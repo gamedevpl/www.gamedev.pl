@@ -2329,7 +2329,19 @@ export async function registerSubmissionRoutes(
       }
     }
 
-    const creatorLocale = normalizeLocale(parsed.data.locale ?? input.acceptLanguage?.split(',')[0]);
+    // Three sources, most specific first. The third exists because the first two are
+    // both absent over MCP: a coding agent that omits `locale` leaves nothing to fall
+    // back on, since Claude chat and friends are not browsers and send no
+    // `accept-language`. Eight consecutive self-build games landed on 'en' that way, and
+    // their Polish creator read English progress through every one of them.
+    //
+    // `normalizeLocale` collapses undefined to 'en', so the declared value has to be
+    // checked *before* normalizing — otherwise "nobody said" and "somebody said English"
+    // are the same input and the account preference can never be consulted.
+    const declaredLocale = parsed.data.locale ?? input.acceptLanguage?.split(',')[0];
+    const creatorLocale = declaredLocale
+      ? normalizeLocale(declaredLocale)
+      : normalizeLocale(store ? ((await store.getUser(input.uid))?.locale ?? undefined) : undefined);
     const sanitizedTitle = sanitizeCreatorText(parsed.data.title, { singleLine: true });
     const sanitizedConcept = sanitizeCreatorText(parsed.data.concept, { singleLine: false });
     const sanitizedDisplayName = parsed.data.displayName

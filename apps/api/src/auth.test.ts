@@ -113,6 +113,47 @@ describe('Auth API Routes', () => {
     expect(stored?.name).toBe('Alice');
   });
 
+  it('records the browser language on sign-in, so agent-created games can inherit it', async () => {
+    // The only place this preference survives leaving the browser. A game created over
+    // MCP has no accept-language — Claude chat is not a browser — so without this
+    // create_game had nothing to fall back on and pinned every self-build game to
+    // English regardless of who owned it.
+    const { app, store } = await setupTestServer({
+      'valid-id-token': { sub: '10009', email: 'ola@example.com', name: 'Ola' },
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/auth/google',
+      headers: { 'accept-language': 'pl-PL,pl;q=0.9,en;q=0.8' },
+      payload: { idToken: 'valid-id-token' },
+    });
+
+    expect((await store.getUser('g:10009'))?.locale).toBe('pl');
+  });
+
+  it('leaves a stored language alone when the client sends no accept-language', async () => {
+    // Absent must stay distinct from 'en': an API client with no header should not
+    // overwrite a preference the browser recorded.
+    const { app, store } = await setupTestServer({
+      'valid-id-token': { sub: '10010', email: 'ola@example.com', name: 'Ola' },
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/auth/google',
+      headers: { 'accept-language': 'pl-PL,pl;q=0.9' },
+      payload: { idToken: 'valid-id-token' },
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/api/auth/google',
+      payload: { idToken: 'valid-id-token' },
+    });
+
+    expect((await store.getUser('g:10010'))?.locale).toBe('pl');
+  });
+
   it('POST /api/auth/google rejects invalid token', async () => {
     const { app } = await setupTestServer();
 

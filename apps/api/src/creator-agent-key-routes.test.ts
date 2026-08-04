@@ -892,4 +892,43 @@ describe('creator agent key routes + MCP start (BY-27a)', () => {
     const job = await store.getSubmission(structured.jobId);
     expect(job?.locale).toBe('pl');
   });
+
+  it("falls back to the account's language when the agent sends neither locale nor header", async () => {
+    // The MCP case, and the one that was broken: Claude chat is not a browser, so there
+    // is no accept-language to fall back on. Eight consecutive self-build games landed on
+    // 'en' this way and their Polish creator read English progress through every one.
+    const store = new InMemoryStore();
+    app = await createApp(store);
+    await store.upsertUser({ uid: OWNER, locale: 'pl' });
+    const minted = await app.inject({ method: 'GET', url: '/api/me/creator-agent-key', headers: authHeaders() });
+    const creatorKey = minted.json().key as string;
+
+    const { structured } = await callCreateGame(
+      app,
+      { title: 'Po polsku', concept: GAME_CONCEPT },
+      { authorization: `Bearer ${creatorKey}` },
+    );
+
+    const job = await store.getSubmission((structured as { jobId: number }).jobId);
+    expect(job?.locale).toBe('pl');
+  });
+
+  it('lets an explicit English locale win over a stored preference', async () => {
+    // "Nobody said" and "somebody said English" must stay distinct, or the account
+    // preference would silently override a deliberate choice.
+    const store = new InMemoryStore();
+    app = await createApp(store);
+    await store.upsertUser({ uid: OWNER, locale: 'pl' });
+    const minted = await app.inject({ method: 'GET', url: '/api/me/creator-agent-key', headers: authHeaders() });
+    const creatorKey = minted.json().key as string;
+
+    const { structured } = await callCreateGame(
+      app,
+      { title: 'In English', concept: GAME_CONCEPT, locale: 'en' },
+      { authorization: `Bearer ${creatorKey}` },
+    );
+
+    const job = await store.getSubmission((structured as { jobId: number }).jobId);
+    expect(job?.locale).toBe('en');
+  });
 });

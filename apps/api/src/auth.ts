@@ -12,6 +12,26 @@ import { createMailerFromEnv } from './mailer.js';
 import { emitWaitlistJoined } from './notify.js';
 import { createPusherFromEnv } from './pusher.js';
 import { withActiveDay, type Store, type User } from './store.js';
+import { normalizeLocale } from './translate.js';
+
+/**
+ * The signed-in creator's language, from the browser that signed them in.
+ *
+ * Recorded on the account because it is the only place the preference survives leaving
+ * the browser. A game created through a coding agent has no `accept-language` — Claude
+ * chat is not a browser — so without this, `create_game` had nothing to fall back on and
+ * pinned every self-build game to English regardless of who owned it.
+ *
+ * Returns undefined when the header is absent, which must stay distinct from 'en': an
+ * API client with no header should leave a stored preference alone, not overwrite it.
+ * Signing in from a differently-configured browser does update it, which is the intended
+ * reading of "preferred language" when there is no explicit setting to consult.
+ */
+function localeFromRequest(request: FastifyRequest): string | undefined {
+  const header = request.headers['accept-language'];
+  if (typeof header !== 'string' || !header.trim()) return undefined;
+  return normalizeLocale(header.split(',')[0]);
+}
 
 export const SESSION_COOKIE_NAME = 'gamedev_session';
 export const DEFAULT_SESSION_DURATION_SECONDS = 12 * 60 * 60; // 12 hours
@@ -470,11 +490,13 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
         }
 
         await store.cancelAccountDeletion(uid);
+        const signInLocale = localeFromRequest(request);
         const user = await store.upsertUser({
           uid,
           email: googleUser.email,
           name: googleUser.name,
           picture: googleUser.picture,
+          ...(signInLocale ? { locale: signInLocale } : {}),
         });
 
         if (user.tier === 'blocked') {
@@ -557,6 +579,7 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
         }
 
         await store.cancelAccountDeletion(uid);
+        const signInLocale = localeFromRequest(request);
         const user = await store.upsertUser({
           uid,
           // Only ever the linkable address. Writing a relay address here would overwrite a
@@ -566,6 +589,7 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
           // Apple sends the name once and never again, so an absent one must leave any
           // stored name alone — which `upsertUser` already does for undefined.
           name: parseResult.data.name || undefined,
+          ...(signInLocale ? { locale: signInLocale } : {}),
         });
 
         if (user.tier === 'blocked') {
