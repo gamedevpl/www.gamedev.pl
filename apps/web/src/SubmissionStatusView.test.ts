@@ -59,6 +59,10 @@ describe('pollDelayMs', () => {
     expect(pollDelayMs('queued', undefined, 'dispatched')).toBe(ACTIVE_POLL_MS);
     expect(pollDelayMs('queued')).toBeGreaterThan(ACTIVE_POLL_MS);
   });
+
+  it('polls gently once gate-green is waiting on a human', () => {
+    expect(pollDelayMs('in_review')).toBeGreaterThan(ACTIVE_POLL_MS);
+  });
 });
 
 describe('SubmissionStatusView', () => {
@@ -418,6 +422,7 @@ describe('SubmissionStatusView', () => {
     const description = container.querySelector('.status-description')?.textContent ?? '';
     expect(description).toContain('waiting for the last look');
     expect(description).not.toContain('Automated checks are making sure');
+    expect(container.querySelector('.studio-context-phase-spinner')).toBeNull();
 
     await act(async () => {
       root.unmount();
@@ -470,6 +475,10 @@ describe('SubmissionStatusView', () => {
     expect(container.querySelector('.studio-status-chip')).toBeNull();
     expect(container.textContent).not.toMatch(/quiet for a while|can't start it from here/i);
     expect(container.querySelector('.studio-context-phase')?.textContent).toMatch(/Final check/i);
+    // Gate-green is waiting on a human — not mid-agent work. A spinner here made
+    // "Final check · updated 20 minutes ago" look eternally in progress.
+    expect(container.querySelector('.studio-thread-context.is-active')).toBeNull();
+    expect(container.querySelector('.studio-context-phase-spinner')).toBeNull();
 
     await act(async () => {
       root.unmount();

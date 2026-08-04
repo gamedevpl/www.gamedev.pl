@@ -7,7 +7,9 @@ import type { SubmissionStatus } from './submissionApi.js';
  * (react-refresh) while tests can still assert the real intervals.
  */
 
-const ACTIVE_BUILD_STATUSES = new Set<SubmissionStatus['status']>(['building', 'in_review']);
+// `in_review` is out on purpose: gate-green waits on a human, not the agent.
+// Tight polling + foot spinner made "Final check" look eternally in progress.
+const ACTIVE_BUILD_STATUSES = new Set<SubmissionStatus['status']>(['building']);
 
 /** Exported so tests advance timers by the real cadence instead of a magic number. */
 export const ACTIVE_POLL_MS = 3000;
