@@ -72,6 +72,7 @@ export interface GameSources {
 const MAX_SOURCE_GRAPH_MODULES = 64;
 const MAX_SOURCE_GRAPH_BYTES = 200 * 1024;
 const GAME_KIT_MODULE_ENTRIES: Partial<Record<GameKitModuleName, string>> = {
+  urban: 'shared/verticals/urban/index.ts',
   racing: 'shared/verticals/racing/index.ts',
   football: 'shared/verticals/football/index.ts',
 };

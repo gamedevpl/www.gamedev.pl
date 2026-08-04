@@ -730,12 +730,23 @@ describe('getGameSources', () => {
   it('bundles opt-in GameKit verticals from their private TypeScript graphs', async () => {
     const files = new Map<string, string | Uint8Array>([
       ['games/racer/index.html', '<canvas id="game"></canvas>'],
-      ['games/racer/game.ts', 'GameKit.mount({ verticals: [GameKit.circuitRacer, GameKit.arcadeFootball] });'],
+      [
+        'games/racer/game.ts',
+        'GameKit.mount({ verticals: [GameKit.urbanSandbox, GameKit.circuitRacer, GameKit.arcadeFootball] });',
+      ],
       ['games/racer/style.css', '.game {}'],
       ['games/racer/SPEC.md', specMd({ title: 'Racer' })],
-      ['games/racer/GAME.json', JSON.stringify({ engine: { modules: ['racing', 'football'] } })],
+      ['games/racer/GAME.json', JSON.stringify({ engine: { modules: ['urban', 'racing', 'football'] } })],
       ['shared/game-shell.css', '.shell {}'],
       ['shared/modules/core.ts', 'window.GameKit = { mount() {} };'],
+      [
+        'shared/verticals/urban/index.ts',
+        "import { createRoadNetwork } from './streets.ts'; Object.assign(GameKit, { urbanSandbox: { createRoadNetwork } });",
+      ],
+      [
+        'shared/verticals/urban/streets.ts',
+        "export function createRoadNetwork(): string { return 'urban-vertical-loaded'; }",
+      ],
       [
         'shared/verticals/racing/index.ts',
         "import { createRace } from './simulation.ts'; Object.assign(GameKit, { circuitRacer: { createRace } });",
@@ -761,6 +772,7 @@ describe('getGameSources', () => {
 
     const sources = await client.getGameSources('main', 'racer');
 
+    expect(sources?.gameJs).toContain('urban-vertical-loaded');
     expect(sources?.gameJs).toContain('vertical-loaded');
     expect(sources?.gameJs).toContain('football-vertical-loaded');
     expect(sources?.gameJs).not.toContain('import ');
