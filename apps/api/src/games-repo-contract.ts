@@ -97,7 +97,7 @@ export const SOURCE_GRAPH_BUDGET_BYTES = 300 * 1024;
  * Platform half of the serve cap — games-repo `GAMEKIT_PLATFORM_BYTES` /
  * `assemble-contract.json` `platformCeilingBytes`. Together with
  * {@link GAME_BUDGET_BYTES} this must equal games-repo `MAX_BUNDLE_BYTES`
- * (567_568, matching `maxProjectBytes`). Not a round KiB.
+ * (577_568, matching `maxProjectBytes`). Not a round KiB.
  *
  * One derived ceiling, not a sum of per-feature constants (games-repo #281). Check 4
  * over there bills each author for measured `assembled − platformBytes` against the
@@ -106,32 +106,21 @@ export const SOURCE_GRAPH_BUDGET_BYTES = 300 * 1024;
  * `docs/platform-byte-ledger.md`. Raise this when measurement shows a passing game
  * would exceed it — do not re-split it into named allowances on this side either.
  *
- * The author budget last moved for `carjack-city`'s active-run persistence on top of
- * the organic incident simulation: the assembled project measured 563_200 bytes and
- * stranded snapshot publish against the 547_088 serve cap (run 30928592522). Games-repo
- * #479 already raised Check 4 to 232 KiB; keep the full flagship implementation.
- * 212 → 232 KiB, and the serve cap 547_088 → 567_568.
+ * The platform ceiling last moved for the urban top-down vehicle body + grid helper
+ * promotion that pulled carjack-city hull/shape paint and sidewalk/block walks into
+ * GameKit: measured platform 333_323 bytes. 330_000 → 340_000, serve cap
+ * 567_568 → 577_568.
  *
- * Before that, organic incidents and believable service dispatch: author payload
- * 208_829 bytes. 200 → 212 KiB, serve cap 534_800 → 547_088.
+ * Before that, author budget for active-run persistence: 212 → 232 KiB, serve cap
+ * 547_088 → 567_568 (run 30928592522 / games-repo #479).
  *
- * Before that, `carjack-city`'s day/night and reactive-world work moved the platform
- * ceiling: its selected platform measures 327_252 bytes while the game remained within
- * the then-200 KiB author budget (199_723 bytes). 313_000 → 330_000, and the serve cap
- * 517_800 → 534_800. Snapshot publish was stranded at 517_889 with the old ceiling
- * (run 30909878136); games-repo #477 shipped the matching contract.
+ * Before that, organic incidents: 200 → 212 KiB, serve cap 534_800 → 547_088.
  *
- * The drift this corrects is older and larger than that change: the constant has
- * never tracked the heaviest selection. `apex-sprint` (gfx3d) already measures
- * 434_497 platform bytes and passes only because its author payload is small. Sized
- * here to the heaviest 2D selection rather than to gfx3d, which would put the
- * backstop above 639 KB and stop it backstopping anything.
+ * Before that, day/night platform: 313_000 → 330_000, serve cap 517_800 → 534_800.
  *
- * Before it, the opt-in `editor` module (EditorKit L2): +3_700 measured,
- * 482_687 → 486_387. Before that, sensing Phase 2 (camera backdrop) raised the
- * sensing ledger line 6_500 → 9_000 (+2_500), 480_187 → 482_687.
+ * Sized here to the heaviest 2D selection rather than to gfx3d.
  */
-export const GAMEKIT_PLATFORM_BYTES = 330_000;
+export const GAMEKIT_PLATFORM_BYTES = 340_000;
 
 /** Combined html+js+css size cap — must match games-repo `MAX_BUNDLE_BYTES`. */
 export const MAX_PROJECT_BYTES = GAME_BUDGET_BYTES + GAMEKIT_PLATFORM_BYTES;
