@@ -98,39 +98,32 @@ export const SOURCE_GRAPH_BUDGET_BYTES = 336 * 1024;
 /**
  * Platform half of the serve cap — games-repo `GAMEKIT_PLATFORM_BYTES` /
  * `assemble-contract.json` `platformCeilingBytes`. Together with
- * {@link GAME_BUDGET_BYTES} this must be at least games-repo `MAX_BUNDLE_BYTES`
- * (598_048 here, matching `maxProjectBytes`; the games repo is at 588_048 until its
- * own platform raise lands, and website-ahead is the safe direction). Not a round KiB.
+ * {@link GAME_BUDGET_BYTES} this must equal games-repo `MAX_BUNDLE_BYTES`
+ * (638_048, matching `maxProjectBytes`). Not a round KiB.
  *
  * One derived ceiling, not a sum of per-feature constants (games-repo #281). Check 4
  * over there bills each author for measured `assembled − platformBytes` against the
- * 232 KiB author budget; this number is serve-compat only so a game that clears that
+ * 252 KiB author budget; this number is serve-compat only so a game that clears that
  * gate is not refused here. Feature-by-feature archaeology lives in the games repo's
  * `docs/platform-byte-ledger.md`. Raise this when measurement shows a passing game
  * would exceed it — do not re-split it into named allowances on this side either.
  *
- * The author budget last moved for `carjack-city` again: a real island coastline every
- * system obeys (the street plan is clipped to it, held back behind the beach and eroded
- * back to its junctions, so nothing runs into the sea), solid car hulls for everyone on
- * foot, and the mission ladder's chain economy measure 252_340 author bytes against 864
- * bytes of headroom. Platform bytes are untouched by that change.
- * 232 → 252 KiB, and the serve cap 577_568 → 598_048.
+ * The platform ceiling last moved for the urban ground/shadow + headlight + extrusion
+ * promotion that pulled carjack-city street paint and cast shadows into GameKit:
+ * measured platform ~369_006 bytes. 340_000 → 380_000, serve cap 598_048 → 638_048.
  *
- * Before that, the platform ceiling moved for the urban top-down vehicle body + grid
- * helper promotion that pulled carjack-city hull/shape paint and sidewalk/block walks
- * into GameKit: measured platform 333_323 bytes. 330_000 → 340_000, serve cap
- * 567_568 → 577_568.
+ * Before that, the author budget moved for `carjack-city` island coastline / on-foot
+ * car collision / mission ladder: 232 → 252 KiB, serve cap 577_568 → 598_048.
  *
- * Before that, author budget for active-run persistence: 212 → 232 KiB, serve cap
- * 547_088 → 567_568 (run 30928592522 / games-repo #479).
+ * Before that, platform moved for urban top-down vehicle body + grid helpers:
+ * measured platform 333_323 bytes. 330_000 → 340_000.
  *
- * Before that, organic incidents: 200 → 212 KiB, serve cap 534_800 → 547_088.
- *
- * Before that, day/night platform: 313_000 → 330_000, serve cap 517_800 → 534_800.
+ * Before that, author budget for active-run persistence: 212 → 232 KiB
+ * (run 30928592522 / games-repo #479).
  *
  * Sized here to the heaviest 2D selection rather than to gfx3d.
  */
-export const GAMEKIT_PLATFORM_BYTES = 340_000;
+export const GAMEKIT_PLATFORM_BYTES = 380_000;
 
 /** Combined html+js+css size cap — must match games-repo `MAX_BUNDLE_BYTES`. */
 export const MAX_PROJECT_BYTES = GAME_BUDGET_BYTES + GAMEKIT_PLATFORM_BYTES;
