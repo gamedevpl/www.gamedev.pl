@@ -32,13 +32,16 @@ Agents cannot sleep between tool calls, so “poll every ~30s” turns into a ti
 loop that burns connector tool budgets. `get_gate_verdict` is therefore a one-shot
 check, not a wait loop. When `status` is `pending`:
 
-- The response returns `stop: true`, `reason: gate_pending`: stop the agent run
-  immediately and let Studio show the eventual result
-- `retryAfterSeconds` (~30) is informational for a later creator-led run, not
-  permission to wait and call again in the current run
-- Back-to-back calls mean the client ignored `stop:true`; they emit soft
-  `warnings.code=gate_poll_backoff` (and keep re-emitting `call_end` after submit
-  until `end`)
+- With a real `deliveryId`, the response returns `stop: true`,
+  `reason: gate_pending`: stop the agent run immediately and let Studio show the
+  eventual result
+- With `deliveryId: null`, nothing has been delivered: the response returns
+  `stop: false`, `reason: no_delivery`; continue building and call
+  `submit_sources` instead of checking again
+- `retryAfterSeconds` (~30) is informational for a later creator-led run checking a
+  delivered gate, not permission to wait and call again in the current run
+- Back-to-back calls emit soft `warnings.code=gate_poll_backoff` (and keep
+  re-emitting `call_end` after submit until `end`)
 
 ### `kit_outdated` — do not re-upload the tree
 
@@ -100,7 +103,7 @@ Merged by `applySessionNudges` / submit handler. Act, then continue:
 | ------------------- | ---------------------------------------------------------------- |
 | `call_end`          | Call `end` when finished iterating this round                    |
 | `gate_not_started`  | Delivery ok but Cloud Build did not start — no preview yet       |
-| `gate_poll_backoff` | Client ignored pending's `stop:true` — stop this run immediately |
+| `gate_poll_backoff` | Repeated one-shot gate check — stop checking; build/submit or honour `stop:true` |
 | `progress_stale`    | Call `report_progress`                                           |
 | `inbox_pending`     | `read_inbox` → apply → `ack_inbox`                               |
 | `seed_unread`       | Call `get_seed` before scaffolding from the kit                  |
