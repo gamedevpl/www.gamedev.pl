@@ -80,7 +80,7 @@ export const GAME_KIT_MODULES = [
 export type GameKitModuleName = (typeof GAME_KIT_MODULES)[number];
 
 /** Author-facing budget — games-repo Check 4 `GAME_BUDGET_BYTES`. */
-export const GAME_BUDGET_BYTES = 248 * 1024;
+export const GAME_BUDGET_BYTES = 252 * 1024;
 
 /**
  * Raw TypeScript source-graph ceiling for the bake/play/seed bundlers
@@ -90,16 +90,16 @@ export const GAME_BUDGET_BYTES = 248 * 1024;
  * Distinct from {@link GAME_BUDGET_BYTES}: the assembled author payload can stay
  * under the author budget while comments and types push the `.ts` tree higher. Moved
  * 200 → 300 KiB when carjack-city (~247 KiB source) stranded every snapshot publish;
- * 300 → 324 KiB for the same game's island coastline, on-foot car collision and
- * mission-ladder work — 327_685 raw bytes carrying 247_459 assembled ones.
+ * 300 → 336 KiB for the same game's island coastline, on-foot car collision and
+ * mission-ladder work — 334_122 raw bytes carrying 251_700 assembled ones.
  */
-export const SOURCE_GRAPH_BUDGET_BYTES = 324 * 1024;
+export const SOURCE_GRAPH_BUDGET_BYTES = 336 * 1024;
 
 /**
  * Platform half of the serve cap — games-repo `GAMEKIT_PLATFORM_BYTES` /
  * `assemble-contract.json` `platformCeilingBytes`. Together with
  * {@link GAME_BUDGET_BYTES} this must equal games-repo `MAX_BUNDLE_BYTES`
- * (583_952, matching `maxProjectBytes`). Not a round KiB.
+ * (588_048, matching `maxProjectBytes`). Not a round KiB.
  *
  * One derived ceiling, not a sum of per-feature constants (games-repo #281). Check 4
  * over there bills each author for measured `assembled − platformBytes` against the
@@ -109,10 +109,11 @@ export const SOURCE_GRAPH_BUDGET_BYTES = 324 * 1024;
  * would exceed it — do not re-split it into named allowances on this side either.
  *
  * The author budget last moved for `carjack-city` again: a real island coastline every
- * system obeys (the road network is clipped to it, so traffic cannot route out to sea),
- * solid car hulls for everyone on foot, and the mission ladder's chain economy measure
- * 247_459 author bytes against 864 bytes of headroom. Platform bytes are untouched.
- * 232 → 248 KiB, and the serve cap 567_568 → 583_952.
+ * system obeys (the street plan is clipped to it, held back behind the beach and eroded
+ * back to its junctions, so nothing runs into the sea), solid car hulls for everyone on
+ * foot, and the mission ladder's chain economy measure 251_700 author bytes against 864
+ * bytes of headroom. Platform bytes are untouched.
+ * 232 → 252 KiB, and the serve cap 567_568 → 588_048.
  *
  * Before that, `carjack-city`'s active-run persistence on top of
  * the organic incident simulation: the assembled project measured 563_200 bytes and
