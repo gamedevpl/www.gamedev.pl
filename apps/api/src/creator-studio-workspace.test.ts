@@ -226,6 +226,44 @@ describe('GET /api/me/studio/games/:slug/workspace', () => {
     expect(entries.some((item) => item.path === `games/${SLUG}/SPEC.md`)).toBe(true);
   });
 
+  it('ignores a canceled round when choosing what to check out', async () => {
+    // A round the operator canceled keeps whatever it delivered and is newer than the job
+    // that published the live game. Serving it would hand back rejected work, and a
+    // delivery built on it would overwrite what is live.
+    const store3 = new InMemoryStore();
+    await store3.upsertUser({ uid: 'g:creator' });
+    await store3.createSubmission(ISSUE, 'g:creator', 'Comet Courier');
+    await store3.setSubmissionSlug(ISSUE, SLUG);
+    await store3.setSubmissionDeliveredVersion(ISSUE, VERSION);
+    await store3.setPublication({
+      slug: SLUG,
+      state: 'published',
+      currentVersion: VERSION,
+      publishedAt: '2026-08-01T00:00:00.000Z',
+    });
+    await new Promise((resolve) => setTimeout(resolve, 2));
+    await store3.createSubmission(ISSUE + 1, 'g:creator', 'Comet Courier');
+    await store3.setSubmissionSlug(ISSUE + 1, SLUG);
+    await store3.setSubmissionDeliveredVersion(ISSUE + 1, 'v-rejected');
+    await store3.recordJobTransition(ISSUE + 1, {
+      to: 'canceled',
+      at: '2026-08-02T00:00:00.000Z',
+      by: 'operator',
+      reason: 'operator_cancel',
+    });
+
+    const app = await createApp(store3, objectsWithScaffold());
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/me/studio/games/${SLUG}/workspace`,
+      headers: authHeaders('g:creator'),
+    });
+
+    // The stub can only read VERSION back, so 200 proves the canceled round's
+    // `v-rejected` was not chosen.
+    expect(res.statusCode).toBe(200);
+  });
+
   it('503s rather than improvising when no scaffold is published for the current engine', async () => {
     const objects = objectsWithScaffold();
     objects.delete(`workspaces/${ENGINE}.tgz`);

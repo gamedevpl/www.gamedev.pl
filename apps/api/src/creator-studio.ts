@@ -327,140 +327,160 @@ export async function registerCreatorStudioRoutes(
    * a slug the caller did not commission 404s rather than 403s — a creator has no reason
    * to learn which other slugs exist.
    */
-  app.get<{ Params: { slug: string } }>('/api/me/studio/games/:slug/workspace', async (request, reply) => {
-    if (!requireUser(request, reply)) return;
-    if (!options.gamesStore || !options.objectStore) {
-      return reply.status(503).send({ error: 'workspace checkout is not configured on this deployment' });
-    }
-
-    const slug = request.params.slug;
-    if (!/^[a-z0-9][a-z0-9-]{0,60}$/.test(slug)) {
-      return reply.status(400).send({ error: 'invalid slug' });
-    }
-
-    const records = await store.listSubmissionsByOwner(request.user!.uid);
-    const owned = records.filter((record) => record.slug === slug && !record.abandonedAt);
-    if (owned.length === 0) {
-      return reply.status(404).send({ error: 'no such game' });
-    }
-
-    // Same preference order as the agent's own `get_sources`, and it has to be read off
-    // the *newest* round rather than the first owned record that happens to carry a
-    // version. An improvement round starts empty on a slug whose older job still points
-    // at the version it delivered before publication; scanning all records would hand
-    // back that older delivery, and a creator who edited it and delivered would overwrite
-    // newer published work with something derived from a superseded base. When the newest
-    // round has nothing of its own, the live publication is what they last played.
-    const tip = [...owned].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
-    let version = tip.previewVersion ?? tip.deliveredVersion ?? null;
-    if (!version) {
-      const publication = await store.getPublication(slug);
-      if (publication?.state === 'published') version = publication.currentVersion;
-    }
-    if (!version) {
-      return reply.status(409).send({
-        error: 'nothing_delivered',
-        message: 'this game has no delivered version yet — let the first build finish, then check it out',
-      });
-    }
-
-    const manifest = await options.gamesStore.getManifest(slug, version);
-    if (!manifest) {
-      request.log.error({ slug, version }, 'workspace checkout: manifest missing for a version a job points at');
-      return reply.status(502).send({ error: 'the delivered version could not be read back' });
-    }
-
-    const sources = await Promise.all(
-      manifest.sourceFiles.map(async (path) => ({
-        path,
-        content: await options.gamesStore!.getSourceFile(slug, version, path),
-      })),
-    );
-    const missing = sources.filter((file) => file.content === null).map((file) => file.path);
-    if (missing.length > 0) {
-      request.log.error({ slug, version, missing }, 'workspace checkout: version is missing files its manifest lists');
-      return reply.status(502).send({ error: 'the delivered version could not be read back' });
-    }
-
-    try {
-      const registryBody = await options.objectStore.readObject('kits/current.json');
-      if (!registryBody) {
-        return reply.status(503).send({
-          error: 'kit_registry_missing',
-          message: 'the Creator Kit registry is not published yet',
-        });
-      }
-      const engineRef = parseKitRegistry(registryBody.toString('utf8')).current;
-
-      const sidecarBody = await options.objectStore.readObject(`kits/${engineRef}.json`);
-      const scaffoldBody = await options.objectStore.readObject(`workspaces/${engineRef}.tgz`);
-      if (!sidecarBody || !scaffoldBody) {
-        return reply.status(503).send({
-          error: 'workspace_scaffold_missing',
-          message: `no workspace scaffold published for engine ${engineRef}`,
-        });
+  app.get<{ Params: { slug: string } }>(
+    '/api/me/studio/games/:slug/workspace',
+    // The most expensive read a signed-in creator can ask for: up to 200 source-object
+    // reads, the registry and scaffold on top, and a gzip held in memory. The rate-limit
+    // plugin is registered with `global: false`, so a route that says nothing has no
+    // ceiling at all. Generous against real use — nobody checks out a game 30 times an
+    // hour — and bounded against a loop.
+    { config: { rateLimit: { max: 30, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      if (!requireUser(request, reply)) return;
+      if (!options.gamesStore || !options.objectStore) {
+        return reply.status(503).send({ error: 'workspace checkout is not configured on this deployment' });
       }
 
-      // Bounded at the gunzip, not only after it: `readTarEntries`' cap is on what it
-      // retains, so an over-large or corrupt scaffold would already have been inflated
-      // in full by the time that applied. The scaffold is our own artifact rather than
-      // creator input, so this guards a mispublish rather than an attacker — but the
-      // cost of being wrong about that is the API's memory, and the bound is one option.
-      const scaffold: TarEntry[] = [];
-      try {
-        const unpacked = gunzipSync(scaffoldBody, { maxOutputLength: MAX_SCAFFOLD_BYTES });
-        async function* once(): AsyncGenerator<Uint8Array> {
-          yield unpacked;
-        }
-        for await (const item of readTarEntries(once(), { maxTotalBytes: MAX_SCAFFOLD_BYTES })) {
-          scaffold.push(item);
-        }
-      } catch (error) {
-        // Unreadable is the same class of problem as invalid, and gets the same answer:
-        // a controlled 502 naming an operator problem, rather than a 500 that reads to
-        // the creator as "the site is broken" and to us as an unhandled exception.
-        throw new WorkspaceCompositionError(
-          `workspace scaffold for engine ${engineRef} could not be read: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-        );
+      const slug = request.params.slug;
+      if (!/^[a-z0-9][a-z0-9-]{0,60}$/.test(slug)) {
+        return reply.status(400).send({ error: 'invalid slug' });
       }
 
-      const archive = composeWorkspaceArchive({
-        slug,
-        lock: {
-          slug,
-          engineRef,
-          // Short-lived by design. `setup.mjs` is meant to be re-run — that is also the
-          // re-baseline path when the pin falls outside the kit's N/N−1 window — so a URL
-          // that expires costs a fresh checkout link, not a broken workspace.
-          kitUrl: await options.objectStore.signReadUrl(`kits/${engineRef}.tgz`, DEFAULT_SIGNED_URL_TTL_SECONDS),
-          kitSha256: parseKitSidecar(sidecarBody.toString('utf8')).sha256,
-          issuedAt: new Date(now()).toISOString(),
-        },
-        scaffold,
-        sources: sources as Array<{ path: string; content: string }>,
-      });
-
-      return (
-        reply
-          .header('content-type', 'application/gzip')
-          .header('content-disposition', `attachment; filename="${slug}-workspace.tgz"`)
-          // The signed kit URL inside makes every archive short-lived and per-creator.
-          .header('cache-control', 'private, no-store')
-          .send(archive)
+      const records = await store.listSubmissionsByOwner(request.user!.uid);
+      // Canceled rounds are excluded as well as abandoned ones, matching the shelf the
+      // creator is looking at when they click this. A round the operator canceled can still
+      // carry a preview or delivery, and it is newer than the job that published the live
+      // game — so keeping it would hand back work that was rejected, and a delivery built on
+      // it would overwrite what is live. That is the same hazard as picking a stale record,
+      // reached from the other direction.
+      const owned = records.filter(
+        (record) => record.slug === slug && !record.abandonedAt && record.state !== 'canceled',
       );
-    } catch (error) {
-      if (error instanceof KitRegistryError) {
-        return reply.status(503).send({ error: error.code, message: error.message });
+      if (owned.length === 0) {
+        return reply.status(404).send({ error: 'no such game' });
       }
-      if (error instanceof WorkspaceCompositionError) {
-        // A scaffold that fails its own invariants is an operator problem, not the
-        // creator's: refuse rather than hand over an archive we cannot vouch for.
-        request.log.error({ slug, err: error }, 'workspace checkout: refused to compose an archive');
-        return reply.status(502).send({ error: 'the workspace could not be assembled' });
+
+      // Same preference order as the agent's own `get_sources`, and it has to be read off
+      // the *newest* round rather than the first owned record that happens to carry a
+      // version. An improvement round starts empty on a slug whose older job still points
+      // at the version it delivered before publication; scanning all records would hand
+      // back that older delivery, and a creator who edited it and delivered would overwrite
+      // newer published work with something derived from a superseded base. When the newest
+      // round has nothing of its own, the live publication is what they last played.
+      const tip = [...owned].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+      let version = tip.previewVersion ?? tip.deliveredVersion ?? null;
+      if (!version) {
+        const publication = await store.getPublication(slug);
+        if (publication?.state === 'published') version = publication.currentVersion;
       }
-      throw error;
-    }
-  });
+      if (!version) {
+        return reply.status(409).send({
+          error: 'nothing_delivered',
+          message: 'this game has no delivered version yet — let the first build finish, then check it out',
+        });
+      }
+
+      const manifest = await options.gamesStore.getManifest(slug, version);
+      if (!manifest) {
+        request.log.error({ slug, version }, 'workspace checkout: manifest missing for a version a job points at');
+        return reply.status(502).send({ error: 'the delivered version could not be read back' });
+      }
+
+      const sources = await Promise.all(
+        manifest.sourceFiles.map(async (path) => ({
+          path,
+          content: await options.gamesStore!.getSourceFile(slug, version, path),
+        })),
+      );
+      const missing = sources.filter((file) => file.content === null).map((file) => file.path);
+      if (missing.length > 0) {
+        request.log.error(
+          { slug, version, missing },
+          'workspace checkout: version is missing files its manifest lists',
+        );
+        return reply.status(502).send({ error: 'the delivered version could not be read back' });
+      }
+
+      try {
+        const registryBody = await options.objectStore.readObject('kits/current.json');
+        if (!registryBody) {
+          return reply.status(503).send({
+            error: 'kit_registry_missing',
+            message: 'the Creator Kit registry is not published yet',
+          });
+        }
+        const engineRef = parseKitRegistry(registryBody.toString('utf8')).current;
+
+        const sidecarBody = await options.objectStore.readObject(`kits/${engineRef}.json`);
+        const scaffoldBody = await options.objectStore.readObject(`workspaces/${engineRef}.tgz`);
+        if (!sidecarBody || !scaffoldBody) {
+          return reply.status(503).send({
+            error: 'workspace_scaffold_missing',
+            message: `no workspace scaffold published for engine ${engineRef}`,
+          });
+        }
+
+        // Bounded at the gunzip, not only after it: `readTarEntries`' cap is on what it
+        // retains, so an over-large or corrupt scaffold would already have been inflated
+        // in full by the time that applied. The scaffold is our own artifact rather than
+        // creator input, so this guards a mispublish rather than an attacker — but the
+        // cost of being wrong about that is the API's memory, and the bound is one option.
+        const scaffold: TarEntry[] = [];
+        try {
+          const unpacked = gunzipSync(scaffoldBody, { maxOutputLength: MAX_SCAFFOLD_BYTES });
+          async function* once(): AsyncGenerator<Uint8Array> {
+            yield unpacked;
+          }
+          for await (const item of readTarEntries(once(), { maxTotalBytes: MAX_SCAFFOLD_BYTES })) {
+            scaffold.push(item);
+          }
+        } catch (error) {
+          // Unreadable is the same class of problem as invalid, and gets the same answer:
+          // a controlled 502 naming an operator problem, rather than a 500 that reads to
+          // the creator as "the site is broken" and to us as an unhandled exception.
+          throw new WorkspaceCompositionError(
+            `workspace scaffold for engine ${engineRef} could not be read: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
+        }
+
+        const archive = composeWorkspaceArchive({
+          slug,
+          lock: {
+            slug,
+            engineRef,
+            // Short-lived by design. `setup.mjs` is meant to be re-run — that is also the
+            // re-baseline path when the pin falls outside the kit's N/N−1 window — so a URL
+            // that expires costs a fresh checkout link, not a broken workspace.
+            kitUrl: await options.objectStore.signReadUrl(`kits/${engineRef}.tgz`, DEFAULT_SIGNED_URL_TTL_SECONDS),
+            kitSha256: parseKitSidecar(sidecarBody.toString('utf8')).sha256,
+            issuedAt: new Date(now()).toISOString(),
+          },
+          scaffold,
+          sources: sources as Array<{ path: string; content: string }>,
+        });
+
+        return (
+          reply
+            .header('content-type', 'application/gzip')
+            .header('content-disposition', `attachment; filename="${slug}-workspace.tgz"`)
+            // The signed kit URL inside makes every archive short-lived and per-creator.
+            .header('cache-control', 'private, no-store')
+            .send(archive)
+        );
+      } catch (error) {
+        if (error instanceof KitRegistryError) {
+          return reply.status(503).send({ error: error.code, message: error.message });
+        }
+        if (error instanceof WorkspaceCompositionError) {
+          // A scaffold that fails its own invariants is an operator problem, not the
+          // creator's: refuse rather than hand over an archive we cannot vouch for.
+          request.log.error({ slug, err: error }, 'workspace checkout: refused to compose an archive');
+          return reply.status(502).send({ error: 'the workspace could not be assembled' });
+        }
+        throw error;
+      }
+    },
+  );
 }

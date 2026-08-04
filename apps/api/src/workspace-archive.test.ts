@@ -126,6 +126,29 @@ describe('composeWorkspaceArchive', () => {
     ).toThrow(/refusing source path/);
   });
 
+  it('refuses a scaffold that lists the same path twice', () => {
+    // Must be a composition error, not the tar writer's plain Error: the route only maps
+    // the former to a controlled 502, so the latter would surface as a 500.
+    expect(() =>
+      composeWorkspaceArchive({
+        slug: 'comet-courier',
+        lock: LOCK,
+        scaffold: [...SCAFFOLD, entry('README.md', 'second copy\n')],
+        sources: SOURCES,
+      }),
+    ).toThrow(WorkspaceCompositionError);
+  });
+
+  it('refuses a scaffold missing the files that make it a working copy', () => {
+    // An empty or truncated tar decompresses fine and yields nothing, which would
+    // otherwise be a 200 carrying sources with no way to fetch the kit or deliver back.
+    for (const scaffold of [[], SCAFFOLD.filter((item) => item.path !== 'setup.mjs')]) {
+      expect(() => composeWorkspaceArchive({ slug: 'comet-courier', lock: LOCK, scaffold, sources: SOURCES })).toThrow(
+        /missing/,
+      );
+    }
+  });
+
   it('refuses a game with nothing delivered rather than handing back an empty repo', () => {
     expect(() =>
       composeWorkspaceArchive({ slug: 'comet-courier', lock: LOCK, scaffold: SCAFFOLD, sources: [] }),

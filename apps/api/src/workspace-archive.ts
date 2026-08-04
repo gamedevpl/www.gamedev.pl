@@ -69,6 +69,16 @@ export class WorkspaceCompositionError extends Error {
  */
 const RESERVED_ROOTS = new Set(['shared', 'node_modules', 'games']);
 
+/**
+ * Scaffold members without which the archive is not a working copy.
+ *
+ * `setup.mjs` is how the kit arrives and the README is how the creator gets back; an
+ * archive missing either is sources in a folder. Named here rather than trusted from the
+ * packer because this is the side that hands bytes to a creator. Kept to the two that are
+ * load-bearing, so adding an optional scaffold file does not need a change on both sides.
+ */
+const REQUIRED_SCAFFOLD_FILES = ['setup.mjs', 'README.md'];
+
 function assertNoEngineContent(path: string): void {
   const first = path.split('/')[0];
   if (first === 'shared' || first === 'node_modules') {
@@ -139,8 +149,23 @@ export function composeWorkspaceArchive(input: ComposeWorkspaceInput): Buffer {
       // silently, which is the kind of thing that is only ever noticed in the field.
       throw new WorkspaceCompositionError('workspace scaffold must not ship gamedev.lock — the site writes it');
     }
+    // Caught here rather than left to the tar writer: the writer throws a plain Error,
+    // which the route does not recognize as a composition failure and would return as a
+    // 500 — the wrong answer for a scaffold we published badly.
+    if (claimed.has(path)) {
+      throw new WorkspaceCompositionError(`workspace scaffold lists ${path} twice`);
+    }
     claimed.add(path);
     files.push({ path, content: entry.bytes, executable: path.endsWith('.mjs') || path.endsWith('.sh') });
+  }
+
+  // An empty or truncated tar decompresses cleanly and simply yields nothing, so without
+  // this the creator gets a 200 and an archive with their sources but no `setup.mjs` and
+  // no README — no way to fetch the kit, and no instructions for delivering back. Silent
+  // uselessness is worse than a refusal an operator can see.
+  const missingScaffold = REQUIRED_SCAFFOLD_FILES.filter((required) => !claimed.has(required));
+  if (missingScaffold.length > 0) {
+    throw new WorkspaceCompositionError(`workspace scaffold is missing ${missingScaffold.join(', ')}`);
   }
 
   if (input.sources.length === 0) {
