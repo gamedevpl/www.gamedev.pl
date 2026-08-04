@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "_comment": "Cross-repo DELIVERY contract — which files a game may deliver to www.gamedev.pl. Games-repo half: tools/submit.mjs reads this file (no second literal). Website half: www.gamedev.pl apps/api/src/games-repo-contract.ts (DELIVERY_CONTRACT) feeds games-store.ts ALLOWED_SOURCE_FILES, and CI contract:games-repo compares the two. This list has drifted three times (TRACE, then PLAYTEST, then AGENT); each drift turned a finished game into a multi-delivery retry loop, because the site refused a path validate had just made mandatory. ADDING A FILE: merge the WEBSITE side first — a site that accepts a path no game sends yet is harmless, a game that sends a path the site refuses 400s at upload.",
+  "fixedFiles": [
+    "SPEC.md",
+    "GAME.json",
+    "CAPTURE.json",
+    "ACCEPTANCE.json",
+    "TRACE.json",
+    "PLAYTEST.json",
+    "AGENT.json",
+    "EDITOR.json",
+    "index.html",
+    "game.ts",
+    "style.css",
+    "sim.ts"
+  ],
+  "extraModulePattern": "^[a-z0-9][a-z0-9/-]{0,60}\\.ts$",
+  "reservedSegments": ["shared", "tools", "games", "node_modules", "dist", "references", "templates"],
+  "maxFiles": 200,
+  "maxUploadBytes": 2097152,
+  "_notDelivered": "media/ is produced by the site's capture harness from the sources delivered here, so it is refused rather than uploaded. TRACE.json is the one entry above that is not source in the ordinary sense: the gate replays CAPTURE.json against the upstream engine and diffs against it, which is what proves the game behaves the same on our engine as it did on yours."
+}

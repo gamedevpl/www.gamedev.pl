@@ -1,7 +1,12 @@
+import { gunzipSync } from 'node:zlib';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { DEFAULT_SIGNED_URL_TTL_SECONDS, type GcsObjectStore } from './gcs-sign.js';
+import { KitRegistryError, parseKitRegistry, parseKitSidecar } from './kit-registry.js';
 import { pageOwnerGames } from './owner-games.js';
+import { readTarEntries, type TarEntry } from './tar.js';
 import { recentPartitions, summarizeGameHealth, type GameHealth } from './telemetry-health.js';
+import { composeWorkspaceArchive, WorkspaceCompositionError } from './workspace-archive.js';
 import type { GamesStore } from './games-store.js';
 import type { Store, TelemetryEvent } from './store.js';
 
@@ -32,8 +37,13 @@ export interface CreatorStudioRoutesOptions {
   gamesStore?: GamesStore;
   /** Mints status tokens so the studio can deep-link into the build page. */
   mintStatusToken?: (issueNumber: number) => string;
+  /** Reads the workspace scaffold and signs the kit URL the scaffold fetches. */
+  objectStore?: GcsObjectStore;
   now?: () => number;
 }
+
+/** Ceiling on the scaffold we will unpack — it is a handful of text files, not a kit. */
+const MAX_SCAFFOLD_BYTES = 1024 * 1024;
 
 export interface CreatorStudioGame {
   token: string;
@@ -300,5 +310,135 @@ export async function registerCreatorStudioRoutes(
 
     const body: CreatorScorecardsResponse = { scorecards, truncated, totalGames: total };
     return reply.send(body);
+  });
+
+  /**
+   * A working copy of the creator's own game, for creators who would rather use their
+   * own IDE than the Studio's agent flow.
+   *
+   * This is a checkout, not a handover: the archive is sources plus the scaffold that
+   * fetches the toolchain and explains how to deliver back, and the game keeps its home
+   * here. Nothing about the round trip changes — the creator's agent still opens a round
+   * and calls `submit_sources`, the site's gate still rebuilds against its own pinned
+   * engine, and a human still publishes. See `workspace-archive.ts` for what is in the
+   * archive and why GameKit is not.
+   *
+   * Ownership is the same `ownerUid` + `slug` attribution the rest of this file uses, so
+   * a slug the caller did not commission 404s rather than 403s — a creator has no reason
+   * to learn which other slugs exist.
+   */
+  app.get<{ Params: { slug: string } }>('/api/me/studio/games/:slug/workspace', async (request, reply) => {
+    if (!requireUser(request, reply)) return;
+    if (!options.gamesStore || !options.objectStore) {
+      return reply.status(503).send({ error: 'workspace checkout is not configured on this deployment' });
+    }
+
+    const slug = request.params.slug;
+    if (!/^[a-z0-9][a-z0-9-]{0,60}$/.test(slug)) {
+      return reply.status(400).send({ error: 'invalid slug' });
+    }
+
+    const records = await store.listSubmissionsByOwner(request.user!.uid);
+    const owned = records.filter((record) => record.slug === slug && !record.abandonedAt);
+    if (owned.length === 0) {
+      return reply.status(404).send({ error: 'no such game' });
+    }
+
+    // Same preference order as the agent's own `get_sources`: the newest thing the
+    // creator has, which for an improvement round is the live publication rather than
+    // this job's (still empty) delivery.
+    let version = owned.map((record) => record.previewVersion ?? record.deliveredVersion).find(Boolean) ?? null;
+    if (!version) {
+      const publication = await store.getPublication(slug);
+      if (publication?.state === 'published') version = publication.currentVersion;
+    }
+    if (!version) {
+      return reply.status(409).send({
+        error: 'nothing_delivered',
+        message: 'this game has no delivered version yet — let the first build finish, then check it out',
+      });
+    }
+
+    const manifest = await options.gamesStore.getManifest(slug, version);
+    if (!manifest) {
+      request.log.error({ slug, version }, 'workspace checkout: manifest missing for a version a job points at');
+      return reply.status(502).send({ error: 'the delivered version could not be read back' });
+    }
+
+    const sources = await Promise.all(
+      manifest.sourceFiles.map(async (path) => ({
+        path,
+        content: await options.gamesStore!.getSourceFile(slug, version, path),
+      })),
+    );
+    const missing = sources.filter((file) => file.content === null).map((file) => file.path);
+    if (missing.length > 0) {
+      request.log.error({ slug, version, missing }, 'workspace checkout: version is missing files its manifest lists');
+      return reply.status(502).send({ error: 'the delivered version could not be read back' });
+    }
+
+    try {
+      const registryBody = await options.objectStore.readObject('kits/current.json');
+      if (!registryBody) {
+        return reply.status(503).send({
+          error: 'kit_registry_missing',
+          message: 'the Creator Kit registry is not published yet',
+        });
+      }
+      const engineRef = parseKitRegistry(registryBody.toString('utf8')).current;
+
+      const sidecarBody = await options.objectStore.readObject(`kits/${engineRef}.json`);
+      const scaffoldBody = await options.objectStore.readObject(`workspaces/${engineRef}.tgz`);
+      if (!sidecarBody || !scaffoldBody) {
+        return reply.status(503).send({
+          error: 'workspace_scaffold_missing',
+          message: `no workspace scaffold published for engine ${engineRef}`,
+        });
+      }
+
+      const scaffold: TarEntry[] = [];
+      async function* once(): AsyncGenerator<Uint8Array> {
+        yield gunzipSync(scaffoldBody!);
+      }
+      for await (const item of readTarEntries(once(), { maxTotalBytes: MAX_SCAFFOLD_BYTES })) {
+        scaffold.push(item);
+      }
+
+      const archive = composeWorkspaceArchive({
+        slug,
+        lock: {
+          slug,
+          engineRef,
+          // Short-lived by design. `setup.mjs` is meant to be re-run — that is also the
+          // re-baseline path when the pin falls outside the kit's N/N−1 window — so a URL
+          // that expires costs a fresh checkout link, not a broken workspace.
+          kitUrl: await options.objectStore.signReadUrl(`kits/${engineRef}.tgz`, DEFAULT_SIGNED_URL_TTL_SECONDS),
+          kitSha256: parseKitSidecar(sidecarBody.toString('utf8')).sha256,
+          issuedAt: new Date(now()).toISOString(),
+        },
+        scaffold,
+        sources: sources as Array<{ path: string; content: string }>,
+      });
+
+      return (
+        reply
+          .header('content-type', 'application/gzip')
+          .header('content-disposition', `attachment; filename="${slug}-workspace.tgz"`)
+          // The signed kit URL inside makes every archive short-lived and per-creator.
+          .header('cache-control', 'private, no-store')
+          .send(archive)
+      );
+    } catch (error) {
+      if (error instanceof KitRegistryError) {
+        return reply.status(503).send({ error: error.code, message: error.message });
+      }
+      if (error instanceof WorkspaceCompositionError) {
+        // A scaffold that fails its own invariants is an operator problem, not the
+        // creator's: refuse rather than hand over an archive we cannot vouch for.
+        request.log.error({ slug, err: error }, 'workspace checkout: refused to compose an archive');
+        return reply.status(502).send({ error: 'the workspace could not be assembled' });
+      }
+      throw error;
+    }
   });
 }

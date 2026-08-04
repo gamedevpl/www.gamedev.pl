@@ -2,9 +2,10 @@
  * The cross-repo lockstep check itself (issue #247), separated from the CI script
  * so its failure modes are unit-testable.
  *
- * Reads `tools/lib/assemble.ts` and `tools/validate.ts` from the games repo and
- * asserts they still match `games-repo-contract.ts` on this side. Two outcomes are
- * emphatically not the same thing, and the difference is why this lives here:
+ * Reads `tools/lib/assemble.ts`, `tools/validate.ts` and `shared/delivery-contract.json`
+ * from the games repo and asserts they still match `games-repo-contract.ts` on this side.
+ * Two outcomes are emphatically not the same thing, and the difference is why this lives
+ * here:
  *
  *   - **drift** — the two halves disagree. That is the bug this check exists to
  *     catch, and it fails CI.
@@ -19,14 +20,29 @@
  * is that it says so loudly — as a CI annotation, with GitHub's own rate-limit
  * headers — and that `GAMES_CONTRACT_REQUIRE_REMOTE=1` turns it back into a failure
  * for anyone who wants the strict posture.
+ *
+ * A games tip that has no `shared/delivery-contract.json` yet is a third thing again: a
+ * successfully observed absence, not a failed read, and the expected state while this side
+ * merges first. It is tolerated, annotated on the ok outcome, and — unlike an unreachable
+ * remote — not turned into a failure by `GAMES_CONTRACT_REQUIRE_REMOTE`, which exists to
+ * demand that the fetch happened, and it did.
  */
 
 import {
+  DELIVERY_CONTRACT_PATH,
+  DELIVERY_CONTRACT_VERSION,
+  DELIVERY_EXTRA_MODULE_PATTERN,
+  DELIVERY_FIXED_FILES,
+  DELIVERY_MAX_FILES,
+  DELIVERY_MAX_UPLOAD_BYTES,
+  DELIVERY_RESERVED_SEGMENTS,
+  extractDeliveryContract,
   extractGameKitModules,
   extractMaxBundleBytes,
   extractMusicContractSignals,
   GAME_KIT_MODULES,
   MAX_PROJECT_BYTES,
+  type DeliveryContract,
 } from './games-repo-contract.js';
 import { isRateLimitResponse } from './github-rate-limit.js';
 
@@ -35,8 +51,11 @@ export type ContractCheckOutcome =
   | { kind: 'skipped'; reason: string }
   /** The games repo could not be read. Says nothing about drift. */
   | { kind: 'unreachable'; reason: string }
-  /** Both halves agree. */
-  | { kind: 'ok' }
+  /**
+   * Every half that could be compared agrees. `notes` carries the halves that were
+   * tolerated rather than compared, so a green run still says so out loud.
+   */
+  | { kind: 'ok'; notes?: string[] }
   /** The halves disagree — the failure this check is for. */
   | { kind: 'drift'; reason: string };
 
@@ -61,7 +80,15 @@ const MAX_RETRY_DELAY_MS = 10_000;
 /** Enough of GitHub's error body to name the cause without pasting a page of JSON. */
 const MAX_BODY_CHARS = 300;
 
-class UnreachableGamesRepoError extends Error {}
+class UnreachableGamesRepoError extends Error {
+  /** HTTP status of the last response, absent when the fault was below HTTP. */
+  readonly status: number | undefined;
+
+  constructor(message: string, status?: number) {
+    super(message);
+    this.status = status;
+  }
+}
 
 /** True when `remote` is an exact prefix of `local` (same order; local may be longer). */
 export function isModulePrefix(remote: string[], local: string[]): boolean {
@@ -156,6 +183,7 @@ export async function runGamesRepoContractCheck(options: ContractCheckOptions): 
   async function readGamesRepoFile(path: string): Promise<string> {
     const url = `https://api.github.com/repos/${repo}/contents/${path}?ref=${encodeURIComponent(ref)}`;
     let lastFailure = 'no attempt was made';
+    let lastStatus: number | undefined;
 
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
       let response: Response;
@@ -171,6 +199,7 @@ export async function runGamesRepoContractCheck(options: ContractCheckOptions): 
       } catch (error: unknown) {
         // A network fault is transient by definition — retry it like a 5xx.
         lastFailure = error instanceof Error ? error.message : String(error);
+        lastStatus = undefined;
         if (attempt + 1 < MAX_ATTEMPTS) {
           await sleep(RETRY_BASE_DELAY_MS * 2 ** attempt);
           continue;
@@ -187,6 +216,7 @@ export async function runGamesRepoContractCheck(options: ContractCheckOptions): 
       }
 
       lastFailure = await describeFailure(response);
+      lastStatus = response.status;
       if (!isTransientResponse(response) || attempt + 1 >= MAX_ATTEMPTS) {
         break;
       }
@@ -203,15 +233,35 @@ export async function runGamesRepoContractCheck(options: ContractCheckOptions): 
       await sleep(delayMs);
     }
 
-    throw new UnreachableGamesRepoError(`cannot read ${repo}@${ref}:${path} (${lastFailure})`);
+    throw new UnreachableGamesRepoError(`cannot read ${repo}@${ref}:${path} (${lastFailure})`, lastStatus);
+  }
+
+  /**
+   * Same read, but a 404 answers `null`. Only for halves this side is allowed to be ahead
+   * on: a games tip that predates the file is the expected state during a website-first
+   * rollout, and treating it as unreachable would make the ordering rule unusable. A wrong
+   * repo or ref cannot slip through as "absent": it 404s the two required files as well,
+   * and those reject the whole run as unreachable whatever this one answered.
+   */
+  async function readOptionalGamesRepoFile(path: string): Promise<string | null> {
+    try {
+      return await readGamesRepoFile(path);
+    } catch (error: unknown) {
+      if (error instanceof UnreachableGamesRepoError && error.status === 404) {
+        return null;
+      }
+      throw error;
+    }
   }
 
   let assembleSource: string;
   let validateSource: string;
+  let deliverySource: string | null;
   try {
-    [assembleSource, validateSource] = await Promise.all([
+    [assembleSource, validateSource, deliverySource] = await Promise.all([
       readGamesRepoFile('tools/lib/assemble.ts'),
       readGamesRepoFile('tools/validate.ts'),
+      readOptionalGamesRepoFile(DELIVERY_CONTRACT_PATH),
     ]);
   } catch (error: unknown) {
     if (error instanceof UnreachableGamesRepoError) {
@@ -314,5 +364,116 @@ export async function runGamesRepoContractCheck(options: ContractCheckOptions): 
   }
   log('  ✓ music contract (__GAME_AUDIO_MUSIC__ + tracks + readMusicCatalog)');
 
-  return { kind: 'ok' };
+  const notes: string[] = [];
+  if (deliverySource === null) {
+    notes.push(
+      `${DELIVERY_CONTRACT_PATH} is absent from ${repo}@${ref} (404) — the delivery half was NOT ` +
+        `compared. Expected only while this side is ahead of the games tip; if the file has landed ` +
+        `there, GAMES_PUBLISHED_REF is probably pointing at an older ref.`,
+    );
+    log(`  · ${DELIVERY_CONTRACT_PATH}: absent on the games tip — delivery half not compared`);
+  } else {
+    let remoteDelivery: DeliveryContract;
+    try {
+      remoteDelivery = extractDeliveryContract(deliverySource);
+    } catch (error: unknown) {
+      return { kind: 'drift', reason: error instanceof Error ? error.message : String(error) };
+    }
+    const delivery = describeDeliveryDrift(remoteDelivery);
+    if (delivery.drift) {
+      return { kind: 'drift', reason: delivery.drift };
+    }
+    notes.push(...delivery.notes);
+    log(`  ✓ delivery contract (${remoteDelivery.fixedFiles.length} fixed files, ${remoteDelivery.maxFiles} max)`);
+  }
+
+  return notes.length > 0 ? { kind: 'ok', notes } : { kind: 'ok' };
+}
+
+/**
+ * Compare the games repo's delivery contract against this side's constants.
+ *
+ * Asymmetric, and deliberately so — it enforces the ordering rule rather than mere
+ * equality. A path the games repo sends and this side refuses is the bug the whole check
+ * exists for: every delivery carrying it 400s at upload. The reverse — this side accepting
+ * a path no game sends yet — is the *intended* middle state of a website-first rollout, so
+ * failing on it would make the documented safe order the one that turns master red, and the
+ * unsafe order the comfortable one. It is reported as a note instead, loudly enough that a
+ * permanently half-landed change is still visible.
+ *
+ * Same asymmetry the GameKit module half already uses for website-ahead extras, arrived at
+ * for the same reason.
+ */
+function describeDeliveryDrift(remote: DeliveryContract): { drift: string | null; notes: string[] } {
+  const localFixed = [...DELIVERY_FIXED_FILES] as string[];
+  const problems: string[] = [];
+  const notes: string[] = [];
+
+  if (remote.version !== DELIVERY_CONTRACT_VERSION) {
+    problems.push(
+      `version: games-repo=${remote.version} website=${DELIVERY_CONTRACT_VERSION} — the contract ` +
+        `shape changed; update extractDeliveryContract before the values.`,
+    );
+  }
+
+  // The two directions are different bugs with different fixes, so they are never
+  // collapsed into one "lists differ" line.
+  const addedByGames = remote.fixedFiles.filter((path) => !localFixed.includes(path));
+  const websiteOnly = localFixed.filter((path) => !remote.fixedFiles.includes(path));
+  if (addedByGames.length > 0) {
+    problems.push(
+      `fixedFiles the games repo sends and this side refuses: ${addedByGames.join(', ')} — every ` +
+        `delivery carrying one 400s at upload. Add them to DELIVERY_FIXED_FILES now.`,
+    );
+  }
+  if (websiteOnly.length > 0) {
+    notes.push(
+      `delivery contract: this side accepts ${websiteOnly.join(', ')}, which the games repo does not ` +
+        `list yet. Harmless to deliveries and expected mid-rollout (this side widens first), but if the ` +
+        `paired games-repo change is not on its way, drop the entries here.`,
+    );
+  }
+
+  // Order is contractual — both sides render this list into agent-facing text — but only
+  // over what both sides have. Comparing full lists would re-fail the website-ahead case
+  // above as a phantom reorder.
+  const sharedRemote = remote.fixedFiles.filter((path) => localFixed.includes(path));
+  const sharedLocal = localFixed.filter((path) => remote.fixedFiles.includes(path));
+  if (addedByGames.length === 0 && sharedRemote.join(',') !== sharedLocal.join(',')) {
+    problems.push(
+      `fixedFiles order differs — games-repo: ${sharedRemote.join(', ')}; website: ${sharedLocal.join(', ')}. ` +
+        `Order is contractual: both sides render this list into agent-facing text.`,
+    );
+  }
+
+  if (remote.extraModulePattern !== DELIVERY_EXTRA_MODULE_PATTERN.source) {
+    problems.push(
+      `extraModulePattern: games-repo=${remote.extraModulePattern} ` +
+        `website=${DELIVERY_EXTRA_MODULE_PATTERN.source}`,
+    );
+  }
+
+  // Order carries no meaning for reserved segments — both sides use them as a set.
+  const localSegments = [...DELIVERY_RESERVED_SEGMENTS].sort();
+  const remoteSegments = [...remote.reservedSegments].sort();
+  if (localSegments.join(',') !== remoteSegments.join(',')) {
+    problems.push(`reservedSegments: games-repo=${remoteSegments.join(', ')} website=${localSegments.join(', ')}`);
+  }
+
+  if (remote.maxFiles !== DELIVERY_MAX_FILES) {
+    problems.push(`maxFiles: games-repo=${remote.maxFiles} website=${DELIVERY_MAX_FILES}`);
+  }
+  if (remote.maxUploadBytes !== DELIVERY_MAX_UPLOAD_BYTES) {
+    problems.push(`maxUploadBytes: games-repo=${remote.maxUploadBytes} website=${DELIVERY_MAX_UPLOAD_BYTES}`);
+  }
+
+  if (problems.length === 0) {
+    return { drift: null, notes };
+  }
+  return {
+    drift:
+      `delivery contract mismatch (${DELIVERY_CONTRACT_PATH} vs apps/api/src/games-repo-contract.ts):\n` +
+      problems.map((problem) => `  - ${problem}`).join('\n'),
+    notes,
+  };
 }

@@ -19,6 +19,13 @@
 
 import { randomBytes } from 'node:crypto';
 import { GoogleAuth } from 'google-auth-library';
+import {
+  DELIVERY_EXTRA_MODULE_PATTERN,
+  DELIVERY_FIXED_FILES,
+  DELIVERY_MAX_FILES,
+  DELIVERY_MAX_UPLOAD_BYTES,
+  DELIVERY_RESERVED_SEGMENTS,
+} from './games-repo-contract.js';
 import { KIT_REGISTRY_OBJECT, parseKitRegistry, type KitRegistry } from './kit-window.js';
 
 /**
@@ -30,65 +37,28 @@ import { KIT_REGISTRY_OBJECT, parseKitRegistry, type KitRegistry } from './kit-w
  * reaches `shared/`, `tools/`, or another game's directory, so a prompt-injected or
  * simply confused agent cannot widen its own scope.
  *
- * Game-shape only: SPEC / GAME / CAPTURE / PLAYTEST / TRACE, the playable trio, and the
- * game's own `.ts` modules (including under `game/`). Media bytes are produced by our
- * gate, never uploaded — `media/` paths are refused below.
+ * The list itself lives in `games-repo-contract.ts`, beside the other halves of the
+ * cross-repo lockstep, because it is shared with the games repo's own submit tool — and
+ * because keeping two literals in step by hand is what drifted three times. Change it
+ * there (and read the ordering rule in that file's header before you do); enforcement
+ * stays here. Media bytes are produced by our gate, never uploaded — `media/` paths are
+ * refused below rather than listed.
  */
-export const ALLOWED_SOURCE_FILES = [
-  'SPEC.md',
-  'GAME.json',
-  'CAPTURE.json',
-  'ACCEPTANCE.json',
-  // The committed behavioural golden. It is not source in the ordinary sense, but the
-  // gate replays CAPTURE.json against our engine and diffs the result against this file,
-  // so a delivery without it is one the gate cannot check — it fails at the trace stage
-  // with `no committed trace`, having proved nothing about the game.
-  'TRACE.json',
-  // The per-game playtest contract the harness requires of every game (validate Check
-  // 26, `tools/lib/playtest-contract.ts`). Same shape of dependency as TRACE.json: a
-  // harness-side requirement that only the agent can satisfy, so leaving it off this
-  // list does not keep anything out — it makes every delivery unpassable. It did: the
-  // check landed in the games repo while this list stayed as it was, and from then on
-  // each delivered game reached validate and stopped there, with no gate artifacts and
-  // therefore no draft preview for the creator watching.
-  'PLAYTEST.json',
-  // Validate Check 28 (`tools/lib/agent-contract.ts`) requires AGENT.json so
-  // `npm run agent-play` knows whether to replay CAPTURE or load a closed-loop module.
-  // Same drift class as TRACE/PLAYTEST above: the check landed in the games repo while
-  // this list stayed put, so agents that wrote a correct AGENT.json were told the path
-  // was not deliverable, dropped it, and then failed the remote gate at Check 28 —
-  // burning a session on allowlist archaeology instead of the game.
-  //
-  // Accepted here, but not hard-required yet: in-flight builder workspaces still ship the
-  // pre-companion submit tool that omits AGENT.json, and the two repos cannot deploy
-  // atomically. Requiring it at upload would 400 those deliveries before the gate could
-  // even run. Let Check 28 report the missing contract until old workspaces drain; then
-  // promote to a required upload (same path TRACE/PLAYTEST already took).
-  'AGENT.json',
-  // The editor declaration (EditorKit L0, games-repo Check 31). Optional — only
-  // born-editable games ship one — but same drift class as TRACE/PLAYTEST/AGENT
-  // above: the games repo's `FIXED_FILES` already lists it, and refusing it here
-  // would 400 every born-editable delivery at upload. The generated
-  // `game/editor-content.ts` needs no entry, it matches EXTRA_SOURCE_PATTERN.
-  'EDITOR.json',
-  'index.html',
-  'game.ts',
-  'style.css',
-  'sim.ts',
-] as const;
+export const ALLOWED_SOURCE_FILES = DELIVERY_FIXED_FILES;
 
-/**
- * Additional source files a game may carry beyond the fixed set — its own modules only.
- * Kept narrow on purpose: relative imports inside the game directory are the one thing
- * games legitimately add, and everything else is a smell. Covers modules under `game/`
- * and other in-game modules (`entities/player.ts`, …).
- */
-const EXTRA_SOURCE_PATTERN = /^[a-z0-9][a-z0-9/-]{0,60}\.ts$/;
+/** A game's own `.ts` modules, the one thing it may add beyond the fixed set. */
+const EXTRA_SOURCE_PATTERN = DELIVERY_EXTRA_MODULE_PATTERN;
 
 /**
  * Config-shaped or executable-config paths an externally-authored delivery must never
  * carry. Named separately from the allowlist so the rejection reason can point at the
  * offending path as a config/exec smell rather than a vague "not deliverable".
+ *
+ * Deliberately *not* part of the shared delivery contract: these are platform-side
+ * anti-RCE controls with no games-repo counterpart. The games repo's submit tool has
+ * nothing to gain from knowing them — it never sends such a path — while a game that does
+ * is either confused or hostile, and either way this side must refuse it whatever the
+ * shared contract says. Tightening them is a website-only change and needs no lockstep.
  */
 const FORBIDDEN_DELIVERY_BASENAME =
   /^(tsconfig(\..*)?\.json|package(-lock)?\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lockb?|composer\.json|\.npmrc|\.eslintrc(\..*)?|vite\.config\..+|webpack\.config\..+|rollup\.config\..+|jest\.config\..+|vitest\.config\..+)$/i;
@@ -108,7 +78,7 @@ const FORBIDDEN_DELIVERY_EXTENSION = /\.(js|mjs|cjs|jsx|tsx|sh|bash|zsh|ps1|bat|
  * reviewing a diff can see it holding. Costing an agent one clear error message is a
  * better trade than a directory listing nobody can interpret at a glance.
  */
-const RESERVED_SEGMENTS = new Set(['shared', 'tools', 'games', 'node_modules', 'dist', 'references', 'templates']);
+const RESERVED_SEGMENTS = new Set<string>(DELIVERY_RESERVED_SEGMENTS);
 
 /** Mirrors the games repo's own slug rule, so a name valid here is valid there. */
 const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
@@ -118,10 +88,10 @@ const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
  * in the catalog is a few hundred KB of TypeScript) and far below anything that would
  * make a rogue upload interesting as a storage attack.
  */
-export const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
+export const MAX_UPLOAD_BYTES = DELIVERY_MAX_UPLOAD_BYTES;
 /** Cap on files per delivery. Aligned with the MCP `submit_sources` schema; the
  * byte budget (`MAX_UPLOAD_BYTES`) and filename allowlist still bound abuse. */
-export const MAX_UPLOAD_FILES = 200;
+export const MAX_UPLOAD_FILES = DELIVERY_MAX_FILES;
 
 export interface SourceFile {
   path: string;
