@@ -396,12 +396,29 @@ export async function registerCreatorStudioRoutes(
         });
       }
 
+      // Bounded at the gunzip, not only after it: `readTarEntries`' cap is on what it
+      // retains, so an over-large or corrupt scaffold would already have been inflated
+      // in full by the time that applied. The scaffold is our own artifact rather than
+      // creator input, so this guards a mispublish rather than an attacker — but the
+      // cost of being wrong about that is the API's memory, and the bound is one option.
       const scaffold: TarEntry[] = [];
-      async function* once(): AsyncGenerator<Uint8Array> {
-        yield gunzipSync(scaffoldBody!);
-      }
-      for await (const item of readTarEntries(once(), { maxTotalBytes: MAX_SCAFFOLD_BYTES })) {
-        scaffold.push(item);
+      try {
+        const unpacked = gunzipSync(scaffoldBody, { maxOutputLength: MAX_SCAFFOLD_BYTES });
+        async function* once(): AsyncGenerator<Uint8Array> {
+          yield unpacked;
+        }
+        for await (const item of readTarEntries(once(), { maxTotalBytes: MAX_SCAFFOLD_BYTES })) {
+          scaffold.push(item);
+        }
+      } catch (error) {
+        // Unreadable is the same class of problem as invalid, and gets the same answer:
+        // a controlled 502 naming an operator problem, rather than a 500 that reads to
+        // the creator as "the site is broken" and to us as an unhandled exception.
+        throw new WorkspaceCompositionError(
+          `workspace scaffold for engine ${engineRef} could not be read: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
       }
 
       const archive = composeWorkspaceArchive({

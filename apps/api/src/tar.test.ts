@@ -213,6 +213,15 @@ describe('writeTarGz', () => {
     expect(writeTarGz(files).equals(writeTarGz(files))).toBe(true);
   });
 
+  it('pins the gzip header timestamp, not just the tar payload', () => {
+    // Comparing two archives written back to back cannot see a seconds-resolution
+    // timestamp, so determinism is asserted against the header field itself. Node
+    // leaves gzip MTIME at zero because it never calls deflateSetHeader — true, but
+    // true by omission, which is worth a test rather than a comment.
+    const archive = writeTarGz([{ path: 'x.txt', content: 'same\n' }]);
+    expect(archive.readUInt32LE(4)).toBe(0);
+  });
+
   it('refuses paths that would extract outside the archive root', () => {
     expect(() => writeTarGz([{ path: '/etc/passwd', content: '' }])).toThrow(/refusing/);
     expect(() => writeTarGz([{ path: 'a/../../b', content: '' }])).toThrow(/refusing/);

@@ -207,6 +207,20 @@ describe('GET /api/me/studio/games/:slug/workspace', () => {
     expect(res.json().error).toBe('workspace_scaffold_missing');
   });
 
+  it('answers 502, not 500, when the published scaffold cannot be decompressed', async () => {
+    const objects = objectsWithScaffold();
+    objects.set(`workspaces/${ENGINE}.tgz`, Buffer.from('not gzip at all'));
+    const app = await createApp(store, objects);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/me/studio/games/${SLUG}/workspace`,
+      headers: authHeaders('g:creator'),
+    });
+
+    expect(res.statusCode).toBe(502);
+  });
+
   it('refuses to assemble an archive from a scaffold that carries engine content', async () => {
     const objects = objectsWithScaffold();
     objects.set(
