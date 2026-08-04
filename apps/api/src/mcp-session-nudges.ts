@@ -34,7 +34,7 @@ export interface JobNudgeState {
   lastGatePollAt: number | null;
 }
 
-/** Minimum wall-clock gap used to detect a client that ignored pending's `stop:true`. */
+/** Minimum wall-clock gap used to detect repeated gate checks inside one agent run. */
 export const GATE_POLL_MIN_INTERVAL_MS = 25_000;
 /** Informational delay before a later creator-led run checks a pending gate again. */
 export const GATE_POLL_RETRY_AFTER_SECONDS = 30;
@@ -234,14 +234,13 @@ export function createMcpNudgeTracker(
       });
     }
 
-    // Defense in depth for clients that ignore pending's stop:true. The stop is carried
-    // directly by every pending response; this warning makes an ignored stop unmistakable.
+    // Defense in depth for clients that repeat the one-shot check. A delivered pending
+    // response carries stop:true; a no-delivery response tells the agent to keep building.
     if (toolName === 'get_gate_verdict') {
       if (state.lastGatePollAt !== null && nowMs - state.lastGatePollAt < GATE_POLL_MIN_INTERVAL_MS) {
-        const waitSec = Math.max(1, Math.ceil((GATE_POLL_MIN_INTERVAL_MS - (nowMs - state.lastGatePollAt)) / 1000));
         warnings.push({
           code: 'gate_poll_backoff',
-          message: `You ignored stop:true from a pending gate. STOP this run now; do not call get_gate_verdict or any other tool again. Studio will show the result. A later creator-led run may check again after ~${waitSec}s (retryAfterSeconds=${GATE_POLL_RETRY_AFTER_SECONDS}).`,
+          message: `Do not repeat get_gate_verdict in one run. If a delivery is pending, honour stop:true; if deliveryId is null, continue building and call submit_sources instead. A later creator-led run may check a delivered gate after retryAfterSeconds=${GATE_POLL_RETRY_AFTER_SECONDS} has elapsed.`,
         });
       }
       state.lastGatePollAt = nowMs;
