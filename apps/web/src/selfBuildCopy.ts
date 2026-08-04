@@ -9,14 +9,14 @@
  * Pure functions so the selection is unit-tested without mounting Studio.
  */
 
-export type SelfStatusCopy = 'no_agent_yet' | 'quiet_agent' | 'delivery_cap';
+export type SelfStatusCopy = 'no_agent_yet' | 'quiet_agent' | 'agent_ended' | 'delivery_cap';
 
 /** Where a self-round composer message will actually go. */
 export type SelfComposerRoute = 'active' | 'waiting';
 
 export type SelfBuildCopyInput = {
   builder?: 'platform' | 'self' | null;
-  stall?: 'awaiting_input' | 'not_dispatched' | 'quiet' | 'gate_not_started' | 'no_agent_yet' | null;
+  stall?: 'awaiting_input' | 'not_dispatched' | 'quiet' | 'ended' | 'gate_not_started' | 'no_agent_yet' | null;
   failureReason?: string | null;
   /**
    * Internal job phase when the coarse status is lossy. Gate-green drafts project as
@@ -35,6 +35,7 @@ export function selfStatusCopy(input: SelfBuildCopyInput): SelfStatusCopy | null
   if (input.failureReason === 'self_build_delivery_cap') return 'delivery_cap';
   if (input.builder !== 'self') return null;
   if (input.stall === 'no_agent_yet') return 'no_agent_yet';
+  if (input.stall === 'ended') return 'agent_ended';
   if (input.stall === 'quiet') return 'quiet_agent';
   return null;
 }
@@ -49,6 +50,9 @@ export function selfStatusCopy(input: SelfBuildCopyInput): SelfStatusCopy | null
  * connect endpoint returns `inactive_round`, so mounting the card only produced a
  * red "could not load connect steps" while ChatGPT correctly said Done. Gate-green
  * is Final check / waiting to publish — not a reconnect moment.
+ *
+ * Not shown after MCP `end` (`ended`): the agent finished on purpose — handoff /
+ * composer note, not reconnect.
  *
  * Quiet uses {@link connectCardMode} `resume` (kickoff-first), not the full
  * first-time MCP install chrome.
@@ -79,9 +83,9 @@ export function connectCardMode(input: SelfBuildCopyInput): ConnectCardMode | nu
  * composer should not be on screen.
  *
  * Pre-first-signal (`no_agent_yet`): returns null — Studio hides the composer; the
- * connect card is the only action. `waiting` is for quiet / gate-green / delivery-cap,
- * where a note can still be left for the next start. `active` means a recent signal so
- * the next check-in will pick the inbox up.
+ * connect card is the only action. `waiting` is for quiet / ended / gate-green /
+ * delivery-cap, where a note can still be left for the next start. `active` means a
+ * recent signal so the next check-in will pick the inbox up.
  *
  * Gate-green (`ready_for_review`) closes the round and retires the session key, so
  * claiming a next check-in would be a lie — route as waiting even with a stale stall.
@@ -91,6 +95,6 @@ export function selfComposerRoute(input: SelfBuildCopyInput): SelfComposerRoute 
   if (input.stall === 'no_agent_yet') return null;
   if (input.failureReason === 'self_build_delivery_cap') return 'waiting';
   if (input.phase === 'ready_for_review') return 'waiting';
-  if (input.stall === 'quiet') return 'waiting';
+  if (input.stall === 'quiet' || input.stall === 'ended') return 'waiting';
   return 'active';
 }

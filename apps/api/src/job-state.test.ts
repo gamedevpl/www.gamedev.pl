@@ -285,6 +285,26 @@ describe('detectStall', () => {
     expect(detectStall({ state: 'building', stateSince: ago(HOUR), now: NOW })).toBe('quiet');
   });
 
+  it('prefers MCP end over quiet / gate_not_started', () => {
+    expect(
+      detectStall({
+        state: 'building',
+        stateSince: ago(60_000),
+        lastAgentSignalAt: ago(30_000),
+        agentEndedAt: ago(10_000),
+        now: NOW,
+      }),
+    ).toBe('ended');
+    expect(
+      detectStall({
+        state: 'submitted',
+        stateSince: ago(HOUR),
+        agentEndedAt: ago(5_000),
+        now: NOW,
+      }),
+    ).toBe('ended');
+  });
+
   it('catches our own gate failing to start', () => {
     expect(detectStall({ state: 'submitted', stateSince: ago(HOUR), now: NOW })).toBe('gate_not_started');
   });

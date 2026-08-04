@@ -297,6 +297,7 @@ const BEHAVIOURAL_CONTRACT = [
   'Send a screenshot as soon as the game draws anything playable.',
   'While iterating, deliver with mode=preview (no TRACE required). Prefer stage_source_file once per path then submit_sources({ fromStaged:true, mode:"preview", kitEngineRef }) — avoid one giant files[] payload. Only mode=publish needs TRACE/PLAYTEST and can go green.',
   'Run kit checks green (at least check:static) before submit_sources when you have a local kit checkout; otherwise submit and let the gate run checks.',
+  'After submit_sources, if you will not deliver more this round, call end (required — warnings.code=call_end). Do not stop after submit alone.',
   'Honour stop immediately — do not continue after stop:true.',
   'When seedAvailable/seedStatus=available (or warnings.code=seed_unread), call get_seed and continue that draft — do not scaffold from scratch. When seedStatus=pending, recheck get_seed before scaffolding.',
   'Every write reply carries pendingMessages — when that array is non-empty, read_inbox and apply before continuing.',
@@ -322,6 +323,7 @@ const SESSION_WORKFLOW: readonly string[] = [
   'Build the game — continuing the seed or sources you fetched, otherwise from the kit; report_progress before and after long steps.',
   'send_screenshot as soon as the game draws anything playable.',
   'While iterating: prefer stage_source_file({ path, content }) for each game file (list_staged_sources to check), then submit_sources({ fromStaged: true, mode: "preview", kitEngineRef }) — TRACE/PLAYTEST not required; Studio gets a playable draft after typecheck→smoke→build. Inline files[] still works for tiny trees.',
+  'After every successful submit_sources: if you will not deliver more this round, call end immediately (warnings.code=call_end). submit alone is not enough — ChatGPT-class agents often stop after submit; end tells Studio you are done so the creator can hand off without waiting.',
   'Poll get_gate_verdict until preview_passed or preview_failed; fix and re-preview on the SAME key. preview_passed does NOT end the round.',
   'When ready to seal: record TRACE (`npm run trace -- <slug> --accept` if you have a kit checkout), stage/include PLAYTEST.json + TRACE.json, then submit_sources({ fromStaged: true, mode: "publish", kitEngineRef }) (or inline files[]).',
   'Poll get_gate_verdict about every 30s until it is green, red, or kit_outdated (publish lane).',
@@ -331,7 +333,7 @@ const SESSION_WORKFLOW: readonly string[] = [
   // Green closes the round before the next tool call; writes and non-receipt reads then
   // reject the retired key (terminal-receipt tests). Any final progress/inbox work must
   // happen on earlier write replies — do not instruct post-green tools (Codex P1).
-  'green (publish only): the round is complete — END the session immediately. Do not report_progress, read_inbox, or ack after green; the key retired with that transition (get_gate_verdict and get_gate_media may still answer via terminal receipt). ' +
+  'green (publish only): the round is complete — END the session immediately (end tool is optional after green; the key already retired). Do not report_progress, read_inbox, or ack after green; the key retired with that transition (get_gate_verdict and get_gate_media may still answer via terminal receipt). ' +
     'If the creator wants more changes before publish, call continue_draft({ feedback }) then start() — do not call open_round on an unpublished draft.',
 ];
 
@@ -714,7 +716,13 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     }
 
     nudgeTracker.noteToolSuccess(jobId, toolName, nowMs);
-    const warnings: NudgeWarning[] = nudgeTracker.warningsFor(jobId, toolName, nowMs);
+    const nudgeWarnings: NudgeWarning[] = nudgeTracker.warningsFor(jobId, toolName, nowMs);
+    const prior = Array.isArray(data.warnings)
+      ? (data.warnings as NudgeWarning[]).filter(
+          (w) => w && typeof w === 'object' && typeof w.code === 'string' && typeof w.message === 'string',
+        )
+      : [];
+    const warnings = [...prior, ...nudgeWarnings];
     if (warnings.length === 0 && !piggybacked) {
       return result;
     }
@@ -778,11 +786,11 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     warnings: {
       type: 'array',
       description:
-        'Soft session nudges (progress_stale, inbox_pending). Not errors — act on them, then continue the workflow.',
+        'Soft session nudges (progress_stale, inbox_pending, call_end, seed_unread). Not errors — act on them, then continue the workflow.',
       items: {
         type: 'object',
         properties: {
-          code: { type: 'string', enum: ['progress_stale', 'inbox_pending'] },
+          code: { type: 'string', enum: ['progress_stale', 'inbox_pending', 'seed_unread', 'call_end'] },
           message: { type: 'string' },
         },
         required: ['code', 'message'],
@@ -2878,8 +2886,9 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         const used =
           (await store!.getSubmission(auth.issueNumber))?.roundDeliveryCount ?? auth.record.roundDeliveryCount ?? 0;
 
+        const accepted = body.accepted !== false;
         return toolOk({
-          ok: body.accepted !== false,
+          ok: accepted,
           mode: body.mode === 'preview' ? 'preview' : 'publish',
           ...(body.rejected ? { rejected: body.rejected } : {}),
           deliveryId: body.delivery?.version ?? null,
@@ -2887,6 +2896,75 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           gateStarted: body.accepted === true,
           deliveriesRemaining: cap === null ? null : Math.max(0, cap - used),
           ...stopFromChannel(body),
+          pendingMessages: pendingMessagesFromChannel(body),
+          ...(accepted
+            ? {
+                warnings: [
+                  {
+                    code: 'call_end',
+                    message:
+                      'Call end when you will not deliver more this round. submit_sources alone is not enough — ' +
+                      'without end, Studio cannot tell you finished and the creator may wait on a quiet timeout.',
+                  },
+                ],
+              }
+            : {}),
+        });
+      },
+    },
+
+    end: {
+      annotations: { title: 'End (commit) this round', ...WRITES, idempotentHint: true },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          ok: { type: 'boolean' },
+          ended: { type: 'boolean' },
+          rejected: { type: 'string' },
+          ...REPLY_CONTROL,
+        },
+        required: ['ok', 'ended', 'stop', 'pendingMessages'],
+      },
+      description:
+        'Signal that you are finished iterating this round (commit / done). Call after your last submit_sources ' +
+        'when you will not deliver more — required whenever submit returns warnings.code=call_end. ' +
+        'Does not publish by itself; unlocks creator handoff to the platform without waiting for silence. ' +
+        'After a green publish verdict the key already retires — end is optional then. ' +
+        BEHAVIOURAL_CONTRACT,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          sessionKey: SESSION_KEY_PROP,
+          note: {
+            type: 'string',
+            description: 'Optional short note for logs (not shown as a Studio chat turn).',
+          },
+        },
+      },
+      handler: async (args, ctx) => {
+        const auth = await resolveAuth(ctx, args);
+        if (!('channelToken' in auth)) return auth;
+
+        const res = await injectChannel(ctx.request, 'POST', '/api/agent/build/end', auth.channelToken, {});
+        const body = res.json() as {
+          error?: string;
+          accepted?: boolean;
+          ended?: boolean;
+          rejected?: string;
+          control?: { stop?: boolean; reason?: string };
+          pending?: Array<{ id: string; text: string; createdAt: string }>;
+        };
+        if (res.statusCode !== 200) {
+          return toolErr(body.error ?? `end failed (${res.statusCode})`, body);
+        }
+        const ended = body.accepted !== false && body.ended !== false;
+        return toolOk({
+          ok: ended,
+          ended,
+          ...(body.rejected ? { rejected: body.rejected } : {}),
+          // Soft stop: tell the agent to halt; channel still accepts writes if they resume.
+          stop: true,
+          reason: 'agent_ended',
           pendingMessages: pendingMessagesFromChannel(body),
         });
       },

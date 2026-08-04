@@ -2,10 +2,11 @@
 //
 // A property of the *round*, not the game. The game keeps a default (= last used) so the
 // next round can offer a sensible choice. Mid-flight switches are refused except a
-// deliberate quiet self→platform handoff (agent silent; round generation bump kills the
-// self token so two agents cannot write the same round).
+// deliberate self→platform handoff when the agent has ended (MCP `end`) or gone quiet
+// (fallback); round generation bump kills the self token so two agents cannot write
+// the same round.
 
-import type { JobState, JobTransition } from './job-state.js';
+import type { JobState, JobStall, JobTransition } from './job-state.js';
 
 export const BUILDERS = ['platform', 'self'] as const;
 export type BuilderKind = (typeof BUILDERS)[number];
@@ -56,10 +57,18 @@ export function isActiveBuildRound(record: { state?: JobState; transitions?: Job
   }
 }
 
+/** Stalls that unlock mid-round self→platform handoff. */
+const SELF_TO_PLATFORM_HANDOFF_STALLS: ReadonlySet<JobStall> = new Set(['ended', 'quiet']);
+
 /**
- * Quiet self round → platform: the creator's escape hatch when their agent has
- * stopped talking. Refuses the reverse and refuses while the agent is still chatty
- * (or has never connected — that is still "waiting to start", not a handoff).
+ * Self round → platform: the creator's escape hatch when their agent has finished
+ * (`ended` via MCP `end`) or stopped talking (`quiet`, time-based fallback). Refuses
+ * the reverse and refuses while the agent is still chatty (or has never connected —
+ * that is still "waiting to start", not a handoff).
+ *
+ * Prefer `ended`: ChatGPT-class agents usually submit and stop, so waiting 15 minutes
+ * of silence is the wrong primary signal. Quiet remains the backstop when `end` is
+ * never called.
  *
  * Race kill: handoff goes through `resumeBuild`, which bumps `roundGeneration` before
  * minting the platform brief, so the self MCP token dies; late self deliveries land as
@@ -71,7 +80,7 @@ export function allowsQuietBuilderHandoff(input: {
   stall?: string | null;
 }): boolean {
   if (input.requestedBuilder !== 'platform' || input.currentBuilder !== 'self') return false;
-  return input.stall === 'quiet';
+  return typeof input.stall === 'string' && SELF_TO_PLATFORM_HANDOFF_STALLS.has(input.stall as JobStall);
 }
 
 /**

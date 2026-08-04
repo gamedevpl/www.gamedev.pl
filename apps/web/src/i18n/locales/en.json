@@ -665,6 +665,8 @@
       "not_dispatched": "The build hasn't been picked up by an agent yet. It's been waiting longer than expected — we're looking into it.",
       "quiet": "The agent has been quiet for a while. It may still be working — or you can send feedback below to start another round.",
       "quietSelf": "Your coding agent has been quiet. We can't start it from here — paste the prompt below into your agent when you're ready, or send a note that it will pick up on its next run.",
+      "ended": "Your coding agent finished this round. Send feedback below to continue, or switch to the platform builder.",
+      "endedSelf": "Your coding agent finished this round. Send a note below to continue with your agent, or choose the platform builder to hand the work over.",
       "gate_not_started": "The game was delivered, but verification hasn't started yet. This is on our side — no action needed from you.",
       "no_agent_yet": "No agent yet — this round waits for your coding agent. Follow the steps below to connect it."
     },

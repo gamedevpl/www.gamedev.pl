@@ -380,6 +380,11 @@ export type JobStall =
   | 'not_dispatched'
   /** A live session that has said nothing for a while. The old heuristic, kept. */
   | 'quiet'
+  /**
+   * The agent called MCP `end` — finished iterating this round on purpose.
+   * Prefer this over inferred quiet; unlocks creator self→platform handoff immediately.
+   */
+  | 'ended'
   /** Delivered, but our own gate never picked it up. Our bug, not the agent's. */
   | 'gate_not_started'
   /**
@@ -415,6 +420,11 @@ export interface StallInput {
   lastAgentSignalAt?: string;
   /** Latest agent observation, when we have one. */
   agentState?: AgentTaskState;
+  /**
+   * When the agent explicitly ended this round (MCP `end`). Cleared on the next
+   * channel write so a resumed session is not stuck as handed-off.
+   */
+  agentEndedAt?: string;
   now: number;
   thresholds?: StallThresholds;
   /**
@@ -439,6 +449,9 @@ export function detectStall(input: StallInput): JobStall | null {
   // Explicit beats inferred: if the agent says it is waiting for us, there is nothing to
   // deduce from timestamps and no waiting period worth observing.
   if (input.agentState === 'waiting_for_user') return 'awaiting_input';
+
+  // MCP `end` is an explicit "I am done iterating" — do not wait for the quiet window.
+  if (input.agentEndedAt) return 'ended';
 
   // Self rounds before the first channel signal are waiting, not stalled. After the
   // first signal, ordinary quiet detection applies.

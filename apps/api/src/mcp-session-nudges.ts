@@ -7,7 +7,7 @@
  * results by the MCP dispatcher.
  */
 
-export type NudgeCode = 'progress_stale' | 'inbox_pending' | 'seed_unread';
+export type NudgeCode = 'progress_stale' | 'inbox_pending' | 'seed_unread' | 'call_end';
 
 export interface NudgeWarning {
   code: NudgeCode;
@@ -40,6 +40,7 @@ export const PROGRESS_NUDGE_EXEMPT = new Set([
   'get_gate_verdict',
   'read_inbox',
   'ack_inbox',
+  'end',
 ]);
 
 /**

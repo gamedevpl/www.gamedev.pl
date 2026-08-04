@@ -24,7 +24,7 @@ export type JobState =
   | 'canceled'
   | 'abandoned';
 
-export type JobStall = 'awaiting_input' | 'not_dispatched' | 'quiet' | 'gate_not_started';
+export type JobStall = 'awaiting_input' | 'not_dispatched' | 'quiet' | 'ended' | 'gate_not_started';
 
 export interface JobQueueEntry {
   issueNumber: number;

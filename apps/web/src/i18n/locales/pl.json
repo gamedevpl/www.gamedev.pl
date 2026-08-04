@@ -669,6 +669,8 @@
       "not_dispatched": "Budowa nie została jeszcze podjęta przez agenta. Trwa to dłużej niż zwykle — sprawdzamy to.",
       "quiet": "Agent od dłuższej chwili nie daje znaku życia. Może wciąż pracuje — możesz też wysłać poniżej uwagi, aby rozpocząć kolejną rundę.",
       "quietSelf": "Twój agent od dłuższej chwili milczy. Nie możemy go stąd uruchomić — wklej poniżej prompt do swojego agenta, gdy będziesz gotowy, albo wyślij uwagę, którą odbierze przy następnym uruchomieniu.",
+      "ended": "Twój agent zakończył tę rundę. Wyślij uwagę poniżej, żeby kontynuować, albo przełącz na budowę platformową.",
+      "endedSelf": "Twój agent zakończył tę rundę. Wyślij uwagę poniżej, żeby kontynuować ze swoim agentem, albo wybierz budowę platformową, żeby przekazać pracę.",
       "gate_not_started": "Gra została dostarczona, ale weryfikacja jeszcze się nie rozpoczęła. To po naszej stronie — nie musisz nic robić.",
       "no_agent_yet": "Nie ma jeszcze agenta — ta runda czeka na Twojego agenta. Wykonaj kroki poniżej, żeby go podłączyć."
     },

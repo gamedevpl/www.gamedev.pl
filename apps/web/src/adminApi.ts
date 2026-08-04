@@ -19,7 +19,7 @@ export interface OperatorAlert {
   ownerUid?: string;
   slug?: string;
   since: string;
-  stall?: 'awaiting_input' | 'not_dispatched' | 'quiet' | 'gate_not_started';
+  stall?: 'awaiting_input' | 'not_dispatched' | 'quiet' | 'ended' | 'gate_not_started';
 }
 
 export interface AdminSummary {

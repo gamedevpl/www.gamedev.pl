@@ -1821,6 +1821,7 @@ export async function registerSubmissionRoutes(
       stateSince: record.stateSince ?? record.createdAt,
       lastAgentSignalAt: record.lastAgentSignalAt,
       agentState: record.agentState,
+      agentEndedAt: record.agentEndedAt,
       now: now(),
       builder: builderOf(record),
     });
@@ -2948,11 +2949,12 @@ export async function registerSubmissionRoutes(
             stateSince: record.stateSince ?? record.createdAt,
             lastAgentSignalAt: record.lastAgentSignalAt,
             agentState: record.agentState,
+            agentEndedAt: record.agentEndedAt,
             now: now(),
             builder: current,
           });
-          // Quiet / never-connected self → platform is the handoff escape hatch. Anything
-          // else mid-round stays locked (two agents must not write the same round).
+          // Ended (MCP `end`) or quiet self → platform is the handoff escape hatch.
+          // Anything else mid-round stays locked (two agents must not write the same round).
           if (
             !allowsQuietBuilderHandoff({
               currentBuilder: current,
@@ -2993,7 +2995,7 @@ export async function registerSubmissionRoutes(
       // A queued job with no refs is the opposite: dispatch never landed, so nobody
       // will poll — fall through to resumeBuild so feedback can still start a session.
       //
-      // Quiet self→platform handoff must resume (generation bump + platform dispatch),
+      // Self→platform handoff must resume (generation bump + platform dispatch),
       // not drop mail for the agent we are about to invalidate.
       const builderChanging = Boolean(
         record && requestedBuilder && isBuilderKind(requestedBuilder) && requestedBuilder !== builderOf(record),
@@ -3008,20 +3010,39 @@ export async function registerSubmissionRoutes(
         });
       }
 
+      const handoffStall =
+        builderChanging && record
+          ? detectStall({
+              state: record.state ?? 'queued',
+              stateSince: record.stateSince ?? record.createdAt,
+              lastAgentSignalAt: record.lastAgentSignalAt,
+              agentState: record.agentState,
+              agentEndedAt: record.agentEndedAt,
+              now: now(),
+              builder: builderOf(record),
+            })
+          : null;
+      const handoffReason =
+        handoffStall === 'ended'
+          ? 'agent_ended_handoff'
+          : builderChanging
+            ? 'quiet_builder_handoff'
+            : 'creator_feedback';
+
       const outcome = await resumeBuild({
         issueNumber,
         feedback: inboxText,
         locale: creatorLocale,
         log: request.log,
         // Handoff always opens a new round generation even when a candidate exists —
-        // that bump is what kills the quiet self agent's token.
+        // that bump is what kills the self agent's token.
         ...(builderChanging ? {} : record?.deliveredVersion ? {} : { undelivered: true }),
         ...(requestedBuilder && isBuilderKind(requestedBuilder) ? { builder: requestedBuilder } : {}),
         // Name the actor so a ready_for_review → building reopen does not look like a
         // GitHub-derived observation in the job history.
         transition: {
           by: 'creator',
-          reason: builderChanging ? 'quiet_builder_handoff' : 'creator_feedback',
+          reason: handoffReason,
         },
       });
 

@@ -729,6 +729,37 @@ describe('SubmissionStatusView', () => {
     }
   });
 
+  it('offers platform handoff when the self agent called end, without reconnect chrome', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'building',
+      stall: 'ended',
+      builder: 'self',
+      events: [],
+    });
+
+    await i18n.changeLanguage('en');
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    try {
+      await act(async () => {
+        root.render(createElement(SubmissionStatusView, { token: 'ended-token', embedded: true }));
+        await flushEffects();
+        await flushEffects();
+      });
+
+      expect(container.querySelector('.studio-connect')).toBeNull();
+      expect(container.querySelector('.status-warning')?.textContent).toMatch(/finished this round/i);
+      expect(container.querySelector('.builder-choice')).not.toBeNull();
+    } finally {
+      await act(async () => {
+        root.unmount();
+      });
+    }
+  });
+
   it('names a delivery-cap stop for a self round', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     mockedGetSubmissionStatus.mockResolvedValue({

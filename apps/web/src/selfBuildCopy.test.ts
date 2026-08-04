@@ -17,6 +17,10 @@ describe('selfStatusCopy', () => {
     expect(selfStatusCopy({ builder: 'self', stall: 'quiet' })).toBe('quiet_agent');
   });
 
+  it('selects agent_ended when the agent called end', () => {
+    expect(selfStatusCopy({ builder: 'self', stall: 'ended' })).toBe('agent_ended');
+  });
+
   it('selects delivery_cap over stall when the round hit its ceiling', () => {
     expect(
       selfStatusCopy({
@@ -43,6 +47,10 @@ describe('shouldShowConnectCard', () => {
   it('shows for no-agent-yet and quiet self rounds', () => {
     expect(shouldShowConnectCard({ builder: 'self', stall: 'no_agent_yet' })).toBe(true);
     expect(shouldShowConnectCard({ builder: 'self', stall: 'quiet' })).toBe(true);
+  });
+
+  it('hides after agent ended — handoff, not reconnect', () => {
+    expect(shouldShowConnectCard({ builder: 'self', stall: 'ended' })).toBe(false);
   });
 
   it('hides when the delivery cap is reached or the agent is active', () => {
@@ -90,9 +98,10 @@ describe('selfComposerRoute', () => {
     expect(selfComposerRoute({ builder: 'self' })).toBe('active');
   });
 
-  it('hides the composer before first signal; waits when quiet or at the delivery cap', () => {
+  it('hides the composer before first signal; waits when quiet, ended, or at the delivery cap', () => {
     expect(selfComposerRoute({ builder: 'self', stall: 'no_agent_yet' })).toBeNull();
     expect(selfComposerRoute({ builder: 'self', stall: 'quiet' })).toBe('waiting');
+    expect(selfComposerRoute({ builder: 'self', stall: 'ended' })).toBe('waiting');
     expect(
       selfComposerRoute({
         builder: 'self',

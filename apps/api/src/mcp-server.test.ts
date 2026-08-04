@@ -314,6 +314,7 @@ describe('POST /api/mcp (BY-05)', () => {
         'list_staged_sources',
         'clear_staged_sources',
         'submit_sources',
+        'end',
         'get_gate_verdict',
         'read_inbox',
         'ack_inbox',
@@ -938,6 +939,13 @@ describe('POST /api/mcp (BY-05)', () => {
       stop: false,
       pendingMessages: expect.any(Array),
     });
+    const submitWarnings = (submitted.structured as { warnings?: Array<{ code: string }> }).warnings ?? [];
+    expect(submitWarnings.some((w) => w.code === 'call_end')).toBe(true);
+
+    const ended = await callTool(app, 'end', { sessionKey }, { 'mcp-session-id': sessionId });
+    expect(ended.isError).toBe(false);
+    expect(ended.structured).toMatchObject({ ok: true, ended: true, stop: true, reason: 'agent_ended' });
+    expect((await store.getSubmission(ISSUE))?.agentEndedAt).toBeTruthy();
 
     // Gate red keeps the round open — verdict readable on the active key.
     await store.setSubmissionDeliveredVersion(ISSUE, 'v1');
@@ -1488,6 +1496,7 @@ describe('POST /api/mcp (BY-05)', () => {
       'stage_source_file',
       'clear_staged_sources',
       'submit_sources',
+      'end',
       'ack_inbox',
     ];
     for (const name of writers) {

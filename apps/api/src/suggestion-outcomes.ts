@@ -168,6 +168,7 @@ export async function advanceSuggestionOutcomes(deps: SuggestionOutcomeDeps): Pr
           stateSince: job.stateSince ?? job.createdAt,
           lastAgentSignalAt: job.lastAgentSignalAt,
           agentState: job.agentState,
+          agentEndedAt: job.agentEndedAt,
           now: currentTime,
         });
         if (stall) {

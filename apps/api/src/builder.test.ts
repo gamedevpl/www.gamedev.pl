@@ -17,7 +17,10 @@ describe('builder helpers', () => {
     expect(isBuilderKind('copilot')).toBe(false);
   });
 
-  it('allows only quiet self→platform handoffs mid-round', () => {
+  it('allows only ended or quiet self→platform handoffs mid-round', () => {
+    expect(allowsQuietBuilderHandoff({ currentBuilder: 'self', requestedBuilder: 'platform', stall: 'ended' })).toBe(
+      true,
+    );
     expect(allowsQuietBuilderHandoff({ currentBuilder: 'self', requestedBuilder: 'platform', stall: 'quiet' })).toBe(
       true,
     );
@@ -31,6 +34,9 @@ describe('builder helpers', () => {
       allowsQuietBuilderHandoff({ currentBuilder: 'self', requestedBuilder: 'platform', stall: 'gate_not_started' }),
     ).toBe(false);
     expect(allowsQuietBuilderHandoff({ currentBuilder: 'platform', requestedBuilder: 'self', stall: 'quiet' })).toBe(
+      false,
+    );
+    expect(allowsQuietBuilderHandoff({ currentBuilder: 'platform', requestedBuilder: 'self', stall: 'ended' })).toBe(
       false,
     );
   });

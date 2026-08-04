@@ -197,6 +197,7 @@ function alertFor(record: SubmissionRecord, now: number, pendingFeedback?: Pendi
     stateSince: since,
     lastAgentSignalAt: record.lastAgentSignalAt,
     agentState: record.agentState,
+    agentEndedAt: record.agentEndedAt,
     now,
   });
   if (!stall) return null;
