@@ -24,11 +24,15 @@ describe('account deletion infrastructure', () => {
   });
 
   it('reconciles the scheduler instead of requiring a one-shot create command', () => {
+    expect(setupScript).toContain('reconcile_scheduler_job()');
+    expect(setupScript).toContain('for attempt in $(seq 1 30)');
+    expect(setupScript).toContain('if reconcile_scheduler_job; then');
     expect(setupScript).toContain('gcloud scheduler jobs describe "$JOB_NAME"');
     expect(setupScript).toContain('gcloud scheduler jobs update http "$JOB_NAME"');
     expect(setupScript).toContain('gcloud scheduler jobs create http "$JOB_NAME"');
     expect(setupScript).toContain('--oidc-service-account-email "$SWEEP_SA"');
     expect(setupScript).toContain('--oidc-token-audience "$SWEEP_URL"');
+    expect(setupScript).not.toContain('Waiting for the identity to propagate');
   });
 
   it('is part of the normal project bootstrap', () => {

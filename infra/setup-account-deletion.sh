@@ -40,17 +40,6 @@ else
     --project "$PROJECT_ID" \
     >/dev/null
   echo "    Created ${SWEEP_SA}."
-
-  # A newly created identity may be visible to IAM before Scheduler can use it.
-  printf '    Waiting for the identity to propagate'
-  for _ in $(seq 1 30); do
-    if gcloud iam service-accounts describe "$SWEEP_SA" --project "$PROJECT_ID" >/dev/null 2>&1; then
-      break
-    fi
-    printf '.'
-    sleep 2
-  done
-  printf '\n'
 fi
 
 echo "==> Ensuring Cloud Scheduler job ${JOB_NAME}"
@@ -66,16 +55,45 @@ COMMON_FLAGS=(
   --attempt-deadline 180s
 )
 
-if gcloud scheduler jobs describe "$JOB_NAME" \
-  --location "$REGION" \
-  --project "$PROJECT_ID" \
-  >/dev/null 2>&1; then
-  gcloud scheduler jobs update http "$JOB_NAME" "${COMMON_FLAGS[@]}" >/dev/null
-  echo "    Updated existing job."
-else
-  gcloud scheduler jobs create http "$JOB_NAME" "${COMMON_FLAGS[@]}" >/dev/null
-  echo "    Created job."
+reconcile_scheduler_job() {
+  if gcloud scheduler jobs describe "$JOB_NAME" \
+    --location "$REGION" \
+    --project "$PROJECT_ID" \
+    >/dev/null 2>&1; then
+    if gcloud scheduler jobs update http "$JOB_NAME" "${COMMON_FLAGS[@]}" >/dev/null; then
+      SCHEDULER_ACTION="Updated existing job."
+      return 0
+    fi
+  elif gcloud scheduler jobs create http "$JOB_NAME" "${COMMON_FLAGS[@]}" >/dev/null; then
+    SCHEDULER_ACTION="Created job."
+    return 0
+  fi
+
+  return 1
+}
+
+# Scheduler can reject a newly created service account briefly after IAM starts
+# returning it. Retry the operation that consumes the identity so a fresh
+# bootstrap does not require an operator to rerun the whole setup.
+printf '    Reconciling job'
+SCHEDULER_READY=false
+for attempt in $(seq 1 30); do
+  if reconcile_scheduler_job; then
+    SCHEDULER_READY=true
+    break
+  fi
+  if [[ "$attempt" -lt 30 ]]; then
+    printf '.'
+    sleep 2
+  fi
+done
+printf '\n'
+
+if [[ "$SCHEDULER_READY" != true ]]; then
+  echo "ERROR: Could not reconcile ${JOB_NAME} after 30 attempts." >&2
+  exit 1
 fi
+echo "    ${SCHEDULER_ACTION}"
 
 echo ""
 echo "==> Done. ${JOB_NAME} calls:"
