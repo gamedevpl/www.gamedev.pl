@@ -67,7 +67,7 @@ export const GAME_BUDGET_BYTES = 200 * 1024;
  * Platform half of the serve cap — games-repo `GAMEKIT_PLATFORM_BYTES` /
  * `assemble-contract.json` `platformCeilingBytes`. Together with
  * {@link GAME_BUDGET_BYTES} this must equal games-repo `MAX_BUNDLE_BYTES`
- * (486_387, matching `maxProjectBytes`). Not a round KiB.
+ * (517_800, matching `maxProjectBytes`). Not a round KiB.
  *
  * One derived ceiling, not a sum of per-feature constants (games-repo #281). Check 4
  * over there bills each author for measured `assembled − platformBytes` against the
@@ -76,11 +76,23 @@ export const GAME_BUDGET_BYTES = 200 * 1024;
  * `docs/platform-byte-ledger.md`. Raise this when measurement shows a passing game
  * would exceed it — do not re-split it into named allowances on this side either.
  *
- * Last moved by the opt-in `editor` module (EditorKit L2): +3_700 measured,
- * 482_687 → 486_387. Before it, sensing Phase 2 (camera backdrop) raised the sensing
- * ledger line 6_500 → 9_000 (+2_500), 480_187 → 482_687.
+ * Last moved by `carjack-city`'s open-world work: measured platform bytes for its
+ * (2D, non-gfx3d) module selection are 312_583, so 281_587 no longer covered a game
+ * that comfortably clears the author gate — carjack assembles to 493_433 of which
+ * 180_850 is author payload, 88% of the 200 KiB budget. 281_587 → 313_000, and the
+ * serve cap 486_387 → 517_800.
+ *
+ * The drift this corrects is older and larger than that change: the constant has
+ * never tracked the heaviest selection. `apex-sprint` (gfx3d) already measures
+ * 434_497 platform bytes and passes only because its author payload is small. Sized
+ * here to the heaviest 2D selection rather than to gfx3d, which would put the
+ * backstop above 639 KB and stop it backstopping anything.
+ *
+ * Before it, the opt-in `editor` module (EditorKit L2): +3_700 measured,
+ * 482_687 → 486_387. Before that, sensing Phase 2 (camera backdrop) raised the
+ * sensing ledger line 6_500 → 9_000 (+2_500), 480_187 → 482_687.
  */
-export const GAMEKIT_PLATFORM_BYTES = 281_587;
+export const GAMEKIT_PLATFORM_BYTES = 313_000;
 
 /** Combined html+js+css size cap — must match games-repo `MAX_BUNDLE_BYTES`. */
 export const MAX_PROJECT_BYTES = GAME_BUDGET_BYTES + GAMEKIT_PLATFORM_BYTES;
