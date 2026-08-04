@@ -1877,3 +1877,160 @@ describe('POST /api/mcp (BY-05)', () => {
     });
   });
 });
+
+describe('MCP Apps views (SEP-1865, Phase 0)', () => {
+  let app: FastifyInstance | null = null;
+  const previousFlag = process.env.MCP_UI;
+
+  afterEach(async () => {
+    await app?.close();
+    app = null;
+    if (previousFlag === undefined) delete process.env.MCP_UI;
+    else process.env.MCP_UI = previousFlag;
+  });
+
+  const UI_EXTENSION = 'io.modelcontextprotocol/ui';
+  const UI_MIME = 'text/html;profile=mcp-app';
+
+  async function initializeWith(instance: FastifyInstance, declaresUi: boolean) {
+    const res = await mcpCall(instance, 'initialize', {
+      protocolVersion: '2025-11-25',
+      capabilities: declaresUi ? { extensions: { [UI_EXTENSION]: { mimeTypes: [UI_MIME] } } } : {},
+      clientInfo: { name: declaresUi ? 'view-capable-host' : 'plain-agent', version: '0' },
+    });
+    expect(res.statusCode).toBe(200);
+    return {
+      sessionId: String(res.headers['mcp-session-id']),
+      capabilities: res.json().result.capabilities as Record<string, unknown>,
+    };
+  }
+
+  async function listTools(instance: FastifyInstance, sessionId: string) {
+    const listed = await mcpCall(instance, 'tools/list', {}, { 'mcp-session-id': sessionId });
+    expect(listed.statusCode).toBe(200);
+    return listed.json().result.tools as Array<{ name: string; _meta?: { ui?: { resourceUri?: string } } }>;
+  }
+
+  it('leaves every non-declaring client on the pre-views contract, flag on or not', async () => {
+    process.env.MCP_UI = 'true';
+    const store = new InMemoryStore();
+    await seedJob(store);
+    app = await createApp(store);
+
+    const { sessionId, capabilities } = await initializeWith(app, false);
+    // A client that never negotiated views is told nothing about them.
+    expect(capabilities).toEqual({ tools: { listChanged: false } });
+    expect(capabilities.extensions).toBeUndefined();
+    expect(capabilities.resources).toBeUndefined();
+
+    const tools = await listTools(app, sessionId);
+    expect(tools.length).toBeGreaterThan(10);
+    expect(tools.every((tool) => tool._meta === undefined)).toBe(true);
+
+    // The resource methods are on the same gate as `_meta.ui`: a client that never
+    // negotiated views gets the answer it got before views existed, so probing cannot
+    // reveal a surface it did not ask for.
+    for (const method of ['resources/list', 'resources/templates/list']) {
+      const probed = await mcpCall(app, method, {}, { 'mcp-session-id': sessionId });
+      expect(probed.json().error?.code).toBe(-32601);
+    }
+    const read = await mcpCall(
+      app,
+      'resources/read',
+      { uri: 'ui://gamedevpl/round-status' },
+      { 'mcp-session-id': sessionId },
+    );
+    expect(read.json().error?.code).toBe(-32601);
+
+    // Same for a caller with no session at all.
+    const anonymous = await mcpCall(app, 'resources/read', { uri: 'ui://gamedevpl/round-status' });
+    expect(anonymous.json().error?.code).toBe(-32601);
+  });
+
+  it('echoes the extension and attaches the card once a client declares it', async () => {
+    process.env.MCP_UI = 'true';
+    const store = new InMemoryStore();
+    await seedJob(store);
+    app = await createApp(store);
+
+    const { sessionId, capabilities } = await initializeWith(app, true);
+    expect(capabilities.extensions).toEqual({ [UI_EXTENSION]: { mimeTypes: [UI_MIME] } });
+    expect(capabilities.resources).toBeDefined();
+
+    const tools = await listTools(app, sessionId);
+    const verdict = tools.find((tool) => tool.name === 'get_gate_verdict');
+    expect(verdict?._meta?.ui?.resourceUri).toBe('ui://gamedevpl/round-status');
+    // Only the opted-in tool carries a view.
+    expect(tools.filter((tool) => tool._meta !== undefined).map((tool) => tool.name)).toEqual(['get_gate_verdict']);
+  });
+
+  it('serves the card over resources/list and resources/read', async () => {
+    process.env.MCP_UI = 'true';
+    const store = new InMemoryStore();
+    await seedJob(store);
+    app = await createApp(store);
+    const { sessionId } = await initializeWith(app, true);
+    const headers = { 'mcp-session-id': sessionId };
+
+    const listed = await mcpCall(app, 'resources/list', {}, headers);
+    expect(listed.statusCode).toBe(200);
+    const resources = listed.json().result.resources as Array<{ uri: string; mimeType: string }>;
+    expect(resources).toEqual([expect.objectContaining({ uri: 'ui://gamedevpl/round-status', mimeType: UI_MIME })]);
+
+    const read = await mcpCall(app, 'resources/read', { uri: 'ui://gamedevpl/round-status' }, headers);
+    expect(read.statusCode).toBe(200);
+    const contents = read.json().result.contents as Array<{ uri: string; mimeType: string; text: string }>;
+    expect(contents[0]?.mimeType).toBe(UI_MIME);
+    expect(contents[0]?.text).toContain('ui/initialize');
+
+    const missing = await mcpCall(app, 'resources/read', { uri: 'ui://gamedevpl/nope' }, headers);
+    expect(missing.json().error?.code).toBe(-32602);
+  });
+
+  it('offers nothing at all while the flag is off, even to a declaring client', async () => {
+    delete process.env.MCP_UI;
+    const store = new InMemoryStore();
+    await seedJob(store);
+    app = await createApp(store);
+
+    const { sessionId, capabilities } = await initializeWith(app, true);
+    expect(capabilities).toEqual({ tools: { listChanged: false } });
+
+    const tools = await listTools(app, sessionId);
+    expect(tools.every((tool) => tool._meta === undefined)).toBe(true);
+
+    const listed = await mcpCall(app, 'resources/list', {}, { 'mcp-session-id': sessionId });
+    expect(listed.json().error?.code).toBe(-32601);
+  });
+
+  it('keeps the negotiated capability across start, which re-registers the correlator', async () => {
+    process.env.MCP_UI = 'true';
+    const store = new InMemoryStore();
+    await seedJob(store);
+    app = await createApp(store);
+
+    const { sessionId } = await initializeWith(app, true);
+    const started = await callTool(app, 'start', { key: roundKey(1) }, { 'mcp-session-id': sessionId });
+    expect(started.isError).toBe(false);
+
+    // start re-sets the transport session mid-round; a plain overwrite there used to
+    // drop uiCapable and the card would vanish for the rest of the round.
+    const tools = await listTools(app, sessionId);
+    expect(tools.find((tool) => tool.name === 'get_gate_verdict')?._meta?.ui?.resourceUri).toBe(
+      'ui://gamedevpl/round-status',
+    );
+  });
+
+  it('treats a correlator adopted from another instance as not view-capable', async () => {
+    process.env.MCP_UI = 'true';
+    const store = new InMemoryStore();
+    await seedJob(store);
+    app = await createApp(store);
+
+    // Cloud Run is multi-instance: this correlator was negotiated somewhere else, so
+    // this instance cannot know what it renders. Degrade to text, never assume UI.
+    const foreign = 'fedcba9876543210fedcba9876543210fedc';
+    const tools = await listTools(app, foreign);
+    expect(tools.every((tool) => tool._meta === undefined)).toBe(true);
+  });
+});
