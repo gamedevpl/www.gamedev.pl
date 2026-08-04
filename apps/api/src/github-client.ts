@@ -1332,13 +1332,19 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
           return null;
         }
         const tracks = parseMusicTracks(musicSource);
-        const selected: Record<string, unknown> = {};
+        // `Object.hasOwn`, not `tracks[name] !== undefined`: the catalog comes from
+        // JSON.parse and inherits Object.prototype, so `tracks.constructor` is a function
+        // rather than undefined and passes a truthiness check. `constructor` also clears
+        // the kebab-case filter above. Such a name would be accepted here and then embed
+        // nothing — JSON.stringify drops a function — leaving playMusic to fail at runtime;
+        // `__proto__` is worse still, since assigning it sets a prototype instead of a key
+        // and the whole tracks map serializes empty. Mirrors games-repo assemble.ts.
+        const selected: Record<string, unknown> = Object.create(null);
         for (const name of [manifest.music, ...manifest.musicTracks]) {
-          const track = tracks[name];
-          if (track === undefined) {
+          if (!Object.hasOwn(tracks, name)) {
             throw new Error(`game manifest music track not in catalog: ${name}`);
           }
-          selected[name] = track;
+          selected[name] = tracks[name];
         }
         assetChunks.push(`window.__GAME_AUDIO_MUSIC__ = ${JSON.stringify(manifest.music)};`);
         assetChunks.push(`window.__GAME_MUSIC_TRACKS__ = Object.freeze(${JSON.stringify(selected)});`);
