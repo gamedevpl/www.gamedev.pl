@@ -178,6 +178,29 @@ describe('Auth API Routes', () => {
     expect(JSON.parse(meRes.body).user.uid).toBe('g:10002');
   });
 
+  it('blocks old credentials while deletion is pending and restores the account on sign-in', async () => {
+    const { app, store } = await setupTestServer({
+      'restore-token': { sub: '10005', email: 'restore@example.com' },
+    });
+    await store.upsertUser({ uid: 'g:10005', email: 'restore@example.com' });
+    await store.scheduleAccountDeletion('g:10005', '2026-08-04T00:00:00.000Z', '2026-08-18T00:00:00.000Z');
+
+    const stale = await app.inject({
+      method: 'GET',
+      url: '/api/auth/me',
+      headers: { cookie: `${SESSION_COOKIE_NAME}=${mintSessionToken('g:10005', 'test-secret-key')}` },
+    });
+    expect(stale.statusCode).toBe(401);
+
+    const restored = await app.inject({
+      method: 'POST',
+      url: '/api/auth/google',
+      payload: { idToken: 'restore-token' },
+    });
+    expect(restored.statusCode).toBe(200);
+    expect((await store.getUser('g:10005'))?.deletionScheduledFor).toBeUndefined();
+  });
+
   it('tells an operator’s session that it is one, and says nothing to anyone else', async () => {
     // The client draws the console link from this rather than from probing an operator
     // endpoint and reading its 404 as "no" — that probe put an error in every

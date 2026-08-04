@@ -73,6 +73,7 @@ survives only in this repo's early history.
 | [`auth-and-usage-plan.md`](./auth-and-usage-plan.md)               | ✅ Google sign-in, sessions, per-user quotas                                                           |
 | [`agent-access-tokens.md`](./agent-access-tokens.md)               | ✅ How an agent in a cloud VM authenticates without a browser or a Google account                      |
 | [`agent-gcp-access.md`](./agent-gcp-access.md)                     | ✅ Read-only GCP credential + `infra/gcp-read.mjs` so an agent can triage prod without gcloud          |
+| [`account-deletion.md`](./account-deletion.md)                     | 14-day recovery window, operator protection, and cleanup sweep setup                                   |
 | [`content-safety-plan.md`](./content-safety-plan.md)               | ✅ Moderation of submitted specs before an agent ever sees them                                        |
 | [`agent-live-channel-plan.md`](./agent-live-channel-plan.md)       | ✅ How a working agent reports progress to the creator in seconds, not commits                         |
 | [`closed-beta-launch-plan.md`](./closed-beta-launch-plan.md)       | The launch that put the closed beta on the domain                                                      |

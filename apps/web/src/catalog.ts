@@ -65,7 +65,7 @@ export interface CatalogEntry {
   submittedBy: string | null;
   /**
    * Unique creator handle when the catalog join resolved a profile. Present → the
-   * byline links to `/creators/:handle`.
+   * byline links to `/:handle`.
    */
   creatorHandle?: string | null;
 }

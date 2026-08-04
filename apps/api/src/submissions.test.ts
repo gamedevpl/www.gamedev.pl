@@ -2942,10 +2942,15 @@ describe('games published from the store rather than the repo', () => {
   });
 
   /** A store holding one published version: its spec, and the bundle the gate assembled. */
-  function publishedGamesStore(bundle = '<!doctype html><meta name="ai-provenance" content="x" />game') {
+  function publishedGamesStore(
+    bundle = '<!doctype html><meta name="ai-provenance" content="x" />game',
+    submittedBy?: string,
+  ) {
     return {
       getSourceFile: async (_slug: string, _version: string, path: string) =>
-        path === 'SPEC.md' ? '---\ntitle: Comet Courier\ngenre: arcade\n---\n' : null,
+        path === 'SPEC.md'
+          ? `---\ntitle: Comet Courier\ngenre: arcade\n${submittedBy ? `submitted_by: ${submittedBy}\n` : ''}---\n`
+          : null,
       getDerivedArtifact: async (_slug: string, _version: string, name: string) => {
         if (name === 'bundle.html') return Buffer.from(bundle, 'utf8');
         if (name === 'media/metadata.json') return Buffer.from(MEDIA_METADATA, 'utf8');
@@ -3006,6 +3011,24 @@ describe('games published from the store rather than the repo', () => {
         ],
         video: 'gameplay.mp4',
       },
+    });
+
+    await app.close();
+  });
+
+  it('replaces a deleted creator byline even when the cached source still names them', async () => {
+    const { app, store } = await appWithPublication(publishedGamesStore(undefined, 'Ada Lovelace'));
+    await store.createSubmission(123, 'g:test-user', 'Comet Courier');
+    await store.setSubmissionSlug(123, 'comet-courier');
+    await store.setSubmissionPublishedAt(123, '2026-07-30T12:00:00Z');
+    await store.deleteAccountIdentity('g:test-user', '2026-08-04T00:00:00Z');
+
+    const response = await app.inject({ method: 'GET', url: '/api/catalog' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().find((item: CatalogGameEntry) => item.slug === 'comet-courier')).toMatchObject({
+      submittedBy: 'gamedev-platform',
+      creatorHandle: null,
     });
 
     await app.close();

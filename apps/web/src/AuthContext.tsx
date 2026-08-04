@@ -53,6 +53,7 @@ interface AuthContextType {
   // not on the allowlist). Re-verifies the same ID token server-side.
   joinWaitlist: (idToken: string, locale?: string, provider?: 'google' | 'apple') => Promise<void>;
   logout: () => Promise<void>;
+  deleteAccount: () => Promise<{ deleteAfter: string }>;
   refreshUser: () => Promise<void>;
 }
 
@@ -66,6 +67,7 @@ const AuthContext = createContext<AuthContextType>({
   signInWithAppleToken: async () => {},
   joinWaitlist: async () => {},
   logout: async () => {},
+  deleteAccount: async () => ({ deleteAfter: '' }),
   refreshUser: async () => {},
 });
 
@@ -172,6 +174,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
   };
 
+  const deleteAccount = async () => {
+    const res = await fetch('/api/me/account', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ confirmation: 'DELETE' }),
+    });
+    if (!res.ok) {
+      const err = (await res.json().catch(() => null)) as { error?: string } | null;
+      throw new Error(err?.error ?? 'Account deletion failed');
+    }
+    const result = (await res.json()) as { deleteAfter: string };
+    clearCachedCatalogSortPayload();
+    setUser(null);
+    return result;
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -184,6 +203,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         signInWithAppleToken,
         joinWaitlist,
         logout,
+        deleteAccount,
         refreshUser,
       }}
     >

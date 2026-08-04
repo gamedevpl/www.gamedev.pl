@@ -1,6 +1,7 @@
 import { useEffect, useState, type MouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from './AuthContext.js';
+import { AccountSettingsModal } from './AccountSettingsModal.js';
 import { AuthModal } from './AuthModal.js';
 import { LanguageSwitcher } from './LanguageSwitcher.js';
 import { Mascot } from './Mascot.js';
@@ -42,6 +43,7 @@ export function NavHeader({
   const { t } = useTranslation();
   const { user, logout } = useAuth();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isAccountSettingsOpen, setIsAccountSettingsOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   // Header mark mimes the visitor: pull a phone and scroll a tiny feed while the page moves.
   const pageScrolling = usePageScrolling();
@@ -222,6 +224,18 @@ export function NavHeader({
                 </button>
               )}
 
+              {user && (
+                <button
+                  className="nav-link"
+                  onClick={() => {
+                    setIsMenuOpen(false);
+                    setIsAccountSettingsOpen(true);
+                  }}
+                >
+                  <PixelIcon name="user" size={14} /> {t('creatorProfile.accountSettings')}
+                </button>
+              )}
+
               {/* Controls that live in the header bar on a desktop but cannot fit
                   beside it on a phone. Hidden above the mobile breakpoint, where
                   the header itself still shows them. */}
@@ -256,6 +270,7 @@ export function NavHeader({
       </div>
 
       <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
+      <AccountSettingsModal isOpen={isAccountSettingsOpen} onClose={() => setIsAccountSettingsOpen(false)} />
     </header>
   );
 }

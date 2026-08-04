@@ -324,9 +324,9 @@ export const termsEn: LegalDocument = {
         {
           kind: 'p',
           text:
-            'You may stop using the Service and request account deletion at any time by writing to ' +
-            `[${CONTACT_EMAIL}](mailto:${CONTACT_EMAIL}). The contract for electronic services ends when the ` +
-            'account is deleted.',
+            'You may stop using the Service and schedule account deletion at any time in Account settings, or write to ' +
+            `[${CONTACT_EMAIL}](mailto:${CONTACT_EMAIL}). Deletion follows a 14-day recovery period and is cancelled if ` +
+            'you sign in again. The contract for electronic services ends when the account is deleted.',
         },
         {
           kind: 'p',

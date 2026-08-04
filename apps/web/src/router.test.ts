@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   canonicalPath,
   canonicalPlayPath,
+  creatorPath,
   draftPath,
   joinPath,
   legalAnchor,
@@ -113,8 +114,8 @@ describe('parsePathRoute', () => {
   });
 
   it('maps unknown paths to notFound', () => {
-    expect(parsePathRoute('/nope')).toEqual({ view: 'notFound' });
     expect(parsePathRoute('/this/does/not/exist')).toEqual({ view: 'notFound' });
+    expect(parsePathRoute('/NotAHandle')).toEqual({ view: 'notFound' });
   });
 
   it('parses the legal routes', () => {
@@ -127,6 +128,8 @@ describe('parsePathRoute', () => {
   });
 
   it('parses public creator profile routes', () => {
+    expect(parsePathRoute('/ada')).toEqual({ view: 'creator', handle: 'ada' });
+    expect(parsePathRoute('/ada_lovelace')).toEqual({ view: 'creator', handle: 'ada_lovelace' });
     expect(parsePathRoute('/creators/ada')).toEqual({ view: 'creator', handle: 'ada' });
     expect(parsePathRoute('/creators/ada_lovelace')).toEqual({ view: 'creator', handle: 'ada_lovelace' });
     expect(parsePathRoute('/creators/ab')).toEqual({ view: 'notFound' });
@@ -171,6 +174,7 @@ describe('path builders', () => {
     expect(canonicalPath('/ai/sky-dodge')).toBe('/play/sky-dodge');
     expect(canonicalPath('/health')).toBe('/admin/telemetry');
     expect(canonicalPath('/status/tok-abc')).toBe('/studio/tok-abc');
+    expect(canonicalPath('/creators/ada')).toBe('/ada');
     // A bare /admin names no section; the queue is what it shows, so that is what it says.
     expect(canonicalPath('/admin')).toBe('/admin/queue');
     // An old tab name is not the current address for the surface that absorbed it.
@@ -185,14 +189,20 @@ describe('path builders', () => {
     expect(canonicalPath('/studio/tok-abc')).toBeNull();
     expect(canonicalPath('/studio/tok-abc/thread')).toBeNull();
     expect(canonicalPath('/studio')).toBeNull();
+    expect(canonicalPath('/ada')).toBeNull();
     expect(canonicalPath('/draft/sky-dodge')).toBeNull();
     expect(canonicalPath('/')).toBeNull();
-    expect(canonicalPath('/nonsense')).toBeNull();
+    expect(canonicalPath('/NotAHandle')).toBeNull();
   });
 
   it('builds a draft path that round-trips', () => {
     expect(draftPath('space-runner')).toBe('/draft/space-runner');
     expect(parsePathRoute(draftPath('space-runner'))).toEqual({ view: 'draft', slug: 'space-runner' });
+  });
+
+  it('builds a root creator path that round-trips', () => {
+    expect(creatorPath('ada')).toBe('/ada');
+    expect(parsePathRoute(creatorPath('ada'))).toEqual({ view: 'creator', handle: 'ada' });
   });
 
   it('percent-encodes status tokens into studio paths', () => {

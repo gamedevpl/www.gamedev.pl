@@ -65,6 +65,7 @@ const AUDIENCE_ENV_VAR = {
   digestSweep: 'DIGEST_SWEEP_AUDIENCE',
   suggestionSweep: 'SUGGESTION_SWEEP_AUDIENCE',
   healthSweep: 'HEALTH_SWEEP_AUDIENCE',
+  accountDeletionSweep: 'ACCOUNT_DELETION_SWEEP_AUDIENCE',
   // Not a sweep and not called by the scheduler: this one is the app service calling the
   // split-out party relay (mp-relay.ts). The mechanism is identical — a Google-signed OIDC
   // token, audience-pinned to the callee's URL — so it reuses this seam rather than

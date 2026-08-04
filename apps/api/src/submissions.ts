@@ -63,7 +63,13 @@ import { isAdminSession } from './admin.js';
 import { peekQuota } from './quota-gate.js';
 import { mintGameSlug } from './slug.js';
 import { runSlugBackfill, settleSlugClaim } from './slug-backfill.js';
-import { type BuildPreviewSummary, type BuildShotSummary, type Store, type SubmissionRecord } from './store.js';
+import {
+  DELETED_ACCOUNT_UID,
+  type BuildPreviewSummary,
+  type BuildShotSummary,
+  type Store,
+  type SubmissionRecord,
+} from './store.js';
 import {
   CREATOR_FEEDBACK_MARKER,
   countCreatorClarifications,
@@ -4152,6 +4158,22 @@ export async function registerSubmissionRoutes(
     }
   }
 
+  /**
+   * Account erasure must win over both catalog sources and their caches. Repo SPECs
+   * can carry a historical `submitted_by`, while store entries are cached for ten
+   * minutes with the profile join already applied. The non-personal owner marker is
+   * the durable source of truth, so scrub those bylines on every catalog response.
+   */
+  async function deattributeDeletedOwners(entries: CatalogGameEntry[]): Promise<CatalogGameEntry[]> {
+    if (!store) return entries;
+    const erased = await store.listSubmissionsByOwner(DELETED_ACCOUNT_UID);
+    const slugs = new Set(erased.flatMap((submission) => (submission.slug ? [submission.slug] : [])));
+    if (slugs.size === 0) return entries;
+    return entries.map((entry) =>
+      slugs.has(entry.slug) ? { ...entry, submittedBy: 'gamedev-platform', creatorHandle: null } : entry,
+    );
+  }
+
   // The public game catalog, derived from SPEC.md frontmatter on the games repo's
   // default branch via the authenticated API. This (not public GitHub Pages) is
   // what the web app lists, so the games repo itself can be private — the app's
@@ -4164,7 +4186,8 @@ export async function registerSubmissionRoutes(
     try {
       const entries = await getCatalogEntries(githubClient);
       const published = entries.filter((entry) => entry.status === 'published');
-      return reply.send([...published, ...(await storeCatalogEntries(published.map((entry) => entry.slug)))]);
+      const combined = [...published, ...(await storeCatalogEntries(published.map((entry) => entry.slug)))];
+      return reply.send(await deattributeDeletedOwners(combined));
     } catch (error) {
       if (error instanceof SnapshotUnavailableError) {
         request.log.error({ err: error }, 'snapshot catalog unavailable');

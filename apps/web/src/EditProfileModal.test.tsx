@@ -12,11 +12,12 @@ const profileApi = vi.hoisted(() => ({
   updateMyProfile: vi.fn(),
   checkHandleAvailability: vi.fn(),
 }));
+const deleteAccount = vi.hoisted(() => vi.fn());
 
 vi.mock('./creatorProfileApi.js', () => profileApi);
 
 vi.mock('./AuthContext.js', () => ({
-  useAuth: () => ({ refreshUser: vi.fn(), user: { uid: 'g:test', handle: 'ada' } }),
+  useAuth: () => ({ refreshUser: vi.fn(), deleteAccount, user: { uid: 'g:test', handle: 'ada' } }),
 }));
 
 import { ClaimHandleModal } from './ClaimHandleModal.js';
@@ -33,6 +34,7 @@ beforeEach(async () => {
   profileApi.claimHandle.mockReset();
   profileApi.updateMyProfile.mockReset();
   profileApi.checkHandleAvailability.mockReset();
+  deleteAccount.mockReset();
   container = document.createElement('div');
   document.body.appendChild(container);
 });
@@ -178,6 +180,44 @@ describe('EditProfileModal', () => {
     expect(profileApi.updateMyProfile).toHaveBeenCalled();
     expect(onSaved).toHaveBeenCalled();
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it('requires an explicit DELETE confirmation before account deletion', async () => {
+    profileApi.fetchMyProfile.mockResolvedValue(readyProfile);
+    deleteAccount.mockResolvedValue({ deleteAfter: '2026-08-18T00:00:00.000Z' });
+    root = createRoot(container);
+    await act(async () => {
+      root!.render(
+        <StudioCreatorProfileProvider>
+          <EditProfileModal isOpen onClose={() => undefined} />
+        </StudioCreatorProfileProvider>,
+      );
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    act(() => {
+      Simulate.click(document.body.querySelector('.creator-profile-delete-button') as HTMLButtonElement);
+    });
+    const dialog = document.body.querySelector('.account-delete-dialog');
+    const confirm = dialog?.querySelector('.creator-profile-delete-confirm') as HTMLButtonElement;
+    expect(dialog?.textContent).toContain('Published games stay playable');
+    expect(confirm.disabled).toBe(true);
+
+    const input = dialog?.querySelector('input') as HTMLInputElement;
+    input.value = 'DELETE';
+    act(() => {
+      Simulate.change(input);
+    });
+    expect(confirm.disabled).toBe(false);
+
+    await act(async () => {
+      Simulate.click(confirm);
+      await Promise.resolve();
+    });
+    expect(deleteAccount).toHaveBeenCalledOnce();
+    expect(document.body.querySelector('.account-delete-dialog')).toBeNull();
   });
 });
 

@@ -81,4 +81,15 @@ describe('createInternalAuthVerifierFromEnv', () => {
     } as NodeJS.ProcessEnv);
     expect(v).toBeInstanceOf(OidcInternalAuthVerifier);
   });
+
+  it('uses a separate audience for the account deletion sweep', () => {
+    const v = createInternalAuthVerifierFromEnv(
+      {
+        ACCOUNT_DELETION_SWEEP_AUDIENCE: 'https://svc/api/internal/account-deletion-sweep',
+        NOTIFY_SWEEP_SA: 'sched@proj.iam.gserviceaccount.com',
+      } as NodeJS.ProcessEnv,
+      'accountDeletionSweep',
+    );
+    expect(v).toBeInstanceOf(OidcInternalAuthVerifier);
+  });
 });

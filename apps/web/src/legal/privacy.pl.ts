@@ -341,8 +341,9 @@ export const privacyPl: LegalDocument = {
         {
           kind: 'p',
           text:
-            `Możesz w każdej chwili poprosić o usunięcie konta, pisząc na [${CONTACT_EMAIL}](mailto:${CONTACT_EMAIL}). ` +
-            'Usuwamy wtedy dane Twojego konta, adres e-mail, subskrypcje powiadomień, oddane przez Ciebie głosy i ' +
+            `Możesz w każdej chwili zaplanować usunięcie konta w ustawieniach konta albo napisać na [${CONTACT_EMAIL}](mailto:${CONTACT_EMAIL}). ` +
+            'Usunięcie następuje po 14-dniowym okresie na zmianę decyzji. Ponowne zalogowanie przed wykonaniem usunięcia anuluje dyspozycję. ' +
+            'Po upływie tego okresu usuwamy dane Twojego konta, adres e-mail, subskrypcje powiadomień, oddane przez Ciebie głosy i ' +
             'wpisane uwagi do gier, zapis tego, które gry otwierałeś na potrzeby rekomendacji, zapisane postępy w grach, które je przechowują, wszystko, co zbudowałeś we ' +
             'wspólnych światach gier, Twój publiczny profil twórcy (handle, nazwę wyświetlaną, bio, preferencję avatara) ' +
             'oraz rezerwację handle, i powiązanie zgłoszeń z Twoją osobą. Usunięcie tego, co ' +

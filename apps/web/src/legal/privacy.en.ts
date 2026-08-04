@@ -330,8 +330,9 @@ export const privacyEn: LegalDocument = {
         {
           kind: 'p',
           text:
-            `You can ask us to delete your account at any time by writing to [${CONTACT_EMAIL}](mailto:${CONTACT_EMAIL}). ` +
-            'We then remove your account data, email address, notification subscriptions, the votes and written ' +
+            `You can schedule deletion at any time in Account settings, or ask us at [${CONTACT_EMAIL}](mailto:${CONTACT_EMAIL}). ` +
+            'Deletion happens after a 14-day recovery period. Signing in again before cleanup cancels the request. ' +
+            'When the period ends we remove your account data, email address, notification subscriptions, the votes and written ' +
             'feedback you left on games, the record of which games you opened for recommendations, your saved ' +
             'progress in games that keep it, anything you built in a ' +
             'game’s shared world, your public creator profile (handle, display name, bio, avatar preference) and ' +

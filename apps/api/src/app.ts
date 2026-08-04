@@ -17,6 +17,7 @@ import { registerAdminRoutes } from './admin.js';
 import { parseAppleClientIds, type AppleAuthVerifier } from './apple-auth.js';
 import { registerAuthPlugin, type GoogleAuthVerifier } from './auth.js';
 import { registerCreatorProfileRoutes } from './creator-profile-routes.js';
+import { registerAccountDeletionRoutes, type AccountDeletionRoutesOptions } from './account-deletion-routes.js';
 import { registerCreatorStudioRoutes } from './creator-studio.js';
 import { registerEditorRoutes } from './editor-drafts.js';
 import { VertexEditorAssistant, type EditorAssistant } from './editor-assist.js';
@@ -115,6 +116,10 @@ export interface BuildAppOptions {
   suggestionInboxRoutes?: Partial<Omit<SuggestionInboxRoutesOptions, 'store'>>;
   /** Seams for the public contact form (mailer fake in tests). */
   contactRoutes?: ContactRoutesOptions;
+  /** Seams for delayed account erasure; defaults to OIDC-or-deny-all from env. */
+  accountDeletionRoutes?: Partial<
+    Omit<AccountDeletionRoutesOptions, 'store' | 'adminUids' | 'internalAuthVerifier'>
+  > & { internalAuthVerifier?: AccountDeletionRoutesOptions['internalAuthVerifier'] };
   // Private beta allowlist — uids (comma-separated) allowed to sign in and access gated routes
   betaAllowedUids?: string;
   // Private beta allowlist — Google-verified emails (comma-separated, case-insensitive)
@@ -554,11 +559,20 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   });
 
   // Publish-gated public identity. Building needs none of this; catalog bylines and
-  // `/creators/:handle` need the claimed handle. gamesStore is the same instance the
+  // `/:handle` need the claimed handle. gamesStore is the same instance the
   // delivery path writes to, so a profile page never lists a game from a different bucket.
   await registerCreatorProfileRoutes(app, {
     store,
     gamesStore,
+  });
+  registerAccountDeletionRoutes(app, {
+    store,
+    adminUids,
+    internalAuthVerifier:
+      options.accountDeletionRoutes?.internalAuthVerifier ??
+      createInternalAuthVerifierFromEnv(process.env, 'accountDeletionSweep'),
+    now: options.accountDeletionRoutes?.now,
+    graceMs: options.accountDeletionRoutes?.graceMs,
   });
 
   /**

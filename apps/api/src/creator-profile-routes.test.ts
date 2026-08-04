@@ -144,6 +144,10 @@ describe('creator profile routes', () => {
       headers: { cookie: authCookie('g:b') },
     });
     expect(cooling.json()).toMatchObject({ available: false, reason: 'taken' });
+
+    const oldPage = await app.inject({ method: 'GET', url: '/api/creators/old_name' });
+    expect(oldPage.statusCode).toBe(308);
+    expect(oldPage.headers.location).toBe('/api/creators/new_name');
   });
 
   it('404s unknown creators', async () => {

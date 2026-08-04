@@ -54,7 +54,7 @@ export type DocumentTitleContext = {
   draftTitle?: string | null;
   /** Title of an ephemeral theater open on the home route (generated / party). */
   stageTitle?: string | null;
-  /** Display name for `/creators/:handle` once the profile loads. */
+  /** Display name for `/:handle` once the profile loads. */
   creatorName?: string | null;
 };
 

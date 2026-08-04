@@ -258,7 +258,7 @@ export interface CatalogGameEntry {
   submittedBy: string | null;
   /**
    * Unique creator handle when the catalog join resolved a publishable profile for
-   * the job owner. Present → byline links to `/creators/:handle`. Absent for
+   * the job owner. Present → byline links to `/:handle`. Absent for
    * platform/repo games and unpublished drafts.
    */
   creatorHandle?: string | null;

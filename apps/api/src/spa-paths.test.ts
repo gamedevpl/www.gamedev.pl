@@ -31,6 +31,8 @@ describe('isKnownSpaShellPath', () => {
     '/terms',
     '/health',
     '/contact',
+    '/ada',
+    '/ada_lovelace',
     '/creators/ada',
     '/creators/ada_lovelace',
     '/play/sky-dodge',
@@ -65,8 +67,8 @@ describe('isKnownSpaShellPath', () => {
   });
 
   it.each([
-    '/nope',
     '/this/does/not/exist',
+    '/NotAHandle',
     '/play/',
     '/play/-bad',
     '/play/Kotek%20W%20Cyrku',

@@ -98,7 +98,9 @@ export type AppRoute =
   // sign-in is not a published contact point.
   | { view: 'contact' }
   // Public creator profile. Reachable without a session — the byline destination for
-  // published games. Handle shape matches the API (`^[a-z][a-z0-9_]{2,23}$`).
+  // published games. The canonical address is `/:handle`; `/creators/:handle` remains
+  // an alias for links minted before profiles moved to the root namespace. Handle shape
+  // matches the API (`^[a-z][a-z0-9_]{2,23}$`).
   | { view: 'creator'; handle: string }
   // Unknown / invalid path. Kept as its own view so a typo or stale bookmark shows a
   // real 404 instead of silently dumping the visitor on the home catalog.
@@ -244,6 +246,14 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
     return { view: 'join', code: joinMatch[1], token: fragment };
   }
 
+  // Root creator profile. This comes after every first-class product route so `/play`,
+  // `/studio`, `/privacy`, etc. keep their meaning. Those segments are also reserved at
+  // handle-claim time; the ordering here is defense in depth for old data and typos.
+  const rootHandle = decodeSegment(normalizedPath.slice(1));
+  if (!normalizedPath.slice(1).includes('/') && rootHandle && CREATOR_HANDLE_PATTERN.test(rootHandle)) {
+    return { view: 'creator', handle: rootHandle };
+  }
+
   return { view: 'notFound' };
 }
 
@@ -299,6 +309,8 @@ export function canonicalPath(pathname: string): string | null {
       // token to its slug also happens there, for the same reason: it takes the shelf.
       case 'studio':
         return route.game ? studioPath(route.game, route.tab) : null;
+      case 'creator':
+        return creatorPath(route.handle);
       default:
         return null;
     }
@@ -417,7 +429,7 @@ export function contactPath(): string {
 
 /** URL for a public creator profile. */
 export function creatorPath(handle: string): string {
-  return `/creators/${handle}`;
+  return `/${handle}`;
 }
 
 /**

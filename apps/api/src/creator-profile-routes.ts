@@ -201,10 +201,26 @@ export async function registerCreatorProfileRoutes(
       return reply.status(400).send({ error: 'invalid handle' });
     }
 
-    const user = await store.getUserByHandle(params.data.handle);
-    const profile = user ? toPublicCreatorProfile(user) : null;
+    let user = await store.getUserByHandle(params.data.handle);
+    let profile = user ? toPublicCreatorProfile(user) : null;
     if (!user || !profile) {
-      return reply.status(404).send({ error: 'not_found' });
+      // A renamed handle remains reserved during the cooldown. Resolve it to the
+      // creator's current profile so links in catalog shares, posts, and bookmarks do
+      // not break the moment they rename. Deleted accounts have no user document and
+      // therefore fall through to the ordinary 404.
+      const reservation = await store.getHandleReservation(params.data.handle);
+      if (reservation?.releasedAt && reservation.previousUid) {
+        const renamedUser = await store.getUser(reservation.previousUid);
+        const renamedProfile = renamedUser ? toPublicCreatorProfile(renamedUser) : null;
+        if (renamedUser?.handle && renamedProfile) {
+          return reply.redirect(`/api/creators/${encodeURIComponent(renamedUser.handle)}`, 308);
+        }
+        user = renamedUser;
+        profile = renamedProfile;
+      }
+      if (!user || !profile) {
+        return reply.status(404).send({ error: 'not_found' });
+      }
     }
 
     const games = await listCreatorPublishedGames(store, gamesStore ?? null, user.uid, profile);

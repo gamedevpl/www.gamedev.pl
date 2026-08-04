@@ -11498,6 +11498,10 @@ a.user-name--profile:focus-visible {
   opacity: 0.75;
 }
 
+.creator-profile-rename-warning {
+  line-height: 1.35;
+}
+
 .creator-profile-avail.is-taken {
   color: #f5a0a0;
   opacity: 1;
@@ -11543,6 +11547,107 @@ a.user-name--profile:focus-visible {
 .creator-profile-rename[open] summary {
   margin-bottom: 0.5rem;
   opacity: 1;
+}
+
+.account-settings-modal-card {
+  width: min(92vw, 520px);
+}
+
+.creator-profile-danger {
+  margin-top: 1rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.creator-profile-danger h3,
+.creator-profile-danger p {
+  margin: 0;
+}
+
+.creator-profile-danger h3 {
+  font-size: 0.9rem;
+}
+
+.creator-profile-danger p {
+  margin-top: 0.3rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.creator-profile-delete-button,
+.creator-profile-delete-confirm {
+  border: 1px solid rgba(245, 100, 100, 0.55);
+  border-radius: 7px;
+  background: rgba(140, 25, 25, 0.2);
+  color: #ffd7d7;
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.creator-profile-delete-button {
+  margin-top: 0.65rem;
+  padding: 0.45rem 0.65rem;
+  font-size: 0.82rem;
+}
+
+.creator-profile-delete-button:hover,
+.creator-profile-delete-confirm:hover:not(:disabled) {
+  background: rgba(175, 35, 35, 0.32);
+}
+
+.account-delete-backdrop {
+  align-items: safe center;
+  overflow-y: auto;
+  padding: 1rem;
+}
+
+.account-delete-dialog {
+  width: min(92vw, 520px);
+  max-height: min(92dvh, 92vh);
+  margin: auto;
+  padding: 1.25rem;
+  overflow-y: auto;
+  border: 1px solid rgba(245, 100, 100, 0.35);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+  text-align: left;
+}
+
+.account-delete-dialog h2 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.account-delete-dialog > p,
+.account-delete-dialog ul {
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.account-delete-dialog ul {
+  padding-left: 1.2rem;
+}
+
+.account-delete-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.65rem;
+  margin-top: 1rem;
+}
+
+.account-delete-actions .secondary-btn,
+.creator-profile-delete-confirm {
+  width: auto;
+  padding: 0.55rem 0.8rem;
+}
+
+.creator-profile-delete-confirm:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .creator-profile-message {

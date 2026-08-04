@@ -234,7 +234,7 @@ describe('NavHeader profile link', () => {
     vi.restoreAllMocks();
   });
 
-  it('links the signed-in name to /creators/:handle when a handle is claimed', async () => {
+  it('links the signed-in name to /:handle when a handle is claimed', async () => {
     await i18n.changeLanguage('en');
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = String(input);
@@ -282,7 +282,7 @@ describe('NavHeader profile link', () => {
 
     const profile = container.querySelector<HTMLAnchorElement>('a.user-name--profile');
     expect(profile).not.toBeNull();
-    expect(profile?.getAttribute('href')).toBe('/creators/ada');
+    expect(profile?.getAttribute('href')).toBe('/ada');
     expect(profile?.textContent).toBe('Ada');
 
     await act(async () => root.unmount());
@@ -326,6 +326,15 @@ describe('NavHeader profile link', () => {
 
     expect(container.querySelector('a.user-name--profile')).toBeNull();
     expect(container.querySelector('.user-name')?.textContent).toBe('Ada Lovelace');
+
+    const hamburger = container.querySelector('.hamburger-btn') as HTMLButtonElement;
+    await act(async () => hamburger.click());
+    const accountSettings = Array.from(container.querySelectorAll<HTMLButtonElement>('.nav-link')).find((element) =>
+      element.textContent?.includes('Account settings'),
+    );
+    expect(accountSettings).toBeTruthy();
+    await act(async () => accountSettings?.click());
+    expect(document.body.querySelector('.account-settings-modal-card')).not.toBeNull();
 
     await act(async () => root.unmount());
   });

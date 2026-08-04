@@ -1,13 +1,13 @@
-// Erase a person's player-side contributions — votes, written feedback, saved progress.
+// Erase an account completely — identity, credentials, subscriptions, and player data.
 //
 //   npm run player:erase -w @gamedevpl/api -- g:12345 --dry-run
-//   npm run player:erase -w @gamedevpl/api -- g:12345 --confirm
+//   ADMIN_UIDS=g:operator npm run player:erase -w @gamedevpl/api -- g:12345 --confirm
 //
 // This is the executable half of the promise in the privacy notice (§8, "Deleting your
 // account"): account deletion removes the votes and feedback a person left on games.
-// Deletion is requested by email, so this is an operator command rather than an HTTP
-// route — a destructive, uid-targeted endpoint is attack surface that buys nothing when
-// the request already arrives out of band and a human has to verify it anyway.
+// Self-service deletion normally waits through the recovery window and is purged by the
+// scheduled sweep. This command remains for verified exceptional requests and dry-run
+// inspection.
 //
 // Talks to Firestore with your ambient gcloud credentials, like `beta:approve` and
 // `token:mint`. There is no dev/prod switch — check `gcloud config get-value project`
@@ -16,7 +16,9 @@
 // Note what this does *not* do: play telemetry is untouched because it carries no uid at
 // all. There is nothing there to erase, which is the intended property, not a gap.
 
-import { erasePlayerSignals, indexHint } from '../src/erase-player-signals.js';
+import { eraseAccount } from '../src/erase-account.js';
+import { scheduleAccountDeletion } from '../src/account-deletion.js';
+import { indexHint } from '../src/erase-player-signals.js';
 import { FirestoreStore } from '../src/store.js';
 
 function usage(): never {
@@ -24,7 +26,7 @@ function usage(): never {
     [
       'Usage:',
       '  player:erase -- <uid> --dry-run    # show what would be removed',
-      '  player:erase -- <uid> --confirm    # actually remove it',
+      '  player:erase -- <uid> --confirm    # schedule removal after the recovery window',
       '',
       'One of --dry-run or --confirm is required.',
     ].join('\n'),
@@ -43,10 +45,25 @@ async function main(): Promise<void> {
   if (!uid || dryRun === confirm) usage();
 
   const store = new FirestoreStore();
-  const result = await erasePlayerSignals({ store, uid, dryRun });
+  const adminUids = new Set(
+    (process.env.ADMIN_UIDS ?? '')
+      .split(',')
+      .map((value) => value.trim())
+      .filter(Boolean),
+  );
+  if (confirm && adminUids.size === 0) {
+    throw new Error('ADMIN_UIDS must be set before scheduling deletion so operator protection can be enforced');
+  }
+  const account = await eraseAccount({ store, uid, dryRun: true, adminUids });
+  const result = account.signals;
 
-  const verb = result.dryRun ? 'would remove' : 'removed';
-  console.log(`${result.dryRun ? '[dry run] ' : ''}${verb} for ${result.uid}:`);
+  if (confirm) {
+    const scheduled = await scheduleAccountDeletion({ store, uid, adminUids });
+    if (!scheduled) throw new Error('account not found');
+    console.log(`scheduled deletion for ${uid} after ${scheduled.scheduledFor}; cleanup will remove:`);
+  } else {
+    console.log(`[dry run] would schedule deletion for ${result.uid}; cleanup would remove:`);
+  }
   console.log(
     `  votes:    ${result.votesCleared.length}${result.votesCleared.length ? ` (${result.votesCleared.join(', ')})` : ''}`,
   );
@@ -62,6 +79,12 @@ async function main(): Promise<void> {
   );
   console.log(
     `  handles:  ${result.handlesReleased.length}${result.handlesReleased.length ? ` (${result.handlesReleased.join(', ')})` : ''}`,
+  );
+  console.log(
+    `  published games kept: ${account.identity.publishedSlugs.length}${account.identity.publishedSlugs.length ? ` (${account.identity.publishedSlugs.join(', ')})` : ''}`,
+  );
+  console.log(
+    `  unpublished games removed: ${account.identity.unpublishedSlugs.length}${account.identity.unpublishedSlugs.length ? ` (${account.identity.unpublishedSlugs.join(', ')})` : ''}`,
   );
   if (
     result.votesCleared.length === 0 &&
