@@ -316,7 +316,6 @@ const BRIDGE = `(function(){
     if(e.key==='Escape'){post({type:'key',key:'Escape'});}
   });
   addEventListener('pointerdown',function(){post({type:'pointer'});},{passive:true});
-  addEventListener('mousemove',function(e){if(e.clientY<=48){post({type:'topHover'});}},{passive:true});
   // iOS Safari: long-press on the canvas opens the callout (Copy / Translate / Look Up)
   // and the text-selection loupe ("mini zoom"). CSS covers most of it; these kill the
   // remaining native handlers. Games have no selectable document chrome in the player.
@@ -548,8 +547,6 @@ export function useGamePlayer(
   onEscape?: () => void,
   /** Called on pointerdown inside the game (see the bridge's job 5). */
   onPointer?: () => void,
-  /** Called when mouse moves into top region inside the game. */
-  onTopHover?: () => void,
 ) {
   const [meta, setMeta] = useState<GamePlayerMeta | null>(null);
   const [controls, setControls] = useState<ReportedControls | null>(null);
@@ -560,8 +557,6 @@ export function useGamePlayer(
   onEscapeRef.current = onEscape;
   const onPointerRef = useRef(onPointer);
   onPointerRef.current = onPointer;
-  const onTopHoverRef = useRef(onTopHover);
-  onTopHoverRef.current = onTopHover;
 
   useEffect(() => {
     if (!active) {
@@ -602,8 +597,6 @@ export function useGamePlayer(
         onEscapeRef.current?.();
       } else if (data.type === 'pointer') {
         onPointerRef.current?.();
-      } else if (data.type === 'topHover') {
-        onTopHoverRef.current?.();
       }
     }
     window.addEventListener('message', onMessage);

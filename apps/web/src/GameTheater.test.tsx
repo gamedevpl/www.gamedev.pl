@@ -417,30 +417,18 @@ describe('GameTheater how-to-play visit telemetry', () => {
     setVisitSessionForTesting(null);
   });
 
-  it('hides the bar during play and restores it from the peek pill by keyboard', async () => {
+  it('keeps the theater bar visible throughout play', async () => {
     vi.useFakeTimers();
     try {
       await draw();
-      // The grace window: the bar is still there while the title registers.
       expect(container.querySelector('.game-theater-bar')).not.toBeNull();
       await act(async () => {
-        vi.advanceTimersByTime(3100);
-      });
-      // Play owns the screen; the pill is the way back.
-      expect(container.querySelector('.game-theater-bar')).toBeNull();
-      const pill = container.querySelector('.theater-peek-btn') as HTMLButtonElement | null;
-      expect(pill).not.toBeNull();
-
-      // Enter/Space on a focused button emit `click` and no pointer events at
-      // all — a pointerdown-only pill would strand a keyboard-only player with
-      // no route back to mute or exit.
-      await act(async () => {
-        pill!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        vi.advanceTimersByTime(12_000);
       });
       expect(container.querySelector('.game-theater-bar')).not.toBeNull();
-      // And the bar it brings back is the whole bar: the report path (DSA art.
-      // 16) lives in the More panel, so an auto-hide is only allowed to make it
-      // one tap deeper — never to make it unreachable.
+      expect(container.querySelector('.theater-peek-btn')).toBeNull();
+      // The report path (DSA art. 16) stays directly reachable in More without
+      // first recovering hidden chrome.
       expect(container.querySelector('a.report-btn')).not.toBeNull();
     } finally {
       vi.useRealTimers();
