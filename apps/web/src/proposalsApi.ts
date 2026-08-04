@@ -64,6 +64,18 @@ export type ContributionEligibility = { canPropose: true } | { canPropose: false
 
 export type ProposalApiError = Error & { status?: number; code?: string; category?: string };
 
+/**
+ * Coerce a list field to an array.
+ *
+ * A 200 whose body is missing the field is not an error the `catch` above can see, and the
+ * component that renders it would throw on `.length` — which is how one shape-drifted
+ * endpoint takes down the surface embedding it. Absent reads as empty, which is what an
+ * absent list means everywhere else in this product.
+ */
+function asList<T>(value: T[] | undefined): T[] {
+  return Array.isArray(value) ? value : [];
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     credentials: 'include',
@@ -114,18 +126,18 @@ export function proposeFromRemix(
 }
 
 export async function myProposals(): Promise<Proposal[]> {
-  const { proposals } = await request<{ proposals: Proposal[] }>('/api/proposals');
-  return proposals;
+  const { proposals } = await request<{ proposals?: Proposal[] }>('/api/proposals');
+  return asList(proposals);
 }
 
 export async function myReviews(): Promise<Proposal[]> {
-  const { proposals } = await request<{ proposals: Proposal[] }>('/api/me/reviews');
-  return proposals;
+  const { proposals } = await request<{ proposals?: Proposal[] }>('/api/me/reviews');
+  return asList(proposals);
 }
 
 export async function platformProposals(): Promise<Proposal[]> {
-  const { proposals } = await request<{ proposals: Proposal[] }>('/api/admin/proposals');
-  return proposals;
+  const { proposals } = await request<{ proposals?: Proposal[] }>('/api/admin/proposals');
+  return asList(proposals);
 }
 
 export async function getProposal(id: string): Promise<Proposal> {
@@ -168,8 +180,12 @@ export async function requestProposalChanges(id: string, text: string): Promise<
 export type ContributionMode = 'off' | 'review';
 
 export async function getContributionMode(slug: string): Promise<ContributionMode> {
-  const { mode } = await request<{ mode: ContributionMode }>(`/api/me/games/${encodeURIComponent(slug)}/contributions`);
-  return mode;
+  const { mode } = await request<{ mode?: ContributionMode }>(
+    `/api/me/games/${encodeURIComponent(slug)}/contributions`,
+  );
+  // Unknown reads as `off`, the same failure direction the server takes: a game stays shut
+  // rather than accidentally open when something upstream is not what we expected.
+  return mode === 'review' ? 'review' : 'off';
 }
 
 export function setContributionMode(
@@ -185,8 +201,8 @@ export function setContributionMode(
 export type ContributorBlock = { ownerUid: string; blockedUid: string; createdAt: string };
 
 export async function listContributorBlocks(): Promise<ContributorBlock[]> {
-  const { blocks } = await request<{ blocks: ContributorBlock[] }>('/api/me/contributor-blocks');
-  return blocks;
+  const { blocks } = await request<{ blocks?: ContributorBlock[] }>('/api/me/contributor-blocks');
+  return asList(blocks);
 }
 
 export function blockContributor(uid: string): Promise<{ ok: true }> {

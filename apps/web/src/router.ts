@@ -62,7 +62,18 @@ export function isGamePageTab(value: string): value is GamePageTab {
  * things to look at. In the URL so a refresh, a bookmark, or the link in an alert
  * notification lands on the section it meant rather than on whichever one is first.
  */
-export const ADMIN_SECTIONS = ['queue', 'costs', 'telemetry', 'limits', 'tokens', 'suggestions', 'waitlist'] as const;
+export const ADMIN_SECTIONS = [
+  'queue',
+  'costs',
+  'telemetry',
+  'limits',
+  'tokens',
+  'suggestions',
+  // Proposals against platform-owned catalog games. Beside `suggestions` because both are
+  // inbound work the operator decides on, rather than something to look at.
+  'proposals',
+  'waitlist',
+] as const;
 export type AdminSection = (typeof ADMIN_SECTIONS)[number];
 
 export function isAdminSection(value: string): value is AdminSection {
