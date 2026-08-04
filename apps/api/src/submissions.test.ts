@@ -2262,15 +2262,16 @@ describe('submission preview route', () => {
     expect((await app.inject({ method: 'GET', url: `/api/submissions/${token}` })).statusCode).toBe(200);
     const callsAfterFirst = getSubmission.mock.calls.length;
 
-    // Inside the window: answered from cache, so the record is not re-read.
+    // Inside the window: the heavy refresh is skipped. One cheap record read still
+    // runs to overlay live heartbeat / ended / stall (same outside-cache idea as events).
     currentTime += 59_000;
     expect((await app.inject({ method: 'GET', url: `/api/submissions/${token}` })).statusCode).toBe(200);
-    expect(getSubmission.mock.calls.length).toBe(callsAfterFirst);
+    expect(getSubmission.mock.calls.length).toBe(callsAfterFirst + 1);
 
-    // Past it: refreshed.
+    // Past it: full refresh again (abandoned check + refresh + overlay).
     currentTime += 2_000;
     expect((await app.inject({ method: 'GET', url: `/api/submissions/${token}` })).statusCode).toBe(200);
-    expect(getSubmission.mock.calls.length).toBeGreaterThan(callsAfterFirst);
+    expect(getSubmission.mock.calls.length).toBeGreaterThan(callsAfterFirst + 1);
 
     await app.close();
   });
@@ -3053,9 +3054,9 @@ describe('status route under store pressure', () => {
     release();
     const responses = await polls;
 
-    // Three abandoned-checks — one per request, outside the cache by design — and
-    // exactly one refresh behind them. A second refresh would mean no coalescing.
-    expect(getSubmission).toHaveBeenCalledTimes(4);
+    // Three abandoned-checks + one coalesced refresh + three heartbeat overlays
+    // (attachBuildEvents runs per response). A second refresh would mean no coalescing.
+    expect(getSubmission).toHaveBeenCalledTimes(7);
     for (const response of responses) expect(response.statusCode).toBe(200);
 
     await app.close();
@@ -3075,17 +3076,17 @@ describe('status route under store pressure', () => {
       app.inject({ method: 'GET', url: `/api/submissions/${token}?locale=pl` }),
     ]);
 
-    // Two keys, so two refreshes — a shared one would hand a Polish reader English.
-    // Plus the two per-request abandoned-checks.
-    expect(getSubmission).toHaveBeenCalledTimes(4);
+    // Two keys → two refreshes (a shared one would hand a Polish reader English),
+    // plus two abandoned-checks and two heartbeat overlays.
+    expect(getSubmission).toHaveBeenCalledTimes(6);
 
     await app.close();
   });
 
   it('serves the last known status when a refresh fails', async () => {
-    // Calls 1-2 are the warm request; 3 is the next request's abandoned-check, so 4 is
-    // its refresh — the one the stale-serve is there to cover.
-    const { store } = spyStore({ failOnCall: 4 });
+    // Warm: abandoned + refresh + overlay (1–3). Stale: abandoned (4), then refresh
+    // fails (5) — the stale-serve path. Overlay on the fallback is soft and may be 6.
+    const { store } = spyStore({ failOnCall: 5 });
     let currentTime = 10_000;
     const { app } = await createApp({
       githubClient: createGithubClientStub({}).githubClient,

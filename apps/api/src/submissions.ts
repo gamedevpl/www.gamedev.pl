@@ -1531,7 +1531,8 @@ export async function registerSubmissionRoutes(
       loadBuildEvents(issueNumber),
       buildMedia(issueNumber, locale),
       buildPlayables(issueNumber, locale),
-      store ? store.getSubmission(issueNumber) : Promise.resolve(null),
+      // Soft: a store blip must not 500 a cached status poll — keep cached stall/ended.
+      store ? store.getSubmission(issueNumber).catch(() => null) : Promise.resolve(null),
     ]);
     // Drop leftover synthetic presence steps from before heartbeats stopped writing chat.
     const events = loadedEvents.filter((event) => !isMcpPresenceEventText(event.text));
