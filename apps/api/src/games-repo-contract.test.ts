@@ -15,6 +15,7 @@ import {
   GAMEKIT_PLATFORM_BYTES,
   MAX_PROJECT_BYTES,
   MUSIC_CONTRACT,
+  SOURCE_GRAPH_BUDGET_BYTES,
 } from './games-repo-contract.js';
 import { MAX_PROJECT_BYTES as ASSEMBLE_MAX } from './assemble.js';
 import { ALLOWED_SOURCE_FILES, MAX_UPLOAD_BYTES, MAX_UPLOAD_FILES } from './games-store.js';
@@ -48,6 +49,13 @@ describe('games-repo-contract (website half)', () => {
     expect(GAME_BUDGET_BYTES + GAMEKIT_PLATFORM_BYTES).toBe(MAX_PROJECT_BYTES);
     // assemble.ts must re-export the same number — a second literal would drift.
     expect(ASSEMBLE_MAX).toBe(MAX_PROJECT_BYTES);
+  });
+
+  it('keeps the bake/play source-graph ceiling above the assembled author budget', () => {
+    // Raw `.ts` can exceed assembled author bytes (comments/types). Carjack-city
+    // at ~247 KiB is why this is 300 KiB rather than matching GAME_BUDGET_BYTES.
+    expect(SOURCE_GRAPH_BUDGET_BYTES).toBe(300 * 1024);
+    expect(SOURCE_GRAPH_BUDGET_BYTES).toBeGreaterThan(GAME_BUDGET_BYTES);
   });
 
   it('keeps the fixtures/games-repo assemble-contract snapshot in lockstep', async () => {

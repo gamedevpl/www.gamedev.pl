@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { build, transform } from 'esbuild';
 import { classifyTouchSource, type CatalogGameTouch } from './catalog-touch.js';
-import { GAME_KIT_MODULES, type GameKitModuleName } from './games-repo-contract.js';
+import { GAME_KIT_MODULES, SOURCE_GRAPH_BUDGET_BYTES, type GameKitModuleName } from './games-repo-contract.js';
 import { isRateLimitResponse } from './github-rate-limit.js';
 
 export type { CatalogGameTouch } from './catalog-touch.js';
@@ -70,7 +70,8 @@ export interface GameSources {
 // GAME_KIT_MODULES lives in games-repo-contract.ts — CI re-checks the live
 // games repo copy when GAMES_REPO_TOKEN is set (issue #247).
 const MAX_SOURCE_GRAPH_MODULES = 64;
-const MAX_SOURCE_GRAPH_BYTES = 200 * 1024;
+/** Alias of {@link SOURCE_GRAPH_BUDGET_BYTES} — keep the local name at the call sites. */
+const MAX_SOURCE_GRAPH_BYTES = SOURCE_GRAPH_BUDGET_BYTES;
 const GAME_KIT_MODULE_ENTRIES: Partial<Record<GameKitModuleName, string>> = {
   urban: 'shared/verticals/urban/index.ts',
   racing: 'shared/verticals/racing/index.ts',
