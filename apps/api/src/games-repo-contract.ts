@@ -80,7 +80,7 @@ export const GAME_KIT_MODULES = [
 export type GameKitModuleName = (typeof GAME_KIT_MODULES)[number];
 
 /** Author-facing budget — games-repo Check 4 `GAME_BUDGET_BYTES`. */
-export const GAME_BUDGET_BYTES = 232 * 1024;
+export const GAME_BUDGET_BYTES = 252 * 1024;
 
 /**
  * Raw TypeScript source-graph ceiling for the bake/play/seed bundlers
@@ -88,16 +88,19 @@ export const GAME_BUDGET_BYTES = 232 * 1024;
  * `seed-bundle.ts`). Lockstep with games-repo Check 4 `SOURCE_GRAPH_BUDGET_BYTES`.
  *
  * Distinct from {@link GAME_BUDGET_BYTES}: the assembled author payload can stay
- * under 232 KiB while comments and types push the `.ts` tree higher. Last moved
- * 200 → 300 KiB when carjack-city (~247 KiB source) stranded every snapshot publish.
+ * under the author budget while comments and types push the `.ts` tree higher. Moved
+ * 200 → 300 KiB when carjack-city (~247 KiB source) stranded every snapshot publish;
+ * 300 → 336 KiB for the same game's island coastline, on-foot car collision and
+ * mission-ladder work — 335_142 raw bytes carrying 252_340 assembled ones.
  */
-export const SOURCE_GRAPH_BUDGET_BYTES = 300 * 1024;
+export const SOURCE_GRAPH_BUDGET_BYTES = 336 * 1024;
 
 /**
  * Platform half of the serve cap — games-repo `GAMEKIT_PLATFORM_BYTES` /
  * `assemble-contract.json` `platformCeilingBytes`. Together with
- * {@link GAME_BUDGET_BYTES} this must equal games-repo `MAX_BUNDLE_BYTES`
- * (577_568, matching `maxProjectBytes`). Not a round KiB.
+ * {@link GAME_BUDGET_BYTES} this must be at least games-repo `MAX_BUNDLE_BYTES`
+ * (598_048 here, matching `maxProjectBytes`; the games repo is at 588_048 until its
+ * own platform raise lands, and website-ahead is the safe direction). Not a round KiB.
  *
  * One derived ceiling, not a sum of per-feature constants (games-repo #281). Check 4
  * over there bills each author for measured `assembled − platformBytes` against the
@@ -106,9 +109,16 @@ export const SOURCE_GRAPH_BUDGET_BYTES = 300 * 1024;
  * `docs/platform-byte-ledger.md`. Raise this when measurement shows a passing game
  * would exceed it — do not re-split it into named allowances on this side either.
  *
- * The platform ceiling last moved for the urban top-down vehicle body + grid helper
- * promotion that pulled carjack-city hull/shape paint and sidewalk/block walks into
- * GameKit: measured platform 333_323 bytes. 330_000 → 340_000, serve cap
+ * The author budget last moved for `carjack-city` again: a real island coastline every
+ * system obeys (the street plan is clipped to it, held back behind the beach and eroded
+ * back to its junctions, so nothing runs into the sea), solid car hulls for everyone on
+ * foot, and the mission ladder's chain economy measure 252_340 author bytes against 864
+ * bytes of headroom. Platform bytes are untouched by that change.
+ * 232 → 252 KiB, and the serve cap 577_568 → 598_048.
+ *
+ * Before that, the platform ceiling moved for the urban top-down vehicle body + grid
+ * helper promotion that pulled carjack-city hull/shape paint and sidewalk/block walks
+ * into GameKit: measured platform 333_323 bytes. 330_000 → 340_000, serve cap
  * 567_568 → 577_568.
  *
  * Before that, author budget for active-run persistence: 212 → 232 KiB, serve cap

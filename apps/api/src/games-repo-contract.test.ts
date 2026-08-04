@@ -45,7 +45,7 @@ function validContract(): Record<string, unknown> {
 
 describe('games-repo-contract (website half)', () => {
   it('keeps the serve budget at the Check 4 total (games-repo MAX_BUNDLE_BYTES)', () => {
-    expect(MAX_PROJECT_BYTES).toBe(577_568);
+    expect(MAX_PROJECT_BYTES).toBe(598_048);
     expect(GAME_BUDGET_BYTES + GAMEKIT_PLATFORM_BYTES).toBe(MAX_PROJECT_BYTES);
     // assemble.ts must re-export the same number — a second literal would drift.
     expect(ASSEMBLE_MAX).toBe(MAX_PROJECT_BYTES);
@@ -53,8 +53,8 @@ describe('games-repo-contract (website half)', () => {
 
   it('keeps the bake/play source-graph ceiling above the assembled author budget', () => {
     // Raw `.ts` can exceed assembled author bytes (comments/types). Carjack-city
-    // at ~247 KiB is why this is 300 KiB rather than matching GAME_BUDGET_BYTES.
-    expect(SOURCE_GRAPH_BUDGET_BYTES).toBe(300 * 1024);
+    // at ~334 KiB source is why this is 336 KiB rather than matching GAME_BUDGET_BYTES.
+    expect(SOURCE_GRAPH_BUDGET_BYTES).toBe(336 * 1024);
     expect(SOURCE_GRAPH_BUDGET_BYTES).toBeGreaterThan(GAME_BUDGET_BYTES);
   });
 
@@ -229,7 +229,7 @@ describe('games-repo source extractors', () => {
     // The extractor still has to resolve `BUDGET + PLATFORM` (and `a + b` / `a * b`
     // forms inside those consts), not only bare literals.
     const source = `
-      const GAME_BUDGET_BYTES = 232 * 1024;
+      const GAME_BUDGET_BYTES = 252 * 1024;
       const GAMEKIT_PLATFORM_BYTES = 340_000;
       const MAX_BUNDLE_BYTES = GAME_BUDGET_BYTES + GAMEKIT_PLATFORM_BYTES;
     `;
@@ -238,7 +238,7 @@ describe('games-repo source extractors', () => {
 
   it('still evaluates a + b allowance expressions when a tip uses them', () => {
     const source = `
-      const GAME_BUDGET_BYTES = 232 * 1024;
+      const GAME_BUDGET_BYTES = 252 * 1024;
       const GAMEKIT_TOUCH_BYTES = 7_501 + 5_560;
       const GAMEKIT_PLATFORM_BYTES = GAMEKIT_TOUCH_BYTES + 326_939;
       const MAX_BUNDLE_BYTES = GAME_BUDGET_BYTES + GAMEKIT_PLATFORM_BYTES;
