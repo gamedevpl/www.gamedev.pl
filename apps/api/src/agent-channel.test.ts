@@ -910,6 +910,7 @@ describe('agent build channel', () => {
           };
         },
         getStagedSourceFiles: async () => [...staged.entries()].map(([path, content]) => ({ path, content })),
+        getStagedSourceFile: async (input: { path: string }) => staged.get(input.path) ?? null,
         clearStagedSources: async (input?: { paths?: string[] }) => {
           if (!input?.paths?.length) {
             const cleared = staged.size;
@@ -1468,6 +1469,171 @@ describe('agent build channel', () => {
       );
       // Finalize clears the buffer so the next iterate starts clean.
       expect(staged.size).toBe(0);
+    });
+
+    it('patches a delivery file into staging and fromStaged overlays the rest', async () => {
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      await store.setSubmissionSlug(ISSUE, 'comet-courier');
+      await store.setSubmissionPreviewVersion(ISSUE, 'v1');
+      const { gamesStore, stored, staged } = stubGamesStore();
+      const delivered: Record<string, string> = Object.fromEntries(
+        MINIMAL.filter((f) => f.path !== 'TRACE.json' && f.path !== 'PLAYTEST.json').map((f) => [f.path, f.content]),
+      );
+      delivered['game/render.ts'] = 'export function paint() {\n  drawSky();\n}\n';
+      app = await createApp(store, {
+        gamesStore: {
+          ...gamesStore,
+          getManifest: async () => ({ sourceFiles: Object.keys(delivered) }),
+          getSourceFile: async (_slug: string, _version: string, path: string) => delivered[path] ?? null,
+        } as unknown as GamesStore,
+      });
+
+      const patched = await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/sources/stage/patch',
+        headers: agentHeaders(),
+        payload: {
+          path: 'game/render.ts',
+          patch: [
+            '--- a/game/render.ts',
+            '+++ b/game/render.ts',
+            '@@ -1,3 +1,4 @@',
+            ' export function paint() {',
+            '   drawSky();',
+            '+  drawHud();',
+            ' }',
+            '',
+          ].join('\n'),
+        },
+      });
+      expect(patched.statusCode).toBe(200);
+      expect(patched.json()).toMatchObject({
+        accepted: true,
+        path: 'game/render.ts',
+        replacements: 1,
+        baseFrom: 'delivery',
+      });
+      expect(staged.get('game/render.ts')).toContain('drawHud()');
+      expect(staged.size).toBe(1);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/sources',
+        headers: agentHeaders(),
+        payload: {
+          slug: 'comet-courier',
+          fromStaged: true,
+          kitEngineRef: 'abcdef1234567890',
+          mode: 'preview',
+        },
+      });
+      expect(response.statusCode).toBe(200);
+      const files = stored[0]?.files as Array<{ path: string; content: string }>;
+      expect(files.find((f) => f.path === 'game/render.ts')?.content).toContain('drawHud()');
+      expect(files.find((f) => f.path === 'game.ts')?.content).toBe(delivered['game.ts']);
+      expect(staged.size).toBe(0);
+    });
+
+    it('fromStaged fails closed when the delivery manifest lists unreadable paths', async () => {
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      await store.setSubmissionSlug(ISSUE, 'comet-courier');
+      await store.setSubmissionPreviewVersion(ISSUE, 'v1');
+      const { gamesStore, stored, staged } = stubGamesStore();
+      app = await createApp(store, {
+        gamesStore: {
+          ...gamesStore,
+          getManifest: async () => ({ sourceFiles: ['game.ts', 'SPEC.md', 'index.html'] }),
+          getSourceFile: async (_slug: string, _version: string, path: string) =>
+            path === 'game.ts' ? 'export {};' : null,
+        } as unknown as GamesStore,
+      });
+
+      await app.inject({
+        method: 'PUT',
+        url: '/api/agent/build/sources/stage',
+        headers: agentHeaders(),
+        payload: { slug: 'comet-courier', path: 'game.ts', content: 'export const fixed = 1;' },
+      });
+      expect(staged.size).toBe(1);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/sources',
+        headers: agentHeaders(),
+        payload: {
+          slug: 'comet-courier',
+          fromStaged: true,
+          kitEngineRef: 'abcdef1234567890',
+          mode: 'preview',
+        },
+      });
+      expect(response.statusCode).toBe(502);
+      expect(response.json().error).toMatch(/could not be read back/i);
+      expect(stored).toHaveLength(0);
+    });
+
+    it('refuses a whitespace-only patch before apply', async () => {
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      const { gamesStore } = stubGamesStore();
+      app = await createApp(store, { gamesStore });
+
+      await app.inject({
+        method: 'PUT',
+        url: '/api/agent/build/sources/stage',
+        headers: agentHeaders(),
+        payload: { slug: 'comet-courier', path: 'game.ts', content: 'line1\n' },
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/sources/stage/patch',
+        headers: agentHeaders(),
+        payload: { path: 'game.ts', patch: '   \n\t  ' },
+      });
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error).toMatch(/empty|patch/i);
+    });
+
+    it('refuses a unified diff that does not apply or targets the wrong path', async () => {
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      const { gamesStore, staged } = stubGamesStore();
+      app = await createApp(store, { gamesStore });
+
+      await app.inject({
+        method: 'PUT',
+        url: '/api/agent/build/sources/stage',
+        headers: agentHeaders(),
+        payload: { slug: 'comet-courier', path: 'game.ts', content: 'line1\nline2\n' },
+      });
+
+      const stale = await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/sources/stage/patch',
+        headers: agentHeaders(),
+        payload: {
+          path: 'game.ts',
+          patch: ['--- a/game.ts', '+++ b/game.ts', '@@ -1,2 +1,2 @@', ' missing', '-line2', '+line2x', ''].join('\n'),
+        },
+      });
+      expect(stale.statusCode).toBe(400);
+      expect(stale.json().error).toMatch(/did not apply/i);
+
+      const wrongPath = await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/sources/stage/patch',
+        headers: agentHeaders(),
+        payload: {
+          path: 'game.ts',
+          patch: ['--- a/other.ts', '+++ b/other.ts', '@@ -1,2 +1,2 @@', ' line1', '-line2', '+line2x', ''].join('\n'),
+        },
+      });
+      expect(wrongPath.statusCode).toBe(400);
+      expect(wrongPath.json().error).toMatch(/does not match/i);
+      expect(staged.get('game.ts')).toBe('line1\nline2\n');
     });
 
     /**

@@ -46,6 +46,9 @@ import {
   parseKitSidecar,
 } from './kit-registry.js';
 import { seedPayload } from './seed-status.js';
+import { largeSourceFileHint } from './module-size.js';
+import { applySourcePatch, SourcePatchError } from './source-patch.js';
+import { overlayGameSources } from './staged-preview.js';
 import { type CreatorMessage, type Store, type SubmissionRecord } from './store.js';
 import { BUILD_EVENT_KINDS, BUILD_STEPS, sanitizeCreatorText, type BuildEvent } from './submission-status.js';
 import { normalizeAtIntake, type IntakeText } from './localize-intake.js';
@@ -248,6 +251,21 @@ const BuildSourcesInputSchema = z
 const StageSourceInputSchema = z.object({
   path: z.string().trim().min(1).max(120),
   content: z.string().max(1_000_000),
+  slug: z
+    .string()
+    .trim()
+    .regex(/^[a-z0-9][a-z0-9-]*$/, 'slug must be lowercase letters, digits and dashes')
+    .max(64)
+    .optional(),
+});
+
+const StageSourcePatchInputSchema = z.object({
+  path: z.string().trim().min(1).max(120),
+  /** Unified diff for this one path (`---` / `+++` + `@@` hunks). */
+  patch: z
+    .string()
+    .transform((value) => value.trim())
+    .pipe(z.string().min(1, 'patch must not be empty').max(400_000)),
   slug: z
     .string()
     .trim()
@@ -987,6 +1005,7 @@ export async function registerAgentChannelRoutes(
         options.onEvent?.(issueNumber);
         // After the buffer is durable, so the assembly it schedules reads this file too.
         options.onSourcesStaged?.({ issueNumber, slug, roundGeneration });
+        const hint = largeSourceFileHint(staged.path, staged.bytes, parsed.data.content);
         return reply.send({
           accepted: true,
           path: staged.path,
@@ -998,10 +1017,142 @@ export async function registerAgentChannelRoutes(
             maxFiles: staged.maxFiles,
             updatedAt: staged.updatedAt,
           },
+          ...(hint ? { hint } : {}),
           ...(await channelState(issueNumber, (await store!.getSubmission(issueNumber)) ?? record)),
         });
       } catch (error) {
         if (error instanceof InvalidUploadError) {
+          return reply.status(400).send({ error: error.message });
+        }
+        throw error;
+      }
+    },
+  );
+
+  /**
+   * Unified-diff patch into the staging buffer.
+   *
+   * Base content is staged → latest delivery → seed (same overlay order as the live
+   * staged preview). The patched file is then written with putStagedSourceFile, so a
+   * later fromStaged submit (which overlays the same way) only needs the changed paths
+   * in the buffer — chat-thin agents never re-emit a 40 KB render.ts for a one-line fix.
+   */
+  app.post(
+    '/api/agent/build/sources/stage/patch',
+    {
+      config: { rateLimit: { max: 300, timeWindow: '1 hour' } },
+      bodyLimit: 500_000,
+    },
+    async (request, reply) => {
+      const resolved = await resolveBuild(request, reply);
+      if (!resolved) return reply;
+      const { issueNumber, record } = resolved;
+
+      if (!options.gamesStore) {
+        return reply.status(503).send({ error: 'delivery is not configured on this deployment' });
+      }
+      if (stopReason(record)) {
+        return reply.send({ accepted: false, rejected: 'stopped', ...(await channelState(issueNumber, record)) });
+      }
+
+      const parsed = StageSourcePatchInputSchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
+      }
+
+      const slug = record.slug ?? parsed.data.slug;
+      if (!slug) {
+        return reply.status(400).send({
+          error: 'slug is required before patching — send the slug from get_brief / start',
+        });
+      }
+      if (record.slug && parsed.data.slug && record.slug !== parsed.data.slug) {
+        return reply.status(409).send({ error: `this build delivers to ${record.slug}, not ${parsed.data.slug}` });
+      }
+      if (!record.slug && store) {
+        await store.setSubmissionSlug(issueNumber, slug);
+      }
+
+      const roundGeneration = store
+        ? ((await store.ensureRoundGeneration(issueNumber)) ?? record.roundGeneration ?? 1)
+        : (record.roundGeneration ?? 1);
+
+      try {
+        const stagedContent = await options.gamesStore.getStagedSourceFile({
+          slug,
+          issueNumber,
+          roundGeneration,
+          path: parsed.data.path,
+        });
+
+        let base = stagedContent;
+        let baseFrom: 'staged' | 'delivery' | 'seed' | null = stagedContent !== null ? 'staged' : null;
+
+        if (base === null) {
+          let version = record.previewVersion ?? record.deliveredVersion;
+          if (!version) {
+            const publication = await store!.getPublication(slug);
+            if (publication?.state === 'published') version = publication.currentVersion;
+          }
+          if (version) {
+            base = await options.gamesStore.getSourceFile(slug, version, parsed.data.path);
+            if (base !== null) baseFrom = 'delivery';
+          }
+        }
+
+        if (base === null && record.seed?.files) {
+          const seedFile = record.seed.files.find((file) => file.path === parsed.data.path);
+          if (seedFile) {
+            base = seedFile.content;
+            baseFrom = 'seed';
+          }
+        }
+
+        if (base === null || baseFrom === null) {
+          return reply.status(400).send({
+            error:
+              `cannot patch ${parsed.data.path}: no base content in staging, the latest delivery, or the seed — ` +
+              'stage_source_file the full file first (or get_sources / get_seed), then patch',
+          });
+        }
+
+        const patched = applySourcePatch({
+          content: base,
+          path: parsed.data.path,
+          patch: parsed.data.patch,
+        });
+
+        const staged = await options.gamesStore.putStagedSourceFile({
+          slug,
+          issueNumber,
+          roundGeneration,
+          path: parsed.data.path,
+          content: patched.content,
+        });
+        await markBuildingFromChannel(issueNumber, record);
+        await store?.touchLastAgentSignalAt(issueNumber, undefined, { key: 'staging_sources' });
+        options.onEvent?.(issueNumber);
+        options.onSourcesStaged?.({ issueNumber, slug, roundGeneration });
+
+        const hint = largeSourceFileHint(staged.path, staged.bytes, patched.content);
+        return reply.send({
+          accepted: true,
+          path: staged.path,
+          bytes: staged.bytes,
+          replacements: patched.replacements,
+          baseFrom,
+          staged: {
+            files: staged.files,
+            totalBytes: staged.totalBytes,
+            maxBytes: staged.maxBytes,
+            maxFiles: staged.maxFiles,
+            updatedAt: staged.updatedAt,
+          },
+          ...(hint ? { hint } : {}),
+          ...(await channelState(issueNumber, (await store!.getSubmission(issueNumber)) ?? record)),
+        });
+      } catch (error) {
+        if (error instanceof SourcePatchError || error instanceof InvalidUploadError) {
           return reply.status(400).send({ error: error.message });
         }
         throw error;
@@ -1231,16 +1382,45 @@ export async function registerAgentChannelRoutes(
           if (staged.length === 0 && files.length === 0) {
             return reply.status(400).send({
               error:
-                'fromStaged=true but the staging buffer is empty — call stage_source_file for each path first, ' +
-                'or pass files[] inline',
+                'fromStaged=true but the staging buffer is empty — call stage_source_file / patch_source_file ' +
+                'for each changed path first, or pass files[] inline',
             });
           }
-          // Inline files win on path collision so a final fix can patch one file without
-          // re-staging the whole tree.
-          const byPath = new Map<string, string>();
-          for (const file of staged) byPath.set(file.path, file.content);
-          for (const file of files) byPath.set(file.path, file.content);
-          files = [...byPath.entries()].map(([path, content]) => ({ path, content }));
+          // Overlay matches the live staged preview: staged (plus inline) over the latest
+          // delivery over the seed. A one-file patch_source_file (or a partial stage) can
+          // therefore submit a complete tree without re-uploading unchanged paths.
+          let delivered: Array<{ path: string; content: string }> = [];
+          let version = record.previewVersion ?? record.deliveredVersion;
+          if (!version) {
+            const publication = await store!.getPublication(slug);
+            if (publication?.state === 'published') version = publication.currentVersion;
+          }
+          if (version) {
+            const manifest = await options.gamesStore.getManifest(slug, version);
+            if (!manifest) {
+              return reply.status(502).send({ error: 'the latest delivery could not be read back' });
+            }
+            const loaded = await Promise.all(
+              manifest.sourceFiles.map(async (path) => ({
+                path,
+                content: await options.gamesStore!.getSourceFile(slug, version!, path),
+              })),
+            );
+            // Fail closed like fromLatestDelivery — a hole in the base would let a one-file
+            // patch assemble a tree missing paths the manifest still claims exist.
+            const missing = loaded.filter((file) => file.content === null).map((file) => file.path);
+            if (missing.length > 0) {
+              request.log.error({ slug, version, missing }, 'latest delivery missing files its manifest lists');
+              return reply.status(502).send({ error: 'the latest delivery could not be read back' });
+            }
+            delivered = loaded.map((file) => ({ path: file.path, content: file.content as string }));
+          }
+          const overlay = overlayGameSources({
+            staged: [...staged, ...files],
+            ...(delivered.length ? { delivered } : {}),
+            ...(record.seed?.files ? { seed: record.seed.files } : {}),
+          });
+          files = Object.entries(overlay).map(([path, content]) => ({ path, content }));
         }
         mode ??= 'publish';
 

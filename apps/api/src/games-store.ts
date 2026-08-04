@@ -432,6 +432,13 @@ export interface GamesStore {
   }): Promise<StagedSourcesSummary>;
   /** Reads staged contents for finalize. */
   getStagedSourceFiles(input: { slug: string; issueNumber: number; roundGeneration: number }): Promise<SourceFile[]>;
+  /** Reads one staged path (null when not in the buffer). Used by patch_source_file. */
+  getStagedSourceFile(input: {
+    slug: string;
+    issueNumber: number;
+    roundGeneration: number;
+    path: string;
+  }): Promise<string | null>;
   /** Clears the staging buffer (all paths, or a named subset). */
   clearStagedSources(input: {
     slug: string;
@@ -758,6 +765,17 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
         }),
       );
       return files;
+    },
+
+    async getStagedSourceFile(input) {
+      assertSlug(input.slug);
+      const path = assertDeliverableSourcePath(input.path);
+      const existing = await readStagingManifest(input.slug, input.issueNumber, input.roundGeneration);
+      if (!existing?.manifest.files.some((file) => file.path === path)) return null;
+      const body = await readObject(
+        `${stagingPrefix(input.slug, input.issueNumber, input.roundGeneration)}/source/${path}`,
+      );
+      return body ? body.toString('utf8') : null;
     },
 
     async clearStagedSources(input) {

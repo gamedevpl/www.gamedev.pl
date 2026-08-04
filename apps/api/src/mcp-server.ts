@@ -40,6 +40,7 @@ import { decodeCanonicalBase64Utf8, InvalidBase64Error } from './canonical-base6
 import { selfBuildDeliveryCap } from './builder.js';
 import type { BuilderKind } from './builder.js';
 import { MAX_UPLOAD_FILES, type GamesStore } from './games-store.js';
+import { largeSourceFileHint, moduleSizeWarnings } from './module-size.js';
 import type { GcsObjectStore } from './gcs-sign.js';
 import {
   assertMcpSessionKeyUnexpired,
@@ -309,7 +310,7 @@ const BEHAVIOURAL_CONTRACT = [
   // language they did not choose, which is the whole reason the field exists.
   "Write progress in the creator's language: when get_brief.locales[0] is not 'en', send report_progress with textLocalized and locale as well as the English text.",
   'Send a screenshot as soon as the game draws anything playable.',
-  'While iterating, deliver with mode=preview (no TRACE required). Prefer stage_source_file once per path then submit_sources({ fromStaged:true, mode:"preview", kitEngineRef }) — avoid one giant files[] payload. Only mode=publish needs TRACE/PLAYTEST and can go green.',
+  'While iterating, deliver with mode=preview (no TRACE required). Prefer stage_source_file for new/rewritten paths and patch_source_file({ path, patch }) with a unified diff for edits (never re-emit a whole large render.ts/model.ts). Honour warnings.code=module_too_large by splitting before more feature work. Then submit_sources({ fromStaged:true, mode:"preview", kitEngineRef }) — fromStaged overlays onto the latest delivery/seed so only changed paths need staging. Avoid one giant files[] payload. Only mode=publish needs TRACE/PLAYTEST and can go green.',
   'Run kit checks green (at least check:static) before submit_sources when you have a local kit checkout; otherwise submit and let the gate run checks.',
   'After submit_sources, if you will not deliver more this round, call end (required — warnings.code=call_end; submit already unlocks creator handoff). Prefer end over sitting in a get_gate_verdict loop — Studio shows the gate. Do not stop after submit alone without end.',
   'Honour stop immediately — do not continue after stop:true.',
@@ -334,12 +335,12 @@ const SESSION_WORKFLOW: readonly string[] = [
   // existed. Following the loop literally, it scaffolded a fresh game over a published
   // one. get_sources is cheap and answers available:false on a new game, so it is
   // unconditional rather than gated on a round type the agent cannot see.
-  'get_sources — when it returns available:true this round improves an existing game: continue those files. Never scaffold over them.',
+  'get_sources — when it returns available:true this round improves an existing game: continue those files. Never scaffold over them. If warnings.code=module_too_large, split those oversized modules into cohesive game/*.ts pieces BEFORE adding features — do not grow them further.',
   'get_kit — keep engineRef for submit_sources; prefer read_kit_files for several known small paths (else list_kit_files / search_kit_files / read_kit_file / read_kit_file_fragment) when shell unpack is unavailable; otherwise unpack via the returned one-liner and follow SKILL.md locally. Never dump the whole kit into context.',
-  'Build the game — continuing the seed or sources you fetched, otherwise from the kit; report_progress before and after long steps.',
+  'Build the game — continuing the seed or sources you fetched, otherwise from the kit; report_progress before and after long steps. Soft module budget: keep each game/*.ts under ~350 lines / ~12 KiB. When a file approaches that, split cohesive pieces (render→art/ui/hud/rooms; model→tables/layout/types; runtime→systems) before more feature work. Honour warnings.code=module_too_large the same way you honour call_end — act, then continue.',
   'send_screenshot as soon as the game draws anything playable.',
-  'While iterating: prefer stage_source_file({ path, content }) for each game file (list_staged_sources to check), then submit_sources({ fromStaged: true, mode: "preview", kitEngineRef }) — TRACE/PLAYTEST not required; Studio gets a playable draft after typecheck→smoke→build. Inline files[] still works for tiny trees.',
-  'Staging is already visible: once index.html, game.ts, style.css and GAME.json are staged, the platform assembles the buffer and shows the creator a live playable preview — without waiting for submit or the gate. Stage a runnable tree early and keep staging as you work; a buffer that does not compile simply leaves the previous preview up.',
+  'While iterating: stage_source_file({ path, content }) for new or fully rewritten paths; for edits prefer patch_source_file({ path, patch }) with a unified diff (---/+++ + @@ hunks for ONE file; context must match exactly). Stage only changed paths — never re-upload the whole tree. Then submit_sources({ fromStaged: true, mode: "preview", kitEngineRef }) — fromStaged overlays onto the latest delivery/seed. TRACE/PLAYTEST not required; Studio gets a playable draft after typecheck→smoke→build. Inline files[] still works for tiny trees.',
+  'Staging is already visible: once index.html, game.ts, style.css and GAME.json are present across staging + delivery/seed, the platform assembles a live playable preview — without waiting for submit or the gate. Stage a runnable tree early and keep staging/patching as you work; a buffer that does not compile simply leaves the previous preview up.',
   'After every successful submit_sources: creator handoff is already unlocked; still call end immediately if you will not deliver more (warnings.code=call_end). Prefer end over sitting in a get_gate_verdict loop — Studio shows the gate. submit alone leaves your MCP session open — end sets stop:true. ChatGPT-class agents often stop after submit; end closes the session cleanly.',
   'Only call get_gate_verdict once when an already-available verdict would change what you deliver. It is not a wait loop. Pending with a deliveryId returns stop:true: stop immediately and let Studio show the eventual result. Pending with deliveryId:null returns stop:false because you checked too early — continue building and call submit_sources; do not check again before a delivery. A later creator-led run may check a delivered gate again. Preview lane: preview_passed / preview_failed — fix and re-preview on the SAME key; preview_passed does NOT end the round.',
   'When ready to seal: record TRACE (`npm run trace -- <slug> --accept` if you have a kit checkout), stage/include PLAYTEST.json + TRACE.json, then submit_sources({ fromStaged: true, mode: "publish", kitEngineRef }) (or inline files[]).',
@@ -853,7 +854,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     warnings: {
       type: 'array',
       description:
-        'Soft session nudges (progress_stale, inbox_pending, call_end, seed_unread, gate_not_started, gate_poll_backoff). Not errors — act on them, then continue the workflow.',
+        'Soft session nudges (progress_stale, inbox_pending, call_end, seed_unread, gate_not_started, gate_poll_backoff, module_too_large). Not errors — act on them, then continue the workflow. module_too_large means split that game/*.ts module before adding more behavior.',
       items: {
         type: 'object',
         properties: {
@@ -866,6 +867,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
               'call_end',
               'gate_not_started',
               'gate_poll_backoff',
+              'module_too_large',
             ],
           },
           message: { type: 'string' },
@@ -1728,6 +1730,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           },
           references: { type: 'array', items: { type: 'string' } },
           notes: { type: ['string', 'null'] },
+          ...WARNINGS_PROP,
         },
         required: ['available', 'status', 'files', 'references', 'notes'],
       },
@@ -1735,6 +1738,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         'Fetch the platform-generated compiling seed draft for this round when present. ' +
         'Continue the seed when available/status=available. When status=pending, wait and call again before scaffolding. ' +
         'Only scaffold from a kit template when status=unavailable. ' +
+        'Honour warnings.code=module_too_large by splitting oversized modules before growing them. ' +
         BEHAVIOURAL_CONTRACT,
       inputSchema: {
         type: 'object',
@@ -1745,14 +1749,24 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         const auth = await resolveAuth(ctx, args);
         if (!('channelToken' in auth)) return auth;
         const res = await injectChannel(ctx.request, 'GET', '/api/agent/build/seed', auth.channelToken);
-        const body = res.json();
+        const body = res.json() as {
+          error?: string;
+          available?: boolean;
+          status?: string;
+          files?: Array<{ path: string; content: string }>;
+          [key: string]: unknown;
+        };
         if (res.statusCode === 404) {
           return toolOk(body);
         }
         if (res.statusCode !== 200) {
-          return toolErr((body as { error?: string }).error ?? `seed failed (${res.statusCode})`);
+          return toolErr(body.error ?? `seed failed (${res.statusCode})`);
         }
-        return toolOk(body);
+        const sizeWarnings = Array.isArray(body.files) ? moduleSizeWarnings(body.files) : [];
+        return toolOk({
+          ...body,
+          ...(sizeWarnings.length ? { warnings: sizeWarnings } : {}),
+        });
       },
     },
 
@@ -2169,11 +2183,13 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             type: 'array',
             items: { type: 'object', properties: { path: { type: 'string' }, content: { type: 'string' } } },
           },
+          ...WARNINGS_PROP,
         },
         required: ['available', 'files'],
       },
       description:
         "Fetch the latest candidate or published sources for this job's game so a self round can continue prior work. " +
+        'When warnings.code=module_too_large, split those oversized game/*.ts modules before adding features. ' +
         BEHAVIOURAL_CONTRACT,
       inputSchema: {
         type: 'object',
@@ -2190,14 +2206,21 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         const auth = await resolveAuth(ctx, args);
         if (!('channelToken' in auth)) return auth;
         const res = await injectChannel(ctx.request, 'GET', '/api/agent/build/sources', auth.channelToken);
-        const body = res.json() as { error?: string; delivery?: unknown; files?: unknown[] };
+        const body = res.json() as {
+          error?: string;
+          delivery?: unknown;
+          files?: Array<{ path: string; content: string }>;
+        };
         if (res.statusCode !== 200) {
           return toolErr(body.error ?? `sources failed (${res.statusCode})`);
         }
+        const files = body.files ?? [];
+        const sizeWarnings = moduleSizeWarnings(files);
         return toolOk({
           available: Boolean(body.delivery),
           delivery: body.delivery ?? null,
-          files: body.files ?? [],
+          files,
+          ...(sizeWarnings.length ? { warnings: sizeWarnings } : {}),
         });
       },
     },
@@ -2589,6 +2612,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           ok: { type: 'boolean' },
           path: { type: 'string' },
           bytes: { type: 'number' },
+          hint: { type: 'string' },
           staged: {
             type: 'object',
             properties: {
@@ -2611,9 +2635,11 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         required: ['ok', 'path', 'bytes', 'staged', 'stop', 'pendingMessages'],
       },
       description:
-        'Upload ONE game source file into this round’s staging buffer. Prefer this over a giant submit_sources files[] ' +
-        'when the tree is large (Claude Chat often truncates huge tool JSON). Call once per path, then ' +
-        'submit_sources({ fromStaged: true, mode, kitEngineRef }). Overwrites the same path if staged again. ' +
+        'Upload ONE game source file into this round’s staging buffer (full rewrite). Prefer this for new files; ' +
+        'for edits to an existing path prefer patch_source_file so you do not re-emit a whole large file. ' +
+        'Prefer over a giant submit_sources files[] when the tree is large (Claude Chat often truncates huge tool JSON). ' +
+        'Call once per path, then submit_sources({ fromStaged: true, mode, kitEngineRef }). Overwrites the same path if staged again. ' +
+        'Keep modules modest — if hint warns the file is large, split into cohesive game/*.ts modules. ' +
         BEHAVIOURAL_CONTRACT,
       inputSchema: {
         type: 'object',
@@ -2656,6 +2682,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           rejected?: string;
           path?: string;
           bytes?: number;
+          hint?: string;
           staged?: {
             files: Array<{ path: string; bytes: number }>;
             totalBytes: number;
@@ -2668,11 +2695,132 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         if (res.statusCode !== 200) {
           return toolErr(body.error ?? `stage failed (${res.statusCode})`, body);
         }
+        const hint =
+          body.hint ??
+          (typeof body.bytes === 'number' ? largeSourceFileHint(body.path ?? path, body.bytes, content) : null);
         return toolOk({
           ok: body.accepted !== false,
           ...(body.rejected ? { rejected: body.rejected } : {}),
           path: body.path ?? path,
           bytes: body.bytes ?? 0,
+          ...(hint ? { hint, warnings: [{ code: 'module_too_large' as const, message: hint }] } : {}),
+          staged: body.staged ?? { files: [], totalBytes: 0, maxBytes: 0, maxFiles: 0 },
+          ...stopFromChannel(body),
+          pendingMessages: pendingMessagesFromChannel(body),
+        });
+      },
+    },
+
+    patch_source_file: {
+      annotations: { title: 'Patch one staged source file', ...WRITES },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          ok: { type: 'boolean' },
+          path: { type: 'string' },
+          bytes: { type: 'number' },
+          replacements: { type: 'number' },
+          baseFrom: { type: 'string', enum: ['staged', 'delivery', 'seed'] },
+          hint: { type: 'string' },
+          staged: {
+            type: 'object',
+            properties: {
+              files: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: { path: { type: 'string' }, bytes: { type: 'number' } },
+                  required: ['path', 'bytes'],
+                },
+              },
+              totalBytes: { type: 'number' },
+              maxBytes: { type: 'number' },
+              maxFiles: { type: 'number' },
+            },
+            required: ['files', 'totalBytes', 'maxBytes', 'maxFiles'],
+          },
+          ...REPLY_CONTROL,
+        },
+        required: ['ok', 'path', 'bytes', 'replacements', 'baseFrom', 'staged', 'stop', 'pendingMessages'],
+      },
+      description:
+        'Apply a unified diff to ONE existing path and write the result into the staging buffer. ' +
+        'Prefer this over stage_source_file whenever the file already exists (from get_sources, a prior stage, or the seed) — ' +
+        'especially for large game/render.ts or game/model.ts files. ' +
+        'patch must be a standard unified diff for that single file, e.g. ' +
+        '"--- a/game/render.ts\\n+++ b/game/render.ts\\n@@ -10,6 +10,7 @@\\n context\\n-old\\n+new\\n context\\n". ' +
+        'Context must match exactly (no fuzzy apply). Multi-file patches are refused — call once per path. ' +
+        'Then submit_sources({ fromStaged: true, mode, kitEngineRef }); fromStaged overlays onto the latest delivery/seed so you only need the patched paths staged. ' +
+        BEHAVIOURAL_CONTRACT,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          sessionKey: SESSION_KEY_PROP,
+          path: {
+            type: 'string',
+            description: 'Game-relative path (e.g. game/render.ts). Must match the ---/+++ headers.',
+          },
+          patch: {
+            type: 'string',
+            description:
+              'Unified diff for this one file only (`--- a/<path>` / `+++ b/<path>` plus one or more @@ hunks).',
+          },
+          slug: { type: 'string' },
+        },
+        required: ['path', 'patch'],
+      },
+      handler: async (args, ctx) => {
+        const auth = await resolveAuth(ctx, args);
+        if (!('channelToken' in auth)) return auth;
+        const path = typeof args.path === 'string' ? args.path.trim() : '';
+        if (!path) return toolErr('path is required');
+        if (typeof args.patch !== 'string' || args.patch.trim().length === 0) {
+          return toolErr('patch is required (unified diff text)');
+        }
+        const slug =
+          typeof args.slug === 'string' && args.slug.trim() ? args.slug.trim() : (auth.record.slug ?? undefined);
+        const res = await injectChannel(
+          ctx.request,
+          'POST',
+          '/api/agent/build/sources/stage/patch',
+          auth.channelToken,
+          {
+            path,
+            patch: args.patch,
+            ...(slug ? { slug } : {}),
+          },
+        );
+        const body = res.json() as {
+          error?: string;
+          accepted?: boolean;
+          rejected?: string;
+          path?: string;
+          bytes?: number;
+          replacements?: number;
+          baseFrom?: 'staged' | 'delivery' | 'seed';
+          hint?: string;
+          staged?: {
+            files: Array<{ path: string; bytes: number }>;
+            totalBytes: number;
+            maxBytes: number;
+            maxFiles: number;
+          };
+          control?: { stop?: boolean; reason?: string };
+          pending?: Array<{ id: string; text: string; createdAt: string }>;
+        };
+        if (res.statusCode !== 200) {
+          return toolErr(body.error ?? `patch failed (${res.statusCode})`, body);
+        }
+        const hint =
+          body.hint ?? (typeof body.bytes === 'number' ? largeSourceFileHint(body.path ?? path, body.bytes) : null);
+        return toolOk({
+          ok: body.accepted !== false,
+          ...(body.rejected ? { rejected: body.rejected } : {}),
+          path: body.path ?? path,
+          bytes: body.bytes ?? 0,
+          replacements: body.replacements ?? 0,
+          baseFrom: body.baseFrom ?? 'staged',
+          ...(hint ? { hint, warnings: [{ code: 'module_too_large' as const, message: hint }] } : {}),
           staged: body.staged ?? { files: [], totalBytes: 0, maxBytes: 0, maxFiles: 0 },
           ...stopFromChannel(body),
           pendingMessages: pendingMessagesFromChannel(body),
@@ -2701,8 +2849,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         required: ['files', 'totalBytes', 'maxBytes', 'maxFiles', 'updatedAt'],
       },
       description:
-        'List paths currently in the staging buffer (no contents). Use after stage_source_file to confirm the tree ' +
-        'before submit_sources({ fromStaged: true, … }). ' +
+        'List paths currently in the staging buffer (no contents). Use after stage_source_file / patch_source_file ' +
+        'to confirm changed paths before submit_sources({ fromStaged: true, … }). ' +
         BEHAVIOURAL_CONTRACT,
       inputSchema: {
         type: 'object',
@@ -2835,7 +2983,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         ],
       },
       description:
-        `Deliver game sources. Prefer stage_source_file per path then fromStaged=true (avoids huge tool JSON). ` +
+        `Deliver game sources. Prefer stage_source_file / patch_source_file for changed paths then fromStaged=true ` +
+        `(fromStaged overlays onto the latest delivery/seed — do not re-stage unchanged files). ` +
         `On kit_outdated: get_kit then fromLatestDelivery=true with the same mode and new kitEngineRef — do NOT re-upload the whole tree. ` +
         `mode=preview (iterate): TRACE/PLAYTEST not required; runs typecheck→smoke→build; Studio gets a draft. ` +
         `mode=publish (seal): TRACE.json + PLAYTEST.json required; full gate; only publish green ends the round. ` +
@@ -2852,8 +3001,9 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           fromStaged: {
             type: 'boolean',
             description:
-              'Assemble the staging buffer built with stage_source_file. Prefer this for large trees. ' +
-              'When true, files[] may be omitted (or used as path overrides). Not with fromLatestDelivery.',
+              'Assemble staging (stage_source_file / patch_source_file), overlaid on the latest delivery and seed. ' +
+              'Prefer this for large trees and for one-file patches. When true, files[] may be omitted (or used as path overrides). ' +
+              'Not with fromLatestDelivery.',
           },
           fromLatestDelivery: {
             type: 'boolean',

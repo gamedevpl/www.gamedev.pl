@@ -20,12 +20,12 @@ const NO_PULSE = new Set([
   'report_progress',
   'send_screenshot',
   'submit_sources',
-  // Channel PUT …/sources/stage refreshes lastAgentSignalAt (+ staging_sources presence).
+  // Channel PUT …/sources/stage (and POST …/stage/patch) refresh lastAgentSignalAt (+ staging_sources presence).
   'stage_source_file',
+  'patch_source_file',
   'clear_staged_sources',
   'ack_inbox',
 ]);
-
 /**
  * Closed vocabulary for Studio thought headlines. Client translates via
  * `statusView.presence.<key>`; English `text` matches historical chat rows so
