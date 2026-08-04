@@ -617,6 +617,92 @@ describe('getRefSha', () => {
 });
 
 describe('getGameSources', () => {
+  it('embeds every track a game can reach, not just the one that autoplays', async () => {
+    // `audio.musicTracks` is how a game changes score mid-round without a fetch, which the
+    // games-repo forbids outright. Serve-time assembly has to carry the extras too, or a
+    // published game's playMusic('combat') finds nothing and the switch silently no-ops.
+    const files = new Map<string, string | Uint8Array>([
+      ['games/raid/index.html', '<canvas id="game"></canvas>'],
+      ['games/raid/game.ts', 'const game: { update(): void } = { update() {} }; GameKit.mount(game);'],
+      ['games/raid/style.css', '.game { color: teal; }'],
+      ['games/raid/SPEC.md', specMd({ title: 'Raid' })],
+      [
+        'games/raid/GAME.json',
+        JSON.stringify({
+          engine: { modules: ['input', 'audio'] },
+          audio: { sounds: ['ui-toggle', 'coin'], music: 'calm-theme', musicTracks: ['combat-theme'] },
+        }),
+      ],
+      ['shared/game-shell.css', '.shell { display: grid; }'],
+      ['shared/modules/core.ts', 'const version: number = 1; window.GameKit = { mount() {} };'],
+      ['shared/modules/input.ts', 'GameKit.createInput = function (): void {};'],
+      ['shared/modules/audio.ts', 'GameKit.createAudio = function (): void {};'],
+      ['shared/audio/assets/ui-toggle.wav', new Uint8Array([1, 2])],
+      ['shared/audio/assets/coin.wav', new Uint8Array([3, 4])],
+      [
+        'shared/audio/music.json',
+        JSON.stringify({
+          tracks: {
+            'calm-theme': { loop: true, data: 'data:audio/mpeg;base64,AAA=' },
+            'combat-theme': { loop: true, data: 'data:audio/mpeg;base64,BBB=' },
+            'unused-theme': { loop: true, data: 'data:audio/mpeg;base64,CCC=' },
+          },
+        }),
+      ],
+    ]);
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const pathname = new URL(String(input)).pathname;
+      const marker = '/contents/';
+      const path = decodeURIComponent(pathname.slice(pathname.indexOf(marker) + marker.length));
+      const value = files.get(path);
+      return value === undefined ? new Response('not found', { status: 404 }) : new Response(value, { status: 200 });
+    }) as unknown as typeof fetch;
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+
+    const sources = await client.getGameSources('main', 'raid');
+
+    // The autoplay track is still the single `music` name — extras do not change it.
+    expect(sources?.gameJs).toContain('window.__GAME_AUDIO_MUSIC__ = "calm-theme";');
+    expect(sources?.gameJs).toContain(
+      'window.__GAME_MUSIC_TRACKS__ = Object.freeze({"calm-theme":{"loop":true,"data":"data:audio/mpeg;base64,AAA="},' +
+        '"combat-theme":{"loop":true,"data":"data:audio/mpeg;base64,BBB="}});',
+    );
+    // Still not the whole catalog.
+    expect(sources?.gameJs).not.toContain('unused-theme');
+  });
+
+  it('rejects a musicTracks list that repeats the autoplay track', async () => {
+    const files = new Map<string, string | Uint8Array>([
+      ['games/raid/index.html', '<canvas id="game"></canvas>'],
+      ['games/raid/game.ts', 'const game: { update(): void } = { update() {} }; GameKit.mount(game);'],
+      ['games/raid/style.css', '.game { color: teal; }'],
+      ['games/raid/SPEC.md', specMd({ title: 'Raid' })],
+      [
+        'games/raid/GAME.json',
+        JSON.stringify({
+          engine: { modules: ['input', 'audio'] },
+          audio: { sounds: ['ui-toggle'], music: 'calm-theme', musicTracks: ['calm-theme'] },
+        }),
+      ],
+      ['shared/game-shell.css', '.shell { display: grid; }'],
+      ['shared/modules/core.ts', 'window.GameKit = { mount() {} };'],
+      ['shared/modules/input.ts', 'GameKit.createInput = function (): void {};'],
+      ['shared/modules/audio.ts', 'GameKit.createAudio = function (): void {};'],
+      ['shared/audio/assets/ui-toggle.wav', new Uint8Array([1, 2])],
+      ['shared/audio/music.json', JSON.stringify({ tracks: { 'calm-theme': { loop: true } } })],
+    ]);
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const pathname = new URL(String(input)).pathname;
+      const marker = '/contents/';
+      const path = decodeURIComponent(pathname.slice(pathname.indexOf(marker) + marker.length));
+      const value = files.get(path);
+      return value === undefined ? new Response('not found', { status: 404 }) : new Response(value, { status: 200 });
+    }) as unknown as typeof fetch;
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+
+    await expect(client.getGameSources('main', 'raid')).rejects.toThrow(/audio musicTracks/);
+  });
+
   it('bundles selected GameKit modules, audio assets, music catalog, and shared shell styles', async () => {
     const files = new Map<string, string | Uint8Array>([
       ['games/coin-catcher/index.html', '<canvas id="game"></canvas>'],

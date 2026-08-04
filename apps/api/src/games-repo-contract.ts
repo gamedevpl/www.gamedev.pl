@@ -129,14 +129,21 @@ export const MAX_PROJECT_BYTES = GAME_BUDGET_BYTES + GAMEKIT_PLATFORM_BYTES;
 
 /**
  * Music embedding contract (games-repo `tools/lib/assemble.ts`):
- * - `GAME.json` → `audio.music` is a single track-name string
+ * - `GAME.json` → `audio.music` is a single track-name string — the track that autoplays
+ * - `GAME.json` → `audio.musicTracks` is an optional array of *extra* track names a game
+ *   switches to at runtime (ambient → combat). Games may not fetch, so every named track
+ *   is embedded at build time.
  * - catalog is loaded via `readMusicCatalog()` (games-repo `tools/audio.ts`;
  *   formerly an inline `shared/audio/music.json` read in assemble.ts)
- * - inject `window.__GAME_AUDIO_MUSIC__ = "<name>"` and a one-entry tracks object
+ * - inject `window.__GAME_AUDIO_MUSIC__ = "<name>"` and a tracks object carrying the
+ *   default plus every extra
  */
 export const MUSIC_CONTRACT = {
   manifestField: 'music',
   manifestFieldType: 'string',
+  /** Optional sibling of `music`; absent on the vast majority of games. */
+  manifestTracksField: 'musicTracks',
+  manifestTracksFieldType: 'string[]',
   /** Historical path; the catalog file may still live here inside `tools/audio.ts`. */
   catalogPath: 'shared/audio/music.json',
   /** Function assemble.ts calls to load the music catalog (post-refactor lockstep). */

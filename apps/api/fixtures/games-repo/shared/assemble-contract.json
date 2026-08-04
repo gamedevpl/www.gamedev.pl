@@ -31,6 +31,7 @@
   "maxProjectBytes": 534800,
   "audio": {
     "musicField": "string",
+    "musicTracksField": "string[]",
     "musicCatalogRequiredKeys": ["version", "tracks"],
     "injectedGlobals": {
       "assets": "__GAME_AUDIO_ASSETS__",
