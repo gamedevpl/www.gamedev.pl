@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from './app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import type { GamesStore } from './games-store.js';
+import type { CatalogGameEntry, GitHubClient } from './github-client.js';
 import { InMemoryStore } from './store.js';
 
 const sessionSecret = 'dev-session-secret-change-me';
@@ -16,11 +17,26 @@ describe('creator profile routes', () => {
     while (apps.length) await apps.pop()!.close();
   });
 
-  async function appWith(store: InMemoryStore, gamesStore?: GamesStore) {
+  async function appWith(store: InMemoryStore, gamesStore?: GamesStore, repoCatalog?: CatalogGameEntry[]) {
     const app = await buildApp({
       store,
       sessionSecret,
-      submissionRoutes: gamesStore ? { agentChannel: { gamesStore } } : undefined,
+      submissionRoutes:
+        gamesStore || repoCatalog
+          ? {
+              agentChannel: { gamesStore },
+              ...(repoCatalog
+                ? {
+                    githubToken: 'test-github-token',
+                    submissionTokenSecret: 'test-submission-secret',
+                    snapshotReader: null,
+                    githubClient: {
+                      getCatalog: async () => repoCatalog,
+                    } as unknown as GitHubClient,
+                  }
+                : {}),
+            }
+          : undefined,
     });
     apps.push(app);
     return app;
@@ -128,6 +144,50 @@ describe('creator profile routes', () => {
     expect(publicPage.json().games[0]).toMatchObject({
       slug: 'sky-dodge',
       media: { screenshots: [{ name: 'opening', file: 'opening.png' }], video: null },
+    });
+  });
+
+  it('uses repo catalog media when a migrated game also exists in the delivery store', async () => {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:creator' });
+    await store.claimHandle('g:creator', 'ada', '2026-07-01T00:00:00.000Z');
+    await store.createSubmission(42, 'g:creator', 'Store Title');
+    await store.setSubmissionSlug(42, 'sky-dodge');
+    await store.setSubmissionPublishedAt(42, '2026-08-01T12:00:00.000Z');
+    await store.setPublication({
+      slug: 'sky-dodge',
+      state: 'published',
+      currentVersion: 'v1',
+      publishedAt: '2026-08-01T12:00:00.000Z',
+    });
+    const gamesStore = {
+      getSourceFile: async () => '---\ntitle: Store Title\ngenre: arcade\n---\n',
+      getDerivedArtifact: async () =>
+        Buffer.from(JSON.stringify({ captures: { opening: { file: 'store-opening.png' } }, video: null })),
+    } as unknown as GamesStore;
+    const repoEntry: CatalogGameEntry = {
+      slug: 'sky-dodge',
+      title: 'Repo Title',
+      genre: 'arcade',
+      controls: '',
+      status: 'published',
+      media: { screenshots: [{ name: 'opening', file: 'repo-opening.png' }], video: null },
+      multiplayer: null,
+      saves: null,
+      world: null,
+      sensing: null,
+      orientation: 'any',
+      submittedBy: null,
+    };
+    const app = await appWith(store, gamesStore, [repoEntry]);
+
+    const publicPage = await app.inject({ method: 'GET', url: '/api/creators/ada' });
+
+    expect(publicPage.statusCode).toBe(200);
+    expect(publicPage.json().games[0]).toMatchObject({
+      slug: 'sky-dodge',
+      title: 'Repo Title',
+      media: { screenshots: [{ name: 'opening', file: 'repo-opening.png' }], video: null },
     });
   });
 

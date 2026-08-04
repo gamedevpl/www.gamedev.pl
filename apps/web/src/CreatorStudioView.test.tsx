@@ -817,6 +817,7 @@ describe('CreatorStudioView', () => {
     const { container, root } = await renderStudio({ selectedGame: 'game-2' });
 
     expect(container.querySelector('.studio-detail-title-block h2')?.textContent).toContain('Game 2');
+    expect(fetchStudioGames).toHaveBeenCalledWith('game-2');
 
     root.unmount();
   });

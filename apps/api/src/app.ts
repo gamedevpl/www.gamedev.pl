@@ -565,6 +565,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   await registerCreatorProfileRoutes(app, {
     store,
     gamesStore,
+    getRepoPublishedCatalogEntry: submissionSeams.getRepoPublishedCatalogEntry,
   });
   registerAccountDeletionRoutes(app, {
     store,

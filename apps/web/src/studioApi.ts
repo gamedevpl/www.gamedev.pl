@@ -259,8 +259,9 @@ export type StudioGamesResponse = {
 };
 
 /** The signed-in creator's control-panel shelf (slug + publish time when known). */
-export async function fetchStudioGames(): Promise<StudioGamesResponse> {
-  const response = await fetch(`${API_BASE}/api/me/studio`, { credentials: 'include' });
+export async function fetchStudioGames(game?: string): Promise<StudioGamesResponse> {
+  const query = game ? `?game=${encodeURIComponent(game)}` : '';
+  const response = await fetch(`${API_BASE}/api/me/studio${query}`, { credentials: 'include' });
   if (!response.ok) {
     await throwResponseError(response);
   }

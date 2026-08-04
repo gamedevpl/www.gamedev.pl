@@ -43,6 +43,8 @@ export interface CreatorProfileRoutesOptions {
   store: Store;
   /** Needed to list a creator's published games on the public profile. */
   gamesStore?: GamesStore | null;
+  /** Repo-backed catalog lookup; this source wins in the public media route too. */
+  getRepoPublishedCatalogEntry?: (slug: string) => Promise<CatalogGameEntry | null>;
   now?: () => number;
 }
 
@@ -96,7 +98,7 @@ export async function registerCreatorProfileRoutes(
   app: FastifyInstance,
   options: CreatorProfileRoutesOptions,
 ): Promise<void> {
-  const { store, gamesStore } = options;
+  const { store, gamesStore, getRepoPublishedCatalogEntry } = options;
   const now = options.now ?? Date.now;
 
   app.get('/api/me/profile', async (request, reply) => {
@@ -223,7 +225,13 @@ export async function registerCreatorProfileRoutes(
       }
     }
 
-    const games = await listCreatorPublishedGames(store, gamesStore ?? null, user.uid, profile);
+    const games = await listCreatorPublishedGames(
+      store,
+      gamesStore ?? null,
+      getRepoPublishedCatalogEntry,
+      user.uid,
+      profile,
+    );
     const body: PublicCreatorResponse = { profile, games };
     return reply.send(body);
   });
@@ -232,6 +240,7 @@ export async function registerCreatorProfileRoutes(
 async function listCreatorPublishedGames(
   store: Store,
   gamesStore: GamesStore | null,
+  getRepoPublishedCatalogEntry: ((slug: string) => Promise<CatalogGameEntry | null>) | undefined,
   ownerUid: string,
   profile: PublicCreatorProfile,
 ): Promise<CatalogGameEntry[]> {
@@ -246,8 +255,10 @@ async function listCreatorPublishedGames(
     const publication = await store.getPublication(slug);
     if (!publication || publication.state !== 'published') continue;
 
-    let entry: CatalogGameEntry | null = null;
-    if (gamesStore) {
+    // Match /api/games/:slug/media/:filename: a repo-backed catalog entry wins
+    // whenever both the migrated repo copy and store delivery exist.
+    let entry = getRepoPublishedCatalogEntry ? await getRepoPublishedCatalogEntry(slug) : null;
+    if (!entry && gamesStore) {
       try {
         const version = publication.currentVersion ?? record.deliveredVersion;
         if (version) {
