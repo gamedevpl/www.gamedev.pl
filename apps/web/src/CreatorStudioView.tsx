@@ -815,6 +815,10 @@ export function CreatorStudioView({
                           // URLs, browser Back included.
                           key={activeGame.token}
                           game={activeGame}
+                          // Handoff (published → improve) keeps the shelf on the live game
+                          // while the thread rides a new job token. Media must follow that
+                          // thread, or toast clicks open the prior round's shots.
+                          mediaToken={threadToken ?? activeGame.token}
                           health={selectedHealth}
                           days={days}
                           healthDays={healthDays}
@@ -983,6 +987,7 @@ type DetailsPaneDef = {
  */
 function DetailsPanel({
   game,
+  mediaToken,
   health,
   days,
   healthDays,
@@ -997,6 +1002,8 @@ function DetailsPanel({
   onRemoved,
 }: {
   game: StudioShelfGame;
+  /** Token for Media (and the active build round). Differs from `game.token` during handoff. */
+  mediaToken?: string;
   health: GameHealth | null;
   days: number;
   healthDays: string[];
@@ -1017,6 +1024,7 @@ function DetailsPanel({
   const publishedAt = game.publishedAt ?? game.livePublishedAt;
   const [abandonArmed, setAbandonArmed] = useState(false);
   const [abandoning, setAbandoning] = useState(false);
+  const shotToken = mediaToken ?? game.token;
 
   async function handleAbandon() {
     if (!abandonArmed) {
@@ -1145,7 +1153,7 @@ function DetailsPanel({
           ) : null}
 
           {activePane === 'media' ? (
-            <StudioDetailsMedia token={game.token} emptyLabel={t('studioPanel.rail.mediaEmpty')} />
+            <StudioDetailsMedia token={shotToken} emptyLabel={t('studioPanel.rail.mediaEmpty')} />
           ) : null}
 
           {activePane === 'keys' ? (

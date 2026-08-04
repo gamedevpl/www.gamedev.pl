@@ -208,6 +208,44 @@ describe('CreatorStudioView publish→improve handoff', () => {
       // Unpublished preview path uses the new job's token (not the published slug fetch).
       const { getSubmissionPreview } = await import('./submissionApi.js');
       expect(vi.mocked(getSubmissionPreview)).toHaveBeenCalledWith('new-self-job');
+
+      // Back to thread, then Details → Media must poll the handoff job — not the
+      // published shelf token — or toast shots from the new round are missing.
+      await act(async () => {
+        const playTab = Array.from(container.querySelectorAll('.studio-head-action.is-primary')).find(Boolean);
+        playTab!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await flushEffects();
+      });
+      mockedGetSubmissionStatus.mockClear();
+      mockedGetSubmissionStatus.mockImplementation(async (token: string) =>
+        token === 'new-self-job'
+          ? {
+              status: 'queued',
+              stall: 'no_agent_yet',
+              builder: 'self',
+              media: [{ source: 'channel', ref: 'shot-1', label: 'New round' }],
+            }
+          : { status: 'published', slug: 'tv-tycoon', media: [{ source: 'channel', ref: 'old', label: 'Old' }] },
+      );
+      await act(async () => {
+        const details = Array.from(container.querySelectorAll('.studio-head-action')).find((button) =>
+          button.textContent?.includes('Details'),
+        );
+        details!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await flushEffects();
+        await flushEffects();
+      });
+      await act(async () => {
+        container
+          .querySelector('[data-testid="studio-rail-icon-media"]')!
+          .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await flushEffects();
+        await flushEffects();
+      });
+      expect(mockedGetSubmissionStatus).toHaveBeenCalledWith('new-self-job', expect.anything());
+      expect(container.querySelector('[data-testid="studio-details-media"]')).not.toBeNull();
+      expect(container.textContent).toContain('New round');
+      expect(container.textContent).not.toContain('Old');
     } finally {
       await act(async () => {
         root.unmount();
