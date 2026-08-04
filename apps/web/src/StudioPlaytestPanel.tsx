@@ -47,6 +47,9 @@ const DEV_PLAYTEST_HTML = `<!doctype html><html><head><meta charset="utf-8"><tit
 })();
 </script></body></html>`;
 
+/** How often to retry `/preview` while the gate is still assembling HTML (HTTP 409). */
+export const PREVIEW_POLL_MS = 3000;
+
 type StudioPlaytestPanelProps = {
   game: StudioGame;
   published: boolean;
@@ -112,6 +115,8 @@ export function StudioPlaytestPanel({ game, published, onExit, shelfOpen }: Stud
   const [html, setHtml] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  /** True while `/preview` returns 409 — gate is still assembling the draft HTML. */
+  const [waitingForPreview, setWaitingForPreview] = useState(false);
   const [text, setText] = useState('');
   const [sendState, setSendState] = useState<'idle' | 'sending' | 'sent'>('idle');
   const [sendError, setSendError] = useState<string | null>(null);
@@ -135,38 +140,70 @@ export function StudioPlaytestPanel({ game, published, onExit, shelfOpen }: Stud
 
   useEffect(() => {
     let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     setHtml(null);
     setLoadError(null);
+    setWaitingForPreview(false);
     setLoading(true);
     clearSnapshot();
 
-    const load =
-      published && game.slug
-        ? fetchPublishedGame(game.slug).then((doc) => doc.html)
-        : getSubmissionPreview(game.token).then((preview) => preview.html);
+    const finishError = (message: string) => {
+      if (cancelled) return;
+      setWaitingForPreview(false);
+      setLoadError(message);
+      setLoading(false);
+    };
 
-    load
-      .then((documentHtml) => {
-        if (cancelled) return;
+    const loadOnce = async (): Promise<'done' | 'retry'> => {
+      try {
+        const documentHtml =
+          published && game.slug
+            ? (await fetchPublishedGame(game.slug)).html
+            : (await getSubmissionPreview(game.token)).html;
+        if (cancelled) return 'done';
         setHtml(documentHtml);
+        setWaitingForPreview(false);
+        setLoadError(null);
         setLoading(false);
-      })
-      .catch(() => {
-        if (cancelled) return;
+        return 'done';
+      } catch (err) {
+        if (cancelled) return 'done';
+        const status = (err as SubmissionApiError).status;
+        // 409 = sources landed, gate still assembling preview.html. Keep waiting —
+        // a one-shot error here is what made "Play" look broken right after submit.
+        if (!published && status === 409) {
+          setWaitingForPreview(true);
+          setLoadError(null);
+          setLoading(true);
+          return 'retry';
+        }
         // Local Studio seed has submissions but no games-repo HTML. Fall back to a
         // tiny canvas toy in Vite so Pause & note can still be exercised offline.
         // Vitest runs with MODE=test — keep the real empty/error surface there.
         if (import.meta.env.MODE === 'development') {
           setHtml(DEV_PLAYTEST_HTML);
+          setWaitingForPreview(false);
           setLoading(false);
-          return;
+          return 'done';
         }
-        setLoadError(t('studioPanel.playtest.loadError'));
-        setLoading(false);
-      });
+        finishError(t('studioPanel.playtest.loadError'));
+        return 'done';
+      }
+    };
+
+    const tick = async () => {
+      const outcome = await loadOnce();
+      if (outcome === 'retry' && !cancelled) {
+        timer = setTimeout(() => {
+          void tick();
+        }, PREVIEW_POLL_MS);
+      }
+    };
+    void tick();
 
     return () => {
       cancelled = true;
+      if (timer) clearTimeout(timer);
     };
   }, [game.token, game.slug, published, t, clearSnapshot]);
 
@@ -233,7 +270,13 @@ export function StudioPlaytestPanel({ game, published, onExit, shelfOpen }: Stud
       {!html ? (
         <div className="studio-playtest-empty">
           <p className="panel-copy studio-playtest-hint">{t('studioPanel.playtest.hint')}</p>
-          {loading ? <p className="studio-muted">{t('studioPanel.playtest.loading')}</p> : null}
+          {waitingForPreview ? (
+            <p className="studio-muted" aria-live="polite">
+              {t('studioPanel.playtest.waitingForPreview')}
+            </p>
+          ) : loading ? (
+            <p className="studio-muted">{t('studioPanel.playtest.loading')}</p>
+          ) : null}
           {loadError ? <p className="error">{loadError}</p> : null}
           {/* Theater Close only exists once HTML loads; empty/error must still offer a
               labeled way back to the build thread (Testuj replaces that surface). */}

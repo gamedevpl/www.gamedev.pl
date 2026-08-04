@@ -353,6 +353,7 @@
     "playtest": {
       "hint": "Zagraj, wstrzymaj w momencie wartym zmiany i wyślij prośbę z tym widokiem oraz sygnałami z sesji.",
       "loading": "Ładujemy grywalny build…",
+      "waitingForPreview": "Automatyczne sprawdzenia składają szkic — zwykle zajmuje to kilka minut po wysłaniu. Play otworzy się, gdy będzie gotowy.",
       "loadError": "Nie ma jeszcze grywalnego buildu. Wróć do wątku i spróbuj, gdy pojawi się podgląd.",
       "backToThread": "Wróć do wątku",
       "theaterAria": "Playtest · {{title}}",
