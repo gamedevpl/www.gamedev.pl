@@ -72,8 +72,14 @@ describe('games-repo-contract (website half)', () => {
       gameKitModules: string[];
       authorBudgetBytes: number;
       platformCeilingBytes: number;
+      audio: { musicField: string; musicTracksField: string };
     };
     expect(fixture.version).toBe(2);
+    // The audio injection shape is half of what this fixture exists to pin: `music` is the
+    // autoplay track and `musicTracks` the extras a game switches to. Serve-time assembly
+    // must embed both, or a published game's mid-round score change silently no-ops.
+    expect(fixture.audio.musicField).toBe(MUSIC_CONTRACT.manifestFieldType);
+    expect(fixture.audio.musicTracksField).toBe(MUSIC_CONTRACT.manifestTracksFieldType);
     expect(fixture.maxProjectBytes).toBe(MAX_PROJECT_BYTES);
     expect(fixture.authorBudgetBytes).toBe(GAME_BUDGET_BYTES);
     expect(fixture.platformCeilingBytes).toBe(GAMEKIT_PLATFORM_BYTES);

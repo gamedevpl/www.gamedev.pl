@@ -111,7 +111,7 @@ export function resolveGameTypeScriptPath(resolveDir: string, specifier: string)
 
 interface GameManifest {
   engine?: { modules?: unknown };
-  audio?: { sounds?: unknown; music?: unknown };
+  audio?: { sounds?: unknown; music?: unknown; musicTracks?: unknown };
 }
 
 interface ParsedGameManifest {
@@ -122,6 +122,11 @@ interface ParsedGameManifest {
    * audio module is off. Matches games-repo `tools/lib/assemble.ts`.
    */
   music: string | null;
+  /**
+   * Extra BGM ids from GAME.json (`audio.musicTracks`), embedded alongside `music` so a
+   * game can change score mid-round without a fetch. Empty for almost every game.
+   */
+  musicTracks: string[];
 }
 
 function isKebabCaseName(value: unknown): value is string {
@@ -147,7 +152,7 @@ function parseGameManifest(source: string): ParsedGameManifest {
   }
 
   if (!modules.includes('audio')) {
-    return { modules: modules as GameKitModuleName[], sounds: [], music: null };
+    return { modules: modules as GameKitModuleName[], sounds: [], music: null, musicTracks: [] };
   }
 
   const sounds = manifest.audio?.sounds;
@@ -161,13 +166,30 @@ function parseGameManifest(source: string): ParsedGameManifest {
   }
 
   // Games-repo assemble: `audio.music` is a single track name string. Injected as
-  // `window.__GAME_AUDIO_MUSIC__ = "<name>"` with only that entry from music.json.
+  // `window.__GAME_AUDIO_MUSIC__ = "<name>"`, and it is the track that autoplays.
   const music = manifest.audio?.music;
   if (!isKebabCaseName(music)) {
     throw new Error('game manifest contains invalid audio music');
   }
 
-  return { modules: modules as GameKitModuleName[], sounds, music };
+  // `audio.musicTracks` is optional. Mirrors games-repo validate Check 3: non-empty when
+  // present, kebab-case names, no duplicates, and never a repeat of `audio.music`.
+  const rawTracks = manifest.audio?.musicTracks;
+  let musicTracks: string[] = [];
+  if (rawTracks !== undefined) {
+    if (
+      !Array.isArray(rawTracks) ||
+      rawTracks.length === 0 ||
+      new Set(rawTracks).size !== rawTracks.length ||
+      !rawTracks.every(isKebabCaseName) ||
+      rawTracks.includes(music)
+    ) {
+      throw new Error('game manifest contains invalid audio musicTracks');
+    }
+    musicTracks = rawTracks;
+  }
+
+  return { modules: modules as GameKitModuleName[], sounds, music, musicTracks };
 }
 
 /**
@@ -1302,22 +1324,24 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
         );
       }
 
-      // Music: games-repo assemble reads only `tracks` from music.json, then injects
-      // the selected name plus a one-entry map — not the whole catalog.
+      // Music: games-repo assemble reads only `tracks` from music.json, then injects the
+      // autoplay name plus a map of the tracks this game can reach — not the whole catalog.
       if (manifest.music !== null) {
         const musicSource = await readRawFile('shared/audio/music.json', ref);
         if (musicSource === null) {
           return null;
         }
         const tracks = parseMusicTracks(musicSource);
-        const track = tracks[manifest.music];
-        if (track === undefined) {
-          throw new Error(`game manifest music track not in catalog: ${manifest.music}`);
+        const selected: Record<string, unknown> = {};
+        for (const name of [manifest.music, ...manifest.musicTracks]) {
+          const track = tracks[name];
+          if (track === undefined) {
+            throw new Error(`game manifest music track not in catalog: ${name}`);
+          }
+          selected[name] = track;
         }
         assetChunks.push(`window.__GAME_AUDIO_MUSIC__ = ${JSON.stringify(manifest.music)};`);
-        assetChunks.push(
-          `window.__GAME_MUSIC_TRACKS__ = Object.freeze(${JSON.stringify({ [manifest.music]: track })});`,
-        );
+        assetChunks.push(`window.__GAME_MUSIC_TRACKS__ = Object.freeze(${JSON.stringify(selected)});`);
       }
 
       const assetsJs = assetChunks.length > 0 ? `${assetChunks.join('\n')}\n` : '';
