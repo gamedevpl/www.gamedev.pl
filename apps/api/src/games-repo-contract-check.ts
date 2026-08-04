@@ -296,6 +296,7 @@ export async function runGamesRepoContractCheck(options: ContractCheckOptions): 
   // as soon as its paired games change lands; the deadline is the fail-closed backstop.
   const WEBSITE_AHEAD_EXPIRY: ReadonlyMap<string, number> = new Map([
     ['football', Date.parse('2026-08-10T00:00:00.000Z')],
+    ['vehicles', Date.parse('2026-09-01T00:00:00.000Z')],
     ['urban', Date.parse('2026-08-11T00:00:00.000Z')],
   ]);
   const websiteExtras = localModules.filter((m) => !remoteModules.includes(m));
