@@ -394,6 +394,18 @@ export function embedGameHtml(html: string): string {
   return html + inject;
 }
 
+/**
+ * Sends one host message into an embedded game frame.
+ *
+ * The bridge's message contract (`pause`, `resume`, `setSound`, `capture`, `hello`) is
+ * useful to callers that want none of the state the hooks below keep — the floating live
+ * preview wants to mute and freeze a frame it never subscribes to. Exported so the
+ * envelope tag stays in this file, which is the only place that knows it.
+ */
+export function postGameHostMessage(frame: HTMLIFrameElement | null, message: Record<string, unknown>): void {
+  frame?.contentWindow?.postMessage({ source: HOST, ...message }, '*');
+}
+
 /** en/pl are the only locales games ship strings for; anything else maps to en. */
 export function toGameLocale(lang: string | undefined | null): 'en' | 'pl' {
   return lang?.toLowerCase().startsWith('pl') ? 'pl' : 'en';

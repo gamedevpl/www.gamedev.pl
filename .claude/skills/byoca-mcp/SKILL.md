@@ -21,6 +21,7 @@ Source of truth: `SESSION_WORKFLOW` + `BEHAVIOURAL_CONTRACT` in
    - `mode=preview` while iterating; `mode=publish` to seal (TRACE + PLAYTEST required)
    - Each successful stage refreshes Studio’s heartbeat (so a long staging loop is not
      mistaken for quiet / offline)
+   - Each stage may also publish a **live preview** of the buffer — see below
 4. **Prefer `end` after the last successful `submit_sources`** if you will not deliver
    more — Studio shows the gate; do not sit in a `get_gate_verdict` loop
 5. Only poll `get_gate_verdict` when you still need the verdict to decide whether to
@@ -45,6 +46,28 @@ When the gate returns `kit_outdated` (or soft copy says the kit rotated):
    refused delivery (preview stays preview; omit mode only to reuse that lane). Server
    copies the last candidate; optional `files[]` only for paths you actually changed
 3. Do **not** `get_sources` + `stage_source_file` every path again (burns connector tokens)
+
+### Staging is creator-visible (live staged preview)
+
+`apps/api/src/staged-preview.ts` assembles the **staging buffer itself** and stores it as
+an ordinary `BuildPreview`, so the creator plays what the agent has staged long before a
+delivery or a gate run. Studio floats it as a muted, non-interactive frame above the
+composer (`apps/web/src/StudioLivePreview.tsx`); clicking opens the normal theater.
+
+- Fires from the channel’s `PUT …/sources/stage` via `onSourcesStaged`, **off** the
+  response path — a staging receipt never waits on an assembly.
+- Debounced (~6s) with a per-job floor (~25s) so a staging burst costs one assembly.
+- Overlay is **staged > last delivered version > seed**, so a one-file stage on an
+  improvement round still renders a whole game. Needs `index.html`, `game.ts`,
+  `style.css`, `GAME.json` present across that overlay; short of that it does nothing.
+- Reuses the serve path (`getGameSources` + `assembleGameHtml`, `restrictNetwork`), so a
+  live preview passes the same CSP / provenance / credential-scan hygiene as a published
+  game. It never writes `gate` or `previewGate` and can never publish.
+- Failure is the normal state and is silent: a buffer that does not compile leaves the
+  previous preview standing. Identical bytes are not republished.
+
+Agents should therefore **stage a runnable tree early and keep staging** — it is the
+cheapest way to show the creator progress, and it costs no turns.
 
 ### `end` is required after submit (not optional etiquette)
 
@@ -136,13 +159,16 @@ queued.
 | Channel (`POST …/end`, …)    | `apps/api/src/agent-channel.ts`                             |
 | Stall / `ended`              | `apps/api/src/job-state.ts` (`detectStall`)                 |
 | Handoff gate                 | `apps/api/src/builder.ts` (`allowsSelfToPlatformHandoff`)   |
+| Live staged preview          | `apps/api/src/staged-preview.ts`                            |
+| Studio live-preview frame    | `apps/web/src/StudioLivePreview.tsx`                        |
 | Feedback / resume            | `apps/api/src/submissions.ts`                               |
 | Studio copy / builder choice | `apps/web/src/selfBuildCopy.ts`, `SubmissionStatusView.tsx` |
 
 ## Safety invariant (unchanged)
 
 Games render only in an iframe with
-`sandbox="allow-scripts allow-pointer-lock"` and **no `allow-same-origin`**.
+`sandbox="allow-scripts allow-pointer-lock"` and **no `allow-same-origin`**. That includes
+the Studio live-preview frame, which additionally takes no pointer input and no focus.
 
 ## Mandatory: keep this skill current
 

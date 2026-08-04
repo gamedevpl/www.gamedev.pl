@@ -381,6 +381,11 @@
       "collapseShots": "Stack",
       "pause": "Pause"
     },
+    "livePreview": {
+      "badge": "Live draft",
+      "open": "Play",
+      "dismiss": "Hide the live draft"
+    },
     "stats": {
       "noSlug": "Stats appear once this game has a draft or published slug.",
       "range": "Measured {{from}} → {{to}}",

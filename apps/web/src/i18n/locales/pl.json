@@ -385,6 +385,11 @@
       "collapseShots": "Zwiń",
       "pause": "Wstrzymaj"
     },
+    "livePreview": {
+      "badge": "Wersja na żywo",
+      "open": "Zagraj",
+      "dismiss": "Ukryj podgląd na żywo"
+    },
     "stats": {
       "noSlug": "Statystyki pojawią się, gdy gra otrzyma slug roboczy lub publikacyjny.",
       "range": "Zmierzone {{from}} → {{to}}",

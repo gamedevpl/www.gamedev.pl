@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mintAgentToken, mintLegacyAgentToken, STALE_AGENT_TOKEN_REASON } from './agent-token.js';
 import { buildApp } from './app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
@@ -47,16 +47,22 @@ async function createApp(
       mode?: 'health' | 'preview';
     }) => void;
   },
+  extra?: {
+    githubClient?: GitHubClient;
+    /** Live-preview timings; the real ones are tens of seconds and no test can wait them out. */
+    stagedPreview?: { debounceMs?: number; minGapMs?: number; maxBytes?: number };
+  },
 ) {
   await store.upsertUser({ uid: 'g:owner' });
   return await buildApp({
     store,
     sessionSecret,
     submissionRoutes: {
-      githubClient: stubGitHub(),
+      githubClient: extra?.githubClient ?? stubGitHub(),
       githubToken: 'gh-token',
       submissionTokenSecret: secret,
       ...(agentChannel ? { agentChannel } : {}),
+      ...(extra?.stagedPreview ? { stagedPreview: extra.stagedPreview } : {}),
     },
   });
 }
@@ -1401,6 +1407,95 @@ describe('agent build channel', () => {
       );
       // Finalize clears the buffer so the next iterate starts clean.
       expect(staged.size).toBe(0);
+    });
+
+    /**
+     * The point of the whole live-preview path: an agent that has only *staged* — not
+     * delivered, not gated, not committed — has already given the creator something to
+     * play. Everything the assembly needs is exercised here except the real bundler,
+     * which `staged-preview.test.ts` and the play route own.
+     */
+    it('publishes a playable preview from the staging buffer alone, before any delivery', async () => {
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      const { gamesStore } = stubGamesStore();
+      app = await createApp(
+        store,
+        { gamesStore },
+        {
+          githubClient: stubGitHub({
+            getGameSources: async () => ({
+              indexHtml: '<div id="game-root"></div>',
+              gameJs: 'console.log("staged play");',
+              styleCss: 'body{margin:0}',
+              title: 'A game',
+            }),
+          }),
+          stagedPreview: { debounceMs: 1, minGapMs: 1 },
+        },
+      );
+
+      const tree = [
+        { path: 'index.html', content: '<div id="game-root"></div>' },
+        { path: 'game.ts', content: 'export {};' },
+        { path: 'style.css', content: 'body{margin:0}' },
+        { path: 'GAME.json', content: '{"modules":[]}' },
+      ];
+      for (const file of tree) {
+        const response = await app.inject({
+          method: 'PUT',
+          url: '/api/agent/build/sources/stage',
+          headers: agentHeaders(),
+          payload: { slug: 'comet-courier', path: file.path, content: file.content },
+        });
+        expect(response.statusCode).toBe(200);
+      }
+
+      // The assembly is scheduled off the response path on purpose — the agent's staging
+      // receipt must not wait on it — so this waits for the debounce rather than the call.
+      await vi.waitFor(async () => {
+        expect(await store.countBuildPreviews(ISSUE)).toBeGreaterThan(0);
+      });
+
+      const [preview] = await store.listBuildPreviews(ISSUE);
+      expect(preview?.slug).toBe('comet-courier');
+      const full = await store.getBuildPreview(ISSUE, preview!.id);
+      const html = Buffer.from(full!.data, 'base64').toString('utf8');
+      expect(html).toContain('console.log("staged play")');
+      // Unreviewed agent output: the same network-restricted document the play path serves.
+      expect(html).toContain("default-src 'none'");
+    });
+
+    it('does not preview a staging buffer that cannot make a game yet', async () => {
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      const { gamesStore } = stubGamesStore();
+      app = await createApp(
+        store,
+        { gamesStore },
+        {
+          githubClient: stubGitHub({
+            getGameSources: async () => {
+              throw new Error('assembly must not be attempted for a partial tree');
+            },
+          }),
+          stagedPreview: { debounceMs: 1, minGapMs: 1 },
+        },
+      );
+
+      const response = await app.inject({
+        method: 'PUT',
+        url: '/api/agent/build/sources/stage',
+        headers: agentHeaders(),
+        payload: { slug: 'comet-courier', path: 'SPEC.md', content: '---\ntitle: A game\n---\n' },
+      });
+
+      // The staging call still succeeds — a preview that cannot be built is not the
+      // agent's problem and must never be reported back as one.
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({ accepted: true });
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      expect(await store.countBuildPreviews(ISSUE)).toBe(0);
     });
   });
 

@@ -24,6 +24,7 @@ import { NAVIGATE_EVENT, statusPath, studioPath } from './router.js';
 import { formatRelativeTime } from './relativeTime.js';
 import { connectCardMode, selfComposerRoute, selfStatusCopy, shouldShowConnectCard } from './selfBuildCopy.js';
 import { StudioConnectCard } from './StudioConnectCard.js';
+import { StudioLivePreview } from './StudioLivePreview.js';
 import { submitImprovement } from './studioApi.js';
 import { pollDelayMs } from './studioStatusPoll.js';
 import { recordStudioStep, type StudioStepDetail } from './visitTelemetry.js';
@@ -716,6 +717,30 @@ export function SubmissionStatusView({
               />
 
               <div className="studio-thread-foot">
+                {/* The draft, running, in the corner of the conversation — so a creator
+                    can see the game move while the agent is deep in details, without
+                    deciding to open anything. Rendered here rather than over the thread
+                    because this block is what the composer's height is made of: anchored
+                    to its top edge, the card cannot land on the reply box whatever the
+                    status chips below add. Hidden while the theater is up — the same
+                    game at full size is already on screen, and two live copies of one
+                    game is two game loops and one confusing picture.
+
+                    Not on a published or abandoned build: there the round that produced
+                    this draft is over, and a card labelled "live" beside a game that is
+                    already live (or a build that was stopped) describes nothing. A
+                    `needs_changes` bounce deliberately keeps it — the draft is precisely
+                    what the creator is deciding about. */}
+                {playing === null && status.status !== 'published' && status.status !== 'abandoned' ? (
+                  <StudioLivePreview
+                    token={token}
+                    html={preview?.html ?? channelHtml}
+                    title={preview ? previewTitle : (submittedTitle ?? latestChannelBuild?.slug ?? previewTitle)}
+                    label={preview ? undefined : latestChannelBuild?.label}
+                    onOpen={preview ? openDraft : openChannel}
+                  />
+                ) : null}
+
                 {/* Trouble is said once, immediately above the box the creator would use
                     to do something about it. A dead round outranks a slow one: when both
                     are set the failure is the explanation and the stall is its symptom.
