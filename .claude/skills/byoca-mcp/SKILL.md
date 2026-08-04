@@ -17,10 +17,10 @@ Source of truth: `SESSION_WORKFLOW` + `BEHAVIOURAL_CONTRACT` in
 
 1. `start` → `get_brief` / `get_seed` / `get_sources` / `get_kit` as needed
 2. Build; `report_progress`; `send_screenshot` when something draws
-3. Prefer `stage_source_file` (new/full rewrite) or `patch_source_file` (exact edit) then
+3. Prefer `stage_source_file` (new/full rewrite) or `patch_source_file` (unified diff) then
    `submit_sources({ fromStaged: true, mode, kitEngineRef })`
-   - **Edits:** `patch_source_file({ path, oldString, newString })` — do not re-emit whole
-     `render.ts` / `model.ts` files through `stage_source_file`
+   - **Edits:** `patch_source_file({ path, patch })` with a standard unified diff
+     (`---/`+++`+`@@`hunks for one file) — do not re-emit whole`render.ts`/`model.ts`files through`stage_source_file`
    - **Modules:** keep `game/*.ts` cohesive and modest; split growing paint/HUD/art or
      model tables so later patches stay small (chat-thin clients pay per token)
    - `fromStaged` overlays onto the latest delivery/seed — stage only changed paths

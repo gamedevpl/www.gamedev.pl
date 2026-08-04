@@ -260,9 +260,8 @@ const StageSourceInputSchema = z.object({
 
 const StageSourcePatchInputSchema = z.object({
   path: z.string().trim().min(1).max(120),
-  oldString: z.string().min(1).max(200_000),
-  newString: z.string().max(200_000),
-  replaceAll: z.boolean().optional(),
+  /** Unified diff for this one path (`---/`+++` + `@@` hunks). */
+  patch: z.string().min(1).max(400_000),
   slug: z
     .string()
     .trim()
@@ -1115,9 +1114,8 @@ export async function registerAgentChannelRoutes(
 
         const patched = applySourcePatch({
           content: base,
-          oldString: parsed.data.oldString,
-          newString: parsed.data.newString,
-          replaceAll: parsed.data.replaceAll === true,
+          path: parsed.data.path,
+          patch: parsed.data.patch,
         });
 
         const staged = await options.gamesStore.putStagedSourceFile({

@@ -1495,8 +1495,16 @@ describe('agent build channel', () => {
         headers: agentHeaders(),
         payload: {
           path: 'game/render.ts',
-          oldString: 'drawSky();',
-          newString: 'drawSky();\n  drawHud();',
+          patch: [
+            '--- a/game/render.ts',
+            '+++ b/game/render.ts',
+            '@@ -1,3 +1,4 @@',
+            ' export function paint() {',
+            '   drawSky();',
+            '+  drawHud();',
+            ' }',
+            '',
+          ].join('\n'),
         },
       });
       expect(patched.statusCode).toBe(200);
@@ -1527,7 +1535,7 @@ describe('agent build channel', () => {
       expect(staged.size).toBe(0);
     });
 
-    it('refuses a patch whose oldString is missing or ambiguous', async () => {
+    it('refuses a unified diff that does not apply or targets the wrong path', async () => {
       const store = new InMemoryStore();
       await seedSubmission(store);
       const { gamesStore, staged } = stubGamesStore();
@@ -1537,27 +1545,33 @@ describe('agent build channel', () => {
         method: 'PUT',
         url: '/api/agent/build/sources/stage',
         headers: agentHeaders(),
-        payload: { slug: 'comet-courier', path: 'game.ts', content: 'aa aa' },
+        payload: { slug: 'comet-courier', path: 'game.ts', content: 'line1\nline2\n' },
       });
 
-      const missing = await app.inject({
+      const stale = await app.inject({
         method: 'POST',
         url: '/api/agent/build/sources/stage/patch',
         headers: agentHeaders(),
-        payload: { path: 'game.ts', oldString: 'zz', newString: 'yy' },
+        payload: {
+          path: 'game.ts',
+          patch: ['--- a/game.ts', '+++ b/game.ts', '@@ -1,2 +1,2 @@', ' missing', '-line2', '+line2x', ''].join('\n'),
+        },
       });
-      expect(missing.statusCode).toBe(400);
-      expect(missing.json().error).toMatch(/not found/i);
+      expect(stale.statusCode).toBe(400);
+      expect(stale.json().error).toMatch(/did not apply/i);
 
-      const ambiguous = await app.inject({
+      const wrongPath = await app.inject({
         method: 'POST',
         url: '/api/agent/build/sources/stage/patch',
         headers: agentHeaders(),
-        payload: { path: 'game.ts', oldString: 'aa', newString: 'bb' },
+        payload: {
+          path: 'game.ts',
+          patch: ['--- a/other.ts', '+++ b/other.ts', '@@ -1,2 +1,2 @@', ' line1', '-line2', '+line2x', ''].join('\n'),
+        },
       });
-      expect(ambiguous.statusCode).toBe(400);
-      expect(ambiguous.json().error).toMatch(/more than once/i);
-      expect(staged.get('game.ts')).toBe('aa aa');
+      expect(wrongPath.statusCode).toBe(400);
+      expect(wrongPath.json().error).toMatch(/does not match/i);
+      expect(staged.get('game.ts')).toBe('line1\nline2\n');
     });
 
     /**
