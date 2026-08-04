@@ -80,7 +80,7 @@ export const GAME_KIT_MODULES = [
 export type GameKitModuleName = (typeof GAME_KIT_MODULES)[number];
 
 /** Author-facing budget — games-repo Check 4 `GAME_BUDGET_BYTES`. */
-export const GAME_BUDGET_BYTES = 232 * 1024;
+export const GAME_BUDGET_BYTES = 248 * 1024;
 
 /**
  * Raw TypeScript source-graph ceiling for the bake/play/seed bundlers
@@ -88,16 +88,18 @@ export const GAME_BUDGET_BYTES = 232 * 1024;
  * `seed-bundle.ts`). Lockstep with games-repo Check 4 `SOURCE_GRAPH_BUDGET_BYTES`.
  *
  * Distinct from {@link GAME_BUDGET_BYTES}: the assembled author payload can stay
- * under 232 KiB while comments and types push the `.ts` tree higher. Last moved
- * 200 → 300 KiB when carjack-city (~247 KiB source) stranded every snapshot publish.
+ * under the author budget while comments and types push the `.ts` tree higher. Moved
+ * 200 → 300 KiB when carjack-city (~247 KiB source) stranded every snapshot publish;
+ * 300 → 324 KiB for the same game's island coastline, on-foot car collision and
+ * mission-ladder work — 327_685 raw bytes carrying 247_459 assembled ones.
  */
-export const SOURCE_GRAPH_BUDGET_BYTES = 300 * 1024;
+export const SOURCE_GRAPH_BUDGET_BYTES = 324 * 1024;
 
 /**
  * Platform half of the serve cap — games-repo `GAMEKIT_PLATFORM_BYTES` /
  * `assemble-contract.json` `platformCeilingBytes`. Together with
  * {@link GAME_BUDGET_BYTES} this must equal games-repo `MAX_BUNDLE_BYTES`
- * (567_568, matching `maxProjectBytes`). Not a round KiB.
+ * (583_952, matching `maxProjectBytes`). Not a round KiB.
  *
  * One derived ceiling, not a sum of per-feature constants (games-repo #281). Check 4
  * over there bills each author for measured `assembled − platformBytes` against the
@@ -106,7 +108,13 @@ export const SOURCE_GRAPH_BUDGET_BYTES = 300 * 1024;
  * `docs/platform-byte-ledger.md`. Raise this when measurement shows a passing game
  * would exceed it — do not re-split it into named allowances on this side either.
  *
- * The author budget last moved for `carjack-city`'s active-run persistence on top of
+ * The author budget last moved for `carjack-city` again: a real island coastline every
+ * system obeys (the road network is clipped to it, so traffic cannot route out to sea),
+ * solid car hulls for everyone on foot, and the mission ladder's chain economy measure
+ * 247_459 author bytes against 864 bytes of headroom. Platform bytes are untouched.
+ * 232 → 248 KiB, and the serve cap 567_568 → 583_952.
+ *
+ * Before that, `carjack-city`'s active-run persistence on top of
  * the organic incident simulation: the assembled project measured 563_200 bytes and
  * stranded snapshot publish against the 547_088 serve cap (run 30928592522). Games-repo
  * #479 already raised Check 4 to 232 KiB; keep the full flagship implementation.
