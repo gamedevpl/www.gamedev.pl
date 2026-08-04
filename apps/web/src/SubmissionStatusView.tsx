@@ -88,12 +88,16 @@ export const SENT_RECEIPT_MS = 4500;
  *
  * Gate-green (`in_review` / `ready_for_review`) used to keep spinning forever after the
  * agent finished, with "updated 20 minutes ago" under an active spinner.
+ *
+ * Self rounds with `stall: ended` / `agentEndedAt` are handoff, not mid-build — spinning
+ * "Writing code" next to "finished this round" was the same class of lie.
  */
 function isAgentWorkActive(status: SubmissionStatus | null | undefined): boolean {
   if (!status) return false;
   if (TERMINAL_STATUSES.has(status.status)) return false;
   if (isAwaitingOwnAgent(status)) return false;
   if (status.status === 'in_review' || status.phase === 'ready_for_review') return false;
+  if (status.stall === 'ended' || Boolean(status.agentEndedAt)) return false;
   return true;
 }
 

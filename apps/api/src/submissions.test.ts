@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { assertAgentTokenActive, verifyAgentToken } from './agent-token.js';
+import { assertAgentTokenActive, mintAgentToken, verifyAgentToken } from './agent-token.js';
 import { buildApp } from './app.js';
 import type { GameSeeder, SeedDraft } from './game-seed.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
@@ -1073,6 +1073,61 @@ describe('submission routes', () => {
       by: 'creator',
       reason: 'creator_feedback',
     });
+
+    await app.close();
+  });
+
+  it('drops cached stall=ended when the self agent resumes after submit auto-end', async () => {
+    // Submit marks agentEndedAt for ChatGPT-class stop-without-end. Claude often keeps
+    // iterating: progress/stage clear ended in the store, but a 60s status cache used to
+    // keep serving stall=ended beside fresh "now" events — Studio said finished and working.
+    const { githubClient } = createGithubClientStub({ issueNumber: 78 });
+    const { backend } = createBackendStub();
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    const token = mintToken(job.issueNumber, secret);
+    await store.setRoundBuilder(job.issueNumber, 'self');
+    await store.ensureRoundGeneration(job.issueNumber);
+    await store.recordJobTransition(job.issueNumber, {
+      to: 'building',
+      at: new Date().toISOString(),
+      by: 'agent',
+      reason: 'self_signal',
+    });
+    await store.touchLastAgentSignalAt(job.issueNumber, new Date().toISOString());
+    await store.markAgentEnded(job.issueNumber, new Date().toISOString());
+
+    const ended = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
+    expect(ended.statusCode).toBe(200);
+    expect(ended.json()).toMatchObject({ builder: 'self', stall: 'ended' });
+    expect(ended.json().agentEndedAt).toBeTruthy();
+
+    const progress = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/progress',
+      headers: { authorization: `Bearer ${mintAgentToken(job.issueNumber, secret, { roundGeneration: 1 })}` },
+      payload: { text: 'Fixing the roofline before the next preview.' },
+    });
+    expect(progress.statusCode).toBe(200);
+    expect((await store.getSubmission(job.issueNumber))?.agentEndedAt).toBeUndefined();
+
+    // Immediate poll must not keep the cached ended snapshot next to the new event.
+    const resumed = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
+    expect(resumed.statusCode).toBe(200);
+    expect(resumed.json().stall).toBeUndefined();
+    expect(resumed.json().agentEndedAt).toBeUndefined();
+    expect(resumed.json().events?.some((event: { text: string }) => /roofline/i.test(event.text))).toBe(true);
 
     await app.close();
   });

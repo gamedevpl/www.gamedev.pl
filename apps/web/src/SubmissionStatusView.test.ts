@@ -772,6 +772,9 @@ describe('SubmissionStatusView', () => {
       expect(container.querySelector('.studio-connect')).toBeNull();
       expect(container.querySelector('.status-warning')?.textContent).toMatch(/finished this round/i);
       expect(container.querySelector('.builder-choice')).not.toBeNull();
+      // Handoff, not mid-build — do not spin "Writing code" beside the finished chip.
+      expect(container.querySelector('.studio-thread-context.is-active')).toBeNull();
+      expect(container.querySelector('.studio-context-phase-spinner')).toBeNull();
     } finally {
       await act(async () => {
         root.unmount();
