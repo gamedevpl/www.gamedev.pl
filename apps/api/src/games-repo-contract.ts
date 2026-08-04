@@ -101,7 +101,7 @@ export const SOURCE_GRAPH_BUDGET_BYTES = 336 * 1024;
  * Platform half of the serve cap — games-repo `GAMEKIT_PLATFORM_BYTES` /
  * `assemble-contract.json` `platformCeilingBytes`. Together with
  * {@link GAME_BUDGET_BYTES} this must equal games-repo `MAX_BUNDLE_BYTES`
- * (638_048, matching `maxProjectBytes`). Not a round KiB.
+ * (658_048, matching `maxProjectBytes`). Not a round KiB.
  *
  * One derived ceiling, not a sum of per-feature constants (games-repo #281). Check 4
  * over there bills each author for measured `assembled − platformBytes` against the
@@ -110,22 +110,16 @@ export const SOURCE_GRAPH_BUDGET_BYTES = 336 * 1024;
  * `docs/platform-byte-ledger.md`. Raise this when measurement shows a passing game
  * would exceed it — do not re-split it into named allowances on this side either.
  *
- * The platform ceiling last moved for the urban ground/shadow + headlight + extrusion
- * promotion that pulled carjack-city street paint and cast shadows into GameKit:
- * measured platform ~369_006 bytes. 340_000 → 380_000, serve cap 598_048 → 638_048.
+ * The platform ceiling last moved for carjack-city's coastal road-mask,
+ * weather/daylight, and foot-clearance/spin promotions into urban/vehicles:
+ * measured platform ~380_645 bytes. 380_000 → 400_000, serve cap 638_048 → 658_048.
  *
- * Before that, the author budget moved for `carjack-city` island coastline / on-foot
- * car collision / mission ladder: 232 → 252 KiB, serve cap 577_568 → 598_048.
- *
- * Before that, platform moved for urban top-down vehicle body + grid helpers:
- * measured platform 333_323 bytes. 330_000 → 340_000.
- *
- * Before that, author budget for active-run persistence: 212 → 232 KiB
- * (run 30928592522 / games-repo #479).
+ * Before that, urban ground/shadow + headlight + extrusion: ~369_006 bytes.
+ * 340_000 → 380_000. Author budget for island/collision/mission ladder: 232 → 252 KiB.
  *
  * Sized here to the heaviest 2D selection rather than to gfx3d.
  */
-export const GAMEKIT_PLATFORM_BYTES = 380_000;
+export const GAMEKIT_PLATFORM_BYTES = 400_000;
 
 /** Combined html+js+css size cap — must match games-repo `MAX_BUNDLE_BYTES`. */
 export const MAX_PROJECT_BYTES = GAME_BUDGET_BYTES + GAMEKIT_PLATFORM_BYTES;
