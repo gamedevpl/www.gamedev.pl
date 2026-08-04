@@ -925,6 +925,31 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(verdict.structured).toMatchObject({ status: 'red', deliveryId: 'v1' });
   });
 
+  it('rejects malformed base64 on stage_source_file instead of silently corrupting', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    const { gamesStore } = stubGamesStore();
+    app = await createApp(store, gamesStore);
+    const sessionId = await initialize(app);
+    const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    // Node's Buffer.from would decode this as "abc" — we must refuse.
+    const bad = await callTool(
+      app,
+      'stage_source_file',
+      {
+        sessionKey,
+        path: 'game.ts',
+        encoding: 'base64',
+        content: 'YWJj!!!',
+      },
+      { 'mcp-session-id': sessionId },
+    );
+    expect(bad.isError).toBe(true);
+    expect(JSON.stringify(bad.structured)).toMatch(/invalid base64/i);
+  });
+
   describe('terminal receipt (generation one behind) on all three transports', () => {
     async function closeRoundGreen(store: InMemoryStore, gamesStore: GamesStore) {
       await store.setSubmissionDeliveredVersion(ISSUE, 'v1');

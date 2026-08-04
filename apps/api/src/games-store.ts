@@ -141,6 +141,17 @@ export class InvalidUploadError extends Error {
   }
 }
 
+/** Staging manifest lost a race — caller should re-read and retry. */
+export class StagingGenerationMismatchError extends Error {
+  constructor(message = 'staging manifest generation mismatch') {
+    super(message);
+    this.name = 'StagingGenerationMismatchError';
+  }
+}
+
+/** How many times a staging manifest write may retry after a concurrent update. */
+export const MAX_STAGING_MANIFEST_RETRIES = 8;
+
 /** Hint derived from {@link ALLOWED_SOURCE_FILES} so refusal text cannot drift from the contract. */
 const ALLOWED_SOURCES_HINT = `${ALLOWED_SOURCE_FILES.join(', ')}, or your own .ts modules`;
 
@@ -558,17 +569,35 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
     });
 
   async function readObject(name: string): Promise<Buffer | null> {
+    const got = await readObjectWithGeneration(name);
+    return got?.body ?? null;
+  }
+
+  async function readObjectWithGeneration(name: string): Promise<{ body: Buffer; generation: number } | null> {
     const url = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(bucket)}/o/${encodeURIComponent(name)}?alt=media`;
     const response = await fetchImpl(url, { headers: { authorization: `Bearer ${await getAccessToken()}` } });
     if (response.status === 404) return null;
     if (!response.ok) throw new Error(`games store read of ${name} failed: ${response.status}`);
-    return Buffer.from(await response.arrayBuffer());
+    const generationHeader = response.headers.get('x-goog-generation');
+    const generation = generationHeader !== null ? Number(generationHeader) : 0;
+    return {
+      body: Buffer.from(await response.arrayBuffer()),
+      generation: Number.isFinite(generation) ? generation : 0,
+    };
   }
 
-  async function writeObject(name: string, body: Buffer, contentType: string): Promise<void> {
-    const url =
+  async function writeObject(
+    name: string,
+    body: Buffer,
+    contentType: string,
+    opts?: { ifGenerationMatch?: number },
+  ): Promise<void> {
+    let url =
       `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(bucket)}/o` +
       `?uploadType=media&name=${encodeURIComponent(name)}`;
+    if (opts?.ifGenerationMatch !== undefined) {
+      url += `&ifGenerationMatch=${opts.ifGenerationMatch}`;
+    }
     const response = await fetchImpl(url, {
       method: 'POST',
       headers: {
@@ -580,6 +609,9 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
       },
       body: new Uint8Array(body),
     });
+    if (response.status === 412) {
+      throw new StagingGenerationMismatchError(`games store write of ${name} lost a race (412)`);
+    }
     if (!response.ok) throw new Error(`games store write of ${name} failed: ${response.status}`);
   }
 
@@ -603,9 +635,13 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
     slug: string,
     issueNumber: number,
     roundGeneration: number,
-  ): Promise<StagingManifest | null> {
-    const body = await readObject(`${stagingPrefix(slug, issueNumber, roundGeneration)}/manifest.json`);
-    return body ? (JSON.parse(body.toString('utf8')) as StagingManifest) : null;
+  ): Promise<{ manifest: StagingManifest; generation: number } | null> {
+    const got = await readObjectWithGeneration(`${stagingPrefix(slug, issueNumber, roundGeneration)}/manifest.json`);
+    if (!got) return null;
+    return {
+      manifest: JSON.parse(got.body.toString('utf8')) as StagingManifest,
+      generation: got.generation,
+    };
   }
 
   function emptyStagingSummary(): StagedSourcesSummary {
@@ -674,48 +710,70 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
       }
 
       const prefix = stagingPrefix(input.slug, input.issueNumber, input.roundGeneration);
-      const existing = (await readStagingManifest(input.slug, input.issueNumber, input.roundGeneration)) ?? {
-        slug: input.slug,
-        issueNumber: input.issueNumber,
-        roundGeneration: input.roundGeneration,
-        updatedAt: new Date(now()).toISOString(),
-        files: [],
-        totalBytes: 0,
-      };
-
-      const previous = existing.files.find((file) => file.path === path);
-      const nextFiles = previous
-        ? existing.files.map((file) => (file.path === path ? { path, bytes } : file))
-        : [...existing.files, { path, bytes }];
-      if (nextFiles.length > MAX_UPLOAD_FILES) {
-        throw new InvalidUploadError(`too many staged files: ${nextFiles.length} > ${MAX_UPLOAD_FILES}`);
-      }
-      const totalBytes = existing.totalBytes - (previous?.bytes ?? 0) + bytes;
-      if (totalBytes > MAX_UPLOAD_BYTES) {
-        throw new InvalidUploadError(`staged upload too large: over ${MAX_UPLOAD_BYTES} bytes`);
-      }
-
+      // Source bytes first — orphaned sources without a manifest entry are harmless;
+      // a lost race on the manifest is retried below.
       await writeObject(`${prefix}/source/${path}`, Buffer.from(input.content, 'utf8'), 'text/plain; charset=utf-8');
-      const manifest: StagingManifest = {
-        slug: input.slug,
-        issueNumber: input.issueNumber,
-        roundGeneration: input.roundGeneration,
-        updatedAt: new Date(now()).toISOString(),
-        files: nextFiles,
-        totalBytes,
-      };
-      await writeObject(`${prefix}/manifest.json`, Buffer.from(JSON.stringify(manifest, null, 2)), 'application/json');
-      return { path, bytes, ...summaryFromManifest(manifest) };
+
+      for (let attempt = 0; attempt < MAX_STAGING_MANIFEST_RETRIES; attempt++) {
+        const existing = await readStagingManifest(input.slug, input.issueNumber, input.roundGeneration);
+        const base = existing?.manifest ?? {
+          slug: input.slug,
+          issueNumber: input.issueNumber,
+          roundGeneration: input.roundGeneration,
+          updatedAt: new Date(now()).toISOString(),
+          files: [],
+          totalBytes: 0,
+        };
+        const generation = existing?.generation ?? 0;
+
+        const previous = base.files.find((file) => file.path === path);
+        const nextFiles = previous
+          ? base.files.map((file) => (file.path === path ? { path, bytes } : file))
+          : [...base.files, { path, bytes }];
+        if (nextFiles.length > MAX_UPLOAD_FILES) {
+          throw new InvalidUploadError(`too many staged files: ${nextFiles.length} > ${MAX_UPLOAD_FILES}`);
+        }
+        const totalBytes = base.totalBytes - (previous?.bytes ?? 0) + bytes;
+        if (totalBytes > MAX_UPLOAD_BYTES) {
+          throw new InvalidUploadError(`staged upload too large: over ${MAX_UPLOAD_BYTES} bytes`);
+        }
+
+        const manifest: StagingManifest = {
+          slug: input.slug,
+          issueNumber: input.issueNumber,
+          roundGeneration: input.roundGeneration,
+          updatedAt: new Date(now()).toISOString(),
+          files: nextFiles,
+          totalBytes,
+        };
+        try {
+          await writeObject(
+            `${prefix}/manifest.json`,
+            Buffer.from(JSON.stringify(manifest, null, 2)),
+            'application/json',
+            { ifGenerationMatch: generation },
+          );
+          return { path, bytes, ...summaryFromManifest(manifest) };
+        } catch (error) {
+          if (error instanceof StagingGenerationMismatchError) continue;
+          throw error;
+        }
+      }
+      throw new InvalidUploadError(
+        'could not update staging manifest — too many concurrent stage_source_file calls; retry',
+      );
     },
 
     async listStagedSources(input) {
       assertSlug(input.slug);
-      return summaryFromManifest(await readStagingManifest(input.slug, input.issueNumber, input.roundGeneration));
+      const existing = await readStagingManifest(input.slug, input.issueNumber, input.roundGeneration);
+      return summaryFromManifest(existing?.manifest ?? null);
     },
 
     async getStagedSourceFiles(input) {
       assertSlug(input.slug);
-      const manifest = await readStagingManifest(input.slug, input.issueNumber, input.roundGeneration);
+      const existing = await readStagingManifest(input.slug, input.issueNumber, input.roundGeneration);
+      const manifest = existing?.manifest;
       if (!manifest || manifest.files.length === 0) return [];
       const prefix = stagingPrefix(input.slug, input.issueNumber, input.roundGeneration);
       const files = await Promise.all(
@@ -735,30 +793,46 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
     async clearStagedSources(input) {
       assertSlug(input.slug);
       const prefix = stagingPrefix(input.slug, input.issueNumber, input.roundGeneration);
-      const existing = await readStagingManifest(input.slug, input.issueNumber, input.roundGeneration);
-      if (!existing || existing.files.length === 0) return { cleared: 0 };
 
-      const removePaths = input.paths?.length
-        ? new Set(input.paths.map((path) => assertDeliverableSourcePath(path)))
-        : null;
-      const toClear = removePaths ? existing.files.filter((file) => removePaths.has(file.path)) : existing.files;
+      for (let attempt = 0; attempt < MAX_STAGING_MANIFEST_RETRIES; attempt++) {
+        const existing = await readStagingManifest(input.slug, input.issueNumber, input.roundGeneration);
+        if (!existing || existing.manifest.files.length === 0) return { cleared: 0 };
 
-      await Promise.all(toClear.map((file) => deleteObject(`${prefix}/source/${file.path}`)));
+        const removePaths = input.paths?.length
+          ? new Set(input.paths.map((path) => assertDeliverableSourcePath(path)))
+          : null;
+        const toClear = removePaths
+          ? existing.manifest.files.filter((file) => removePaths.has(file.path))
+          : existing.manifest.files;
 
-      if (!removePaths || toClear.length === existing.files.length) {
-        await deleteObject(`${prefix}/manifest.json`);
-        return { cleared: toClear.length };
+        await Promise.all(toClear.map((file) => deleteObject(`${prefix}/source/${file.path}`)));
+
+        if (!removePaths || toClear.length === existing.manifest.files.length) {
+          await deleteObject(`${prefix}/manifest.json`);
+          return { cleared: toClear.length };
+        }
+
+        const remaining = existing.manifest.files.filter((file) => !removePaths.has(file.path));
+        const manifest: StagingManifest = {
+          ...existing.manifest,
+          updatedAt: new Date(now()).toISOString(),
+          files: remaining,
+          totalBytes: remaining.reduce((sum, file) => sum + file.bytes, 0),
+        };
+        try {
+          await writeObject(
+            `${prefix}/manifest.json`,
+            Buffer.from(JSON.stringify(manifest, null, 2)),
+            'application/json',
+            { ifGenerationMatch: existing.generation },
+          );
+          return { cleared: toClear.length };
+        } catch (error) {
+          if (error instanceof StagingGenerationMismatchError) continue;
+          throw error;
+        }
       }
-
-      const remaining = existing.files.filter((file) => !removePaths.has(file.path));
-      const manifest: StagingManifest = {
-        ...existing,
-        updatedAt: new Date(now()).toISOString(),
-        files: remaining,
-        totalBytes: remaining.reduce((sum, file) => sum + file.bytes, 0),
-      };
-      await writeObject(`${prefix}/manifest.json`, Buffer.from(JSON.stringify(manifest, null, 2)), 'application/json');
-      return { cleared: toClear.length };
+      throw new InvalidUploadError('could not clear staging manifest — too many concurrent updates; retry');
     },
 
     async getManifest(slug, version) {

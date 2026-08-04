@@ -43,6 +43,7 @@ import {
   type AgentTokenAccess,
   type AgentTokenClaims,
 } from './agent-token.js';
+import { decodeCanonicalBase64Utf8, InvalidBase64Error } from './canonical-base64.js';
 import { selfBuildDeliveryCap } from './builder.js';
 import type { BuilderKind } from './builder.js';
 import { MAX_UPLOAD_FILES, type GamesStore } from './games-store.js';
@@ -2563,9 +2564,12 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         let content = args.content;
         if (args.encoding === 'base64') {
           try {
-            content = Buffer.from(args.content, 'base64').toString('utf8');
-          } catch {
-            return toolErr(`file ${path}: invalid base64 content`);
+            content = decodeCanonicalBase64Utf8(args.content);
+          } catch (error) {
+            if (error instanceof InvalidBase64Error) {
+              return toolErr(`file ${path}: invalid base64 content`);
+            }
+            throw error;
           }
         }
         const slug =
@@ -2832,9 +2836,12 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         for (const file of inlineFiles) {
           if (file.encoding === 'base64') {
             try {
-              decodedFiles.push({ path: file.path, content: Buffer.from(file.content, 'base64').toString('utf8') });
-            } catch {
-              return toolErr(`file ${file.path}: invalid base64 content`);
+              decodedFiles.push({ path: file.path, content: decodeCanonicalBase64Utf8(file.content) });
+            } catch (error) {
+              if (error instanceof InvalidBase64Error) {
+                return toolErr(`file ${file.path}: invalid base64 content`);
+              }
+              throw error;
             }
           } else {
             decodedFiles.push({ path: file.path, content: file.content });

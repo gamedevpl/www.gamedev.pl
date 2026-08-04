@@ -236,9 +236,12 @@ fi
 # Unlike the snapshot bucket, Cloud Run must *write* here: a delivery arrives over the
 # build channel, which is served by the API, so the runtime is what stores a candidate
 # version. It gets objectCreator + objectViewer rather than objectAdmin — create and read
-# but never delete — so a compromised runtime cannot destroy stored games, and the
-# immutable version ids mean it has no existing path worth overwriting anyway. The
-# deployer keeps objectAdmin for the bake; the gate writes through its own SA (below).
+# but never delete on published/candidate versions — so a compromised runtime cannot
+# destroy stored games, and the immutable version ids mean it has no existing path worth
+# overwriting anyway. MCP file-by-file staging (games/*/staging/**) is the exception:
+# it rewrites a per-job manifest and clears buffers, so a *conditional* objectAdmin on
+# that prefix alone is granted below. The deployer keeps full objectAdmin for the bake;
+# the gate writes through its own SA (further below).
 gcloud storage buckets add-iam-policy-binding "gs://${STORE_BUCKET}" \
   --member="serviceAccount:${DEPLOYER_SA}" \
   --role="roles/storage.objectAdmin" \
@@ -253,12 +256,22 @@ for role in roles/storage.objectViewer roles/storage.objectCreator; do
     >/dev/null
 done
 
+# Staging buffers need overwrite + delete (manifest upsert, clear). Bound to the staging
+# prefix only — versions/ and everything else stay create+read for the runtime.
+# CEL: object resource names are projects/_/buckets/BUCKET/objects/OBJECT_PATH.
+gcloud storage buckets add-iam-policy-binding "gs://${STORE_BUCKET}" \
+  --member="serviceAccount:${RUN_SA}" \
+  --role="roles/storage.objectAdmin" \
+  --condition="expression=resource.name.startsWith('projects/_/buckets/${STORE_BUCKET}/objects/games/') && resource.name.contains('/staging/'),title=games-store-staging-mutate,description=Overwrite/delete only under games/*/staging/ for MCP file-by-file staging" \
+  --project="$PROJECT_ID" \
+  >/dev/null
+
 # Live objects are never aged out — these are the originals, not a rebuildable
 # projection. Object versioning + soft-delete are the BY-11 compensating controls
 # for gate-runner's objectAdmin (overwrite/delete recovery); the lifecycle rule
 # only deletes *noncurrent* versions so versioning does not grow unbounded.
 # See infra/gate-hardening.md "Store IAM: why objectAdmin".
-echo "    IAM applied (deployer: admin, Cloud Run: read+create)."
+echo "    IAM applied (deployer: admin, Cloud Run: read+create, staging prefix: mutate)."
 echo "    Ensuring object versioning, 30d soft-delete, and noncurrent-version prune…"
 gcloud storage buckets update "gs://${STORE_BUCKET}" \
   --versioning \
