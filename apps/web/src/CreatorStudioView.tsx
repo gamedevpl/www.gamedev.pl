@@ -30,6 +30,7 @@ import { StudioCreatorAgentKeyPanel } from './StudioCreatorAgentKeyPanel.js';
 import { StudioDetailsBuildProgress } from './StudioDetailsBuildProgress.js';
 import { StudioDetailsMedia } from './StudioDetailsMedia.js';
 import { StudioOAuthClientsPanel } from './StudioOAuthClientsPanel.js';
+import { StudioWorkspaceCheckoutPanel } from './StudioWorkspaceCheckoutPanel.js';
 import { SubmissionStatusView } from './SubmissionStatusView.js';
 import {
   approveSuggestion,
@@ -1162,6 +1163,13 @@ function DetailsPanel({
               {showLegacyKey ? <StudioAgentKeyPanel token={game.token} /> : null}
               <StudioCreatorAgentKeyPanel />
               <StudioOAuthClientsPanel />
+              {/* Working copy belongs in the credentials pane rather than the create
+                  flow: it is the same bring-your-own-agent corner, and a creator who
+                  wants their own IDE is already here fetching a key. It needs a slug —
+                  a game without one has nothing to check out yet. */}
+              {game.slug && game.lastKnownStatus !== 'abandoned' ? (
+                <StudioWorkspaceCheckoutPanel slug={game.slug} />
+              ) : null}
             </div>
           ) : null}
 

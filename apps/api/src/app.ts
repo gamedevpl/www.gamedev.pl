@@ -521,6 +521,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     store,
     gamesStore,
     mintStatusToken: submissionTokenSecret ? (issueNumber) => mintToken(issueNumber, submissionTokenSecret) : undefined,
+    objectStore,
   });
 
   // The Creator Studio content editor (EditorKit): drafts in Firestore, publish

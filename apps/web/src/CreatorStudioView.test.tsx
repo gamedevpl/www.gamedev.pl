@@ -559,6 +559,64 @@ describe('CreatorStudioView', () => {
     root.unmount();
   });
 
+  it('offers a working copy beside the agent keys, and only for a game there is one of', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
+    fetchStudioGames.mockResolvedValue(
+      studioShelf([
+        {
+          token: 'token-live',
+          title: 'TV Tycoon',
+          createdAt: '2026-07-30T09:00:00.000Z',
+          lastKnownStatus: 'published',
+          slug: 'tv-tycoon',
+          publishedAt: '2026-07-31T09:00:00.000Z',
+        },
+        // No slug yet: the first build has not produced a game to check out.
+        {
+          token: 'token-fresh',
+          title: 'Space Miner',
+          createdAt: '2026-07-30T09:00:00.000Z',
+          lastKnownStatus: 'building',
+        },
+        {
+          token: 'token-gone',
+          title: 'Dead End',
+          createdAt: '2026-07-30T09:00:00.000Z',
+          lastKnownStatus: 'abandoned',
+          slug: 'dead-end',
+        },
+      ]),
+    );
+
+    const { container, root, rerender } = await renderStudio({ selectedGame: 'tv-tycoon', selectedTab: 'details' });
+
+    // The working copy lives in the credentials pane with the other bring-your-own-agent
+    // controls, so every assertion here has to open that pane first — the rail lands on
+    // overview.
+    const openKeys = async () => {
+      const keys = container.querySelector('[data-testid="studio-rail-icon-keys"]');
+      await act(async () => {
+        keys!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+    };
+
+    await openKeys();
+    expect(container.querySelector('[data-testid="workspace-checkout"]')).not.toBeNull();
+    expect(container.textContent).toContain('Work on this game in your own IDE');
+
+    await rerender({ selectedGame: 'token-fresh', selectedTab: 'details' });
+    await openKeys();
+    expect(container.querySelector('[data-testid="workspace-checkout"]')).toBeNull();
+
+    await rerender({ selectedGame: 'dead-end', selectedTab: 'details' });
+    await openKeys();
+    expect(container.querySelector('[data-testid="workspace-checkout"]')).toBeNull();
+
+    root.unmount();
+  });
+
   it('makes the details panel behave like a sheet on a narrow screen', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');

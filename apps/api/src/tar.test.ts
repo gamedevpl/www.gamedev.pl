@@ -1,5 +1,10 @@
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { gunzipSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
-import { readTarEntries, type TarEntry } from './tar.js';
+import { readTarEntries, writeTarGz, type TarEntry } from './tar.js';
 
 const BLOCK = 512;
 
@@ -166,5 +171,75 @@ describe('readTarEntries', () => {
     const buffer = archive({ name: 'repo-abc123/games/pong/media/gameplay.mp4', body: 'z'.repeat(4096) });
 
     await expect(collect(stream(buffer), { maxTotalBytes: 1024 })).rejects.toThrow(/exceeds 1024 retained bytes/);
+  });
+});
+
+describe('writeTarGz', () => {
+  it('round-trips through the reader in this file', async () => {
+    const archive = writeTarGz([
+      { path: 'README.md', content: '# workspace\n' },
+      { path: 'games/comet-courier/game.ts', content: 'export const x = 1;\n' },
+      { path: 'setup.mjs', content: 'process.exit(0);\n', executable: true },
+    ]);
+
+    const entries = await collect(stream(gunzipSync(archive)));
+    expect(entries.map((entry) => entry.path)).toEqual(['README.md', 'games/comet-courier/game.ts', 'setup.mjs']);
+    expect(Buffer.from(entries[1].bytes).toString('utf8')).toBe('export const x = 1;\n');
+  });
+
+  it('extracts with the system tar, which is what the creator actually runs', () => {
+    const archive = writeTarGz([
+      { path: 'a/b/deep.txt', content: 'nested\n' },
+      { path: 'top.txt', content: 'top\n' },
+    ]);
+    const dir = mkdtempSync(join(tmpdir(), 'tar-write-'));
+    try {
+      writeFileSync(join(dir, 'out.tgz'), archive);
+      // Real tar is the only check that catches a bad checksum: this file's own
+      // reader never validates one, so a writer bug would round-trip happily here
+      // and fail on the creator's machine.
+      const result = spawnSync('tar', ['-xzf', 'out.tgz'], { cwd: dir, encoding: 'utf8' });
+      expect(result.stderr).toBe('');
+      expect(result.status).toBe(0);
+      expect(readFileSync(join(dir, 'a', 'b', 'deep.txt'), 'utf8')).toBe('nested\n');
+      expect(readFileSync(join(dir, 'top.txt'), 'utf8')).toBe('top\n');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('is a pure function of its input, so the same workspace is the same bytes', () => {
+    const files = [{ path: 'x.txt', content: 'same\n' }];
+    expect(writeTarGz(files).equals(writeTarGz(files))).toBe(true);
+  });
+
+  it('pins the gzip header timestamp, not just the tar payload', () => {
+    // Comparing two archives written back to back cannot see a seconds-resolution
+    // timestamp, so determinism is asserted against the header field itself. Node
+    // leaves gzip MTIME at zero because it never calls deflateSetHeader — true, but
+    // true by omission, which is worth a test rather than a comment.
+    const archive = writeTarGz([{ path: 'x.txt', content: 'same\n' }]);
+    expect(archive.readUInt32LE(4)).toBe(0);
+  });
+
+  it('refuses paths that would extract outside the archive root', () => {
+    expect(() => writeTarGz([{ path: '/etc/passwd', content: '' }])).toThrow(/refusing/);
+    expect(() => writeTarGz([{ path: 'a/../../b', content: '' }])).toThrow(/refusing/);
+  });
+
+  it('refuses a duplicate path rather than letting last-one-wins decide', () => {
+    expect(() =>
+      writeTarGz([
+        { path: 'dup.txt', content: 'first' },
+        { path: 'dup.txt', content: 'second' },
+      ]),
+    ).toThrow(/duplicate/);
+  });
+
+  it('splits a long path across name and prefix instead of truncating it', async () => {
+    const path = `games/a-game/${'nested/'.repeat(14)}module.ts`;
+    expect(path.length).toBeGreaterThan(100);
+    const entries = await collect(stream(gunzipSync(writeTarGz([{ path, content: 'x' }]))));
+    expect(entries[0].path).toBe(path);
   });
 });

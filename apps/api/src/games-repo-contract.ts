@@ -18,6 +18,23 @@
  * allows this side to list modules the published games tip has not shipped yet
  * (website-ahead extras), and fails only when games-repo introduces a name or
  * reorders shared modules this side does not recognize.
+ *
+ * ---
+ *
+ * The second half of this file is the **delivery** contract — which files a game may
+ * upload — cut from the same games-repo file `tools/submit.mjs` reads
+ * ({@link DELIVERY_CONTRACT_PATH}). It used to be a hand-kept literal on each side and
+ * drifted three times (TRACE, then PLAYTEST, then AGENT); each drift turned a finished
+ * game into a multi-delivery retry loop, because the site refused a path the games repo
+ * had just made mandatory.
+ *
+ * **Adding a deliverable file? Merge this side first — the same order as raising a byte
+ * budget, for the same underlying reason:** the side that *accepts* has to widen before
+ * the side that *sends*. A site that allows a path no game delivers yet is inert; a game
+ * that delivers a path the site refuses gets a 400 at upload, and the agent that could
+ * have fixed it is gone twenty minutes later. Removing a file is the mirror image —
+ * games-repo stops sending it first, this side drops the entry last — so the rule in both
+ * directions is that the allowlist here is never the narrower of the two.
  */
 
 /** Canonical GameKit module order — must match games-repo `GAME_KIT_MODULES`. */
@@ -162,6 +179,182 @@ export function extractMusicContractSignals(assembleSource: string): {
       new RegExp(`\\b${MUSIC_CONTRACT.catalogReader}\\s*\\(`).test(assembleSource) ||
       new RegExp(catalogPathPattern).test(assembleSource),
   };
+}
+
+/* ── Delivery contract (games-repo `shared/delivery-contract.json`) ─────────────── */
+
+/** Where the machine-readable delivery contract lives in the games repo. */
+export const DELIVERY_CONTRACT_PATH = 'shared/delivery-contract.json';
+
+/** Shape version this side understands. A bump means the shape changed, not the values. */
+export const DELIVERY_CONTRACT_VERSION = 1;
+
+/**
+ * Fixed files a game may deliver — games-repo `delivery-contract.json` `fixedFiles`, in
+ * that order. Order is part of the contract: both sides render it into agent-facing
+ * refusal and instruction text, so a reshuffle is a visible change even when the set is
+ * identical, and the CI check reports it separately from an add or a remove.
+ *
+ * Game-shape only: SPEC / GAME / CAPTURE / ACCEPTANCE / TRACE / PLAYTEST / AGENT / EDITOR,
+ * the playable trio, and `sim.ts`. Media bytes are produced by our gate and never
+ * uploaded, so `media/` is refused rather than listed here.
+ */
+export const DELIVERY_FIXED_FILES = [
+  'SPEC.md',
+  'GAME.json',
+  'CAPTURE.json',
+  'ACCEPTANCE.json',
+  // The committed behavioural golden. It is not source in the ordinary sense, but the
+  // gate replays CAPTURE.json against our engine and diffs the result against this file,
+  // so a delivery without it is one the gate cannot check — it fails at the trace stage
+  // with `no committed trace`, having proved nothing about the game.
+  'TRACE.json',
+  // The per-game playtest contract the harness requires of every game (validate Check
+  // 26, `tools/lib/playtest-contract.ts`). Same shape of dependency as TRACE.json: a
+  // harness-side requirement that only the agent can satisfy, so leaving it off this
+  // list does not keep anything out — it makes every delivery unpassable. It did: the
+  // check landed in the games repo while this list stayed as it was, and from then on
+  // each delivered game reached validate and stopped there, with no gate artifacts and
+  // therefore no draft preview for the creator watching.
+  'PLAYTEST.json',
+  // Validate Check 28 (`tools/lib/agent-contract.ts`) requires AGENT.json so
+  // `npm run agent-play` knows whether to replay CAPTURE or load a closed-loop module.
+  // Same drift class as TRACE/PLAYTEST above: the check landed in the games repo while
+  // this list stayed put, so agents that wrote a correct AGENT.json were told the path
+  // was not deliverable, dropped it, and then failed the remote gate at Check 28 —
+  // burning a session on allowlist archaeology instead of the game.
+  //
+  // Accepted, but not hard-required at upload yet: in-flight builder workspaces still ship
+  // the pre-companion submit tool that omits AGENT.json, and the two repos cannot deploy
+  // atomically. Requiring it at upload would 400 those deliveries before the gate could
+  // even run. Let Check 28 report the missing contract until old workspaces drain; then
+  // promote to a required upload (same path TRACE/PLAYTEST already took) in
+  // `validateSourceUpload`.
+  'AGENT.json',
+  // The editor declaration (EditorKit L0, games-repo Check 31). Optional — only
+  // born-editable games ship one — but same drift class as TRACE/PLAYTEST/AGENT
+  // above: the games repo already sends it, and refusing it here would 400 every
+  // born-editable delivery at upload. The generated `game/editor-content.ts` needs no
+  // entry, it matches {@link DELIVERY_EXTRA_MODULE_PATTERN}.
+  'EDITOR.json',
+  'index.html',
+  'game.ts',
+  'style.css',
+  'sim.ts',
+] as const;
+
+/**
+ * Additional source files a game may carry beyond the fixed set — its own modules only.
+ * Kept narrow on purpose: relative imports inside the game directory are the one thing
+ * games legitimately add, and everything else is a smell. Covers modules under `game/`
+ * and other in-game modules (`entities/player.ts`, …).
+ *
+ * Built from the contract's string form rather than written as a regex literal: `.source`
+ * on a literal escapes the `/` inside the character class (`[a-z0-9\/-]`), which would not
+ * match the games-repo JSON byte-for-byte and would read as drift on every CI run.
+ */
+export const DELIVERY_EXTRA_MODULE_PATTERN = new RegExp('^[a-z0-9][a-z0-9/-]{0,60}\\.ts$');
+
+/**
+ * First path segments a game may not use. Set semantics, not a sequence — order carries no
+ * meaning here and the CI check compares them as sets.
+ */
+export const DELIVERY_RESERVED_SEGMENTS = [
+  'shared',
+  'tools',
+  'games',
+  'node_modules',
+  'dist',
+  'references',
+  'templates',
+] as const;
+
+/** Cap on files per delivery. */
+export const DELIVERY_MAX_FILES = 200;
+
+/** Total bytes one delivery may carry. */
+export const DELIVERY_MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
+
+/** The games-repo delivery contract as read off the wire. */
+export interface DeliveryContract {
+  version: number;
+  fixedFiles: string[];
+  extraModulePattern: string;
+  reservedSegments: string[];
+  maxFiles: number;
+  maxUploadBytes: number;
+}
+
+/**
+ * Parse games-repo `shared/delivery-contract.json`. Unlike the assemble/validate
+ * extractors this reads a file written to be read, so it validates the shape strictly and
+ * names the offending field: a contract that parses into partial garbage would compare
+ * "clean" against this side and hide exactly the drift the check exists to catch.
+ */
+export function extractDeliveryContract(json: string): DeliveryContract {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(json);
+  } catch (error: unknown) {
+    throw new Error(
+      `games-repo delivery contract is not valid JSON: ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error },
+    );
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    throw new Error('games-repo delivery contract must be a JSON object');
+  }
+  const raw = parsed as Record<string, unknown>;
+
+  return {
+    version: readPositiveInteger(raw, 'version'),
+    fixedFiles: readStringArray(raw, 'fixedFiles', { allowEmpty: false }),
+    extraModulePattern: readPattern(raw, 'extraModulePattern'),
+    reservedSegments: readStringArray(raw, 'reservedSegments', { allowEmpty: true }),
+    maxFiles: readPositiveInteger(raw, 'maxFiles'),
+    maxUploadBytes: readPositiveInteger(raw, 'maxUploadBytes'),
+  };
+}
+
+function readStringArray(raw: Record<string, unknown>, key: string, options: { allowEmpty: boolean }): string[] {
+  const value = raw[key];
+  if (!Array.isArray(value)) {
+    throw new Error(`games-repo delivery contract field \`${key}\` must be an array of strings`);
+  }
+  if (!options.allowEmpty && value.length === 0) {
+    throw new Error(`games-repo delivery contract field \`${key}\` is empty`);
+  }
+  return value.map((entry, index) => {
+    if (typeof entry !== 'string' || entry.trim() === '') {
+      throw new Error(`games-repo delivery contract \`${key}[${index}]\` is not a non-empty string`);
+    }
+    return entry;
+  });
+}
+
+function readPositiveInteger(raw: Record<string, unknown>, key: string): number {
+  const value = raw[key];
+  if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0) {
+    throw new Error(`games-repo delivery contract field \`${key}\` must be a positive integer`);
+  }
+  return value;
+}
+
+function readPattern(raw: Record<string, unknown>, key: string): string {
+  const value = raw[key];
+  if (typeof value !== 'string' || value === '') {
+    throw new Error(`games-repo delivery contract field \`${key}\` must be a non-empty string`);
+  }
+  try {
+    new RegExp(value);
+  } catch (error: unknown) {
+    throw new Error(
+      `games-repo delivery contract field \`${key}\` is not a valid regular expression: ` +
+        `${error instanceof Error ? error.message : String(error)}`,
+      { cause: error },
+    );
+  }
+  return value;
 }
 
 function evaluateByteExpression(expression: string, source: string): number {

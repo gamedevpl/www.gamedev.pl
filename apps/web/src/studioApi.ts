@@ -216,6 +216,12 @@ export type StudioApiError = Error & {
   revision?: number;
   /** How long the publish cooldown has left (429). */
   retryAfterMs?: number;
+  /**
+   * The server's human-readable `message`, where a route sends one alongside `error`.
+   * Only surfaced where the wording is meant for the creator (see the workspace
+   * checkout's 409) — `error` itself is a machine code and never reaches the UI.
+   */
+  detail?: string;
 };
 
 async function readJson(response: Response): Promise<unknown> {
@@ -225,6 +231,7 @@ async function readJson(response: Response): Promise<unknown> {
 async function throwResponseError(response: Response): Promise<never> {
   const body = (await readJson(response)) as {
     error?: string;
+    message?: unknown;
     category?: string;
     problems?: unknown;
     revision?: unknown;
@@ -233,6 +240,7 @@ async function throwResponseError(response: Response): Promise<never> {
   const error = new Error(body?.error ?? `Request failed (${response.status})`) as StudioApiError;
   error.status = response.status;
   error.category = body?.category;
+  if (typeof body?.message === 'string' && body.message.trim().length > 0) error.detail = body.message;
   // Structured detail the editor routes send alongside `error`. Dropping it made
   // the panel's per-problem feedback dead code and cost the cooldown its number.
   if (Array.isArray(body?.problems) && body.problems.every((problem) => typeof problem === 'string')) {
@@ -288,6 +296,37 @@ export async function fetchStudioScorecards(): Promise<StudioScorecard[]> {
   }
   const body = (await response.json()) as { scorecards?: StudioScorecard[] };
   return body.scorecards ?? [];
+}
+
+/** The archive bytes plus the name the server asked us to save them under. */
+export type GameWorkspaceArchive = { blob: Blob; filename: string };
+
+/** `attachment; filename="x.tgz"` → `x.tgz`. A name carrying a path separator is refused. */
+function filenameFromDisposition(header: string | null): string | null {
+  const match = header ? /filename="?([^";]+)"?/i.exec(header) : null;
+  const name = match?.[1]?.trim();
+  return name && !name.includes('/') && !name.includes('\\') ? name : null;
+}
+
+/**
+ * A working copy of one of the creator's own games, for creators who would rather work
+ * in their own IDE than through the Studio's agent flow.
+ *
+ * Read through `fetch` rather than by pointing a link at the route: it answers failures
+ * as JSON (401 / 404 / 409 / 502 / 503), and a plain navigation would drop the creator
+ * on a page of raw JSON instead of a sentence they can act on.
+ */
+export async function fetchGameWorkspace(slug: string): Promise<GameWorkspaceArchive> {
+  const response = await fetch(`${API_BASE}/api/me/studio/games/${encodeURIComponent(slug)}/workspace`, {
+    credentials: 'include',
+  });
+  if (!response.ok) {
+    await throwResponseError(response);
+  }
+  return {
+    blob: await response.blob(),
+    filename: filenameFromDisposition(response.headers.get('content-disposition')) ?? `${slug}-workspace.tgz`,
+  };
 }
 
 /**

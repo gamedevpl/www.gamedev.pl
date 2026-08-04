@@ -3,16 +3,19 @@
  *
  * The check itself lives in `../src/games-repo-contract-check.ts`; this file is the
  * environment, the logging, and the exit code. It asserts the games repo's
- * `tools/lib/assemble.ts` and `tools/validate.ts` still match
- * `games-repo-contract.ts` on this side:
+ * `tools/lib/assemble.ts`, `tools/validate.ts` and `shared/delivery-contract.json`
+ * still match `games-repo-contract.ts` on this side:
  *   - GAME_KIT_MODULES order
  *   - MAX_BUNDLE_BYTES === MAX_PROJECT_BYTES
  *   - music injection contract (tracks + __GAME_AUDIO_MUSIC__ + readMusicCatalog)
+ *   - delivery contract (fixed files and their order, extra-module pattern, caps)
  *
  * Requires GAMES_REPO_TOKEN (contents:read on the games repo). Drift fails. A games
  * repo that cannot be read — no token, exhausted quota, GitHub down — warns and
  * passes, because it is not evidence of drift; set GAMES_CONTRACT_REQUIRE_REMOTE=1
- * to demand the live comparison instead.
+ * to demand the live comparison instead. A half that was tolerated rather than
+ * compared (a games tip with no delivery contract yet) is warned about on an
+ * otherwise green run.
  *
  * Usage: npm run contract:games-repo -w @gamedevpl/api
  */
@@ -46,6 +49,9 @@ async function main(): Promise<void> {
 
   switch (outcome.kind) {
     case 'ok':
+      for (const note of outcome.notes ?? []) {
+        annotate('games-repo contract half not compared', note);
+      }
       console.log('games-repo contract: ok');
       return;
 
