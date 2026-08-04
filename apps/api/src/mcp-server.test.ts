@@ -1070,6 +1070,28 @@ describe('POST /api/mcp (BY-05)', () => {
     expect((await store.getSubmission(ISSUE))?.lastAgentPresence?.key).toBe('waiting_checks');
   });
 
+  it('keeps a no-delivery gate check active so the agent can continue building', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    const { gamesStore } = stubGamesStore();
+    app = await createApp(store, gamesStore);
+    const sessionId = await initialize(app);
+    const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    const verdict = await callTool(app, 'get_gate_verdict', { sessionKey }, { 'mcp-session-id': sessionId });
+    expect(verdict.isError).toBe(false);
+    expect(verdict.structured).toMatchObject({
+      status: 'pending',
+      deliveryId: null,
+      stop: false,
+      reason: 'no_delivery',
+    });
+    expect(String((verdict.structured as { summary?: string }).summary)).toMatch(
+      /continue building.*submit_sources/i,
+    );
+  });
+
   it('makes pending get_gate_verdict a one-shot stop and warns if the client ignores it', async () => {
     const store = new InMemoryStore();
     await seedJob(store);
@@ -1528,7 +1550,8 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(instructions).toMatch(/sessionKey/);
     expect(instructions).toMatch(/get_gate_verdict/);
     expect(instructions).toMatch(/one-shot check/i);
-    expect(instructions).toMatch(/pending returns stop:true/i);
+    expect(instructions).toMatch(/pending delivery returns stop:true/i);
+    expect(instructions).toMatch(/deliveryId:null means continue building/i);
     expect(instructions).not.toMatch(/poll get_gate_verdict until green/i);
     expect(instructions).toMatch(/honour stop/i);
   });
