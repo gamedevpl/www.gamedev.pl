@@ -91,15 +91,16 @@ export const GAME_BUDGET_BYTES = 252 * 1024;
  * under the author budget while comments and types push the `.ts` tree higher. Moved
  * 200 → 300 KiB when carjack-city (~247 KiB source) stranded every snapshot publish;
  * 300 → 336 KiB for the same game's island coastline, on-foot car collision and
- * mission-ladder work — 334_122 raw bytes carrying 251_700 assembled ones.
+ * mission-ladder work — 335_142 raw bytes carrying 252_340 assembled ones.
  */
 export const SOURCE_GRAPH_BUDGET_BYTES = 336 * 1024;
 
 /**
  * Platform half of the serve cap — games-repo `GAMEKIT_PLATFORM_BYTES` /
  * `assemble-contract.json` `platformCeilingBytes`. Together with
- * {@link GAME_BUDGET_BYTES} this must equal games-repo `MAX_BUNDLE_BYTES`
- * (588_048, matching `maxProjectBytes`). Not a round KiB.
+ * {@link GAME_BUDGET_BYTES} this must be at least games-repo `MAX_BUNDLE_BYTES`
+ * (598_048 here, matching `maxProjectBytes`; the games repo is at 588_048 until its
+ * own platform raise lands, and website-ahead is the safe direction). Not a round KiB.
  *
  * One derived ceiling, not a sum of per-feature constants (games-repo #281). Check 4
  * over there bills each author for measured `assembled − platformBytes` against the
@@ -111,36 +112,25 @@ export const SOURCE_GRAPH_BUDGET_BYTES = 336 * 1024;
  * The author budget last moved for `carjack-city` again: a real island coastline every
  * system obeys (the street plan is clipped to it, held back behind the beach and eroded
  * back to its junctions, so nothing runs into the sea), solid car hulls for everyone on
- * foot, and the mission ladder's chain economy measure 251_700 author bytes against 864
- * bytes of headroom. Platform bytes are untouched.
- * 232 → 252 KiB, and the serve cap 567_568 → 588_048.
+ * foot, and the mission ladder's chain economy measure 252_340 author bytes against 864
+ * bytes of headroom. Platform bytes are untouched by that change.
+ * 232 → 252 KiB, and the serve cap 577_568 → 598_048.
  *
- * Before that, `carjack-city`'s active-run persistence on top of
- * the organic incident simulation: the assembled project measured 563_200 bytes and
- * stranded snapshot publish against the 547_088 serve cap (run 30928592522). Games-repo
- * #479 already raised Check 4 to 232 KiB; keep the full flagship implementation.
- * 212 → 232 KiB, and the serve cap 547_088 → 567_568.
+ * Before that, the platform ceiling moved for the urban top-down vehicle body + grid
+ * helper promotion that pulled carjack-city hull/shape paint and sidewalk/block walks
+ * into GameKit: measured platform 333_323 bytes. 330_000 → 340_000, serve cap
+ * 567_568 → 577_568.
  *
- * Before that, organic incidents and believable service dispatch: author payload
- * 208_829 bytes. 200 → 212 KiB, serve cap 534_800 → 547_088.
+ * Before that, author budget for active-run persistence: 212 → 232 KiB, serve cap
+ * 547_088 → 567_568 (run 30928592522 / games-repo #479).
  *
- * Before that, `carjack-city`'s day/night and reactive-world work moved the platform
- * ceiling: its selected platform measures 327_252 bytes while the game remained within
- * the then-200 KiB author budget (199_723 bytes). 313_000 → 330_000, and the serve cap
- * 517_800 → 534_800. Snapshot publish was stranded at 517_889 with the old ceiling
- * (run 30909878136); games-repo #477 shipped the matching contract.
+ * Before that, organic incidents: 200 → 212 KiB, serve cap 534_800 → 547_088.
  *
- * The drift this corrects is older and larger than that change: the constant has
- * never tracked the heaviest selection. `apex-sprint` (gfx3d) already measures
- * 434_497 platform bytes and passes only because its author payload is small. Sized
- * here to the heaviest 2D selection rather than to gfx3d, which would put the
- * backstop above 639 KB and stop it backstopping anything.
+ * Before that, day/night platform: 313_000 → 330_000, serve cap 517_800 → 534_800.
  *
- * Before it, the opt-in `editor` module (EditorKit L2): +3_700 measured,
- * 482_687 → 486_387. Before that, sensing Phase 2 (camera backdrop) raised the
- * sensing ledger line 6_500 → 9_000 (+2_500), 480_187 → 482_687.
+ * Sized here to the heaviest 2D selection rather than to gfx3d.
  */
-export const GAMEKIT_PLATFORM_BYTES = 330_000;
+export const GAMEKIT_PLATFORM_BYTES = 340_000;
 
 /** Combined html+js+css size cap — must match games-repo `MAX_BUNDLE_BYTES`. */
 export const MAX_PROJECT_BYTES = GAME_BUDGET_BYTES + GAMEKIT_PLATFORM_BYTES;
