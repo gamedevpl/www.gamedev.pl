@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { configDefaults, defineConfig } from 'vitest/config';
 
 /**
@@ -17,6 +18,12 @@ export default defineConfig({
     // instead of the package's, and without the setup file an API test invoked that way
     // can reach live Vertex through ambient credentials. The file only sets env vars, so
     // it is harmless for packages that do not need it.
-    setupFiles: ['./apps/api/vitest.setup.ts'],
+    //
+    // Absolute, resolved from this file rather than written as './apps/api/…'. Workspaces
+    // with no vitest.config.ts of their own — packages/zone-core — walk up and load THIS
+    // config while running in their own directory, where a relative path resolves to
+    // packages/zone-core/apps/api/vitest.setup.ts and every test in that package fails to
+    // collect. That is exactly how it broke master's CI on 2026-08-04.
+    setupFiles: [fileURLToPath(new URL('./apps/api/vitest.setup.ts', import.meta.url))],
   },
 });
