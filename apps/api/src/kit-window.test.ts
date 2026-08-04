@@ -41,6 +41,8 @@ describe('kit window (kits/current.json)', () => {
     expect(report).toContain('cccccccccccccccccccccccccccccccccccccccc');
     expect(report).toContain(REGISTRY.current);
     expect(report).toContain(REGISTRY.previous!);
-    expect(report).toMatch(/get_kit|Refresh the Creator Kit/i);
+    expect(report).toMatch(/get_kit/i);
+    expect(report).toMatch(/fromLatestDelivery/);
+    expect(report).toMatch(/do not re-stage|do not re-upload/i);
   });
 });
