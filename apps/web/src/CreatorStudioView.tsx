@@ -10,7 +10,7 @@ import { formatRelativeTime } from './relativeTime.js';
 import { playPath, studioPath, type StudioTab } from './router.js';
 import { abandonSubmission } from './submissionApi.js';
 import { StudioPlaytestPanel } from './StudioPlaytestPanel.js';
-import { StudioPreviewRail, type StudioPreviewRailHandle } from './StudioPreviewRail.js';
+import { StudioShotToasts } from './StudioShotToasts.js';
 import { EditorPanel } from './EditorPanel.js';
 import {
   collapseStudioGames,
@@ -51,11 +51,14 @@ import {
  *
  * One game is one thread, and the thread is the studio.
  *
- * Making a game here is a conversation with an agent. Surfaces: the thread; things
- * beside it (details, and on a wide screen a live Game preview rail); and full
- * playtest theater (Expand / phone), which genuinely takes the screen. The composer
- * at the foot of the thread is the only one, and it always targets the game's
- * current state — published or not, there is only ever the tip to work on.
+ * Making a game here is a conversation with an agent, and this screen used to be five
+ * tabs laid across the top of it — with the same act, "say what to change", living in
+ * three of them, so which box a creator was allowed depended on a lifecycle state they
+ * had to know in order to find it. There are three surfaces now: the thread, the things
+ * beside the thread (facts, sharing, play health, stopping it), and playtest, which
+ * genuinely takes the screen. The composer at the foot of the thread is the only one,
+ * and it always targets the game's current state — published or not, there is only ever
+ * the tip to work on.
  *
  * Shelf scales past a handful of games: compact rows, search/filter once the list grows.
  * On a desktop with a long shelf it collapses to a left-edge rail of dots (not a "switch
@@ -82,9 +85,6 @@ const SHEET_QUERY = `(max-width: ${SHEET_MAX_WIDTH}px)`;
 /** Matches the phone drawer breakpoint in styles.css — shelf off-canvas when a game is open. */
 const SHELF_DRAWER_MAX_WIDTH = 800;
 const SHELF_DRAWER_QUERY = `(max-width: ${SHELF_DRAWER_MAX_WIDTH}px)`;
-/** Live preview rail beside the thread — same band as the details rail. */
-const PREVIEW_RAIL_MIN_WIDTH = 1100;
-const PREVIEW_RAIL_QUERY = `(min-width: ${PREVIEW_RAIL_MIN_WIDTH}px)`;
 
 type NavigateOptions = { replace?: boolean };
 
@@ -193,10 +193,6 @@ export function CreatorStudioView({
   const [shelfOpen, setShelfOpen] = useState(false);
   /** True when the shelf is the phone drawer (off-canvas), not the desktop rail. */
   const [shelfIsDrawer, setShelfIsDrawer] = useState(false);
-  /** Desktop-wide enough for the live Game preview rail beside the thread. */
-  const [previewWide, setPreviewWide] = useState(false);
-  const [previewTransport, setPreviewTransport] = useState({ hasHtml: false, paused: false });
-  const previewRailRef = useRef<StudioPreviewRailHandle | null>(null);
   // Publishing is terminal, so an improvement on a live game opens a *new* job with its
   // own token — one not on the shelf yet. When that happens the open thread moves onto
   // it while the shelf selection stays on the source game (the new job inherits its slug,
@@ -439,18 +435,6 @@ export function CreatorStudioView({
   useEffect(() => {
     const query = typeof window.matchMedia === 'function' ? window.matchMedia(SHELF_DRAWER_QUERY) : null;
     const sync = () => setShelfIsDrawer(query ? query.matches : window.innerWidth <= SHELF_DRAWER_MAX_WIDTH);
-    sync();
-    query?.addEventListener('change', sync);
-    window.addEventListener('resize', sync);
-    return () => {
-      query?.removeEventListener('change', sync);
-      window.removeEventListener('resize', sync);
-    };
-  }, []);
-
-  useEffect(() => {
-    const query = typeof window.matchMedia === 'function' ? window.matchMedia(PREVIEW_RAIL_QUERY) : null;
-    const sync = () => setPreviewWide(query ? query.matches : window.innerWidth >= PREVIEW_RAIL_MIN_WIDTH);
     sync();
     query?.addEventListener('change', sync);
     window.addEventListener('resize', sync);
@@ -713,54 +697,17 @@ export function CreatorStudioView({
                           <span className="studio-head-action-label">{t('creatorProfile.publishGateTitle')}</span>
                         </button>
                       ) : null}
-                      {/* Transport: on a wide screen Play/Pause drive the inset preview
-                        rail; Expand opens the full theater. On a phone Play still opens
-                        the theater (the only playable surface there). */}
-                      {previewWide && tab !== 'playtest' && tab !== 'edit' ? (
-                        <div className="studio-head-transport" role="group" aria-label={t('studioPanel.tabs.playtest')}>
-                          <button
-                            type="button"
-                            className="studio-head-action is-primary studio-head-transport-play"
-                            aria-label={
-                              previewTransport.paused
-                                ? t('studioPanel.playtest.resume')
-                                : t('studioPanel.tabs.playtest')
-                            }
-                            onClick={() => {
-                              if (previewTransport.paused) {
-                                previewRailRef.current?.resume();
-                                return;
-                              }
-                              if (!previewTransport.hasHtml) {
-                                openTab('playtest');
-                              }
-                            }}
-                          >
-                            <PixelIcon name="play" size={12} />
-                            <span className="studio-head-action-label">{t('studioPanel.tabs.playtest')}</span>
-                          </button>
-                          <button
-                            type="button"
-                            className="studio-head-action studio-head-transport-pause"
-                            disabled={!previewTransport.hasHtml || previewTransport.paused}
-                            aria-label={t('studioPanel.preview.pause')}
-                            onClick={() => previewRailRef.current?.pause()}
-                          >
-                            <PixelIcon name="pause" size={12} />
-                            <span className="studio-head-action-label">{t('studioPanel.preview.pause')}</span>
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          className={`studio-head-action is-primary${tab === 'playtest' ? ' is-active' : ''}`}
-                          aria-pressed={tab === 'playtest'}
-                          onClick={() => openTab(tab === 'playtest' ? 'thread' : 'playtest')}
-                        >
-                          <PixelIcon name="play" size={12} />{' '}
-                          <span className="studio-head-action-label">{t('studioPanel.tabs.playtest')}</span>
-                        </button>
-                      )}
+                      {/* One primary Play verb — opens the playtest theater. Pause lives
+                        inside that theater (pause-and-note), not in this chrome. */}
+                      <button
+                        type="button"
+                        className={`studio-head-action is-primary is-play${tab === 'playtest' ? ' is-active' : ''}`}
+                        aria-pressed={tab === 'playtest'}
+                        onClick={() => openTab(tab === 'playtest' ? 'thread' : 'playtest')}
+                      >
+                        <PixelIcon name="play" size={14} />{' '}
+                        <span className="studio-head-action-label">{t('studioPanel.tabs.playtest')}</span>
+                      </button>
                       <button
                         type="button"
                         className={`studio-head-action is-icon-only${tab === 'details' ? ' is-active' : ''}`}
@@ -782,13 +729,14 @@ export function CreatorStudioView({
                   </div>
                 </div>
 
-                {/* The thread stays put. Details and the live preview open beside it on a
-                  wide screen; only full playtest theater (Expand / phone) replaces it. */}
-                <div
-                  className={`studio-workspace${tab === 'details' ? ' is-details-open' : ''}${
-                    previewWide && tab !== 'playtest' && tab !== 'edit' ? ' is-preview-open' : ''
-                  }`}
-                >
+                {/* The thread stays put. Details opens beside it on a wide screen and over
+                  it on a narrow one; only playtest, which needs the whole viewport to be
+                  a game, replaces it. Agent screenshots float as dismissable toasts. */}
+                {tab !== 'playtest' && tab !== 'edit' ? (
+                  <StudioShotToasts token={threadToken ?? activeGame.token} placement="bottom-right" />
+                ) : null}
+
+                <div className={`studio-workspace${tab === 'details' ? ' is-details-open' : ''}`}>
                   {tab === 'edit' ? (
                     <EditorPanel
                       key={activeGame.token}
@@ -821,17 +769,6 @@ export function CreatorStudioView({
                         }
                       />
                     </div>
-                  ) : null}
-
-                  {previewWide && tab !== 'playtest' && tab !== 'edit' && playtestGame ? (
-                    <StudioPreviewRail
-                      key={playtestGame.token}
-                      ref={previewRailRef}
-                      game={playtestGame}
-                      published={playtestPublished}
-                      onExpand={() => openTab('playtest')}
-                      onTransportChange={setPreviewTransport}
-                    />
                   ) : null}
 
                   {tab === 'playtest' && playtestGame ? (

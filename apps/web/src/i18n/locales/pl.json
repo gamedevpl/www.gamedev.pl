@@ -374,9 +374,10 @@
       "live": "Na żywo",
       "empty": "Nie ma jeszcze grywalnego buildu — pojawi się tu, gdy będzie podgląd.",
       "expand": "Rozwiń playtest",
-      "media": "Media",
+      "media": "Zrzuty ekranu",
       "shot": "Zrzut ekranu",
       "closeShot": "Zamknij zrzut",
+      "dismissShot": "Odrzuć zrzut",
       "pause": "Wstrzymaj"
     },
     "stats": {

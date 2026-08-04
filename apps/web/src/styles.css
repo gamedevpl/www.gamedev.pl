@@ -4496,189 +4496,110 @@ a.user-name--profile:focus-visible {
   .studio-workspace.is-details-open {
     grid-template-columns: minmax(0, 1fr) minmax(300px, 400px);
   }
-
-  /* Live Game preview beside the thread (Unity Game view / Codex side panel). */
-  .studio-workspace.is-preview-open {
-    grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
-    align-items: stretch;
-  }
-
-  .studio-workspace.is-preview-open.is-details-open {
-    grid-template-columns: minmax(0, 1fr) minmax(260px, 320px) minmax(280px, 360px);
-  }
 }
 
-.studio-preview-rail {
-  min-width: 0;
-  min-height: 0;
+/* Louder Play in the head cluster — still one verb, no Pause sibling. */
+.studio-head-action.is-primary.is-play {
+  padding: 8px 16px;
+  font-size: 0.88rem;
+  box-shadow: 0 0 14px var(--turquoise-glow);
+}
+
+/* Codex-style stacked screenshot toasts inside the game detail. */
+.studio-shot-toasts {
+  position: absolute;
+  z-index: 40;
   display: flex;
+  flex-direction: column-reverse;
+  gap: 8px;
+  width: min(220px, calc(100% - 24px));
+  pointer-events: none;
+}
+
+.studio-shot-toasts.is-bottom-right {
+  right: 14px;
+  bottom: 14px;
+}
+
+.studio-shot-toasts.is-near-play {
+  right: 14px;
+  top: 64px;
   flex-direction: column;
-  gap: 0;
+}
+
+.studio-shot-toast {
+  position: relative;
+  pointer-events: auto;
   border-radius: 12px;
   border: 1px solid var(--panel-border);
   background: var(--panel-card);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
   overflow: hidden;
-  align-self: stretch;
+  animation: studio-shot-toast-in 0.22s ease-out;
 }
 
-.studio-preview-rail-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  flex: none;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--panel-border);
+@keyframes studio-shot-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
-.studio-preview-rail-title {
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.studio-preview-rail-live {
-  font-size: 0.68rem;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--turquoise);
-}
-
-.studio-preview-rail-live::before {
-  content: '●';
-  margin-right: 0.35em;
-}
-
-.studio-preview-stage {
-  position: relative;
-  flex: none;
-  aspect-ratio: 16 / 10;
-  background: #0b1018;
-  border-bottom: 1px solid var(--panel-border);
-}
-
-.studio-preview-stage .game-frame,
-.studio-preview-stage iframe {
-  position: absolute;
-  inset: 0;
+.studio-shot-toast-body {
+  display: block;
   width: 100%;
-  height: 100%;
+  padding: 0;
   border: 0;
-}
-
-.studio-preview-empty {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  padding: 16px;
-  text-align: center;
-}
-
-.studio-preview-controls {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: none;
-  padding: 10px 12px;
-}
-
-.studio-preview-play {
-  flex: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: 40px;
-  padding: 0 14px;
-  border: 1px solid var(--turquoise);
-  border-radius: 999px;
-  background: var(--turquoise);
-  color: #08241d;
-  font-size: 0.9rem;
-  font-weight: 800;
-  cursor: pointer;
-  box-shadow: 0 0 18px var(--turquoise-glow);
-}
-
-.studio-preview-play:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-  box-shadow: none;
-}
-
-.studio-preview-play:not(:disabled):hover {
-  filter: brightness(1.08);
-}
-
-.studio-preview-expand {
-  flex: none;
-  width: 40px;
-  height: 40px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  border: 1px solid var(--panel-border);
   background: transparent;
+  color: inherit;
+  cursor: zoom-in;
+  text-align: left;
+}
+
+.studio-shot-toast-body img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  background: #0b1018;
+}
+
+.studio-shot-toast-caption {
+  display: block;
+  padding: 6px 10px 8px;
+  font-size: 0.72rem;
   color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.studio-shot-toast-dismiss {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(8, 12, 16, 0.72);
+  color: var(--text);
   cursor: pointer;
 }
 
-.studio-preview-expand:hover {
-  color: var(--text);
+.studio-shot-toast-dismiss:hover {
+  background: rgba(8, 12, 16, 0.92);
   border-color: rgba(0, 228, 172, 0.35);
 }
 
-.studio-preview-media {
-  flex: none;
-  padding: 0 12px 12px;
-  border-top: 1px solid var(--panel-border);
-  padding-top: 10px;
-}
-
-.studio-preview-media-label {
-  font-size: 0.68rem;
-  font-weight: 600;
-  color: var(--muted);
-  margin-bottom: 6px;
-}
-
-.studio-preview-film {
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  padding-bottom: 2px;
-}
-
-.studio-preview-thumb {
-  flex: none;
-  width: 88px;
-  height: 56px;
-  padding: 0;
-  border-radius: 8px;
-  border: 1px solid var(--panel-border);
-  background: #1a222a;
-  overflow: hidden;
-  cursor: pointer;
-}
-
-.studio-preview-thumb img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.studio-preview-thumb:hover {
-  outline: 2px solid rgba(0, 228, 172, 0.55);
-  outline-offset: 1px;
-}
-
-.studio-preview-lightbox {
+.studio-shot-lightbox {
   position: fixed;
   inset: 0;
   z-index: 1200;
@@ -4691,30 +4612,11 @@ a.user-name--profile:focus-visible {
   place-items: center;
 }
 
-.studio-preview-lightbox img {
+.studio-shot-lightbox img {
   max-width: min(960px, 100%);
   max-height: 90vh;
   border-radius: 10px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-}
-
-.studio-head-transport {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  padding: 2px;
-  border-radius: 999px;
-  border: 1px solid var(--panel-border);
-  background: rgba(0, 0, 0, 0.2);
-}
-
-.studio-head-transport .studio-head-action {
-  border-radius: 999px;
-}
-
-.studio-head-transport-pause:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
 }
 
 .studio-rail {
@@ -8745,6 +8647,7 @@ a.user-name--profile:focus-visible {
 }
 
 .studio-detail {
+  position: relative;
   background: var(--panel);
   border: 1px solid var(--panel-border);
   border-radius: 14px;

@@ -370,9 +370,10 @@
       "live": "Live",
       "empty": "No playable build yet — it appears here once a preview is ready.",
       "expand": "Expand playtest",
-      "media": "Media",
+      "media": "Screenshots",
       "shot": "Screenshot",
       "closeShot": "Close screenshot",
+      "dismissShot": "Dismiss screenshot",
       "pause": "Pause"
     },
     "stats": {
