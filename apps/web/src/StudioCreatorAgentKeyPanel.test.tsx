@@ -26,6 +26,7 @@ describe('StudioCreatorAgentKeyPanel', () => {
   let root: Root;
 
   beforeEach(() => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     mockedRecordStudioStep.mockClear();
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
@@ -46,20 +47,18 @@ describe('StudioCreatorAgentKeyPanel', () => {
     document.body.appendChild(container);
     root = createRoot(container);
 
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => ({
-        ok: true,
-        json: async () => ({
-          key: FULL_KEY,
-          keyGeneration: 1,
-          expiresAt: Math.floor(Date.now() / 1000) + 86400,
-          fingerprint: '9a10e',
-          authorizationHeader: `Authorization: Bearer ${FULL_KEY}`,
-          authorizationHeaderMasked: 'Authorization: Bearer ····9a10e',
-        }),
-      })),
-    );
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        key: FULL_KEY,
+        keyGeneration: 1,
+        expiresAt: Math.floor(Date.now() / 1000) + 86400,
+        fingerprint: '9a10e',
+        authorizationHeader: `Authorization: Bearer ${FULL_KEY}`,
+        authorizationHeaderMasked: 'Authorization: Bearer ····9a10e',
+      }),
+    }));
+    vi.stubGlobal('fetch', fetchMock);
 
     await act(async () => {
       root.render(createElement(StudioCreatorAgentKeyPanel));
@@ -75,6 +74,8 @@ describe('StudioCreatorAgentKeyPanel', () => {
     expect(container.querySelector('[data-testid="creator-key-masked"]')?.textContent).toBe(
       'Authorization: Bearer ····9a10e',
     );
+    expect(container.textContent).toContain('Active');
+    expect(container.textContent).not.toMatch(/generation/i);
 
     await act(async () => {
       container.querySelectorAll('button').forEach((button) => {
@@ -85,5 +86,18 @@ describe('StudioCreatorAgentKeyPanel', () => {
       await flush();
     });
     expect(mockedRecordStudioStep).toHaveBeenCalledWith('connect_copied', 'self', 'header');
+    expect(container.textContent).toContain('Copied');
+
+    const rotate = [...container.querySelectorAll('button')].find((button) => button.textContent === 'Rotate key');
+    await act(async () => rotate?.click());
+    expect(container.textContent).toContain('Every agent using the current key will lose access immediately');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    const cancel = [...container.querySelectorAll('button')].find((button) => button.textContent === 'Cancel');
+    await act(async () => cancel?.click());
+    const revoke = [...container.querySelectorAll('button')].find((button) => button.textContent === 'Revoke key');
+    await act(async () => revoke?.click());
+    expect(container.textContent).toContain('You can create a new key later');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
