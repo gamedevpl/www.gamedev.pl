@@ -33,7 +33,8 @@
 #   MAIL_FROM=...              (RFC 5322 sender; defaults to noreply@mail.gamedev.pl)
 #   INVITE_URL=...             (where invitees land; defaults to https://www.gamedev.pl)
 #   NOTIFY_SWEEP_AUDIENCE=...  (sweep endpoint URL; enables OIDC auth on /api/internal/notify-sweep)
-#   NOTIFY_SWEEP_SA=...        (Cloud Scheduler SA email allowed to call the sweeps; shared by all four)
+#   NOTIFY_SWEEP_SA=...        (Cloud Scheduler SA email allowed to call the sweeps)
+#   ACCOUNT_DELETION_SWEEP_AUDIENCE=... (delayed account cleanup endpoint URL)
 #   DIGEST_SWEEP_AUDIENCE=...   (digest endpoint URL; enables OIDC auth on the
 #                                weekly creator digest sweep)
 #   SUGGESTION_SWEEP_AUDIENCE=... (suggestion endpoint URL; enables OIDC auth on the
@@ -109,6 +110,7 @@ SCORECARD_SWEEP_AUDIENCE="${SCORECARD_SWEEP_AUDIENCE:-}"
 DIGEST_SWEEP_AUDIENCE="${DIGEST_SWEEP_AUDIENCE:-}"
 SUGGESTION_SWEEP_AUDIENCE="${SUGGESTION_SWEEP_AUDIENCE:-}"
 HEALTH_SWEEP_AUDIENCE="${HEALTH_SWEEP_AUDIENCE:-}"
+ACCOUNT_DELETION_SWEEP_AUDIENCE="${ACCOUNT_DELETION_SWEEP_AUDIENCE:-}"
 HEALTH_SWEEP_BATCH="${HEALTH_SWEEP_BATCH:-}"
 # Web Push (docs/notifications-plan.md M2). Public key is public by design (env var);
 # the private key is a Secret Manager secret wired in below. Push is off without them.
@@ -259,6 +261,9 @@ if [ -n "$DIGEST_SWEEP_AUDIENCE" ]; then
 fi
 if [ -n "$HEALTH_SWEEP_AUDIENCE" ]; then
   ENV_VARS="${ENV_VARS}|HEALTH_SWEEP_AUDIENCE=${HEALTH_SWEEP_AUDIENCE}"
+fi
+if [ -n "$ACCOUNT_DELETION_SWEEP_AUDIENCE" ]; then
+  ENV_VARS="${ENV_VARS}|ACCOUNT_DELETION_SWEEP_AUDIENCE=${ACCOUNT_DELETION_SWEEP_AUDIENCE}"
 fi
 if [ -n "$HEALTH_SWEEP_BATCH" ]; then
   ENV_VARS="${ENV_VARS}|HEALTH_SWEEP_BATCH=${HEALTH_SWEEP_BATCH}"

@@ -67,6 +67,10 @@ export interface User {
   profileCreatedAt?: string;
   /** When the handle last changed (rename cooldown). */
   handleChangedAt?: string;
+  /** When the person requested account deletion. Present only during the recovery window. */
+  deletionRequestedAt?: string;
+  /** Earliest instant at which the cleanup sweep may permanently erase the account. */
+  deletionScheduledFor?: string;
 }
 
 /** Reservation row for a lowercase handle → owning uid. */
@@ -1357,6 +1361,12 @@ export interface Store {
    * abandoned and likewise unlinked. Player contributions are erased separately first.
    */
   deleteAccountIdentity(uid: string, at: string): Promise<AccountIdentityDeletionResult>;
+  /** Mark an account for later erasure without removing any data yet. */
+  scheduleAccountDeletion(uid: string, requestedAt: string, scheduledFor: string): Promise<User | null>;
+  /** Remove a pending deletion marker, normally when the person signs in again. */
+  cancelAccountDeletion(uid: string): Promise<boolean>;
+  /** Accounts whose recovery window has elapsed, oldest deadline first. */
+  listAccountsDueForDeletion(at: string, limit: number): Promise<User[]>;
   /**
    * Find the single account holding this email, or null.
    *
@@ -2347,6 +2357,29 @@ export class InMemoryStore implements Store {
     return { publishedSlugs, unpublishedSlugs };
   }
 
+  async scheduleAccountDeletion(uid: string, requestedAt: string, scheduledFor: string): Promise<User | null> {
+    const user = this.users.get(uid);
+    if (!user) return null;
+    const updated = { ...user, deletionRequestedAt: requestedAt, deletionScheduledFor: scheduledFor };
+    this.users.set(uid, updated);
+    return { ...updated };
+  }
+
+  async cancelAccountDeletion(uid: string): Promise<boolean> {
+    const user = this.users.get(uid);
+    if (!user?.deletionScheduledFor) return false;
+    this.users.set(uid, { ...user, deletionRequestedAt: undefined, deletionScheduledFor: undefined });
+    return true;
+  }
+
+  async listAccountsDueForDeletion(at: string, limit: number): Promise<User[]> {
+    return [...this.users.values()]
+      .filter((user) => user.deletionScheduledFor !== undefined && user.deletionScheduledFor <= at)
+      .sort((left, right) => left.deletionScheduledFor!.localeCompare(right.deletionScheduledFor!))
+      .slice(0, limit)
+      .map((user) => ({ ...user }));
+  }
+
   async findUserByEmail(email: string): Promise<User | null> {
     const wanted = email.trim().toLowerCase();
     if (wanted === '') return null;
@@ -2381,6 +2414,8 @@ export class InMemoryStore implements Store {
       avatarMode: existing?.avatarMode,
       profileCreatedAt: existing?.profileCreatedAt,
       handleChangedAt: existing?.handleChangedAt,
+      deletionRequestedAt: existing?.deletionRequestedAt,
+      deletionScheduledFor: existing?.deletionScheduledFor,
     };
 
     this.users.set(userData.uid, updated);
@@ -4092,6 +4127,45 @@ export class FirestoreStore implements Store {
     }
 
     return { publishedSlugs, unpublishedSlugs };
+  }
+
+  async scheduleAccountDeletion(uid: string, requestedAt: string, scheduledFor: string): Promise<User | null> {
+    const ref = this.db.collection('users').doc(uid);
+    return this.db.runTransaction(async (transaction) => {
+      const snap = await transaction.get(ref);
+      if (!snap.exists) return null;
+      const updated = {
+        ...(snap.data() as User),
+        deletionRequestedAt: requestedAt,
+        deletionScheduledFor: scheduledFor,
+      };
+      transaction.set(ref, { deletionRequestedAt: requestedAt, deletionScheduledFor: scheduledFor }, { merge: true });
+      return updated;
+    });
+  }
+
+  async cancelAccountDeletion(uid: string): Promise<boolean> {
+    const ref = this.db.collection('users').doc(uid);
+    return this.db.runTransaction(async (transaction) => {
+      const snap = await transaction.get(ref);
+      if (!snap.exists || !(snap.data() as User).deletionScheduledFor) return false;
+      transaction.set(
+        ref,
+        { deletionRequestedAt: FieldValue.delete(), deletionScheduledFor: FieldValue.delete() },
+        { merge: true },
+      );
+      return true;
+    });
+  }
+
+  async listAccountsDueForDeletion(at: string, limit: number): Promise<User[]> {
+    const snap = await this.db
+      .collection('users')
+      .where('deletionScheduledFor', '<=', at)
+      .orderBy('deletionScheduledFor', 'asc')
+      .limit(limit)
+      .get();
+    return snap.docs.map((doc) => doc.data() as User);
   }
 
   async findUserByEmail(email: string): Promise<User | null> {

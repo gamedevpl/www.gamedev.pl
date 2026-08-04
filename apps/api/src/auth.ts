@@ -295,7 +295,7 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
     try {
       const { uid, exp, src } = readSessionToken(cookieToken, effectiveSessionSecret, sessionSecretPrev);
       const user = await store.getUser(uid);
-      if (!user) {
+      if (!user || user.deletionScheduledFor) {
         return { user: null, needsRenewal: false, fromToken: false };
       }
 
@@ -342,7 +342,7 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
     if (isAccessTokenExpired(record.expiresAt, Date.now())) return null;
 
     const user = await store.getUser(record.uid);
-    if (!user) return null;
+    if (!user || user.deletionScheduledFor) return null;
 
     // Last-use tracking, coarsened to a day so a chatty agent costs one write rather
     // than one per request — the question it answers ("is anything still using this
@@ -469,6 +469,7 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
           }
         }
 
+        await store.cancelAccountDeletion(uid);
         const user = await store.upsertUser({
           uid,
           email: googleUser.email,
@@ -555,6 +556,7 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
           }
         }
 
+        await store.cancelAccountDeletion(uid);
         const user = await store.upsertUser({
           uid,
           // Only ever the linkable address. Writing a relay address here would overwrite a
@@ -776,6 +778,7 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
     const handle = parsed.data.uid ?? 'local';
     const uid = `dev:${handle}`;
 
+    await store.cancelAccountDeletion(uid);
     const user = await store.upsertUser({
       uid,
       email: `${handle}@localhost`,

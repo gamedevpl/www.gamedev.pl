@@ -6,7 +6,7 @@ import { useAuth } from './AuthContext.js';
 /** Destructive account action shared by profile editing and handle-less account settings. */
 export function AccountDeletionControl({ labelledBy }: { labelledBy?: string }) {
   const { t } = useTranslation();
-  const { deleteAccount } = useAuth();
+  const { deleteAccount, user } = useAuth();
   const dialogId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);
@@ -43,9 +43,13 @@ export function AccountDeletionControl({ labelledBy }: { labelledBy?: string }) 
       <section className="creator-profile-danger" aria-labelledby={labelledBy}>
         <h3 id={labelledBy}>{t('creatorProfile.accountHeading')}</h3>
         <p>{t('creatorProfile.deleteAccountSummary')}</p>
-        <button type="button" className="creator-profile-delete-button" onClick={() => setOpen(true)}>
-          {t('creatorProfile.deleteAccount')}
-        </button>
+        {user?.admin ? (
+          <p className="creator-profile-message">{t('creatorProfile.deleteOperatorBlocked')}</p>
+        ) : (
+          <button type="button" className="creator-profile-delete-button" onClick={() => setOpen(true)}>
+            {t('creatorProfile.deleteAccount')}
+          </button>
+        )}
       </section>
 
       {open

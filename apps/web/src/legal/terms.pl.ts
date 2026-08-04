@@ -340,9 +340,9 @@ export const termsPl: LegalDocument = {
         {
           kind: 'p',
           text:
-            'Możesz w każdej chwili zrezygnować z korzystania z Serwisu i zażądać usunięcia konta, pisząc na ' +
-            `[${CONTACT_EMAIL}](mailto:${CONTACT_EMAIL}). Umowa o świadczenie usług drogą elektroniczną rozwiązuje ` +
-            'się z chwilą usunięcia konta.',
+            'Możesz w każdej chwili zrezygnować z korzystania z Serwisu i zaplanować usunięcie konta w ustawieniach konta albo napisać na ' +
+            `[${CONTACT_EMAIL}](mailto:${CONTACT_EMAIL}). Usunięcie następuje po 14-dniowym okresie na zmianę decyzji i jest anulowane po ` +
+            'ponownym zalogowaniu. Umowa o świadczenie usług drogą elektroniczną rozwiązuje się z chwilą usunięcia konta.',
         },
         {
           kind: 'p',

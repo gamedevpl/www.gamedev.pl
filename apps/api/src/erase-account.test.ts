@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { eraseAccount } from './erase-account.js';
+import { eraseAccount, OperatorAccountDeletionError } from './erase-account.js';
 import { DELETED_ACCOUNT_UID, InMemoryStore } from './store.js';
 
 describe('eraseAccount', () => {
@@ -85,5 +85,15 @@ describe('eraseAccount', () => {
     expect(result.identity.publishedSlugs).toEqual(['stays']);
     expect(await store.getUser('g:stay')).not.toBeNull();
     expect(await store.getSubmission(1)).toMatchObject({ ownerUid: 'g:stay' });
+  });
+
+  it('does not let the operator CLI erase a configured operator', async () => {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:operator' });
+
+    await expect(eraseAccount({ store, uid: 'g:operator', adminUids: new Set(['g:operator']) })).rejects.toBeInstanceOf(
+      OperatorAccountDeletionError,
+    );
+    expect(await store.getUser('g:operator')).not.toBeNull();
   });
 });

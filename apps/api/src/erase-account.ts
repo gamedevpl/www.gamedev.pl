@@ -6,6 +6,13 @@ export interface EraseAccountResult {
   identity: AccountIdentityDeletionResult;
 }
 
+export class OperatorAccountDeletionError extends Error {
+  constructor() {
+    super('operator accounts must be demoted before deletion');
+    this.name = 'OperatorAccountDeletionError';
+  }
+}
+
 /**
  * Complete account erasure shared by self-service deletion and the operator CLI.
  *
@@ -19,7 +26,9 @@ export async function eraseAccount(options: {
   uid: string;
   dryRun?: boolean;
   at?: string;
+  adminUids?: ReadonlySet<string>;
 }): Promise<EraseAccountResult> {
+  if (options.adminUids?.has(options.uid)) throw new OperatorAccountDeletionError();
   const dryRun = options.dryRun ?? false;
   const signals = await erasePlayerSignals({ store: options.store, uid: options.uid, dryRun });
   const submissions = await options.store.listSubmissionsByOwner(options.uid);

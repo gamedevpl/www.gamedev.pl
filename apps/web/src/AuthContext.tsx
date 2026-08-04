@@ -1,7 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { clearCachedCatalogSortPayload } from './recommendationsApi.js';
-import { clearPendingQa } from './pendingQa.js';
-import { clearSavedSpecs } from './mySpecs.js';
 
 export interface User {
   uid: string;
@@ -55,7 +53,7 @@ interface AuthContextType {
   // not on the allowlist). Re-verifies the same ID token server-side.
   joinWaitlist: (idToken: string, locale?: string, provider?: 'google' | 'apple') => Promise<void>;
   logout: () => Promise<void>;
-  deleteAccount: () => Promise<{ publishedGamesKept: string[]; unpublishedGamesRemoved: string[] }>;
+  deleteAccount: () => Promise<{ deleteAfter: string }>;
   refreshUser: () => Promise<void>;
 }
 
@@ -69,7 +67,7 @@ const AuthContext = createContext<AuthContextType>({
   signInWithAppleToken: async () => {},
   joinWaitlist: async () => {},
   logout: async () => {},
-  deleteAccount: async () => ({ publishedGamesKept: [], unpublishedGamesRemoved: [] }),
+  deleteAccount: async () => ({ deleteAfter: '' }),
   refreshUser: async () => {},
 });
 
@@ -187,13 +185,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const err = (await res.json().catch(() => null)) as { error?: string } | null;
       throw new Error(err?.error ?? 'Account deletion failed');
     }
-    const result = (await res.json()) as {
-      publishedGamesKept: string[];
-      unpublishedGamesRemoved: string[];
-    };
+    const result = (await res.json()) as { deleteAfter: string };
     clearCachedCatalogSortPayload();
-    clearPendingQa();
-    clearSavedSpecs();
     setUser(null);
     return result;
   };

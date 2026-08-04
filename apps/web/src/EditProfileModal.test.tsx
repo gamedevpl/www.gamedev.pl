@@ -184,7 +184,7 @@ describe('EditProfileModal', () => {
 
   it('requires an explicit DELETE confirmation before account deletion', async () => {
     profileApi.fetchMyProfile.mockResolvedValue(readyProfile);
-    deleteAccount.mockResolvedValue({ publishedGamesKept: [], unpublishedGamesRemoved: [] });
+    deleteAccount.mockResolvedValue({ deleteAfter: '2026-08-18T00:00:00.000Z' });
     root = createRoot(container);
     await act(async () => {
       root!.render(
