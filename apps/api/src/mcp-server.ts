@@ -57,6 +57,14 @@ import {
 } from './mcp-debug-log.js';
 import { mcpMissingCredentialHint, sendMcpOAuthChallenge, shouldIssueMcpOAuthChallenge } from './mcp-oauth-metadata.js';
 import {
+  MCP_UI_TOOL_RESOURCES,
+  clientDeclaresUi,
+  mcpUiEnabled,
+  mcpUiServerCapability,
+  readUiResource,
+  uiResourceDescriptors,
+} from './mcp-ui.js';
+import {
   INBOX_PIGGYBACK_TOOLS,
   createMcpNudgeTracker,
   pendingCountFromPayload,
@@ -118,6 +126,11 @@ export interface McpServerOptions {
    * cannot exist for them. Copy only; this gates no access.
    */
   privateBeta?: boolean;
+  /**
+   * MCP Apps (SEP-1865) views — off unless `MCP_UI` says otherwise. Phase 0 spike:
+   * clients that do not declare the extension see today's contract unchanged either way.
+   */
+  uiEnabled?: boolean;
   gamesStore?: GamesStore;
   objectStore?: GcsObjectStore;
   /**
@@ -418,9 +431,17 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
   const dailyFeedbackQuota = options.dailyFeedbackQuota ?? 20;
   const privateBeta = options.privateBeta ?? (process.env.PRIVATE_BETA ?? '').toLowerCase() === 'true';
   const missingCredentialHint = mcpMissingCredentialHint(privateBeta);
+  const uiEnabled = options.uiEnabled ?? mcpUiEnabled();
 
-  /** Transport sessions only — never consulted for authorization. */
-  const transportSessions = new Map<string, { createdAt: number }>();
+  /**
+   * Transport sessions only — never consulted for authorization. `uiCapable` records
+   * whether this client declared the MCP Apps extension at initialize, so `_meta.ui` is
+   * only ever emitted to a client that asked for it. A correlator adopted from another
+   * instance has no recorded answer and is treated as not capable: the failure mode is a
+   * client that supports views not getting one, never a client being handed UI metadata
+   * it never negotiated.
+   */
+  const transportSessions = new Map<string, { createdAt: number; uiCapable?: boolean }>();
   /**
    * Correlators explicitly terminated via DELETE on this instance. Prevents the
    * multi-instance adopt path from resurrecting a session the client just closed.
@@ -449,6 +470,25 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     for (let i = 0; i < overflow; i += 1) {
       transportSessions.delete(oldest[i]![0]);
     }
+  }
+
+  /**
+   * Record/refresh a transport correlator. Keeps any negotiated `uiCapable` answer —
+   * `start` and `open_round` re-set the session mid-round, and a plain overwrite there
+   * would silently drop a client's view capability partway through a round.
+   */
+  function noteTransportSession(sessionId: string, uiCapable?: boolean): void {
+    const existing = transportSessions.get(sessionId);
+    transportSessions.set(sessionId, {
+      createdAt: now(),
+      uiCapable: uiCapable ?? existing?.uiCapable ?? false,
+    });
+  }
+
+  /** Emit view metadata only for a flag-enabled server and a client that negotiated it. */
+  function sessionWantsUi(sessionId: string | null): boolean {
+    if (!uiEnabled || !sessionId) return false;
+    return transportSessions.get(sessionId)?.uiCapable === true;
   }
 
   function pruneInvalidStartBuckets(currentTime: number): void {
@@ -928,7 +968,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           // never saw initialize (Cloud Run multi-instance). Reminting here used to
           // embed a new id in the sessionKey while the client kept sending the old one.
           const sessionId = ctx.sessionId && looksLikeMcpSessionId(ctx.sessionId) ? ctx.sessionId : newMcpSessionId();
-          transportSessions.set(sessionId, { createdAt: now() });
+          noteTransportSession(sessionId);
 
           const jobId = active.issueNumber;
           const roundGeneration = active.roundGeneration ?? 1;
@@ -1086,7 +1126,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         pruneTransportSessions(now());
         pruneInvalidStartBuckets(now());
         const sessionId = ctx.sessionId && looksLikeMcpSessionId(ctx.sessionId) ? ctx.sessionId : newMcpSessionId();
-        transportSessions.set(sessionId, { createdAt: now() });
+        noteTransportSession(sessionId);
 
         const sessionKey = mintMcpSessionKey(agentTokenSecret, {
           sessionId,
@@ -3325,8 +3365,13 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       const requested = typeof params.protocolVersion === 'string' ? params.protocolVersion : PROTOCOL_VERSION;
       const protocolVersion = SUPPORTED_PROTOCOL_VERSIONS.has(requested) ? requested : PROTOCOL_VERSION;
 
+      // MCP Apps: remember what this client can render, and answer in kind. A client
+      // that does not declare the extension gets exactly the capabilities it got before
+      // views existed — no `resources`, no `extensions`.
+      const uiCapable = uiEnabled && clientDeclaresUi(params);
+
       const sessionId = newMcpSessionId();
-      transportSessions.set(sessionId, { createdAt: now() });
+      noteTransportSession(sessionId, uiCapable);
       reply.header('Mcp-Session-Id', sessionId);
       reply.header('MCP-Session-Id', sessionId);
 
@@ -3335,6 +3380,12 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           protocolVersion,
           capabilities: {
             tools: { listChanged: false },
+            ...(uiCapable
+              ? {
+                  resources: { subscribe: false, listChanged: false },
+                  extensions: mcpUiServerCapability(),
+                }
+              : {}),
           },
           serverInfo: {
             name: 'gamedevpl',
@@ -3388,7 +3439,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         );
         return reply.status(404).send({ error: 'unknown MCP session' });
       }
-      transportSessions.set(sessionHeader, { createdAt: now() });
+      noteTransportSession(sessionHeader);
       request.log.info(
         {
           event: 'mcp_session_adopted',
@@ -3415,17 +3466,46 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     }
 
     if (message.method === 'tools/list') {
+      // `_meta.ui` is added only for a client that negotiated the extension, so this
+      // list stays byte-identical for every client that shipped before views existed.
+      const withUi = sessionWantsUi(sessionHeader);
       return reply.send(
         jsonRpcResult(message.id, {
-          tools: Object.entries(tools).map(([name, tool]) => ({
-            name,
-            description: tool.description,
-            inputSchema: tool.inputSchema,
-            outputSchema: tool.outputSchema,
-            ...(tool.annotations ? { annotations: tool.annotations } : {}),
-          })),
+          tools: Object.entries(tools).map(([name, tool]) => {
+            const uiResourceUri = withUi ? MCP_UI_TOOL_RESOURCES[name] : undefined;
+            return {
+              name,
+              description: tool.description,
+              inputSchema: tool.inputSchema,
+              outputSchema: tool.outputSchema,
+              ...(tool.annotations ? { annotations: tool.annotations } : {}),
+              ...(uiResourceUri ? { _meta: { ui: { resourceUri: uiResourceUri, visibility: ['model', 'app'] } } } : {}),
+            };
+          }),
         }),
       );
+    }
+
+    // MCP Apps resources. Answered whenever the flag is on — a client that never
+    // negotiated the extension is not told they exist (see initialize) and has no
+    // reason to ask, but answering an explicit probe keeps the spike debuggable.
+    if (uiEnabled && message.method === 'resources/list') {
+      return reply.send(jsonRpcResult(message.id, { resources: uiResourceDescriptors() }));
+    }
+
+    // Every view is a fixed `ui://` document; nothing here is parameterised by URI.
+    if (uiEnabled && message.method === 'resources/templates/list') {
+      return reply.send(jsonRpcResult(message.id, { resourceTemplates: [] }));
+    }
+
+    if (uiEnabled && message.method === 'resources/read') {
+      const params = (message.params ?? {}) as { uri?: unknown };
+      const uri = typeof params.uri === 'string' ? params.uri : '';
+      const resource = readUiResource(uri);
+      if (!resource) {
+        return reply.send(jsonRpcError(message.id, -32602, `unknown resource: ${uri || '(missing uri)'}`));
+      }
+      return reply.send(jsonRpcResult(message.id, { contents: [resource] }));
     }
 
     if (message.method === 'tools/call') {

@@ -2772,7 +2772,11 @@ export async function registerSubmissionRoutes(
   // varies by language is resolved per-request in `attachBuildEvents`, from text the
   // agent already sent. `cacheKey` still carries the locale so existing entries and
   // `invalidateStatusCache`'s prefix scan keep working.
-  async function refreshStatus(issueNumber: number, cacheKey: string, token: string): Promise<SubmissionStatusResponse> {
+  async function refreshStatus(
+    issueNumber: number,
+    cacheKey: string,
+    token: string,
+  ): Promise<SubmissionStatusResponse> {
     const existing = statusRefreshes.get(cacheKey);
     if (existing) return existing;
 
@@ -4531,6 +4535,8 @@ export async function registerSubmissionRoutes(
     agentTokenSecret: submissionTokenSecret,
     now,
     privateBeta: options.privateBeta,
+    // MCP Apps views (SEP-1865) read MCP_UI directly — off in production until the
+    // Phase 0 host spike lands. No behaviour changes for clients without the extension.
     gamesStore: options.agentChannel?.gamesStore,
     objectStore: options.agentChannel?.objectStore,
     startImprovementRound,
