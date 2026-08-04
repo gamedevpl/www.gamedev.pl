@@ -38,6 +38,9 @@ Provisioned by [`infra/setup-monitoring.sh`](../../infra/setup-monitoring.sh).
 | A6  | `A6 zone admission failing`                     | The zone host could not start a zone (log-based, rate-limited to hourly) | [`zones-down-triage.md`](./zones-down-triage.md) |
 | A7  | `A7 world service 5xx rate elevated`            | `gamedev-world` 5xx sustained over 10 min                                | [`zones-down-triage.md`](./zones-down-triage.md) |
 | A14 | `A14 moderation rejection burst`                | >60 moderation rejections in 10 min on `gamedev-app` (log-based)         | [`moderation-burst.md`](./moderation-burst.md)   |
+| A23 | `A23 seeded builds cannot place their drafts`   | >1 seed staging failure in an hour (log-based)                           | §Vertex spend below                              |
+| A24 | `A24 Vertex call volume abnormally high`        | Vertex calls >0.25/s sustained 10 min, project-wide                      | §Vertex spend below                              |
+| A25 | `A25 Vertex output token rate abnormally high`  | Vertex output tokens >300/s sustained 10 min, project-wide               | §Vertex spend below                              |
 
 **A1 and A2 name the service; the rest do not.** A1/A2 exist once per Cloud Run service
 answering requests (`gamedev-app`, and the party relay when it takes traffic), so the
@@ -84,6 +87,58 @@ the deny-list refusing legitimate creators**, which is a user-facing outage that
 rejected text is never logged (the category is what makes a rejection actionable; the wording
 would put user-authored abuse material into Cloud Logging with no erasure path), so the
 diagnosis is uid and category concentration, not reading submissions.
+
+### Vertex spend (A23, A24, A25)
+
+**Not yet drilled.** Written after 2026-08-04, when a build-log translator on the status
+endpoint made ~9,250 Vertex calls in a day and was found only because somebody opened the
+billing console.
+
+**The thing that makes this class hard: every call succeeded.** All 9,250 returned HTTP
+200 and were discarded client-side at a 4s abort, so no error rate moved, no latency
+moved, and nothing but the call count was ever abnormal. Do not look for failures.
+
+**A24 and A25 are deliberately different questions.** A24 catches many cheap calls (a
+retry loop); A25 catches few enormous ones — `game-seed.ts` and `code-lane.ts` both
+request up to 65,536 output tokens, so a loop there would cost a fortune while barely
+moving A24. If both fire it is a call loop; start with A24.
+
+**Every call site shares one model and location**, so `model_user_id` and `location`
+cannot tell you who is calling. The only discriminator is the token-size labels. This is
+the query that identified the culprit — the signature was `500_TO_1K -> 500_TO_1K`:
+
+```sh
+TOKEN=$(gcloud auth print-access-token)
+curl -s -H "Authorization: Bearer $TOKEN" --get \
+  'https://monitoring.googleapis.com/v3/projects/gamedevpl/timeSeries' \
+  --data-urlencode 'filter=metric.type="aiplatform.googleapis.com/publisher/online_serving/model_invocation_count"' \
+  --data-urlencode "interval.startTime=$(date -u -v-6H +%Y-%m-%dT%H:%M:%SZ)" \
+  --data-urlencode "interval.endTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  --data-urlencode 'aggregation.alignmentPeriod=3600s' \
+  --data-urlencode 'aggregation.perSeriesAligner=ALIGN_SUM' \
+  | python3 -m json.tool | grep -E 'token_size|int64Value'
+```
+
+`gcloud monitoring` has no `time-series` verb — the API is the only way to read these.
+
+Call sites, all in `apps/api/src/`: `moderation.ts`, `refine.ts`, `game-seed.ts`,
+`code-lane.ts`, `editor-assist.ts`, `feedback-themes.ts`, `translate.ts`.
+
+**Do not reach for an env-var kill switch without checking it survives a deploy.** Both
+`infra/deploy-api.sh` and `.github/workflows/deploy.yml` apply `--set-env-vars`, which
+replaces the whole map — a variable set by hand with `--update-env-vars` is gone at the
+next deploy. On 2026-08-04 that silently reverted the fix twice. To stop spend durably,
+ship the code change or add the variable to both `ENV_VARS` lists.
+
+**Confirm a fix by watching traffic and calls together**, never by a quiet window alone:
+
+```sh
+gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="gamedev-app" AND httpRequest.requestUrl:"/api/submissions/"' \
+  --project gamedevpl --limit 500 --freshness 10m --format='value(resource.labels.revision_name)' | sort | uniq -c
+```
+
+Requests still flowing while the Vertex rate sits at zero is proof. A quiet period on its
+own only proves nobody was looking.
 
 **A6 has no uptime check behind it, on purpose.** Probing a scale-to-zero service every
 five minutes keeps an instance warm around the clock and turns `$0` at rest into roughly

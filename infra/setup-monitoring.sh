@@ -593,6 +593,105 @@ cat > "${POLICY_DIR}/a23.json" <<EOF
 }
 EOF
 
+# A24 — something is calling Vertex in a loop.
+#
+# Written after a build-log translator on the status endpoint billed ~9,250 requests in a
+# day (2026-08-04) and was found only because somebody opened the billing console. Every
+# call returned 200 and was discarded client-side at a 4s timeout, so no error rate moved,
+# no latency moved, and no existing policy could have fired. The only signal that ever
+# distinguished that day from a quiet one was the *call count itself*, which is why this
+# watches volume rather than failures.
+#
+# The rate is per second because that is the unit the metric aligns to, which makes the
+# threshold look deceptively small: the incident ran at a flat 0.40/s for six hours.
+#
+# CALIBRATION, measured rather than guessed (ALIGN_RATE/600s, the same shape this
+# condition evaluates):
+#   Jul 28 - Aug 4 13:00, 264 windows: max 0.158/s
+#   Aug 4 15:00-21:00 (incident),  41 windows: ~0.40/s sustained
+# The first draft of this used 0.1/s on an hourly-average estimate, and checking it
+# against the real distribution showed three consecutive windows on the morning of Aug 3
+# at 0.111/0.158/0.113 — enough to satisfy duration=600s and page somebody for normal
+# traffic. 0.25/s sits ~1.6x above the busiest real window and ~1.6x below the incident.
+# An alert that cries wolf gets filtered, and a filtered channel is worth nothing, which
+# is the same argument A23's threshold makes.
+#
+# This is tuned to closed-beta volume. Real growth will cross it, and that is intentional
+# — the first crossing should be read, not silenced. Raise it deliberately when it
+# reflects more creators, never to quiet a leak.
+cat > "${POLICY_DIR}/a24.json" <<EOF
+{
+  "displayName": "A24 Vertex call volume abnormally high",
+  "combiner": "OR",
+  "conditions": [{
+    "displayName": "model invocations sustained over 10 minutes",
+    "conditionThreshold": {
+      "filter": "metric.type=\"aiplatform.googleapis.com/publisher/online_serving/model_invocation_count\" AND resource.type=\"aiplatform.googleapis.com/PublisherModel\"",
+      "aggregations": [{
+        "alignmentPeriod": "600s",
+        "perSeriesAligner": "ALIGN_RATE",
+        "crossSeriesReducer": "REDUCE_SUM"
+      }],
+      "comparison": "COMPARISON_GT",
+      "thresholdValue": 0.25,
+      "duration": "600s",
+      "trigger": { "count": 1 }
+    }
+  }],
+  "notificationChannels": ["${CHANNEL_NAME}"],
+  "alertStrategy": { "autoClose": "86400s" },
+  "documentation": {
+    "content": "Something is calling Vertex far more often than this project's traffic explains — most likely a model call on a polled read path, retried because a failure cached nothing. Note the calls may all be succeeding: the 2026-08-04 incident was 100% HTTP 200 and 100% discarded. Triage: identify the call site from the token-size labels on aiplatform.googleapis.com/publisher/online_serving/model_invocation_count (input_token_size / output_token_size), since every call site shares one model and location and nothing else separates them. Then find the write or read path that fires at that shape. Call sites: moderation.ts, refine.ts, game-seed.ts, code-lane.ts, editor-assist.ts, feedback-themes.ts, translate.ts.",
+    "mimeType": "text/markdown"
+  }
+}
+EOF
+
+# A25 — Vertex output tokens are being generated at a rate nothing here justifies.
+#
+# The complement to A24, for the failure it cannot see: a handful of calls that each emit
+# an enormous response. Two call sites ask for up to 65,536 output tokens (game-seed,
+# code-lane), so a loop there would cost a fortune while barely moving the call count.
+#
+# Output rather than input because output is what costs: the 2026-08-04 billing lines came
+# to ~28.6 PLN per million output tokens against ~5.7 for input, and output was 8.79M of
+# that day's 15.9M tokens but the large majority of its price.
+#
+# CALIBRATION, measured the same way as A24 (ALIGN_RATE/600s):
+#   Jul 28 - Aug 4 13:00, 259 windows: max 164.4/s (next: 137, 107, 104, 93, 78)
+#   Aug 4 15:00-21:00 (incident),  36 windows: ~455-466/s sustained
+# 300/s (~1.08M tokens an hour) sits 1.8x above the busiest real window and 1.5x below
+# the incident. The headroom is deliberately wider than A24's because a single 65k-token
+# generation is a legitimate spike that must not page anyone — those are what the 164/s
+# and 137/s baseline peaks are.
+cat > "${POLICY_DIR}/a25.json" <<EOF
+{
+  "displayName": "A25 Vertex output token rate abnormally high",
+  "combiner": "OR",
+  "conditions": [{
+    "displayName": "output tokens sustained over 10 minutes",
+    "conditionThreshold": {
+      "filter": "metric.type=\"aiplatform.googleapis.com/publisher/online_serving/token_count\" AND resource.type=\"aiplatform.googleapis.com/PublisherModel\" AND metric.label.\"type\"=\"output\"",
+      "aggregations": [{
+        "alignmentPeriod": "600s",
+        "perSeriesAligner": "ALIGN_RATE",
+        "crossSeriesReducer": "REDUCE_SUM"
+      }],
+      "comparison": "COMPARISON_GT",
+      "thresholdValue": 300,
+      "duration": "600s",
+      "trigger": { "count": 1 }
+    }
+  }],
+  "notificationChannels": ["${CHANNEL_NAME}"],
+  "alertStrategy": { "autoClose": "86400s" },
+  "documentation": {
+    "content": "Vertex is emitting output tokens far faster than this project's traffic explains. Output tokens are the dominant cost (~5x input per token), so this is the closest thing to a live spend alarm. If A24 is also firing, it is a call loop — start there. If A24 is quiet, it is a small number of very large generations: look at game-seed.ts and code-lane.ts, which both request up to 65,536 output tokens. Confirm the size distribution from the output_token_size label on model_invocation_count before changing any maxOutputTokens.",
+    "mimeType": "text/markdown"
+  }
+}
+EOF
+
 fi
 
 for FILE in "${POLICY_DIR}"/*.json; do
@@ -719,3 +818,20 @@ echo "        'resource.labels.service_name=\"${PRIMARY_SERVICE}\" AND jsonPaylo
 echo "        --project ${PROJECT_ID} --limit 20 --freshness 30d"
 echo "      gcloud run services describe ${PRIMARY_SERVICE} --region ${REGION} --project ${PROJECT_ID} \\"
 echo "        --format='value(spec.template.spec.containers[0].env)' | tr ',' '\\n' | grep SEED_DISPATCH"
+echo ""
+echo "    A24/A25 (Vertex volume) watch Google-published metrics rather than our logs, so"
+echo "    there is no filter to typo — but there is a threshold to calibrate, and a"
+echo "    threshold set above real traffic is the same silent failure. Check what the last"
+echo "    week actually looked like before trusting either number, and re-check after the"
+echo "    beta grows. gcloud cannot read time series, so this goes through the API:"
+echo "      TOKEN=\$(gcloud auth print-access-token)"
+echo "      curl -s -H \"Authorization: Bearer \$TOKEN\" --get \\"
+echo "        'https://monitoring.googleapis.com/v3/projects/${PROJECT_ID}/timeSeries' \\"
+echo "        --data-urlencode 'filter=metric.type=\"aiplatform.googleapis.com/publisher/online_serving/model_invocation_count\"' \\"
+echo "        --data-urlencode \"interval.startTime=\$(date -u -v-7d +%Y-%m-%dT%H:%M:%SZ)\" \\"
+echo "        --data-urlencode \"interval.endTime=\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" \\"
+echo "        --data-urlencode 'aggregation.alignmentPeriod=3600s' \\"
+echo "        --data-urlencode 'aggregation.perSeriesAligner=ALIGN_SUM' \\"
+echo "        --data-urlencode 'aggregation.crossSeriesReducer=REDUCE_SUM'"
+echo "      # Divide the busiest hour by 3600 to compare against A24's 0.1/s."
+echo "      # Swap the metric for .../token_count with metric.label.type=output for A25."
