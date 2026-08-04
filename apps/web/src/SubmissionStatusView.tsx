@@ -1612,11 +1612,17 @@ function ThreadContextBar({
   const { t } = useTranslation();
   const [, setTick] = useState(0);
 
-  // Presence ages out client-side; tick so the headline falls back without a status poll.
+  // Presence ages out client-side; one timeout at expiry so the headline falls back
+  // without a status poll — and without a lingering interval after the flash ends.
   useEffect(() => {
     if (!thought) return;
-    const id = window.setInterval(() => setTick((n) => n + 1), 5_000);
-    return () => window.clearInterval(id);
+    const remaining = thought.at + PRESENCE_THOUGHT_MS - Date.now();
+    if (remaining <= 0) {
+      setTick((n) => n + 1);
+      return;
+    }
+    const id = window.setTimeout(() => setTick((n) => n + 1), remaining);
+    return () => window.clearTimeout(id);
   }, [thought]);
 
   const thoughtFresh = thought !== null && thought !== undefined && Date.now() - thought.at <= PRESENCE_THOUGHT_MS;
