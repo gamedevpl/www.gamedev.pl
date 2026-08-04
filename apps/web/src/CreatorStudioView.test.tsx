@@ -488,6 +488,15 @@ describe('CreatorStudioView', () => {
     });
 
     expect(container.querySelector('.studio-head-share-popover .studio-share-toggle')).not.toBeNull();
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    expect(container.querySelector('.studio-head-share-popover')).toBeNull();
+
+    await act(async () => {
+      shareBtn!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
     await act(async () => {
       container
         .querySelector('.studio-head-share-popover .studio-share-toggle')!

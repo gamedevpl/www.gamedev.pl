@@ -1288,6 +1288,16 @@ function DraftShareControl({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  // Header popover unmounts this control on Escape / game switch; ignore the
+  // in-flight toggle result so we do not setState after unmount.
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     setShared(Boolean(game.draftShared));
@@ -1304,20 +1314,25 @@ function DraftShareControl({
     setShared(next);
     try {
       await setDraftShared(game.token, next);
+      if (!mountedRef.current) return;
       onSharedChange?.(next);
     } catch {
+      if (!mountedRef.current) return;
       setShared(!next);
       setError(t('studioPanel.share.error'));
     } finally {
-      setBusy(false);
+      if (mountedRef.current) setBusy(false);
     }
   }
 
   async function copy() {
     try {
       await navigator.clipboard.writeText(url);
+      if (!mountedRef.current) return;
       setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
+      window.setTimeout(() => {
+        if (mountedRef.current) setCopied(false);
+      }, 2000);
     } catch {
       // No clipboard permission or no clipboard API — the link is on screen to select
       // by hand, so this needs no error state.
