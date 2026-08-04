@@ -33,8 +33,10 @@
 #   MAIL_FROM=...              (RFC 5322 sender; defaults to noreply@mail.gamedev.pl)
 #   INVITE_URL=...             (where invitees land; defaults to https://www.gamedev.pl)
 #   NOTIFY_SWEEP_AUDIENCE=...  (sweep endpoint URL; enables OIDC auth on /api/internal/notify-sweep)
-#   NOTIFY_SWEEP_SA=...        (Cloud Scheduler SA email allowed to call the sweeps)
-#   ACCOUNT_DELETION_SWEEP_AUDIENCE=... (delayed account cleanup endpoint URL)
+#   NOTIFY_SWEEP_SA=...        (Cloud Scheduler SA email allowed to call the sweeps;
+#                               defaults to notify-sweep@<project>.iam.gserviceaccount.com)
+#   ACCOUNT_DELETION_SWEEP_AUDIENCE=... (delayed cleanup endpoint; defaults to this
+#                               service's stable run.app URL)
 #   DIGEST_SWEEP_AUDIENCE=...   (digest endpoint URL; enables OIDC auth on the
 #                                weekly creator digest sweep)
 #   SUGGESTION_SWEEP_AUDIENCE=... (suggestion endpoint URL; enables OIDC auth on the
@@ -123,6 +125,10 @@ MP_RELAY_URL="${MP_RELAY_URL:-}"
 
 IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/app:$(date +%Y%m%d-%H%M%S)"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+PROJECT_NUMBER="$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')"
+SERVICE_URL="https://${SERVICE}-${PROJECT_NUMBER}.${REGION}.run.app"
+NOTIFY_SWEEP_SA="${NOTIFY_SWEEP_SA:-notify-sweep@${PROJECT_ID}.iam.gserviceaccount.com}"
+ACCOUNT_DELETION_SWEEP_AUDIENCE="${ACCOUNT_DELETION_SWEEP_AUDIENCE:-${SERVICE_URL}/api/internal/account-deletion-sweep}"
 
 echo "==> Enabling required services"
 gcloud services enable run.googleapis.com cloudbuild.googleapis.com \

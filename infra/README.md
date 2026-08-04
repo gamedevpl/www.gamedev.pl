@@ -15,14 +15,15 @@ candidate sources as hostile input. Inventory, caps, and owner follow-ups:
 All are idempotent and **owner-run** — they need `gcloud` authenticated against the
 project, which agent tooling can read but not write.
 
-| Script                | What it provisions                                                             | When to run                                                                                           |
-| --------------------- | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
-| `setup-wif.sh`        | Workload Identity Federation for GitHub Actions                                | Once, before the first deploy                                                                         |
-| `setup-gcp.sh`        | Firestore, IAM, session secret, telemetry TTL, snapshot bucket, gate-runner SA | Once, then after adding a resource it manages                                                         |
-| `setup-backups.sh`    | Firestore PITR + daily export to GCS, export SA and its IAM                    | Once. **Then drill the restore** — see `docs/runbooks/restore-firestore.md`                           |
-| `setup-monitoring.sh` | Per-service uptime check + A1/A2, project-wide A3/A4 and A6/A7, email channel  | **Once per service** (`SERVICE=…`), per `ALERT_EMAIL`. Prints the manual step for A5 (billing budget) |
-| `deploy-api.sh`       | Manual deploy of the app service                                               | Rarely — CI deploys on merge to `master`                                                              |
-| `deploy-world.sh`     | Manual deploy of the zone host                                                 | Rarely; inert unless `ZONE_HOST_URL` is set                                                           |
+| Script                      | What it provisions                                                              | When to run                                                                                           |
+| --------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `setup-wif.sh`              | Workload Identity Federation for GitHub Actions                                 | Once, before the first deploy                                                                         |
+| `setup-gcp.sh`              | Firestore, IAM, storage, deletion sweep, session secret, telemetry TTL, gate SA | Once, then after adding a resource it manages                                                         |
+| `setup-account-deletion.sh` | Account-deletion Scheduler job, OIDC caller SA                                  | Called by `setup-gcp.sh`; run directly to reconcile only this job                                     |
+| `setup-backups.sh`          | Firestore PITR + daily export to GCS, export SA and its IAM                     | Once. **Then drill the restore** — see `docs/runbooks/restore-firestore.md`                           |
+| `setup-monitoring.sh`       | Per-service uptime check + A1/A2, project-wide A3/A4 and A6/A7, email channel   | **Once per service** (`SERVICE=…`), per `ALERT_EMAIL`. Prints the manual step for A5 (billing budget) |
+| `deploy-api.sh`             | Manual deploy of the app service                                                | Rarely — CI deploys on merge to `master`                                                              |
+| `deploy-world.sh`           | Manual deploy of the zone host                                                  | Rarely; inert unless `ZONE_HOST_URL` is set                                                           |
 
 Backups and alerting exist because neither Cloud Run nor Firestore provides them by
 default: without `setup-backups.sh` a wrong delete is unrecoverable, and without
