@@ -344,6 +344,8 @@
     },
     "share": {
       "title": "Udostępnij wersję roboczą",
+      "liveTitle": "Udostępnij grę",
+      "liveHint": "Ta gra jest już w arcade. Każdy z tym linkiem zagra w najnowszą opublikowaną wersję.",
       "on": "Wł.",
       "off": "Wył.",
       "hintOff": "Na razie tylko Ty możesz zagrać w tę grę. Włącz, aby każdy z linkiem mógł spróbować — i tak nie trafi do arcade.",

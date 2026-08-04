@@ -501,9 +501,12 @@ export function CreatorStudioView({
   }
   openTabRef.current = openTab;
 
-  const canShareDraft = Boolean(
-    activeGame && activeGame.slug && activeGame.lastKnownStatus !== 'abandoned' && !isStudioGameShelfLive(activeGame),
-  );
+  // Share is about the permalink, not about the draft switch: a game already live in
+  // the catalog has nothing to toggle, but it still needs a way to hand the link out.
+  // Hiding the control there left published games with no share affordance anywhere.
+  const canShare = Boolean(activeGame && activeGame.slug && activeGame.lastKnownStatus !== 'abandoned');
+  const shareIsLive = Boolean(activeGame && isStudioGameShelfLive(activeGame));
+  const shareTitle = t(shareIsLive ? 'studioPanel.share.liveTitle' : 'studioPanel.share.title');
 
   useEffect(() => {
     setShareMenuOpen(false);
@@ -729,29 +732,26 @@ export function CreatorStudioView({
                         <PixelIcon name="play" size={14} />{' '}
                         <span className="studio-head-action-label">{t('studioPanel.tabs.playtest')}</span>
                       </button>
-                      {canShareDraft && activeGame ? (
+                      {canShare && activeGame ? (
                         <div className="studio-head-share">
                           <button
                             type="button"
                             className={`studio-head-action is-icon-only${shareMenuOpen ? ' is-active' : ''}`}
                             aria-pressed={shareMenuOpen}
                             aria-expanded={shareMenuOpen}
-                            aria-label={t('studioPanel.share.title')}
+                            aria-label={shareTitle}
                             data-testid="studio-head-share"
                             onClick={() => setShareMenuOpen((open) => !open)}
                           >
                             <PixelIcon name="share" size={14} />{' '}
-                            <span className="studio-head-action-label">{t('studioPanel.share.title')}</span>
+                            <span className="studio-head-action-label">{shareTitle}</span>
                           </button>
                           {shareMenuOpen ? (
-                            <div
-                              className="studio-head-share-popover"
-                              role="dialog"
-                              aria-label={t('studioPanel.share.title')}
-                            >
+                            <div className="studio-head-share-popover" role="dialog" aria-label={shareTitle}>
                               <DraftShareControl
                                 game={activeGame}
                                 compact
+                                live={shareIsLive}
                                 onSharedChange={(shared) => {
                                   setGames((prev) =>
                                     prev.map((game) =>
@@ -1183,9 +1183,12 @@ function DetailsPanel({
               </div>
             </section>
 
-            {!catalogLive && game.slug && game.lastKnownStatus !== 'abandoned' ? (
-              <section className="studio-rail-section" aria-label={t('studioPanel.share.title')}>
-                <DraftShareControl game={game} onSharedChange={onDraftSharedChange} />
+            {game.slug && game.lastKnownStatus !== 'abandoned' ? (
+              <section
+                className="studio-rail-section"
+                aria-label={t(catalogLive ? 'studioPanel.share.liveTitle' : 'studioPanel.share.title')}
+              >
+                <DraftShareControl game={game} live={catalogLive} onSharedChange={onDraftSharedChange} />
               </section>
             ) : null}
           </>
@@ -1272,15 +1275,22 @@ function DetailsPanel({
  * way — the link is the only way in, which is what makes one switch enough. The link
  * shown is the game's ordinary permalink, the same one it will keep once it is live,
  * so there is nothing to re-share when that happens.
+ *
+ * Once the game *is* live in the catalog there is no switch left to show — the link is
+ * public by definition — but the creator still wants to hand it out, so `live` drops the
+ * toggle and keeps the permalink and its copy button.
  */
 function DraftShareControl({
   game,
   compact = false,
+  live = false,
   onSharedChange,
 }: {
   game: StudioGame;
   /** Drop the card chrome when nested in the header popover. */
   compact?: boolean;
+  /** Game is live in the catalog: permalink only, no draft switch. */
+  live?: boolean;
   onSharedChange?: (shared: boolean) => void;
 }) {
   const { t } = useTranslation();
@@ -1340,23 +1350,27 @@ function DraftShareControl({
   }
 
   return (
-    <div className={`studio-share${compact ? ' is-compact' : ''}`}>
+    <div className={`studio-share${compact ? ' is-compact' : ''}${live ? ' is-live' : ''}`}>
       <div className="studio-share-head">
-        <h3 className="studio-share-title">{t('studioPanel.share.title')}</h3>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={shared}
-          className={`studio-share-toggle${shared ? ' is-on' : ''}`}
-          onClick={() => void toggle()}
-          disabled={busy}
-        >
-          <span className="studio-share-toggle-track" aria-hidden="true" />
-          {shared ? t('studioPanel.share.on') : t('studioPanel.share.off')}
-        </button>
+        <h3 className="studio-share-title">{t(live ? 'studioPanel.share.liveTitle' : 'studioPanel.share.title')}</h3>
+        {live ? null : (
+          <button
+            type="button"
+            role="switch"
+            aria-checked={shared}
+            className={`studio-share-toggle${shared ? ' is-on' : ''}`}
+            onClick={() => void toggle()}
+            disabled={busy}
+          >
+            <span className="studio-share-toggle-track" aria-hidden="true" />
+            {shared ? t('studioPanel.share.on') : t('studioPanel.share.off')}
+          </button>
+        )}
       </div>
-      <p className="studio-share-hint">{t(shared ? 'studioPanel.share.hintOn' : 'studioPanel.share.hintOff')}</p>
-      {shared ? (
+      <p className="studio-share-hint">
+        {t(live ? 'studioPanel.share.liveHint' : shared ? 'studioPanel.share.hintOn' : 'studioPanel.share.hintOff')}
+      </p>
+      {live || shared ? (
         <p className="status-note status-share">
           <a className="inline-link" href={url}>
             {url}
