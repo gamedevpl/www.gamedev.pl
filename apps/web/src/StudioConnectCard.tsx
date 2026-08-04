@@ -70,8 +70,12 @@ type StudioConnectCardProps = {
   /**
    * When true, a non-self / inactive round yields nothing instead of an error
    * (Details mounts this for every open game; only self rounds have a payload).
+   * Pair with `unavailableLabel` in the Details pane so the Connect icon does not
+   * open a blank rail for platform rounds.
    */
   hideIfUnavailable?: boolean;
+  /** Shown instead of null when `hideIfUnavailable` quiets a non-self round. */
+  unavailableLabel?: string;
   /**
    * Studio thread: open the Details rail for MCP install instead of expanding it
    * inline (Claude-shaped — install lives in the side panel, not the transcript).
@@ -101,6 +105,7 @@ export function StudioConnectCard({
   mode = 'setup',
   collapsible = true,
   hideIfUnavailable = false,
+  unavailableLabel,
   onOpenInstall,
   density = 'thread',
   panelHeading,
@@ -164,8 +169,11 @@ export function StudioConnectCard({
     };
   }, [token, t, hideIfUnavailable]);
 
-  if (agentConnected || unavailable) {
+  if (agentConnected) {
     return null;
+  }
+  if (unavailable) {
+    return unavailableLabel ? <p className="studio-rail-empty">{unavailableLabel}</p> : null;
   }
 
   const hideCard = () => {

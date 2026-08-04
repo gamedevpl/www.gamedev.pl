@@ -1107,7 +1107,13 @@ function DetailsPanel({
 
           {activePane === 'connect' ? (
             showConnect ? (
-              <StudioConnectCard token={game.token} collapsible={false} hideIfUnavailable density="panel" />
+              <StudioConnectCard
+                token={game.token}
+                collapsible={false}
+                hideIfUnavailable
+                unavailableLabel={t('studioPanel.rail.connectEmpty')}
+                density="panel"
+              />
             ) : (
               <p className="studio-rail-empty">{t('studioPanel.rail.connectEmpty')}</p>
             )

@@ -543,6 +543,46 @@ describe('StudioConnectCard', () => {
     await act(async () => root.unmount());
   });
 
+  it('shows unavailableLabel in the Details pane when the round is not self', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: false,
+        status: 409,
+        json: async () => ({ error: 'connect_unavailable', reason: 'not_self_round', builder: 'platform' }),
+      })),
+    );
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(StudioConnectCard, {
+          token: 'plat-tok',
+          hideIfUnavailable: true,
+          unavailableLabel: 'This round does not need a coding-agent connect step.',
+          collapsible: false,
+          density: 'panel',
+        }),
+      );
+      await flush();
+    });
+    await act(async () => {
+      await flush();
+    });
+
+    expect(container.querySelector('.studio-connect')).toBeNull();
+    expect(container.querySelector('.studio-rail-empty')?.textContent).toContain(
+      'does not need a coding-agent connect step',
+    );
+
+    await act(async () => root.unmount());
+  });
+
   it('surfaces missing_slug instead of hiding when hideIfUnavailable', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
