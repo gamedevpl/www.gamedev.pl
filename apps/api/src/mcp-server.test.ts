@@ -361,7 +361,9 @@ describe('POST /api/mcp (BY-05)', () => {
 
     const gateVerdict = tools.find((t) => t.name === 'get_gate_verdict');
     expect(gateVerdict?.description).toMatch(/2–5 minutes/);
-    expect(gateVerdict?.description).toMatch(/~30s/);
+    expect(gateVerdict?.description).toMatch(/~30/);
+    expect(gateVerdict?.description).toMatch(/busy-poll|Do NOT busy-poll/i);
+    expect(gateVerdict?.description).toMatch(/gate_poll_backoff/);
     expect(gateVerdict?.description).toMatch(/kit_outdated/);
     expect(gateVerdict?.description).toMatch(/re-run get_kit/);
     expect(gateVerdict?.description).toMatch(/fromLatestDelivery/);
@@ -467,6 +469,8 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(joined).toMatch(/mode:\s*"preview"|mode=preview/i);
     expect(joined).toMatch(/mode:\s*"publish"|mode=publish/i);
     expect(joined).toMatch(/get_gate_verdict/);
+    expect(joined).toMatch(/Never busy-poll|at most once per ~30s wall-clock/i);
+    expect(joined).toMatch(/Prefer end over sitting in a get_gate_verdict loop/i);
     // The stop condition is explicit: green means done — END immediately; no post-green
     // tools (key retires; get_gate_verdict may still answer via terminal receipt).
     expect(joined).toMatch(/green \(publish only\): the round is complete/i);
@@ -1060,6 +1064,49 @@ describe('POST /api/mcp (BY-05)', () => {
     // Gate-poll presence must not clear the submit auto-end handoff unlock.
     expect((await store.getSubmission(ISSUE))?.agentEndedAt).toBe(endedAt);
     expect((await store.getSubmission(ISSUE))?.lastAgentPresence?.key).toBe('waiting_checks');
+  });
+
+  it('pending get_gate_verdict carries retryAfterSeconds and soft-warns on busy-poll', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    // No gate verdict on the version yet — channel returns pending.
+    const { gamesStore } = stubGamesStore();
+    app = await createApp(store, gamesStore, undefined, {
+      onSourcesDelivered: async () => ({ accepted: true, buildId: 'build-pending' }),
+    });
+    const sessionId = await initialize(app);
+    const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    await callTool(
+      app,
+      'submit_sources',
+      {
+        sessionKey,
+        kitEngineRef: ENGINE,
+        files: MINIMAL_FILES.map((f) => ({ ...f, encoding: 'utf8' })),
+      },
+      { 'mcp-session-id': sessionId },
+    );
+    await store.setSubmissionDeliveredVersion(ISSUE, 'v1');
+
+    const first = await callTool(app, 'get_gate_verdict', { sessionKey }, { 'mcp-session-id': sessionId });
+    expect(first.isError).toBe(false);
+    expect(first.structured).toMatchObject({
+      status: 'pending',
+      deliveryId: 'v1',
+      retryAfterSeconds: 30,
+    });
+    expect(String((first.structured as { summary?: string }).summary)).toMatch(/do not busy-poll/i);
+    const firstWarnings = (first.structured as { warnings?: Array<{ code: string }> }).warnings ?? [];
+    expect(firstWarnings.some((w) => w.code === 'call_end')).toBe(true);
+    expect(firstWarnings.some((w) => w.code === 'gate_poll_backoff')).toBe(false);
+
+    const second = await callTool(app, 'get_gate_verdict', { sessionKey }, { 'mcp-session-id': sessionId });
+    expect(second.isError).toBe(false);
+    const secondWarnings = (second.structured as { warnings?: Array<{ code: string }> }).warnings ?? [];
+    expect(secondWarnings.some((w) => w.code === 'gate_poll_backoff')).toBe(true);
+    expect(secondWarnings.some((w) => w.code === 'call_end')).toBe(true);
   });
 
   it('rejects malformed base64 on stage_source_file instead of silently corrupting', async () => {
