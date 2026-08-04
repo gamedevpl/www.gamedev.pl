@@ -1,6 +1,6 @@
 /**
- * Client for GET /api/submissions/:id/connect and creator/game key management
- * (BY-03 / BY-23 / BY-27a / BY-27b).
+ * Client for GET /api/submissions/:id/connect and creator-key management
+ * (BY-03 / BY-27a / BY-27b).
  *
  * Connect returns a config block (MCP URL + Authorization header) and a keyless
  * kickoff prompt (slug only). The full Authorization value is for Copy only.
@@ -39,15 +39,6 @@ export type ConnectPayload = {
   expiresAt: number;
   keyGeneration: number;
   slug: string;
-};
-
-export type AgentKeyPayload = {
-  slug: string;
-  keyGeneration: number;
-  expiresAt: number;
-  kickoffPrompt: string;
-  installSnippets: InstallSnippets;
-  rotated?: boolean;
 };
 
 export type ConnectApiError = Error & {
@@ -90,33 +81,6 @@ export async function getConnectPayload(token: string): Promise<ConnectPayload> 
 
   const body = (await response.json()) as ConnectPayload;
   return body;
-}
-
-/** Remint the durable per-game key at the current generation (fresh exp, no rotate). */
-export async function getAgentKey(token: string): Promise<AgentKeyPayload> {
-  const response = await fetch(`${API_BASE}/api/submissions/${encodeURIComponent(token)}/agent-key`, {
-    credentials: 'include',
-  });
-
-  if (!response.ok) {
-    await throwResponseError(response);
-  }
-
-  return (await response.json()) as AgentKeyPayload;
-}
-
-/** Bump per-game keyGeneration and return a fresh keyed kickoff. */
-export async function rotateAgentKey(token: string): Promise<AgentKeyPayload> {
-  const response = await fetch(`${API_BASE}/api/submissions/${encodeURIComponent(token)}/agent-key/rotate`, {
-    method: 'POST',
-    credentials: 'include',
-  });
-
-  if (!response.ok) {
-    await throwResponseError(response);
-  }
-
-  return (await response.json()) as AgentKeyPayload;
 }
 
 export type OAuthGrantSummary = {

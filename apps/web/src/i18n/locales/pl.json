@@ -334,8 +334,8 @@
       "build": "Postęp buildu",
       "media": "Zrzuty ekranu",
       "mediaEmpty": "Nie ma jeszcze zrzutów — pojawią się tu, gdy agent je wyśle.",
-      "credentials": "Klucze i podłączone agenty",
-      "credentialsHint": "Klucz twórcy, legacy klucz per-gra i agenty, które zatwierdziłeś.",
+      "credentials": "Dostęp agentów",
+      "credentialsHint": "Zarządzaj kluczem i agentami, które mają dostęp do Twoich gier przez MCP.",
       "kickoffDetails": "Prompt budowy",
       "overview": "Przegląd",
       "stats": "Statystyki",
@@ -1044,14 +1044,6 @@
       "waiting": "Czekamy, aż Twój agent znów się odezwie…"
     }
   },
-  "agentKey": {
-    "title": "Klucz per-gra (legacy)",
-    "loading": "Wczytywanie ustawień agenta…",
-    "loadError": "Nie udało się wczytać ustawień agenta.",
-    "legacyHint": "Preferuj klucz agenta kodującego powyżej — wklej go raz w konfiguracji MCP. Ten klucz per-gra jest tylko dla starszych ustawień.",
-    "expiry": "Klucz tej gry wygasa {{when}}.",
-    "rotatedKickoff": "Klucz został obrócony — skopiuj ten nowy kickoff dla agenta:"
-  },
   "workspaceCheckout": {
     "title": "Pracuj nad tą grą we własnym IDE",
     "hint": "Pobierz kopię roboczą — źródła tej gry, skrypt konfiguracyjny i README, gotowe dla Twojego edytora i Twojego repozytorium Git. Gra zostaje tutaj: gdy skończysz, Twój agent oddaje zmiany, a te przechodzą zwykłą rundę, bramkę i recenzję, zanim cokolwiek zostanie opublikowane.",
@@ -1068,41 +1060,46 @@
   },
   "oauthClients": {
     "title": "Podłączone agenty kodujące",
-    "hint": "Agenty, którym zatwierdziłeś logowanie na Twoje konto. Odłączenie wymaga ponownej zgody.",
+    "hint": "Agenty z dostępem do Twoich gier przez MCP. Odłączenie natychmiast odbiera dostęp.",
     "loading": "Wczytywanie podłączonych klientów…",
     "loadError": "Nie udało się wczytać podłączonych klientów.",
     "revokeError": "Nie udało się odłączyć tego klienta. Spróbuj za chwilę.",
     "empty": "Żaden agent kodujący nie jest podłączony do Twojego konta.",
-    "connected": "Podłączono {{when}}",
-    "lastUsed": "Ostatnio użyto {{when}}",
-    "neverUsed": "jeszcze nie",
+    "connectionId": "Połączenie {{id}}",
+    "connectedLabel": "Podłączono",
+    "lastUsedLabel": "Ostatnio użyto",
+    "neverUsed": "Nigdy",
     "revoke": "Odłącz",
-    "revoking": "Odłączanie…"
+    "revoking": "Odłączanie…",
+    "confirm": "Odłączyć {{client}}? Agent natychmiast straci dostęp i będzie wymagał ponownej zgody.",
+    "confirmYes": "Tak, odłącz",
+    "confirmNo": "Anuluj"
   },
   "creatorKey": {
     "title": "Klucz agenta kodującego",
-    "hint": "Wklej ten nagłówek raz w ustawieniach serwera MCP swojego agenta. Otwiera sesje na każdej z Twoich gier — rotacja zatrzymuje każdy agent wciąż używający starego klucza.",
+    "active": "Aktywny",
+    "hint": "Użyj tego nagłówka z agentami, które nie mogą zalogować się przez przeglądarkę. Pozwala im pracować nad każdą z Twoich gier.",
     "loading": "Wczytywanie klucza agenta…",
     "loadError": "Nie udało się wczytać klucza agenta.",
     "copyHeader": "Kopiuj nagłówek",
     "copied": "Skopiowano",
-    "meta": "Końcówka {{fingerprint}} · generacja {{generation}} · wygasa {{when}}",
+    "expires": "Wygasa {{when}}",
     "revoked": "Klucz agenta został unieważniony. Utwórz nowy, gdy będziesz gotów połączyć się ponownie.",
     "mint": "Utwórz klucz",
     "minting": "Tworzenie…",
     "mintError": "Nie udało się utworzyć klucza. Spróbuj za chwilę.",
     "rotate": {
       "start": "Rotuj klucz",
-      "confirm": "Rotacja zatrzymuje każdy agent wciąż używający starego klucza. Kontynuować?",
-      "yes": "Rotuj",
+      "confirm": "Utworzyć klucz zastępczy? Każdy agent używający obecnego klucza natychmiast straci dostęp. Nowy nagłówek trzeba będzie wkleić do każdego agenta.",
+      "yes": "Tak, rotuj klucz",
       "no": "Anuluj",
       "sending": "Rotowanie…"
     },
     "rotateError": "Nie udało się obrócić klucza. Spróbuj za chwilę.",
     "revoke": {
       "start": "Unieważnij klucz",
-      "confirm": "Unieważnienie zatrzymuje każdy agent używający tego klucza. Kontynuować?",
-      "yes": "Unieważnij",
+      "confirm": "Unieważnić ten klucz? Każdy agent, który go używa, natychmiast straci dostęp. Później możesz utworzyć nowy klucz.",
+      "yes": "Tak, unieważnij klucz",
       "no": "Anuluj",
       "sending": "Unieważnianie…"
     },

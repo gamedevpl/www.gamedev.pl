@@ -4,7 +4,6 @@ import { mintCreatorAgentKey } from './agent-creator-key.js';
 import {
   DRAFT_NOT_CONTINUABLE_REASON,
   GAME_ALREADY_PUBLISHED_REASON,
-  mintGameAgentKey,
   NO_OPEN_ROUND_REASON,
   SLUG_NOT_ON_ACCOUNT_REASON,
 } from './agent-game-key.js';
@@ -67,13 +66,14 @@ async function seedGreenDraft(store: InMemoryStore) {
   await store.ensureGameAgentKey(SLUG, OWNER, '2026-08-01T12:00:00.000Z');
 }
 
-function gameKey(generation = 1) {
-  return mintGameAgentKey(secret, {
-    slug: SLUG,
+async function creatorHeaders(store: InMemoryStore): Promise<Record<string, string>> {
+  await store.ensureCreatorAgentKey(OWNER, new Date().toISOString());
+  const key = mintCreatorAgentKey(secret, {
     creatorUid: OWNER,
-    keyGeneration: generation,
+    keyGeneration: 1,
     now: Date.parse('2026-08-01T12:00:00.000Z'),
   });
+  return { authorization: `Bearer ${key}` };
 }
 
 async function mcpCall(
@@ -123,17 +123,20 @@ describe('MCP continue_draft', () => {
   it('reopens a ready_for_review draft into building and lets start join', async () => {
     const store = new InMemoryStore();
     await seedGreenDraft(store);
+    const headers = await creatorHeaders(store);
     app = await createApp(store);
 
-    const startBefore = await callTool(app, 'start', { key: gameKey() });
+    const startBefore = await callTool(app, 'start', { slug: SLUG }, headers);
     expect(startBefore.isError).toBe(true);
     expect((startBefore.structured as { error: string }).error).toMatch(/continue_draft/i);
     expect((startBefore.structured as { error: string }).error).toBe(NO_OPEN_ROUND_REASON);
 
-    const { structured, isError } = await callTool(app, 'continue_draft', {
-      key: gameKey(),
-      feedback: 'Make the paddle wider and add a second ball.',
-    });
+    const { structured, isError } = await callTool(
+      app,
+      'continue_draft',
+      { slug: SLUG, feedback: 'Make the paddle wider and add a second ball.' },
+      headers,
+    );
     expect(isError).toBe(false);
     expect(structured).toMatchObject({
       jobId: DRAFT_ISSUE,
@@ -149,7 +152,7 @@ describe('MCP continue_draft', () => {
       reason: 'continue_draft',
     });
 
-    const started = await callTool(app, 'start', { key: gameKey() });
+    const started = await callTool(app, 'start', { slug: SLUG }, headers);
     expect(started.isError).toBe(false);
     expect(started.structured).toMatchObject({ jobId: DRAFT_ISSUE, slug: SLUG });
   });
@@ -160,12 +163,15 @@ describe('MCP continue_draft', () => {
     // it — otherwise a paraphrase reads as a message the creator wrote themselves.
     const store = new InMemoryStore();
     await seedGreenDraft(store);
+    const headers = await creatorHeaders(store);
     app = await createApp(store);
 
-    await callTool(app, 'continue_draft', {
-      key: gameKey(),
-      feedback: 'Make the paddle wider and add a second ball.',
-    });
+    await callTool(
+      app,
+      'continue_draft',
+      { slug: SLUG, feedback: 'Make the paddle wider and add a second ball.' },
+      headers,
+    );
 
     const messages = await store.listCreatorMessages(DRAFT_ISSUE);
     expect(messages).toHaveLength(1);
@@ -178,16 +184,16 @@ describe('MCP continue_draft', () => {
   it('is idempotent while a round is already open', async () => {
     const store = new InMemoryStore();
     await seedGreenDraft(store);
+    const headers = await creatorHeaders(store);
     app = await createApp(store);
 
-    await callTool(app, 'continue_draft', {
-      key: gameKey(),
-      feedback: 'First continue.',
-    });
-    const again = await callTool(app, 'continue_draft', {
-      key: gameKey(),
-      feedback: 'Second continue should not reopen.',
-    });
+    await callTool(app, 'continue_draft', { slug: SLUG, feedback: 'First continue.' }, headers);
+    const again = await callTool(
+      app,
+      'continue_draft',
+      { slug: SLUG, feedback: 'Second continue should not reopen.' },
+      headers,
+    );
     expect(again.isError).toBe(false);
     expect(again.structured).toMatchObject({ jobId: DRAFT_ISSUE, alreadyOpen: true });
   });
@@ -203,13 +209,15 @@ describe('MCP continue_draft', () => {
       by: 'operator',
       reason: 'published',
     });
-    await store.ensureGameAgentKey(SLUG, OWNER, '2026-08-01T12:00:00.000Z');
+    const headers = await creatorHeaders(store);
     app = await createApp(store);
 
-    const { structured, isError } = await callTool(app, 'continue_draft', {
-      key: gameKey(),
-      feedback: 'Post-publish work belongs on open_round.',
-    });
+    const { structured, isError } = await callTool(
+      app,
+      'continue_draft',
+      { slug: SLUG, feedback: 'Post-publish work belongs on open_round.' },
+      headers,
+    );
     expect(isError).toBe(true);
     expect((structured as { error: string }).error).toBe(GAME_ALREADY_PUBLISHED_REASON);
   });
@@ -266,12 +274,15 @@ describe('MCP continue_draft', () => {
       by: 'operator',
       reason: 'publish_started',
     });
+    const headers = await creatorHeaders(store);
     app = await createApp(store);
 
-    const { structured, isError } = await callTool(app, 'continue_draft', {
-      key: gameKey(),
-      feedback: 'Too late — bake is in flight.',
-    });
+    const { structured, isError } = await callTool(
+      app,
+      'continue_draft',
+      { slug: SLUG, feedback: 'Too late — bake is in flight.' },
+      headers,
+    );
     expect(isError).toBe(true);
     expect((structured as { error: string }).error).toMatch(/publishing/i);
     expect((structured as { error: string }).error).not.toBe(DRAFT_NOT_CONTINUABLE_REASON);
@@ -282,15 +293,17 @@ describe('MCP continue_draft', () => {
     await store.createSubmission(DRAFT_ISSUE, OWNER, 'Legacy Draft');
     await store.setSubmissionSlug(DRAFT_ISSUE, SLUG);
     await store.setRoundBuilder(DRAFT_ISSUE, 'self');
-    await store.ensureGameAgentKey(SLUG, OWNER, '2026-08-01T12:00:00.000Z');
+    const headers = await creatorHeaders(store);
     // No recordJobTransition — state stays undefined (pre-job-model shape).
     expect((await store.getSubmission(DRAFT_ISSUE))?.state).toBeUndefined();
     app = await createApp(store);
 
-    const { structured, isError } = await callTool(app, 'continue_draft', {
-      key: gameKey(),
-      feedback: 'Pick up this legacy draft and keep going.',
-    });
+    const { structured, isError } = await callTool(
+      app,
+      'continue_draft',
+      { slug: SLUG, feedback: 'Pick up this legacy draft and keep going.' },
+      headers,
+    );
     expect(isError).toBe(false);
     expect(structured).toMatchObject({ jobId: DRAFT_ISSUE, alreadyOpen: false });
     const job = await store.getSubmission(DRAFT_ISSUE);

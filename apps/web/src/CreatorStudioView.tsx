@@ -24,7 +24,6 @@ import {
   type StudioShelfFilter,
   type StudioShelfGame,
 } from './studioShelf.js';
-import { StudioAgentKeyPanel } from './StudioAgentKeyPanel.js';
 import { StudioConnectCard } from './StudioConnectCard.js';
 import { StudioCreatorAgentKeyPanel } from './StudioCreatorAgentKeyPanel.js';
 import { StudioDetailsBuildProgress } from './StudioDetailsBuildProgress.js';
@@ -1044,8 +1043,6 @@ function DetailsPanel({
 
   const showConnect = game.lastKnownStatus !== 'abandoned' && game.lastKnownStatus !== 'published';
   const showProgress = showConnect;
-  const showLegacyKey = Boolean(game.slug && game.lastKnownStatus !== 'abandoned');
-
   const panes: DetailsPaneDef[] = [
     { id: 'overview', icon: 'eye', labelKey: 'studioPanel.rail.overview' },
     ...(showConnect ? [{ id: 'connect' as const, icon: 'signal' as const, labelKey: 'studioPanel.rail.connect' }] : []),
@@ -1160,7 +1157,6 @@ function DetailsPanel({
           {activePane === 'keys' ? (
             <div className="studio-rail-credentials-body">
               <p className="studio-rail-credentials-hint">{t('studioPanel.rail.credentialsHint')}</p>
-              {showLegacyKey ? <StudioAgentKeyPanel token={game.token} /> : null}
               <StudioCreatorAgentKeyPanel />
               <StudioOAuthClientsPanel />
               {/* Working copy belongs in the credentials pane rather than the create

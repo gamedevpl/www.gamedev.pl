@@ -281,6 +281,7 @@ describe('OAuth authorization server (BY-18b)', () => {
 
   it('rotates refresh credentials and revokes grant on reuse', async () => {
     const store = new InMemoryStore();
+    await seedSelfRound(store, 41, 'g:creator');
     await store.upsertUser({ uid: 'g:creator' });
     app = await buildOAuthApp(store);
     const clientId = await registerClient(app);
@@ -309,6 +310,7 @@ describe('OAuth authorization server (BY-18b)', () => {
       }).toString(),
     });
     expect(reuse.statusCode).toBe(400);
+    expect((await store.getSubmission(41))?.roundGeneration).toBe(2);
 
     const afterReuse = await app.inject({
       method: 'POST',
@@ -324,18 +326,26 @@ describe('OAuth authorization server (BY-18b)', () => {
 
   it('revocation breaks a live grant', async () => {
     const store = new InMemoryStore();
+    await seedSelfRound(store, 42, 'g:creator');
     await store.upsertUser({ uid: 'g:creator' });
     app = await buildOAuthApp(store);
     const clientId = await registerClient(app);
     const verifier = 'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk';
     const tokens = await authorizeAndExchange(app, clientId, 'http://127.0.0.1/callback', verifier);
 
-    await app.inject({
-      method: 'POST',
-      url: '/oauth/revoke',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      payload: new URLSearchParams({ token: tokens.refresh_token }).toString(),
-    });
+    const revoke = async () =>
+      app!.inject({
+        method: 'POST',
+        url: '/oauth/revoke',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        payload: new URLSearchParams({ token: tokens.refresh_token }).toString(),
+      });
+    await revoke();
+    expect((await store.getSubmission(42))?.roundGeneration).toBe(2);
+
+    // RFC 7009 is idempotent; replaying a revoked token must not keep killing new rounds.
+    await revoke();
+    expect((await store.getSubmission(42))?.roundGeneration).toBe(2);
 
     const refresh = await app.inject({
       method: 'POST',
@@ -492,7 +502,7 @@ describe('MCP OAuth integration (BY-18b)', () => {
   // on every tools/call. That must not shadow the sessionKey start() just minted —
   // otherwise the client can create a game, start a round, and then every write
   // tool is refused immediately ("rejected the session key").
-  it('honours sessionKey for write tools even when Authorization still carries OAuth access', async () => {
+  it('honours sessionKey with OAuth access, then invalidates it when the grant is disconnected', async () => {
     const store = new InMemoryStore();
     await seedSelfRound(store, 43, 'g:creator');
     await store.upsertUser({ uid: 'g:creator' });
@@ -540,9 +550,44 @@ describe('MCP OAuth integration (BY-18b)', () => {
     const body = brief.json() as { result?: { isError?: boolean; structuredContent?: { error?: string } } };
     expect(body.result?.isError).not.toBe(true);
     expect(body.result?.structuredContent?.error).toBeUndefined();
+
+    const grants = await app.inject({
+      method: 'GET',
+      url: '/api/me/oauth-grants',
+      headers: { cookie: sessionCookie('g:creator') },
+    });
+    const grantId = (grants.json() as Array<{ grantId: string }>)[0]!.grantId;
+    const disconnected = await app.inject({
+      method: 'DELETE',
+      url: `/api/me/oauth-grants/${grantId}`,
+      headers: { cookie: sessionCookie('g:creator') },
+    });
+    expect(disconnected.statusCode).toBe(204);
+    expect((await store.getSubmission(43))?.roundGeneration).toBe(2);
+
+    const afterDisconnect = await app.inject({
+      method: 'POST',
+      url: MCP_ENDPOINT_PATH,
+      headers: {
+        'content-type': 'application/json',
+        'mcp-session-id': sessionId,
+        authorization: `Bearer ${tokens.access_token}`,
+      },
+      payload: {
+        jsonrpc: '2.0',
+        id: 4,
+        method: 'tools/call',
+        params: { name: 'get_brief', arguments: { sessionKey } },
+      },
+    });
+    const disconnectedBody = afterDisconnect.json() as {
+      result?: { isError?: boolean; structuredContent?: { error?: string } };
+    };
+    expect(disconnectedBody.result?.isError).toBe(true);
+    expect(disconnectedBody.result?.structuredContent?.error).toBe(STALE_AGENT_TOKEN_REASON);
   });
 
-  it('static round key, durable game key, and sessionKey still work', async () => {
+  it('keeps static round keys working but retires durable per-game keys', async () => {
     const store = new InMemoryStore();
     await seedSelfRound(store, 77, 'g:owner');
     const at = new Date().toISOString();
@@ -585,22 +630,11 @@ describe('MCP OAuth integration (BY-18b)', () => {
         params: { name: 'start', arguments: { key: gameKey } },
       },
     });
-    const sessionKey = (started.json() as { result?: { structuredContent?: { sessionKey?: string } } }).result
-      ?.structuredContent?.sessionKey;
-    expect(typeof sessionKey).toBe('string');
-
-    const briefSession = await app.inject({
-      method: 'POST',
-      url: MCP_ENDPOINT_PATH,
-      headers: { 'content-type': 'application/json', 'mcp-session-id': sessionId },
-      payload: {
-        jsonrpc: '2.0',
-        id: 4,
-        method: 'tools/call',
-        params: { name: 'get_brief', arguments: { sessionKey } },
-      },
-    });
-    expect((briefSession.json() as { result?: { isError?: boolean } }).result?.isError).not.toBe(true);
+    const retired = started.json() as {
+      result?: { isError?: boolean; structuredContent?: { error?: string } };
+    };
+    expect(retired.result?.isError).toBe(true);
+    expect(retired.result?.structuredContent?.error).toMatch(/per-game keys are retired/i);
   });
 
   it('stale round key returns its own reason, not an OAuth challenge', async () => {

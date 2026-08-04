@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { listOAuthGrants, revokeOAuthGrant, type OAuthGrantSummary } from './connectApi.js';
+import { formatRelativeTime } from './relativeTime.js';
 
 /**
  * Connected coding-agent clients (BY-18b). Lists OAuth grants and lets the creator revoke.
@@ -12,6 +13,7 @@ export function StudioOAuthClientsPanel() {
   const [grants, setGrants] = useState<OAuthGrantSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [revokingId, setRevokingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -37,6 +39,7 @@ export function StudioOAuthClientsPanel() {
     try {
       await revokeOAuthGrant(grantId);
       setGrants((prev) => prev.filter((row) => row.grantId !== grantId));
+      setConfirmingId((current) => (current === grantId ? null : current));
     } catch {
       setError(t('oauthClients.revokeError'));
     } finally {
@@ -44,20 +47,23 @@ export function StudioOAuthClientsPanel() {
     }
   };
 
-  const formatWhen = (iso: string | null) => {
-    if (!iso) return t('oauthClients.neverUsed');
+  const formatExact = (iso: string) => {
     return new Intl.DateTimeFormat(i18n.language, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso));
   };
 
   return (
-    <section className="studio-oauth-clients" aria-labelledby={`${baseId}-title`}>
+    <section className="studio-credentials-section studio-oauth-clients" aria-labelledby={`${baseId}-title`}>
       <h3 id={`${baseId}-title`} className="studio-agent-key-title">
         {t('oauthClients.title')}
       </h3>
       <p className="studio-share-hint">{t('oauthClients.hint')}</p>
 
       {loading ? <p className="studio-connect-state">{t('oauthClients.loading')}</p> : null}
-      {error ? <p className="error">{error}</p> : null}
+      {error ? (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      ) : null}
 
       {!loading && grants.length === 0 ? <p className="studio-connect-state">{t('oauthClients.empty')}</p> : null}
 
@@ -66,21 +72,67 @@ export function StudioOAuthClientsPanel() {
           {grants.map((grant) => (
             <li key={grant.grantId} className="studio-oauth-client-row">
               <div className="studio-oauth-client-meta">
-                <strong>{grant.clientLabel}</strong>
-                <span className="studio-oauth-client-dates">
-                  {t('oauthClients.connected', { when: formatWhen(grant.createdAt) })}
-                  {' · '}
-                  {t('oauthClients.lastUsed', { when: formatWhen(grant.lastUsedAt) })}
-                </span>
+                <div className="studio-oauth-client-name">
+                  <strong>{grant.clientLabel}</strong>
+                  <span>{t('oauthClients.connectionId', { id: grant.grantId.slice(-6).toUpperCase() })}</span>
+                </div>
+                <dl className="studio-oauth-client-dates">
+                  <div>
+                    <dt>{t('oauthClients.connectedLabel')}</dt>
+                    <dd>
+                      <time dateTime={grant.createdAt} title={formatExact(grant.createdAt)}>
+                        {formatRelativeTime(grant.createdAt, i18n.language)}
+                      </time>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>{t('oauthClients.lastUsedLabel')}</dt>
+                    <dd>
+                      {grant.lastUsedAt ? (
+                        <time dateTime={grant.lastUsedAt} title={formatExact(grant.lastUsedAt)}>
+                          {formatRelativeTime(grant.lastUsedAt, i18n.language)}
+                        </time>
+                      ) : (
+                        t('oauthClients.neverUsed')
+                      )}
+                    </dd>
+                  </div>
+                </dl>
               </div>
-              <button
-                type="button"
-                className="studio-connect-skip is-danger"
-                disabled={revokingId === grant.grantId}
-                onClick={() => void handleRevoke(grant.grantId)}
-              >
-                {revokingId === grant.grantId ? t('oauthClients.revoking') : t('oauthClients.revoke')}
-              </button>
+
+              {confirmingId === grant.grantId ? (
+                <div className="studio-credential-confirm is-danger" role="alert">
+                  <p>{t('oauthClients.confirm', { client: grant.clientLabel })}</p>
+                  <div className="studio-credential-actions">
+                    <button
+                      autoFocus
+                      type="button"
+                      className="studio-credential-action is-danger"
+                      disabled={revokingId !== null}
+                      onClick={() => void handleRevoke(grant.grantId)}
+                    >
+                      {revokingId === grant.grantId ? t('oauthClients.revoking') : t('oauthClients.confirmYes')}
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary-btn studio-credential-action"
+                      disabled={revokingId !== null}
+                      onClick={() => setConfirmingId(null)}
+                    >
+                      {t('oauthClients.confirmNo')}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="studio-credential-action is-danger"
+                  disabled={revokingId !== null}
+                  onClick={() => setConfirmingId(grant.grantId)}
+                >
+                  {t('oauthClients.revoke')}
+                </button>
+              )}
             </li>
           ))}
         </ul>
