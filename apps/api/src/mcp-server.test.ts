@@ -329,7 +329,11 @@ describe('POST /api/mcp (BY-05)', () => {
         'ack_inbox',
       ]),
     );
-    const tools = listed.json().result.tools as Array<{ name: string; description: string }>;
+    const tools = listed.json().result.tools as Array<{
+      name: string;
+      description: string;
+      annotations?: { title?: string };
+    }>;
     const start = tools.find((t) => t.name === 'start');
     expect(start?.description).toMatch(/screenshot|Honour stop|sessionKey/i);
     // start advertises the returned workflow / inbox policy / refusal guidance.
@@ -358,9 +362,11 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(tools.find((t) => t.name === 'read_kit_file_fragment')?.description).toMatch(/lines|bytes/i);
 
     const gateVerdict = tools.find((t) => t.name === 'get_gate_verdict');
+    expect(gateVerdict?.annotations?.title).toBe('Check the gate once');
+    expect(gateVerdict?.annotations?.title).not.toMatch(/poll/i);
     expect(gateVerdict?.description).toMatch(/2–5 minutes/);
-    expect(gateVerdict?.description).toMatch(/~30/);
-    expect(gateVerdict?.description).toMatch(/busy-poll|Do NOT busy-poll/i);
+    expect(gateVerdict?.description).toMatch(/one-shot/i);
+    expect(gateVerdict?.description).toMatch(/pending.*stop:true/i);
     expect(gateVerdict?.description).toMatch(/gate_poll_backoff/);
     expect(gateVerdict?.description).toMatch(/kit_outdated/);
     expect(gateVerdict?.description).toMatch(/re-run get_kit/);
@@ -467,7 +473,8 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(joined).toMatch(/mode:\s*"preview"|mode=preview/i);
     expect(joined).toMatch(/mode:\s*"publish"|mode=publish/i);
     expect(joined).toMatch(/get_gate_verdict/);
-    expect(joined).toMatch(/Never busy-poll|at most once per ~30s wall-clock/i);
+    expect(joined).toMatch(/call get_gate_verdict once|one-shot/i);
+    expect(joined).toMatch(/pending.*stop:true/i);
     expect(joined).toMatch(/Prefer end over sitting in a get_gate_verdict loop/i);
     // The stop condition is explicit: green means done — END immediately; no post-green
     // tools (key retires; get_gate_verdict may still answer via terminal receipt).
@@ -967,7 +974,7 @@ describe('POST /api/mcp (BY-05)', () => {
     await store.setSubmissionDeliveredVersion(ISSUE, 'v1');
     const verdict = await callTool(app, 'get_gate_verdict', { sessionKey }, { 'mcp-session-id': sessionId });
     expect(verdict.isError).toBe(false);
-    expect(verdict.structured).toMatchObject({ status: 'red', deliveryId: 'v1' });
+    expect(verdict.structured).toMatchObject({ status: 'red', deliveryId: 'v1', stop: false });
   });
 
   it('submit_sources reports gateStarted when Cloud Build returns a build id', async () => {
@@ -1063,7 +1070,7 @@ describe('POST /api/mcp (BY-05)', () => {
     expect((await store.getSubmission(ISSUE))?.lastAgentPresence?.key).toBe('waiting_checks');
   });
 
-  it('pending get_gate_verdict carries retryAfterSeconds and soft-warns on busy-poll', async () => {
+  it('makes pending get_gate_verdict a one-shot stop and warns if the client ignores it', async () => {
     const store = new InMemoryStore();
     await seedJob(store);
     // No gate verdict on the version yet — channel returns pending.
@@ -1093,14 +1100,17 @@ describe('POST /api/mcp (BY-05)', () => {
       status: 'pending',
       deliveryId: 'v1',
       retryAfterSeconds: 30,
+      stop: true,
+      reason: 'gate_pending',
     });
-    expect(String((first.structured as { summary?: string }).summary)).toMatch(/do not busy-poll/i);
+    expect(String((first.structured as { summary?: string }).summary)).toMatch(/STOP this agent run/i);
     const firstWarnings = (first.structured as { warnings?: Array<{ code: string }> }).warnings ?? [];
     expect(firstWarnings.some((w) => w.code === 'call_end')).toBe(true);
     expect(firstWarnings.some((w) => w.code === 'gate_poll_backoff')).toBe(false);
 
     const second = await callTool(app, 'get_gate_verdict', { sessionKey }, { 'mcp-session-id': sessionId });
     expect(second.isError).toBe(false);
+    expect(second.structured).toMatchObject({ stop: true, reason: 'gate_pending' });
     const secondWarnings = (second.structured as { warnings?: Array<{ code: string }> }).warnings ?? [];
     expect(secondWarnings.some((w) => w.code === 'gate_poll_backoff')).toBe(true);
     expect(secondWarnings.some((w) => w.code === 'call_end')).toBe(true);
@@ -1196,7 +1206,12 @@ describe('POST /api/mcp (BY-05)', () => {
         { 'mcp-session-id': sessionId, authorization: `Bearer ${bearer}` },
       );
       expect(verdict.isError).toBe(false);
-      expect(verdict.structured).toMatchObject({ status: 'green', access: 'terminal_receipt' });
+      expect(verdict.structured).toMatchObject({
+        status: 'green',
+        access: 'terminal_receipt',
+        stop: true,
+        reason: 'gate_green',
+      });
 
       const write = await callTool(
         app,
@@ -1512,6 +1527,9 @@ describe('POST /api/mcp (BY-05)', () => {
     // The rest of the loop must survive the rewrite.
     expect(instructions).toMatch(/sessionKey/);
     expect(instructions).toMatch(/get_gate_verdict/);
+    expect(instructions).toMatch(/one-shot check/i);
+    expect(instructions).toMatch(/pending returns stop:true/i);
+    expect(instructions).not.toMatch(/poll get_gate_verdict until green/i);
     expect(instructions).toMatch(/honour stop/i);
   });
 
