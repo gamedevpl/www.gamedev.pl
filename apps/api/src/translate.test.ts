@@ -35,6 +35,80 @@ describe('NoopTranslator', () => {
     const texts = ['feat: add player jump', 'Wire up collision'];
     expect(await translator.translate(texts, 'pl')).toEqual(texts);
   });
+
+  it('answers null rather than echoing, so callers cannot mislabel the source language', async () => {
+    expect(await new NoopTranslator().toBilingual()).toBeNull();
+  });
+});
+
+describe('VertexTranslator.toBilingual', () => {
+  it('asks for both languages in one call and returns them', async () => {
+    let prompt = '';
+    const translator = new VertexTranslator({
+      client: genaicode(
+        stubProvider('{"en":"Drawing the soldiers.","pl":"Rysuję żołnierzy."}', (r) => {
+          prompt = JSON.stringify(r);
+        }),
+      ),
+    });
+
+    expect(await translator.toBilingual('Rysuję żołnierzy.', 'pl')).toEqual({
+      en: 'Drawing the soldiers.',
+      localized: 'Rysuję żołnierzy.',
+    });
+    // The whole point of the rewrite: the model is told not to assume the input is
+    // English, so a Polish or German source normalizes rather than passing through
+    // into a field every reader treats as the English fallback.
+    expect(prompt).toContain('ANY language');
+  });
+
+  it('still calls for an English creator, because the source may not be English', async () => {
+    // The one-directional version returned early on locale 'en'. That is exactly how a
+    // German sentence ended up stored as the English fallback.
+    let calls = 0;
+    const translator = new VertexTranslator({
+      client: genaicode(
+        stubProvider('{"en":"Drawing the soldiers."}', () => {
+          calls += 1;
+        }),
+      ),
+    });
+
+    expect(await translator.toBilingual('Zeichne die Soldaten.', 'en')).toEqual({
+      en: 'Drawing the soldiers.',
+      localized: 'Drawing the soldiers.',
+    });
+    expect(calls).toBe(1);
+  });
+
+  it('serves a repeat from cache without a second call', async () => {
+    let calls = 0;
+    const translator = new VertexTranslator({
+      client: genaicode(
+        stubProvider('{"en":"Drawing the soldiers.","pl":"Rysuję żołnierzy."}', () => {
+          calls += 1;
+        }),
+      ),
+    });
+
+    await translator.toBilingual('Rysuję żołnierzy.', 'pl');
+    await translator.toBilingual('Rysuję żołnierzy.', 'pl');
+    expect(calls).toBe(1);
+  });
+
+  it('answers null when the model omits English, since that is the universal fallback', async () => {
+    const translator = new VertexTranslator({
+      client: genaicode(stubProvider('{"pl":"Rysuję żołnierzy."}')),
+    });
+    expect(await translator.toBilingual('Drawing the soldiers.', 'pl')).toBeNull();
+  });
+
+  it('answers null on a malformed response rather than throwing at the caller', async () => {
+    const translator = new VertexTranslator({
+      client: genaicode(stubProvider('not json at all')),
+    });
+    expect(await translator.toBilingual('Drawing the soldiers.', 'pl')).toBeNull();
+  });
 });
 
 describe('VertexTranslator', () => {

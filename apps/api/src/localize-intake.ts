@@ -15,10 +15,13 @@
 //   - Decorative. Any failure returns null and the caller stores the source text. A build
 //     must never fail, and an agent must never be blocked, because a sentence could not
 //     be translated.
-//   - Returns null for "no translation" rather than echoing the input, so a caller cannot
-//     accidentally tag English text with a Polish locale.
+//   - Normalizes in both directions. `text` is documented as English and frequently is
+//     not — an agent talking to a Polish creator writes Polish, one talking to neither
+//     writes something else again — so intake decides what English *is* rather than
+//     assuming the input already was. An en→en or pl→pl round trip is a normal outcome,
+//     not a wasted call.
 import { sanitizeCreatorText } from './submission-status.js';
-import { normalizeLocale, type TranslationKind, type Translator } from './translate.js';
+import { SECONDARY_LOCALE, type TranslationKind, type Translator } from './translate.js';
 
 export interface IntakeLocalizationOptions {
   /**
@@ -32,30 +35,61 @@ export interface IntakeLocalizationOptions {
   maxLength: number;
 }
 
+/** What to store: English as the universal fallback, plus the secondary language. */
+export interface IntakeText {
+  /** Goes in `text`. English whenever we could produce it, else the source unchanged. */
+  text: string;
+  /**
+   * Goes in `textLocalized` + `locale`. Absent only when normalization produced nothing —
+   * not conditioned on who the creator is, so a reader in either language always has a
+   * version to match.
+   */
+  textLocalized?: string;
+  locale?: string;
+}
+
 /**
- * Translate one piece of text into the creator's language, or answer null.
+ * Normalize one piece of text into **both** stored languages, whatever it arrived in.
  *
- * `recordLocale` is the creator's language from the submission record. Anything that
- * normalizes to `en` — including an unknown tag — skips the call entirely.
+ * Deliberately does not take the creator's locale. Two separate failures made that
+ * argument the wrong thing to branch on:
+ *
+ *   - Nothing enforces what language an agent writes in. `text` is documented as English
+ *     and often is not, so even for an English-reading creator the question is "is what
+ *     we are about to store actually English", not "does this need translating".
+ *   - The record's locale is routinely wrong. A game created over MCP has no
+ *     `accept-language` to fall back on, so it lands on `en` unless the agent passed one;
+ *     eight consecutive self-build games did not. Branching on it meant a Polish creator
+ *     watching a Polish build read English all the way through.
+ *
+ * Storing both makes the record's locale irrelevant to display: the status page matches
+ * the reader's own UI language and always finds one of the two. It costs the same single
+ * call either way, because the model returns both halves at once.
+ *
+ * Fail-open in the strong sense: if normalization produces nothing, the caller stores
+ * exactly what arrived, and no reader ever retries it.
  */
-export async function localizeAtIntake(
+export async function normalizeAtIntake(
   translator: Translator,
   text: string,
-  recordLocale: string | undefined,
   options: IntakeLocalizationOptions,
-): Promise<{ textLocalized: string; locale: string } | null> {
-  const locale = normalizeLocale(recordLocale);
-  if (locale === 'en' || !text.trim()) return null;
+): Promise<IntakeText> {
+  const source = text.trim();
+  if (!source) return { text };
+
+  const clean = (value: string) =>
+    sanitizeCreatorText(value, { singleLine: options.kind === 'log' }).slice(0, options.maxLength);
+
   try {
-    const [translated] = await translator.translate([text], locale, { kind: options.kind });
-    const clean = translated
-      ? sanitizeCreatorText(translated, { singleLine: options.kind === 'log' }).slice(0, options.maxLength)
-      : '';
-    // Translators fail open by returning the source unchanged, and NoopTranslator always
-    // does. Storing that would tag the source language as the target one and stop the
-    // reader ever seeing a real translation, so unchanged counts as no translation.
-    return clean && clean !== text ? { textLocalized: clean, locale } : null;
+    const both = await translator.toBilingual(source, SECONDARY_LOCALE, { kind: options.kind });
+    if (!both) return { text };
+    const en = clean(both.en) || text;
+    const localized = clean(both.localized);
+    // Equal halves are normal — a short source already in one language often renders the
+    // same both ways. Store the pair anyway: the reader match is on `locale`, and a
+    // missing half sends that reader to the English fallback instead.
+    return localized ? { text: en, textLocalized: localized, locale: SECONDARY_LOCALE } : { text: en };
   } catch {
-    return null;
+    return { text };
   }
 }

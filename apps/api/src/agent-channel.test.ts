@@ -172,11 +172,12 @@ describe('agent build channel', () => {
     // costs one model call per poll per viewer.
     const store = new InMemoryStore();
     await seedSubmission(store);
-    const asked: string[][] = [];
+    const asked: string[] = [];
     const translator: Translator = {
-      translate: async (texts) => {
-        asked.push(texts);
-        return texts.map((t) => `PL:${t}`);
+      translate: async (texts) => texts,
+      toBilingual: async (text) => {
+        asked.push(text);
+        return { en: text, localized: `PL:${text}` };
       },
     };
     app = await createApp(store, { translator });
@@ -189,9 +190,10 @@ describe('agent build channel', () => {
     });
 
     const events = await store.listBuildEvents(ISSUE);
+    expect(events[0]!.text).toBe('Drawing the soldiers.');
     expect(events[0]!.textLocalized).toBe('PL:Drawing the soldiers.');
     expect(events[0]!.locale).toBe('pl');
-    expect(asked).toEqual([['Drawing the soldiers.']]);
+    expect(asked).toEqual(['Drawing the soldiers.']);
 
     // Reading the status any number of times must not translate anything. This is the
     // assertion that would have caught 2026-08-04: the leak was not a bad translation,
@@ -202,14 +204,72 @@ describe('agent build channel', () => {
     expect(asked).toHaveLength(1);
   });
 
+  it('stores English in `text` even when the agent wrote the report in Polish', async () => {
+    // Nothing enforces the language an agent writes in. An agent talking to a Polish
+    // creator writes Polish into `text`, and `text` is the field every reader falls back
+    // to — so an English reader on a shared draft link was shown Polish with no second
+    // version stored. Normalization decides what English is rather than assuming.
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    const translator: Translator = {
+      translate: async (texts) => texts,
+      toBilingual: async (text) => ({ en: `EN:${text}`, localized: text }),
+    };
+    app = await createApp(store, { translator });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/progress',
+      headers: agentHeaders(),
+      payload: { text: 'Rysuję żołnierzy.' },
+    });
+
+    const events = await store.listBuildEvents(ISSUE);
+    expect(events[0]!.text).toBe('EN:Rysuję żołnierzy.');
+    expect(events[0]!.textLocalized).toBe('Rysuję żołnierzy.');
+    expect(events[0]!.locale).toBe('pl');
+  });
+
+  it('stores both languages even when the game record says its creator reads English', async () => {
+    // The record's locale is routinely wrong: a game created over MCP has no
+    // accept-language to fall back on, so it lands on 'en' unless the agent passed one —
+    // eight consecutive self-build games did not, and their Polish creator read English
+    // throughout. Storing both makes that field irrelevant to what a reader sees.
+    const store = new InMemoryStore();
+    await store.createSubmission(4242, 'g:owner', 'Squad game');
+    await store.setSubmissionLocale(4242, 'en');
+    const translator: Translator = {
+      translate: async (texts) => texts,
+      toBilingual: async (text) => ({ en: `EN:${text}`, localized: `PL:${text}` }),
+    };
+    app = await createApp(store, { translator });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/progress',
+      headers: agentHeaders(4242),
+      payload: { text: 'Zeichne die Soldaten.' },
+    });
+
+    const events = await store.listBuildEvents(4242);
+    expect(events[0]!.text).toBe('EN:Zeichne die Soldaten.');
+    expect(events[0]!.textLocalized).toBe('PL:Zeichne die Soldaten.');
+    expect(events[0]!.locale).toBe('pl');
+
+    // And a Polish reader gets Polish, despite the record claiming English.
+    const status = await app.inject({ method: 'GET', url: `/api/submissions/${mintToken(4242, secret)}?locale=pl` });
+    expect(status.json().events[0].text).toBe('PL:Zeichne die Soldaten.');
+  });
+
   it('does not translate when the agent already sent both languages', async () => {
     const store = new InMemoryStore();
     await seedSubmission(store);
     let calls = 0;
     const translator: Translator = {
-      translate: async (texts) => {
+      translate: async (texts) => texts,
+      toBilingual: async () => {
         calls++;
-        return texts;
+        return null;
       },
     };
     app = await createApp(store, { translator });
@@ -235,7 +295,8 @@ describe('agent build channel', () => {
     await seedSubmission(store);
     let calls = 0;
     const translator: Translator = {
-      translate: async () => {
+      translate: async (texts) => texts,
+      toBilingual: async () => {
         calls++;
         throw new Error('vertex is down');
       },

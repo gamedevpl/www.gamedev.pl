@@ -2444,7 +2444,12 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         properties: {
           sessionKey: SESSION_KEY_PROP,
           step: { type: 'string', enum: [...BUILD_STEPS] },
-          text: { type: 'string', description: 'English progress sentence, ≤300 chars.' },
+          text: {
+            type: 'string',
+            description:
+              'One short progress sentence, ≤300 chars. English preferred; any language is accepted and ' +
+              'normalized on arrival, so never skip the update because you are speaking another language.',
+          },
           // These two carry the whole point of the field pair, so they say so. Declared
           // without descriptions, agents sent `text` alone and the creator's thread fell
           // back to English on every line — the platform then paid a model to put it back
@@ -2453,7 +2458,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             type: 'string',
             description:
               "The same sentence in the creator's language — the first entry of get_brief.locales. " +
-              "Send it whenever that locale is not 'en': it is what the creator actually reads.",
+              'Sending it with locale is the cheap path: the pair is stored as-is and costs nothing. ' +
+              'Omit it and the platform normalizes `text` into both languages itself.',
           },
           locale: {
             type: 'string',
@@ -2473,7 +2479,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         // — which names neither the field that was missing nor the ones that exist.
         if (typeof args.text !== 'string' || !args.text.trim()) {
           return toolErr(
-            'report_progress needs text: a short English sentence about what you are doing. ' +
+            'report_progress needs text: a short sentence about what you are doing. ' +
               "Send textLocalized + locale alongside it when get_brief.locales[0] is not 'en' — that pair is what the creator reads. " +
               `Optional: step (one of ${BUILD_STEPS.join(', ')}), done, total.`,
           );

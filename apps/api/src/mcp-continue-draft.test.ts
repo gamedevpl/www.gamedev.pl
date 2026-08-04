@@ -188,11 +188,12 @@ describe('MCP continue_draft', () => {
     const store = new InMemoryStore();
     await seedGreenDraft(store);
     await store.setSubmissionLocale(DRAFT_ISSUE, 'pl');
-    const asked: Array<{ texts: string[]; kind?: string }> = [];
+    const asked: Array<{ text: string; kind?: string }> = [];
     const translator: Translator = {
-      translate: async (texts, _locale, opts) => {
-        asked.push({ texts, kind: opts?.kind });
-        return texts.map((t) => `PL:${t}`);
+      translate: async (texts) => texts,
+      toBilingual: async (text, _locale, opts) => {
+        asked.push({ text, kind: opts?.kind });
+        return { en: text, localized: `PL:${text}` };
       },
     };
     const headers = await creatorHeaders(store);
@@ -215,7 +216,7 @@ describe('MCP continue_draft', () => {
     // kind must be 'message', never 'log'. The log prompt compresses to one short line,
     // which on a numbered change request hands the creator a summary of their own
     // request with pieces missing.
-    expect(asked).toEqual([{ texts: ['Make the paddle wider and add a second ball.'], kind: 'message' }]);
+    expect(asked).toEqual([{ text: 'Make the paddle wider and add a second ball.', kind: 'message' }]);
   });
 
   it('leaves the relayed request in its own language when translation fails', async () => {
@@ -226,7 +227,8 @@ describe('MCP continue_draft', () => {
     await seedGreenDraft(store);
     await store.setSubmissionLocale(DRAFT_ISSUE, 'pl');
     const translator: Translator = {
-      translate: async () => {
+      translate: async (texts) => texts,
+      toBilingual: async () => {
         throw new Error('vertex is down');
       },
     };
@@ -255,9 +257,10 @@ describe('MCP continue_draft', () => {
     await store.setSubmissionLocale(DRAFT_ISSUE, 'pl');
     let calls = 0;
     const translator: Translator = {
-      translate: async (texts) => {
+      translate: async (texts) => texts,
+      toBilingual: async (text) => {
         calls++;
-        return texts;
+        return { en: text, localized: `PL:${text}` };
       },
     };
     app = await createApp(store, undefined, translator);

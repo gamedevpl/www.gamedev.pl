@@ -48,7 +48,7 @@ import {
 import { seedPayload } from './seed-status.js';
 import { type CreatorMessage, type Store, type SubmissionRecord } from './store.js';
 import { BUILD_EVENT_KINDS, BUILD_STEPS, sanitizeCreatorText, type BuildEvent } from './submission-status.js';
-import { localizeAtIntake } from './localize-intake.js';
+import { normalizeAtIntake, type IntakeText } from './localize-intake.js';
 import { createTranslatorFromEnv, type Translator } from './translate.js';
 
 /**
@@ -688,16 +688,14 @@ export async function registerAgentChannelRoutes(
 
   /**
    * The fallback for agents that ignore `report_progress`'s textLocalized/locale pair.
-   * See localize-intake.ts for why this runs on the write and never on the read.
+   * See localize-intake.ts for why this runs on the write and never on the read, and why
+   * it runs for English-reading creators too.
    *
    * Cost is bounded by content: one short sentence, capped at maxEventsPerBuild per
    * build, rather than by how many people are watching.
    */
-  async function localizeForCreator(
-    text: string,
-    record: SubmissionRecord,
-  ): Promise<{ textLocalized: string; locale: string } | null> {
-    return localizeAtIntake(translator, text, record.locale, { kind: 'log', maxLength: MAX_EVENT_TEXT });
+  async function localizeForCreator(text: string): Promise<IntakeText> {
+    return normalizeAtIntake(translator, text, { kind: 'log', maxLength: MAX_EVENT_TEXT });
   }
 
   // IP ceilings sit above the per-build limiters inside each handler. Agents
@@ -741,11 +739,13 @@ export async function registerAgentChannelRoutes(
       // A localized sentence without a language tag cannot be matched to a reader, so
       // it is dropped rather than shown to someone who may not read it.
       const hasLocalized = Boolean(localized && parsed.data.locale);
-      // The agent sending the pair is the cheap path and the one report_progress asks
-      // for; translating is the fallback for the ones that do not.
-      const localization = hasLocalized
-        ? { textLocalized: localized, locale: parsed.data.locale as string }
-        : await localizeForCreator(text, record);
+      // An agent that sends the pair has answered both halves itself and is taken at its
+      // word — that is the zero-cost path report_progress asks for. Everything else goes
+      // through normalization, which decides what English is rather than assuming `text`
+      // already was: agents write in whatever language the conversation is happening in.
+      const intake: IntakeText = hasLocalized
+        ? { text, textLocalized: localized, locale: parsed.data.locale as string }
+        : await localizeForCreator(text);
       const progress = parsed.data.progress
         ? { done: Math.min(parsed.data.progress.done, parsed.data.progress.total), total: parsed.data.progress.total }
         : undefined;
@@ -753,8 +753,10 @@ export async function registerAgentChannelRoutes(
       const event: Omit<BuildEvent, 'id' | 'createdAt'> = {
         kind: parsed.data.kind,
         ...(parsed.data.step ? { step: parsed.data.step } : {}),
-        text,
-        ...(localization ?? {}),
+        text: intake.text,
+        ...(intake.textLocalized && intake.locale
+          ? { textLocalized: intake.textLocalized, locale: intake.locale }
+          : {}),
         ...(progress ? { progress } : {}),
       };
 

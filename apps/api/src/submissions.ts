@@ -86,7 +86,7 @@ import {
   type SubmissionStatusResponse,
 } from './submission-status.js';
 import { InvalidTokenError, mintToken, verifyToken } from './submission-token.js';
-import { localizeAtIntake } from './localize-intake.js';
+import { normalizeAtIntake, type IntakeText } from './localize-intake.js';
 import { createTranslatorFromEnv, normalizeLocale, type Translator } from './translate.js';
 import { isVariantWidth } from './image-variants.js';
 import { logModerationRejection } from './moderation-metrics.js';
@@ -1160,17 +1160,13 @@ export async function registerSubmissionRoutes(
    * chose to type them in; translating those would hand them back a paraphrase of their
    * own request, which is the bug the `origin` field exists to prevent.
    */
-  async function relayedMessageLocalization(
-    origin: 'agent' | 'creator' | undefined,
-    text: string,
-    locale: string | undefined,
-  ): Promise<{ textLocalized: string; locale: string } | undefined> {
-    if (origin !== 'agent') return undefined;
+  async function relayedMessageLocalization(origin: 'agent' | 'creator' | undefined, text: string): Promise<IntakeText> {
+    // A creator's own words are stored exactly as typed, in whatever language they chose.
+    // Normalizing those would rewrite someone's own request back at them.
+    if (origin !== 'agent') return { text };
     // kind 'message', never 'log': a change request runs to numbered points and the log
     // prompt would compress it into a summary with the creator's own details missing.
-    return (
-      (await localizeAtIntake(translator, text, locale, { kind: 'message', maxLength: MAX_REVISION_CHARS })) ?? undefined
-    );
+    return normalizeAtIntake(translator, text, { kind: 'message', maxLength: MAX_REVISION_CHARS });
   }
 
   async function startImprovementRound(input: {
@@ -1239,11 +1235,13 @@ export async function registerSubmissionRoutes(
     // note would read as a second, newer instruction to act on.
     if (input.requestedBy) {
       try {
-        const localization = await relayedMessageLocalization(input.requestedBy, input.text, input.locale);
-        await store.appendCreatorMessage(jobId, input.text, {
+        const relayed = await relayedMessageLocalization(input.requestedBy, input.text);
+        await store.appendCreatorMessage(jobId, relayed.text, {
           origin: input.requestedBy,
           delivered: true,
-          ...(localization ?? {}),
+          ...(relayed.textLocalized && relayed.locale
+            ? { textLocalized: relayed.textLocalized, locale: relayed.locale }
+            : {}),
         });
       } catch (seedError) {
         // Best effort. The request still reaches the agent as the brief, so a failure
@@ -1322,10 +1320,12 @@ export async function registerSubmissionRoutes(
       // of a conversation held somewhere else — usually in English, whatever the creator
       // was speaking — so the thread must not present it as the creator's own words.
       const origin = input.openedBy === 'agent' ? ('agent' as const) : ('creator' as const);
-      const localization = await relayedMessageLocalization(origin, input.feedback, record.locale);
-      await store.appendCreatorMessage(input.issueNumber, input.feedback, {
+      const relayed = await relayedMessageLocalization(origin, input.feedback);
+      await store.appendCreatorMessage(input.issueNumber, relayed.text, {
         origin,
-        ...(localization ?? {}),
+        ...(relayed.textLocalized && relayed.locale
+          ? { textLocalized: relayed.textLocalized, locale: relayed.locale }
+          : {}),
       });
     } catch (queueError) {
       input.log.error({ err: queueError, issueNumber: input.issueNumber }, 'failed to queue continue_draft feedback');
