@@ -332,6 +332,8 @@
     "rail": {
       "connect": "Podłącz agenta",
       "build": "Postęp buildu",
+      "media": "Zrzuty ekranu",
+      "mediaEmpty": "Nie ma jeszcze zrzutów — pojawią się tu, gdy agent je wyśle.",
       "credentials": "Klucze i podłączone agenty",
       "credentialsHint": "Klucz twórcy, legacy klucz per-gra i agenty, które zatwierdziłeś.",
       "kickoffDetails": "Prompt budowy",

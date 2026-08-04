@@ -28,6 +28,7 @@ import { StudioAgentKeyPanel } from './StudioAgentKeyPanel.js';
 import { StudioConnectCard } from './StudioConnectCard.js';
 import { StudioCreatorAgentKeyPanel } from './StudioCreatorAgentKeyPanel.js';
 import { StudioDetailsBuildProgress } from './StudioDetailsBuildProgress.js';
+import { StudioDetailsMedia } from './StudioDetailsMedia.js';
 import { StudioOAuthClientsPanel } from './StudioOAuthClientsPanel.js';
 import { SubmissionStatusView } from './SubmissionStatusView.js';
 import {
@@ -731,9 +732,17 @@ export function CreatorStudioView({
 
                 {/* The thread stays put. Details opens beside it on a wide screen and over
                   it on a narrow one; only playtest, which needs the whole viewport to be
-                  a game, replaces it. Agent screenshots float as dismissable toasts. */}
-                {tab !== 'playtest' && tab !== 'edit' ? (
-                  <StudioShotToasts token={threadToken ?? activeGame.token} placement="near-play" />
+                  a game, replaces it. Agent screenshots float as dismissable toasts that
+                  open Details → Media. Hide while Details or the shelf is open. */}
+                {tab !== 'playtest' && tab !== 'edit' && tab !== 'details' && !shelfOpen ? (
+                  <StudioShotToasts
+                    token={threadToken ?? activeGame.token}
+                    placement="near-play"
+                    onOpenMedia={() => {
+                      setDetailsPane('media');
+                      openTab('details');
+                    }}
+                  />
                 ) : null}
 
                 <div className={`studio-workspace${tab === 'details' ? ' is-details-open' : ''}`}>
@@ -959,7 +968,7 @@ function StudioShelfList({
 }
 
 /** Cursor-style Details strip — one pane at a time, chosen by icon. */
-type DetailsPaneId = 'overview' | 'connect' | 'build' | 'keys' | 'stats';
+type DetailsPaneId = 'overview' | 'connect' | 'build' | 'media' | 'keys' | 'stats';
 
 type DetailsPaneDef = {
   id: DetailsPaneId;
@@ -1032,6 +1041,7 @@ function DetailsPanel({
     { id: 'overview', icon: 'eye', labelKey: 'studioPanel.rail.overview' },
     ...(showConnect ? [{ id: 'connect' as const, icon: 'signal' as const, labelKey: 'studioPanel.rail.connect' }] : []),
     ...(showProgress ? [{ id: 'build' as const, icon: 'wrench' as const, labelKey: 'studioPanel.rail.build' }] : []),
+    { id: 'media', icon: 'image', labelKey: 'studioPanel.rail.media' },
     { id: 'keys', icon: 'lock', labelKey: 'studioPanel.rail.credentials' },
     ...(catalogLive ? [{ id: 'stats' as const, icon: 'star' as const, labelKey: 'studioPanel.rail.stats' }] : []),
   ];
@@ -1132,6 +1142,10 @@ function DetailsPanel({
             ) : (
               <p className="studio-rail-empty">{t('studioPanel.rail.buildEmpty')}</p>
             )
+          ) : null}
+
+          {activePane === 'media' ? (
+            <StudioDetailsMedia token={game.token} emptyLabel={t('studioPanel.rail.mediaEmpty')} />
           ) : null}
 
           {activePane === 'keys' ? (

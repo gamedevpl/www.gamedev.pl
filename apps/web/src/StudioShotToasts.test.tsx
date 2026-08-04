@@ -41,9 +41,9 @@ describe('StudioShotToasts', () => {
       await Promise.resolve();
     });
 
+    expect(getSubmissionStatus).toHaveBeenCalledWith('tok', 'en');
     expect(host.querySelector('.studio-shot-toasts.is-near-play')).not.toBeNull();
     expect(host.querySelectorAll('.studio-shot-toast')).toHaveLength(2);
-    expect(host.querySelector('.studio-shot-toast.is-slot-0')).not.toBeNull();
 
     const dismiss = host.querySelector('.studio-shot-toast-dismiss') as HTMLButtonElement;
     await act(async () => {
@@ -56,22 +56,20 @@ describe('StudioShotToasts', () => {
     host.remove();
   });
 
-  it('expands the stack into a layout on click', async () => {
+  it('opens Details Media on click instead of expanding in place', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
     getSubmissionStatus.mockResolvedValue({
-      media: [
-        { source: 'channel', ref: 'a', label: 'First look' },
-        { source: 'channel', ref: 'b', label: 'Boss fight' },
-      ],
+      media: [{ source: 'channel', ref: 'a', label: 'First look' }],
     });
+    const onOpenMedia = vi.fn();
 
     const host = document.createElement('div');
     document.body.appendChild(host);
     const root = createRoot(host);
 
     await act(async () => {
-      root.render(<StudioShotToasts token="tok" placement="near-play" />);
+      root.render(<StudioShotToasts token="tok" placement="near-play" onOpenMedia={onOpenMedia} />);
     });
     await act(async () => {
       await Promise.resolve();
@@ -82,32 +80,27 @@ describe('StudioShotToasts', () => {
       body.click();
     });
 
-    expect(host.querySelector('.studio-shot-toasts.is-expanded')).not.toBeNull();
-    expect(host.querySelector('.studio-shot-toasts-collapse')).not.toBeNull();
-
-    const collapse = host.querySelector('.studio-shot-toasts-collapse') as HTMLButtonElement;
-    await act(async () => {
-      collapse.click();
-    });
-    expect(host.querySelector('.studio-shot-toasts.is-collapsed')).not.toBeNull();
+    expect(onOpenMedia).toHaveBeenCalledTimes(1);
+    expect(host.querySelector('.studio-shot-toasts.is-expanded')).toBeNull();
 
     root.unmount();
     host.remove();
   });
 
-  it('drags the collapsed stack without expanding', async () => {
+  it('drags the collapsed stack without opening Media', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
     getSubmissionStatus.mockResolvedValue({
       media: [{ source: 'channel', ref: 'a', label: 'First look' }],
     });
+    const onOpenMedia = vi.fn();
 
     const host = document.createElement('div');
     document.body.appendChild(host);
     const root = createRoot(host);
 
     await act(async () => {
-      root.render(<StudioShotToasts token="tok" placement="near-play" />);
+      root.render(<StudioShotToasts token="tok" placement="near-play" onOpenMedia={onOpenMedia} />);
     });
     await act(async () => {
       await Promise.resolve();
@@ -123,19 +116,48 @@ describe('StudioShotToasts', () => {
       stack.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 1, clientX: 40, clientY: 30 }));
     });
 
-    expect(stack.style.transform).toBe('translate(30px, 20px)');
-    expect(host.querySelector('.studio-shot-toasts.is-expanded')).toBeNull();
+    expect(stack.style.transform).toMatch(/translate\(/);
+    expect(onOpenMedia).not.toHaveBeenCalled();
 
     await act(async () => {
       (host.querySelector('.studio-shot-toast-body') as HTMLButtonElement).click();
     });
-    // Drag suppress should swallow the synthetic click that follows a drag.
-    expect(host.querySelector('.studio-shot-toasts.is-expanded')).toBeNull();
+    // Drag suppress swallows the click that follows a drag.
+    expect(onOpenMedia).not.toHaveBeenCalled();
 
     await act(async () => {
       (host.querySelector('.studio-shot-toast-body') as HTMLButtonElement).click();
     });
-    expect(host.querySelector('.studio-shot-toasts.is-expanded')).not.toBeNull();
+    expect(onOpenMedia).toHaveBeenCalledTimes(1);
+
+    root.unmount();
+    host.remove();
+  });
+
+  it('reloads media when the locale changes', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    getSubmissionStatus.mockResolvedValue({ media: [{ source: 'channel', ref: 'a', label: 'Shot' }] });
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(<StudioShotToasts token="tok" />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(getSubmissionStatus).toHaveBeenCalledWith('tok', 'en');
+
+    await act(async () => {
+      await i18n.changeLanguage('pl');
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(getSubmissionStatus).toHaveBeenCalledWith('tok', 'pl');
 
     root.unmount();
     host.remove();

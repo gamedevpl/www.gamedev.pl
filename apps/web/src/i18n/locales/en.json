@@ -330,6 +330,8 @@
     "rail": {
       "connect": "Connect your agent",
       "build": "Build progress",
+      "media": "Screenshots",
+      "mediaEmpty": "No screenshots yet — they appear here when the agent posts them.",
       "credentials": "Keys & connected agents",
       "credentialsHint": "Creator key, legacy per-game key, and agents you’ve approved.",
       "kickoffDetails": "Build prompt",

@@ -4505,7 +4505,8 @@ a.user-name--profile:focus-visible {
   box-shadow: 0 0 14px var(--turquoise-glow);
 }
 
-/* Scattered screenshot toast stack inside the game detail — sits under/near Play. */
+/* Scattered screenshot toast stack inside the game detail — sits under/near Play.
+   Click opens Details → Media; expand-in-place was removed. */
 .studio-shot-toasts {
   position: absolute;
   z-index: 40;
@@ -4574,86 +4575,6 @@ a.user-name--profile:focus-visible {
   transform: rotate(5deg) translate(12px, 28px);
   z-index: 1;
   animation-delay: 0.08s;
-}
-
-/* Expanded: comfortable grid under the Play cluster. */
-.studio-shot-toasts.is-expanded {
-  right: 10px;
-  top: 44px;
-  left: auto;
-  bottom: auto;
-  width: min(480px, calc(100% - 20px));
-  height: auto;
-  max-height: min(70vh, 420px);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 10px 10px 12px;
-  border-radius: 14px;
-  border: 1px solid var(--panel-border);
-  background: rgba(15, 20, 24, 0.92);
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(10px);
-  pointer-events: auto;
-  overflow: auto;
-}
-
-.studio-shot-toasts-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  flex: none;
-  padding: 0 2px;
-}
-
-.studio-shot-toasts-toolbar-title {
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.studio-shot-toasts-collapse {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
-  border-radius: 999px;
-  border: 1px solid var(--panel-border);
-  background: transparent;
-  color: var(--muted);
-  font-size: 0.72rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.studio-shot-toasts-collapse:hover {
-  color: var(--text);
-  border-color: rgba(0, 228, 172, 0.35);
-}
-
-.studio-shot-toasts.is-expanded .studio-shot-toasts-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
-  gap: 10px;
-  height: auto;
-  pointer-events: auto;
-}
-
-.studio-shot-toasts.is-expanded .studio-shot-toast {
-  position: relative;
-  left: auto;
-  top: auto;
-  width: auto;
-  transform: none;
-  animation: none;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-}
-
-.studio-shot-toasts.is-expanded .studio-shot-toast-body {
-  cursor: zoom-in;
 }
 
 @keyframes studio-shot-toast-in {
@@ -4737,7 +4658,45 @@ a.user-name--profile:focus-visible {
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
 }
 
-/* Phone: tighter fan; expanded becomes a bottom sheet above the composer. */
+/* Details → Media pane */
+.studio-details-media-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+}
+
+.studio-details-media-card {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  background: var(--panel-card);
+  color: inherit;
+  overflow: hidden;
+  cursor: zoom-in;
+  text-align: left;
+}
+
+.studio-details-media-card img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  background: #0b1018;
+}
+
+.studio-details-media-caption {
+  display: block;
+  padding: 6px 8px 8px;
+  font-size: 0.72rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Phone: tighter fan near Play. */
 @media (max-width: 800px) {
   .studio-shot-toasts.is-collapsed.is-near-play,
   .studio-shot-toasts.is-collapsed.is-bottom-right {
@@ -4763,19 +4722,6 @@ a.user-name--profile:focus-visible {
 
   .studio-shot-toasts.is-collapsed .studio-shot-toast.is-slot-2 {
     transform: rotate(3.5deg) translate(8px, 20px);
-  }
-
-  .studio-shot-toasts.is-expanded {
-    right: 6px;
-    left: 6px;
-    top: auto;
-    bottom: 72px;
-    width: auto;
-    max-height: 42vh;
-  }
-
-  .studio-shot-toasts.is-expanded .studio-shot-toasts-cards {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .studio-shot-toast-caption {
