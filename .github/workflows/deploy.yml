@@ -1,8 +1,17 @@
 name: Deploy to Cloud Run
 
+# Runs after CI succeeds on master — not on the push itself. Every master push used to
+# pay for lint/type-check/test/build twice (CI's build_and_test + this workflow's
+# ci-gate). Waiting on the CI workflow also means deploy inherits the image-boot and
+# games-repo contract jobs, which the old ci-gate never ran.
 on:
-  push:
-    branches: [ master ]
+  workflow_run:
+    workflows: ['CI']
+    types: [completed]
+    branches: [master]
+  # Manual escape hatch: redeploy the current master tip without waiting on a CI run
+  # (e.g. after a Cloud Run config fix that does not need a new commit).
+  workflow_dispatch:
 
 concurrency:
   group: cloud-run-deploy
@@ -13,22 +22,9 @@ permissions:
   id-token: write
 
 jobs:
-  ci-gate:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-      - run: npm ci
-      - run: npm run lint
-      - run: npm run type-check
-      - run: npm run test
-      - run: npm run build
-
   deploy:
-    needs: ci-gate
+    # workflow_run fires for every CI completion, including failures — refuse those.
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     env:
       PROJECT_ID: 'gamedevpl'
@@ -46,9 +42,14 @@ jobs:
       GAMES_STORE_BUCKET: 'gamedevpl-games-store'
       WIF_PROVIDER: 'projects/334141807880/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
       WIF_SERVICE_ACCOUNT: 'github-actions-deployer@gamedevpl.iam.gserviceaccount.com'
+      # workflow_run's github.sha is the default-branch tip at schedule time, not
+      # necessarily the commit CI validated. Prefer the triggering run's head_sha.
+      DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
 
       - name: Authenticate to GCP via Workload Identity Federation
         uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
@@ -61,7 +62,7 @@ jobs:
 
       - name: Build image via Cloud Build
         run: |
-          SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)
+          SHORT_SHA=$(echo "${DEPLOY_SHA}" | cut -c1-7)
           IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/app:${SHORT_SHA}"
           echo "IMAGE=${IMAGE}" >> $GITHUB_ENV
           gcloud builds submit . \
@@ -429,8 +430,8 @@ jobs:
       # broken assembler each return a healthy 200 and a black screen — and a site without
       # playable games is worth nothing (apps/e2e, docs/deployment.md).
       #
-      # `deploy` is a separate job from `ci-gate`, on a fresh runner with no node_modules —
-      # everything before this point is gcloud and curl — so Node is set up here.
+      # `deploy` is a fresh runner with no node_modules — everything before this point is
+      # gcloud and curl — so Node is set up here.
       - name: Set up Node for the browser gate
         uses: actions/setup-node@v4
         with:
