@@ -95,8 +95,12 @@ async function main(): Promise<void> {
   const harnesses: string[] = [];
   const health = process.argv.includes('--health');
   const preview = process.argv.includes('--preview');
-  if (health && preview) {
-    console.error('--health and --preview are mutually exclusive');
+  // The proposal lane: the full acceptance check, except that a behavioural-golden
+  // mismatch is recorded as a finding rather than refusing the candidate. See
+  // GateRunOptions.proposal for why a proposal needs that and a delivery does not.
+  const proposal = process.argv.includes('--proposal');
+  if ([health, preview, proposal].filter(Boolean).length > 1) {
+    console.error('--health, --preview and --proposal are mutually exclusive');
     process.exit(2);
   }
 
@@ -132,7 +136,7 @@ async function main(): Promise<void> {
     },
     // Health asks about today's engine, so the manifest's pin is exactly the thing to
     // ignore. An acceptance run passes nothing and lets the pin (or `main`) decide.
-    health ? { engineRef: 'main' } : preview ? { preview: true } : {},
+    health ? { engineRef: 'main' } : preview ? { preview: true } : proposal ? { proposal: true } : {},
   );
 
   if (health) {
@@ -162,6 +166,7 @@ async function main(): Promise<void> {
       report: outcome.report,
       engineRef: outcome.engineCommit,
       ...(outcome.status ? { status: outcome.status } : {}),
+      ...(outcome.behaviouralDiff ? { behaviouralDiff: true } : {}),
       ...(outcome.screenshot ? { screenshot: outcome.screenshot } : {}),
     });
   }
@@ -171,7 +176,7 @@ async function main(): Promise<void> {
   }
 
   console.log(
-    `\n${health ? 'health check' : preview ? 'preview check' : 'gate'} ${outcome.green ? 'PASSED' : 'FAILED'} for ${slug}@${version} ` +
+    `\n${health ? 'health check' : preview ? 'preview check' : proposal ? 'proposal gate' : 'gate'} ${outcome.green ? 'PASSED' : 'FAILED'} for ${slug}@${version} ` +
       `in ${Math.round(outcome.durationMs / 1000)}s`,
   );
   if (outcome.artifacts.length) console.log(`stored: ${outcome.artifacts.join(', ')}`);

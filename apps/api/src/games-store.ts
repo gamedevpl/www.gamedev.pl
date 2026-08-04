@@ -383,6 +383,11 @@ export type GateVerdict = {
   status?: 'kit_outdated';
   /** First capture PNG under the version prefix, when the run produced one. */
   screenshot?: string;
+  /**
+   * The candidate changes a committed behavioural golden — set only by the proposal lane,
+   * and only beside a green verdict. A finding for whoever reviews it, never a refusal.
+   */
+  behaviouralDiff?: boolean;
 };
 
 export type PublicationState = 'published' | 'archived' | 'disabled';
@@ -545,6 +550,8 @@ export interface GamesStore {
       engineRef?: string;
       status?: 'kit_outdated';
       screenshot?: string;
+      /** Proposal lane only — see {@link GateVerdict.behaviouralDiff}. */
+      behaviouralDiff?: boolean;
     },
   ): Promise<void>;
   /**
@@ -991,6 +998,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
         report: result.report,
         ...(result.status ? { status: result.status } : {}),
         ...(result.screenshot ? { screenshot: result.screenshot } : {}),
+        ...(result.behaviouralDiff ? { behaviouralDiff: true } : {}),
       };
       // First writer wins: the ref the *first* gate run checked against is the one the
       // verdict is reproducible against, and a re-run must not quietly repin it.

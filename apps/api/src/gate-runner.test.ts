@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import { runGate, type GateRunnerDeps } from './gate-runner.js';
+import { runGate, type GateRunnerDeps, failedOnlyOnTrace } from './gate-runner.js';
 import type { GamesStore, VersionManifest } from './games-store.js';
 
 const MANIFEST: VersionManifest = {
@@ -477,5 +477,27 @@ describe('runGate', () => {
     expect(
       (store as unknown as { putCandidateSources: ReturnType<typeof vi.fn> }).putCandidateSources,
     ).not.toHaveBeenCalled();
+  });
+});
+
+describe('failedOnlyOnTrace', () => {
+  it('recognises the trace stage refusing a changed golden', () => {
+    expect(failedOnlyOnTrace('replaying TRACE.json\nTRACE.json differs from the committed golden')).toBe(true);
+  });
+
+  it('refuses to shortcut when another stage also failed', () => {
+    // The one mistake this must not make: handing a reviewer a red game with a green
+    // badge because the output happened to mention the trace somewhere.
+    expect(failedOnlyOnTrace('typecheck failed: TS2345\nTRACE.json differs from the golden')).toBe(false);
+    expect(failedOnlyOnTrace('TRACE.json changed\nplaytest failed: never reached lap 3')).toBe(false);
+  });
+
+  it('is not fooled by a run that merely mentions the trace', () => {
+    expect(failedOnlyOnTrace('replayed TRACE.json: 0 differences\nvalidate failed: Check 9')).toBe(false);
+    expect(failedOnlyOnTrace('smoke error: page did not load')).toBe(false);
+  });
+
+  it('needs both the stage and a difference — naming the file alone is not enough', () => {
+    expect(failedOnlyOnTrace('wrote TRACE.json')).toBe(false);
   });
 });

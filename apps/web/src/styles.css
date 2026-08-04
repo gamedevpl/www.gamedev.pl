@@ -14081,3 +14081,86 @@ a.user-name--profile:focus-visible {
   gap: 14px;
   padding-top: 4px;
 }
+
+.proposal-diff {
+  display: grid;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.proposal-diff-file {
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.proposal-diff-file > header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 11px;
+  background: var(--panel-card);
+  border-bottom: 1px solid var(--panel-border);
+  font-size: 0.78rem;
+}
+
+.proposal-diff-counts {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.proposal-diff-counts .is-add {
+  color: var(--turquoise);
+}
+
+.proposal-diff-counts .is-del {
+  color: var(--error);
+}
+
+/*
+ * Its own scroll container. A long line in somebody else's code must never make the page
+ * itself scroll sideways — the diff is the one thing here whose width we do not control.
+ */
+.proposal-diff-body {
+  overflow-x: auto;
+}
+
+.proposal-diff-body table {
+  border-collapse: collapse;
+  width: 100%;
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 0.74rem;
+}
+
+.proposal-diff-body td {
+  padding: 1px 8px;
+  white-space: pre;
+  vertical-align: top;
+}
+
+.proposal-diff-ln {
+  color: var(--muted);
+  text-align: right;
+  user-select: none;
+  font-variant-numeric: tabular-nums;
+  width: 1%;
+}
+
+.proposal-diff-body tr.is-add td {
+  background: rgba(0, 228, 172, 0.12);
+}
+
+.proposal-diff-body tr.is-del td {
+  background: rgba(255, 107, 107, 0.12);
+}
+
+.proposal-diff-text {
+  width: 100%;
+}
+
+.card-contributors {
+  margin: 2px 0 0;
+  font-size: 0.76rem;
+  color: var(--muted);
+}

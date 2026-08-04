@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { ProposalDiffView } from './ProposalDiffView.js';
 import {
   acceptProposal,
   declineProposal,
@@ -46,6 +47,10 @@ export function ProposalReviewCard(props: {
   const { proposal } = props;
   const [busy, setBusy] = useState(false);
   const [mode, setMode] = useState<'idle' | 'changes' | 'decline'>('idle');
+  // The diff is a second click, not a wall of TypeScript in front of the decision: a
+  // creator judging a stranger's change is being asked "is this good", and the honest way
+  // to answer that is to play it.
+  const [showDiff, setShowDiff] = useState(false);
   const [text, setText] = useState('');
   const [reason, setReason] = useState<DeclineReason>('not_the_direction');
   const [error, setError] = useState<string | null>(null);
@@ -163,11 +168,17 @@ export function ProposalReviewCard(props: {
                 ▶ {t('reviews.play')}
               </button>
             ) : null}
-            {props.onViewChanges ? (
-              <button type="button" className="remix-btn is-quiet" onClick={() => props.onViewChanges?.(proposal)}>
-                {t('reviews.viewChanges')}
-              </button>
-            ) : null}
+            <button
+              type="button"
+              className="remix-btn is-quiet"
+              aria-expanded={showDiff}
+              onClick={() => {
+                setShowDiff((open) => !open);
+                props.onViewChanges?.(proposal);
+              }}
+            >
+              {t('reviews.viewChanges')}
+            </button>
             <button
               type="button"
               className="remix-btn is-quiet"
@@ -183,6 +194,7 @@ export function ProposalReviewCard(props: {
               {t('reviews.decline')}
             </button>
           </div>
+          {showDiff ? <ProposalDiffView proposalId={proposal.id} /> : null}
           {/* Said on the card, not in a confirm dialog: it is the fact that makes accepting
               safe to try, and a dialog would put it where only the hesitant would read it. */}
           <p className="propose-note">{t('reviews.acceptHelp')}</p>

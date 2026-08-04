@@ -69,6 +69,20 @@
         "title": "A game you follow was updated",
         "body": "“{{title}}” has a new version."
       }
+    },
+    "proposal": {
+      "awaiting_review": {
+        "title": "A proposed change is waiting",
+        "body": "Someone proposed a change to {{title}}. It passed our checks — you decide."
+      },
+      "decided": {
+        "title": "Your proposal was reviewed",
+        "body": "Your proposal for {{title}} has a decision."
+      },
+      "merged": {
+        "title": "Your contribution is live",
+        "body": "Your change is now part of {{title}}."
+      }
     }
   },
   "header": {
@@ -226,7 +240,8 @@
       "last_played": "Last played",
       "alpha": "A–Z"
     },
-    "about": "About"
+    "about": "About",
+    "withContributions": "with contributions from"
   },
   "recommendations": {
     "reasonContinue": "Continue playing",
@@ -1416,6 +1431,11 @@
       "blocked": "Blocked",
       "blockedHelp": "Blocked people can't propose to any of your games.",
       "unblock": "Unblock"
-    }
+    },
+    "diffSummary": "{{files}} files changed · +{{additions}} −{{deletions}}",
+    "diffEmpty": "No file changes to show.",
+    "diffTruncated": "This file's diff is long — showing the first part.",
+    "diffOmitted": "{{count}} more changed files not shown.",
+    "diffUnavailable": "Couldn't load the changes. You can still play it and read the description."
   }
 }

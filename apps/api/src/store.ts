@@ -877,7 +877,27 @@ export type NotificationType =
    * Someone asked to join the closed beta. Not a job alert — there is no issue number —
    * but it is still an operator action: approve (or not) via the waitlist tooling.
    */
-  | 'operator.waitlist_joined';
+  | 'operator.waitlist_joined'
+  /**
+   * A proposal is waiting on this creator — somebody proposed a change to one of their
+   * games and it passed our gate.
+   *
+   * Deliberately its own type rather than folded into the submission family: it is not
+   * about a job (a proposal has none, by design), and the submission copy renders
+   * "«your game» happened", where this is "somebody wants to change «your game»" — a
+   * different sentence with a different actor.
+   */
+  | 'proposal.awaiting_review'
+  /** A proposal this person sent was decided — accepted, declined, or bounced back. */
+  | 'proposal.decided'
+  /**
+   * A proposal this person sent is live in the game. The watcher relationship starts
+   * here: merged contributors get digest visibility, never approval rights.
+   */
+  | 'proposal.merged';
+
+/** The proposal family, split out for the same reason the submission one is. */
+export type ProposalNotificationType = Extract<NotificationType, `proposal.${string}`>;
 
 /**
  * The types that are about one submission, and so can render "«game title» happened".

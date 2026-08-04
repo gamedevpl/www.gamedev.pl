@@ -68,6 +68,14 @@ export interface CatalogEntry {
    * byline links to `/:handle`.
    */
   creatorHandle?: string | null;
+  /**
+   * Handles of people whose proposals were merged into the live version.
+   *
+   * Joined by the API from the version manifest, never from SPEC. Each links to
+   * `/:handle` the same way the owner byline does — a merged contribution is credited
+   * publicly or it is not credited at all.
+   */
+  contributorHandles?: string[];
 }
 
 /** Platform sentinel used in fixture / seed SPECs for games with no human creator. */
@@ -233,6 +241,13 @@ export function normalizeCatalogEntry(value: unknown): CatalogEntry | null {
     touch: parseCatalogTouch(entry.touch),
     submittedBy: parseCatalogSubmittedBy(entry.submittedBy ?? entry.submitted_by),
     creatorHandle: parseCatalogCreatorHandle(entry.creatorHandle),
+    // Validated element-wise for the same reason the owner handle is: a byline that
+    // links somewhere is a byline that can link somewhere wrong.
+    contributorHandles: Array.isArray(entry.contributorHandles)
+      ? entry.contributorHandles
+          .map((handle) => parseCatalogCreatorHandle(handle))
+          .filter((handle): handle is string => handle !== null)
+      : undefined,
   };
 }
 

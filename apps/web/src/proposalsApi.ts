@@ -62,6 +62,26 @@ export type ContributionRefusal =
 
 export type ContributionEligibility = { canPropose: true } | { canPropose: false; reason: ContributionRefusal };
 
+export type DiffLine = { kind: 'context' | 'add' | 'del'; text: string; a?: number; b?: number };
+
+export type FileDiff = {
+  path: string;
+  status: 'added' | 'removed' | 'modified';
+  additions: number;
+  deletions: number;
+  lines: DiffLine[];
+  /** This file's diff was cut short by the server's line cap. */
+  truncated?: boolean;
+};
+
+export type ProposalDiff = {
+  files: FileDiff[];
+  additions: number;
+  deletions: number;
+  /** Changed files the server omitted. Surfaced, never swallowed. */
+  omittedFiles: number;
+};
+
 export type ProposalApiError = Error & { status?: number; code?: string; category?: string };
 
 /**
@@ -143,6 +163,11 @@ export async function platformProposals(): Promise<Proposal[]> {
 export async function getProposal(id: string): Promise<Proposal> {
   const { proposal } = await request<{ proposal: Proposal }>(`/api/proposals/${encodeURIComponent(id)}`);
   return proposal;
+}
+
+export async function getProposalDiff(id: string): Promise<ProposalDiff> {
+  const { diff } = await request<{ diff: ProposalDiff }>(`/api/proposals/${encodeURIComponent(id)}/diff`);
+  return { ...diff, files: asList(diff?.files) };
 }
 
 export async function withdrawProposal(id: string): Promise<Proposal> {

@@ -19,7 +19,8 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { isAdminSession } from './admin.js';
-import type { GamesStore } from './games-store.js';
+import type { GamesStore, SourceFile } from './games-store.js';
+import { diffProposal } from './proposal-diff.js';
 import type { ContentChecker } from './moderation.js';
 import { resolveOwnerOfRecord } from './owner-of-record.js';
 import { DECLINE_REASONS, toPublicProposalState, type DeclineReason } from './proposal-state.js';
@@ -68,6 +69,14 @@ const BlockSchema = z.object({
 export interface ProposalRoutesOptions {
   store: Store;
   gamesStore?: GamesStore | null;
+  /** Resolves a proposal's base sources, for the diff. Both lanes. */
+  resolveBase?: (slug: string) => Promise<{ files: SourceFile[] } | null>;
+  /** Lands an accepted repo-lane proposal in the games repo. */
+  applyToRepo?: (proposal: ProposalRecord) => Promise<{ number: number; url: string } | null>;
+  /** The live snapshot pointer, for re-checking a repo-lane base at decision time. */
+  snapshotPointer?: () => Promise<{ commitSha: string | null } | null>;
+  /** Tells somebody a proposal moved. Best effort — see ProposalDeps.notify. */
+  notify?: ProposalDeps['notify'];
   contentChecker?: ContentChecker;
   adminUids?: Set<string>;
   /**
@@ -138,7 +147,7 @@ export async function registerProposalRoutes(app: FastifyInstance, options: Prop
   /** Assembled per request so a deployment without a games store degrades rather than crashes. */
   function deps(log?: ProposalDeps['log']): ProposalDeps | null {
     if (!gamesStore) return null;
-    return { store, gamesStore, contentChecker, log, now };
+    return { store, gamesStore, contentChecker, log, notify: options.notify, now };
   }
 
   /**
@@ -185,6 +194,40 @@ export async function registerProposalRoutes(app: FastifyInstance, options: Prop
       return reply.status(404).send({ error: 'not_found' });
     }
     return reply.send({ proposal: toPublicProposal(record) });
+  });
+
+  /**
+   * What this proposal changes, file by file.
+   *
+   * Same readership as the proposal itself — author, reviewer, operator — because a
+   * proposer looking at their own rejected diff is as legitimate a reader as the person
+   * who rejected it. Computed on demand rather than stored: the version and its base are
+   * both immutable, so the diff is a pure function of two things that cannot drift, and a
+   * second stored representation could only ever disagree with them.
+   */
+  app.get<{ Params: { id: string } }>('/api/proposals/:id/diff', async (request, reply) => {
+    if (!requireUser(request, reply)) return;
+    const params = IdParamsSchema.safeParse(request.params);
+    if (!params.success) return reply.status(404).send({ error: 'not_found' });
+    if (!gamesStore || !options.resolveBase) return reply.status(503).send({ error: 'store_unavailable' });
+
+    const record = await store.getProposal(params.data.id);
+    if (!record?.version) return reply.status(404).send({ error: 'not_found' });
+    const uid = request.user!.uid;
+    if (record.proposerUid !== uid && !visibleToReviewer(record, uid, isAdminSession(request, adminUids))) {
+      return reply.status(404).send({ error: 'not_found' });
+    }
+
+    const manifest = await gamesStore.getManifest(record.targetSlug, record.version);
+    if (!manifest) return reply.status(404).send({ error: 'not_found' });
+    const proposed: SourceFile[] = [];
+    for (const path of manifest.sourceFiles) {
+      const content = await gamesStore.getSourceFile(record.targetSlug, record.version, path);
+      if (content !== null) proposed.push({ path, content });
+    }
+
+    const base = await options.resolveBase(record.targetSlug);
+    return reply.send({ diff: diffProposal(base?.files ?? [], proposed) });
   });
 
   app.post<{ Params: { id: string } }>('/api/proposals/:id/withdraw', async (request, reply) => {
@@ -256,7 +299,12 @@ export async function registerProposalRoutes(app: FastifyInstance, options: Prop
     if (!adoptIntoJob) return reply.status(503).send({ error: 'store_unavailable' });
 
     const result = await acceptProposal(
-      { ...scope, adoptIntoJob },
+      {
+        ...scope,
+        adoptIntoJob,
+        ...(options.applyToRepo ? { applyToRepo: options.applyToRepo } : {}),
+        ...(options.snapshotPointer ? { snapshotPointer: options.snapshotPointer } : {}),
+      },
       { id: record.id, byUid: reviewer.byUid, reviewer: reviewer.reviewer },
     );
     if (!result.ok) return reply.status(result.status).send({ error: result.error });

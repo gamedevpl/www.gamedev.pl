@@ -21,6 +21,7 @@ import {
   MAX_PROPOSAL_DESCRIPTION_LENGTH,
   MAX_PROPOSAL_TITLE_LENGTH,
   MIN_PROPOSAL_DESCRIPTION_LENGTH,
+  type ProposalDeps,
 } from './proposals.js';
 
 /**
@@ -208,6 +209,8 @@ function readRemixId(id: string): { uidTag: string; slug: string; expiresAt: num
 }
 
 export interface RemixRoutesOptions {
+  /** Tells somebody a proposal moved. Best effort — see ProposalDeps.notify. */
+  notifyProposal?: ProposalDeps['notify'];
   /**
    * Starts the gate on a delivered candidate. Shared with the delivery path so a
    * proposal is checked by exactly the machinery a creator's own upload is.
@@ -889,6 +892,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
           gamesStore: options.gamesStore,
           contentChecker: options.contentChecker,
           log: request.log,
+          notify: options.notifyProposal,
           now,
         },
         {

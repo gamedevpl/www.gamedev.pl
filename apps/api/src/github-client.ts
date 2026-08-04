@@ -293,6 +293,15 @@ export interface CatalogGameEntry {
    */
   creatorHandle?: string | null;
   /**
+   * Handles of people whose proposals were merged into the live version.
+   *
+   * Joined at read time from the version manifest's `proposal` provenance, exactly like
+   * the owner byline — never written into SPEC.md, which is the game's own file and has no
+   * business carrying identity. Absent when nobody has contributed or when the
+   * contributor has not claimed a handle.
+   */
+  contributorHandles?: string[];
+  /**
    * Touch playability class, derived from each game's *code* (createInput /
    * defineGame / party / pointer polls). Present when the catalog was built from
    * a games-repo archive (snapshot bake) or from a legacy committed catalog.json.

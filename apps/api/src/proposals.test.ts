@@ -74,14 +74,18 @@ function fakeGamesStore() {
       return manifest;
     },
     /** Test-only: stand in for the gate having run. */
-    setGate(slug: string, version: string, gate: { green: boolean; report?: string }) {
+    setGate(slug: string, version: string, gate: { green: boolean; report?: string; behaviouralDiff?: boolean }) {
       const manifest = manifests.get(key(slug, version));
       if (manifest) manifest.gate = { ...gate, ranAt: new Date(NOW).toISOString() };
     },
     manifests,
   };
   return store as unknown as GamesStore & {
-    setGate: (slug: string, version: string, gate: { green: boolean; report?: string }) => void;
+    setGate: (
+      slug: string,
+      version: string,
+      gate: { green: boolean; report?: string; behaviouralDiff?: boolean },
+    ) => void;
     manifests: Map<string, VersionManifest>;
   };
 }
@@ -280,11 +284,20 @@ describe('gate reconciliation', () => {
 
   it('flags a behavioural diff as a finding rather than refusing it', async () => {
     const proposal = await open();
-    gamesStore.setGate(SLUG, proposal.version!, { green: true, report: 'TRACE.json differs from golden' });
+    // Read off the verdict the proposal gate set, not sniffed out of the report text —
+    // the report is a build log and its wording is not a contract.
+    gamesStore.setGate(SLUG, proposal.version!, { green: true, behaviouralDiff: true });
     const reconciled = await reconcileProposalGate(deps(store, gamesStore), proposal.id);
     expect(reconciled?.behaviouralDiff).toBe(true);
     // Still reviewable: a proposal that changes behaviour is supposed to change the golden.
     expect(reconciled?.state).toBe('in_review');
+  });
+
+  it('does not invent a behavioural diff from a report that merely mentions the trace', async () => {
+    const proposal = await open();
+    gamesStore.setGate(SLUG, proposal.version!, { green: true, report: 'replayed TRACE.json: 0 differences' });
+    const reconciled = await reconcileProposalGate(deps(store, gamesStore), proposal.id);
+    expect(reconciled?.behaviouralDiff).toBeUndefined();
   });
 });
 

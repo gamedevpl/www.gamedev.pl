@@ -47,6 +47,14 @@ export interface GateOutcome {
   status?: 'kit_outdated';
   /** First capture PNG path under the version prefix, when one was stored. */
   screenshot?: string;
+  /**
+   * The candidate changes a committed behavioural golden.
+   *
+   * Only ever set by the proposal lane, and only alongside a green verdict — it says
+   * "this passes, and it plays differently", which is a thing a human decides about, not
+   * a thing a gate refuses.
+   */
+  behaviouralDiff?: boolean;
 }
 
 export interface GateRunOptions {
@@ -61,6 +69,22 @@ export interface GateRunOptions {
    * bundle.html / publishable green — only preview.html.
    */
   preview?: boolean;
+  /**
+   * Proposal lane: the full check, but a behavioural-golden mismatch is a *finding*
+   * rather than a refusal.
+   *
+   * A proposal that changes how the game plays is supposed to change `TRACE.json` — that
+   * is what proposing a gameplay change means. Judging it against the golden recorded
+   * before the change would fail every proposal worth reviewing, and a reviewer would
+   * never see the ones that matter. So when the trace stage is the only thing standing
+   * between a proposal and green, the golden is re-derived and the check re-run: if
+   * everything else passes, the verdict is green with {@link GateOutcome.behaviouralDiff}
+   * set, and the reviewer is told the game plays differently.
+   *
+   * This never lowers the bar on anything else. A proposal that fails typecheck, smoke,
+   * validate, accept, or playtest is red exactly as any other candidate would be.
+   */
+  proposal?: boolean;
 }
 
 export interface GateRunnerDeps {
@@ -236,13 +260,50 @@ export async function runGate(
 
     // Preview: typecheck→smoke→build only. Publish: full check:game without `--accept`
     // (that flag re-records the behavioural golden instead of checking against it).
-    const check = await deps.run(
+    let check = await deps.run(
       'npm',
       previewRun
         ? ['run', 'check:game', '--', slug, '--preview', ...(previewStills ? ['--preview-stills'] : [])]
         : ['run', 'check:game', '--', slug],
       harness,
     );
+
+    /*
+     * The proposal lane's one concession, and it is narrow on purpose.
+     *
+     * A proposal that changes how the game plays changes `TRACE.json`, so the trace stage
+     * refuses it — correctly, for a creator's own delivery, where a surprise behavioural
+     * change is exactly what the golden exists to catch. For a proposal it is the point:
+     * judged against the golden recorded before the change, every gameplay proposal is red
+     * and no reviewer ever sees the ones worth seeing.
+     *
+     * So when the trace stage is the *only* thing that failed, the golden is re-derived and
+     * the whole chain re-run. Everything else — typecheck, smoke, validate, capture, accept,
+     * playtest — has to pass on its own merits against the regenerated trace, so this
+     * converts one refusal into one finding rather than lowering the bar. If the re-run
+     * fails for any reason, the original red verdict stands and its report is what the
+     * proposer reads.
+     */
+    let behaviouralDiff = false;
+    if (!previewRun && options.proposal && check.code !== 0 && failedOnlyOnTrace(check.output)) {
+      const rederived = await deps.run('npm', ['run', 'trace', '--', slug, '--accept'], harness);
+      if (rederived.code === 0) {
+        const rerun = await deps.run('npm', ['run', 'check:game', '--', slug], harness);
+        if (rerun.code === 0) {
+          behaviouralDiff = true;
+          check = rerun;
+          // Stored so the reviewer can see what the new behaviour actually is, and so an
+          // accepted proposal carries a golden that matches the game it describes.
+          const golden = await readFile(path.join(gameDir, 'TRACE.json')).catch(() => null);
+          if (golden) {
+            await deps.store
+              .putDerivedArtifact(slug, version, 'source/TRACE.json', golden, 'text/plain; charset=utf-8')
+              .catch(() => {});
+          }
+        }
+      }
+    }
+
     if (check.code !== 0) {
       // Preview for the creator; media when capture got far enough — both best-effort.
       // Preview lane never runs capture, so media store is a no-op there.
@@ -317,17 +378,44 @@ export async function runGate(
     const screenshot = firstGateScreenshotPath(artifacts);
     return {
       green: true,
-      report: `check:game passed against engine ${engineCommit ?? engineRef}; ${artifacts.length} artifacts stored`,
+      report:
+        `check:game passed against engine ${engineCommit ?? engineRef}; ${artifacts.length} artifacts stored` +
+        // Named in the report as well as flagged on the outcome: the report is what an
+        // operator reads in the Cloud Build history, where the flag is not visible.
+        (behaviouralDiff ? '; behavioural golden re-derived (this proposal changes how the game plays)' : ''),
       artifacts,
       durationMs: now() - startedAt,
       ...(engineCommit ? { engineCommit } : {}),
       ...(screenshot ? { screenshot } : {}),
+      ...(behaviouralDiff ? { behaviouralDiff: true } : {}),
     };
   } finally {
     // The harness is disposable and can be large. Leaving it behind is how a long-lived
     // runner fills its disk and starts failing for reasons unrelated to any game.
     await rm(gameDir, { recursive: true, force: true }).catch(() => {});
   }
+}
+
+/**
+ * Whether a failed `check:game` failed at the trace stage and nowhere else.
+ *
+ * Deliberately conservative: it must see the trace stage named as the failure *and* see
+ * no other stage reporting one. A parse that guessed wrong in the permissive direction
+ * would turn "this proposal is broken" into "this proposal plays differently", which is
+ * the one mistake this lane must not make — a reviewer would be handed a red game with a
+ * green badge.
+ *
+ * Matching on the harness's own stage vocabulary rather than on exit codes because
+ * `check:game` is a chain that reports which link broke; the exit code only says one did.
+ */
+export function failedOnlyOnTrace(output: string): boolean {
+  const text = output.toLowerCase();
+  const mentionsTrace = /trace(\.json)?\b/.test(text) && /(differ|mismatch|does not match|changed)/.test(text);
+  if (!mentionsTrace) return false;
+  // Any other stage naming a failure disqualifies the shortcut.
+  const otherStageFailed =
+    /(typecheck|smoke|validate|webgl|audio|ios|no-js|gfx|accept|playtest|build)\b[^\n]*(fail|error)/.test(text);
+  return !otherStageFailed;
 }
 
 /** Writes a stored version's sources into the harness as the game's own directory. */

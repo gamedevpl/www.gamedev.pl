@@ -69,6 +69,20 @@
         "title": "Nowa wersja gry, którą obserwujesz",
         "body": "„{{title}}” ma nową wersję."
       }
+    },
+    "proposal": {
+      "awaiting_review": {
+        "title": "Czeka propozycja zmiany",
+        "body": "Ktoś zaproponował zmianę w {{title}}. Przeszła nasze testy — decyzja należy do ciebie."
+      },
+      "decided": {
+        "title": "Twoja propozycja została oceniona",
+        "body": "Twoja propozycja do {{title}} ma decyzję."
+      },
+      "merged": {
+        "title": "Twoja zmiana jest na żywo",
+        "body": "Twoja zmiana jest już częścią {{title}}."
+      }
     }
   },
   "header": {
@@ -226,7 +240,8 @@
       "last_played": "Ostatnio grane",
       "alpha": "A–Z"
     },
-    "about": "O grze"
+    "about": "O grze",
+    "withContributions": "ze zmianami od"
   },
   "recommendations": {
     "reasonContinue": "Kontynuuj grę",
@@ -1422,6 +1437,11 @@
       "blocked": "Zablokowani",
       "blockedHelp": "Zablokowane osoby nie mogą proponować zmian do żadnej z twoich gier.",
       "unblock": "Odblokuj"
-    }
+    },
+    "diffSummary": "Zmienione pliki: {{files}} · +{{additions}} −{{deletions}}",
+    "diffEmpty": "Brak zmian w plikach do pokazania.",
+    "diffTruncated": "Różnica w tym pliku jest długa — pokazujemy początek.",
+    "diffOmitted": "Nie pokazano kolejnych zmienionych plików: {{count}}.",
+    "diffUnavailable": "Nie udało się wczytać zmian. Nadal możesz zagrać i przeczytać opis."
   }
 }
