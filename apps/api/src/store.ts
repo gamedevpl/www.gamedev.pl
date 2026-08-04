@@ -1621,11 +1621,17 @@ export interface Store {
    * Queues a creator change request for the agent to collect. `origin` records who
    * typed it — omit it for the Studio composer, pass `agent` when an agent relayed the
    * request on the creator's behalf (@see CreatorMessage.origin).
+   *
+   * `delivered` writes it already collected, for a request the agent is receiving by
+   * another route — a new improvement round, whose brief already *is* this text. It
+   * still belongs in the thread (it is what the creator asked for), but queueing it
+   * would hand the agent the same instruction twice: once as its brief, once as a
+   * pending note that reads like something new to act on.
    */
   appendCreatorMessage(
     issueNumber: number,
     text: string,
-    opts?: { origin?: CreatorMessageOrigin },
+    opts?: { origin?: CreatorMessageOrigin; delivered?: boolean },
   ): Promise<CreatorMessage>;
   /** Undelivered creator messages, oldest first — the agent's inbox. */
   listPendingCreatorMessages(issueNumber: number, opts?: { limit?: number }): Promise<CreatorMessage[]>;
@@ -2929,13 +2935,14 @@ export class InMemoryStore implements Store {
   async appendCreatorMessage(
     issueNumber: number,
     text: string,
-    opts?: { origin?: CreatorMessageOrigin },
+    opts?: { origin?: CreatorMessageOrigin; delivered?: boolean },
   ): Promise<CreatorMessage> {
+    const now = new Date().toISOString();
     const record: CreatorMessage = {
       id: randomUUID(),
       text,
-      createdAt: new Date().toISOString(),
-      deliveredAt: null,
+      createdAt: now,
+      deliveredAt: opts?.delivered ? now : null,
       ...(opts?.origin === 'agent' ? { origin: 'agent' as const } : {}),
     };
     const existing = this.creatorMessages.get(issueNumber) ?? [];
@@ -4894,15 +4901,16 @@ export class FirestoreStore implements Store {
   async appendCreatorMessage(
     issueNumber: number,
     text: string,
-    opts?: { origin?: CreatorMessageOrigin },
+    opts?: { origin?: CreatorMessageOrigin; delivered?: boolean },
   ): Promise<CreatorMessage> {
     // `origin` is spread in only when it is `agent`: Firestore rejects an explicit
     // `undefined`, and a stored `'creator'` would say nothing the absent field does not.
+    const now = new Date().toISOString();
     const record: CreatorMessage = {
       id: randomUUID(),
       text,
-      createdAt: new Date().toISOString(),
-      deliveredAt: null,
+      createdAt: now,
+      deliveredAt: opts?.delivered ? now : null,
       ...(opts?.origin === 'agent' ? { origin: 'agent' as const } : {}),
     };
     await this.messagesCollection(issueNumber).doc(record.id).set(record);

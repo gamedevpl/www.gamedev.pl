@@ -138,6 +138,8 @@ export interface McpServerOptions {
     log: { error: (context: object, message: string) => void };
     builder?: BuilderKind;
     openedBy?: 'creator' | 'agent';
+    /** Opens the new job's thread with `text`, attributed to whoever wrote it. */
+    requestedBy?: 'creator' | 'agent';
     /** When set, the new job is owned by this uid (slug-transfer safe). */
     ownerUid?: string;
   }) => Promise<{ route: 'job'; jobId: number } | null>;
@@ -1418,6 +1420,9 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             log: ctx.request.log,
             builder: 'self',
             openedBy: 'agent',
+            // Same relay as continue_draft: the agent wrote this summary, so the thread
+            // labels and translates it rather than passing it off as the creator's words.
+            requestedBy: 'agent',
             // Authorized creator wins over the published record's owner after a transfer.
             ownerUid: resolved.creatorUid,
           });

@@ -144,6 +144,10 @@ describe('POST /api/me/suggestions/:id/approve', () => {
     expect(res.json().suggestion.issueNumber).toBeUndefined();
     expect(start.mock.calls[0][0]).toMatchObject({ issueNumber: PUBLISHED_JOB_ID });
     expect(start.mock.calls[0][0].text).toContain('40 uncaught errors across 100 sessions.');
+    // No `requestedBy`, so this brief never opens the thread as a creator message. It is
+    // assembled here out of player evidence — nobody typed it, and putting it on the
+    // creator's side of the conversation would show them words they never wrote.
+    expect(start.mock.calls[0][0].requestedBy).toBeUndefined();
     await app.close();
   });
 
