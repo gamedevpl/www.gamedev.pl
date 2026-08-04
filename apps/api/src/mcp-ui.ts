@@ -336,7 +336,7 @@ const ROUND_STATUS_HTML = `<!doctype html>
         }
 
         var COPY = {
-          pending: 'The gate is still running. This agent run has stopped; Studio will show the eventual result.',
+          pending: 'Gate status is pending.',
           green: 'Publish gate green — the round is complete.',
           red: 'Publish gate red. The report below says what failed.',
           preview_passed: 'Preview gate passed — the build runs. Publish still needs a green publish gate.',
@@ -357,7 +357,7 @@ const ROUND_STATUS_HTML = `<!doctype html>
           addRow('Version', verdict.version);
           addRow('Ran at', formatTime(verdict.ranAt));
           if (status === 'pending') {
-            addRow('Next step', 'Watch Studio');
+            addRow('Next step', verdict.deliveryId ? 'Watch Studio' : 'Continue building');
           }
 
           if (typeof verdict.report === 'string' && verdict.report.trim()) {
@@ -369,7 +369,9 @@ const ROUND_STATUS_HTML = `<!doctype html>
 
           foot.textContent =
             status === 'pending'
-              ? 'This card is a static snapshot. The agent has stopped; Studio will show the eventual result.'
+              ? verdict.deliveryId
+                ? 'This card is a static snapshot. The agent has stopped; Studio will show the eventual result.'
+                : 'Nothing has been delivered yet. Continue building and submit before checking again.'
               : '';
           reportSize();
         }
