@@ -1261,6 +1261,39 @@ describe('SubmissionStatusView', () => {
     });
   });
 
+  it('flashes a presence thought in the thread bar without adding a chat turn', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    const at = new Date().toISOString();
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'building',
+      builder: 'self',
+      lastAgentSignalAt: at,
+      lastAgentPresence: { key: 'browsing_kit', at },
+      events: [],
+    });
+    await i18n.changeLanguage('en');
+    window.history.pushState(null, '', '/studio/presence-thought/thread');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'presence-thought', embedded: true }));
+      await flushEffects();
+      await flushEffects();
+    });
+
+    expect(container.querySelector('.studio-thread-context.is-thought')).not.toBeNull();
+    expect(container.querySelector('.studio-context-phase')?.textContent).toContain('Browsing the Creator Kit');
+    // Thought stays out of the transcript.
+    expect(container.querySelector('.studio-turn')).toBeNull();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it('lets the creator dismiss a stall chip above the composer', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     mockedGetSubmissionStatus.mockResolvedValue({

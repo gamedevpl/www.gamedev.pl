@@ -115,12 +115,31 @@ const TIMELINE_STEPS: SubmissionStatus['status'][] = ['queued', 'building', 'in_
 function latestAgentActivityAt(status: SubmissionStatus | null): number | null {
   if (!status) return null;
   const times = [
+    ...(status.lastAgentSignalAt ? [Date.parse(status.lastAgentSignalAt)] : []),
     ...(status.events ?? []).map((event) => Date.parse(event.createdAt)),
     ...(status.media ?? []).map((item) => (item.createdAt ? Date.parse(item.createdAt) : Number.NaN)),
     ...(status.playable ?? []).map((item) => (item.createdAt ? Date.parse(item.createdAt) : Number.NaN)),
     ...(status.progress?.commits ?? []).map((commit) => Date.parse(commit.committedDate)),
   ].filter((time) => Number.isFinite(time));
   return times.length > 0 ? Math.max(...times) : null;
+}
+
+/** How long a presence thought stays as the thread-bar headline before falling back. */
+const PRESENCE_THOUGHT_MS = 90_000;
+
+/**
+ * Ambient MCP presence for the thread bar — a thought headline, not a chat row.
+ * Fresh for {@link PRESENCE_THOUGHT_MS}; cleared server-side when real progress arrives.
+ */
+function presenceThought(
+  status: SubmissionStatus | null,
+  nowMs: number = Date.now(),
+): { key: string; at: number } | null {
+  const presence = status?.lastAgentPresence;
+  if (!presence?.key) return null;
+  const at = Date.parse(presence.at);
+  if (!Number.isFinite(at) || nowMs - at > PRESENCE_THOUGHT_MS) return null;
+  return { key: presence.key, at };
 }
 
 /**
@@ -726,6 +745,9 @@ export function SubmissionStatusView({
                         ? t('connect.waiting')
                         : t('connect.resume.waiting')
                       : t(`statusView.states.${status.status}.label`)
+                  }
+                  thought={
+                    isAwaitingOwnAgent(status) || TERMINAL_STATUSES.has(status.status) ? null : presenceThought(status)
                   }
                   heartbeatAt={isAwaitingOwnAgent(status) ? null : heartbeatAt}
                   active={!TERMINAL_STATUSES.has(status.status) && !isAwaitingOwnAgent(status)}
@@ -1572,12 +1594,15 @@ function ThreadStream({
  */
 function ThreadContextBar({
   phase,
+  thought,
   heartbeatAt,
   progress,
   primary,
   active = false,
 }: {
   phase: string;
+  /** Fresh MCP presence thought — replaces the coarse phase as a short headline flash. */
+  thought?: { key: string; at: number } | null;
   heartbeatAt: number | null;
   progress?: { done: number; total: number };
   primary?: { label: string; onClick: () => void };
@@ -1585,13 +1610,40 @@ function ThreadContextBar({
   active?: boolean;
 }) {
   const { t } = useTranslation();
+  const [, setTick] = useState(0);
+
+  // Presence ages out client-side; one timeout at expiry so the headline falls back
+  // without a status poll — and without a lingering interval after the flash ends.
+  useEffect(() => {
+    if (!thought) return;
+    const remaining = thought.at + PRESENCE_THOUGHT_MS - Date.now();
+    if (remaining <= 0) {
+      setTick((n) => n + 1);
+      return;
+    }
+    const id = window.setTimeout(() => setTick((n) => n + 1), remaining);
+    return () => window.clearTimeout(id);
+  }, [thought]);
+
+  const thoughtFresh = thought !== null && thought !== undefined && Date.now() - thought.at <= PRESENCE_THOUGHT_MS;
+  const thoughtLabel =
+    thoughtFresh && thought
+      ? t(`statusView.presence.${thought.key}`, {
+          defaultValue: '',
+        })
+      : '';
+  const headline = thoughtLabel || phase;
+  const showingThought = Boolean(thoughtLabel);
 
   return (
-    <div className={`studio-thread-context${active ? ' is-active' : ''}`}>
+    <div className={`studio-thread-context${active ? ' is-active' : ''}${showingThought ? ' is-thought' : ''}`}>
       <span className="studio-context-state">
-        <span className="studio-context-phase">
+        <span
+          className="studio-context-phase"
+          key={showingThought ? `thought:${thought!.key}:${thought!.at}` : `phase:${phase}`}
+        >
           {active ? <span className="studio-context-phase-spinner" aria-hidden="true" /> : null}
-          {phase}
+          {headline}
         </span>
         {heartbeatAt !== null ? (
           <span className="studio-context-beat">
