@@ -46,3 +46,12 @@ export function removeSpec(token: string): SavedSpec[] {
   }
   return updated;
 }
+
+/** Remove account-bound local copies when the account itself is deleted. */
+export function clearSavedSpecs(): void {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // Storage is best-effort throughout this module.
+  }
+}

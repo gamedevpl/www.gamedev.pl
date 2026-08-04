@@ -80,7 +80,7 @@ type GameTheaterProps = {
    * platform sentinel read as the site itself; anything else is shown as a byline.
    */
   submittedBy?: string | null;
-  /** When set, the byline links to `/creators/:handle`. */
+  /** When set, the byline links to `/:handle`. */
   creatorHandle?: string | null;
   /**
    * The game's `controls` line from the catalog. A fallback now rather than the only

@@ -17,6 +17,7 @@ import { registerAdminRoutes } from './admin.js';
 import { parseAppleClientIds, type AppleAuthVerifier } from './apple-auth.js';
 import { registerAuthPlugin, type GoogleAuthVerifier } from './auth.js';
 import { registerCreatorProfileRoutes } from './creator-profile-routes.js';
+import { registerAccountDeletionRoutes } from './account-deletion-routes.js';
 import { registerCreatorStudioRoutes } from './creator-studio.js';
 import { registerEditorRoutes } from './editor-drafts.js';
 import { VertexEditorAssistant, type EditorAssistant } from './editor-assist.js';
@@ -554,12 +555,13 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   });
 
   // Publish-gated public identity. Building needs none of this; catalog bylines and
-  // `/creators/:handle` need the claimed handle. gamesStore is the same instance the
+  // `/:handle` need the claimed handle. gamesStore is the same instance the
   // delivery path writes to, so a profile page never lists a game from a different bucket.
   await registerCreatorProfileRoutes(app, {
     store,
     gamesStore,
   });
+  registerAccountDeletionRoutes(app, store);
 
   /**
    * `appleSignIn` tells the web app whether this server can actually verify an Apple

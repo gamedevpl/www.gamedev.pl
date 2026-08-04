@@ -53,7 +53,7 @@ export interface User {
    */
   activeDays?: string[];
   /**
-   * Unique public handle (`/creators/:handle`). Required to publish a game; never the
+   * Unique public handle (`/:handle`). Required to publish a game; never the
    * Google/Apple account name. Absent until the creator claims one.
    */
   handle?: string;
@@ -76,6 +76,14 @@ export interface HandleRecord {
   /** Set while the previous owner still holds the rename cooldown. */
   releasedAt?: string;
   previousUid?: string;
+}
+
+/** Non-personal owner used after an account is erased. */
+export const DELETED_ACCOUNT_UID = 'platform:deleted-account';
+
+export interface AccountIdentityDeletionResult {
+  publishedSlugs: string[];
+  unpublishedSlugs: string[];
 }
 
 export type ClaimHandleResult =
@@ -1344,6 +1352,12 @@ export interface Store {
    */
   releaseCreatorHandles(uid: string, at: string): Promise<string[]>;
   /**
+   * Remove the account record and every credential/subscription tied to it. Published
+   * submissions are retained under a non-personal platform owner; unfinished ones are
+   * abandoned and likewise unlinked. Player contributions are erased separately first.
+   */
+  deleteAccountIdentity(uid: string, at: string): Promise<AccountIdentityDeletionResult>;
+  /**
    * Find the single account holding this email, or null.
    *
    * Exists for one caller: linking a Sign in with Apple identity onto the Google account
@@ -2258,6 +2272,79 @@ export class InMemoryStore implements Store {
     }
     void at;
     return released.sort();
+  }
+
+  async deleteAccountIdentity(uid: string, at: string): Promise<AccountIdentityDeletionResult> {
+    const user = this.users.get(uid);
+    const owned = [...this.submissions.values()].filter((submission) => submission.ownerUid === uid);
+    const publishedSlugs = owned
+      .filter((submission) => Boolean(submission.publishedAt && submission.slug))
+      .map((submission) => submission.slug!)
+      .sort();
+    const unpublishedSlugs = owned
+      .filter((submission) => !submission.publishedAt && submission.slug)
+      .map((submission) => submission.slug!)
+      .sort();
+
+    for (const submission of owned) {
+      this.submissions.set(submission.issueNumber, {
+        ...submission,
+        ownerUid: DELETED_ACCOUNT_UID,
+        ...(!submission.publishedAt ? { abandonedAt: submission.abandonedAt ?? at, draftSharedAt: undefined } : {}),
+      });
+    }
+
+    for (const [key, reservation] of [...this.handles]) {
+      if (reservation.uid === uid || reservation.previousUid === uid) this.handles.delete(key);
+    }
+    for (const [key, counters] of [...this.usage]) {
+      void counters;
+      if (key.startsWith(`${uid}:`)) this.usage.delete(key);
+    }
+    this.waitlist.delete(uid);
+    if (user?.email) {
+      const email = user.email.toLowerCase();
+      for (const [key, entry] of [...this.waitlist]) {
+        if (entry.email?.toLowerCase() === email) this.waitlist.delete(key);
+      }
+    }
+    this.notifications.delete(uid);
+    this.pushSubs.delete(uid);
+    this.gameSaves.delete(uid);
+    this.editorDrafts.delete(uid);
+    this.playAffinity.delete(uid);
+    for (const [tokenId, record] of [...this.accessTokens]) {
+      if (record.uid === uid) this.accessTokens.delete(tokenId);
+    }
+    for (const [slug, record] of [...this.gameAgentKeys]) {
+      if (record.ownerUid === uid) this.gameAgentKeys.delete(slug);
+    }
+    this.creatorAgentKeys.delete(uid);
+    for (const [id, suggestion] of [...this.suggestions]) {
+      if (suggestion.ownerUid === uid) this.suggestions.set(id, { ...suggestion, ownerUid: null, updatedAt: at });
+    }
+    for (const [clientId, client] of [...this.oauthClients]) {
+      if (client.ownerUid === uid) this.oauthClients.set(clientId, { ...client, ownerUid: undefined });
+    }
+    const grantIds = new Set<string>();
+    for (const [grantId, grant] of [...this.oauthGrants]) {
+      if (grant.ownerUid !== uid) continue;
+      grantIds.add(grantId);
+      this.oauthGrants.delete(grantId);
+    }
+    for (const [tokenId, token] of [...this.oauthAccessTokens]) {
+      if (token.ownerUid === uid || grantIds.has(token.grantId)) this.oauthAccessTokens.delete(tokenId);
+    }
+    for (const [codeId, code] of [...this.oauthAuthCodes]) {
+      if (code.ownerUid === uid || (code.grantId && grantIds.has(code.grantId))) this.oauthAuthCodes.delete(codeId);
+    }
+    for (const [refreshId, grantId] of [...this.oauthRefreshTokenIndex]) {
+      if (grantIds.has(grantId)) this.oauthRefreshTokenIndex.delete(refreshId);
+    }
+    for (const slug of [...publishedSlugs, ...unpublishedSlugs]) this.gameAutonomy.delete(slug);
+    this.users.delete(uid);
+
+    return { publishedSlugs, unpublishedSlugs };
   }
 
   async findUserByEmail(email: string): Promise<User | null> {
@@ -3877,6 +3964,134 @@ export class FirestoreStore implements Store {
     }
     void at;
     return [...released].sort();
+  }
+
+  async deleteAccountIdentity(uid: string, at: string): Promise<AccountIdentityDeletionResult> {
+    const user = await this.getUser(uid);
+    const submissions = await this.db.collection('submissions').where('ownerUid', '==', uid).get();
+    const owned = submissions.docs.map((doc) => ({ doc, record: doc.data() as SubmissionRecord }));
+    const publishedSlugs = owned
+      .filter(({ record }) => Boolean(record.publishedAt && record.slug))
+      .map(({ record }) => record.slug!)
+      .sort();
+    const unpublishedSlugs = owned
+      .filter(({ record }) => !record.publishedAt && record.slug)
+      .map(({ record }) => record.slug!)
+      .sort();
+
+    // Resolve every account-owned collection before the first write. Besides making the
+    // dry operational failure mode easier to reason about, this ensures an index error
+    // cannot leave a half-deleted identity.
+    const email = user?.email?.toLowerCase();
+    const [
+      accessTokens,
+      gameAgentKeys,
+      suggestions,
+      oauthClients,
+      oauthGrants,
+      oauthAccessTokens,
+      oauthAuthCodes,
+      refreshTokens,
+      activeHandles,
+      previousHandles,
+      notifications,
+      pushSubscriptions,
+      saves,
+      drafts,
+      affinity,
+      usageCounters,
+      waitlistByEmail,
+    ] = await Promise.all([
+      this.db.collection('accessTokens').where('uid', '==', uid).get(),
+      this.db.collection('gameAgentKeys').where('ownerUid', '==', uid).get(),
+      this.db.collection('suggestions').where('ownerUid', '==', uid).get(),
+      this.db.collection('oauthClients').where('ownerUid', '==', uid).get(),
+      this.db.collection('oauthGrants').where('ownerUid', '==', uid).get(),
+      this.db.collection('oauthAccessTokens').where('ownerUid', '==', uid).get(),
+      this.db.collection('oauthAuthCodes').where('ownerUid', '==', uid).get(),
+      this.db.collection('oauthRefreshTokens').where('ownerUid', '==', uid).get(),
+      this.db.collection('handles').where('uid', '==', uid).get(),
+      this.db.collection('handles').where('previousUid', '==', uid).get(),
+      this.db.collection('users').doc(uid).collection('notifications').get(),
+      this.db.collection('users').doc(uid).collection('pushSubscriptions').get(),
+      this.db.collection('users').doc(uid).collection('gameSaves').get(),
+      this.db.collection('users').doc(uid).collection('editorDrafts').get(),
+      this.db.collection('users').doc(uid).collection('playAffinity').get(),
+      this.db.collection('usage').doc(uid).collection('counters').get(),
+      email ? this.db.collection('waitlist').where('email', '==', email).get() : Promise.resolve(null),
+    ]);
+
+    // Refresh-token index rows historically carry only grantId, so ownerUid is absent.
+    // Join them to the owned grants rather than leaving a credential lookup pointing at
+    // a deleted account. The ownerUid query above still covers newer rows if that field
+    // is added later.
+    const grantIds = new Set(oauthGrants.docs.map((doc) => doc.id));
+    const refreshByGrant = await Promise.all(
+      [...grantIds].map((grantId) => this.db.collection('oauthRefreshTokens').where('grantId', '==', grantId).get()),
+    );
+
+    const deleteRefs = new Map<string, FirebaseFirestore.DocumentReference>();
+    const addDeletes = (docs: readonly FirebaseFirestore.QueryDocumentSnapshot[]) => {
+      for (const doc of docs) deleteRefs.set(doc.ref.path, doc.ref);
+    };
+    for (const snap of [
+      accessTokens,
+      gameAgentKeys,
+      oauthGrants,
+      oauthAccessTokens,
+      oauthAuthCodes,
+      refreshTokens,
+      activeHandles,
+      previousHandles,
+      notifications,
+      pushSubscriptions,
+      saves,
+      drafts,
+      affinity,
+      usageCounters,
+      ...refreshByGrant,
+    ]) {
+      addDeletes(snap.docs);
+    }
+    if (waitlistByEmail) addDeletes(waitlistByEmail.docs);
+    deleteRefs.set(`waitlist/${uid}`, this.db.collection('waitlist').doc(uid));
+    deleteRefs.set(`creatorAgentKeys/${uid}`, this.db.collection('creatorAgentKeys').doc(uid));
+    deleteRefs.set(`usage/${uid}`, this.db.collection('usage').doc(uid));
+    deleteRefs.set(`users/${uid}`, this.db.collection('users').doc(uid));
+
+    const writes: Array<(batch: FirebaseFirestore.WriteBatch) => void> = [];
+    for (const { doc, record } of owned) {
+      writes.push((batch) =>
+        batch.set(
+          doc.ref,
+          {
+            ownerUid: DELETED_ACCOUNT_UID,
+            ...(!record.publishedAt
+              ? { abandonedAt: record.abandonedAt ?? at, draftSharedAt: FieldValue.delete() }
+              : {}),
+          },
+          { merge: true },
+        ),
+      );
+    }
+    for (const doc of suggestions.docs) {
+      writes.push((batch) => batch.set(doc.ref, { ownerUid: null, updatedAt: at }, { merge: true }));
+    }
+    for (const doc of oauthClients.docs) {
+      writes.push((batch) => batch.set(doc.ref, { ownerUid: FieldValue.delete() }, { merge: true }));
+    }
+    for (const ref of deleteRefs.values()) writes.push((batch) => batch.delete(ref));
+
+    // Keep below Firestore's 500-operation ceiling. Every operation is idempotent, so a
+    // transport failure between batches is safely completed by retrying the request.
+    const BATCH_SIZE = 450;
+    for (let start = 0; start < writes.length; start += BATCH_SIZE) {
+      const batch = this.db.batch();
+      for (const write of writes.slice(start, start + BATCH_SIZE)) write(batch);
+      await batch.commit();
+    }
+
+    return { publishedSlugs, unpublishedSlugs };
   }
 
   async findUserByEmail(email: string): Promise<User | null> {

@@ -15,6 +15,7 @@ import { deriveTitleFromConcept } from './gameTitle.js';
 import {
   adminPath,
   canonicalPath,
+  creatorPath,
   NAVIGATE_EVENT,
   navUpTarget,
   parsePathRoute,
@@ -142,7 +143,7 @@ export function App() {
   // Draft's real name, reported by DraftView once the preview loads. Cleared on
   // unmount / slug change so the generic draft label returns while the next one loads.
   const [draftTitle, setDraftTitle] = useState<string | null>(null);
-  /** Display name for `/creators/:handle` once the public profile loads. */
+  /** Display name for `/:handle` once the public profile loads. */
   const [creatorName, setCreatorName] = useState<string | null>(null);
 
   // Tab title follows the route (and any known game/submission/draft name). App is
@@ -863,7 +864,12 @@ export function App() {
             onBack={() => navigate('/')}
             onPlay={(slug) => navigate(playPath(slug))}
             onNavigate={navigate}
-            onProfileLoaded={(profile: PublicCreatorProfile) => setCreatorName(profile.profileName)}
+            onProfileLoaded={(profile: PublicCreatorProfile) => {
+              setCreatorName(profile.profileName);
+              if (profile.handle !== route.handle) {
+                navigate(creatorPath(profile.handle), { replace: true });
+              }
+            }}
           />
         </main>
         <SiteFooter />

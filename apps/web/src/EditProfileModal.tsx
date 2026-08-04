@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
+import { AccountDeletionControl } from './AccountDeletionControl.js';
 import { useStudioCreatorProfile } from './studioCreatorProfile.js';
 import { PixelIcon } from './PixelIcon.js';
 import { creatorPath } from './router.js';
@@ -59,6 +60,7 @@ export function EditProfileModal({
     const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
+        if (document.querySelector('.account-delete-dialog')) return;
         event.preventDefault();
         clearMessageRef.current();
         onCloseRef.current();
@@ -229,6 +231,9 @@ export function EditProfileModal({
                       />
                     </div>
                     <span className="creator-profile-hint">{t('creatorProfile.handleHint')}</span>
+                    <span className="creator-profile-hint creator-profile-rename-warning">
+                      {t('creatorProfile.renameWarning')}
+                    </span>
                     {availability && !availability.available ? (
                       <span className="creator-profile-avail is-taken">
                         {refusalCopy(availability.reason ?? 'taken')}
@@ -245,6 +250,8 @@ export function EditProfileModal({
                   </div>
                 </form>
               </details>
+
+              <AccountDeletionControl labelledBy={`${formId}-account-heading`} />
 
               {message ? (
                 <p className="creator-profile-message" role="status">

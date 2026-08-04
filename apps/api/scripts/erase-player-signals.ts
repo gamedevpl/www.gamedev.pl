@@ -1,4 +1,4 @@
-// Erase a person's player-side contributions — votes, written feedback, saved progress.
+// Erase an account completely — identity, credentials, subscriptions, and player data.
 //
 //   npm run player:erase -w @gamedevpl/api -- g:12345 --dry-run
 //   npm run player:erase -w @gamedevpl/api -- g:12345 --confirm
@@ -16,7 +16,8 @@
 // Note what this does *not* do: play telemetry is untouched because it carries no uid at
 // all. There is nothing there to erase, which is the intended property, not a gap.
 
-import { erasePlayerSignals, indexHint } from '../src/erase-player-signals.js';
+import { eraseAccount } from '../src/erase-account.js';
+import { indexHint } from '../src/erase-player-signals.js';
 import { FirestoreStore } from '../src/store.js';
 
 function usage(): never {
@@ -43,7 +44,8 @@ async function main(): Promise<void> {
   if (!uid || dryRun === confirm) usage();
 
   const store = new FirestoreStore();
-  const result = await erasePlayerSignals({ store, uid, dryRun });
+  const account = await eraseAccount({ store, uid, dryRun });
+  const result = account.signals;
 
   const verb = result.dryRun ? 'would remove' : 'removed';
   console.log(`${result.dryRun ? '[dry run] ' : ''}${verb} for ${result.uid}:`);
@@ -62,6 +64,12 @@ async function main(): Promise<void> {
   );
   console.log(
     `  handles:  ${result.handlesReleased.length}${result.handlesReleased.length ? ` (${result.handlesReleased.join(', ')})` : ''}`,
+  );
+  console.log(
+    `  published games kept: ${account.identity.publishedSlugs.length}${account.identity.publishedSlugs.length ? ` (${account.identity.publishedSlugs.join(', ')})` : ''}`,
+  );
+  console.log(
+    `  unpublished games removed: ${account.identity.unpublishedSlugs.length}${account.identity.unpublishedSlugs.length ? ` (${account.identity.unpublishedSlugs.join(', ')})` : ''}`,
   );
   if (
     result.votesCleared.length === 0 &&
