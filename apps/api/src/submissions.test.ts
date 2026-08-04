@@ -1064,14 +1064,80 @@ describe('submission routes', () => {
     expect(briefs.at(-1)?.undelivered).toBeUndefined();
     expect(briefs.at(-1)?.feedback).toContain('Make the parcels bigger');
     // Gate-green closed the round; feedback must reopen the job, not leave it stuck
-    // in ready_for_review while a session quietly starts underneath.
+    // in ready_for_review while a session quietly starts underneath. Land on
+    // `dispatched` — Copilot boots before GitHub reports `in_progress`.
     const after = await store.getSubmission(job.issueNumber);
-    expect(after?.state).toBe('building');
+    expect(after?.state).toBe('dispatched');
     expect(after?.transitions?.at(-1)).toMatchObject({
-      to: 'building',
+      to: 'dispatched',
       by: 'creator',
       reason: 'creator_feedback',
     });
+
+    await app.close();
+  });
+
+  it('self→platform handoff lands on dispatched and busts the status cache', async () => {
+    // Without the cache bust, Studio kept serving the previous self stall
+    // (`no_agent_yet` / ended) for up to a minute while Copilot was already queued.
+    const { githubClient } = createGithubClientStub({ issueNumber: 77 });
+    const { backend } = createBackendStub();
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    const token = mintToken(job.issueNumber, secret);
+    await store.setRoundBuilder(job.issueNumber, 'self');
+    await store.recordJobTransition(job.issueNumber, {
+      to: 'building',
+      at: new Date().toISOString(),
+      by: 'agent',
+      reason: 'self_signal',
+    });
+    await store.markAgentEnded(job.issueNumber, new Date().toISOString());
+
+    const before = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
+    expect(before.statusCode).toBe(200);
+    expect(before.json()).toMatchObject({ builder: 'self', stall: 'ended' });
+
+    const handoff = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${token}/feedback`,
+      headers: authHeaders,
+      payload: {
+        feedback: 'Please continue this round with the platform coding agent.',
+        builder: 'platform',
+      },
+    });
+    expect(handoff.statusCode).toBe(200);
+
+    const after = await store.getSubmission(job.issueNumber);
+    expect(after?.builder).toBe('platform');
+    expect(after?.state).toBe('dispatched');
+    expect(after?.transitions?.at(-1)).toMatchObject({
+      to: 'dispatched',
+      by: 'creator',
+      reason: 'agent_ended_handoff',
+    });
+
+    // Immediate status must not return the cached self+ended snapshot.
+    const status = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
+    expect(status.statusCode).toBe(200);
+    expect(status.json()).toMatchObject({
+      builder: 'platform',
+      status: 'queued',
+      phase: 'dispatched',
+    });
+    expect(status.json().stall).toBeUndefined();
 
     await app.close();
   });
@@ -1189,10 +1255,16 @@ describe('submission routes', () => {
     // says "building" until the end of time and the creator has nothing to act on.
     const { githubClient } = createGithubClientStub({ issueNumber: 77 });
     const { backend } = createBackendStub();
-    const observe = vi.fn(async (_ref: string, opts: { hasCandidate: boolean }) => ({
-      state: 'failed' as const,
-      hasCandidate: opts.hasCandidate,
-    }));
+    // Fresh `dispatched` jobs are observed immediately (session boot). First answer
+    // advances to building; later answers (after the quiet window) name the death.
+    let observeCalls = 0;
+    const observe = vi.fn(async (_ref: string, opts: { hasCandidate: boolean }) => {
+      observeCalls += 1;
+      if (observeCalls === 1) {
+        return { state: 'in_progress' as const, hasCandidate: opts.hasCandidate };
+      }
+      return { state: 'failed' as const, hasCandidate: opts.hasCandidate };
+    });
     const clock = { t: Date.now() };
     const { app, authHeaders, store } = await createApp({
       githubClient,
@@ -1210,17 +1282,19 @@ describe('submission routes', () => {
     const [job] = await store.listSubmissionsByOwner('g:test-user');
     const token = mintToken(job.issueNumber, secret);
 
-    // Fresh dispatch: still within the quiet window, so no observation happens.
+    // Fresh dispatch: observe immediately so `in_progress` advances us to building.
     const early = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
     expect(early.statusCode).toBe(200);
-    expect(observe).not.toHaveBeenCalled();
+    expect(observe).toHaveBeenCalledWith('task-1', { hasCandidate: false });
+    expect((await store.getSubmission(job.issueNumber))?.state).toBe('building');
+    expect(early.json().phase).toBe('building');
 
     // Three minutes of silence is past the window (and past the status cache).
     clock.t += 3 * 60 * 1000;
     const status = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
 
     expect(status.statusCode).toBe(200);
-    expect(observe).toHaveBeenCalledWith('task-1', { hasCandidate: false });
+    expect(observe).toHaveBeenCalledTimes(2);
     // `failed` projects onto `needs_changes`, and `failure` names what happened —
     // without it the page reads "waiting for your input" about a session that died.
     expect(status.json().status).toBe('needs_changes');
@@ -1631,8 +1705,9 @@ describe('submission routes', () => {
 
     expect(response.statusCode).toBe(200);
     expect(briefs.at(-1)?.feedback).toContain('pick this up again');
-    // The dead round must not orphan the job: the retry moves it back to building.
-    expect((await store.getSubmission(job.issueNumber))?.state).toBe('building');
+    // The dead round must not orphan the job: the retry hands it to an agent again.
+    // `dispatched` until the session is observed `in_progress`.
+    expect((await store.getSubmission(job.issueNumber))?.state).toBe('dispatched');
     // Nothing to report when the round did start — the field exists to say otherwise.
     expect(response.json()).not.toHaveProperty('roundStarted');
 
@@ -3217,9 +3292,9 @@ describe('a session that finishes without delivering', () => {
     expect(brief?.undelivered).toBe(true);
     // The branch is the only copy of undelivered work, so the round is told where it is.
     expect(brief?.previousWorkspace).toBe('copilot/has-the-work');
-    // Building again, not failed: the creator is not shown an error about a round that
-    // is at this moment running.
-    expect((await store.getSubmission(job.issueNumber))?.state).toBe('building');
+    // Dispatched again, not failed: the creator is not shown an error about a round that
+    // is at this moment starting. `building` waits on a real `in_progress` observation.
+    expect((await store.getSubmission(job.issueNumber))?.state).toBe('dispatched');
 
     await app.close();
   });
@@ -3751,7 +3826,7 @@ describe('operator cancel and retry', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ ok: true, state: 'building', creditsSpent: 1 });
+    expect(response.json()).toEqual({ ok: true, state: 'dispatched', creditsSpent: 1 });
 
     // The branch is the only copy of undelivered work; the new round is told where it is.
     const brief = briefs.at(-1);
@@ -3759,9 +3834,9 @@ describe('operator cancel and retry', () => {
     expect(brief?.previousWorkspace).toBe('copilot/has-the-work');
 
     const record = await store.getSubmission(job.issueNumber);
-    expect(record?.state).toBe('building');
+    expect(record?.state).toBe('dispatched');
     // The history says who restarted it, not `derived_from_github`.
-    expect(record?.transitions?.at(-1)).toMatchObject({ to: 'building', by: 'operator', reason: 'operator_retry' });
+    expect(record?.transitions?.at(-1)).toMatchObject({ to: 'dispatched', by: 'operator', reason: 'operator_retry' });
     // The retry is an agent session like any other, so the ledger books it.
     expect(record?.costs?.filter((entry) => entry.kind === 'agent_session')).toHaveLength(2);
 
@@ -3812,9 +3887,10 @@ describe('operator cancel and retry', () => {
 
     expect(response.statusCode).toBe(200);
     const record = await store.getSubmission(job.issueNumber);
-    // Same state, new session — without the explicit transition the retry would leave
-    // no trace in the job's history at all.
-    expect(record?.transitions?.at(-1)).toMatchObject({ to: 'building', by: 'operator', reason: 'operator_retry' });
+    // New session boots at `dispatched` — claiming `building` again would lie about
+    // Copilot startup. History still names the operator retry.
+    expect(record?.state).toBe('dispatched');
+    expect(record?.transitions?.at(-1)).toMatchObject({ to: 'dispatched', by: 'operator', reason: 'operator_retry' });
     expect(record?.dispatch?.refs).toHaveLength(2);
 
     await app.close();

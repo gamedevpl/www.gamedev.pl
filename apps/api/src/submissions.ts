@@ -1091,21 +1091,23 @@ export async function registerSubmissionRoutes(
       if (!input.undelivered && previous?.workspace && previous.workspace !== result.workspace) {
         await releaseWorkspace(input.issueNumber, previous.workspace, input.log);
       }
-      // Pass `record.state` even when undefined — planObservedStatusTransition adopts
-      // legacy/partial records into `building`. Guarding on truthy state skipped that
-      // and left continue_draft / feedback with a live dispatch but no durable move.
-      const transition = record
-        ? planObservedStatusTransition(
-            record.state,
-            'building',
-            new Date(now()).toISOString(),
-            input.transition?.by ?? 'creator',
-          )
-        : null;
-      if (transition) {
+      // Land on `dispatched`, not `building`. Copilot's agent-tasks API accepts the
+      // task immediately and only later reports `in_progress` (often with
+      // `session_count: 0` on create) — claiming "writing code" here made Studio look
+      // stuck or "not connected" while GitHub was still booting the session. The
+      // reconciler advances to `building` from a real observation. Same shape as
+      // `dispatchBuild` for a first round.
+      const latest = await store.getSubmission(input.issueNumber);
+      const from = latest?.state;
+      // No prior state: adopt directly (recordJobTransition does not gate on canTransition).
+      // Otherwise only advance when the walk still allows it — a self agent can deliver
+      // before this line runs, and yanking past `submitted` would reopen CP-1 hazards.
+      if (!from || canTransition(from, 'dispatched')) {
         await store.recordJobTransition(input.issueNumber, {
-          ...transition,
-          ...(input.transition ? { reason: input.transition.reason } : {}),
+          to: 'dispatched',
+          at: new Date(now()).toISOString(),
+          by: input.transition?.by ?? 'creator',
+          reason: input.transition?.reason ?? `dispatched_to_${selected.name}`,
         });
       }
       return { started: true };
@@ -1264,7 +1266,7 @@ export async function registerSubmissionRoutes(
       return { ok: true, jobId: input.issueNumber, alreadyOpen: true };
     }
     // Only states where a new round is the honest next step. Canceled/abandoned stay dead.
-    // `undefined` is a legacy/partial record — resumeBuild adopts it into `building`.
+    // `undefined` is a legacy/partial record — resumeBuild adopts it into `dispatched`.
     const state = record.state;
     const continuable =
       state === 'ready_for_review' ||
@@ -1380,6 +1382,19 @@ export async function registerSubmissionRoutes(
   // watchers of one build land together; without this each miss launched its own
   // fan-out of GitHub reads, multiplying the burst that gets the token limited.
   const statusRefreshes = new Map<string, Promise<SubmissionStatusResponse>>();
+  // Bumped on invalidate so a refresh that started on a stale snapshot cannot
+  // repopulate the cache after feedback/handoff cleared it.
+  const statusCacheEpoch = new Map<number, number>();
+  /** Drop every locale variant so the next poll rebuilds from the job record. */
+  function invalidateStatusCache(issueNumber: number): void {
+    for (const key of [...statusCache.keys()]) {
+      if (key.startsWith(`${issueNumber}:`)) statusCache.delete(key);
+    }
+    for (const key of [...statusRefreshes.keys()]) {
+      if (key.startsWith(`${issueNumber}:`)) statusRefreshes.delete(key);
+    }
+    statusCacheEpoch.set(issueNumber, (statusCacheEpoch.get(issueNumber) ?? 0) + 1);
+  }
   const translator = options.translator ?? createTranslatorFromEnv();
 
   // Agent progress events are read on every poll but change rarely, so they get a
@@ -1965,11 +1980,17 @@ export async function registerSubmissionRoutes(
     // queued/dispatched advances to building without waiting out the quiet window.
     const selfNeedsProjection =
       selected.name === 'self' && agentActive && Boolean(record.lastAgentSignalAt) && state !== 'building';
+    // Platform tasks sit in `queued`/`dispatched` while GitHub boots the session
+    // (`session_count: 0`, task state still `queued`). That stretch is not "quiet
+    // building" — ask every status poll so `in_progress` flips us to `building`
+    // from a real Agent Tasks signal, not a timer.
+    const awaitingSessionStart = selected.name !== 'self' && (state === 'queued' || state === 'dispatched');
     // Cost-only polls skip the quiet window: the session is already done, and waiting
     // would only delay the ledger catching up with the bill.
     if (
       !needsWorkspace &&
       !selfNeedsProjection &&
+      !awaitingSessionStart &&
       agentActive &&
       (!Number.isFinite(silence) || silence < observeQuietMs)
     ) {
@@ -1987,6 +2008,16 @@ export async function registerSubmissionRoutes(
           await store.setJobCostCredits(record.issueNumber, lastRef, observation.sessionCredits);
         } catch (error) {
           app.log.error({ err: error, issueNumber: record.issueNumber }, 'could not reconcile agent session cost');
+        }
+      }
+      // Persist the vendor state even when the job does not move — `waiting_for_user`
+      // stalls and operator views read it, and a create response that stays `queued`
+      // must not leave `agentState` blank until the first transition.
+      if (observation.state !== record.agentState) {
+        try {
+          await store.setSubmissionAgentState(record.issueNumber, observation.state);
+        } catch (error) {
+          app.log.error({ err: error, issueNumber: record.issueNumber }, 'could not store agent task state');
         }
       }
       // A cost-only poll on a job past the agent: write the credits and stop. State
@@ -2033,7 +2064,7 @@ export async function registerSubmissionRoutes(
             log: app.log,
             undelivered: true,
           });
-          // `resumeBuild` has already moved the job back to building. Reporting the
+          // `resumeBuild` has already moved the job back to dispatched. Reporting the
           // failure here as well would show the creator an error about a round that is
           // at this moment running again.
           return null;
@@ -2654,10 +2685,7 @@ export async function registerSubmissionRoutes(
       }
 
       await store.setSubmissionAbandoned(issueNumber, new Date(now()).toISOString());
-      // Drop every cached locale variant so the next poll reflects the new state.
-      for (const key of [...statusCache.keys()]) {
-        if (key.startsWith(`${issueNumber}:`)) statusCache.delete(key);
-      }
+      invalidateStatusCache(issueNumber);
 
       return reply.send({ ok: true });
     },
@@ -2715,6 +2743,7 @@ export async function registerSubmissionRoutes(
     const existing = statusRefreshes.get(cacheKey);
     if (existing) return existing;
 
+    const epochAtStart = statusCacheEpoch.get(issueNumber) ?? 0;
     const refresh = (async () => {
       // Every job answers from its own record: there is no issue to read, and the
       // GitHub round-trip it used to need is gone with the path that needed it.
@@ -2736,7 +2765,13 @@ export async function registerSubmissionRoutes(
       const status = record
         ? await localizeStatus(await nativeJobStatus(record), locale)
         : ({ status: 'queued' } as SubmissionStatusResponse);
-      statusCache.set(cacheKey, { value: status, expiresAt: now() + 60_000 });
+      // Session boot (`dispatched`) must re-observe Agent Tasks every few seconds —
+      // a 60s cache would freeze "Starting agent" while GitHub already reports
+      // `in_progress`. Skip writing when invalidate raced this refresh.
+      if ((statusCacheEpoch.get(issueNumber) ?? 0) === epochAtStart) {
+        const ttlMs = status.phase === 'dispatched' ? 2_000 : 60_000;
+        statusCache.set(cacheKey, { value: status, expiresAt: now() + ttlMs });
+      }
       if (store && record) {
         try {
           await notifyOnTransition(buildNotifyDeps(), record, status, token);
@@ -2744,8 +2779,6 @@ export async function registerSubmissionRoutes(
           app.log.error({ err: notifyError }, 'notification emit on status poll failed');
         }
       }
-      return status;
-
       return status;
     })().finally(() => {
       statusRefreshes.delete(cacheKey);
@@ -2984,6 +3017,9 @@ export async function registerSubmissionRoutes(
         if (!queued) {
           return reply.status(503).send({ error: 'failed to queue feedback for the agent' });
         }
+        // Inbox-only: still drop the status cache so the creator's note appears on the
+        // next poll instead of riding a stale 60s snapshot.
+        invalidateStatusCache(issueNumber);
         return reply.send({
           ok: true,
           ...(shotId ? { shotId } : {}),
@@ -3018,13 +3054,18 @@ export async function registerSubmissionRoutes(
         // that bump is what kills the self agent's token.
         ...(builderChanging ? {} : record?.deliveredVersion ? {} : { undelivered: true }),
         ...(requestedBuilder && isBuilderKind(requestedBuilder) ? { builder: requestedBuilder } : {}),
-        // Name the actor so a ready_for_review → building reopen does not look like a
+        // Name the actor so a ready_for_review → dispatched reopen does not look like a
         // GitHub-derived observation in the job history.
         transition: {
           by: 'creator',
           reason: handoffReason,
         },
       });
+
+      // Drop the cached status: without this, Studio kept serving the previous self
+      // round (`no_agent_yet` / ended) for up to a minute while Copilot was already
+      // queued on GitHub — exactly the "agent not connected" false warning.
+      invalidateStatusCache(issueNumber);
 
       // Accepted, and honest about what it bought. The message is kept either way — it is
       // on the record and in the thread, and the next round to start will read it — but a
@@ -3233,9 +3274,7 @@ export async function registerSubmissionRoutes(
       await store.clearDispatchSeedWorkspace(issueNumber);
     }
     await store.setSubmissionAbandoned(issueNumber, at);
-    for (const key of [...statusCache.keys()]) {
-      if (key.startsWith(`${issueNumber}:`)) statusCache.delete(key);
-    }
+    invalidateStatusCache(issueNumber);
 
     return reply.send({ ok: true, state: 'canceled', stopEnforced });
   });
@@ -3317,13 +3356,13 @@ export async function registerSubmissionRoutes(
       return reply.status(502).send({ error: 'dispatch_failed' });
     }
 
-    // A same-state retry (kicking a quiet build) records no transition on the resume
-    // path — building to building is not a move the table knows — so without this the
-    // retry would be invisible in the job's own history. The quiet-stall flag may keep
-    // showing until the new session first reports, which is accurate: it hasn't yet.
-    if (state === 'building') {
+    // resumeBuild lands on `dispatched` when the walk allows it. A retry that was
+    // already `dispatched` records no move (same state), so stamp an operator_retry
+    // marker — otherwise the kick is invisible in the job history. Coming from
+    // `building` / `failed` already wrote `dispatched` with this reason.
+    if (state === 'dispatched' && after?.state === 'dispatched') {
       await store.recordJobTransition(issueNumber, {
-        to: 'building',
+        to: 'dispatched',
         at: new Date(now()).toISOString(),
         by: 'operator',
         reason: 'operator_retry',
@@ -3331,7 +3370,8 @@ export async function registerSubmissionRoutes(
     }
 
     // One credit: the retry is an agent session like any other, booked by resumeBuild.
-    return reply.send({ ok: true, state: 'building', creditsSpent: 1 });
+    // Report the real phase — `dispatched` until GitHub says `in_progress`.
+    return reply.send({ ok: true, state: after?.state ?? 'dispatched', creditsSpent: 1 });
   });
 
   /**

@@ -565,7 +565,7 @@ describe('self builder (BY-02)', () => {
     await vi.waitFor(async () => {
       const live = await store.getSubmission(issueNumber);
       expect(live?.builder).toBe('self');
-      expect(live?.state).toBe('building');
+      expect(live?.state).toBe('dispatched');
     });
 
     const genBefore = (await store.getSubmission(issueNumber))?.roundGeneration ?? 1;
@@ -637,7 +637,7 @@ describe('self builder (BY-02)', () => {
     await vi.waitFor(async () => {
       const live = await store.getSubmission(issueNumber);
       expect(live?.builder).toBe('self');
-      expect(live?.state).toBe('building');
+      expect(live?.state).toBe('dispatched');
     });
 
     // Recent signal — quiet would refuse; MCP end unlocks handoff immediately.

@@ -111,6 +111,14 @@ describe('transition rules', () => {
     expect(canTransition('ready_for_review', 'published')).toBe(false);
   });
 
+  it('lets a new agent session start from mid-round states without claiming it is coding yet', () => {
+    // Self→platform handoff and Copilot resume accept a task long before GitHub reports
+    // `in_progress`. Forcing `building` at dispatch lied about that boot window.
+    expect(canTransition('building', 'dispatched')).toBe(true);
+    expect(canTransition('submitted', 'dispatched')).toBe(true);
+    expect(canTransition('gating', 'dispatched')).toBe(true);
+  });
+
   // A gate-red round is not always over: `mustFixGate` tells the live session to fix the
   // cause and deliver again without a new dispatch. agent-channel records that upload
   // only when this holds, so refusing it stranded a game the agent had already repaired.
@@ -227,6 +235,15 @@ describe('planObservedStatusTransition', () => {
     expect(planObservedStatusTransition('building', 'building', AT)).toBeNull();
   });
 
+  it('does not erase a richer internal state that projects to the same public status', () => {
+    // `submitted`/`gating` both read as `building` to creators — a derived-status
+    // poll must not yank the delivery back to `building` on that lossy match.
+    expect(planObservedStatusTransition('submitted', 'building', AT)).toBeNull();
+    expect(planObservedStatusTransition('gating', 'building', AT)).toBeNull();
+    expect(planObservedStatusTransition('failed', 'needs_changes', AT)).toBeNull();
+    expect(planObservedStatusTransition('dispatched', 'queued', AT)).toBeNull();
+  });
+
   it('records a genuine move', () => {
     expect(planObservedStatusTransition('building', 'in_review', AT)).toEqual({
       to: 'ready_for_review',
@@ -333,11 +350,21 @@ describe('detectStall', () => {
         now: NOW,
       }),
     ).toBe('no_agent_yet');
-    // Once the agent has spoken, ordinary quiet detection applies.
+    // Once the agent has spoken, ordinary quiet detection applies — including while
+    // still `dispatched` (resume lands there until progress / in_progress).
     expect(
       detectStall({
         state: 'building',
         stateSince: ago(HOUR),
+        lastAgentSignalAt: ago(HOUR),
+        builder: 'self',
+        now: NOW,
+      }),
+    ).toBe('quiet');
+    expect(
+      detectStall({
+        state: 'dispatched',
+        stateSince: ago(60_000),
         lastAgentSignalAt: ago(HOUR),
         builder: 'self',
         now: NOW,

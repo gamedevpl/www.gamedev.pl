@@ -79,15 +79,34 @@ export function isTerminal(state: JobState): boolean {
 const ALLOWED_TRANSITIONS: Readonly<Record<JobState, readonly JobState[]>> = {
   queued: ['dispatched', 'building', 'canceled', 'abandoned', 'failed'],
   dispatched: ['building', 'submitted', 'failed', 'canceled', 'abandoned'],
-  building: ['submitted', 'ready_for_review', 'needs_changes', 'failed', 'canceled', 'abandoned'],
+  // `dispatched` / `queued` let a new agent session start without pretending the session
+  // is already coding — resumeBuild hands work to Copilot long before GitHub reports
+  // `in_progress`, and a self→platform handoff often leaves the job in `building` or
+  // `submitted` from the previous round.
+  building: [
+    'submitted',
+    'ready_for_review',
+    'needs_changes',
+    'failed',
+    'canceled',
+    'abandoned',
+    'dispatched',
+    'queued',
+  ],
   // The verdict is read off the version manifest in a single poll, so a delivered job
   // reaches its outcome without ever being seen in `gating`. Listing only `gating` here
   // made `submitted` a trap: reconcileGateVerdict computes `ready_for_review` or
   // `needs_changes`, canTransition refused both, and nothing else writes `gating` — so
   // every job that arrived here stayed, showing "delivered, gate never started" for as
   // long as the creator kept the page open.
-  submitted: ['gating', 'ready_for_review', 'needs_changes', 'failed', 'canceled', 'abandoned'],
-  gating: ['ready_for_review', 'needs_changes', 'failed', 'canceled', 'abandoned'],
+  //
+  // `dispatched` / `queued`: a creator handoff or revision can start a new agent
+  // session after delivery, before (or instead of) the gate finishing. Do not list
+  // `building` here — `toSubmissionStatus(submitted)` is already `building`, and
+  // allowing that edge lets the lossy derived-status reconciler yank a delivery back
+  // to `building` on every sweep.
+  submitted: ['gating', 'ready_for_review', 'needs_changes', 'failed', 'canceled', 'abandoned', 'dispatched', 'queued'],
+  gating: ['ready_for_review', 'needs_changes', 'failed', 'canceled', 'abandoned', 'dispatched', 'queued'],
   // `building` (and the queue/dispatch that precede a fresh round) let a creator or
   // their agent continue iterating after a green gate without waiting on publish —
   // Studio feedback and MCP `continue_draft` both land here. Reviewer reject still
@@ -284,6 +303,10 @@ export function planObservedStatusTransition(
   const to = fromSubmissionStatus(observed);
   if (!current) return { to, at, by, reason: 'adopted_from_derived_status' };
   if (to === current) return null;
+  // Richer internal states project onto a coarser public status (`submitted`→`building`,
+  // `failed`→`needs_changes`, …). When the derivation only re-states that projection,
+  // keep the precise state — otherwise every poll would erase it.
+  if (toSubmissionStatus(current) === observed) return null;
   if (!canTransition(current, to)) return null;
   return { to, at, by, reason: 'derived_from_github' };
 }
@@ -475,14 +498,26 @@ export function detectStall(input: StallInput): JobStall | null {
 
   if (!sinceOk) return null;
 
-  if ((input.state === 'queued' || input.state === 'dispatched') && sinceState > thresholds.notDispatchedMs) {
+  // `not_dispatched` is only for rounds that never showed channel/session life. Once
+  // the agent has spoken, silence is `quiet` even if the job is still `dispatched`
+  // (resume lands there until `in_progress` / first progress) — otherwise self→platform
+  // handoff would stay locked forever on a quiet dispatched round.
+  if (
+    (input.state === 'queued' || input.state === 'dispatched') &&
+    !input.lastAgentSignalAt &&
+    sinceState > thresholds.notDispatchedMs
+  ) {
     return 'not_dispatched';
   }
 
-  if (input.state === 'building') {
-    // Fall back to when the build entered `building` when the agent has never spoken —
+  if (
+    input.state === 'building' ||
+    ((input.state === 'queued' || input.state === 'dispatched') && input.lastAgentSignalAt)
+  ) {
+    // Fall back to when the build entered this state when the agent has never spoken —
     // otherwise a session that dies before its first report would never register as
-    // quiet at all, which is the worst case to miss.
+    // quiet at all, which is the worst case to miss. (queued/dispatched only reach this
+    // branch when a signal exists, so the fallback is for `building` alone.)
     const lastSignal = input.lastAgentSignalAt ? Date.parse(input.lastAgentSignalAt) : NaN;
     const silenceFrom = Number.isFinite(lastSignal) ? lastSignal : Date.parse(input.stateSince);
     if (Number.isFinite(silenceFrom) && input.now - silenceFrom > thresholds.quietMs) return 'quiet';
