@@ -47,6 +47,34 @@ export function mcpUiEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
 }
 
 /**
+ * Canonicalise a media type so `text/html; profile="MCP-App"` and
+ * `text/html;profile=mcp-app` compare equal. Media-type parameters allow surrounding
+ * whitespace and quoted values, and case only matters inside the value — comparing the
+ * raw strings would silently deny views to a client that spelled it legally.
+ */
+function canonicalMediaType(value: string): string | null {
+  const segments = value.split(';');
+  const base = (segments.shift() ?? '').trim().toLowerCase();
+  if (!base) return null;
+  const parameters = segments
+    .map((segment) => {
+      const separator = segment.indexOf('=');
+      if (separator === -1) return null;
+      const name = segment.slice(0, separator).trim().toLowerCase();
+      let parameterValue = segment.slice(separator + 1).trim();
+      if (parameterValue.length >= 2 && parameterValue.startsWith('"') && parameterValue.endsWith('"')) {
+        parameterValue = parameterValue.slice(1, -1);
+      }
+      return name ? `${name}=${parameterValue.toLowerCase()}` : null;
+    })
+    .filter((parameter): parameter is string => parameter !== null)
+    .sort();
+  return [base, ...parameters].join(';');
+}
+
+const CANONICAL_UI_MIME_TYPE = canonicalMediaType(MCP_UI_MIME_TYPE);
+
+/**
  * Did the client declare the UI extension in `initialize`? A client that declares it
  * but lists mime types we cannot serve counts as not capable; a client that omits
  * `mimeTypes` entirely is taken at its word (the field is optional in practice).
@@ -62,7 +90,7 @@ export function clientDeclaresUi(params: unknown): boolean {
   const mimeTypes = (ui as { mimeTypes?: unknown }).mimeTypes;
   if (mimeTypes === undefined) return true;
   if (!Array.isArray(mimeTypes)) return false;
-  return mimeTypes.some((value) => typeof value === 'string' && value.trim().toLowerCase() === MCP_UI_MIME_TYPE);
+  return mimeTypes.some((value) => typeof value === 'string' && canonicalMediaType(value) === CANONICAL_UI_MIME_TYPE);
 }
 
 /** What we echo in `initialize.capabilities.extensions` for a UI-capable client. */

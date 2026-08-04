@@ -3486,19 +3486,26 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       );
     }
 
-    // MCP Apps resources. Answered whenever the flag is on — a client that never
-    // negotiated the extension is not told they exist (see initialize) and has no
-    // reason to ask, but answering an explicit probe keeps the spike debuggable.
-    if (uiEnabled && message.method === 'resources/list') {
+    // MCP Apps resources, on exactly the same gate as `_meta.ui`: the flag AND a client
+    // that negotiated the extension. A client that did not gets `method not found`, the
+    // same answer it got before views existed — no probe reveals a surface it did not
+    // ask for. Caveat worth carrying into Phase 1: capability lives on the transport
+    // correlator, so a client whose session is adopted by another instance mid-round
+    // reads as not capable and would be refused here. Single-instance today
+    // (`--max-instances 1`), and a spike runs against one process, but a durable view
+    // surface cannot key off the correlator alone.
+    const wantsUiResources = sessionWantsUi(sessionHeader);
+
+    if (wantsUiResources && message.method === 'resources/list') {
       return reply.send(jsonRpcResult(message.id, { resources: uiResourceDescriptors() }));
     }
 
     // Every view is a fixed `ui://` document; nothing here is parameterised by URI.
-    if (uiEnabled && message.method === 'resources/templates/list') {
+    if (wantsUiResources && message.method === 'resources/templates/list') {
       return reply.send(jsonRpcResult(message.id, { resourceTemplates: [] }));
     }
 
-    if (uiEnabled && message.method === 'resources/read') {
+    if (wantsUiResources && message.method === 'resources/read') {
       const params = (message.params ?? {}) as { uri?: unknown };
       const uri = typeof params.uri === 'string' ? params.uri : '';
       const resource = readUiResource(uri);

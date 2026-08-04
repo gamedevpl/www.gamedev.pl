@@ -1926,6 +1926,25 @@ describe('MCP Apps views (SEP-1865, Phase 0)', () => {
     const tools = await listTools(app, sessionId);
     expect(tools.length).toBeGreaterThan(10);
     expect(tools.every((tool) => tool._meta === undefined)).toBe(true);
+
+    // The resource methods are on the same gate as `_meta.ui`: a client that never
+    // negotiated views gets the answer it got before views existed, so probing cannot
+    // reveal a surface it did not ask for.
+    for (const method of ['resources/list', 'resources/templates/list']) {
+      const probed = await mcpCall(app, method, {}, { 'mcp-session-id': sessionId });
+      expect(probed.json().error?.code).toBe(-32601);
+    }
+    const read = await mcpCall(
+      app,
+      'resources/read',
+      { uri: 'ui://gamedevpl/round-status' },
+      { 'mcp-session-id': sessionId },
+    );
+    expect(read.json().error?.code).toBe(-32601);
+
+    // Same for a caller with no session at all.
+    const anonymous = await mcpCall(app, 'resources/read', { uri: 'ui://gamedevpl/round-status' });
+    expect(anonymous.json().error?.code).toBe(-32601);
   });
 
   it('echoes the extension and attaches the card once a client declares it', async () => {

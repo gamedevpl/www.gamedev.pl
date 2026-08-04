@@ -37,6 +37,27 @@ describe('clientDeclaresUi', () => {
     expect(clientDeclaresUi(withUiExtension({}))).toBe(true);
   });
 
+  it('accepts any legal spelling of the media type, not just our exact string', () => {
+    // Media-type parameters allow surrounding whitespace, quoted values, and differ in
+    // case only inside the value — all of these mean the same thing as our constant.
+    for (const mimeType of [
+      'text/html; profile=mcp-app',
+      'text/html ;profile=mcp-app',
+      'text/html;profile="mcp-app"',
+      'text/html; profile="MCP-App"',
+      'TEXT/HTML;PROFILE=mcp-app',
+      '  text/html;profile=mcp-app  ',
+    ]) {
+      expect(clientDeclaresUi(withUiExtension({ mimeTypes: [mimeType] }))).toBe(true);
+    }
+  });
+
+  it('still refuses html without the mcp-app profile, and the profile on another type', () => {
+    expect(clientDeclaresUi(withUiExtension({ mimeTypes: ['text/html'] }))).toBe(false);
+    expect(clientDeclaresUi(withUiExtension({ mimeTypes: ['text/plain;profile=mcp-app'] }))).toBe(false);
+    expect(clientDeclaresUi(withUiExtension({ mimeTypes: ['text/html;profile=something-else'] }))).toBe(false);
+  });
+
   it('refuses a client that can only render content types we do not serve', () => {
     expect(clientDeclaresUi(withUiExtension({ mimeTypes: ['application/vnd.remote-dom'] }))).toBe(false);
     expect(clientDeclaresUi(withUiExtension({ mimeTypes: 'text/html;profile=mcp-app' }))).toBe(false);
