@@ -504,9 +504,18 @@ describe('CreatorStudioView', () => {
     });
     expect(setDraftShared).toHaveBeenCalledWith('token-draft', true);
 
-    // Published games already live at /play/<slug> — no draft-share head control.
+    // Published games have no draft switch — the link is already public — but the head
+    // control stays so the permalink is still one click away.
     await rerender({ selectedGame: 'live-game' });
-    expect(container.querySelector('[data-testid="studio-head-share"]')).toBeNull();
+    const liveShare = container.querySelector<HTMLButtonElement>('[data-testid="studio-head-share"]');
+    expect(liveShare).not.toBeNull();
+    await act(async () => {
+      liveShare!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(container.querySelector('.studio-head-share-popover .studio-share-toggle')).toBeNull();
+    expect(container.querySelector('.studio-head-share-popover .inline-link')?.textContent).toContain(
+      '/play/live-game',
+    );
 
     root.unmount();
   });
@@ -837,6 +846,34 @@ describe('CreatorStudioView', () => {
       'true',
     );
     expect(container.querySelector('.studio-share-toggle')).not.toBeNull();
+
+    root.unmount();
+  });
+
+  it('keeps a share link in Overview once the game is live in the catalog', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
+    fetchStudioGames.mockResolvedValue(
+      studioShelf([
+        {
+          token: 'token-live',
+          title: 'Live Game',
+          createdAt: '2026-07-30T09:00:00.000Z',
+          lastKnownStatus: 'published',
+          slug: 'live-game',
+          publishedAt: '2026-07-31T09:00:00.000Z',
+        },
+      ]),
+    );
+
+    const { container, root } = await renderStudio({ selectedGame: 'live-game', selectedTab: 'details' });
+
+    // Nothing left to toggle — the game is public — but the permalink must still be here,
+    // otherwise a published game has no share affordance anywhere in Studio.
+    expect(container.querySelector('.studio-share-toggle')).toBeNull();
+    expect(container.querySelector('.studio-share.is-live .inline-link')?.textContent).toContain('/play/live-game');
+    expect(container.querySelector('.studio-share .status-share-copy')).not.toBeNull();
 
     root.unmount();
   });

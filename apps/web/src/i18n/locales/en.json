@@ -342,6 +342,8 @@
     },
     "share": {
       "title": "Share the draft",
+      "liveTitle": "Share the game",
+      "liveHint": "This game is live in the arcade. Anyone with this link plays the latest published version.",
       "on": "On",
       "off": "Off",
       "hintOff": "Only you can play this game right now. Turn this on to give anyone with the link a go — it stays out of the arcade either way.",
