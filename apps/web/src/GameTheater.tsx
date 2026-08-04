@@ -352,10 +352,11 @@ export function GameTheater({
   // Gated on real game input: chrome never vanishes while somebody is still
   // orienting themselves. Once play begins, a quiet grace period fades it; further
   // play input does not un-fade it (see notePlayerActivity). Hover/focus and open
-  // control surfaces pin a still-visible bar in place.
+  // control surfaces pin the bar — including a race where the idle timer and a
+  // pointerenter land in the same tick.
   useEffect(() => {
     if (!playerEngaged || chromeHeld || moreOpen || howToOpen || fullscreen) {
-      if (!playerEngaged || moreOpen || howToOpen || fullscreen) setChromeIdle(false);
+      setChromeIdle(false);
       return;
     }
     const timer = window.setTimeout(() => setChromeIdle(true), PLAYER_CHROME_IDLE_MS);
