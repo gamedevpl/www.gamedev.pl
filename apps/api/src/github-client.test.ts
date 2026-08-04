@@ -671,6 +671,42 @@ describe('getGameSources', () => {
     expect(sources?.gameJs).not.toContain('unused-theme');
   });
 
+  it('rejects an inherited Object.prototype name as a track', async () => {
+    // The catalog comes from JSON.parse, so `tracks.constructor` is a function rather than
+    // undefined and survives a truthiness check — and `constructor` is lowercase, so it
+    // clears the kebab-case filter too. Accepting it would embed nothing (JSON.stringify
+    // drops a function) and playMusic would fail at runtime on a build CI called clean.
+    const files = new Map<string, string | Uint8Array>([
+      ['games/raid/index.html', '<canvas id="game"></canvas>'],
+      ['games/raid/game.ts', 'const game: { update(): void } = { update() {} }; GameKit.mount(game);'],
+      ['games/raid/style.css', '.game { color: teal; }'],
+      ['games/raid/SPEC.md', specMd({ title: 'Raid' })],
+      [
+        'games/raid/GAME.json',
+        JSON.stringify({
+          engine: { modules: ['input', 'audio'] },
+          audio: { sounds: ['ui-toggle'], music: 'calm-theme', musicTracks: ['constructor'] },
+        }),
+      ],
+      ['shared/game-shell.css', '.shell { display: grid; }'],
+      ['shared/modules/core.ts', 'window.GameKit = { mount() {} };'],
+      ['shared/modules/input.ts', 'GameKit.createInput = function (): void {};'],
+      ['shared/modules/audio.ts', 'GameKit.createAudio = function (): void {};'],
+      ['shared/audio/assets/ui-toggle.wav', new Uint8Array([1, 2])],
+      ['shared/audio/music.json', JSON.stringify({ tracks: { 'calm-theme': { loop: true } } })],
+    ]);
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const pathname = new URL(String(input)).pathname;
+      const marker = '/contents/';
+      const path = decodeURIComponent(pathname.slice(pathname.indexOf(marker) + marker.length));
+      const value = files.get(path);
+      return value === undefined ? new Response('not found', { status: 404 }) : new Response(value, { status: 200 });
+    }) as unknown as typeof fetch;
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+
+    await expect(client.getGameSources('main', 'raid')).rejects.toThrow(/music track not in catalog/);
+  });
+
   it('rejects a musicTracks list that repeats the autoplay track', async () => {
     const files = new Map<string, string | Uint8Array>([
       ['games/raid/index.html', '<canvas id="game"></canvas>'],
