@@ -1944,7 +1944,9 @@ export async function registerAgentChannelRoutes(
         return reply.send({
           status: 'pending',
           deliveryId: null,
-          summary: 'nothing has been delivered yet',
+          summary:
+            'nothing has been delivered yet — do not busy-poll; wait ~30s wall-clock before the next get_gate_verdict, or call end if done (Studio shows the gate)',
+          retryAfterSeconds: 30,
           access,
         });
       }
@@ -1964,7 +1966,9 @@ export async function registerAgentChannelRoutes(
         return reply.send({
           status: 'pending',
           deliveryId: version,
-          summary: 'gate has not reported yet',
+          summary:
+            'gate has not reported yet — do not busy-poll; wait ~30s wall-clock before the next get_gate_verdict, or call end if done (Studio shows the gate)',
+          retryAfterSeconds: 30,
           access,
         });
       }

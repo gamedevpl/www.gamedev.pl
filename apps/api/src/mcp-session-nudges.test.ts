@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  GATE_POLL_MIN_INTERVAL_MS,
   PROGRESS_STALE_CALLS,
   PROGRESS_STALE_MS,
   createMcpNudgeTracker,
@@ -73,9 +74,23 @@ describe('mcp-session-nudges', () => {
     const t0 = 1_000_000;
     nudges.noteSubmitSuccess(1, t0);
     expect(nudges.warningsFor(1, 'submit_sources', t0).map((w) => w.code)).not.toContain('call_end');
-    expect(nudges.warningsFor(1, 'get_gate_verdict', t0).map((w) => w.code)).toContain('call_end');
+    const onGate = nudges.warningsFor(1, 'get_gate_verdict', t0);
+    expect(onGate.map((w) => w.code)).toContain('call_end');
+    expect(onGate.find((w) => w.code === 'call_end')?.message).toMatch(/do not busy-poll/i);
     nudges.noteToolSuccess(1, 'end', t0 + 1);
-    expect(nudges.warningsFor(1, 'get_gate_verdict', t0 + 2).map((w) => w.code)).not.toContain('call_end');
+    expect(
+      nudges.warningsFor(1, 'get_gate_verdict', t0 + GATE_POLL_MIN_INTERVAL_MS + 2).map((w) => w.code),
+    ).not.toContain('call_end');
+  });
+
+  it('soft-warns gate_poll_backoff on tight get_gate_verdict loops', () => {
+    const nudges = createMcpNudgeTracker();
+    const t0 = 1_000_000;
+    expect(nudges.warningsFor(1, 'get_gate_verdict', t0).map((w) => w.code)).not.toContain('gate_poll_backoff');
+    expect(nudges.warningsFor(1, 'get_gate_verdict', t0 + 1_000).map((w) => w.code)).toContain('gate_poll_backoff');
+    expect(
+      nudges.warningsFor(1, 'get_gate_verdict', t0 + 1_000 + GATE_POLL_MIN_INTERVAL_MS).map((w) => w.code),
+    ).not.toContain('gate_poll_backoff');
   });
 
   it('does not progress-nudge submit_sources (call_end owns that reply)', () => {
