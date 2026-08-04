@@ -710,7 +710,9 @@ describe('SubmissionStatusView', () => {
       expect(container.querySelector('.studio-connect.is-resume')).not.toBeNull();
       expect(container.textContent).toContain('Continue with your agent');
       expect(container.textContent).not.toContain('Connect your coding agent');
-      // Full first-time install stays under a closed disclosure — continue, not a reset.
+      // Quiet escape hatch: pick Gamedev.pl and send — API kills the self token.
+      expect(container.querySelector('.builder-choice')).not.toBeNull();
+      expect(container.textContent).toMatch(/Who builds this round/i); // Full first-time install stays under a closed disclosure — continue, not a reset.
       const details = container.querySelector<HTMLDetailsElement>('[data-testid="connect-setup-details"]');
       expect(details).not.toBeNull();
       expect(details?.open).toBe(false);

@@ -29,6 +29,7 @@ import { createInternalAuthVerifierFromEnv, type InternalAuthVerifier } from './
 import type { AgentBackend, SeedFiles } from './agent-backend.js';
 import { resolveBuilderBackend, type AgentBackendRegistry } from './agent-backend-env.js';
 import {
+  allowsQuietBuilderHandoff,
   isActiveBuildRound,
   isBuilderKind,
   shouldSteerFeedbackViaInbox,
@@ -2942,11 +2943,29 @@ export async function registerSubmissionRoutes(
       if (record && requestedBuilder && isActiveBuildRound(record)) {
         const current = builderOf(record);
         if (requestedBuilder !== current) {
-          return reply.status(409).send({
-            error: 'builder_locked',
-            reason: 'active_round',
+          const stall = detectStall({
+            state: record.state ?? 'queued',
+            stateSince: record.stateSince ?? record.createdAt,
+            lastAgentSignalAt: record.lastAgentSignalAt,
+            agentState: record.agentState,
+            now: now(),
             builder: current,
           });
+          // Quiet / never-connected self → platform is the handoff escape hatch. Anything
+          // else mid-round stays locked (two agents must not write the same round).
+          if (
+            !allowsQuietBuilderHandoff({
+              currentBuilder: current,
+              requestedBuilder,
+              stall,
+            })
+          ) {
+            return reply.status(409).send({
+              error: 'builder_locked',
+              reason: 'active_round',
+              builder: current,
+            });
+          }
         }
       }
       // Queue *before* dispatch. resumeBuild awaits the agent-tasks API, and a slow or
@@ -2973,7 +2992,13 @@ export async function registerSubmissionRoutes(
       //
       // A queued job with no refs is the opposite: dispatch never landed, so nobody
       // will poll — fall through to resumeBuild so feedback can still start a session.
-      if (record && shouldSteerFeedbackViaInbox(record)) {
+      //
+      // Quiet self→platform handoff must resume (generation bump + platform dispatch),
+      // not drop mail for the agent we are about to invalidate.
+      const builderChanging = Boolean(
+        record && requestedBuilder && isBuilderKind(requestedBuilder) && requestedBuilder !== builderOf(record),
+      );
+      if (record && shouldSteerFeedbackViaInbox(record, { builderChanging })) {
         if (!queued) {
           return reply.status(503).send({ error: 'failed to queue feedback for the agent' });
         }
@@ -2988,11 +3013,16 @@ export async function registerSubmissionRoutes(
         feedback: inboxText,
         locale: creatorLocale,
         log: request.log,
-        ...(record?.deliveredVersion ? {} : { undelivered: true }),
+        // Handoff always opens a new round generation even when a candidate exists —
+        // that bump is what kills the quiet self agent's token.
+        ...(builderChanging ? {} : record?.deliveredVersion ? {} : { undelivered: true }),
         ...(requestedBuilder && isBuilderKind(requestedBuilder) ? { builder: requestedBuilder } : {}),
         // Name the actor so a ready_for_review → building reopen does not look like a
         // GitHub-derived observation in the job history.
-        transition: { by: 'creator', reason: 'creator_feedback' },
+        transition: {
+          by: 'creator',
+          reason: builderChanging ? 'quiet_builder_handoff' : 'creator_feedback',
+        },
       });
 
       // Accepted, and honest about what it bought. The message is kept either way — it is

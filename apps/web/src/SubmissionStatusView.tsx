@@ -50,6 +50,9 @@ function isAwaitingOwnAgent(status: SubmissionStatus | null | undefined): boolea
  */
 function canChooseBuilder(status: SubmissionStatus | null | undefined): boolean {
   if (!status) return false;
+  // Quiet self round: offer the platform handoff (API bumps round generation so the
+  // quiet agent's token dies — two agents must not write the same round).
+  if (status.builder === 'self' && status.stall === 'quiet') return true;
   if (isAwaitingOwnAgent(status)) return false;
   // Gate-red / kit_outdated keep the round open server-side (`builder_locked` on switch).
   // Offering a selector that can only 409 is worse than hiding it until the repair lands.

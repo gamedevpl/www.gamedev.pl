@@ -1,7 +1,9 @@
 // Which coding agent builds a round: the platform's (Copilot) or the creator's own.
 //
 // A property of the *round*, not the game. The game keeps a default (= last used) so the
-// next round can offer a sensible choice; an active round never switches mid-flight.
+// next round can offer a sensible choice. Mid-flight switches are refused except a
+// deliberate quiet self→platform handoff (agent silent; round generation bump kills the
+// self token so two agents cannot write the same round).
 
 import type { JobState, JobTransition } from './job-state.js';
 
@@ -29,7 +31,8 @@ export function selfBuildDeliveryCap(): number {
 }
 
 /**
- * Whether the current round is still live — builder must not change until it closes.
+ * Whether the current round is still live — builder must not change until it closes,
+ * except {@link allowsQuietBuilderHandoff}.
  *
  * Includes gate-red / kit_outdated `needs_changes`: those keep the round open so the
  * same session can repair (or refresh the kit) and re-deliver without a new kickoff.
@@ -54,6 +57,24 @@ export function isActiveBuildRound(record: { state?: JobState; transitions?: Job
 }
 
 /**
+ * Quiet self round → platform: the creator's escape hatch when their agent has
+ * stopped talking. Refuses the reverse and refuses while the agent is still chatty
+ * (or has never connected — that is still "waiting to start", not a handoff).
+ *
+ * Race kill: handoff goes through `resumeBuild`, which bumps `roundGeneration` before
+ * minting the platform brief, so the self MCP token dies; late self deliveries land as
+ * stale. Candidate sources (if any) seed the platform brief.
+ */
+export function allowsQuietBuilderHandoff(input: {
+  currentBuilder: BuilderKind;
+  requestedBuilder: BuilderKind;
+  stall?: string | null;
+}): boolean {
+  if (input.requestedBuilder !== 'platform' || input.currentBuilder !== 'self') return false;
+  return input.stall === 'quiet';
+}
+
+/**
  * Whether creator feedback should only go to the build-channel inbox (no new dispatch).
  *
  * An in-flight round that already has a dispatch ref has an agent that will poll the
@@ -66,12 +87,19 @@ export function isActiveBuildRound(record: { state?: JobState; transitions?: Job
  *
  * A `queued` job with **no** refs is different: dispatch never landed, so nobody will
  * read the inbox. Feedback must retry `resumeBuild` in that case.
+ *
+ * A quiet self→platform handoff must not take this path — it needs a fresh platform
+ * dispatch (and a generation bump), not mail for the silenced self agent.
  */
-export function shouldSteerFeedbackViaInbox(record: {
-  state?: JobState;
-  transitions?: JobTransition[];
-  dispatch?: { refs?: readonly string[] } | null;
-}): boolean {
+export function shouldSteerFeedbackViaInbox(
+  record: {
+    state?: JobState;
+    transitions?: JobTransition[];
+    dispatch?: { refs?: readonly string[] } | null;
+  },
+  opts?: { builderChanging?: boolean },
+): boolean {
+  if (opts?.builderChanging) return false;
   if (record.state === 'publishing') return false;
   if (!isActiveBuildRound(record)) return false;
   return (record.dispatch?.refs?.length ?? 0) > 0;
