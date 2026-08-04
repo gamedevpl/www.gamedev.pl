@@ -333,6 +333,7 @@
       "connect": "Podłącz agenta",
       "build": "Postęp buildu",
       "media": "Zrzuty ekranu",
+      "workspace": "Twoje IDE",
       "mediaEmpty": "Nie ma jeszcze zrzutów — pojawią się tu, gdy agent je wyśle.",
       "credentials": "Dostęp agentów",
       "credentialsHint": "Zarządzaj kluczem i agentami, które mają dostęp do Twoich gier przez MCP.",

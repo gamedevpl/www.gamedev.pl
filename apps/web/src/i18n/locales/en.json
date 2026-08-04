@@ -331,6 +331,7 @@
       "connect": "Connect your agent",
       "build": "Build progress",
       "media": "Screenshots",
+      "workspace": "Your own IDE",
       "mediaEmpty": "No screenshots yet — they appear here when the agent posts them.",
       "credentials": "Agent access",
       "credentialsHint": "Manage the key and agents that can access your games through MCP.",

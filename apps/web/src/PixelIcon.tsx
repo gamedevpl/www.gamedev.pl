@@ -34,6 +34,7 @@ export type PixelIconName =
   | 'arrowLeft'
   | 'clock'
   | 'wrench'
+  | 'download'
   | 'eye'
   | 'star'
   | 'checkbox'
@@ -224,6 +225,25 @@ const ICONS: Record<PixelIconName, string[]> = {
     '...............',
     '...............',
     '...............',
+    '...............',
+  ],
+  // Arrow into a tray — the working copy leaving for the creator's machine. Distinct
+  // from `collapse`, which is a resize chevron pair and reads as "shrink", not "save".
+  download: [
+    '...............',
+    '......###......',
+    '......###......',
+    '......###......',
+    '......###......',
+    '...#########...',
+    '....#######....',
+    '.....#####.....',
+    '......###......',
+    '.......#.......',
+    '...............',
+    '.#...........#.',
+    '.#...........#.',
+    '.#############.',
     '...............',
   ],
   folder: [

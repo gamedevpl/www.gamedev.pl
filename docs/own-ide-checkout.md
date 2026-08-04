@@ -1,8 +1,11 @@
 # Working on a game in your own IDE
 
-> **Status: 🚧 Built, not yet released.** The server half and the games-repo scaffold are
-> in place; see [`games-repo.md`](./games-repo.md) for how a game is normally built and
-> [`security-model.md`](./security-model.md) for the boundaries this respects.
+> **Status: ✅ Live.** Both halves shipped 2026-08-04 and the round trip has been exercised
+> against production. See [`games-repo.md`](./games-repo.md) for how a game is normally
+> built and [`security-model.md`](./security-model.md) for the boundaries this respects.
+>
+> Not yet announced to creators, and the archive's README still carries a placeholder where
+> the terms of use will go.
 
 Most creators describe a game and let an agent build it. Some would rather open the code in
 their own editor, with their own tools, their own Git history. This is that path.

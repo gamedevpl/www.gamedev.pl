@@ -592,26 +592,28 @@ describe('CreatorStudioView', () => {
 
     const { container, root, rerender } = await renderStudio({ selectedGame: 'tv-tycoon', selectedTab: 'details' });
 
-    // The working copy lives in the credentials pane with the other bring-your-own-agent
-    // controls, so every assertion here has to open that pane first — the rail lands on
-    // overview.
-    const openKeys = async () => {
-      const keys = container.querySelector('[data-testid="studio-rail-icon-keys"]');
+    // The working copy has its own rail pane. The rail lands on overview, so reaching it
+    // is one click — and for a game with nothing to check out the icon is absent
+    // entirely, which is the assertion that matters for the other two rows.
+    const railIcon = () => container.querySelector('[data-testid="studio-rail-icon-workspace"]');
+    const openWorkspace = async () => {
       await act(async () => {
-        keys!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        railIcon()!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       });
     };
 
-    await openKeys();
+    expect(railIcon()).not.toBeNull();
+    await openWorkspace();
     expect(container.querySelector('[data-testid="workspace-checkout"]')).not.toBeNull();
     expect(container.textContent).toContain('Work on this game in your own IDE');
 
+    // No slug yet: no pane to open, so the rail must not advertise one.
     await rerender({ selectedGame: 'token-fresh', selectedTab: 'details' });
-    await openKeys();
+    expect(railIcon()).toBeNull();
     expect(container.querySelector('[data-testid="workspace-checkout"]')).toBeNull();
 
     await rerender({ selectedGame: 'dead-end', selectedTab: 'details' });
-    await openKeys();
+    expect(railIcon()).toBeNull();
     expect(container.querySelector('[data-testid="workspace-checkout"]')).toBeNull();
 
     root.unmount();
