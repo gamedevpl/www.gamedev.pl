@@ -83,6 +83,17 @@ export type GameKitModuleName = (typeof GAME_KIT_MODULES)[number];
 export const GAME_BUDGET_BYTES = 200 * 1024;
 
 /**
+ * Raw TypeScript source-graph ceiling for the bake/play/seed bundlers
+ * (`MAX_SOURCE_GRAPH_BYTES` in `github-client.ts`, `MAX_GAME_SOURCE_BYTES` in
+ * `seed-bundle.ts`). Lockstep with games-repo Check 4 `SOURCE_GRAPH_BUDGET_BYTES`.
+ *
+ * Distinct from {@link GAME_BUDGET_BYTES}: the assembled author payload can stay
+ * under 200 KiB while comments and types push the `.ts` tree higher. Last moved
+ * 200 → 300 KiB when carjack-city (~247 KiB source) stranded every snapshot publish.
+ */
+export const SOURCE_GRAPH_BUDGET_BYTES = 300 * 1024;
+
+/**
  * Platform half of the serve cap — games-repo `GAMEKIT_PLATFORM_BYTES` /
  * `assemble-contract.json` `platformCeilingBytes`. Together with
  * {@link GAME_BUDGET_BYTES} this must equal games-repo `MAX_BUNDLE_BYTES`
