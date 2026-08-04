@@ -83,6 +83,20 @@ const HALTED_STATUSES = new Set<SubmissionStatus['status']>(['needs_changes', 'a
 /** How long the compact composer's "Sent!" receipt stays up before clearing itself. */
 export const SENT_RECEIPT_MS = 4500;
 
+/**
+ * Whether the thread-foot spinner should run — agent mid-work, not "waiting on us".
+ *
+ * Gate-green (`in_review` / `ready_for_review`) used to keep spinning forever after the
+ * agent finished, with "updated 20 minutes ago" under an active spinner.
+ */
+function isAgentWorkActive(status: SubmissionStatus | null | undefined): boolean {
+  if (!status) return false;
+  if (TERMINAL_STATUSES.has(status.status)) return false;
+  if (isAwaitingOwnAgent(status)) return false;
+  if (status.status === 'in_review' || status.phase === 'ready_for_review') return false;
+  return true;
+}
+
 const STATUS_ICONS: Record<SubmissionStatus['status'], PixelIconName> = {
   queued: 'clock',
   building: 'wrench',
@@ -756,10 +770,15 @@ export function SubmissionStatusView({
                         : t(`statusView.states.${status.status}.label`)
                   }
                   thought={
-                    isAwaitingOwnAgent(status) || TERMINAL_STATUSES.has(status.status) ? null : presenceThought(status)
+                    isAwaitingOwnAgent(status) ||
+                    TERMINAL_STATUSES.has(status.status) ||
+                    status.status === 'in_review' ||
+                    status.phase === 'ready_for_review'
+                      ? null
+                      : presenceThought(status)
                   }
                   heartbeatAt={isAwaitingOwnAgent(status) ? null : heartbeatAt}
-                  active={!TERMINAL_STATUSES.has(status.status) && !isAwaitingOwnAgent(status)}
+                  active={isAgentWorkActive(status)}
                 />
 
                 {/* Before the first agent signal there is nobody to receive a note — the
