@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { assertAgentTokenActive, verifyAgentToken } from './agent-token.js';
+import { assertAgentTokenActive, mintAgentToken, verifyAgentToken } from './agent-token.js';
 import { buildApp } from './app.js';
 import type { GameSeeder, SeedDraft } from './game-seed.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
@@ -1073,6 +1073,61 @@ describe('submission routes', () => {
       by: 'creator',
       reason: 'creator_feedback',
     });
+
+    await app.close();
+  });
+
+  it('drops cached stall=ended when the self agent resumes after submit auto-end', async () => {
+    // Submit marks agentEndedAt for ChatGPT-class stop-without-end. Claude often keeps
+    // iterating: progress/stage clear ended in the store, but a 60s status cache used to
+    // keep serving stall=ended beside fresh "now" events — Studio said finished and working.
+    const { githubClient } = createGithubClientStub({ issueNumber: 78 });
+    const { backend } = createBackendStub();
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    const token = mintToken(job.issueNumber, secret);
+    await store.setRoundBuilder(job.issueNumber, 'self');
+    await store.ensureRoundGeneration(job.issueNumber);
+    await store.recordJobTransition(job.issueNumber, {
+      to: 'building',
+      at: new Date().toISOString(),
+      by: 'agent',
+      reason: 'self_signal',
+    });
+    await store.touchLastAgentSignalAt(job.issueNumber, new Date().toISOString());
+    await store.markAgentEnded(job.issueNumber, new Date().toISOString());
+
+    const ended = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
+    expect(ended.statusCode).toBe(200);
+    expect(ended.json()).toMatchObject({ builder: 'self', stall: 'ended' });
+    expect(ended.json().agentEndedAt).toBeTruthy();
+
+    const progress = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/progress',
+      headers: { authorization: `Bearer ${mintAgentToken(job.issueNumber, secret, { roundGeneration: 1 })}` },
+      payload: { text: 'Fixing the roofline before the next preview.' },
+    });
+    expect(progress.statusCode).toBe(200);
+    expect((await store.getSubmission(job.issueNumber))?.agentEndedAt).toBeUndefined();
+
+    // Immediate poll must not keep the cached ended snapshot next to the new event.
+    const resumed = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
+    expect(resumed.statusCode).toBe(200);
+    expect(resumed.json().stall).toBeUndefined();
+    expect(resumed.json().agentEndedAt).toBeUndefined();
+    expect(resumed.json().events?.some((event: { text: string }) => /roofline/i.test(event.text))).toBe(true);
 
     await app.close();
   });
@@ -2207,15 +2262,16 @@ describe('submission preview route', () => {
     expect((await app.inject({ method: 'GET', url: `/api/submissions/${token}` })).statusCode).toBe(200);
     const callsAfterFirst = getSubmission.mock.calls.length;
 
-    // Inside the window: answered from cache, so the record is not re-read.
+    // Inside the window: the heavy refresh is skipped. One cheap record read still
+    // runs to overlay live heartbeat / ended / stall (same outside-cache idea as events).
     currentTime += 59_000;
     expect((await app.inject({ method: 'GET', url: `/api/submissions/${token}` })).statusCode).toBe(200);
-    expect(getSubmission.mock.calls.length).toBe(callsAfterFirst);
+    expect(getSubmission.mock.calls.length).toBe(callsAfterFirst + 1);
 
-    // Past it: refreshed.
+    // Past it: full refresh again (abandoned check + refresh + overlay).
     currentTime += 2_000;
     expect((await app.inject({ method: 'GET', url: `/api/submissions/${token}` })).statusCode).toBe(200);
-    expect(getSubmission.mock.calls.length).toBeGreaterThan(callsAfterFirst);
+    expect(getSubmission.mock.calls.length).toBeGreaterThan(callsAfterFirst + 1);
 
     await app.close();
   });
@@ -2998,9 +3054,9 @@ describe('status route under store pressure', () => {
     release();
     const responses = await polls;
 
-    // Three abandoned-checks — one per request, outside the cache by design — and
-    // exactly one refresh behind them. A second refresh would mean no coalescing.
-    expect(getSubmission).toHaveBeenCalledTimes(4);
+    // Three abandoned-checks + one coalesced refresh + three heartbeat overlays
+    // (attachBuildEvents runs per response). A second refresh would mean no coalescing.
+    expect(getSubmission).toHaveBeenCalledTimes(7);
     for (const response of responses) expect(response.statusCode).toBe(200);
 
     await app.close();
@@ -3020,17 +3076,17 @@ describe('status route under store pressure', () => {
       app.inject({ method: 'GET', url: `/api/submissions/${token}?locale=pl` }),
     ]);
 
-    // Two keys, so two refreshes — a shared one would hand a Polish reader English.
-    // Plus the two per-request abandoned-checks.
-    expect(getSubmission).toHaveBeenCalledTimes(4);
+    // Two keys → two refreshes (a shared one would hand a Polish reader English),
+    // plus two abandoned-checks and two heartbeat overlays.
+    expect(getSubmission).toHaveBeenCalledTimes(6);
 
     await app.close();
   });
 
   it('serves the last known status when a refresh fails', async () => {
-    // Calls 1-2 are the warm request; 3 is the next request's abandoned-check, so 4 is
-    // its refresh — the one the stale-serve is there to cover.
-    const { store } = spyStore({ failOnCall: 4 });
+    // Warm: abandoned + refresh + overlay (1–3). Stale: abandoned (4), then refresh
+    // fails (5) — the stale-serve path. Overlay on the fallback is soft and may be 6.
+    const { store } = spyStore({ failOnCall: 5 });
     let currentTime = 10_000;
     const { app } = await createApp({
       githubClient: createGithubClientStub({}).githubClient,

@@ -1515,27 +1515,57 @@ export async function registerSubmissionRoutes(
 
   /**
    * Attaches what the agent sent us directly — its updates, in the reader's language,
-   * and its pictures. Both sit outside the 60s status cache for the same reason: they
-   * are the only things that move in the long stretch before a pull request exists.
+   * and its pictures — plus the live heartbeat / ended fields from the job record.
+   *
+   * All of these sit outside the 60s status cache: after MCP submit auto-marks
+   * `agentEndedAt`, a Claude-class agent often keeps staging and reporting progress.
+   * Serving a cached `stall: ended` beside fresh "now" events made Studio claim the
+   * round finished while the thread was still moving.
    */
   async function attachBuildEvents(
     status: SubmissionStatusResponse,
     issueNumber: number,
     locale: string,
   ): Promise<SubmissionStatusResponse> {
-    const [loadedEvents, media, playable] = await Promise.all([
+    const [loadedEvents, media, playable, record] = await Promise.all([
       loadBuildEvents(issueNumber),
       buildMedia(issueNumber, locale),
       buildPlayables(issueNumber, locale),
+      // Soft: a store blip must not 500 a cached status poll — keep cached stall/ended.
+      store ? store.getSubmission(issueNumber).catch(() => null) : Promise.resolve(null),
     ]);
     // Drop leftover synthetic presence steps from before heartbeats stopped writing chat.
     const events = loadedEvents.filter((event) => !isMcpPresenceEventText(event.text));
-    return {
+    const next: SubmissionStatusResponse = {
       ...status,
       ...(events.length > 0 ? { events: await localizeEvents(events, locale) } : {}),
       ...(media.length > 0 ? { media } : {}),
       ...(playable.length > 0 ? { playable } : {}),
     };
+    if (!record) return next;
+
+    // Overlay must clear stale keys, not only set present ones — a cached ended
+    // snapshot has to lose agentEndedAt/stall when the agent resumes.
+    if (record.lastAgentSignalAt) next.lastAgentSignalAt = record.lastAgentSignalAt;
+    else delete next.lastAgentSignalAt;
+    if (record.lastAgentPresence) next.lastAgentPresence = record.lastAgentPresence;
+    else delete next.lastAgentPresence;
+    if (record.agentEndedAt) next.agentEndedAt = record.agentEndedAt;
+    else delete next.agentEndedAt;
+
+    const stall = detectStall({
+      state: record.state ?? 'queued',
+      stateSince: record.stateSince ?? record.createdAt,
+      lastAgentSignalAt: record.lastAgentSignalAt,
+      agentState: record.agentState,
+      agentEndedAt: record.agentEndedAt,
+      now: now(),
+      builder: builderOf(record),
+    });
+    if (stall) next.stall = stall;
+    else delete next.stall;
+
+    return next;
   }
 
   // Draft previews are heavier (several GitHub Contents reads + esbuild) and used
@@ -4476,13 +4506,18 @@ export async function registerSubmissionRoutes(
   });
 
   // The agent's side of the wire. Registered here rather than in app.ts so it shares
-  // the store, the token secret, and the event cache it has to invalidate.
+  // the store, the token secret, and the caches it has to invalidate.
   await registerAgentChannelRoutes(app, {
     ...options.agentChannel,
     store,
     agentTokenSecret: submissionTokenSecret,
     now,
-    onEvent: (issueNumber) => eventsCache.delete(issueNumber),
+    onEvent: (issueNumber) => {
+      eventsCache.delete(issueNumber);
+      // Heartbeat / ended / phase move with channel writes; do not keep serving a
+      // minute-old stall next to fresh progress (submit auto-end + continue loop).
+      invalidateStatusCache(issueNumber);
+    },
   });
 
   // Remote MCP (BY-05): streamable-HTTP tools wrapping the channel above. Same secret

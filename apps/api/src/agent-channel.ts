@@ -915,9 +915,11 @@ export async function registerAgentChannelRoutes(
         });
         // Staging is channel activity — without this, a long stage_source_file loop
         // (Claude Chat's preferred path) looks quiet after 15m and Studio wrongly offers
-        // a platform handoff while the agent is still uploading files.
+        // a platform handoff while the agent is still uploading files. Also busts the
+        // status cache so a prior submit auto-end does not keep stall=ended on screen.
         await markBuildingFromChannel(issueNumber, record);
         await store?.touchLastAgentSignalAt(issueNumber, undefined, { key: 'staging_sources' });
+        options.onEvent?.(issueNumber);
         return reply.send({
           accepted: true,
           path: staged.path,
@@ -1382,6 +1384,7 @@ export async function registerAgentChannelRoutes(
       }
 
       await store!.markAgentEnded(issueNumber);
+      options.onEvent?.(issueNumber);
       const fresh = (await store!.getSubmission(issueNumber)) ?? record;
       return reply.send({
         accepted: true,

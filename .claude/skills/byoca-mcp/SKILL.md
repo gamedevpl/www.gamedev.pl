@@ -49,7 +49,9 @@ handoff unlocked.
 _publish_ gate still retires the key; `end` is optional after green.
 
 Further channel writes after `end` (or after submit’s auto-`agentEndedAt`) clear
-`agentEndedAt` (agent resumed).
+`agentEndedAt` (agent resumed). Studio status polls overlay heartbeat / ended /
+stall from the job record outside the 60s cache (and channel `onEvent` busts that
+cache), so a resume cannot keep showing “finished this round” next to live progress.
 
 ## Credentials and immediate revocation
 
