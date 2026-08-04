@@ -71,6 +71,10 @@ const StudioStepSchema = z.enum([
   'agent_signaled',
   'gate_verdict',
   'round_opened',
+  // A creator took a working copy to their own IDE (docs/own-ide-checkout.md). Its
+  // value is as the denominator for a question nothing else can answer: of the
+  // creators who leave to work locally, how many come back and deliver.
+  'workspace_checkout',
 ]);
 /** Platform vs creator's own agent. Optional on create_step; required on studio_step. */
 const BuilderDimensionSchema = z.enum(['platform', 'self']);

@@ -1050,6 +1050,20 @@
     "expiry": "Klucz tej gry wygasa {{when}}.",
     "rotatedKickoff": "Klucz został obrócony — skopiuj ten nowy kickoff dla agenta:"
   },
+  "workspaceCheckout": {
+    "title": "Pracuj nad tą grą we własnym IDE",
+    "hint": "Pobierz kopię roboczą — źródła tej gry, skrypt konfiguracyjny i README, gotowe dla Twojego edytora i Twojego repozytorium Git. Gra zostaje tutaj: gdy skończysz, Twój agent oddaje zmiany, a te przechodzą zwykłą rundę, bramkę i recenzję, zanim cokolwiek zostanie opublikowane.",
+    "action": "Pobierz kopię roboczą",
+    "pending": "Przygotowujemy kopię roboczą…",
+    "done": "Kopia robocza trafia do Twoich pobranych plików.",
+    "errors": {
+      "signedOut": "Nie jesteś zalogowany. Zaloguj się ponownie, aby pobrać kopię roboczą.",
+      "notFound": "Nie znaleźliśmy tej gry na Twojej półce.",
+      "notDelivered": "Ta gra nie ma jeszcze dostarczonej wersji — poczekaj, aż skończy się pierwszy build, i wtedy pobierz kopię roboczą.",
+      "unavailable": "Kopie robocze są chwilowo niedostępne. Spróbuj nieco później.",
+      "failed": "Nie udało się złożyć kopii roboczej. Spróbuj za chwilę."
+    }
+  },
   "oauthClients": {
     "title": "Podłączone agenty kodujące",
     "hint": "Agenty, którym zatwierdziłeś logowanie na Twoje konto. Odłączenie wymaga ponownej zgody.",

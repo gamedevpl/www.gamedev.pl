@@ -136,7 +136,10 @@ export type StudioStep =
   | 'connect_restored'
   | 'agent_signaled'
   | 'gate_verdict'
-  | 'round_opened';
+  | 'round_opened'
+  // A working copy left for the creator's own IDE (docs/own-ide-checkout.md) — the
+  // denominator for "of those who go local, how many deliver back".
+  | 'workspace_checkout';
 
 /**
  * Closed detail for studio steps that need one. `install` / `kickoff` are connect-card

@@ -1046,6 +1046,20 @@
     "expiry": "This game's key expires {{when}}.",
     "rotatedKickoff": "Your key was rotated — copy this fresh kickoff for your agent:"
   },
+  "workspaceCheckout": {
+    "title": "Work on this game in your own IDE",
+    "hint": "Get a working copy — this game's sources, a setup script and a README, ready for your own editor and your own Git repo. The game stays here: when you're done, your agent delivers the changes back and they go through the usual round, gate and review before anything is published.",
+    "action": "Get working copy",
+    "pending": "Preparing your working copy…",
+    "done": "Your working copy is on its way to your downloads.",
+    "errors": {
+      "signedOut": "You're signed out. Sign in again to get a working copy.",
+      "notFound": "We couldn't find this game on your shelf.",
+      "notDelivered": "This game has no delivered version yet — let the first build finish, then check it out.",
+      "unavailable": "Working copies are temporarily unavailable. Try again a little later.",
+      "failed": "We couldn't put your working copy together. Try again in a moment."
+    }
+  },
   "oauthClients": {
     "title": "Connected coding agents",
     "hint": "Agents you approved to sign in as you. Revoking disconnects them — they will need your approval again.",
