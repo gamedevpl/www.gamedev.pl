@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  mcpPresenceText,
+  isMcpPresenceEventText,
   MCP_PRESENCE_MIN_GAP_MS,
   noteMcpPresencePulse,
   shouldEmitMcpPresencePulse,
@@ -20,13 +20,12 @@ describe('mcp presence pulses', () => {
     // Inherited Object keys must not count as tools.
     expect(shouldPulseMcpPresence('toString')).toBe(false);
     expect(shouldPulseMcpPresence('constructor')).toBe(false);
-    expect(mcpPresenceText('toString')).toBeNull();
   });
 
-  it('maps tools to short Studio-facing copy', () => {
-    expect(mcpPresenceText('list_kit_files')).toMatch(/Creator Kit/i);
-    expect(mcpPresenceText('get_gate_verdict')).toMatch(/checks/i);
-    expect(mcpPresenceText('start')).toBeNull();
+  it('recognizes leftover synthetic chat rows so status can hide them', () => {
+    expect(isMcpPresenceEventText('Browsing the Creator Kit…')).toBe(true);
+    expect(isMcpPresenceEventText('Reading Creator Kit files…')).toBe(true);
+    expect(isMcpPresenceEventText('Getting the squad moving.')).toBe(false);
   });
 
   it('rate-limits pulses per job', () => {

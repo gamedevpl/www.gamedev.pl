@@ -49,6 +49,7 @@ import {
   type JobState,
   type JobTransition,
 } from './job-state.js';
+import { isMcpPresenceEventText } from './mcp-presence.js';
 import { logSeedStagingFailure } from './seed-metrics.js';
 import { createSelfBuildBackend } from './self-build-backend.js';
 import { mintConnectPayload, mintGameKeyKickoff } from './self-build-connect.js';
@@ -1454,11 +1455,13 @@ export async function registerSubmissionRoutes(
     issueNumber: number,
     locale: string,
   ): Promise<SubmissionStatusResponse> {
-    const [events, media, playable] = await Promise.all([
+    const [loadedEvents, media, playable] = await Promise.all([
       loadBuildEvents(issueNumber),
       buildMedia(issueNumber, locale),
       buildPlayables(issueNumber, locale),
     ]);
+    // Drop leftover synthetic presence steps from before heartbeats stopped writing chat.
+    const events = loadedEvents.filter((event) => !isMcpPresenceEventText(event.text));
     return {
       ...status,
       ...(events.length > 0 ? { events: await localizeEvents(events, locale) } : {}),
@@ -1821,6 +1824,8 @@ export async function registerSubmissionRoutes(
       builder: builderOf(record),
     });
     if (stall) status.stall = stall;
+    // Heartbeat for Studio "updated ago" — presence pulses refresh this without chat rows.
+    if (record.lastAgentSignalAt) status.lastAgentSignalAt = record.lastAgentSignalAt;
     // Echo builder fields so Studio does not invent `platform` from empty localStorage
     // when the server already knows the game's last-used choice (Codex P2 on BY-07).
     const roundBuilder = record.builder;

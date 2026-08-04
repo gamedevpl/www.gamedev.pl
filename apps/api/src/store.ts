@@ -1523,6 +1523,12 @@ export interface Store {
     issueNumber: number,
     event: Omit<BuildEvent, 'id' | 'createdAt'> & { createdAt?: string },
   ): Promise<BuildEvent>;
+  /**
+   * Refreshes {@link SubmissionRecord.lastAgentSignalAt} without writing a chat event.
+   * Used by MCP presence heartbeats so kit-browse activity clears `no_agent_yet` / quiet
+   * stalls without stuffing "Browsing the Creator Kit…" into the Studio thread.
+   */
+  touchLastAgentSignalAt(issueNumber: number, at?: string): Promise<void>;
   /** Agent progress events for a build, newest first. */
   listBuildEvents(issueNumber: number, opts?: { limit?: number }): Promise<BuildEvent[]>;
   /** How many events a build has recorded — the cap that bounds a runaway agent. */
@@ -2628,6 +2634,15 @@ export class InMemoryStore implements Store {
     const submission = this.submissions.get(issueNumber);
     if (submission) this.submissions.set(issueNumber, { ...submission, lastAgentSignalAt: record.createdAt });
     return { ...record };
+  }
+
+  async touchLastAgentSignalAt(issueNumber: number, at?: string): Promise<void> {
+    const submission = this.submissions.get(issueNumber);
+    if (!submission) return;
+    this.submissions.set(issueNumber, {
+      ...submission,
+      lastAgentSignalAt: at ?? new Date().toISOString(),
+    });
   }
 
   async listBuildEvents(issueNumber: number, opts?: { limit?: number }): Promise<BuildEvent[]> {
@@ -4379,6 +4394,13 @@ export class FirestoreStore implements Store {
       .doc(String(issueNumber))
       .set({ lastAgentSignalAt: record.createdAt }, { merge: true });
     return record;
+  }
+
+  async touchLastAgentSignalAt(issueNumber: number, at?: string): Promise<void> {
+    await this.db
+      .collection('submissions')
+      .doc(String(issueNumber))
+      .set({ lastAgentSignalAt: at ?? new Date().toISOString() }, { merge: true });
   }
 
   async listBuildEvents(issueNumber: number, opts?: { limit?: number }): Promise<BuildEvent[]> {

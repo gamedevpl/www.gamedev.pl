@@ -169,6 +169,13 @@ export interface SubmissionStatusResponseBase {
    */
   events?: BuildEvent[];
   /**
+   * Last MCP/channel agent activity timestamp (heartbeat). Refreshed by real progress
+   * and by presence pulses that intentionally do **not** create chat `events`. Used by
+   * the Studio foot "updated ago" line when the transcript is quiet but the agent is
+   * still browsing the kit.
+   */
+  lastAgentSignalAt?: string;
+  /**
    * Pictures of the game as it is now, newest first — the build log stops being a
    * wall of text. Same reasoning as `events`: kept outside `progress` so a build
    * with no pull request yet can still show something.

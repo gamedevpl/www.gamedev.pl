@@ -390,6 +390,26 @@ describe('POST /api/mcp (BY-05)', () => {
     });
   });
 
+  it('kit browse refreshes the agent heartbeat without writing Studio chat events', async () => {
+    const store = new InMemoryStore();
+    await seedActiveSelfJob(store);
+    app = await createApp(store);
+    const sessionId = await initialize(app);
+    const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    await store.appendBuildEvent(ISSUE, { kind: 'step', text: 'Browsing the Creator Kit…' });
+    const before = (await store.listBuildEvents(ISSUE)).length;
+
+    const brief = await callTool(app, 'get_brief', { sessionKey }, { 'mcp-session-id': sessionId });
+    expect(brief.isError).toBe(false);
+
+    const record = await store.getSubmission(ISSUE);
+    expect(record?.lastAgentSignalAt).toBeTruthy();
+    // No new chat row — presence is heartbeat-only now.
+    expect(await store.listBuildEvents(ISSUE)).toHaveLength(before);
+  });
+
   it('start returns the session workflow in both structuredContent and the text body', async () => {
     const store = new InMemoryStore();
     await seedJob(store);

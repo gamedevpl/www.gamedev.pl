@@ -11168,31 +11168,6 @@ a.user-name--profile:focus-visible {
    that fed it went with it. `offered` / `opened` on the visit stream is what now
    answers whether the quieter door still gets used. */
 
-<<<<<<< HEAD
-=======
-/* The invitation's arrival: two gentle pulses, then stillness. Never mid-action
-   by construction — the reveal only fires on end/progress signals or the 60s
-   one-time timer, and reduced-motion users get no pulse at all. */
-.remix-open.is-revealed {
-  animation: remix-invite 1.6s ease-in-out 2;
-}
-
-@keyframes remix-invite {
-  0%,
-  100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.06);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .remix-open.is-revealed {
-    animation: none;
-  }
-}
-
 /* The way back when play owns the screen: a thin, always-visible pill at the
    top edge. Deliberately quiet, deliberately generous to a thumb — hidden
    chrome must never mean gone chrome. */

@@ -3,11 +3,12 @@
  *
  * ChatGPT Apps (and similar) often browse the kit for many turns with few
  * `report_progress` writes. Studio then looks idle even though the agent is busy.
- * These pulses ride successful session-authenticated tool calls — not 1:1 tool
- * logging — and are rate-limited so the build-event cap stays healthy.
+ * Pulses only refresh `lastAgentSignalAt` on the submission (heartbeat / stall) —
+ * they must NOT append durable build-event chat rows. Rate-limited so a read-heavy
+ * loop cannot hammer Firestore.
  */
 
-/** Minimum gap between synthetic presence events for one job. */
+/** Minimum gap between synthetic presence heartbeats for one job. */
 export const MCP_PRESENCE_MIN_GAP_MS = 60_000;
 
 /** Tools that already write real progress / open rounds — never synthesize for these. */
@@ -24,6 +25,11 @@ const NO_PULSE = new Set([
   'ack_inbox',
 ]);
 
+/**
+ * Tools that count as "agent is working" for the heartbeat. Values are the English
+ * strings historically written as `kind: 'step'` chat rows (filtered from status so
+ * old threads stop showing them as messages).
+ */
 const PRESENCE_COPY: Record<string, string> = {
   get_brief: 'Reading the build brief…',
   get_seed: 'Loading the seed draft…',
@@ -42,14 +48,17 @@ const PRESENCE_COPY: Record<string, string> = {
   get_gate_media: 'Reviewing gate captures…',
 };
 
+const PRESENCE_EVENT_TEXTS = new Set(Object.values(PRESENCE_COPY));
+
 export function shouldPulseMcpPresence(toolName: string): boolean {
   if (NO_PULSE.has(toolName)) return false;
   // Own-property only — `in` would also match inherited keys like `toString`.
   return Object.hasOwn(PRESENCE_COPY, toolName);
 }
 
-export function mcpPresenceText(toolName: string): string | null {
-  return Object.hasOwn(PRESENCE_COPY, toolName) ? PRESENCE_COPY[toolName]! : null;
+/** True when a durable step text is a leftover synthetic presence row (filter from chat). */
+export function isMcpPresenceEventText(text: string): boolean {
+  return PRESENCE_EVENT_TEXTS.has(text);
 }
 
 /** Cap for the in-process last-pulse map — oldest entries drop first (insertion order). */

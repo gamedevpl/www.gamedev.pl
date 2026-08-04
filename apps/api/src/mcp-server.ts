@@ -27,12 +27,7 @@ import {
   resolveGameAgentKeyForStart,
   verifyDurableGameAgentKey,
 } from './agent-game-key-resolve.js';
-import {
-  mcpPresenceText,
-  noteMcpPresencePulse,
-  shouldEmitMcpPresencePulse,
-  shouldPulseMcpPresence,
-} from './mcp-presence.js';
+import { noteMcpPresencePulse, shouldEmitMcpPresencePulse, shouldPulseMcpPresence } from './mcp-presence.js';
 import {
   classifyAgentTokenAccess,
   InvalidAgentTokenError,
@@ -3337,15 +3332,15 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             );
           }
         } else if (store && agentTokenSecret && shouldPulseMcpPresence(name)) {
-          // Coarse Studio presence for read-heavy Apps loops that skip report_progress.
-          const presenceText = mcpPresenceText(name);
+          // Heartbeat only — never append a durable chat row. Kit-browse loops used to
+          // spam "Czytanie plików Creator Kit…" between real report_progress turns.
           const jobId = resolvePresenceJobId(sessionKeyArg, bearerToken, agentTokenSecret);
-          if (presenceText && jobId !== null) {
+          if (jobId !== null) {
             const at = now();
             if (shouldEmitMcpPresencePulse(presencePulseByJob.get(jobId), at)) {
               noteMcpPresencePulse(presencePulseByJob, jobId, at);
               try {
-                await store.appendBuildEvent(jobId, { kind: 'step', text: presenceText });
+                await store.touchLastAgentSignalAt(jobId, new Date(at).toISOString());
               } catch (pulseError) {
                 request.log.warn({ err: pulseError, jobId, tool: name }, 'mcp presence pulse failed');
               }

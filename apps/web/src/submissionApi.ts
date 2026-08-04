@@ -108,6 +108,11 @@ export type SubmissionStatus = {
    */
   events?: BuildEvent[];
   /**
+   * Last agent activity (MCP heartbeat / progress). May advance without a new chat
+   * event when the agent is browsing the kit.
+   */
+  lastAgentSignalAt?: string;
+  /**
    * Pictures of the build, newest first. `branch` items are captures the agent
    * committed; `channel` items were pushed straight to the API and can appear long
    * before the first commit. Build the URL with {@link buildMediaUrl}.

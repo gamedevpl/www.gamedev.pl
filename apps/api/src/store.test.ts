@@ -97,6 +97,16 @@ describe('InMemoryStore', () => {
     expect(await repairStore.bumpRoundGeneration(5)).toBe(2);
   });
 
+  it('touchLastAgentSignalAt refreshes heartbeat without writing chat events', async () => {
+    const store = new InMemoryStore();
+    await store.createSubmission(61, 'g:123', 'Heartbeat');
+    expect((await store.getSubmission(61))?.lastAgentSignalAt).toBeUndefined();
+
+    await store.touchLastAgentSignalAt(61, '2026-08-04T00:00:00.000Z');
+    expect((await store.getSubmission(61))?.lastAgentSignalAt).toBe('2026-08-04T00:00:00.000Z');
+    expect(await store.listBuildEvents(61)).toEqual([]);
+  });
+
   it('ensureRoundGeneration initializes a legacy job without bumping an existing one', async () => {
     const store = new InMemoryStore();
     await store.createSubmission(6, 'g:123', 'Legacy');

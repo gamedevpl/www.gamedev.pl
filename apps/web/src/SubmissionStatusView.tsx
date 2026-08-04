@@ -115,6 +115,7 @@ const TIMELINE_STEPS: SubmissionStatus['status'][] = ['queued', 'building', 'in_
 function latestAgentActivityAt(status: SubmissionStatus | null): number | null {
   if (!status) return null;
   const times = [
+    ...(status.lastAgentSignalAt ? [Date.parse(status.lastAgentSignalAt)] : []),
     ...(status.events ?? []).map((event) => Date.parse(event.createdAt)),
     ...(status.media ?? []).map((item) => (item.createdAt ? Date.parse(item.createdAt) : Number.NaN)),
     ...(status.playable ?? []).map((item) => (item.createdAt ? Date.parse(item.createdAt) : Number.NaN)),
