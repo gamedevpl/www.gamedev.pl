@@ -35,14 +35,15 @@ describe('StudioShotToasts', () => {
     const root = createRoot(host);
 
     await act(async () => {
-      root.render(<StudioShotToasts token="tok" placement="bottom-right" />);
+      root.render(<StudioShotToasts token="tok" placement="near-play" />);
     });
     await act(async () => {
       await Promise.resolve();
     });
 
-    expect(host.querySelector('.studio-shot-toasts.is-bottom-right')).not.toBeNull();
+    expect(host.querySelector('.studio-shot-toasts.is-near-play')).not.toBeNull();
     expect(host.querySelectorAll('.studio-shot-toast')).toHaveLength(2);
+    expect(host.querySelector('.studio-shot-toast.is-slot-0')).not.toBeNull();
 
     const dismiss = host.querySelector('.studio-shot-toast-dismiss') as HTMLButtonElement;
     await act(async () => {

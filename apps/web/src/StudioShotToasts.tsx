@@ -4,10 +4,9 @@ import { PixelIcon } from './PixelIcon.js';
 import { buildMediaUrl, getSubmissionStatus, type BuildMediaItem } from './submissionApi.js';
 
 /**
- * Codex-style stacked screenshot toasts for Creator Studio.
- * Newest on top, dismissable, floating in a corner of the game detail
- * (default: bottom-right). Pause stays in the playtest theater — these are
- * only "look at what the agent captured".
+ * Codex-inspired screenshot toasts for Creator Studio.
+ * Slightly scattered stack, aligned near the Play control (or bottom-right).
+ * Dismissable; pause stays in the playtest theater.
  */
 
 const MAX_VISIBLE = 3;
@@ -41,7 +40,7 @@ type StudioShotToastsProps = {
   placement?: StudioShotToastsPlacement;
 };
 
-export function StudioShotToasts({ token, placement = 'bottom-right' }: StudioShotToastsProps) {
+export function StudioShotToasts({ token, placement = 'near-play' }: StudioShotToastsProps) {
   const { t } = useTranslation();
   const [media, setMedia] = useState<BuildMediaItem[]>([]);
   const [dismissed, setDismissed] = useState<Set<string>>(() => new Set());
@@ -90,7 +89,7 @@ export function StudioShotToasts({ token, placement = 'bottom-right' }: StudioSh
           const key = `${item.source}:${item.ref}`;
           const label = item.label?.trim() || t('studioPanel.preview.shot');
           return (
-            <div key={key} className="studio-shot-toast" style={{ zIndex: MAX_VISIBLE - index }}>
+            <div key={key} className={`studio-shot-toast is-slot-${index}`} style={{ zIndex: MAX_VISIBLE - index }}>
               <button
                 type="button"
                 className="studio-shot-toast-body"

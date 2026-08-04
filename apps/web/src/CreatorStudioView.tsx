@@ -733,7 +733,7 @@ export function CreatorStudioView({
                   it on a narrow one; only playtest, which needs the whole viewport to be
                   a game, replaces it. Agent screenshots float as dismissable toasts. */}
                 {tab !== 'playtest' && tab !== 'edit' ? (
-                  <StudioShotToasts token={threadToken ?? activeGame.token} placement="bottom-right" />
+                  <StudioShotToasts token={threadToken ?? activeGame.token} placement="near-play" />
                 ) : null}
 
                 <div className={`studio-workspace${tab === 'details' ? ' is-details-open' : ''}`}>
