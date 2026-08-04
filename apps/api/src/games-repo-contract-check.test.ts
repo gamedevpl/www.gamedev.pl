@@ -81,7 +81,7 @@ describe('runGamesRepoContractCheck', () => {
   it('allows a short-lived website-first module rollout', async () => {
     // Website-first adds: GAME_KIT_MODULES here already includes these modules, but
     // main's assemble.ts may still list the older order. That window must stay green.
-    const aheadModules = new Set(['football']);
+    const aheadModules = new Set(['football', 'urban']);
     const withoutAheadExtras = GAME_KIT_MODULES.filter((name) => !aheadModules.has(name));
     const olderAssemble = `
       const GAME_KIT_MODULES = [${withoutAheadExtras.map((name) => `'${name}'`).join(', ')}];

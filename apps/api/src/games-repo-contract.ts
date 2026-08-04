@@ -27,6 +27,8 @@ export const GAME_KIT_MODULES = [
   'world',
   'ai',
   'gameplay',
+  // Genre vertical: deterministic street topology and routing for 2D urban games.
+  'urban',
   'drawing',
   'actors',
   'gfx',
