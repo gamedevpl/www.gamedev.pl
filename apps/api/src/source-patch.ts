@@ -110,14 +110,5 @@ export function applySourcePatch(input: ApplySourcePatchInput): ApplySourcePatch
   return { content: next, replacements: hunks };
 }
 
-/** Soft size hint: full-file rewrites past this burn connector tokens on chat-thin clients. */
-export const LARGE_SOURCE_FILE_HINT_BYTES = 24 * 1024;
-
-export function largeSourceFileHint(path: string, bytes: number): string | null {
-  if (bytes < LARGE_SOURCE_FILE_HINT_BYTES) return null;
-  return (
-    `${path} is ${bytes} bytes. Prefer cohesive modules under ~${LARGE_SOURCE_FILE_HINT_BYTES} bytes ` +
-    `(split render/HUD/art or model tables) and use patch_source_file with a unified diff for later ` +
-    `edits so you do not re-emit the whole file.`
-  );
-}
+/** @deprecated Prefer {@link largeSourceFileHint} from `module-size.js`. Re-exported for callers. */
+export { largeSourceFileHint, MODULE_SOFT_LIMIT_BYTES as LARGE_SOURCE_FILE_HINT_BYTES } from './module-size.js';

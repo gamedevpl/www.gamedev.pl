@@ -21,8 +21,11 @@ Source of truth: `SESSION_WORKFLOW` + `BEHAVIOURAL_CONTRACT` in
    `submit_sources({ fromStaged: true, mode, kitEngineRef })`
    - **Edits:** `patch_source_file({ path, patch })` with a standard unified diff
      (`---/`+++`+`@@`hunks for one file) — do not re-emit whole`render.ts`/`model.ts`files through`stage_source_file`
-   - **Modules:** keep `game/*.ts` cohesive and modest; split growing paint/HUD/art or
-     model tables so later patches stay small (chat-thin clients pay per token)
+   - **Modules:** soft budget ~350 lines / ~12 KiB per `game/*.ts`. Honour
+     `warnings.code=module_too_large` (on `get_sources` / `get_seed` / stage / patch)
+     by splitting cohesive pieces _before_ more feature work — same urgency as
+     `call_end`. Recipes: render→`art`/`ui`/`hud`/`rooms`; model→`tables`/`layout`/
+     `types`; runtime→systems
    - `fromStaged` overlays onto the latest delivery/seed — stage only changed paths
    - `mode=preview` while iterating; `mode=publish` to seal (TRACE + PLAYTEST required)
    - Each successful stage/patch refreshes Studio’s heartbeat (so a long staging loop is not

@@ -471,6 +471,8 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(joined).toMatch(/send_screenshot/);
     expect(joined).toMatch(/stage_source_file|fromStaged/);
     expect(joined).toMatch(/patch_source_file/);
+    expect(joined).toMatch(/module_too_large/);
+    expect(joined).toMatch(/350 lines|12 KiB/);
     expect(joined).toMatch(/submit_sources/);
     expect(joined).toMatch(/mode:\s*"preview"|mode=preview/i);
     expect(joined).toMatch(/mode:\s*"publish"|mode=publish/i);

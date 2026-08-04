@@ -1,12 +1,6 @@
 import { createPatch } from 'diff';
 import { describe, expect, it } from 'vitest';
-import {
-  applySourcePatch,
-  LARGE_SOURCE_FILE_HINT_BYTES,
-  largeSourceFileHint,
-  normalizePatchPath,
-  SourcePatchError,
-} from './source-patch.js';
+import { applySourcePatch, normalizePatchPath, SourcePatchError } from './source-patch.js';
 
 describe('normalizePatchPath', () => {
   it('strips a/b prefixes, tabs, and quotes', () => {
@@ -60,18 +54,5 @@ describe('applySourcePatch', () => {
   it('refuses a stale context (no fuzzy apply)', () => {
     const patch = createPatch('game.ts', content, 'line1\nline2x\nline3\n');
     expect(() => applySourcePatch({ content: 'different\n', path: 'game.ts', patch })).toThrow(/did not apply/);
-  });
-});
-
-describe('largeSourceFileHint', () => {
-  it('stays quiet under the soft ceiling', () => {
-    expect(largeSourceFileHint('game/render.ts', LARGE_SOURCE_FILE_HINT_BYTES - 1)).toBeNull();
-  });
-
-  it('nudges toward split + unified patch past the ceiling', () => {
-    const hint = largeSourceFileHint('game/render.ts', LARGE_SOURCE_FILE_HINT_BYTES);
-    expect(hint).toMatch(/game\/render\.ts/);
-    expect(hint).toMatch(/patch_source_file/);
-    expect(hint).toMatch(/unified diff/);
   });
 });

@@ -46,7 +46,8 @@ import {
   parseKitSidecar,
 } from './kit-registry.js';
 import { seedPayload } from './seed-status.js';
-import { applySourcePatch, largeSourceFileHint, SourcePatchError } from './source-patch.js';
+import { largeSourceFileHint } from './module-size.js';
+import { applySourcePatch, SourcePatchError } from './source-patch.js';
 import { overlayGameSources } from './staged-preview.js';
 import { type CreatorMessage, type Store, type SubmissionRecord } from './store.js';
 import { BUILD_EVENT_KINDS, BUILD_STEPS, sanitizeCreatorText, type BuildEvent } from './submission-status.js';
@@ -1001,7 +1002,7 @@ export async function registerAgentChannelRoutes(
         options.onEvent?.(issueNumber);
         // After the buffer is durable, so the assembly it schedules reads this file too.
         options.onSourcesStaged?.({ issueNumber, slug, roundGeneration });
-        const hint = largeSourceFileHint(staged.path, staged.bytes);
+        const hint = largeSourceFileHint(staged.path, staged.bytes, parsed.data.content);
         return reply.send({
           accepted: true,
           path: staged.path,
@@ -1026,7 +1027,7 @@ export async function registerAgentChannelRoutes(
   );
 
   /**
-   * Exact string patch into the staging buffer.
+   * Unified-diff patch into the staging buffer.
    *
    * Base content is staged → latest delivery → seed (same overlay order as the live
    * staged preview). The patched file is then written with putStagedSourceFile, so a
@@ -1130,7 +1131,7 @@ export async function registerAgentChannelRoutes(
         options.onEvent?.(issueNumber);
         options.onSourcesStaged?.({ issueNumber, slug, roundGeneration });
 
-        const hint = largeSourceFileHint(staged.path, staged.bytes);
+        const hint = largeSourceFileHint(staged.path, staged.bytes, patched.content);
         return reply.send({
           accepted: true,
           path: staged.path,

@@ -40,6 +40,7 @@ import { decodeCanonicalBase64Utf8, InvalidBase64Error } from './canonical-base6
 import { selfBuildDeliveryCap } from './builder.js';
 import type { BuilderKind } from './builder.js';
 import { MAX_UPLOAD_FILES, type GamesStore } from './games-store.js';
+import { largeSourceFileHint, moduleSizeWarnings } from './module-size.js';
 import type { GcsObjectStore } from './gcs-sign.js';
 import {
   assertMcpSessionKeyUnexpired,
@@ -309,7 +310,7 @@ const BEHAVIOURAL_CONTRACT = [
   // language they did not choose, which is the whole reason the field exists.
   "Write progress in the creator's language: when get_brief.locales[0] is not 'en', send report_progress with textLocalized and locale as well as the English text.",
   'Send a screenshot as soon as the game draws anything playable.',
-  'While iterating, deliver with mode=preview (no TRACE required). Prefer stage_source_file for new/rewritten paths and patch_source_file({ path, patch }) with a unified diff for edits (never re-emit a whole large render.ts/model.ts). Then submit_sources({ fromStaged:true, mode:"preview", kitEngineRef }) — fromStaged overlays onto the latest delivery/seed so only changed paths need staging. Avoid one giant files[] payload. Only mode=publish needs TRACE/PLAYTEST and can go green.',
+  'While iterating, deliver with mode=preview (no TRACE required). Prefer stage_source_file for new/rewritten paths and patch_source_file({ path, patch }) with a unified diff for edits (never re-emit a whole large render.ts/model.ts). Honour warnings.code=module_too_large by splitting before more feature work. Then submit_sources({ fromStaged:true, mode:"preview", kitEngineRef }) — fromStaged overlays onto the latest delivery/seed so only changed paths need staging. Avoid one giant files[] payload. Only mode=publish needs TRACE/PLAYTEST and can go green.',
   'Run kit checks green (at least check:static) before submit_sources when you have a local kit checkout; otherwise submit and let the gate run checks.',
   'After submit_sources, if you will not deliver more this round, call end (required — warnings.code=call_end; submit already unlocks creator handoff). Prefer end over sitting in a get_gate_verdict loop — Studio shows the gate. Do not stop after submit alone without end.',
   'Honour stop immediately — do not continue after stop:true.',
@@ -334,9 +335,9 @@ const SESSION_WORKFLOW: readonly string[] = [
   // existed. Following the loop literally, it scaffolded a fresh game over a published
   // one. get_sources is cheap and answers available:false on a new game, so it is
   // unconditional rather than gated on a round type the agent cannot see.
-  'get_sources — when it returns available:true this round improves an existing game: continue those files. Never scaffold over them.',
+  'get_sources — when it returns available:true this round improves an existing game: continue those files. Never scaffold over them. If warnings.code=module_too_large, split those oversized modules into cohesive game/*.ts pieces BEFORE adding features — do not grow them further.',
   'get_kit — keep engineRef for submit_sources; prefer read_kit_files for several known small paths (else list_kit_files / search_kit_files / read_kit_file / read_kit_file_fragment) when shell unpack is unavailable; otherwise unpack via the returned one-liner and follow SKILL.md locally. Never dump the whole kit into context.',
-  'Build the game — continuing the seed or sources you fetched, otherwise from the kit; report_progress before and after long steps. Keep modules cohesive and modest (prefer splitting a growing render.ts / model.ts into game/*.ts such as art, ui, rooms, tables) so later edits stay small.',
+  'Build the game — continuing the seed or sources you fetched, otherwise from the kit; report_progress before and after long steps. Soft module budget: keep each game/*.ts under ~350 lines / ~12 KiB. When a file approaches that, split cohesive pieces (render→art/ui/hud/rooms; model→tables/layout/types; runtime→systems) before more feature work. Honour warnings.code=module_too_large the same way you honour call_end — act, then continue.',
   'send_screenshot as soon as the game draws anything playable.',
   'While iterating: stage_source_file({ path, content }) for new or fully rewritten paths; for edits prefer patch_source_file({ path, patch }) with a unified diff (---/+++ + @@ hunks for ONE file; context must match exactly). Stage only changed paths — never re-upload the whole tree. Then submit_sources({ fromStaged: true, mode: "preview", kitEngineRef }) — fromStaged overlays onto the latest delivery/seed. TRACE/PLAYTEST not required; Studio gets a playable draft after typecheck→smoke→build. Inline files[] still works for tiny trees.',
   'Staging is already visible: once index.html, game.ts, style.css and GAME.json are present across staging + delivery/seed, the platform assembles a live playable preview — without waiting for submit or the gate. Stage a runnable tree early and keep staging/patching as you work; a buffer that does not compile simply leaves the previous preview up.',
@@ -853,7 +854,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     warnings: {
       type: 'array',
       description:
-        'Soft session nudges (progress_stale, inbox_pending, call_end, seed_unread, gate_not_started, gate_poll_backoff). Not errors — act on them, then continue the workflow.',
+        'Soft session nudges (progress_stale, inbox_pending, call_end, seed_unread, gate_not_started, gate_poll_backoff, module_too_large). Not errors — act on them, then continue the workflow. module_too_large means split that game/*.ts module before adding more behavior.',
       items: {
         type: 'object',
         properties: {
@@ -866,6 +867,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
               'call_end',
               'gate_not_started',
               'gate_poll_backoff',
+              'module_too_large',
             ],
           },
           message: { type: 'string' },
@@ -1728,6 +1730,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           },
           references: { type: 'array', items: { type: 'string' } },
           notes: { type: ['string', 'null'] },
+          ...WARNINGS_PROP,
         },
         required: ['available', 'status', 'files', 'references', 'notes'],
       },
@@ -1735,6 +1738,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         'Fetch the platform-generated compiling seed draft for this round when present. ' +
         'Continue the seed when available/status=available. When status=pending, wait and call again before scaffolding. ' +
         'Only scaffold from a kit template when status=unavailable. ' +
+        'Honour warnings.code=module_too_large by splitting oversized modules before growing them. ' +
         BEHAVIOURAL_CONTRACT,
       inputSchema: {
         type: 'object',
@@ -1745,14 +1749,24 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         const auth = await resolveAuth(ctx, args);
         if (!('channelToken' in auth)) return auth;
         const res = await injectChannel(ctx.request, 'GET', '/api/agent/build/seed', auth.channelToken);
-        const body = res.json();
+        const body = res.json() as {
+          error?: string;
+          available?: boolean;
+          status?: string;
+          files?: Array<{ path: string; content: string }>;
+          [key: string]: unknown;
+        };
         if (res.statusCode === 404) {
           return toolOk(body);
         }
         if (res.statusCode !== 200) {
-          return toolErr((body as { error?: string }).error ?? `seed failed (${res.statusCode})`);
+          return toolErr(body.error ?? `seed failed (${res.statusCode})`);
         }
-        return toolOk(body);
+        const sizeWarnings = Array.isArray(body.files) ? moduleSizeWarnings(body.files) : [];
+        return toolOk({
+          ...body,
+          ...(sizeWarnings.length ? { warnings: sizeWarnings } : {}),
+        });
       },
     },
 
@@ -2169,11 +2183,13 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             type: 'array',
             items: { type: 'object', properties: { path: { type: 'string' }, content: { type: 'string' } } },
           },
+          ...WARNINGS_PROP,
         },
         required: ['available', 'files'],
       },
       description:
         "Fetch the latest candidate or published sources for this job's game so a self round can continue prior work. " +
+        'When warnings.code=module_too_large, split those oversized game/*.ts modules before adding features. ' +
         BEHAVIOURAL_CONTRACT,
       inputSchema: {
         type: 'object',
@@ -2190,14 +2206,21 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         const auth = await resolveAuth(ctx, args);
         if (!('channelToken' in auth)) return auth;
         const res = await injectChannel(ctx.request, 'GET', '/api/agent/build/sources', auth.channelToken);
-        const body = res.json() as { error?: string; delivery?: unknown; files?: unknown[] };
+        const body = res.json() as {
+          error?: string;
+          delivery?: unknown;
+          files?: Array<{ path: string; content: string }>;
+        };
         if (res.statusCode !== 200) {
           return toolErr(body.error ?? `sources failed (${res.statusCode})`);
         }
+        const files = body.files ?? [];
+        const sizeWarnings = moduleSizeWarnings(files);
         return toolOk({
           available: Boolean(body.delivery),
           delivery: body.delivery ?? null,
-          files: body.files ?? [],
+          files,
+          ...(sizeWarnings.length ? { warnings: sizeWarnings } : {}),
         });
       },
     },
@@ -2672,12 +2695,15 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         if (res.statusCode !== 200) {
           return toolErr(body.error ?? `stage failed (${res.statusCode})`, body);
         }
+        const hint =
+          body.hint ??
+          (typeof body.bytes === 'number' ? largeSourceFileHint(body.path ?? path, body.bytes, content) : null);
         return toolOk({
           ok: body.accepted !== false,
           ...(body.rejected ? { rejected: body.rejected } : {}),
           path: body.path ?? path,
           bytes: body.bytes ?? 0,
-          ...(body.hint ? { hint: body.hint } : {}),
+          ...(hint ? { hint, warnings: [{ code: 'module_too_large' as const, message: hint }] } : {}),
           staged: body.staged ?? { files: [], totalBytes: 0, maxBytes: 0, maxFiles: 0 },
           ...stopFromChannel(body),
           pendingMessages: pendingMessagesFromChannel(body),
@@ -2785,6 +2811,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         if (res.statusCode !== 200) {
           return toolErr(body.error ?? `patch failed (${res.statusCode})`, body);
         }
+        const hint =
+          body.hint ?? (typeof body.bytes === 'number' ? largeSourceFileHint(body.path ?? path, body.bytes) : null);
         return toolOk({
           ok: body.accepted !== false,
           ...(body.rejected ? { rejected: body.rejected } : {}),
@@ -2792,7 +2820,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           bytes: body.bytes ?? 0,
           replacements: body.replacements ?? 0,
           baseFrom: body.baseFrom ?? 'staged',
-          ...(body.hint ? { hint: body.hint } : {}),
+          ...(hint ? { hint, warnings: [{ code: 'module_too_large' as const, message: hint }] } : {}),
           staged: body.staged ?? { files: [], totalBytes: 0, maxBytes: 0, maxFiles: 0 },
           ...stopFromChannel(body),
           pendingMessages: pendingMessagesFromChannel(body),
