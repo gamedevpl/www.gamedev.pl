@@ -351,6 +351,7 @@
     "playtest": {
       "hint": "Play the game, pause on a moment worth changing, and send a request with that viewport and live instrumentation attached.",
       "loading": "Loading the playable build…",
+      "waitingForPreview": "Automated checks are assembling your draft — this usually takes a few minutes after submit. Play will open when it’s ready.",
       "loadError": "No playable build is ready yet. Go back to the thread and try again once a preview appears.",
       "backToThread": "Back to thread",
       "theaterAria": "Playtest · {{title}}",
