@@ -461,6 +461,8 @@ describe('GameTheater how-to-play visit telemetry', () => {
       expect(bar.classList.contains('is-idle')).toBe(true);
       expect(container.querySelector('.theater-reveal-btn')).not.toBeNull();
 
+      // Play activity must not un-fade the bar — mouse-aim games move the pointer
+      // constantly, and a click-heavy tactics game would flap the chrome on every tap.
       await act(async () => {
         window.dispatchEvent(
           new MessageEvent('message', {
@@ -469,10 +471,25 @@ describe('GameTheater how-to-play visit telemetry', () => {
           }),
         );
       });
+      expect(bar.classList.contains('is-idle')).toBe(true);
+      expect(container.querySelector('.theater-reveal-btn')).not.toBeNull();
+
+      await act(async () => {
+        window.dispatchEvent(
+          new MessageEvent('message', {
+            data: { source: 'gdpl-player', type: 'pointer' },
+            origin: 'null',
+          }),
+        );
+      });
+      expect(bar.classList.contains('is-idle')).toBe(true);
+
+      // The report path (DSA art. 16) stays reachable once the peek brings the bar
+      // back — without remounting or moving controls.
+      await act(async () => {
+        (container.querySelector('.theater-reveal-btn') as HTMLButtonElement).click();
+      });
       expect(bar.classList.contains('is-idle')).toBe(false);
-      expect(container.querySelector('.theater-reveal-btn')).toBeNull();
-      // The report path (DSA art. 16) stays directly reachable in More without
-      // remounting or moving controls when chrome returns.
       expect(container.querySelector('a.report-btn')).not.toBeNull();
     } finally {
       vi.useRealTimers();

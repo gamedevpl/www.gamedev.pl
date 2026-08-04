@@ -121,7 +121,7 @@ describe('the injected bridge reports health', () => {
     bridge.stop();
   });
 
-  it('reports activity only after real game input establishes engagement', async () => {
+  it('reports activity on discrete input, never on pointer movement', async () => {
     const bridge = runBridge('<canvas id="game"></canvas>');
 
     bridge.frameWindow.dispatchEvent(new bridge.frameWindow.PointerEvent('pointermove'));
@@ -135,7 +135,8 @@ describe('the injected bridge reports health', () => {
     await new Promise((resolve) => setTimeout(resolve, 260));
     bridge.frameWindow.dispatchEvent(new bridge.frameWindow.PointerEvent('pointermove'));
     await delivered();
-    expect(bridge.received.filter((m) => m.type === 'activity')).toHaveLength(2);
+    // Movement after engagement still must not count — host chrome would flap on aim.
+    expect(bridge.received.filter((m) => m.type === 'activity')).toHaveLength(1);
     bridge.stop();
   });
 

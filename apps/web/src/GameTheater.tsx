@@ -201,7 +201,16 @@ export function GameTheater({
   const moreOpenRef = useRef(moreOpen);
   moreOpenRef.current = moreOpen;
 
+  // Play input starts the hide clock and can postpone a still-visible bar, but it
+  // must never bring a faded bar back — mouse-aim and click-heavy games would
+  // otherwise flap the chrome on every move. Peek / game-over are the return paths
+  // (ops D.11.6: pause moments + always-visible peek affordance).
   const notePlayerActivity = useCallback(() => {
+    setPlayerEngaged(true);
+    setActivityVersion((version) => version + 1);
+  }, []);
+
+  const revealChrome = useCallback(() => {
     setPlayerEngaged(true);
     setChromeIdle(false);
     setActivityVersion((version) => version + 1);
@@ -340,12 +349,13 @@ export function GameTheater({
     setHowToOpen(false);
   }, [fullscreen]);
 
-  // Media-player convention, but gated on real game input: chrome never vanishes while
-  // somebody is still orienting themselves. Once play begins, each activity gets a
-  // calm grace period. Hover/focus and open control surfaces pin the bar in place.
+  // Gated on real game input: chrome never vanishes while somebody is still
+  // orienting themselves. Once play begins, a quiet grace period fades it; further
+  // play input does not un-fade it (see notePlayerActivity). Hover/focus and open
+  // control surfaces pin a still-visible bar in place.
   useEffect(() => {
     if (!playerEngaged || chromeHeld || moreOpen || howToOpen || fullscreen) {
-      setChromeIdle(false);
+      if (!playerEngaged || moreOpen || howToOpen || fullscreen) setChromeIdle(false);
       return;
     }
     const timer = window.setTimeout(() => setChromeIdle(true), PLAYER_CHROME_IDLE_MS);
@@ -572,8 +582,8 @@ export function GameTheater({
           title={t('player.showControls')}
           // Pointerdown makes the control immediate on touch. Click keeps the same
           // route available to Enter/Space, which do not emit pointer events.
-          onPointerDown={notePlayerActivity}
-          onClick={notePlayerActivity}
+          onPointerDown={revealChrome}
+          onClick={revealChrome}
         >
           <PixelIcon name="chevronDown" size={15} />
         </button>
