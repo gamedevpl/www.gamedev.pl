@@ -3818,24 +3818,32 @@ export async function registerSubmissionRoutes(
    * already applied by the side that owns it, so the creator plays the exact document a
    * player would. It exists once the gate has run.
    *
-   * Returns null for exactly one reason: **there is nothing to serve yet** — no
+   * Returns `false` for exactly one reason: **there is nothing to serve yet** — no
    * delivery, or a delivery the gate has not bundled. Anything else throws, because a
    * broken preview and an unstarted one are different facts, and a creator told "not
    * yet" about a failure will wait for something that is not coming.
+   *
+   * Fastify 5's Reply is a thenable. Returning `reply.send(...)` from an async helper
+   * and then `await`ing that helper resolves to `undefined` (the thenable's settle
+   * value), so `if (stored) return stored` falls through and tries to send again —
+   * "Reply was already sent". Prod logs for every successful Studio preview showed
+   * exactly that (served gate-built → no delivery yet → already sent). Return a plain
+   * boolean instead (`true` after sending), and never await a Reply.
    */
   async function replyWithStoredDraft(
     request: FastifyRequest,
     reply: FastifyReply,
     record: SubmissionRecord,
-  ): Promise<FastifyReply | null> {
+  ): Promise<boolean> {
     const gamesStore = options.agentChannel?.gamesStore;
     const { slug } = record;
     const playableVersion = record.previewVersion ?? record.deliveredVersion;
-    if (!gamesStore || !slug || !playableVersion) return null;
+    if (!gamesStore || !slug || !playableVersion) return false;
 
     const cached = draftPreviewCache.get(record.issueNumber);
     if (cached && cached.revision === playableVersion && cached.expiresAt > now()) {
-      return reply.send(cached.value);
+      reply.send(cached.value);
+      return true;
     }
 
     // The verified bundle first, then the gate's red-run / preview-lane document. Both
@@ -3852,7 +3860,7 @@ export async function registerSubmissionRoutes(
     // that there was nothing assemblable to keep. Both are "not ready", and the channel's
     // own pushed previews cover the window. A store that *errors* throws out of here
     // instead, and is reported as the failure it is.
-    if (bundle === null) return null;
+    if (bundle === null) return false;
 
     const value: DraftPreviewValue = { slug, title: record.title || slug, html: bundle.toString('utf8') };
     rememberDraftPreview(record.issueNumber, {
@@ -3864,19 +3872,17 @@ export async function registerSubmissionRoutes(
       { issueNumber: record.issueNumber, slug, version: playableVersion, artifact },
       'served gate-built preview for a delivered version',
     );
-    return reply.send(value);
+    reply.send(value);
+    return true;
   }
 
-  async function replyWithDraft(
-    request: FastifyRequest,
-    reply: FastifyReply,
-    issueNumber: number,
-  ): Promise<FastifyReply> {
-    const serveLastKnown = (reason: string, err?: unknown): FastifyReply | null => {
+  async function replyWithDraft(request: FastifyRequest, reply: FastifyReply, issueNumber: number): Promise<void> {
+    const serveLastKnown = (reason: string, err?: unknown): boolean => {
       const lastKnown = draftPreviewCache.get(issueNumber);
-      if (!lastKnown) return null;
+      if (!lastKnown) return false;
       request.log.warn({ err, issueNumber, revision: lastKnown.revision }, reason);
-      return reply.send(lastKnown.value);
+      reply.send(lastKnown.value);
+      return true;
     };
 
     // The stored delivery is the whole path now: there is no PR to resolve and no branch
@@ -3890,36 +3896,33 @@ export async function registerSubmissionRoutes(
     const record = gamesStore ? await store?.getSubmission(issueNumber) : null;
     if (record) {
       try {
-        const stored = await replyWithStoredDraft(request, reply, record);
-        if (stored) return stored;
+        if (await replyWithStoredDraft(request, reply, record)) return;
       } catch (error) {
         // No hygiene-error branch here on purpose. This path serves the gate's own
         // bundle byte-for-byte and never assembles anything, so EmptyProjectError and
         // friends cannot arise — and catching them would only mislabel a store read
         // failure as "this game could not be previewed", which is a claim about the
         // game rather than about us.
-        const stale = serveLastKnown('stored draft read failed; serving last known draft', error);
-        if (stale) return stale;
+        if (serveLastKnown('stored draft read failed; serving last known draft', error)) return;
         // There is no second source, so this is the end of the line and it is a failure,
         // not a state. Answering 409 here would tell a creator whose game was delivered
         // an hour ago that it has not been — and they would keep waiting.
         request.log.error({ err: error, issueNumber }, 'stored draft preview failed');
-        return reply.status(502).send({ error: 'failed to load preview' });
+        reply.status(502).send({ error: 'failed to load preview' });
+        return;
       }
     }
-    {
-      const stale = serveLastKnown('no delivery yet for native job; serving last known draft');
-      if (stale) return stale;
-      // Without a store this deployment can never preview a native job — there is no PR
-      // to fall back to and nowhere for a delivery to land. 409 would say "not yet"
-      // about something that is never coming, which is the same lie as reporting a
-      // failure as a pending state, just told to an operator instead of a creator.
-      if (!gamesStore) {
-        request.log.error({ issueNumber }, 'preview requested for a native job with no games store configured');
-        return reply.status(503).send({ error: 'previews are not configured on this deployment' });
-      }
-      return reply.status(409).send({ error: 'no preview available for this submission yet' });
+    if (serveLastKnown('no delivery yet for native job; serving last known draft')) return;
+    // Without a store this deployment can never preview a native job — there is no PR
+    // to fall back to and nowhere for a delivery to land. 409 would say "not yet"
+    // about something that is never coming, which is the same lie as reporting a
+    // failure as a pending state, just told to an operator instead of a creator.
+    if (!gamesStore) {
+      request.log.error({ issueNumber }, 'preview requested for a native job with no games store configured');
+      reply.status(503).send({ error: 'previews are not configured on this deployment' });
+      return;
     }
+    reply.status(409).send({ error: 'no preview available for this submission yet' });
   }
 
   // Play the in-progress game straight from its (unmerged) PR branch. This runs the

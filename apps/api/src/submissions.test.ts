@@ -2094,6 +2094,61 @@ describe('submission preview route', () => {
     await app.close();
   });
 
+  it('does not fall through to a second send after serving a stored draft', async () => {
+    // Fastify 5 Reply is a thenable. Awaiting `return reply.send(...)` from an async
+    // helper resolves to undefined, so the old `if (stored) return stored` fell through
+    // and tried to send again ("Reply was already sent"). Live Studio previews logged
+    // served → "no delivery yet… last known draft" → already-sent on every hit.
+    const store = new InMemoryStore();
+    const jobId = 1_000_047;
+    await store.upsertUser({ uid: 'g:test-user' });
+    await store.createSubmission(jobId, 'g:test-user', 'TV Tycoon');
+    await store.setSubmissionSlug(jobId, 'tv-tycoon');
+    await store.setSubmissionDeliveredVersion(jobId, 'v20260804T154320637Z-d53599');
+
+    const getDerivedArtifact = vi.fn(async (_s: string, _v: string, name: string) =>
+      name === 'preview.html' ? Buffer.from('<!doctype html><title>TV Tycoon</title><canvas></canvas>') : null,
+    );
+    const gamesStore = { getDerivedArtifact } as unknown as GamesStore;
+    const { githubClient } = createGithubClientStub({});
+    const logLines: string[] = [];
+    const app = await buildApp({
+      store,
+      sessionSecret,
+      logger: {
+        level: 'warn',
+        stream: {
+          write(chunk: string) {
+            logLines.push(chunk);
+          },
+        },
+      },
+      submissionRoutes: {
+        githubToken: 'token',
+        submissionTokenSecret: secret,
+        gamesRepo: repo,
+        githubClient,
+        translator: new NoopTranslator(),
+        agentChannel: { gamesStore },
+      },
+    });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(jobId, secret)}/preview`,
+      headers: getAuthHeaders(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ slug: 'tv-tycoon', title: 'TV Tycoon' });
+    expect(getDerivedArtifact).toHaveBeenCalled();
+    const joined = logLines.join('\n');
+    expect(joined).not.toMatch(/no delivery yet for native job/i);
+    expect(joined).not.toMatch(/already sent/i);
+
+    await app.close();
+  });
+
   it('shows the creator a build the gate refused, rather than nothing at all', async () => {
     // The regression this exists for, found on a real game: the gate went red, a red run
     // stored no artifacts, and the preview only ever read `bundle.html` — so a build that
