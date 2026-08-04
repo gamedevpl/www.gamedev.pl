@@ -110,6 +110,10 @@ export type AppRoute =
   // Public contact form. Same early-exit posture as legal: a contact point behind
   // sign-in is not a published contact point.
   | { view: 'contact' }
+  // The proposer's tracker: changes this person has proposed to other people's games,
+  // and what happened to them. Signed-in only, and deliberately its own address rather
+  // than a Studio tab — a proposal is not one of your games, and the shelf is.
+  | { view: 'proposals' }
   // Public creator profile. Reachable without a session — the byline destination for
   // published games. The canonical address is `/:handle`; `/creators/:handle` remains
   // an alias for links minted before profiles moved to the root namespace. Handle shape
@@ -279,6 +283,10 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
 
   if (normalizedPath === '/studio') {
     return { view: 'studio' };
+  }
+
+  if (normalizedPath === '/proposals') {
+    return { view: 'proposals' };
   }
 
   // `/studio/:game` or `/studio/:game/:tab`. A third segment that is not a known
@@ -481,6 +489,7 @@ export function navUpTarget(route: AppRoute): NavUpTarget | null {
     case 'legal':
     case 'contact':
     case 'creator':
+    case 'proposals':
     case 'notFound':
       return { path: '/', labelKey: 'upHome' };
   }
@@ -534,6 +543,11 @@ export function creatorPath(handle: string): string {
 export function gamePath(handle: string, slug: string, tab?: GamePageTab): string {
   const base = `/${encodeURIComponent(handle)}/${encodeURIComponent(slug)}`;
   return tab ? `${base}/${tab}` : base;
+}
+
+/** The proposer's tracker. */
+export function proposalsPath(): string {
+  return '/proposals';
 }
 
 /**

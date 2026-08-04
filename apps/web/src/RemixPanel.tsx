@@ -18,6 +18,8 @@ import {
   type RemixSuggestion,
 } from './remixApi.js';
 import { RemixPainter } from './RemixPainter.js';
+import { ProposeComposer } from './ProposeComposer.js';
+import { checkContributions } from './proposalsApi.js';
 import type {
   EditorContentDoc,
   EditorItemContent,
@@ -241,6 +243,17 @@ export function RemixPanel(props: {
   const [undo, setUndo] = useState<Record<string, EditorParamValue> | null>(null);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  /**
+   * Whether this game takes proposals from this player.
+   *
+   * Asked once per session rather than assumed: contributions are off by default, and a
+   * button that appears for every game and fails on most of them would teach players to
+   * ignore it. `null` means we have not asked yet, which renders as no button at all —
+   * the honest state, since we do not know.
+   */
+  const [canPropose, setCanPropose] = useState<boolean | null>(null);
+  const [proposing, setProposing] = useState(false);
+  const [proposed, setProposed] = useState(false);
   /** The last change that landed, and whether there is anything to share of it. */
   const [changed, setChanged] = useState<{
     text: string;
@@ -357,6 +370,30 @@ export function RemixPanel(props: {
     // a shared link that opens the panel on arrival.
     recordRemixStep('opened');
   }, []);
+
+  /*
+   * Ask once, when a change has actually landed.
+   *
+   * Not on mount: most sessions never change anything, and asking for every panel open
+   * would spend a request per curious tap. Not per change either — the answer is a
+   * property of the game and the player, and neither moves while the panel is open.
+   */
+  useEffect(() => {
+    if (!session || !changed || canPropose !== null) return;
+    let cancelled = false;
+    void checkContributions(props.slug)
+      .then((verdict) => {
+        if (!cancelled) setCanPropose(verdict.canPropose);
+      })
+      // A failed check is not a closed door, but it is not an open one either: the
+      // button stays hidden, and the two exits the panel has always had still work.
+      .catch(() => {
+        if (!cancelled) setCanPropose(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [session, changed, canPropose, props.slug]);
 
   const suggestions = session?.suggestions ?? [];
   const showSuggestions = lane === 'idle' && !changed && utterance.length === 0 && suggestions.length > 0;
@@ -1078,7 +1115,7 @@ export function RemixPanel(props: {
             </span>
             <span>{changed.broke ? t('remix.brokeIt') : changed.text}</span>
           </p>
-          {changed.canShare || undo || changed.undoCode || !changed.broke ? (
+          {changed.canShare || canPropose || undo || changed.undoCode || !changed.broke ? (
             <div className="remix-actions-row">
               {changed.canShare ? (
                 <button type="button" className="remix-btn is-primary" onClick={() => void share()}>
@@ -1099,6 +1136,18 @@ export function RemixPanel(props: {
                   onClick={() => void saveAsMine()}
                 >
                   {saving ? t('remix.saving') : t('remix.makeItYours')}
+                </button>
+              ) : null}
+              {/*
+               * The third exit. Remix's two originals — save as yours, share — are
+               * unchanged and still never publish; this one asks the owner, who may say
+               * no. It appears only once a change has landed and only for a game whose
+               * owner opted in, so it is offered when there is something to offer and to
+               * somebody who can receive it.
+               */}
+              {canPropose && !proposing && !proposed ? (
+                <button type="button" className="remix-btn is-quiet" onClick={() => setProposing(true)}>
+                  {t('propose.action')}
                 </button>
               ) : null}
               {undo || changed.undoCode ? (
@@ -1279,6 +1328,29 @@ export function RemixPanel(props: {
             {t('remix.share')}
           </button>
         </div>
+      ) : null}
+      {/*
+       * The composer sits at panel level rather than inside the result block: it is a
+       * form, not a status line, and nesting it under the "your change landed" message
+       * made it shift every time a later change re-rendered that message.
+       */}
+      {proposing && session ? (
+        <ProposeComposer
+          remixId={session.remixId}
+          onSent={() => {
+            setProposing(false);
+            setProposed(true);
+          }}
+          onCancel={() => setProposing(false)}
+        />
+      ) : null}
+      {proposed ? (
+        <p className="remix-result" role="status">
+          <span className="remix-tick" aria-hidden="true">
+            ✓
+          </span>
+          <span>{t('propose.sent')}</span>
+        </p>
       ) : null}
       {shareUrl ? <p className="remix-share-url">{shareUrl}</p> : null}
       <AuthModal

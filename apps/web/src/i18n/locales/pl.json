@@ -914,7 +914,8 @@
     "statusNamed": "Status · {{title}}",
     "studioNamed": "Studio · {{title}}",
     "creatorNamed": "{{title}}",
-    "gameNamed": "{{title}}"
+    "gameNamed": "{{title}}",
+    "proposals": "Moje propozycje"
   },
   "creatorProfile": {
     "back": "Wróć",
@@ -1324,5 +1325,103 @@
     },
     "following": "Obserwujesz",
     "rolePlatform": "zbudowane tutaj"
+  },
+  "propose": {
+    "action": "Zaproponuj tę zmianę",
+    "title": "Zaproponuj autorowi",
+    "titlePlatform": "Zaproponuj gamedev.pl",
+    "fieldTitle": "Tytuł",
+    "fieldTitlePlaceholder": "Co robi twoja zmiana?",
+    "fieldDescription": "Co zmieniłeś i dlaczego",
+    "fieldDescriptionPlaceholder": "Napisz, co zmieniłeś i co to poprawia.",
+    "submit": "Wyślij propozycję",
+    "sending": "Wysyłanie…",
+    "cancel": "Anuluj",
+    "reassure": "Sprawdzamy i uruchamiamy twoją zmianę, zanim ktoś ją zobaczy.",
+    "sent": "Wysłane. Sprawdzimy zmianę, potem zdecyduje autor.",
+    "openCount": "{{count}} z {{max}} otwartych propozycji do tej gry.",
+    "errors": {
+      "contributions_off": "Ta gra nie przyjmuje teraz propozycji.",
+      "own_game": "To twoja gra — użyj Ulepsz.",
+      "not_published": "Ta gra nie jest teraz opublikowana.",
+      "too_many_open_here": "Masz już maksymalną liczbę propozycji do tej gry. Zamknij jedną.",
+      "too_many_open": "Masz dużo otwartych propozycji. Zamknij kilka, zanim wyślesz kolejne.",
+      "no_changes": "Najpierw coś zmień, potem zaproponuj.",
+      "not_proposable": "Ta gra nie przyjmuje jeszcze propozycji.",
+      "generic": "Nie udało się wysłać. Spróbuj za chwilę."
+    }
+  },
+  "proposals": {
+    "navTitle": "Moje propozycje",
+    "empty": "Jeszcze nic. Zremiksuj grę, która ci się podoba, i zaproponuj zmianę.",
+    "toOwner": "do {{handle}}",
+    "toPlatform": "do gamedev.pl",
+    "state": {
+      "checking": "sprawdzamy",
+      "in_review": "w recenzji",
+      "needs_work": "do poprawki",
+      "changes_requested": "prośba o zmiany",
+      "accepted": "przyjęta",
+      "merged": "na żywo",
+      "declined": "odrzucona",
+      "withdrawn": "wycofana",
+      "superseded": "nieaktualna",
+      "expired": "wygasła",
+      "draft": "szkic"
+    },
+    "checksPassed": "testy przeszły",
+    "checksFailed": "testy nie przeszły",
+    "behaviouralDiff": "zmienia sposób gry",
+    "steps": {
+      "sent": "wysłana",
+      "checked": "sprawdzona i uruchomiona",
+      "notified": "autor powiadomiony",
+      "decision": "decyzja"
+    },
+    "fromReviewer": "Od recenzenta",
+    "withdraw": "Wycofaj",
+    "rebuild": "Przebuduj na najnowszej",
+    "supersededHelp": "Gra została zaktualizowana po twojej propozycji. Przebuduj ją na najnowszej wersji.",
+    "expiredHelp": "Gra ucichła, więc propozycja wygasła. To nie jest odmowa.",
+    "watcher": "Obserwujesz tę grę — dostaniesz podsumowanie, gdy się zmieni.",
+    "mergedHelp": "Twoja zmiana jest na żywo."
+  },
+  "reviews": {
+    "navTitle": "Propozycje",
+    "cardTitle": "Propozycja od {{handle}}",
+    "empty": "Żadna propozycja nie czeka na ciebie.",
+    "play": "Zagraj",
+    "viewChanges": "Zobacz zmiany",
+    "accept": "Przyjmij…",
+    "requestChanges": "Poproś o zmiany",
+    "decline": "Odrzuć",
+    "acceptHelp": "Przyjęcie tworzy dla ciebie nową wersję — nic nie trafia na żywo, dopóki jej nie opublikujesz.",
+    "expiresIn": "Wygasa za {{days}} dni bez recenzji",
+    "changesPlaceholder": "Co powinni zmienić?",
+    "declineReason": {
+      "label": "Dlaczego?",
+      "not_the_direction": "Nie ten kierunek dla tej gry",
+      "duplicate": "Już zrobione lub zaproponowane",
+      "quality": "Wykonanie niewystarczające",
+      "off_topic": "Niezwiązane z tą grą",
+      "unsafe": "Łamie zasady treści",
+      "infringing": "Używa materiałów bez praw"
+    },
+    "declineNote": "Chcesz coś dodać? (opcjonalnie)",
+    "gateVerdict": "Uruchomienie testowe",
+    "gateGreen": "zielone",
+    "gateRan": "Uruchomione {{when}}",
+    "filesChanged": "Zmienione pliki: {{count}}",
+    "sandboxNote": "Działa w piaskownicy, jak każda gra na gamedev.pl",
+    "contributions": {
+      "title": "Współtworzenie",
+      "off": "Wyłączone",
+      "offHelp": "Nikt nie może proponować zmian do tej gry.",
+      "review": "Recenzuj propozycje",
+      "reviewHelp": "Gracze i twórcy mogą proponować zmiany. Każda propozycja jest najpierw sprawdzana i uruchamiana, a ty recenzujesz każdą — nic nie zmienia twojej gry bez ciebie.",
+      "blocked": "Zablokowani",
+      "blockedHelp": "Zablokowane osoby nie mogą proponować zmian do żadnej z twoich gier.",
+      "unblock": "Odblokuj"
+    }
   }
 }

@@ -13813,3 +13813,165 @@ a.user-name--profile:focus-visible {
   text-decoration: none;
   font-size: 0.85rem;
 }
+
+/*
+ * Proposals — the composer behind Remix's third exit, and the tracker.
+ *
+ * Styled from the remix panel's own tokens rather than new ones: a proposal starts inside
+ * that panel, and a form that looked like it came from somewhere else would read as a
+ * different product asking for something.
+ */
+.propose-composer {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  background: var(--panel-card);
+}
+
+.propose-heading {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.propose-field {
+  display: grid;
+  gap: 5px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.propose-field input,
+.propose-field textarea {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--panel-border);
+  border-radius: 9px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-weight: 400;
+  resize: vertical;
+}
+
+.propose-field input:focus-visible,
+.propose-field textarea:focus-visible {
+  outline: 2px solid var(--turquoise);
+  outline-offset: 1px;
+}
+
+.propose-actions {
+  display: flex;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+
+.propose-error {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--error);
+}
+
+.propose-note {
+  margin: 0;
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+
+.proposals-page {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 24px 16px 56px;
+  display: grid;
+  gap: 14px;
+}
+
+.proposals-empty {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.proposal-card {
+  display: grid;
+  gap: 9px;
+  padding: 15px;
+  border: 1px solid var(--panel-border);
+  border-radius: 13px;
+  background: var(--panel);
+}
+
+.proposal-card h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.proposal-card .proposal-sub {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.proposal-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.proposal-chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-card);
+  color: var(--muted);
+}
+
+.proposal-chip.is-ok {
+  color: var(--turquoise);
+  border-color: rgba(0, 228, 172, 0.35);
+}
+
+.proposal-chip.is-warn {
+  color: #fbbf24;
+  border-color: rgba(251, 191, 36, 0.35);
+}
+
+.proposal-chip.is-err {
+  color: var(--error);
+  border-color: rgba(255, 107, 107, 0.35);
+}
+
+/*
+ * Reviewer text, quoted back to its author.
+ *
+ * The rule visually separates it from anything the product itself says — it is somebody
+ * else's words, shown as data, and the same boundary the server enforces when it fences
+ * this text as data rather than instructions.
+ */
+.proposal-reviewer-note {
+  border-left: 3px solid #fbbf24;
+  border-radius: 0 9px 9px 0;
+  padding: 8px 11px;
+  background: rgba(251, 191, 36, 0.1);
+  font-size: 0.84rem;
+}
+
+.proposal-reviewer-note .proposal-note-from {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #fbbf24;
+  margin-bottom: 2px;
+}
+
+.proposal-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}

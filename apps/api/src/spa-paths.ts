@@ -75,6 +75,10 @@ export function isKnownSpaShellPath(urlOrPath: string): boolean {
   if (pathname === '/privacy' || pathname === '/terms' || pathname === '/health' || pathname === '/contact') {
     return true;
   }
+  // The proposer's tracker. A real page, so a refresh on it boots 200 rather than 404 —
+  // and it is reached from a notification link, which is exactly the traffic a soft 404
+  // would make look broken.
+  if (pathname === '/proposals') return true;
 
   if (STUDIO_PATTERN.test(pathname)) return true;
   if (ADMIN_PATTERN.test(pathname)) return true;

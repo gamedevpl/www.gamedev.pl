@@ -589,6 +589,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     assistant: options.editorAssistant ?? new VertexEditorAssistant(),
     codeLane: new VertexCodeLane(),
     contentChecker,
+    // Same gate the delivery path uses: a proposal is checked by exactly the machinery a
+    // creator's own upload is, or the reviewer would be judging something unverified.
+    onSourcesDelivered: gateTrigger,
   });
 
   /**

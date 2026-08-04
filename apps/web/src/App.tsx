@@ -26,6 +26,7 @@ import {
 import type { PublicCreatorProfile } from './creatorProfileApi.js';
 import { LegalPage } from './LegalPage.js';
 import { ContactPage } from './ContactPage.js';
+import { ProposalsPage } from './ProposalsPage.js';
 import { CreatorProfilePage } from './CreatorProfilePage.js';
 import { GamePage } from './GamePage.js';
 import { NotFoundPage } from './NotFoundPage.js';
@@ -174,6 +175,7 @@ export function App() {
         privacy: t('legal.privacy'),
         terms: t('legal.terms'),
         contact: t('pageTitle.contact'),
+        proposals: t('pageTitle.proposals'),
         notFound: t('pageTitle.notFound'),
         playNamed: t('pageTitle.playNamed'),
         draftNamed: t('pageTitle.draftNamed'),
@@ -912,6 +914,29 @@ export function App() {
             onCanonicalPath={(path) => navigate(path, { replace: true })}
             onGameLoaded={setGameTitle}
           />
+        </main>
+        <SiteFooter />
+      </div>
+    );
+  }
+
+  // The proposer's tracker. Behind the ordinary chrome rather than the open-chrome
+  // posture legal and contact take: this is signed-in territory, and the API answers 401
+  // to anyone else, so there is nothing to show a visitor who is not.
+  if (route.view === 'proposals') {
+    return (
+      <div className="app app--proposals">
+        <NavHeader
+          activeBuildCount={activeBuildCount}
+          onNavigate={handleNavigateSection}
+          onHome={() => navigate('/')}
+          onStudio={() => navigate(studioPath())}
+          onAdmin={() => navigate(adminPath())}
+          upTarget={headerUp}
+          onUp={navigate}
+        />
+        <main className="content">
+          <ProposalsPage />
         </main>
         <SiteFooter />
       </div>
