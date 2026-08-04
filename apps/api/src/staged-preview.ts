@@ -51,6 +51,12 @@ export const STAGED_PREVIEW_LABEL_PL = 'Podgląd na żywo — agent wciąż nad 
  * assembling after each one would spend an esbuild pass and a fan-out of engine reads on
  * a tree that is knowingly half-written. Waiting for the burst to settle costs the creator
  * a few seconds and saves most of the work.
+ *
+ * Restarted by every staged file, so it measures quiet *after* the last one rather than
+ * time since the first: an assembly armed by the first file of a slowly-uploaded tree
+ * fires on three files of a game and reports `incomplete`, and then the gap floor holds
+ * the real preview back — the opposite of the point. {@link STAGED_PREVIEW_MAX_WAIT_MS}
+ * bounds the restarting.
  */
 export const STAGED_PREVIEW_DEBOUNCE_MS = 6_000;
 
@@ -63,6 +69,26 @@ export const STAGED_PREVIEW_DEBOUNCE_MS = 6_000;
  * assembly reads the engine over the network rather than off a local checkout.
  */
 export const STAGED_PREVIEW_MIN_GAP_MS = 25_000;
+
+/**
+ * Longest a settling burst may hold the first assembly back.
+ *
+ * The debounce restarts on every staged file, which is what makes it trailing-edge — but
+ * an agent that keeps staging every few seconds for a minute would restart it forever and
+ * the creator would watch a status page through the whole thing, which is the exact
+ * failure this module exists to end. Past this point the assembly happens on the tree as
+ * it stands, and the next one is governed by the gap floor as usual.
+ */
+export const STAGED_PREVIEW_MAX_WAIT_MS = 20_000;
+
+/**
+ * How long to wait before re-trying a job whose assembly was already running.
+ *
+ * Short, because the thing it is waiting for takes seconds — but never zero: once the
+ * max-wait above has elapsed the computed delay is 0, and a re-arm at 0ms against a
+ * still-running assembly is a busy loop.
+ */
+export const STAGED_PREVIEW_BUSY_RETRY_MS = 1_000;
 
 /**
  * Assemblies allowed to run at once across the process.
@@ -174,6 +200,10 @@ export interface StagedPreviewOptions {
   minGapMs?: number;
   maxBytes?: number;
   maxConcurrent?: number;
+  /** Ceiling on how long a settling burst may defer its first assembly. */
+  maxWaitMs?: number;
+  /** Re-arm delay when the job (or the process) is already assembling. */
+  busyRetryMs?: number;
 }
 
 export interface StagedPreviewPublisher {
@@ -194,9 +224,15 @@ export function createStagedPreviewPublisher(options: StagedPreviewOptions): Sta
   const minGapMs = options.minGapMs ?? STAGED_PREVIEW_MIN_GAP_MS;
   const maxBytes = options.maxBytes ?? MAX_BUILD_PREVIEW_BYTES;
   const maxConcurrent = options.maxConcurrent ?? MAX_CONCURRENT_STAGED_PREVIEWS;
+  const maxWaitMs = options.maxWaitMs ?? STAGED_PREVIEW_MAX_WAIT_MS;
+  const busyRetryMs = options.busyRetryMs ?? STAGED_PREVIEW_BUSY_RETRY_MS;
   const keepPreviews = options.keepPreviews ?? 4;
 
-  const timers = new Map<number, NodeJS.Timeout>();
+  /**
+   * The one armed timer per job, with the moment its burst began — restarting the
+   * debounce must not restart the max-wait, or a steady stream never assembles.
+   */
+  const pending = new Map<number, { timer: NodeJS.Timeout; burstStartedAt: number }>();
   const lastAttemptAt = new Map<number, number>();
   const running = new Set<number>();
   /**
@@ -329,37 +365,53 @@ export function createStagedPreviewPublisher(options: StagedPreviewOptions): Sta
     }
   }
 
-  function schedule(issueNumber: number): void {
-    // One timer per job: a burst of staged files collapses into the single assembly that
-    // follows the last of them, which is the only one whose result anybody wants.
-    if (timers.has(issueNumber)) return;
-
-    const since = now() - (lastAttemptAt.get(issueNumber) ?? Number.NEGATIVE_INFINITY);
-    const delay = Math.max(debounceMs, Number.isFinite(since) ? minGapMs - since : 0);
+  /**
+   * Arms the one timer this job may have, from three independent floors.
+   *
+   * `settle` is the trailing-edge debounce, shortened as the burst approaches its
+   * max-wait; `gap` is the per-job floor between assemblies; `atLeast` is what a
+   * busy re-arm needs so it cannot spin. The latest of the three wins.
+   */
+  function arm(issueNumber: number, burstStartedAt: number, atLeast = 0): void {
+    const current = now();
+    const sinceLast = current - (lastAttemptAt.get(issueNumber) ?? Number.NEGATIVE_INFINITY);
+    const gap = Number.isFinite(sinceLast) ? Math.max(0, minGapMs - sinceLast) : 0;
+    const settle = Math.min(debounceMs, Math.max(0, burstStartedAt + maxWaitMs - current));
     const timer = setTimeout(
       () => {
-        timers.delete(issueNumber);
-        if (inFlight >= maxConcurrent) {
-          // Busy: come back rather than queue, so a pile-up sheds load instead of
-          // deepening. The staging buffer is durable — a later assembly reads the same
-          // tree, or a fresher one.
-          schedule(issueNumber);
+        pending.delete(issueNumber);
+        // A job already assembling, or a process at its concurrency ceiling, must be
+        // *re-armed* rather than run: `publishNow` would answer `skipped` and this file
+        // would then wait for a stage that may never come, because the burst it belongs
+        // to may have just ended. Re-arming keeps the burst's own max-wait window.
+        if (running.has(issueNumber) || inFlight >= maxConcurrent) {
+          arm(issueNumber, burstStartedAt, busyRetryMs);
           return;
         }
         void publishNow(issueNumber).catch((error: unknown) => {
           options.log.error({ issueNumber, err: error }, 'staged preview attempt failed unexpectedly');
         });
       },
-      Math.max(0, delay),
+      Math.max(gap, settle, atLeast),
     );
     // Never a reason to hold the process open — this is courtesy work beside a build.
     timer.unref?.();
-    timers.set(issueNumber, timer);
+    pending.set(issueNumber, { timer, burstStartedAt });
+  }
+
+  function schedule(issueNumber: number): void {
+    // Trailing edge: every staged file restarts the clock, so the assembly lands after
+    // the *last* of a burst rather than being armed by the first and firing on a tree
+    // that is still half-uploaded. `burstStartedAt` survives the restart, which is what
+    // stops a steady staging stream from deferring the first preview forever.
+    const existing = pending.get(issueNumber);
+    if (existing) clearTimeout(existing.timer);
+    arm(issueNumber, existing?.burstStartedAt ?? now());
   }
 
   function stop(): void {
-    for (const timer of timers.values()) clearTimeout(timer);
-    timers.clear();
+    for (const { timer } of pending.values()) clearTimeout(timer);
+    pending.clear();
   }
 
   return { schedule, publishNow, stop };

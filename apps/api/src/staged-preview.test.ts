@@ -41,7 +41,9 @@ type HarnessInput = {
   published?: boolean;
   /** Stands in for the assembler; throw to model a tree that does not compile. */
   assemble?: () => Promise<typeof GAME_SOURCES>;
-} & Partial<Pick<StagedPreviewOptions, 'debounceMs' | 'minGapMs' | 'maxBytes' | 'onPublished'>>;
+} & Partial<
+  Pick<StagedPreviewOptions, 'debounceMs' | 'minGapMs' | 'maxBytes' | 'maxWaitMs' | 'busyRetryMs' | 'onPublished'>
+>;
 
 function harness(input: HarnessInput = {}) {
   const record =
@@ -76,6 +78,8 @@ function harness(input: HarnessInput = {}) {
     ...(input.debounceMs !== undefined ? { debounceMs: input.debounceMs } : {}),
     ...(input.minGapMs !== undefined ? { minGapMs: input.minGapMs } : {}),
     ...(input.maxBytes !== undefined ? { maxBytes: input.maxBytes } : {}),
+    ...(input.maxWaitMs !== undefined ? { maxWaitMs: input.maxWaitMs } : {}),
+    ...(input.busyRetryMs !== undefined ? { busyRetryMs: input.busyRetryMs } : {}),
     ...(input.onPublished ? { onPublished: input.onPublished } : {}),
   };
 
@@ -331,6 +335,105 @@ describe('createStagedPreviewPublisher', () => {
       await vi.advanceTimersByTimeAsync(500);
 
       expect(previews).toHaveLength(1);
+      publisher.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('waits for the last file of a burst, not the first', async () => {
+    // The failure this pins: an assembly armed by the *first* staged file fires on a
+    // half-uploaded tree, answers `incomplete`, and then the gap floor holds the real
+    // preview back — so a slowly-staged game reaches the creator later than if nothing
+    // had been scheduled at all. Every stage must restart the clock.
+    vi.useFakeTimers();
+    try {
+      const staged = [PLAYABLE_TREE[0]!];
+      const { publisher, previews, getGameSources } = harness({
+        staged,
+        debounceMs: 1_000,
+        minGapMs: 5_000,
+        maxWaitMs: 60_000,
+      });
+
+      publisher.schedule(7);
+      for (const file of PLAYABLE_TREE.slice(1)) {
+        // Each new path lands before the previous one's debounce would have expired.
+        await vi.advanceTimersByTimeAsync(600);
+        staged.push(file);
+        publisher.schedule(7);
+      }
+
+      // Still nothing: the tree was never quiet for a full debounce.
+      expect(previews).toHaveLength(0);
+
+      await vi.advanceTimersByTimeAsync(1_200);
+
+      // One assembly, and it saw the whole tree rather than the first file of it.
+      expect(previews).toHaveLength(1);
+      expect(getGameSources).toHaveBeenCalledTimes(1);
+      publisher.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('re-arms rather than dropping a file staged while an assembly is running', async () => {
+    // publishNow answers `skipped` for a job already assembling. If the scheduler took
+    // that for an answer, the last file of a burst could be lost outright — nothing
+    // would ever assemble it, because the stage that would have retried never comes.
+    vi.useFakeTimers();
+    try {
+      let release: () => void = () => {};
+      const firstAssembly = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      let calls = 0;
+      const staged = [...PLAYABLE_TREE];
+      const { publisher, previews } = harness({
+        staged,
+        debounceMs: 10,
+        minGapMs: 10,
+        busyRetryMs: 50,
+        assemble: async () => {
+          calls += 1;
+          if (calls === 1) await firstAssembly;
+          return { ...GAME_SOURCES, gameJs: `console.log(${calls});` };
+        },
+      });
+
+      publisher.schedule(7);
+      await vi.advanceTimersByTimeAsync(50);
+
+      // A further file lands while that first assembly is still in flight.
+      staged.push({ path: 'game/extra.ts', content: 'export {};' });
+      publisher.schedule(7);
+      await vi.advanceTimersByTimeAsync(50);
+
+      release();
+      await vi.advanceTimersByTimeAsync(500);
+
+      expect(previews).toHaveLength(2);
+      publisher.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('still assembles during a staging stream that never goes quiet', async () => {
+    // The cost of a trailing debounce: an agent staging steadily would restart it for as
+    // long as it kept going. The max-wait is what stops the creator waiting out the whole
+    // upload — which is the exact wait this module exists to end.
+    vi.useFakeTimers();
+    try {
+      const { publisher, previews } = harness({ debounceMs: 1_000, minGapMs: 10, maxWaitMs: 3_000 });
+
+      for (let index = 0; index < 12; index++) {
+        publisher.schedule(7);
+        await vi.advanceTimersByTimeAsync(500);
+      }
+
+      expect(previews.length).toBeGreaterThan(0);
       publisher.stop();
     } finally {
       vi.useRealTimers();
