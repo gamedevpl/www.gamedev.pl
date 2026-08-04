@@ -86,8 +86,14 @@ function gameKey(generation = 1) {
   });
 }
 
-async function ensureGameKey(store: InMemoryStore) {
-  await store.ensureGameAgentKey(SLUG, OWNER, new Date().toISOString());
+async function creatorHeaders(store: InMemoryStore): Promise<Record<string, string>> {
+  await store.ensureCreatorAgentKey(OWNER, new Date().toISOString());
+  const key = mintCreatorAgentKey(secret, {
+    creatorUid: OWNER,
+    keyGeneration: 1,
+    now: Date.parse('2026-08-01T12:00:00.000Z'),
+  });
+  return { authorization: `Bearer ${key}` };
 }
 
 async function mcpCall(
@@ -163,13 +169,14 @@ describe('MCP open_round (BY-24 / BY-27b)', () => {
   it('opens exactly one self improvement round with no flag set', async () => {
     const store = new InMemoryStore();
     await seedPublishedGame(store);
-    await ensureGameKey(store);
+    const headers = await creatorHeaders(store);
     app = await createApp(store);
 
-    const { structured, isError } = await callOpenRound(app, {
-      key: gameKey(),
-      feedback: 'Add a checkpoint after level one.',
-    });
+    const { structured, isError } = await callOpenRound(
+      app,
+      { slug: SLUG, feedback: 'Add a checkpoint after level one.' },
+      headers,
+    );
     expect(isError).toBe(false);
     expect(structured).toMatchObject({ slug: SLUG, alreadyOpen: false });
     const jobId = (structured as { jobId: number }).jobId;
@@ -351,13 +358,13 @@ describe('MCP open_round (BY-24 / BY-27b)', () => {
   it('admits only one concurrent open_round per slug', async () => {
     const store = new InMemoryStore();
     await seedPublishedGame(store);
-    await ensureGameKey(store);
+    const headers = await creatorHeaders(store);
     app = await createApp(store);
 
     const results = await Promise.all([
-      callOpenRound(app, { key: gameKey(), feedback: 'Concurrent A.' }),
-      callOpenRound(app, { key: gameKey(), feedback: 'Concurrent B.' }),
-      callOpenRound(app, { key: gameKey(), feedback: 'Concurrent C.' }),
+      callOpenRound(app, { slug: SLUG, feedback: 'Concurrent A.' }, headers),
+      callOpenRound(app, { slug: SLUG, feedback: 'Concurrent B.' }, headers),
+      callOpenRound(app, { slug: SLUG, feedback: 'Concurrent C.' }, headers),
     ]);
 
     const newOpens = results.filter(
@@ -377,14 +384,14 @@ describe('MCP open_round (BY-24 / BY-27b)', () => {
   it('is idempotent while a round is open and does not stack', async () => {
     const store = new InMemoryStore();
     await seedPublishedGame(store);
-    await ensureGameKey(store);
+    const headers = await creatorHeaders(store);
     app = await createApp(store);
 
-    const first = await callOpenRound(app, { key: gameKey(), feedback: 'First change.' });
+    const first = await callOpenRound(app, { slug: SLUG, feedback: 'First change.' }, headers);
     expect(first.isError).toBe(false);
     const jobId = (first.structured as { jobId: number }).jobId;
 
-    const second = await callOpenRound(app, { key: gameKey(), feedback: 'Second change.' });
+    const second = await callOpenRound(app, { slug: SLUG, feedback: 'Second change.' }, headers);
     expect(second.isError).toBe(false);
     expect(second.structured).toMatchObject({ jobId, alreadyOpen: true });
 
@@ -396,16 +403,13 @@ describe('MCP open_round (BY-24 / BY-27b)', () => {
   it('refuses when improvement quota is exhausted', async () => {
     const store = new InMemoryStore();
     await seedPublishedGame(store);
-    await ensureGameKey(store);
+    const headers = await creatorHeaders(store);
     const dateStr = new Date().toISOString().slice(0, 10);
     await store.checkAndIncrementQuota(OWNER, dateStr, 2, 'improvements');
     await store.checkAndIncrementQuota(OWNER, dateStr, 2, 'improvements');
     app = await createApp(store);
 
-    const { structured, isError } = await callOpenRound(app, {
-      key: gameKey(),
-      feedback: 'One more try.',
-    });
+    const { structured, isError } = await callOpenRound(app, { slug: SLUG, feedback: 'One more try.' }, headers);
     expect(isError).toBe(true);
     expect(structured).toMatchObject({ error: IMPROVEMENT_QUOTA_EXHAUSTED_REASON });
   });
@@ -413,18 +417,15 @@ describe('MCP open_round (BY-24 / BY-27b)', () => {
   it('moderates feedback on this path', async () => {
     const store = new InMemoryStore();
     await seedPublishedGame(store);
-    await ensureGameKey(store);
+    const headers = await creatorHeaders(store);
     app = await createApp(store, rejectingChecker());
 
-    const { structured, isError } = await callOpenRound(app, {
-      key: gameKey(),
-      feedback: 'bad words',
-    });
+    const { structured, isError } = await callOpenRound(app, { slug: SLUG, feedback: 'bad words' }, headers);
     expect(isError).toBe(true);
     expect(structured).toMatchObject({ error: 'content_rejected' });
   });
 
-  it('rejects a round key where the durable key is required', async () => {
+  it('rejects a round key where account authorization is required', async () => {
     const store = new InMemoryStore();
     await seedPublishedGame(store);
     app = await createApp(store);
@@ -435,10 +436,10 @@ describe('MCP open_round (BY-24 / BY-27b)', () => {
       feedback: 'Nope.',
     });
     expect(isError).toBe(true);
-    expect((structured as { error: string }).error).toMatch(/durable per-game key/i);
+    expect((structured as { error: string }).error).toMatch(/Authorization Bearer/i);
   });
 
-  it('rejects a sessionKey where the durable key is required', async () => {
+  it('rejects a sessionKey where account authorization is required', async () => {
     const store = new InMemoryStore();
     await seedPublishedGame(store);
     app = await createApp(store);
@@ -453,31 +454,26 @@ describe('MCP open_round (BY-24 / BY-27b)', () => {
       feedback: 'Nope.',
     });
     expect(isError).toBe(true);
-    expect((structured as { error: string }).error).toMatch(/durable per-game key/i);
+    expect((structured as { error: string }).error).toMatch(/Authorization Bearer/i);
   });
 
   it('refuses an unpublished game', async () => {
     const store = new InMemoryStore();
-    const at = new Date().toISOString();
     await store.createSubmission(30, OWNER, 'Unpublished');
     await store.setSubmissionSlug(30, SLUG);
-    await store.ensureGameAgentKey(SLUG, OWNER, at);
+    const headers = await creatorHeaders(store);
     app = await createApp(store);
 
-    const { structured, isError } = await callOpenRound(app, {
-      key: gameKey(),
-      feedback: 'Too early.',
-    });
+    const { structured, isError } = await callOpenRound(app, { slug: SLUG, feedback: 'Too early.' }, headers);
     expect(isError).toBe(true);
     expect(structured).toMatchObject({ error: GAME_NOT_PUBLISHED_REASON });
   });
 
   it('cannot open a round when the key slug has no published game', async () => {
     const store = new InMemoryStore();
-    const at = new Date().toISOString();
     await store.createSubmission(35, OWNER, 'Unpublished comet');
     await store.setSubmissionSlug(35, SLUG);
-    await store.ensureGameAgentKey(SLUG, OWNER, at);
+    const headers = await creatorHeaders(store);
 
     const otherSlug = 'other-game';
     await store.createSubmission(40, OWNER, 'Other');
@@ -486,10 +482,11 @@ describe('MCP open_round (BY-24 / BY-27b)', () => {
 
     app = await createApp(store);
 
-    const { structured, isError } = await callOpenRound(app, {
-      key: gameKey(),
-      feedback: 'Wrong slug published.',
-    });
+    const { structured, isError } = await callOpenRound(
+      app,
+      { slug: SLUG, feedback: 'Wrong slug published.' },
+      headers,
+    );
     expect(isError).toBe(true);
     expect(structured).toMatchObject({ error: GAME_NOT_PUBLISHED_REASON });
   });

@@ -12,7 +12,7 @@ import {
   mintCreatorAgentKey,
   verifyCreatorAgentKey,
 } from './agent-creator-key.js';
-import { isActiveBuildRound } from './builder.js';
+import { endOpenAgentSessions } from './agent-session-revocation.js';
 import type { CreatorAgentKeyRecord, Store } from './store.js';
 
 export interface CreatorAgentKeyRoutesOptions {
@@ -91,42 +91,7 @@ async function mintCurrentKey(
   return mintPayload(secret, ownerUid, refreshed.keyGeneration, generationAnchor(refreshed, nowMs));
 }
 
-/**
- * Ends every agent session opened against this creator's still-open rounds.
- *
- * Bumping `keyGeneration` alone does not do what the Studio panel promises — "rotating
- * stops every agent still using the old key". A `sessionKey` minted before the rotation
- * authenticates on the *round's* generation and never consults the creator key at all, so
- * it kept full write access for the rest of its 24-hour life. CP-2 confirmed it against
- * production: `report_progress` succeeded after a rotation and the write landed in the
- * creator's thread.
- *
- * Advancing `roundGeneration` is what actually cuts those sessions off. It is the same
- * revocation the round-close path already performs, and `classifyAgentTokenAccess` already
- * rejects a stale generation on every tool call, so nothing new has to be trusted.
- *
- * Deliberately broader than the sentence promises for *self* rounds: this also ends
- * sessions opened with a per-game key on them. Rotation is a security action and should
- * fail safe, and the cost is recoverable — the agent calls `start` again.
- *
- * Platform rounds are excluded, and that is not the same trade-off. A platform build's
- * credential is not derived from the creator key — the creator key cannot even open a
- * platform round (see PLATFORM_ROUND_REASON) — so bumping its generation would stall a
- * build for no security gain at all. Failing safe means revoking what the key could
- * reach, not everything the creator owns.
- */
-async function endOpenAgentSessions(store: Store, ownerUid: string): Promise<number> {
-  const owned = await store.listSubmissionsByOwner(ownerUid);
-  const open = owned.filter(
-    (job) => !job.abandonedAt && isActiveBuildRound(job) && (job.builder ?? 'platform') === 'self',
-  );
-  let ended = 0;
-  for (const job of open) {
-    if ((await store.bumpRoundGeneration(job.issueNumber)) !== null) ended += 1;
-  }
-  return ended;
-}
-
+/** Register creator-wide key lifecycle routes used by the Studio credentials panel. */
 export function registerCreatorAgentKeyRoutes(app: FastifyInstance, options: CreatorAgentKeyRoutesOptions): void {
   const { store, submissionTokenSecret } = options;
   const now = options.now ?? Date.now;

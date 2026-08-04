@@ -9,6 +9,7 @@ import {
   type CreatorAgentKeyStatus,
 } from './connectApi.js';
 import { PixelIcon } from './PixelIcon.js';
+import { formatRelativeTime } from './relativeTime.js';
 import { recordStudioStep } from './visitTelemetry.js';
 
 /**
@@ -21,9 +22,7 @@ export function StudioCreatorAgentKeyPanel() {
   const baseId = useId();
   const keyRef = useRef<string | null>(null);
   const [maskedHeader, setMaskedHeader] = useState<string | null>(null);
-  const [fingerprint, setFingerprint] = useState<string | null>(null);
   const [expiresAt, setExpiresAt] = useState<number | null>(null);
-  const [keyGeneration, setKeyGeneration] = useState<number | null>(null);
   const [revoked, setRevoked] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -35,9 +34,7 @@ export function StudioCreatorAgentKeyPanel() {
   const applyPayload = useCallback((payload: CreatorAgentKeyPayload) => {
     keyRef.current = payload.key;
     setMaskedHeader(payload.authorizationHeaderMasked);
-    setFingerprint(payload.fingerprint);
     setExpiresAt(payload.expiresAt);
-    setKeyGeneration(payload.keyGeneration);
     setRevoked(false);
   }, []);
 
@@ -46,9 +43,7 @@ export function StudioCreatorAgentKeyPanel() {
       if (status.revoked) {
         keyRef.current = null;
         setMaskedHeader(null);
-        setFingerprint(null);
         setExpiresAt(null);
-        setKeyGeneration(status.keyGeneration);
         setRevoked(true);
         return;
       }
@@ -73,12 +68,13 @@ export function StudioCreatorAgentKeyPanel() {
     void load();
   }, [load]);
 
-  const expiresLabel =
+  const expiresExact =
     expiresAt != null
       ? new Intl.DateTimeFormat(i18n.language, { dateStyle: 'medium', timeStyle: 'short' }).format(
           new Date(expiresAt * 1000),
         )
       : '';
+  const expiresRelative = expiresAt != null ? formatRelativeTime(expiresAt * 1000, i18n.language) : '';
 
   const copyHeader = async () => {
     const key = keyRef.current;
@@ -125,9 +121,7 @@ export function StudioCreatorAgentKeyPanel() {
       await revokeCreatorAgentKey();
       keyRef.current = null;
       setMaskedHeader(null);
-      setFingerprint(null);
       setExpiresAt(null);
-      setKeyGeneration((prev) => (prev == null ? 1 : prev + 1));
       setRevoked(true);
       setRevokeArmed(false);
     } catch {
@@ -140,19 +134,31 @@ export function StudioCreatorAgentKeyPanel() {
   const hasActiveKey = Boolean(maskedHeader) && !revoked;
 
   return (
-    <section className="studio-oauth-clients" aria-labelledby={`${baseId}-title`}>
-      <h3 id={`${baseId}-title`} className="studio-agent-key-title">
-        {t('creatorKey.title')}
-      </h3>
+    <section className="studio-credentials-section studio-creator-key" aria-labelledby={`${baseId}-title`}>
+      <div className="studio-credential-heading">
+        <h3 id={`${baseId}-title`} className="studio-agent-key-title">
+          {t('creatorKey.title')}
+        </h3>
+        {!loading && hasActiveKey ? <span className="studio-credential-status">{t('creatorKey.active')}</span> : null}
+      </div>
       <p className="studio-share-hint">{t('creatorKey.hint')}</p>
 
       {loading ? <p className="studio-connect-state">{t('creatorKey.loading')}</p> : null}
-      {error ? <p className="error">{error}</p> : null}
+      {error ? (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      ) : null}
 
       {!loading && revoked ? (
-        <div className="studio-connect-actions">
+        <div className="studio-credential-empty">
           <p className="studio-connect-state">{t('creatorKey.revoked')}</p>
-          <button type="button" className="button" disabled={busy === 'mint'} onClick={() => void handleMint()}>
+          <button
+            type="button"
+            className="primary-btn studio-credential-action"
+            disabled={busy === 'mint'}
+            onClick={() => void handleMint()}
+          >
             {busy === 'mint' ? t('creatorKey.minting') : t('creatorKey.mint')}
           </button>
         </div>
@@ -163,29 +169,53 @@ export function StudioCreatorAgentKeyPanel() {
           <pre className="studio-connect-snippet" tabIndex={0} data-testid="creator-key-masked">
             {maskedHeader}
           </pre>
-          <p className="studio-connect-expiry">
-            {t('creatorKey.meta', {
-              fingerprint: fingerprint ?? '',
-              when: expiresLabel,
-              generation: keyGeneration ?? 1,
-            })}
-          </p>
-          <div className="studio-connect-actions">
-            <button type="button" className="status-share-copy" onClick={() => void copyHeader()}>
-              <PixelIcon name={copied ? 'check' : 'sparkle'} size={12} />{' '}
-              {copied ? t('creatorKey.copied') : t('creatorKey.copyHeader')}
-            </button>
+          {expiresAt != null ? (
+            <p className="studio-connect-expiry">
+              <time dateTime={new Date(expiresAt * 1000).toISOString()} title={expiresExact}>
+                {t('creatorKey.expires', { when: expiresRelative })}
+              </time>
+            </p>
+          ) : null}
 
-            {!rotateArmed ? (
-              <button type="button" className="studio-connect-skip" onClick={() => setRotateArmed(true)}>
+          {!rotateArmed && !revokeArmed ? (
+            <div className="studio-credential-actions" aria-live="polite">
+              <button type="button" className="primary-btn studio-credential-action" onClick={() => void copyHeader()}>
+                <PixelIcon name={copied ? 'check' : 'sparkle'} size={12} />{' '}
+                {copied ? t('creatorKey.copied') : t('creatorKey.copyHeader')}
+              </button>
+
+              <button
+                type="button"
+                className="secondary-btn studio-credential-action"
+                onClick={() => {
+                  setRevokeArmed(false);
+                  setRotateArmed(true);
+                }}
+              >
                 {t('creatorKey.rotate.start')}
               </button>
-            ) : (
-              <span className="studio-connect-rotate-confirm">
-                <span>{t('creatorKey.rotate.confirm')}</span>
+
+              <button
+                type="button"
+                className="studio-credential-action is-danger"
+                onClick={() => {
+                  setRotateArmed(false);
+                  setRevokeArmed(true);
+                }}
+              >
+                {t('creatorKey.revoke.start')}
+              </button>
+            </div>
+          ) : null}
+
+          {rotateArmed ? (
+            <div className="studio-credential-confirm" role="alert">
+              <p>{t('creatorKey.rotate.confirm')}</p>
+              <div className="studio-credential-actions">
                 <button
+                  autoFocus
                   type="button"
-                  className="studio-connect-skip is-danger"
+                  className="studio-credential-action is-danger"
                   disabled={busy !== null}
                   onClick={() => void handleRotate()}
                 >
@@ -193,25 +223,24 @@ export function StudioCreatorAgentKeyPanel() {
                 </button>
                 <button
                   type="button"
-                  className="studio-connect-skip"
+                  className="secondary-btn studio-credential-action"
                   disabled={busy !== null}
                   onClick={() => setRotateArmed(false)}
                 >
                   {t('creatorKey.rotate.no')}
                 </button>
-              </span>
-            )}
+              </div>
+            </div>
+          ) : null}
 
-            {!revokeArmed ? (
-              <button type="button" className="studio-connect-skip" onClick={() => setRevokeArmed(true)}>
-                {t('creatorKey.revoke.start')}
-              </button>
-            ) : (
-              <span className="studio-connect-rotate-confirm">
-                <span>{t('creatorKey.revoke.confirm')}</span>
+          {revokeArmed ? (
+            <div className="studio-credential-confirm is-danger" role="alert">
+              <p>{t('creatorKey.revoke.confirm')}</p>
+              <div className="studio-credential-actions">
                 <button
+                  autoFocus
                   type="button"
-                  className="studio-connect-skip is-danger"
+                  className="studio-credential-action is-danger"
                   disabled={busy !== null}
                   onClick={() => void handleRevoke()}
                 >
@@ -219,15 +248,15 @@ export function StudioCreatorAgentKeyPanel() {
                 </button>
                 <button
                   type="button"
-                  className="studio-connect-skip"
+                  className="secondary-btn studio-credential-action"
                   disabled={busy !== null}
                   onClick={() => setRevokeArmed(false)}
                 >
                   {t('creatorKey.revoke.no')}
                 </button>
-              </span>
-            )}
-          </div>
+              </div>
+            </div>
+          ) : null}
         </>
       ) : null}
     </section>

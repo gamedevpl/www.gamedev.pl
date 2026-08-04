@@ -589,10 +589,7 @@ describe('POST /api/mcp (BY-05)', () => {
     }
   });
 
-  // A Bearer game key is recognised everywhere else ("only opens a session via
-  // start()"), so start must not answer it with "key is required" — that pair of
-  // refusals sends the agent back and forth with no way out.
-  it('routes a Bearer game key to the key argument instead of claiming none was sent', async () => {
+  it('gives a retired per-game key a direct reconnect instruction', async () => {
     const store = new InMemoryStore();
     await seedJob(store);
     app = await createApp(store);
@@ -612,7 +609,7 @@ describe('POST /api/mcp (BY-05)', () => {
     );
     expect(isError).toBe(true);
     const { error } = structured as { error: string };
-    expect(error).toMatch(/key argument/i);
+    expect(error).toMatch(/per-game keys are retired/i);
     expect(error).not.toMatch(/key is required/i);
   });
 
@@ -1236,7 +1233,7 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(brief.isError).toBe(true);
   });
 
-  it('start with a durable per-game key works', async () => {
+  it('retires durable per-game keys at start', async () => {
     const store = new InMemoryStore();
     await seedActiveSelfJob(store);
     await ensureGameKey(store);
@@ -1244,18 +1241,11 @@ describe('POST /api/mcp (BY-05)', () => {
     const sessionId = await initialize(app);
 
     const started = await callTool(app, 'start', { key: gameKey() }, { 'mcp-session-id': sessionId });
-    expect(started.isError).toBe(false);
-    expect(started.structured).toMatchObject({
-      jobId: ISSUE,
-      slug: 'comet-courier',
-      title: 'Comet Courier',
-    });
-    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
-    const brief = await callTool(app, 'get_brief', { sessionKey }, { 'mcp-session-id': sessionId });
-    expect(brief.isError).toBe(false);
+    expect(started.isError).toBe(true);
+    expect(JSON.stringify(started.structured)).toMatch(/per-game keys are retired/i);
   });
 
-  it('durable key still starts a new active round after the previous round closes', async () => {
+  it('does not resurrect a retired per-game key for a later round', async () => {
     const store = new InMemoryStore();
     await seedActiveSelfJob(store);
     await ensureGameKey(store);
@@ -1264,7 +1254,7 @@ describe('POST /api/mcp (BY-05)', () => {
     const durable = gameKey();
 
     const first = await callTool(app, 'start', { key: durable }, { 'mcp-session-id': sessionId });
-    expect(first.isError).toBe(false);
+    expect(first.isError).toBe(true);
 
     await store.recordJobTransition(ISSUE, {
       to: 'ready_for_review',
@@ -1289,8 +1279,8 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(keyRecord?.keyGeneration).toBe(1);
 
     const second = await callTool(app, 'start', { key: durable }, { 'mcp-session-id': sessionId });
-    expect(second.isError).toBe(false);
-    expect(second.structured).toMatchObject({ jobId: NEXT_ISSUE, slug: 'comet-courier' });
+    expect(second.isError).toBe(true);
+    expect(JSON.stringify(second.structured)).toMatch(/per-game keys are retired/i);
   });
 
   it('rejects a durable game key on write tools', async () => {
@@ -1308,7 +1298,7 @@ describe('POST /api/mcp (BY-05)', () => {
       { 'mcp-session-id': sessionId },
     );
     expect(viaSessionKey.isError).toBe(true);
-    expect(JSON.stringify(viaSessionKey.structured)).toMatch(/only opens a session via start/i);
+    expect(JSON.stringify(viaSessionKey.structured)).toMatch(/per-game keys are retired/i);
 
     const viaBearer = await callTool(
       app,
@@ -1317,7 +1307,7 @@ describe('POST /api/mcp (BY-05)', () => {
       { 'mcp-session-id': sessionId, authorization: `Bearer ${durable}` },
     );
     expect(viaBearer.isError).toBe(true);
-    expect(JSON.stringify(viaBearer.structured)).toMatch(/only opens a session via start/i);
+    expect(JSON.stringify(viaBearer.structured)).toMatch(/per-game keys are retired/i);
   });
 
   it('legacy round-scoped key still works end-to-end on start', async () => {

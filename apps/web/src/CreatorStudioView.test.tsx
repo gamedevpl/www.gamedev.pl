@@ -811,7 +811,8 @@ describe('CreatorStudioView', () => {
     });
     expect(keys?.getAttribute('aria-pressed')).toBe('true');
     expect(container.querySelector('[data-testid="studio-rail-pane-keys"]')).not.toBeNull();
-    expect(container.textContent).toMatch(/Creator key|legacy per-game key/i);
+    expect(container.textContent).toContain('Coding-agent key');
+    expect(container.textContent).not.toMatch(/legacy|per-game key/i);
 
     // Header Details always re-opens on Overview — not whatever pane was left selected.
     const details = Array.from(container.querySelectorAll('.studio-head-action')).find((button) =>
