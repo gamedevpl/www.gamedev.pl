@@ -23,6 +23,7 @@ import { registerGameReviewRoutes, type GameReviewRoutesOptions } from './game-r
 import { registerGameSourcesRoutes, type GameSourcesRoutesOptions } from './game-sources-routes.js';
 import { registerGameFollowRoutes, type GameFollowRoutesOptions } from './game-follow-routes.js';
 import { createFollowerFanout } from './game-follow-notify.js';
+import { registerProposalRoutes } from './proposal-routes.js';
 import { registerAccountDeletionRoutes, type AccountDeletionRoutesOptions } from './account-deletion-routes.js';
 import { registerCreatorStudioRoutes } from './creator-studio.js';
 import { registerEditorRoutes } from './editor-drafts.js';
@@ -57,7 +58,7 @@ import {
 import { registerScorecardRoutes, type ScorecardRoutesOptions } from './scorecard.js';
 import { createInternalAuthVerifierFromEnv } from './internal-auth.js';
 import { registerRefineRoute, type SpecRefiner } from './refine.js';
-import { InMemoryStore, type Store } from './store.js';
+import { BOT_UID_PREFIX, InMemoryStore, type Store } from './store.js';
 import { registerSubmissionRoutes, type SubmissionRoutesOptions } from './submissions.js';
 import { mintToken } from './submission-token.js';
 import { registerTelemetryRoutes, type TelemetryRoutesOptions } from './telemetry.js';
@@ -588,6 +589,44 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     assistant: options.editorAssistant ?? new VertexEditorAssistant(),
     codeLane: new VertexCodeLane(),
     contentChecker,
+  });
+
+  /**
+   * Proposals — the contribute-back exit. A change to a game somebody else owns,
+   * carried as a candidate version the proposer cannot publish.
+   *
+   * `adoptIntoJob` is the accept step's only side effect on the job world: it creates a
+   * job owned by the *target's* owner that already carries the gate-green version, so the
+   * owner publishes it through the ordinary route. Deliberately no dispatch — the change
+   * is already built, and handing it to an agent would rebuild what a human just approved.
+   */
+  await registerProposalRoutes(app, {
+    store,
+    gamesStore,
+    contentChecker,
+    adminUids,
+    adoptIntoJob: async ({ proposal, ownerUid }) => {
+      const source = await store.getSubmissionBySlug(proposal.targetSlug);
+      const at = new Date().toISOString();
+      const jobId = await store.allocateJobId();
+      // Owned by whoever holds the game, never by the proposer: this job is the owner's
+      // to publish, and a job on their slug owned by somebody else is a transfer.
+      await store.createSubmission(
+        jobId,
+        ownerUid ?? source?.ownerUid ?? BOT_UID_PREFIX + 'platform',
+        source?.title ?? proposal.targetSlug,
+      );
+      if (source?.locale) await store.setSubmissionLocale(jobId, source.locale);
+      await store.setSubmissionSlug(jobId, proposal.targetSlug);
+      await store.recordJobTransition(jobId, { to: 'queued', at, by: 'creator', reason: 'proposal_accepted' });
+      await store.recordJobTransition(jobId, { to: 'building', at, by: 'creator', reason: 'proposal_accepted' });
+      await store.setSubmissionDeliveredVersion(jobId, proposal.version!);
+      await store.recordJobTransition(jobId, { to: 'submitted', at, by: 'creator', reason: 'proposal_adopted' });
+      // Straight to review: the gate already ran on this exact version, and re-running it
+      // would ask the same question of the same bytes.
+      await store.recordJobTransition(jobId, { to: 'ready_for_review', at, by: 'gate', reason: 'gate_green' });
+      return { issueNumber: jobId };
+    },
   });
 
   // Publish-gated public identity. Building needs none of this; catalog bylines and

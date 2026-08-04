@@ -24,6 +24,8 @@
 // or serve any HTTP (see `proposal-routes.ts`). It is the domain layer both of those call.
 
 import { randomUUID } from 'node:crypto';
+import type { FastifyBaseLogger } from 'fastify';
+import { logModerationRejection } from './moderation-metrics.js';
 import type { ContentChecker } from './moderation.js';
 import type { GamesStore, SourceFile } from './games-store.js';
 import { ownerUidOf, resolveOwnerOfRecord, reviewerKindOf, type OwnerOfRecord } from './owner-of-record.js';
@@ -63,6 +65,14 @@ import { sanitizeCreatorText } from './submission-status.js';
  */
 export const PROPOSAL_NO_JOB = 0;
 
+/**
+ * Fallback when no logger was injected — a sweep or a test calling the domain layer
+ * directly. Dropping the line is right there: the rejection still reaches the caller, and
+ * inventing a console write from a library module would put request-shaped noise in
+ * contexts that have no request.
+ */
+const SILENT_LOG = { warn: () => {} } as unknown as FastifyBaseLogger;
+
 export const MAX_PROPOSAL_TITLE_LENGTH = 120;
 export const MIN_PROPOSAL_DESCRIPTION_LENGTH = 20;
 export const MAX_PROPOSAL_DESCRIPTION_LENGTH = 2000;
@@ -81,6 +91,15 @@ export interface ProposalDeps {
   store: Store;
   gamesStore: GamesStore;
   contentChecker?: ContentChecker;
+  /**
+   * Where moderation rejections are reported.
+   *
+   * Logged here rather than in the route because this is the layer that knows which field
+   * tripped and whose it was; a route can only say "something in that request". The repo's
+   * moderation-metrics guard enforces one report per rejection branch, and that guard is
+   * the reason the alert on rejection bursts can be trusted to see all of them.
+   */
+  log?: FastifyBaseLogger;
   now?: () => number;
 }
 
@@ -225,6 +244,11 @@ export async function openProposal(deps: ProposalDeps, input: OpenProposalInput)
   if (deps.contentChecker) {
     const verdict = await deps.contentChecker.checkFields([title, description]);
     if (!verdict.allowed) {
+      logModerationRejection(deps.log ?? SILENT_LOG, {
+        surface: 'proposal',
+        uid: input.proposerUid,
+        category: verdict.category,
+      });
       return { ok: false, status: 422, error: 'content_rejected', category: verdict.category ?? 'other' };
     }
   }
@@ -304,7 +328,8 @@ export async function reconcileProposalGate(deps: ProposalDeps, id: string): Pro
   return record;
 }
 
-export type DecisionResult = { ok: true; proposal: ProposalRecord } | { ok: false; status: number; error: string };
+export type DecisionResult =
+  { ok: true; proposal: ProposalRecord } | { ok: false; status: number; error: string; category?: string };
 
 /**
  * Accept a proposal: adopt its version and hand the owner a job they can publish.
@@ -380,7 +405,14 @@ export async function declineProposal(
     : undefined;
   if (note && deps.contentChecker) {
     const verdict = await deps.contentChecker.checkFields([note]);
-    if (!verdict.allowed) return { ok: false, status: 422, error: 'content_rejected' };
+    if (!verdict.allowed) {
+      logModerationRejection(deps.log ?? SILENT_LOG, {
+        surface: 'proposal',
+        uid: input.byUid ?? undefined,
+        category: verdict.category,
+      });
+      return { ok: false, status: 422, error: 'content_rejected', category: verdict.category ?? 'other' };
+    }
   }
 
   const at = new Date(now()).toISOString();
@@ -417,7 +449,14 @@ export async function requestProposalChanges(
   if (text.length < 2) return { ok: false, status: 400, error: 'text_too_short' };
   if (deps.contentChecker) {
     const verdict = await deps.contentChecker.checkFields([text]);
-    if (!verdict.allowed) return { ok: false, status: 422, error: 'content_rejected' };
+    if (!verdict.allowed) {
+      logModerationRejection(deps.log ?? SILENT_LOG, {
+        surface: 'proposal',
+        uid: input.byUid ?? undefined,
+        category: verdict.category,
+      });
+      return { ok: false, status: 422, error: 'content_rejected', category: verdict.category ?? 'other' };
+    }
   }
 
   const at = new Date(now()).toISOString();
