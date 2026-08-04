@@ -1229,7 +1229,12 @@ export async function registerSubmissionRoutes(
     }
 
     try {
-      await store.appendCreatorMessage(input.issueNumber, input.feedback);
+      // Record who typed this. An agent calling `continue_draft` writes its own summary
+      // of a conversation held somewhere else — usually in English, whatever the creator
+      // was speaking — so the thread must not present it as the creator's own words.
+      await store.appendCreatorMessage(input.issueNumber, input.feedback, {
+        origin: input.openedBy === 'agent' ? 'agent' : 'creator',
+      });
     } catch (queueError) {
       input.log.error({ err: queueError, issueNumber: input.issueNumber }, 'failed to queue continue_draft feedback');
       return { ok: false, reason: 'queue_failed' };
@@ -1811,6 +1816,7 @@ export async function registerSubmissionRoutes(
           revisions: messages.map((message) => ({
             text: stripPlaytestContext(message.text),
             createdAt: message.createdAt,
+            ...(message.origin === 'agent' ? { origin: 'agent' as const } : {}),
           })),
         };
       }
@@ -2271,17 +2277,27 @@ export async function registerSubmissionRoutes(
       return status;
     }
 
-    const { commits, checklist, note } = status.progress;
+    const { commits, checklist, note, revisions } = status.progress;
+    // Only the *relayed* revisions. A creator's own words are already in the language
+    // they chose to type them in, and running them through a translator would rewrite
+    // their message back at them. An agent's relay is the opposite case: it is written
+    // in whatever language the agent happened to be speaking, almost always English.
+    const relayed = revisions.map((revision, index) => ({ revision, index })).filter((r) => r.revision.origin);
     const sources = [
       ...commits.map((commit) => commit.message),
       ...checklist.map((item) => item.text),
       ...(note ? [note] : []),
+      ...relayed.map((r) => r.revision.text),
     ];
     if (sources.length === 0) {
       return status;
     }
 
     const translated = await translator.translate(sources, locale);
+    const relayedAt = commits.length + checklist.length + (note ? 1 : 0);
+    const relayedText = new Map(
+      relayed.map((r, offset) => [r.index, translated[relayedAt + offset] ?? r.revision.text]),
+    );
     return {
       ...status,
       progress: {
@@ -2292,6 +2308,10 @@ export async function registerSubmissionRoutes(
           text: translated[commits.length + index] ?? item.text,
         })),
         ...(note ? { note: translated[commits.length + checklist.length] ?? note } : {}),
+        revisions: revisions.map((revision, index) => {
+          const text = relayedText.get(index);
+          return text === undefined ? revision : { ...revision, text };
+        }),
       },
     };
   }

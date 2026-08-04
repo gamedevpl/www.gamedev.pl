@@ -582,6 +582,7 @@
       "quietHint": "The agent has been quiet for a while. Bigger games take longer — you can close this page, we'll notify you.",
       "yourRequest": "Your request",
       "yourRequestSending": "Your request · sending",
+      "relayedRequest": "Summarized by your agent",
       "agentSays": "Agent says",
       "steps": {
         "planning": "Planning",

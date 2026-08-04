@@ -30,7 +30,16 @@ export type BuildProgress = {
    * show a creator what they already asked for. Optional: an older API deploy
    * doesn't send it.
    */
-  revisions?: Array<{ text: string; createdAt: string }>;
+  revisions?: Array<{
+    text: string;
+    createdAt: string;
+    /**
+     * `'agent'` when an agent wrote the request on the creator's behalf rather than the
+     * creator typing it. Those get a "relayed by your agent" label instead of being
+     * presented as the creator's own words. Absent means the creator typed it.
+     */
+    origin?: 'agent';
+  }>;
 };
 
 /** One of the creator's games, as listed by GET /api/submissions/mine. */

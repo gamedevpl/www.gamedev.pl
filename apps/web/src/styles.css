@@ -4833,6 +4833,15 @@ a.user-name--profile:focus-visible {
   color: var(--text);
 }
 
+/* The kicker on the creator's side is a disclaimer, not a heading: it says an agent
+   wrote these words on their behalf. Turquoise is the agent voice elsewhere in the
+   thread and would make the quieter bubble the loud one, so this stays muted. */
+.studio-turn.is-mine .studio-turn-kicker {
+  color: var(--muted);
+  font-weight: 600;
+  letter-spacing: 0.4px;
+}
+
 .studio-turn.is-pending .studio-turn-body {
   opacity: 0.7;
 }

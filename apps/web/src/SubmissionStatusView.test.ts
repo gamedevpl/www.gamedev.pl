@@ -1294,6 +1294,54 @@ describe('SubmissionStatusView', () => {
     });
   });
 
+  it('says when a request on the creator’s side was written by their agent', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    // Both rows sit on the creator's side of the thread, because both are their request.
+    // Only one of them is in their own words; without the kicker the other reads as a
+    // message they wrote — which is how a Polish creator met an English summary of
+    // themselves.
+    const at = new Date().toISOString();
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'building',
+      builder: 'self',
+      events: [],
+      progress: {
+        headSha: 'sha',
+        commits: [],
+        checklist: [],
+        revisions: [
+          { text: 'Zrób paczki większe.', createdAt: at },
+          {
+            text: 'Zoom out the battlefield.',
+            createdAt: new Date(Date.parse(at) + 1000).toISOString(),
+            origin: 'agent',
+          },
+        ],
+      },
+    });
+    await i18n.changeLanguage('en');
+    window.history.pushState(null, '', '/studio/relayed/thread');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'relayed', embedded: true }));
+      await flushEffects();
+      await flushEffects();
+    });
+
+    const turns = [...container.querySelectorAll('.studio-turn.is-mine')];
+    expect(turns).toHaveLength(2);
+    expect(turns[0].querySelector('.studio-turn-kicker')).toBeNull();
+    expect(turns[1].querySelector('.studio-turn-kicker')?.textContent).toBe('Summarized by your agent');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it('lets the creator dismiss a stall chip above the composer', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     mockedGetSubmissionStatus.mockResolvedValue({

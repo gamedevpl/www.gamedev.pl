@@ -154,6 +154,27 @@ describe('MCP continue_draft', () => {
     expect(started.structured).toMatchObject({ jobId: DRAFT_ISSUE, slug: SLUG });
   });
 
+  it('records the relayed feedback as the agent’s words, not the creator’s', async () => {
+    // The agent writes this sentence; the creator said something else, somewhere else.
+    // Studio shows it on the creator's side of the thread, so it has to carry who typed
+    // it — otherwise a paraphrase reads as a message the creator wrote themselves.
+    const store = new InMemoryStore();
+    await seedGreenDraft(store);
+    app = await createApp(store);
+
+    await callTool(app, 'continue_draft', {
+      key: gameKey(),
+      feedback: 'Make the paddle wider and add a second ball.',
+    });
+
+    const messages = await store.listCreatorMessages(DRAFT_ISSUE);
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatchObject({
+      text: 'Make the paddle wider and add a second ball.',
+      origin: 'agent',
+    });
+  });
+
   it('is idempotent while a round is already open', async () => {
     const store = new InMemoryStore();
     await seedGreenDraft(store);
