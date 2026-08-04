@@ -3025,7 +3025,7 @@ export async function registerSubmissionRoutes(
             })
           : null;
       const handoffReason =
-        handoffStall === 'ended'
+        record?.agentEndedAt || handoffStall === 'ended'
           ? 'agent_ended_handoff'
           : builderChanging
             ? 'quiet_builder_handoff'
