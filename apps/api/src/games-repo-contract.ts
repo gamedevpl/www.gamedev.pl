@@ -80,7 +80,7 @@ export const GAME_KIT_MODULES = [
 export type GameKitModuleName = (typeof GAME_KIT_MODULES)[number];
 
 /** Author-facing budget — games-repo Check 4 `GAME_BUDGET_BYTES`. */
-export const GAME_BUDGET_BYTES = 212 * 1024;
+export const GAME_BUDGET_BYTES = 232 * 1024;
 
 /**
  * Raw TypeScript source-graph ceiling for the bake/play/seed bundlers
@@ -88,7 +88,7 @@ export const GAME_BUDGET_BYTES = 212 * 1024;
  * `seed-bundle.ts`). Lockstep with games-repo Check 4 `SOURCE_GRAPH_BUDGET_BYTES`.
  *
  * Distinct from {@link GAME_BUDGET_BYTES}: the assembled author payload can stay
- * under 212 KiB while comments and types push the `.ts` tree higher. Last moved
+ * under 232 KiB while comments and types push the `.ts` tree higher. Last moved
  * 200 → 300 KiB when carjack-city (~247 KiB source) stranded every snapshot publish.
  */
 export const SOURCE_GRAPH_BUDGET_BYTES = 300 * 1024;
@@ -97,18 +97,23 @@ export const SOURCE_GRAPH_BUDGET_BYTES = 300 * 1024;
  * Platform half of the serve cap — games-repo `GAMEKIT_PLATFORM_BYTES` /
  * `assemble-contract.json` `platformCeilingBytes`. Together with
  * {@link GAME_BUDGET_BYTES} this must equal games-repo `MAX_BUNDLE_BYTES`
- * (547_088, matching `maxProjectBytes`). Not a round KiB.
+ * (567_568, matching `maxProjectBytes`). Not a round KiB.
  *
  * One derived ceiling, not a sum of per-feature constants (games-repo #281). Check 4
  * over there bills each author for measured `assembled − platformBytes` against the
- * 212 KiB author budget; this number is serve-compat only so a game that clears that
+ * 232 KiB author budget; this number is serve-compat only so a game that clears that
  * gate is not refused here. Feature-by-feature archaeology lives in the games repo's
  * `docs/platform-byte-ledger.md`. Raise this when measurement shows a passing game
  * would exceed it — do not re-split it into named allowances on this side either.
  *
- * The author budget last moved for `carjack-city`'s organic incidents and believable
- * service dispatch: its author payload measures 208_829 bytes. Keep the full flagship
- * implementation. 200 → 212 KiB, and the serve cap 534_800 → 547_088.
+ * The author budget last moved for `carjack-city`'s active-run persistence on top of
+ * the organic incident simulation: the assembled project measured 563_200 bytes and
+ * stranded snapshot publish against the 547_088 serve cap (run 30928592522). Games-repo
+ * #479 already raised Check 4 to 232 KiB; keep the full flagship implementation.
+ * 212 → 232 KiB, and the serve cap 547_088 → 567_568.
+ *
+ * Before that, organic incidents and believable service dispatch: author payload
+ * 208_829 bytes. 200 → 212 KiB, serve cap 534_800 → 547_088.
  *
  * Before that, `carjack-city`'s day/night and reactive-world work moved the platform
  * ceiling: its selected platform measures 327_252 bytes while the game remained within

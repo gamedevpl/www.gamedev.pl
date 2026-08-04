@@ -26,9 +26,9 @@
     "voice",
     "editor"
   ],
-  "authorBudgetBytes": 217088,
+  "authorBudgetBytes": 237568,
   "platformCeilingBytes": 330000,
-  "maxProjectBytes": 547088,
+  "maxProjectBytes": 567568,
   "audio": {
     "musicField": "string",
     "musicTracksField": "string[]",
