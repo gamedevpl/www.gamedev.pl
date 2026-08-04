@@ -7,6 +7,7 @@ import { useEditorDraftBridge } from './editorBridge.js';
 import { PixelIcon } from './PixelIcon.js';
 import {
   getSubmissionPreview,
+  getSubmissionStatus,
   submitFeedback,
   type FeedbackContext,
   type SubmissionApiError,
@@ -49,6 +50,8 @@ const DEV_PLAYTEST_HTML = `<!doctype html><html><head><meta charset="utf-8"><tit
 
 /** How often to retry `/preview` while the gate is still assembling HTML (HTTP 409). */
 export const PREVIEW_POLL_MS = 3000;
+/** Give up waiting so a permanent 409 (gate red, no artifact) does not poll forever. */
+export const PREVIEW_WAIT_MAX_MS = 10 * 60 * 1000;
 
 type StudioPlaytestPanelProps = {
   game: StudioGame;
@@ -141,6 +144,7 @@ export function StudioPlaytestPanel({ game, published, onExit, shelfOpen }: Stud
   useEffect(() => {
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    const waitStartedAt = Date.now();
     setHtml(null);
     setLoadError(null);
     setWaitingForPreview(false);
@@ -152,6 +156,23 @@ export function StudioPlaytestPanel({ game, published, onExit, shelfOpen }: Stud
       setWaitingForPreview(false);
       setLoadError(message);
       setLoading(false);
+    };
+
+    /**
+     * 409 alone is ambiguous: gate still assembling, or gate already red with no
+     * artifact. Status settles the latter — Play has unmounted the thread poller.
+     */
+    const previewStillComing = async (): Promise<boolean> => {
+      if (Date.now() - waitStartedAt >= PREVIEW_WAIT_MAX_MS) return false;
+      try {
+        const job = await getSubmissionStatus(game.token);
+        if (job.preview?.slug) return true;
+        if (job.status === 'needs_changes' || job.status === 'abandoned') return false;
+        if (job.failure) return false;
+      } catch {
+        // Status probe failed — keep waiting on the preview 409 itself.
+      }
+      return Date.now() - waitStartedAt < PREVIEW_WAIT_MAX_MS;
     };
 
     const loadOnce = async (): Promise<'done' | 'retry'> => {
@@ -171,7 +192,9 @@ export function StudioPlaytestPanel({ game, published, onExit, shelfOpen }: Stud
         const status = (err as SubmissionApiError).status;
         // 409 = sources landed, gate still assembling preview.html. Keep waiting —
         // a one-shot error here is what made "Play" look broken right after submit.
-        if (!published && status === 409) {
+        // Stop when the round is already terminal with no artifact (or we timed out).
+        if (!published && status === 409 && (await previewStillComing())) {
+          if (cancelled) return 'done';
           setWaitingForPreview(true);
           setLoadError(null);
           setLoading(true);

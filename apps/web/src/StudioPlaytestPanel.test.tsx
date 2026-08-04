@@ -19,6 +19,7 @@ vi.mock('./submissionApi.js', () => ({
   getSubmissionPreview: vi.fn(async () => ({
     html: '<!doctype html><html><body><canvas id="game"></canvas></body></html>',
   })),
+  getSubmissionStatus: vi.fn(async () => ({ status: 'building' })),
   submitFeedback: vi.fn(),
 }));
 
@@ -142,7 +143,7 @@ describe('StudioPlaytestPanel theater', () => {
     await i18n.changeLanguage('en');
     vi.useFakeTimers();
 
-    const { getSubmissionPreview } = await import('./submissionApi.js');
+    const { getSubmissionPreview, getSubmissionStatus } = await import('./submissionApi.js');
     const previewHtml = '<!doctype html><html><body><canvas id="game"></canvas></body></html>';
     vi.mocked(getSubmissionPreview)
       .mockRejectedValueOnce(Object.assign(new Error('no preview available'), { status: 409 }))
@@ -151,6 +152,7 @@ describe('StudioPlaytestPanel theater', () => {
         title: 'Sky Dodge',
         html: previewHtml,
       });
+    vi.mocked(getSubmissionStatus).mockResolvedValue({ status: 'building' });
 
     const onExit = vi.fn();
     const container = document.createElement('div');
@@ -170,6 +172,7 @@ describe('StudioPlaytestPanel theater', () => {
     expect(container.textContent).toContain('Automated checks are assembling your draft');
     expect(container.textContent).not.toContain('No playable build is ready yet');
     expect(vi.mocked(getSubmissionPreview)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(getSubmissionStatus)).toHaveBeenCalled();
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(PREVIEW_POLL_MS);
@@ -183,6 +186,42 @@ describe('StudioPlaytestPanel theater', () => {
 
     root.unmount();
     vi.useRealTimers();
+  });
+
+  it('stops waiting on 409 when the round is already needs_changes with no preview', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+
+    const { getSubmissionPreview, getSubmissionStatus } = await import('./submissionApi.js');
+    vi.mocked(getSubmissionPreview).mockRejectedValue(
+      Object.assign(new Error('no preview available'), { status: 409 }),
+    );
+    vi.mocked(getSubmissionStatus).mockResolvedValue({
+      status: 'needs_changes',
+      failure: { reason: 'gate_red' },
+    });
+
+    const onExit = vi.fn();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const unpublished: StudioGame = { ...game, lastKnownStatus: 'building', slug: undefined, publishedAt: undefined };
+
+    await act(async () => {
+      root.render(createElement(StudioPlaytestPanel, { game: unpublished, published: false, onExit }));
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('.studio-playtest-theater')).toBeNull();
+    expect(container.textContent).toContain('No playable build is ready yet');
+    expect(container.textContent).not.toContain('Automated checks are assembling your draft');
+    expect(vi.mocked(getSubmissionPreview)).toHaveBeenCalledTimes(1);
+
+    root.unmount();
   });
 
   it('does not exit on Escape when shelfOpen is true', async () => {
