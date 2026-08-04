@@ -910,6 +910,7 @@ describe('agent build channel', () => {
           };
         },
         getStagedSourceFiles: async () => [...staged.entries()].map(([path, content]) => ({ path, content })),
+        getStagedSourceFile: async (input: { path: string }) => staged.get(input.path) ?? null,
         clearStagedSources: async (input?: { paths?: string[] }) => {
           if (!input?.paths?.length) {
             const cleared = staged.size;
@@ -1468,6 +1469,95 @@ describe('agent build channel', () => {
       );
       // Finalize clears the buffer so the next iterate starts clean.
       expect(staged.size).toBe(0);
+    });
+
+    it('patches a delivery file into staging and fromStaged overlays the rest', async () => {
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      await store.setSubmissionSlug(ISSUE, 'comet-courier');
+      await store.setSubmissionPreviewVersion(ISSUE, 'v1');
+      const { gamesStore, stored, staged } = stubGamesStore();
+      const delivered: Record<string, string> = Object.fromEntries(
+        MINIMAL.filter((f) => f.path !== 'TRACE.json' && f.path !== 'PLAYTEST.json').map((f) => [f.path, f.content]),
+      );
+      delivered['game/render.ts'] = 'export function paint() {\n  drawSky();\n}\n';
+      app = await createApp(store, {
+        gamesStore: {
+          ...gamesStore,
+          getManifest: async () => ({ sourceFiles: Object.keys(delivered) }),
+          getSourceFile: async (_slug: string, _version: string, path: string) => delivered[path] ?? null,
+        } as unknown as GamesStore,
+      });
+
+      const patched = await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/sources/stage/patch',
+        headers: agentHeaders(),
+        payload: {
+          path: 'game/render.ts',
+          oldString: 'drawSky();',
+          newString: 'drawSky();\n  drawHud();',
+        },
+      });
+      expect(patched.statusCode).toBe(200);
+      expect(patched.json()).toMatchObject({
+        accepted: true,
+        path: 'game/render.ts',
+        replacements: 1,
+        baseFrom: 'delivery',
+      });
+      expect(staged.get('game/render.ts')).toContain('drawHud()');
+      expect(staged.size).toBe(1);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/sources',
+        headers: agentHeaders(),
+        payload: {
+          slug: 'comet-courier',
+          fromStaged: true,
+          kitEngineRef: 'abcdef1234567890',
+          mode: 'preview',
+        },
+      });
+      expect(response.statusCode).toBe(200);
+      const files = stored[0]?.files as Array<{ path: string; content: string }>;
+      expect(files.find((f) => f.path === 'game/render.ts')?.content).toContain('drawHud()');
+      expect(files.find((f) => f.path === 'game.ts')?.content).toBe(delivered['game.ts']);
+      expect(staged.size).toBe(0);
+    });
+
+    it('refuses a patch whose oldString is missing or ambiguous', async () => {
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      const { gamesStore, staged } = stubGamesStore();
+      app = await createApp(store, { gamesStore });
+
+      await app.inject({
+        method: 'PUT',
+        url: '/api/agent/build/sources/stage',
+        headers: agentHeaders(),
+        payload: { slug: 'comet-courier', path: 'game.ts', content: 'aa aa' },
+      });
+
+      const missing = await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/sources/stage/patch',
+        headers: agentHeaders(),
+        payload: { path: 'game.ts', oldString: 'zz', newString: 'yy' },
+      });
+      expect(missing.statusCode).toBe(400);
+      expect(missing.json().error).toMatch(/not found/i);
+
+      const ambiguous = await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/sources/stage/patch',
+        headers: agentHeaders(),
+        payload: { path: 'game.ts', oldString: 'aa', newString: 'bb' },
+      });
+      expect(ambiguous.statusCode).toBe(400);
+      expect(ambiguous.json().error).toMatch(/more than once/i);
+      expect(staged.get('game.ts')).toBe('aa aa');
     });
 
     /**

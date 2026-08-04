@@ -320,6 +320,7 @@ describe('POST /api/mcp (BY-05)', () => {
         'report_progress',
         'send_screenshot',
         'stage_source_file',
+        'patch_source_file',
         'list_staged_sources',
         'clear_staged_sources',
         'submit_sources',
@@ -469,6 +470,7 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(joined).toMatch(/read_kit_files|list_kit_files|read_kit_file/);
     expect(joined).toMatch(/send_screenshot/);
     expect(joined).toMatch(/stage_source_file|fromStaged/);
+    expect(joined).toMatch(/patch_source_file/);
     expect(joined).toMatch(/submit_sources/);
     expect(joined).toMatch(/mode:\s*"preview"|mode=preview/i);
     expect(joined).toMatch(/mode:\s*"publish"|mode=publish/i);
@@ -1087,9 +1089,7 @@ describe('POST /api/mcp (BY-05)', () => {
       stop: false,
       reason: 'no_delivery',
     });
-    expect(String((verdict.structured as { summary?: string }).summary)).toMatch(
-      /continue building.*submit_sources/i,
-    );
+    expect(String((verdict.structured as { summary?: string }).summary)).toMatch(/continue building.*submit_sources/i);
   });
 
   it('makes pending get_gate_verdict a one-shot stop and warns if the client ignores it', async () => {
@@ -1680,6 +1680,7 @@ describe('POST /api/mcp (BY-05)', () => {
       'report_progress',
       'send_screenshot',
       'stage_source_file',
+      'patch_source_file',
       'clear_staged_sources',
       'submit_sources',
       'end',

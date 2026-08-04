@@ -315,6 +315,12 @@ describe('GCS games store', () => {
     const listed = await store.listStagedSources({ slug: 'g', issueNumber: 7, roundGeneration: 1 });
     expect(listed.files.map((f) => f.path).sort()).toEqual(draft.map((f) => f.path).sort());
     expect(objects.has('games/g/staging/7/g1/source/game.ts')).toBe(true);
+    expect(await store.getStagedSourceFile({ slug: 'g', issueNumber: 7, roundGeneration: 1, path: 'game.ts' })).toBe(
+      draft.find((f) => f.path === 'game.ts')!.content,
+    );
+    expect(
+      await store.getStagedSourceFile({ slug: 'g', issueNumber: 7, roundGeneration: 1, path: 'missing.ts' }),
+    ).toBeNull();
 
     const assembled = await store.getStagedSourceFiles({ slug: 'g', issueNumber: 7, roundGeneration: 1 });
     const { version } = await store.putCandidateSources({

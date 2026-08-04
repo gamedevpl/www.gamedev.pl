@@ -21,6 +21,7 @@ describe('mcp presence pulses', () => {
     expect(shouldPulseMcpPresence('continue_draft')).toBe(false);
     expect(shouldPulseMcpPresence('open_round')).toBe(false);
     expect(shouldPulseMcpPresence('stage_source_file')).toBe(false);
+    expect(shouldPulseMcpPresence('patch_source_file')).toBe(false);
     expect(shouldPulseMcpPresence('clear_staged_sources')).toBe(false);
     // Inherited Object keys must not count as tools.
     expect(shouldPulseMcpPresence('toString')).toBe(false);

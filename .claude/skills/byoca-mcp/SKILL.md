@@ -17,9 +17,15 @@ Source of truth: `SESSION_WORKFLOW` + `BEHAVIOURAL_CONTRACT` in
 
 1. `start` → `get_brief` / `get_seed` / `get_sources` / `get_kit` as needed
 2. Build; `report_progress`; `send_screenshot` when something draws
-3. Prefer `stage_source_file` then `submit_sources({ fromStaged: true, mode, kitEngineRef })`
+3. Prefer `stage_source_file` (new/full rewrite) or `patch_source_file` (exact edit) then
+   `submit_sources({ fromStaged: true, mode, kitEngineRef })`
+   - **Edits:** `patch_source_file({ path, oldString, newString })` — do not re-emit whole
+     `render.ts` / `model.ts` files through `stage_source_file`
+   - **Modules:** keep `game/*.ts` cohesive and modest; split growing paint/HUD/art or
+     model tables so later patches stay small (chat-thin clients pay per token)
+   - `fromStaged` overlays onto the latest delivery/seed — stage only changed paths
    - `mode=preview` while iterating; `mode=publish` to seal (TRACE + PLAYTEST required)
-   - Each successful stage refreshes Studio’s heartbeat (so a long staging loop is not
+   - Each successful stage/patch refreshes Studio’s heartbeat (so a long staging loop is not
      mistaken for quiet / offline)
    - Each stage may also publish a **live preview** of the buffer — see below
 4. **Prefer `end` after the last successful `submit_sources`** if you will not deliver
@@ -122,14 +128,14 @@ cache), so a resume cannot keep showing “finished this round” next to live p
 
 Merged by `applySessionNudges` / submit handler. Act, then continue:
 
-| Code                | Meaning                                                          |
-| ------------------- | ---------------------------------------------------------------- |
-| `call_end`          | Call `end` when finished iterating this round                    |
-| `gate_not_started`  | Delivery ok but Cloud Build did not start — no preview yet       |
+| Code                | Meaning                                                                          |
+| ------------------- | -------------------------------------------------------------------------------- |
+| `call_end`          | Call `end` when finished iterating this round                                    |
+| `gate_not_started`  | Delivery ok but Cloud Build did not start — no preview yet                       |
 | `gate_poll_backoff` | Repeated one-shot gate check — stop checking; build/submit or honour `stop:true` |
-| `progress_stale`    | Call `report_progress`                                           |
-| `inbox_pending`     | `read_inbox` → apply → `ack_inbox`                               |
-| `seed_unread`       | Call `get_seed` before scaffolding from the kit                  |
+| `progress_stale`    | Call `report_progress`                                                           |
+| `inbox_pending`     | `read_inbox` → apply → `ack_inbox`                                               |
+| `seed_unread`       | Call `get_seed` before scaffolding from the kit                                  |
 
 ## Builder handoff (Studio)
 
