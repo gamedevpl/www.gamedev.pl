@@ -196,9 +196,10 @@ const BuildSourcesInputSchema = z
     /**
      * Re-deliver the job's latest candidate (previewVersion, then deliveredVersion)
      * from the games store without the agent re-uploading every path. Built for
-     * `kit_outdated`: get_kit → submit_sources({ fromLatestDelivery:true, kitEngineRef })
+     * `kit_outdated`: get_kit → submit_sources({ fromLatestDelivery:true, mode, kitEngineRef })
      * with optional files[] overlays for paths that actually changed. Mutually exclusive
-     * with fromStaged.
+     * with fromStaged. When mode is omitted with fromLatestDelivery, the previous
+     * candidate's deliveryMode is reused (preview stays preview).
      */
     fromLatestDelivery: z.boolean().optional(),
     /**
@@ -214,9 +215,10 @@ const BuildSourcesInputSchema = z
       .optional(),
     /**
      * Preview: typecheck→smoke→build, TRACE/PLAYTEST optional, Studio-playable only.
-     * Publish (default): full gate; TRACE/PLAYTEST required. Keeps `npm run submit` safe.
+     * Publish: full gate; TRACE/PLAYTEST required. Default when omitted is publish,
+     * except with fromLatestDelivery — then the previous candidate's lane is reused.
      */
-    mode: z.enum(['preview', 'publish']).default('publish'),
+    mode: z.enum(['preview', 'publish']).optional(),
   })
   .superRefine((value, ctx) => {
     if (value.fromStaged && value.fromLatestDelivery) {
@@ -1132,7 +1134,11 @@ export async function registerAgentChannelRoutes(
         // and `canTransition('queued','submitted')` is false, so the protective
         // transition was skipped and the job stayed `building` (CP-1 double-close).
         const stateAfterSignal = await markBuildingFromChannel(issueNumber, record);
-        const mode: DeliveryMode = parsed.data.mode === 'preview' ? 'preview' : 'publish';
+        // Explicit mode wins. Omitting mode defaults to publish — except
+        // fromLatestDelivery, which reuses the previous candidate's lane so a
+        // kit_outdated preview recovery does not suddenly demand TRACE/PLAYTEST.
+        let mode: DeliveryMode | undefined =
+          parsed.data.mode === 'preview' || parsed.data.mode === 'publish' ? parsed.data.mode : undefined;
         const roundGeneration = store
           ? ((await store.ensureRoundGeneration(issueNumber)) ?? record.roundGeneration ?? 1)
           : (record.roundGeneration ?? 1);
@@ -1148,6 +1154,9 @@ export async function registerAgentChannelRoutes(
           const manifest = await options.gamesStore.getManifest(slug, version);
           if (!manifest) {
             return reply.status(502).send({ error: 'the latest delivery could not be read back' });
+          }
+          if (!mode) {
+            mode = manifest.deliveryMode === 'preview' ? 'preview' : 'publish';
           }
           const loaded = await Promise.all(
             manifest.sourceFiles.map(async (path) => ({
@@ -1186,6 +1195,7 @@ export async function registerAgentChannelRoutes(
           for (const file of files) byPath.set(file.path, file.content);
           files = [...byPath.entries()].map(([path, content]) => ({ path, content }));
         }
+        mode ??= 'publish';
 
         const { version } = await options.gamesStore.putCandidateSources({
           slug,

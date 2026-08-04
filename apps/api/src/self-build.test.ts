@@ -68,9 +68,18 @@ function stubGamesStore(options?: {
     issueNumber: number;
     backend?: string;
     kitEngineRef?: string;
+    mode?: 'preview' | 'publish';
     files: unknown[];
   }> = [];
-  const versions = new Map<string, { files: typeof MINIMAL_FILES; backend?: string; kitEngineRef?: string }>();
+  const versions = new Map<
+    string,
+    {
+      files: typeof MINIMAL_FILES;
+      backend?: string;
+      kitEngineRef?: string;
+      deliveryMode?: 'preview' | 'publish';
+    }
+  >();
   const derived = new Map<string, Buffer>();
   const gamesStore = {
     putCandidateSources: async (input: {
@@ -79,6 +88,7 @@ function stubGamesStore(options?: {
       files: typeof MINIMAL_FILES;
       backend?: string;
       kitEngineRef?: string;
+      mode?: 'preview' | 'publish';
     }) => {
       stored.push(input);
       const version = `v${stored.length}`;
@@ -86,6 +96,7 @@ function stubGamesStore(options?: {
         files: input.files,
         backend: input.backend,
         kitEngineRef: input.kitEngineRef,
+        deliveryMode: input.mode === 'preview' ? 'preview' : 'publish',
       });
       return {
         version,
@@ -96,6 +107,7 @@ function stubGamesStore(options?: {
           issueNumber: input.issueNumber,
           backend: input.backend,
           kitEngineRef: input.kitEngineRef,
+          deliveryMode: input.mode === 'preview' ? 'preview' : 'publish',
           sourceFiles: input.files.map((f) => f.path),
         },
       };
@@ -110,6 +122,7 @@ function stubGamesStore(options?: {
         issueNumber: 0,
         backend: hit.backend,
         kitEngineRef: hit.kitEngineRef,
+        deliveryMode: hit.deliveryMode,
         sourceFiles: hit.files.map((f) => f.path),
         ...(options?.gateGreen !== undefined
           ? { gate: { green: options.gateGreen, ranAt: new Date().toISOString() } }
@@ -325,6 +338,7 @@ describe('self builder (BY-02)', () => {
       headers: authHeaders(),
       payload: { title: 'Reuse Delivery', concept: CONCEPT, builder: 'self' },
     });
+    expect(submit.statusCode).toBe(200);
     const slug = submit.json().slug as string;
     let issueNumber = 0;
     await vi.waitFor(async () => {
@@ -354,14 +368,62 @@ describe('self builder (BY-02)', () => {
       },
     });
     expect(reused.statusCode).toBe(200);
-    expect(reused.json()).toMatchObject({ accepted: true });
+    expect(reused.json()).toMatchObject({ accepted: true, mode: 'preview' });
     expect(stored).toHaveLength(2);
     expect(stored[1]?.kitEngineRef).toBe(nextKit);
+    expect(stored[1]?.mode).toBe('preview');
     const secondFiles = stored[1]?.files as Array<{ path: string; content: string }>;
     expect(secondFiles.find((f) => f.path === 'SPEC.md')?.content).toBe('# Patched only\n');
     expect(secondFiles.find((f) => f.path === 'game.ts')?.content).toBe(
       MINIMAL_FILES.find((f) => f.path === 'game.ts')!.content,
     );
+  });
+
+  it('fromLatestDelivery without mode reuses the previous candidate lane', async () => {
+    const { gamesStore, stored } = stubGamesStore();
+    const created = await createApp({ gamesStore });
+    app = created.app;
+    const { store } = created;
+
+    const submit = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders(),
+      payload: { title: 'Infer Preview Lane', concept: CONCEPT, builder: 'self' },
+    });
+    expect(submit.statusCode).toBe(200);
+    const slug = submit.json().slug as string;
+    let issueNumber = 0;
+    await vi.waitFor(async () => {
+      issueNumber = (await store.listSubmissionsByOwner('g:creator'))[0]!.issueNumber;
+    });
+
+    // Preview candidates may omit TRACE/PLAYTEST — kit_outdated recovery must not
+    // silently flip to publish and 400 on those seals.
+    const previewOnly = MINIMAL_FILES.filter((f) => f.path !== 'TRACE.json' && f.path !== 'PLAYTEST.json');
+    const first = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/sources',
+      headers: agentHeaders(issueNumber),
+      payload: { slug, files: previewOnly, kitEngineRef: KIT_REF, mode: 'preview' },
+    });
+    expect(first.statusCode).toBe(200);
+    expect(first.json()).toMatchObject({ accepted: true, mode: 'preview' });
+
+    const reused = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/sources',
+      headers: agentHeaders(issueNumber),
+      payload: {
+        slug,
+        fromLatestDelivery: true,
+        kitEngineRef: 'fedcba0987654321',
+        // mode omitted on purpose — must stay preview
+      },
+    });
+    expect(reused.statusCode).toBe(200);
+    expect(reused.json()).toMatchObject({ accepted: true, mode: 'preview' });
+    expect(stored[1]?.mode).toBe('preview');
   });
 
   it('rejects a self-build delivery that omits kitEngineRef', async () => {

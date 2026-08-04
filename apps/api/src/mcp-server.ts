@@ -2756,9 +2756,10 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       },
       description:
         `Deliver game sources. Prefer stage_source_file per path then fromStaged=true (avoids huge tool JSON). ` +
-        `On kit_outdated: get_kit then fromLatestDelivery=true with the new kitEngineRef — do NOT re-upload the whole tree. ` +
+        `On kit_outdated: get_kit then fromLatestDelivery=true with the same mode and new kitEngineRef — do NOT re-upload the whole tree. ` +
         `mode=preview (iterate): TRACE/PLAYTEST not required; runs typecheck→smoke→build; Studio gets a draft. ` +
-        `mode=publish (default, seal): TRACE.json + PLAYTEST.json required; full gate; only publish green ends the round. ` +
+        `mode=publish (seal): TRACE.json + PLAYTEST.json required; full gate; only publish green ends the round. ` +
+        `Omitting mode defaults to publish, except with fromLatestDelivery (reuses the previous candidate's lane). ` +
         `files[{path, content, encoding utf8|base64}] optional when fromStaged/fromLatestDelivery (inline paths override); ≤${MAX_SUBMIT_FILES}; kitEngineRef required. ` +
         'Subject to delivery cap and filename allowlist. Reply includes stop and pendingMessages. ' +
         'gateStarted is true when Cloud Build accepted the gate create — not merely when the upload was accepted. ' +
@@ -2778,8 +2779,9 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             type: 'boolean',
             description:
               'Re-deliver the job’s latest candidate from the store (no re-upload). Use after kit_outdated: ' +
-              'get_kit → submit_sources({ fromLatestDelivery:true, kitEngineRef }). Optional files[] overlay only ' +
-              'the paths you changed. Not with fromStaged.',
+              'get_kit → submit_sources({ fromLatestDelivery:true, mode, kitEngineRef }). Pass the same mode ' +
+              'as the refused delivery (preview stays preview); if mode is omitted the previous lane is inferred. ' +
+              'Optional files[] overlay only the paths you changed. Not with fromStaged.',
           },
           files: {
             type: 'array',
@@ -2802,7 +2804,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             type: 'string',
             enum: ['preview', 'publish'],
             description:
-              'preview = iterate without TRACE (Studio draft). publish = sealed candidate (TRACE required; default).',
+              'preview = iterate without TRACE (Studio draft). publish = sealed candidate (TRACE required). ' +
+              'Default publish when omitted, except fromLatestDelivery reuses the previous candidate lane.',
           },
           slug: { type: 'string' },
           note: { type: 'string' },
@@ -2846,7 +2849,10 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           return toolErr('kitEngineRef is required — send the engineRef from get_kit / kit.json');
         }
 
-        const mode = args.mode === 'preview' ? 'preview' : 'publish';
+        // Pass mode through only when the agent set it. Omitting lets the channel infer
+        // the previous candidate's lane for fromLatestDelivery (preview kit_outdated
+        // recovery must not suddenly demand TRACE).
+        const mode = args.mode === 'preview' || args.mode === 'publish' ? args.mode : undefined;
 
         const decodedFiles: Array<{ path: string; content: string }> = [];
         for (const file of inlineFiles) {
@@ -2873,7 +2879,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           ...(fromStaged ? { fromStaged: true } : {}),
           ...(fromLatestDelivery ? { fromLatestDelivery: true } : {}),
           kitEngineRef,
-          mode,
+          ...(mode ? { mode } : {}),
         });
         const body = res.json() as {
           error?: string;
@@ -3018,8 +3024,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         'Poll the gate verdict for a delivery (default: latest). Preview lane: preview_passed / preview_failed ' +
         '(does not end the round). Publish lane: green / red / kit_outdated — only green ends the round. ' +
         'Verdicts typically land in 2–5 minutes; poll every ~30s. kit_outdated is terminal — stop polling, ' +
-        're-run get_kit, then submit_sources({ fromLatestDelivery: true, kitEngineRef }) ' +
-        '(do not re-upload the whole tree; do not wait for green/red). ' +
+        're-run get_kit, then submit_sources({ fromLatestDelivery: true, mode, kitEngineRef }) ' +
+        '(same mode as the refused delivery; omit mode only to reuse that lane; do not re-upload the whole tree; do not wait for green/red). ' +
         'Terminal receipt: still readable after the round closes ' +
         "when your capability's generation owns that delivery (generation may be exactly one behind current), " +
         'so the verdict stays readable if the round closes between polls. ' +

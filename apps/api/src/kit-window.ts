@@ -65,8 +65,9 @@ export function kitOutdatedReport(kitEngineRef: string, registry: KitRegistry): 
   return (
     `kit_outdated: delivery was built against kitEngineRef=${kitEngineRef}, which is ` +
     `outside the supported window (${window}). Re-run get_kit for a fresh engineRef, then ` +
-    `submit_sources({ fromLatestDelivery: true, mode, kitEngineRef }) — do not re-stage or ` +
-    `re-upload the whole tree through the model. Only pass files[] for paths you actually ` +
-    `changed for the new kit.`
+    `submit_sources({ fromLatestDelivery: true, mode, kitEngineRef }) — pass the same mode ` +
+    `as this delivery (preview stays preview); omit mode only to reuse that lane. Do not ` +
+    `re-stage or re-upload the whole tree through the model. Only pass files[] for paths ` +
+    `you actually changed for the new kit.`
   );
 }

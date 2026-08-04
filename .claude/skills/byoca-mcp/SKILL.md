@@ -29,8 +29,9 @@ Source of truth: `SESSION_WORKFLOW` + `BEHAVIOURAL_CONTRACT` in
 When the gate returns `kit_outdated` (or soft copy says the kit rotated):
 
 1. `get_kit` for a fresh `engineRef` only — do not dump the kit into context
-2. `submit_sources({ fromLatestDelivery: true, mode, kitEngineRef })` — server copies the
-   last candidate; optional `files[]` only for paths you actually changed
+2. `submit_sources({ fromLatestDelivery: true, mode, kitEngineRef })` — same `mode` as the
+   refused delivery (preview stays preview; omit mode only to reuse that lane). Server
+   copies the last candidate; optional `files[]` only for paths you actually changed
 3. Do **not** `get_sources` + `stage_source_file` every path again (burns connector tokens)
 
 ### `end` is required after submit (not optional etiquette)
