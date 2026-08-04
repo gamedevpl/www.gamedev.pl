@@ -2287,17 +2287,26 @@ export async function registerSubmissionRoutes(
       ...commits.map((commit) => commit.message),
       ...checklist.map((item) => item.text),
       ...(note ? [note] : []),
-      ...relayed.map((r) => r.revision.text),
     ];
-    if (sources.length === 0) {
+    if (sources.length === 0 && relayed.length === 0) {
       return status;
     }
 
-    const translated = await translator.translate(sources, locale);
-    const relayedAt = commits.length + checklist.length + (note ? 1 : 0);
-    const relayedText = new Map(
-      relayed.map((r, offset) => [r.index, translated[relayedAt + offset] ?? r.revision.text]),
-    );
+    // Two calls, because they are two different asks. The log prompt is built to
+    // compress a commit subject to one short line; a change request runs to 2000
+    // characters of numbered points, and compressing *that* would hand the creator a
+    // summary of their own request with pieces missing.
+    const [translated, relayedTranslated] = await Promise.all([
+      sources.length > 0 ? translator.translate(sources, locale) : Promise.resolve([]),
+      relayed.length > 0
+        ? translator.translate(
+            relayed.map((r) => r.revision.text),
+            locale,
+            { kind: 'message' },
+          )
+        : Promise.resolve([]),
+    ]);
+    const relayedText = new Map(relayed.map((r, offset) => [r.index, relayedTranslated[offset] ?? r.revision.text]));
     return {
       ...status,
       progress: {

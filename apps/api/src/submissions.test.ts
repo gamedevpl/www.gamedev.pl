@@ -1129,8 +1129,12 @@ describe('submission routes', () => {
     // creator's own side of a Polish thread, as words they had never written.
     const { githubClient } = createGithubClientStub({ issueNumber: 78 });
     const { backend } = createBackendStub();
+    const asked: Array<{ kind: string; texts: string[] }> = [];
     const translator: Translator = {
-      translate: async (texts) => texts.map((text) => `PL:${text}`),
+      translate: async (texts, _locale, opts) => {
+        asked.push({ kind: opts?.kind ?? 'log', texts });
+        return texts.map((text) => `PL:${text}`);
+      },
     };
     const { app, authHeaders, store } = await createApp({
       githubClient,
@@ -1169,6 +1173,12 @@ describe('submission routes', () => {
       text: 'PL:Major systems pass: zoom out the battlefield.',
       origin: 'agent',
     });
+    // A change request runs to 2000 characters of numbered points; the log prompt is
+    // built to compress a commit subject to one short line. Asking for a relay on that
+    // prompt returns a summary with pieces of the creator's request missing.
+    const message = asked.find((call) => call.kind === 'message');
+    expect(message?.texts).toEqual(['Major systems pass: zoom out the battlefield.']);
+    expect(asked.some((call) => call.kind === 'log' && call.texts.includes('Zrób paczki większe.'))).toBe(false);
 
     await app.close();
   });
