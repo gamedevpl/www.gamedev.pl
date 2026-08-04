@@ -3818,18 +3818,17 @@ export async function registerSubmissionRoutes(
    * already applied by the side that owns it, so the creator plays the exact document a
    * player would. It exists once the gate has run.
    *
-   * Returns null for exactly one reason: **there is nothing to serve yet** — no
+   * Returns `false` for exactly one reason: **there is nothing to serve yet** — no
    * delivery, or a delivery the gate has not bundled. Anything else throws, because a
    * broken preview and an unstarted one are different facts, and a creator told "not
    * yet" about a failure will wait for something that is not coming.
-   */
-  /**
+   *
    * Fastify 5's Reply is a thenable. Returning `reply.send(...)` from an async helper
    * and then `await`ing that helper resolves to `undefined` (the thenable's settle
    * value), so `if (stored) return stored` falls through and tries to send again —
    * "Reply was already sent". Prod logs for every successful Studio preview showed
    * exactly that (served gate-built → no delivery yet → already sent). Return a plain
-   * boolean instead, and never await a Reply.
+   * boolean instead (`true` after sending), and never await a Reply.
    */
   async function replyWithStoredDraft(
     request: FastifyRequest,
