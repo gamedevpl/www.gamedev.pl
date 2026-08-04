@@ -685,23 +685,23 @@ const ICONS: Record<PixelIconName, string[]> = {
     '....###........',
     '...............',
   ],
-  // Share: tray with an up-arrow. Reads at 12px; the old three-node web glyph
-  // turned into noise once it was promoted into the Studio head cluster.
+  // Share: source node on the left, two targets on the right, single-pixel bridges.
+  // Solid 3×3 nodes so it stays a "share" mark at 12–14px (not an upload tray).
   share: [
     '...............',
+    '..........###..',
+    '..........###..',
+    '........#.###..',
     '.......#.......',
-    '......###......',
-    '.....#.#.#.....',
-    '....#..#..#....',
+    '......#........',
+    '...###.........',
+    '...###.........',
+    '...###.........',
+    '......#........',
     '.......#.......',
-    '.......#.......',
-    '..#....#....#..',
-    '..#.........#..',
-    '..#.........#..',
-    '..#.........#..',
-    '..#.........#..',
-    '..###########..',
-    '...............',
+    '........#.###..',
+    '..........###..',
+    '..........###..',
     '...............',
   ],
   chevronDown: [
