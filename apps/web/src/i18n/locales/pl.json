@@ -378,6 +378,8 @@
       "shot": "Zrzut ekranu",
       "closeShot": "Zamknij zrzut",
       "dismissShot": "Odrzuć zrzut",
+      "expandShots": "Otwórz zrzuty",
+      "collapseShots": "Zwiń",
       "pause": "Wstrzymaj"
     },
     "stats": {

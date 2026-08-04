@@ -4510,20 +4510,33 @@ a.user-name--profile:focus-visible {
   position: absolute;
   z-index: 40;
   pointer-events: none;
+  touch-action: none;
 }
 
-.studio-shot-toasts.is-bottom-right {
+.studio-shot-toasts.is-collapsed.is-bottom-right {
   right: 14px;
   bottom: 14px;
   width: 168px;
   height: 150px;
 }
 
-.studio-shot-toasts.is-near-play {
+.studio-shot-toasts.is-collapsed.is-near-play {
   right: 8px;
   top: 48px;
   width: 168px;
   height: 150px;
+  cursor: grab;
+}
+
+.studio-shot-toasts.is-collapsed.is-near-play:active {
+  cursor: grabbing;
+}
+
+.studio-shot-toasts-cards {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
 }
 
 .studio-shot-toast {
@@ -4539,24 +4552,108 @@ a.user-name--profile:focus-visible {
   overflow: hidden;
   transform-origin: 85% 0%;
   animation: studio-shot-toast-in 0.28s ease-out both;
+  transition:
+    transform 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    width 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.25s ease;
 }
 
 /* Slight stack + scatter — newest (slot-0) on top, peeking siblings behind. */
-.studio-shot-toasts .studio-shot-toast.is-slot-0 {
+.studio-shot-toasts.is-collapsed .studio-shot-toast.is-slot-0 {
   transform: rotate(2.5deg) translate(6px, 0);
   z-index: 3;
 }
 
-.studio-shot-toasts .studio-shot-toast.is-slot-1 {
+.studio-shot-toasts.is-collapsed .studio-shot-toast.is-slot-1 {
   transform: rotate(-3.5deg) translate(-10px, 14px);
   z-index: 2;
   animation-delay: 0.04s;
 }
 
-.studio-shot-toasts .studio-shot-toast.is-slot-2 {
+.studio-shot-toasts.is-collapsed .studio-shot-toast.is-slot-2 {
   transform: rotate(5deg) translate(12px, 28px);
   z-index: 1;
   animation-delay: 0.08s;
+}
+
+/* Expanded: comfortable grid under the Play cluster. */
+.studio-shot-toasts.is-expanded {
+  right: 10px;
+  top: 44px;
+  left: auto;
+  bottom: auto;
+  width: min(480px, calc(100% - 20px));
+  height: auto;
+  max-height: min(70vh, 420px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 10px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--panel-border);
+  background: rgba(15, 20, 24, 0.92);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px);
+  pointer-events: auto;
+  overflow: auto;
+}
+
+.studio-shot-toasts-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex: none;
+  padding: 0 2px;
+}
+
+.studio-shot-toasts-toolbar-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.studio-shot-toasts-collapse {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--panel-border);
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.studio-shot-toasts-collapse:hover {
+  color: var(--text);
+  border-color: rgba(0, 228, 172, 0.35);
+}
+
+.studio-shot-toasts.is-expanded .studio-shot-toasts-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 10px;
+  height: auto;
+  pointer-events: auto;
+}
+
+.studio-shot-toasts.is-expanded .studio-shot-toast {
+  position: relative;
+  left: auto;
+  top: auto;
+  width: auto;
+  transform: none;
+  animation: none;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.studio-shot-toasts.is-expanded .studio-shot-toast-body {
+  cursor: zoom-in;
 }
 
 @keyframes studio-shot-toast-in {
@@ -4575,8 +4672,9 @@ a.user-name--profile:focus-visible {
   border: 0;
   background: transparent;
   color: inherit;
-  cursor: zoom-in;
+  cursor: grab;
   text-align: left;
+  user-select: none;
 }
 
 .studio-shot-toast-body img {
@@ -4585,6 +4683,7 @@ a.user-name--profile:focus-visible {
   aspect-ratio: 16 / 10;
   object-fit: cover;
   background: #0b1018;
+  pointer-events: none;
 }
 
 .studio-shot-toast-caption {
@@ -4638,10 +4737,10 @@ a.user-name--profile:focus-visible {
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
 }
 
-/* Phone: tighter fan under the Play cluster so the thread stays readable. */
+/* Phone: tighter fan; expanded becomes a bottom sheet above the composer. */
 @media (max-width: 800px) {
-  .studio-shot-toasts.is-near-play,
-  .studio-shot-toasts.is-bottom-right {
+  .studio-shot-toasts.is-collapsed.is-near-play,
+  .studio-shot-toasts.is-collapsed.is-bottom-right {
     right: 6px;
     top: 44px;
     bottom: auto;
@@ -4649,21 +4748,34 @@ a.user-name--profile:focus-visible {
     height: 110px;
   }
 
-  .studio-shot-toast {
+  .studio-shot-toasts.is-collapsed .studio-shot-toast {
     width: 104px;
     border-radius: 10px;
   }
 
-  .studio-shot-toasts .studio-shot-toast.is-slot-0 {
+  .studio-shot-toasts.is-collapsed .studio-shot-toast.is-slot-0 {
     transform: rotate(2deg) translate(4px, 0);
   }
 
-  .studio-shot-toasts .studio-shot-toast.is-slot-1 {
+  .studio-shot-toasts.is-collapsed .studio-shot-toast.is-slot-1 {
     transform: rotate(-2.5deg) translate(-6px, 10px);
   }
 
-  .studio-shot-toasts .studio-shot-toast.is-slot-2 {
+  .studio-shot-toasts.is-collapsed .studio-shot-toast.is-slot-2 {
     transform: rotate(3.5deg) translate(8px, 20px);
+  }
+
+  .studio-shot-toasts.is-expanded {
+    right: 6px;
+    left: 6px;
+    top: auto;
+    bottom: 72px;
+    width: auto;
+    max-height: 42vh;
+  }
+
+  .studio-shot-toasts.is-expanded .studio-shot-toasts-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .studio-shot-toast-caption {

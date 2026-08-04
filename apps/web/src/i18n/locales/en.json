@@ -374,6 +374,8 @@
       "shot": "Screenshot",
       "closeShot": "Close screenshot",
       "dismissShot": "Dismiss screenshot",
+      "expandShots": "Open screenshots",
+      "collapseShots": "Stack",
       "pause": "Pause"
     },
     "stats": {
