@@ -631,6 +631,21 @@
       "ready_for_review": "Your game passed every check. It's waiting for the last look before going live."
     },
     "updatedAgo": "updated {{time}}",
+    "presence": {
+      "reading_brief": "Reading the build brief…",
+      "loading_seed": "Loading the seed draft…",
+      "fetching_kit": "Fetching Creator Kit metadata…",
+      "browsing_kit": "Browsing the Creator Kit…",
+      "searching_kit": "Searching the Creator Kit…",
+      "reading_kit": "Reading Creator Kit files…",
+      "loading_sources": "Loading existing game sources…",
+      "browsing_examples": "Browsing example games…",
+      "reading_example": "Reading an example game…",
+      "checking_staged": "Checking staged sources…",
+      "checking_inbox": "Checking creator notes…",
+      "waiting_checks": "Waiting on automated checks…",
+      "reviewing_captures": "Reviewing gate captures…"
+    },
     "playtestCta": "Play with a note",
     "live": "Live",
     "shareLink": "Share this game (watch only):",

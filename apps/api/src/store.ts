@@ -235,6 +235,13 @@ export interface SubmissionRecord {
    */
   lastAgentSignalAt?: string;
   /**
+   * Latest MCP presence thought (closed vocabulary key + timestamp).
+   *
+   * Not a chat event — Studio flashes it as a short headline while the agent is
+   * browsing the kit. Cleared when a real build event arrives or the round closes.
+   */
+  lastAgentPresence?: { key: string; at: string };
+  /**
    * Which backend is building this job and where.
    *
    * `refs` accumulates because a revision round is a *new* task rather than a new session
@@ -1527,8 +1534,9 @@ export interface Store {
    * Refreshes {@link SubmissionRecord.lastAgentSignalAt} without writing a chat event.
    * Used by MCP presence heartbeats so kit-browse activity clears `no_agent_yet` / quiet
    * stalls without stuffing "Browsing the Creator Kit…" into the Studio thread.
+   * When `presence` is set, also stores a short-lived thought key for the Studio bar.
    */
-  touchLastAgentSignalAt(issueNumber: number, at?: string): Promise<void>;
+  touchLastAgentSignalAt(issueNumber: number, at?: string, presence?: { key: string }): Promise<void>;
   /** Agent progress events for a build, newest first. */
   listBuildEvents(issueNumber: number, opts?: { limit?: number }): Promise<BuildEvent[]>;
   /** How many events a build has recorded — the cap that bounds a runaway agent. */
@@ -2358,6 +2366,7 @@ export class InMemoryStore implements Store {
       // Signals belong to the round that closed — keeping them makes the next self
       // round look "connected" before any agent has joined.
       delete next.lastAgentSignalAt;
+      delete next.lastAgentPresence;
     }
     this.submissions.set(issueNumber, next);
     return true;
@@ -2371,6 +2380,7 @@ export class InMemoryStore implements Store {
     delete next.seed;
     delete next.seedStatus;
     delete next.lastAgentSignalAt;
+    delete next.lastAgentPresence;
     this.submissions.set(issueNumber, next);
     return roundGeneration;
   }
@@ -2632,16 +2642,23 @@ export class InMemoryStore implements Store {
     existing.push(record);
     this.buildEvents.set(issueNumber, existing);
     const submission = this.submissions.get(issueNumber);
-    if (submission) this.submissions.set(issueNumber, { ...submission, lastAgentSignalAt: record.createdAt });
+    if (submission) {
+      const next: SubmissionRecord = { ...submission, lastAgentSignalAt: record.createdAt };
+      // A real chat row supersedes the ambient thought flash.
+      delete next.lastAgentPresence;
+      this.submissions.set(issueNumber, next);
+    }
     return { ...record };
   }
 
-  async touchLastAgentSignalAt(issueNumber: number, at?: string): Promise<void> {
+  async touchLastAgentSignalAt(issueNumber: number, at?: string, presence?: { key: string }): Promise<void> {
     const submission = this.submissions.get(issueNumber);
     if (!submission) return;
+    const stamped = at ?? new Date().toISOString();
     this.submissions.set(issueNumber, {
       ...submission,
-      lastAgentSignalAt: at ?? new Date().toISOString(),
+      lastAgentSignalAt: stamped,
+      ...(presence ? { lastAgentPresence: { key: presence.key, at: stamped } } : {}),
     });
   }
 
@@ -4000,6 +4017,7 @@ export class FirestoreStore implements Store {
         delete next.seed;
         delete next.seedStatus;
         delete next.lastAgentSignalAt;
+        delete next.lastAgentPresence;
         tx.set(ref, next);
       } else {
         tx.set(
@@ -4027,6 +4045,7 @@ export class FirestoreStore implements Store {
       delete next.seed;
       delete next.seedStatus;
       delete next.lastAgentSignalAt;
+      delete next.lastAgentPresence;
       tx.set(ref, next);
       return roundGeneration;
     });
@@ -4389,18 +4408,29 @@ export class FirestoreStore implements Store {
     // in-flight job without a subcollection read per job. Merged separately rather than
     // transactionally: losing a race here costs a slightly stale liveness timestamp,
     // which is not worth a transaction on the hottest write in the channel.
-    await this.db
-      .collection('submissions')
-      .doc(String(issueNumber))
-      .set({ lastAgentSignalAt: record.createdAt }, { merge: true });
+    await this.db.collection('submissions').doc(String(issueNumber)).set(
+      {
+        lastAgentSignalAt: record.createdAt,
+        // A real chat row supersedes the ambient thought flash.
+        lastAgentPresence: FieldValue.delete(),
+      },
+      { merge: true },
+    );
     return record;
   }
 
-  async touchLastAgentSignalAt(issueNumber: number, at?: string): Promise<void> {
+  async touchLastAgentSignalAt(issueNumber: number, at?: string, presence?: { key: string }): Promise<void> {
+    const stamped = at ?? new Date().toISOString();
     await this.db
       .collection('submissions')
       .doc(String(issueNumber))
-      .set({ lastAgentSignalAt: at ?? new Date().toISOString() }, { merge: true });
+      .set(
+        {
+          lastAgentSignalAt: stamped,
+          ...(presence ? { lastAgentPresence: { key: presence.key, at: stamped } } : {}),
+        },
+        { merge: true },
+      );
   }
 
   async listBuildEvents(issueNumber: number, opts?: { limit?: number }): Promise<BuildEvent[]> {

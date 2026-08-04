@@ -406,7 +406,8 @@ describe('POST /api/mcp (BY-05)', () => {
 
     const record = await store.getSubmission(ISSUE);
     expect(record?.lastAgentSignalAt).toBeTruthy();
-    // No new chat row — presence is heartbeat-only now.
+    expect(record?.lastAgentPresence).toMatchObject({ key: 'reading_brief' });
+    // No new chat row — presence is heartbeat + thought key, not a transcript turn.
     expect(await store.listBuildEvents(ISSUE)).toHaveLength(before);
   });
 

@@ -27,7 +27,12 @@ import {
   resolveGameAgentKeyForStart,
   verifyDurableGameAgentKey,
 } from './agent-game-key-resolve.js';
-import { noteMcpPresencePulse, shouldEmitMcpPresencePulse, shouldPulseMcpPresence } from './mcp-presence.js';
+import {
+  mcpPresenceKey,
+  noteMcpPresencePulse,
+  shouldEmitMcpPresencePulse,
+  shouldPulseMcpPresence,
+} from './mcp-presence.js';
 import {
   classifyAgentTokenAccess,
   InvalidAgentTokenError,
@@ -3332,15 +3337,18 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             );
           }
         } else if (store && agentTokenSecret && shouldPulseMcpPresence(name)) {
-          // Heartbeat only — never append a durable chat row. Kit-browse loops used to
-          // spam "Czytanie plików Creator Kit…" between real report_progress turns.
+          // Heartbeat + short-lived thought key — never a durable chat row. Kit-browse
+          // loops used to spam "Czytanie plików Creator Kit…" between real report_progress.
           const jobId = resolvePresenceJobId(sessionKeyArg, bearerToken, agentTokenSecret);
-          if (jobId !== null) {
+          const presenceKey = mcpPresenceKey(name);
+          if (jobId !== null && presenceKey) {
             const at = now();
             if (shouldEmitMcpPresencePulse(presencePulseByJob.get(jobId), at)) {
               noteMcpPresencePulse(presencePulseByJob, jobId, at);
               try {
-                await store.touchLastAgentSignalAt(jobId, new Date(at).toISOString());
+                await store.touchLastAgentSignalAt(jobId, new Date(at).toISOString(), {
+                  key: presenceKey,
+                });
               } catch (pulseError) {
                 request.log.warn({ err: pulseError, jobId, tool: name }, 'mcp presence pulse failed');
               }

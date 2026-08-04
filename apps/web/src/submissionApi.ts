@@ -113,6 +113,11 @@ export type SubmissionStatus = {
    */
   lastAgentSignalAt?: string;
   /**
+   * Ambient presence thought (closed key + timestamp). Studio flashes it in the
+   * thread bar; it is not a transcript row.
+   */
+  lastAgentPresence?: { key: string; at: string };
+  /**
    * Pictures of the build, newest first. `branch` items are captures the agent
    * committed; `channel` items were pushed straight to the API and can appear long
    * before the first commit. Build the URL with {@link buildMediaUrl}.

@@ -176,6 +176,11 @@ export interface SubmissionStatusResponseBase {
    */
   lastAgentSignalAt?: string;
   /**
+   * Short-lived presence thought for the Studio thread bar (closed vocabulary key).
+   * Not a chat event — UI flashes it as a headline while the agent browses the kit.
+   */
+  lastAgentPresence?: { key: string; at: string };
+  /**
    * Pictures of the game as it is now, newest first — the build log stops being a
    * wall of text. Same reasoning as `events`: kept outside `progress` so a build
    * with no pull request yet can still show something.

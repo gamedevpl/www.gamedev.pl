@@ -1824,8 +1824,9 @@ export async function registerSubmissionRoutes(
       builder: builderOf(record),
     });
     if (stall) status.stall = stall;
-    // Heartbeat for Studio "updated ago" — presence pulses refresh this without chat rows.
+    // Heartbeat + thought flash — presence pulses refresh these without chat rows.
     if (record.lastAgentSignalAt) status.lastAgentSignalAt = record.lastAgentSignalAt;
+    if (record.lastAgentPresence) status.lastAgentPresence = record.lastAgentPresence;
     // Echo builder fields so Studio does not invent `platform` from empty localStorage
     // when the server already knows the game's last-used choice (Codex P2 on BY-07).
     const roundBuilder = record.builder;

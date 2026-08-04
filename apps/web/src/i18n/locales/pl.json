@@ -635,6 +635,21 @@
       "ready_for_review": "Twoja gra przeszła wszystkie testy. Czeka na ostatnie spojrzenie przed publikacją."
     },
     "updatedAgo": "aktualizacja {{time}}",
+    "presence": {
+      "reading_brief": "Czytanie briefu…",
+      "loading_seed": "Ładowanie szkicu startowego…",
+      "fetching_kit": "Pobieranie metadanych Creator Kit…",
+      "browsing_kit": "Przeglądanie Creator Kit…",
+      "searching_kit": "Szukanie w Creator Kit…",
+      "reading_kit": "Czytanie plików Creator Kit…",
+      "loading_sources": "Ładowanie źródeł gry…",
+      "browsing_examples": "Przeglądanie przykładów…",
+      "reading_example": "Czytanie przykładowej gry…",
+      "checking_staged": "Sprawdzanie przygotowanych źródeł…",
+      "checking_inbox": "Sprawdzanie notatek twórcy…",
+      "waiting_checks": "Czekanie na automatyczne testy…",
+      "reviewing_captures": "Przeglądanie zrzutów z bramki…"
+    },
     "playtestCta": "Graj z notatką",
     "live": "Na żywo",
     "shareLink": "Podziel się tą grą (tylko do oglądania):",

@@ -4884,6 +4884,23 @@ a.user-name--profile:focus-visible {
   background: linear-gradient(90deg, rgba(0, 228, 172, 0.06), var(--panel-card) 40%);
 }
 
+/* Ambient MCP thought — a headline flash in the bar, not a chat turn. */
+.studio-thread-context.is-thought .studio-context-phase {
+  color: var(--turquoise);
+  animation: studio-thought-flash 0.55s ease-out;
+}
+
+@keyframes studio-thought-flash {
+  from {
+    opacity: 0.35;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .studio-context-phase {
   display: inline-flex;
   align-items: center;
