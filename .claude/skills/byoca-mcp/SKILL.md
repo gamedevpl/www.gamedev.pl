@@ -29,12 +29,15 @@ Source of truth: `SESSION_WORKFLOW` + `BEHAVIOURAL_CONTRACT` in
 ### Never busy-poll `get_gate_verdict`
 
 Agents cannot sleep between tool calls, so “poll every ~30s” turns into a tight
-loop that burns connector tool budgets. When `status` is `pending`:
+loop that burns connector tool budgets. Soft warnings were ignored (Claude-class
+connectors kept polling), so back-to-back polls are **hard-refused**
+(`isError`, `code=gate_poll_backoff`, plus channel HTTP 429). When `status` is
+`pending`:
 
 - Honour `retryAfterSeconds` (~30) as **wall-clock** wait before the next poll, **or**
 - Call **`end`** and stop — Studio already shows gate progress
-- Back-to-back polls emit soft `warnings.code=gate_poll_backoff` (and keep
-  re-emitting `call_end` after submit until `end`)
+- A second poll inside ~25s returns `isError` with `code=gate_poll_backoff` (and
+  soft `call_end` still re-emits on successful tools after submit until `end`)
 
 ### `kit_outdated` — do not re-upload the tree
 
@@ -92,14 +95,19 @@ cache), so a resume cannot keep showing “finished this round” next to live p
 
 Merged by `applySessionNudges` / submit handler. Act, then continue:
 
-| Code                | Meaning                                                                    |
-| ------------------- | -------------------------------------------------------------------------- |
-| `call_end`          | Call `end` when finished iterating this round                              |
-| `gate_not_started`  | Delivery ok but Cloud Build did not start — no preview yet                 |
-| `gate_poll_backoff` | Stop tight-looping `get_gate_verdict` — wait ~30s wall-clock or call `end` |
-| `progress_stale`    | Call `report_progress`                                                     |
-| `inbox_pending`     | `read_inbox` → apply → `ack_inbox`                                         |
-| `seed_unread`       | Call `get_seed` before scaffolding from the kit                            |
+| Code               | Meaning                                                    |
+| ------------------ | ---------------------------------------------------------- |
+| `call_end`         | Call `end` when finished iterating this round              |
+| `gate_not_started` | Delivery ok but Cloud Build did not start — no preview yet |
+| `progress_stale`   | Call `report_progress`                                     |
+| `inbox_pending`    | `read_inbox` → apply → `ack_inbox`                         |
+| `seed_unread`      | Call `get_seed` before scaffolding from the kit            |
+
+### Hard refuse (isError)
+
+| Code                | Meaning                                                                                                    |
+| ------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `gate_poll_backoff` | Tight `get_gate_verdict` loop — wait `retryAfterSeconds` wall-clock, or call `end` (Studio shows the gate) |
 
 ## Builder handoff (Studio)
 

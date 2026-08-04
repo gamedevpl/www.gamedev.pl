@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   GATE_POLL_MIN_INTERVAL_MS,
+  GATE_POLL_PRESENCE_KEY,
   PROGRESS_STALE_CALLS,
   PROGRESS_STALE_MS,
   createMcpNudgeTracker,
+  gatePollBackoffFromPresence,
+  gatePollRetryAfterSeconds,
   pendingCountFromPayload,
 } from './mcp-session-nudges.js';
 
@@ -83,14 +86,30 @@ describe('mcp-session-nudges', () => {
     ).not.toContain('call_end');
   });
 
-  it('soft-warns gate_poll_backoff on tight get_gate_verdict loops', () => {
+  it('hard-refuses pending gate polls closer than the min interval (no soft warning)', () => {
     const nudges = createMcpNudgeTracker();
     const t0 = 1_000_000;
-    expect(nudges.warningsFor(1, 'get_gate_verdict', t0).map((w) => w.code)).not.toContain('gate_poll_backoff');
-    expect(nudges.warningsFor(1, 'get_gate_verdict', t0 + 1_000).map((w) => w.code)).toContain('gate_poll_backoff');
+    expect(nudges.gatePollBackoff(1, t0)).toBeNull();
+    nudges.noteGatePoll(1, t0, true);
+    expect(nudges.gatePollBackoff(1, t0 + 1_000)).toEqual({
+      retryAfterSeconds: Math.ceil((GATE_POLL_MIN_INTERVAL_MS - 1_000) / 1000),
+    });
+    expect(nudges.gatePollBackoff(1, t0 + GATE_POLL_MIN_INTERVAL_MS)).toBeNull();
+    // Landed verdict — immediate re-read is allowed (terminal receipt, etc.).
+    nudges.noteGatePoll(1, t0 + GATE_POLL_MIN_INTERVAL_MS + 1, false);
+    expect(nudges.gatePollBackoff(1, t0 + GATE_POLL_MIN_INTERVAL_MS + 2)).toBeNull();
+    // Soft warnings must not carry gate_poll_backoff — busy polls are isError.
+    expect(nudges.warningsFor(1, 'get_gate_verdict', t0 + 1_000).map((w) => w.code)).not.toContain('gate_poll_backoff');
+  });
+
+  it('gatePollRetryAfterSeconds / presence helper share the interval', () => {
+    const t0 = 1_000_000;
+    expect(gatePollRetryAfterSeconds(null, t0)).toBeNull();
+    expect(gatePollRetryAfterSeconds(t0, t0 + 1_000)).toBe(Math.ceil((GATE_POLL_MIN_INTERVAL_MS - 1_000) / 1000));
     expect(
-      nudges.warningsFor(1, 'get_gate_verdict', t0 + 1_000 + GATE_POLL_MIN_INTERVAL_MS).map((w) => w.code),
-    ).not.toContain('gate_poll_backoff');
+      gatePollBackoffFromPresence({ key: GATE_POLL_PRESENCE_KEY, at: new Date(t0).toISOString() }, t0 + 1_000),
+    ).toBe(Math.ceil((GATE_POLL_MIN_INTERVAL_MS - 1_000) / 1000));
+    expect(gatePollBackoffFromPresence({ key: 'browsing_kit', at: new Date(t0).toISOString() }, t0 + 1_000)).toBeNull();
   });
 
   it('does not progress-nudge submit_sources (call_end owns that reply)', () => {

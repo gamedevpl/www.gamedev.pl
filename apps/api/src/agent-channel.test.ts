@@ -1668,4 +1668,33 @@ describe('the delivery reminder on every channel call', () => {
 
     await app.close();
   });
+
+  it('hard-refuses back-to-back pending gate polls via presence backoff (429)', async () => {
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    await store.setSubmissionSlug(ISSUE, 'test-game');
+    await store.setSubmissionDeliveredVersion(ISSUE, 'v1');
+    const channelApp = await createApp(store);
+
+    const first = await channelApp.inject({
+      method: 'GET',
+      url: '/api/agent/build/gate',
+      headers: agentHeaders(),
+    });
+    expect(first.statusCode).toBe(200);
+    expect(first.json()).toMatchObject({ status: 'pending', retryAfterSeconds: 30 });
+    expect((await store.getSubmission(ISSUE))?.lastAgentPresence?.key).toBe('waiting_checks');
+
+    const second = await channelApp.inject({
+      method: 'GET',
+      url: '/api/agent/build/gate',
+      headers: agentHeaders(),
+    });
+    expect(second.statusCode).toBe(429);
+    expect(second.json()).toMatchObject({ code: 'gate_poll_backoff' });
+    expect(typeof second.json().retryAfterSeconds).toBe('number');
+    expect(second.headers['retry-after']).toBeTruthy();
+
+    await channelApp.close();
+  });
 });

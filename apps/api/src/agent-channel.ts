@@ -45,6 +45,11 @@ import {
   parseKitRegistry,
   parseKitSidecar,
 } from './kit-registry.js';
+import {
+  GATE_POLL_PRESENCE_KEY,
+  GATE_POLL_RETRY_AFTER_SECONDS,
+  gatePollBackoffFromPresence,
+} from './mcp-session-nudges.js';
 import { seedPayload } from './seed-status.js';
 import { type CreatorMessage, type Store, type SubmissionRecord } from './store.js';
 import { BUILD_EVENT_KINDS, BUILD_STEPS, sanitizeCreatorText, type BuildEvent } from './submission-status.js';
@@ -1959,23 +1964,54 @@ export async function registerAgentChannelRoutes(
    */
   app.get(
     '/api/agent/build/gate',
+    // Soft per-IP cap; per-job busy-poll refuse below is the real throttle.
     { config: { rateLimit: { max: 120, timeWindow: '1 hour' } } },
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply, { allowTerminalReceipt: true });
       if (!resolved) return reply;
-      const { record, access } = resolved;
+      const { record, access, issueNumber } = resolved;
 
       const query = request.query as { version?: string };
       const requestedVersion = typeof query.version === 'string' && query.version.trim() ? query.version.trim() : null;
       const version = requestedVersion ?? record.previewVersion ?? record.deliveredVersion ?? null;
 
+      const refusePendingBusyPoll = () => {
+        // Only pending reads are throttled — a landed verdict may be re-read immediately
+        // (terminal receipt on multiple transports, etc.). Soft MCP warnings were ignored
+        // by Claude connectors, so this is a hard 429.
+        const retryAfterSeconds = gatePollBackoffFromPresence(record.lastAgentPresence, Date.now());
+        if (retryAfterSeconds === null) return null;
+        reply.header('Retry-After', String(retryAfterSeconds));
+        return reply.status(429).send({
+          error: `get_gate_verdict busy-poll refused — wait ${retryAfterSeconds}s wall-clock before the next poll, or call end now (Studio shows the gate)`,
+          code: 'gate_poll_backoff',
+          retryAfterSeconds,
+        });
+      };
+
+      const stampPendingGatePoll = async () => {
+        try {
+          await store?.touchLastAgentSignalAt(
+            issueNumber,
+            undefined,
+            { key: GATE_POLL_PRESENCE_KEY },
+            { preserveEnded: true },
+          );
+        } catch (error) {
+          request.log.warn({ err: error, issueNumber }, 'gate poll presence stamp failed');
+        }
+      };
+
       if (!version || !record.slug) {
+        const refused = refusePendingBusyPoll();
+        if (refused) return refused;
+        await stampPendingGatePoll();
         return reply.send({
           status: 'pending',
           deliveryId: null,
           summary:
             'nothing has been delivered yet — do not busy-poll; wait ~30s wall-clock before the next get_gate_verdict, or call end if done (Studio shows the gate)',
-          retryAfterSeconds: 30,
+          retryAfterSeconds: GATE_POLL_RETRY_AFTER_SECONDS,
           access,
         });
       }
@@ -1992,12 +2028,15 @@ export async function registerAgentChannelRoutes(
         previewVersion: version,
       });
       if (!gate) {
+        const refused = refusePendingBusyPoll();
+        if (refused) return refused;
+        await stampPendingGatePoll();
         return reply.send({
           status: 'pending',
           deliveryId: version,
           summary:
             'gate has not reported yet — do not busy-poll; wait ~30s wall-clock before the next get_gate_verdict, or call end if done (Studio shows the gate)',
-          retryAfterSeconds: 30,
+          retryAfterSeconds: GATE_POLL_RETRY_AFTER_SECONDS,
           access,
         });
       }
@@ -2011,6 +2050,7 @@ export async function registerAgentChannelRoutes(
             : gate.status === 'preview_failed'
               ? 'preview_failed'
               : 'red';
+      // Landed verdict — do not stamp waiting_checks / do not throttle re-reads.
       return reply.send({
         status,
         deliveryId: version,

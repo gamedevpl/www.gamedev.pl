@@ -5,10 +5,13 @@
  * `report_progress`, so the Studio UI looks frozen; creator notes only ride writes.
  * These warnings are advisory (never `isError`) and are merged into successful tool
  * results by the MCP dispatcher.
+ *
+ * Gate-poll busy-loops are different: Claude-class connectors ignored soft
+ * `gate_poll_backoff` warnings and burned tool budgets. Those are hard-refused
+ * (`isError`) via `gatePollBackoff` / the channel 429 — not soft-nudged.
  */
 
-export type NudgeCode =
-  'progress_stale' | 'inbox_pending' | 'seed_unread' | 'call_end' | 'gate_not_started' | 'gate_poll_backoff';
+export type NudgeCode = 'progress_stale' | 'inbox_pending' | 'seed_unread' | 'call_end' | 'gate_not_started';
 
 export interface NudgeWarning {
   code: NudgeCode;
@@ -32,12 +35,17 @@ export interface JobNudgeState {
   awaitingEnd: boolean;
   /** Wall-clock ms of the last successful get_gate_verdict in this tracker. */
   lastGatePollAt: number | null;
+  /** True when that last successful poll returned status=pending (only those are throttled). */
+  lastGatePollPending: boolean;
 }
 
-/** Minimum wall-clock gap between get_gate_verdict polls before soft `gate_poll_backoff`. */
+/** Minimum wall-clock gap between get_gate_verdict polls before hard refuse. */
 export const GATE_POLL_MIN_INTERVAL_MS = 25_000;
 /** Hint returned on pending gate reads — agents must wait this many seconds, not busy-poll. */
 export const GATE_POLL_RETRY_AFTER_SECONDS = 30;
+
+/** Presence key stamped on successful gate reads (Studio + durable backoff). */
+export const GATE_POLL_PRESENCE_KEY = 'waiting_checks';
 
 /** No progress for this long (wall clock) → `progress_stale`. */
 export const PROGRESS_STALE_MS = 90_000;
@@ -86,6 +94,32 @@ export const SEED_NUDGE_TOOLS = new Set([
   'read_kit_file_fragment',
 ]);
 
+/**
+ * Seconds to wait before the next poll, or null when the poll is allowed.
+ * Pure — does not mutate tracker state.
+ */
+export function gatePollRetryAfterSeconds(lastPollAtMs: number | null, nowMs: number): number | null {
+  if (lastPollAtMs === null) return null;
+  const elapsed = nowMs - lastPollAtMs;
+  if (elapsed >= GATE_POLL_MIN_INTERVAL_MS) return null;
+  return Math.max(1, Math.ceil((GATE_POLL_MIN_INTERVAL_MS - elapsed) / 1000));
+}
+
+/**
+ * Durable backoff from Studio presence: a recent `waiting_checks` stamp means a
+ * successful gate poll already ran (this instance or another). Used by the channel
+ * so Cloud Run instance hops cannot reset the in-process tracker.
+ */
+export function gatePollBackoffFromPresence(
+  presence: { key: string; at: string } | undefined,
+  nowMs: number,
+): number | null {
+  if (!presence || presence.key !== GATE_POLL_PRESENCE_KEY) return null;
+  const atMs = Date.parse(presence.at);
+  if (!Number.isFinite(atMs)) return null;
+  return gatePollRetryAfterSeconds(atMs, nowMs);
+}
+
 export interface McpNudgeTracker {
   ensure(jobId: number, nowMs: number): JobNudgeState;
   noteProgress(jobId: number, nowMs: number): void;
@@ -99,6 +133,16 @@ export interface McpNudgeTracker {
   /** `nowMs` is only used if the job has never been ensured — callers should pass the injected clock. */
   notePendingCount(jobId: number, count: number, nowMs: number): void;
   noteToolSuccess(jobId: number, toolName: string, nowMs: number): void;
+  /**
+   * Record a successful get_gate_verdict. Only `pending: true` polls count toward
+   * the busy-poll interval — landed verdicts may be re-read immediately.
+   */
+  noteGatePoll(jobId: number, nowMs: number, pending: boolean): void;
+  /**
+   * In-process busy-poll check after a pending poll. Returns `{ retryAfterSeconds }`
+   * when too soon; null when allowed (including after a landed verdict). Does not mutate.
+   */
+  gatePollBackoff(jobId: number, nowMs: number): { retryAfterSeconds: number } | null;
   warningsFor(jobId: number, toolName: string, nowMs: number): NudgeWarning[];
   /** Test helper. */
   peek(jobId: number): JobNudgeState | undefined;
@@ -124,6 +168,7 @@ export function createMcpNudgeTracker(
         seedStatus: null,
         awaitingEnd: false,
         lastGatePollAt: null,
+        lastGatePollPending: false,
       };
       states.set(jobId, state);
     }
@@ -164,6 +209,20 @@ export function createMcpNudgeTracker(
   function notePendingCount(jobId: number, count: number, nowMs: number): void {
     const state = ensure(jobId, nowMs);
     state.pendingCount = Math.max(0, count);
+  }
+
+  function noteGatePoll(jobId: number, nowMs: number, pending: boolean): void {
+    const state = ensure(jobId, nowMs);
+    state.lastGatePollAt = nowMs;
+    state.lastGatePollPending = pending;
+  }
+
+  function gatePollBackoff(jobId: number, nowMs: number): { retryAfterSeconds: number } | null {
+    const state = ensure(jobId, nowMs);
+    if (!state.lastGatePollPending) return null;
+    const retryAfterSeconds = gatePollRetryAfterSeconds(state.lastGatePollAt, nowMs);
+    if (retryAfterSeconds === null) return null;
+    return { retryAfterSeconds };
   }
 
   function noteToolSuccess(jobId: number, toolName: string, nowMs: number): void {
@@ -234,19 +293,6 @@ export function createMcpNudgeTracker(
       });
     }
 
-    // Agents cannot sleep between tool calls, so "poll every ~30s" becomes a tight loop
-    // that burns connector tool budgets. Soft-warn when polls are closer than the gap.
-    if (toolName === 'get_gate_verdict') {
-      if (state.lastGatePollAt !== null && nowMs - state.lastGatePollAt < GATE_POLL_MIN_INTERVAL_MS) {
-        const waitSec = Math.max(1, Math.ceil((GATE_POLL_MIN_INTERVAL_MS - (nowMs - state.lastGatePollAt)) / 1000));
-        warnings.push({
-          code: 'gate_poll_backoff',
-          message: `Do not busy-poll get_gate_verdict — wait ~${waitSec}s wall-clock before the next poll (retryAfterSeconds=${GATE_POLL_RETRY_AFTER_SECONDS}). If you will not deliver more, call end instead; Studio shows the gate.`,
-        });
-      }
-      state.lastGatePollAt = nowMs;
-    }
-
     return warnings;
   }
 
@@ -260,6 +306,8 @@ export function createMcpNudgeTracker(
     noteEnded,
     notePendingCount,
     noteToolSuccess,
+    noteGatePoll,
+    gatePollBackoff,
     warningsFor,
     peek: (jobId) => states.get(jobId),
   };

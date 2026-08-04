@@ -1063,7 +1063,7 @@ describe('POST /api/mcp (BY-05)', () => {
     expect((await store.getSubmission(ISSUE))?.lastAgentPresence?.key).toBe('waiting_checks');
   });
 
-  it('pending get_gate_verdict carries retryAfterSeconds and soft-warns on busy-poll', async () => {
+  it('pending get_gate_verdict carries retryAfterSeconds and hard-refuses busy-poll', async () => {
     const store = new InMemoryStore();
     await seedJob(store);
     // No gate verdict on the version yet — channel returns pending.
@@ -1097,13 +1097,17 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(String((first.structured as { summary?: string }).summary)).toMatch(/do not busy-poll/i);
     const firstWarnings = (first.structured as { warnings?: Array<{ code: string }> }).warnings ?? [];
     expect(firstWarnings.some((w) => w.code === 'call_end')).toBe(true);
+    // Soft warning path is gone — Claude ignored it.
     expect(firstWarnings.some((w) => w.code === 'gate_poll_backoff')).toBe(false);
+    expect((await store.getSubmission(ISSUE))?.lastAgentPresence?.key).toBe('waiting_checks');
 
     const second = await callTool(app, 'get_gate_verdict', { sessionKey }, { 'mcp-session-id': sessionId });
-    expect(second.isError).toBe(false);
-    const secondWarnings = (second.structured as { warnings?: Array<{ code: string }> }).warnings ?? [];
-    expect(secondWarnings.some((w) => w.code === 'gate_poll_backoff')).toBe(true);
-    expect(secondWarnings.some((w) => w.code === 'call_end')).toBe(true);
+    expect(second.isError).toBe(true);
+    expect(second.structured).toMatchObject({
+      code: 'gate_poll_backoff',
+    });
+    expect(typeof (second.structured as { retryAfterSeconds?: number }).retryAfterSeconds).toBe('number');
+    expect(String((second.structured as { error?: string }).error)).toMatch(/busy-poll refused/i);
   });
 
   it('rejects malformed base64 on stage_source_file instead of silently corrupting', async () => {
