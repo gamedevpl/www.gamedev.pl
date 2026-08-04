@@ -33,6 +33,11 @@ type GameFrameProps = GameFrameSource & {
  * Microphone loudness for shout games is owned by the theater shell
  * (`useVoiceMeterBridge`). Opaque-origin documents cannot call `getUserMedia`
  * without `allow-same-origin`, which we never grant.
+ *
+ * The `allow` list must never grow `tools`: WebMCP-capable browsers expose agent
+ * tool registration to a cross-origin iframe granted `allow="tools"`, and game
+ * code is untrusted — it must never present tools to a visitor's browser agent.
+ * Asserted in GameFrame.sandbox.test.ts; invariant in docs/security-model.md.
  */
 export function GameFrame(props: GameFrameProps) {
   const localRef = useRef<HTMLIFrameElement>(null);
