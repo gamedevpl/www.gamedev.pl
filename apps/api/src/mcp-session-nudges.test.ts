@@ -87,7 +87,12 @@ describe('mcp-session-nudges', () => {
     const nudges = createMcpNudgeTracker();
     const t0 = 1_000_000;
     expect(nudges.warningsFor(1, 'get_gate_verdict', t0).map((w) => w.code)).not.toContain('gate_poll_backoff');
-    expect(nudges.warningsFor(1, 'get_gate_verdict', t0 + 1_000).map((w) => w.code)).toContain('gate_poll_backoff');
+    const repeated = nudges.warningsFor(1, 'get_gate_verdict', t0 + 1_000);
+    expect(repeated.map((w) => w.code)).toContain('gate_poll_backoff');
+    const message = repeated.find((w) => w.code === 'gate_poll_backoff')?.message ?? '';
+    expect(message).toMatch(/deliveryId is null.*submit_sources/i);
+    expect(message).toContain('retryAfterSeconds=30');
+    expect(message).not.toMatch(/~\d+s/);
     expect(
       nudges.warningsFor(1, 'get_gate_verdict', t0 + 1_000 + GATE_POLL_MIN_INTERVAL_MS).map((w) => w.code),
     ).not.toContain('gate_poll_backoff');
