@@ -313,6 +313,57 @@ describe('self builder (BY-02)', () => {
     expect(stored[0]?.backend).toBe('self');
   });
 
+  it('re-delivers from the latest candidate without re-uploading the tree', async () => {
+    const { gamesStore, stored } = stubGamesStore();
+    const created = await createApp({ gamesStore });
+    app = created.app;
+    const { store } = created;
+
+    const submit = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders(),
+      payload: { title: 'Reuse Delivery', concept: CONCEPT, builder: 'self' },
+    });
+    const slug = submit.json().slug as string;
+    let issueNumber = 0;
+    await vi.waitFor(async () => {
+      issueNumber = (await store.listSubmissionsByOwner('g:creator'))[0]!.issueNumber;
+    });
+
+    const first = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/sources',
+      headers: agentHeaders(issueNumber),
+      payload: { slug, files: MINIMAL_FILES, kitEngineRef: KIT_REF, mode: 'preview' },
+    });
+    expect(first.json()).toMatchObject({ accepted: true });
+    expect(stored).toHaveLength(1);
+
+    const nextKit = 'fedcba0987654321';
+    const reused = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/sources',
+      headers: agentHeaders(issueNumber),
+      payload: {
+        slug,
+        fromLatestDelivery: true,
+        kitEngineRef: nextKit,
+        mode: 'preview',
+        files: [{ path: 'SPEC.md', content: '# Patched only\n' }],
+      },
+    });
+    expect(reused.statusCode).toBe(200);
+    expect(reused.json()).toMatchObject({ accepted: true });
+    expect(stored).toHaveLength(2);
+    expect(stored[1]?.kitEngineRef).toBe(nextKit);
+    const secondFiles = stored[1]?.files as Array<{ path: string; content: string }>;
+    expect(secondFiles.find((f) => f.path === 'SPEC.md')?.content).toBe('# Patched only\n');
+    expect(secondFiles.find((f) => f.path === 'game.ts')?.content).toBe(
+      MINIMAL_FILES.find((f) => f.path === 'game.ts')!.content,
+    );
+  });
+
   it('rejects a self-build delivery that omits kitEngineRef', async () => {
     const { gamesStore } = stubGamesStore();
     const created = await createApp({ gamesStore });

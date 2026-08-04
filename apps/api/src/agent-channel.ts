@@ -194,6 +194,14 @@ const BuildSourcesInputSchema = z
      */
     fromStaged: z.boolean().optional(),
     /**
+     * Re-deliver the job's latest candidate (previewVersion, then deliveredVersion)
+     * from the games store without the agent re-uploading every path. Built for
+     * `kit_outdated`: get_kit → submit_sources({ fromLatestDelivery:true, kitEngineRef })
+     * with optional files[] overlays for paths that actually changed. Mutually exclusive
+     * with fromStaged.
+     */
+    fromLatestDelivery: z.boolean().optional(),
+    /**
      * Creator Kit engineRef the sources were built against. Required for self-build
      * deliveries (BY-06); the gate compares it to `kits/current.json`'s N/N−1 window.
      */
@@ -211,11 +219,19 @@ const BuildSourcesInputSchema = z
     mode: z.enum(['preview', 'publish']).default('publish'),
   })
   .superRefine((value, ctx) => {
-    const inline = value.files?.length ?? 0;
-    if (!value.fromStaged && inline === 0) {
+    if (value.fromStaged && value.fromLatestDelivery) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'files is required (or set fromStaged=true after staging files one-by-one)',
+        message: 'fromStaged and fromLatestDelivery cannot both be true — pick one',
+        path: ['fromLatestDelivery'],
+      });
+    }
+    const inline = value.files?.length ?? 0;
+    if (!value.fromStaged && !value.fromLatestDelivery && inline === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          'files is required (or set fromStaged=true after staging, or fromLatestDelivery=true to reuse the last candidate)',
         path: ['files'],
       });
     }
@@ -619,8 +635,10 @@ export async function registerAgentChannelRoutes(
               mustFixGate:
                 gate.status === 'kit_outdated'
                   ? `The gate refused your delivery (${gate.version}) because the Creator Kit is ` +
-                    'outdated (`kit_outdated`). Refresh the kit (re-run get_kit), rebuild against ' +
-                    'it, and deliver again with the new kitEngineRef.'
+                    'outdated (`kit_outdated`). Re-run get_kit for a fresh engineRef, then ' +
+                    'submit_sources({ fromLatestDelivery: true, mode, kitEngineRef }) — do NOT ' +
+                    're-stage or re-upload the whole tree through the model (burns tokens). Only ' +
+                    'pass files[] for paths you actually changed for the new kit.'
                   : gate.status === 'preview_failed'
                     ? `The preview check refused your delivery (${gate.version}). Fix typecheck/smoke/build, ` +
                       'then submit_sources again with mode=preview. TRACE.json is not required until mode=publish.'
@@ -1120,7 +1138,35 @@ export async function registerAgentChannelRoutes(
           : (record.roundGeneration ?? 1);
 
         let files = parsed.data.files ?? [];
-        if (parsed.data.fromStaged) {
+        if (parsed.data.fromLatestDelivery) {
+          const version = record.previewVersion ?? record.deliveredVersion;
+          if (!version) {
+            return reply.status(400).send({
+              error: 'fromLatestDelivery=true but this job has no candidate yet — deliver files[] or fromStaged first',
+            });
+          }
+          const manifest = await options.gamesStore.getManifest(slug, version);
+          if (!manifest) {
+            return reply.status(502).send({ error: 'the latest delivery could not be read back' });
+          }
+          const loaded = await Promise.all(
+            manifest.sourceFiles.map(async (path) => ({
+              path,
+              content: await options.gamesStore!.getSourceFile(slug, version, path),
+            })),
+          );
+          const missing = loaded.filter((file) => file.content === null).map((file) => file.path);
+          if (missing.length > 0) {
+            request.log.error({ slug, version, missing }, 'latest delivery missing files its manifest lists');
+            return reply.status(502).send({ error: 'the latest delivery could not be read back' });
+          }
+          // Inline files win on path collision so kit_outdated / small fixes overlay without
+          // re-uploading the whole tree through the model.
+          const byPath = new Map<string, string>();
+          for (const file of loaded) byPath.set(file.path, file.content as string);
+          for (const file of files) byPath.set(file.path, file.content);
+          files = [...byPath.entries()].map(([path, content]) => ({ path, content }));
+        } else if (parsed.data.fromStaged) {
           const staged = await options.gamesStore.getStagedSourceFiles({
             slug,
             issueNumber,

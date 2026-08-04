@@ -24,6 +24,15 @@ Source of truth: `SESSION_WORKFLOW` + `BEHAVIOURAL_CONTRACT` in
 4. Poll `get_gate_verdict` (and `get_gate_media` after a publish verdict)
 5. **After the last successful `submit_sources`, call `end`** if you will not deliver more
 
+### `kit_outdated` — do not re-upload the tree
+
+When the gate returns `kit_outdated` (or soft copy says the kit rotated):
+
+1. `get_kit` for a fresh `engineRef` only — do not dump the kit into context
+2. `submit_sources({ fromLatestDelivery: true, mode, kitEngineRef })` — server copies the
+   last candidate; optional `files[]` only for paths you actually changed
+3. Do **not** `get_sources` + `stage_source_file` every path again (burns connector tokens)
+
 ### `end` is required after submit (not optional etiquette)
 
 ChatGPT-class agents usually **submit and stop**. Soft `call_end` alone was not

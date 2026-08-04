@@ -364,6 +364,7 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(gateVerdict?.description).toMatch(/~30s/);
     expect(gateVerdict?.description).toMatch(/kit_outdated/);
     expect(gateVerdict?.description).toMatch(/re-run get_kit/);
+    expect(gateVerdict?.description).toMatch(/fromLatestDelivery/);
     expect(gateVerdict?.description).toMatch(/terminal receipt/i);
   });
 
@@ -474,7 +475,8 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(joined).toMatch(/terminal receipt/i);
     // Both failure branches are covered.
     expect(joined).toMatch(/red \/ preview_failed:.*resubmit on the SAME key/i);
-    expect(joined).toMatch(/kit_outdated: re-run get_kit/i);
+    expect(joined).toMatch(/kit_outdated:.*fromLatestDelivery/i);
+    expect(joined).toMatch(/do NOT get_sources \+ re-stage/i);
 
     // Inbox policy: no scheduled polling; drain non-empty pendingMessages from write replies.
     expect(result.structuredContent.inboxPolicy).toMatch(/do not schedule background or recurring inbox checks/i);
