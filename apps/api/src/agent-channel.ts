@@ -48,6 +48,7 @@ import {
 import { seedPayload } from './seed-status.js';
 import { type CreatorMessage, type Store, type SubmissionRecord } from './store.js';
 import { BUILD_EVENT_KINDS, BUILD_STEPS, sanitizeCreatorText, type BuildEvent } from './submission-status.js';
+import { createTranslatorFromEnv, normalizeLocale, type Translator } from './translate.js';
 
 /**
  * The build channel (docs/agent-live-channel-plan.md).
@@ -291,6 +292,13 @@ export interface AgentChannelOptions {
    * and the creator's next poll shows the update rather than a stale snapshot.
    */
   onEvent?: (issueNumber: number) => void;
+  /**
+   * Localizes a progress report that arrived without one. Runs here, on the write, and
+   * never on the status read — a translation on the read path costs one model call per
+   * poll per viewer, which is exactly how 2026-08-04 happened. Defaults to
+   * createTranslatorFromEnv(); tests inject NoopTranslator.
+   */
+  translator?: Translator;
   /** Hard ceiling on stored events per build — bounds a looping agent's cost. */
   maxEventsPerBuild?: number;
   /** Events one build may record per hour. */
@@ -363,6 +371,7 @@ export async function registerAgentChannelRoutes(
   const store = options.store;
   const agentTokenSecret = options.agentTokenSecret ?? process.env.SUBMISSION_TOKEN_SECRET;
   const now = options.now ?? Date.now;
+  const translator = options.translator ?? createTranslatorFromEnv();
   const maxEventsPerBuild = options.maxEventsPerBuild ?? 500;
   const maxEventsPerWindow = options.maxEventsPerWindow ?? 240;
   const maxInboxChecksPerWindow = 600;
@@ -662,6 +671,38 @@ export async function registerAgentChannelRoutes(
     };
   }
 
+  /**
+   * Put one progress sentence into the creator's language, or answer null.
+   *
+   * This is the fallback for agents that ignore `report_progress`'s textLocalized/locale
+   * pair. It runs on the write, exactly once per event, and is never retried: if it
+   * fails, the event stays English forever rather than being re-attempted by whoever
+   * reads it next. That asymmetry is the entire point. The previous design translated on
+   * the status read, where a failure cached nothing and the next 3s poll asked again —
+   * 9,250 billed-and-discarded calls in a day (2026-08-04).
+   *
+   * Cost here is bounded by content: one short sentence, capped at maxEventsPerBuild per
+   * build, rather than by how many people are watching.
+   */
+  async function localizeForCreator(
+    text: string,
+    record: SubmissionRecord,
+  ): Promise<{ textLocalized: string; locale: string } | null> {
+    const locale = normalizeLocale(record.locale);
+    if (locale === 'en') return null;
+    try {
+      const [translated] = await translator.translate([text], locale);
+      const clean = translated ? sanitizeCreatorText(translated, { singleLine: true }).slice(0, MAX_EVENT_TEXT) : '';
+      // Translators fail open by returning the source unchanged, and NoopTranslator always
+      // does. Storing that would tag English text as Polish and stop the reader ever
+      // seeing a real translation, so an unchanged string counts as no translation.
+      return clean && clean !== text ? { textLocalized: clean, locale } : null;
+    } catch {
+      // Decorative: a build must never fail because a sentence could not be translated.
+      return null;
+    }
+  }
+
   // IP ceilings sit above the per-build limiters inside each handler. Agents
   // share a Cloud Run egress IP, so these are generous; the build-keyed checks
   // remain the real abuse control.
@@ -703,6 +744,11 @@ export async function registerAgentChannelRoutes(
       // A localized sentence without a language tag cannot be matched to a reader, so
       // it is dropped rather than shown to someone who may not read it.
       const hasLocalized = Boolean(localized && parsed.data.locale);
+      // The agent sending the pair is the cheap path and the one report_progress asks
+      // for; translating is the fallback for the ones that do not.
+      const localization = hasLocalized
+        ? { textLocalized: localized, locale: parsed.data.locale as string }
+        : await localizeForCreator(text, record);
       const progress = parsed.data.progress
         ? { done: Math.min(parsed.data.progress.done, parsed.data.progress.total), total: parsed.data.progress.total }
         : undefined;
@@ -711,7 +757,7 @@ export async function registerAgentChannelRoutes(
         kind: parsed.data.kind,
         ...(parsed.data.step ? { step: parsed.data.step } : {}),
         text,
-        ...(hasLocalized ? { textLocalized: localized, locale: parsed.data.locale } : {}),
+        ...(localization ?? {}),
         ...(progress ? { progress } : {}),
       };
 

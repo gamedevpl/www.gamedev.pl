@@ -13,5 +13,10 @@ import { configDefaults, defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     exclude: [...configDefaults.exclude, '**/.claude/worktrees/**'],
+    // Mirrors apps/api/vitest.config.ts. A root-level ad-hoc run loads this config
+    // instead of the package's, and without the setup file an API test invoked that way
+    // can reach live Vertex through ambient credentials. The file only sets env vars, so
+    // it is harmless for packages that do not need it.
+    setupFiles: ['./apps/api/vitest.setup.ts'],
   },
 });

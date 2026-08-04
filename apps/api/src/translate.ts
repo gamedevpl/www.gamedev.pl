@@ -2,20 +2,21 @@
 // a creator watching their game get built reads the site in their own language — an
 // untranslated log is the single most alienating part of the wait.
 //
-// STATUS: only `normalizeLocale` is wired (submissions.ts, refine.ts). `VertexTranslator`
-// is deliberately unreferenced right now. It used to run on the status read path, which
-// was a mistake worth recording: the endpoint is polled every 3s, and a failed call
-// cached nothing, so one latency regression turned every poll into a billed Vertex
-// request that was aborted at 4s and thrown away — ~9,250 discarded calls in a day.
+// WHERE THIS RUNS: the build-progress write handler in agent-channel.ts, and nowhere
+// else. It used to run on the status read path, which is the mistake worth recording:
+// that endpoint is polled every 3s, a failed call cached nothing, and so one latency
+// regression turned every poll into a billed Vertex request that was aborted at 4s and
+// thrown away — ~9,250 discarded calls in a day (2026-08-04).
 //
-// Localization belongs at intake instead, where it costs one call per event rather than
-// one per poll per viewer. The first line of defence is `report_progress` asking agents
-// for `textLocalized` + `locale` outright; this class is what should fill the gap when
-// an agent does not comply, called from the write path — never from a read.
+// Localization therefore happens at intake, where it costs one call per event rather
+// than one per poll per viewer. The first line of defence is `report_progress` asking
+// agents for `textLocalized` + `locale` outright; this class only fills the gap left by
+// agents that do not comply.
 //
-// Whatever calls it must keep the properties the read path could not: cache failures as
-// well as successes (or the retry loop comes straight back), and stay decorative — any
-// failure falls back to the original English rather than failing the request.
+// Two properties any future caller must preserve, both of which the read path lacked:
+// a failure must not be retried by a later read (a stored event stays English, and that
+// is the correct outcome), and it stays decorative — any failure falls back to the
+// original English rather than failing the request.
 
 import type { GenAIClient } from 'genaicode';
 import { z } from 'zod';
@@ -127,9 +128,12 @@ export class VertexTranslator implements Translator {
 
   constructor(options: VertexTranslatorOptions = {}) {
     this.options = options;
-    // Kept short: this sits inline in a polled endpoint, and a miss just means the
-    // English line shows until the next poll picks up the cached translation.
-    this.timeoutMs = options.timeoutMs ?? Number(process.env.VERTEX_TRANSLATE_TIMEOUT_MS ?? '4000');
+    // 8s, not the 4s this used to carry. The old budget was sized for a 3s-polled read
+    // where a miss cost nothing because the next poll would retry — the assumption that
+    // turned a latency regression into 9,250 billed retries. On the write path a miss is
+    // permanent (nothing retries a stored event), so the call is given room to finish.
+    // It is still bounded: an agent waiting on report_progress must not wait forever.
+    this.timeoutMs = options.timeoutMs ?? Number(process.env.VERTEX_TRANSLATE_TIMEOUT_MS ?? '8000');
     // A paragraphs-long change request needs more room than a commit subject, and the
     // log budget would time it out every poll — failing open forever to the English the
     // creator complained about. Only the first poll after a relay pays it; the result is

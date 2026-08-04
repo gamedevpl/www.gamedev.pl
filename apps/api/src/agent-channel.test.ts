@@ -7,6 +7,7 @@ import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } f
 import type { GamesStore } from './games-store.js';
 import { InMemoryStore } from './store.js';
 import { mintToken } from './submission-token.js';
+import type { Translator } from './translate.js';
 
 const secret = 'test-secret';
 const ISSUE = 42;
@@ -35,6 +36,7 @@ const sessionSecret = 'dev-session-secret-change-me';
 async function createApp(
   store: InMemoryStore,
   agentChannel?: {
+    translator?: Translator;
     maxEventsPerWindow?: number;
     gamesStore?: GamesStore;
     maxSubmitsPerWindow?: number;
@@ -155,6 +157,104 @@ describe('agent build channel', () => {
 
     const events = await store.listBuildEvents(ISSUE);
     expect(events[0]!.textLocalized).toBeUndefined();
+  });
+
+  it('localizes an English-only progress report once, on the write', async () => {
+    // report_progress asks agents for textLocalized + locale, and the ones that comply
+    // cost nothing. This is the fallback for the ones that do not — and it belongs here,
+    // on the write, because the alternative (translating when somebody reads the status)
+    // costs one model call per poll per viewer.
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    const asked: string[][] = [];
+    const translator: Translator = {
+      translate: async (texts) => {
+        asked.push(texts);
+        return texts.map((t) => `PL:${t}`);
+      },
+    };
+    app = await createApp(store, { translator });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/progress',
+      headers: agentHeaders(),
+      payload: { text: 'Drawing the soldiers.' },
+    });
+
+    const events = await store.listBuildEvents(ISSUE);
+    expect(events[0]!.textLocalized).toBe('PL:Drawing the soldiers.');
+    expect(events[0]!.locale).toBe('pl');
+    expect(asked).toEqual([['Drawing the soldiers.']]);
+
+    // Reading the status any number of times must not translate anything. This is the
+    // assertion that would have caught 2026-08-04: the leak was not a bad translation,
+    // it was a translation on a 3s-polled read path.
+    for (let i = 0; i < 3; i++) {
+      await app.inject({ method: 'GET', url: `/api/submissions/${mintToken(ISSUE, secret)}?locale=pl` });
+    }
+    expect(asked).toHaveLength(1);
+  });
+
+  it('does not translate when the agent already sent both languages', async () => {
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    let calls = 0;
+    const translator: Translator = {
+      translate: async (texts) => {
+        calls++;
+        return texts;
+      },
+    };
+    app = await createApp(store, { translator });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/progress',
+      headers: agentHeaders(),
+      payload: { text: 'Drawing the soldiers.', textLocalized: 'Rysuję żołnierzy.', locale: 'pl' },
+    });
+
+    const events = await store.listBuildEvents(ISSUE);
+    expect(events[0]!.textLocalized).toBe('Rysuję żołnierzy.');
+    expect(calls).toBe(0);
+  });
+
+  it('stores the English text when translation fails, and never retries it', async () => {
+    // Decorative by contract: a build must not fail, and must not get slower, because a
+    // sentence could not be translated. The event stays English permanently — that is the
+    // correct outcome, and the opposite of the read-path design, where a failure cached
+    // nothing and the next poll asked again forever.
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    let calls = 0;
+    const translator: Translator = {
+      translate: async () => {
+        calls++;
+        throw new Error('vertex is down');
+      },
+    };
+    app = await createApp(store, { translator });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/progress',
+      headers: agentHeaders(),
+      payload: { text: 'Drawing the soldiers.' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().accepted).toBe(true);
+    const events = await store.listBuildEvents(ISSUE);
+    expect(events[0]!.text).toBe('Drawing the soldiers.');
+    expect(events[0]!.textLocalized).toBeUndefined();
+
+    const status = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(ISSUE, secret)}?locale=pl`,
+    });
+    expect(status.json().events[0].text).toBe('Drawing the soldiers.');
+    expect(calls).toBe(1);
   });
 
   it('sanitizes agent text and caps its length', async () => {
