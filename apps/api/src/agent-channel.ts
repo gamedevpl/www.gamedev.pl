@@ -48,7 +48,8 @@ import {
 import { seedPayload } from './seed-status.js';
 import { type CreatorMessage, type Store, type SubmissionRecord } from './store.js';
 import { BUILD_EVENT_KINDS, BUILD_STEPS, sanitizeCreatorText, type BuildEvent } from './submission-status.js';
-import { createTranslatorFromEnv, normalizeLocale, type Translator } from './translate.js';
+import { localizeAtIntake } from './localize-intake.js';
+import { createTranslatorFromEnv, type Translator } from './translate.js';
 
 /**
  * The build channel (docs/agent-live-channel-plan.md).
@@ -672,35 +673,17 @@ export async function registerAgentChannelRoutes(
   }
 
   /**
-   * Put one progress sentence into the creator's language, or answer null.
+   * The fallback for agents that ignore `report_progress`'s textLocalized/locale pair.
+   * See localize-intake.ts for why this runs on the write and never on the read.
    *
-   * This is the fallback for agents that ignore `report_progress`'s textLocalized/locale
-   * pair. It runs on the write, exactly once per event, and is never retried: if it
-   * fails, the event stays English forever rather than being re-attempted by whoever
-   * reads it next. That asymmetry is the entire point. The previous design translated on
-   * the status read, where a failure cached nothing and the next 3s poll asked again —
-   * 9,250 billed-and-discarded calls in a day (2026-08-04).
-   *
-   * Cost here is bounded by content: one short sentence, capped at maxEventsPerBuild per
+   * Cost is bounded by content: one short sentence, capped at maxEventsPerBuild per
    * build, rather than by how many people are watching.
    */
   async function localizeForCreator(
     text: string,
     record: SubmissionRecord,
   ): Promise<{ textLocalized: string; locale: string } | null> {
-    const locale = normalizeLocale(record.locale);
-    if (locale === 'en') return null;
-    try {
-      const [translated] = await translator.translate([text], locale);
-      const clean = translated ? sanitizeCreatorText(translated, { singleLine: true }).slice(0, MAX_EVENT_TEXT) : '';
-      // Translators fail open by returning the source unchanged, and NoopTranslator always
-      // does. Storing that would tag English text as Polish and stop the reader ever
-      // seeing a real translation, so an unchanged string counts as no translation.
-      return clean && clean !== text ? { textLocalized: clean, locale } : null;
-    } catch {
-      // Decorative: a build must never fail because a sentence could not be translated.
-      return null;
-    }
+    return localizeAtIntake(translator, text, record.locale, { kind: 'log', maxLength: MAX_EVENT_TEXT });
   }
 
   // IP ceilings sit above the per-build limiters inside each handler. Agents

@@ -1284,13 +1284,63 @@ describe('submission routes', () => {
     // The creator's own sentence is already in the language they chose to write it in.
     expect(revisions[0]).toMatchObject({ text: 'Zrób paczki większe.' });
     expect(revisions[0].origin).toBeUndefined();
-    // Verbatim, even though the reader asked for `pl`: the relay is labelled rather than
-    // rewritten. Anything that turns this back into a translated string has put a model
-    // call on the poll path again.
+    // Verbatim, even though the reader asked for `pl`: nothing was stored alongside it.
+    // Anything that turns this into a translated string has put a model call on the poll
+    // path again — the translation must come from the write, not from here.
     expect(revisions[1]).toMatchObject({
       text: 'Major systems pass: zoom out the battlefield.',
       origin: 'agent',
     });
+
+    await app.close();
+  });
+
+  it('serves a relayed request in the reader’s language from what the write stored', async () => {
+    // The other half of the same contract: the poll resolves language by *choosing*
+    // between stored strings, never by producing one. See localize-intake.ts.
+    const { githubClient } = createGithubClientStub({ issueNumber: 79 });
+    const { backend } = createBackendStub();
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    const token = mintToken(job.issueNumber, secret);
+
+    await store.appendCreatorMessage(job.issueNumber, 'Zoom out the battlefield.', {
+      origin: 'agent',
+      textLocalized: 'Oddal widok pola bitwy.',
+      locale: 'pl',
+    });
+
+    const polish = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${token}?locale=pl`,
+      headers: authHeaders,
+    });
+    const plRevision = polish.json().progress?.revisions?.[0];
+    expect(plRevision).toMatchObject({ text: 'Oddal widok pola bitwy.', origin: 'agent' });
+    // One resolved sentence on the wire — the client never has to pick, and never sees a
+    // language it did not ask for.
+    expect(plRevision.textLocalized).toBeUndefined();
+    expect(plRevision.locale).toBeUndefined();
+
+    // A reader in another language gets the agent's own wording rather than Polish they
+    // may not read.
+    const english = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${token}?locale=en`,
+      headers: authHeaders,
+    });
+    expect(english.json().progress?.revisions?.[0]).toMatchObject({ text: 'Zoom out the battlefield.' });
 
     await app.close();
   });

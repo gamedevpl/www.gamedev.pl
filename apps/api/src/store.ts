@@ -472,11 +472,24 @@ export interface CreatorMessage {
    *
    * Absent means `creator`: every message written before this field existed came from
    * the composer, and the two paths are not interchangeable downstream. Studio labels
-   * them differently and only translates the relayed kind — presenting an agent's
+   * them differently and only the relayed kind is ever translated — presenting an agent's
    * English summary as the creator's own message is how a Polish creator ended up
    * reading words they never wrote, in a language they did not choose.
    */
   origin?: CreatorMessageOrigin;
+  /**
+   * The relayed text in the creator's language, filled in on the write (see
+   * localize-intake.ts). Only ever set for `origin: 'agent'` — a creator's own words are
+   * already in the language they chose, and running them through a translator would hand
+   * them back a paraphrase of their own request.
+   *
+   * Absent means the status page shows `text` as written. That is the fail-open outcome
+   * when translation was unavailable, and it is never retried by a reader: the whole
+   * point of doing this on the write is that a read costs nothing.
+   */
+  textLocalized?: string;
+  /** Which language `textLocalized` is in. Without it the field cannot be matched. */
+  locale?: string;
 }
 
 /** @see CreatorMessage.origin */
@@ -1638,7 +1651,7 @@ export interface Store {
   appendCreatorMessage(
     issueNumber: number,
     text: string,
-    opts?: { origin?: CreatorMessageOrigin; delivered?: boolean },
+    opts?: { origin?: CreatorMessageOrigin; delivered?: boolean; textLocalized?: string; locale?: string },
   ): Promise<CreatorMessage>;
   /** Undelivered creator messages, oldest first — the agent's inbox. */
   listPendingCreatorMessages(issueNumber: number, opts?: { limit?: number }): Promise<CreatorMessage[]>;
@@ -2949,7 +2962,7 @@ export class InMemoryStore implements Store {
   async appendCreatorMessage(
     issueNumber: number,
     text: string,
-    opts?: { origin?: CreatorMessageOrigin; delivered?: boolean },
+    opts?: { origin?: CreatorMessageOrigin; delivered?: boolean; textLocalized?: string; locale?: string },
   ): Promise<CreatorMessage> {
     const now = new Date().toISOString();
     const record: CreatorMessage = {
@@ -2958,6 +2971,7 @@ export class InMemoryStore implements Store {
       createdAt: now,
       deliveredAt: opts?.delivered ? now : null,
       ...(opts?.origin === 'agent' ? { origin: 'agent' as const } : {}),
+      ...(opts?.textLocalized && opts?.locale ? { textLocalized: opts.textLocalized, locale: opts.locale } : {}),
     };
     const existing = this.creatorMessages.get(issueNumber) ?? [];
     existing.push(record);
@@ -4920,7 +4934,7 @@ export class FirestoreStore implements Store {
   async appendCreatorMessage(
     issueNumber: number,
     text: string,
-    opts?: { origin?: CreatorMessageOrigin; delivered?: boolean },
+    opts?: { origin?: CreatorMessageOrigin; delivered?: boolean; textLocalized?: string; locale?: string },
   ): Promise<CreatorMessage> {
     // `origin` is spread in only when it is `agent`: Firestore rejects an explicit
     // `undefined`, and a stored `'creator'` would say nothing the absent field does not.
@@ -4931,6 +4945,7 @@ export class FirestoreStore implements Store {
       createdAt: now,
       deliveredAt: opts?.delivered ? now : null,
       ...(opts?.origin === 'agent' ? { origin: 'agent' as const } : {}),
+      ...(opts?.textLocalized && opts?.locale ? { textLocalized: opts.textLocalized, locale: opts.locale } : {}),
     };
     await this.messagesCollection(issueNumber).doc(record.id).set(record);
     return record;

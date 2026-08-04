@@ -75,15 +75,18 @@ import {
 import {
   CREATOR_FEEDBACK_MARKER,
   countCreatorClarifications,
+  MAX_REVISION_CHARS,
   sanitizeCreatorText,
   type BuildEvent,
   type BuildMediaItem,
   type BuildPlayableItem,
+  type CreatorRevision,
   type SubmissionStatus,
   type SubmissionStatusResponse,
 } from './submission-status.js';
 import { InvalidTokenError, mintToken, verifyToken } from './submission-token.js';
-import { normalizeLocale } from './translate.js';
+import { localizeAtIntake } from './localize-intake.js';
+import { createTranslatorFromEnv, normalizeLocale, type Translator } from './translate.js';
 import { isVariantWidth } from './image-variants.js';
 import { logModerationRejection } from './moderation-metrics.js';
 
@@ -248,6 +251,12 @@ export interface SubmissionRoutesOptions {
   githubToken?: string;
   gamesRepo?: string;
   submissionTokenSecret?: string;
+  /**
+   * Localizes an agent-relayed change request on the write that stores it. Used by the
+   * two relay paths and by nothing that serves a read — see the note on the instance.
+   * Defaults to createTranslatorFromEnv(); tests inject a stub.
+   */
+  translator?: Translator;
   /** Forwarded to the MCP routes so the endpoint can say the product is closed. Copy only. */
   privateBeta?: boolean;
   githubClient?: GitHubClient;
@@ -1137,6 +1146,26 @@ export async function registerSubmissionRoutes(
    * suggestion — so that they cannot disagree about how work reaches an agent. When the
    * legacy issue leg is retired this is one branch to delete rather than two that drifted.
    */
+  /**
+   * The localization pair to store alongside a relayed change request, or nothing.
+   *
+   * Only for `origin: 'agent'`. A creator's own words are already in the language they
+   * chose to type them in; translating those would hand them back a paraphrase of their
+   * own request, which is the bug the `origin` field exists to prevent.
+   */
+  async function relayedMessageLocalization(
+    origin: 'agent' | 'creator' | undefined,
+    text: string,
+    locale: string | undefined,
+  ): Promise<{ textLocalized: string; locale: string } | undefined> {
+    if (origin !== 'agent') return undefined;
+    // kind 'message', never 'log': a change request runs to numbered points and the log
+    // prompt would compress it into a summary with the creator's own details missing.
+    return (
+      (await localizeAtIntake(translator, text, locale, { kind: 'message', maxLength: MAX_REVISION_CHARS })) ?? undefined
+    );
+  }
+
   async function startImprovementRound(input: {
     /** The job that owns the published game. Its slug and owner seed the new job. */
     issueNumber: number;
@@ -1203,7 +1232,12 @@ export async function registerSubmissionRoutes(
     // note would read as a second, newer instruction to act on.
     if (input.requestedBy) {
       try {
-        await store.appendCreatorMessage(jobId, input.text, { origin: input.requestedBy, delivered: true });
+        const localization = await relayedMessageLocalization(input.requestedBy, input.text, input.locale);
+        await store.appendCreatorMessage(jobId, input.text, {
+          origin: input.requestedBy,
+          delivered: true,
+          ...(localization ?? {}),
+        });
       } catch (seedError) {
         // Best effort. The request still reaches the agent as the brief, so a failure
         // here costs the creator the echo, not the round.
@@ -1280,8 +1314,11 @@ export async function registerSubmissionRoutes(
       // Record who typed this. An agent calling `continue_draft` writes its own summary
       // of a conversation held somewhere else — usually in English, whatever the creator
       // was speaking — so the thread must not present it as the creator's own words.
+      const origin = input.openedBy === 'agent' ? ('agent' as const) : ('creator' as const);
+      const localization = await relayedMessageLocalization(origin, input.feedback, record.locale);
       await store.appendCreatorMessage(input.issueNumber, input.feedback, {
-        origin: input.openedBy === 'agent' ? 'agent' : 'creator',
+        origin,
+        ...(localization ?? {}),
       });
     } catch (queueError) {
       input.log.error({ err: queueError, issueNumber: input.issueNumber }, 'failed to queue continue_draft feedback');
@@ -1373,6 +1410,16 @@ export async function registerSubmissionRoutes(
   const statusRateLimitWindowMs = 60 * 1000;
   const maxStatusChecksPerWindow = 120;
   const statusChecksByIp = new Map<string, number[]>();
+  /**
+   * Used by `relayedMessageLocalization` and by nothing else in this file.
+   *
+   * A translator lived here once and was called from the status read, which is polled
+   * every 3s per watcher; when those calls began timing out nothing cached and every poll
+   * re-sent the batch — ~9,250 billed-and-discarded Vertex calls in a day (2026-08-04).
+   * It is back only to serve the two *writes* that store an agent-relayed change request.
+   * If a future change makes a read path reach for this, that is the bug.
+   */
+  const translator: Translator = options.translator ?? createTranslatorFromEnv();
   // Keyed by `${issueNumber}:${locale}` — the response body is localized, so two
   // languages must not share an entry.
   const statusCache = new Map<string, CachedStatus>();
@@ -1488,6 +1535,21 @@ export async function registerSubmissionRoutes(
    * An event without a matching `textLocalized` shows its English text. That is the
    * same fail-open contract the translating version had, minus the retry loop.
    */
+  /**
+   * The revision counterpart to `localizeEvents`, and pure for the same reason: this runs
+   * on a 3s-polled endpoint, so it may only choose between strings that are already
+   * stored. A relayed request with no matching translation shows the agent's own wording.
+   */
+  function localizeRevisions(revisions: CreatorRevision[], locale: string): CreatorRevision[] {
+    return revisions.map((revision) => {
+      const text = revision.locale === locale && revision.textLocalized ? revision.textLocalized : revision.text;
+      const resolved: CreatorRevision = { ...revision, text };
+      delete resolved.textLocalized;
+      delete resolved.locale;
+      return resolved;
+    });
+  }
+
   function localizeEvents(events: BuildEvent[], locale: string): BuildEvent[] {
     return events.map((event) => {
       const text = event.locale === locale && event.textLocalized ? event.textLocalized : event.text;
@@ -1528,6 +1590,11 @@ export async function registerSubmissionRoutes(
       ...(events.length > 0 ? { events: localizeEvents(events, locale) } : {}),
       ...(media.length > 0 ? { media } : {}),
       ...(playable.length > 0 ? { playable } : {}),
+      // Relayed change requests resolve here rather than in nativeJobStatus, so the
+      // cached status body stays language-neutral and one entry serves every reader.
+      ...(status.progress
+        ? { progress: { ...status.progress, revisions: localizeRevisions(status.progress.revisions, locale) } }
+        : {}),
     };
     if (!record) return next;
 
@@ -1893,10 +1960,15 @@ export async function registerSubmissionRoutes(
           headSha: playableVersion ?? '',
           commits: [],
           checklist: [],
+          // textLocalized/locale ride along and are resolved per reader in
+          // `localizeRevisions`; they never reach the wire.
           revisions: messages.map((message) => ({
             text: stripPlaytestContext(message.text),
             createdAt: message.createdAt,
             ...(message.origin === 'agent' ? { origin: 'agent' as const } : {}),
+            ...(message.textLocalized && message.locale
+              ? { textLocalized: stripPlaytestContext(message.textLocalized), locale: message.locale }
+              : {}),
           })),
         };
       }

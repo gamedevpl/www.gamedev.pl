@@ -34,10 +34,18 @@ export interface CreatorRevision {
   /**
    * Present, and `'agent'`, when an agent wrote this request on the creator's behalf
    * instead of the creator typing it (MCP `continue_draft({ feedback })`). Studio labels
-   * those as relayed and translates them; a creator's own words are shown untouched.
-   * Absent means the creator typed it.
+   * those as relayed and they are the only kind ever translated; a creator's own words
+   * are shown untouched. Absent means the creator typed it.
    */
   origin?: 'agent';
+  /**
+   * Server-internal, and stripped before this reaches the wire — exactly like the pair on
+   * BuildEvent. The translation is stored on the write and resolved against the reader's
+   * locale per request, so the client is handed one sentence rather than a choice, and no
+   * read ever calls a model to produce it.
+   */
+  textLocalized?: string;
+  locale?: string;
 }
 
 // Marker the games-repo relay workflow matches on. Kept out of the rendered comment
@@ -345,7 +353,8 @@ function parseChecklist(body: string | undefined): ChecklistItem[] {
 }
 
 const MAX_REVISIONS = 20;
-const MAX_REVISION_CHARS = 2000;
+/** Cap on one change request, and therefore on a stored translation of one. */
+export const MAX_REVISION_CHARS = 2000;
 
 /**
  * Pulls the creator's change requests back out of the PR conversation. Each was

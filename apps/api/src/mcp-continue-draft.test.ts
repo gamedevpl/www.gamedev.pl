@@ -12,6 +12,7 @@ import type { ContentChecker } from './moderation.js';
 import type { GamesStore } from './games-store.js';
 import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './github-client.js';
 import { InMemoryStore } from './store.js';
+import type { Translator } from './translate.js';
 
 const secret = 'continue-draft-test-secret';
 const OWNER = 'g:owner';
@@ -36,7 +37,7 @@ function stubGitHub(): GitHubClient {
   };
 }
 
-async function createApp(store: InMemoryStore, contentChecker?: ContentChecker) {
+async function createApp(store: InMemoryStore, contentChecker?: ContentChecker, translator?: Translator) {
   return buildApp({
     store,
     sessionSecret: 'dev-session-secret-change-me',
@@ -46,6 +47,7 @@ async function createApp(store: InMemoryStore, contentChecker?: ContentChecker) 
       githubToken: 'gh-token',
       submissionTokenSecret: secret,
       agentChannel: {} as { gamesStore?: GamesStore },
+      ...(translator ? { translator } : {}),
     },
   });
 }
@@ -177,6 +179,94 @@ describe('MCP continue_draft', () => {
       text: 'Make the paddle wider and add a second ball.',
       origin: 'agent',
     });
+  });
+
+  it('stores the relayed request in the creator’s language, translated on the write', async () => {
+    // The agent relays in whatever language it was speaking — nearly always English —
+    // and the creator reads the thread in theirs. This is translated here, on the write
+    // that stores it, so the 3s status poll that shows it never calls a model.
+    const store = new InMemoryStore();
+    await seedGreenDraft(store);
+    await store.setSubmissionLocale(DRAFT_ISSUE, 'pl');
+    const asked: Array<{ texts: string[]; kind?: string }> = [];
+    const translator: Translator = {
+      translate: async (texts, _locale, opts) => {
+        asked.push({ texts, kind: opts?.kind });
+        return texts.map((t) => `PL:${t}`);
+      },
+    };
+    const headers = await creatorHeaders(store);
+    app = await createApp(store, undefined, translator);
+
+    await callTool(
+      app,
+      'continue_draft',
+      { slug: SLUG, feedback: 'Make the paddle wider and add a second ball.' },
+      headers,
+    );
+
+    const messages = await store.listCreatorMessages(DRAFT_ISSUE);
+    expect(messages[0]).toMatchObject({
+      text: 'Make the paddle wider and add a second ball.',
+      textLocalized: 'PL:Make the paddle wider and add a second ball.',
+      locale: 'pl',
+      origin: 'agent',
+    });
+    // kind must be 'message', never 'log'. The log prompt compresses to one short line,
+    // which on a numbered change request hands the creator a summary of their own
+    // request with pieces missing.
+    expect(asked).toEqual([{ texts: ['Make the paddle wider and add a second ball.'], kind: 'message' }]);
+  });
+
+  it('leaves the relayed request in its own language when translation fails', async () => {
+    // Decorative, and never retried: the round must open even with Vertex down, and the
+    // stored message stays as the agent wrote it rather than being re-attempted by a
+    // reader. That asymmetry is what keeps a failure from becoming a per-poll retry.
+    const store = new InMemoryStore();
+    await seedGreenDraft(store);
+    await store.setSubmissionLocale(DRAFT_ISSUE, 'pl');
+    const translator: Translator = {
+      translate: async () => {
+        throw new Error('vertex is down');
+      },
+    };
+    const headers = await creatorHeaders(store);
+    app = await createApp(store, undefined, translator);
+
+    const res = await callTool(
+      app,
+      'continue_draft',
+      { slug: SLUG, feedback: 'Make the paddle wider.' },
+      headers,
+    );
+
+    expect((res.structured as { error?: string }).error).toBeUndefined();
+    const messages = await store.listCreatorMessages(DRAFT_ISSUE);
+    expect(messages[0]).toMatchObject({ text: 'Make the paddle wider.', origin: 'agent' });
+    expect(messages[0]!.textLocalized).toBeUndefined();
+  });
+
+  it('never translates a creator’s own words', async () => {
+    // The creator typed these in the language they chose. Running them through a
+    // translator would hand them back a paraphrase of their own request — the exact bug
+    // the origin field exists to prevent.
+    const store = new InMemoryStore();
+    await seedGreenDraft(store);
+    await store.setSubmissionLocale(DRAFT_ISSUE, 'pl');
+    let calls = 0;
+    const translator: Translator = {
+      translate: async (texts) => {
+        calls++;
+        return texts;
+      },
+    };
+    app = await createApp(store, undefined, translator);
+
+    await store.appendCreatorMessage(DRAFT_ISSUE, 'Zrób paletkę szerszą.', { origin: 'creator' });
+
+    const messages = await store.listCreatorMessages(DRAFT_ISSUE);
+    expect(messages[0]!.textLocalized).toBeUndefined();
+    expect(calls).toBe(0);
   });
 
   it('is idempotent while a round is already open', async () => {
