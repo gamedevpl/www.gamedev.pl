@@ -247,6 +247,12 @@ export interface SubmissionRecord {
    */
   lastAgentSignalAt?: string;
   /**
+   * When the agent called MCP `end` for this round. Surfaces stall `ended` and unlocks
+   * self→platform handoff without waiting for the quiet window. Cleared when the agent
+   * writes again or the round generation advances.
+   */
+  agentEndedAt?: string;
+  /**
    * Latest MCP presence thought (closed vocabulary key + timestamp).
    *
    * Not a chat event — Studio flashes it as a short headline while the agent is
@@ -1561,6 +1567,11 @@ export interface Store {
    * When `presence` is set, also stores a short-lived thought key for the Studio bar.
    */
   touchLastAgentSignalAt(issueNumber: number, at?: string, presence?: { key: string }): Promise<void>;
+  /**
+   * Marks that the agent finished iterating this round (MCP `end`). Idempotent.
+   * Does not bump generation or stop the channel — creator handoff does that.
+   */
+  markAgentEnded(issueNumber: number, at?: string): Promise<void>;
   /** Agent progress events for a build, newest first. */
   listBuildEvents(issueNumber: number, opts?: { limit?: number }): Promise<BuildEvent[]>;
   /** How many events a build has recorded — the cap that bounds a runaway agent. */
@@ -2489,6 +2500,7 @@ export class InMemoryStore implements Store {
       // round look "connected" before any agent has joined.
       delete next.lastAgentSignalAt;
       delete next.lastAgentPresence;
+      delete next.agentEndedAt;
     }
     this.submissions.set(issueNumber, next);
     return true;
@@ -2503,6 +2515,7 @@ export class InMemoryStore implements Store {
     delete next.seedStatus;
     delete next.lastAgentSignalAt;
     delete next.lastAgentPresence;
+    delete next.agentEndedAt;
     this.submissions.set(issueNumber, next);
     return roundGeneration;
   }
@@ -2768,6 +2781,8 @@ export class InMemoryStore implements Store {
       const next: SubmissionRecord = { ...submission, lastAgentSignalAt: record.createdAt };
       // A real chat row supersedes the ambient thought flash.
       delete next.lastAgentPresence;
+      // Resumed work after MCP `end` — clear so stall is no longer `ended`.
+      delete next.agentEndedAt;
       this.submissions.set(issueNumber, next);
     }
     return { ...record };
@@ -2777,10 +2792,21 @@ export class InMemoryStore implements Store {
     const submission = this.submissions.get(issueNumber);
     if (!submission) return;
     const stamped = at ?? new Date().toISOString();
-    this.submissions.set(issueNumber, {
+    const next: SubmissionRecord = {
       ...submission,
       lastAgentSignalAt: stamped,
       ...(presence ? { lastAgentPresence: { key: presence.key, at: stamped } } : {}),
+    };
+    delete next.agentEndedAt;
+    this.submissions.set(issueNumber, next);
+  }
+
+  async markAgentEnded(issueNumber: number, at?: string): Promise<void> {
+    const submission = this.submissions.get(issueNumber);
+    if (!submission) return;
+    this.submissions.set(issueNumber, {
+      ...submission,
+      agentEndedAt: at ?? new Date().toISOString(),
     });
   }
 
@@ -4307,6 +4333,7 @@ export class FirestoreStore implements Store {
         delete next.seedStatus;
         delete next.lastAgentSignalAt;
         delete next.lastAgentPresence;
+        delete next.agentEndedAt;
         tx.set(ref, next);
       } else {
         tx.set(
@@ -4335,6 +4362,7 @@ export class FirestoreStore implements Store {
       delete next.seedStatus;
       delete next.lastAgentSignalAt;
       delete next.lastAgentPresence;
+      delete next.agentEndedAt;
       tx.set(ref, next);
       return roundGeneration;
     });
@@ -4702,6 +4730,8 @@ export class FirestoreStore implements Store {
         lastAgentSignalAt: record.createdAt,
         // A real chat row supersedes the ambient thought flash.
         lastAgentPresence: FieldValue.delete(),
+        // Resumed work after MCP `end`.
+        agentEndedAt: FieldValue.delete(),
       },
       { merge: true },
     );
@@ -4716,10 +4746,18 @@ export class FirestoreStore implements Store {
       .set(
         {
           lastAgentSignalAt: stamped,
+          agentEndedAt: FieldValue.delete(),
           ...(presence ? { lastAgentPresence: { key: presence.key, at: stamped } } : {}),
         },
         { merge: true },
       );
+  }
+
+  async markAgentEnded(issueNumber: number, at?: string): Promise<void> {
+    await this.db
+      .collection('submissions')
+      .doc(String(issueNumber))
+      .set({ agentEndedAt: at ?? new Date().toISOString() }, { merge: true });
   }
 
   async listBuildEvents(issueNumber: number, opts?: { limit?: number }): Promise<BuildEvent[]> {

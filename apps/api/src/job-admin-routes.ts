@@ -94,7 +94,14 @@ export function buildJobQueue(records: SubmissionRecord[], now: number): JobQueu
         stateSince,
         timeInStateMs: Number.isFinite(Date.parse(stateSince)) ? now - Date.parse(stateSince) : undefined,
         ageMs: now - Date.parse(record.createdAt),
-        stall: detectStall({ state, stateSince, lastAgentSignalAt, agentState: record.agentState, now }),
+        stall: detectStall({
+          state,
+          stateSince,
+          lastAgentSignalAt,
+          agentState: record.agentState,
+          agentEndedAt: record.agentEndedAt,
+          now,
+        }),
         agentState: record.agentState,
         recentTransitions: (record.transitions ?? []).slice(-TRANSITIONS_SHOWN).reverse(),
       };

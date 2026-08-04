@@ -33,6 +33,7 @@ function copyInputFromStatus(status: SubmissionStatus | null | undefined) {
     stall: status?.stall,
     failureReason: status?.failure?.reason,
     phase: status?.phase,
+    agentEndedAt: status?.agentEndedAt,
   };
 }
 
@@ -50,6 +51,15 @@ function isAwaitingOwnAgent(status: SubmissionStatus | null | undefined): boolea
  */
 function canChooseBuilder(status: SubmissionStatus | null | undefined): boolean {
   if (!status) return false;
+  // Agent ended (MCP `end`) or quiet self round: offer the platform handoff (API bumps
+  // round generation so the self agent's token dies — two agents must not write the same round).
+  // `agentEndedAt` unlocks even when stall later becomes `gate_not_started` for ops.
+  if (
+    status.builder === 'self' &&
+    (status.stall === 'ended' || status.stall === 'quiet' || Boolean(status.agentEndedAt))
+  ) {
+    return true;
+  }
   if (isAwaitingOwnAgent(status)) return false;
   // Gate-red / kit_outdated keep the round open server-side (`builder_locked` on switch).
   // Offering a selector that can only 409 is worse than hiding it until the repair lands.
@@ -847,8 +857,9 @@ export function SubmissionStatusView({
 
             {/* A dead round outranks a slow one: when both are set, the failure is
                 the explanation and the stall is just its symptom. Self quiet keeps
-                its warning and resurfaces the connect card. Gate-green suppresses a
-                stale quiet stall — Final check is Done, not "agent wandered off". */}
+                its warning and resurfaces the connect card. Agent-ended offers handoff
+                without reconnect. Gate-green suppresses a stale quiet stall — Final
+                check is Done, not "agent wandered off". */}
             {status.failure ? (
               <p className="status-warning">
                 <PixelIcon name="signal" size={13} /> {t(`statusView.failure.${failureCopyKey(status.failure.reason)}`)}
@@ -857,6 +868,10 @@ export function SubmissionStatusView({
               'quiet_agent' ? (
               <p className="status-warning">
                 <PixelIcon name="signal" size={13} /> {t('statusView.stall.quietSelf')}
+              </p>
+            ) : selfCopy === 'agent_ended' ? (
+              <p className="status-warning">
+                <PixelIcon name="signal" size={13} /> {t('statusView.stall.endedSelf')}
               </p>
             ) : status.stall ? (
               <p className="status-warning">

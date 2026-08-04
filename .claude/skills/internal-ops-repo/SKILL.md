@@ -32,6 +32,9 @@ accepted; future edits happen there):
 - `docs/store-launch-plan.md` — App Store / Play submission plan. Referenced from
   `mp/protocol.ts`, `app.ts`, `mp-relay.ts` (the T0 relay split).
 - `docs/creator-experience-review.md` — internal critique of the creation flow.
+- `docs/byoca-execution-plan.md` / `docs/byoca-delegation-plan.md` — BYOCA / MCP
+  self-build plans (tool contract, handoff). Public playbook:
+  [`.claude/skills/byoca-mcp/SKILL.md`](../byoca-mcp/SKILL.md).
 
 Start at its [`docs/README.md`](https://github.com/gamedevpl/www.gamedev.pl-ops/blob/main/docs/README.md);
 its `AGENTS.md` is the contract for working there.

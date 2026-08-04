@@ -1211,6 +1211,9 @@ export async function registerAgentChannelRoutes(
         }
         options.onEvent?.(issueNumber);
 
+        // Delivery is channel activity — refresh the quiet clock and revoke a prior MCP `end`.
+        await store?.touchLastAgentSignalAt(issueNumber);
+
         const fresh = store ? ((await store.getSubmission(issueNumber)) ?? record) : record;
         return reply.send({
           accepted: true,
@@ -1344,6 +1347,35 @@ export async function registerAgentChannelRoutes(
 
       await store!.markCreatorMessagesDelivered(issueNumber, parsed.data.ids);
       return reply.send({ ok: true, ...(await channelState(issueNumber, record)) });
+    },
+  );
+
+  /**
+   * Agent declares it is finished iterating this round (MCP `end`).
+   *
+   * Does not close the job or bump generation — that is the creator's handoff / gate
+   * green. Sets `agentEndedAt` so Studio surfaces stall `ended` and unlocks
+   * self→platform without waiting for the quiet window.
+   */
+  app.post(
+    '/api/agent/build/end',
+    { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      const resolved = await resolveBuild(request, reply);
+      if (!resolved) return reply;
+      const { issueNumber, record } = resolved;
+
+      if (stopReason(record)) {
+        return reply.send({ accepted: false, rejected: 'stopped', ...(await channelState(issueNumber, record)) });
+      }
+
+      await store!.markAgentEnded(issueNumber);
+      const fresh = (await store!.getSubmission(issueNumber)) ?? record;
+      return reply.send({
+        accepted: true,
+        ended: true,
+        ...(await channelState(issueNumber, fresh)),
+      });
     },
   );
 

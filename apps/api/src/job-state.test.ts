@@ -285,6 +285,36 @@ describe('detectStall', () => {
     expect(detectStall({ state: 'building', stateSince: ago(HOUR), now: NOW })).toBe('quiet');
   });
 
+  it('prefers MCP end over quiet, but not over a due gate_not_started', () => {
+    expect(
+      detectStall({
+        state: 'building',
+        stateSince: ago(60_000),
+        lastAgentSignalAt: ago(30_000),
+        agentEndedAt: ago(10_000),
+        now: NOW,
+      }),
+    ).toBe('ended');
+    // Fresh submit+end: still ended so Studio can hand off before the gate window.
+    expect(
+      detectStall({
+        state: 'submitted',
+        stateSince: ago(60_000),
+        agentEndedAt: ago(5_000),
+        now: NOW,
+      }),
+    ).toBe('ended');
+    // Past the gate window: ops must see gate_not_started even after end.
+    expect(
+      detectStall({
+        state: 'submitted',
+        stateSince: ago(HOUR),
+        agentEndedAt: ago(5_000),
+        now: NOW,
+      }),
+    ).toBe('gate_not_started');
+  });
+
   it('catches our own gate failing to start', () => {
     expect(detectStall({ state: 'submitted', stateSince: ago(HOUR), now: NOW })).toBe('gate_not_started');
   });

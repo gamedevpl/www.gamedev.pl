@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  allowsSelfToPlatformHandoff,
   DEFAULT_SELF_BUILD_CONNECT_DAYS,
   DEFAULT_SELF_BUILD_DELIVERY_CAP,
   isActiveBuildRound,
@@ -16,6 +17,38 @@ describe('builder helpers', () => {
     expect(isBuilderKind('copilot')).toBe(false);
   });
 
+  it('allows ended or quiet self→platform handoffs mid-round', () => {
+    expect(allowsSelfToPlatformHandoff({ currentBuilder: 'self', requestedBuilder: 'platform', stall: 'ended' })).toBe(
+      true,
+    );
+    expect(allowsSelfToPlatformHandoff({ currentBuilder: 'self', requestedBuilder: 'platform', stall: 'quiet' })).toBe(
+      true,
+    );
+    expect(
+      allowsSelfToPlatformHandoff({
+        currentBuilder: 'self',
+        requestedBuilder: 'platform',
+        stall: 'gate_not_started',
+        agentEndedAt: '2026-08-04T00:00:00Z',
+      }),
+    ).toBe(true);
+    expect(
+      allowsSelfToPlatformHandoff({ currentBuilder: 'self', requestedBuilder: 'platform', stall: 'no_agent_yet' }),
+    ).toBe(false);
+    expect(allowsSelfToPlatformHandoff({ currentBuilder: 'self', requestedBuilder: 'platform', stall: null })).toBe(
+      false,
+    );
+    expect(
+      allowsSelfToPlatformHandoff({ currentBuilder: 'self', requestedBuilder: 'platform', stall: 'gate_not_started' }),
+    ).toBe(false);
+    expect(allowsSelfToPlatformHandoff({ currentBuilder: 'platform', requestedBuilder: 'self', stall: 'quiet' })).toBe(
+      false,
+    );
+    expect(allowsSelfToPlatformHandoff({ currentBuilder: 'platform', requestedBuilder: 'self', stall: 'ended' })).toBe(
+      false,
+    );
+  });
+
   it('steers via inbox for in-flight rounds that already have a dispatch ref', () => {
     const withRef = { dispatch: { refs: ['task-1'] } };
     expect(shouldSteerFeedbackViaInbox({ state: 'queued', ...withRef })).toBe(true);
@@ -30,6 +63,8 @@ describe('builder helpers', () => {
         ...withRef,
       }),
     ).toBe(true);
+    // Builder handoff must resume, not mail the agent we are about to invalidate.
+    expect(shouldSteerFeedbackViaInbox({ state: 'building', ...withRef }, { builderChanging: true })).toBe(false);
     // Dispatch never landed — feedback must retry starting a session.
     expect(shouldSteerFeedbackViaInbox({ state: 'queued' })).toBe(false);
     expect(shouldSteerFeedbackViaInbox({ state: 'queued', dispatch: { refs: [] } })).toBe(false);

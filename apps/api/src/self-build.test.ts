@@ -443,7 +443,8 @@ describe('self builder (BY-02)', () => {
       issueNumber = (await store.listSubmissionsByOwner('g:creator'))[0]!.issueNumber;
     });
 
-    // Mid-round switch refused.
+    // Mid-round switch refused while the agent has never gone quiet (no_agent_yet /
+    // live building). Quiet handoff is covered in the next test.
     const mid = await app.inject({
       method: 'POST',
       url: `/api/submissions/${mintToken(issueNumber, secret)}/feedback`,
@@ -513,6 +514,162 @@ describe('self builder (BY-02)', () => {
       expect(record?.builder).toBe('self');
       expect(record?.dispatch?.backend).toBe('self');
     });
+  });
+
+  it('hands a quiet self round to platform, bumps generation, and seeds from the candidate', async () => {
+    const { backend, briefs } = platformStub();
+    const { gamesStore } = stubGamesStore();
+    const created = await createApp({ platform: backend, gamesStore });
+    app = created.app;
+    const { store } = created;
+
+    const submit = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders(),
+      payload: { title: 'Quiet Handoff', concept: CONCEPT, builder: 'self' },
+    });
+    const slug = submit.json().slug as string;
+    let issueNumber = 0;
+    await vi.waitFor(async () => {
+      issueNumber = (await store.listSubmissionsByOwner('g:creator'))[0]!.issueNumber;
+    });
+
+    // Deliver a candidate, close the self round, reopen self, then go quiet.
+    await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/sources',
+      headers: agentHeaders(issueNumber),
+      payload: { slug, files: MINIMAL_FILES, kitEngineRef: KIT_REF },
+    });
+    expect((await store.getSubmission(issueNumber))?.deliveredVersion).toBeTruthy();
+    await store.recordJobTransition(issueNumber, {
+      to: 'ready_for_review',
+      at: new Date().toISOString(),
+      by: 'gate',
+      reason: 'gate_green',
+    });
+    await store.recordJobTransition(issueNumber, {
+      to: 'needs_changes',
+      at: new Date().toISOString(),
+      by: 'operator',
+      reason: 'rejected',
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(issueNumber, secret)}/feedback`,
+      headers: authHeaders(),
+      payload: { feedback: 'Keep going on the draft.', builder: 'self' },
+    });
+    await vi.waitFor(async () => {
+      const live = await store.getSubmission(issueNumber);
+      expect(live?.builder).toBe('self');
+      expect(live?.state).toBe('building');
+    });
+
+    const genBefore = (await store.getSubmission(issueNumber))?.roundGeneration ?? 1;
+    const quietAt = new Date(Date.now() - 20 * 60 * 1000).toISOString();
+    await store.touchLastAgentSignalAt(issueNumber, quietAt);
+
+    const handoff = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(issueNumber, secret)}/feedback`,
+      headers: authHeaders(),
+      payload: {
+        feedback: 'Please have the platform team finish this — my agent went quiet.',
+        builder: 'platform',
+      },
+    });
+    expect(handoff.statusCode).toBe(200);
+    await vi.waitFor(() => expect(briefs.length).toBeGreaterThan(0));
+    const after = await store.getSubmission(issueNumber);
+    expect(after?.builder).toBe('platform');
+    expect(after?.dispatch?.backend).toBe('copilot');
+    expect(after?.roundGeneration).toBeGreaterThan(genBefore);
+    expect(briefs.at(-1)?.seed?.files.some((f) => f.path === 'SPEC.md')).toBe(true);
+  });
+
+  it('hands an ended self round to platform without waiting for quiet', async () => {
+    const { backend, briefs } = platformStub();
+    const { gamesStore } = stubGamesStore();
+    const created = await createApp({ platform: backend, gamesStore });
+    app = created.app;
+    const { store } = created;
+
+    const submit = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders(),
+      payload: { title: 'Ended Handoff', concept: CONCEPT, builder: 'self' },
+    });
+    const slug = submit.json().slug as string;
+    let issueNumber = 0;
+    await vi.waitFor(async () => {
+      issueNumber = (await store.listSubmissionsByOwner('g:creator'))[0]!.issueNumber;
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/sources',
+      headers: agentHeaders(issueNumber),
+      payload: { slug, files: MINIMAL_FILES, kitEngineRef: KIT_REF },
+    });
+    await store.recordJobTransition(issueNumber, {
+      to: 'ready_for_review',
+      at: new Date().toISOString(),
+      by: 'gate',
+      reason: 'gate_green',
+    });
+    await store.recordJobTransition(issueNumber, {
+      to: 'needs_changes',
+      at: new Date().toISOString(),
+      by: 'operator',
+      reason: 'rejected',
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(issueNumber, secret)}/feedback`,
+      headers: authHeaders(),
+      payload: { feedback: 'Keep going on the draft.', builder: 'self' },
+    });
+    await vi.waitFor(async () => {
+      const live = await store.getSubmission(issueNumber);
+      expect(live?.builder).toBe('self');
+      expect(live?.state).toBe('building');
+    });
+
+    // Recent signal — quiet would refuse; MCP end unlocks handoff immediately.
+    await store.touchLastAgentSignalAt(issueNumber, new Date().toISOString());
+    const liveGen = (await store.getSubmission(issueNumber))?.roundGeneration ?? 1;
+    const endRes = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/end',
+      headers: agentHeaders(issueNumber, liveGen),
+      payload: {},
+    });
+    expect(endRes.statusCode).toBe(200);
+    expect(endRes.json()).toMatchObject({ accepted: true, ended: true });
+    expect((await store.getSubmission(issueNumber))?.agentEndedAt).toBeTruthy();
+
+    const genBefore = (await store.getSubmission(issueNumber))?.roundGeneration ?? 1;
+    const handoff = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(issueNumber, secret)}/feedback`,
+      headers: authHeaders(),
+      payload: {
+        feedback: 'Please have the platform team finish this — my agent ended.',
+        builder: 'platform',
+      },
+    });
+    expect(handoff.statusCode).toBe(200);
+    await vi.waitFor(() => expect(briefs.length).toBeGreaterThan(0));
+    const after = await store.getSubmission(issueNumber);
+    expect(after?.builder).toBe('platform');
+    expect(after?.dispatch?.backend).toBe('copilot');
+    expect(after?.roundGeneration).toBeGreaterThan(genBefore);
+    expect(after?.agentEndedAt).toBeUndefined();
   });
 
   it('records builder provenance on delivered versions', async () => {

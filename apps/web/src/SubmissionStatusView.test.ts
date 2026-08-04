@@ -710,7 +710,9 @@ describe('SubmissionStatusView', () => {
       expect(container.querySelector('.studio-connect.is-resume')).not.toBeNull();
       expect(container.textContent).toContain('Continue with your agent');
       expect(container.textContent).not.toContain('Connect your coding agent');
-      // Full first-time install stays under a closed disclosure — continue, not a reset.
+      // Quiet escape hatch: pick Gamedev.pl and send — API kills the self token.
+      expect(container.querySelector('.builder-choice')).not.toBeNull();
+      expect(container.textContent).toMatch(/Who builds this round/i); // Full first-time install stays under a closed disclosure — continue, not a reset.
       const details = container.querySelector<HTMLDetailsElement>('[data-testid="connect-setup-details"]');
       expect(details).not.toBeNull();
       expect(details?.open).toBe(false);
@@ -724,6 +726,37 @@ describe('SubmissionStatusView', () => {
         root.unmount();
       });
       vi.unstubAllGlobals();
+    }
+  });
+
+  it('offers platform handoff when the self agent called end, without reconnect chrome', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'building',
+      stall: 'ended',
+      builder: 'self',
+      events: [],
+    });
+
+    await i18n.changeLanguage('en');
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    try {
+      await act(async () => {
+        root.render(createElement(SubmissionStatusView, { token: 'ended-token', embedded: true }));
+        await flushEffects();
+        await flushEffects();
+      });
+
+      expect(container.querySelector('.studio-connect')).toBeNull();
+      expect(container.querySelector('.status-warning')?.textContent).toMatch(/finished this round/i);
+      expect(container.querySelector('.builder-choice')).not.toBeNull();
+    } finally {
+      await act(async () => {
+        root.unmount();
+      });
     }
   });
 

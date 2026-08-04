@@ -44,6 +44,7 @@ const STALL_COPY: Record<NonNullable<JobQueueEntry['stall']>, string> = {
   awaiting_input: 'waiting on the creator',
   not_dispatched: 'never picked up by an agent',
   quiet: 'agent silent',
+  ended: 'agent ended the round',
   gate_not_started: 'delivered, gate never started',
 };
 

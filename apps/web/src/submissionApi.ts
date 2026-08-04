@@ -132,7 +132,12 @@ export type SubmissionStatus = {
    * Why the build looks stuck, when it does. Closed vocabulary; the page renders its
    * own translated copy per value. Absent means progressing normally.
    */
-  stall?: 'awaiting_input' | 'not_dispatched' | 'quiet' | 'gate_not_started' | 'no_agent_yet';
+  stall?: 'awaiting_input' | 'not_dispatched' | 'quiet' | 'ended' | 'gate_not_started' | 'no_agent_yet';
+  /**
+   * When the self agent called MCP `end`. Survives when stall later becomes
+   * `gate_not_started` — Studio still offers platform handoff.
+   */
+  agentEndedAt?: string;
   /**
    * Who is building the current round, when the API reports it. Optional — older
    * deploys omit it; the Studio then falls back to local last-used memory.
