@@ -408,6 +408,9 @@ describe('CreatorStudioView', () => {
     authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
     fetchStudioGames.mockResolvedValue(studioShelf(manyGames(2)));
     window.history.replaceState(null, '', '/studio/token-0');
+    // Narrow viewport → phone/tablet Play (opens theater), not the desktop transport cluster.
+    const previousWidth = window.innerWidth;
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 900 });
 
     const { container, root } = await renderStudio({ selectedGame: 'token-0' });
 
@@ -423,6 +426,46 @@ describe('CreatorStudioView', () => {
     expect(details?.classList.contains('is-icon-only')).toBe(true);
 
     root.unmount();
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: previousWidth });
+  });
+
+  it('shows a live preview rail beside the thread on a wide desktop', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
+    fetchStudioGames.mockResolvedValue(studioShelf(manyGames(2)));
+    window.history.replaceState(null, '', '/studio/token-0');
+    const previousWidth = window.innerWidth;
+    const previousMatchMedia = window.matchMedia;
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1400 });
+    window.matchMedia = ((query: string) => {
+      const min = /min-width:\s*(\d+)/.exec(query);
+      const max = /max-width:\s*(\d+)/.exec(query);
+      let matches = false;
+      if (min) matches = 1400 >= Number(min[1]);
+      if (max) matches = 1400 <= Number(max[1]);
+      return {
+        matches,
+        media: query,
+        addEventListener: () => undefined,
+        removeEventListener: () => undefined,
+        addListener: () => undefined,
+        removeListener: () => undefined,
+        dispatchEvent: () => false,
+        onchange: null,
+      };
+    }) as typeof window.matchMedia;
+
+    const { container, root } = await renderStudio({ selectedGame: 'token-0' });
+
+    expect(container.querySelector('.studio-workspace.is-preview-open')).not.toBeNull();
+    expect(container.querySelector('.studio-preview-rail')).not.toBeNull();
+    expect(container.querySelector('.studio-build')).not.toBeNull();
+    expect(container.querySelector('.studio-head-transport')).not.toBeNull();
+
+    root.unmount();
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: previousWidth });
+    window.matchMedia = previousMatchMedia;
   });
 
   it('lets Play toggle back to the thread when already open', async () => {

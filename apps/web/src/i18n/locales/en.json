@@ -364,6 +364,17 @@
       "placeholder": "e.g. The spike on the right edge is unfair — add a checkpoint just before it…",
       "submit": "Send with this moment"
     },
+    "preview": {
+      "aria": "Live game preview",
+      "title": "Preview",
+      "live": "Live",
+      "empty": "No playable build yet — it appears here once a preview is ready.",
+      "expand": "Expand playtest",
+      "media": "Media",
+      "shot": "Screenshot",
+      "closeShot": "Close screenshot",
+      "pause": "Pause"
+    },
     "stats": {
       "noSlug": "Stats appear once this game has a draft or published slug.",
       "range": "Measured {{from}} → {{to}}",

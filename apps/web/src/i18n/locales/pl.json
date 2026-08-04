@@ -368,6 +368,17 @@
       "placeholder": "np. Kolec przy prawej krawędzi jest niesprawiedliwy — dodaj checkpoint tuż przed nim…",
       "submit": "Wyślij z tym momentem"
     },
+    "preview": {
+      "aria": "Podgląd gry na żywo",
+      "title": "Podgląd",
+      "live": "Na żywo",
+      "empty": "Nie ma jeszcze grywalnego buildu — pojawi się tu, gdy będzie podgląd.",
+      "expand": "Rozwiń playtest",
+      "media": "Media",
+      "shot": "Zrzut ekranu",
+      "closeShot": "Zamknij zrzut",
+      "pause": "Wstrzymaj"
+    },
     "stats": {
       "noSlug": "Statystyki pojawią się, gdy gra otrzyma slug roboczy lub publikacyjny.",
       "range": "Zmierzone {{from}} → {{to}}",
