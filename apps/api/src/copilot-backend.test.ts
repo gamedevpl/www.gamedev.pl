@@ -55,7 +55,10 @@ describe('buildPrompt', () => {
   it('tells the agent a pull request is not a delivery', () => {
     const prompt = buildPrompt(BRIEF);
     expect(prompt).toContain('**A pull request is not a delivery.**');
-    expect(prompt).toContain('npm run submit');
+    expect(prompt).toContain('npm run submit -- <slug> --no-wait');
+    // Blocking submit on the site gate parks Copilot in read_bash while Studio stalls.
+    expect(prompt).toContain('Always deliver with `--no-wait`');
+    expect(prompt).toContain('npm run progress -- --check');
   });
 
   it('carries the per-job channel credentials', () => {
