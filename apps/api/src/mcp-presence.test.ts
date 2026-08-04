@@ -4,6 +4,7 @@ import {
   mcpPresenceKey,
   MCP_PRESENCE_MIN_GAP_MS,
   noteMcpPresencePulse,
+  presencePreservesEnded,
   shouldEmitMcpPresencePulse,
   shouldPulseMcpPresence,
 } from './mcp-presence.js';
@@ -32,6 +33,13 @@ describe('mcp presence pulses', () => {
     expect(mcpPresenceKey('get_brief')).toBe('reading_brief');
     expect(mcpPresenceKey('list_staged_sources')).toBe('checking_staged');
     expect(mcpPresenceKey('report_progress')).toBeNull();
+  });
+
+  it('preserves agentEndedAt for gate-poll presence only', () => {
+    expect(presencePreservesEnded('get_gate_verdict')).toBe(true);
+    expect(presencePreservesEnded('get_gate_media')).toBe(true);
+    expect(presencePreservesEnded('list_kit_files')).toBe(false);
+    expect(presencePreservesEnded('get_brief')).toBe(false);
   });
 
   it('recognizes leftover synthetic chat rows so status can hide them', () => {

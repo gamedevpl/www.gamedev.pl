@@ -22,6 +22,7 @@ import { creatorOwnsSlug, findActiveRoundForSlug, findDraftJobForSlug } from './
 import {
   mcpPresenceKey,
   noteMcpPresencePulse,
+  presencePreservesEnded,
   shouldEmitMcpPresencePulse,
   shouldPulseMcpPresence,
 } from './mcp-presence.js';
@@ -295,7 +296,7 @@ const BEHAVIOURAL_CONTRACT = [
   'Run kit checks green (at least check:static) before submit_sources when you have a local kit checkout; otherwise submit and let the gate run checks.',
   'After submit_sources, if you will not deliver more this round, call end (required — warnings.code=call_end; submit already unlocks creator handoff). Do not stop after submit alone without end.',
   'Honour stop immediately — do not continue after stop:true.',
-  'gateStarted true means Cloud Build started; gateStarted false after ok submit means no preview is assembling — honour warnings.code=gate_not_started.',
+  'gateStarted true means Cloud Build accepted the gate create; gateStarted false after ok submit means no preview is assembling — honour warnings.code=gate_not_started.',
   'When seedAvailable/seedStatus=available (or warnings.code=seed_unread), call get_seed and continue that draft — do not scaffold from scratch. When seedStatus=pending, recheck get_seed before scaffolding.',
   'Every write reply carries pendingMessages — when that array is non-empty, read_inbox and apply before continuing.',
   'Do not schedule background or recurring inbox polls; drain pendingMessages from write replies (and kit/browse replies that piggyback them) as you go. Honour warnings.code=inbox_pending.',
@@ -2731,12 +2732,13 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           gateStarted: {
             type: 'boolean',
             description:
-              'True only when Cloud Build accepted the gate run (a build id exists). ' +
+              'True when Cloud Build accepted the gate create (HTTP 2xx), with or without a parseable build id. ' +
               'False means the delivery was stored but the gate did not start — do not assume a preview is assembling.',
           },
           buildId: {
             type: 'string',
-            description: 'Cloud Build id when gateStarted is true.',
+            description:
+              'Cloud Build id when the create response included one (may be absent even when gateStarted is true).',
           },
           deliveriesRemaining: { type: ['number', 'null'] },
           ...REPLY_CONTROL,
@@ -2758,7 +2760,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         `mode=publish (default, seal): TRACE.json + PLAYTEST.json required; full gate; only publish green ends the round. ` +
         `files[{path, content, encoding utf8|base64}] optional when fromStaged=true (inline paths override staged); ≤${MAX_SUBMIT_FILES}; kitEngineRef required. ` +
         'Subject to delivery cap and filename allowlist. Reply includes stop and pendingMessages. ' +
-        'gateStarted is true only when the gate Cloud Build actually started — not merely when the upload was accepted. ' +
+        'gateStarted is true when Cloud Build accepted the gate create — not merely when the upload was accepted. ' +
         'A successful delivery unlocks creator handoff (agentEndedAt); still call end when you will not deliver more (warnings.code=call_end). ' +
         BEHAVIOURAL_CONTRACT,
       inputSchema: {
@@ -3430,9 +3432,12 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             if (shouldEmitMcpPresencePulse(presencePulseByJob.get(jobId), at)) {
               noteMcpPresencePulse(presencePulseByJob, jobId, at);
               try {
-                await store.touchLastAgentSignalAt(jobId, new Date(at).toISOString(), {
-                  key: presenceKey,
-                });
+                await store.touchLastAgentSignalAt(
+                  jobId,
+                  new Date(at).toISOString(),
+                  { key: presenceKey },
+                  { preserveEnded: presencePreservesEnded(name) },
+                );
               } catch (pulseError) {
                 request.log.warn({ err: pulseError, jobId, tool: name }, 'mcp presence pulse failed');
               }

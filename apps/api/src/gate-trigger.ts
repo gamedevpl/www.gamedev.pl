@@ -175,6 +175,12 @@ function buildSpec(
  */
 export interface GateTriggerResult {
   buildId?: string;
+  /**
+   * True when Cloud Build accepted the create (HTTP 2xx). May be true without
+   * `buildId` when the operation body could not be parsed — the build is still
+   * queued in that case; do not treat it as "gate did not start".
+   */
+  accepted?: boolean;
 }
 
 export function createCloudBuildGateTrigger(
@@ -224,7 +230,8 @@ export function createCloudBuildGateTrigger(
         .then((body: unknown) => (body as { metadata?: { build?: { id?: string } } })?.metadata?.build?.id)
         .catch(() => undefined);
       log?.info({ slug: input.slug, version: input.version, buildId }, 'gate started');
-      return buildId ? { buildId } : {};
+      // Always mark accepted on 2xx — missing id is a bookkeeping gap, not a failed start.
+      return { accepted: true, ...(buildId ? { buildId } : {}) };
     } catch (error) {
       // Loud, because the consequence is silent: the candidate is stored, the agent
       // thinks it is done, and nothing will ever verify it unless someone notices this.

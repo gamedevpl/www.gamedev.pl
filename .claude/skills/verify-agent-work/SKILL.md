@@ -147,8 +147,9 @@ Two concrete instances of that (observed 2026-07-23):
   session. Soft `warnings.code=call_end` re-emits until `end`. Quiet is only the
   fallback. `gateStarted` means Cloud Build returned a build id — not mere upload
   acceptance. Reviewing a PR that "fixes" handoff by shortening quiet, redefines
-  `gateStarted` as `accepted`, or drops submit→`agentEndedAt` / `call_end`, is
-  missing the contract — see `.claude/skills/byoca-mcp/SKILL.md`.
+  `gateStarted` as mere upload `accepted` (ignoring Cloud Build create), or drops
+  submit→`agentEndedAt` / `call_end` / gate-poll `preserveEnded`, is missing the
+  contract — see `.claude/skills/byoca-mcp/SKILL.md`.
 - **A fix that narrows a predicate can reintroduce the same defect through a smaller
   door — and its regression test will not notice.** Observed (BY-25, 2026-08-02): a
   correct fix replaced "does the creator have ANY non-abandoned job with this slug"

@@ -1581,8 +1581,15 @@ export interface Store {
    * Used by MCP presence heartbeats so kit-browse activity clears `no_agent_yet` / quiet
    * stalls without stuffing "Browsing the Creator Kit…" into the Studio thread.
    * When `presence` is set, also stores a short-lived thought key for the Studio bar.
+   * Clears `agentEndedAt` unless `options.preserveEnded` — gate-poll presence must not
+   * relock self→platform handoff after submit auto-end.
    */
-  touchLastAgentSignalAt(issueNumber: number, at?: string, presence?: { key: string }): Promise<void>;
+  touchLastAgentSignalAt(
+    issueNumber: number,
+    at?: string,
+    presence?: { key: string },
+    options?: { preserveEnded?: boolean },
+  ): Promise<void>;
   /**
    * Marks that the agent finished iterating this round (MCP `end`). Idempotent.
    * Does not bump generation or stop the channel — creator handoff does that.
@@ -2818,7 +2825,12 @@ export class InMemoryStore implements Store {
     return { ...record };
   }
 
-  async touchLastAgentSignalAt(issueNumber: number, at?: string, presence?: { key: string }): Promise<void> {
+  async touchLastAgentSignalAt(
+    issueNumber: number,
+    at?: string,
+    presence?: { key: string },
+    options?: { preserveEnded?: boolean },
+  ): Promise<void> {
     const submission = this.submissions.get(issueNumber);
     if (!submission) return;
     const stamped = at ?? new Date().toISOString();
@@ -2827,7 +2839,9 @@ export class InMemoryStore implements Store {
       lastAgentSignalAt: stamped,
       ...(presence ? { lastAgentPresence: { key: presence.key, at: stamped } } : {}),
     };
-    delete next.agentEndedAt;
+    if (!options?.preserveEnded) {
+      delete next.agentEndedAt;
+    }
     this.submissions.set(issueNumber, next);
   }
 
@@ -4774,7 +4788,12 @@ export class FirestoreStore implements Store {
     return record;
   }
 
-  async touchLastAgentSignalAt(issueNumber: number, at?: string, presence?: { key: string }): Promise<void> {
+  async touchLastAgentSignalAt(
+    issueNumber: number,
+    at?: string,
+    presence?: { key: string },
+    options?: { preserveEnded?: boolean },
+  ): Promise<void> {
     const stamped = at ?? new Date().toISOString();
     await this.db
       .collection('submissions')
@@ -4782,7 +4801,7 @@ export class FirestoreStore implements Store {
       .set(
         {
           lastAgentSignalAt: stamped,
-          agentEndedAt: FieldValue.delete(),
+          ...(options?.preserveEnded ? {} : { agentEndedAt: FieldValue.delete() }),
           ...(presence ? { lastAgentPresence: { key: presence.key, at: stamped } } : {}),
         },
         { merge: true },

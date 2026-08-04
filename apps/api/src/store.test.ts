@@ -116,6 +116,24 @@ describe('InMemoryStore', () => {
     expect((await store.getSubmission(61))?.lastAgentSignalAt).toBeTruthy();
   });
 
+  it('touchLastAgentSignalAt can preserve agentEndedAt for gate-poll presence', async () => {
+    const store = new InMemoryStore();
+    await store.createSubmission(62, 'g:123', 'Ended');
+    await store.markAgentEnded(62, '2026-08-04T01:00:00.000Z');
+
+    await store.touchLastAgentSignalAt(
+      62,
+      '2026-08-04T01:01:00.000Z',
+      { key: 'waiting_checks' },
+      { preserveEnded: true },
+    );
+    expect((await store.getSubmission(62))?.agentEndedAt).toBe('2026-08-04T01:00:00.000Z');
+    expect((await store.getSubmission(62))?.lastAgentSignalAt).toBe('2026-08-04T01:01:00.000Z');
+
+    await store.touchLastAgentSignalAt(62, '2026-08-04T01:02:00.000Z', { key: 'browsing_kit' });
+    expect((await store.getSubmission(62))?.agentEndedAt).toBeUndefined();
+  });
+
   it('ensureRoundGeneration initializes a legacy job without bumping an existing one', async () => {
     const store = new InMemoryStore();
     await store.createSubmission(6, 'g:123', 'Legacy');

@@ -36,9 +36,14 @@ creator **self→platform** handoff immediately). Still call **`end`**:
 - Without `end`, your session may look finished while still connected; quiet
   (~15 minutes) remains a fallback only
 
-`gateStarted` is **true only when Cloud Build returned a build id** — not merely
-when the upload was accepted. If `ok` but `gateStarted: false`, honour
-`warnings.code=gate_not_started` (no preview is assembling).
+`gateStarted` is **true when Cloud Build accepted the create** (HTTP 2xx), even
+if the build id could not be parsed. If `ok` but `gateStarted: false`, honour
+`warnings.code=gate_not_started` (no preview is assembling — safe to retry).
+Do **not** retry solely because `buildId` is missing when `gateStarted` is true.
+
+Gate-poll presence (`get_gate_verdict` / `get_gate_media`) refreshes the
+heartbeat without clearing `agentEndedAt`, so submit→poll→stop still leaves
+handoff unlocked.
 
 `end` does **not** publish, close the job, or bump generation by itself. A green
 _publish_ gate still retires the key; `end` is optional after green.

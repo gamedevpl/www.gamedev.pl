@@ -1141,7 +1141,7 @@ describe('agent build channel', () => {
       expect(response.json().buildId).toBeUndefined();
     });
 
-    it('reports gateStarted only when the trigger returns a build id', async () => {
+    it('reports gateStarted when Cloud Build accepted the create', async () => {
       const store = new InMemoryStore();
       await seedSubmission(store);
       const { gamesStore } = stubGamesStore();
@@ -1172,6 +1172,39 @@ describe('agent build channel', () => {
         gateStarted: true,
         buildId: 'projects/x/builds/abc',
       });
+
+      await app.close();
+      app = await buildApp({
+        store,
+        sessionSecret,
+        submissionRoutes: {
+          githubClient: stubGitHub(),
+          githubToken: 'gh-token',
+          submissionTokenSecret: secret,
+          translator: new NoopTranslator(),
+          agentChannel: {
+            gamesStore,
+            // 2xx without a parseable build id — still started, do not advise retry.
+            onSourcesDelivered: async () => ({ accepted: true }),
+          },
+        },
+      });
+
+      const acceptedNoId = await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/sources',
+        headers: agentHeaders(),
+        payload: {
+          slug: 'comet-courier',
+          files: MINIMAL.map((f) =>
+            f.path === 'SPEC.md' ? { ...f, content: '---\ntitle: Comet Courier\n---\nv2\n' } : f,
+          ),
+          mode: 'preview',
+        },
+      });
+      expect(acceptedNoId.statusCode).toBe(200);
+      expect(acceptedNoId.json()).toMatchObject({ accepted: true, gateStarted: true });
+      expect(acceptedNoId.json().buildId).toBeUndefined();
     });
 
     it('preview mode accepts TRACE-less drafts and does not seal deliveredVersion', async () => {

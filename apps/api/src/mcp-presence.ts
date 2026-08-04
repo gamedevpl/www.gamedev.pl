@@ -49,6 +49,17 @@ const PRESENCE_BY_TOOL: Record<string, { key: string; text: string }> = {
   get_gate_media: { key: 'reviewing_captures', text: 'Reviewing gate captures…' },
 };
 
+/**
+ * Gate-poll presence must refresh the heartbeat without clearing `agentEndedAt`.
+ * Submit auto-ends for handoff; agents are told to poll next — clearing ended on
+ * those pulses would relock self→platform until quiet timeout.
+ */
+export const PRESENCE_PRESERVE_ENDED = new Set(['get_gate_verdict', 'get_gate_media']);
+
+export function presencePreservesEnded(toolName: string): boolean {
+  return PRESENCE_PRESERVE_ENDED.has(toolName);
+}
+
 const PRESENCE_EVENT_TEXTS = new Set(Object.values(PRESENCE_BY_TOOL).map((entry) => entry.text));
 
 export function shouldPulseMcpPresence(toolName: string): boolean {

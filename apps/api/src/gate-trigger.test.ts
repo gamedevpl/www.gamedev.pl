@@ -70,16 +70,19 @@ describe('createCloudBuildGateTrigger', () => {
     const { impl } = stubFetch();
     const trigger = createCloudBuildGateTrigger({ ...OPTIONS, fetchImpl: impl });
 
-    await expect(trigger!({ slug: 'comet-courier', version: 'v1' })).resolves.toEqual({ buildId: 'build-abc' });
+    await expect(trigger!({ slug: 'comet-courier', version: 'v1' })).resolves.toEqual({
+      accepted: true,
+      buildId: 'build-abc',
+    });
   });
 
   it('keeps the gate running when the response is not the shape we expected', async () => {
     // The build is already queued by the time this is parsed. An unrecognised body costs
-    // us the id, and must not cost us the verification.
+    // us the id, and must not cost us the verification — or tell the agent to resubmit.
     const { impl } = stubFetch({ json: async () => ({ nothing: 'useful' }) });
     const trigger = createCloudBuildGateTrigger({ ...OPTIONS, fetchImpl: impl });
 
-    await expect(trigger!({ slug: 'comet-courier', version: 'v1' })).resolves.toEqual({});
+    await expect(trigger!({ slug: 'comet-courier', version: 'v1' })).resolves.toEqual({ accepted: true });
   });
 
   it('uses the read-only games token, never a credential that can start agent work', async () => {
