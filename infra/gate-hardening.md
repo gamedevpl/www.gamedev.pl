@@ -16,16 +16,16 @@ is ours; candidate files are **data** materialized into our pinned harness only.
 
 ## Inventory — what a run can reach
 
-| Surface                    | Before hardening                                                                                     | Intended after owner applies `setup-gcp.sh` + this config                                                                              |
-| -------------------------- | ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| **Service account**        | Unspecified → project Cloud Build / Compute default (often broad: Editor-class or runtime SA powers) | `gate-runner@PROJECT.iam.gserviceaccount.com` only                                                                                     |
+| Surface                    | Before hardening                                                                                     | Intended after owner applies `setup-gcp.sh` + this config                                                                                                                           |
+| -------------------------- | ---------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Service account**        | Unspecified → project Cloud Build / Compute default (often broad: Editor-class or runtime SA powers) | `gate-runner@PROJECT.iam.gserviceaccount.com` only                                                                                                                                  |
 | **SA roles (intended)**    | n/a / ambient                                                                                        | Games-store `roles/storage.objectAdmin` **on that bucket only** (includes delete — see below); `secretmanager.secretAccessor` **on `github-token` only**; `roles/logging.logWriter` |
-| **Secrets in step env**    | `GAMES_REPO_TOKEN` (`github-token`, contents:read)                                                   | Same sole secret; runner unsets it and scrubs the harness `git` remote **before** `check:game`                                         |
-| **Metadata server**        | GCE metadata credentials for the build SA                                                            | Same mechanism; blast radius limited by the gate SA’s IAM                                                                              |
-| **Network egress**         | Default Cloud Build pool: unrestricted egress                                                        | Still unrestricted until owner adds a private pool / VPC egress policy (below)                                                         |
-| **Writable paths**         | `/workspace`, `/tmp`, container root FS                                                              | Unchanged (ephemeral VM); no durable write except via games-store API                                                                  |
-| **Source of build CONFIG** | This YAML + inline `gate-trigger` spec                                                               | Unchanged — slug/version are CLI data only                                                                                             |
-| **Timeout / machine**      | `3600s`, `E2_HIGHCPU_8`, default disk                                                                | `1800s`, `E2_HIGHCPU_8`, `diskSizeGb: 50`                                                                                              |
+| **Secrets in step env**    | `GAMES_REPO_TOKEN` (`github-token`, contents:read)                                                   | Same sole secret; runner unsets it and scrubs the harness `git` remote **before** `check:game`                                                                                      |
+| **Metadata server**        | GCE metadata credentials for the build SA                                                            | Same mechanism; blast radius limited by the gate SA’s IAM                                                                                                                           |
+| **Network egress**         | Default Cloud Build pool: unrestricted egress                                                        | Still unrestricted until owner adds a private pool / VPC egress policy (below)                                                                                                      |
+| **Writable paths**         | `/workspace`, `/tmp`, container root FS                                                              | Unchanged (ephemeral VM); no durable write except via games-store API                                                                                                               |
+| **Source of build CONFIG** | This YAML + inline `gate-trigger` spec                                                               | Unchanged — slug/version are CLI data only                                                                                                                                          |
+| **Timeout / machine**      | `3600s`, `E2_HIGHCPU_8`, default disk                                                                | `1800s`, `E2_HIGHCPU_8`, `diskSizeGb: 50`                                                                                                                                           |
 
 ### Egress the run actually needs
 
@@ -49,7 +49,6 @@ ability to start further builds should be granted to `gate-runner`.
   role that enables those writes is `objectAdmin`, which also permits **delete/overwrite
   of every object in the bucket** — see “Store IAM: why objectAdmin” below.
 
-
 ## Store IAM: why `objectAdmin` (delete on every stored game)
 
 The brief asks for “store write only.” The gate SA is granted
@@ -67,6 +66,20 @@ equally powerful custom role with `storage.objects.delete`).
 Accepted residual risk until a compensating control lands: a compromised gate run can
 delete or overwrite any store object the SA can name, not merely “create namespaced
 immutable objects.”
+
+### Cloud Run runtime: staging-prefix mutate (MCP file staging)
+
+The API runtime keeps bucket-wide `objectCreator` + `objectViewer` only — it must not be
+able to destroy candidate/published versions. MCP `stage_source_file` / clear, however,
+rewrite `games/<slug>/staging/<issue>/g<gen>/manifest.json` and delete staged sources.
+
+`setup-gcp.sh` therefore also grants the runtime `roles/storage.objectAdmin` **with an
+IAM condition** limited to object names under `games/*/staging/`. Outside that prefix the
+runtime still cannot overwrite or delete. Re-run `./infra/setup-gcp.sh` after merging so
+production gets the binding (merge alone does not apply IAM).
+
+Staging manifest writes use GCS `ifGenerationMatch` with retry so concurrent
+`stage_source_file` calls cannot drop each other's entries.
 
 ### Compensating controls (owner console — required follow-up)
 
@@ -98,7 +111,10 @@ Add these to the post-merge owner list (not done by merging this PR):
 These require project credentials. Re-run or perform after merging:
 
 1. **Apply SA + IAM** — `./infra/setup-gcp.sh` (or the gate-runner block alone). Until this
-   exists, builds that set `serviceAccount: gate-runner@…` will fail to start.
+   exists, builds that set `serviceAccount: gate-runner@…` will fail to start. The same
+   script also grants the Cloud Run runtime conditional `objectAdmin` on
+   `games/*/staging/**` (MCP file staging overwrite/clear) — re-run after that change
+   lands or staging will 403 on the second file.
 2. **Confirm default Cloud Build SA is not still Editor** — historically
    `PROJECT_NUMBER@cloudbuild.gserviceaccount.com` received broad project roles. Gate
    builds must not rely on it; audit and remove excess roles if present

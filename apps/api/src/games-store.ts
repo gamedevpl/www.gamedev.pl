@@ -141,6 +141,17 @@ export class InvalidUploadError extends Error {
   }
 }
 
+/** Staging manifest lost a race — caller should re-read and retry. */
+export class StagingGenerationMismatchError extends Error {
+  constructor(message = 'staging manifest generation mismatch') {
+    super(message);
+    this.name = 'StagingGenerationMismatchError';
+  }
+}
+
+/** How many times a staging manifest write may retry after a concurrent update. */
+export const MAX_STAGING_MANIFEST_RETRIES = 8;
+
 /** Hint derived from {@link ALLOWED_SOURCE_FILES} so refusal text cannot drift from the contract. */
 const ALLOWED_SOURCES_HINT = `${ALLOWED_SOURCE_FILES.join(', ')}, or your own .ts modules`;
 
@@ -175,6 +186,41 @@ export function forbiddenDeliveryPathReason(path: string): string | null {
 }
 
 /**
+ * Validates one delivery path (shape + allowlist). Used by full uploads and by
+ * file-by-file staging — required-set checks (SPEC.md, TRACE, …) stay on finalize.
+ */
+export function assertDeliverableSourcePath(rawPath: string): string {
+  const path = rawPath.trim();
+  // Traversal is checked before anything else and rejected by shape, not by
+  // normalization: `..` never appears in a legitimate game file, so there is no reason
+  // to be clever about resolving it.
+  if (path.includes('..') || path.startsWith('/') || path.includes('\\') || path.includes('\0')) {
+    throw new InvalidUploadError(`illegal path: ${rawPath}`);
+  }
+
+  const forbidden = forbiddenDeliveryPathReason(path);
+  if (forbidden) throw new InvalidUploadError(forbidden);
+
+  if (RESERVED_SEGMENTS.has(path.split('/')[0])) {
+    throw new InvalidUploadError(
+      `path not deliverable: ${path}. \`${path.split('/')[0]}\` belongs to the harness — ` +
+        'GameKit, the tooling and other games are read-only context.',
+    );
+  }
+
+  const allowed =
+    (ALLOWED_SOURCE_FILES as readonly string[]).includes(path) ||
+    (EXTRA_SOURCE_PATTERN.test(path) && !path.includes('//'));
+  if (!allowed) {
+    throw new InvalidUploadError(
+      `path not deliverable: ${path}. Deliver only your own game's files ` +
+        `(${ALLOWED_SOURCE_FILES.join(', ')}, or your own .ts modules under the game).`,
+    );
+  }
+  return path;
+}
+
+/**
  * Validates an upload against the delivery contract.
  *
  * Returns the files to store; throws {@link InvalidUploadError} with a message meant for
@@ -195,35 +241,8 @@ export function validateSourceUpload(files: SourceFile[], mode: DeliveryMode = '
   let total = 0;
 
   for (const file of files) {
-    const path = file.path.trim();
-
-    // Traversal is checked before anything else and rejected by shape, not by
-    // normalization: `..` never appears in a legitimate game file, so there is no reason
-    // to be clever about resolving it.
-    if (path.includes('..') || path.startsWith('/') || path.includes('\\') || path.includes('\0')) {
-      throw new InvalidUploadError(`illegal path: ${file.path}`);
-    }
+    const path = assertDeliverableSourcePath(file.path);
     if (seen.has(path)) throw new InvalidUploadError(`duplicate path: ${path}`);
-
-    const forbidden = forbiddenDeliveryPathReason(path);
-    if (forbidden) throw new InvalidUploadError(forbidden);
-
-    if (RESERVED_SEGMENTS.has(path.split('/')[0])) {
-      throw new InvalidUploadError(
-        `path not deliverable: ${path}. \`${path.split('/')[0]}\` belongs to the harness — ` +
-          'GameKit, the tooling and other games are read-only context.',
-      );
-    }
-
-    const allowed =
-      (ALLOWED_SOURCE_FILES as readonly string[]).includes(path) ||
-      (EXTRA_SOURCE_PATTERN.test(path) && !path.includes('//'));
-    if (!allowed) {
-      throw new InvalidUploadError(
-        `path not deliverable: ${path}. Deliver only your own game's files ` +
-          `(${ALLOWED_SOURCE_FILES.join(', ')}, or your own .ts modules under the game).`,
-      );
-    }
 
     total += Buffer.byteLength(file.content, 'utf8');
     if (total > MAX_UPLOAD_BYTES) throw new InvalidUploadError(`upload too large: over ${MAX_UPLOAD_BYTES} bytes`);
@@ -387,6 +406,27 @@ export interface PublicationRecord {
   healthCheck?: PublicationHealthCheck;
 }
 
+/** One path in a job's pre-delivery staging buffer (file-by-file MCP uploads). */
+export type StagedSourceEntry = { path: string; bytes: number };
+
+/** Summary of a job's staging buffer — paths only, no contents. */
+export type StagedSourcesSummary = {
+  files: StagedSourceEntry[];
+  totalBytes: number;
+  maxBytes: number;
+  maxFiles: number;
+  updatedAt: string | null;
+};
+
+type StagingManifest = {
+  slug: string;
+  issueNumber: number;
+  roundGeneration: number;
+  updatedAt: string;
+  files: StagedSourceEntry[];
+  totalBytes: number;
+};
+
 export interface GamesStore {
   /** Writes a candidate version's sources. Returns the version id assigned. */
   putCandidateSources(input: {
@@ -403,6 +443,32 @@ export interface GamesStore {
     /** Preview skips TRACE/PLAYTEST; default publish. */
     mode?: DeliveryMode;
   }): Promise<{ version: string; manifest: VersionManifest }>;
+  /**
+   * Upserts one file into the job's staging buffer (does not run the gate).
+   * Scoped by roundGeneration so a retired key cannot clobber a newer round's buffer.
+   */
+  putStagedSourceFile(input: {
+    slug: string;
+    issueNumber: number;
+    roundGeneration: number;
+    path: string;
+    content: string;
+  }): Promise<StagedSourcesSummary & { path: string; bytes: number }>;
+  /** Lists staged paths + byte totals (no contents). */
+  listStagedSources(input: {
+    slug: string;
+    issueNumber: number;
+    roundGeneration: number;
+  }): Promise<StagedSourcesSummary>;
+  /** Reads staged contents for finalize. */
+  getStagedSourceFiles(input: { slug: string; issueNumber: number; roundGeneration: number }): Promise<SourceFile[]>;
+  /** Clears the staging buffer (all paths, or a named subset). */
+  clearStagedSources(input: {
+    slug: string;
+    issueNumber: number;
+    roundGeneration: number;
+    paths?: string[];
+  }): Promise<{ cleared: number }>;
   getManifest(slug: string, version: string): Promise<VersionManifest | null>;
   getSourceFile(slug: string, version: string, path: string): Promise<string | null>;
   /**
@@ -503,17 +569,35 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
     });
 
   async function readObject(name: string): Promise<Buffer | null> {
+    const got = await readObjectWithGeneration(name);
+    return got?.body ?? null;
+  }
+
+  async function readObjectWithGeneration(name: string): Promise<{ body: Buffer; generation: number } | null> {
     const url = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(bucket)}/o/${encodeURIComponent(name)}?alt=media`;
     const response = await fetchImpl(url, { headers: { authorization: `Bearer ${await getAccessToken()}` } });
     if (response.status === 404) return null;
     if (!response.ok) throw new Error(`games store read of ${name} failed: ${response.status}`);
-    return Buffer.from(await response.arrayBuffer());
+    const generationHeader = response.headers.get('x-goog-generation');
+    const generation = generationHeader !== null ? Number(generationHeader) : 0;
+    return {
+      body: Buffer.from(await response.arrayBuffer()),
+      generation: Number.isFinite(generation) ? generation : 0,
+    };
   }
 
-  async function writeObject(name: string, body: Buffer, contentType: string): Promise<void> {
-    const url =
+  async function writeObject(
+    name: string,
+    body: Buffer,
+    contentType: string,
+    opts?: { ifGenerationMatch?: number },
+  ): Promise<void> {
+    let url =
       `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(bucket)}/o` +
       `?uploadType=media&name=${encodeURIComponent(name)}`;
+    if (opts?.ifGenerationMatch !== undefined) {
+      url += `&ifGenerationMatch=${opts.ifGenerationMatch}`;
+    }
     const response = await fetchImpl(url, {
       method: 'POST',
       headers: {
@@ -525,10 +609,61 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
       },
       body: new Uint8Array(body),
     });
+    if (response.status === 412) {
+      throw new StagingGenerationMismatchError(`games store write of ${name} lost a race (412)`);
+    }
     if (!response.ok) throw new Error(`games store write of ${name} failed: ${response.status}`);
   }
 
+  async function deleteObject(name: string): Promise<void> {
+    const url = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(bucket)}/o/${encodeURIComponent(name)}`;
+    const response = await fetchImpl(url, {
+      method: 'DELETE',
+      headers: { authorization: `Bearer ${await getAccessToken()}` },
+    });
+    // 404 is fine — clear is idempotent.
+    if (!response.ok && response.status !== 404) {
+      throw new Error(`games store delete of ${name} failed: ${response.status}`);
+    }
+  }
+
   const versionPrefix = (slug: string, version: string) => `games/${slug}/versions/${version}`;
+  const stagingPrefix = (slug: string, issueNumber: number, roundGeneration: number) =>
+    `games/${slug}/staging/${issueNumber}/g${roundGeneration}`;
+
+  async function readStagingManifest(
+    slug: string,
+    issueNumber: number,
+    roundGeneration: number,
+  ): Promise<{ manifest: StagingManifest; generation: number } | null> {
+    const got = await readObjectWithGeneration(`${stagingPrefix(slug, issueNumber, roundGeneration)}/manifest.json`);
+    if (!got) return null;
+    return {
+      manifest: JSON.parse(got.body.toString('utf8')) as StagingManifest,
+      generation: got.generation,
+    };
+  }
+
+  function emptyStagingSummary(): StagedSourcesSummary {
+    return {
+      files: [],
+      totalBytes: 0,
+      maxBytes: MAX_UPLOAD_BYTES,
+      maxFiles: MAX_UPLOAD_FILES,
+      updatedAt: null,
+    };
+  }
+
+  function summaryFromManifest(manifest: StagingManifest | null): StagedSourcesSummary {
+    if (!manifest) return emptyStagingSummary();
+    return {
+      files: [...manifest.files].sort((a, b) => a.path.localeCompare(b.path)),
+      totalBytes: manifest.totalBytes,
+      maxBytes: MAX_UPLOAD_BYTES,
+      maxFiles: MAX_UPLOAD_FILES,
+      updatedAt: manifest.updatedAt,
+    };
+  }
 
   return {
     async putCandidateSources(input) {
@@ -564,6 +699,140 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
       await writeObject(`${prefix}/manifest.json`, Buffer.from(JSON.stringify(manifest, null, 2)), 'application/json');
 
       return { version, manifest };
+    },
+
+    async putStagedSourceFile(input) {
+      assertSlug(input.slug);
+      const path = assertDeliverableSourcePath(input.path);
+      const bytes = Buffer.byteLength(input.content, 'utf8');
+      if (bytes > 1_000_000) {
+        throw new InvalidUploadError(`file too large: ${path} is ${bytes} bytes (max 1000000 per file)`);
+      }
+
+      const prefix = stagingPrefix(input.slug, input.issueNumber, input.roundGeneration);
+      // Source bytes first — orphaned sources without a manifest entry are harmless;
+      // a lost race on the manifest is retried below.
+      await writeObject(`${prefix}/source/${path}`, Buffer.from(input.content, 'utf8'), 'text/plain; charset=utf-8');
+
+      for (let attempt = 0; attempt < MAX_STAGING_MANIFEST_RETRIES; attempt++) {
+        const existing = await readStagingManifest(input.slug, input.issueNumber, input.roundGeneration);
+        const base = existing?.manifest ?? {
+          slug: input.slug,
+          issueNumber: input.issueNumber,
+          roundGeneration: input.roundGeneration,
+          updatedAt: new Date(now()).toISOString(),
+          files: [],
+          totalBytes: 0,
+        };
+        const generation = existing?.generation ?? 0;
+
+        const previous = base.files.find((file) => file.path === path);
+        const nextFiles = previous
+          ? base.files.map((file) => (file.path === path ? { path, bytes } : file))
+          : [...base.files, { path, bytes }];
+        if (nextFiles.length > MAX_UPLOAD_FILES) {
+          throw new InvalidUploadError(`too many staged files: ${nextFiles.length} > ${MAX_UPLOAD_FILES}`);
+        }
+        const totalBytes = base.totalBytes - (previous?.bytes ?? 0) + bytes;
+        if (totalBytes > MAX_UPLOAD_BYTES) {
+          throw new InvalidUploadError(`staged upload too large: over ${MAX_UPLOAD_BYTES} bytes`);
+        }
+
+        const manifest: StagingManifest = {
+          slug: input.slug,
+          issueNumber: input.issueNumber,
+          roundGeneration: input.roundGeneration,
+          updatedAt: new Date(now()).toISOString(),
+          files: nextFiles,
+          totalBytes,
+        };
+        try {
+          await writeObject(
+            `${prefix}/manifest.json`,
+            Buffer.from(JSON.stringify(manifest, null, 2)),
+            'application/json',
+            { ifGenerationMatch: generation },
+          );
+          return { path, bytes, ...summaryFromManifest(manifest) };
+        } catch (error) {
+          if (error instanceof StagingGenerationMismatchError) continue;
+          throw error;
+        }
+      }
+      throw new InvalidUploadError(
+        'could not update staging manifest — too many concurrent stage_source_file calls; retry',
+      );
+    },
+
+    async listStagedSources(input) {
+      assertSlug(input.slug);
+      const existing = await readStagingManifest(input.slug, input.issueNumber, input.roundGeneration);
+      return summaryFromManifest(existing?.manifest ?? null);
+    },
+
+    async getStagedSourceFiles(input) {
+      assertSlug(input.slug);
+      const existing = await readStagingManifest(input.slug, input.issueNumber, input.roundGeneration);
+      const manifest = existing?.manifest;
+      if (!manifest || manifest.files.length === 0) return [];
+      const prefix = stagingPrefix(input.slug, input.issueNumber, input.roundGeneration);
+      const files = await Promise.all(
+        manifest.files.map(async (entry) => {
+          const body = await readObject(`${prefix}/source/${entry.path}`);
+          if (!body) {
+            throw new InvalidUploadError(
+              `staged file missing: ${entry.path} — stage it again, then submit_sources with fromStaged=true`,
+            );
+          }
+          return { path: entry.path, content: body.toString('utf8') };
+        }),
+      );
+      return files;
+    },
+
+    async clearStagedSources(input) {
+      assertSlug(input.slug);
+      const prefix = stagingPrefix(input.slug, input.issueNumber, input.roundGeneration);
+
+      for (let attempt = 0; attempt < MAX_STAGING_MANIFEST_RETRIES; attempt++) {
+        const existing = await readStagingManifest(input.slug, input.issueNumber, input.roundGeneration);
+        if (!existing || existing.manifest.files.length === 0) return { cleared: 0 };
+
+        const removePaths = input.paths?.length
+          ? new Set(input.paths.map((path) => assertDeliverableSourcePath(path)))
+          : null;
+        const toClear = removePaths
+          ? existing.manifest.files.filter((file) => removePaths.has(file.path))
+          : existing.manifest.files;
+
+        await Promise.all(toClear.map((file) => deleteObject(`${prefix}/source/${file.path}`)));
+
+        if (!removePaths || toClear.length === existing.manifest.files.length) {
+          await deleteObject(`${prefix}/manifest.json`);
+          return { cleared: toClear.length };
+        }
+
+        const remaining = existing.manifest.files.filter((file) => !removePaths.has(file.path));
+        const manifest: StagingManifest = {
+          ...existing.manifest,
+          updatedAt: new Date(now()).toISOString(),
+          files: remaining,
+          totalBytes: remaining.reduce((sum, file) => sum + file.bytes, 0),
+        };
+        try {
+          await writeObject(
+            `${prefix}/manifest.json`,
+            Buffer.from(JSON.stringify(manifest, null, 2)),
+            'application/json',
+            { ifGenerationMatch: existing.generation },
+          );
+          return { cleared: toClear.length };
+        } catch (error) {
+          if (error instanceof StagingGenerationMismatchError) continue;
+          throw error;
+        }
+      }
+      throw new InvalidUploadError('could not clear staging manifest — too many concurrent updates; retry');
     },
 
     async getManifest(slug, version) {

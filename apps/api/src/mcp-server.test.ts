@@ -310,6 +310,9 @@ describe('POST /api/mcp (BY-05)', () => {
         'get_example',
         'report_progress',
         'send_screenshot',
+        'stage_source_file',
+        'list_staged_sources',
+        'clear_staged_sources',
         'submit_sources',
         'get_gate_verdict',
         'read_inbox',
@@ -425,6 +428,7 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(joined).toMatch(/get_kit/);
     expect(joined).toMatch(/read_kit_files|list_kit_files|read_kit_file/);
     expect(joined).toMatch(/send_screenshot/);
+    expect(joined).toMatch(/stage_source_file|fromStaged/);
     expect(joined).toMatch(/submit_sources/);
     expect(joined).toMatch(/mode:\s*"preview"|mode=preview/i);
     expect(joined).toMatch(/mode:\s*"publish"|mode=publish/i);
@@ -919,6 +923,31 @@ describe('POST /api/mcp (BY-05)', () => {
     const verdict = await callTool(app, 'get_gate_verdict', { sessionKey }, { 'mcp-session-id': sessionId });
     expect(verdict.isError).toBe(false);
     expect(verdict.structured).toMatchObject({ status: 'red', deliveryId: 'v1' });
+  });
+
+  it('rejects malformed base64 on stage_source_file instead of silently corrupting', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    const { gamesStore } = stubGamesStore();
+    app = await createApp(store, gamesStore);
+    const sessionId = await initialize(app);
+    const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    // Node's Buffer.from would decode this as "abc" — we must refuse.
+    const bad = await callTool(
+      app,
+      'stage_source_file',
+      {
+        sessionKey,
+        path: 'game.ts',
+        encoding: 'base64',
+        content: 'YWJj!!!',
+      },
+      { 'mcp-session-id': sessionId },
+    );
+    expect(bad.isError).toBe(true);
+    expect(JSON.stringify(bad.structured)).toMatch(/invalid base64/i);
   });
 
   describe('terminal receipt (generation one behind) on all three transports', () => {
@@ -1423,6 +1452,7 @@ describe('POST /api/mcp (BY-05)', () => {
       'get_sources',
       'list_examples',
       'get_example',
+      'list_staged_sources',
       'read_inbox',
     ];
     for (const name of readers) {
@@ -1434,12 +1464,15 @@ describe('POST /api/mcp (BY-05)', () => {
       'continue_draft',
       'report_progress',
       'send_screenshot',
+      'stage_source_file',
+      'clear_staged_sources',
       'submit_sources',
       'ack_inbox',
     ];
     for (const name of writers) {
       expect(tools.find((tool) => tool.name === name)?.annotations?.readOnlyHint, name).toBe(false);
     }
+    expect(tools.find((tool) => tool.name === 'list_staged_sources')?.annotations?.readOnlyHint).toBe(true);
   });
 
   it('declares an outputSchema for every tool', async () => {

@@ -197,18 +197,38 @@ describe('defaultVersionId', () => {
 
 function stubGcs() {
   const objects = new Map<string, Buffer>();
+  const generations = new Map<string, number>();
   const impl = (async (url: string | URL, init: RequestInit = {}) => {
     const href = String(url);
     if (init.method === 'POST') {
-      const name = decodeURIComponent(new URL(href).searchParams.get('name') ?? '');
+      const parsed = new URL(href);
+      const name = decodeURIComponent(parsed.searchParams.get('name') ?? '');
+      const ifMatch = parsed.searchParams.get('ifGenerationMatch');
+      const current = generations.get(name) ?? 0;
+      if (ifMatch !== null && Number(ifMatch) !== current) {
+        return new Response('Precondition Failed', { status: 412 });
+      }
       objects.set(name, Buffer.from(init.body as Uint8Array));
-      return new Response('{}', { status: 200 });
+      const next = current + 1;
+      generations.set(name, next);
+      return new Response(JSON.stringify({ generation: String(next) }), { status: 200 });
+    }
+    if (init.method === 'DELETE') {
+      const name = decodeURIComponent(href.split('/o/')[1].split('?')[0]);
+      objects.delete(name);
+      generations.delete(name);
+      return new Response(null, { status: 200 });
     }
     const name = decodeURIComponent(href.split('/o/')[1].split('?')[0]);
     const body = objects.get(name);
-    return body ? new Response(new Uint8Array(body), { status: 200 }) : new Response('', { status: 404 });
+    if (!body) return new Response('', { status: 404 });
+    const generation = String(generations.get(name) ?? 1);
+    return new Response(new Uint8Array(body), {
+      status: 200,
+      headers: { 'x-goog-generation': generation },
+    });
   }) as unknown as typeof fetch;
-  return { impl, objects };
+  return { impl, objects, generations };
 }
 
 describe('GCS games store', () => {
@@ -275,6 +295,105 @@ describe('GCS games store', () => {
     await store.putGateResult('g', version, { green: false, report: '3 checks failed' });
 
     expect((await store.getManifest('g', version))?.gate).toMatchObject({ green: false, report: '3 checks failed' });
+  });
+
+  it('stages files one-by-one and assembles them for finalize', async () => {
+    const { impl, objects } = stubGcs();
+    const store = createGcsGamesStore({ ...base, fetchImpl: impl });
+    const draft = MINIMAL.filter((f) => f.path !== 'TRACE.json' && f.path !== 'PLAYTEST.json');
+
+    for (const file of draft) {
+      await store.putStagedSourceFile({
+        slug: 'g',
+        issueNumber: 7,
+        roundGeneration: 1,
+        path: file.path,
+        content: file.content,
+      });
+    }
+
+    const listed = await store.listStagedSources({ slug: 'g', issueNumber: 7, roundGeneration: 1 });
+    expect(listed.files.map((f) => f.path).sort()).toEqual(draft.map((f) => f.path).sort());
+    expect(objects.has('games/g/staging/7/g1/source/game.ts')).toBe(true);
+
+    const assembled = await store.getStagedSourceFiles({ slug: 'g', issueNumber: 7, roundGeneration: 1 });
+    const { version } = await store.putCandidateSources({
+      slug: 'g',
+      issueNumber: 7,
+      files: assembled,
+      mode: 'preview',
+    });
+    expect(version).toBeTruthy();
+
+    await store.clearStagedSources({ slug: 'g', issueNumber: 7, roundGeneration: 1 });
+    expect((await store.listStagedSources({ slug: 'g', issueNumber: 7, roundGeneration: 1 })).files).toEqual([]);
+  });
+
+  it('retries staging manifest writes when a concurrent update wins the generation race', async () => {
+    const objects = new Map<string, Buffer>();
+    const generations = new Map<string, number>();
+    let manifestWrites = 0;
+    const impl = (async (url: string | URL, init: RequestInit = {}) => {
+      const href = String(url);
+      if (init.method === 'POST') {
+        const parsed = new URL(href);
+        const name = decodeURIComponent(parsed.searchParams.get('name') ?? '');
+        if (name.endsWith('/manifest.json')) {
+          manifestWrites += 1;
+          // First attempt pretends another writer landed first.
+          if (manifestWrites === 1) {
+            return new Response('Precondition Failed', { status: 412 });
+          }
+        }
+        const ifMatch = parsed.searchParams.get('ifGenerationMatch');
+        const current = generations.get(name) ?? 0;
+        if (ifMatch !== null && Number(ifMatch) !== current) {
+          return new Response('Precondition Failed', { status: 412 });
+        }
+        objects.set(name, Buffer.from(init.body as Uint8Array));
+        const next = current + 1;
+        generations.set(name, next);
+        return new Response('{}', { status: 200 });
+      }
+      if (init.method === 'DELETE') {
+        const name = decodeURIComponent(href.split('/o/')[1].split('?')[0]);
+        objects.delete(name);
+        generations.delete(name);
+        return new Response(null, { status: 200 });
+      }
+      const name = decodeURIComponent(href.split('/o/')[1].split('?')[0]);
+      // After the first 412, the concurrent writer's manifest appears for the retry read.
+      if (name.endsWith('/manifest.json') && manifestWrites >= 1 && !objects.has(name)) {
+        const concurrent = {
+          slug: 'g',
+          issueNumber: 7,
+          roundGeneration: 1,
+          updatedAt: '2026-07-30T10:00:00.000Z',
+          files: [{ path: 'SPEC.md', bytes: 3 }],
+          totalBytes: 3,
+        };
+        objects.set(name, Buffer.from(JSON.stringify(concurrent)));
+        generations.set(name, 1);
+      }
+      const body = objects.get(name);
+      if (!body) return new Response('', { status: 404 });
+      return new Response(new Uint8Array(body), {
+        status: 200,
+        headers: { 'x-goog-generation': String(generations.get(name) ?? 1) },
+      });
+    }) as unknown as typeof fetch;
+
+    const store = createGcsGamesStore({ ...base, fetchImpl: impl });
+    const result = await store.putStagedSourceFile({
+      slug: 'g',
+      issueNumber: 7,
+      roundGeneration: 1,
+      path: 'game.ts',
+      content: 'export {};',
+    });
+
+    expect(manifestWrites).toBeGreaterThanOrEqual(2);
+    expect(result.files.map((f) => f.path).sort()).toEqual(['SPEC.md', 'game.ts']);
   });
 
   it('records kit_outdated on a preview-lane check without touching gate', async () => {

@@ -43,6 +43,7 @@ import {
   type AgentTokenAccess,
   type AgentTokenClaims,
 } from './agent-token.js';
+import { decodeCanonicalBase64Utf8, InvalidBase64Error } from './canonical-base64.js';
 import { selfBuildDeliveryCap } from './builder.js';
 import type { BuilderKind } from './builder.js';
 import { MAX_UPLOAD_FILES, type GamesStore } from './games-store.js';
@@ -294,7 +295,7 @@ function stopFromChannel(body: { control?: { stop?: boolean; reason?: string } }
 const BEHAVIOURAL_CONTRACT = [
   'Report progress before and after long steps (and whenever a reply carries warnings with code progress_stale).',
   'Send a screenshot as soon as the game draws anything playable.',
-  'While iterating, submit_sources with mode=preview (no TRACE required). Only mode=publish needs TRACE/PLAYTEST and can go green.',
+  'While iterating, deliver with mode=preview (no TRACE required). Prefer stage_source_file once per path then submit_sources({ fromStaged:true, mode:"preview", kitEngineRef }) — avoid one giant files[] payload. Only mode=publish needs TRACE/PLAYTEST and can go green.',
   'Run kit checks green (at least check:static) before submit_sources when you have a local kit checkout; otherwise submit and let the gate run checks.',
   'Honour stop immediately — do not continue after stop:true.',
   'When seedAvailable/seedStatus=available (or warnings.code=seed_unread), call get_seed and continue that draft — do not scaffold from scratch. When seedStatus=pending, recheck get_seed before scaffolding.',
@@ -320,9 +321,9 @@ const SESSION_WORKFLOW: readonly string[] = [
   'get_kit — keep engineRef for submit_sources; prefer read_kit_files for several known small paths (else list_kit_files / search_kit_files / read_kit_file / read_kit_file_fragment) when shell unpack is unavailable; otherwise unpack via the returned one-liner and follow SKILL.md locally. Never dump the whole kit into context.',
   'Build the game — continuing the seed or sources you fetched, otherwise from the kit; report_progress before and after long steps.',
   'send_screenshot as soon as the game draws anything playable.',
-  'While iterating: submit_sources({ mode: "preview", kitEngineRef, files }) — TRACE/PLAYTEST not required; Studio gets a playable draft after typecheck→smoke→build.',
+  'While iterating: prefer stage_source_file({ path, content }) for each game file (list_staged_sources to check), then submit_sources({ fromStaged: true, mode: "preview", kitEngineRef }) — TRACE/PLAYTEST not required; Studio gets a playable draft after typecheck→smoke→build. Inline files[] still works for tiny trees.',
   'Poll get_gate_verdict until preview_passed or preview_failed; fix and re-preview on the SAME key. preview_passed does NOT end the round.',
-  'When ready to seal: record TRACE (`npm run trace -- <slug> --accept` if you have a kit checkout), include PLAYTEST.json, then submit_sources({ mode: "publish", … }).',
+  'When ready to seal: record TRACE (`npm run trace -- <slug> --accept` if you have a kit checkout), stage/include PLAYTEST.json + TRACE.json, then submit_sources({ fromStaged: true, mode: "publish", kitEngineRef }) (or inline files[]).',
   'Poll get_gate_verdict about every 30s until it is green, red, or kit_outdated (publish lane).',
   'Once a publish verdict lands, get_gate_media returns the screenshots and gameplay video the gate recorded — check the frames for visual defects the report cannot describe, and show them to the creator. Essential when you cannot run the game yourself.',
   'red / preview_failed: read the report, fix, and resubmit on the SAME key (preview while iterating; publish when sealing).',
@@ -449,7 +450,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
 
   async function injectChannel(
     request: FastifyRequest,
-    method: 'GET' | 'POST',
+    method: 'GET' | 'POST' | 'PUT' | 'DELETE',
     path: string,
     channelToken: string,
     body?: Record<string, unknown> | unknown[],
@@ -2509,6 +2510,218 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       },
     },
 
+    stage_source_file: {
+      annotations: { title: 'Stage one source file', ...WRITES },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          ok: { type: 'boolean' },
+          path: { type: 'string' },
+          bytes: { type: 'number' },
+          staged: {
+            type: 'object',
+            properties: {
+              files: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: { path: { type: 'string' }, bytes: { type: 'number' } },
+                  required: ['path', 'bytes'],
+                },
+              },
+              totalBytes: { type: 'number' },
+              maxBytes: { type: 'number' },
+              maxFiles: { type: 'number' },
+            },
+            required: ['files', 'totalBytes', 'maxBytes', 'maxFiles'],
+          },
+          ...REPLY_CONTROL,
+        },
+        required: ['ok', 'path', 'bytes', 'staged', 'stop', 'pendingMessages'],
+      },
+      description:
+        'Upload ONE game source file into this round’s staging buffer. Prefer this over a giant submit_sources files[] ' +
+        'when the tree is large (Claude Chat often truncates huge tool JSON). Call once per path, then ' +
+        'submit_sources({ fromStaged: true, mode, kitEngineRef }). Overwrites the same path if staged again. ' +
+        BEHAVIOURAL_CONTRACT,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          sessionKey: SESSION_KEY_PROP,
+          path: { type: 'string', description: 'Game-relative path (e.g. game.ts, SPEC.md).' },
+          content: { type: 'string', description: 'File contents (utf8 text, or base64 when encoding=base64).' },
+          encoding: { type: 'string', enum: ['utf8', 'base64'] },
+          slug: { type: 'string' },
+        },
+        required: ['path', 'content'],
+      },
+      handler: async (args, ctx) => {
+        const auth = await resolveAuth(ctx, args);
+        if (!('channelToken' in auth)) return auth;
+        const path = typeof args.path === 'string' ? args.path.trim() : '';
+        if (!path) return toolErr('path is required');
+        if (typeof args.content !== 'string') return toolErr('content is required');
+        let content = args.content;
+        if (args.encoding === 'base64') {
+          try {
+            content = decodeCanonicalBase64Utf8(args.content);
+          } catch (error) {
+            if (error instanceof InvalidBase64Error) {
+              return toolErr(`file ${path}: invalid base64 content`);
+            }
+            throw error;
+          }
+        }
+        const slug =
+          typeof args.slug === 'string' && args.slug.trim() ? args.slug.trim() : (auth.record.slug ?? undefined);
+        const res = await injectChannel(ctx.request, 'PUT', '/api/agent/build/sources/stage', auth.channelToken, {
+          path,
+          content,
+          ...(slug ? { slug } : {}),
+        });
+        const body = res.json() as {
+          error?: string;
+          accepted?: boolean;
+          rejected?: string;
+          path?: string;
+          bytes?: number;
+          staged?: {
+            files: Array<{ path: string; bytes: number }>;
+            totalBytes: number;
+            maxBytes: number;
+            maxFiles: number;
+          };
+          control?: { stop?: boolean; reason?: string };
+          pending?: Array<{ id: string; text: string; createdAt: string }>;
+        };
+        if (res.statusCode !== 200) {
+          return toolErr(body.error ?? `stage failed (${res.statusCode})`, body);
+        }
+        return toolOk({
+          ok: body.accepted !== false,
+          ...(body.rejected ? { rejected: body.rejected } : {}),
+          path: body.path ?? path,
+          bytes: body.bytes ?? 0,
+          staged: body.staged ?? { files: [], totalBytes: 0, maxBytes: 0, maxFiles: 0 },
+          ...stopFromChannel(body),
+          pendingMessages: pendingMessagesFromChannel(body),
+        });
+      },
+    },
+
+    list_staged_sources: {
+      annotations: { title: 'List staged source files', ...READS },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          files: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: { path: { type: 'string' }, bytes: { type: 'number' } },
+              required: ['path', 'bytes'],
+            },
+          },
+          totalBytes: { type: 'number' },
+          maxBytes: { type: 'number' },
+          maxFiles: { type: 'number' },
+          updatedAt: { type: ['string', 'null'] },
+        },
+        required: ['files', 'totalBytes', 'maxBytes', 'maxFiles', 'updatedAt'],
+      },
+      description:
+        'List paths currently in the staging buffer (no contents). Use after stage_source_file to confirm the tree ' +
+        'before submit_sources({ fromStaged: true, … }). ' +
+        BEHAVIOURAL_CONTRACT,
+      inputSchema: {
+        type: 'object',
+        properties: { sessionKey: SESSION_KEY_PROP },
+        required: [],
+      },
+      handler: async (args, ctx) => {
+        const auth = await resolveAuth(ctx, args);
+        if (!('channelToken' in auth)) return auth;
+        const res = await injectChannel(ctx.request, 'GET', '/api/agent/build/sources/stage', auth.channelToken);
+        const body = res.json() as {
+          error?: string;
+          files?: Array<{ path: string; bytes: number }>;
+          totalBytes?: number;
+          maxBytes?: number;
+          maxFiles?: number;
+          updatedAt?: string | null;
+        };
+        if (res.statusCode !== 200) {
+          return toolErr(body.error ?? `list staged failed (${res.statusCode})`, body);
+        }
+        return toolOk({
+          files: body.files ?? [],
+          totalBytes: body.totalBytes ?? 0,
+          maxBytes: body.maxBytes ?? 0,
+          maxFiles: body.maxFiles ?? 0,
+          updatedAt: body.updatedAt ?? null,
+        });
+      },
+    },
+
+    clear_staged_sources: {
+      annotations: { title: 'Clear staged source files', ...WRITES },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          ok: { type: 'boolean' },
+          cleared: { type: 'number' },
+          ...REPLY_CONTROL,
+        },
+        required: ['ok', 'cleared', 'stop', 'pendingMessages'],
+      },
+      description:
+        'Clear the staging buffer (all paths, or only paths[]). Use before re-staging a clean tree. ' +
+        'Successful submit_sources({ fromStaged: true }) also clears automatically. ' +
+        BEHAVIOURAL_CONTRACT,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          sessionKey: SESSION_KEY_PROP,
+          paths: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Optional subset to clear; omit to clear everything.',
+          },
+        },
+        required: [],
+      },
+      handler: async (args, ctx) => {
+        const auth = await resolveAuth(ctx, args);
+        if (!('channelToken' in auth)) return auth;
+        const paths = Array.isArray(args.paths)
+          ? args.paths.filter((path): path is string => typeof path === 'string' && path.trim().length > 0)
+          : undefined;
+        const res = await injectChannel(
+          ctx.request,
+          'POST',
+          '/api/agent/build/sources/stage/clear',
+          auth.channelToken,
+          paths?.length ? { paths } : {},
+        );
+        const body = res.json() as {
+          error?: string;
+          accepted?: boolean;
+          cleared?: number;
+          control?: { stop?: boolean; reason?: string };
+          pending?: Array<{ id: string; text: string; createdAt: string }>;
+        };
+        if (res.statusCode !== 200) {
+          return toolErr(body.error ?? `clear staged failed (${res.statusCode})`, body);
+        }
+        return toolOk({
+          ok: body.accepted !== false,
+          cleared: body.cleared ?? 0,
+          ...stopFromChannel(body),
+          pendingMessages: pendingMessagesFromChannel(body),
+        });
+      },
+    },
+
     submit_sources: {
       annotations: { title: 'Deliver sources to the gate', ...CONSUMES },
       outputSchema: {
@@ -2541,15 +2754,22 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         ],
       },
       description:
-        `Deliver game sources. mode=preview (iterate): TRACE/PLAYTEST not required; runs typecheck→smoke→build; Studio gets a draft. ` +
+        `Deliver game sources. Prefer stage_source_file per path then fromStaged=true (avoids huge tool JSON). ` +
+        `mode=preview (iterate): TRACE/PLAYTEST not required; runs typecheck→smoke→build; Studio gets a draft. ` +
         `mode=publish (default, seal): TRACE.json + PLAYTEST.json required; full gate; only publish green ends the round. ` +
-        `files[{path, content, encoding utf8|base64}] ≤${MAX_SUBMIT_FILES}; kitEngineRef required (from get_kit / kit.json). ` +
+        `files[{path, content, encoding utf8|base64}] optional when fromStaged=true (inline paths override staged); ≤${MAX_SUBMIT_FILES}; kitEngineRef required. ` +
         'Subject to delivery cap and filename allowlist. Reply includes stop and pendingMessages. ' +
         BEHAVIOURAL_CONTRACT,
       inputSchema: {
         type: 'object',
         properties: {
           sessionKey: SESSION_KEY_PROP,
+          fromStaged: {
+            type: 'boolean',
+            description:
+              'Assemble the staging buffer built with stage_source_file. Prefer this for large trees. ' +
+              'When true, files[] may be omitted (or used as path overrides).',
+          },
           files: {
             type: 'array',
             maxItems: MAX_SUBMIT_FILES,
@@ -2576,12 +2796,13 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           slug: { type: 'string' },
           note: { type: 'string' },
         },
-        required: ['files', 'kitEngineRef'],
+        required: ['kitEngineRef'],
       },
       handler: async (args, ctx) => {
         const auth = await resolveAuth(ctx, args);
         if (!('channelToken' in auth)) return auth;
 
+        const fromStaged = args.fromStaged === true;
         const filesParse = z
           .array(
             z.object({
@@ -2590,14 +2811,18 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
               encoding: z.enum(['utf8', 'base64']).optional(),
             }),
           )
-          .min(1)
           .max(MAX_SUBMIT_FILES)
+          .optional()
           .safeParse(args.files);
         if (!filesParse.success) {
           return toolErr(filesParse.error.issues[0]?.message ?? 'invalid files');
         }
-        if (filesParse.data.length > MAX_SUBMIT_FILES) {
-          return toolErr(`too many files (max ${MAX_SUBMIT_FILES})`);
+        const inlineFiles = filesParse.data ?? [];
+        if (!fromStaged && inlineFiles.length === 0) {
+          return toolErr(
+            'submit_sources needs files[] or fromStaged=true after stage_source_file. ' +
+              'For large trees: stage_source_file each path, then submit_sources({ fromStaged: true, mode, kitEngineRef }).',
+          );
         }
 
         const kitEngineRef = typeof args.kitEngineRef === 'string' ? args.kitEngineRef.trim() : '';
@@ -2608,12 +2833,15 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         const mode = args.mode === 'preview' ? 'preview' : 'publish';
 
         const decodedFiles: Array<{ path: string; content: string }> = [];
-        for (const file of filesParse.data) {
+        for (const file of inlineFiles) {
           if (file.encoding === 'base64') {
             try {
-              decodedFiles.push({ path: file.path, content: Buffer.from(file.content, 'base64').toString('utf8') });
-            } catch {
-              return toolErr(`file ${file.path}: invalid base64 content`);
+              decodedFiles.push({ path: file.path, content: decodeCanonicalBase64Utf8(file.content) });
+            } catch (error) {
+              if (error instanceof InvalidBase64Error) {
+                return toolErr(`file ${file.path}: invalid base64 content`);
+              }
+              throw error;
             }
           } else {
             decodedFiles.push({ path: file.path, content: file.content });
@@ -2625,7 +2853,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
 
         const res = await injectChannel(ctx.request, 'POST', '/api/agent/build/sources', auth.channelToken, {
           slug,
-          files: decodedFiles,
+          ...(decodedFiles.length ? { files: decodedFiles } : {}),
+          ...(fromStaged ? { fromStaged: true } : {}),
           kitEngineRef,
           mode,
         });

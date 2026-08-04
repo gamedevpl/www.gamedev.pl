@@ -19,7 +19,13 @@ import {
 } from './agent-token.js';
 import { selfBuildDeliveryCap } from './builder.js';
 import { DEFAULT_SIGNED_URL_TTL_SECONDS, type GcsObjectStore } from './gcs-sign.js';
-import { InvalidUploadError, MAX_UPLOAD_FILES, type DeliveryMode, type GamesStore } from './games-store.js';
+import {
+  InvalidUploadError,
+  MAX_UPLOAD_BYTES,
+  MAX_UPLOAD_FILES,
+  type DeliveryMode,
+  type GamesStore,
+} from './games-store.js';
 import { parseGameMedia, parseSpecTitle } from './github-client.js';
 import { canTransition, resolveJobState, type JobState } from './job-state.js';
 import {
@@ -164,38 +170,66 @@ const DEFAULT_MAX_SUBMITS_PER_WINDOW = 20;
  * exactly the order of operations that produces zip-slip bugs. A flat list of
  * (path, content) is checked before a single byte is stored.
  */
-const BuildSourcesInputSchema = z.object({
+const BuildSourcesInputSchema = z
+  .object({
+    slug: z
+      .string()
+      .trim()
+      .regex(/^[a-z0-9][a-z0-9-]*$/, 'slug must be lowercase letters, digits and dashes')
+      .max(64),
+    files: z
+      .array(
+        z.object({
+          path: z.string().trim().min(1).max(120),
+          content: z.string().max(1_000_000),
+        }),
+      )
+      // Keep in lockstep with games-store MAX_UPLOAD_FILES (MCP advertise the same).
+      .max(MAX_UPLOAD_FILES, 'too many files')
+      .optional(),
+    /**
+     * Assemble the job's staged buffer (built via PUT …/sources/stage) instead of
+     * requiring the full tree in this request — for MCP clients that cannot emit a
+     * huge files[] payload cleanly.
+     */
+    fromStaged: z.boolean().optional(),
+    /**
+     * Creator Kit engineRef the sources were built against. Required for self-build
+     * deliveries (BY-06); the gate compares it to `kits/current.json`'s N/N−1 window.
+     */
+    kitEngineRef: z
+      .string()
+      .trim()
+      .min(7, 'kitEngineRef must be a kit engine commit')
+      .max(64)
+      .regex(/^[0-9a-f]+$/i, 'kitEngineRef must be a hex commit sha')
+      .optional(),
+    /**
+     * Preview: typecheck→smoke→build, TRACE/PLAYTEST optional, Studio-playable only.
+     * Publish (default): full gate; TRACE/PLAYTEST required. Keeps `npm run submit` safe.
+     */
+    mode: z.enum(['preview', 'publish']).default('publish'),
+  })
+  .superRefine((value, ctx) => {
+    const inline = value.files?.length ?? 0;
+    if (!value.fromStaged && inline === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'files is required (or set fromStaged=true after staging files one-by-one)',
+        path: ['files'],
+      });
+    }
+  });
+
+const StageSourceInputSchema = z.object({
+  path: z.string().trim().min(1).max(120),
+  content: z.string().max(1_000_000),
   slug: z
     .string()
     .trim()
     .regex(/^[a-z0-9][a-z0-9-]*$/, 'slug must be lowercase letters, digits and dashes')
-    .max(64),
-  files: z
-    .array(
-      z.object({
-        path: z.string().trim().min(1).max(120),
-        content: z.string().max(1_000_000),
-      }),
-    )
-    .min(1, 'files is required')
-    // Keep in lockstep with games-store MAX_UPLOAD_FILES (MCP advertise the same).
-    .max(MAX_UPLOAD_FILES, 'too many files'),
-  /**
-   * Creator Kit engineRef the sources were built against. Required for self-build
-   * deliveries (BY-06); the gate compares it to `kits/current.json`'s N/N−1 window.
-   */
-  kitEngineRef: z
-    .string()
-    .trim()
-    .min(7, 'kitEngineRef must be a kit engine commit')
     .max(64)
-    .regex(/^[0-9a-f]+$/i, 'kitEngineRef must be a hex commit sha')
     .optional(),
-  /**
-   * Preview: typecheck→smoke→build, TRACE/PLAYTEST optional, Studio-playable only.
-   * Publish (default): full gate; TRACE/PLAYTEST required. Keeps `npm run submit` safe.
-   */
-  mode: z.enum(['preview', 'publish']).default('publish'),
 });
 
 const BuildPreviewInputSchema = z.object({
@@ -824,6 +858,160 @@ export async function registerAgentChannelRoutes(
   );
 
   /**
+   * File-by-file staging before a delivery.
+   *
+   * MCP clients (Claude Chat especially) often fail mid-serialization when emitting a
+   * huge `files[]` in one tool call. Staging lets them PUT one path at a time into a
+   * job-scoped buffer, then finalize with `fromStaged=true` — the gate still sees one
+   * assembled upload; only the wire shape changes.
+   */
+  app.put(
+    '/api/agent/build/sources/stage',
+    {
+      config: { rateLimit: { max: 300, timeWindow: '1 hour' } },
+      bodyLimit: 1_500_000,
+    },
+    async (request, reply) => {
+      const resolved = await resolveBuild(request, reply);
+      if (!resolved) return reply;
+      const { issueNumber, record } = resolved;
+
+      if (!options.gamesStore) {
+        return reply.status(503).send({ error: 'delivery is not configured on this deployment' });
+      }
+      if (stopReason(record)) {
+        return reply.send({ accepted: false, rejected: 'stopped', ...(await channelState(issueNumber, record)) });
+      }
+
+      const parsed = StageSourceInputSchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
+      }
+
+      const slug = record.slug ?? parsed.data.slug;
+      if (!slug) {
+        return reply.status(400).send({
+          error: 'slug is required before staging — send the slug from get_brief / start',
+        });
+      }
+      if (record.slug && parsed.data.slug && record.slug !== parsed.data.slug) {
+        return reply.status(409).send({ error: `this build delivers to ${record.slug}, not ${parsed.data.slug}` });
+      }
+      if (!record.slug && store) {
+        await store.setSubmissionSlug(issueNumber, slug);
+      }
+
+      const roundGeneration = store
+        ? ((await store.ensureRoundGeneration(issueNumber)) ?? record.roundGeneration ?? 1)
+        : (record.roundGeneration ?? 1);
+
+      try {
+        const staged = await options.gamesStore.putStagedSourceFile({
+          slug,
+          issueNumber,
+          roundGeneration,
+          path: parsed.data.path,
+          content: parsed.data.content,
+        });
+        return reply.send({
+          accepted: true,
+          path: staged.path,
+          bytes: staged.bytes,
+          staged: {
+            files: staged.files,
+            totalBytes: staged.totalBytes,
+            maxBytes: staged.maxBytes,
+            maxFiles: staged.maxFiles,
+            updatedAt: staged.updatedAt,
+          },
+          ...(await channelState(issueNumber, (await store!.getSubmission(issueNumber)) ?? record)),
+        });
+      } catch (error) {
+        if (error instanceof InvalidUploadError) {
+          return reply.status(400).send({ error: error.message });
+        }
+        throw error;
+      }
+    },
+  );
+
+  app.get(
+    '/api/agent/build/sources/stage',
+    { config: { rateLimit: { max: 120, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      const resolved = await resolveBuild(request, reply);
+      if (!resolved) return reply;
+      const { issueNumber, record } = resolved;
+
+      if (!options.gamesStore) {
+        return reply.status(503).send({ error: 'delivery is not configured on this deployment' });
+      }
+      if (!record.slug) {
+        return reply.send({
+          files: [],
+          totalBytes: 0,
+          maxBytes: MAX_UPLOAD_BYTES,
+          maxFiles: MAX_UPLOAD_FILES,
+          updatedAt: null,
+        });
+      }
+
+      const roundGeneration = store
+        ? ((await store.ensureRoundGeneration(issueNumber)) ?? record.roundGeneration ?? 1)
+        : (record.roundGeneration ?? 1);
+      const staged = await options.gamesStore.listStagedSources({
+        slug: record.slug,
+        issueNumber,
+        roundGeneration,
+      });
+      return reply.send(staged);
+    },
+  );
+
+  // POST rather than DELETE: MCP inject + many clients are unreliable with DELETE bodies,
+  // and selective clear needs a paths[] payload.
+  app.post(
+    '/api/agent/build/sources/stage/clear',
+    { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      const resolved = await resolveBuild(request, reply);
+      if (!resolved) return reply;
+      const { issueNumber, record } = resolved;
+
+      if (!options.gamesStore) {
+        return reply.status(503).send({ error: 'delivery is not configured on this deployment' });
+      }
+      if (!record.slug) {
+        return reply.send({ accepted: true, cleared: 0 });
+      }
+
+      const body = (request.body ?? {}) as { paths?: unknown };
+      const paths = Array.isArray(body.paths)
+        ? body.paths.filter((path): path is string => typeof path === 'string' && path.trim().length > 0)
+        : undefined;
+
+      const roundGeneration = store
+        ? ((await store.ensureRoundGeneration(issueNumber)) ?? record.roundGeneration ?? 1)
+        : (record.roundGeneration ?? 1);
+
+      try {
+        const { cleared } = await options.gamesStore.clearStagedSources({
+          slug: record.slug,
+          issueNumber,
+          roundGeneration,
+          ...(paths?.length ? { paths } : {}),
+        });
+        return reply.send({ accepted: true, cleared });
+      } catch (error) {
+        if (error instanceof InvalidUploadError) {
+          return reply.status(400).send({ error: error.message });
+        }
+        throw error;
+      }
+    },
+  );
+
+  /**
    * Deliver the game.
    *
    * This is what replaces "open a pull request and wait for a human to merge it". The
@@ -920,16 +1108,47 @@ export async function registerAgentChannelRoutes(
         // transition was skipped and the job stayed `building` (CP-1 double-close).
         const stateAfterSignal = await markBuildingFromChannel(issueNumber, record);
         const mode: DeliveryMode = parsed.data.mode === 'preview' ? 'preview' : 'publish';
+        const roundGeneration = store
+          ? ((await store.ensureRoundGeneration(issueNumber)) ?? record.roundGeneration ?? 1)
+          : (record.roundGeneration ?? 1);
+
+        let files = parsed.data.files ?? [];
+        if (parsed.data.fromStaged) {
+          const staged = await options.gamesStore.getStagedSourceFiles({
+            slug,
+            issueNumber,
+            roundGeneration,
+          });
+          if (staged.length === 0 && files.length === 0) {
+            return reply.status(400).send({
+              error:
+                'fromStaged=true but the staging buffer is empty — call stage_source_file for each path first, ' +
+                'or pass files[] inline',
+            });
+          }
+          // Inline files win on path collision so a final fix can patch one file without
+          // re-staging the whole tree.
+          const byPath = new Map<string, string>();
+          for (const file of staged) byPath.set(file.path, file.content);
+          for (const file of files) byPath.set(file.path, file.content);
+          files = [...byPath.entries()].map(([path, content]) => ({ path, content }));
+        }
+
         const { version } = await options.gamesStore.putCandidateSources({
           slug,
           issueNumber,
-          files: parsed.data.files,
+          files,
           // Provenance: which backend built this version. Backend name on the dispatch
           // ('copilot' / 'self') is the durable record; builder is the round selector.
           backend: record.dispatch?.backend ?? record.builder,
           mode,
           ...(parsed.data.kitEngineRef ? { kitEngineRef: parsed.data.kitEngineRef } : {}),
         });
+        // Staging is spent once the candidate is written — clear so the next iterate
+        // starts clean and a half-edited buffer cannot leak into a later round.
+        if (parsed.data.fromStaged) {
+          await options.gamesStore.clearStagedSources({ slug, issueNumber, roundGeneration }).catch(() => {});
+        }
         // Preview updates Studio's playable pointer without marking a sealed delivery —
         // control.delivered / publication reconciliation still wait for mode=publish.
         // Publish sets both (setSubmissionDeliveredVersion also refreshes previewVersion).
@@ -947,7 +1166,7 @@ export async function registerAgentChannelRoutes(
         // SPEC title for the catalog, so the two surfaces disagreed. Adopting it here
         // keeps them aligned for every delivery from now on.
         if (store) {
-          const spec = parsed.data.files.find((file) => file.path === 'SPEC.md')?.content;
+          const spec = files.find((file) => file.path === 'SPEC.md')?.content;
           const deliveredTitle = spec ? parseSpecTitle(spec) : null;
           if (deliveredTitle) {
             const sanitized = sanitizeCreatorText(deliveredTitle, { singleLine: true }).slice(0, 80);
