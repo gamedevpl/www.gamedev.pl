@@ -76,7 +76,7 @@ describe('mcp-session-nudges', () => {
     expect(nudges.warningsFor(1, 'submit_sources', t0).map((w) => w.code)).not.toContain('call_end');
     const onGate = nudges.warningsFor(1, 'get_gate_verdict', t0);
     expect(onGate.map((w) => w.code)).toContain('call_end');
-    expect(onGate.find((w) => w.code === 'call_end')?.message).toMatch(/do not busy-poll/i);
+    expect(onGate.find((w) => w.code === 'call_end')?.message).toMatch(/one-shot check.*stop:true/i);
     nudges.noteToolSuccess(1, 'end', t0 + 1);
     expect(
       nudges.warningsFor(1, 'get_gate_verdict', t0 + GATE_POLL_MIN_INTERVAL_MS + 2).map((w) => w.code),
