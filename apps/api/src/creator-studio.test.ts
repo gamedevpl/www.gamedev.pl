@@ -104,6 +104,42 @@ describe('GET /api/me/studio', () => {
     await app.close();
   });
 
+  it('includes a specifically addressed game beyond the shelf ceiling', async () => {
+    for (let game = 0; game < 51; game++) {
+      const issueNumber = 1_000 + game;
+      await store.createSubmission(issueNumber, 'g:creator', `Game ${game}`);
+      await store.setSubmissionSlug(issueNumber, `game-${game}`);
+      if (game < 50) await new Promise((resolve) => setTimeout(resolve, 2));
+    }
+
+    const app = await buildApp({
+      store,
+      sessionSecret,
+      submissionRoutes: { submissionTokenSecret },
+    });
+
+    const ordinary = await app.inject({
+      method: 'GET',
+      url: '/api/me/studio',
+      headers: authHeaders('g:creator'),
+    });
+    const ordinaryBody = ordinary.json() as { games: CreatorStudioGame[]; truncated: boolean; totalGames: number };
+    expect(ordinaryBody.games).toHaveLength(50);
+    expect(ordinaryBody.games.map((game) => game.slug)).not.toContain('game-0');
+
+    const addressed = await app.inject({
+      method: 'GET',
+      url: '/api/me/studio?game=game-0',
+      headers: authHeaders('g:creator'),
+    });
+    const addressedBody = addressed.json() as { games: CreatorStudioGame[]; truncated: boolean; totalGames: number };
+    expect(addressedBody).toMatchObject({ truncated: true, totalGames: 51 });
+    expect(addressedBody.games).toHaveLength(51);
+    expect(addressedBody.games.map((game) => game.slug)).toContain('game-0');
+
+    await app.close();
+  });
+
   it('prefers lastStatus over lastNotifiedStatus so a just-published game is not still "building"', async () => {
     // `in_review` shares a notification event with `building`, so lastNotifiedStatus
     // can lag while lastStatus is current — and publish writes lastStatus immediately.

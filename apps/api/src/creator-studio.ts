@@ -3,7 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { DEFAULT_SIGNED_URL_TTL_SECONDS, type GcsObjectStore } from './gcs-sign.js';
 import { KitRegistryError, parseKitRegistry, parseKitSidecar } from './kit-registry.js';
-import { pageOwnerGames } from './owner-games.js';
+import { collapseJobsToOwnerGames, MAX_OWNER_GAMES, pageOwnerGames } from './owner-games.js';
 import { readTarEntries, type TarEntry } from './tar.js';
 import { recentPartitions, summarizeGameHealth, type GameHealth } from './telemetry-health.js';
 import { composeWorkspaceArchive, WorkspaceCompositionError } from './workspace-archive.js';
@@ -29,6 +29,10 @@ const MAX_EVENTS_PER_REQUEST = 5_000;
 
 const QuerySchema = z.object({
   days: z.coerce.number().int().min(1).max(MAX_DAYS).optional(),
+});
+
+const ShelfQuerySchema = z.object({
+  game: z.string().trim().min(1).max(512).optional(),
 });
 
 export interface CreatorStudioRoutesOptions {
@@ -190,8 +194,32 @@ export async function registerCreatorStudioRoutes(
       return reply.status(503).send({ error: 'submissions are not configured' });
     }
 
+    const parsed = ShelfQuerySchema.safeParse(request.query ?? {});
+    if (!parsed.success) {
+      return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid query' });
+    }
+
     const records = await store.listSubmissionsByOwner(request.user!.uid);
-    const { games: shelf, truncated, total } = pageOwnerGames(records, 'shelf');
+    const collapsed = collapseJobsToOwnerGames(records, 'shelf');
+    const total = collapsed.length;
+    const truncated = total > MAX_OWNER_GAMES;
+    const shelf = collapsed.slice(0, MAX_OWNER_GAMES);
+
+    // A profile deep link must keep working even when its game has fallen below the
+    // 50-row shelf. Resolve only against this creator's records, then append the
+    // collapsed tip for that game so legacy capability-token URLs keep working too.
+    const requested = parsed.data.game;
+    if (requested) {
+      const addressedRecord = records.find(
+        (record) => record.slug === requested || options.mintStatusToken!(record.issueNumber) === requested,
+      );
+      const addressedGame = addressedRecord
+        ? collapsed.find(({ tip }) =>
+            addressedRecord.slug ? tip.slug === addressedRecord.slug : tip.issueNumber === addressedRecord.issueNumber,
+          )
+        : undefined;
+      if (addressedGame && !shelf.includes(addressedGame)) shelf.push(addressedGame);
+    }
 
     // Which delivered versions ship an editor definition. One manifest read per
     // game with a delivery, best-effort: a read that fails only costs the Edit

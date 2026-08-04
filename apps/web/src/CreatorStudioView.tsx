@@ -244,7 +244,7 @@ export function CreatorStudioView({
     setLoading(true);
     setError(null);
 
-    Promise.all([fetchStudioGames(), fetchStudioHealth(days)])
+    Promise.all([fetchStudioGames(requestedGameRef.current), fetchStudioHealth(days)])
       .then(([shelfPage, health]) => {
         if (cancelled) return;
         const shelf = shelfPage.games;

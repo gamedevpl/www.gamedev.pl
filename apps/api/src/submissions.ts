@@ -441,6 +441,13 @@ export interface SubmissionRoutesHandle {
   /** The resolved games-repo client, or null when this deployment cannot reach one. */
   githubClient: GitHubClient | null;
   /**
+   * Finds a published entry in the repo-backed catalog only.
+   *
+   * The public media route gives this source priority over migrated store bytes, so
+   * profile cards must use the same winner or they can advertise a stale filename.
+   */
+  getRepoPublishedCatalogEntry: (slug: string) => Promise<CatalogGameEntry | null>;
+  /**
    * Starts a post-publish improvement round, choosing job dispatch or a legacy issue.
    *
    * Exported rather than reimplemented so the suggestion inbox and the creator's own
@@ -4553,5 +4560,10 @@ export async function registerSubmissionRoutes(
     dailyFeedbackQuota,
   });
 
-  return { githubClient, startImprovementRound };
+  return {
+    githubClient,
+    getRepoPublishedCatalogEntry: (slug) =>
+      githubClient ? getPublishedCatalogEntry(githubClient, slug) : Promise.resolve(null),
+    startImprovementRound,
+  };
 }
