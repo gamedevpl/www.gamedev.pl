@@ -335,6 +335,17 @@ describe('MCP open_round (BY-24 / BY-27b)', () => {
     expect(job?.spec).not.toBe('');
     // The change request is free text, not a clarifications block.
     expect(job?.qa).toEqual([]);
+
+    // It also opens the round's thread — as the agent's relay, not the creator's words,
+    // so Studio labels and translates it the way continue_draft's relay is.
+    const messages = await store.listCreatorMessages(jobId);
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatchObject({
+      text: 'Make the title screen background a solid coloured rectangle.',
+      origin: 'agent',
+    });
+    // Already delivered: the brief above is how the agent receives it.
+    expect(await store.listPendingCreatorMessages(jobId)).toEqual([]);
   });
 
   it('admits only one concurrent open_round per slug', async () => {

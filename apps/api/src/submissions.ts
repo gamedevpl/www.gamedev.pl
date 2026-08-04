@@ -68,6 +68,7 @@ import {
   DELETED_ACCOUNT_UID,
   type BuildPreviewSummary,
   type BuildShotSummary,
+  type CreatorMessageOrigin,
   type Store,
   type SubmissionRecord,
 } from './store.js';
@@ -459,6 +460,11 @@ export interface SubmissionRoutesHandle {
     builder?: BuilderKind;
     /** Who opened this improvement — drives the queued transition and status.openedBy. */
     openedBy?: 'creator' | 'agent';
+    /**
+     * Set when a person or their agent put this request into words, to open the new
+     * job's thread with it. Omit for a machine-assembled brief — see the implementation.
+     */
+    requestedBy?: CreatorMessageOrigin;
     /** When set, the new job is owned by this uid (slug-transfer safe). */
     ownerUid?: string;
   }) => Promise<{ route: 'job'; jobId: number } | null>;
@@ -1141,6 +1147,22 @@ export async function registerSubmissionRoutes(
     /** Who opened this improvement — drives the queued transition and status.openedBy. */
     openedBy?: 'creator' | 'agent';
     /**
+     * Who put this round's request into words, when a person or their agent did. Set it
+     * and `text` opens the new job's thread, attributed accordingly — `creator` for the
+     * Studio improve composer, `agent` for a relay through MCP `open_round`.
+     *
+     * Publishing is terminal, so an improvement is a *new* job with an empty thread, and
+     * the request that started it used to live only in the brief the agent reads. The
+     * creator would send a change request, land on the new round, and find no trace of
+     * what they had just asked for — worse after a reload, which drops the page's own
+     * local echo of it too.
+     *
+     * Omitted on purpose by the suggestion paths: `buildImprovementBrief` assembles those
+     * out of player evidence, so nobody typed them. Putting one on the creator's side of
+     * the thread would be the bug #539 fixed, wearing a different hat.
+     */
+    requestedBy?: CreatorMessageOrigin;
+    /**
      * Owner of the new job. Defaults to the published source's ownerUid. Pass the
      * authorized creator after a slug transfer so quota and Studio stay aligned.
      */
@@ -1169,6 +1191,18 @@ export async function registerSubmissionRoutes(
     // stored brief and nothing else. Without this an agent-opened improvement round
     // starts with an empty spec and no idea what the creator asked for.
     await store.setSubmissionBrief(jobId, { spec: input.text, qa: [] });
+    // Open the new job's thread with the request that started it. Written already
+    // delivered: the brief below carries the same words to the agent, and a pending
+    // note would read as a second, newer instruction to act on.
+    if (input.requestedBy) {
+      try {
+        await store.appendCreatorMessage(jobId, input.text, { origin: input.requestedBy, delivered: true });
+      } catch (seedError) {
+        // Best effort. The request still reaches the agent as the brief, so a failure
+        // here costs the creator the echo, not the round.
+        input.log.error({ err: seedError, issueNumber: jobId }, 'failed to seed the improvement thread');
+      }
+    }
     await store.recordJobTransition(jobId, {
       to: 'queued',
       at: new Date(now()).toISOString(),
@@ -3201,6 +3235,10 @@ export async function registerSubmissionRoutes(
         issueNumber,
         text: contextBlock ? `${sanitizedFeedback}\n\n${contextBlock}` : sanitizedFeedback,
         title: sanitizedTitle,
+        // Their own words, typed in the improve composer — the new round's thread opens
+        // with them instead of empty. `stripPlaytestContext` keeps the instrumentation
+        // block we stapled on out of the echo.
+        requestedBy: 'creator',
         // The record was already loaded above for the ownership check.
         locale: record.locale ?? 'en',
         log: request.log,

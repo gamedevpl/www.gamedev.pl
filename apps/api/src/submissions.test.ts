@@ -3575,6 +3575,54 @@ describe('POST /api/submissions/:token/improve', () => {
     expect(verifyToken(body.token, secret)).not.toBe(published);
     await app.close();
   });
+
+  it('opens the new round’s thread with the request that started it', async () => {
+    // Publishing is terminal, so an improvement is a new job with an empty thread. The
+    // request used to live only in the brief the agent reads: the creator would send it,
+    // land on the new round, and find no trace of what they had just asked for — and a
+    // reload dropped the page's own local echo too.
+    const stub = createGithubClientStub({});
+    const { backend } = createBackendStub();
+    const { app, store, authHeaders } = await createApp({
+      githubClient: stub.githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+    });
+
+    const published = await store.allocateJobId();
+    await store.createSubmission(published, 'g:test-user', 'Echo Game');
+    await store.setSubmissionSlug(published, 'echo-game');
+    await store.setSubmissionPublishedAt(published, '2026-07-01T00:00:00.000Z');
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(published, secret)}/improve`,
+      headers: authHeaders,
+      payload: {
+        feedback: 'Please add a checkpoint before the hard second level jump.',
+        context: { instrumentation: { playSeconds: 30 } },
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    const jobId = res.json().jobId as number;
+
+    const status = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${res.json().token}`,
+      headers: authHeaders,
+    });
+    const revisions = status.json().progress?.revisions;
+    expect(revisions).toHaveLength(1);
+    // Their own words, so no relay label — and without the instrumentation block that
+    // was stapled on for the agent.
+    expect(revisions[0].text).toBe('Please add a checkpoint before the hard second level jump.');
+    expect(revisions[0].origin).toBeUndefined();
+
+    // Written already delivered: the brief carries the same words to the agent, so
+    // queueing it too would hand over one instruction that looks like two.
+    expect(await store.listPendingCreatorMessages(jobId)).toEqual([]);
+    await app.close();
+  });
 });
 
 /**
