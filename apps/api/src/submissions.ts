@@ -1266,7 +1266,7 @@ export async function registerSubmissionRoutes(
       return { ok: true, jobId: input.issueNumber, alreadyOpen: true };
     }
     // Only states where a new round is the honest next step. Canceled/abandoned stay dead.
-    // `undefined` is a legacy/partial record — resumeBuild adopts it into `building`.
+    // `undefined` is a legacy/partial record — resumeBuild adopts it into `dispatched`.
     const state = record.state;
     const continuable =
       state === 'ready_for_review' ||
@@ -2057,7 +2057,7 @@ export async function registerSubmissionRoutes(
             log: app.log,
             undelivered: true,
           });
-          // `resumeBuild` has already moved the job back to building. Reporting the
+          // `resumeBuild` has already moved the job back to dispatched. Reporting the
           // failure here as well would show the creator an error about a round that is
           // at this moment running again.
           return null;
