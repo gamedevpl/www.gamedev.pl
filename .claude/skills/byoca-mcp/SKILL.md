@@ -19,6 +19,8 @@ Source of truth: `SESSION_WORKFLOW` + `BEHAVIOURAL_CONTRACT` in
 2. Build; `report_progress`; `send_screenshot` when something draws
 3. Prefer `stage_source_file` then `submit_sources({ fromStaged: true, mode, kitEngineRef })`
    - `mode=preview` while iterating; `mode=publish` to seal (TRACE + PLAYTEST required)
+   - Each successful stage refreshes Studio’s heartbeat (so a long staging loop is not
+     mistaken for quiet / offline)
 4. Poll `get_gate_verdict` (and `get_gate_media` after a publish verdict)
 5. **After the last successful `submit_sources`, call `end`** if you will not deliver more
 
