@@ -195,6 +195,8 @@ export function CreatorStudioView({
   const [shelfOpen, setShelfOpen] = useState(false);
   /** True when the shelf is the phone drawer (off-canvas), not the desktop rail. */
   const [shelfIsDrawer, setShelfIsDrawer] = useState(false);
+  /** Header share control — draft link toggle/copy, not buried in Details → Overview. */
+  const [shareMenuOpen, setShareMenuOpen] = useState(false);
   // Publishing is terminal, so an improvement on a live game opens a *new* job with its
   // own token — one not on the shelf yet. When that happens the open thread moves onto
   // it while the shelf selection stays on the source game (the new job inherits its slug,
@@ -494,10 +496,28 @@ export function CreatorStudioView({
 
   function openTab(next: StudioTab) {
     if (!activeGame || !tabAvailable(activeGame, next)) return;
+    setShareMenuOpen(false);
     setTab(next);
     onNavigate(studioPath(studioAddress(activeGame), next));
   }
   openTabRef.current = openTab;
+
+  const canShareDraft = Boolean(
+    activeGame && activeGame.slug && activeGame.lastKnownStatus !== 'abandoned' && !isStudioGameShelfLive(activeGame),
+  );
+
+  useEffect(() => {
+    setShareMenuOpen(false);
+  }, [selected]);
+
+  useEffect(() => {
+    if (!shareMenuOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setShareMenuOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [shareMenuOpen]);
 
   if (!user) {
     return (
@@ -710,6 +730,41 @@ export function CreatorStudioView({
                         <PixelIcon name="play" size={14} />{' '}
                         <span className="studio-head-action-label">{t('studioPanel.tabs.playtest')}</span>
                       </button>
+                      {canShareDraft && activeGame ? (
+                        <div className="studio-head-share">
+                          <button
+                            type="button"
+                            className={`studio-head-action is-icon-only${shareMenuOpen ? ' is-active' : ''}`}
+                            aria-pressed={shareMenuOpen}
+                            aria-expanded={shareMenuOpen}
+                            aria-label={t('studioPanel.share.title')}
+                            data-testid="studio-head-share"
+                            onClick={() => setShareMenuOpen((open) => !open)}
+                          >
+                            <PixelIcon name="share" size={12} />{' '}
+                            <span className="studio-head-action-label">{t('studioPanel.share.title')}</span>
+                          </button>
+                          {shareMenuOpen ? (
+                            <div
+                              className="studio-head-share-popover"
+                              role="dialog"
+                              aria-label={t('studioPanel.share.title')}
+                            >
+                              <DraftShareControl
+                                game={activeGame}
+                                compact
+                                onSharedChange={(shared) => {
+                                  setGames((prev) =>
+                                    prev.map((game) =>
+                                      game.token === activeGame.token ? { ...game, draftShared: shared } : game,
+                                    ),
+                                  );
+                                }}
+                              />
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
                       <button
                         type="button"
                         className={`studio-head-action is-icon-only${tab === 'details' ? ' is-active' : ''}`}
@@ -831,6 +886,13 @@ export function CreatorStudioView({
                           onDaysChange={setDays}
                           onOpenPlaytest={() => openTab('playtest')}
                           onPlay={() => activeGame.slug && onPlay(activeGame.slug)}
+                          onDraftSharedChange={(shared) => {
+                            setGames((prev) =>
+                              prev.map((game) =>
+                                game.token === activeGame.token ? { ...game, draftShared: shared } : game,
+                              ),
+                            );
+                          }}
                           onRemoved={(token) => {
                             setGames((prev) => prev.filter((game) => game.token !== token));
                             setSelected((current) => (current === token ? null : current));
@@ -1000,6 +1062,7 @@ function DetailsPanel({
   onDaysChange,
   onOpenPlaytest,
   onPlay,
+  onDraftSharedChange,
   onRemoved,
 }: {
   game: StudioShelfGame;
@@ -1016,6 +1079,7 @@ function DetailsPanel({
   onDaysChange: (days: number) => void;
   onOpenPlaytest: () => void;
   onPlay: () => void;
+  onDraftSharedChange: (shared: boolean) => void;
   onRemoved: (token: string) => void;
 }) {
   const { t, i18n } = useTranslation();
@@ -1125,7 +1189,7 @@ function DetailsPanel({
 
               {!catalogLive && game.slug && game.lastKnownStatus !== 'abandoned' ? (
                 <section className="studio-rail-section" aria-label={t('studioPanel.share.title')}>
-                  <DraftShareControl game={game} />
+                  <DraftShareControl game={game} onSharedChange={onDraftSharedChange} />
                 </section>
               ) : null}
             </>
@@ -1215,12 +1279,25 @@ function DetailsPanel({
  * shown is the game's ordinary permalink, the same one it will keep once it is live,
  * so there is nothing to re-share when that happens.
  */
-function DraftShareControl({ game }: { game: StudioGame }) {
+function DraftShareControl({
+  game,
+  compact = false,
+  onSharedChange,
+}: {
+  game: StudioGame;
+  /** Drop the card chrome when nested in the header popover. */
+  compact?: boolean;
+  onSharedChange?: (shared: boolean) => void;
+}) {
   const { t } = useTranslation();
   const [shared, setShared] = useState(Boolean(game.draftShared));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    setShared(Boolean(game.draftShared));
+  }, [game.draftShared, game.token]);
 
   const url = game.slug ? new URL(playPath(game.slug), window.location.href).toString() : '';
 
@@ -1233,6 +1310,7 @@ function DraftShareControl({ game }: { game: StudioGame }) {
     setShared(next);
     try {
       await setDraftShared(game.token, next);
+      onSharedChange?.(next);
     } catch {
       setShared(!next);
       setError(t('studioPanel.share.error'));
@@ -1253,7 +1331,7 @@ function DraftShareControl({ game }: { game: StudioGame }) {
   }
 
   return (
-    <div className="studio-share">
+    <div className={`studio-share${compact ? ' is-compact' : ''}`}>
       <div className="studio-share-head">
         <h3 className="studio-share-title">{t('studioPanel.share.title')}</h3>
         <button

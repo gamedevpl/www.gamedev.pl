@@ -437,6 +437,71 @@ describe('CreatorStudioView', () => {
     root.unmount();
   });
 
+  it('exposes draft share between Play and Details in the head actions', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
+    setDraftShared.mockResolvedValue({ shared: true, slug: 'tv-tycoon' });
+    fetchStudioGames.mockResolvedValue(
+      studioShelf([
+        {
+          token: 'token-draft',
+          title: 'TV Tycoon',
+          createdAt: '2026-07-30T09:00:00.000Z',
+          lastKnownStatus: 'building',
+          slug: 'tv-tycoon',
+        },
+        {
+          token: 'token-live',
+          title: 'Live Game',
+          createdAt: '2026-07-30T08:00:00.000Z',
+          lastKnownStatus: 'published',
+          slug: 'live-game',
+          publishedAt: '2026-07-31T09:00:00.000Z',
+        },
+      ]),
+    );
+    window.history.replaceState(null, '', '/studio/tv-tycoon');
+
+    const { container, root, rerender } = await renderStudio({ selectedGame: 'tv-tycoon' });
+
+    const actions = Array.from(container.querySelector('.studio-head-actions')?.children ?? []);
+    const play = actions.findIndex((node) => node instanceof HTMLElement && node.classList.contains('is-play'));
+    const shareWrap = container.querySelector('.studio-head-share');
+    const details = actions.findIndex(
+      (node) =>
+        node instanceof HTMLElement &&
+        node.classList.contains('studio-head-action') &&
+        node.textContent?.includes('Details'),
+    );
+    expect(shareWrap).not.toBeNull();
+    expect(play).toBeGreaterThanOrEqual(0);
+    expect(actions.indexOf(shareWrap!)).toBe(play + 1);
+    expect(details).toBe(actions.indexOf(shareWrap!) + 1);
+
+    const shareBtn = container.querySelector<HTMLButtonElement>('[data-testid="studio-head-share"]');
+    expect(shareBtn?.classList.contains('is-icon-only')).toBe(true);
+    expect(container.querySelector('.studio-head-share-popover')).toBeNull();
+
+    await act(async () => {
+      shareBtn!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(container.querySelector('.studio-head-share-popover .studio-share-toggle')).not.toBeNull();
+    await act(async () => {
+      container
+        .querySelector('.studio-head-share-popover .studio-share-toggle')!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(setDraftShared).toHaveBeenCalledWith('token-draft', true);
+
+    // Published games already live at /play/<slug> — no draft-share head control.
+    await rerender({ selectedGame: 'live-game' });
+    expect(container.querySelector('[data-testid="studio-head-share"]')).toBeNull();
+
+    root.unmount();
+  });
+
   it('lets Play toggle back to the thread when already open', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');

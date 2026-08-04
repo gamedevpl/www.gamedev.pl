@@ -4992,8 +4992,8 @@ a.user-name--profile:focus-visible {
   font-weight: 700;
 }
 
-/* Claude-shaped cluster: Edit / Details / Claim are icons; the accessible name stays
-   in a clipped label so AT and tests that read textContent still see the word. */
+/* Claude-shaped cluster: Edit / Share / Details / Claim are icons; the accessible name
+   stays in a clipped label so AT and tests that read textContent still see the word. */
 .studio-head-action.is-icon-only .studio-head-action-label {
   position: absolute;
   width: 1px;
@@ -5004,6 +5004,25 @@ a.user-name--profile:focus-visible {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+/* Draft share sits between Play and Details — popover hosts the same toggle/copy control
+   that still lives under Details → Overview. */
+.studio-head-share {
+  position: relative;
+  display: inline-flex;
+}
+
+.studio-head-share-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 40;
+  width: min(360px, calc(100vw - 24px));
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: var(--panel-bg, #0c1218);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
 }
 
 .studio-head-action--claim {
@@ -5660,9 +5679,9 @@ a.user-name--profile:focus-visible {
     padding: 6px 10px;
   }
 
-  /* Icon-only peers in the title row — Details / Edit / Claim were enough to shove the
-     trailing control past the right edge on a 390px phone with a long title. Play keeps
-     its word: clipping it made the primary CTA a tiny icon twin of Details. */
+  /* Icon-only peers in the title row — Share / Details / Edit / Claim were enough to
+     shove the trailing control past the right edge on a 390px phone with a long title.
+     Play keeps its word: clipping it made the primary CTA a tiny icon twin of Details. */
   .app:has(.studio-layout.is-game-open) .studio-head-action:not(.is-primary) .studio-head-action-label {
     position: absolute;
     width: 1px;
@@ -9050,6 +9069,13 @@ a.user-name--profile:focus-visible {
   border-radius: 12px;
   border: 1px solid var(--panel-border, #33383d);
   background: var(--panel-card);
+}
+
+.studio-share.is-compact {
+  margin-top: 0;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
 }
 
 .studio-share-head {
