@@ -575,6 +575,8 @@ export function useGamePlayer(
   onPointer?: () => void,
   /** Called on meaningful player input and subsequent pointer movement (job 6). */
   onActivity?: () => void,
+  /** Called when the game reports a terminal round state. */
+  onEnd?: () => void,
 ) {
   const [meta, setMeta] = useState<GamePlayerMeta | null>(null);
   const [controls, setControls] = useState<ReportedControls | null>(null);
@@ -587,6 +589,8 @@ export function useGamePlayer(
   onPointerRef.current = onPointer;
   const onActivityRef = useRef(onActivity);
   onActivityRef.current = onActivity;
+  const onEndRef = useRef(onEnd);
+  onEndRef.current = onEnd;
 
   useEffect(() => {
     if (!active) {
@@ -630,6 +634,8 @@ export function useGamePlayer(
         onActivityRef.current?.();
       } else if (data.type === 'activity') {
         onActivityRef.current?.();
+      } else if (data.type === 'end') {
+        onEndRef.current?.();
       }
     }
     window.addEventListener('message', onMessage);

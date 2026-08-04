@@ -497,6 +497,58 @@ describe('GameTheater how-to-play visit telemetry', () => {
     }
   });
 
+  it('reveals and pins the bar at game over until the next gameplay input', async () => {
+    vi.useFakeTimers();
+    try {
+      await draw();
+      const frame = container.querySelector('iframe') as HTMLIFrameElement;
+      const bar = container.querySelector('.game-theater-bar') as HTMLElement;
+
+      await act(async () => {
+        frame.focus();
+        window.dispatchEvent(
+          new MessageEvent('message', {
+            data: { source: 'gdpl-player', type: 'pointer' },
+            origin: 'null',
+          }),
+        );
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(PLAYER_CHROME_IDLE_MS);
+      });
+      expect(bar.classList.contains('is-idle')).toBe(true);
+
+      await act(async () => {
+        window.dispatchEvent(
+          new MessageEvent('message', {
+            data: { source: 'gdpl-player', type: 'end', outcome: 'lost' },
+            origin: 'null',
+          }),
+        );
+      });
+      expect(bar.classList.contains('is-idle')).toBe(false);
+      await act(async () => {
+        vi.advanceTimersByTime(PLAYER_CHROME_IDLE_MS * 2);
+      });
+      expect(bar.classList.contains('is-idle')).toBe(false);
+
+      await act(async () => {
+        window.dispatchEvent(
+          new MessageEvent('message', {
+            data: { source: 'gdpl-player', type: 'activity' },
+            origin: 'null',
+          }),
+        );
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(PLAYER_CHROME_IDLE_MS);
+      });
+      expect(bar.classList.contains('is-idle')).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('records via and same-card reopen for a published play', async () => {
     await draw({ controls: 'Arrow keys to move' });
     await click(container.querySelector('.howto-btn'));

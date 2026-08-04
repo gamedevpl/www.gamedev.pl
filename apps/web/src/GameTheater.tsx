@@ -207,6 +207,13 @@ export function GameTheater({
     setActivityVersion((version) => version + 1);
   }, []);
 
+  const notePlayerEnd = useCallback(() => {
+    // A terminal screen is another orientation moment: surface exit/feedback/remix
+    // controls and keep them there until the next round begins with fresh input.
+    setPlayerEngaged(false);
+    setChromeIdle(false);
+  }, []);
+
   // Closing hands focus to the game, not back to the trigger. In a player the next key
   // press is meant for the game: leaving focus on the button turns the next Space into
   // "reopen the card" instead of "fire".
@@ -226,7 +233,7 @@ export function GameTheater({
   // Escape is handled twice on purpose: the window listener below covers the app's
   // own chrome, and this covers the game iframe, which holds focus while playing
   // and swallows its own key events.
-  const player = useGamePlayer(frameRef, true, escapeOrExit, dismissMore, notePlayerActivity);
+  const player = useGamePlayer(frameRef, true, escapeOrExit, dismissMore, notePlayerActivity, notePlayerEnd);
 
   // What the game says about itself, falling back to what the catalog says about it.
   // Derived every render rather than memoized on first value, because both sources
