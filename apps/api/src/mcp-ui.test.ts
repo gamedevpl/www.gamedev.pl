@@ -92,6 +92,11 @@ describe('ui resources', () => {
     const resource = readUiResource(ROUND_STATUS_RESOURCE_URI);
     expect(resource?.mimeType).toBe(MCP_UI_MIME_TYPE);
     expect(resource?.text).toContain('<!doctype html>');
+    expect(resource?.text).toContain('The agent has stopped');
+    expect(resource?.text).toContain("verdict.deliveryId ? 'Watch Studio' : 'Continue building'");
+    expect(resource?.text).toContain('Nothing has been delivered yet. Continue building');
+    expect(resource?.text).not.toContain('ask your agent to poll again');
+    expect(resource?.text).not.toContain("addRow('Recheck in'");
     expect(readUiResource('ui://gamedevpl/does-not-exist')).toBeNull();
     expect(readUiResource('https://www.gamedev.pl/')).toBeNull();
     expect(readUiResource('')).toBeNull();

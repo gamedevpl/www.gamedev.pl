@@ -314,7 +314,7 @@ const BEHAVIOURAL_CONTRACT = [
   'After submit_sources, if you will not deliver more this round, call end (required — warnings.code=call_end; submit already unlocks creator handoff). Prefer end over sitting in a get_gate_verdict loop — Studio shows the gate. Do not stop after submit alone without end.',
   'Honour stop immediately — do not continue after stop:true.',
   'gateStarted true means Cloud Build accepted the gate create; gateStarted false after ok submit means no preview is assembling — honour warnings.code=gate_not_started.',
-  'Do not busy-poll get_gate_verdict — when status is pending, wait retryAfterSeconds (~30s wall-clock) before the next poll, or call end if done. Honour warnings.code=gate_poll_backoff.',
+  'Treat get_gate_verdict as a one-shot check, never a polling loop. Pending with a deliveryId returns stop:true: stop immediately and let Studio show the eventual result. Pending with deliveryId:null means you checked before delivering: stop is false, so continue building and call submit_sources instead of checking again. A later creator-led run may check a delivered gate again. Honour warnings.code=gate_poll_backoff on repeated checks.',
   'When seedAvailable/seedStatus=available (or warnings.code=seed_unread), call get_seed and continue that draft — do not scaffold from scratch. When seedStatus=pending, recheck get_seed before scaffolding.',
   'Every write reply carries pendingMessages — when that array is non-empty, read_inbox and apply before continuing.',
   'Do not schedule background or recurring inbox polls; drain pendingMessages from write replies (and kit/browse replies that piggyback them) as you go. Honour warnings.code=inbox_pending.',
@@ -341,9 +341,9 @@ const SESSION_WORKFLOW: readonly string[] = [
   'While iterating: prefer stage_source_file({ path, content }) for each game file (list_staged_sources to check), then submit_sources({ fromStaged: true, mode: "preview", kitEngineRef }) — TRACE/PLAYTEST not required; Studio gets a playable draft after typecheck→smoke→build. Inline files[] still works for tiny trees.',
   'Staging is already visible: once index.html, game.ts, style.css and GAME.json are staged, the platform assembles the buffer and shows the creator a live playable preview — without waiting for submit or the gate. Stage a runnable tree early and keep staging as you work; a buffer that does not compile simply leaves the previous preview up.',
   'After every successful submit_sources: creator handoff is already unlocked; still call end immediately if you will not deliver more (warnings.code=call_end). Prefer end over sitting in a get_gate_verdict loop — Studio shows the gate. submit alone leaves your MCP session open — end sets stop:true. ChatGPT-class agents often stop after submit; end closes the session cleanly.',
-  'Only poll get_gate_verdict when you still need the verdict to decide whether to fix before ending. Never busy-poll: when status=pending, honour retryAfterSeconds (~30) as wall-clock wait, or call end and stop. Back-to-back get_gate_verdict calls waste your tool budget (warnings.code=gate_poll_backoff). Only poll when gateStarted was true on submit. Preview lane: preview_passed / preview_failed — fix and re-preview on the SAME key; preview_passed does NOT end the round.',
+  'Only call get_gate_verdict once when an already-available verdict would change what you deliver. It is not a wait loop. Pending with a deliveryId returns stop:true: stop immediately and let Studio show the eventual result. Pending with deliveryId:null returns stop:false because you checked too early — continue building and call submit_sources; do not check again before a delivery. A later creator-led run may check a delivered gate again. Preview lane: preview_passed / preview_failed — fix and re-preview on the SAME key; preview_passed does NOT end the round.',
   'When ready to seal: record TRACE (`npm run trace -- <slug> --accept` if you have a kit checkout), stage/include PLAYTEST.json + TRACE.json, then submit_sources({ fromStaged: true, mode: "publish", kitEngineRef }) (or inline files[]).',
-  'For publish, if you are still iterating on the verdict: poll get_gate_verdict at most once per ~30s wall-clock until green, red, or kit_outdated — never in a tight loop. If you are done delivering, call end instead of polling.',
+  'For publish, prefer end after delivery and let Studio show the gate. If you need an already-available verdict before deciding whether to fix, call get_gate_verdict once; a pending delivery returns stop:true and ends this run.',
   'Once a publish verdict lands, get_gate_media returns the screenshots and gameplay video the gate recorded — check the frames for visual defects the report cannot describe, and show them to the creator. Essential when you cannot run the game yourself.',
   'red / preview_failed: read the report, fix, and resubmit on the SAME key (preview while iterating; publish when sealing).',
   'kit_outdated: re-run get_kit for a fresh engineRef, then submit_sources({ fromLatestDelivery: true, mode, kitEngineRef }) — do NOT get_sources + re-stage the whole tree (burns tokens). Only pass files[] for paths you actually changed.',
@@ -2993,7 +2993,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
               'Call end when you will not deliver more this round (sets stop:true). ' +
               'Creator handoff is already unlocked from this submit; without end your session may look finished while still connected. ' +
               'Prefer end over sitting in a get_gate_verdict loop — Studio shows the gate. ' +
-              'If you will keep iterating (poll get_gate_verdict at most once per ~30s wall-clock / fix / resubmit), call end only after your last delivery.',
+              'If you need an already-available verdict to keep iterating, call get_gate_verdict once; a pending delivery returns stop:true and ends this run.',
           });
           if (!gateStarted) {
             warnings.push({
@@ -3074,7 +3074,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     },
 
     get_gate_verdict: {
-      annotations: { title: 'Poll the gate verdict', ...READS },
+      annotations: { title: 'Check the gate once', ...READS },
       outputSchema: {
         type: 'object',
         properties: {
@@ -3095,17 +3095,22 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           retryAfterSeconds: {
             type: 'number',
             description:
-              'When status is pending: wait this many wall-clock seconds before the next poll (do not busy-poll).',
+              'Informational delay before a later creator-led run checks again. stop:true takes priority in this run.',
           },
+          stop: { type: 'boolean', description: 'When true, stop this agent run immediately.' },
+          reason: { type: 'string' },
+          ...WARNINGS_PROP,
         },
-        required: ['status', 'deliveryId', 'summary', 'access'],
+        required: ['status', 'deliveryId', 'summary', 'access', 'stop'],
       },
       description:
-        'Poll the gate verdict for a delivery (default: latest). Preview lane: preview_passed / preview_failed ' +
+        'One-shot check of the gate verdict for a delivery (default: latest); this is not a polling or waiting tool. ' +
+        'Preview lane: preview_passed / preview_failed ' +
         '(does not end the round). Publish lane: green / red / kit_outdated — only green ends the round. ' +
-        'Verdicts typically land in 2–5 minutes. Do NOT busy-poll: when status=pending, wait retryAfterSeconds (~30) ' +
-        'of wall-clock time before the next call, or call end if you will not deliver more (Studio shows the gate). ' +
-        'Back-to-back polls trigger warnings.code=gate_poll_backoff and burn tool limits. ' +
+        'Verdicts typically land in 2–5 minutes. When status=pending and deliveryId is set, the result has stop:true: ' +
+        'STOP this run immediately and let Studio show the eventual result. A pending result with deliveryId:null means ' +
+        'you checked before delivering: stop is false, so continue building and call submit_sources instead of checking again. ' +
+        'retryAfterSeconds is only for a later creator-led run checking a delivered gate. Repeated checks trigger warnings.code=gate_poll_backoff. ' +
         'kit_outdated is terminal — stop polling, re-run get_kit, then submit_sources({ fromLatestDelivery: true, mode, kitEngineRef }) ' +
         '(same mode as the refused delivery; omit mode only to reuse that lane; do not re-upload the whole tree; do not wait for green/red). ' +
         'Terminal receipt: still readable after the round closes ' +
@@ -3135,7 +3140,28 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         if (res.statusCode !== 200) {
           return toolErr(body.error ?? `gate verdict failed (${res.statusCode})`);
         }
-        return toolOk(body);
+        if (body.status === 'pending' && typeof body.deliveryId === 'string') {
+          return toolOk({
+            ...body,
+            summary:
+              'gate is still running — STOP this agent run now; do not call get_gate_verdict or any other tool again. Studio will show the eventual result.',
+            stop: true,
+            reason: 'gate_pending',
+          });
+        }
+        if (body.status === 'pending') {
+          return toolOk({
+            ...body,
+            summary:
+              'nothing has been delivered yet — continue building and call submit_sources; do not call get_gate_verdict again before a delivery',
+            stop: false,
+            reason: 'no_delivery',
+          });
+        }
+        if (body.status === 'green') {
+          return toolOk({ ...body, stop: true, reason: 'gate_green' });
+        }
+        return toolOk({ ...body, stop: false });
       },
     },
 
@@ -3405,7 +3431,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             "the game slug — nothing else is needed. A per-game or legacy key from the creator's Studio kickoff " +
             'prompt goes in the key argument instead. start returns a sessionKey — pass it on every later tool call — ' +
             'and your workflow (the ordered start→done loop): follow it; honour stop; screenshot early; kit-check ' +
-            'before submit; poll get_gate_verdict until green, then finish. Do not poll the inbox on a schedule; ' +
+            'before submit; normally call end after delivery and let Studio show the gate. get_gate_verdict is a ' +
+            'one-shot check, never a loop: a pending delivery returns stop:true, while deliveryId:null means continue building. Do not poll the inbox on a schedule; ' +
             'a green verdict ends the round and the key retires.',
         }),
       );

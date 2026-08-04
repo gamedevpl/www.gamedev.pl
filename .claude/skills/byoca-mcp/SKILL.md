@@ -24,17 +24,24 @@ Source of truth: `SESSION_WORKFLOW` + `BEHAVIOURAL_CONTRACT` in
    - Each stage may also publish a **live preview** of the buffer — see below
 4. **Prefer `end` after the last successful `submit_sources`** if you will not deliver
    more — Studio shows the gate; do not sit in a `get_gate_verdict` loop
-5. Only poll `get_gate_verdict` when you still need the verdict to decide whether to
-   fix before ending (and `get_gate_media` after a publish verdict)
+5. Only call `get_gate_verdict` once when an already-available verdict would change
+   what you deliver (and `get_gate_media` after a publish verdict)
 
 ### Never busy-poll `get_gate_verdict`
 
 Agents cannot sleep between tool calls, so “poll every ~30s” turns into a tight
-loop that burns connector tool budgets. When `status` is `pending`:
+loop that burns connector tool budgets. `get_gate_verdict` is therefore a one-shot
+check, not a wait loop. When `status` is `pending`:
 
-- Honour `retryAfterSeconds` (~30) as **wall-clock** wait before the next poll, **or**
-- Call **`end`** and stop — Studio already shows gate progress
-- Back-to-back polls emit soft `warnings.code=gate_poll_backoff` (and keep
+- With a real `deliveryId`, the response returns `stop: true`,
+  `reason: gate_pending`: stop the agent run immediately and let Studio show the
+  eventual result
+- With `deliveryId: null`, nothing has been delivered: the response returns
+  `stop: false`, `reason: no_delivery`; continue building and call
+  `submit_sources` instead of checking again
+- `retryAfterSeconds` (~30) is informational for a later creator-led run checking a
+  delivered gate, not permission to wait and call again in the current run
+- Back-to-back calls emit soft `warnings.code=gate_poll_backoff` (and keep
   re-emitting `call_end` after submit until `end`)
 
 ### `kit_outdated` — do not re-upload the tree
@@ -115,14 +122,14 @@ cache), so a resume cannot keep showing “finished this round” next to live p
 
 Merged by `applySessionNudges` / submit handler. Act, then continue:
 
-| Code                | Meaning                                                                    |
-| ------------------- | -------------------------------------------------------------------------- |
-| `call_end`          | Call `end` when finished iterating this round                              |
-| `gate_not_started`  | Delivery ok but Cloud Build did not start — no preview yet                 |
-| `gate_poll_backoff` | Stop tight-looping `get_gate_verdict` — wait ~30s wall-clock or call `end` |
-| `progress_stale`    | Call `report_progress`                                                     |
-| `inbox_pending`     | `read_inbox` → apply → `ack_inbox`                                         |
-| `seed_unread`       | Call `get_seed` before scaffolding from the kit                            |
+| Code                | Meaning                                                          |
+| ------------------- | ---------------------------------------------------------------- |
+| `call_end`          | Call `end` when finished iterating this round                    |
+| `gate_not_started`  | Delivery ok but Cloud Build did not start — no preview yet       |
+| `gate_poll_backoff` | Repeated one-shot gate check — stop checking; build/submit or honour `stop:true` |
+| `progress_stale`    | Call `report_progress`                                           |
+| `inbox_pending`     | `read_inbox` → apply → `ack_inbox`                               |
+| `seed_unread`       | Call `get_seed` before scaffolding from the kit                  |
 
 ## Builder handoff (Studio)
 
