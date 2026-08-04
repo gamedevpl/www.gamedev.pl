@@ -1617,7 +1617,7 @@ function ThreadContextBar({
     if (!thought) return;
     const id = window.setInterval(() => setTick((n) => n + 1), 5_000);
     return () => window.clearInterval(id);
-  }, [thought?.at, thought?.key]);
+  }, [thought]);
 
   const thoughtFresh = thought !== null && thought !== undefined && Date.now() - thought.at <= PRESENCE_THOUGHT_MS;
   const thoughtLabel =
