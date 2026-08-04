@@ -2937,9 +2937,9 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       },
       description:
         'Signal that you are finished iterating this round (commit / done). Call after your last submit_sources ' +
-        'when you will not deliver more — required whenever submit returns warnings.code=call_end. ' +
-        'Does not publish by itself; unlocks creator handoff to the platform without waiting for silence. ' +
-        'After a green publish verdict the key already retires — end is optional then. ' +
+        'when you will not deliver more — required whenever submit returns warnings.code=call_end (sets stop:true). ' +
+        'Successful submit already unlocks creator handoff (agentEndedAt); end closes your MCP session cleanly. ' +
+        'Does not publish by itself. After a green publish verdict the key already retires — end is optional then. ' +
         BEHAVIOURAL_CONTRACT,
       inputSchema: {
         type: 'object',
