@@ -34,9 +34,9 @@ export interface JobNudgeState {
   lastGatePollAt: number | null;
 }
 
-/** Minimum wall-clock gap between get_gate_verdict polls before soft `gate_poll_backoff`. */
+/** Minimum wall-clock gap used to detect a client that ignored pending's `stop:true`. */
 export const GATE_POLL_MIN_INTERVAL_MS = 25_000;
-/** Hint returned on pending gate reads — agents must wait this many seconds, not busy-poll. */
+/** Informational delay before a later creator-led run checks a pending gate again. */
 export const GATE_POLL_RETRY_AFTER_SECONDS = 30;
 
 /** No progress for this long (wall clock) → `progress_stale`. */
@@ -229,19 +229,19 @@ export function createMcpNudgeTracker(
         code: 'call_end',
         message:
           toolName === 'get_gate_verdict'
-            ? 'Still waiting for end — do not busy-poll get_gate_verdict. Call end now if you will not deliver more this round; Studio shows the gate. Only re-poll after ~30s wall-clock if you still need the verdict to fix.'
+            ? 'Still waiting for end — get_gate_verdict is a one-shot check, not a loop. Honour stop:true on pending and let Studio show the gate.'
             : 'Still waiting for end — call end now if you will not deliver more this round (Studio handoff may already be unlocked from submit).',
       });
     }
 
-    // Agents cannot sleep between tool calls, so "poll every ~30s" becomes a tight loop
-    // that burns connector tool budgets. Soft-warn when polls are closer than the gap.
+    // Defense in depth for clients that ignore pending's stop:true. The stop is carried
+    // directly by every pending response; this warning makes an ignored stop unmistakable.
     if (toolName === 'get_gate_verdict') {
       if (state.lastGatePollAt !== null && nowMs - state.lastGatePollAt < GATE_POLL_MIN_INTERVAL_MS) {
         const waitSec = Math.max(1, Math.ceil((GATE_POLL_MIN_INTERVAL_MS - (nowMs - state.lastGatePollAt)) / 1000));
         warnings.push({
           code: 'gate_poll_backoff',
-          message: `Do not busy-poll get_gate_verdict — wait ~${waitSec}s wall-clock before the next poll (retryAfterSeconds=${GATE_POLL_RETRY_AFTER_SECONDS}). If you will not deliver more, call end instead; Studio shows the gate.`,
+          message: `You ignored stop:true from a pending gate. STOP this run now; do not call get_gate_verdict or any other tool again. Studio will show the result. A later creator-led run may check again after ~${waitSec}s (retryAfterSeconds=${GATE_POLL_RETRY_AFTER_SECONDS}).`,
         });
       }
       state.lastGatePollAt = nowMs;
