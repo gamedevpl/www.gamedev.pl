@@ -1128,7 +1128,7 @@ describe('agent build channel', () => {
         },
       });
 
-      await app.inject({
+      const response = await app.inject({
         method: 'POST',
         url: '/api/agent/build/sources',
         headers: agentHeaders(),
@@ -1136,6 +1136,42 @@ describe('agent build channel', () => {
       });
 
       expect(delivered).toEqual([{ slug: 'comet-courier', version: 'v1' }]);
+      // Hook returned void — delivery accepted, but no Cloud Build id.
+      expect(response.json()).toMatchObject({ accepted: true, gateStarted: false });
+      expect(response.json().buildId).toBeUndefined();
+    });
+
+    it('reports gateStarted only when the trigger returns a build id', async () => {
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      const { gamesStore } = stubGamesStore();
+      app = await buildApp({
+        store,
+        sessionSecret,
+        submissionRoutes: {
+          githubClient: stubGitHub(),
+          githubToken: 'gh-token',
+          submissionTokenSecret: secret,
+          translator: new NoopTranslator(),
+          agentChannel: {
+            gamesStore,
+            onSourcesDelivered: async () => ({ buildId: 'projects/x/builds/abc' }),
+          },
+        },
+      });
+
+      const withGate = await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/sources',
+        headers: agentHeaders(),
+        payload: { slug: 'comet-courier', files: MINIMAL, mode: 'preview' },
+      });
+      expect(withGate.statusCode).toBe(200);
+      expect(withGate.json()).toMatchObject({
+        accepted: true,
+        gateStarted: true,
+        buildId: 'projects/x/builds/abc',
+      });
     });
 
     it('preview mode accepts TRACE-less drafts and does not seal deliveredVersion', async () => {

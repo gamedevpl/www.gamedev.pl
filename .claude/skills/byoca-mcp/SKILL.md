@@ -26,18 +26,25 @@ Source of truth: `SESSION_WORKFLOW` + `BEHAVIOURAL_CONTRACT` in
 
 ### `end` is required after submit (not optional etiquette)
 
-ChatGPT-class agents usually **submit and stop**. That is not enough:
+ChatGPT-class agents usually **submit and stop**. Soft `call_end` alone was not
+enough, so a successful MCP `submit_sources` also sets `agentEndedAt` (unlocks
+creator **self→platform** handoff immediately). Still call **`end`**:
 
 - Successful `submit_sources` returns soft `warnings: [{ code: "call_end", … }]`
-- `end` sets `agentEndedAt` → stall `ended` → Studio unlocks **self→platform** handoff
-  immediately (creator chooses; API bumps `roundGeneration` so the self token dies)
-- Without `end`, creators wait on the **quiet** fallback (~15 minutes silence in
-  `building`) — do not treat that timeout as the primary design
+  (and re-emits `call_end` on later tools until you call `end`)
+- `end` sets `stop: true` / `reason: agent_ended` for your MCP session
+- Without `end`, your session may look finished while still connected; quiet
+  (~15 minutes) remains a fallback only
+
+`gateStarted` is **true only when Cloud Build returned a build id** — not merely
+when the upload was accepted. If `ok` but `gateStarted: false`, honour
+`warnings.code=gate_not_started` (no preview is assembling).
 
 `end` does **not** publish, close the job, or bump generation by itself. A green
 _publish_ gate still retires the key; `end` is optional after green.
 
-Further channel writes after `end` clear `agentEndedAt` (agent resumed).
+Further channel writes after `end` (or after submit’s auto-`agentEndedAt`) clear
+`agentEndedAt` (agent resumed).
 
 ## Credentials and immediate revocation
 
@@ -56,21 +63,22 @@ Further channel writes after `end` clear `agentEndedAt` (agent resumed).
 
 Merged by `applySessionNudges` / submit handler. Act, then continue:
 
-| Code             | Meaning                                         |
-| ---------------- | ----------------------------------------------- |
-| `call_end`       | Call `end` when finished iterating this round   |
-| `progress_stale` | Call `report_progress`                          |
-| `inbox_pending`  | `read_inbox` → apply → `ack_inbox`              |
-| `seed_unread`    | Call `get_seed` before scaffolding from the kit |
+| Code               | Meaning                                                    |
+| ------------------ | ---------------------------------------------------------- |
+| `call_end`         | Call `end` when finished iterating this round              |
+| `gate_not_started` | Delivery ok but Cloud Build did not start — no preview yet |
+| `progress_stale`   | Call `report_progress`                                     |
+| `inbox_pending`    | `read_inbox` → apply → `ack_inbox`                         |
+| `seed_unread`      | Call `get_seed` before scaffolding from the kit            |
 
 ## Builder handoff (Studio)
 
 Mid-round switch is refused while the self agent is live (`builder_locked`), except:
 
-| Signal                         | Who                | Effect                                   |
-| ------------------------------ | ------------------ | ---------------------------------------- |
-| `agentEndedAt` / stall `ended` | Agent called `end` | Primary unlock for self→platform handoff |
-| stall `quiet`                  | ~15m silence       | Fallback if `end` was never called       |
+| Signal                         | Who                                     | Effect                                   |
+| ------------------------------ | --------------------------------------- | ---------------------------------------- |
+| `agentEndedAt` / stall `ended` | MCP submit (auto) or agent called `end` | Primary unlock for self→platform handoff |
+| stall `quiet`                  | ~15m silence                            | Fallback if neither happened             |
 
 `allowsSelfToPlatformHandoff` checks `agentEndedAt` directly so a later
 `gate_not_started` stall (ops visibility after a wedged gate) does not revoke handoff.

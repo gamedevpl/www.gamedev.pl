@@ -293,8 +293,9 @@ const BEHAVIOURAL_CONTRACT = [
   'Send a screenshot as soon as the game draws anything playable.',
   'While iterating, deliver with mode=preview (no TRACE required). Prefer stage_source_file once per path then submit_sources({ fromStaged:true, mode:"preview", kitEngineRef }) — avoid one giant files[] payload. Only mode=publish needs TRACE/PLAYTEST and can go green.',
   'Run kit checks green (at least check:static) before submit_sources when you have a local kit checkout; otherwise submit and let the gate run checks.',
-  'After submit_sources, if you will not deliver more this round, call end (required — warnings.code=call_end). Do not stop after submit alone.',
+  'After submit_sources, if you will not deliver more this round, call end (required — warnings.code=call_end; submit already unlocks creator handoff). Do not stop after submit alone without end.',
   'Honour stop immediately — do not continue after stop:true.',
+  'gateStarted true means Cloud Build started; gateStarted false after ok submit means no preview is assembling — honour warnings.code=gate_not_started.',
   'When seedAvailable/seedStatus=available (or warnings.code=seed_unread), call get_seed and continue that draft — do not scaffold from scratch. When seedStatus=pending, recheck get_seed before scaffolding.',
   'Every write reply carries pendingMessages — when that array is non-empty, read_inbox and apply before continuing.',
   'Do not schedule background or recurring inbox polls; drain pendingMessages from write replies (and kit/browse replies that piggyback them) as you go. Honour warnings.code=inbox_pending.',
@@ -319,8 +320,8 @@ const SESSION_WORKFLOW: readonly string[] = [
   'Build the game — continuing the seed or sources you fetched, otherwise from the kit; report_progress before and after long steps.',
   'send_screenshot as soon as the game draws anything playable.',
   'While iterating: prefer stage_source_file({ path, content }) for each game file (list_staged_sources to check), then submit_sources({ fromStaged: true, mode: "preview", kitEngineRef }) — TRACE/PLAYTEST not required; Studio gets a playable draft after typecheck→smoke→build. Inline files[] still works for tiny trees.',
-  'After every successful submit_sources: if you will not deliver more this round, call end immediately (warnings.code=call_end). submit alone is not enough — ChatGPT-class agents often stop after submit; end tells Studio you are done so the creator can hand off without waiting.',
-  'Poll get_gate_verdict until preview_passed or preview_failed; fix and re-preview on the SAME key. preview_passed does NOT end the round.',
+  'After every successful submit_sources: creator handoff is already unlocked; still call end immediately if you will not deliver more (warnings.code=call_end). submit alone leaves your MCP session open — end sets stop:true. ChatGPT-class agents often stop after submit; end closes the session cleanly.',
+  'Poll get_gate_verdict until preview_passed or preview_failed; fix and re-preview on the SAME key. preview_passed does NOT end the round. Only poll when gateStarted was true on submit.',
   'When ready to seal: record TRACE (`npm run trace -- <slug> --accept` if you have a kit checkout), stage/include PLAYTEST.json + TRACE.json, then submit_sources({ fromStaged: true, mode: "publish", kitEngineRef }) (or inline files[]).',
   'Poll get_gate_verdict about every 30s until it is green, red, or kit_outdated (publish lane).',
   'Once a publish verdict lands, get_gate_media returns the screenshots and gameplay video the gate recorded — check the frames for visual defects the report cannot describe, and show them to the creator. Essential when you cannot run the game yourself.',
@@ -725,6 +726,9 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     }
 
     nudgeTracker.noteToolSuccess(jobId, toolName, nowMs);
+    if (toolName === 'submit_sources' && data.ok === true) {
+      nudgeTracker.noteSubmitSuccess(jobId, nowMs);
+    }
     const nudgeWarnings: NudgeWarning[] = nudgeTracker.warningsFor(jobId, toolName, nowMs);
     const prior = Array.isArray(data.warnings)
       ? (data.warnings as NudgeWarning[]).filter(
@@ -795,11 +799,14 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     warnings: {
       type: 'array',
       description:
-        'Soft session nudges (progress_stale, inbox_pending, call_end, seed_unread). Not errors — act on them, then continue the workflow.',
+        'Soft session nudges (progress_stale, inbox_pending, call_end, seed_unread, gate_not_started). Not errors — act on them, then continue the workflow.',
       items: {
         type: 'object',
         properties: {
-          code: { type: 'string', enum: ['progress_stale', 'inbox_pending', 'seed_unread', 'call_end'] },
+          code: {
+            type: 'string',
+            enum: ['progress_stale', 'inbox_pending', 'seed_unread', 'call_end', 'gate_not_started'],
+          },
           message: { type: 'string' },
         },
         required: ['code', 'message'],
@@ -2721,7 +2728,16 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
               version: { type: 'string' },
             },
           },
-          gateStarted: { type: 'boolean' },
+          gateStarted: {
+            type: 'boolean',
+            description:
+              'True only when Cloud Build accepted the gate run (a build id exists). ' +
+              'False means the delivery was stored but the gate did not start — do not assume a preview is assembling.',
+          },
+          buildId: {
+            type: 'string',
+            description: 'Cloud Build id when gateStarted is true.',
+          },
           deliveriesRemaining: { type: ['number', 'null'] },
           ...REPLY_CONTROL,
         },
@@ -2742,6 +2758,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         `mode=publish (default, seal): TRACE.json + PLAYTEST.json required; full gate; only publish green ends the round. ` +
         `files[{path, content, encoding utf8|base64}] optional when fromStaged=true (inline paths override staged); ≤${MAX_SUBMIT_FILES}; kitEngineRef required. ` +
         'Subject to delivery cap and filename allowlist. Reply includes stop and pendingMessages. ' +
+        'gateStarted is true only when the gate Cloud Build actually started — not merely when the upload was accepted. ' +
+        'A successful delivery unlocks creator handoff (agentEndedAt); still call end when you will not deliver more (warnings.code=call_end). ' +
         BEHAVIOURAL_CONTRACT,
       inputSchema: {
         type: 'object',
@@ -2850,6 +2868,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           delivery?: { slug: string; version: string };
           deliveryCap?: number;
           deliveriesUsed?: number;
+          gateStarted?: boolean;
+          buildId?: string;
           control?: { stop?: boolean; reason?: string };
           pending?: Array<{ id: string; text: string; createdAt: string }>;
         };
@@ -2862,28 +2882,43 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           (await store!.getSubmission(auth.issueNumber))?.roundDeliveryCount ?? auth.record.roundDeliveryCount ?? 0;
 
         const accepted = body.accepted !== false;
+        const gateStarted = body.gateStarted === true;
+        // ChatGPT-class agents usually submit and stop without calling end. Soft
+        // call_end was ignored; mark ended here so Studio unlocks self→platform
+        // handoff immediately. Further channel writes clear agentEndedAt again.
+        if (accepted && store) {
+          await store.markAgentEnded(auth.issueNumber).catch(() => {});
+        }
+        const warnings: Array<{ code: string; message: string }> = [];
+        if (accepted) {
+          warnings.push({
+            code: 'call_end',
+            message:
+              'Call end when you will not deliver more this round (sets stop:true). ' +
+              'Creator handoff is already unlocked from this submit; without end your session may look finished while still connected. ' +
+              'If you will keep iterating (poll get_gate_verdict / fix / resubmit), call end only after your last delivery.',
+          });
+          if (!gateStarted) {
+            warnings.push({
+              code: 'gate_not_started',
+              message:
+                'Delivery accepted but the gate did not start (no Cloud Build id). ' +
+                'Do not assume a Studio preview is assembling — retry submit_sources or tell the creator.',
+            });
+          }
+        }
         return toolOk({
           ok: accepted,
           mode: body.mode === 'preview' ? 'preview' : 'publish',
           ...(body.rejected ? { rejected: body.rejected } : {}),
           deliveryId: body.delivery?.version ?? null,
           delivery: body.delivery ?? null,
-          gateStarted: body.accepted === true,
+          gateStarted,
+          ...(typeof body.buildId === 'string' && body.buildId ? { buildId: body.buildId } : {}),
           deliveriesRemaining: cap === null ? null : Math.max(0, cap - used),
           ...stopFromChannel(body),
           pendingMessages: pendingMessagesFromChannel(body),
-          ...(accepted
-            ? {
-                warnings: [
-                  {
-                    code: 'call_end',
-                    message:
-                      'Call end when you will not deliver more this round. submit_sources alone is not enough — ' +
-                      'without end, Studio cannot tell you finished and the creator may wait on a quiet timeout.',
-                  },
-                ],
-              }
-            : {}),
+          ...(warnings.length > 0 ? { warnings } : {}),
         });
       },
     },

@@ -142,10 +142,12 @@ Two concrete instances of that (observed 2026-07-23):
   overstated.
 - **Do not assume a 15-minute quiet stall is how self→platform handoff is supposed to
   work.** Observed (BYOCA handoff follow-up, 2026-08-04): ChatGPT-class agents usually
-  `submit_sources` and stop. The primary signal is MCP `end` (submit returns
-  `warnings.code=call_end`); stall `ended` unlocks creator handoff immediately. Quiet is
-  only the fallback when `end` was never called. Reviewing a PR that "fixes" handoff by
-  shortening the quiet window, or that adds submit without an `end` / `call_end` path, is
+  `submit_sources` and stop. A successful MCP submit now also sets `agentEndedAt`
+  (handoff unlock) even if `end` is skipped; `end` still sets `stop:true` for the
+  session. Soft `warnings.code=call_end` re-emits until `end`. Quiet is only the
+  fallback. `gateStarted` means Cloud Build returned a build id — not mere upload
+  acceptance. Reviewing a PR that "fixes" handoff by shortening quiet, redefines
+  `gateStarted` as `accepted`, or drops submit→`agentEndedAt` / `call_end`, is
   missing the contract — see `.claude/skills/byoca-mcp/SKILL.md`.
 - **A fix that narrows a predicate can reintroduce the same defect through a smaller
   door — and its regression test will not notice.** Observed (BY-25, 2026-08-02): a

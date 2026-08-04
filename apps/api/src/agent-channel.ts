@@ -1204,13 +1204,14 @@ export async function registerAgentChannelRoutes(
         // known: the trigger takes a slug and a version and has no idea whose ledger to
         // write to. Best-effort like every other write in this handler — the delivery has
         // already been accepted, and refusing it now would make the agent upload again.
-        if (store && gate?.buildId) {
+        const buildId = gate && typeof gate === 'object' && typeof gate.buildId === 'string' ? gate.buildId : undefined;
+        if (store && buildId) {
           await store
             .recordJobCost(issueNumber, {
               kind: 'gate_run',
               at: new Date().toISOString(),
               by: 'cloud-build',
-              ref: gate.buildId,
+              ref: buildId,
             })
             .catch(() => {});
         }
@@ -1224,6 +1225,11 @@ export async function registerAgentChannelRoutes(
           accepted: true,
           mode,
           delivery: { slug, version },
+          // True only when Cloud Build (or a test trigger) returned a build id —
+          // not merely "we accepted the upload". Agents must not treat acceptance as
+          // "preview is assembling" when the gate never started.
+          gateStarted: Boolean(buildId),
+          ...(buildId ? { buildId } : {}),
           ...(await channelState(issueNumber, fresh)),
         });
       } catch (error) {

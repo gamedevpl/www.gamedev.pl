@@ -67,4 +67,24 @@ describe('mcp-session-nudges', () => {
     nudges.noteToolSuccess(1, 'get_seed', t0);
     expect(nudges.warningsFor(1, 'read_kit_files', t0 + 1).map((w) => w.code)).not.toContain('seed_unread');
   });
+
+  it('re-emits call_end after submit until end', () => {
+    const nudges = createMcpNudgeTracker();
+    const t0 = 1_000_000;
+    nudges.noteSubmitSuccess(1, t0);
+    expect(nudges.warningsFor(1, 'submit_sources', t0).map((w) => w.code)).not.toContain('call_end');
+    expect(nudges.warningsFor(1, 'get_gate_verdict', t0).map((w) => w.code)).toContain('call_end');
+    nudges.noteToolSuccess(1, 'end', t0 + 1);
+    expect(nudges.warningsFor(1, 'get_gate_verdict', t0 + 2).map((w) => w.code)).not.toContain('call_end');
+  });
+
+  it('does not progress-nudge submit_sources (call_end owns that reply)', () => {
+    const nudges = createMcpNudgeTracker();
+    const t0 = 1_000_000;
+    nudges.ensure(1, t0);
+    for (let i = 0; i < PROGRESS_STALE_CALLS + 2; i += 1) {
+      nudges.noteToolSuccess(1, 'read_kit_file', t0 + i);
+    }
+    expect(nudges.warningsFor(1, 'submit_sources', t0 + 50_000).map((w) => w.code)).not.toContain('progress_stale');
+  });
 });
