@@ -21,7 +21,7 @@ This specification defines the quality gates enforced on incoming pull requests 
 
 ### 2. Game Bundle Size Cap
 
-- Hard failure if the author's own bytes exceed 204,800 (200 KiB). Games-repo Check 4
+- Hard failure if the author's own bytes exceed 217,088 (212 KiB). Games-repo Check 4
   measures those as `assembled − platformBytes` (selected GameKit modules, inlined audio,
   shell CSS) — a platform change cannot break a published game whose author spent nothing.
 - On top of that sits a single serve-compat platform ceiling for the touch pad, restart
