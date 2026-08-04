@@ -99,6 +99,38 @@ describe('creator profile routes', () => {
     expect(JSON.stringify(body)).not.toContain('Secret Google');
   });
 
+  it('includes gate screenshots in published game cards', async () => {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:creator' });
+    await store.claimHandle('g:creator', 'ada', '2026-07-01T00:00:00.000Z');
+    await store.createSubmission(42, 'g:creator', 'Sky Dodge');
+    await store.setSubmissionSlug(42, 'sky-dodge');
+    await store.setSubmissionPublishedAt(42, '2026-08-01T12:00:00.000Z');
+    await store.setPublication({
+      slug: 'sky-dodge',
+      state: 'published',
+      currentVersion: 'v1',
+      publishedAt: '2026-08-01T12:00:00.000Z',
+    });
+    const gamesStore = {
+      getSourceFile: async (_slug: string, _version: string, path: string) =>
+        path === 'SPEC.md' ? '---\ntitle: Sky Dodge\ngenre: arcade\n---\n' : null,
+      getDerivedArtifact: async (_slug: string, _version: string, path: string) =>
+        path === 'media/metadata.json'
+          ? Buffer.from(JSON.stringify({ captures: { opening: { file: 'opening.png' } }, video: null }))
+          : null,
+    } as unknown as GamesStore;
+    const app = await appWith(store, gamesStore);
+
+    const publicPage = await app.inject({ method: 'GET', url: '/api/creators/ada' });
+
+    expect(publicPage.statusCode).toBe(200);
+    expect(publicPage.json().games[0]).toMatchObject({
+      slug: 'sky-dodge',
+      media: { screenshots: [{ name: 'opening', file: 'opening.png' }], video: null },
+    });
+  });
+
   it('reports availability and refuses reserved handles', async () => {
     const store = new InMemoryStore();
     await store.upsertUser({ uid: 'g:a' });

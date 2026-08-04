@@ -252,7 +252,15 @@ async function listCreatorPublishedGames(
         const version = publication.currentVersion ?? record.deliveredVersion;
         if (version) {
           const spec = await gamesStore.getSourceFile(slug, version, 'SPEC.md');
-          if (spec) entry = catalogEntryFromSpec(slug, spec, () => null);
+          if (spec) {
+            // Gate captures are derived artifacts, not game sources. Reading only
+            // SPEC.md here left every creator-profile poster empty even though the
+            // catalog and media route could already serve the same screenshot.
+            const mediaMetadata = await gamesStore.getDerivedArtifact(slug, version, 'media/metadata.json');
+            entry = catalogEntryFromSpec(slug, spec, (name) =>
+              name === 'media/metadata.json' && mediaMetadata ? mediaMetadata.toString('utf8') : null,
+            );
+          }
         }
       } catch {
         // A missing store object must not blank the whole profile.

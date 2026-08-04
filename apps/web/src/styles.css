@@ -11626,9 +11626,14 @@ a.user-name--profile:focus-visible {
   opacity: 0.75;
 }
 
+.creator-profile-game-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem 0.75rem;
+}
+
 .creator-profile-game-link {
-  display: inline-block;
-  margin-left: 0.75rem;
   font-size: 0.85rem;
 }
 

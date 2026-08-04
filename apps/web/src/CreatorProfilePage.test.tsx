@@ -84,6 +84,36 @@ async function renderPage() {
   });
 }
 
+function creatorPageWithGame() {
+  return {
+    profile: {
+      handle: 'ada',
+      profileName: 'Ada',
+      bio: 'Builder',
+      avatarUrl: null,
+      profileCreatedAt: '2026-08-01T00:00:00.000Z',
+    },
+    games: [
+      {
+        slug: 'sky-dodge',
+        title: 'Sky Dodge',
+        genre: 'arcade',
+        controls: 'Arrow keys',
+        status: 'published',
+        media: { screenshots: [{ name: 'opening', file: 'opening.png' }], video: null },
+        submittedBy: 'Ada',
+        creatorHandle: 'ada',
+        orientation: 'any',
+        touch: 'gamekit',
+        multiplayer: null,
+        saves: null,
+        world: null,
+        sensing: null,
+      },
+    ],
+  };
+}
+
 describe('CreatorProfilePage owner edit', () => {
   it('hides Edit profile for visitors', async () => {
     authUser = { uid: 'g:other', handle: 'bob' };
@@ -104,5 +134,28 @@ describe('CreatorProfilePage owner edit', () => {
     });
     expect(document.body.querySelector('.edit-profile-modal-card')).not.toBeNull();
     expect(document.body.querySelector('.edit-profile-modal-card')?.textContent).toContain('Your public profile');
+  });
+
+  it('shows screenshots and per-game Studio links to the owner', async () => {
+    authUser = { uid: 'g:ada', handle: 'ada', name: 'Ada' };
+    fetchCreatorPage.mockResolvedValue(creatorPageWithGame());
+
+    await renderPage();
+
+    expect(container.querySelector<HTMLImageElement>('.creator-profile-game-thumb')?.getAttribute('src')).toBe(
+      '/api/games/sky-dodge/media/opening.png',
+    );
+    expect(container.querySelector<HTMLAnchorElement>('a[href="/studio/sky-dodge"]')?.textContent).toContain(
+      'Open in Studio',
+    );
+  });
+
+  it('keeps per-game Studio links private to the owner', async () => {
+    authUser = { uid: 'g:other', handle: 'bob' };
+    fetchCreatorPage.mockResolvedValue(creatorPageWithGame());
+
+    await renderPage();
+
+    expect(container.querySelector('a[href="/studio/sky-dodge"]')).toBeNull();
   });
 });

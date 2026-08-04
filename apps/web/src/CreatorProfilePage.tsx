@@ -5,7 +5,7 @@ import { catalogMediaUrl, isPlatformAuthor, normalizeCatalogEntry, type CatalogE
 import { fetchCreatorPage, type PublicCreatorProfile } from './creatorProfileApi.js';
 import { EditProfileModal } from './EditProfileModal.js';
 import { PixelIcon } from './PixelIcon.js';
-import { creatorPath, playPath } from './router.js';
+import { creatorPath, playPath, studioPath } from './router.js';
 import { StudioCreatorProfileProvider } from './studioCreatorProfile.js';
 
 /**
@@ -142,12 +142,19 @@ export function CreatorProfilePage({
                     <div className="creator-profile-game-meta">
                       <h3 className="creator-profile-game-title">{game.title}</h3>
                       <p className="creator-profile-game-by">{t('player.byAuthor', { author })}</p>
-                      <button type="button" className="primary-btn" onClick={() => onPlay(game.slug)}>
-                        <PixelIcon name="play" size={13} /> {t('catalog.play')}
-                      </button>
-                      <a className="creator-profile-game-link" href={playPath(game.slug)}>
-                        {t('creatorProfile.openPermalink')}
-                      </a>
+                      <div className="creator-profile-game-actions">
+                        <button type="button" className="primary-btn" onClick={() => onPlay(game.slug)}>
+                          <PixelIcon name="play" size={13} /> {t('catalog.play')}
+                        </button>
+                        <a className="creator-profile-game-link" href={playPath(game.slug)}>
+                          {t('creatorProfile.openPermalink')}
+                        </a>
+                        {isOwner ? (
+                          <a className="creator-profile-game-link" href={studioPath(game.slug)}>
+                            {t('creatorProfile.openStudio')}
+                          </a>
+                        ) : null}
+                      </div>
                     </div>
                   </li>
                 );
