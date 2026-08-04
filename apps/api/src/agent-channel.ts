@@ -913,6 +913,11 @@ export async function registerAgentChannelRoutes(
           path: parsed.data.path,
           content: parsed.data.content,
         });
+        // Staging is channel activity — without this, a long stage_source_file loop
+        // (Claude Chat's preferred path) looks quiet after 15m and Studio wrongly offers
+        // a platform handoff while the agent is still uploading files.
+        await markBuildingFromChannel(issueNumber, record);
+        await store?.touchLastAgentSignalAt(issueNumber, undefined, { key: 'staging_sources' });
         return reply.send({
           accepted: true,
           path: staged.path,

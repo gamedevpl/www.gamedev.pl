@@ -1200,6 +1200,12 @@ describe('agent build channel', () => {
         expect(stagedRes.statusCode).toBe(200);
         expect(stagedRes.json()).toMatchObject({ accepted: true, path: file.path });
       }
+      // Staging must refresh the quiet clock — otherwise a long stage_source_file loop
+      // looks offline and Studio offers a platform handoff mid-upload.
+      const afterStage = await store.getSubmission(ISSUE);
+      expect(afterStage?.lastAgentSignalAt).toBeTruthy();
+      expect(afterStage?.lastAgentPresence?.key).toBe('staging_sources');
+      expect(afterStage?.state).toBe('building');
 
       const listed = await app.inject({
         method: 'GET',

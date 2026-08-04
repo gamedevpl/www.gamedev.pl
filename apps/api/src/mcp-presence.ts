@@ -20,6 +20,7 @@ const NO_PULSE = new Set([
   'report_progress',
   'send_screenshot',
   'submit_sources',
+  // Channel PUT …/sources/stage refreshes lastAgentSignalAt (+ staging_sources presence).
   'stage_source_file',
   'clear_staged_sources',
   'ack_inbox',
