@@ -88,6 +88,15 @@ generation bump + seed from latest delivery. Do not auto-dispatch platform from 
 
 `no_agent_yet` is waiting to connect, not a handoff.
 
+### Platform session boot (no heuristics)
+
+After a platform dispatch (including self→platform handoff), the job stays
+`dispatched` until GitHub's Agent Tasks API reports `in_progress`. That is a real
+vendor signal — not a timer. Studio shows phase copy ("Starting agent" / session
+booting) and polls tightly on `phase === 'dispatched'`. Feedback also busts the
+60s status cache so the previous self stall cannot linger while Copilot is already
+queued.
+
 ## Key code
 
 | Area                         | Path                                                        |

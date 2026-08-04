@@ -161,7 +161,8 @@ export function buildPrompt(brief: BuildBrief): string {
     `export GAMEDEVPL_BUILD_TOKEN=${brief.channelToken}`,
     'npm run progress -- --step planning "Sketching the loop."       # as you go',
     'npm run preview:watch -- <slug> &                               # playable draft, early',
-    'npm run submit -- <slug>                                        # deliver, when it is good',
+    'npm run submit -- <slug> --no-wait                              # deliver, when it is good',
+    'npm run progress -- --check                                     # gate verdict + inbox',
     '```',
     '',
     'Report progress as you work — the creator is watching a live page, and silence reads as a',
@@ -181,8 +182,11 @@ export function buildPrompt(brief: BuildBrief): string {
     '— silence here is how their note sits unread until you finish the wrong thing.',
     '`--ack <id>` only after you have actually acted on a message. Stop immediately when `stop` is set.',
     '',
-    'After you upload, our own gate runs the full check against the upstream engine and either',
-    'accepts the game or comes back to you with what failed. You do not need to merge anything.',
+    '**Always deliver with `--no-wait`.** After upload the site gate can take many minutes;',
+    'blocking `submit` on that wait parks you in a silent bash session while Studio looks stuck',
+    'and creator notes go unacked. You are not done until `npm run progress -- --check` shows',
+    'GATE PASSED (or you fix a GATE FAILED, re-check locally, and submit again). Do not open a',
+    'pull request for delivery — nothing downstream reads PRs.',
   ];
 
   if (brief.locale && brief.locale !== 'en') {

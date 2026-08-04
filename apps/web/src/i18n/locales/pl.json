@@ -647,10 +647,13 @@
       }
     },
     "phases": {
-      "dispatched": "Agent podjął Twój pomysł i właśnie zaczyna pracę.",
+      "dispatched": "Agent platformy dostał zadanie i właśnie się uruchamia. Pierwsza aktualizacja może zająć kilka minut, zanim sesja wstanie — nie musisz odświeżać.",
       "submitted": "Agent dostarczył Twoją grę. Właśnie ją sprawdzamy.",
       "gating": "Automatyczne testy sprawdzają, czy gra działa bez zarzutu.",
       "ready_for_review": "Twoja gra przeszła wszystkie testy. Czeka na ostatnie spojrzenie przed publikacją."
+    },
+    "phaseLabels": {
+      "dispatched": "Uruchamianie agenta"
     },
     "updatedAgo": "aktualizacja {{time}}",
     "presence": {

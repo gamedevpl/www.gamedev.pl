@@ -145,9 +145,9 @@ describe('MCP continue_draft', () => {
     });
 
     const job = await store.getSubmission(DRAFT_ISSUE);
-    expect(job?.state).toBe('building');
+    expect(job?.state).toBe('dispatched');
     expect(job?.transitions?.at(-1)).toMatchObject({
-      to: 'building',
+      to: 'dispatched',
       by: 'agent',
       reason: 'continue_draft',
     });
@@ -288,7 +288,7 @@ describe('MCP continue_draft', () => {
     expect((structured as { error: string }).error).not.toBe(DRAFT_NOT_CONTINUABLE_REASON);
   });
 
-  it('adopts a legacy draft with no state into building', async () => {
+  it('adopts a legacy draft with no state into dispatched', async () => {
     const store = new InMemoryStore();
     await store.createSubmission(DRAFT_ISSUE, OWNER, 'Legacy Draft');
     await store.setSubmissionSlug(DRAFT_ISSUE, SLUG);
@@ -307,6 +307,6 @@ describe('MCP continue_draft', () => {
     expect(isError).toBe(false);
     expect(structured).toMatchObject({ jobId: DRAFT_ISSUE, alreadyOpen: false });
     const job = await store.getSubmission(DRAFT_ISSUE);
-    expect(job?.state).toBe('building');
+    expect(job?.state).toBe('dispatched');
   });
 });

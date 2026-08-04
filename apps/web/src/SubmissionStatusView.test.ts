@@ -5,7 +5,8 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import i18n from './i18n/index.js';
 import { statusPath } from './router.js';
-import { ACTIVE_POLL_MS, SubmissionStatusView } from './SubmissionStatusView.js';
+import { SubmissionStatusView } from './SubmissionStatusView.js';
+import { ACTIVE_POLL_MS, pollDelayMs } from './studioStatusPoll.js';
 import {
   abandonSubmission,
   getChannelPlayable,
@@ -50,6 +51,15 @@ async function flushEffects() {
   await Promise.resolve();
   await Promise.resolve();
 }
+
+describe('pollDelayMs', () => {
+  it('polls tightly while the platform agent session is still starting', () => {
+    // Public status stays `queued` for phase `dispatched`; idle polling would hide
+    // the flip to `building` when GitHub reports `in_progress`.
+    expect(pollDelayMs('queued', undefined, 'dispatched')).toBe(ACTIVE_POLL_MS);
+    expect(pollDelayMs('queued')).toBeGreaterThan(ACTIVE_POLL_MS);
+  });
+});
 
 describe('SubmissionStatusView', () => {
   afterEach(() => {

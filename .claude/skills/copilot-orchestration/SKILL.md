@@ -119,6 +119,10 @@ Business/Enterprise — it is wrong; a personal paid plan works. No Enterprise s
 heuristic below — use it whenever you have the task ID.
 
 **Timing observed**: a trivial one-file task went `queued` → `completed` in ≈4.5 minutes.
+A freshly created task often returns `artifacts: []` and `session_count: 0` while still
+`queued` — the session has been accepted but not started. gamedev.pl Studio maps that
+stretch to job phase `dispatched` and only advances to `building` on `in_progress`
+(see BYOCA skill "Platform session boot").
 
 ### Dumping a session's generation log
 
