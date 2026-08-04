@@ -1,7 +1,7 @@
 # Deployment
 
 > **Status: ✅ Live in closed beta at [www.gamedev.pl](https://www.gamedev.pl)**, deployed
-> automatically by GitHub Actions (`deploy.yml`) on every push to `master`.
+> automatically by GitHub Actions (`deploy.yml`) after CI succeeds on `master`.
 >
 > The app (web + API) runs as **one Cloud Run service**: project `gamedevpl`, region
 > **`europe-west1`**, service `gamedev-app`, scale-to-zero and pinned to **one instance** until
@@ -28,9 +28,12 @@ gcloud secrets list --project gamedevpl
 
 ## Automated CD Pipeline (`.github/workflows/deploy.yml`)
 
-Deployments to Cloud Run are triggered on push to `master`:
+Deployments to Cloud Run start when the **CI** workflow completes successfully on
+`master` (`workflow_run`) — not on the push itself. That way lint / type-check / test /
+build / image-boot run once (in CI), and deploy does not re-pay for them. Manual
+`workflow_dispatch` on `deploy.yml` is the escape hatch for redeploying the current tip.
 
-1. **CI Gate (`ci-gate`):** Runs `npm run lint`, `npm run type-check`, `npm run test`, `npm run build` on Node 20.
+1. **CI (prerequisite):** `ci.yml` on `master` — secret scan, lint/type-check/test/build, games-repo contract, production image boot.
 2. **Keyless OIDC Auth:** Authenticates via GCP Workload Identity Federation (no long-lived service account keys).
 3. **Cloud Build Image Creation:** Submits image build using `infra/cloudbuild.yaml` to Artifact Registry. The WIF deployer service account must also have `roles/serviceusage.serviceUsageConsumer` and storage access for the default Cloud Build staging bucket; `infra/setup-wif.sh` grants both.
 4. **Staging / Candidate Revision:** Deploys revision to Cloud Run with `--no-traffic --tag candidate`.

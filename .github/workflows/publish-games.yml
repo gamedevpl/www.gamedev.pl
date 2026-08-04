@@ -41,12 +41,14 @@ on:
         required: false
         default: false
 
-# Two publishes racing would interleave their pointer writes, and the loser could
-# leave `current.json` addressing the older snapshot. Queue them instead — the
-# snapshot prefixes are immutable, so a queued run is simply the newer truth.
+# Two publishes racing would interleave their pointer writes. Cancel the older
+# run instead of queuing: the games repo can dispatch many times in a merge
+# train, and each bake is a full catalog assemble — only the newest SHA is
+# worth publishing. Snapshot prefixes are immutable, so a cancelled mid-bake
+# leaves no half-written pointer (the pointer write is the last step).
 concurrency:
   group: games-snapshot-publish
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 permissions:
   contents: read

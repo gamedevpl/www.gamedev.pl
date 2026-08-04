@@ -3,16 +3,27 @@ name: CI
 on:
   push:
     branches: [master]
+  # Draft PRs skip the jobs below (no runner assigned). Agent branches push often;
+  # open as draft until ready for review.
   pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
 
 # Least-privilege GITHUB_TOKEN: both jobs only read the repo (checkout, npm,
 # gitleaks, gate). No writes to issues/PRs/contents.
 permissions:
   contents: read
 
+# Superseded PR heads prove nothing the newer run does not. Master runs stay
+# queued — deploy waits on CI via workflow_run, so cancelling a master CI run
+# would strand a commit that already landed.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   gitleaks:
     name: Secret Scanning
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,6 +39,7 @@ jobs:
 
   build_and_test:
     name: Lint, Test & Build
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -51,6 +63,7 @@ jobs:
   # GAMES_CONTRACT_REQUIRE_REMOTE=1 below to demand the live comparison instead.
   games_repo_contract:
     name: Games-repo contract
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -84,6 +97,7 @@ jobs:
   # --omit=optional, a missing dist/ copy). So this starts the thing and asks it for health.
   image_build:
     name: Production image
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
