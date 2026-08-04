@@ -16,7 +16,6 @@ import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } f
 import { mintMcpSessionKey } from './mcp-session-key.js';
 import { InMemoryStore } from './store.js';
 import { mintToken } from './submission-token.js';
-import { NoopTranslator } from './translate.js';
 
 const secret = 'open-round-test-secret';
 const OWNER = 'g:owner';
@@ -57,7 +56,6 @@ async function createApp(store: InMemoryStore, contentChecker?: ContentChecker) 
       githubClient: stubGitHub(),
       githubToken: 'gh-token',
       submissionTokenSecret: secret,
-      translator: new NoopTranslator(),
       dailyImprovementQuota: 2,
       agentChannel: {} as { gamesStore?: GamesStore },
     },

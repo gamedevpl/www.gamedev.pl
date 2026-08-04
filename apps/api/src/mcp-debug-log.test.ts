@@ -14,7 +14,6 @@ import { mintMcpSessionKey, newMcpSessionId } from './mcp-session-key.js';
 import { generateAsAccessToken } from './oauth-tokens.js';
 import { MCP_ENDPOINT_PATH } from './self-build-connect.js';
 import { InMemoryStore } from './store.js';
-import { NoopTranslator } from './translate.js';
 
 const secret = 'mcp-debug-log-secret';
 
@@ -129,7 +128,6 @@ describe('mcp tool refusal logging', () => {
         },
         githubToken: 'gh-token',
         submissionTokenSecret: secret,
-        translator: new NoopTranslator(),
         agentChannel: {},
       },
     });

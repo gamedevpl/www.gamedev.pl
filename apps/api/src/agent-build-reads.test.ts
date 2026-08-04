@@ -10,7 +10,6 @@ import type { GcsObjectStore } from './gcs-sign.js';
 import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './github-client.js';
 import { KIT_ROOT_DIR } from './kit-registry.js';
 import { InMemoryStore } from './store.js';
-import { NoopTranslator } from './translate.js';
 
 const secret = 'test-secret';
 const ISSUE = 77;
@@ -74,7 +73,6 @@ async function createApp(store: InMemoryStore, objectStore?: GcsObjectStore) {
       githubClient: stubGitHub(),
       githubToken: 'gh-token',
       submissionTokenSecret: secret,
-      translator: new NoopTranslator(),
       agentChannel: objectStore ? { objectStore } : {},
     },
   });

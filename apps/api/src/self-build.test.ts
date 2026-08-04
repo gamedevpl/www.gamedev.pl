@@ -8,7 +8,6 @@ import type { GamesStore } from './games-store.js';
 import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './github-client.js';
 import { InMemoryStore } from './store.js';
 import { mintToken } from './submission-token.js';
-import { NoopTranslator } from './translate.js';
 
 const secret = 'self-build-test-secret';
 const sessionSecret = 'dev-session-secret-change-me';
@@ -171,7 +170,6 @@ async function createApp(options: {
       githubClient: stubGitHub(),
       githubToken: 'gh',
       submissionTokenSecret: secret,
-      translator: new NoopTranslator(),
       now: options.now,
       internalAuthVerifier: options.internalAuthVerifier,
       ...(options.platform ? { agentBackend: options.platform } : {}),

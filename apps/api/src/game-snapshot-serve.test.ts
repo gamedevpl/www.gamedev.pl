@@ -4,7 +4,6 @@ import { buildApp } from './app.js';
 import type { GameSnapshotReader, SnapshotGame } from './game-snapshot.js';
 import type { CatalogGameEntry, GameSources, GitHubClient } from './github-client.js';
 import { InMemoryStore } from './store.js';
-import { NoopTranslator } from './translate.js';
 
 /**
  * The serve half of the snapshot: when configured, published games are read
@@ -100,7 +99,6 @@ async function createApp(params: {
       gamesRepo: repo,
       githubClient: params.githubClient,
       snapshotReader: params.snapshotReader ?? null,
-      translator: new NoopTranslator(),
     },
   });
 }

@@ -6,7 +6,6 @@ import type { GamesStore } from './games-store.js';
 import type { GcsObjectStore } from './gcs-sign.js';
 import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './github-client.js';
 import { InMemoryStore } from './store.js';
-import { NoopTranslator } from './translate.js';
 
 /**
  * BY-28 — the gate's own media, read back over the channel.
@@ -115,7 +114,6 @@ async function createApp(store: InMemoryStore, gamesStore?: GamesStore, objectSt
       githubClient: stubGitHub(),
       githubToken: 'gh-token',
       submissionTokenSecret: secret,
-      translator: new NoopTranslator(),
       agentChannel: { ...(gamesStore ? { gamesStore } : {}), ...(objectStore ? { objectStore } : {}) },
     },
   });

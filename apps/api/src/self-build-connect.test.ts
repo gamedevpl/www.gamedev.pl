@@ -24,7 +24,6 @@ import {
 } from './self-build-connect.js';
 import { InMemoryStore } from './store.js';
 import { mintToken } from './submission-token.js';
-import { NoopTranslator } from './translate.js';
 
 const secret = 'self-build-connect-test-secret';
 const sessionSecret = 'dev-session-secret-change-me';
@@ -61,7 +60,6 @@ async function createApp(options: { now?: () => number } = {}) {
       githubClient: stubGitHub(),
       githubToken: 'gh',
       submissionTokenSecret: secret,
-      translator: new NoopTranslator(),
       notifyAppBaseUrl: APP_BASE,
       now: options.now,
     },

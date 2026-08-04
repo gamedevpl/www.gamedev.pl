@@ -83,7 +83,7 @@ import {
   type SubmissionStatusResponse,
 } from './submission-status.js';
 import { InvalidTokenError, mintToken, verifyToken } from './submission-token.js';
-import { createTranslatorFromEnv, normalizeLocale, type Translator } from './translate.js';
+import { normalizeLocale } from './translate.js';
 import { isVariantWidth } from './image-variants.js';
 import { logModerationRejection } from './moderation-metrics.js';
 
@@ -276,8 +276,6 @@ export interface SubmissionRoutesOptions {
   notifyAppBaseUrl?: string;
   /** Secret for signing unsubscribe tokens; defaults to SESSION_SECRET. */
   unsubscribeSecret?: string;
-  /** Localizes the agent's English build log; defaults to createTranslatorFromEnv(). */
-  translator?: Translator;
   /** Caps and seams for the agent build channel; see registerAgentChannelRoutes. */
   /**
    * Which coding-agent backend builds submitted games. Treated as the `platform` entry
@@ -1395,7 +1393,6 @@ export async function registerSubmissionRoutes(
     }
     statusCacheEpoch.set(issueNumber, (statusCacheEpoch.get(issueNumber) ?? 0) + 1);
   }
-  const translator = options.translator ?? createTranslatorFromEnv();
 
   // Agent progress events are read on every poll but change rarely, so they get a
   // short cache of their own rather than riding the 60s status cache — the entire
@@ -1481,29 +1478,19 @@ export async function registerSubmissionRoutes(
   }
 
   /**
-   * Resolves each event to one sentence in the reader's language. An agent that wrote
-   * the sentence in the creator's language already (the common case — we tell it which
-   * one in the issue) needs no model call at all; the rest fall back to translation,
-   * which is why a shared draft link still reads correctly in a third language.
+   * Resolves each event to one sentence in the reader's language, using only what the
+   * agent already sent. Pure by design: this runs on a 3s-polled endpoint, and the
+   * version that called a model here instead billed one Vertex request per poll per
+   * viewer — a failed call cached nothing, so the same lines were re-translated every
+   * 3 seconds for as long as anyone watched. Localization belongs at intake, where it
+   * costs one call per event; see `report_progress`, which asks agents for the pair.
+   *
+   * An event without a matching `textLocalized` shows its English text. That is the
+   * same fail-open contract the translating version had, minus the retry loop.
    */
-  async function localizeEvents(events: BuildEvent[], locale: string): Promise<BuildEvent[]> {
-    if (events.length === 0) return events;
-
-    const needsTranslation = events.filter(
-      (event) => !(event.locale === locale && event.textLocalized) && locale !== 'en',
-    );
-    const translated =
-      needsTranslation.length > 0
-        ? await translator.translate(
-            needsTranslation.map((e) => e.text),
-            locale,
-          )
-        : [];
-    const byId = new Map(needsTranslation.map((event, index) => [event.id, translated[index] ?? event.text]));
-
+  function localizeEvents(events: BuildEvent[], locale: string): BuildEvent[] {
     return events.map((event) => {
-      const text =
-        event.locale === locale && event.textLocalized ? event.textLocalized : (byId.get(event.id) ?? event.text);
+      const text = event.locale === locale && event.textLocalized ? event.textLocalized : event.text;
       // The wire carries one resolved sentence — the client never has to pick, and
       // never sees a language it didn't ask for.
       const resolved: BuildEvent = { ...event, text };
@@ -1538,7 +1525,7 @@ export async function registerSubmissionRoutes(
     const events = loadedEvents.filter((event) => !isMcpPresenceEventText(event.text));
     const next: SubmissionStatusResponse = {
       ...status,
-      ...(events.length > 0 ? { events: await localizeEvents(events, locale) } : {}),
+      ...(events.length > 0 ? { events: localizeEvents(events, locale) } : {}),
       ...(media.length > 0 ? { media } : {}),
       ...(playable.length > 0 ? { playable } : {}),
     };
@@ -2381,61 +2368,6 @@ export async function registerSubmissionRoutes(
     return reply.send({ token, slug: created.slug, statusUrl: `/api/submissions/${token}` });
   });
 
-  // The agent's build log is English; a creator reading the site in another language
-  // gets it translated (cached per line, fail-open to the original text).
-  async function localizeStatus(status: SubmissionStatusResponse, locale: string): Promise<SubmissionStatusResponse> {
-    if (locale === 'en' || !status.progress) {
-      return status;
-    }
-
-    const { commits, checklist, note, revisions } = status.progress;
-    // Only the *relayed* revisions. A creator's own words are already in the language
-    // they chose to type them in, and running them through a translator would rewrite
-    // their message back at them. An agent's relay is the opposite case: it is written
-    // in whatever language the agent happened to be speaking, almost always English.
-    const relayed = revisions.map((revision, index) => ({ revision, index })).filter((r) => r.revision.origin);
-    const sources = [
-      ...commits.map((commit) => commit.message),
-      ...checklist.map((item) => item.text),
-      ...(note ? [note] : []),
-    ];
-    if (sources.length === 0 && relayed.length === 0) {
-      return status;
-    }
-
-    // Two calls, because they are two different asks. The log prompt is built to
-    // compress a commit subject to one short line; a change request runs to 2000
-    // characters of numbered points, and compressing *that* would hand the creator a
-    // summary of their own request with pieces missing.
-    const [translated, relayedTranslated] = await Promise.all([
-      sources.length > 0 ? translator.translate(sources, locale) : Promise.resolve([]),
-      relayed.length > 0
-        ? translator.translate(
-            relayed.map((r) => r.revision.text),
-            locale,
-            { kind: 'message' },
-          )
-        : Promise.resolve([]),
-    ]);
-    const relayedText = new Map(relayed.map((r, offset) => [r.index, relayedTranslated[offset] ?? r.revision.text]));
-    return {
-      ...status,
-      progress: {
-        ...status.progress,
-        commits: commits.map((commit, index) => ({ ...commit, message: translated[index] ?? commit.message })),
-        checklist: checklist.map((item, index) => ({
-          ...item,
-          text: translated[commits.length + index] ?? item.text,
-        })),
-        ...(note ? { note: translated[commits.length + checklist.length] ?? note } : {}),
-        revisions: revisions.map((revision, index) => {
-          const text = relayedText.get(index);
-          return text === undefined ? revision : { ...revision, text };
-        }),
-      },
-    };
-  }
-
   // What's left of today's allowance. Read-only (never increments), so the hero can
   // show it before a creator spends their last submission on a surprise 429.
   app.get('/api/me/quota', async (request, reply) => {
@@ -2764,12 +2696,11 @@ export async function registerSubmissionRoutes(
    * coalesced poll observes a transition exactly once no matter how many watchers
    * were waiting on it.
    */
-  async function refreshStatus(
-    issueNumber: number,
-    locale: string,
-    cacheKey: string,
-    token: string,
-  ): Promise<SubmissionStatusResponse> {
+  // No `locale` parameter: the cached status is now language-neutral. Everything that
+  // varies by language is resolved per-request in `attachBuildEvents`, from text the
+  // agent already sent. `cacheKey` still carries the locale so existing entries and
+  // `invalidateStatusCache`'s prefix scan keep working.
+  async function refreshStatus(issueNumber: number, cacheKey: string, token: string): Promise<SubmissionStatusResponse> {
     const existing = statusRefreshes.get(cacheKey);
     if (existing) return existing;
 
@@ -2792,9 +2723,7 @@ export async function registerSubmissionRoutes(
           };
         }
       }
-      const status = record
-        ? await localizeStatus(await nativeJobStatus(record), locale)
-        : ({ status: 'queued' } as SubmissionStatusResponse);
+      const status = record ? await nativeJobStatus(record) : ({ status: 'queued' } as SubmissionStatusResponse);
       // Session boot (`dispatched`) must re-observe Agent Tasks every few seconds —
       // a 60s cache would freeze "Starting agent" while GitHub already reports
       // `in_progress`. Skip writing when invalidate raced this refresh.
@@ -2863,7 +2792,7 @@ export async function registerSubmissionRoutes(
 
       let status: SubmissionStatusResponse;
       try {
-        status = await refreshStatus(issueNumber, locale, cacheKey, token);
+        status = await refreshStatus(issueNumber, cacheKey, token);
       } catch (error) {
         // The refresh is several GitHub reads, and GitHub rate-limits the whole token
         // at once — so this throws in bursts, for everyone watching a build, exactly

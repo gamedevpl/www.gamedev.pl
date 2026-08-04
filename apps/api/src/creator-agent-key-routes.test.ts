@@ -17,7 +17,6 @@ import { consentToken } from './oauth-as.js';
 import { pkceChallengeS256 } from './oauth-pkce.js';
 import { InMemoryStore } from './store.js';
 import type { CreatorAgentKeyRecord } from './store.js';
-import { NoopTranslator } from './translate.js';
 
 const secret = 'creator-agent-routes-secret';
 const sessionSecret = 'dev-session-secret-change-me';
@@ -54,7 +53,6 @@ async function createApp(store: InMemoryStore) {
       githubClient: stubGitHub(),
       githubToken: 'gh',
       submissionTokenSecret: secret,
-      translator: new NoopTranslator(),
     },
   });
 }

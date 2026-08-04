@@ -7,7 +7,6 @@ import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } f
 import type { GamesStore } from './games-store.js';
 import { InMemoryStore } from './store.js';
 import { mintToken } from './submission-token.js';
-import { NoopTranslator } from './translate.js';
 
 const secret = 'test-secret';
 const ISSUE = 42;
@@ -55,7 +54,6 @@ async function createApp(
       githubClient: stubGitHub(),
       githubToken: 'gh-token',
       submissionTokenSecret: secret,
-      translator: new NoopTranslator(),
       ...(agentChannel ? { agentChannel } : {}),
     },
   });
@@ -1118,7 +1116,6 @@ describe('agent build channel', () => {
           githubClient: stubGitHub(),
           githubToken: 'gh-token',
           submissionTokenSecret: secret,
-          translator: new NoopTranslator(),
           agentChannel: {
             gamesStore,
             onSourcesDelivered: ({ slug, version, mode }) => {
@@ -1152,7 +1149,6 @@ describe('agent build channel', () => {
           githubClient: stubGitHub(),
           githubToken: 'gh-token',
           submissionTokenSecret: secret,
-          translator: new NoopTranslator(),
           agentChannel: {
             gamesStore,
             onSourcesDelivered: async () => ({ buildId: 'projects/x/builds/abc' }),
@@ -1181,7 +1177,6 @@ describe('agent build channel', () => {
           githubClient: stubGitHub(),
           githubToken: 'gh-token',
           submissionTokenSecret: secret,
-          translator: new NoopTranslator(),
           agentChannel: {
             gamesStore,
             // 2xx without a parseable build id — still started, do not advise retry.
@@ -1219,7 +1214,6 @@ describe('agent build channel', () => {
           githubClient: stubGitHub(),
           githubToken: 'gh-token',
           submissionTokenSecret: secret,
-          translator: new NoopTranslator(),
           agentChannel: {
             gamesStore,
             onSourcesDelivered: (input) => {

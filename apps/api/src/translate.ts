@@ -1,13 +1,21 @@
-// Build-log localization. The coding agent writes its commit subjects and PR
-// checklist in English, but a creator watching their game get built reads the site
-// in their own language — an untranslated log is the single most alienating part of
-// the wait. This translates those short agent-authored lines on the way out.
+// Build-log localization. The coding agent writes its progress updates in English, but
+// a creator watching their game get built reads the site in their own language — an
+// untranslated log is the single most alienating part of the wait.
 //
-// Constraints that shape the design:
-//  - It sits on a 3s-polled endpoint, so everything is cached by exact source text;
-//    a steady build only ever translates the one new line the agent just pushed.
-//  - It is decorative. Any failure (timeout, quota, bad JSON) falls back to the
-//    original English rather than failing the status response.
+// STATUS: only `normalizeLocale` is wired (submissions.ts, refine.ts). `VertexTranslator`
+// is deliberately unreferenced right now. It used to run on the status read path, which
+// was a mistake worth recording: the endpoint is polled every 3s, and a failed call
+// cached nothing, so one latency regression turned every poll into a billed Vertex
+// request that was aborted at 4s and thrown away — ~9,250 discarded calls in a day.
+//
+// Localization belongs at intake instead, where it costs one call per event rather than
+// one per poll per viewer. The first line of defence is `report_progress` asking agents
+// for `textLocalized` + `locale` outright; this class is what should fill the gap when
+// an agent does not comply, called from the write path — never from a read.
+//
+// Whatever calls it must keep the properties the read path could not: cache failures as
+// well as successes (or the retry loop comes straight back), and stay decorative — any
+// failure falls back to the original English rather than failing the request.
 
 import type { GenAIClient } from 'genaicode';
 import { z } from 'zod';

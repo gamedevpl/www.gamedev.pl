@@ -16,7 +16,6 @@ import {
 } from './mcp-oauth-metadata.js';
 import { MCP_ENDPOINT_PATH } from './self-build-connect.js';
 import { InMemoryStore } from './store.js';
-import { NoopTranslator } from './translate.js';
 
 describe('canonicalAppBaseUrl / oauth metadata helpers', () => {
   const envKeys = [
@@ -177,7 +176,6 @@ describe('MCP OAuth 401 challenge (BY-18a)', () => {
         },
         githubToken: 'gh-token',
         submissionTokenSecret: secret,
-        translator: new NoopTranslator(),
         agentChannel: {},
       },
     });
@@ -252,7 +250,6 @@ describe('MCP OAuth 401 challenge (BY-18a)', () => {
         },
         githubToken: 'gh-token',
         submissionTokenSecret: secret,
-        translator: new NoopTranslator(),
         agentChannel: {},
       },
     });
@@ -347,7 +344,6 @@ describe('MCP OAuth challenge regressions (BY-18a)', () => {
         },
         githubToken: 'gh-token',
         submissionTokenSecret: secret,
-        translator: new NoopTranslator(),
         agentChannel: {},
       },
     });

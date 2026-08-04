@@ -8,7 +8,6 @@ import type { GcsObjectStore } from './gcs-sign.js';
 import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './github-client.js';
 import { mintMcpSessionKey, verifyMcpSessionKey } from './mcp-session-key.js';
 import { InMemoryStore } from './store.js';
-import { NoopTranslator } from './translate.js';
 
 const secret = 'test-secret';
 const ISSUE = 55;
@@ -96,7 +95,6 @@ async function createApp(
       githubClient: stubGitHub(),
       githubToken: 'gh-token',
       submissionTokenSecret: secret,
-      translator: new NoopTranslator(),
       agentChannel: {
         ...(gamesStore ? { gamesStore } : {}),
         ...(objectStore ? { objectStore } : {}),
@@ -691,7 +689,6 @@ describe('POST /api/mcp (BY-05)', () => {
         githubClient: stubGitHub(),
         githubToken: 'gh-token',
         submissionTokenSecret: secret,
-        translator: new NoopTranslator(),
         agentChannel: {},
       },
     });

@@ -12,7 +12,6 @@ import { canTransition } from './job-state.js';
 import type { AgentBackend, BuildBrief } from './agent-backend.js';
 import type { GamesStore } from './games-store.js';
 import { JOB_ID_FLOOR } from './store.js';
-import { NoopTranslator, type Translator } from './translate.js';
 
 const secret = 'submission-secret';
 const repo = 'gamedevpl/www.gamedev.pl-games';
@@ -118,7 +117,6 @@ async function createApp(params: {
   dailyFeedbackQuota?: number;
   globalDailySubmissionCap?: number;
   creationLimitsTtlMs?: number;
-  translator?: Translator;
   contentChecker?: ContentChecker;
   maxCachedDraftPreviews?: number;
   agentBackend?: AgentBackend;
@@ -153,7 +151,6 @@ async function createApp(params: {
       dailyFeedbackQuota: params.dailyFeedbackQuota,
       globalDailySubmissionCap: params.globalDailySubmissionCap,
       creationLimitsTtlMs: params.creationLimitsTtlMs,
-      translator: params.translator ?? new NoopTranslator(),
       maxCachedDraftPreviews: params.maxCachedDraftPreviews,
       ...(params.agentChannel ? { agentChannel: params.agentChannel } : {}),
     },
@@ -1243,25 +1240,22 @@ describe('submission routes', () => {
     await app.close();
   });
 
-  it('marks an agent-relayed request as relayed and translates it for the reader', async () => {
+  it('marks an agent-relayed request as relayed and echoes it without calling a model', async () => {
     // A creator talking to their coding agent in a chat we never see gets their request
     // relayed through `continue_draft({ feedback })` — written by the agent, in whatever
     // language it was speaking. Echoing that unlabelled put an English summary on the
     // creator's own side of a Polish thread, as words they had never written.
+    //
+    // This endpoint is polled every 3s, so it resolves language from stored text only.
+    // It used to translate here instead, and when those calls started timing out nothing
+    // was cached, so every poll re-sent the same request — ~9,250 billed-and-discarded
+    // Vertex calls in a day. Localization belongs at intake; see `report_progress`.
     const { githubClient } = createGithubClientStub({ issueNumber: 78 });
     const { backend } = createBackendStub();
-    const asked: Array<{ kind: string; texts: string[] }> = [];
-    const translator: Translator = {
-      translate: async (texts, _locale, opts) => {
-        asked.push({ kind: opts?.kind ?? 'log', texts });
-        return texts.map((text) => `PL:${text}`);
-      },
-    };
     const { app, authHeaders, store } = await createApp({
       githubClient,
       agentBackend: backend,
       submissionTokenSecret: secret,
-      translator,
     });
 
     await app.inject({
@@ -1290,16 +1284,13 @@ describe('submission routes', () => {
     // The creator's own sentence is already in the language they chose to write it in.
     expect(revisions[0]).toMatchObject({ text: 'Zrób paczki większe.' });
     expect(revisions[0].origin).toBeUndefined();
+    // Verbatim, even though the reader asked for `pl`: the relay is labelled rather than
+    // rewritten. Anything that turns this back into a translated string has put a model
+    // call on the poll path again.
     expect(revisions[1]).toMatchObject({
-      text: 'PL:Major systems pass: zoom out the battlefield.',
+      text: 'Major systems pass: zoom out the battlefield.',
       origin: 'agent',
     });
-    // A change request runs to 2000 characters of numbered points; the log prompt is
-    // built to compress a commit subject to one short line. Asking for a relay on that
-    // prompt returns a summary with pieces of the creator's request missing.
-    const message = asked.find((call) => call.kind === 'message');
-    expect(message?.texts).toEqual(['Major systems pass: zoom out the battlefield.']);
-    expect(asked.some((call) => call.kind === 'log' && call.texts.includes('Zrób paczki większe.'))).toBe(false);
 
     await app.close();
   });
@@ -2128,7 +2119,6 @@ describe('submission preview route', () => {
         submissionTokenSecret: secret,
         gamesRepo: repo,
         githubClient,
-        translator: new NoopTranslator(),
         agentChannel: { gamesStore },
       },
     });

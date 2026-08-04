@@ -291,6 +291,10 @@ function stopFromChannel(body: { control?: { stop?: boolean; reason?: string } }
 
 const BEHAVIOURAL_CONTRACT = [
   'Report progress before and after long steps (and whenever a reply carries warnings with code progress_stale).',
+  // The creator's thread renders textLocalized and falls back to the English text.
+  // Agents that skip the pair leave every non-English creator reading commit-speak in a
+  // language they did not choose, which is the whole reason the field exists.
+  "Write progress in the creator's language: when get_brief.locales[0] is not 'en', send report_progress with textLocalized and locale as well as the English text.",
   'Send a screenshot as soon as the game draws anything playable.',
   'While iterating, deliver with mode=preview (no TRACE required). Prefer stage_source_file once per path then submit_sources({ fromStaged:true, mode:"preview", kitEngineRef }) — avoid one giant files[] payload. Only mode=publish needs TRACE/PLAYTEST and can go green.',
   'Run kit checks green (at least check:static) before submit_sources when you have a local kit checkout; otherwise submit and let the gate run checks.',
@@ -2400,8 +2404,21 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           sessionKey: SESSION_KEY_PROP,
           step: { type: 'string', enum: [...BUILD_STEPS] },
           text: { type: 'string', description: 'English progress sentence, ≤300 chars.' },
-          textLocalized: { type: 'string' },
-          locale: { type: 'string' },
+          // These two carry the whole point of the field pair, so they say so. Declared
+          // without descriptions, agents sent `text` alone and the creator's thread fell
+          // back to English on every line — the platform then paid a model to put it back
+          // into a language the agent already spoke.
+          textLocalized: {
+            type: 'string',
+            description:
+              "The same sentence in the creator's language — the first entry of get_brief.locales. " +
+              "Send it whenever that locale is not 'en': it is what the creator actually reads.",
+          },
+          locale: {
+            type: 'string',
+            description:
+              "Which language textLocalized is written in, e.g. 'pl'. Without it textLocalized cannot be used and is ignored.",
+          },
           done: { type: 'integer' },
           total: { type: 'integer' },
         },
@@ -2416,7 +2433,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         if (typeof args.text !== 'string' || !args.text.trim()) {
           return toolErr(
             'report_progress needs text: a short English sentence about what you are doing. ' +
-              `Optional: step (one of ${BUILD_STEPS.join(', ')}), textLocalized, locale, done, total.`,
+              "Send textLocalized + locale alongside it when get_brief.locales[0] is not 'en' — that pair is what the creator reads. " +
+              `Optional: step (one of ${BUILD_STEPS.join(', ')}), done, total.`,
           );
         }
         if (args.step !== undefined && (typeof args.step !== 'string' || !BUILD_STEP_NAMES.has(args.step))) {

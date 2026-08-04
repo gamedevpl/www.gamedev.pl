@@ -9,7 +9,6 @@ import { pkceChallengeS256 } from './oauth-pkce.js';
 import { AS_ACCESS_TOKEN_TTL_MS, generateAsAccessToken, generateAsRefreshToken } from './oauth-tokens.js';
 import { MCP_ENDPOINT_PATH } from './self-build-connect.js';
 import { InMemoryStore } from './store.js';
-import { NoopTranslator } from './translate.js';
 
 const SESSION_SECRET = 'dev-session-secret-change-me';
 const MCP_SECRET = 'oauth-as-mcp-secret';
@@ -40,7 +39,6 @@ async function buildOAuthApp(store: InMemoryStore) {
       },
       githubToken: 'gh-token',
       submissionTokenSecret: MCP_SECRET,
-      translator: new NoopTranslator(),
       agentChannel: {},
     },
   });
@@ -811,7 +809,6 @@ describe('oauth token helpers', () => {
         } as never,
         githubToken: 'gh-token',
         submissionTokenSecret: MCP_SECRET,
-        translator: new NoopTranslator(),
         agentChannel: {},
       },
     });

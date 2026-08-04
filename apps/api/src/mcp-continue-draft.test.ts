@@ -12,7 +12,6 @@ import type { ContentChecker } from './moderation.js';
 import type { GamesStore } from './games-store.js';
 import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './github-client.js';
 import { InMemoryStore } from './store.js';
-import { NoopTranslator } from './translate.js';
 
 const secret = 'continue-draft-test-secret';
 const OWNER = 'g:owner';
@@ -46,7 +45,6 @@ async function createApp(store: InMemoryStore, contentChecker?: ContentChecker) 
       githubClient: stubGitHub(),
       githubToken: 'gh-token',
       submissionTokenSecret: secret,
-      translator: new NoopTranslator(),
       agentChannel: {} as { gamesStore?: GamesStore },
     },
   });
