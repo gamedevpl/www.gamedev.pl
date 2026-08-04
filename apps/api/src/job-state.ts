@@ -79,15 +79,41 @@ export function isTerminal(state: JobState): boolean {
 const ALLOWED_TRANSITIONS: Readonly<Record<JobState, readonly JobState[]>> = {
   queued: ['dispatched', 'building', 'canceled', 'abandoned', 'failed'],
   dispatched: ['building', 'submitted', 'failed', 'canceled', 'abandoned'],
-  building: ['submitted', 'ready_for_review', 'needs_changes', 'failed', 'canceled', 'abandoned'],
+  // `dispatched` / `queued` let a new agent session start without pretending the session
+  // is already coding — resumeBuild hands work to Copilot long before GitHub reports
+  // `in_progress`, and a self→platform handoff often leaves the job in `building` or
+  // `submitted` from the previous round.
+  building: [
+    'submitted',
+    'ready_for_review',
+    'needs_changes',
+    'failed',
+    'canceled',
+    'abandoned',
+    'dispatched',
+    'queued',
+  ],
   // The verdict is read off the version manifest in a single poll, so a delivered job
   // reaches its outcome without ever being seen in `gating`. Listing only `gating` here
   // made `submitted` a trap: reconcileGateVerdict computes `ready_for_review` or
   // `needs_changes`, canTransition refused both, and nothing else writes `gating` — so
   // every job that arrived here stayed, showing "delivered, gate never started" for as
   // long as the creator kept the page open.
-  submitted: ['gating', 'ready_for_review', 'needs_changes', 'failed', 'canceled', 'abandoned'],
-  gating: ['ready_for_review', 'needs_changes', 'failed', 'canceled', 'abandoned'],
+  //
+  // `dispatched` / `queued` / `building`: a creator handoff or revision can start a new
+  // agent session after delivery, before (or instead of) the gate finishing.
+  submitted: [
+    'gating',
+    'ready_for_review',
+    'needs_changes',
+    'failed',
+    'canceled',
+    'abandoned',
+    'dispatched',
+    'queued',
+    'building',
+  ],
+  gating: ['ready_for_review', 'needs_changes', 'failed', 'canceled', 'abandoned', 'dispatched', 'queued', 'building'],
   // `building` (and the queue/dispatch that precede a fresh round) let a creator or
   // their agent continue iterating after a green gate without waiting on publish —
   // Studio feedback and MCP `continue_draft` both land here. Reviewer reject still

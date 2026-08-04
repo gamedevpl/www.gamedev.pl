@@ -25,6 +25,7 @@ import { formatRelativeTime } from './relativeTime.js';
 import { connectCardMode, selfComposerRoute, selfStatusCopy, shouldShowConnectCard } from './selfBuildCopy.js';
 import { StudioConnectCard } from './StudioConnectCard.js';
 import { submitImprovement } from './studioApi.js';
+import { pollDelayMs } from './studioStatusPoll.js';
 import { recordStudioStep, type StudioStepDetail } from './visitTelemetry.js';
 
 function copyInputFromStatus(status: SubmissionStatus | null | undefined) {
@@ -79,26 +80,8 @@ function resolveDefaultBuilder(token: string, status: SubmissionStatus | null | 
 const TERMINAL_STATUSES = new Set<SubmissionStatus['status']>(['published', 'needs_changes', 'abandoned']);
 /** Statuses that halt the linear timeline rather than sitting on a step of it. */
 const HALTED_STATUSES = new Set<SubmissionStatus['status']>(['needs_changes', 'abandoned']);
-// The agent is actively working during these — poll tightly so progress feels live.
-// Everything else (queued/publishing) changes slowly, so poll gently.
-const ACTIVE_BUILD_STATUSES = new Set<SubmissionStatus['status']>(['building', 'in_review']);
-/** Exported so tests advance timers by the real cadence instead of a magic number. */
-export const ACTIVE_POLL_MS = 3000;
-const IDLE_POLL_MS = 10000;
 /** How long the compact composer's "Sent!" receipt stays up before clearing itself. */
 export const SENT_RECEIPT_MS = 4500;
-
-function pollDelayMs(status: SubmissionStatus['status'], stall?: SubmissionStatus['stall']): number | null {
-  // `needs_changes` is terminal for the *round*, not for the page: feedback from here
-  // starts another round, and stopping the poll meant the UI kept saying "needs changes"
-  // after a successful send until the creator refreshed. Published and abandoned are
-  // finished for good — nothing the composer can do moves them.
-  if (status === 'published' || status === 'abandoned') return null;
-  if (status === 'needs_changes') return IDLE_POLL_MS;
-  // Flip the connect card to live progress as soon as the agent signals.
-  if (stall === 'no_agent_yet') return ACTIVE_POLL_MS;
-  return ACTIVE_BUILD_STATUSES.has(status) ? ACTIVE_POLL_MS : IDLE_POLL_MS;
-}
 
 const STATUS_ICONS: Record<SubmissionStatus['status'], PixelIconName> = {
   queued: 'clock',
@@ -342,6 +325,8 @@ export function SubmissionStatusView({
   const previewInFlightRef = useRef(false);
   const loadedChannelRef = useRef<string | null>(null);
   const channelInFlightRef = useRef(false);
+  /** Immediate status re-pull after send (builder handoff / new dispatch). */
+  const requestStatusRefreshRef = useRef<() => void>(() => {});
 
   const currentTrackingUrl = useMemo(
     () => trackingUrl ?? new URL(embedded ? studioPath(token) : statusPath(token), window.location.href).toString(),
@@ -396,8 +381,8 @@ export function SubmissionStatusView({
       }
     };
 
-    const scheduleNext = (next: Pick<SubmissionStatus, 'status' | 'stall'>) => {
-      const delay = pollDelayMs(next.status, next.stall);
+    const scheduleNext = (next: Pick<SubmissionStatus, 'status' | 'stall' | 'phase'>) => {
+      const delay = pollDelayMs(next.status, next.stall, next.phase);
       if (delay === null || cancelled) return;
       timeoutId = window.setTimeout(() => {
         void poll();
@@ -432,11 +417,17 @@ export function SubmissionStatusView({
       }
     };
 
+    requestStatusRefreshRef.current = () => {
+      stopPolling();
+      void poll();
+    };
+
     void poll();
 
     return () => {
       cancelled = true;
       stopPolling();
+      requestStatusRefreshRef.current = () => {};
     };
     // i18n.language is a dependency because the API localizes the build log for us.
   }, [i18n.language, t, token]);
@@ -754,7 +745,9 @@ export function SubmissionStatusView({
                       ? selfCopy === 'no_agent_yet'
                         ? t('connect.waiting')
                         : t('connect.resume.waiting')
-                      : t(`statusView.states.${status.status}.label`)
+                      : status.phase === 'dispatched'
+                        ? t('statusView.phaseLabels.dispatched')
+                        : t(`statusView.states.${status.status}.label`)
                   }
                   thought={
                     isAwaitingOwnAgent(status) || TERMINAL_STATUSES.has(status.status) ? null : presenceThought(status)
@@ -779,7 +772,12 @@ export function SubmissionStatusView({
                     failureReason={status.failure?.reason}
                     phase={status.phase}
                     suppressRouteNote={isAwaitingOwnAgent(status) || status.phase === 'ready_for_review'}
-                    onSent={(text) => setPendingRevisions((current) => [...current, { text, at: Date.now() }])}
+                    onSent={(text) => {
+                      setPendingRevisions((current) => [...current, { text, at: Date.now() }]);
+                      // Feedback may have switched builder or landed on `dispatched` —
+                      // pull status now so we do not keep painting the previous stall.
+                      requestStatusRefreshRef.current();
+                    }}
                     onPublishedImprove={handleImproved}
                   />
                 ) : null}
@@ -967,7 +965,10 @@ export function SubmissionStatusView({
                 stall={status.stall}
                 failureReason={status.failure?.reason}
                 phase={status.phase}
-                onSent={(text) => setPendingRevisions((current) => [...current, { text, at: Date.now() }])}
+                onSent={(text) => {
+                  setPendingRevisions((current) => [...current, { text, at: Date.now() }]);
+                  requestStatusRefreshRef.current();
+                }}
                 onPublishedImprove={handleImproved}
               />
             ) : null}

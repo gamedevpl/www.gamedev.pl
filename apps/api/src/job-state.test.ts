@@ -111,6 +111,14 @@ describe('transition rules', () => {
     expect(canTransition('ready_for_review', 'published')).toBe(false);
   });
 
+  it('lets a new agent session start from mid-round states without claiming it is coding yet', () => {
+    // Self→platform handoff and Copilot resume accept a task long before GitHub reports
+    // `in_progress`. Forcing `building` at dispatch lied about that boot window.
+    expect(canTransition('building', 'dispatched')).toBe(true);
+    expect(canTransition('submitted', 'dispatched')).toBe(true);
+    expect(canTransition('gating', 'dispatched')).toBe(true);
+  });
+
   // A gate-red round is not always over: `mustFixGate` tells the live session to fix the
   // cause and deliver again without a new dispatch. agent-channel records that upload
   // only when this holds, so refusing it stranded a game the agent had already repaired.
