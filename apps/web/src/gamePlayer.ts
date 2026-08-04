@@ -26,9 +26,9 @@ const PLAYER = 'gdpl-player';
 //      without covering the playfield — parent document listeners never see taps
 //      inside this opaque-origin frame, and focus tricks don't fire reliably on
 //      mobile either. Report-only: the game still gets the same pointer event;
-//   6. reports player activity so host chrome can follow the familiar media-player
-//      pattern: stay put until play begins, then fade after a quiet grace period and
-//      return as soon as the player moves or presses a control;
+//   6. reports discrete player activity (keydown / pointerdown) so host chrome can
+//      start its hide clock once play begins. Pointer *movement* is not activity —
+//      mouse-aim games would otherwise keep the theater bar flapping forever;
 //   7. reports health — uncaught errors and animation-frame liveness. This is the
 //      only vantage point that has them: the game runs in an opaque origin the app
 //      cannot inspect, and its CSP blocks every way it could report for itself. An
@@ -314,10 +314,8 @@ const BRIDGE = `(function(){
     else if(m.type==='resume'){setPaused(false);}
     else if(m.type==='capture'){sendSnapshot('capture');}
   });
-  var playerEngaged=false,lastActivity=0;
-  function reportActivity(force){
-    if(force)playerEngaged=true;
-    if(!playerEngaged)return;
+  var lastActivity=0;
+  function reportActivity(){
     var now=Date.now();
     if(now-lastActivity<250)return;
     lastActivity=now;
@@ -326,21 +324,15 @@ const BRIDGE = `(function(){
   addEventListener('keydown',function(e){
     // Report only — the game keeps its own Escape handling (pause menus etc).
     if(e.key==='Escape'){post({type:'key',key:'Escape'});}
-    else{reportActivity(true);}
+    else{reportActivity();}
   });
-  function playerPointerDown(){playerEngaged=true;lastActivity=Date.now();post({type:'pointer'});}
-  function playerPointerMove(){reportActivity(false);}
+  function playerPointerDown(){lastActivity=Date.now();post({type:'pointer'});}
   if(typeof PointerEvent==='function'){
     addEventListener('pointerdown',playerPointerDown,{passive:true});
-    // Movement is meaningful only after a click/tap or key has established that the
-    // pointer belongs to a player, not a cursor that happened to rest over the frame.
-    addEventListener('pointermove',playerPointerMove,{passive:true});
   }else{
     // Older/restricted WebViews may expose only the pre-Pointer Events APIs.
     addEventListener('mousedown',playerPointerDown,{passive:true});
-    addEventListener('mousemove',playerPointerMove,{passive:true});
     addEventListener('touchstart',playerPointerDown,{passive:true});
-    addEventListener('touchmove',playerPointerMove,{passive:true});
   }
   // iOS Safari: long-press on the canvas opens the callout (Copy / Translate / Look Up)
   // and the text-selection loupe ("mini zoom"). CSS covers most of it; these kill the
@@ -366,6 +358,12 @@ const BRIDGE = `(function(){
 // the Copy / Translate / Look Up callout over the playfield.
 const HIDE_CHROME =
   `#game-title,#game-desc,.game-controls,.hint{display:none!important}` +
+  // Mouse-primary desktops: a buttons-only GameKit cluster (no pad) sits on top of
+  // pointer-native UIs and steals the corner. Phones keep it via any-pointer:coarse;
+  // games that still mount a pad on desktop keep their action cluster too.
+  `@media not all and (any-pointer:coarse){` +
+  `.gamekit-touch:not(:has(.gamekit-touch-pad)){display:none!important}` +
+  `}` +
   `html,body,canvas,img,video{` +
   `-webkit-touch-callout:none;` +
   `-webkit-user-select:none;` +
@@ -573,7 +571,7 @@ export function useGamePlayer(
   onEscape?: () => void,
   /** Called on pointerdown inside the game (see the bridge's job 5). */
   onPointer?: () => void,
-  /** Called on meaningful player input and subsequent pointer movement (job 6). */
+  /** Called on discrete player input (keydown / pointerdown) so chrome can idle (job 6). */
   onActivity?: () => void,
   /** Called when the game reports a terminal round state. */
   onEnd?: () => void,
