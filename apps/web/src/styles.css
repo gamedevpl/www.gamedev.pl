@@ -1609,10 +1609,14 @@ body.player-open {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* The safe-area insets below are what keep the bar's controls and the game itself
-   clear of a notch, a rounded corner, or the home indicator now that the page opts
-   into the full screen with viewport-fit=cover. They resolve to 0 everywhere else. */
+/* The bar floats over the game instead of taking a flex row away from it. Its safe-area
+   insets keep controls clear of a notch or rounded corner; the game remains full-bleed
+   underneath, with its own side/bottom insets below. */
 .game-theater-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1620,16 +1624,72 @@ body.player-open {
   padding-top: max(12px, env(safe-area-inset-top));
   padding-left: max(24px, env(safe-area-inset-left));
   padding-right: max(24px, env(safe-area-inset-right));
-  background: rgba(18, 24, 30, 0.95);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--panel-border);
+  background: rgba(12, 18, 24, 0.72);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.22);
   width: 100%;
   flex: none;
   /* The overflow menu hangs below the bar; clipping it would make the hamburger
      look broken — the panel opens but nothing appears. */
   overflow: visible;
-  z-index: 2;
+  z-index: 10;
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  transition:
+    opacity 700ms ease,
+    transform 700ms ease,
+    visibility 0s linear 0s;
+  will-change: opacity, transform;
+}
+
+.game-theater-bar.is-idle {
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-10px);
+  pointer-events: none;
+  /* Remove it from hit-testing immediately, but from rendering only after the fade.
+     Returning activity uses the base rule's zero delay and reveals it at once. */
+  transition-delay: 0s, 0s, 700ms;
+}
+
+/* Even at full immersion, chrome is never gone: this quiet thumb-sized door replaces
+   the bar's top-right control as it fades and brings the complete bar back in one tap. */
+.theater-reveal-btn {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top));
+  right: max(12px, env(safe-area-inset-right));
+  z-index: 11;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 10px;
+  background: rgba(12, 18, 24, 0.62);
+  color: rgba(255, 255, 255, 0.8);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  opacity: 0.78;
+  transition:
+    opacity 180ms ease,
+    background 180ms ease,
+    border-color 180ms ease,
+    transform 180ms ease;
+}
+
+.theater-reveal-btn:hover,
+.theater-reveal-btn:focus-visible {
+  opacity: 1;
+  background: rgba(20, 29, 38, 0.86);
+  border-color: rgba(255, 255, 255, 0.4);
+  transform: scale(1.04);
 }
 
 .game-theater-meta {
@@ -1638,6 +1698,13 @@ body.player-open {
   gap: 12px;
   min-width: 0;
   flex: 1 1 auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .game-theater-bar,
+  .theater-reveal-btn {
+    transition: none;
+  }
 }
 
 /* Quiet AI Act disclosure — present, not a neon brand mark next to the title. */
@@ -1982,9 +2049,8 @@ body.player-open {
   width: 100%;
   /* Positioning context for the rotate hint / camera backdrop that overlay the game. */
   position: relative;
-  /* `height: 100%` here would resolve against the stage and ignore the header bar,
-     overflowing the game off the bottom of a short (landscape phone) viewport.
-     `flex: 1` with min-height:0 gives it exactly the space the bar leaves. */
+  /* The header is absolutely positioned, so this flex child receives the entire
+     theater instead of only the height left below the controls. */
   min-height: 0;
   display: flex;
   align-items: center;
@@ -2022,7 +2088,8 @@ body.player-open {
 
 .theater-camera-indicator {
   position: absolute;
-  top: max(12px, env(safe-area-inset-top));
+  /* Clear the floating bar while staying attached to the full-height game surface. */
+  top: calc(max(12px, env(safe-area-inset-top)) + 58px);
   left: max(12px, env(safe-area-inset-left));
   z-index: 2;
   display: inline-flex;
@@ -2119,8 +2186,8 @@ body.player-open {
 /* MOBILE GAME THEATER
    Two independent squeezes. Narrow (portrait phone): the bar can't fit three
    labelled buttons plus a description, so labels and secondary text go. Short
-   (landscape phone, ~380px tall): every pixel the bar takes is a pixel the game
-   doesn't get, so it shrinks to a thin strip. A landscape phone hits both. */
+   (landscape phone, ~380px tall): the overlay shrinks so it obscures less of the
+   game. A landscape phone hits both. */
 @media (max-width: 768px) {
   .game-theater-bar {
     padding: 8px 12px;
@@ -2174,6 +2241,10 @@ body.player-open {
     gap: 6px;
   }
 
+  .theater-camera-indicator {
+    top: calc(max(8px, env(safe-area-inset-top)) + 57px);
+  }
+
   /* Phone: sound + fullscreen leave the bar and appear as menu rows instead. */
   .theater-desktop-chrome {
     display: none !important;
@@ -2210,6 +2281,10 @@ body.player-open {
 
   .theater-title {
     font-size: 0.85rem;
+  }
+
+  .theater-camera-indicator {
+    top: calc(max(4px, env(safe-area-inset-top)) + 45px);
   }
 
   /* Shrink bar chrome only — leave the overflow menu rows at their thumb target. */
@@ -11184,48 +11259,6 @@ a.user-name--profile:focus-visible {
    the one element on the screen moving for its own sake, and the reveal timers
    that fed it went with it. `offered` / `opened` on the visit stream is what now
    answers whether the quieter door still gets used. */
-
-/* The way back when play owns the screen: a thin, always-visible pill at the
-   top edge. Deliberately quiet, deliberately generous to a thumb — hidden
-   chrome must never mean gone chrome. */
-.theater-peek-btn,
-.theater-peek-pill {
-  position: absolute;
-  top: max(12px, env(safe-area-inset-top));
-  right: max(12px, env(safe-area-inset-right));
-  z-index: 6;
-  width: 34px;
-  height: 34px;
-  padding: 0;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.7);
-  color: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
-  transition:
-    background 0.15s ease,
-    color 0.15s ease,
-    transform 0.15s ease,
-    border-color 0.15s ease,
-    box-shadow 0.15s ease;
-}
-
-.theater-peek-btn:hover,
-.theater-peek-btn:focus-visible,
-.theater-peek-pill:hover,
-.theater-peek-pill:focus-visible {
-  background: rgba(30, 41, 59, 0.9);
-  color: #ffffff;
-  border-color: rgba(255, 255, 255, 0.4);
-  transform: scale(1.06);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-}
 
 /* —— Creator profiles —— */
 .creator-profile-page {

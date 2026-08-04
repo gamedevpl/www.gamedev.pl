@@ -93,6 +93,10 @@ type GameTheaterProps = {
   touch?: CatalogTouch | null;
 };
 
+// Long enough that the bar never reacts like a hover tooltip, short enough to clear
+// the playfield once somebody has demonstrably started playing.
+export const PLAYER_CHROME_IDLE_MS = 3200;
+
 /**
  * True while a handheld is held the wrong way round for this game.
  *
@@ -144,6 +148,10 @@ export function GameTheater({
   const moreRef = useRef<HTMLDivElement | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
   const [howToOpen, setHowToOpen] = useState(false);
+  const [playerEngaged, setPlayerEngaged] = useState(false);
+  const [chromeIdle, setChromeIdle] = useState(false);
+  const [activityVersion, setActivityVersion] = useState(0);
+  const [chromeHeld, setChromeHeld] = useState(false);
   /**
    * The always-available doors to Remix and its painter (ops repo,
    * remix-content-editing-plan §3.1): nonces the menu bumps, threaded down to
@@ -193,6 +201,19 @@ export function GameTheater({
   const moreOpenRef = useRef(moreOpen);
   moreOpenRef.current = moreOpen;
 
+  const notePlayerActivity = useCallback(() => {
+    setPlayerEngaged(true);
+    setChromeIdle(false);
+    setActivityVersion((version) => version + 1);
+  }, []);
+
+  const notePlayerEnd = useCallback(() => {
+    // A terminal screen is another orientation moment: surface exit/feedback/remix
+    // controls and keep them there until the next round begins with fresh input.
+    setPlayerEngaged(false);
+    setChromeIdle(false);
+  }, []);
+
   // Closing hands focus to the game, not back to the trigger. In a player the next key
   // press is meant for the game: leaving focus on the button turns the next Space into
   // "reopen the card" instead of "fire".
@@ -209,84 +230,10 @@ export function GameTheater({
     requestExit();
   }, [requestExit, closeHowTo]);
 
-  /**
-   * Chrome auto-hide (ops repo realtime plan §D.11.6): during play the screen is
-   * pure game; the bar returns at the natural pauses — a finished run, top edge hover,
-   * or the always-visible top-right peek button. One rule, shared with the remix reveal:
-   * chrome appears in the gaps, never mid-action. Hidden must never mean gone — the
-   * button is one tap from mute and exit, and reveal fires on pointerdown so a
-   * phone gets it without the click delay.
-   */
-  const [chromeHidden, setChromeHidden] = useState(false);
-  const rehideTimerRef = useRef<number | null>(null);
-  const revealChrome = useCallback((rehideAfterMs?: number) => {
-    setChromeHidden(false);
-    if (rehideTimerRef.current !== null) window.clearTimeout(rehideTimerRef.current);
-    rehideTimerRef.current =
-      rehideAfterMs === undefined ? null : window.setTimeout(() => setChromeHidden(true), rehideAfterMs);
-  }, []);
-
-  const handleTopHover = useCallback(() => revealChrome(2500), [revealChrome]);
-
   // Escape is handled twice on purpose: the window listener below covers the app's
   // own chrome, and this covers the game iframe, which holds focus while playing
   // and swallows its own key events.
-  const player = useGamePlayer(frameRef, true, escapeOrExit, dismissMore, handleTopHover);
-
-  // Desktop mouse proximity: moving the cursor near the top edge unveils the topbar.
-  useEffect(() => {
-    const onMouseMove = (e: MouseEvent) => {
-      if (e.clientY > 0 && e.clientY <= 48) {
-        revealChrome(2500);
-      }
-    };
-    window.addEventListener('mousemove', onMouseMove, { passive: true });
-    return () => window.removeEventListener('mousemove', onMouseMove);
-  }, [revealChrome]);
-
-  // Mobile touch swipe-down: pulling down from near the top edge unveils the topbar.
-  useEffect(() => {
-    let touchStartY = 0;
-    const onTouchStart = (e: TouchEvent) => {
-      if (e.touches.length > 0) touchStartY = e.touches[0].clientY;
-    };
-    const onTouchMove = (e: TouchEvent) => {
-      if (e.touches.length > 0) {
-        const currentY = e.touches[0].clientY;
-        if (touchStartY <= 60 && currentY - touchStartY > 20) {
-          revealChrome();
-        }
-      }
-    };
-    const stage = stageRef.current;
-    if (!stage) return;
-    stage.addEventListener('touchstart', onTouchStart, { passive: true });
-    stage.addEventListener('touchmove', onTouchMove, { passive: true });
-    return () => {
-      stage.removeEventListener('touchstart', onTouchStart);
-      stage.removeEventListener('touchmove', onTouchMove);
-    };
-  }, [revealChrome]);
-
-  useEffect(() => {
-    // Play start: a short grace so the title/author register, then the game owns
-    // the screen. A finished run hands the controls back for a while — the same
-    // beat the remix invitation uses — and then play takes over again.
-    const grace = window.setTimeout(() => setChromeHidden(true), 3000);
-    function onMessage(event: MessageEvent) {
-      if (event.origin !== 'null') return;
-      const frame = frameRef.current;
-      if (!frame || event.source !== frame.contentWindow) return;
-      const data = event.data as { source?: string; type?: string } | null;
-      if (data?.source === 'gdpl-player' && data.type === 'end') revealChrome(8000);
-    }
-    window.addEventListener('message', onMessage);
-    return () => {
-      window.clearTimeout(grace);
-      window.removeEventListener('message', onMessage);
-      if (rehideTimerRef.current !== null) window.clearTimeout(rehideTimerRef.current);
-    };
-  }, [frameRef, revealChrome]);
+  const player = useGamePlayer(frameRef, true, escapeOrExit, dismissMore, notePlayerActivity, notePlayerEnd);
 
   // What the game says about itself, falling back to what the catalog says about it.
   // Derived every render rather than memoized on first value, because both sources
@@ -393,6 +340,18 @@ export function GameTheater({
     setHowToOpen(false);
   }, [fullscreen]);
 
+  // Media-player convention, but gated on real game input: chrome never vanishes while
+  // somebody is still orienting themselves. Once play begins, each activity gets a
+  // calm grace period. Hover/focus and open control surfaces pin the bar in place.
+  useEffect(() => {
+    if (!playerEngaged || chromeHeld || moreOpen || howToOpen || fullscreen) {
+      setChromeIdle(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setChromeIdle(true), PLAYER_CHROME_IDLE_MS);
+    return () => window.clearTimeout(timer);
+  }, [activityVersion, chromeHeld, fullscreen, howToOpen, moreOpen, playerEngaged]);
+
   const toggleFullscreen = useCallback(() => {
     if (document.fullscreenElement) {
       void document.exitFullscreen().catch(() => undefined);
@@ -420,6 +379,7 @@ export function GameTheater({
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      notePlayerActivity();
       if (event.key === 'Escape') {
         // Innermost surface first: the card, then the menu, then leaving the game.
         if (howToOpenRef.current) {
@@ -435,7 +395,7 @@ export function GameTheater({
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [requestExit, closeHowTo]);
+  }, [requestExit, closeHowTo, notePlayerActivity]);
 
   // Close the overflow menu on an outside tap — phones have no hover to dismiss it.
   // Same-document chrome uses pointerdown here. Taps on the sandboxed game are
@@ -596,33 +556,39 @@ export function GameTheater({
 
   return (
     <section
-      className={`panel stage is-playing-full-viewport${fullscreen ? ' is-native-fullscreen' : ''}`}
+      className={`panel stage is-playing-full-viewport${fullscreen ? ' is-native-fullscreen' : ''}${chromeIdle ? ' is-player-idle' : ''}`}
       role="dialog"
       aria-modal="true"
       aria-label={displayTitle}
       ref={stageRef}
     >
-      {/* Fullscreen hides the bar so the game owns the screen; so does play
-          itself now (chromeHidden), with the peek pill as the way back. Votes
-          stay on the bar when it's visible; secondary actions stay in More. */}
-      {!fullscreen && chromeHidden && (
+      {/* Native fullscreen is the explicit immersive mode. Normal play keeps the bar
+          mounted in a stable location and fades it only after demonstrated activity. */}
+      {!fullscreen && chromeIdle && (
         <button
           type="button"
-          className="theater-peek-btn"
+          className="theater-reveal-btn"
           aria-label={t('player.showControls')}
           title={t('player.showControls')}
-          // Both: pointerdown for a touch that should not wait for the click,
-          // click for Enter/Space — which never emit pointer events, and this
-          // button is the only way back to mute and exit once the bar is hidden.
-          // revealChrome is idempotent, so the pair firing together is a no-op.
-          onPointerDown={() => revealChrome()}
-          onClick={() => revealChrome()}
+          // Pointerdown makes the control immediate on touch. Click keeps the same
+          // route available to Enter/Space, which do not emit pointer events.
+          onPointerDown={notePlayerActivity}
+          onClick={notePlayerActivity}
         >
-          <PixelIcon name="menu" size={14} />
+          <PixelIcon name="chevronDown" size={15} />
         </button>
       )}
-      {!fullscreen && !chromeHidden && (
-        <div className="game-theater-bar">
+      {!fullscreen && (
+        <div
+          className={`game-theater-bar${chromeIdle ? ' is-idle' : ''}`}
+          aria-hidden={chromeIdle}
+          onPointerEnter={() => setChromeHeld(true)}
+          onPointerLeave={() => setChromeHeld(false)}
+          onFocusCapture={() => setChromeHeld(true)}
+          onBlurCapture={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setChromeHeld(false);
+          }}
+        >
           <div className="game-theater-meta">
             <span className="theater-badge" title={t('ai.generatedTooltip')}>
               <PixelIcon name={badge.icon} size={12} /> {badge.label}

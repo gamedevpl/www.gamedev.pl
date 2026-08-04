@@ -139,6 +139,7 @@
     "share": "Udostępnij",
     "shareCopied": "Skopiowano link",
     "moreActions": "Więcej działań",
+    "showControls": "Pokaż sterowanie",
     "byAuthor": "autor: {{author}}",
     "byAuthorPrefix": "autor: ",
     "vote": {
@@ -164,8 +165,7 @@
     "howToPlayDismiss": "Naciśnij Escape lub kliknij obok, aby zamknąć",
     "howToPlayTouch": "Dotyk",
     "howToPlayTouchPad": "Pad ekranowy na ekranach dotykowych",
-    "howToPlayOther": "Sterowanie",
-    "showControls": "Pokaż sterowanie"
+    "howToPlayOther": "Sterowanie"
   },
   "catalog": {
     "title": "Gry",

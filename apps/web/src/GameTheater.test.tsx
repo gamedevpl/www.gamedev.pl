@@ -35,7 +35,7 @@ vi.mock('./useScreenWakeLock', () => ({
   useScreenWakeLock: () => undefined,
 }));
 
-import { GameTheater } from './GameTheater.js';
+import { GameTheater, PLAYER_CHROME_IDLE_MS } from './GameTheater.js';
 import { setVisitSessionForTesting, VisitSession, type WireVisitEvent } from './visitTelemetry.js';
 
 let container: HTMLDivElement;
@@ -417,31 +417,148 @@ describe('GameTheater how-to-play visit telemetry', () => {
     setVisitSessionForTesting(null);
   });
 
-  it('hides the bar during play and restores it from the peek pill by keyboard', async () => {
+  it('stays visible until gameplay begins, then fades after an inactivity grace period', async () => {
     vi.useFakeTimers();
     try {
       await draw();
-      // The grace window: the bar is still there while the title registers.
-      expect(container.querySelector('.game-theater-bar')).not.toBeNull();
+      const bar = container.querySelector('.game-theater-bar') as HTMLElement;
+      expect(bar.classList.contains('is-idle')).toBe(false);
       await act(async () => {
-        vi.advanceTimersByTime(3100);
+        vi.advanceTimersByTime(12_000);
       });
-      // Play owns the screen; the pill is the way back.
-      expect(container.querySelector('.game-theater-bar')).toBeNull();
-      const pill = container.querySelector('.theater-peek-btn') as HTMLButtonElement | null;
-      expect(pill).not.toBeNull();
+      expect(bar.classList.contains('is-idle')).toBe(false);
 
-      // Enter/Space on a focused button emit `click` and no pointer events at
-      // all — a pointerdown-only pill would strand a keyboard-only player with
-      // no route back to mute or exit.
       await act(async () => {
-        pill!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        (container.querySelector('iframe') as HTMLIFrameElement).focus();
+        window.dispatchEvent(
+          new MessageEvent('message', {
+            data: { source: 'gdpl-player', type: 'pointer' },
+            origin: 'null',
+          }),
+        );
       });
-      expect(container.querySelector('.game-theater-bar')).not.toBeNull();
-      // And the bar it brings back is the whole bar: the report path (DSA art.
-      // 16) lives in the More panel, so an auto-hide is only allowed to make it
-      // one tap deeper — never to make it unreachable.
+      await act(async () => {
+        vi.advanceTimersByTime(PLAYER_CHROME_IDLE_MS - 1);
+      });
+      expect(bar.classList.contains('is-idle')).toBe(false);
+      await act(async () => {
+        vi.advanceTimersByTime(1);
+      });
+      expect(bar.classList.contains('is-idle')).toBe(true);
+      expect(bar.getAttribute('aria-hidden')).toBe('true');
+      const reveal = container.querySelector('.theater-reveal-btn') as HTMLButtonElement | null;
+      expect(reveal).not.toBeNull();
+      expect(reveal!.getAttribute('aria-label')).toBe('Show controls');
+
+      await act(async () => {
+        reveal!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+      expect(bar.classList.contains('is-idle')).toBe(false);
+      expect(container.querySelector('.theater-reveal-btn')).toBeNull();
+      await act(async () => {
+        vi.advanceTimersByTime(PLAYER_CHROME_IDLE_MS);
+      });
+      expect(bar.classList.contains('is-idle')).toBe(true);
+      expect(container.querySelector('.theater-reveal-btn')).not.toBeNull();
+
+      await act(async () => {
+        window.dispatchEvent(
+          new MessageEvent('message', {
+            data: { source: 'gdpl-player', type: 'activity' },
+            origin: 'null',
+          }),
+        );
+      });
+      expect(bar.classList.contains('is-idle')).toBe(false);
+      expect(container.querySelector('.theater-reveal-btn')).toBeNull();
+      // The report path (DSA art. 16) stays directly reachable in More without
+      // remounting or moving controls when chrome returns.
       expect(container.querySelector('a.report-btn')).not.toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('pins the bar while one of its controls is focused', async () => {
+    vi.useFakeTimers();
+    try {
+      await draw();
+      const frame = container.querySelector('iframe') as HTMLIFrameElement;
+      const more = container.querySelector('.theater-more-btn') as HTMLButtonElement;
+      const bar = container.querySelector('.game-theater-bar') as HTMLElement;
+
+      await act(async () => {
+        frame.focus();
+        window.dispatchEvent(
+          new MessageEvent('message', {
+            data: { source: 'gdpl-player', type: 'pointer' },
+            origin: 'null',
+          }),
+        );
+        more.focus();
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(PLAYER_CHROME_IDLE_MS * 2);
+      });
+      expect(bar.classList.contains('is-idle')).toBe(false);
+
+      await act(async () => frame.focus());
+      await act(async () => {
+        vi.advanceTimersByTime(PLAYER_CHROME_IDLE_MS);
+      });
+      expect(bar.classList.contains('is-idle')).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('reveals and pins the bar at game over until the next gameplay input', async () => {
+    vi.useFakeTimers();
+    try {
+      await draw();
+      const frame = container.querySelector('iframe') as HTMLIFrameElement;
+      const bar = container.querySelector('.game-theater-bar') as HTMLElement;
+
+      await act(async () => {
+        frame.focus();
+        window.dispatchEvent(
+          new MessageEvent('message', {
+            data: { source: 'gdpl-player', type: 'pointer' },
+            origin: 'null',
+          }),
+        );
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(PLAYER_CHROME_IDLE_MS);
+      });
+      expect(bar.classList.contains('is-idle')).toBe(true);
+
+      await act(async () => {
+        window.dispatchEvent(
+          new MessageEvent('message', {
+            data: { source: 'gdpl-player', type: 'end', outcome: 'lost' },
+            origin: 'null',
+          }),
+        );
+      });
+      expect(bar.classList.contains('is-idle')).toBe(false);
+      await act(async () => {
+        vi.advanceTimersByTime(PLAYER_CHROME_IDLE_MS * 2);
+      });
+      expect(bar.classList.contains('is-idle')).toBe(false);
+
+      await act(async () => {
+        window.dispatchEvent(
+          new MessageEvent('message', {
+            data: { source: 'gdpl-player', type: 'activity' },
+            origin: 'null',
+          }),
+        );
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(PLAYER_CHROME_IDLE_MS);
+      });
+      expect(bar.classList.contains('is-idle')).toBe(true);
     } finally {
       vi.useRealTimers();
     }

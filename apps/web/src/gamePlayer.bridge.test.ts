@@ -121,6 +121,24 @@ describe('the injected bridge reports health', () => {
     bridge.stop();
   });
 
+  it('reports activity only after real game input establishes engagement', async () => {
+    const bridge = runBridge('<canvas id="game"></canvas>');
+
+    bridge.frameWindow.dispatchEvent(new bridge.frameWindow.PointerEvent('pointermove'));
+    await delivered();
+    expect(bridge.received.filter((m) => m.type === 'activity')).toHaveLength(0);
+
+    bridge.frameWindow.dispatchEvent(new bridge.frameWindow.KeyboardEvent('keydown', { key: 'w' }));
+    await delivered();
+    expect(bridge.received.filter((m) => m.type === 'activity').map((m) => m.source)).toEqual(['gdpl-player']);
+
+    await new Promise((resolve) => setTimeout(resolve, 260));
+    bridge.frameWindow.dispatchEvent(new bridge.frameWindow.PointerEvent('pointermove'));
+    await delivered();
+    expect(bridge.received.filter((m) => m.type === 'activity')).toHaveLength(2);
+    bridge.stop();
+  });
+
   it('cancels contextmenu and selectstart so iOS cannot open the callout over the game', () => {
     const bridge = runBridge('<canvas id="game"></canvas>');
 
