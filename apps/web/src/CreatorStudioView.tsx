@@ -194,6 +194,8 @@ export function CreatorStudioView({
   const [shelfOpen, setShelfOpen] = useState(false);
   /** True when the shelf is the phone drawer (off-canvas), not the desktop rail. */
   const [shelfIsDrawer, setShelfIsDrawer] = useState(false);
+  /** Header share control — draft link toggle/copy, not buried in Details → Overview. */
+  const [shareMenuOpen, setShareMenuOpen] = useState(false);
   // Publishing is terminal, so an improvement on a live game opens a *new* job with its
   // own token — one not on the shelf yet. When that happens the open thread moves onto
   // it while the shelf selection stays on the source game (the new job inherits its slug,
@@ -493,10 +495,28 @@ export function CreatorStudioView({
 
   function openTab(next: StudioTab) {
     if (!activeGame || !tabAvailable(activeGame, next)) return;
+    setShareMenuOpen(false);
     setTab(next);
     onNavigate(studioPath(studioAddress(activeGame), next));
   }
   openTabRef.current = openTab;
+
+  const canShareDraft = Boolean(
+    activeGame && activeGame.slug && activeGame.lastKnownStatus !== 'abandoned' && !isStudioGameShelfLive(activeGame),
+  );
+
+  useEffect(() => {
+    setShareMenuOpen(false);
+  }, [selected]);
+
+  useEffect(() => {
+    if (!shareMenuOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setShareMenuOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [shareMenuOpen]);
 
   if (!user) {
     return (
@@ -709,6 +729,41 @@ export function CreatorStudioView({
                         <PixelIcon name="play" size={14} />{' '}
                         <span className="studio-head-action-label">{t('studioPanel.tabs.playtest')}</span>
                       </button>
+                      {canShareDraft && activeGame ? (
+                        <div className="studio-head-share">
+                          <button
+                            type="button"
+                            className={`studio-head-action is-icon-only${shareMenuOpen ? ' is-active' : ''}`}
+                            aria-pressed={shareMenuOpen}
+                            aria-expanded={shareMenuOpen}
+                            aria-label={t('studioPanel.share.title')}
+                            data-testid="studio-head-share"
+                            onClick={() => setShareMenuOpen((open) => !open)}
+                          >
+                            <PixelIcon name="share" size={14} />{' '}
+                            <span className="studio-head-action-label">{t('studioPanel.share.title')}</span>
+                          </button>
+                          {shareMenuOpen ? (
+                            <div
+                              className="studio-head-share-popover"
+                              role="dialog"
+                              aria-label={t('studioPanel.share.title')}
+                            >
+                              <DraftShareControl
+                                game={activeGame}
+                                compact
+                                onSharedChange={(shared) => {
+                                  setGames((prev) =>
+                                    prev.map((game) =>
+                                      game.token === activeGame.token ? { ...game, draftShared: shared } : game,
+                                    ),
+                                  );
+                                }}
+                              />
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
                       <button
                         type="button"
                         className={`studio-head-action is-icon-only${tab === 'details' ? ' is-active' : ''}`}
@@ -830,6 +885,13 @@ export function CreatorStudioView({
                           onDaysChange={setDays}
                           onOpenPlaytest={() => openTab('playtest')}
                           onPlay={() => activeGame.slug && onPlay(activeGame.slug)}
+                          onDraftSharedChange={(shared) => {
+                            setGames((prev) =>
+                              prev.map((game) =>
+                                game.token === activeGame.token ? { ...game, draftShared: shared } : game,
+                              ),
+                            );
+                          }}
                           onRemoved={(token) => {
                             setGames((prev) => prev.filter((game) => game.token !== token));
                             setSelected((current) => (current === token ? null : current));
@@ -999,6 +1061,7 @@ function DetailsPanel({
   onDaysChange,
   onOpenPlaytest,
   onPlay,
+  onDraftSharedChange,
   onRemoved,
 }: {
   game: StudioShelfGame;
@@ -1015,6 +1078,7 @@ function DetailsPanel({
   onDaysChange: (days: number) => void;
   onOpenPlaytest: () => void;
   onPlay: () => void;
+  onDraftSharedChange: (shared: boolean) => void;
   onRemoved: (token: string) => void;
 }) {
   const { t, i18n } = useTranslation();
@@ -1065,140 +1129,138 @@ function DetailsPanel({
         </button>
       </div>
 
-      <div className="studio-rail-body">
-        <div className="studio-rail-pane studio-overview" data-testid={`studio-rail-pane-${activePane}`}>
-          {activePane === 'overview' ? (
-            <>
-              <section className="studio-rail-section" aria-label={t('studioPanel.overview.status')}>
-                <ul className="funnel-stats studio-facts">
+      <div className="studio-rail-pane studio-overview" data-testid={`studio-rail-pane-${activePane}`}>
+        {activePane === 'overview' ? (
+          <>
+            <section className="studio-rail-section" aria-label={t('studioPanel.overview.status')}>
+              <ul className="funnel-stats studio-facts">
+                <li>
+                  <span className="funnel-stat-value">
+                    {formatRelativeTime(Date.parse(game.createdAt), i18n.language)}
+                  </span>
+                  <span className="funnel-stat-label">{t('studioPanel.overview.created')}</span>
+                </li>
+                {publishedAt ? (
                   <li>
                     <span className="funnel-stat-value">
-                      {formatRelativeTime(Date.parse(game.createdAt), i18n.language)}
+                      {formatRelativeTime(Date.parse(publishedAt), i18n.language)}
                     </span>
-                    <span className="funnel-stat-label">{t('studioPanel.overview.created')}</span>
+                    <span className="funnel-stat-label">{t('studioPanel.overview.published')}</span>
                   </li>
-                  {publishedAt ? (
-                    <li>
-                      <span className="funnel-stat-value">
-                        {formatRelativeTime(Date.parse(publishedAt), i18n.language)}
+                ) : null}
+                {health ? (
+                  <li>
+                    <span className="funnel-stat-value">
+                      {health.sessions}
+                      <span className="studio-fact-suffix">
+                        · {formatSeconds(health.totalPlaySeconds)} {t('studioPanel.overview.play')}
                       </span>
-                      <span className="funnel-stat-label">{t('studioPanel.overview.published')}</span>
-                    </li>
-                  ) : null}
-                  {health ? (
-                    <li>
-                      <span className="funnel-stat-value">
-                        {health.sessions}
-                        <span className="studio-fact-suffix">
-                          · {formatSeconds(health.totalPlaySeconds)} {t('studioPanel.overview.play')}
-                        </span>
-                      </span>
-                      <span className="funnel-stat-label">{t('studioPanel.overview.sessions')}</span>
-                    </li>
-                  ) : null}
-                </ul>
+                    </span>
+                    <span className="funnel-stat-label">{t('studioPanel.overview.sessions')}</span>
+                  </li>
+                ) : null}
+              </ul>
 
-                <div className="studio-actions">
-                  {catalogLive && game.slug ? (
-                    <button type="button" className="primary-btn" onClick={onPlay}>
-                      <PixelIcon name="play" size={12} /> {t('myGames.play')}
-                    </button>
-                  ) : null}
-                  <button type="button" className="secondary-btn" onClick={onOpenPlaytest}>
-                    <PixelIcon name="play" size={12} /> {t('studioPanel.overview.playtest')}
+              <div className="studio-actions">
+                {catalogLive && game.slug ? (
+                  <button type="button" className="primary-btn" onClick={onPlay}>
+                    <PixelIcon name="play" size={12} /> {t('myGames.play')}
                   </button>
-                  {!publishedJob && game.lastKnownStatus !== 'abandoned' ? (
-                    <button
-                      type="button"
-                      className={`status-abandon${abandonArmed ? ' is-danger' : ''}`}
-                      onClick={() => void handleAbandon()}
-                      disabled={abandoning}
-                    >
-                      {abandonArmed ? t('studioPanel.overview.abandonConfirm') : t('studioPanel.overview.abandon')}
-                    </button>
-                  ) : null}
-                </div>
+                ) : null}
+                <button type="button" className="secondary-btn" onClick={onOpenPlaytest}>
+                  <PixelIcon name="play" size={12} /> {t('studioPanel.overview.playtest')}
+                </button>
+                {!publishedJob && game.lastKnownStatus !== 'abandoned' ? (
+                  <button
+                    type="button"
+                    className={`status-abandon${abandonArmed ? ' is-danger' : ''}`}
+                    onClick={() => void handleAbandon()}
+                    disabled={abandoning}
+                  >
+                    {abandonArmed ? t('studioPanel.overview.abandonConfirm') : t('studioPanel.overview.abandon')}
+                  </button>
+                ) : null}
+              </div>
+            </section>
+
+            {!catalogLive && game.slug && game.lastKnownStatus !== 'abandoned' ? (
+              <section className="studio-rail-section" aria-label={t('studioPanel.share.title')}>
+                <DraftShareControl game={game} onSharedChange={onDraftSharedChange} />
               </section>
+            ) : null}
+          </>
+        ) : null}
 
-              {!catalogLive && game.slug && game.lastKnownStatus !== 'abandoned' ? (
-                <section className="studio-rail-section" aria-label={t('studioPanel.share.title')}>
-                  <DraftShareControl game={game} />
-                </section>
-              ) : null}
-            </>
-          ) : null}
-
-          {activePane === 'connect' ? (
-            showConnect ? (
-              <StudioConnectCard
-                token={game.token}
-                collapsible={false}
-                hideIfUnavailable
-                unavailableLabel={t('studioPanel.rail.connectEmpty')}
-                density="panel"
-              />
-            ) : (
-              <p className="studio-rail-empty">{t('studioPanel.rail.connectEmpty')}</p>
-            )
-          ) : null}
-
-          {activePane === 'build' ? (
-            showProgress ? (
-              <StudioDetailsBuildProgress token={game.token} emptyLabel={t('studioPanel.rail.buildEmpty')} />
-            ) : (
-              <p className="studio-rail-empty">{t('studioPanel.rail.buildEmpty')}</p>
-            )
-          ) : null}
-
-          {activePane === 'media' ? (
-            <StudioDetailsMedia token={shotToken} emptyLabel={t('studioPanel.rail.mediaEmpty')} />
-          ) : null}
-
-          {activePane === 'keys' ? (
-            <div className="studio-rail-credentials-body">
-              <p className="studio-rail-credentials-hint">{t('studioPanel.rail.credentialsHint')}</p>
-              <StudioCreatorAgentKeyPanel />
-              <StudioOAuthClientsPanel />
-              {/* Working copy belongs in the credentials pane rather than the create
-                  flow: it is the same bring-your-own-agent corner, and a creator who
-                  wants their own IDE is already here fetching a key. It needs a slug —
-                  a game without one has nothing to check out yet. */}
-              {game.slug && game.lastKnownStatus !== 'abandoned' ? (
-                <StudioWorkspaceCheckoutPanel slug={game.slug} />
-              ) : null}
-            </div>
-          ) : null}
-
-          {activePane === 'stats' && catalogLive ? (
-            <StatsSection
-              game={game}
-              health={health}
-              days={days}
-              healthDays={healthDays}
-              truncated={truncated}
-              scorecard={scorecard}
-              onDaysChange={onDaysChange}
+        {activePane === 'connect' ? (
+          showConnect ? (
+            <StudioConnectCard
+              token={game.token}
+              collapsible={false}
+              hideIfUnavailable
+              unavailableLabel={t('studioPanel.rail.connectEmpty')}
+              density="panel"
             />
-          ) : null}
-        </div>
+          ) : (
+            <p className="studio-rail-empty">{t('studioPanel.rail.connectEmpty')}</p>
+          )
+        ) : null}
 
-        <nav className="studio-rail-icons" aria-label={t('studioPanel.tabs.details')}>
-          {panes.map((entry) => (
-            <button
-              key={entry.id}
-              type="button"
-              className={`studio-rail-icon${activePane === entry.id ? ' is-active' : ''}`}
-              aria-pressed={activePane === entry.id}
-              aria-label={t(entry.labelKey)}
-              title={t(entry.labelKey)}
-              data-testid={`studio-rail-icon-${entry.id}`}
-              onClick={() => onPaneChange(entry.id)}
-            >
-              <PixelIcon name={entry.icon} size={14} />
-            </button>
-          ))}
-        </nav>
+        {activePane === 'build' ? (
+          showProgress ? (
+            <StudioDetailsBuildProgress token={game.token} emptyLabel={t('studioPanel.rail.buildEmpty')} />
+          ) : (
+            <p className="studio-rail-empty">{t('studioPanel.rail.buildEmpty')}</p>
+          )
+        ) : null}
+
+        {activePane === 'media' ? (
+          <StudioDetailsMedia token={shotToken} emptyLabel={t('studioPanel.rail.mediaEmpty')} />
+        ) : null}
+
+        {activePane === 'keys' ? (
+          <div className="studio-rail-credentials-body">
+            <p className="studio-rail-credentials-hint">{t('studioPanel.rail.credentialsHint')}</p>
+            <StudioCreatorAgentKeyPanel />
+            <StudioOAuthClientsPanel />
+            {/* Working copy belongs in the credentials pane rather than the create
+                flow: it is the same bring-your-own-agent corner, and a creator who
+                wants their own IDE is already here fetching a key. It needs a slug —
+                a game without one has nothing to check out yet. */}
+            {game.slug && game.lastKnownStatus !== 'abandoned' ? (
+              <StudioWorkspaceCheckoutPanel slug={game.slug} />
+            ) : null}
+          </div>
+        ) : null}
+
+        {activePane === 'stats' && catalogLive ? (
+          <StatsSection
+            game={game}
+            health={health}
+            days={days}
+            healthDays={healthDays}
+            truncated={truncated}
+            scorecard={scorecard}
+            onDaysChange={onDaysChange}
+          />
+        ) : null}
       </div>
+
+      <nav className="studio-rail-icons" aria-label={t('studioPanel.tabs.details')}>
+        {panes.map((entry) => (
+          <button
+            key={entry.id}
+            type="button"
+            className={`studio-rail-icon${activePane === entry.id ? ' is-active' : ''}`}
+            aria-pressed={activePane === entry.id}
+            aria-label={t(entry.labelKey)}
+            title={t(entry.labelKey)}
+            data-testid={`studio-rail-icon-${entry.id}`}
+            onClick={() => onPaneChange(entry.id)}
+          >
+            <PixelIcon name={entry.icon} size={14} />
+          </button>
+        ))}
+      </nav>
     </div>
   );
 }
@@ -1211,12 +1273,35 @@ function DetailsPanel({
  * shown is the game's ordinary permalink, the same one it will keep once it is live,
  * so there is nothing to re-share when that happens.
  */
-function DraftShareControl({ game }: { game: StudioGame }) {
+function DraftShareControl({
+  game,
+  compact = false,
+  onSharedChange,
+}: {
+  game: StudioGame;
+  /** Drop the card chrome when nested in the header popover. */
+  compact?: boolean;
+  onSharedChange?: (shared: boolean) => void;
+}) {
   const { t } = useTranslation();
   const [shared, setShared] = useState(Boolean(game.draftShared));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  // Header popover unmounts this control on Escape / game switch; ignore the
+  // in-flight toggle result so we do not setState after unmount.
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    setShared(Boolean(game.draftShared));
+  }, [game.draftShared, game.token]);
 
   const url = game.slug ? new URL(playPath(game.slug), window.location.href).toString() : '';
 
@@ -1229,19 +1314,25 @@ function DraftShareControl({ game }: { game: StudioGame }) {
     setShared(next);
     try {
       await setDraftShared(game.token, next);
+      if (!mountedRef.current) return;
+      onSharedChange?.(next);
     } catch {
+      if (!mountedRef.current) return;
       setShared(!next);
       setError(t('studioPanel.share.error'));
     } finally {
-      setBusy(false);
+      if (mountedRef.current) setBusy(false);
     }
   }
 
   async function copy() {
     try {
       await navigator.clipboard.writeText(url);
+      if (!mountedRef.current) return;
       setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
+      window.setTimeout(() => {
+        if (mountedRef.current) setCopied(false);
+      }, 2000);
     } catch {
       // No clipboard permission or no clipboard API — the link is on screen to select
       // by hand, so this needs no error state.
@@ -1249,7 +1340,7 @@ function DraftShareControl({ game }: { game: StudioGame }) {
   }
 
   return (
-    <div className="studio-share">
+    <div className={`studio-share${compact ? ' is-compact' : ''}`}>
       <div className="studio-share-head">
         <h3 className="studio-share-title">{t('studioPanel.share.title')}</h3>
         <button

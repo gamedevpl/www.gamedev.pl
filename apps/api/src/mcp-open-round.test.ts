@@ -409,11 +409,7 @@ describe('MCP open_round (BY-24 / BY-27b)', () => {
     await store.checkAndIncrementQuota(OWNER, dateStr, 2, 'improvements');
     app = await createApp(store);
 
-    const { structured, isError } = await callOpenRound(
-      app,
-      { slug: SLUG, feedback: 'One more try.' },
-      headers,
-    );
+    const { structured, isError } = await callOpenRound(app, { slug: SLUG, feedback: 'One more try.' }, headers);
     expect(isError).toBe(true);
     expect(structured).toMatchObject({ error: IMPROVEMENT_QUOTA_EXHAUSTED_REASON });
   });
