@@ -450,6 +450,16 @@ export function detectStall(input: StallInput): JobStall | null {
   // deduce from timestamps and no waiting period worth observing.
   if (input.agentState === 'waiting_for_user') return 'awaiting_input';
 
+  const sinceState = input.now - Date.parse(input.stateSince);
+  const sinceOk = Number.isFinite(sinceState);
+
+  // Our gate failing to start outranks MCP `end`: an agent that correctly ends after
+  // submit must not hide a wedged gate from operator alerts / admin. Handoff still
+  // unlocks via `agentEndedAt` on the handoff predicate (not only stall === 'ended').
+  if (input.state === 'submitted' && sinceOk && sinceState > thresholds.gateNotStartedMs) {
+    return 'gate_not_started';
+  }
+
   // MCP `end` is an explicit "I am done iterating" — do not wait for the quiet window.
   if (input.agentEndedAt) return 'ended';
 
@@ -463,15 +473,10 @@ export function detectStall(input: StallInput): JobStall | null {
     return 'no_agent_yet';
   }
 
-  const sinceState = input.now - Date.parse(input.stateSince);
-  if (!Number.isFinite(sinceState)) return null;
+  if (!sinceOk) return null;
 
   if ((input.state === 'queued' || input.state === 'dispatched') && sinceState > thresholds.notDispatchedMs) {
     return 'not_dispatched';
-  }
-
-  if (input.state === 'submitted' && sinceState > thresholds.gateNotStartedMs) {
-    return 'gate_not_started';
   }
 
   if (input.state === 'building') {

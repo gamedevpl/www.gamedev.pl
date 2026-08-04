@@ -33,7 +33,7 @@ export function selfBuildDeliveryCap(): number {
 
 /**
  * Whether the current round is still live — builder must not change until it closes,
- * except {@link allowsQuietBuilderHandoff}.
+ * except {@link allowsSelfToPlatformHandoff}.
  *
  * Includes gate-red / kit_outdated `needs_changes`: those keep the round open so the
  * same session can repair (or refresh the kit) and re-deliver without a new kickoff.
@@ -57,29 +57,33 @@ export function isActiveBuildRound(record: { state?: JobState; transitions?: Job
   }
 }
 
-/** Stalls that unlock mid-round self→platform handoff. */
+/** Stalls that unlock mid-round self→platform handoff (when `agentEndedAt` is absent). */
 const SELF_TO_PLATFORM_HANDOFF_STALLS: ReadonlySet<JobStall> = new Set(['ended', 'quiet']);
 
 /**
  * Self round → platform: the creator's escape hatch when their agent has finished
- * (`ended` via MCP `end`) or stopped talking (`quiet`, time-based fallback). Refuses
- * the reverse and refuses while the agent is still chatty (or has never connected —
- * that is still "waiting to start", not a handoff).
+ * (`agentEndedAt` / stall `ended` via MCP `end`) or stopped talking (`quiet`,
+ * time-based fallback). Refuses the reverse and refuses while the agent is still
+ * chatty (or has never connected — that is still "waiting to start", not a handoff).
  *
- * Prefer `ended`: ChatGPT-class agents usually submit and stop, so waiting 15 minutes
- * of silence is the wrong primary signal. Quiet remains the backstop when `end` is
- * never called.
+ * Prefer `agentEndedAt`: ChatGPT-class agents usually submit and stop, so waiting
+ * 15 minutes of silence is the wrong primary signal. Quiet remains the backstop when
+ * `end` is never called. `agentEndedAt` is checked directly so a later
+ * `gate_not_started` stall (ops visibility) does not revoke the handoff unlock.
  *
  * Race kill: handoff goes through `resumeBuild`, which bumps `roundGeneration` before
  * minting the platform brief, so the self MCP token dies; late self deliveries land as
  * stale. Candidate sources (if any) seed the platform brief.
  */
-export function allowsQuietBuilderHandoff(input: {
+export function allowsSelfToPlatformHandoff(input: {
   currentBuilder: BuilderKind;
   requestedBuilder: BuilderKind;
   stall?: string | null;
+  /** When set, unlocks even if stall was overwritten by `gate_not_started`. */
+  agentEndedAt?: string | null;
 }): boolean {
   if (input.requestedBuilder !== 'platform' || input.currentBuilder !== 'self') return false;
+  if (input.agentEndedAt) return true;
   return typeof input.stall === 'string' && SELF_TO_PLATFORM_HANDOFF_STALLS.has(input.stall as JobStall);
 }
 

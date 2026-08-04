@@ -29,7 +29,7 @@ import { createInternalAuthVerifierFromEnv, type InternalAuthVerifier } from './
 import type { AgentBackend, SeedFiles } from './agent-backend.js';
 import { resolveBuilderBackend, type AgentBackendRegistry } from './agent-backend-env.js';
 import {
-  allowsQuietBuilderHandoff,
+  allowsSelfToPlatformHandoff,
   isActiveBuildRound,
   isBuilderKind,
   shouldSteerFeedbackViaInbox,
@@ -1829,6 +1829,7 @@ export async function registerSubmissionRoutes(
     // Heartbeat + thought flash — presence pulses refresh these without chat rows.
     if (record.lastAgentSignalAt) status.lastAgentSignalAt = record.lastAgentSignalAt;
     if (record.lastAgentPresence) status.lastAgentPresence = record.lastAgentPresence;
+    if (record.agentEndedAt) status.agentEndedAt = record.agentEndedAt;
     // Echo builder fields so Studio does not invent `platform` from empty localStorage
     // when the server already knows the game's last-used choice (Codex P2 on BY-07).
     const roundBuilder = record.builder;
@@ -2956,10 +2957,11 @@ export async function registerSubmissionRoutes(
           // Ended (MCP `end`) or quiet self → platform is the handoff escape hatch.
           // Anything else mid-round stays locked (two agents must not write the same round).
           if (
-            !allowsQuietBuilderHandoff({
+            !allowsSelfToPlatformHandoff({
               currentBuilder: current,
               requestedBuilder,
               stall,
+              agentEndedAt: record.agentEndedAt,
             })
           ) {
             return reply.status(409).send({

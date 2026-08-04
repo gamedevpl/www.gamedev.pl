@@ -52,10 +52,13 @@ Merged by `applySessionNudges` / submit handler. Act, then continue:
 
 Mid-round switch is refused while the self agent is live (`builder_locked`), except:
 
-| Stall   | Who                | Effect                                   |
-| ------- | ------------------ | ---------------------------------------- |
-| `ended` | Agent called `end` | Primary unlock for self→platform handoff |
-| `quiet` | ~15m silence       | Fallback if `end` was never called       |
+| Signal                         | Who                | Effect                                   |
+| ------------------------------ | ------------------ | ---------------------------------------- |
+| `agentEndedAt` / stall `ended` | Agent called `end` | Primary unlock for self→platform handoff |
+| stall `quiet`                  | ~15m silence       | Fallback if `end` was never called       |
+
+`allowsSelfToPlatformHandoff` checks `agentEndedAt` directly so a later
+`gate_not_started` stall (ops visibility after a wedged gate) does not revoke handoff.
 
 Handoff goes through creator feedback with `builder: 'platform'` → `resumeBuild` with
 generation bump + seed from latest delivery. Do not auto-dispatch platform from `end`.
@@ -69,7 +72,7 @@ generation bump + seed from latest delivery. Do not auto-dispatch platform from 
 | MCP tools                    | `apps/api/src/mcp-server.ts`                                |
 | Channel (`POST …/end`, …)    | `apps/api/src/agent-channel.ts`                             |
 | Stall / `ended`              | `apps/api/src/job-state.ts` (`detectStall`)                 |
-| Handoff gate                 | `apps/api/src/builder.ts` (`allowsQuietBuilderHandoff`)     |
+| Handoff gate                 | `apps/api/src/builder.ts` (`allowsSelfToPlatformHandoff`)   |
 | Feedback / resume            | `apps/api/src/submissions.ts`                               |
 | Studio copy / builder choice | `apps/web/src/selfBuildCopy.ts`, `SubmissionStatusView.tsx` |
 

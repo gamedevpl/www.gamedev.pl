@@ -2935,10 +2935,6 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         type: 'object',
         properties: {
           sessionKey: SESSION_KEY_PROP,
-          note: {
-            type: 'string',
-            description: 'Optional short note for logs (not shown as a Studio chat turn).',
-          },
         },
       },
       handler: async (args, ctx) => {

@@ -23,6 +23,8 @@ export type SelfBuildCopyInput = {
    * `in_review` / `ready_for_review` with no live session — copy must not claim a check-in.
    */
   phase?: string | null;
+  /** When set, the agent called MCP `end` (even if stall is later `gate_not_started`). */
+  agentEndedAt?: string | null;
 };
 
 /**
@@ -30,12 +32,19 @@ export type SelfBuildCopyInput = {
  *
  * Delivery-cap outranks stall: the round cannot accept more deliveries, and a quiet
  * banner would misread that as "the agent wandered off".
+ * `gate_not_started` keeps the generic stall warning (ops-side); `agentEndedAt` alone
+ * still maps to `agent_ended` when stall is not already something stronger.
  */
 export function selfStatusCopy(input: SelfBuildCopyInput): SelfStatusCopy | null {
   if (input.failureReason === 'self_build_delivery_cap') return 'delivery_cap';
   if (input.builder !== 'self') return null;
   if (input.stall === 'no_agent_yet') return 'no_agent_yet';
-  if (input.stall === 'ended') return 'agent_ended';
+  if (
+    input.stall === 'ended' ||
+    (input.agentEndedAt && input.stall !== 'gate_not_started' && input.stall !== 'quiet')
+  ) {
+    return 'agent_ended';
+  }
   if (input.stall === 'quiet') return 'quiet_agent';
   return null;
 }
@@ -95,6 +104,6 @@ export function selfComposerRoute(input: SelfBuildCopyInput): SelfComposerRoute 
   if (input.stall === 'no_agent_yet') return null;
   if (input.failureReason === 'self_build_delivery_cap') return 'waiting';
   if (input.phase === 'ready_for_review') return 'waiting';
-  if (input.stall === 'quiet' || input.stall === 'ended') return 'waiting';
+  if (input.stall === 'quiet' || input.stall === 'ended' || input.agentEndedAt) return 'waiting';
   return 'active';
 }

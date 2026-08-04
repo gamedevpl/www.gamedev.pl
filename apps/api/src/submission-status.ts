@@ -206,6 +206,11 @@ export interface SubmissionStatusResponseBase {
    */
   stall?: JobStall;
   /**
+   * When the self agent called MCP `end`. Survives even if {@link stall} later becomes
+   * `gate_not_started` (ops visibility) — Studio still offers platform handoff.
+   */
+  agentEndedAt?: string;
+  /**
    * Who owns the *current* round (`platform` | `self`), when known. Studio uses this
    * (with {@link defaultBuilder}) instead of localStorage alone so another browser
    * still defaults to the game's last-used choice.

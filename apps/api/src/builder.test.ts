@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  allowsQuietBuilderHandoff,
+  allowsSelfToPlatformHandoff,
   DEFAULT_SELF_BUILD_CONNECT_DAYS,
   DEFAULT_SELF_BUILD_DELIVERY_CAP,
   isActiveBuildRound,
@@ -17,26 +17,34 @@ describe('builder helpers', () => {
     expect(isBuilderKind('copilot')).toBe(false);
   });
 
-  it('allows only ended or quiet self→platform handoffs mid-round', () => {
-    expect(allowsQuietBuilderHandoff({ currentBuilder: 'self', requestedBuilder: 'platform', stall: 'ended' })).toBe(
+  it('allows ended or quiet self→platform handoffs mid-round', () => {
+    expect(allowsSelfToPlatformHandoff({ currentBuilder: 'self', requestedBuilder: 'platform', stall: 'ended' })).toBe(
       true,
     );
-    expect(allowsQuietBuilderHandoff({ currentBuilder: 'self', requestedBuilder: 'platform', stall: 'quiet' })).toBe(
+    expect(allowsSelfToPlatformHandoff({ currentBuilder: 'self', requestedBuilder: 'platform', stall: 'quiet' })).toBe(
       true,
     );
     expect(
-      allowsQuietBuilderHandoff({ currentBuilder: 'self', requestedBuilder: 'platform', stall: 'no_agent_yet' }),
+      allowsSelfToPlatformHandoff({
+        currentBuilder: 'self',
+        requestedBuilder: 'platform',
+        stall: 'gate_not_started',
+        agentEndedAt: '2026-08-04T00:00:00Z',
+      }),
+    ).toBe(true);
+    expect(
+      allowsSelfToPlatformHandoff({ currentBuilder: 'self', requestedBuilder: 'platform', stall: 'no_agent_yet' }),
     ).toBe(false);
-    expect(allowsQuietBuilderHandoff({ currentBuilder: 'self', requestedBuilder: 'platform', stall: null })).toBe(
+    expect(allowsSelfToPlatformHandoff({ currentBuilder: 'self', requestedBuilder: 'platform', stall: null })).toBe(
       false,
     );
     expect(
-      allowsQuietBuilderHandoff({ currentBuilder: 'self', requestedBuilder: 'platform', stall: 'gate_not_started' }),
+      allowsSelfToPlatformHandoff({ currentBuilder: 'self', requestedBuilder: 'platform', stall: 'gate_not_started' }),
     ).toBe(false);
-    expect(allowsQuietBuilderHandoff({ currentBuilder: 'platform', requestedBuilder: 'self', stall: 'quiet' })).toBe(
+    expect(allowsSelfToPlatformHandoff({ currentBuilder: 'platform', requestedBuilder: 'self', stall: 'quiet' })).toBe(
       false,
     );
-    expect(allowsQuietBuilderHandoff({ currentBuilder: 'platform', requestedBuilder: 'self', stall: 'ended' })).toBe(
+    expect(allowsSelfToPlatformHandoff({ currentBuilder: 'platform', requestedBuilder: 'self', stall: 'ended' })).toBe(
       false,
     );
   });
