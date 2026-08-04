@@ -1974,7 +1974,7 @@ export async function registerAgentChannelRoutes(
           status: 'pending',
           deliveryId: null,
           summary:
-            'nothing has been delivered yet — do not loop on get_gate_verdict; stop this run and let Studio show the gate',
+            'nothing has been delivered yet — continue building and call submit_sources first; do not call get_gate_verdict again before a delivery',
           retryAfterSeconds: 30,
           access,
         });
