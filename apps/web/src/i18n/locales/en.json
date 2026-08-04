@@ -330,6 +330,8 @@
     "rail": {
       "connect": "Connect your agent",
       "build": "Build progress",
+      "media": "Screenshots",
+      "mediaEmpty": "No screenshots yet — they appear here when the agent posts them.",
       "credentials": "Keys & connected agents",
       "credentialsHint": "Creator key, legacy per-game key, and agents you’ve approved.",
       "kickoffDetails": "Build prompt",
@@ -363,6 +365,20 @@
       "noShot": "No viewport frame was captured — the text request will still send.",
       "placeholder": "e.g. The spike on the right edge is unfair — add a checkpoint just before it…",
       "submit": "Send with this moment"
+    },
+    "preview": {
+      "aria": "Live game preview",
+      "title": "Preview",
+      "live": "Live",
+      "empty": "No playable build yet — it appears here once a preview is ready.",
+      "expand": "Expand playtest",
+      "media": "Screenshots",
+      "shot": "Screenshot",
+      "closeShot": "Close screenshot",
+      "dismissShot": "Dismiss screenshot",
+      "expandShots": "Open screenshots",
+      "collapseShots": "Stack",
+      "pause": "Pause"
     },
     "stats": {
       "noSlug": "Stats appear once this game has a draft or published slug.",

@@ -10,6 +10,7 @@ import { formatRelativeTime } from './relativeTime.js';
 import { playPath, studioPath, type StudioTab } from './router.js';
 import { abandonSubmission } from './submissionApi.js';
 import { StudioPlaytestPanel } from './StudioPlaytestPanel.js';
+import { StudioShotToasts } from './StudioShotToasts.js';
 import { EditorPanel } from './EditorPanel.js';
 import {
   collapseStudioGames,
@@ -27,6 +28,7 @@ import { StudioAgentKeyPanel } from './StudioAgentKeyPanel.js';
 import { StudioConnectCard } from './StudioConnectCard.js';
 import { StudioCreatorAgentKeyPanel } from './StudioCreatorAgentKeyPanel.js';
 import { StudioDetailsBuildProgress } from './StudioDetailsBuildProgress.js';
+import { StudioDetailsMedia } from './StudioDetailsMedia.js';
 import { StudioOAuthClientsPanel } from './StudioOAuthClientsPanel.js';
 import { SubmissionStatusView } from './SubmissionStatusView.js';
 import {
@@ -696,13 +698,15 @@ export function CreatorStudioView({
                           <span className="studio-head-action-label">{t('creatorProfile.publishGateTitle')}</span>
                         </button>
                       ) : null}
+                      {/* One primary Play verb — opens the playtest theater. Pause lives
+                        inside that theater (pause-and-note), not in this chrome. */}
                       <button
                         type="button"
-                        className={`studio-head-action is-primary${tab === 'playtest' ? ' is-active' : ''}`}
+                        className={`studio-head-action is-primary is-play${tab === 'playtest' ? ' is-active' : ''}`}
                         aria-pressed={tab === 'playtest'}
                         onClick={() => openTab(tab === 'playtest' ? 'thread' : 'playtest')}
                       >
-                        <PixelIcon name="play" size={12} />{' '}
+                        <PixelIcon name="play" size={14} />{' '}
                         <span className="studio-head-action-label">{t('studioPanel.tabs.playtest')}</span>
                       </button>
                       <button
@@ -728,7 +732,19 @@ export function CreatorStudioView({
 
                 {/* The thread stays put. Details opens beside it on a wide screen and over
                   it on a narrow one; only playtest, which needs the whole viewport to be
-                  a game, replaces it. */}
+                  a game, replaces it. Agent screenshots float as dismissable toasts that
+                  open Details → Media. Hide while Details or the shelf is open. */}
+                {tab !== 'playtest' && tab !== 'edit' && tab !== 'details' && !shelfOpen ? (
+                  <StudioShotToasts
+                    token={threadToken ?? activeGame.token}
+                    placement="near-play"
+                    onOpenMedia={() => {
+                      setDetailsPane('media');
+                      openTab('details');
+                    }}
+                  />
+                ) : null}
+
                 <div className={`studio-workspace${tab === 'details' ? ' is-details-open' : ''}`}>
                   {tab === 'edit' ? (
                     <EditorPanel
@@ -799,6 +815,10 @@ export function CreatorStudioView({
                           // URLs, browser Back included.
                           key={activeGame.token}
                           game={activeGame}
+                          // Handoff (published → improve) keeps the shelf on the live game
+                          // while the thread rides a new job token. Media must follow that
+                          // thread, or toast clicks open the prior round's shots.
+                          mediaToken={threadToken ?? activeGame.token}
                           health={selectedHealth}
                           days={days}
                           healthDays={healthDays}
@@ -952,7 +972,7 @@ function StudioShelfList({
 }
 
 /** Cursor-style Details strip — one pane at a time, chosen by icon. */
-type DetailsPaneId = 'overview' | 'connect' | 'build' | 'keys' | 'stats';
+type DetailsPaneId = 'overview' | 'connect' | 'build' | 'media' | 'keys' | 'stats';
 
 type DetailsPaneDef = {
   id: DetailsPaneId;
@@ -967,6 +987,7 @@ type DetailsPaneDef = {
  */
 function DetailsPanel({
   game,
+  mediaToken,
   health,
   days,
   healthDays,
@@ -981,6 +1002,8 @@ function DetailsPanel({
   onRemoved,
 }: {
   game: StudioShelfGame;
+  /** Token for Media (and the active build round). Differs from `game.token` during handoff. */
+  mediaToken?: string;
   health: GameHealth | null;
   days: number;
   healthDays: string[];
@@ -1001,6 +1024,7 @@ function DetailsPanel({
   const publishedAt = game.publishedAt ?? game.livePublishedAt;
   const [abandonArmed, setAbandonArmed] = useState(false);
   const [abandoning, setAbandoning] = useState(false);
+  const shotToken = mediaToken ?? game.token;
 
   async function handleAbandon() {
     if (!abandonArmed) {
@@ -1025,6 +1049,7 @@ function DetailsPanel({
     { id: 'overview', icon: 'eye', labelKey: 'studioPanel.rail.overview' },
     ...(showConnect ? [{ id: 'connect' as const, icon: 'signal' as const, labelKey: 'studioPanel.rail.connect' }] : []),
     ...(showProgress ? [{ id: 'build' as const, icon: 'wrench' as const, labelKey: 'studioPanel.rail.build' }] : []),
+    { id: 'media', icon: 'image', labelKey: 'studioPanel.rail.media' },
     { id: 'keys', icon: 'lock', labelKey: 'studioPanel.rail.credentials' },
     ...(catalogLive ? [{ id: 'stats' as const, icon: 'star' as const, labelKey: 'studioPanel.rail.stats' }] : []),
   ];
@@ -1125,6 +1150,10 @@ function DetailsPanel({
             ) : (
               <p className="studio-rail-empty">{t('studioPanel.rail.buildEmpty')}</p>
             )
+          ) : null}
+
+          {activePane === 'media' ? (
+            <StudioDetailsMedia token={shotToken} emptyLabel={t('studioPanel.rail.mediaEmpty')} />
           ) : null}
 
           {activePane === 'keys' ? (

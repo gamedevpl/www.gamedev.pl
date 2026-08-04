@@ -22,6 +22,15 @@ vi.mock('./AuthContext', () => ({
   useAuth: () => ({ user: authUser, logout: vi.fn() }),
 }));
 
+vi.mock('./submissionApi', async () => {
+  const actual = await vi.importActual<typeof import('./submissionApi.js')>('./submissionApi.js');
+  return {
+    ...actual,
+    getSubmissionStatus: vi.fn(async () => ({ media: [] })),
+    abandonSubmission: vi.fn(),
+  };
+});
+
 vi.mock('./studioApi', async () => {
   const actual = await vi.importActual<typeof import('./studioApi.js')>('./studioApi.js');
   return {
@@ -419,8 +428,11 @@ describe('CreatorStudioView', () => {
     );
     expect(play?.textContent).toMatch(/Play/);
     expect(play?.classList.contains('is-primary')).toBe(true);
+    expect(play?.classList.contains('is-play')).toBe(true);
     expect(details?.classList.contains('is-primary')).toBe(false);
     expect(details?.classList.contains('is-icon-only')).toBe(true);
+    expect(container.querySelector('.studio-head-transport')).toBeNull();
+    expect(container.querySelector('.studio-preview-rail')).toBeNull();
 
     root.unmount();
   });
@@ -643,11 +655,13 @@ describe('CreatorStudioView', () => {
     const overview = container.querySelector('[data-testid="studio-rail-icon-overview"]');
     const connect = container.querySelector('[data-testid="studio-rail-icon-connect"]');
     const build = container.querySelector('[data-testid="studio-rail-icon-build"]');
+    const media = container.querySelector('[data-testid="studio-rail-icon-media"]');
     const keys = container.querySelector('[data-testid="studio-rail-icon-keys"]');
     expect(overview?.getAttribute('aria-pressed')).toBe('true');
     expect(container.querySelector('[data-testid="studio-rail-pane-overview"]')).not.toBeNull();
     expect(container.querySelector('.studio-share-toggle')).not.toBeNull();
     expect(container.querySelector('[data-testid="studio-details-progress"]')).toBeNull();
+    expect(media).not.toBeNull();
 
     await act(async () => {
       connect!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -662,6 +676,12 @@ describe('CreatorStudioView', () => {
     });
     expect(build?.getAttribute('aria-pressed')).toBe('true');
     expect(container.querySelector('[data-testid="studio-rail-pane-build"]')).not.toBeNull();
+
+    await act(async () => {
+      media!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(media?.getAttribute('aria-pressed')).toBe('true');
+    expect(container.querySelector('[data-testid="studio-rail-pane-media"]')).not.toBeNull();
 
     await act(async () => {
       keys!.dispatchEvent(new MouseEvent('click', { bubbles: true }));

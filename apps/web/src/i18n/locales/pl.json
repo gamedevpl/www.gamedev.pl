@@ -332,6 +332,8 @@
     "rail": {
       "connect": "Podłącz agenta",
       "build": "Postęp buildu",
+      "media": "Zrzuty ekranu",
+      "mediaEmpty": "Nie ma jeszcze zrzutów — pojawią się tu, gdy agent je wyśle.",
       "credentials": "Klucze i podłączone agenty",
       "credentialsHint": "Klucz twórcy, legacy klucz per-gra i agenty, które zatwierdziłeś.",
       "kickoffDetails": "Prompt budowy",
@@ -367,6 +369,20 @@
       "noShot": "Nie udało się przechwycić widoku — sam tekst i tak zostanie wysłany.",
       "placeholder": "np. Kolec przy prawej krawędzi jest niesprawiedliwy — dodaj checkpoint tuż przed nim…",
       "submit": "Wyślij z tym momentem"
+    },
+    "preview": {
+      "aria": "Podgląd gry na żywo",
+      "title": "Podgląd",
+      "live": "Na żywo",
+      "empty": "Nie ma jeszcze grywalnego buildu — pojawi się tu, gdy będzie podgląd.",
+      "expand": "Rozwiń playtest",
+      "media": "Zrzuty ekranu",
+      "shot": "Zrzut ekranu",
+      "closeShot": "Zamknij zrzut",
+      "dismissShot": "Odrzuć zrzut",
+      "expandShots": "Otwórz zrzuty",
+      "collapseShots": "Zwiń",
+      "pause": "Wstrzymaj"
     },
     "stats": {
       "noSlug": "Statystyki pojawią się, gdy gra otrzyma slug roboczy lub publikacyjny.",
