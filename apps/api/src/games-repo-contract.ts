@@ -97,7 +97,7 @@ export const SOURCE_GRAPH_BUDGET_BYTES = 300 * 1024;
  * Platform half of the serve cap — games-repo `GAMEKIT_PLATFORM_BYTES` /
  * `assemble-contract.json` `platformCeilingBytes`. Together with
  * {@link GAME_BUDGET_BYTES} this must equal games-repo `MAX_BUNDLE_BYTES`
- * (533_800, matching `maxProjectBytes`). Not a round KiB.
+ * (534_800, matching `maxProjectBytes`). Not a round KiB.
  *
  * One derived ceiling, not a sum of per-feature constants (games-repo #281). Check 4
  * over there bills each author for measured `assembled − platformBytes` against the
@@ -106,15 +106,14 @@ export const SOURCE_GRAPH_BUDGET_BYTES = 300 * 1024;
  * `docs/platform-byte-ledger.md`. Raise this when measurement shows a passing game
  * would exceed it — do not re-split it into named allowances on this side either.
  *
- * Last moved by the canvas-bridge provenance work (games-repo #480), which adds
- * `input.bridged()` so a game that reads the bridge's action key *and* hit-tests
- * `consumeClick` can tell a synthesized press from a real one. Small in itself, but
- * `carjack-city` was 29 bytes under the cap, so it is what tipped the measurement:
- * that selection now measures 328_475 platform bytes and assembles to 518_994.
- * 313_000 → 329_000, and the serve cap 517_800 → 533_800.
+ * Last moved by `carjack-city`'s world-services expansion (games-repo #477), which raised
+ * the games-repo half to 330_000 — leaving this side behind the ceiling games are already
+ * built against, which `games-repo-contract-check` reports as drift. 313_000 → 330_000,
+ * and the serve cap 517_800 → 534_800.
  *
- * Raised website-first, per `games-repo-contract-check`: the games repo may not build
- * against a ceiling this side would refuse at serve time.
+ * Catching up rather than leading, which is the one direction the check tolerates: it
+ * fails only when the games repo builds above what this side would serve. The games repo
+ * is at 330_000 today; this now matches it exactly.
  *
  * Before it, `carjack-city`'s open-world work: measured platform bytes for its
  * (2D, non-gfx3d) module selection are 312_583, so 281_587 no longer covered a game
@@ -132,7 +131,7 @@ export const SOURCE_GRAPH_BUDGET_BYTES = 300 * 1024;
  * 482_687 → 486_387. Before that, sensing Phase 2 (camera backdrop) raised the
  * sensing ledger line 6_500 → 9_000 (+2_500), 480_187 → 482_687.
  */
-export const GAMEKIT_PLATFORM_BYTES = 329_000;
+export const GAMEKIT_PLATFORM_BYTES = 330_000;
 
 /** Combined html+js+css size cap — must match games-repo `MAX_BUNDLE_BYTES`. */
 export const MAX_PROJECT_BYTES = GAME_BUDGET_BYTES + GAMEKIT_PLATFORM_BYTES;

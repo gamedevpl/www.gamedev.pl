@@ -45,7 +45,7 @@ function validContract(): Record<string, unknown> {
 
 describe('games-repo-contract (website half)', () => {
   it('keeps the serve budget at the Check 4 total (games-repo MAX_BUNDLE_BYTES)', () => {
-    expect(MAX_PROJECT_BYTES).toBe(533_800);
+    expect(MAX_PROJECT_BYTES).toBe(534_800);
     expect(GAME_BUDGET_BYTES + GAMEKIT_PLATFORM_BYTES).toBe(MAX_PROJECT_BYTES);
     // assemble.ts must re-export the same number — a second literal would drift.
     expect(ASSEMBLE_MAX).toBe(MAX_PROJECT_BYTES);
@@ -224,7 +224,7 @@ describe('games-repo source extractors', () => {
     // forms inside those consts), not only bare literals.
     const source = `
       const GAME_BUDGET_BYTES = 200 * 1024;
-      const GAMEKIT_PLATFORM_BYTES = 329_000;
+      const GAMEKIT_PLATFORM_BYTES = 330_000;
       const MAX_BUNDLE_BYTES = GAME_BUDGET_BYTES + GAMEKIT_PLATFORM_BYTES;
     `;
     expect(extractMaxBundleBytes(source)).toBe(MAX_PROJECT_BYTES);
@@ -234,7 +234,7 @@ describe('games-repo source extractors', () => {
     const source = `
       const GAME_BUDGET_BYTES = 200 * 1024;
       const GAMEKIT_TOUCH_BYTES = 7_501 + 5_560;
-      const GAMEKIT_PLATFORM_BYTES = GAMEKIT_TOUCH_BYTES + 315_939;
+      const GAMEKIT_PLATFORM_BYTES = GAMEKIT_TOUCH_BYTES + 316_939;
       const MAX_BUNDLE_BYTES = GAME_BUDGET_BYTES + GAMEKIT_PLATFORM_BYTES;
     `;
     expect(extractMaxBundleBytes(source)).toBe(MAX_PROJECT_BYTES);
