@@ -261,8 +261,11 @@ const StageSourceInputSchema = z.object({
 
 const StageSourcePatchInputSchema = z.object({
   path: z.string().trim().min(1).max(120),
-  /** Unified diff for this one path (`---/`+++` + `@@` hunks). */
-  patch: z.string().min(1).max(400_000),
+  /** Unified diff for this one path (`---` / `+++` + `@@` hunks). */
+  patch: z
+    .string()
+    .transform((value) => value.trim())
+    .pipe(z.string().min(1, 'patch must not be empty').max(400_000)),
   slug: z
     .string()
     .trim()
@@ -1394,15 +1397,23 @@ export async function registerAgentChannelRoutes(
           }
           if (version) {
             const manifest = await options.gamesStore.getManifest(slug, version);
-            if (manifest) {
-              const loaded = await Promise.all(
-                manifest.sourceFiles.map(async (path) => ({
-                  path,
-                  content: await options.gamesStore!.getSourceFile(slug, version!, path),
-                })),
-              );
-              delivered = loaded.filter((file): file is { path: string; content: string } => file.content !== null);
+            if (!manifest) {
+              return reply.status(502).send({ error: 'the latest delivery could not be read back' });
             }
+            const loaded = await Promise.all(
+              manifest.sourceFiles.map(async (path) => ({
+                path,
+                content: await options.gamesStore!.getSourceFile(slug, version!, path),
+              })),
+            );
+            // Fail closed like fromLatestDelivery — a hole in the base would let a one-file
+            // patch assemble a tree missing paths the manifest still claims exist.
+            const missing = loaded.filter((file) => file.content === null).map((file) => file.path);
+            if (missing.length > 0) {
+              request.log.error({ slug, version, missing }, 'latest delivery missing files its manifest lists');
+              return reply.status(502).send({ error: 'the latest delivery could not be read back' });
+            }
+            delivered = loaded.map((file) => ({ path: file.path, content: file.content as string }));
           }
           const overlay = overlayGameSources({
             staged: [...staged, ...files],

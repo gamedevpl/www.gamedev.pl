@@ -1535,6 +1535,68 @@ describe('agent build channel', () => {
       expect(staged.size).toBe(0);
     });
 
+    it('fromStaged fails closed when the delivery manifest lists unreadable paths', async () => {
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      await store.setSubmissionSlug(ISSUE, 'comet-courier');
+      await store.setSubmissionPreviewVersion(ISSUE, 'v1');
+      const { gamesStore, stored, staged } = stubGamesStore();
+      app = await createApp(store, {
+        gamesStore: {
+          ...gamesStore,
+          getManifest: async () => ({ sourceFiles: ['game.ts', 'SPEC.md', 'index.html'] }),
+          getSourceFile: async (_slug: string, _version: string, path: string) =>
+            path === 'game.ts' ? 'export {};' : null,
+        } as unknown as GamesStore,
+      });
+
+      await app.inject({
+        method: 'PUT',
+        url: '/api/agent/build/sources/stage',
+        headers: agentHeaders(),
+        payload: { slug: 'comet-courier', path: 'game.ts', content: 'export const fixed = 1;' },
+      });
+      expect(staged.size).toBe(1);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/sources',
+        headers: agentHeaders(),
+        payload: {
+          slug: 'comet-courier',
+          fromStaged: true,
+          kitEngineRef: 'abcdef1234567890',
+          mode: 'preview',
+        },
+      });
+      expect(response.statusCode).toBe(502);
+      expect(response.json().error).toMatch(/could not be read back/i);
+      expect(stored).toHaveLength(0);
+    });
+
+    it('refuses a whitespace-only patch before apply', async () => {
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      const { gamesStore } = stubGamesStore();
+      app = await createApp(store, { gamesStore });
+
+      await app.inject({
+        method: 'PUT',
+        url: '/api/agent/build/sources/stage',
+        headers: agentHeaders(),
+        payload: { slug: 'comet-courier', path: 'game.ts', content: 'line1\n' },
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/sources/stage/patch',
+        headers: agentHeaders(),
+        payload: { path: 'game.ts', patch: '   \n\t  ' },
+      });
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error).toMatch(/empty|patch/i);
+    });
+
     it('refuses a unified diff that does not apply or targets the wrong path', async () => {
       const store = new InMemoryStore();
       await seedSubmission(store);

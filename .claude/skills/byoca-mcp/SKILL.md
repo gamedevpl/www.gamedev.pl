@@ -20,7 +20,8 @@ Source of truth: `SESSION_WORKFLOW` + `BEHAVIOURAL_CONTRACT` in
 3. Prefer `stage_source_file` (new/full rewrite) or `patch_source_file` (unified diff) then
    `submit_sources({ fromStaged: true, mode, kitEngineRef })`
    - **Edits:** `patch_source_file({ path, patch })` with a standard unified diff
-     (`---/`+++`+`@@`hunks for one file) — do not re-emit whole`render.ts`/`model.ts`files through`stage_source_file`
+     (`---` / `+++` + `@@` hunks for one file) — do not re-emit whole `render.ts` /
+     `model.ts` files through `stage_source_file`
    - **Modules:** soft budget ~350 lines / ~12 KiB per `game/*.ts`. Honour
      `warnings.code=module_too_large` (on `get_sources` / `get_seed` / stage / patch)
      by splitting cohesive pieces _before_ more feature work — same urgency as
