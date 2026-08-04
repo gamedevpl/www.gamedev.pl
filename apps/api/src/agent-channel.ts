@@ -314,7 +314,7 @@ export interface AgentChannelOptions {
      * Omitted means the acceptance (publish) gate.
      */
     mode?: 'health' | 'preview';
-  }) => Promise<{ buildId?: string } | void> | void;
+  }) => Promise<{ buildId?: string; accepted?: boolean } | void> | void;
 }
 
 type RejectionReason =
@@ -1204,13 +1204,15 @@ export async function registerAgentChannelRoutes(
         // known: the trigger takes a slug and a version and has no idea whose ledger to
         // write to. Best-effort like every other write in this handler — the delivery has
         // already been accepted, and refusing it now would make the agent upload again.
-        if (store && gate?.buildId) {
+        const buildId = gate && typeof gate === 'object' && typeof gate.buildId === 'string' ? gate.buildId : undefined;
+        const gateAccepted = Boolean(buildId || (gate && typeof gate === 'object' && gate.accepted === true));
+        if (store && buildId) {
           await store
             .recordJobCost(issueNumber, {
               kind: 'gate_run',
               at: new Date().toISOString(),
               by: 'cloud-build',
-              ref: gate.buildId,
+              ref: buildId,
             })
             .catch(() => {});
         }
@@ -1224,6 +1226,11 @@ export async function registerAgentChannelRoutes(
           accepted: true,
           mode,
           delivery: { slug, version },
+          // True when Cloud Build accepted the create (build id and/or accepted:true).
+          // False only when the trigger was missing or failed — not when the id was
+          // unparseable from an otherwise successful create.
+          gateStarted: gateAccepted,
+          ...(buildId ? { buildId } : {}),
           ...(await channelState(issueNumber, fresh)),
         });
       } catch (error) {

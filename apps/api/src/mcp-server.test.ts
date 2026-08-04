@@ -81,7 +81,14 @@ function stubGamesStore(gate?: { green: boolean; ranAt?: string; report?: string
   return { gamesStore, stored };
 }
 
-async function createApp(store: InMemoryStore, gamesStore?: GamesStore, objectStore?: GcsObjectStore) {
+async function createApp(
+  store: InMemoryStore,
+  gamesStore?: GamesStore,
+  objectStore?: GcsObjectStore,
+  channelExtras?: {
+    onSourcesDelivered?: (input: unknown) => Promise<{ buildId?: string; accepted?: boolean } | void> | void;
+  },
+) {
   return await buildApp({
     store,
     sessionSecret: 'dev-session-secret-change-me',
@@ -90,7 +97,11 @@ async function createApp(store: InMemoryStore, gamesStore?: GamesStore, objectSt
       githubToken: 'gh-token',
       submissionTokenSecret: secret,
       translator: new NoopTranslator(),
-      agentChannel: { ...(gamesStore ? { gamesStore } : {}), ...(objectStore ? { objectStore } : {}) },
+      agentChannel: {
+        ...(gamesStore ? { gamesStore } : {}),
+        ...(objectStore ? { objectStore } : {}),
+        ...channelExtras,
+      },
     },
   });
 }
@@ -935,9 +946,14 @@ describe('POST /api/mcp (BY-05)', () => {
       deliveryId: 'v1',
       stop: false,
       pendingMessages: expect.any(Array),
+      // Tests do not wire Cloud Build — delivery accepted, gate not started.
+      gateStarted: false,
     });
     const submitWarnings = (submitted.structured as { warnings?: Array<{ code: string }> }).warnings ?? [];
     expect(submitWarnings.some((w) => w.code === 'call_end')).toBe(true);
+    expect(submitWarnings.some((w) => w.code === 'gate_not_started')).toBe(true);
+    // Successful MCP submit unlocks handoff even before explicit end.
+    expect((await store.getSubmission(ISSUE))?.agentEndedAt).toBeTruthy();
 
     const ended = await callTool(app, 'end', { sessionKey }, { 'mcp-session-id': sessionId });
     expect(ended.isError).toBe(false);
@@ -949,6 +965,99 @@ describe('POST /api/mcp (BY-05)', () => {
     const verdict = await callTool(app, 'get_gate_verdict', { sessionKey }, { 'mcp-session-id': sessionId });
     expect(verdict.isError).toBe(false);
     expect(verdict.structured).toMatchObject({ status: 'red', deliveryId: 'v1' });
+  });
+
+  it('submit_sources reports gateStarted when Cloud Build returns a build id', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    const { gamesStore } = stubGamesStore();
+    app = await createApp(store, gamesStore, undefined, {
+      onSourcesDelivered: async () => ({ buildId: 'build-xyz' }),
+    });
+    const sessionId = await initialize(app);
+    const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    const submitted = await callTool(
+      app,
+      'submit_sources',
+      {
+        sessionKey,
+        kitEngineRef: ENGINE,
+        files: MINIMAL_FILES.map((f) => ({ ...f, encoding: 'utf8' })),
+      },
+      { 'mcp-session-id': sessionId },
+    );
+    expect(submitted.isError).toBe(false);
+    expect(submitted.structured).toMatchObject({
+      ok: true,
+      gateStarted: true,
+      buildId: 'build-xyz',
+    });
+    const warnings = (submitted.structured as { warnings?: Array<{ code: string }> }).warnings ?? [];
+    expect(warnings.some((w) => w.code === 'gate_not_started')).toBe(false);
+    expect(warnings.some((w) => w.code === 'call_end')).toBe(true);
+  });
+
+  it('submit_sources treats accepted-without-buildId as gateStarted (no retry warning)', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    const { gamesStore } = stubGamesStore();
+    app = await createApp(store, gamesStore, undefined, {
+      onSourcesDelivered: async () => ({ accepted: true }),
+    });
+    const sessionId = await initialize(app);
+    const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    const submitted = await callTool(
+      app,
+      'submit_sources',
+      {
+        sessionKey,
+        kitEngineRef: ENGINE,
+        files: MINIMAL_FILES.map((f) => ({ ...f, encoding: 'utf8' })),
+      },
+      { 'mcp-session-id': sessionId },
+    );
+    expect(submitted.isError).toBe(false);
+    expect(submitted.structured).toMatchObject({ ok: true, gateStarted: true });
+    expect((submitted.structured as { buildId?: string }).buildId).toBeUndefined();
+    const warnings = (submitted.structured as { warnings?: Array<{ code: string }> }).warnings ?? [];
+    expect(warnings.some((w) => w.code === 'gate_not_started')).toBe(false);
+  });
+
+  it('keeps agentEndedAt after get_gate_verdict presence pulse', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    const { gamesStore } = stubGamesStore({ green: false, report: 'still building' });
+    app = await createApp(store, gamesStore, undefined, {
+      onSourcesDelivered: async () => ({ accepted: true, buildId: 'build-1' }),
+    });
+    const sessionId = await initialize(app);
+    const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    const submitted = await callTool(
+      app,
+      'submit_sources',
+      {
+        sessionKey,
+        kitEngineRef: ENGINE,
+        files: MINIMAL_FILES.map((f) => ({ ...f, encoding: 'utf8' })),
+      },
+      { 'mcp-session-id': sessionId },
+    );
+    expect(submitted.isError).toBe(false);
+    const endedAt = (await store.getSubmission(ISSUE))?.agentEndedAt;
+    expect(endedAt).toBeTruthy();
+
+    await store.setSubmissionDeliveredVersion(ISSUE, 'v1');
+    const verdict = await callTool(app, 'get_gate_verdict', { sessionKey }, { 'mcp-session-id': sessionId });
+    expect(verdict.isError).toBe(false);
+    // Gate-poll presence must not clear the submit auto-end handoff unlock.
+    expect((await store.getSubmission(ISSUE))?.agentEndedAt).toBe(endedAt);
+    expect((await store.getSubmission(ISSUE))?.lastAgentPresence?.key).toBe('waiting_checks');
   });
 
   it('rejects malformed base64 on stage_source_file instead of silently corrupting', async () => {

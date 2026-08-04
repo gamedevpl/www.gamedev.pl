@@ -7,7 +7,7 @@
  * results by the MCP dispatcher.
  */
 
-export type NudgeCode = 'progress_stale' | 'inbox_pending' | 'seed_unread' | 'call_end';
+export type NudgeCode = 'progress_stale' | 'inbox_pending' | 'seed_unread' | 'call_end' | 'gate_not_started';
 
 export interface NudgeWarning {
   code: NudgeCode;
@@ -24,6 +24,11 @@ export interface JobNudgeState {
   seedFetched: boolean;
   /** Last known seedStatus from brief/seed payloads. */
   seedStatus: 'pending' | 'available' | 'unavailable' | null;
+  /**
+   * True after a successful submit_sources until `end` — subsequent tools re-emit
+   * `call_end` so ChatGPT-class agents that keep chatting without ending still see it.
+   */
+  awaitingEnd: boolean;
 }
 
 /** No progress for this long (wall clock) → `progress_stale`. */
@@ -41,6 +46,9 @@ export const PROGRESS_NUDGE_EXEMPT = new Set([
   'read_inbox',
   'ack_inbox',
   'end',
+  // Submit already carries call_end / gate_not_started — progress_stale on the same
+  // reply drowned the handoff instruction for ChatGPT-class agents.
+  'submit_sources',
 ]);
 
 /**
@@ -76,6 +84,10 @@ export interface McpNudgeTracker {
   noteInboxCheck(jobId: number, nowMs: number): void;
   noteSeedFetch(jobId: number, nowMs: number): void;
   noteSeedStatus(jobId: number, status: 'pending' | 'available' | 'unavailable' | null, nowMs: number): void;
+  /** Successful submit_sources — creator handoff may already be unlocked; still need `end`. */
+  noteSubmitSuccess(jobId: number, nowMs: number): void;
+  /** Successful MCP `end` — clear the post-submit call_end loop. */
+  noteEnded(jobId: number, nowMs: number): void;
   /** `nowMs` is only used if the job has never been ensured — callers should pass the injected clock. */
   notePendingCount(jobId: number, count: number, nowMs: number): void;
   noteToolSuccess(jobId: number, toolName: string, nowMs: number): void;
@@ -102,6 +114,7 @@ export function createMcpNudgeTracker(
         lastInboxCheckAt: null,
         seedFetched: false,
         seedStatus: null,
+        awaitingEnd: false,
       };
       states.set(jobId, state);
     }
@@ -129,6 +142,16 @@ export function createMcpNudgeTracker(
     state.seedStatus = status;
   }
 
+  function noteSubmitSuccess(jobId: number, nowMs: number): void {
+    const state = ensure(jobId, nowMs);
+    state.awaitingEnd = true;
+  }
+
+  function noteEnded(jobId: number, nowMs: number): void {
+    const state = ensure(jobId, nowMs);
+    state.awaitingEnd = false;
+  }
+
   function notePendingCount(jobId: number, count: number, nowMs: number): void {
     const state = ensure(jobId, nowMs);
     state.pendingCount = Math.max(0, count);
@@ -145,6 +168,9 @@ export function createMcpNudgeTracker(
     }
     if (toolName === 'get_seed') {
       noteSeedFetch(jobId, nowMs);
+    }
+    if (toolName === 'end') {
+      noteEnded(jobId, nowMs);
     }
     if (!PROGRESS_NUDGE_EXEMPT.has(toolName)) {
       state.callsSinceProgress += 1;
@@ -187,6 +213,16 @@ export function createMcpNudgeTracker(
       });
     }
 
+    // Re-emit after submit until end — ChatGPT often stops on the submit reply itself,
+    // but when it keeps chatting this keeps call_end in every subsequent tool result.
+    if (state.awaitingEnd && toolName !== 'end' && toolName !== 'submit_sources') {
+      warnings.push({
+        code: 'call_end',
+        message:
+          'Still waiting for end — call end now if you will not deliver more this round (Studio handoff may already be unlocked from submit).',
+      });
+    }
+
     return warnings;
   }
 
@@ -196,6 +232,8 @@ export function createMcpNudgeTracker(
     noteInboxCheck,
     noteSeedFetch,
     noteSeedStatus,
+    noteSubmitSuccess,
+    noteEnded,
     notePendingCount,
     noteToolSuccess,
     warningsFor,
