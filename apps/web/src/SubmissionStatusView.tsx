@@ -1561,6 +1561,11 @@ function ThreadStream({
                 {!mine && entry.step ? (
                   <span className="studio-turn-kicker">{t(`statusView.progress.steps.${entry.step}`)}</span>
                 ) : null}
+                {/* A relayed request wears its provenance. Unlabelled, an agent's own
+                    summary of a chat held elsewhere reads as words the creator typed. */}
+                {mine && entry.relayed ? (
+                  <span className="studio-turn-kicker">{t('statusView.progress.relayedRequest')}</span>
+                ) : null}
                 <p className="studio-turn-text">{entry.text}</p>
                 {media.length > 0 ? (
                   <span className="studio-turn-shots">
@@ -1699,6 +1704,12 @@ type ActivityEntry = {
   /** For agent events: the step it reported, rendered from our own translations. */
   step?: BuildStep;
   eventKind?: BuildEventKind;
+  /**
+   * For revisions: set when an agent wrote the request on the creator's behalf. The row
+   * stays on the creator's side of the thread — it is still their request — but says so
+   * rather than passing an agent's summary off as something the creator typed.
+   */
+  relayed?: boolean;
   /** Pictures shown as thumbnails on this row, expandable to full size. */
   media?: BuildMediaItem[];
 };
@@ -1769,6 +1780,7 @@ function buildActivityFeed(
       kind: 'revision' as const,
       text: revision.text,
       at: Date.parse(revision.createdAt),
+      ...(revision.origin === 'agent' ? { relayed: true } : {}),
     })),
   ];
 
@@ -1929,7 +1941,9 @@ function BuildProgressPanel({
                     <span className="build-activity-label">
                       {entry.pending
                         ? t('statusView.progress.yourRequestSending')
-                        : t('statusView.progress.yourRequest')}
+                        : entry.relayed
+                          ? t('statusView.progress.relayedRequest')
+                          : t('statusView.progress.yourRequest')}
                     </span>
                   ) : entry.step ? (
                     // The step is a closed set, so it is real translated copy rather

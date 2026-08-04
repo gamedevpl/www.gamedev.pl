@@ -1116,6 +1116,69 @@ describe('submission routes', () => {
     // not something they wrote, so it must not be echoed back as if they did.
     expect(revisions[0].text).toBe('Make the parcels bigger and the asteroids slower.');
     expect(revisions[0].createdAt).toBeTruthy();
+    // Typed in the composer, so it is the creator's own message — nothing to disclaim.
+    expect(revisions[0].origin).toBeUndefined();
+
+    await app.close();
+  });
+
+  it('marks an agent-relayed request as relayed and translates it for the reader', async () => {
+    // A creator talking to their coding agent in a chat we never see gets their request
+    // relayed through `continue_draft({ feedback })` — written by the agent, in whatever
+    // language it was speaking. Echoing that unlabelled put an English summary on the
+    // creator's own side of a Polish thread, as words they had never written.
+    const { githubClient } = createGithubClientStub({ issueNumber: 78 });
+    const { backend } = createBackendStub();
+    const asked: Array<{ kind: string; texts: string[] }> = [];
+    const translator: Translator = {
+      translate: async (texts, _locale, opts) => {
+        asked.push({ kind: opts?.kind ?? 'log', texts });
+        return texts.map((text) => `PL:${text}`);
+      },
+    };
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      translator,
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    const token = mintToken(job.issueNumber, secret);
+
+    await store.appendCreatorMessage(job.issueNumber, 'Zrób paczki większe.');
+    await store.appendCreatorMessage(job.issueNumber, 'Major systems pass: zoom out the battlefield.', {
+      origin: 'agent',
+    });
+
+    const status = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${token}?locale=pl`,
+      headers: authHeaders,
+    });
+
+    expect(status.statusCode).toBe(200);
+    const revisions = status.json().progress?.revisions;
+    expect(revisions).toHaveLength(2);
+    // The creator's own sentence is already in the language they chose to write it in.
+    expect(revisions[0]).toMatchObject({ text: 'Zrób paczki większe.' });
+    expect(revisions[0].origin).toBeUndefined();
+    expect(revisions[1]).toMatchObject({
+      text: 'PL:Major systems pass: zoom out the battlefield.',
+      origin: 'agent',
+    });
+    // A change request runs to 2000 characters of numbered points; the log prompt is
+    // built to compress a commit subject to one short line. Asking for a relay on that
+    // prompt returns a summary with pieces of the creator's request missing.
+    const message = asked.find((call) => call.kind === 'message');
+    expect(message?.texts).toEqual(['Major systems pass: zoom out the battlefield.']);
+    expect(asked.some((call) => call.kind === 'log' && call.texts.includes('Zrób paczki większe.'))).toBe(false);
 
     await app.close();
   });

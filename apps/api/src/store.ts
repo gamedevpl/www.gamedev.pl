@@ -464,7 +464,23 @@ export interface CreatorMessage {
   createdAt: string;
   /** Set once an agent has collected it. Undelivered messages are re-served. */
   deliveredAt?: string | null;
+  /**
+   * Who actually typed this. `creator` — the words came out of the Studio composer and
+   * are the creator's own, in their own language. `agent` — an agent wrote them on the
+   * creator's behalf (MCP `continue_draft({ feedback })`), which is nearly always an
+   * English paraphrase of something said in a chat we never saw.
+   *
+   * Absent means `creator`: every message written before this field existed came from
+   * the composer, and the two paths are not interchangeable downstream. Studio labels
+   * them differently and only translates the relayed kind — presenting an agent's
+   * English summary as the creator's own message is how a Polish creator ended up
+   * reading words they never wrote, in a language they did not choose.
+   */
+  origin?: CreatorMessageOrigin;
 }
+
+/** @see CreatorMessage.origin */
+export type CreatorMessageOrigin = 'creator' | 'agent';
 
 /**
  * A screenshot the agent pushed over the build channel rather than committing.
@@ -1601,8 +1617,16 @@ export interface Store {
 
   /** Drops all but the newest `keep` previews, returning how many were removed. */
   pruneBuildPreviews(issueNumber: number, keep: number): Promise<number>;
-  /** Queues a creator change request for the agent to collect. */
-  appendCreatorMessage(issueNumber: number, text: string): Promise<CreatorMessage>;
+  /**
+   * Queues a creator change request for the agent to collect. `origin` records who
+   * typed it — omit it for the Studio composer, pass `agent` when an agent relayed the
+   * request on the creator's behalf (@see CreatorMessage.origin).
+   */
+  appendCreatorMessage(
+    issueNumber: number,
+    text: string,
+    opts?: { origin?: CreatorMessageOrigin },
+  ): Promise<CreatorMessage>;
   /** Undelivered creator messages, oldest first — the agent's inbox. */
   listPendingCreatorMessages(issueNumber: number, opts?: { limit?: number }): Promise<CreatorMessage[]>;
   /**
@@ -2902,12 +2926,17 @@ export class InMemoryStore implements Store {
     return existing.length - kept.length;
   }
 
-  async appendCreatorMessage(issueNumber: number, text: string): Promise<CreatorMessage> {
+  async appendCreatorMessage(
+    issueNumber: number,
+    text: string,
+    opts?: { origin?: CreatorMessageOrigin },
+  ): Promise<CreatorMessage> {
     const record: CreatorMessage = {
       id: randomUUID(),
       text,
       createdAt: new Date().toISOString(),
       deliveredAt: null,
+      ...(opts?.origin === 'agent' ? { origin: 'agent' as const } : {}),
     };
     const existing = this.creatorMessages.get(issueNumber) ?? [];
     existing.push(record);
@@ -4862,12 +4891,19 @@ export class FirestoreStore implements Store {
     return stale.length;
   }
 
-  async appendCreatorMessage(issueNumber: number, text: string): Promise<CreatorMessage> {
+  async appendCreatorMessage(
+    issueNumber: number,
+    text: string,
+    opts?: { origin?: CreatorMessageOrigin },
+  ): Promise<CreatorMessage> {
+    // `origin` is spread in only when it is `agent`: Firestore rejects an explicit
+    // `undefined`, and a stored `'creator'` would say nothing the absent field does not.
     const record: CreatorMessage = {
       id: randomUUID(),
       text,
       createdAt: new Date().toISOString(),
       deliveredAt: null,
+      ...(opts?.origin === 'agent' ? { origin: 'agent' as const } : {}),
     };
     await this.messagesCollection(issueNumber).doc(record.id).set(record);
     return record;

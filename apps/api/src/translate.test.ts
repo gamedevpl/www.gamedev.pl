@@ -101,6 +101,32 @@ describe('VertexTranslator over a genaicode client', () => {
     expect(promptText).toContain('Return ONLY a JSON array of strings');
   });
 
+  it('asks a message to be translated whole, on its own prompt and cache entry', async () => {
+    // The log prompt tells the model to keep every line short, which is right for a
+    // commit subject and wrong for a 2000-character change request: it would come back
+    // as a summary of the creator's own words with points missing.
+    const prompts: string[] = [];
+    const request = 'Zoom out the battlefield.\n\n1. Smaller units.\n2. More high ground.';
+    const translator = new VertexTranslator({
+      client: genaicode(
+        stubProvider(JSON.stringify(['przetłumaczone']), (req) => {
+          prompts.push((req.prompt ?? []).map((part) => part.text ?? '').join(''));
+        }),
+      ),
+    });
+
+    expect(await translator.translate([request], 'pl', { kind: 'message' })).toEqual(['przetłumaczone']);
+    const [messagePrompt] = prompts;
+    expect(messagePrompt).toContain('Never summarize, shorten, merge or omit anything');
+    expect(messagePrompt).not.toContain('Keep it to one short line each');
+    expect(messagePrompt).toContain(JSON.stringify([request]));
+
+    // The two kinds answer differently, so one must not serve the other's cache entry.
+    expect(await translator.translate([request], 'pl')).toEqual(['przetłumaczone']);
+    expect(prompts).toHaveLength(2);
+    expect(prompts[1]).toContain('Keep it to one short line each');
+  });
+
   it('maps non-string JSON array entries to empty strings and keeps source text', async () => {
     const translator = new VertexTranslator({
       client: genaicode(stubProvider(JSON.stringify([42, null, 'ok']))),

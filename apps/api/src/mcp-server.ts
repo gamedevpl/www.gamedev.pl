@@ -357,6 +357,19 @@ const RETIRED_KEY_ETIQUETTE =
   "call open_round({ feedback }) then start(); or tell the creator to open the game's Studio thread. Copy the " +
   'current kickoff only if they rotated the key — the gamedev.pl MCP connection itself is unchanged.';
 
+/**
+ * How to write the `feedback` on `open_round` / `continue_draft`.
+ *
+ * This text lands in the creator's Studio thread on their side of the conversation, so
+ * a paraphrase reads as something they said. A creator opened their thread to find an
+ * English executive summary of a chat they had held in Polish, attributed to them —
+ * words they never wrote, in a language they had not selected. Studio now labels the
+ * relay and translates it, but the honest input is still the creator's own sentence.
+ */
+const RELAY_VERBATIM =
+  "Quote the creator's own words, in the language they used — this is shown to them as their request, so a " +
+  'rewritten or translated summary reads as something they said and did not. Summarize only what will not fit.';
+
 /** Human-readable session loop for the text body of `start`. */
 const SESSION_WORKFLOW_TEXT = [
   'Session workflow (start → done):',
@@ -1233,7 +1246,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           feedback: {
             type: 'string',
             description:
-              'Creator change request for this improvement round (≤2000 chars). Treated as untrusted creator text.',
+              'Creator change request for this improvement round (≤2000 chars). Treated as untrusted creator text. ' +
+              RELAY_VERBATIM,
           },
         },
         required: ['feedback'],
@@ -1454,7 +1468,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           feedback: {
             type: 'string',
             description:
-              'Creator change request for this draft round (≤2000 chars). Treated as untrusted creator text.',
+              'Creator change request for this draft round (≤2000 chars). Treated as untrusted creator text. ' +
+              RELAY_VERBATIM,
           },
         },
         required: ['feedback'],

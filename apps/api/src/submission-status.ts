@@ -31,6 +31,13 @@ export interface ChecklistItem {
 export interface CreatorRevision {
   text: string;
   createdAt: string;
+  /**
+   * Present, and `'agent'`, when an agent wrote this request on the creator's behalf
+   * instead of the creator typing it (MCP `continue_draft({ feedback })`). Studio labels
+   * those as relayed and translates them; a creator's own words are shown untouched.
+   * Absent means the creator typed it.
+   */
+  origin?: 'agent';
 }
 
 // Marker the games-repo relay workflow matches on. Kept out of the rendered comment
