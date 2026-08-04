@@ -31,4 +31,15 @@ describe('game theater floating bar', () => {
     expect(bar).toMatch(/background:\s*rgba\(12,\s*18,\s*24,\s*0\.72\)/);
     expect(bar).toMatch(/backdrop-filter:\s*blur\(16px\)/);
   });
+
+  it('fades slowly and becomes non-interactive once the player is idle', () => {
+    const bar = ruleBody('.game-theater-bar');
+    const idle = ruleBody('.game-theater-bar.is-idle');
+
+    expect(bar).toMatch(/opacity\s+700ms\s+ease/);
+    expect(idle).toMatch(/opacity:\s*0/);
+    expect(idle).toMatch(/visibility:\s*hidden/);
+    expect(idle).toMatch(/pointer-events:\s*none/);
+    expect(idle).toMatch(/transition-delay:\s*0s,\s*0s,\s*700ms/);
+  });
 });

@@ -1635,6 +1635,24 @@ body.player-open {
      look broken — the panel opens but nothing appears. */
   overflow: visible;
   z-index: 10;
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  transition:
+    opacity 700ms ease,
+    transform 700ms ease,
+    visibility 0s linear 0s;
+  will-change: opacity, transform;
+}
+
+.game-theater-bar.is-idle {
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-10px);
+  pointer-events: none;
+  /* Remove it from hit-testing immediately, but from rendering only after the fade.
+     Returning activity uses the base rule's zero delay and reveals it at once. */
+  transition-delay: 0s, 0s, 700ms;
 }
 
 .game-theater-meta {
@@ -1643,6 +1661,12 @@ body.player-open {
   gap: 12px;
   min-width: 0;
   flex: 1 1 auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .game-theater-bar {
+    transition: none;
+  }
 }
 
 /* Quiet AI Act disclosure — present, not a neon brand mark next to the title. */

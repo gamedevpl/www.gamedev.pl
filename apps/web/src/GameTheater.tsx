@@ -93,6 +93,10 @@ type GameTheaterProps = {
   touch?: CatalogTouch | null;
 };
 
+// Long enough that the bar never reacts like a hover tooltip, short enough to clear
+// the playfield once somebody has demonstrably started playing.
+export const PLAYER_CHROME_IDLE_MS = 3200;
+
 /**
  * True while a handheld is held the wrong way round for this game.
  *
@@ -144,6 +148,10 @@ export function GameTheater({
   const moreRef = useRef<HTMLDivElement | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
   const [howToOpen, setHowToOpen] = useState(false);
+  const [playerEngaged, setPlayerEngaged] = useState(false);
+  const [chromeIdle, setChromeIdle] = useState(false);
+  const [activityVersion, setActivityVersion] = useState(0);
+  const [chromeHeld, setChromeHeld] = useState(false);
   /**
    * The always-available doors to Remix and its painter (ops repo,
    * remix-content-editing-plan §3.1): nonces the menu bumps, threaded down to
@@ -193,6 +201,12 @@ export function GameTheater({
   const moreOpenRef = useRef(moreOpen);
   moreOpenRef.current = moreOpen;
 
+  const notePlayerActivity = useCallback(() => {
+    setPlayerEngaged(true);
+    setChromeIdle(false);
+    setActivityVersion((version) => version + 1);
+  }, []);
+
   // Closing hands focus to the game, not back to the trigger. In a player the next key
   // press is meant for the game: leaving focus on the button turns the next Space into
   // "reopen the card" instead of "fire".
@@ -212,7 +226,7 @@ export function GameTheater({
   // Escape is handled twice on purpose: the window listener below covers the app's
   // own chrome, and this covers the game iframe, which holds focus while playing
   // and swallows its own key events.
-  const player = useGamePlayer(frameRef, true, escapeOrExit, dismissMore);
+  const player = useGamePlayer(frameRef, true, escapeOrExit, dismissMore, notePlayerActivity);
 
   // What the game says about itself, falling back to what the catalog says about it.
   // Derived every render rather than memoized on first value, because both sources
@@ -319,6 +333,18 @@ export function GameTheater({
     setHowToOpen(false);
   }, [fullscreen]);
 
+  // Media-player convention, but gated on real game input: chrome never vanishes while
+  // somebody is still orienting themselves. Once play begins, each activity gets a
+  // calm grace period. Hover/focus and open control surfaces pin the bar in place.
+  useEffect(() => {
+    if (!playerEngaged || chromeHeld || moreOpen || howToOpen || fullscreen) {
+      setChromeIdle(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setChromeIdle(true), PLAYER_CHROME_IDLE_MS);
+    return () => window.clearTimeout(timer);
+  }, [activityVersion, chromeHeld, fullscreen, howToOpen, moreOpen, playerEngaged]);
+
   const toggleFullscreen = useCallback(() => {
     if (document.fullscreenElement) {
       void document.exitFullscreen().catch(() => undefined);
@@ -346,6 +372,7 @@ export function GameTheater({
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      notePlayerActivity();
       if (event.key === 'Escape') {
         // Innermost surface first: the card, then the menu, then leaving the game.
         if (howToOpenRef.current) {
@@ -361,7 +388,7 @@ export function GameTheater({
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [requestExit, closeHowTo]);
+  }, [requestExit, closeHowTo, notePlayerActivity]);
 
   // Close the overflow menu on an outside tap — phones have no hover to dismiss it.
   // Same-document chrome uses pointerdown here. Taps on the sandboxed game are
@@ -522,16 +549,25 @@ export function GameTheater({
 
   return (
     <section
-      className={`panel stage is-playing-full-viewport${fullscreen ? ' is-native-fullscreen' : ''}`}
+      className={`panel stage is-playing-full-viewport${fullscreen ? ' is-native-fullscreen' : ''}${chromeIdle ? ' is-player-idle' : ''}`}
       role="dialog"
       aria-modal="true"
       aria-label={displayTitle}
       ref={stageRef}
     >
-      {/* Native fullscreen is the explicit immersive mode. Otherwise the bar stays
-          visible so mute, game details, More, and Exit never move or disappear. */}
+      {/* Native fullscreen is the explicit immersive mode. Normal play keeps the bar
+          mounted in a stable location and fades it only after demonstrated activity. */}
       {!fullscreen && (
-        <div className="game-theater-bar">
+        <div
+          className={`game-theater-bar${chromeIdle ? ' is-idle' : ''}`}
+          aria-hidden={chromeIdle}
+          onPointerEnter={() => setChromeHeld(true)}
+          onPointerLeave={() => setChromeHeld(false)}
+          onFocusCapture={() => setChromeHeld(true)}
+          onBlurCapture={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setChromeHeld(false);
+          }}
+        >
           <div className="game-theater-meta">
             <span className="theater-badge" title={t('ai.generatedTooltip')}>
               <PixelIcon name={badge.icon} size={12} /> {badge.label}

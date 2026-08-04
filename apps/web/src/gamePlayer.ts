@@ -26,13 +26,16 @@ const PLAYER = 'gdpl-player';
 //      without covering the playfield — parent document listeners never see taps
 //      inside this opaque-origin frame, and focus tricks don't fire reliably on
 //      mobile either. Report-only: the game still gets the same pointer event;
-//   6. reports health — uncaught errors and animation-frame liveness. This is the
+//   6. reports player activity so host chrome can follow the familiar media-player
+//      pattern: stay put until play begins, then fade after a quiet grace period and
+//      return as soon as the player moves or presses a control;
+//   7. reports health — uncaught errors and animation-frame liveness. This is the
 //      only vantage point that has them: the game runs in an opaque origin the app
 //      cannot inspect, and its CSP blocks every way it could report for itself. An
 //      uncaught error is the single most reliable "this published game is broken"
 //      signal we can get, and `frames: 0` while on screen distinguishes a stalled
 //      game from a hard game (docs/improvement-loop-plan.md IL-1);
-//   7. reports the game's own account of its controls, for the player's How-to-play
+//   8. reports the game's own account of its controls, for the player's How-to-play
 //      card. Job 1 is exactly why this is needed: the card is host chrome because the
 //      game's `.game-controls` and `.hint` are hidden here, and an opaque origin means
 //      the host cannot read them for itself. The alternative — the catalog's `controls`
@@ -311,11 +314,34 @@ const BRIDGE = `(function(){
     else if(m.type==='resume'){setPaused(false);}
     else if(m.type==='capture'){sendSnapshot('capture');}
   });
+  var playerEngaged=false,lastActivity=0;
+  function reportActivity(force){
+    if(force)playerEngaged=true;
+    if(!playerEngaged)return;
+    var now=Date.now();
+    if(now-lastActivity<250)return;
+    lastActivity=now;
+    post({type:'activity'});
+  }
   addEventListener('keydown',function(e){
     // Report only — the game keeps its own Escape handling (pause menus etc).
     if(e.key==='Escape'){post({type:'key',key:'Escape'});}
+    else{reportActivity(true);}
   });
-  addEventListener('pointerdown',function(){post({type:'pointer'});},{passive:true});
+  function playerPointerDown(){playerEngaged=true;lastActivity=Date.now();post({type:'pointer'});}
+  function playerPointerMove(){reportActivity(false);}
+  if(typeof PointerEvent==='function'){
+    addEventListener('pointerdown',playerPointerDown,{passive:true});
+    // Movement is meaningful only after a click/tap or key has established that the
+    // pointer belongs to a player, not a cursor that happened to rest over the frame.
+    addEventListener('pointermove',playerPointerMove,{passive:true});
+  }else{
+    // Older/restricted WebViews may expose only the pre-Pointer Events APIs.
+    addEventListener('mousedown',playerPointerDown,{passive:true});
+    addEventListener('mousemove',playerPointerMove,{passive:true});
+    addEventListener('touchstart',playerPointerDown,{passive:true});
+    addEventListener('touchmove',playerPointerMove,{passive:true});
+  }
   // iOS Safari: long-press on the canvas opens the callout (Copy / Translate / Look Up)
   // and the text-selection loupe ("mini zoom"). CSS covers most of it; these kill the
   // remaining native handlers. Games have no selectable document chrome in the player.
@@ -547,6 +573,8 @@ export function useGamePlayer(
   onEscape?: () => void,
   /** Called on pointerdown inside the game (see the bridge's job 5). */
   onPointer?: () => void,
+  /** Called on meaningful player input and subsequent pointer movement (job 6). */
+  onActivity?: () => void,
 ) {
   const [meta, setMeta] = useState<GamePlayerMeta | null>(null);
   const [controls, setControls] = useState<ReportedControls | null>(null);
@@ -557,6 +585,8 @@ export function useGamePlayer(
   onEscapeRef.current = onEscape;
   const onPointerRef = useRef(onPointer);
   onPointerRef.current = onPointer;
+  const onActivityRef = useRef(onActivity);
+  onActivityRef.current = onActivity;
 
   useEffect(() => {
     if (!active) {
@@ -597,6 +627,9 @@ export function useGamePlayer(
         onEscapeRef.current?.();
       } else if (data.type === 'pointer') {
         onPointerRef.current?.();
+        onActivityRef.current?.();
+      } else if (data.type === 'activity') {
+        onActivityRef.current?.();
       }
     }
     window.addEventListener('message', onMessage);

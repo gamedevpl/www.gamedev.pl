@@ -35,7 +35,7 @@ vi.mock('./useScreenWakeLock', () => ({
   useScreenWakeLock: () => undefined,
 }));
 
-import { GameTheater } from './GameTheater.js';
+import { GameTheater, PLAYER_CHROME_IDLE_MS } from './GameTheater.js';
 import { setVisitSessionForTesting, VisitSession, type WireVisitEvent } from './visitTelemetry.js';
 
 let container: HTMLDivElement;
@@ -417,19 +417,81 @@ describe('GameTheater how-to-play visit telemetry', () => {
     setVisitSessionForTesting(null);
   });
 
-  it('keeps the theater bar visible throughout play', async () => {
+  it('stays visible until gameplay begins, then fades after an inactivity grace period', async () => {
     vi.useFakeTimers();
     try {
       await draw();
-      expect(container.querySelector('.game-theater-bar')).not.toBeNull();
+      const bar = container.querySelector('.game-theater-bar') as HTMLElement;
+      expect(bar.classList.contains('is-idle')).toBe(false);
       await act(async () => {
         vi.advanceTimersByTime(12_000);
       });
-      expect(container.querySelector('.game-theater-bar')).not.toBeNull();
-      expect(container.querySelector('.theater-peek-btn')).toBeNull();
+      expect(bar.classList.contains('is-idle')).toBe(false);
+
+      await act(async () => {
+        (container.querySelector('iframe') as HTMLIFrameElement).focus();
+        window.dispatchEvent(
+          new MessageEvent('message', {
+            data: { source: 'gdpl-player', type: 'pointer' },
+            origin: 'null',
+          }),
+        );
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(PLAYER_CHROME_IDLE_MS - 1);
+      });
+      expect(bar.classList.contains('is-idle')).toBe(false);
+      await act(async () => {
+        vi.advanceTimersByTime(1);
+      });
+      expect(bar.classList.contains('is-idle')).toBe(true);
+      expect(bar.getAttribute('aria-hidden')).toBe('true');
+
+      await act(async () => {
+        window.dispatchEvent(
+          new MessageEvent('message', {
+            data: { source: 'gdpl-player', type: 'activity' },
+            origin: 'null',
+          }),
+        );
+      });
+      expect(bar.classList.contains('is-idle')).toBe(false);
       // The report path (DSA art. 16) stays directly reachable in More without
-      // first recovering hidden chrome.
+      // remounting or moving controls when chrome returns.
       expect(container.querySelector('a.report-btn')).not.toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('pins the bar while one of its controls is focused', async () => {
+    vi.useFakeTimers();
+    try {
+      await draw();
+      const frame = container.querySelector('iframe') as HTMLIFrameElement;
+      const more = container.querySelector('.theater-more-btn') as HTMLButtonElement;
+      const bar = container.querySelector('.game-theater-bar') as HTMLElement;
+
+      await act(async () => {
+        frame.focus();
+        window.dispatchEvent(
+          new MessageEvent('message', {
+            data: { source: 'gdpl-player', type: 'pointer' },
+            origin: 'null',
+          }),
+        );
+        more.focus();
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(PLAYER_CHROME_IDLE_MS * 2);
+      });
+      expect(bar.classList.contains('is-idle')).toBe(false);
+
+      await act(async () => frame.focus());
+      await act(async () => {
+        vi.advanceTimersByTime(PLAYER_CHROME_IDLE_MS);
+      });
+      expect(bar.classList.contains('is-idle')).toBe(true);
     } finally {
       vi.useRealTimers();
     }
