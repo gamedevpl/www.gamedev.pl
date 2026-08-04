@@ -25,6 +25,7 @@ import {
   type GameSnapshotReader,
 } from './game-snapshot.js';
 import { startHealthCheck } from './game-health.js';
+import { createStagedPreviewPublisher, type StagedPreviewOptions } from './staged-preview.js';
 import { createInternalAuthVerifierFromEnv, type InternalAuthVerifier } from './internal-auth.js';
 import type { AgentBackend, SeedFiles } from './agent-backend.js';
 import { resolveBuilderBackend, type AgentBackendRegistry } from './agent-backend-env.js';
@@ -311,6 +312,12 @@ export interface SubmissionRoutesOptions {
     | 'maxSubmitsPerWindow'
     | 'onSourcesDelivered'
   >;
+  /**
+   * Timing seams for the live staged preview (`staged-preview.ts`). The defaults are
+   * tuned for a real build — several seconds of debounce, tens of seconds between
+   * assemblies — which is exactly what a test cannot wait out.
+   */
+  stagedPreview?: Pick<StagedPreviewOptions, 'debounceMs' | 'minGapMs' | 'maxBytes'>;
   /**
    * Pre-assembled published games. Defaults to the bucket in
    * GAMES_SNAPSHOT_BUCKET, or null when unset. Always a fast path in front of
@@ -4513,6 +4520,29 @@ export async function registerSubmissionRoutes(
     }
   });
 
+  // Renders the staging buffer while the agent is still filling it, so a creator is not
+  // left watching sentences for the minutes between "the game exists" and "the gate
+  // agreed". Needs the games store (the buffer), the GitHub client (the engine half) and
+  // the store (where a preview lands), all of which this module already holds — which is
+  // why it is built here rather than in app.ts.
+  const stagedPreviewStore = options.agentChannel?.gamesStore;
+  const stagedPreviews =
+    store && stagedPreviewStore && githubClient
+      ? createStagedPreviewPublisher({
+          store,
+          gamesStore: stagedPreviewStore,
+          githubClient,
+          engineRef: publishedRef,
+          ...options.stagedPreview,
+          now,
+          log: app.log,
+          onPublished: (issueNumber) => {
+            eventsCache.delete(issueNumber);
+            invalidateStatusCache(issueNumber);
+          },
+        })
+      : null;
+
   // The agent's side of the wire. Registered here rather than in app.ts so it shares
   // the store, the token secret, and the caches it has to invalidate.
   await registerAgentChannelRoutes(app, {
@@ -4526,6 +4556,9 @@ export async function registerSubmissionRoutes(
       // minute-old stall next to fresh progress (submit auto-end + continue loop).
       invalidateStatusCache(issueNumber);
     },
+    ...(stagedPreviews
+      ? { onSourcesStaged: ({ issueNumber }: { issueNumber: number }) => stagedPreviews.schedule(issueNumber) }
+      : {}),
   });
 
   // Remote MCP (BY-05): streamable-HTTP tools wrapping the channel above. Same secret

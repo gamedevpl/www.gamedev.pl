@@ -5225,6 +5225,145 @@ a.user-name--profile:focus-visible {
   gap: 8px;
   padding-top: 12px;
   border-top: 1px solid var(--panel-border);
+  /* The positioning context for the live preview below. Anchoring that card to this
+     block's top edge is what keeps it off the composer no matter how tall the composer,
+     the builder chooser and the status chips grow — the bug this shell already had once,
+     from a viewport-fixed banner landing on the textarea. */
+  position: relative;
+}
+
+/* The running draft, floating over the end of the conversation.
+
+   `bottom: 100%` is load-bearing, not decorative: it is measured from the foot, which is
+   everything the creator replies with, so the card rides above all of it by construction
+   rather than by a number someone would have to keep in step. */
+.studio-live-preview {
+  position: absolute;
+  right: 4px;
+  bottom: calc(100% + 10px);
+  z-index: 40;
+  width: 190px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-radius: 12px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-card);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.45);
+  padding: 6px;
+  animation: studio-live-preview-in 0.3s ease-out both;
+}
+
+@keyframes studio-live-preview-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.studio-live-preview-frame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #0b1018;
+}
+
+/* Deaf to the pointer on purpose — the open button above it is the only way in, so a tap
+   near the card can never be swallowed by a game that is not meant to be played here. */
+.studio-live-preview-iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  pointer-events: none;
+}
+
+.studio-live-preview-open {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0 0 8px;
+  border: 0;
+  background: linear-gradient(to top, rgba(6, 10, 18, 0.75), rgba(6, 10, 18, 0) 55%);
+  color: var(--text);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+
+.studio-live-preview-open:hover,
+.studio-live-preview-open:focus-visible {
+  opacity: 1;
+}
+
+/* Touch has no hover to reveal the affordance with, so the label stays put there. */
+@media (hover: none) {
+  .studio-live-preview-open {
+    opacity: 1;
+  }
+}
+
+.studio-live-preview-open-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(6, 10, 18, 0.8);
+  font-size: 0.68rem;
+}
+
+.studio-live-preview-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.studio-live-preview-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.66rem;
+  color: var(--muted);
+}
+
+.studio-live-preview-dismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.studio-live-preview-dismiss:hover,
+.studio-live-preview-dismiss:focus-visible {
+  color: var(--text);
+  background: var(--panel-border);
+}
+
+/* Agent-authored text. One line, ellipsised — a caption is a hint, not a paragraph. */
+.studio-live-preview-caption {
+  margin: 0;
+  font-size: 0.64rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Where the work is, and the one thing to do about it — the bar directly above the
@@ -5624,6 +5763,23 @@ a.user-name--profile:focus-visible {
     z-index: 2;
     padding-bottom: 10px;
     background: var(--panel);
+  }
+
+  /* Narrower here because the card floats over the last message rather than beside it,
+     and on a phone that message is most of the screen. Still legible as a moving game;
+     still one tap from the theater, which is where playing happens. */
+  .studio-live-preview {
+    width: 132px;
+    padding: 5px;
+    gap: 3px;
+  }
+
+  .studio-live-preview-badge {
+    font-size: 0.6rem;
+  }
+
+  .studio-live-preview-caption {
+    font-size: 0.58rem;
   }
 }
 

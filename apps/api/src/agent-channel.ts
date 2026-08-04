@@ -158,8 +158,12 @@ const MAX_PREVIEW_LABEL = 120;
  * 320 KB decoded. The games repo caps an assembled bundle at a little over 200 KB
  * (validate.ts Check 4) and the largest game in the catalog measures 243 KB, so this
  * clears the real ceiling with slack while staying well inside a Firestore document.
+ *
+ * Exported because every producer of a `BuildPreview` shares this ceiling — the agent's
+ * own pushes here, the round-0 seed preview, and the staged live preview — and three
+ * copies of one number is how the first two came to disagree.
  */
-const maxPreviewBytes = 320 * 1024;
+export const MAX_BUILD_PREVIEW_BYTES = 320 * 1024;
 // Deliveries are rare by nature — a build delivers once, a revision round once more — so
 // this bounds a looping agent rather than shaping normal use.
 const DEFAULT_MAX_SUBMITS_PER_WINDOW = 20;
@@ -257,7 +261,7 @@ const BuildPreviewInputSchema = z.object({
     .string()
     .trim()
     .min(1, 'html is required')
-    .max(Math.ceil((maxPreviewBytes * 4) / 3) + 1024, 'preview is too large')
+    .max(Math.ceil((MAX_BUILD_PREVIEW_BYTES * 4) / 3) + 1024, 'preview is too large')
     .regex(/^[A-Za-z0-9+/\s]*={0,2}$/, 'html must be base64'),
   slug: z
     .string()
@@ -332,6 +336,16 @@ export interface AgentChannelOptions {
    * trigger reports Cloud Build's own build id, which is booked below so a line on the
    * bill can be traced back to the game that caused it.
    */
+  /**
+   * Called after a file lands in the staging buffer.
+   *
+   * Staging is the only moment we learn that a game exists in a form nobody has looked
+   * at: an MCP agent uploads its tree a path at a time and the creator sees none of it
+   * until a delivery clears the gate minutes later. The publisher behind this assembles
+   * whatever is in the buffer and shows it — see `staged-preview.ts`. Deliberately
+   * fire-and-forget: the agent is owed its staging receipt whatever the preview does.
+   */
+  onSourcesStaged?: (input: { issueNumber: number; slug: string; roundGeneration: number }) => void;
   onSourcesDelivered?: (input: {
     issueNumber: number;
     slug: string;
@@ -869,7 +883,7 @@ export async function registerAgentChannelRoutes(
       }
 
       const bytes = Buffer.from(parsed.data.html, 'base64');
-      if (bytes.length > maxPreviewBytes) {
+      if (bytes.length > MAX_BUILD_PREVIEW_BYTES) {
         return reply.status(413).send({ error: 'preview is too large' });
       }
       // The equivalent of the PNG signature check on shots. It proves nothing about what
@@ -969,6 +983,8 @@ export async function registerAgentChannelRoutes(
         await markBuildingFromChannel(issueNumber, record);
         await store?.touchLastAgentSignalAt(issueNumber, undefined, { key: 'staging_sources' });
         options.onEvent?.(issueNumber);
+        // After the buffer is durable, so the assembly it schedules reads this file too.
+        options.onSourcesStaged?.({ issueNumber, slug, roundGeneration });
         return reply.send({
           accepted: true,
           path: staged.path,
