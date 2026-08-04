@@ -74,9 +74,11 @@ able to destroy candidate/published versions. MCP `stage_source_file` / clear, h
 rewrite `games/<slug>/staging/<issue>/g<gen>/manifest.json` and delete staged sources.
 
 `setup-gcp.sh` therefore also grants the runtime `roles/storage.objectAdmin` **with an
-IAM condition** limited to object names under `games/*/staging/`. Outside that prefix the
-runtime still cannot overwrite or delete. Re-run `./infra/setup-gcp.sh` after merging so
-production gets the binding (merge alone does not apply IAM).
+IAM condition** limited to object names under `games/<slug>/staging/…`. The condition uses
+`resource.name.extract('…/games/{slug}/staging/') != ''` — IAM CEL on `resource.name`
+only supports `startsWith` / `endsWith` / `extract` (not `contains`). Outside that
+prefix the runtime still cannot overwrite or delete. Re-run `./infra/setup-gcp.sh` after
+merging so production gets the binding (merge alone does not apply IAM).
 
 Staging manifest writes use GCS `ifGenerationMatch` with retry so concurrent
 `stage_source_file` calls cannot drop each other's entries.

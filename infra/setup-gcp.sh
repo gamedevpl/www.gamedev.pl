@@ -258,11 +258,13 @@ done
 
 # Staging buffers need overwrite + delete (manifest upsert, clear). Bound to the staging
 # prefix only — versions/ and everything else stay create+read for the runtime.
-# CEL: object resource names are projects/_/buckets/BUCKET/objects/OBJECT_PATH.
+# IAM CEL on resource.name only allows startsWith/endsWith/extract (no contains/matches),
+# so we match games/<slug>/staging/… via extract; empty extract ⇒ path is outside staging.
+# Object names are projects/_/buckets/BUCKET/objects/OBJECT_PATH.
 gcloud storage buckets add-iam-policy-binding "gs://${STORE_BUCKET}" \
   --member="serviceAccount:${RUN_SA}" \
   --role="roles/storage.objectAdmin" \
-  --condition="expression=resource.name.startsWith('projects/_/buckets/${STORE_BUCKET}/objects/games/') && resource.name.contains('/staging/'),title=games-store-staging-mutate,description=Overwrite/delete only under games/*/staging/ for MCP file-by-file staging" \
+  --condition="expression=resource.type == 'storage.googleapis.com/Object' && resource.name.extract('projects/_/buckets/${STORE_BUCKET}/objects/games/{slug}/staging/') != '',title=games-store-staging-mutate,description=Overwrite/delete only under games/*/staging/ for MCP file-by-file staging" \
   --project="$PROJECT_ID" \
   >/dev/null
 
