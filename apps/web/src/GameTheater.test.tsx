@@ -446,6 +446,20 @@ describe('GameTheater how-to-play visit telemetry', () => {
       });
       expect(bar.classList.contains('is-idle')).toBe(true);
       expect(bar.getAttribute('aria-hidden')).toBe('true');
+      const reveal = container.querySelector('.theater-reveal-btn') as HTMLButtonElement | null;
+      expect(reveal).not.toBeNull();
+      expect(reveal!.getAttribute('aria-label')).toBe('Show controls');
+
+      await act(async () => {
+        reveal!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+      expect(bar.classList.contains('is-idle')).toBe(false);
+      expect(container.querySelector('.theater-reveal-btn')).toBeNull();
+      await act(async () => {
+        vi.advanceTimersByTime(PLAYER_CHROME_IDLE_MS);
+      });
+      expect(bar.classList.contains('is-idle')).toBe(true);
+      expect(container.querySelector('.theater-reveal-btn')).not.toBeNull();
 
       await act(async () => {
         window.dispatchEvent(
@@ -456,6 +470,7 @@ describe('GameTheater how-to-play visit telemetry', () => {
         );
       });
       expect(bar.classList.contains('is-idle')).toBe(false);
+      expect(container.querySelector('.theater-reveal-btn')).toBeNull();
       // The report path (DSA art. 16) stays directly reachable in More without
       // remounting or moving controls when chrome returns.
       expect(container.querySelector('a.report-btn')).not.toBeNull();

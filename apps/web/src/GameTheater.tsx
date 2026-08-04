@@ -564,6 +564,20 @@ export function GameTheater({
     >
       {/* Native fullscreen is the explicit immersive mode. Normal play keeps the bar
           mounted in a stable location and fades it only after demonstrated activity. */}
+      {!fullscreen && chromeIdle && (
+        <button
+          type="button"
+          className="theater-reveal-btn"
+          aria-label={t('player.showControls')}
+          title={t('player.showControls')}
+          // Pointerdown makes the control immediate on touch. Click keeps the same
+          // route available to Enter/Space, which do not emit pointer events.
+          onPointerDown={notePlayerActivity}
+          onClick={notePlayerActivity}
+        >
+          <PixelIcon name="chevronDown" size={15} />
+        </button>
+      )}
       {!fullscreen && (
         <div
           className={`game-theater-bar${chromeIdle ? ' is-idle' : ''}`}

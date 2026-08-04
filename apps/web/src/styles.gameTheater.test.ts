@@ -42,4 +42,15 @@ describe('game theater floating bar', () => {
     expect(idle).toMatch(/pointer-events:\s*none/);
     expect(idle).toMatch(/transition-delay:\s*0s,\s*0s,\s*700ms/);
   });
+
+  it('leaves a quiet thumb-sized route back to the complete bar', () => {
+    const reveal = ruleBody('.theater-reveal-btn');
+
+    expect(reveal).toMatch(/position:\s*absolute/);
+    expect(reveal).toMatch(/top:\s*max\(12px,\s*env\(safe-area-inset-top\)\)/);
+    expect(reveal).toMatch(/right:\s*max\(12px,\s*env\(safe-area-inset-right\)\)/);
+    expect(reveal).toMatch(/width:\s*44px/);
+    expect(reveal).toMatch(/height:\s*44px/);
+    expect(reveal).toMatch(/background:\s*rgba\(12,\s*18,\s*24,\s*0\.62\)/);
+  });
 });
