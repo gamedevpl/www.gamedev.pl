@@ -877,6 +877,7 @@
     "gamesHeading": "Games ({{count}})",
     "noGames": "No published games yet.",
     "openPermalink": "Open game page",
+    "openStudio": "Open in Studio",
     "editorTitle": "Your public profile",
     "publishGateTitle": "Claim a handle to publish",
     "editorNeeded": "Building and playtesting do not need a handle — publishing does.",
