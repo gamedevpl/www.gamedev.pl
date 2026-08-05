@@ -294,6 +294,31 @@ const ROUND_STATUS_HTML = `<!doctype html>
         max-height: 220px;
         overflow: auto;
       }
+      .actions { margin: 12px 0 0; }
+      .action {
+        font: inherit;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--gd-accent);
+        background: transparent;
+        border: 1px solid var(--gd-accent);
+        border-radius: 999px;
+        padding: 7px 14px;
+        cursor: pointer;
+      }
+      .action:hover:not(:disabled) { background: rgba(0, 228, 172, 0.12); }
+      .action:disabled { color: var(--gd-muted); border-color: var(--gd-border); cursor: default; }
+      .hint {
+        margin: 8px 0 0;
+        padding: 8px;
+        border: 1px solid var(--gd-border);
+        border-radius: 8px;
+        font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+        font-size: 11.5px;
+        line-height: 1.45;
+        white-space: pre-wrap;
+        color: var(--gd-muted);
+      }
       .foot { margin: 12px 0 0; font-size: 11.5px; color: var(--gd-muted); }
       .live { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--gd-accent); margin-right: 6px; vertical-align: middle; }
       [hidden] { display: none !important; }
@@ -311,6 +336,10 @@ const ROUND_STATUS_HTML = `<!doctype html>
       <figure id="shot" class="shot" hidden><img id="shotImg" alt="Latest frame from the build" /><figcaption id="shotCap"></figcaption></figure>
       <dl id="meta" class="meta"></dl>
       <pre id="report" class="report" hidden></pre>
+      <div id="actionRow" class="actions" hidden>
+        <button id="actionBtn" type="button" class="action"></button>
+        <p id="actionHint" class="hint" hidden></p>
+      </div>
       <p id="foot" class="foot"></p>
     </main>
     <script>
@@ -341,6 +370,9 @@ const ROUND_STATUS_HTML = `<!doctype html>
         var shotEl = document.getElementById('shot');
         var shotImg = document.getElementById('shotImg');
         var shotCap = document.getElementById('shotCap');
+        var actionRow = document.getElementById('actionRow');
+        var actionBtn = document.getElementById('actionBtn');
+        var actionHint = document.getElementById('actionHint');
         var metaList = document.getElementById('meta');
         var report = document.getElementById('report');
         var foot = document.getElementById('foot');
@@ -488,7 +520,7 @@ const ROUND_STATUS_HTML = `<!doctype html>
           red: 'Publish gate red. The report below says what failed.',
           preview_passed: 'Preview gate passed — the build runs. Publish still needs a green publish gate.',
           preview_failed: 'Preview gate failed. The report below says what broke.',
-          kit_outdated: 'The Creator Kit rotated mid-round. Re-run get_kit, then resubmit with fromLatestDelivery.'
+          kit_outdated: 'The Creator Kit changed mid-round, so this delivery has to be rebuilt against the new one.'
         };
 
         var STALL_COPY = {
@@ -499,6 +531,68 @@ const ROUND_STATUS_HTML = `<!doctype html>
           gate_not_started: 'The gate did not start.',
           awaiting_input: 'Waiting on the creator.'
         };
+
+        var ACTIONS = {
+          kit_outdated: {
+            label: 'Rebuild against the new kit',
+            text:
+              'The gate refused the last delivery with kit_outdated. Re-run get_kit for a fresh engineRef, then ' +
+              'submit_sources({ fromLatestDelivery: true, mode, kitEngineRef }) using the same mode as that ' +
+              'delivery. Do not re-stage or re-upload the whole tree.'
+          },
+          red: {
+            label: 'Ask the agent to fix it',
+            text: 'The publish gate came back red. Read the gate report, fix what failed, and resubmit on the same key.'
+          },
+          preview_failed: {
+            label: 'Ask the agent to fix it',
+            text: 'The preview gate failed. Read the gate report, fix what broke, and re-preview on the same key.'
+          },
+          preview_passed: {
+            label: 'Ask the agent to publish',
+            text:
+              'The preview gate passed. Record TRACE and PLAYTEST, then submit_sources with mode=publish to seal ' +
+              'this round.'
+          }
+        };
+
+        function renderAction(status, gateStatus) {
+          // Only once the agent has stopped: while it is still working it will act on a
+          // red gate itself, and a second instruction would just talk over it.
+          var action = gateStatus && status.agentEnded ? ACTIONS[gateStatus] : null;
+          if (!action) {
+            actionRow.hidden = true;
+            return;
+          }
+          actionBtn.textContent = action.label;
+          actionBtn.disabled = false;
+          actionHint.hidden = true;
+          actionRow.hidden = false;
+          actionBtn.onclick = function () {
+            actionBtn.disabled = true;
+            actionBtn.textContent = 'Sending…';
+            var id = nextId++;
+            pendingCalls[id] = function (result, error) {
+              if (error) {
+                // The host will not post for us — show the words so the creator can
+                // paste them rather than leaving a dead button.
+                actionBtn.textContent = action.label;
+                actionBtn.disabled = false;
+                actionHint.textContent = action.text;
+                actionHint.hidden = false;
+              } else {
+                actionBtn.textContent = 'Sent to the agent';
+              }
+              reportSize();
+            };
+            post({
+              jsonrpc: '2.0',
+              id: id,
+              method: 'ui/message',
+              params: { role: 'user', content: { type: 'text', text: action.text } }
+            });
+          };
+        }
 
         /** Terminal for a *round*: nothing further will arrive, so stop polling. */
         function isFinished(status) {
@@ -537,6 +631,7 @@ const ROUND_STATUS_HTML = `<!doctype html>
             report.hidden = true;
           }
 
+          actionRow.hidden = true;
           foot.textContent =
             status === 'pending'
               ? verdict.deliveryId
@@ -561,9 +656,18 @@ const ROUND_STATUS_HTML = `<!doctype html>
             titleEl.hidden = true;
           }
 
+          // Order matters, and the job's own phase comes last: it lags reality. An agent
+          // that has delivered and called end still reads as 'building' for a while, so
+          // leading with the phase told a creator the agent was working while the note
+          // right below it said the agent had stopped.
           var line = null;
           if (gateStatus && gateStatus !== 'pending') {
-            line = (typeof gate.summary === 'string' && gate.summary) || GATE_COPY[gateStatus];
+            var gateSummary = typeof gate.summary === 'string' ? gate.summary : '';
+            line = (gateSummary.length && gateSummary.length <= 180 ? gateSummary : '') || GATE_COPY[gateStatus] || gateSummary;
+          } else if (gate && gate.deliveryId) {
+            line = 'Delivered — the gate is checking it.';
+          } else if (status.agentEnded) {
+            line = 'The agent has stopped without delivering.';
           }
           if (!line) line = PHASE_COPY[status.phase];
           if (!line && gateStatus) line = GATE_COPY[gateStatus];
@@ -605,14 +709,24 @@ const ROUND_STATUS_HTML = `<!doctype html>
           if (typeof status.deliveriesRemaining === 'number') {
             addRow('Deliveries left', status.deliveriesRemaining);
           }
-          if (status.stall && STALL_COPY[status.stall]) addRow('Note', STALL_COPY[status.stall]);
+          if (status.stall && STALL_COPY[status.stall] && STALL_COPY[status.stall] !== summary.textContent) {
+            addRow('Note', STALL_COPY[status.stall]);
+          }
 
-          if (gate && typeof gate.report === 'string' && gate.report.trim()) {
-            report.textContent = gate.report;
+          var detail = gate && typeof gate.report === 'string' ? gate.report.trim() : '';
+          if (!detail && gate && typeof gate.summary === 'string' && gate.summary.length > 180) {
+            // A long agent-facing summary is the detail, even when the gate sent no
+            // separate report.
+            detail = gate.summary.trim();
+          }
+          if (detail && detail !== summary.textContent) {
+            report.textContent = detail;
             report.hidden = false;
           } else {
             report.hidden = true;
           }
+
+          renderAction(status, gateStatus);
 
           if (isFinished(status)) {
             foot.textContent = '';

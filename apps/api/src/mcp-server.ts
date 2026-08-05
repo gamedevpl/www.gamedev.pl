@@ -3321,13 +3321,19 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           };
         }
 
-        // The gate goes through the channel exactly as get_gate_verdict does, so both
-        // read one implementation of what a verdict means.
-        const gateRes = await injectChannel(ctx.request, 'GET', '/api/agent/build/gate', auth.channelToken);
-        const gate = gateRes.statusCode === 200 ? gateRes.json() : null;
-
         const cap = record.builder === 'self' ? selfBuildDeliveryCap() : null;
         const used = record.roundDeliveryCount ?? 0;
+
+        // The gate goes through the channel exactly as get_gate_verdict does, so both
+        // read one implementation of what a verdict means — but the channel answers for
+        // the job's latest delivery whatever round produced it. A round that has
+        // delivered nothing has no verdict, and showing the previous round's told the
+        // creator their fresh round had already been refused.
+        let gate: unknown = null;
+        if (used > 0) {
+          const gateRes = await injectChannel(ctx.request, 'GET', '/api/agent/build/gate', auth.channelToken);
+          if (gateRes.statusCode === 200) gate = gateRes.json();
+        }
 
         return toolOk({
           phase: state,

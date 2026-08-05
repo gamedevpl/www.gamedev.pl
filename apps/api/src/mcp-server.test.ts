@@ -2110,6 +2110,9 @@ describe('MCP Apps views (SEP-1865, Phase 0)', () => {
       retryAfterSeconds: number;
     };
     expect(status.phase).toBeTruthy();
+    // Nothing delivered this round, so there is no verdict for it. The channel would
+    // happily answer with the previous round's, which read as "this round was refused".
+    expect((first.structured as { gate: unknown }).gate).toBeNull();
     expect(status.note?.text).toContain('wiring the HUD');
     expect(status.shot?.png).toBe(TINY_PNG);
     expect(status.retryAfterSeconds).toBeGreaterThan(0);
