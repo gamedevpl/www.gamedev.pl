@@ -20,10 +20,10 @@ const JOIN_PATTERN = /^\/join\/([A-Z0-9]{6})$/;
 const CREATOR_ALIAS_PATTERN = /^\/creators\/([a-z][a-z0-9_]{2,23})$/;
 const ROOT_CREATOR_PATTERN = /^\/([a-z][a-z0-9_]{2,23})$/;
 /**
- * Public game page: `/:handle/:slug` with an optional tab segment — keep the tab
- * vocabulary aligned with `GAME_PAGE_TABS` in apps/web/src/router.ts. The first
- * segment shares the creator-handle grammar (and the reserved-handle check below),
- * so `/play/x`, `/studio/x` etc. never reach this shape.
+ * Public game page: `/:handle/:slug`. The optional final segment is the closed set of
+ * retired tab URLs; the client accepts those bookmarks and replaces them with the
+ * compact page URL. The first segment shares the creator-handle grammar (and the
+ * reserved-handle check below), so `/play/x`, `/studio/x` etc. never reach this shape.
  */
 const GAME_PAGE_PATTERN =
   /^\/([a-z][a-z0-9_]{2,23})\/([a-z0-9]+(?:-[a-z0-9]+)*)(?:\/(?:board|review|releases|sources))?$/;

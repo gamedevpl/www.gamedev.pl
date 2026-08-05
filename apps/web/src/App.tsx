@@ -873,8 +873,9 @@ export function App() {
             key={`${route.handle}/${route.slug}`}
             handle={route.handle}
             slug={route.slug}
-            tab={route.tab}
             onNavigate={navigate}
+            onPlay={handlePlayGame}
+            onRemix={handleRemixGame}
             onCanonicalPath={(path) => navigate(path, { replace: true })}
             onGameLoaded={setGameTitle}
           />

@@ -312,6 +312,15 @@ describe('private beta gate', () => {
     await app.close();
   });
 
+  it('published game preview media is reachable without a session in private-beta mode', async () => {
+    const app = await buildApp({ betaAllowedUids: ownerUid });
+    const res = await app.inject({ method: 'GET', url: '/api/games/some-slug/media/opening.png?w=1280' });
+    // No configured GitHub client means the media handler itself returns 503; a 401
+    // here would mean the private-beta wall intercepted the public preview asset.
+    expect(res.statusCode).toBe(503);
+    await app.close();
+  });
+
   it('play telemetry requires a session in private-beta mode', async () => {
     const app = await buildApp({ betaAllowedUids: ownerUid });
     const res = await app.inject({ method: 'POST', url: '/api/telemetry', payload: {} });

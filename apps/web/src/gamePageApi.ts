@@ -11,31 +11,13 @@ import type { PublicCreatorProfile } from './creatorProfileApi.js';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 
-export interface GamePageRelease {
-  version: string;
-  createdAt: string;
-  current: boolean;
-  gateGreen: boolean | null;
-  origin?: 'editor';
-}
-
-export interface GamePageStats {
-  plays: number;
-  medianPlaySeconds: number | null;
-  windowDays: number;
-}
-
 export interface GamePage {
   entry: CatalogEntry;
   creator: PublicCreatorProfile | null;
   /** The game lives under the platform handle — no profile to link to. */
   platformAuthored: boolean;
-  /** Agent-authored markdown — render only through SpecMarkdown, never innerHTML. */
-  specMarkdown: string | null;
-  modules: string[] | null;
-  budget: { usedBytes: number; limitBytes: number } | null;
-  releases: GamePageRelease[];
-  stats: GamePageStats | null;
+  /** First prose paragraph from SPEC.md, flattened by the API. */
+  description: string | null;
 }
 
 export async function fetchGamePage(slug: string): Promise<GamePage> {
@@ -49,10 +31,6 @@ export async function fetchGamePage(slug: string): Promise<GamePage> {
     entry,
     creator: body.creator ?? null,
     platformAuthored: body.platformAuthored === true,
-    specMarkdown: typeof body.specMarkdown === 'string' ? body.specMarkdown : null,
-    modules: Array.isArray(body.modules) ? body.modules.filter((m): m is string => typeof m === 'string') : null,
-    budget: body.budget ?? null,
-    releases: Array.isArray(body.releases) ? body.releases : [],
-    stats: body.stats ?? null,
+    description: typeof body.description === 'string' ? body.description : null,
   };
 }
