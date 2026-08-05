@@ -12,6 +12,7 @@ import {
   operatorNotificationMessage,
   operatorPushContent,
   submissionNotificationMessage,
+  followedGamePushContent,
   submissionPushContent,
   type DigestEmailParams,
   type OperatorEmailParams,
@@ -126,14 +127,21 @@ async function maybeSendEmail(deps: EmitDeps, uid: string, notification: StoredN
     );
     const locale = normalizeLocale(user.locale);
     const message =
-      notification.type === 'creator.digest'
-        ? digestNotificationMessage(user.email, locale, digestEmailParams(notification, actionUrl, unsubscribeUrl))
-        : submissionNotificationMessage(user.email, locale, notification.type, {
-            title: notification.params.title ?? '',
-            actionUrl,
-            unsubscribeUrl,
-          });
+      notification.type === 'game.new_version'
+        ? // Deliberately not emailed yet. An email about somebody else's game needs its
+          // own unsubscribe scope — the digest has one for exactly this reason — and a
+          // follow that silences "your game is published" would be a worse bug than the
+          // missing mail. In-app and push carry it until that scope exists.
+          null
+        : notification.type === 'creator.digest'
+          ? digestNotificationMessage(user.email, locale, digestEmailParams(notification, actionUrl, unsubscribeUrl))
+          : submissionNotificationMessage(user.email, locale, notification.type, {
+              title: notification.params.title ?? '',
+              actionUrl,
+              unsubscribeUrl,
+            });
 
+    if (!message) return;
     await mailer.send(message);
     await deps.store.markNotificationEmailed(uid, notification.id);
   } catch (err) {
@@ -164,12 +172,14 @@ async function maybePush(deps: EmitDeps, uid: string, notification: StoredNotifi
     const appBaseUrl = deps.appBaseUrl ?? process.env.APP_BASE_URL?.trim() ?? 'https://www.gamedev.pl';
     const locale = normalizeLocale(user?.locale);
     const { title, body } =
-      notification.type === 'creator.digest'
-        ? digestPushContent(locale, digestEmailParams(notification, '', ''))
-        : isOperatorNotification(notification.type)
-          ? // English regardless of the reader's locale — see the operator copy's comment.
-            operatorPushContent(notification.type, notification.params.title ?? '')
-          : submissionPushContent(locale, notification.type, notification.params.title ?? '');
+      notification.type === 'game.new_version'
+        ? followedGamePushContent(locale, notification.params.title ?? '')
+        : notification.type === 'creator.digest'
+          ? digestPushContent(locale, digestEmailParams(notification, '', ''))
+          : isOperatorNotification(notification.type)
+            ? // English regardless of the reader's locale — see the operator copy's comment.
+              operatorPushContent(notification.type, notification.params.title ?? '')
+            : submissionPushContent(locale, notification.type, notification.params.title ?? '');
     const payload = { title, body, url: absoluteAppUrl(appBaseUrl, notification.link), tag: notification.id };
 
     await Promise.all(
@@ -348,6 +358,45 @@ export interface SubmissionNotificationEvent {
   statusToken: string;
   /** Present for `submission.published`: deep-link straight to the playable game. */
   slug?: string;
+}
+
+export interface FollowedGameNotificationEvent {
+  /** The follower being told, never the creator — they have their own publish note. */
+  uid: string;
+  slug: string;
+  gameTitle: string;
+  /** The version that just went live; part of the id so each release notifies once. */
+  version: string;
+  link: string;
+}
+
+/**
+ * Tell one follower that a game they follow published a new version.
+ *
+ * Idempotent by `follow-<slug>-<version>`: a republish of the same version (a retried
+ * operator click, a reconciliation pass) must not notify twice, and a genuinely new
+ * version must. Emission is per-follower rather than batched because the store's
+ * notification model is per-user, and because a failure to reach one follower must not
+ * cost the rest theirs.
+ */
+export async function emitFollowedGameNotification(
+  deps: EmitDeps,
+  event: FollowedGameNotificationEvent,
+): Promise<{ created: boolean }> {
+  const { created, notification } = await deps.store.createNotification(event.uid, {
+    id: `follow-${event.slug}-${event.version}`,
+    type: 'game.new_version',
+    createdAt: new Date(deps.now?.() ?? Date.now()).toISOString(),
+    titleKey: 'notifications.game.new_version.title',
+    bodyKey: 'notifications.game.new_version.body',
+    params: { title: event.gameTitle, slug: event.slug },
+    link: event.link,
+  });
+
+  await maybeSendEmail(deps, event.uid, notification);
+  if (created) await maybePush(deps, event.uid, notification);
+
+  return { created };
 }
 
 export interface DigestNotificationEvent {

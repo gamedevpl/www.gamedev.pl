@@ -27,6 +27,7 @@ import type { PublicCreatorProfile } from './creatorProfileApi.js';
 import { LegalPage } from './LegalPage.js';
 import { ContactPage } from './ContactPage.js';
 import { CreatorProfilePage } from './CreatorProfilePage.js';
+import { GamePage } from './GamePage.js';
 import { NotFoundPage } from './NotFoundPage.js';
 import { AppUpdateBanner } from './AppUpdateBanner.js';
 import { InstallPrompt } from './InstallPrompt.js';
@@ -145,6 +146,7 @@ export function App() {
   const [draftTitle, setDraftTitle] = useState<string | null>(null);
   /** Display name for `/:handle` once the public profile loads. */
   const [creatorName, setCreatorName] = useState<string | null>(null);
+  const [gameTitle, setGameTitle] = useState<string | null>(null);
 
   // Tab title follows the route (and any known game/submission/draft name). App is
   // the single writer — children report names upward rather than touching document.title.
@@ -177,16 +179,18 @@ export function App() {
         draftNamed: t('pageTitle.draftNamed'),
         studioNamed: t('pageTitle.studioNamed'),
         creatorNamed: t('pageTitle.creatorNamed'),
+        gameNamed: t('pageTitle.gameNamed'),
       },
       playTitle,
       studioTitle,
       draftTitle: route.view === 'draft' ? draftTitle : null,
       creatorName: route.view === 'creator' ? creatorName : null,
+      gameTitle: route.view === 'game' ? gameTitle : null,
       // Only surface ephemeral theaters while still on home — `/play/<slug>` already
       // carries its own title via playTitle, and leaving home must restore the home title.
       stageTitle: route.view === 'home' ? stageTitle : null,
     });
-  }, [route, stageContent, catalogEntries, savedSpecs, draftTitle, creatorName, t]);
+  }, [route, stageContent, catalogEntries, savedSpecs, draftTitle, creatorName, gameTitle, t]);
 
   useDocumentTitle(documentTitle);
 
@@ -196,6 +200,12 @@ export function App() {
   useEffect(() => {
     setCreatorName(null);
   }, [creatorRouteHandle]);
+
+  // Same for the game page: title falls back to the humanized slug between games.
+  const gameRouteSlug = route.view === 'game' ? route.slug : null;
+  useEffect(() => {
+    setGameTitle(null);
+  }, [gameRouteSlug]);
 
   useEffect(() => {
     // popstate covers back/forward (and path changes via history API). hashchange
@@ -870,6 +880,37 @@ export function App() {
                 navigate(creatorPath(profile.handle), { replace: true });
               }
             }}
+          />
+        </main>
+        <SiteFooter />
+      </div>
+    );
+  }
+
+  // Public game page — the "repo page" nested under the creator profile. Same
+  // open-chrome posture as the profile: the page renders for anonymous visitors,
+  // and the frame pane inside it is what stays gated during closed beta.
+  if (route.view === 'game') {
+    return (
+      <div className="app app--game">
+        <NavHeader
+          activeBuildCount={activeBuildCount}
+          onNavigate={handleNavigateSection}
+          onHome={() => navigate('/')}
+          onStudio={() => navigate(studioPath())}
+          onAdmin={() => navigate(adminPath())}
+          upTarget={headerUp}
+          onUp={navigate}
+        />
+        <main className="content">
+          <GamePage
+            key={`${route.handle}/${route.slug}`}
+            handle={route.handle}
+            slug={route.slug}
+            tab={route.tab}
+            onNavigate={navigate}
+            onCanonicalPath={(path) => navigate(path, { replace: true })}
+            onGameLoaded={setGameTitle}
           />
         </main>
         <SiteFooter />

@@ -17,6 +17,12 @@ import { registerAdminRoutes } from './admin.js';
 import { parseAppleClientIds, type AppleAuthVerifier } from './apple-auth.js';
 import { registerAuthPlugin, type GoogleAuthVerifier } from './auth.js';
 import { registerCreatorProfileRoutes } from './creator-profile-routes.js';
+import { registerGamePageRoutes, type GamePageRoutesOptions } from './game-page-routes.js';
+import { registerGameBoardRoutes, type GameBoardRoutesOptions } from './game-board-routes.js';
+import { registerGameReviewRoutes, type GameReviewRoutesOptions } from './game-review-routes.js';
+import { registerGameSourcesRoutes, type GameSourcesRoutesOptions } from './game-sources-routes.js';
+import { registerGameFollowRoutes, type GameFollowRoutesOptions } from './game-follow-routes.js';
+import { createFollowerFanout } from './game-follow-notify.js';
 import { registerAccountDeletionRoutes, type AccountDeletionRoutesOptions } from './account-deletion-routes.js';
 import { registerCreatorStudioRoutes } from './creator-studio.js';
 import { registerEditorRoutes } from './editor-drafts.js';
@@ -116,6 +122,16 @@ export interface BuildAppOptions {
   suggestionInboxRoutes?: Partial<Omit<SuggestionInboxRoutesOptions, 'store'>>;
   /** Seams for the public contact form (mailer fake in tests). */
   contactRoutes?: ContactRoutesOptions;
+  /** Seams for the public game page (cache TTL / clock under test). */
+  gamePageRoutes?: Partial<Omit<GamePageRoutesOptions, 'store'>>;
+  /** Seams for the game page's task board. */
+  gameBoardRoutes?: Partial<Omit<GameBoardRoutesOptions, 'store'>>;
+  /** Seams for the side-by-side review surface. */
+  gameReviewRoutes?: Partial<Omit<GameReviewRoutesOptions, 'store'>>;
+  /** Seams for the public read-only sources view. */
+  gameSourcesRoutes?: Partial<Omit<GameSourcesRoutesOptions, 'store'>>;
+  /** Seams for per-game following. */
+  gameFollowRoutes?: Partial<Omit<GameFollowRoutesOptions, 'store'>>;
   /** Seams for delayed account erasure; defaults to OIDC-or-deny-all from env. */
   accountDeletionRoutes?: Partial<
     Omit<AccountDeletionRoutesOptions, 'store' | 'adminUids' | 'internalAuthVerifier'>
@@ -501,6 +517,15 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // end up pointed at different buckets. Publishing re-reads the gate verdict off the
     // manifest rather than trusting the job's derived state.
     gamesStore,
+    // Tell followers a game they follow moved. Reuses the submission routes' own
+    // notification deps, so email and the unsubscribe token behave identically here.
+    notifyFollowers: async (event) => {
+      await createFollowerFanout({
+        store,
+        emitDeps: submissionSeams.buildNotifyDeps(),
+        log: { error: (context, message) => app.log.error(context, message) },
+      })(event);
+    },
   });
 
   // Creator control panel (docs/improvement-loop-plan.md IL-2 creator surface). Own
@@ -573,6 +598,35 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     gamesStore,
     getRepoPublishedCatalogEntry: submissionSeams.getRepoPublishedCatalogEntry,
   });
+
+  // The public game page at `/:handle/:slug` — one aggregate read per game. Same
+  // open posture as the creator profile above (exempted from the beta wall below):
+  // the page is a landing page; playing is what stays gated during closed beta.
+  await registerGamePageRoutes(app, {
+    store,
+    gamesStore,
+    getRepoPublishedCatalogEntry: submissionSeams.getRepoPublishedCatalogEntry,
+    githubClient: submissionSeams.githubClient ?? undefined,
+    publishedRef: process.env.GAMES_PUBLISHED_REF ?? 'main',
+    ...options.gamePageRoutes,
+  });
+
+  // The game page's task board. Reads only — assignment stays on the suggestion
+  // inbox route, which owns the quota and the attribution.
+  await registerGameBoardRoutes(app, { store, ...options.gameBoardRoutes });
+
+  // The review surface: a delivered candidate, playable beside what is live. Owner
+  // and operator only, and it never publishes — that stays the operator action the
+  // job-admin route implements, for the reasons documented there.
+  await registerGameReviewRoutes(app, { store, gamesStore, adminUids, ...options.gameReviewRoutes });
+
+  // Public read-only sources for store-published creator games. Owner decision: code
+  // is worth reading, and the creator checkout already hands over the same bytes.
+  await registerGameSourcesRoutes(app, { store, gamesStore, ...options.gameSourcesRoutes });
+
+  // Following a game: a subscription rather than a bookmark. The count is public,
+  // the follower list is not, and the only message it sends is "new version".
+  await registerGameFollowRoutes(app, { store, ...options.gameFollowRoutes });
   registerAccountDeletionRoutes(app, {
     store,
     adminUids,
@@ -663,6 +717,18 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // Public creator profiles — same posture as contact/legal. Availability checks
     // stay authed (they are under /api/creators/:handle/availability and need a session).
     if (/^\/api\/creators\/[^/]+\/?(\?|$)/.test(request.url)) return;
+    // The public game page (game-page-routes.ts) — a landing page has to load for a
+    // visitor with no session. Only `/page` and its board pass: the playable
+    // document, media, votes and every other `/api/games/:slug/*` route stay walled
+    // during beta. The board's own owner-only column is gated in its handler, which
+    // reads `request.user` — present or absent, the wall does not decide it.
+    // `sources` joins them: reading a published creator game's code needs no session,
+    // by the same decision that made the tab public at all. `follow` too, for its
+    // *count* — the page shows it beside the play numbers, and a landing page that
+    // renders through the wall with one number silently missing is a worse answer
+    // than either fully public or fully walled. Following still needs a session:
+    // the PUT checks `request.user` in its own handler.
+    if (/^\/api\/games\/[^/]+\/(page|board|sources|follow)(\/file)?(\?|$)/.test(request.url)) return;
     // Internal endpoints (the Cloud Scheduler notification sweep) authenticate via
     // an OIDC token in the handler, not a session — the wall would 401 them first.
     if (request.url.startsWith('/api/internal/')) return;

@@ -354,6 +354,13 @@ export interface SubmissionRecord {
    * Empty when the creator skipped the panel or it had nothing to ask.
    */
   qa?: string[];
+  /**
+   * The creator's sign-off on a delivered candidate they played side by side with what
+   * is live (game-review-routes.ts). Advisory to the operator who publishes: it says the
+   * person who asked for the change has already accepted it. Never a publish itself, and
+   * never consulted as permission to become one.
+   */
+  reviewApproval?: ReviewApproval;
 }
 
 /**
@@ -841,6 +848,13 @@ export type NotificationType =
    */
   | 'creator.digest'
   /**
+   * A game someone follows published a new version. The one notification the follow
+   * button exists to send, and the reason it is a follow rather than a bookmark:
+   * "the game you played got better" is worth an interruption, and nothing else about
+   * a game someone else owns is.
+   */
+  | 'game.new_version'
+  /**
    * The operator's own queue, delivered instead of waited on
    * (`operator-alerts.ts`). These do not go to the creator: they go to every uid in
    * ADMIN_UIDS, because the thing being reported — a build waiting on the publish
@@ -1230,6 +1244,18 @@ export interface SuggestionRecord {
   updatedAt: string;
 }
 
+/**
+ * The creator's verdict after playing a delivered candidate side by side with what is
+ * live. Advisory to the operator who publishes; never a publish in itself.
+ */
+export interface ReviewApproval {
+  /** The version the creator played and accepted — not "the latest", which can move. */
+  version: string;
+  at: string;
+  /** The uid that signed off, so an approval is attributable rather than ambient. */
+  by: string;
+}
+
 export type WaitlistStatus = 'pending' | 'approved' | 'rejected';
 
 export interface WaitlistEntry {
@@ -1545,6 +1571,17 @@ export interface Store {
   setSubmissionPublishedAt(issueNumber: number, at: string): Promise<void>;
   /** Marks a submission abandoned by its creator. */
   setSubmissionAbandoned(issueNumber: number, at: string): Promise<void>;
+  /**
+   * Records that the creator played the candidate and signed off on it.
+   *
+   * Explicitly **not** a publish. Publishing stays the operator action it is
+   * (job-admin-routes.ts): the gate answers "does this run", a human answers "may this
+   * be on the site", and the second question is the moderation boundary the DSA and the
+   * AI Act care about. This records the *other* human's answer — the one who asked for
+   * the change and just played it — so an operator publishing sees that the creator has
+   * already accepted it rather than guessing.
+   */
+  setSubmissionReviewApproval(issueNumber: number, approval: ReviewApproval): Promise<void>;
   /** Turns the creator's shared draft link on (a timestamp) or off (null). */
   setDraftShared(issueNumber: number, at: string | null): Promise<void>;
   /**
@@ -1811,6 +1848,23 @@ export interface Store {
   castVote(slug: string, uid: string, value: VoteValue): Promise<GameVoteCounts>;
   /** Removes a user's vote. Returns the game's updated aggregate counts. */
   clearVote(slug: string, uid: string): Promise<GameVoteCounts>;
+  /**
+   * Follow / unfollow a game. Stored as `games/{slug}/followers/{uid}` beside votes,
+   * with the count denormalised onto the game document the same way vote tallies are —
+   * a follower count is read on every page view and must not cost a subcollection scan.
+   */
+  setGameFollow(slug: string, uid: string, at: string): Promise<number>;
+  clearGameFollow(slug: string, uid: string): Promise<number>;
+  isFollowingGame(slug: string, uid: string): Promise<boolean>;
+  countGameFollowers(slug: string): Promise<number>;
+  /**
+   * The uids to notify when a game publishes, newest follower first.
+   *
+   * Bounded rather than complete: fanout is best-effort courtesy beside a publish, and
+   * a game with more followers than the cap is a good problem that must not turn one
+   * operator click into an unbounded write burst.
+   */
+  listGameFollowers(slug: string, opts?: { limit?: number }): Promise<string[]>;
   /** A game's aggregate vote counts — the public read, no uid involved. */
   getVoteCounts(slug: string): Promise<GameVoteCounts>;
   /** One player's save for one game, or null if they have none. */
@@ -2206,6 +2260,8 @@ export class InMemoryStore implements Store {
   private pushSubs = new Map<string, Map<string, PushSubscriptionRecord>>();
   // slug -> (uid -> value)
   private votes = new Map<string, Map<string, VoteValue>>();
+  /** slug → uid → followedAt. Mirrors `games/{slug}/followers/{uid}` in Firestore. */
+  private follows = new Map<string, Map<string, string>>();
   // slug -> feedback rows, newest last (reversed on read)
   private playerFeedback = new Map<string, PlayerFeedbackRecord[]>();
   // uid -> (slug -> saved progress)
@@ -2752,6 +2808,11 @@ export class InMemoryStore implements Store {
   async setSubmissionPreviewVersion(issueNumber: number, version: string): Promise<void> {
     const sub = this.submissions.get(issueNumber);
     if (sub) this.submissions.set(issueNumber, { ...sub, previewVersion: version });
+  }
+
+  async setSubmissionReviewApproval(issueNumber: number, approval: ReviewApproval): Promise<void> {
+    const sub = this.submissions.get(issueNumber);
+    if (sub) this.submissions.set(issueNumber, { ...sub, reviewApproval: structuredClone(approval) });
   }
 
   async recordDeliveryNudge(issueNumber: number): Promise<number> {
@@ -3357,6 +3418,36 @@ export class InMemoryStore implements Store {
     return this.voteCounts(slug);
   }
 
+  async setGameFollow(slug: string, uid: string, at: string): Promise<number> {
+    const forGame = this.follows.get(slug) ?? new Map<string, string>();
+    if (!forGame.has(uid)) forGame.set(uid, at);
+    this.follows.set(slug, forGame);
+    return forGame.size;
+  }
+
+  async clearGameFollow(slug: string, uid: string): Promise<number> {
+    const forGame = this.follows.get(slug);
+    forGame?.delete(uid);
+    return forGame?.size ?? 0;
+  }
+
+  async isFollowingGame(slug: string, uid: string): Promise<boolean> {
+    return this.follows.get(slug)?.has(uid) ?? false;
+  }
+
+  async countGameFollowers(slug: string): Promise<number> {
+    return this.follows.get(slug)?.size ?? 0;
+  }
+
+  async listGameFollowers(slug: string, opts?: { limit?: number }): Promise<string[]> {
+    const forGame = this.follows.get(slug);
+    if (!forGame) return [];
+    const sorted = Array.from(forGame.entries())
+      .sort((a, b) => b[1].localeCompare(a[1]))
+      .map(([uid]) => uid);
+    return opts?.limit ? sorted.slice(0, opts.limit) : sorted;
+  }
+
   async getGameSave(uid: string, slug: string): Promise<GameSaveRecord | null> {
     const found = this.gameSaves.get(uid)?.get(slug);
     return found ? { ...found } : null;
@@ -3626,6 +3717,7 @@ export class InMemoryStore implements Store {
     return [
       ...new Set([
         ...this.votes.keys(),
+        ...this.follows.keys(),
         ...this.playerFeedback.keys(),
         ...this.scorecards.keys(),
         ...this.suggestions.keys(),
@@ -4709,6 +4801,10 @@ export class FirestoreStore implements Store {
     await this.db.collection('submissions').doc(String(issueNumber)).set({ previewVersion: version }, { merge: true });
   }
 
+  async setSubmissionReviewApproval(issueNumber: number, approval: ReviewApproval): Promise<void> {
+    await this.db.collection('submissions').doc(String(issueNumber)).set({ reviewApproval: approval }, { merge: true });
+  }
+
   async recordDeliveryNudge(issueNumber: number): Promise<number> {
     // Transactional: two pollers can observe the same undelivered session at once, and
     // a lost increment here buys the job an extra agent session it was not owed.
@@ -5470,6 +5566,10 @@ export class FirestoreStore implements Store {
     return this.gameRef(slug).collection('playerFeedback');
   }
 
+  private followerRef(slug: string, uid: string) {
+    return this.gameRef(slug).collection('followers').doc(uid);
+  }
+
   private static readVoteCounts(data: DocumentData | undefined): GameVoteCounts {
     return { up: (data?.votesUp as number | undefined) ?? 0, down: (data?.votesDown as number | undefined) ?? 0 };
   }
@@ -5515,6 +5615,53 @@ export class FirestoreStore implements Store {
       transaction.set(gameRef, { votesUp: counts.up, votesDown: counts.down }, { merge: true });
       return counts;
     });
+  }
+
+  async setGameFollow(slug: string, uid: string, at: string): Promise<number> {
+    const gameRef = this.gameRef(slug);
+    const followerRef = this.followerRef(slug, uid);
+    return await this.db.runTransaction(async (transaction) => {
+      const gameSnap = await transaction.get(gameRef);
+      const followerSnap = await transaction.get(followerRef);
+      const count = (gameSnap.data()?.followers as number | undefined) ?? 0;
+      // Following twice is not two followers — only a genuine change moves the tally.
+      if (followerSnap.exists) return count;
+      transaction.set(followerRef, { followedAt: at });
+      transaction.set(gameRef, { followers: count + 1 }, { merge: true });
+      return count + 1;
+    });
+  }
+
+  async clearGameFollow(slug: string, uid: string): Promise<number> {
+    const gameRef = this.gameRef(slug);
+    const followerRef = this.followerRef(slug, uid);
+    return await this.db.runTransaction(async (transaction) => {
+      const gameSnap = await transaction.get(gameRef);
+      const followerSnap = await transaction.get(followerRef);
+      const count = (gameSnap.data()?.followers as number | undefined) ?? 0;
+      if (!followerSnap.exists) return count;
+      const next = Math.max(0, count - 1);
+      transaction.delete(followerRef);
+      transaction.set(gameRef, { followers: next }, { merge: true });
+      return next;
+    });
+  }
+
+  async isFollowingGame(slug: string, uid: string): Promise<boolean> {
+    const snap = await this.followerRef(slug, uid).get();
+    return snap.exists;
+  }
+
+  async countGameFollowers(slug: string): Promise<number> {
+    const snap = await this.gameRef(slug).get();
+    return (snap.data()?.followers as number | undefined) ?? 0;
+  }
+
+  async listGameFollowers(slug: string, opts?: { limit?: number }): Promise<string[]> {
+    let query = this.gameRef(slug).collection('followers').orderBy('followedAt', 'desc');
+    if (opts?.limit) query = query.limit(opts.limit);
+    const snap = await query.get();
+    return snap.docs.map((doc) => doc.id);
   }
 
   async getVoteCounts(slug: string): Promise<GameVoteCounts> {

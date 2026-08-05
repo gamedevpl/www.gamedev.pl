@@ -5,7 +5,7 @@ import { catalogMediaUrl, isPlatformAuthor, normalizeCatalogEntry, type CatalogE
 import { fetchCreatorPage, type PublicCreatorProfile } from './creatorProfileApi.js';
 import { EditProfileModal } from './EditProfileModal.js';
 import { PixelIcon } from './PixelIcon.js';
-import { creatorPath, playPath, studioPath } from './router.js';
+import { creatorPath, gamePath, studioPath } from './router.js';
 import { StudioCreatorProfileProvider } from './studioCreatorProfile.js';
 
 /**
@@ -72,6 +72,15 @@ export function CreatorProfilePage({
   }, [profile, onProfileLoaded]);
 
   const letter = (profile?.profileName || handle).charAt(0).toUpperCase();
+
+  /** In-app navigation for links that must still be real, copyable hrefs. */
+  const interceptTo = useCallback(
+    (path: string) => (event: { preventDefault: () => void }) => {
+      event.preventDefault();
+      onNavigate?.(path);
+    },
+    [onNavigate],
+  );
 
   return (
     <article className="creator-profile-page">
@@ -140,14 +149,24 @@ export function CreatorProfilePage({
                       <span className="creator-profile-game-thumb creator-profile-game-thumb--empty" aria-hidden />
                     )}
                     <div className="creator-profile-game-meta">
-                      <h3 className="creator-profile-game-title">{game.title}</h3>
+                      <h3 className="creator-profile-game-title">
+                        {/* Everything listed here has a handle by construction, so the
+                            game page always resolves — the title is its natural door. */}
+                        <a href={gamePath(handle, game.slug)} onClick={interceptTo(gamePath(handle, game.slug))}>
+                          {game.title}
+                        </a>
+                      </h3>
                       <p className="creator-profile-game-by">{t('player.byAuthor', { author })}</p>
                       <div className="creator-profile-game-actions">
                         <button type="button" className="primary-btn" onClick={() => onPlay(game.slug)}>
                           <PixelIcon name="play" size={13} /> {t('catalog.play')}
                         </button>
-                        <a className="creator-profile-game-link" href={playPath(game.slug)}>
-                          {t('creatorProfile.openPermalink')}
+                        <a
+                          className="creator-profile-game-link"
+                          href={gamePath(handle, game.slug)}
+                          onClick={interceptTo(gamePath(handle, game.slug))}
+                        >
+                          {t('creatorProfile.openGamePage')}
                         </a>
                         {isOwner ? (
                           <a className="creator-profile-game-link" href={studioPath(game.slug)}>

@@ -42,6 +42,8 @@ export type DocumentTitleCopy = {
   studioNamed: string;
   /** Prefixed template for a creator profile, e.g. "{{title}}" (same placeholder as playNamed). */
   creatorNamed: string;
+  /** Prefixed template for a public game page, e.g. "{{title}}". */
+  gameNamed: string;
 };
 
 export type DocumentTitleContext = {
@@ -56,6 +58,8 @@ export type DocumentTitleContext = {
   stageTitle?: string | null;
   /** Display name for `/:handle` once the profile loads. */
   creatorName?: string | null;
+  /** Real game title for `/:handle/:slug` once the page loads. */
+  gameTitle?: string | null;
 };
 
 /**
@@ -86,6 +90,8 @@ export function resolveDocumentTitle(route: AppRoute, ctx: DocumentTitleContext)
       return brandedPageTitle(ctx.copy.contact);
     case 'creator':
       return brandedNamedTitle(ctx.copy.creatorNamed, ctx.creatorName?.trim() || route.handle);
+    case 'game':
+      return brandedNamedTitle(ctx.copy.gameNamed, ctx.gameTitle?.trim() || humanizeSlug(route.slug));
     case 'notFound':
       return brandedPageTitle(ctx.copy.notFound);
     default: {

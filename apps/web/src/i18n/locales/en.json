@@ -63,6 +63,12 @@
         "title": "Someone joined the beta waitlist",
         "body": "“{{title}}” asked to join the closed beta."
       }
+    },
+    "game": {
+      "new_version": {
+        "title": "A game you follow was updated",
+        "body": "“{{title}}” has a new version."
+      }
     }
   },
   "header": {
@@ -78,7 +84,8 @@
     "navFeed": "Agent Stream",
     "activeBuilds": "{{count}} in progress",
     "upHome": "Back to home",
-    "upStudio": "Back to Studio"
+    "upStudio": "Back to Studio",
+    "upCreator": "Back to the creator's page"
   },
   "hero": {
     "mainTitle": "Turn any idea into a playable web game",
@@ -165,7 +172,8 @@
     "howToPlayDismiss": "Press Escape, or click or tap anywhere outside, to close",
     "howToPlayTouch": "Touch",
     "howToPlayTouchPad": "On-screen pad on touch screens",
-    "howToPlayOther": "Control"
+    "howToPlayOther": "Control",
+    "aboutGame": "About this game"
   },
   "catalog": {
     "title": "Games",
@@ -217,7 +225,8 @@
       "most_played": "Most played",
       "last_played": "Last played",
       "alpha": "A–Z"
-    }
+    },
+    "about": "About"
   },
   "recommendations": {
     "reasonContinue": "Continue playing",
@@ -900,7 +909,8 @@
     "draftNamed": "Draft {{title}}",
     "statusNamed": "Status · {{title}}",
     "studioNamed": "Studio · {{title}}",
-    "creatorNamed": "{{title}}"
+    "creatorNamed": "{{title}}",
+    "gameNamed": "{{title}}"
   },
   "creatorProfile": {
     "back": "Back",
@@ -911,7 +921,6 @@
     "gamesAria": "Published games",
     "gamesHeading": "Games ({{count}})",
     "noGames": "No published games yet.",
-    "openPermalink": "Open game page",
     "openStudio": "Open in Studio",
     "editorTitle": "Your public profile",
     "publishGateTitle": "Claim a handle to publish",
@@ -958,7 +967,8 @@
       "cooldown": "You renamed recently — try again after the cooldown.",
       "unchanged": "That is already your handle.",
       "unknown": "Could not update the profile."
-    }
+    },
+    "openGamePage": "Game page"
   },
   "pwa": {
     "ariaLabel": "Install this app",
@@ -1186,5 +1196,127 @@
     "undoFailed": "Couldn't go back just now.",
     "brokeIt": "That change stopped the game working. Put it back?",
     "changeStanding": "Your change is running."
+  },
+  "gamePage": {
+    "loading": "Loading the game page…",
+    "missing": "This game page does not exist.",
+    "missingPlayLink": "Try the direct play link instead",
+    "error": "Could not load the game page. Try again in a moment.",
+    "breadcrumbAria": "Game location",
+    "play": "Play",
+    "follow": "Follow",
+    "remix": "Remix",
+    "remixHint": "Open the game and press the wrench to remix it",
+    "tabsAria": "Game page sections",
+    "tabs": {
+      "game": "Game",
+      "board": "Board",
+      "review": "To play",
+      "releases": "Releases",
+      "sources": "Sources"
+    },
+    "sandboxNote": "The game runs in a sandbox — no access to your account, files, or network.",
+    "gatedTitle": "Playing is in closed beta",
+    "gatedBody": "This page is public, but playing needs a beta account. Sign in or join the waitlist on the homepage.",
+    "gatedCta": "Sign in",
+    "releasesEmpty": "No recorded releases yet — this game predates the release history.",
+    "releaseCurrent": "current",
+    "releaseEditor": "editor publish",
+    "gateGreen": "Accepted by the gate",
+    "gateRed": "Gate run failed",
+    "specHint": "this is the game’s README",
+    "statsHeading": "Activity",
+    "statsPlays": "Plays (last {{days}} days)",
+    "statsMedian": "Median session",
+    "statsReleases": "Releases",
+    "teamHeading": "Team",
+    "roleOwner": "owner",
+    "agentMember": "agent",
+    "agentReleases_one": "{{count}} release",
+    "agentReleases_other": "{{count}} releases",
+    "modulesHeading": "GameKit modules",
+    "budgetHeading": "Author budget",
+    "budgetOf": "{{used}} of {{limit}}",
+    "budgetAria": "Author budget: {{used}} of {{limit}}",
+    "latestReleaseHeading": "Latest release",
+    "board": {
+      "loading": "Loading the board…",
+      "error": "Could not load the board. Try again in a moment.",
+      "columns": {
+        "open": "Up for grabs",
+        "building": "Building",
+        "review": "To play",
+        "released": "Released"
+      },
+      "openPrivate": "Open tasks are private to the game’s creator — they come from play data this page does not publish.",
+      "openEmpty": "Nothing open. The nightly pass opens a task when the play data shows one.",
+      "buildingEmpty": "Nothing being built right now.",
+      "reviewEmpty": "Nothing waiting to be played.",
+      "releasedEmpty": "Nothing released yet.",
+      "assign": "Hand to the agent",
+      "assigning": "Handing over…",
+      "taskFallback": "Task",
+      "byAgent": "agent",
+      "byCreator": "creator",
+      "class": {
+        "defect": "bug",
+        "friction": "friction",
+        "design-change": "design"
+      },
+      "assignError": {
+        "unknown": "Could not hand that task over. Try again in a moment.",
+        "quota_exceeded": "Daily improvement limit reached. Try again tomorrow.",
+        "authentication required": "Sign in as the game’s creator to hand tasks over.",
+        "not found": "That task is gone — the board may have moved on."
+      },
+      "note": "Four columns and nothing else. Handing a task to the agent starts a build; that is the only automation here."
+    },
+    "review": {
+      "loading": "Loading the review…",
+      "error": "Could not load the review. Try again in a moment.",
+      "signedOut": "Sign in as the game’s creator to review changes waiting to be played.",
+      "notYours": "Only this game’s creator can review changes waiting to be played.",
+      "empty": "Nothing waiting to be played. When the agent delivers a change, it lands here beside the live game so you can play both.",
+      "builtOn": "Built {{date}}",
+      "gatePassed": "gate passed",
+      "gateFailed": "gate failed",
+      "gatePending": "gate has not run yet",
+      "gateFailedHint": "The gate refused this build — ask for changes instead.",
+      "instruction": "Play both for thirty seconds. The one on the right is the change.",
+      "liveCaption": "Now",
+      "candidateCaption": "With this change",
+      "noLive": "Nothing is live yet — this would be the game’s first version.",
+      "noCandidate": "The built version could not be loaded.",
+      "approve": "Looks good",
+      "approving": "Recording…",
+      "approved": "You signed off on this {{date}}. An operator publishes it from here.",
+      "requestChanges": "Ask for changes",
+      "publishNote": "Signing off records that you played it and accept it. Putting a game on the site is a separate human check, so an operator does the publishing.",
+      "approveError": {
+        "unknown": "Could not record that. Try again in a moment.",
+        "gate_red": "The gate refused this build, so it cannot be signed off.",
+        "not_gated": "The gate has not finished with this build yet.",
+        "not_found": "That version is gone — the agent may have delivered a newer one.",
+        "not_the_creator": "Only the game’s creator can sign off on a change."
+      },
+      "diffSummary": "{{files}} files · +{{added}} −{{removed}} · show what changed in the code",
+      "diffTruncated": "(at least)",
+      "diffUncounted": "changed",
+      "operatorCannotSignOff": "Reviewing as an operator. The sign-off is the creator’s to give — it says they played this and accept it."
+    },
+    "sources": {
+      "loading": "Loading the sources…",
+      "error": "Could not load the sources. Try again in a moment.",
+      "unavailable": "This game’s sources are not published. Games that came from the platform’s own repository keep their code there.",
+      "intro": "{{files}} files · {{size}} · read-only, exactly what is running",
+      "filesAria": "Source files",
+      "copy": "Copy",
+      "copied": "Copied",
+      "fileLoading": "Loading…",
+      "fileError": "Could not load that file.",
+      "tooLarge": "This file is too large to show here."
+    },
+    "following": "Following",
+    "rolePlatform": "built here"
   }
 }

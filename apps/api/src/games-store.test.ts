@@ -219,6 +219,20 @@ function stubGcs() {
       generations.delete(name);
       return new Response(null, { status: 200 });
     }
+    // Delimiter listing (`/o?prefix=...&delimiter=/`) — answers with the sub-prefixes,
+    // like GCS does, so listVersions can be exercised against the same object map.
+    if (!href.includes('/o/')) {
+      const parsed = new URL(href);
+      const prefix = parsed.searchParams.get('prefix') ?? '';
+      const prefixes = new Set<string>();
+      for (const name of objects.keys()) {
+        if (!name.startsWith(prefix)) continue;
+        const rest = name.slice(prefix.length);
+        const slash = rest.indexOf('/');
+        if (slash !== -1) prefixes.add(`${prefix}${rest.slice(0, slash + 1)}`);
+      }
+      return new Response(JSON.stringify({ prefixes: [...prefixes] }), { status: 200 });
+    }
     const name = decodeURIComponent(href.split('/o/')[1].split('?')[0]);
     const body = objects.get(name);
     if (!body) return new Response('', { status: 404 });
@@ -295,6 +309,27 @@ describe('GCS games store', () => {
     await store.putGateResult('g', version, { green: false, report: '3 checks failed' });
 
     expect((await store.getManifest('g', version))?.gate).toMatchObject({ green: false, report: '3 checks failed' });
+  });
+
+  it('lists versions newest first, skipping directories without a manifest', async () => {
+    const { impl, objects } = stubGcs();
+    let tick = 0;
+    const store = createGcsGamesStore({ ...base, fetchImpl: impl, versionId: () => `v${++tick}` });
+    await store.putCandidateSources({ slug: 'g', issueNumber: 1, files: MINIMAL });
+    await store.putCandidateSources({ slug: 'g', issueNumber: 2, files: MINIMAL });
+    // An interrupted upload: source objects landed, the manifest never did.
+    objects.set('games/g/versions/v9/source/game.ts', Buffer.from('x'));
+
+    const versions = await store.listVersions('g');
+
+    expect(versions.map((manifest) => manifest.version)).toEqual(['v2', 'v1']);
+    expect(versions[0]).toMatchObject({ issueNumber: 2 });
+
+    const limited = await store.listVersions('g', { limit: 1 });
+    expect(limited.map((manifest) => manifest.version)).toEqual(['v2']);
+
+    await expect(store.listVersions('../evil')).rejects.toThrow(InvalidUploadError);
+    expect(await store.listVersions('never-delivered')).toEqual([]);
   });
 
   it('stages files one-by-one and assembles them for finalize', async () => {

@@ -464,6 +464,15 @@ export interface SubmissionRoutesHandle {
    */
   getRepoPublishedCatalogEntry: (slug: string) => Promise<CatalogGameEntry | null>;
   /**
+   * The notification fan-out dependencies (mailer, base URL, unsubscribe secret) as
+   * this module resolved them.
+   *
+   * Exposed so a second emitter — the follower fan-out on publish — reaches the same
+   * mailer and the same unsubscribe secret rather than re-deriving them from env. Two
+   * derivations is two places for "respect the unsubscribe" to drift apart.
+   */
+  buildNotifyDeps: () => EmitDeps;
+  /**
    * Starts a post-publish improvement round, choosing job dispatch or a legacy issue.
    *
    * Exported rather than reimplemented so the suggestion inbox and the creator's own
@@ -4710,5 +4719,6 @@ export async function registerSubmissionRoutes(
     getRepoPublishedCatalogEntry: (slug) =>
       githubClient ? getPublishedCatalogEntry(githubClient, slug) : Promise.resolve(null),
     startImprovementRound,
+    buildNotifyDeps,
   };
 }

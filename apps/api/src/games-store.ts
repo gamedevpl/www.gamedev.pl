@@ -465,6 +465,15 @@ export interface GamesStore {
     paths?: string[];
   }): Promise<{ cleared: number }>;
   getManifest(slug: string, version: string): Promise<VersionManifest | null>;
+  /**
+   * Version history for one game, newest first — the manifests under
+   * `games/<slug>/versions/`. Version ids are sortable timestamps (see
+   * {@link defaultVersionId}), so bucket listing order *is* delivery order.
+   *
+   * `limit` bounds both the listing and the manifest reads: this exists for the
+   * public game page's release history, which is a paged read, not an audit.
+   */
+  listVersions(slug: string, opts?: { limit?: number }): Promise<VersionManifest[]>;
   getSourceFile(slug: string, version: string, path: string): Promise<string | null>;
   /**
    * Records our gate's verdict against a version. Only a green one may publish.
@@ -850,6 +859,44 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
     async getSourceFile(slug, version, path) {
       const body = await readObject(`${versionPrefix(slug, version)}/source/${path}`);
       return body ? body.toString('utf8') : null;
+    },
+
+    async listVersions(slug, opts) {
+      assertSlug(slug);
+      const limit = Math.max(1, Math.min(opts?.limit ?? 30, 100));
+      // Delimiter listing returns the version directories as prefixes without
+      // paging through every object under them — a game's versions each hold a
+      // dozen-plus source files, and this call wants one manifest per version.
+      const prefix = `games/${slug}/versions/`;
+      const url =
+        `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(bucket)}/o` +
+        `?prefix=${encodeURIComponent(prefix)}&delimiter=${encodeURIComponent('/')}&fields=prefixes`;
+      const response = await fetchImpl(url, { headers: { authorization: `Bearer ${await getAccessToken()}` } });
+      if (response.status === 404) return [];
+      if (!response.ok) throw new Error(`games store list of ${prefix} failed: ${response.status}`);
+      const listing = (await response.json()) as { prefixes?: string[] };
+      const versions = (listing.prefixes ?? [])
+        .map((p) => p.slice(prefix.length).replace(/\/$/, ''))
+        .filter(Boolean)
+        // Timestamp ids sort lexicographically; newest first is reverse order.
+        .sort((a, b) => b.localeCompare(a));
+      // A version directory without a manifest is an interrupted upload, not a
+      // version (see putCandidateSources) — it must not appear in a history, and
+      // it must not consume a limit slot either. Read in limit-sized batches so an
+      // orphan-riddled prefix still costs bounded reads rather than the whole list.
+      const collected: VersionManifest[] = [];
+      for (let offset = 0; offset < versions.length && collected.length < limit; offset += limit) {
+        const batch = await Promise.all(
+          versions.slice(offset, offset + limit).map(async (version) => {
+            const body = await readObject(`${versionPrefix(slug, version)}/manifest.json`);
+            return body ? (JSON.parse(body.toString('utf8')) as VersionManifest) : null;
+          }),
+        );
+        for (const manifest of batch) {
+          if (manifest !== null) collected.push(manifest);
+        }
+      }
+      return collected.slice(0, limit);
     },
 
     async putGateResult(slug, version, result) {

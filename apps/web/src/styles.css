@@ -12920,3 +12920,896 @@ a.user-name--profile:focus-visible {
   background: rgba(242, 162, 162, 0.16);
   color: #f2a2a2;
 }
+
+/* ============================================================
+   Public game page — the "repo page" at /:handle/:slug.
+   Layout borrowed from a repository page: header, tabs, main
+   pane + sidebar. The default pane is the playable game.
+   ============================================================ */
+
+.game-page {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+}
+
+.game-page-status {
+  max-width: 640px;
+  margin: 48px auto;
+  text-align: center;
+  color: var(--muted);
+}
+
+.game-page-error {
+  color: var(--error);
+}
+
+.game-page-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+
+.game-page-breadcrumb a {
+  color: var(--turquoise);
+  text-decoration: none;
+}
+
+.game-page-breadcrumb a:hover {
+  text-decoration: underline;
+}
+
+.game-page-breadcrumb-slug {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.game-page-genre-badge {
+  margin-left: 8px;
+  padding: 1px 8px;
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  text-transform: lowercase;
+}
+
+.game-page-title {
+  margin: 8px 0 4px;
+  font-size: 1.6rem;
+  line-height: 1.2;
+}
+
+.game-page-description {
+  margin: 0 0 14px;
+  max-width: 70ch;
+  color: var(--muted);
+}
+
+.game-page-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.game-page-actions .secondary-btn[disabled] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.game-page-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  margin: 18px 0 0;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.game-page-tab {
+  padding: 8px 14px;
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 0.95rem;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+}
+
+.game-page-tab:hover {
+  color: var(--text);
+  background: var(--panel);
+}
+
+.game-page-tab.is-active {
+  color: var(--text);
+  font-weight: 600;
+  background: var(--panel);
+  border-color: var(--panel-border);
+  /* Sits on the border so the active tab reads as part of the pane below. */
+  margin-bottom: -1px;
+  border-bottom: 1px solid var(--bg);
+}
+
+.game-page-tab-count {
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--panel-card);
+  font-size: 0.75rem;
+}
+
+.game-page-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 20px;
+  margin-top: 20px;
+}
+
+@media (max-width: 900px) {
+  .game-page-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.game-page-frame .game-frame {
+  /* The standalone .game-frame height applies; keep the pane self-contained. */
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: #000;
+}
+
+.game-page-frame.is-hidden {
+  display: none;
+}
+
+.game-page-sandbox-note {
+  margin-top: 8px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.game-page-gated {
+  border: 1px dashed var(--panel-border);
+  border-radius: 8px;
+  padding: 40px 24px;
+  text-align: center;
+}
+
+.game-page-gated h2 {
+  margin: 0 0 8px;
+}
+
+.game-page-gated p {
+  margin: 0 auto 16px;
+  max-width: 46ch;
+  color: var(--muted);
+}
+
+.game-page-empty {
+  color: var(--muted);
+}
+
+.game-page-release-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.game-page-release {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.game-page-release-version {
+  font-family: ui-monospace, monospace;
+  font-size: 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.game-page-release-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.game-page-release-dot.is-green {
+  background: #4ade80;
+}
+
+.game-page-release-dot.is-red {
+  background: #f2a2a2;
+}
+
+.game-page-release-meta {
+  color: var(--muted);
+  font-size: 0.85rem;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.game-page-release-current {
+  padding: 0 8px;
+  border: 1px solid var(--turquoise);
+  border-radius: 999px;
+  color: var(--turquoise);
+  font-size: 0.75rem;
+}
+
+.game-page-placeholder {
+  border: 1px dashed var(--panel-border);
+  border-radius: 8px;
+  padding: 32px 24px;
+  color: var(--muted);
+  max-width: 60ch;
+}
+
+.game-page-placeholder h2 {
+  margin: 0 0 8px;
+  color: var(--text);
+}
+
+.game-page-side {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.game-page-panel {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+
+.game-page-panel-heading {
+  margin: 0 0 10px;
+  font-size: 0.95rem;
+}
+
+.game-page-panel-hint {
+  font-weight: 400;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.spec-markdown {
+  font-size: 0.9rem;
+  line-height: 1.55;
+  overflow-wrap: break-word;
+}
+
+.spec-markdown h3,
+.spec-markdown h4,
+.spec-markdown h5,
+.spec-markdown h6 {
+  margin: 14px 0 6px;
+  font-size: 0.95rem;
+}
+
+.spec-markdown p {
+  margin: 0 0 10px;
+}
+
+.spec-markdown ul,
+.spec-markdown ol {
+  margin: 0 0 10px;
+  padding-left: 20px;
+}
+
+.spec-markdown pre {
+  background: var(--panel-card);
+  border-radius: 6px;
+  padding: 10px;
+  overflow-x: auto;
+  font-size: 0.8rem;
+}
+
+.spec-markdown code {
+  font-family: ui-monospace, monospace;
+  font-size: 0.85em;
+}
+
+.spec-markdown hr {
+  border: none;
+  border-top: 1px solid var(--panel-border);
+  margin: 12px 0;
+}
+
+.game-page-stats {
+  margin: 0;
+}
+
+.game-page-stats div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 0;
+}
+
+.game-page-stats dt {
+  color: var(--muted);
+}
+
+.game-page-stats dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.game-page-team {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.game-page-team li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.game-page-team img {
+  border-radius: 50%;
+}
+
+.game-page-team a {
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.game-page-team a:hover {
+  text-decoration: underline;
+}
+
+.game-page-team-role {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.game-page-lettermark {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--panel-card);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+
+.game-page-modules {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.game-page-module {
+  padding: 2px 10px;
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  font-family: ui-monospace, monospace;
+  font-size: 0.8rem;
+}
+
+.game-page-budget-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--panel-card);
+  overflow: hidden;
+}
+
+.game-page-budget-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--turquoise);
+}
+
+.game-page-budget-caption {
+  margin: 6px 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.game-page-latest-release {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+/* The task board — four columns, and deliberately nothing else. */
+
+.game-board-columns {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 900px) {
+  .game-board-columns {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .game-board-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.game-board-column {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 10px;
+  min-width: 0;
+}
+
+.game-board-column-heading {
+  margin: 0 0 10px;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.game-board-column-count {
+  margin-left: 4px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--panel-card);
+  color: var(--text);
+}
+
+.game-board-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.game-board-card {
+  background: var(--panel-card);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  padding: 10px;
+}
+
+.game-board-card-title {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  overflow-wrap: break-word;
+}
+
+.game-board-card-detail {
+  margin: 6px 0 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.game-board-card-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.game-board-card-by,
+.game-board-card-when {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.game-board-class {
+  padding: 1px 8px;
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  font-size: 0.72rem;
+  text-transform: lowercase;
+}
+
+.game-board-class--defect {
+  border-color: rgba(242, 162, 162, 0.5);
+  color: #f2a2a2;
+}
+
+.game-board-assign {
+  padding: 3px 10px;
+  font-size: 0.78rem;
+}
+
+.game-board-empty {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.game-board-error {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--error);
+  border-radius: 6px;
+  color: var(--error);
+  font-size: 0.85rem;
+}
+
+.game-board-note {
+  margin: 14px 0 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+  max-width: 70ch;
+}
+
+/* The review surface — two playable frames, and the diff as a footnote. */
+
+.game-review-title {
+  margin: 0 0 4px;
+  font-size: 1.15rem;
+}
+
+.game-review-meta {
+  margin: 0 0 8px;
+  font-size: 0.85rem;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.game-review-gate {
+  padding: 1px 8px;
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  font-size: 0.75rem;
+}
+
+.game-review-gate.is-green {
+  border-color: rgba(74, 222, 128, 0.5);
+  color: #4ade80;
+}
+
+.game-review-gate.is-red {
+  border-color: rgba(242, 162, 162, 0.5);
+  color: #f2a2a2;
+}
+
+.game-review-instruction {
+  margin: 0 0 14px;
+  font-size: 0.9rem;
+}
+
+.game-review-panes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 760px) {
+  .game-review-panes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.game-review-pane {
+  margin: 0;
+  min-width: 0;
+}
+
+/* Half-width frames: the standalone .game-frame height would tower over them. */
+.game-review-pane .game-frame {
+  height: min(42vh, 420px);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: #000;
+}
+
+.game-review-caption {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.game-review-caption.is-candidate {
+  color: var(--turquoise);
+}
+
+.game-review-version {
+  font-family: ui-monospace, monospace;
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.game-review-missing {
+  margin: 0;
+  padding: 32px 16px;
+  border: 1px dashed var(--panel-border);
+  border-radius: 8px;
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.game-review-verdict {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.game-review-verdict .secondary-btn {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.game-review-approved {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+  color: #4ade80;
+}
+
+.game-review-note {
+  margin: 8px 0 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+  max-width: 70ch;
+}
+
+.game-review-diff {
+  margin-top: 16px;
+  border-top: 1px solid var(--panel-border);
+  padding-top: 10px;
+}
+
+.game-review-diff-toggle {
+  padding: 0;
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: var(--muted);
+  text-decoration: underline;
+  /* Same UA-default guard as the sources file list — this is a text control. */
+  background: transparent;
+  border: 0;
+}
+
+.game-review-diff-toggle:hover {
+  color: var(--text);
+}
+
+.game-review-diff-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.8rem;
+}
+
+.game-review-diff-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.game-review-diff-counts {
+  color: var(--muted);
+  font-family: ui-monospace, monospace;
+  white-space: nowrap;
+}
+
+/* Sources — code as a first-class view, not an escape hatch. */
+
+.game-sources-intro {
+  margin: 0 0 12px;
+  font-size: 0.85rem;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.game-sources-version {
+  font-family: ui-monospace, monospace;
+  font-size: 0.75rem;
+}
+
+.game-sources-layout {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+@media (max-width: 760px) {
+  .game-sources-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.game-sources-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.game-sources-file {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 5px;
+  font-size: 0.8rem;
+  font-weight: 400;
+  text-align: left;
+  color: var(--muted);
+  /* The global `button` rule sets no background, so a bare button falls back to the
+     UA's light `buttonface` — which on this dark theme reads as an inverted pill. */
+  background: transparent;
+  border: 1px solid transparent;
+}
+
+.game-sources-file:hover {
+  background: var(--panel);
+  color: var(--text);
+}
+
+.game-sources-file.is-active {
+  background: var(--panel-card);
+  color: var(--text);
+  font-weight: 600;
+  border-color: var(--panel-border);
+}
+
+.game-sources-file-path {
+  font-family: ui-monospace, monospace;
+  overflow-wrap: anywhere;
+}
+
+.game-sources-file-bytes {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  opacity: 0.75;
+}
+
+.game-sources-viewer {
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: var(--panel);
+  min-width: 0;
+}
+
+.game-sources-viewer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.game-sources-viewer-path {
+  font-family: ui-monospace, monospace;
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+
+.game-sources-copy {
+  padding: 3px 10px;
+  font-size: 0.75rem;
+  flex-shrink: 0;
+}
+
+.game-sources-note {
+  margin: 0;
+  padding: 20px 12px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.game-sources-code {
+  margin: 0;
+  padding: 10px 0;
+  max-height: 70vh;
+  overflow: auto;
+  font-size: 0.78rem;
+  line-height: 1.55;
+}
+
+.game-sources-line {
+  display: flex;
+}
+
+.game-sources-gutter {
+  flex: 0 0 3.5em;
+  padding-right: 10px;
+  text-align: right;
+  color: var(--muted);
+  opacity: 0.55;
+  user-select: none;
+}
+
+.game-sources-line-text {
+  white-space: pre;
+  padding-right: 12px;
+}
+
+.tok-comment {
+  color: #7f8ea3;
+  font-style: italic;
+}
+
+.tok-string {
+  color: #9ad39a;
+}
+
+.tok-number {
+  color: #e0b978;
+}
+
+.tok-keyword {
+  color: var(--turquoise);
+}
+
+.tok-key {
+  color: #c9a3e0;
+}
+
+.game-page-follow-count {
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--panel-card);
+  font-size: 0.75rem;
+}
+
+.game-page-actions .secondary-btn.is-following {
+  border-color: var(--turquoise);
+  color: var(--turquoise);
+}
+
+/* Catalog card's route to the game page — quiet beside the green Play button. */
+.card-about-link {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+  font-size: 0.85rem;
+}

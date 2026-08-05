@@ -27,10 +27,10 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function draw() {
+function draw(path?: string) {
   root = createRoot(container);
   act(() => {
-    root!.render(<ShareGameButton slug="brick-storm" title="Brick Storm" />);
+    root!.render(<ShareGameButton slug="brick-storm" title="Brick Storm" path={path} />);
   });
   return container.querySelector('button')!;
 }
@@ -68,5 +68,22 @@ describe('ShareGameButton', () => {
 
     expect(writeText).toHaveBeenCalledWith(expect.stringMatching(/\/play\/brick-storm$/));
     expect(button.getAttribute('aria-label')).toMatch(/copied/i);
+  });
+
+  // Each surface shares itself: the player shares the play permalink, the game page
+  // shares the game page. Neither is the right link in general — the right link is the
+  // one the sharer was looking at.
+  it('shares the path it was handed instead of the play permalink', async () => {
+    const share = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { ...navigator, share, canShare: () => true, clipboard: navigator.clipboard });
+
+    const button = draw('/nightshift/brick-storm');
+    await act(async () => {
+      button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(share).toHaveBeenCalledWith(
+      expect.objectContaining({ url: `${window.location.origin}/nightshift/brick-storm` }),
+    );
   });
 });
