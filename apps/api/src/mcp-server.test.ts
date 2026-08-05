@@ -2166,6 +2166,45 @@ describe('MCP Apps views (SEP-1865, Phase 0)', () => {
     expect(repeat?.png).toBeUndefined();
   });
 
+  it('shows a localized progress note only to a reader who can read it', async () => {
+    // Observed by the owner 2026-08-05: the same note rendered Polish in the ChatGPT card
+    // and English in Studio. Studio was right — it matches the event's locale against the
+    // reader's; the card preferred textLocalized unconditionally.
+    process.env.MCP_UI = 'true';
+    const store = new InMemoryStore();
+    await seedJob(store);
+    app = await createApp(store);
+    const { sessionId } = await initializeWith(app, true);
+    const started = await callTool(app, 'start', { key: roundKey(1) }, { 'mcp-session-id': sessionId });
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    await callTool(
+      app,
+      'report_progress',
+      { sessionKey, text: 'Adding a landing HUD', textLocalized: 'Dodaje interfejs HUD', locale: 'pl' },
+      { 'mcp-session-id': sessionId },
+    );
+
+    const noteFor = async (locale?: string) => {
+      const res = await callTool(
+        app,
+        'get_round_status',
+        { sessionKey, ...(locale ? { locale } : {}) },
+        { 'mcp-session-id': sessionId },
+      );
+      return (res.structured as { note: { text: string } | null }).note?.text;
+    };
+
+    expect(await noteFor('pl')).toBe('Dodaje interfejs HUD');
+    // Primary subtag only, so pl-PL still matches pl.
+    expect(await noteFor('pl-PL')).toBe('Dodaje interfejs HUD');
+    // A reader who cannot read Polish gets the English the agent also sent.
+    expect(await noteFor('en')).toBe('Adding a landing HUD');
+    expect(await noteFor('en-GB')).toBe('Adding a landing HUD');
+    // No locale from the host is no claim about the reader — English is the safe answer.
+    expect(await noteFor()).toBe('Adding a landing HUD');
+  });
+
   it('serves the card over resources/list and resources/read', async () => {
     process.env.MCP_UI = 'true';
     const store = new InMemoryStore();
