@@ -95,7 +95,19 @@ function buildSpec(
         name: 'node:22',
         entrypoint: 'bash',
         secretEnv: ['GAMES_REPO_TOKEN'],
-        env: [`GAMES_STORE_BUCKET=${options.bucket}`, `GAMES_REPO=${options.gamesRepo}`, 'PUPPETEER_SKIP_DOWNLOAD=1'],
+        env: [
+          `GAMES_STORE_BUCKET=${options.bucket}`,
+          `GAMES_REPO=${options.gamesRepo}`,
+          'PUPPETEER_SKIP_DOWNLOAD=1',
+          // The gate runs in *this* step, not in the API process, so an env var set on
+          // the service reaches it only if it is forwarded here. Without this line the
+          // preview-stills kill switch is inert in production — set on the service,
+          // read by nobody — which is worse than having no switch at all, because it
+          // would be believed. Only the disable value travels: it is the sole
+          // meaningful setting (anything else means the default, on), and forwarding a
+          // literal rather than arbitrary text keeps caller env out of the build config.
+          ...(process.env.GATE_PREVIEW_STILLS === '0' ? ['GATE_PREVIEW_STILLS=0'] : []),
+        ],
         args: [
           '-c',
           [

@@ -50,11 +50,18 @@ It is now tied to **a verdict already in hand** — a state the loop genuinely r
 and still forbids waiting for one. When editing this loop, keep that property: a step
 gated on a condition the loop is told to avoid is a step that does not exist.
 
-**Media exists only after a publish gate run.** The preview lane is typecheck → smoke →
-build, and `smoke` executes the game in `node:vm` against a _recording fake canvas_, not
-a browser — so no lane before publish produces pixels. Do not promise agents frames from
-a preview or from staged sources without first adding real capture compute, which is a
-cost and threat-model decision (see BY-28a in the ops plan), not a copy change.
+**Both lanes carry frames** — see [Preview stills](#preview-stills-by-28a--frames-without-a-publish)
+below. That was not true when this section was written: the preview lane was typecheck →
+smoke → build, and `smoke` executes the game in `node:vm` against a _recording fake
+canvas_, not a browser, so nothing before publish produced a pixel. Adding real capture
+compute was the cost and threat-model decision BY-28a took; it is no longer a copy change
+away.
+
+Still true, and the reason the lane field exists: **a green preview is not publish
+readiness.** It says the game typechecks, smokes and assembles. Nothing more.
+
+**Staged sources still produce no frames.** Staging assembles a document (creator-visible,
+see below) but never runs a browser. Only a delivery to the gate captures.
 
 ### Never busy-poll `get_gate_verdict`
 
@@ -104,6 +111,26 @@ composer (`apps/web/src/StudioLivePreview.tsx`); clicking opens the normal theat
 
 Agents should therefore **stage a runnable tree early and keep staging** — it is the
 cheapest way to show the creator progress, and it costs no turns.
+
+### Preview stills (BY-28a) — frames without a publish
+
+The live staged preview shows the **creator** a playable game; it does nothing for an
+agent that cannot run one. So the preview gate lane now also takes stills:
+`check:game --preview --preview-stills` runs the capture plan but skips the per-frame
+screenshots and the ffmpeg encode, keeping only the named marks.
+
+- Nearly free: a preview build already `apt-get install`s Chrome for a capture it never
+  ran. The expensive halves — a CDP screenshot per frame, and the video — are skipped.
+- **Advisory stage.** A capture failure reports and the lane still passes; a machine
+  with no browser previews exactly as before.
+- **Kill switch:** `GATE_PREVIEW_STILLS=0` on the gate runner drops the flag with no
+  deploy. Volume is already bounded by `SELF_BUILD_DELIVERY_CAP` (20 per round, shared
+  by preview and publish).
+- `manifest.previewGate.screenshot` names the frame; `get_gate_media` serves either
+  lane and reports `gate.lane: 'preview' | 'publish'`. **Publish wins when both exist.**
+- Agents must not read a green _preview_ as publish readiness — hence the lane field.
+- No video on the preview lane, ever: nothing renders an inlined mp4, and the encode is
+  the expensive half.
 
 ### `end` is required after submit (not optional etiquette)
 

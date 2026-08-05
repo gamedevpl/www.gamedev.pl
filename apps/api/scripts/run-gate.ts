@@ -148,6 +148,9 @@ async function main(): Promise<void> {
       green: outcome.green,
       report: outcome.report,
       ...(outcome.status ? { status: outcome.status } : {}),
+      // Stills, when the preview run took any — the manifest names the frame so the
+      // media read does not have to infer it from a bucket listing.
+      ...(outcome.screenshot ? { screenshot: outcome.screenshot } : {}),
     });
   } else {
     // The resolved sha rides along so the manifest ends up pinned to what was actually

@@ -2306,14 +2306,31 @@ export async function registerAgentChannelRoutes(
         });
       }
 
+      // Either lane's verdict can own frames. Publish wins when both exist: it is the
+      // later, fuller run, and its media is what a creator would be shown. Preview
+      // frames (BY-28a) are what make this read useful *during* a round — before
+      // BY-28a a preview delivery had no media at all, so an agent iterating on the
+      // cheap lane could only read prose.
+      const verdict = manifest.gate
+        ? { ...manifest.gate, lane: 'publish' as const }
+        : manifest.previewGate
+          ? { ...manifest.previewGate, lane: 'preview' as const }
+          : null;
+      // Publish wins the *verdict* — it is the later, fuller run — but not the frame.
+      // A publish run that failed before capture names no screenshot, and preferring
+      // its silence over a preview frame that exists would report "no media" while the
+      // bytes sit in the bucket. Verdict precedence and evidence precedence are
+      // different questions; only the first one publish should win by default.
+      const verdictScreenshot = manifest.gate?.screenshot ?? manifest.previewGate?.screenshot ?? null;
+
       const metadataBody = await options.gamesStore.getDerivedArtifact(slug, version, 'media/metadata.json');
       const media = parseGameMedia(metadataBody?.toString('utf8') ?? null);
 
-      // Runs that failed mid-capture store frames without metadata; the manifest's
-      // gate verdict names the first stored frame (`media/opening.png` shape).
+      // Runs that failed mid-capture store frames without metadata; the verdict names
+      // the first stored frame (`media/opening.png` shape).
       const fallbackShot =
-        !media && manifest.gate?.screenshot && /^media\/[a-z0-9][a-z0-9_.-]*\.png$/i.test(manifest.gate.screenshot)
-          ? manifest.gate.screenshot.slice('media/'.length)
+        !media && verdictScreenshot && /^media\/[a-z0-9][a-z0-9_.-]*\.png$/i.test(verdictScreenshot)
+          ? verdictScreenshot.slice('media/'.length)
           : null;
 
       const screenshotFiles = media
@@ -2427,12 +2444,16 @@ export async function registerAgentChannelRoutes(
       return reply.send({
         available: true,
         deliveryId: version,
-        ...(manifest.gate
+        ...(verdict
           ? {
               gate: {
-                green: manifest.gate.green,
-                ranAt: manifest.gate.ranAt,
-                ...(manifest.gate.status ? { status: manifest.gate.status } : {}),
+                green: verdict.green,
+                ranAt: verdict.ranAt,
+                ...(verdict.status ? { status: verdict.status } : {}),
+                // Which lane took these frames. A preview pass is not publish
+                // readiness, and an agent that reads `green` without this would
+                // report a game sealed when it has only typechecked.
+                lane: verdict.lane,
               },
             }
           : {}),

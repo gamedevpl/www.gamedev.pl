@@ -100,10 +100,45 @@ describe('runGate', () => {
     );
 
     expect(outcome.green).toBe(true);
-    expect(run).toHaveBeenCalledWith('npm', ['run', 'check:game', '--', 'comet-courier', '--preview'], harness);
+    // Stills ride along by default (BY-28a): the preview build already installs Chrome,
+    // and an agent that cannot run the game has no other evidence its canvas drew.
+    expect(run).toHaveBeenCalledWith(
+      'npm',
+      ['run', 'check:game', '--', 'comet-courier', '--preview', '--preview-stills'],
+      harness,
+    );
+    // This harness has no media directory, so nothing was captured — and the lane is
+    // unchanged by that. The invariant that matters is unmoved: never bundle.html.
     expect(derived.map((d) => d.name)).toEqual(['preview.html']);
     expect(outcome.artifacts).toEqual(['preview.html']);
     expect(outcome.artifacts).not.toContain('bundle.html');
+  });
+
+  it('drops preview stills when GATE_PREVIEW_STILLS=0, without touching the lane', async () => {
+    // A kill switch that needs no deploy: if the spend or the wall clock ever looks
+    // wrong, this stops the capture and still leaves a working preview verdict.
+    const harness = await harnessDir();
+    const { store } = stubStore();
+    const run = vi.fn(async (command: string, args: string[]) =>
+      command === 'npm' && args.includes('check:game')
+        ? { code: 0, output: 'preview ok' }
+        : { code: 0, output: 'deadbeef' },
+    );
+    const previous = process.env.GATE_PREVIEW_STILLS;
+    process.env.GATE_PREVIEW_STILLS = '0';
+    try {
+      const outcome = await runGate(
+        'comet-courier',
+        'v1',
+        { store, prepareHarness: async () => harness, run, assembleBundle: stubAssemble },
+        { preview: true },
+      );
+      expect(outcome.green).toBe(true);
+      expect(run).toHaveBeenCalledWith('npm', ['run', 'check:game', '--', 'comet-courier', '--preview'], harness);
+    } finally {
+      if (previous === undefined) delete process.env.GATE_PREVIEW_STILLS;
+      else process.env.GATE_PREVIEW_STILLS = previous;
+    }
   });
 
   it('reports the engine commit it actually checked against, from the harness itself', async () => {

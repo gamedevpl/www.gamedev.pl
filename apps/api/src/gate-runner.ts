@@ -162,6 +162,17 @@ export async function runGate(
   // whether the original kit claim was still supported.
   const healthRun = Boolean(options.engineRef);
   const previewRun = Boolean(options.preview);
+  /**
+   * Whether a preview run also takes stills.
+   *
+   * On by default because it is nearly free — the preview build already installs
+   * Chrome for a capture it never runs — and because an agent that cannot run the
+   * game otherwise iterates on prose. Env-killable rather than deploy-gated: if the
+   * spend or the wall clock ever looks wrong, `GATE_PREVIEW_STILLS=0` stops it
+   * without shipping code. The stage is advisory in the harness, so turning it off
+   * (or a machine with no browser) costs frames, never a verdict.
+   */
+  const previewStills = previewRun && process.env.GATE_PREVIEW_STILLS !== '0';
   if (!healthRun && manifest.kitEngineRef) {
     const registry = await (deps.readKitRegistry ?? (() => deps.store.getKitRegistry()))().catch(() => null);
     if (registry && !isKitEngineRefSupported(manifest.kitEngineRef, registry)) {
@@ -227,7 +238,9 @@ export async function runGate(
     // (that flag re-records the behavioural golden instead of checking against it).
     const check = await deps.run(
       'npm',
-      previewRun ? ['run', 'check:game', '--', slug, '--preview'] : ['run', 'check:game', '--', slug],
+      previewRun
+        ? ['run', 'check:game', '--', slug, '--preview', ...(previewStills ? ['--preview-stills'] : [])]
+        : ['run', 'check:game', '--', slug],
       harness,
     );
     if (check.code !== 0) {
@@ -258,15 +271,28 @@ export async function runGate(
     }
 
     if (previewRun) {
-      // Preview pass: Studio-playable document only. Never bundle.html / media — those
-      // are publish seals. Caller writes previewGate, not gate.
-      const artifacts = await storePreview(deps, slug, version, harness);
+      // Preview pass: Studio-playable document, plus stills when the harness took any.
+      // Never bundle.html — that is the publish seal, and the caller writes previewGate
+      // rather than gate, so nothing here can become publishable.
+      //
+      // The stills are the point of the lane for an agent that cannot run the game:
+      // typecheck/smoke/build all pass without a pixel ever existing, so prose was the
+      // only evidence it had. `storeCaptureMedia` is best-effort and the harness stage
+      // is advisory, so a run with no browser simply stores the document as before.
+      const artifacts = [
+        ...(await storePreview(deps, slug, version, harness)),
+        ...(previewStills ? await storeCaptureMedia(deps, slug, version, harness, roots) : []),
+      ];
+      const screenshot = firstGateScreenshotPath(artifacts);
       return {
         green: true,
-        report: `check:game --preview passed against engine ${engineCommit ?? engineRef}; preview.html stored`,
+        report:
+          `check:game --preview passed against engine ${engineCommit ?? engineRef}; ` +
+          `${artifacts.length} artifact(s) stored`,
         artifacts,
         durationMs: now() - startedAt,
         ...(engineCommit ? { engineCommit } : {}),
+        ...(screenshot ? { screenshot } : {}),
       };
     }
 
