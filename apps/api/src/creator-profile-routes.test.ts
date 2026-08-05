@@ -115,6 +115,33 @@ describe('creator profile routes', () => {
     expect(JSON.stringify(body)).not.toContain('Secret Google');
   });
 
+  it('lists one card per slug when a published improvement shares the slug', async () => {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:creator' });
+    await store.claimHandle('g:creator', 'ada', '2026-07-01T00:00:00.000Z');
+    await store.createSubmission(42, 'g:creator', 'TV Tycoon');
+    await store.setSubmissionSlug(42, 'tv-tycoon');
+    await store.setSubmissionPublishedAt(42, '2026-07-01T12:00:00.000Z');
+    // Improvement job: same slug, newer, also published — the Studio shelf collapses
+    // these; the public profile must too.
+    await store.createSubmission(43, 'g:creator', 'TV Tycoon');
+    await store.setSubmissionSlug(43, 'tv-tycoon');
+    await store.setSubmissionPublishedAt(43, '2026-08-01T12:00:00.000Z');
+    await store.setPublication({
+      slug: 'tv-tycoon',
+      state: 'published',
+      currentVersion: 'v2',
+      publishedAt: '2026-08-01T12:00:00.000Z',
+    });
+    const app = await appWith(store);
+
+    const publicPage = await app.inject({ method: 'GET', url: '/api/creators/ada' });
+    expect(publicPage.statusCode).toBe(200);
+    expect(publicPage.json().games).toEqual([
+      expect.objectContaining({ slug: 'tv-tycoon', title: 'TV Tycoon', creatorHandle: 'ada' }),
+    ]);
+  });
+
   it('includes gate screenshots in published game cards', async () => {
     const store = new InMemoryStore();
     await store.upsertUser({ uid: 'g:creator' });
