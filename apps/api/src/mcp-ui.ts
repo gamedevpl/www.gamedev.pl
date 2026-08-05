@@ -23,9 +23,11 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
  *    frame that owns that bridge. Playable-preview views nest the game one iframe
  *    deeper instead (Phase 2); nothing here does that yet.
  *
- * CSP metadata is deliberately omitted from the resource descriptors: the host default
- * is deny-all, which is exactly right for a card that fetches nothing. Declaring
- * `connectDomains` / `frameDomains` is a Phase 2 concern.
+ * The view declares an empty CSP rather than leaning on the host default. Same effect —
+ * it fetches nothing — but stated rather than assumed, and ChatGPT refuses to accept a
+ * template for submission without it. `frameDomains` stays empty until Phase 2 needs a
+ * nested frame, and opting into it is documented to trigger stricter review, so it is
+ * not something to declare speculatively.
  */
 
 /** Extension id hosts advertise in `initialize` and we echo back when we support it. */
@@ -184,6 +186,23 @@ interface UiResource {
   mimeType: string;
   text: string;
 }
+
+/**
+ * Origin the view is attributed to. Required by ChatGPT when submitting a plugin with
+ * UI; inert everywhere else. It identifies the view, and grants it nothing on our site —
+ * the card is served as inline HTML and never runs with our origin's authority.
+ */
+const VIEW_DOMAIN = 'https://www.gamedev.pl';
+
+/**
+ * Declared per resource. Empty by design: the card inlines everything, screenshots
+ * arrive as data URIs, and it calls tools through the host rather than the network.
+ */
+const VIEW_CSP = Object.freeze({
+  connectDomains: [] as string[],
+  resourceDomains: [] as string[],
+  frameDomains: [] as string[],
+});
 
 /**
  * The round-status card. Self-contained by necessity — the host CSP is `default-src
@@ -366,6 +385,7 @@ const ROUND_STATUS_HTML = `<!doctype html>
         var attempts = 0;
         var speculative = false;
         var giveUpTimer = null;
+        var contextKey = null;
         var stopped = false;
         var timer = null;
 
@@ -756,6 +776,33 @@ const ROUND_STATUS_HTML = `<!doctype html>
           reportSize();
         }
 
+        /**
+         * The last piece of watching-without-polling: when a verdict lands the agent is
+         * usually gone, so nothing in the conversation knows it. The host holds this
+         * until the next user message, so if the creator then says "fix it" the agent
+         * already has the verdict instead of spending a call to discover it. Sent once
+         * per distinct verdict — polling must not re-announce the same thing.
+         */
+        function pushModelContext(status) {
+          var gate = status.gate;
+          if (!gate || typeof gate.status !== 'string' || gate.status === 'pending') return;
+          var key = gate.status + ':' + (gate.deliveryId || '');
+          if (key === contextKey) return;
+          contextKey = key;
+          request('ui/update-model-context', {
+            structuredContent: {
+              slug: status.slug || null,
+              phase: status.phase,
+              gate: {
+                status: gate.status,
+                lane: gate.lane || null,
+                deliveryId: gate.deliveryId || null,
+                summary: typeof gate.summary === 'string' ? gate.summary : null
+              }
+            }
+          });
+        }
+
         function schedule(seconds) {
           if (stopped || timer) return;
           var delay = Math.max(10, Number(seconds) || 30) * 1000;
@@ -803,6 +850,7 @@ const ROUND_STATUS_HTML = `<!doctype html>
               return;
             }
             live = true;
+            pushModelContext(status);
             if (giveUpTimer) {
               clearTimeout(giveUpTimer);
               giveUpTimer = null;
@@ -916,14 +964,19 @@ const UI_RESOURCES: readonly UiResource[] = Object.freeze([
   },
 ]);
 
+/** What a host reads about a view: its CSP and the origin it belongs to. */
+function uiResourceMeta(): Record<string, unknown> {
+  return { ui: { csp: VIEW_CSP, domain: VIEW_DOMAIN } };
+}
+
 /** Descriptors for `resources/list` — no bodies. */
-export function uiResourceDescriptors(): Array<Omit<UiResource, 'text'>> {
-  return UI_RESOURCES.map(({ text: _text, ...descriptor }) => descriptor);
+export function uiResourceDescriptors(): Array<Record<string, unknown>> {
+  return UI_RESOURCES.map(({ text: _text, ...descriptor }) => ({ ...descriptor, _meta: uiResourceMeta() }));
 }
 
 /** One `resources/read` content entry, or null when the URI is not ours. */
-export function readUiResource(uri: string): { uri: string; mimeType: string; text: string } | null {
+export function readUiResource(uri: string): Record<string, unknown> | null {
   const found = UI_RESOURCES.find((resource) => resource.uri === uri);
   if (!found) return null;
-  return { uri: found.uri, mimeType: found.mimeType, text: found.text };
+  return { uri: found.uri, mimeType: found.mimeType, text: found.text, _meta: uiResourceMeta() };
 }

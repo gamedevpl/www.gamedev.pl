@@ -3796,7 +3796,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
               const uiMeta = appOnly
                 ? { visibility: ['app'] }
                 : uiResourceUri
-                  ? { resourceUri: uiResourceUri, visibility: ['model', 'app'] }
+                  ? // visibility defaults to ["model", "app"], so a launcher says nothing.
+                    { resourceUri: uiResourceUri }
                   : null;
               return {
                 name,
