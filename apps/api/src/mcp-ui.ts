@@ -23,9 +23,11 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
  *    frame that owns that bridge. Playable-preview views nest the game one iframe
  *    deeper instead (Phase 2); nothing here does that yet.
  *
- * CSP metadata is deliberately omitted from the resource descriptors: the host default
- * is deny-all, which is exactly right for a card that fetches nothing. Declaring
- * `connectDomains` / `frameDomains` is a Phase 2 concern.
+ * The view declares an empty CSP rather than leaning on the host default. Same effect —
+ * it fetches nothing — but stated rather than assumed, and ChatGPT refuses to accept a
+ * template for submission without it. `frameDomains` stays empty until Phase 2 needs a
+ * nested frame, and opting into it is documented to trigger stricter review, so it is
+ * not something to declare speculatively.
  */
 
 /** Extension id hosts advertise in `initialize` and we echo back when we support it. */
@@ -184,6 +186,41 @@ interface UiResource {
   mimeType: string;
   text: string;
 }
+
+/**
+ * Origin the view is attributed to. Required by ChatGPT when submitting a plugin with
+ * UI; inert everywhere else. It identifies the view, and grants it nothing on our site —
+ * the card is served as inline HTML and never runs with our origin's authority.
+ */
+const VIEW_DOMAIN = 'https://www.gamedev.pl';
+
+interface UiCsp {
+  readonly connectDomains: readonly string[];
+  readonly resourceDomains: readonly string[];
+  readonly frameDomains: readonly string[];
+}
+
+interface UiResourceMeta {
+  ui: { csp: UiCsp; domain: string };
+}
+
+/** What `resources/list` returns per view: everything but the body. */
+export type UiResourceDescriptor = Omit<UiResource, 'text'> & { _meta: UiResourceMeta };
+
+/** What `resources/read` returns: the body, plus the same declared metadata. */
+export type UiResourceContents = Pick<UiResource, 'uri' | 'mimeType' | 'text'> & { _meta: UiResourceMeta };
+
+/**
+ * Declared per resource. Empty by design: the card inlines everything, screenshots
+ * arrive as data URIs, and it calls tools through the host rather than the network.
+ */
+const VIEW_CSP: UiCsp = Object.freeze({
+  // Frozen individually: Object.freeze is shallow, and this one object is handed out
+  // on every resources/list and resources/read.
+  connectDomains: Object.freeze([]) as readonly string[],
+  resourceDomains: Object.freeze([]) as readonly string[],
+  frameDomains: Object.freeze([]) as readonly string[],
+});
 
 /**
  * The round-status card. Self-contained by necessity — the host CSP is `default-src
@@ -366,6 +403,8 @@ const ROUND_STATUS_HTML = `<!doctype html>
         var attempts = 0;
         var speculative = false;
         var giveUpTimer = null;
+        var contextKey = null;
+        var REPORT_CONTEXT_LIMIT = 4000;
         var stopped = false;
         var timer = null;
 
@@ -756,6 +795,42 @@ const ROUND_STATUS_HTML = `<!doctype html>
           reportSize();
         }
 
+        /**
+         * The last piece of watching-without-polling: when a verdict lands the agent is
+         * usually gone, so nothing in the conversation knows it. The host holds this
+         * until the next user message, so if the creator then says "fix it" the agent
+         * already has the verdict instead of spending a call to discover it. Sent once
+         * per distinct verdict — polling must not re-announce the same thing.
+         */
+        function pushModelContext(status) {
+          var gate = status.gate;
+          if (!gate || typeof gate.status !== 'string' || gate.status === 'pending') return;
+          var key = gate.status + ':' + (gate.deliveryId || '');
+          if (key === contextKey) return;
+          contextKey = key;
+          // The report, not the summary, is what says what broke — and the app-only
+          // status result never reaches the transcript, so without it here a follow-up
+          // 'fix it' still costs a tool call to discover the failure. Bounded, because
+          // this lands in the model's context whether or not it is ever used.
+          var report = typeof gate.report === 'string' ? gate.report.trim() : '';
+          if (report.length > REPORT_CONTEXT_LIMIT) {
+            report = report.slice(0, REPORT_CONTEXT_LIMIT) + '\\n… (truncated; call get_gate_verdict for the rest)';
+          }
+          request('ui/update-model-context', {
+            structuredContent: {
+              slug: status.slug || null,
+              phase: status.phase,
+              gate: {
+                status: gate.status,
+                lane: gate.lane || null,
+                deliveryId: gate.deliveryId || null,
+                summary: typeof gate.summary === 'string' ? gate.summary : null,
+                report: report || null
+              }
+            }
+          });
+        }
+
         function schedule(seconds) {
           if (stopped || timer) return;
           var delay = Math.max(10, Number(seconds) || 30) * 1000;
@@ -803,6 +878,7 @@ const ROUND_STATUS_HTML = `<!doctype html>
               return;
             }
             live = true;
+            pushModelContext(status);
             if (giveUpTimer) {
               clearTimeout(giveUpTimer);
               giveUpTimer = null;
@@ -916,14 +992,19 @@ const UI_RESOURCES: readonly UiResource[] = Object.freeze([
   },
 ]);
 
+/** What a host reads about a view: its CSP and the origin it belongs to. */
+function uiResourceMeta(): UiResourceMeta {
+  return { ui: { csp: VIEW_CSP, domain: VIEW_DOMAIN } };
+}
+
 /** Descriptors for `resources/list` — no bodies. */
-export function uiResourceDescriptors(): Array<Omit<UiResource, 'text'>> {
-  return UI_RESOURCES.map(({ text: _text, ...descriptor }) => descriptor);
+export function uiResourceDescriptors(): UiResourceDescriptor[] {
+  return UI_RESOURCES.map(({ text: _text, ...descriptor }) => ({ ...descriptor, _meta: uiResourceMeta() }));
 }
 
 /** One `resources/read` content entry, or null when the URI is not ours. */
-export function readUiResource(uri: string): { uri: string; mimeType: string; text: string } | null {
+export function readUiResource(uri: string): UiResourceContents | null {
   const found = UI_RESOURCES.find((resource) => resource.uri === uri);
   if (!found) return null;
-  return { uri: found.uri, mimeType: found.mimeType, text: found.text };
+  return { uri: found.uri, mimeType: found.mimeType, text: found.text, _meta: uiResourceMeta() };
 }

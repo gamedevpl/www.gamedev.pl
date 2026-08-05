@@ -152,6 +152,58 @@ describe('ui resources', () => {
     expect(readUiResource('')).toBeNull();
   });
 
+  it('declares its CSP and origin rather than relying on the host default', () => {
+    // Same effect as the deny-all default, but stated: ChatGPT will not accept a
+    // template for submission without it, and an empty frameDomains is a deliberate
+    // signal that nothing is nested yet (declaring one triggers stricter review).
+    for (const meta of [uiResourceDescriptors()[0]?._meta, readUiResource(ROUND_STATUS_RESOURCE_URI)?._meta]) {
+      expect(meta).toMatchObject({
+        ui: {
+          csp: { connectDomains: [], resourceDomains: [], frameDomains: [] },
+          domain: 'https://www.gamedev.pl',
+        },
+      });
+    }
+  });
+
+  it('tells the model what the view learned, once per verdict', () => {
+    // When a verdict lands the agent is usually gone, so nothing in the conversation
+    // knows it. The host holds this until the next user message.
+    const html = readUiResource(ROUND_STATUS_RESOURCE_URI)?.text ?? '';
+    expect(html).toContain("request('ui/update-model-context'");
+    // Polling must not re-announce the same verdict on every pass.
+    expect(html).toContain('if (key === contextKey) return;');
+    // Nothing to say while the gate is still running.
+    expect(html).toContain("gate.status === 'pending') return;");
+    // The report is what a follow-up turn needs; the summary alone would still cost a
+    // tool call to find out what broke. Bounded, since it lands in the model's context.
+    expect(html).toContain('report: report || null');
+    expect(html).toContain('REPORT_CONTEXT_LIMIT');
+    expect(html).toContain('truncated; call get_gate_verdict for the rest');
+  });
+
+  it('hands out a CSP nobody can mutate, since one object serves every response', () => {
+    const csp = uiResourceDescriptors()[0]?._meta.ui.csp as unknown as Record<string, string[]>;
+    // Object.freeze is shallow: the arrays needed freezing too.
+    expect(() => csp.connectDomains.push('https://evil.example')).toThrow();
+    expect(uiResourceDescriptors()[0]?._meta.ui.csp.connectDomains).toEqual([]);
+  });
+
+  it('parses as JavaScript — the whole view lives inside a TS template literal', () => {
+    // This file is uniquely prone to a class of bug nothing else catches: a backtick,
+    // a ${, or a \n written in a comment or string is consumed by TypeScript and lands
+    // in the emitted view as a real character, breaking its script. tsc is happy, the
+    // string-matching tests below are happy, and the card renders blank in production.
+    // Caught exactly this way once, by the browser harness rather than by CI.
+    const html = readUiResource(ROUND_STATUS_RESOURCE_URI)?.text ?? '';
+    const open = html.indexOf('<script>');
+    const close = html.lastIndexOf('</script>');
+    expect(open).toBeGreaterThan(-1);
+    expect(close).toBeGreaterThan(open);
+    const script = html.slice(open + '<script>'.length, close);
+    expect(() => new Function(script)).not.toThrow();
+  });
+
   it('is self-contained, because the host CSP is deny-all and we declare no domains', () => {
     const html = readUiResource(ROUND_STATUS_RESOURCE_URI)?.text ?? '';
     expect(html).not.toMatch(/<script[^>]+src=/i);
