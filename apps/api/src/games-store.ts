@@ -306,7 +306,14 @@ export interface VersionManifest {
    * `status: 'kit_outdated'` is preserved so agents refresh the kit instead of retrying
    * typecheck/smoke/build against an unsupported engine pin.
    */
-  previewGate?: { green: boolean; ranAt: string; report?: string; status?: 'kit_outdated' };
+  previewGate?: {
+    green: boolean;
+    ranAt: string;
+    report?: string;
+    status?: 'kit_outdated';
+    /** First stills frame, when the preview run captured any (BY-28a). */
+    screenshot?: string;
+  };
   /**
    * The most recent *health* verdict: the same check re-run later against the current
    * engine, asking "does this game still work on today's GameKit".
@@ -474,7 +481,7 @@ export interface GamesStore {
   putPreviewGateResult(
     slug: string,
     version: string,
-    result: { green: boolean; report?: string; status?: 'kit_outdated' },
+    result: { green: boolean; report?: string; status?: 'kit_outdated'; screenshot?: string },
   ): Promise<void>;
   /**
    * Records a *health* verdict — the check re-run against the current engine, long
@@ -861,6 +868,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
         ranAt: new Date(now()).toISOString(),
         ...(result.report ? { report: result.report } : {}),
         ...(result.status ? { status: result.status } : {}),
+        ...(result.screenshot ? { screenshot: result.screenshot } : {}),
       };
       await writeObject(`${prefix}/manifest.json`, Buffer.from(JSON.stringify(manifest, null, 2)), 'application/json');
     },

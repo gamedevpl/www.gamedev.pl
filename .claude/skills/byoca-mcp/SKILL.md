@@ -105,6 +105,26 @@ composer (`apps/web/src/StudioLivePreview.tsx`); clicking opens the normal theat
 Agents should therefore **stage a runnable tree early and keep staging** — it is the
 cheapest way to show the creator progress, and it costs no turns.
 
+### Preview stills (BY-28a) — frames without a publish
+
+The live staged preview shows the **creator** a playable game; it does nothing for an
+agent that cannot run one. So the preview gate lane now also takes stills:
+`check:game --preview --preview-stills` runs the capture plan but skips the per-frame
+screenshots and the ffmpeg encode, keeping only the named marks.
+
+- Nearly free: a preview build already `apt-get install`s Chrome for a capture it never
+  ran. The expensive halves — a CDP screenshot per frame, and the video — are skipped.
+- **Advisory stage.** A capture failure reports and the lane still passes; a machine
+  with no browser previews exactly as before.
+- **Kill switch:** `GATE_PREVIEW_STILLS=0` on the gate runner drops the flag with no
+  deploy. Volume is already bounded by `SELF_BUILD_DELIVERY_CAP` (20 per round, shared
+  by preview and publish).
+- `manifest.previewGate.screenshot` names the frame; `get_gate_media` serves either
+  lane and reports `gate.lane: 'preview' | 'publish'`. **Publish wins when both exist.**
+- Agents must not read a green _preview_ as publish readiness — hence the lane field.
+- No video on the preview lane, ever: nothing renders an inlined mp4, and the encode is
+  the expensive half.
+
 ### `end` is required after submit (not optional etiquette)
 
 ChatGPT-class agents usually **submit and stop**. Soft `call_end` alone was not

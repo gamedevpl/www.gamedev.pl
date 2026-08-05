@@ -424,6 +424,49 @@ describe('GET /api/agent/build/media (BY-28)', () => {
     expect(res.json().error).toBe(STALE_AGENT_TOKEN_REASON);
   });
 
+  it('serves preview-lane stills, and says which lane took them', async () => {
+    // BY-28a: before preview stills, a delivery on the cheap lane had no media at all,
+    // so an agent that cannot run the game iterated on prose. The lane must be stated —
+    // a preview pass is not publish readiness, and `green` alone would read as sealed.
+    const store = new InMemoryStore();
+    await seedDeliveredJob(store);
+    const manifest = {
+      slug: SLUG,
+      version: VERSION,
+      issueNumber: ISSUE,
+      previewGate: { green: true, ranAt: '2026-08-03T20:00:00.000Z', screenshot: 'media/opening.png' },
+    };
+    app = await createApp(store, stubGamesStore({ manifest }), stubObjectStore().objectStore);
+
+    const res = await app.inject({ method: 'GET', url: '/api/agent/build/media', headers: agentHeaders() });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({
+      available: true,
+      deliveryId: VERSION,
+      gate: { green: true, lane: 'preview' },
+    });
+    expect(res.json().frames).toHaveLength(1);
+  });
+
+  it('prefers the publish verdict when a delivery has both', async () => {
+    // Publish is the later, fuller run and its media is what a creator would be shown.
+    const store = new InMemoryStore();
+    await seedDeliveredJob(store);
+    const manifest = {
+      slug: SLUG,
+      version: VERSION,
+      issueNumber: ISSUE,
+      previewGate: { green: true, ranAt: '2026-08-03T20:00:00.000Z' },
+      gate: { green: false, ranAt: '2026-08-03T21:00:00.000Z' },
+    };
+    app = await createApp(store, stubGamesStore({ manifest }), stubObjectStore().objectStore);
+
+    const res = await app.inject({ method: 'GET', url: '/api/agent/build/media', headers: agentHeaders() });
+
+    expect(res.json().gate).toMatchObject({ green: false, lane: 'publish' });
+  });
+
   it('refuses a version delivered by a different job on the same slug', async () => {
     // Every improvement round is a new job that inherits the published slug, so an
     // earlier round's version resolves fine under this one's slug — and after a slug
