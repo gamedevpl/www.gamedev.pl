@@ -119,6 +119,9 @@ const MAX_SUBMIT_FILES = MAX_UPLOAD_FILES;
 
 /** How often the round view should re-read status. Matches the gate's own backoff. */
 const ROUND_STATUS_RETRY_AFTER_SECONDS = 30;
+/** A card shows a strip, not a contact sheet; the bytes ride a postMessage. */
+const ROUND_MEDIA_MAX_FRAMES = 3;
+const ROUND_MEDIA_BYTE_BUDGET = 1_500_000;
 const TRANSPORT_SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 const MAX_TRANSPORT_SESSIONS = 10_000;
 
@@ -3466,6 +3469,121 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           return toolOk({ ...body, stop: true, reason: 'gate_green' });
         }
         return toolOk({ ...body, stop: false });
+      },
+    },
+
+    /**
+     * App-only companion to get_gate_media, for the round view.
+     *
+     * The agent cannot screenshot a game it has no browser to run — observed repeatedly,
+     * and correctly: the alternative is drawing an approximation and calling it a
+     * capture. The gate does run a browser and captures on both lanes, so its frames are
+     * the only honest picture of the build. Reaching them through the agent means waiting
+     * for a verdict, which the workflow tells it not to do. The card is already waiting,
+     * so it fetches them itself.
+     *
+     * Unlike get_gate_media this returns the bytes inside structuredContent rather than
+     * as image blocks: a view needs data URIs, and there is no model context to protect
+     * because the model never sees this call.
+     */
+    get_round_media: {
+      annotations: { title: 'Gate frames for the round view', ...READS },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          available: { type: 'boolean' },
+          deliveryId: { type: ['string', 'null'] },
+          lane: { type: ['string', 'null'] },
+          frames: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                file: { type: 'string' },
+                name: { type: 'string' },
+                png: { type: 'string', description: 'base64 PNG' },
+              },
+            },
+          },
+          video: { type: ['object', 'null'], properties: { file: { type: 'string' }, url: { type: 'string' } } },
+          framesOmitted: { type: 'number', description: 'Frames the gate captured but this reply could not carry.' },
+          reason: { type: 'string', description: 'Why there is nothing to show, when there is nothing to show.' },
+        },
+        required: ['available', 'frames'],
+      },
+      description:
+        "The gate's own frames for a delivery, as base64 PNGs the round view can render, plus the gameplay " +
+        'video link when one exists. Read-only, app-only, and presence-neutral like get_round_status.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          sessionKey: SESSION_KEY_PROP,
+          deliveryId: { type: 'string', description: "Delivery version id; default is the job's latest." },
+        },
+        required: [],
+      },
+      handler: async (args, ctx) => {
+        const auth = await resolveAuth(ctx, args, { allowTerminalReceipt: true });
+        if (!('channelToken' in auth)) return auth;
+
+        const deliveryId =
+          typeof args.deliveryId === 'string' && args.deliveryId.trim() ? args.deliveryId.trim() : null;
+        const query = new URLSearchParams({ frames: 'all' });
+        if (deliveryId) query.set('version', deliveryId);
+        const res = await injectChannel(
+          ctx.request,
+          'GET',
+          `/api/agent/build/media?${query.toString()}`,
+          auth.channelToken,
+        );
+        const body = res.json() as Record<string, unknown> & {
+          error?: string;
+          frames?: Array<{ file?: string; name?: string; png?: string }>;
+          video?: unknown;
+          framesOmitted?: number;
+          // The lane lives under the verdict, not at the top level: which run captured
+          // these frames is a property of the gate that took them.
+          gate?: { lane?: unknown };
+          reason?: string;
+        };
+        if (res.statusCode !== 200) {
+          return toolErr(body.error ?? `gate media failed (${res.statusCode})`);
+        }
+
+        // Bounded again on our side, in base64 rather than in bytes.
+        //
+        // The channel already caps what it inlines, but it caps *decoded* size for the
+        // sake of a model's context. What binds here is different: these frames ride a
+        // JSON-RPC postMessage through the host into a sandboxed iframe, base64 and all,
+        // which is a third larger than the channel measured. So the channel's ceiling is
+        // not this one's, and a run that squeaks under it can still be too much to send.
+        // Whatever is dropped is counted, never silently lost.
+        let budget = ROUND_MEDIA_BYTE_BUDGET;
+        const frames: Array<{ file: string; name: string; png: string }> = [];
+        let omitted = typeof body.framesOmitted === 'number' ? body.framesOmitted : 0;
+        for (const frame of body.frames ?? []) {
+          const png = typeof frame.png === 'string' ? frame.png : '';
+          if (!png) continue;
+          if (frames.length >= ROUND_MEDIA_MAX_FRAMES || png.length > budget) {
+            omitted += 1;
+            continue;
+          }
+          budget -= png.length;
+          frames.push({ file: String(frame.file ?? ''), name: String(frame.name ?? frame.file ?? ''), png });
+        }
+
+        const lane = typeof body.gate?.lane === 'string' ? body.gate.lane : null;
+        return toolOk({
+          available: frames.length > 0 || Boolean(body.video),
+          deliveryId: (body.deliveryId as string | undefined) ?? deliveryId,
+          lane,
+          frames,
+          video: (body.video as Record<string, unknown> | undefined) ?? null,
+          ...(omitted > 0 ? { framesOmitted: omitted } : {}),
+          // Why there is nothing to show, when there is nothing to show. The card can
+          // say "the gate stored no media" instead of rendering an empty strip.
+          ...(frames.length === 0 && !body.video && body.reason ? { reason: body.reason } : {}),
+        });
       },
     },
 

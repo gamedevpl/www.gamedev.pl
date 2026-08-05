@@ -74,7 +74,7 @@ export const MCP_UI_TOOL_RESOURCES: Readonly<Record<string, string>> = Object.fr
  * watching, not an agent working, so polls must not refresh the heartbeat, clear
  * `agentEndedAt`, or hold off the quiet stall that unlocks self→platform handoff.
  */
-export const MCP_UI_APP_ONLY_TOOLS: ReadonlySet<string> = new Set(['get_round_status']);
+export const MCP_UI_APP_ONLY_TOOLS: ReadonlySet<string> = new Set(['get_round_status', 'get_round_media']);
 
 /** Off unless explicitly enabled — production stays on today's contract until the spike lands. */
 export function mcpUiEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
@@ -352,6 +352,24 @@ const ROUND_STATUS_HTML = `<!doctype html>
         max-height: 220px;
         overflow: auto;
       }
+      /* The gate's own frames: a strip, so several fit without pushing the verdict off. */
+      .gallery {
+        display: grid;
+        grid-auto-flow: column;
+        grid-auto-columns: 1fr;
+        gap: 6px;
+        margin: 12px 0 0;
+      }
+      .gallery img {
+        width: 100%;
+        max-height: 150px;
+        object-fit: contain;
+        background: #0c0e0f;
+        border: 1px solid var(--gd-border);
+        border-radius: 6px;
+        display: block;
+      }
+      .galleryCap { margin: 6px 0 0; font-size: 11.5px; color: var(--gd-muted); }
       .actions { margin: 12px 0 0; }
       .action {
         font: inherit;
@@ -394,6 +412,8 @@ const ROUND_STATUS_HTML = `<!doctype html>
       <p id="summary" class="summary">Reading round status…</p>
       <blockquote id="note" class="note" hidden></blockquote>
       <figure id="shot" class="shot" hidden><img id="shotImg" alt="Latest frame from the build" /><figcaption id="shotCap"></figcaption></figure>
+      <div id="gallery" class="gallery" hidden></div>
+      <p id="galleryCap" class="galleryCap" hidden></p>
       <dl id="meta" class="meta"></dl>
       <pre id="report" class="report" hidden></pre>
       <div id="actionRow" class="actions" hidden>
@@ -421,6 +441,10 @@ const ROUND_STATUS_HTML = `<!doctype html>
         var speculative = false;
         var giveUpTimer = null;
         var contextKey = null;
+        var lastFailure = null;
+        var mediaKey = null;
+        var mediaTriesFor = null;
+        var mediaTries = 0;
         var REPORT_CONTEXT_LIMIT = 4000;
         var stopped = false;
         var timer = null;
@@ -435,6 +459,8 @@ const ROUND_STATUS_HTML = `<!doctype html>
         var actionRow = document.getElementById('actionRow');
         var actionBtn = document.getElementById('actionBtn');
         var actionHint = document.getElementById('actionHint');
+        var gallery = document.getElementById('gallery');
+        var galleryCap = document.getElementById('galleryCap');
         var metaList = document.getElementById('meta');
         var report = document.getElementById('report');
         var foot = document.getElementById('foot');
@@ -694,6 +720,8 @@ const ROUND_STATUS_HTML = `<!doctype html>
           }
 
           actionRow.hidden = true;
+          gallery.hidden = true;
+          galleryCap.hidden = true;
           foot.textContent =
             status === 'pending'
               ? verdict.deliveryId
@@ -807,8 +835,28 @@ const ROUND_STATUS_HTML = `<!doctype html>
         function giveUp() {
           giveUpTimer = null;
           if (live) return;
-          if (seed) renderGateOnly(seed);
-          else summary.textContent = 'Could not read round status here.';
+          if (seed) {
+            renderGateOnly(seed);
+          } else {
+            summary.textContent = 'Could not read round status here.';
+          }
+          // Say which of the two ways it failed. Without this a screenshot of a broken
+          // card is indistinguishable between "the host never gave this view a round
+          // key" and "the host refused the call", and those need opposite fixes.
+          var diagnostic =
+            lastFailure ||
+            (sessionKey
+              ? 'The status call was refused.'
+              : 'This view was never given a round key, so it could not ask.');
+          // Appended, never substituted. renderGateOnly may have just put the gate's own
+          // report here, and that is what the creator came to read — a diagnostic about
+          // our polling is the footnote, not the headline.
+          // The escapes are doubled on purpose: this file is a template literal, so a
+          // bare \\n here would emit a real line break inside a JS string and break the
+          // view. tsc and lint both pass it; only the browser notices.
+          report.textContent =
+            report.hidden || !report.textContent ? diagnostic : report.textContent + '\\n\\n' + diagnostic;
+          report.hidden = false;
           reportSize();
         }
 
@@ -848,6 +896,92 @@ const ROUND_STATUS_HTML = `<!doctype html>
           });
         }
 
+        /**
+         * The gate's frames, fetched once per delivery when a verdict exists.
+         *
+         * This is the picture the agent cannot take: it has no browser to run the game
+         * in, so its only honest options are a real gate capture or nothing. The gate
+         * captures on both lanes; the card is already here when the verdict lands.
+         */
+        function loadMedia(status) {
+          var gate = status.gate;
+          if (!gate || !gate.deliveryId || gate.status === 'pending') return;
+          if (mediaKey === gate.deliveryId) return;
+          if (mediaTriesFor !== gate.deliveryId) {
+            mediaTriesFor = gate.deliveryId;
+            mediaTries = 0;
+          }
+          mediaKey = gate.deliveryId;
+          var id = nextId++;
+          pendingCalls[id] = function (result, error) {
+            if (error) {
+              log('warning', 'gate media unavailable: ' + String(error));
+              // Frames are written by the gate a moment after the verdict, so the first
+              // read can lose a race it will win next poll. Retry once, then stop —
+              // a card that re-asks every 30s forever is worse than a card without a
+              // picture.
+              mediaTries++;
+              if (mediaTries < 2) mediaKey = null;
+              return;
+            }
+            var media = unwrap(result, function (value) {
+              return Array.isArray(value.frames);
+            });
+            if (!media) return;
+            renderMedia(media);
+          };
+          var args = { deliveryId: gate.deliveryId };
+          if (sessionKey) args.sessionKey = sessionKey;
+          post({ jsonrpc: '2.0', id: id, method: 'tools/call', params: { name: 'get_round_media', arguments: args } });
+        }
+
+        function renderMedia(media) {
+          gallery.textContent = '';
+          var frames = media.frames || [];
+          for (var i = 0; i < frames.length; i++) {
+            if (!frames[i] || typeof frames[i].png !== 'string') continue;
+            var img = document.createElement('img');
+            img.src = 'data:image/png;base64,' + frames[i].png;
+            img.alt = frames[i].name || 'Frame captured by the gate';
+            gallery.appendChild(img);
+          }
+          gallery.hidden = gallery.childNodes.length === 0;
+
+          galleryCap.textContent = '';
+          galleryCap.hidden = true;
+          if (!gallery.hidden) {
+            var omitted = Number(media.framesOmitted) || 0;
+            galleryCap.textContent =
+              'Captured by the gate' +
+              (media.lane ? ' on the ' + media.lane + ' run' : '') +
+              '.' +
+              (omitted > 0 ? ' ' + omitted + ' more frame' + (omitted === 1 ? '' : 's') + ' too large to show.' : '');
+            galleryCap.hidden = false;
+          } else if (typeof media.reason === 'string' && media.reason) {
+            // No strip is a fact about the run, not a rendering failure. Say which.
+            galleryCap.textContent = 'No frames: ' + media.reason + '.';
+            galleryCap.hidden = false;
+          }
+          // A video is megabytes; it cannot ride a postMessage and the CSP declares no
+          // domains, so hand it to the host to open rather than trying to play it here.
+          if (media.video && typeof media.video.url === 'string' && media.video.url) {
+            var link = document.createElement('button');
+            link.type = 'button';
+            link.className = 'action';
+            link.style.marginTop = '8px';
+            link.textContent = 'Watch the gate recording';
+            link.onclick = (function (url) {
+              return function () {
+                request('ui/open-link', { url: url });
+              };
+            })(media.video.url);
+            galleryCap.hidden = false;
+            galleryCap.appendChild(document.createElement('br'));
+            galleryCap.appendChild(link);
+          }
+          reportSize();
+        }
+
         function schedule(seconds) {
           if (stopped || timer) return;
           var delay = Math.max(10, Number(seconds) || 30) * 1000;
@@ -875,7 +1009,15 @@ const ROUND_STATUS_HTML = `<!doctype html>
             inFlight = false;
             var status = error ? null : unwrap(result, looksLikeStatus);
             if (!status) {
-              log('warning', 'round status unavailable: ' + String(error || 'unrecognised shape'));
+              // Never JSON.stringify a value the host handed us: structured clone
+              // carries cycles, and a throw here is inside the message handler, which
+              // would take the card's whole update path down with it. A plain coercion
+              // says less and cannot fail.
+              var reason = error
+                ? 'call refused: ' + String(error.message || error.code || error).slice(0, 200)
+                : 'the reply was not round status';
+              lastFailure = (sessionKey ? 'with a round key, ' : 'without a round key, ') + reason;
+              log('warning', 'round status unavailable: ' + lastFailure);
               if (speculative) {
                 // The key can land while this very request is in flight, in which case
                 // noteSessionKey's own poll() was dropped as already in flight. Retry
@@ -896,6 +1038,7 @@ const ROUND_STATUS_HTML = `<!doctype html>
             }
             live = true;
             pushModelContext(status);
+            loadMedia(status);
             if (giveUpTimer) {
               clearTimeout(giveUpTimer);
               giveUpTimer = null;

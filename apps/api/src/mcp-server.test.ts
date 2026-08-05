@@ -2024,10 +2024,14 @@ describe('MCP Apps views (SEP-1865, Phase 0)', () => {
     expect(status?._meta?.ui).toEqual({ visibility: ['app'] });
     expect(status?._meta?.ui?.resourceUri).toBeUndefined();
 
-    // A client with no views must not even see it: it would hand it to its model.
+    const media = withUi.find((tool) => tool.name === 'get_round_media');
+    expect(media?._meta?.ui).toEqual({ visibility: ['app'] });
+
+    // A client with no views must not even see them: it would hand them to its model.
     const { sessionId: plain } = await initializeWith(app, false);
     const withoutUi = await listTools(app, plain);
     expect(withoutUi.some((tool) => tool.name === 'get_round_status')).toBe(false);
+    expect(withoutUi.some((tool) => tool.name === 'get_round_media')).toBe(false);
 
     // Absent from the listing is not the same as unreachable. visibility:["app"] is a
     // contract, so a client that guesses the name is refused rather than served — and
@@ -2232,6 +2236,138 @@ describe('MCP Apps views (SEP-1865, Phase 0)', () => {
 
     const listed = await mcpCall(app, 'resources/list', {}, { 'mcp-session-id': foreign });
     expect(listed.json().error?.code).toBe(-32601);
+  });
+
+  describe('get_round_media (Phase 2 — the frames the agent cannot take)', () => {
+    /** A preview gate run that stored four frames and a video for delivery v1. */
+    function framesGamesStore() {
+      const artifacts = new Map<string, Buffer>([
+        [
+          'media/metadata.json',
+          Buffer.from(
+            JSON.stringify({
+              captures: {
+                opening: { file: 'opening.png' },
+                mid: { file: 'mid.png' },
+                late: { file: 'late.png' },
+                last: { file: 'last.png' },
+              },
+              video: { file: 'gameplay.mp4' },
+            }),
+          ),
+        ],
+        ['media/opening.png', Buffer.from(TINY_PNG, 'base64')],
+        ['media/mid.png', Buffer.from(TINY_PNG, 'base64')],
+        ['media/late.png', Buffer.from(TINY_PNG, 'base64')],
+        ['media/last.png', Buffer.from(TINY_PNG, 'base64')],
+        ['media/gameplay.mp4', Buffer.from('mp4-bytes')],
+      ]);
+      return {
+        // previewGate only: a preview pass is the case that matters during a round,
+        // and it is the one that carries lane 'preview'.
+        getManifest: async (slug: string, version: string) =>
+          slug === 'comet-courier' && version === 'v1'
+            ? { slug, version, issueNumber: ISSUE, previewGate: { green: true, ranAt: '2026-08-01T12:00:00.000Z' } }
+            : null,
+        getDerivedArtifact: async (slug: string, version: string, name: string) =>
+          slug === 'comet-courier' && version === 'v1' ? (artifacts.get(name) ?? null) : null,
+        getSourceFile: async () => null,
+        putCandidateSources: async () => ({ version: 'v1', manifest: {} as never }),
+        putGateResult: async () => {},
+        putDerivedArtifact: async () => {},
+        getKitRegistry: async () => null,
+      } as unknown as GamesStore;
+    }
+
+    const objectStore = (): GcsObjectStore => ({
+      readObject: async () => null,
+      objectExists: async () => true,
+      signReadUrl: async (name: string) => `https://signed.example/${name}?sig=1`,
+    });
+
+    it('carries the frames as base64 the card can render, with the lane that took them', async () => {
+      process.env.MCP_UI = 'true';
+      const store = new InMemoryStore();
+      await seedJob(store);
+      await store.setSubmissionPreviewVersion(ISSUE, 'v1');
+      app = await createApp(store, framesGamesStore(), objectStore());
+      const { sessionId } = await initializeWith(app, true);
+      const started = await callTool(app, 'start', { key: roundKey(1) }, { 'mcp-session-id': sessionId });
+      const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+      const res = await callTool(app, 'get_round_media', { sessionKey }, { 'mcp-session-id': sessionId });
+      expect(res.isError).toBe(false);
+      const media = res.structured as {
+        available: boolean;
+        lane: string | null;
+        frames: Array<{ file: string; name: string; png: string }>;
+        video: { url: string } | null;
+        framesOmitted?: number;
+      };
+      expect(media.available).toBe(true);
+      // A green preview is not publish readiness; the card says which run it is showing.
+      expect(media.lane).toBe('preview');
+      expect(media.frames.map((frame) => frame.name)).toEqual(['opening', 'mid', 'late']);
+      expect(media.frames.every((frame) => frame.png === TINY_PNG)).toBe(true);
+      // Four were captured, three fit — said out loud rather than silently dropped.
+      expect(media.framesOmitted).toBe(1);
+      expect(media.video?.url).toContain('gameplay.mp4');
+
+      // Bytes ride structuredContent, not image blocks: the model never sees this call,
+      // and what the view needs is a data URI rather than an attachment.
+      expect(res.content?.some((part: { type: string }) => part.type === 'image')).toBeFalsy();
+    });
+
+    it('is app-only and presence-neutral, exactly like the status read', async () => {
+      process.env.MCP_UI = 'true';
+      const store = new InMemoryStore();
+      await seedJob(store);
+      await store.setSubmissionPreviewVersion(ISSUE, 'v1');
+      app = await createApp(store, framesGamesStore(), objectStore());
+      const { sessionId } = await initializeWith(app, true);
+      const started = await callTool(app, 'start', { key: roundKey(1) }, { 'mcp-session-id': sessionId });
+      const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+      await callTool(app, 'report_progress', { sessionKey, text: 'agent is here' }, { 'mcp-session-id': sessionId });
+      const before = await store.getSubmission(ISSUE);
+
+      // A client with no views that guesses the name is refused by the tool's own gate,
+      // not merely left out of tools/list.
+      const { sessionId: plain } = await initializeWith(app, false);
+      const guessed = await mcpCall(
+        app,
+        'tools/call',
+        { name: 'get_round_media', arguments: { sessionKey } },
+        { 'mcp-session-id': plain, authorization: `Bearer ${roundKey(1)}` },
+      );
+      expect(guessed.json().error?.code).toBe(-32601);
+
+      // A creator watching frames is not an agent working.
+      for (let i = 0; i < 4; i += 1) {
+        const polled = await callTool(app, 'get_round_media', { sessionKey }, { 'mcp-session-id': sessionId });
+        expect(polled.isError).toBe(false);
+        expect((polled.structured as { warnings?: unknown }).warnings).toBeUndefined();
+      }
+      const after = await store.getSubmission(ISSUE);
+      expect(after?.lastAgentSignalAt).toBe(before?.lastAgentSignalAt);
+    });
+
+    it('says why there is nothing to show rather than answering with an empty strip', async () => {
+      process.env.MCP_UI = 'true';
+      const store = new InMemoryStore();
+      await seedJob(store);
+      app = await createApp(store, framesGamesStore(), objectStore());
+      const { sessionId } = await initializeWith(app, true);
+      const started = await callTool(app, 'start', { key: roundKey(1) }, { 'mcp-session-id': sessionId });
+      const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+      // Nothing delivered yet, so no version resolves.
+      const res = await callTool(app, 'get_round_media', { sessionKey }, { 'mcp-session-id': sessionId });
+      expect(res.isError).toBe(false);
+      const media = res.structured as { available: boolean; frames: unknown[]; reason?: string };
+      expect(media.available).toBe(false);
+      expect(media.frames).toEqual([]);
+      expect(media.reason).toContain('produced by the gate');
+    });
   });
 
   it('honours a correlator negotiated on another instance', async () => {
