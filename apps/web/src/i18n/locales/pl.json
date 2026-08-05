@@ -172,7 +172,8 @@
     "howToPlayDismiss": "Naciśnij Escape lub kliknij obok, aby zamknąć",
     "howToPlayTouch": "Dotyk",
     "howToPlayTouchPad": "Pad ekranowy na ekranach dotykowych",
-    "howToPlayOther": "Sterowanie"
+    "howToPlayOther": "Sterowanie",
+    "aboutGame": "O tej grze"
   },
   "catalog": {
     "title": "Gry",
@@ -224,7 +225,8 @@
       "most_played": "Najczęściej grane",
       "last_played": "Ostatnio grane",
       "alpha": "A–Z"
-    }
+    },
+    "about": "O grze"
   },
   "recommendations": {
     "reasonContinue": "Kontynuuj grę",
@@ -917,7 +919,6 @@
     "gamesAria": "Opublikowane gry",
     "gamesHeading": "Gry ({{count}})",
     "noGames": "Brak opublikowanych gier.",
-    "openPermalink": "Otwórz stronę gry",
     "openStudio": "Otwórz w Studio",
     "editorTitle": "Twój publiczny profil",
     "publishGateTitle": "Zajmij handle, żeby opublikować",
@@ -964,7 +965,8 @@
       "cooldown": "Niedawno zmieniałeś handle — spróbuj ponownie po okresie oczekiwania.",
       "unchanged": "To już jest Twój handle.",
       "unknown": "Nie udało się zaktualizować profilu."
-    }
+    },
+    "openGamePage": "Strona gry"
   },
   "pwa": {
     "ariaLabel": "Zainstaluj tę aplikację",

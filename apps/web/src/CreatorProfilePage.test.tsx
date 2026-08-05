@@ -150,6 +150,24 @@ describe('CreatorProfilePage owner edit', () => {
     );
   });
 
+  it('sends both the title and the meta link to the game page, for anyone', async () => {
+    // The profile is the game page's strongest entry point: everything listed here has
+    // a handle by construction, so the address always resolves.
+    authUser = null;
+    fetchCreatorPage.mockResolvedValue(creatorPageWithGame());
+
+    await renderPage();
+
+    const links = Array.from(container.querySelectorAll<HTMLAnchorElement>('a[href="/ada/sky-dodge"]'));
+    expect(links.length).toBe(2);
+    expect(container.querySelector('.creator-profile-game-title a')?.textContent).toBe('Sky Dodge');
+    expect(links.some((link) => link.textContent?.includes('Game page'))).toBe(true);
+    // Play still goes straight to the theater — the card did not lose its job.
+    expect(
+      Array.from(container.querySelectorAll('button')).some((button) => button.textContent?.includes('Play')),
+    ).toBe(true);
+  });
+
   it('keeps per-game Studio links private to the owner', async () => {
     authUser = { uid: 'g:other', handle: 'bob' };
     fetchCreatorPage.mockResolvedValue(creatorPageWithGame());

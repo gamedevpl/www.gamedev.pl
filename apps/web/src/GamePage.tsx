@@ -9,6 +9,7 @@ import { GameSources } from './GameSources.js';
 import { fetchGamePage, type GamePage as GamePageData } from './gamePageApi.js';
 import { PixelIcon } from './PixelIcon.js';
 import { PublishedGameFrame } from './PublishedGameFrame.js';
+import { ShareGameButton } from './ShareGameButton.js';
 import { creatorPath, gamePath, playPath, type GamePageTab } from './router.js';
 import { parseSpecBlocks } from './specBlocks.js';
 import { SpecMarkdown } from './SpecMarkdown.js';
@@ -207,6 +208,8 @@ export function GamePage({
           >
             <PixelIcon name="wrench" size={13} /> {t('gamePage.remix')}
           </button>
+          {/* Shares this page, not the play permalink — see ShareGameButton. */}
+          <ShareGameButton slug={slug} title={entry.title} path={gamePath(handle, slug)} />
         </div>
       </header>
 

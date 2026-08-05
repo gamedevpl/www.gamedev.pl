@@ -13386,3 +13386,11 @@ a.user-name--profile:focus-visible {
   border-color: var(--turquoise);
   color: var(--turquoise);
 }
+
+/* Catalog card's route to the game page — quiet beside the green Play button. */
+.card-about-link {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+  font-size: 0.85rem;
+}

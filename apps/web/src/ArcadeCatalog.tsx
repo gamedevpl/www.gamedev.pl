@@ -26,7 +26,7 @@ import {
 import { MascotMoment } from './Mascot.js';
 import { PixelIcon } from './PixelIcon.js';
 import { getRecentPlays } from './recentPlays.js';
-import { creatorPath } from './router.js';
+import { creatorPath, gamePath } from './router.js';
 import {
   fetchCatalogSortSignals,
   readCachedCatalogSortPayload,
@@ -450,6 +450,14 @@ function CatalogCard({
             <button className="primary-btn" onClick={() => onPlayGame(entry)}>
               <PixelIcon name="play" size={13} /> {t('catalog.play')}
             </button>
+            {/* Play stays the card's job — this is the way to the game's page, and it
+                only exists for games that resolve to a creator (platform games have no
+                address in the `/:handle/` namespace). */}
+            {entry.creatorHandle ? (
+              <a className="secondary-btn card-about-link" href={gamePath(entry.creatorHandle, entry.slug)}>
+                {t('catalog.about')}
+              </a>
+            ) : null}
             {entry.multiplayer && (
               <button className="secondary-btn party-btn" onClick={() => onPlayTogether(entry)}>
                 <PixelIcon name="phone" size={13} /> {t('party.playTogether')}

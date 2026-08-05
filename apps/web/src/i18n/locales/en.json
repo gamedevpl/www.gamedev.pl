@@ -172,7 +172,8 @@
     "howToPlayDismiss": "Press Escape, or click or tap anywhere outside, to close",
     "howToPlayTouch": "Touch",
     "howToPlayTouchPad": "On-screen pad on touch screens",
-    "howToPlayOther": "Control"
+    "howToPlayOther": "Control",
+    "aboutGame": "About this game"
   },
   "catalog": {
     "title": "Games",
@@ -224,7 +225,8 @@
       "most_played": "Most played",
       "last_played": "Last played",
       "alpha": "A–Z"
-    }
+    },
+    "about": "About"
   },
   "recommendations": {
     "reasonContinue": "Continue playing",
@@ -913,7 +915,6 @@
     "gamesAria": "Published games",
     "gamesHeading": "Games ({{count}})",
     "noGames": "No published games yet.",
-    "openPermalink": "Open game page",
     "openStudio": "Open in Studio",
     "editorTitle": "Your public profile",
     "publishGateTitle": "Claim a handle to publish",
@@ -960,7 +961,8 @@
       "cooldown": "You renamed recently — try again after the cooldown.",
       "unchanged": "That is already your handle.",
       "unknown": "Could not update the profile."
-    }
+    },
+    "openGamePage": "Game page"
   },
   "pwa": {
     "ariaLabel": "Install this app",

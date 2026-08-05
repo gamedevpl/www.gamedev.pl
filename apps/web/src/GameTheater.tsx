@@ -19,7 +19,7 @@ import { useVoiceMeterBridge } from './voiceMeter.js';
 import { useWorldBridge } from './world.js';
 import { useZoneBridge } from './zone.js';
 import { useScreenWakeLock } from './useScreenWakeLock.js';
-import { creatorPath } from './router.js';
+import { creatorPath, gamePath } from './router.js';
 
 /**
  * Shell-owned camera feed under the game iframe. Kept as a tiny component so the
@@ -715,6 +715,15 @@ export function GameTheater({
                     <>
                       <div className="theater-menu-divider theater-mobile-chrome" role="separator" />
                       <PlayerFeedbackWidget slug={reportSlug} />
+                      {/* The way out of the player and onto the game's own page —
+                          releases, code, the board. Only for games that have one. */}
+                      {creatorHandle ? (
+                        <a className="theater-menu-item" href={gamePath(creatorHandle, reportSlug)}>
+                          <PixelIcon name="folder" size={13} /> {t('player.aboutGame')}
+                        </a>
+                      ) : null}
+                      {/* Shares the play permalink: someone handed a game link expects
+                          to land in the game. The game page shares itself instead. */}
                       <ShareGameButton slug={reportSlug} title={displayTitle} />
                       <ReportGameButton slug={reportSlug} title={displayTitle} />
                     </>
