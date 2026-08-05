@@ -1218,6 +1218,18 @@ button:disabled {
   box-shadow: inset 0 0 0 3px var(--turquoise);
 }
 
+.catalog-card-hit-area {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+}
+
+.catalog-card-hit-area:focus-visible {
+  outline: 3px solid var(--turquoise);
+  outline-offset: -3px;
+}
+
 .catalog-preview {
   width: 100%;
   height: 100%;
@@ -1285,6 +1297,7 @@ button:disabled {
    corner so they stay clear of the title/Play overlay along the bottom. */
 .catalog-moments {
   position: absolute;
+  z-index: 1;
   top: 42px;
   right: 8px;
   display: flex;
@@ -1373,6 +1386,7 @@ button:disabled {
 
 .genre-pill {
   position: absolute;
+  z-index: 1;
   top: 10px;
   right: 10px;
   /* The genre is agent-authored and runs as long as it likes ("arcade racing
@@ -1401,13 +1415,15 @@ button:disabled {
 .catalog-overlay {
   position: absolute;
   inset: auto 0 0 0;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 12px;
   padding: 32px 12px 12px;
   background: linear-gradient(to top, rgba(4, 7, 10, 0.92) 15%, rgba(4, 7, 10, 0.6) 55%, rgba(4, 7, 10, 0));
   /* Pass hovers through the scrim to the video underneath; only the buttons catch clicks. */
   pointer-events: none;
+  z-index: 2;
 }
 
 .card-title {
@@ -1422,6 +1438,14 @@ button:disabled {
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
 }
 
+.card-copy {
+  min-width: 0;
+}
+
+.card-copy a {
+  pointer-events: auto;
+}
+
 .card-author {
   margin: -4px 0 0;
   font-size: 0.8rem;
@@ -1430,14 +1454,13 @@ button:disabled {
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
 }
 
-/* Buttons hug their content and sit bottom-left instead of stretching the full card
-   width — a bright full-width CTA on every card turned the whole grid into a wall of
-   green. Play stays the obvious action without dominating the preview. */
+/* Keep the explicit actions in the bottom-right corner while the title and author
+   occupy the remaining width. The card link underneath owns discovery navigation. */
 .card-actions {
   display: flex;
+  justify-content: flex-end;
   flex-wrap: wrap;
-  gap: 8px;
-}
+  gap: 8px;}
 
 .card-actions button {
   pointer-events: auto;
