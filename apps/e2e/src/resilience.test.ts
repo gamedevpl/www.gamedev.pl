@@ -67,10 +67,13 @@ describe.skipIf(!prereq.ok)('error and edge routes', () => {
 
     const text = await bodyText();
     expect(text.length).toBeGreaterThan(0);
-    // Preview-first `/play/<slug>`: an unknown slug is a missing game page, not a
-    // failed theater fetch. Keep the older "could not load / retry" wording too so
-    // a loadError state (catalog fetch failure) still passes this gate.
-    expect(text).toMatch(/does not exist|nie istnieje|could not load|nie udało|retry|ponów/i);
+    // Lifetime `/play/<slug>`: an unknown slug is not in the catalog, so App mounts
+    // UnpublishedPlayView ("isn't available yet") rather than the published preview
+    // page's "does not exist". Keep the older missing / loadError wording too so a
+    // catalog-error path that still renders GameDetailPage passes this gate.
+    expect(text).toMatch(
+      /isn't available yet|nie jest jeszcze dostępna|does not exist|nie istnieje|could not load|nie udało|retry|ponów/i,
+    );
 
     expect(describeProblems(watcher.drain())).toBe('');
   });

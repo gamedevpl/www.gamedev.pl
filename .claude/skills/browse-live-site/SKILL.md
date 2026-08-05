@@ -154,8 +154,8 @@ roughly in order of how often they turn up real issues:
 - **Language toggle** (EN/PL) — check strings actually swap, not just the button state.
 - **Static/legal routes** — `/privacy`, `/terms`.
 - **Error paths** — an unknown path (→ `notFound` view, real 404), an unknown game slug at
-  `/play/<garbage>` (→ in-page "This game page does not exist." on the preview page, not a
-  crash or a blank theater),
+  `/play/<garbage>` (→ in-page "This game isn't available yet…" via UnpublishedPlayView —
+  same lifetime permalink as drafts; not a crash or a blank theater),
   a legacy `/draft/<slug>` (must rewrite to `/play/<slug>`), a bogus `/status/<token>`, a
   bogus `/join/<CODE>#<token>`. These should all render a friendly state, never a blank page
   or an unhandled console exception.
