@@ -133,6 +133,12 @@ const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const CREATOR_HANDLE_PATTERN = /^[a-z][a-z0-9_]{2,23}$/;
 
 /**
+ * Where games with no creator to name live — keep aligned with `PLATFORM_HANDLE` in
+ * apps/api/src/creator-profile.ts. Reserved against claiming, but a real address.
+ */
+export const PLATFORM_HANDLE = 'gamedevpl';
+
+/**
  * Handles nobody can claim — keep aligned with `RESERVED_HANDLES` in
  * apps/api/src/creator-profile.ts (same duplication contract as spa-paths.ts).
  * The game-page matcher checks it so `/health/<slug>`-shaped typos stay 404s on
@@ -324,7 +330,9 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
     if (
       handle &&
       CREATOR_HANDLE_PATTERN.test(handle) &&
-      !RESERVED_HANDLE_SEGMENTS.has(handle) &&
+      // The platform handle is reserved against claiming but *is* an address: it is
+      // where games with no creator to name live. Keep aligned with spa-paths.ts.
+      (handle === PLATFORM_HANDLE || !RESERVED_HANDLE_SEGMENTS.has(handle)) &&
       slug &&
       SLUG_PATTERN.test(slug) &&
       tabSegment !== null

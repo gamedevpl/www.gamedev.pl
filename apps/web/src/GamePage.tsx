@@ -126,9 +126,9 @@ export function GamePage({
     }
   }, [user, slug, follow]);
 
-  // The canonical address carries the owning studio's handle. A page with no
-  // creator handle has no address in this namespace — platform and repo games
-  // stay reachable at /play/<slug> only.
+  // The canonical address carries the owning studio's handle, or the platform's for
+  // a game with no creator to name. The server decides which; the client only keeps
+  // the URL in step with it.
   const canonicalHandle = page?.entry.creatorHandle ?? null;
   useEffect(() => {
     if (state !== 'ready' || !page) return;
@@ -147,7 +147,7 @@ export function GamePage({
   if (state === 'loading') {
     return <p className="game-page-status">{t('gamePage.loading')}</p>;
   }
-  if (state === 'missing' || (state === 'ready' && !canonicalHandle)) {
+  if (state === 'missing') {
     return (
       <div className="game-page-status">
         <p>{t('gamePage.missing')}</p>
@@ -177,9 +177,17 @@ export function GamePage({
     <article className="game-page">
       <header className="game-page-header">
         <nav className="game-page-breadcrumb" aria-label={t('gamePage.breadcrumbAria')}>
-          <a href={creatorPath(handle)} onClick={intercept(() => onNavigate(creatorPath(handle)))}>
-            {creator?.profileName ?? handle}
-          </a>
+          {/* A platform-authored game has no profile to link to, so its breadcrumb
+              goes to the catalog — the place those games actually come from. */}
+          {page.platformAuthored ? (
+            <a href="/" onClick={intercept(() => onNavigate('/'))}>
+              {t('catalog.platformAuthor')}
+            </a>
+          ) : (
+            <a href={creatorPath(handle)} onClick={intercept(() => onNavigate(creatorPath(handle)))}>
+              {creator?.profileName ?? handle}
+            </a>
+          )}
           <span aria-hidden="true"> / </span>
           <span className="game-page-breadcrumb-slug">{slug}</span>
           {entry.genre ? <span className="game-page-genre-badge">{entry.genre}</span> : null}
@@ -321,7 +329,15 @@ export function GamePage({
           <section className="game-page-panel">
             <h2 className="game-page-panel-heading">{t('gamePage.teamHeading')}</h2>
             <ul className="game-page-team">
-              {creator ? (
+              {page.platformAuthored ? (
+                <li>
+                  <span className="game-page-lettermark" aria-hidden="true">
+                    ▲
+                  </span>
+                  <span>{t('catalog.platformAuthor')}</span>
+                  <span className="game-page-team-role">{t('gamePage.rolePlatform')}</span>
+                </li>
+              ) : creator ? (
                 <li>
                   {creator.avatarUrl ? (
                     <img src={creator.avatarUrl} alt="" width={28} height={28} />

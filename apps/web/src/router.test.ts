@@ -133,6 +133,16 @@ describe('parsePathRoute', () => {
         tab,
       });
     }
+    // The platform namespace is an address even though nobody can claim it — it is
+    // where games with no creator to name live.
+    expect(parsePathRoute('/gamedevpl/brick-storm')).toEqual({
+      view: 'game',
+      handle: 'gamedevpl',
+      slug: 'brick-storm',
+    });
+    // Other reserved segments stay closed.
+    expect(parsePathRoute('/health/brick-storm')).toEqual({ view: 'notFound' });
+    expect(parsePathRoute('/studio/brick-storm')).toEqual({ view: 'studio', game: 'brick-storm' });
     // Unknown tab is a 404, not a silent fallback — same rule as the studio tabs.
     expect(parsePathRoute('/nightshift/neon-courier/nope')).toEqual({ view: 'notFound' });
     // Handle and slug keep their own grammars.

@@ -73,12 +73,29 @@ export interface CatalogEntry {
 /** Platform sentinel used in fixture / seed SPECs for games with no human creator. */
 export const PLATFORM_SUBMITTED_BY = 'gamedev-platform';
 
+/** Re-exported so callers reach one name for "the platform's namespace". */
+export { PLATFORM_HANDLE } from './router.js';
+import { PLATFORM_HANDLE } from './router.js';
+
 /**
  * True when the byline should read as the site itself rather than a named person —
  * missing values and the platform sentinel both mean "built here, no human creator".
  */
 export function isPlatformAuthor(submittedBy: string | null | undefined): boolean {
   return !submittedBy || submittedBy === PLATFORM_SUBMITTED_BY;
+}
+
+/**
+ * The handle a game's page lives under: its creator's, or the platform's when there
+ * is no creator to name.
+ *
+ * Every published game has a page, so this never returns null — which is what lets
+ * the catalog and the player link to one unconditionally. The server applies the same
+ * fallback (`game-page-routes.ts`), and a wrong guess here is corrected by the page's
+ * own canonical redirect rather than by a 404.
+ */
+export function gamePageHandle(entry: Pick<CatalogEntry, 'creatorHandle'>): string {
+  return entry.creatorHandle ?? PLATFORM_HANDLE;
 }
 
 /** A published game assembled by the API, ready for the sandboxed iframe's srcDoc. */

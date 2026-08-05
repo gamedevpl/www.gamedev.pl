@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from './AuthContext.js';
-import { catalogMediaUrl, isPlatformAuthor, type CatalogEntry } from './catalog.js';
+import { catalogMediaUrl, gamePageHandle, isPlatformAuthor, type CatalogEntry } from './catalog.js';
 import {
   applyCatalogFilters,
   CATALOG_SORT_MODES,
@@ -450,14 +450,12 @@ function CatalogCard({
             <button className="primary-btn" onClick={() => onPlayGame(entry)}>
               <PixelIcon name="play" size={13} /> {t('catalog.play')}
             </button>
-            {/* Play stays the card's job — this is the way to the game's page, and it
-                only exists for games that resolve to a creator (platform games have no
-                address in the `/:handle/` namespace). */}
-            {entry.creatorHandle ? (
-              <a className="secondary-btn card-about-link" href={gamePath(entry.creatorHandle, entry.slug)}>
-                {t('catalog.about')}
-              </a>
-            ) : null}
+            {/* Play stays the card's job — this is the way to the game's page. Every
+                published game has one: a game with no creator to name lives under the
+                platform handle rather than having no address at all. */}
+            <a className="secondary-btn card-about-link" href={gamePath(gamePageHandle(entry), entry.slug)}>
+              {t('catalog.about')}
+            </a>
             {entry.multiplayer && (
               <button className="secondary-btn party-btn" onClick={() => onPlayTogether(entry)}>
                 <PixelIcon name="phone" size={13} /> {t('party.playTogether')}

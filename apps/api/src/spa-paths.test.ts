@@ -63,6 +63,10 @@ describe('isKnownSpaShellPath', () => {
     '/admin/waitlist',
     '/join/K7M3QP',
     '/nightshift/neon-courier',
+    // The platform's namespace is reserved against claiming but is a real address:
+    // it is where every game with no creator to name lives.
+    '/gamedevpl/brick-storm',
+    '/gamedevpl/brick-storm/releases',
     '/nightshift/neon-courier/board',
     '/nightshift/neon-courier/review',
     '/nightshift/neon-courier/releases',

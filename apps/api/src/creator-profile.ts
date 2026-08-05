@@ -19,6 +19,18 @@ export const HANDLE_RENAME_COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000;
  * Path segments, brand, and vocabulary a creator must not claim as a handle.
  * Kept lowercase; matching is case-insensitive after normalisation.
  */
+/**
+ * The handle platform-authored games live under, so every published game has an
+ * address in the `/:handle/:slug` namespace.
+ *
+ * Most of the catalog predates creator profiles and has no owner to name; without a
+ * fallback those games would have no game page at all, which would leave the whole
+ * surface reachable only for games made after profiles shipped. It is a *namespace*,
+ * not a profile: nobody signs in as it, and it stays in {@link RESERVED_HANDLES} below
+ * so no creator can ever claim it.
+ */
+export const PLATFORM_HANDLE = 'gamedevpl';
+
 export const RESERVED_HANDLES: ReadonlySet<string> = new Set([
   'admin',
   'administrator',

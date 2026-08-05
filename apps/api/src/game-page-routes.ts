@@ -1,6 +1,11 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { profileBylineName, toPublicCreatorProfile, type PublicCreatorProfile } from './creator-profile.js';
+import {
+  PLATFORM_HANDLE,
+  profileBylineName,
+  toPublicCreatorProfile,
+  type PublicCreatorProfile,
+} from './creator-profile.js';
 import { GAME_BUDGET_BYTES, GAME_KIT_MODULES } from './games-repo-contract.js';
 import { catalogEntryFromSpec, type CatalogGameEntry, type GitHubClient } from './github-client.js';
 import type { GamesStore, VersionManifest } from './games-store.js';
@@ -47,6 +52,12 @@ export interface GamePageStats {
 export interface GamePageResponse {
   entry: CatalogGameEntry;
   creator: PublicCreatorProfile | null;
+  /**
+   * True when the game has no creator to name and lives under the platform handle.
+   * The page shows the platform as the author rather than linking a profile that
+   * does not exist.
+   */
+  platformAuthored: boolean;
   /**
    * SPEC.md with the catalog frontmatter stripped — the game's own README.
    * Agent-authored markdown; the client renders it through a sanitising renderer.
@@ -183,14 +194,22 @@ export async function registerGamePageRoutes(app: FastifyInstance, options: Game
     const releases = await listReleases(gamesStore ?? null, slug, storePublished?.currentVersion ?? null);
     const stats = await readStats(store, slug);
 
+    // Every published game gets an address. A game with no creator to name — the
+    // pre-profiles catalog, a platform seed, an erased owner — resolves to the
+    // platform handle instead of to nothing, because a page that exists only for
+    // games made after profiles shipped is a page most of the catalog cannot use.
+    const resolvedHandle = erased ? PLATFORM_HANDLE : (creator?.handle ?? entry.creatorHandle ?? PLATFORM_HANDLE);
+    const platformAuthored = resolvedHandle === PLATFORM_HANDLE;
+
     return {
       entry: {
         ...entry,
         status: 'published',
         submittedBy: erased ? 'gamedev-platform' : creator ? profileBylineName(creator) : entry.submittedBy,
-        creatorHandle: erased ? null : (creator?.handle ?? entry.creatorHandle ?? null),
+        creatorHandle: resolvedHandle,
       },
       creator: erased ? null : creator,
+      platformAuthored,
       specMarkdown: specMd ? stripSpecFrontmatter(specMd) : null,
       modules: readGameModules(gameJson),
       budget,

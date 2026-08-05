@@ -71,6 +71,7 @@ function pageData(overrides: Partial<GamePageData> = {}): GamePageData {
       avatarUrl: null,
       profileCreatedAt: '2026-07-01T00:00:00.000Z',
     },
+    platformAuthored: false,
     specMarkdown: '# Neon Courier\n\nDeliver packages before the last neon goes out.\n\n## Controls\n\n- arrows',
     modules: ['input', 'gameplay', 'gfx'],
     budget: { usedBytes: 147 * 1024, limitBytes: 252 * 1024 },
@@ -184,17 +185,26 @@ describe('GamePage', () => {
     expect(onCanonicalPath).toHaveBeenCalledWith('/nightshift/neon-courier');
   });
 
-  it('404s a game with no creator handle, pointing at the play permalink', async () => {
+  it('renders a platform-authored game under the platform handle, with no profile link', async () => {
+    // Most of the catalog predates creator profiles. Those games get a page too —
+    // the platform is named as the author instead of linking a profile that does
+    // not exist.
     fetchGamePage.mockResolvedValue(
       pageData({
-        entry: { ...pageData().entry, creatorHandle: null, submittedBy: 'gamedev-platform' },
+        entry: { ...pageData().entry, creatorHandle: 'gamedevpl', submittedBy: 'gamedev-platform' },
         creator: null,
+        platformAuthored: true,
       }),
     );
-    await renderPage();
+    await renderPage({ handle: 'gamedevpl' });
 
-    expect(container.textContent).toContain('This game page does not exist.');
-    expect(container.querySelector('a[href="/play/neon-courier"]')).not.toBeNull();
+    expect(container.textContent).not.toContain('This game page does not exist.');
+    expect(container.textContent).toContain('Neon Courier');
+    // The breadcrumb goes to the catalog, not to a profile page that would 404.
+    expect(container.querySelector('a[href="/gamedevpl"]')).toBeNull();
+    expect(container.querySelector('.game-page-breadcrumb a')?.getAttribute('href')).toBe('/');
+    // The team panel names the platform rather than an absent creator.
+    expect(container.querySelector('.game-page-team')?.textContent).toContain('built here');
   });
 
   it('follows a game for a signed-in visitor and shows the count', async () => {

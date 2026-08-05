@@ -1301,6 +1301,7 @@
       "fileError": "Nie udało się wczytać tego pliku.",
       "tooLarge": "Ten plik jest za duży, aby go tu pokazać."
     },
-    "following": "Obserwujesz"
+    "following": "Obserwujesz",
+    "rolePlatform": "zbudowane tutaj"
   }
 }

@@ -152,6 +152,8 @@ describe('game page routes', () => {
       creatorHandle: 'nightshift',
     });
     expect(body.creator).toMatchObject({ handle: 'nightshift' });
+    // A game with a real creator is never platform-authored.
+    expect(body.platformAuthored).toBe(false);
     // Frontmatter is catalog data, not README content.
     expect(body.specMarkdown).toContain('# Neon Courier');
     expect(body.specMarkdown).not.toContain('title:');
@@ -202,6 +204,10 @@ describe('game page routes', () => {
     const body = response.json();
     expect(body.entry).toMatchObject({ slug: 'sky-dodge', title: 'Sky Dodge', submittedBy: 'gamedev-platform' });
     expect(body.creator).toBeNull();
+    // No creator to name, so it lives in the platform's namespace rather than having
+    // no address at all — most of the catalog predates creator profiles.
+    expect(body.entry.creatorHandle).toBe('gamedevpl');
+    expect(body.platformAuthored).toBe(true);
     expect(body.specMarkdown).toContain('Deliver packages');
     expect(body.modules).toEqual(['input', 'collision', 'gameplay', 'gfx']);
     expect(body.budget).toBeNull();
@@ -259,7 +265,10 @@ describe('game page routes', () => {
     expect(response.statusCode).toBe(200);
     const body = response.json();
     expect(body.entry.submittedBy).toBe('gamedev-platform');
-    expect(body.entry.creatorHandle).toBeNull();
+    // An erased owner leaves the game with nobody to name — it becomes platform-
+    // authored rather than losing its page.
+    expect(body.entry.creatorHandle).toBe('gamedevpl');
+    expect(body.platformAuthored).toBe(true);
     expect(body.creator).toBeNull();
   });
 });

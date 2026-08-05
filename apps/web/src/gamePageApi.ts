@@ -28,6 +28,8 @@ export interface GamePageStats {
 export interface GamePage {
   entry: CatalogEntry;
   creator: PublicCreatorProfile | null;
+  /** The game lives under the platform handle — no profile to link to. */
+  platformAuthored: boolean;
   /** Agent-authored markdown — render only through SpecMarkdown, never innerHTML. */
   specMarkdown: string | null;
   modules: string[] | null;
@@ -46,6 +48,7 @@ export async function fetchGamePage(slug: string): Promise<GamePage> {
   return {
     entry,
     creator: body.creator ?? null,
+    platformAuthored: body.platformAuthored === true,
     specMarkdown: typeof body.specMarkdown === 'string' ? body.specMarkdown : null,
     modules: Array.isArray(body.modules) ? body.modules.filter((m): m is string => typeof m === 'string') : null,
     budget: body.budget ?? null,
