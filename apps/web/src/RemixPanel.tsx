@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { useTranslation } from 'react-i18next';
+import { PixelIcon } from './PixelIcon.js';
 import { BRIDGE_NAMESPACE, PROTOCOL_VERSION } from './mp/protocol.js';
 import { recordRemixStep } from './visitTelemetry.js';
 import { useAuth } from './AuthContext.js';
@@ -823,7 +824,7 @@ export function RemixPanel(props: {
       <div className="remix-head">
         <span className="remix-title">{t('remix.title')}</span>
         <button type="button" className="remix-close" onClick={props.onClose} aria-label={t('remix.close')}>
-          ×
+          <PixelIcon name="close" size={12} />
         </button>
       </div>
 
