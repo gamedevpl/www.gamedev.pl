@@ -46,18 +46,26 @@ export function createFollowerFanout(
   const concurrency = Math.max(1, options.concurrency ?? FOLLOWER_FANOUT_CONCURRENCY);
 
   return async function notifyFollowers(event) {
-    // One over the cap, so "there were more than we told" is knowable rather than
-    // indistinguishable from "there were exactly the cap".
-    const followers = await options.store.listGameFollowers(event.slug, { limit: maxFanout + 1 });
-    const truncated = followers.length > maxFanout;
-    const recipients = followers.filter((uid) => uid !== event.ownerUid).slice(0, maxFanout);
+    // Two over the cap, not one. The cap counts *recipients*, and the owner is dropped
+    // below — they can occupy at most one slot, so reading one extra beyond that is
+    // what makes "there were more than we notified" distinguishable from "there were
+    // exactly the cap". Deciding `truncated` before the owner is removed reports a
+    // truncation that never happened whenever the owner is the row past the cap.
+    const followers = await options.store.listGameFollowers(event.slug, { limit: maxFanout + 2 });
+    const candidates = followers.filter((uid) => uid !== event.ownerUid);
+    const truncated = candidates.length > maxFanout;
+    const recipients = candidates.slice(0, maxFanout);
 
     let notified = 0;
     let failed = 0;
     for (let index = 0; index < recipients.length; index += concurrency) {
       const batch = recipients.slice(index, index + concurrency);
-      await Promise.all(
-        batch.map(async (uid) => {
+      // Each task reports its own outcome and the batch is tallied after it settles.
+      // The previous shape incremented shared counters inside the mapper; that was in
+      // fact safe (a `+= 1` carries no await, so the event loop cannot interleave it),
+      // but "is this a race?" is a question the reader should not have to answer.
+      const outcomes = await Promise.all(
+        batch.map(async (uid): Promise<'created' | 'duplicate' | 'failed'> => {
           try {
             const { created } = await emitFollowedGameNotification(options.emitDeps, {
               uid,
@@ -66,13 +74,17 @@ export function createFollowerFanout(
               version: event.version,
               link: `/play/${event.slug}`,
             });
-            if (created) notified += 1;
+            return created ? 'created' : 'duplicate';
           } catch (error) {
-            failed += 1;
             options.log?.error({ err: error, slug: event.slug, uid }, 'could not notify a follower of a new version');
+            return 'failed';
           }
         }),
       );
+      for (const outcome of outcomes) {
+        if (outcome === 'created') notified += 1;
+        else if (outcome === 'failed') failed += 1;
+      }
     }
 
     if (truncated) {

@@ -161,6 +161,32 @@ describe('follower fan-out', () => {
     expect(await store.listNotifications('g:one')).toHaveLength(2);
   });
 
+  it('does not count the skipped owner as a truncation, or let them cost a slot', async () => {
+    const store = fanoutStore();
+    // Exactly `maxFanout` real followers, plus the owner — who is dropped, not
+    // notified. Reporting `truncated` here would claim followers were missed when
+    // every one of them was reached.
+    await store.setGameFollow('neon-courier', 'g:owner', '2026-08-01T00:00:00.000Z');
+    await store.setGameFollow('neon-courier', 'g:a', '2026-08-02T00:00:00.000Z');
+    await store.setGameFollow('neon-courier', 'g:b', '2026-08-03T00:00:00.000Z');
+    const errors: string[] = [];
+    const fanout = createFollowerFanout({
+      store,
+      emitDeps: { store },
+      maxFanout: 2,
+      log: { error: (_context, message) => errors.push(message) },
+    });
+
+    const result = await fanout({ slug: 'neon-courier', version: 'v2', gameTitle: 'N', ownerUid: 'g:owner' });
+
+    expect(result).toMatchObject({ notified: 2, failed: 0, truncated: false });
+    expect(errors.join(' ')).not.toContain('cap');
+    // Both real followers heard about it — the owner did not displace one.
+    expect(await store.listNotifications('g:a')).toHaveLength(1);
+    expect(await store.listNotifications('g:b')).toHaveLength(1);
+    expect(await store.listNotifications('g:owner')).toEqual([]);
+  });
+
   it('caps the fan-out and says so rather than notifying silently short', async () => {
     const store = fanoutStore();
     for (let index = 0; index < 5; index += 1) {

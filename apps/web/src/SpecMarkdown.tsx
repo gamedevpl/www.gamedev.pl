@@ -21,6 +21,9 @@ interface SpecMarkdownProps {
   markdown: string;
 }
 
+/** The heading levels a shifted SPEC heading can land on. */
+type HeadingTag = 'h3' | 'h4' | 'h5' | 'h6';
+
 const INLINE_TOKEN = /(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`|\[[^\]]+\]\(https?:\/\/[^)\s]+\))/g;
 
 function renderInline(text: string): ReactNode[] {
@@ -62,8 +65,10 @@ export function SpecMarkdown({ markdown }: SpecMarkdownProps) {
         switch (block.kind) {
           case 'heading': {
             // Shifted down one level: the page already has its own h1/h2 chrome,
-            // and a SPEC's `#` title must not outrank it in the outline.
-            const Tag = `h${Math.min(block.level + 2, 6)}` as 'h3';
+            // and a SPEC's `#` title must not outrank it in the outline. Typed as the
+            // union of what the clamp can actually produce, rather than asserting one
+            // member of it — the levels are the contract, not `h3` specifically.
+            const Tag: HeadingTag = `h${Math.min(block.level + 2, 6) as 3 | 4 | 5 | 6}`;
             return <Tag key={index}>{renderInline(block.text)}</Tag>;
           }
           case 'paragraph':

@@ -466,8 +466,8 @@ export function navUpTarget(route: AppRoute): NavUpTarget | null {
       }
       return { path: '/', labelKey: 'upHome' };
     case 'game':
-      // The page is nested under the creator profile the way a repo nests under
-      // its owner — Up is the studio, not the homepage.
+      // The page is nested under the creator profile the way a repo nests under its
+      // owner, so Up goes to that profile rather than to the homepage.
       return { path: creatorPath(route.handle), labelKey: 'upCreator' };
     case 'admin':
     case 'legal':
