@@ -694,7 +694,7 @@ describe('SubmissionStatusView', () => {
       'platform',
     );
     expect(mockedSubmitFeedback).not.toHaveBeenCalled();
-    expect(container.querySelector('.builder-mode-badge')?.textContent).toContain('Gamedev.pl agent');
+    expect(container.querySelector('.builder-mode-selector')?.textContent).toContain('Gamedev.pl');
     expect(container.querySelector('.builder-choice')).toBeNull();
 
     await act(async () => {
@@ -871,12 +871,12 @@ describe('SubmissionStatusView', () => {
       expect(container.textContent).not.toContain('Connect your coding agent');
       // Quiet escape hatch: Change opens the builder modal — API kills the self token
       // when platform is chosen and a note is sent. Tiles are not permanent chrome.
-      expect(container.querySelector('.builder-mode-badge')?.textContent).toContain('Your agent (MCP)');
-      expect(container.querySelector('.builder-mode-badge-change')).not.toBeNull();
+      expect(container.querySelector('.builder-mode-selector')?.textContent).toContain('Your agent');
+      expect(container.querySelector('button.builder-mode-selector')).not.toBeNull();
       expect(container.querySelector('.builder-choice')).toBeNull();
       await act(async () => {
         container
-          .querySelector('.builder-mode-badge-change')!
+          .querySelector('button.builder-mode-selector')!
           .dispatchEvent(new MouseEvent('click', { bubbles: true }));
         await flushEffects();
       });
@@ -921,8 +921,8 @@ describe('SubmissionStatusView', () => {
 
       expect(container.querySelector('.studio-connect')).toBeNull();
       expect(container.querySelector('.status-warning')?.textContent).toMatch(/finished this round/i);
-      expect(container.querySelector('.builder-mode-badge')?.textContent).toContain('Your agent (MCP)');
-      expect(container.querySelector('.builder-mode-badge-change')).not.toBeNull();
+      expect(container.querySelector('.builder-mode-selector')?.textContent).toContain('Your agent');
+      expect(container.querySelector('button.builder-mode-selector')).not.toBeNull();
       expect(container.querySelector('.builder-choice')).toBeNull();
       // Handoff, not mid-build — no live working turn and no foot "Writing code".
       expect(container.querySelector('.studio-turn.is-working')).toBeNull();
@@ -998,7 +998,7 @@ describe('SubmissionStatusView', () => {
     expect(container.textContent).toContain('Needs a tweak');
     // Active repair round — builder is locked server-side; do not offer a switch that 409s.
     expect(container.querySelector('.builder-choice')).toBeNull();
-    expect(container.querySelector('.builder-mode-badge-change')).toBeNull();
+    expect(container.querySelector('button.builder-mode-selector')).toBeNull();
 
     await act(async () => {
       root.unmount();
@@ -2448,9 +2448,11 @@ describe('SubmissionStatusView stop & retry', () => {
       await flushEffects();
     });
 
-    expect(container.querySelector('.builder-mode-badge')?.textContent).toContain(i18n.t('builder.badge.self'));
+    expect(container.querySelector('.builder-mode-selector')?.textContent).toContain(i18n.t('builder.badge.self'));
     await act(async () => {
-      container.querySelector('.builder-mode-badge-change')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      container
+        .querySelector('button.builder-mode-selector')!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await flushEffects();
     });
     const selected = document.body.querySelector('.builder-choice-option[aria-checked="true"]');

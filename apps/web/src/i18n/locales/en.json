@@ -1015,8 +1015,8 @@
       "detail": "You connect Claude Code, Codex, Cursor, or another agent."
     },
     "badge": {
-      "self": "Your agent (MCP)",
-      "platform": "Gamedev.pl agent",
+      "self": "Your agent",
+      "platform": "Gamedev.pl",
       "change": "Change",
       "modalLede": "This applies to the next round. You can change again when no agent is working.",
       "modalDone": "Done",

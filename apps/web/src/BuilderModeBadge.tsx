@@ -3,24 +3,25 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { BuilderChoice } from './BuilderChoice.js';
 import type { BuilderKind } from './builderKind.js';
+import { PixelIcon } from './PixelIcon.js';
 
 type BuilderModeBadgeProps = {
   value: BuilderKind;
   onChange: (next: BuilderKind) => void;
   /**
-   * Round is silent — the next send can open a new round, so Change is offered.
-   * While an agent is mid-work the badge stays informational only.
+   * Round is silent — the next send can open a new round, so the selector opens
+   * the choice modal. While an agent is mid-work it stays a read-only label.
    */
   canChange: boolean;
   disabled?: boolean;
 };
 
 /**
- * Sticky builder signal for the Studio composer.
+ * Builder control for the Studio composer toolbar (Claude / Cursor / Copilot shape).
  *
- * The create wizard keeps the full two-up choice. At round boundaries the
- * composer only shows this badge; Change opens the same decision in a modal so
- * "who builds" is progressive disclosure, not permanent chrome.
+ * Lives in the bottom toolbar of the prompt card — left side, like a model picker —
+ * not as a floating badge over the textarea. Changeable only while generation is
+ * silent; opens the same two-up choice the create wizard uses.
  */
 export function BuilderModeBadge({ value, onChange, canChange, disabled = false }: BuilderModeBadgeProps) {
   const { t } = useTranslation();
@@ -37,17 +38,29 @@ export function BuilderModeBadge({ value, onChange, canChange, disabled = false 
   }, [open]);
 
   const label = t(value === 'self' ? 'builder.badge.self' : 'builder.badge.platform');
+  const className = `builder-mode-selector${value === 'self' ? ' is-self' : ' is-platform'}${
+    canChange ? '' : ' is-static'
+  }`;
 
   return (
     <>
-      <div className={`builder-mode-badge${value === 'self' ? ' is-self' : ' is-platform'}`}>
-        <span className="builder-mode-badge-label">{label}</span>
-        {canChange ? (
-          <button type="button" className="builder-mode-badge-change" disabled={disabled} onClick={() => setOpen(true)}>
-            {t('builder.badge.change')}
-          </button>
-        ) : null}
-      </div>
+      {canChange ? (
+        <button
+          type="button"
+          className={className}
+          disabled={disabled}
+          onClick={() => setOpen(true)}
+          aria-haspopup="dialog"
+          aria-expanded={open}
+        >
+          <span className="builder-mode-selector-label">{label}</span>
+          <PixelIcon name="chevronDown" size={11} />
+        </button>
+      ) : (
+        <span className={className} title={label}>
+          <span className="builder-mode-selector-label">{label}</span>
+        </span>
+      )}
       {open
         ? createPortal(
             <div className="modal-backdrop builder-choice-modal-backdrop" onClick={() => setOpen(false)}>

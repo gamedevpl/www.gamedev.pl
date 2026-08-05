@@ -1452,20 +1452,18 @@ function FeedbackPanel({
       ? 'statusView.feedback.composerHintBuilding'
       : 'statusView.feedback.composerHint';
 
-  // Sticky builder signal: always when the next send can choose (Change gated on
-  // silence), and while a self round is mid-flight so routing stays visible without
-  // re-staging the create-wizard tiles. Platform mid-round stays chrome-free.
+  // Sticky builder signal in the composer toolbar (Claude/Cursor shape): always when
+  // the next send can choose, and while a self round is mid-flight so routing stays
+  // visible. Platform mid-round stays chrome-free — no selector until a boundary.
   const effectiveBuilder = chooseBuilder ? builder : (roundBuilder ?? builder);
   const showBuilderBadge = chooseBuilder || effectiveBuilder === 'self';
-  const builderBadge = showBuilderBadge ? (
-    <div className="builder-mode-row">
-      <BuilderModeBadge
-        value={effectiveBuilder}
-        onChange={handleBuilderChange}
-        canChange={chooseBuilder}
-        disabled={state === 'sending'}
-      />
-    </div>
+  const builderSelector = showBuilderBadge ? (
+    <BuilderModeBadge
+      value={effectiveBuilder}
+      onChange={handleBuilderChange}
+      canChange={chooseBuilder}
+      disabled={state === 'sending'}
+    />
   ) : null;
 
   // Standalone status page still shows a brief receipt next to Send. The studio
@@ -1489,11 +1487,9 @@ function FeedbackPanel({
       </div>
     ) : null;
 
-  // Compact is the thread's composer: a field and a send, the way a reply box looks
-  // everywhere else. The heading and the standing hint paragraph were page furniture —
-  // fine on a page read once, noise under a conversation you come back to. What the hint
-  // said still matters, so it becomes the placeholder: it is on screen exactly while the
-  // box is empty, which is when "where does this go?" is the open question.
+  // Compact is the thread's composer in the Claude / Cursor / Copilot shape: a clean
+  // field on top, controls in a bottom toolbar (builder selector left, send right).
+  // The heading and standing hint were page furniture — the placeholder carries them.
   if (compact) {
     const sending = state === 'sending';
     return (
@@ -1501,45 +1497,42 @@ function FeedbackPanel({
         className={`status-feedback status-composer is-compact${sending ? ' is-sending' : ''}`}
         aria-busy={sending || undefined}
       >
-        {builderBadge}
         {routeNoteKey && !sending && state !== 'sent' && !error && !notice ? (
           <p className="status-feedback-route">{t(routeNoteKey)}</p>
         ) : null}
-        {/* Field and send on one line. The button used to sit on a row of its own below
-            the box, which cost a phone screen an entire line to say what an arrow beside
-            the text says — and put the thing you tap furthest from the thing you typed.
-            Icon-only, so it stays a button rather than becoming a second column: the word
-            is longer in Polish than in English and would have set the width. */}
-        <div className="status-composer-row">
-          <textarea
-            ref={inputRef}
-            className="status-feedback-input"
-            value={text}
-            onChange={(event) => {
-              setText(event.target.value);
-              autoGrow();
-              if (state === 'sent') setState('idle');
-            }}
-            placeholder={t(composerHintKey)}
-            aria-label={t(titleKey)}
-            rows={1}
-            maxLength={2000}
-            disabled={sending}
-          />
-          <button
-            type="button"
-            className="primary-btn status-composer-send"
-            onClick={() => void send()}
-            disabled={sending || trimmed.length < 10}
-            aria-label={sending ? t('statusView.feedback.sending') : t('statusView.feedback.submit')}
-            title={sending ? t('statusView.feedback.sending') : t('statusView.feedback.submit')}
-          >
-            {sending ? (
-              <span className="status-composer-send-spinner" aria-hidden="true" />
-            ) : (
-              <PixelIcon name="arrowRight" size={13} />
-            )}
-          </button>
+        <textarea
+          ref={inputRef}
+          className="status-feedback-input"
+          value={text}
+          onChange={(event) => {
+            setText(event.target.value);
+            autoGrow();
+            if (state === 'sent') setState('idle');
+          }}
+          placeholder={t(composerHintKey)}
+          aria-label={t(titleKey)}
+          rows={1}
+          maxLength={2000}
+          disabled={sending}
+        />
+        <div className="status-composer-toolbar">
+          <div className="status-composer-toolbar-left">{builderSelector}</div>
+          <div className="status-composer-toolbar-right">
+            <button
+              type="button"
+              className="primary-btn status-composer-send"
+              onClick={() => void send()}
+              disabled={sending || trimmed.length < 10}
+              aria-label={sending ? t('statusView.feedback.sending') : t('statusView.feedback.submit')}
+              title={sending ? t('statusView.feedback.sending') : t('statusView.feedback.submit')}
+            >
+              {sending ? (
+                <span className="status-composer-send-spinner" aria-hidden="true" />
+              ) : (
+                <PixelIcon name="arrowRight" size={13} />
+              )}
+            </button>
+          </div>
         </div>
         {/* Failures, in-flight, and "kept but nothing started" still need a row — they
             ask the creator to wait or act. A plain Sent receipt does not: the thread
@@ -1566,7 +1559,7 @@ function FeedbackPanel({
     <div className="status-feedback status-composer">
       <h3 className="status-feedback-title">{t(titleKey)}</h3>
       <p className="status-feedback-hint">{t(hintKey)}</p>
-      {builderBadge}
+      {builderSelector ? <div className="builder-mode-row">{builderSelector}</div> : null}
       {routeNoteKey && state !== 'sent' && !error && !notice ? (
         <p className="status-feedback-route">{t(routeNoteKey)}</p>
       ) : null}

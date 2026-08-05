@@ -18,7 +18,7 @@ describe('BuilderModeBadge', () => {
     vi.restoreAllMocks();
   });
 
-  it('shows the sticky self label and opens the choice modal on Change', async () => {
+  it('renders a toolbar selector and opens the choice modal on click', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
 
@@ -43,12 +43,14 @@ describe('BuilderModeBadge', () => {
 
     await render();
 
-    expect(container.querySelector('.builder-mode-badge')?.textContent).toContain('Your agent (MCP)');
+    const selector = container.querySelector('.builder-mode-selector');
+    expect(selector?.textContent).toContain('Your agent');
+    expect(selector?.tagName).toBe('BUTTON');
     expect(container.querySelector('.builder-choice')).toBeNull();
     expect(document.body.querySelector('.builder-choice-modal')).toBeNull();
 
     await act(async () => {
-      container.querySelector('.builder-mode-badge-change')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      selector!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await flush();
     });
 
@@ -65,12 +67,12 @@ describe('BuilderModeBadge', () => {
     expect(value).toBe('platform');
 
     await render();
-    expect(container.querySelector('.builder-mode-badge')?.textContent).toContain('Gamedev.pl agent');
+    expect(container.querySelector('.builder-mode-selector')?.textContent).toContain('Gamedev.pl');
 
     await act(async () => root.unmount());
   });
 
-  it('hides Change while an agent is working', async () => {
+  it('stays a static label while an agent is working', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
 
@@ -89,8 +91,10 @@ describe('BuilderModeBadge', () => {
       await flush();
     });
 
-    expect(container.querySelector('.builder-mode-badge')?.textContent).toContain('Your agent (MCP)');
-    expect(container.querySelector('.builder-mode-badge-change')).toBeNull();
+    const selector = container.querySelector('.builder-mode-selector');
+    expect(selector?.textContent).toContain('Your agent');
+    expect(selector?.tagName).toBe('SPAN');
+    expect(container.querySelector('button.builder-mode-selector')).toBeNull();
 
     await act(async () => root.unmount());
   });
