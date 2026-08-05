@@ -78,7 +78,8 @@
     "navFeed": "Agent Stream",
     "activeBuilds": "{{count}} in progress",
     "upHome": "Back to home",
-    "upStudio": "Back to Studio"
+    "upStudio": "Back to Studio",
+    "upCreator": "Back to the creator's page"
   },
   "hero": {
     "mainTitle": "Turn any idea into a playable web game",
@@ -894,7 +895,8 @@
     "draftNamed": "Draft {{title}}",
     "statusNamed": "Status · {{title}}",
     "studioNamed": "Studio · {{title}}",
-    "creatorNamed": "{{title}}"
+    "creatorNamed": "{{title}}",
+    "gameNamed": "{{title}}"
   },
   "creatorProfile": {
     "back": "Back",
@@ -1167,5 +1169,54 @@
     "undoFailed": "Couldn't go back just now.",
     "brokeIt": "That change stopped the game working. Put it back?",
     "changeStanding": "Your change is running."
+  },
+  "gamePage": {
+    "loading": "Loading the game page…",
+    "missing": "This game page does not exist.",
+    "missingPlayLink": "Try the direct play link instead",
+    "error": "Could not load the game page. Try again in a moment.",
+    "breadcrumbAria": "Game location",
+    "play": "Play",
+    "follow": "Follow",
+    "followSoon": "Coming soon — new-release notifications",
+    "remix": "Remix",
+    "remixHint": "Open the game and press the wrench to remix it",
+    "tabsAria": "Game page sections",
+    "tabs": {
+      "game": "Game",
+      "board": "Board",
+      "review": "To play",
+      "releases": "Releases",
+      "sources": "Sources"
+    },
+    "sandboxNote": "The game runs in a sandbox — no access to your account, files, or network.",
+    "gatedTitle": "Playing is in closed beta",
+    "gatedBody": "This page is public, but playing needs a beta account. Sign in or join the waitlist on the homepage.",
+    "gatedCta": "Sign in",
+    "releasesEmpty": "No recorded releases yet — this game predates the release history.",
+    "releaseCurrent": "current",
+    "releaseEditor": "editor publish",
+    "gateGreen": "Accepted by the gate",
+    "gateRed": "Gate run failed",
+    "placeholder": {
+      "board": "The task board lands here: open tasks anyone can pick up, tasks being built by the agent, and changes waiting to be played. In the works.",
+      "review": "Reviewing a change here will mean playing two versions side by side for thirty seconds — not reading a diff. In the works.",
+      "sources": "A read-only view of the game’s sources. Deliberately the last tab — the game is the product. In the works."
+    },
+    "specHint": "this is the game’s README",
+    "statsHeading": "Activity",
+    "statsPlays": "Plays (last {{days}} days)",
+    "statsMedian": "Median session",
+    "statsReleases": "Releases",
+    "teamHeading": "Team",
+    "roleOwner": "owner",
+    "agentMember": "agent",
+    "agentReleases_one": "{{count}} release",
+    "agentReleases_other": "{{count}} releases",
+    "modulesHeading": "GameKit modules",
+    "budgetHeading": "Author budget",
+    "budgetOf": "{{used}} of {{limit}}",
+    "budgetAria": "Author budget: {{used}} of {{limit}}",
+    "latestReleaseHeading": "Latest release"
   }
 }

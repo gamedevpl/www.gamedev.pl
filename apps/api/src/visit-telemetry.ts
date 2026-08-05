@@ -39,7 +39,18 @@ const MAX_BACKDATE_MS = 6 * 60 * 60 * 1000;
 const MAX_TRACKED_VISITS = 5000;
 const MAX_TRACKED_IPS = 20_000;
 
-const RouteKindSchema = z.enum(['home', 'play', 'draft', 'status', 'join', 'legal', 'health', 'studio', 'notFound']);
+const RouteKindSchema = z.enum([
+  'home',
+  'play',
+  'draft',
+  'status',
+  'join',
+  'legal',
+  'health',
+  'studio',
+  'game',
+  'notFound',
+]);
 /**
  * Creation-funnel steps. A closed enum rather than a free string, for the same reason
  * every other field here is bounded: this reaches a grouping key, and the endpoint is

@@ -78,7 +78,8 @@
     "navFeed": "Strumień Agentów",
     "activeBuilds": "w trakcie: {{count}}",
     "upHome": "Wróć do strony głównej",
-    "upStudio": "Wróć do Studio"
+    "upStudio": "Wróć do Studio",
+    "upCreator": "Wróć do strony twórcy"
   },
   "hero": {
     "mainTitle": "Zamień dowolny pomysł w grywalną grę",
@@ -898,7 +899,8 @@
     "draftNamed": "Szkic: {{title}}",
     "statusNamed": "Status · {{title}}",
     "studioNamed": "Studio · {{title}}",
-    "creatorNamed": "{{title}}"
+    "creatorNamed": "{{title}}",
+    "gameNamed": "{{title}}"
   },
   "creatorProfile": {
     "back": "Wróć",
@@ -1171,5 +1173,56 @@
     "undoFailed": "Nie udało się cofnąć.",
     "brokeIt": "Ta zmiana zepsuła grę. Cofnąć?",
     "changeStanding": "Twoja zmiana działa."
+  },
+  "gamePage": {
+    "loading": "Wczytywanie strony gry…",
+    "missing": "Ta strona gry nie istnieje.",
+    "missingPlayLink": "Spróbuj bezpośredniego linku do gry",
+    "error": "Nie udało się wczytać strony gry. Spróbuj za chwilę.",
+    "breadcrumbAria": "Położenie gry",
+    "play": "Zagraj",
+    "follow": "Obserwuj",
+    "followSoon": "Wkrótce — powiadomienia o nowych wydaniach",
+    "remix": "Odbij",
+    "remixHint": "Otwórz grę i użyj klucza, aby ją odbić",
+    "tabsAria": "Sekcje strony gry",
+    "tabs": {
+      "game": "Gra",
+      "board": "Tablica",
+      "review": "Do zagrania",
+      "releases": "Wydania",
+      "sources": "Źródła"
+    },
+    "sandboxNote": "Gra działa w piaskownicy — bez dostępu do twojego konta, plików i sieci.",
+    "gatedTitle": "Granie jest w zamkniętej becie",
+    "gatedBody": "Ta strona jest publiczna, ale do grania potrzebne jest konto w becie. Zaloguj się albo dołącz do listy oczekujących na stronie głównej.",
+    "gatedCta": "Zaloguj się",
+    "releasesEmpty": "Brak zapisanych wydań — ta gra powstała przed historią wydań.",
+    "releaseCurrent": "aktualne",
+    "releaseEditor": "publikacja z edytora",
+    "gateGreen": "Zaakceptowane przez bramkę",
+    "gateRed": "Bramka odrzuciła to wydanie",
+    "placeholder": {
+      "board": "Tu pojawi się tablica zadań: zadania do wzięcia, zadania budowane przez agenta i zmiany czekające na zagranie. W budowie.",
+      "review": "Recenzja zmiany będzie tu oznaczać trzydzieści sekund grania w dwie wersje obok siebie — nie czytanie diffa. W budowie.",
+      "sources": "Podgląd źródeł gry tylko do odczytu. Celowo ostatnia zakładka — produktem jest gra. W budowie."
+    },
+    "specHint": "to jest README gry",
+    "statsHeading": "Aktywność",
+    "statsPlays": "Rozegrania (ostatnie {{days}} dni)",
+    "statsMedian": "Mediana sesji",
+    "statsReleases": "Wydania",
+    "teamHeading": "Skład",
+    "roleOwner": "właściciel",
+    "agentMember": "agent",
+    "agentReleases_one": "{{count}} wydanie",
+    "agentReleases_few": "{{count}} wydania",
+    "agentReleases_many": "{{count}} wydań",
+    "agentReleases_other": "{{count}} wydania",
+    "modulesHeading": "Moduły GameKit",
+    "budgetHeading": "Budżet autora",
+    "budgetOf": "{{used}} z {{limit}}",
+    "budgetAria": "Budżet autora: {{used}} z {{limit}}",
+    "latestReleaseHeading": "Ostatnie wydanie"
   }
 }

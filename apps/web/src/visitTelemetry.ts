@@ -26,7 +26,8 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
  */
 
 /** Where a visit is, coarsely. Route parameters (tokens, slugs) never travel. */
-export type VisitRouteKind = 'home' | 'play' | 'draft' | 'status' | 'join' | 'legal' | 'health' | 'studio' | 'notFound';
+export type VisitRouteKind =
+  'home' | 'play' | 'draft' | 'status' | 'join' | 'legal' | 'health' | 'studio' | 'game' | 'notFound';
 
 export type VisitEvent =
   | {
@@ -335,6 +336,11 @@ export function routeKind(view: string): VisitRouteKind {
     case 'studio':
     case 'notFound':
       return view;
+    // The public game page is its own acquisition surface — the funnel's question 2
+    // ("does a visit that arrives on a game page play a second game") needs it
+    // distinguishable from a direct /play deep link, so it does not fold into `play`.
+    case 'game':
+      return 'game';
     // The console reports as `health`, the name it had when the funnel started
     // recording it. Renaming the bucket would split one surface's history in two.
     case 'admin':

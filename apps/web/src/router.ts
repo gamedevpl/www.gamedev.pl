@@ -43,6 +43,19 @@ export function isStudioTab(value: string): value is StudioTab {
 }
 
 /**
+ * Public game page tabs — the "repo page" layout at `/:handle/:slug`. The default
+ * surface (the playable game) carries no URL segment, so only the four secondary
+ * tabs appear here. Keep the vocabulary aligned with `GAME_PAGE_PATTERN` in
+ * apps/api/src/spa-paths.ts.
+ */
+export const GAME_PAGE_TABS = ['board', 'review', 'releases', 'sources'] as const;
+export type GamePageTab = (typeof GAME_PAGE_TABS)[number];
+
+export function isGamePageTab(value: string): value is GamePageTab {
+  return (GAME_PAGE_TABS as readonly string[]).includes(value);
+}
+
+/**
  * Operator console sections, in the order they are offered.
  *
  * `queue` leads because it is the only one with something to do in it; the rest are
@@ -102,6 +115,12 @@ export type AppRoute =
   // an alias for links minted before profiles moved to the root namespace. Handle shape
   // matches the API (`^[a-z][a-z0-9_]{2,23}$`).
   | { view: 'creator'; handle: string }
+  // Public game page — the "repo page" nested under the creator profile, GitHub-style
+  // (`/:handle/:slug`). Reachable without a session, same as the profile above: the
+  // page is a landing page, and only *playing* is gated during closed beta. `tab`
+  // absent is the default surface (the playable game); the named tabs are the
+  // board / review / releases / sources secondary surfaces.
+  | { view: 'game'; handle: string; slug: string; tab?: GamePageTab }
   // Unknown / invalid path. Kept as its own view so a typo or stale bookmark shows a
   // real 404 instead of silently dumping the visitor on the home catalog.
   | { view: 'notFound' };
@@ -112,6 +131,44 @@ const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 /** Creator handles — keep aligned with apps/api/src/creator-profile.ts HANDLE_PATTERN. */
 const CREATOR_HANDLE_PATTERN = /^[a-z][a-z0-9_]{2,23}$/;
+
+/**
+ * Handles nobody can claim — keep aligned with `RESERVED_HANDLES` in
+ * apps/api/src/creator-profile.ts (same duplication contract as spa-paths.ts).
+ * The game-page matcher checks it so `/health/<slug>`-shaped typos stay 404s on
+ * the client exactly as the API's shell allowlist answers them.
+ */
+const RESERVED_HANDLE_SEGMENTS = new Set([
+  'admin',
+  'administrator',
+  'anonymous',
+  'api',
+  'auth',
+  'contact',
+  'creator',
+  'creators',
+  'dev',
+  'draft',
+  'gamedev',
+  'gamedevpl',
+  'health',
+  'help',
+  'join',
+  'me',
+  'null',
+  'official',
+  'play',
+  'platform',
+  'privacy',
+  'root',
+  'status',
+  'studio',
+  'support',
+  'system',
+  'terms',
+  'undefined',
+  'www',
+]);
 
 // Canonical play prefix is `/play`. `/ay` and `/ai` are accepted aliases (same view);
 // the app rewrites them to `/play/<slug>` so shared URLs stay consistent.
@@ -254,6 +311,33 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
     return { view: 'creator', handle: rootHandle };
   }
 
+  // Public game page: `/:handle/:slug` (+ optional tab). Last for the same reason the
+  // root profile is late — every first-class segment above keeps its meaning, and the
+  // product segments are additionally reserved at handle-claim time, so a real handle
+  // can never collide with them. An unknown tab segment is a 404, not a fallback,
+  // matching the studio tabs and the API's shell allowlist.
+  const gameMatch = normalizedPath.match(/^\/([^/]+)\/([^/]+)(?:\/([^/]+))?$/);
+  if (gameMatch?.[1] && gameMatch[2]) {
+    const handle = decodeSegment(gameMatch[1]);
+    const slug = decodeSegment(gameMatch[2]);
+    const tabSegment = gameMatch[3] ? decodeSegment(gameMatch[3]) : undefined;
+    if (
+      handle &&
+      CREATOR_HANDLE_PATTERN.test(handle) &&
+      !RESERVED_HANDLE_SEGMENTS.has(handle) &&
+      slug &&
+      SLUG_PATTERN.test(slug) &&
+      tabSegment !== null
+    ) {
+      if (!tabSegment) {
+        return { view: 'game', handle, slug };
+      }
+      if (isGamePageTab(tabSegment)) {
+        return { view: 'game', handle, slug, tab: tabSegment };
+      }
+    }
+  }
+
   return { view: 'notFound' };
 }
 
@@ -311,6 +395,8 @@ export function canonicalPath(pathname: string): string | null {
         return route.game ? studioPath(route.game, route.tab) : null;
       case 'creator':
         return creatorPath(route.handle);
+      case 'game':
+        return gamePath(route.handle, route.slug, route.tab);
       default:
         return null;
     }
@@ -355,7 +441,7 @@ export function studioPath(game?: string, tab?: StudioTab): string {
 export type NavUpTarget = {
   path: string;
   /** i18n key under `header.*` for the button's accessible name. */
-  labelKey: 'upHome' | 'upStudio';
+  labelKey: 'upHome' | 'upStudio' | 'upCreator';
 };
 
 export function navUpTarget(route: AppRoute): NavUpTarget | null {
@@ -379,6 +465,10 @@ export function navUpTarget(route: AppRoute): NavUpTarget | null {
         return { path: studioPath(), labelKey: 'upStudio' };
       }
       return { path: '/', labelKey: 'upHome' };
+    case 'game':
+      // The page is nested under the creator profile the way a repo nests under
+      // its owner — Up is the studio, not the homepage.
+      return { path: creatorPath(route.handle), labelKey: 'upCreator' };
     case 'admin':
     case 'legal':
     case 'contact':
@@ -430,6 +520,12 @@ export function contactPath(): string {
 /** URL for a public creator profile. */
 export function creatorPath(handle: string): string {
   return `/${handle}`;
+}
+
+/** URL for a public game page, optionally deep-linked into a secondary tab. */
+export function gamePath(handle: string, slug: string, tab?: GamePageTab): string {
+  const base = `/${encodeURIComponent(handle)}/${encodeURIComponent(slug)}`;
+  return tab ? `${base}/${tab}` : base;
 }
 
 /**

@@ -4,6 +4,7 @@ import {
   canonicalPlayPath,
   creatorPath,
   draftPath,
+  gamePath,
   joinPath,
   legalAnchor,
   legalPath,
@@ -118,6 +119,31 @@ describe('parsePathRoute', () => {
     expect(parsePathRoute('/NotAHandle')).toEqual({ view: 'notFound' });
   });
 
+  it('parses public game page routes', () => {
+    expect(parsePathRoute('/nightshift/neon-courier')).toEqual({
+      view: 'game',
+      handle: 'nightshift',
+      slug: 'neon-courier',
+    });
+    for (const tab of ['board', 'review', 'releases', 'sources'] as const) {
+      expect(parsePathRoute(`/nightshift/neon-courier/${tab}`)).toEqual({
+        view: 'game',
+        handle: 'nightshift',
+        slug: 'neon-courier',
+        tab,
+      });
+    }
+    // Unknown tab is a 404, not a silent fallback — same rule as the studio tabs.
+    expect(parsePathRoute('/nightshift/neon-courier/nope')).toEqual({ view: 'notFound' });
+    // Handle and slug keep their own grammars.
+    expect(parsePathRoute('/Nightshift/neon-courier')).toEqual({ view: 'notFound' });
+    expect(parsePathRoute('/nightshift/Neon%20Courier')).toEqual({ view: 'notFound' });
+    expect(parsePathRoute('/nightshift/-bad')).toEqual({ view: 'notFound' });
+    // First-class product segments keep their meaning; they never become handles.
+    expect(parsePathRoute('/play/neon-courier')).toEqual({ view: 'play', slug: 'neon-courier' });
+    expect(parsePathRoute('/creators/ada')).toEqual({ view: 'creator', handle: 'ada' });
+  });
+
   it('parses the legal routes', () => {
     expect(parsePathRoute('/privacy')).toEqual({ view: 'legal', doc: 'privacy' });
     expect(parsePathRoute('/terms')).toEqual({ view: 'legal', doc: 'terms' });
@@ -203,6 +229,29 @@ describe('path builders', () => {
   it('builds a root creator path that round-trips', () => {
     expect(creatorPath('ada')).toBe('/ada');
     expect(parsePathRoute(creatorPath('ada'))).toEqual({ view: 'creator', handle: 'ada' });
+  });
+
+  it('builds a game page path that round-trips', () => {
+    expect(gamePath('nightshift', 'neon-courier')).toBe('/nightshift/neon-courier');
+    expect(gamePath('nightshift', 'neon-courier', 'releases')).toBe('/nightshift/neon-courier/releases');
+    expect(parsePathRoute(gamePath('nightshift', 'neon-courier'))).toEqual({
+      view: 'game',
+      handle: 'nightshift',
+      slug: 'neon-courier',
+    });
+    expect(parsePathRoute(gamePath('nightshift', 'neon-courier', 'board'))).toEqual({
+      view: 'game',
+      handle: 'nightshift',
+      slug: 'neon-courier',
+      tab: 'board',
+    });
+  });
+
+  it('sends game page Up to the owning creator profile', () => {
+    expect(navUpTarget({ view: 'game', handle: 'nightshift', slug: 'neon-courier' })).toEqual({
+      path: '/nightshift',
+      labelKey: 'upCreator',
+    });
   });
 
   it('percent-encodes status tokens into studio paths', () => {

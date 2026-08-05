@@ -21,6 +21,7 @@ const copy: DocumentTitleCopy = {
   draftNamed: 'Draft {{title}}',
   studioNamed: 'Studio · {{title}}',
   creatorNamed: '{{title}}',
+  gameNamed: '{{title}}',
 };
 
 describe('brandedPageTitle', () => {
@@ -93,5 +94,17 @@ describe('resolveDocumentTitle', () => {
     );
     expect(resolveDocumentTitle({ view: 'creator', handle: 'ada' }, { copy })).toBe('ada — Gamedev.pl');
     expect(resolveDocumentTitle({ view: 'notFound' }, { copy })).toBe('Page not found — Gamedev.pl');
+  });
+
+  it('titles the public game page with the loaded title, else the humanized slug', () => {
+    expect(
+      resolveDocumentTitle(
+        { view: 'game', handle: 'nightshift', slug: 'neon-courier' },
+        { copy, gameTitle: 'Neon Courier' },
+      ),
+    ).toBe('Neon Courier — Gamedev.pl');
+    expect(resolveDocumentTitle({ view: 'game', handle: 'nightshift', slug: 'neon-courier' }, { copy })).toBe(
+      'Neon Courier — Gamedev.pl',
+    );
   });
 });

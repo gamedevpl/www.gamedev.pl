@@ -119,7 +119,15 @@ describe('route kinds follow the real router', () => {
     ['/studio', 'studio'],
     ['/studio/some-token', 'studio'],
     ['/gtanczyk', 'legal'],
-    ['/nope/more', 'notFound'],
+    // The public game page is its own acquisition bucket (funnel question 2). A
+    // handle-shaped pair parses as one whether or not the game exists — same as a
+    // profile URL for a handle nobody claimed reporting `legal`.
+    ['/nightshift/neon-courier', 'game'],
+    ['/nightshift/neon-courier/releases', 'game'],
+    ['/nope/more', 'game'],
+    // Reserved first segments never become game pages.
+    ['/health/brick-storm', 'notFound'],
+    ['/nope/more/than/three', 'notFound'],
   ])('reads %s as %s', (pathname, expected) => {
     expect(routeKind(parsePathRoute(pathname, '').view)).toBe(expected);
   });
