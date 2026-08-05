@@ -22,9 +22,11 @@ import { VoteWidget } from './VoteWidget.js';
  * beta-wall-exempt block in App.tsx); during closed beta only *playing* is gated,
  * so the frame pane swaps for a sign-in card while everything around it renders.
  *
- * Board / review / sources render as named-but-empty surfaces for now — their
- * tranches follow. Keeping the tabs present keeps the URL vocabulary stable
- * (router, spa-paths and this file move together).
+ * Each secondary tab is its own component with its own access posture, which is why
+ * this file only routes to them: the board (GameBoard) is public with an owner-only
+ * column, the review (GameReview) is owner/operator only, and the sources
+ * (GameSources) are public. The URL vocabulary is shared with the router and the
+ * API's shell allowlist, so those three move together.
  */
 
 type LoadState = 'loading' | 'ready' | 'missing' | 'error';
