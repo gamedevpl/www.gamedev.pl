@@ -1,5 +1,7 @@
+import { createHmac, timingSafeEqual } from 'node:crypto';
+
 /**
- * MCP Apps (SEP-1865, extension `io.modelcontextprotocol/ui`) — Phase 0.
+ * MCP Apps (SEP-1865, extension `io.modelcontextprotocol/ui`).
  *
  * Phase 0 is a spike, not a feature: capability negotiation, a `ui://` resource
  * registry, and one **static** card that renders whatever tool result the host hands
@@ -96,6 +98,51 @@ export function clientDeclaresUi(params: unknown): boolean {
 /** What we echo in `initialize.capabilities.extensions` for a UI-capable client. */
 export function mcpUiServerCapability(): Record<string, unknown> {
   return { [MCP_UI_EXTENSION]: { mimeTypes: [MCP_UI_MIME_TYPE] } };
+}
+
+/**
+ * Capability travels in the correlator, signed — not in per-instance memory.
+ *
+ * Phase 0 recorded "did this client negotiate views?" on the in-process transport
+ * session map. Cloud Run is multi-instance and clients do not pin to a revision, so a
+ * request adopted by another instance read as not capable: `tools/list` would drop
+ * `_meta.ui` and `resources/read` would refuse, breaking a view mid-round. Single
+ * instance today (`--max-instances 1`) hid it; keying a durable surface off in-memory
+ * state does not survive contact with a second container.
+ *
+ * So `initialize` mints the id with a suffix any instance can verify with the shared
+ * secret. Unforgeable (HMAC), stateless, and invisible to clients that never negotiated
+ * — their ids are unchanged, and an id without a valid marker is simply not UI-capable.
+ */
+const UI_MARKER_SEPARATOR = '-u';
+const UI_MARKER_BYTES = 10;
+
+function uiMarker(baseId: string, secret: string): string {
+  return createHmac('sha256', secret).update(`mcp-ui-capable:${baseId}`).digest('base64url').slice(0, UI_MARKER_BYTES);
+}
+
+/** Stamp a freshly minted session id as belonging to a view-capable client. */
+export function markSessionIdUiCapable(sessionId: string, secret: string): string {
+  return `${sessionId}${UI_MARKER_SEPARATOR}${uiMarker(sessionId, secret)}`;
+}
+
+/**
+ * Does this correlator carry a valid view-capability marker? Any instance can answer,
+ * including one that never saw the `initialize` that minted it.
+ */
+export function sessionIdIsUiCapable(sessionId: string | null | undefined, secret: string | undefined): boolean {
+  if (!sessionId || !secret) return false;
+  // Slice from the end rather than searching for the separator: the marker is base64url
+  // and may itself contain "-u", so scanning would split in the wrong place.
+  const suffixLength = UI_MARKER_SEPARATOR.length + UI_MARKER_BYTES;
+  if (sessionId.length <= suffixLength) return false;
+  const baseId = sessionId.slice(0, -suffixLength);
+  if (sessionId.slice(-suffixLength, -UI_MARKER_BYTES) !== UI_MARKER_SEPARATOR) return false;
+  const marker = sessionId.slice(-UI_MARKER_BYTES);
+  const expected = uiMarker(baseId, secret);
+  const markerBuffer = Buffer.from(marker, 'utf8');
+  const expectedBuffer = Buffer.from(expected, 'utf8');
+  return markerBuffer.length === expectedBuffer.length && timingSafeEqual(markerBuffer, expectedBuffer);
 }
 
 interface UiResource {

@@ -60,9 +60,11 @@ import { mcpMissingCredentialHint, sendMcpOAuthChallenge, shouldIssueMcpOAuthCha
 import {
   MCP_UI_TOOL_RESOURCES,
   clientDeclaresUi,
+  markSessionIdUiCapable,
   mcpUiEnabled,
   mcpUiServerCapability,
   readUiResource,
+  sessionIdIsUiCapable,
   uiResourceDescriptors,
 } from './mcp-ui.js';
 import {
@@ -441,15 +443,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
   const missingCredentialHint = mcpMissingCredentialHint(privateBeta);
   const uiEnabled = options.uiEnabled ?? mcpUiEnabled();
 
-  /**
-   * Transport sessions only — never consulted for authorization. `uiCapable` records
-   * whether this client declared the MCP Apps extension at initialize, so `_meta.ui` is
-   * only ever emitted to a client that asked for it. A correlator adopted from another
-   * instance has no recorded answer and is treated as not capable: the failure mode is a
-   * client that supports views not getting one, never a client being handed UI metadata
-   * it never negotiated.
-   */
-  const transportSessions = new Map<string, { createdAt: number; uiCapable?: boolean }>();
+  /** Transport sessions only — never consulted for authorization. */
+  const transportSessions = new Map<string, { createdAt: number }>();
   /**
    * Correlators explicitly terminated via DELETE on this instance. Prevents the
    * multi-instance adopt path from resurrecting a session the client just closed.
@@ -480,23 +475,18 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     }
   }
 
-  /**
-   * Record/refresh a transport correlator. Keeps any negotiated `uiCapable` answer —
-   * `start` and `open_round` re-set the session mid-round, and a plain overwrite there
-   * would silently drop a client's view capability partway through a round.
-   */
-  function noteTransportSession(sessionId: string, uiCapable?: boolean): void {
-    const existing = transportSessions.get(sessionId);
-    transportSessions.set(sessionId, {
-      createdAt: now(),
-      uiCapable: uiCapable ?? existing?.uiCapable ?? false,
-    });
+  /** Record/refresh a transport correlator. */
+  function noteTransportSession(sessionId: string): void {
+    transportSessions.set(sessionId, { createdAt: now() });
   }
 
-  /** Emit view metadata only for a flag-enabled server and a client that negotiated it. */
+  /**
+   * Emit view metadata only for a flag-enabled server and a client that negotiated it.
+   * The answer is read out of the correlator's signed marker, so every instance agrees
+   * — including one that never saw the `initialize` that minted it.
+   */
   function sessionWantsUi(sessionId: string | null): boolean {
-    if (!uiEnabled || !sessionId) return false;
-    return transportSessions.get(sessionId)?.uiCapable === true;
+    return uiEnabled && sessionIdIsUiCapable(sessionId, agentTokenSecret);
   }
 
   function pruneInvalidStartBuckets(currentTime: number): void {
@@ -3559,8 +3549,9 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       // views existed — no `resources`, no `extensions`.
       const uiCapable = uiEnabled && clientDeclaresUi(params);
 
-      const sessionId = newMcpSessionId();
-      noteTransportSession(sessionId, uiCapable);
+      const sessionId =
+        uiCapable && agentTokenSecret ? markSessionIdUiCapable(newMcpSessionId(), agentTokenSecret) : newMcpSessionId();
+      noteTransportSession(sessionId);
       reply.header('Mcp-Session-Id', sessionId);
       reply.header('MCP-Session-Id', sessionId);
 

@@ -2065,16 +2065,45 @@ describe('MCP Apps views (SEP-1865, Phase 0)', () => {
     );
   });
 
-  it('treats a correlator adopted from another instance as not view-capable', async () => {
+  it('treats an unmarked correlator as not view-capable', async () => {
     process.env.MCP_UI = 'true';
     const store = new InMemoryStore();
     await seedJob(store);
     app = await createApp(store);
 
-    // Cloud Run is multi-instance: this correlator was negotiated somewhere else, so
-    // this instance cannot know what it renders. Degrade to text, never assume UI.
+    // No signed marker, so nothing claims this client negotiated views.
     const foreign = 'fedcba9876543210fedcba9876543210fedc';
     const tools = await listTools(app, foreign);
     expect(tools.every((tool) => tool._meta === undefined)).toBe(true);
+
+    const listed = await mcpCall(app, 'resources/list', {}, { 'mcp-session-id': foreign });
+    expect(listed.json().error?.code).toBe(-32601);
+  });
+
+  it('honours a correlator negotiated on another instance', async () => {
+    process.env.MCP_UI = 'true';
+    const store = new InMemoryStore();
+    await seedJob(store);
+
+    // Instance A negotiates views and hands the client its correlator.
+    const first = await createApp(store);
+    const { sessionId } = await initializeWith(first, true);
+    await first.close();
+
+    // Instance B has never seen that initialize — Cloud Run does not pin a client to a
+    // revision. Capability rides in the signed correlator, so B agrees with A rather
+    // than silently dropping the view mid-round.
+    app = await createApp(store);
+    const tools = await listTools(app, sessionId);
+    expect(tools.find((tool) => tool.name === 'get_gate_verdict')?._meta?.ui?.resourceUri).toBe(
+      'ui://gamedevpl/round-status',
+    );
+    const read = await mcpCall(
+      app,
+      'resources/read',
+      { uri: 'ui://gamedevpl/round-status' },
+      { 'mcp-session-id': sessionId },
+    );
+    expect(read.json().result?.contents?.[0]?.mimeType).toBe(UI_MIME);
   });
 });

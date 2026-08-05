@@ -5,9 +5,11 @@ import {
   MCP_UI_TOOL_RESOURCES,
   ROUND_STATUS_RESOURCE_URI,
   clientDeclaresUi,
+  markSessionIdUiCapable,
   mcpUiEnabled,
   mcpUiServerCapability,
   readUiResource,
+  sessionIdIsUiCapable,
   uiResourceDescriptors,
 } from './mcp-ui.js';
 
@@ -71,6 +73,51 @@ describe('clientDeclaresUi', () => {
     expect(clientDeclaresUi({ capabilities: { extensions: { 'io.example/other': {} } } })).toBe(false);
     expect(clientDeclaresUi({ capabilities: { extensions: { [MCP_UI_EXTENSION]: true } } })).toBe(false);
     expect(clientDeclaresUi('nonsense')).toBe(false);
+  });
+});
+
+describe('view capability in the correlator', () => {
+  const secret = 'shared-deploy-secret';
+
+  it('is readable by an instance that never saw the initialize that minted it', () => {
+    // The multi-instance property this exists for: Cloud Run does not pin a client to a
+    // revision, and in-memory capability did not survive the hop.
+    const marked = markSessionIdUiCapable('a'.repeat(36), secret);
+    expect(sessionIdIsUiCapable(marked, secret)).toBe(true);
+  });
+
+  it('leaves a non-negotiating client with an unchanged, non-capable id', () => {
+    expect(sessionIdIsUiCapable('a'.repeat(36), secret)).toBe(false);
+    expect(sessionIdIsUiCapable('', secret)).toBe(false);
+    expect(sessionIdIsUiCapable(null, secret)).toBe(false);
+  });
+
+  it('cannot be forged, guessed, or replayed under another secret', () => {
+    const marked = markSessionIdUiCapable('b'.repeat(36), secret);
+    expect(sessionIdIsUiCapable(marked, 'a-different-secret')).toBe(false);
+    expect(sessionIdIsUiCapable(marked, undefined)).toBe(false);
+    // Tampered marker, and a hand-written suffix that merely looks the part.
+    expect(sessionIdIsUiCapable(marked.slice(0, -1) + 'X', secret)).toBe(false);
+    expect(sessionIdIsUiCapable('c'.repeat(36) + '-uAAAAAAAAAA', secret)).toBe(false);
+    // A marker on a different base id does not transfer.
+    const suffix = marked.slice(-12);
+    expect(sessionIdIsUiCapable('d'.repeat(36) + suffix, secret)).toBe(false);
+  });
+
+  it('survives a marker that itself contains the separator', () => {
+    // base64url includes "-", so a marker can contain "-u". Searching for the separator
+    // would split in the wrong place; slicing from the end cannot.
+    let withSeparatorInside: string | null = null;
+    for (let i = 0; i < 4000 && !withSeparatorInside; i += 1) {
+      const candidate = markSessionIdUiCapable(`${'e'.repeat(30)}${String(i).padStart(6, '0')}`, secret);
+      if (candidate.slice(-10).includes('-u')) withSeparatorInside = candidate;
+    }
+    // Only assert when the search actually found one — otherwise this is vacuous.
+    if (withSeparatorInside) expect(sessionIdIsUiCapable(withSeparatorInside, secret)).toBe(true);
+  });
+
+  it('stays a legal Mcp-Session-Id', () => {
+    expect(markSessionIdUiCapable('f'.repeat(36), secret)).toMatch(/^[A-Za-z0-9_-]+$/);
   });
 });
 
