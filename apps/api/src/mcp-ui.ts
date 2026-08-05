@@ -915,6 +915,15 @@ const ROUND_STATUS_HTML = `<!doctype html>
           lastShotId = status.shot && status.shot.id ? status.shot.id : null;
 
           metaList.textContent = '';
+          // Which round this card is watching.
+          //
+          // Useful to a creator on its own, and it settles a question screenshots could
+          // not: ChatGPT showed several near-identical cards for one session, and the
+          // call ledger proved start ran exactly twice. Two cards naming *different*
+          // rounds are one per start and correct; two naming the *same* round are the
+          // host rendering one call more than once, which is not ours to fix. Until a
+          // card says which, both stories fit the pixels equally well.
+          if (typeof status.round === 'number' && status.round > 0) addRow('Round', status.round);
           if (gate) {
             addRow('Lane', gate.lane);
             addRow('Delivery', gate.deliveryId);

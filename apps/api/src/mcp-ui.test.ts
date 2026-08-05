@@ -353,6 +353,16 @@ describe('ui resources', () => {
     expect(html).toContain("status.agentEnded && gate && gate.status && gate.status !== 'pending'");
   });
 
+  it('names the round it is watching, so duplicate cards can be told apart', () => {
+    // ChatGPT showed several near-identical cards for one session. The call ledger
+    // proved `start` ran exactly twice and `get_gate_verdict` never, and our tools/list
+    // attaches the template to those two tools only — so the pixels are consistent with
+    // "one card per start" and with "the host rendered one call twice", and nothing on
+    // screen distinguished them. The round does.
+    const html = readUiResource(ROUND_STATUS_RESOURCE_URI)?.text ?? '';
+    expect(html).toContain("addRow('Round', status.round)");
+  });
+
   it('says which way a status read failed, so a screenshot is enough to diagnose it', () => {
     // Observed in ChatGPT: one card read status fine (screenshot, note and gate all
     // live) while a later one in the same session did not. "Could not read round status
