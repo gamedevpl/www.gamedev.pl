@@ -235,6 +235,11 @@ describe('ui resources', () => {
     // has no permission to follow.
     const [descriptor] = uiResourceDescriptors();
     const legacy = descriptor._meta['openai/widgetCSP'];
+    // The submission requirement, on the openai/* key only. The standard ui.domain is
+    // validated by Claude against a value it derives itself, so declaring our origin
+    // there broke the card in production once (#593, reverted in #595).
+    expect(descriptor._meta['openai/widgetDomain']).toBe('https://www.gamedev.pl');
+    expect(descriptor._meta.ui).not.toHaveProperty('domain');
     expect(legacy.redirect_domains).toEqual(['https://www.gamedev.pl']);
     // Only our own site. A wider list would let a future card hand the host somewhere
     // we did not intend.

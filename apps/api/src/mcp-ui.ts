@@ -213,6 +213,11 @@ interface UiCsp {
 
 interface UiResourceMeta {
   ui: { csp: UiCsp };
+  /**
+   * ChatGPT's dedicated origin for the hosted component. Required to submit an app with
+   * UI, and deliberately *not* the standard `ui.domain` — see the note on WIDGET_DOMAIN.
+   */
+  'openai/widgetDomain': string;
   /** ChatGPT reads its own compatibility key rather than `ui.csp`. */
   'openai/widgetCSP': {
     connect_domains: readonly string[];
@@ -241,6 +246,25 @@ export type UiResourceContents = Pick<UiResource, 'uri' | 'mimeType' | 'text'> &
  * the host somewhere we did not intend.
  */
 const LINK_DOMAINS: readonly string[] = Object.freeze(['https://www.gamedev.pl']);
+
+/**
+ * The origin ChatGPT associates with this hosted component.
+ *
+ * Declared on the `openai/*` key **only**, never on the standard `ui.domain`. Claude
+ * validates `ui.domain` against a value it derives itself —
+ * `sha256(<connector URL>).hex.slice(0, 32) + '.claudemcpcontent.com'` — so declaring our
+ * own origin there broke the card in production once already (public repo #593, reverted
+ * in #595). An `openai/*` key is invisible to Claude, which makes it the safe place to
+ * satisfy OpenAI without re-litigating that.
+ *
+ * Owner's decision (2026-08-05) to use the main origin rather than a dedicated subdomain,
+ * with the trade understood: if ChatGPT serves the component *on* this origin, the card
+ * becomes same-origin with the real site and could reach anything scoped to it. Tolerable
+ * only because the card is our own trusted first-party UI and nests nothing — the §13
+ * decision to cut in-chat play is what keeps that true. If a view ever embeds untrusted
+ * content, this must move to an isolated origin first.
+ */
+const WIDGET_DOMAIN = 'https://www.gamedev.pl';
 
 const VIEW_CSP: UiCsp = Object.freeze({
   // Frozen individually: Object.freeze is shallow, and this one object is handed out
@@ -1269,6 +1293,7 @@ const UI_RESOURCES: readonly UiResource[] = Object.freeze([
 function uiResourceMeta(): UiResourceMeta {
   return {
     ui: { csp: VIEW_CSP },
+    'openai/widgetDomain': WIDGET_DOMAIN,
     // Same declaration in the shape ChatGPT reads. It showed a "CSP off" badge against
     // the modern key alone, and both are documented, so we say it twice rather than
     // guess which one a host honours.
