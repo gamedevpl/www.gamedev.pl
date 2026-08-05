@@ -67,6 +67,21 @@ describe('applySourcePatch', () => {
     expect(result.content).toBe('line1\nline2x\nline3\n');
   });
 
+  it('applies a CRLF unified diff against LF source', () => {
+    const patch = [
+      '--- a/game/render.ts',
+      '+++ b/game/render.ts',
+      '@@ -1,3 +1,3 @@',
+      ' line1',
+      '-line2',
+      '+line2x',
+      ' line3',
+      '',
+    ].join('\r\n');
+    const result = applySourcePatch({ content, path: 'game/render.ts', patch });
+    expect(result.content).toBe('line1\nline2x\nline3\n');
+  });
+
   it('applies a bare @@ hunk matched by context (no line numbers needed)', () => {
     const patch = [
       '--- a/game/model.ts',

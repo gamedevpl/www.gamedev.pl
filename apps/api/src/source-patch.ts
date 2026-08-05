@@ -113,8 +113,12 @@ function countHunkLines(body: string[]): { oldLines: number; newLines: number } 
  * space → prefixed.
  */
 export function normalizeUnifiedDiff(patchText: string): string {
-  const endsWithNewline = patchText.endsWith('\n');
-  const lines = patchText.split('\n');
+  // MCP / Windows clients often send CRLF. split('\n') would leave a trailing \r on
+  // every line, so applyPatch's exact context match fails against LF game sources.
+  // jsdiff itself tolerates CRLF patches; once we rewrite hunks we must too.
+  const text = patchText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const endsWithNewline = text.endsWith('\n');
+  const lines = text.split('\n');
   // split keeps a trailing empty from a final newline; drop it so we don't treat it
   // as a stray body line, then re-attach the newline at the end.
   if (endsWithNewline && lines[lines.length - 1] === '') lines.pop();
@@ -153,7 +157,7 @@ export function normalizeUnifiedDiff(patchText: string): string {
     out.push(...body);
   }
 
-  return endsWithNewline || patchText.length === 0 ? `${out.join('\n')}\n` : out.join('\n');
+  return endsWithNewline || text.length === 0 ? `${out.join('\n')}\n` : out.join('\n');
 }
 
 function assertPatchTargetsPath(path: string, patchText: string): number {
