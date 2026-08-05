@@ -227,22 +227,44 @@ describe('ui resources', () => {
     expect(html).not.toContain('arguments.callee');
   });
 
-  it('opens the round view from the tools a creator watches a round through', () => {
-    // Phase 0 attached the view to read tools only, on the reasoning that a card on a
-    // write tool would freeze a mid-delivery echo on screen. That no longer applies: the
-    // card renders live state from get_round_status rather than the opening payload, so
-    // submitting is exactly the moment a creator wants it open.
-    expect(MCP_UI_TOOL_RESOURCES).toEqual({
-      start: ROUND_STATUS_RESOURCE_URI,
-      get_gate_verdict: ROUND_STATUS_RESOURCE_URI,
-    });
-    // The host renders one card per tool call carrying _meta.ui, so a turn that started
-    // a round and then delivered produced two identical cards. The card is live: the one
-    // from start already follows the delivery.
-    expect(MCP_UI_TOOL_RESOURCES).not.toHaveProperty('submit_sources');
-    // open_round mints no session key and takes none, so a card opened there would have
-    // nothing to read status with.
-    expect(MCP_UI_TOOL_RESOURCES).not.toHaveProperty('open_round');
+  it('allowlists the one place the card may send the reader', () => {
+    // The card fetches nothing, so an empty CSP is right for *fetching*. Link targets
+    // are a different question and were never answered: ChatGPT gates external links
+    // behind redirect_domains, and the standard ui.csp has no equivalent field — so
+    // without this the card's own "Watch the gate recording" button is a link the host
+    // has no permission to follow.
+    const [descriptor] = uiResourceDescriptors();
+    const legacy = descriptor._meta['openai/widgetCSP'];
+    // The submission requirement, on the openai/* key only. The standard ui.domain is
+    // validated by Claude against a value it derives itself, so declaring our origin
+    // there broke the card in production once (#593, reverted in #595).
+    expect(descriptor._meta['openai/widgetDomain']).toBe('https://www.gamedev.pl');
+    expect(descriptor._meta.ui).not.toHaveProperty('domain');
+    expect(legacy.redirect_domains).toEqual(['https://www.gamedev.pl']);
+    // Only our own site. A wider list would let a future card hand the host somewhere
+    // we did not intend.
+    expect(legacy.redirect_domains.every((domain) => domain.startsWith('https://'))).toBe(true);
+    // What it may *fetch* stays empty — the card inlines everything.
+    expect(legacy.connect_domains).toEqual([]);
+    expect(legacy.resource_domains).toEqual([]);
+    expect(legacy.frame_domains).toEqual([]);
+    // Same body on read as on list, so a host cannot see two different policies.
+    expect(readUiResource(ROUND_STATUS_RESOURCE_URI)?._meta).toEqual(descriptor._meta);
+  });
+
+  it('opens the round view from exactly one tool, which exists for nothing else', () => {
+    // This used to be `start` and `get_gate_verdict` — tools an agent calls for its own
+    // reasons — which made a card a side effect of workflow mechanics. An agent that
+    // re-ran `start` before each operation left one card per call (ChatGPT, 2026-08-05),
+    // and it was not doing anything wrong enough to forbid. Showing the creator
+    // something is now a deliberate act with a deliberate tool.
+    expect(MCP_UI_TOOL_RESOURCES).toEqual({ show_round: ROUND_STATUS_RESOURCE_URI });
+
+    // The host renders one card per call carrying _meta.ui, so every tool added here
+    // hands the card count back to whatever the agent happens to do.
+    for (const workflowTool of ['start', 'get_gate_verdict', 'submit_sources', 'open_round']) {
+      expect(MCP_UI_TOOL_RESOURCES).not.toHaveProperty(workflowTool);
+    }
   });
 
   it('keeps the app-only tools read-only, since the model never sees them happen', () => {
@@ -328,6 +350,16 @@ describe('ui resources', () => {
     expect(html).toContain("status.agentEnded && gate && gate.status && gate.status !== 'pending'");
   });
 
+  it('names the round it is watching, so duplicate cards can be told apart', () => {
+    // ChatGPT showed several near-identical cards for one session. The call ledger
+    // proved `start` ran exactly twice and `get_gate_verdict` never, and our tools/list
+    // attaches the template to those two tools only — so the pixels are consistent with
+    // "one card per start" and with "the host rendered one call twice", and nothing on
+    // screen distinguished them. The round does.
+    const html = readUiResource(ROUND_STATUS_RESOURCE_URI)?.text ?? '';
+    expect(html).toContain("addRow('Round', status.round)");
+  });
+
   it('says which way a status read failed, so a screenshot is enough to diagnose it', () => {
     // Observed in ChatGPT: one card read status fine (screenshot, note and gate all
     // live) while a later one in the same session did not. "Could not read round status
@@ -375,6 +407,38 @@ describe('ui resources', () => {
     // Otherwise the strip from the last round stays on screen under a fresh verdict.
     const html = readUiResource(ROUND_STATUS_RESOURCE_URI)?.text ?? '';
     expect(html).toMatch(/gallery\.hidden = true;[\s\S]{0,80}galleryCap\.hidden = true;/);
+  });
+
+  it('sizes itself to the frame the host gave it, per the spec it implements', () => {
+    // Observed in ChatGPT: the card sat at the top of a much taller frame with dead
+    // space beneath. SEP-1865 has containerDimensions in hostContext for exactly this —
+    // a fixed height is the host's decision and the view is meant to fill it. We were
+    // reading theme, locale and timeZone from hostContext and ignoring dimensions.
+    const html = readUiResource(ROUND_STATUS_RESOURCE_URI)?.text ?? '';
+    expect(html).toContain('applyContainerDimensions');
+    expect(html).toContain('context.containerDimensions');
+    // Fixed fills, flexible caps — the two modes the spec defines, kept distinct.
+    expect(html).toMatch(/dimensions\.height[\s\S]{0,220}?'100%'/);
+    expect(html).toContain('dimensions.maxHeight + ');
+    // Absent means unbounded: no dimensions, no styling, same as before this existed.
+    expect(html).toContain("if (!dimensions || typeof dimensions !== 'object') return;");
+  });
+
+  it('paints the round from the opening result, before any poll returns', () => {
+    // show_round returns the whole round, so the card no longer has to sit on
+    // "Reading round status..." waiting for its first poll — and in a host that refuses
+    // the app-only call this is the only state it will ever have. The old seed path
+    // recognised a verdict shape only, which show_round does not return.
+    const html = readUiResource(ROUND_STATUS_RESOURCE_URI)?.text ?? '';
+    expect(html).toMatch(/var opening = unwrap\(message\.params, looksLikeStatus\);/);
+    expect(html).toMatch(/if \(opening && !live\) \{[\s\S]{0,120}?render\(opening\);/);
+    // The gate-only fallback still exists for anything that is not a full status.
+    expect(html).toContain('var verdict = opening ? null : unwrap(message.params, looksLikeVerdict);');
+
+    // And a failed refresh must never trade that content back for an error message.
+    // Verified in the browser against a host refusing every app-only call: the card
+    // still shows phase, round and deliveries left rather than "Could not read...".
+    expect(html).toContain('if (!live && !painted) giveUp();');
   });
 
   it('polls, and degrades to the opening payload when a host refuses the app-only call', () => {

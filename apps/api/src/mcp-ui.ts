@@ -40,25 +40,24 @@ export const MCP_UI_MIME_TYPE = 'text/html;profile=mcp-app';
 export const ROUND_STATUS_RESOURCE_URI = 'ui://gamedevpl/round-status';
 
 /**
- * Tools that open the round view — kept deliberately few, because the host renders one
- * card per tool call that carries `_meta.ui`.
+ * The tool that opens the round view. Exactly one, and it exists for nothing else.
  *
- * `submit_sources` used to be here and was removed: an ordinary turn calls `start` and
- * then delivers, which rendered two cards showing identical state one above the other.
- * Nothing was lost by dropping it. The card is live, so the one opened at `start`
- * already follows the delivery and the gate on its own — that is the whole point of it.
+ * This used to be `start` and `get_gate_verdict` — tools an agent calls for their own
+ * reasons. That made a card a *side effect* of workflow mechanics, so behaviour we
+ * neither control nor should have to decided how many cards a conversation got: an
+ * agent that re-ran `start` before each operation to "reacquire the key" left one card
+ * per call (ChatGPT, 2026-08-05). It was not doing anything wrong enough to forbid, and
+ * no host-side reasoning fixes a cause that lives in the agent's own discretion.
  *
- * `get_gate_verdict` stays for the creator-led check on a later turn, when no `start`
- * precedes it. Doubling up there needs an agent that both opens a round and polls in
- * one turn, which the workflow tells it not to do (prefer `end`, let the card watch).
+ * So showing the creator something is now a deliberate act with a deliberate tool.
+ * Calling `show_round` twice asks for two cards, which is at least honest.
  *
- * `open_round` is deliberately absent for a different reason: it mints no session key
- * and takes none — its own description sends the agent to `start()` for one — so a card
- * opened there would have no credential and would sit on "Reading round status…".
+ * Keep this map at one entry unless a second surface genuinely needs its own view. The
+ * host renders one card per call that carries `_meta.ui`, and every tool added here
+ * hands that decision back to whatever the agent happens to do.
  */
 export const MCP_UI_TOOL_RESOURCES: Readonly<Record<string, string>> = Object.freeze({
-  start: ROUND_STATUS_RESOURCE_URI,
-  get_gate_verdict: ROUND_STATUS_RESOURCE_URI,
+  show_round: ROUND_STATUS_RESOURCE_URI,
 });
 
 /**
@@ -213,11 +212,18 @@ interface UiCsp {
 
 interface UiResourceMeta {
   ui: { csp: UiCsp };
+  /**
+   * ChatGPT's dedicated origin for the hosted component. Required to submit an app with
+   * UI, and deliberately *not* the standard `ui.domain` — see the note on WIDGET_DOMAIN.
+   */
+  'openai/widgetDomain': string;
   /** ChatGPT reads its own compatibility key rather than `ui.csp`. */
   'openai/widgetCSP': {
     connect_domains: readonly string[];
     resource_domains: readonly string[];
     frame_domains: readonly string[];
+    /** External-link targets, which `ui.csp` has no field for. */
+    redirect_domains: readonly string[];
   };
 }
 
@@ -231,6 +237,34 @@ export type UiResourceContents = Pick<UiResource, 'uri' | 'mimeType' | 'text'> &
  * Declared per resource. Empty by design: the card inlines everything, screenshots
  * arrive as data URIs, and it calls tools through the host rather than the network.
  */
+/**
+ * Where the card is allowed to send the reader.
+ *
+ * Only our own site: every link the card offers is a gamedev.pl page (the gate
+ * recording today, the game theater in V3). A wider list would let a future card hand
+ * the host somewhere we did not intend.
+ */
+const LINK_DOMAINS: readonly string[] = Object.freeze(['https://www.gamedev.pl']);
+
+/**
+ * The origin ChatGPT associates with this hosted component.
+ *
+ * Declared on the `openai/*` key **only**, never on the standard `ui.domain`. Claude
+ * validates `ui.domain` against a value it derives itself —
+ * `sha256(<connector URL>).hex.slice(0, 32) + '.claudemcpcontent.com'` — so declaring our
+ * own origin there broke the card in production once already (public repo #593, reverted
+ * in #595). An `openai/*` key is invisible to Claude, which makes it the safe place to
+ * satisfy OpenAI without re-litigating that.
+ *
+ * Owner's decision (2026-08-05) to use the main origin rather than a dedicated subdomain,
+ * with the trade understood: if ChatGPT serves the component *on* this origin, the card
+ * becomes same-origin with the real site and could reach anything scoped to it. Tolerable
+ * only because the card is our own trusted first-party UI and nests nothing — the §13
+ * decision to cut in-chat play is what keeps that true. If a view ever embeds untrusted
+ * content, this must move to an isolated origin first.
+ */
+const WIDGET_DOMAIN = 'https://www.gamedev.pl';
+
 const VIEW_CSP: UiCsp = Object.freeze({
   // Frozen individually: Object.freeze is shallow, and this one object is handed out
   // on every resources/list and resources/read.
@@ -439,6 +473,8 @@ const ROUND_STATUS_HTML = `<!doctype html>
         var lastShotId = null;
         var live = false;
         var seed = null;
+        /** Whether anything real is on screen yet, from a poll or from the opening result. */
+        var painted = false;
         var inFlight = false;
         var attempts = 0;
         var speculative = false;
@@ -516,6 +552,40 @@ const ROUND_STATUS_HTML = `<!doctype html>
           if (typeof context.locale === 'string') hostLocale = context.locale;
           if (typeof context.timeZone === 'string') hostTimeZone = context.timeZone;
           applyThemeVariables(context.themeVariables || context.theme_variables || context.cssVariables);
+          applyContainerDimensions(context.containerDimensions);
+        }
+
+        /**
+         * Honour the frame the host actually gave us.
+         *
+         * SEP-1865 says a view should read containerDimensions and size itself to match:
+         * a height is fixed and the view fills it, a maxHeight is a ceiling the view may
+         * grow up to, and an absent field means unbounded. We ignored it entirely,
+         *
+         * (No backticks in this comment on purpose — the whole view is a TS template
+         * literal, and one would end it. tsc catches that; it is still a wasted round.)
+         * which is fine in a host that sizes to our size-changed notification and wrong in
+         * one that does not — ChatGPT left the card sitting at the top of a much taller
+         * frame with dead space under it (owner, 2026-08-05).
+         *
+         * Filling a fixed frame does not conjure content, but it makes the card look
+         * deliberate rather than broken, and it is what the spec asks for.
+         */
+        function applyContainerDimensions(dimensions) {
+          if (!dimensions || typeof dimensions !== 'object') return;
+          var root = document.documentElement;
+          if (typeof dimensions.height === 'number' && dimensions.height > 0) {
+            root.style.height = '100%';
+            document.body.style.minHeight = '100%';
+            document.body.style.boxSizing = 'border-box';
+          } else if (typeof dimensions.maxHeight === 'number' && dimensions.maxHeight > 0) {
+            root.style.maxHeight = dimensions.maxHeight + 'px';
+          }
+          if (typeof dimensions.width === 'number' && dimensions.width > 0) {
+            root.style.width = '100%';
+          } else if (typeof dimensions.maxWidth === 'number' && dimensions.maxWidth > 0) {
+            root.style.maxWidth = dimensions.maxWidth + 'px';
+          }
         }
 
         /** Gate timestamps are ISO; show them in the reader's locale and zone. */
@@ -846,6 +916,15 @@ const ROUND_STATUS_HTML = `<!doctype html>
           lastShotId = status.shot && status.shot.id ? status.shot.id : null;
 
           metaList.textContent = '';
+          // Which round this card is watching.
+          //
+          // Useful to a creator on its own, and it settles a question screenshots could
+          // not: ChatGPT showed several near-identical cards for one session, and the
+          // call ledger proved start ran exactly twice. Two cards naming *different*
+          // rounds are one per start and correct; two naming the *same* round are the
+          // host rendering one call more than once, which is not ours to fix. Until a
+          // card says which, both stories fit the pixels equally well.
+          if (typeof status.round === 'number' && status.round > 0) addRow('Round', status.round);
           if (gate) {
             addRow('Lane', gate.lane);
             addRow('Delivery', gate.deliveryId);
@@ -1091,11 +1170,17 @@ const ROUND_STATUS_HTML = `<!doctype html>
                 if (!giveUpTimer) giveUpTimer = setTimeout(giveUp, 20000);
                 return;
               }
-              if (!live) giveUp();
+              // Never trade real content for an error message. The card may already be
+              // showing the round from show_round's opening result, and in a host that
+              // refuses app-only calls that is the only state it will ever have —
+              // overwriting it with "Could not read round status here." would leave the
+              // creator worse off than if we had never polled.
+              if (!live && !painted) giveUp();
               if (attempts >= 2) stopped = true;
               return;
             }
             live = true;
+            painted = true;
             pushModelContext(status);
             loadMedia(status);
             if (giveUpTimer) {
@@ -1165,7 +1250,18 @@ const ROUND_STATUS_HTML = `<!doctype html>
           }
 
           if (message.method === 'ui/notifications/tool-result') {
-            var verdict = unwrap(message.params, looksLikeVerdict);
+            // show_round returns the whole round, so the opening result is already the
+            // thing the card exists to display — paint it now rather than showing
+            // "Reading round status..." until a poll returns. In a host that refuses the
+            // app-only call this is also the *only* state the card will ever have, which
+            // is why it renders as live rather than as the static gate-only fallback.
+            var opening = unwrap(message.params, looksLikeStatus);
+            if (opening && !live) {
+              painted = true;
+              render(opening);
+              schedule(opening.retryAfterSeconds);
+            }
+            var verdict = opening ? null : unwrap(message.params, looksLikeVerdict);
             if (verdict && !live) {
               seed = verdict;
               renderGateOnly(verdict);
@@ -1224,6 +1320,7 @@ const UI_RESOURCES: readonly UiResource[] = Object.freeze([
 function uiResourceMeta(): UiResourceMeta {
   return {
     ui: { csp: VIEW_CSP },
+    'openai/widgetDomain': WIDGET_DOMAIN,
     // Same declaration in the shape ChatGPT reads. It showed a "CSP off" badge against
     // the modern key alone, and both are documented, so we say it twice rather than
     // guess which one a host honours.
@@ -1231,6 +1328,16 @@ function uiResourceMeta(): UiResourceMeta {
       connect_domains: VIEW_CSP.connectDomains,
       resource_domains: VIEW_CSP.resourceDomains,
       frame_domains: VIEW_CSP.frameDomains,
+      // Where the card may send the *host* — not where it may fetch from. ChatGPT
+      // allowlists external-link targets separately (`redirect_domains`, the allowlist
+      // behind `openai.openExternal`), and the standard `ui.csp` has no equivalent
+      // field, so this one exists only in the legacy shape.
+      //
+      // Without it the card's own "Watch the gate recording" button is a link ChatGPT
+      // has no permission to follow, and the Play button V3 is built around would be
+      // the same. An empty CSP is right for what the card *fetches* — it fetches
+      // nothing — but link targets are a different question and were never answered.
+      redirect_domains: LINK_DOMAINS,
     },
   };
 }

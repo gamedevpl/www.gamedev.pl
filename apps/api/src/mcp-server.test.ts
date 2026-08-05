@@ -2002,13 +2002,46 @@ describe('MCP Apps views (SEP-1865, Phase 0)', () => {
     expect(capabilities.resources).toBeDefined();
 
     const tools = await listTools(app, sessionId);
-    const verdict = tools.find((tool) => tool.name === 'get_gate_verdict');
-    expect(verdict?._meta?.ui?.resourceUri).toBe('ui://gamedevpl/round-status');
-    // The tools that open the round view, and nothing else.
+    const shower = tools.find((tool) => tool.name === 'show_round');
+    expect(shower?._meta?.ui?.resourceUri).toBe('ui://gamedevpl/round-status');
+    expect(shower?._meta?.['openai/outputTemplate']).toBe('ui://gamedevpl/round-status');
+    // Exactly one tool opens the card. Attaching it to a tool the agent calls for its own
+    // reasons made the card count a side effect of agent discretion.
     expect(tools.filter((tool) => tool._meta?.ui?.resourceUri !== undefined).map((tool) => tool.name)).toEqual([
-      'start',
-      'get_gate_verdict',
+      'show_round',
     ]);
+  });
+
+  it('gives the card its key on the opening result, and stays visible to the model', async () => {
+    process.env.MCP_UI = 'true';
+    const store = new InMemoryStore();
+    await seedJob(store);
+    app = await createApp(store);
+    const { sessionId } = await initializeWith(app, true);
+    const started = await callTool(app, 'start', { key: roundKey(1) }, { 'mcp-session-id': sessionId });
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    const shown = await callTool(app, 'show_round', { sessionKey }, { 'mcp-session-id': sessionId });
+    expect(shown.isError).toBe(false);
+    const payload = shown.structured as { phase: string; sessionKey: string };
+    // The card seeds from this result. Echoing the key means it polls authenticated from
+    // its first frame instead of making a keyless call that gets refused.
+    expect(payload.sessionKey).toBe(sessionKey);
+    expect(payload.phase).toBeTruthy();
+
+    // Unlike the app-only reads, the model must see this one — it is the tool the agent
+    // calls to show the creator a card.
+    const listed = await listTools(app, sessionId);
+    expect(listed.some((tool) => tool.name === 'show_round')).toBe(true);
+    expect(listed.find((tool) => tool.name === 'show_round')?._meta?.ui?.visibility).toBeUndefined();
+
+    // ...and a client with no views still gets a plain status read rather than an error.
+    const { sessionId: plain } = await initializeWith(app, false);
+    const plainList = await listTools(app, plain);
+    expect(plainList.some((tool) => tool.name === 'show_round')).toBe(true);
+    const plainCall = await callTool(app, 'show_round', { sessionKey }, { 'mcp-session-id': plain });
+    expect(plainCall.isError).toBe(false);
+    expect(plainList.find((tool) => tool.name === 'show_round')?._meta).toBeUndefined();
   });
 
   it('offers the app-only status tool to a view, and hides it from every other client', async () => {
@@ -2257,7 +2290,7 @@ describe('MCP Apps views (SEP-1865, Phase 0)', () => {
     // start re-sets the transport session mid-round; a plain overwrite there used to
     // drop uiCapable and the card would vanish for the rest of the round.
     const tools = await listTools(app, sessionId);
-    expect(tools.find((tool) => tool.name === 'get_gate_verdict')?._meta?.ui?.resourceUri).toBe(
+    expect(tools.find((tool) => tool.name === 'show_round')?._meta?.ui?.resourceUri).toBe(
       'ui://gamedevpl/round-status',
     );
   });
@@ -2424,7 +2457,7 @@ describe('MCP Apps views (SEP-1865, Phase 0)', () => {
     // than silently dropping the view mid-round.
     app = await createApp(store);
     const tools = await listTools(app, sessionId);
-    expect(tools.find((tool) => tool.name === 'get_gate_verdict')?._meta?.ui?.resourceUri).toBe(
+    expect(tools.find((tool) => tool.name === 'show_round')?._meta?.ui?.resourceUri).toBe(
       'ui://gamedevpl/round-status',
     );
     const read = await mcpCall(

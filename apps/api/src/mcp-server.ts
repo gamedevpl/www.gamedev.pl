@@ -141,6 +141,40 @@ function noteTextFor(event: { text: string; textLocalized?: string; locale?: str
   return primary(event.locale) === primary(readerLocale) ? event.textLocalized : event.text;
 }
 
+/**
+ * The round snapshot both doors return: `show_round` for the model, `get_round_status`
+ * for the card. Shared so the two can never drift into describing different rounds.
+ */
+const ROUND_STATUS_OUTPUT_SCHEMA: Record<string, unknown> = {
+  type: 'object',
+  properties: {
+    phase: { type: 'string', description: 'Internal job state.' },
+    status: { type: 'string', description: 'Creator-facing projection of the phase.' },
+    stall: { type: ['string', 'null'] },
+    agentEnded: { type: 'boolean' },
+    title: { type: ['string', 'null'] },
+    slug: { type: ['string', 'null'] },
+    round: { type: 'number' },
+    deliveriesRemaining: { type: ['number', 'null'] },
+    note: {
+      type: ['object', 'null'],
+      properties: { text: { type: 'string' }, createdAt: { type: 'string' } },
+    },
+    shot: {
+      type: ['object', 'null'],
+      properties: {
+        id: { type: 'string' },
+        createdAt: { type: 'string' },
+        label: { type: ['string', 'null'] },
+        png: { type: 'string', description: 'base64 PNG; omitted when unchanged since sinceShotId.' },
+      },
+    },
+    gate: { type: ['object', 'null'] },
+    retryAfterSeconds: { type: 'number' },
+  },
+  required: ['phase', 'status', 'retryAfterSeconds'],
+};
+
 const ROUND_STATUS_RETRY_AFTER_SECONDS = 30;
 /** A card shows a strip, not a contact sheet; the bytes ride a postMessage. */
 const ROUND_MEDIA_MAX_FRAMES = 3;
@@ -374,6 +408,13 @@ const BEHAVIOURAL_CONTRACT = [
  * the inbox policy and the retired-key etiquette.
  */
 const SESSION_WORKFLOW: readonly string[] = [
+  // First because an agent that re-runs start before each operation pays a round trip
+  // every time and, in an MCP Apps host, leaves a duplicate round card behind for each
+  // call. Observed in ChatGPT 2026-08-05, where the agent explained it had been calling
+  // start "to reacquire the key" — a fair reading of "short-lived" that nothing here
+  // corrected.
+  'Hold the sessionKey start gave you for the whole round and pass it on every call. Do not re-run start to refresh it — it is valid until expiresAt. Re-run start only if a call is refused as unauthenticated.',
+  "show_round — once, right after start. In a client that renders MCP Apps views this puts a live status card in the creator's chat that follows the build and the gate on its own, so they can watch without you polling. Calling it again renders a second card.",
   'get_brief — read the brief; if seedAvailable or seedStatus=available, get_seed and continue that draft. If seedStatus=pending, browse the kit lightly then recheck get_seed before scaffolding.',
   // An improvement round has no seed (seeds are a new-game facility) and its brief is
   // the change request alone, so nothing above this told the agent a game already
@@ -1006,7 +1047,11 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       outputSchema: {
         type: 'object',
         properties: {
-          sessionKey: { type: 'string', description: 'Pass on every later tool call.' },
+          sessionKey: {
+            type: 'string',
+            description:
+              'Hold this for the whole round and pass it on every later tool call. Do not re-run start to refresh it.',
+          },
           sessionId: { type: 'string' },
           jobId: { type: 'number' },
           slug: { type: ['string', 'null'] },
@@ -1028,7 +1073,11 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       description:
         'Bind this MCP client to a build round using a creator key in Authorization: Bearer plus a game slug, ' +
         'a legacy round-scoped key, or OAuth Bearer + slug. ' +
-        'Returns a short-lived sessionKey — pass it as sessionKey on every later tool call — plus a workflow ' +
+        'Call it ONCE per round and keep the sessionKey for the whole round: it lasts until expiresAt (hours, ' +
+        'not minutes), so calling start again before each operation to refresh the key is wrong. Doing that ' +
+        'costs a round trip every time and, in a client that renders MCP Apps views, leaves a duplicate status ' +
+        'card in the conversation for each call. If a call is ever refused as unauthenticated, then re-run start. ' +
+        'Returns that sessionKey — pass it as sessionKey on every later tool call — plus a workflow ' +
         '(the ordered start→done loop), seedAvailable/seedStatus/seedNotice, an inbox policy, and what to relay if a later call is refused. ' +
         'Creator keys are openers only — never a write capability. OAuth access is identity only. ' +
         'Does not treat Mcp-Session-Id as authority. ' +
@@ -3591,41 +3640,60 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     },
 
     /**
+     * The only tool that opens the round card, and its whole purpose.
+     *
+     * The card used to hang off `start` and `get_gate_verdict`. That made rendering a
+     * *side effect* of doing something else, so agent behaviour we neither control nor
+     * should have to decided how many cards appeared: an agent that re-ran `start`
+     * before each operation left one card per call (ChatGPT, 2026-08-05). No amount of
+     * host-side reasoning fixes that, because the agent was not doing anything wrong
+     * enough to forbid.
+     *
+     * Showing the creator something is a deliberate act, so it gets a deliberate tool.
+     * Calling it twice is the agent asking for two cards, which is at least honest.
+     *
+     * It also removes the opening scramble: the card seeds from this result, so it has
+     * the round key from its first frame instead of making a keyless poll and waiting
+     * for `start`'s result to arrive.
+     */
+    show_round: {
+      annotations: { title: 'Show the creator a live round card', ...READS },
+      description:
+        "Render a live status card for this round in the creator's chat: phase, latest progress note and " +
+        'screenshot, gate verdict, deliveries left. It refreshes itself and stops when the round settles, so ' +
+        'the creator can watch without you polling. ' +
+        'Call it ONCE per round, after start — a second call renders a second card. ' +
+        'Only clients that render MCP Apps views see anything; elsewhere it is a plain status read. ' +
+        BEHAVIOURAL_CONTRACT,
+      inputSchema: {
+        type: 'object',
+        properties: { sessionKey: SESSION_KEY_PROP },
+        required: [],
+      },
+      // Same body as get_round_status plus the echoed key — they are the same read, so
+      // they declare the same shape.
+      outputSchema: ROUND_STATUS_OUTPUT_SCHEMA,
+      handler: async (args, ctx) => {
+        // One implementation, two doors: the model opens the card through this tool, the
+        // card refreshes itself through the app-only one. They must never disagree about
+        // what the round looks like, so they are literally the same read.
+        const status = await tools.get_round_status.handler(args, ctx);
+        // Echo the key so the view holds it from its first frame. The card reads it off
+        // this result; without it the first poll goes out keyless and is refused.
+        if (status.isError || typeof args.sessionKey !== 'string') return status;
+        const data = { ...(status.structuredContent as Record<string, unknown>), sessionKey: args.sessionKey };
+        return toolOk(data);
+      },
+    },
+
+    /**
      * App-only (SEP-1865 `visibility: ["app"]`): the round view calls this, the model
      * never sees it. Read-only and presence-neutral by construction — see
      * MCP_UI_APP_ONLY_TOOLS for why both matter.
      */
     get_round_status: {
       annotations: { title: 'Round status for the round view', ...READS },
-      outputSchema: {
-        type: 'object',
-        properties: {
-          phase: { type: 'string', description: 'Internal job state.' },
-          status: { type: 'string', description: 'Creator-facing projection of the phase.' },
-          stall: { type: ['string', 'null'] },
-          agentEnded: { type: 'boolean' },
-          title: { type: ['string', 'null'] },
-          slug: { type: ['string', 'null'] },
-          round: { type: 'number' },
-          deliveriesRemaining: { type: ['number', 'null'] },
-          note: {
-            type: ['object', 'null'],
-            properties: { text: { type: 'string' }, createdAt: { type: 'string' } },
-          },
-          shot: {
-            type: ['object', 'null'],
-            properties: {
-              id: { type: 'string' },
-              createdAt: { type: 'string' },
-              label: { type: ['string', 'null'] },
-              png: { type: 'string', description: 'base64 PNG; omitted when unchanged since sinceShotId.' },
-            },
-          },
-          gate: { type: ['object', 'null'] },
-          retryAfterSeconds: { type: 'number' },
-        },
-        required: ['phase', 'status', 'retryAfterSeconds'],
-      },
+      outputSchema: ROUND_STATUS_OUTPUT_SCHEMA,
       description:
         'Round state for the gamedev.pl round view: phase, latest progress note, latest screenshot and the current ' +
         'gate verdict in one read. Intended for the view, which polls it on retryAfterSeconds — pass sinceShotId to ' +
