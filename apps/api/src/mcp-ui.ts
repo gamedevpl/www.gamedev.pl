@@ -218,6 +218,8 @@ interface UiResourceMeta {
     connect_domains: readonly string[];
     resource_domains: readonly string[];
     frame_domains: readonly string[];
+    /** External-link targets, which `ui.csp` has no field for. */
+    redirect_domains: readonly string[];
   };
 }
 
@@ -231,6 +233,15 @@ export type UiResourceContents = Pick<UiResource, 'uri' | 'mimeType' | 'text'> &
  * Declared per resource. Empty by design: the card inlines everything, screenshots
  * arrive as data URIs, and it calls tools through the host rather than the network.
  */
+/**
+ * Where the card is allowed to send the reader.
+ *
+ * Only our own site: every link the card offers is a gamedev.pl page (the gate
+ * recording today, the game theater in V3). A wider list would let a future card hand
+ * the host somewhere we did not intend.
+ */
+const LINK_DOMAINS: readonly string[] = Object.freeze(['https://www.gamedev.pl']);
+
 const VIEW_CSP: UiCsp = Object.freeze({
   // Frozen individually: Object.freeze is shallow, and this one object is handed out
   // on every resources/list and resources/read.
@@ -1265,6 +1276,16 @@ function uiResourceMeta(): UiResourceMeta {
       connect_domains: VIEW_CSP.connectDomains,
       resource_domains: VIEW_CSP.resourceDomains,
       frame_domains: VIEW_CSP.frameDomains,
+      // Where the card may send the *host* — not where it may fetch from. ChatGPT
+      // allowlists external-link targets separately (`redirect_domains`, the allowlist
+      // behind `openai.openExternal`), and the standard `ui.csp` has no equivalent
+      // field, so this one exists only in the legacy shape.
+      //
+      // Without it the card's own "Watch the gate recording" button is a link ChatGPT
+      // has no permission to follow, and the Play button V3 is built around would be
+      // the same. An empty CSP is right for what the card *fetches* — it fetches
+      // nothing — but link targets are a different question and were never answered.
+      redirect_domains: LINK_DOMAINS,
     },
   };
 }

@@ -227,6 +227,26 @@ describe('ui resources', () => {
     expect(html).not.toContain('arguments.callee');
   });
 
+  it('allowlists the one place the card may send the reader', () => {
+    // The card fetches nothing, so an empty CSP is right for *fetching*. Link targets
+    // are a different question and were never answered: ChatGPT gates external links
+    // behind redirect_domains, and the standard ui.csp has no equivalent field — so
+    // without this the card's own "Watch the gate recording" button is a link the host
+    // has no permission to follow.
+    const [descriptor] = uiResourceDescriptors();
+    const legacy = descriptor._meta['openai/widgetCSP'];
+    expect(legacy.redirect_domains).toEqual(['https://www.gamedev.pl']);
+    // Only our own site. A wider list would let a future card hand the host somewhere
+    // we did not intend.
+    expect(legacy.redirect_domains.every((domain) => domain.startsWith('https://'))).toBe(true);
+    // What it may *fetch* stays empty — the card inlines everything.
+    expect(legacy.connect_domains).toEqual([]);
+    expect(legacy.resource_domains).toEqual([]);
+    expect(legacy.frame_domains).toEqual([]);
+    // Same body on read as on list, so a host cannot see two different policies.
+    expect(readUiResource(ROUND_STATUS_RESOURCE_URI)?._meta).toEqual(descriptor._meta);
+  });
+
   it('opens the round view from the tools a creator watches a round through', () => {
     // Phase 0 attached the view to read tools only, on the reasoning that a card on a
     // write tool would freeze a mid-delivery echo on screen. That no longer applies: the
