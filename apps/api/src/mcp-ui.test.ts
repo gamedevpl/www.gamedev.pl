@@ -424,6 +424,23 @@ describe('ui resources', () => {
     expect(html).toContain("if (!dimensions || typeof dimensions !== 'object') return;");
   });
 
+  it('paints the round from the opening result, before any poll returns', () => {
+    // show_round returns the whole round, so the card no longer has to sit on
+    // "Reading round status..." waiting for its first poll — and in a host that refuses
+    // the app-only call this is the only state it will ever have. The old seed path
+    // recognised a verdict shape only, which show_round does not return.
+    const html = readUiResource(ROUND_STATUS_RESOURCE_URI)?.text ?? '';
+    expect(html).toMatch(/var opening = unwrap\(message\.params, looksLikeStatus\);/);
+    expect(html).toMatch(/if \(opening && !live\) \{[\s\S]{0,120}?render\(opening\);/);
+    // The gate-only fallback still exists for anything that is not a full status.
+    expect(html).toContain('var verdict = opening ? null : unwrap(message.params, looksLikeVerdict);');
+
+    // And a failed refresh must never trade that content back for an error message.
+    // Verified in the browser against a host refusing every app-only call: the card
+    // still shows phase, round and deliveries left rather than "Could not read...".
+    expect(html).toContain('if (!live && !painted) giveUp();');
+  });
+
   it('polls, and degrades to the opening payload when a host refuses the app-only call', () => {
     const html = readUiResource(ROUND_STATUS_RESOURCE_URI)?.text ?? '';
     expect(html).toContain("name: 'get_round_status'");

@@ -473,6 +473,8 @@ const ROUND_STATUS_HTML = `<!doctype html>
         var lastShotId = null;
         var live = false;
         var seed = null;
+        /** Whether anything real is on screen yet, from a poll or from the opening result. */
+        var painted = false;
         var inFlight = false;
         var attempts = 0;
         var speculative = false;
@@ -1168,11 +1170,17 @@ const ROUND_STATUS_HTML = `<!doctype html>
                 if (!giveUpTimer) giveUpTimer = setTimeout(giveUp, 20000);
                 return;
               }
-              if (!live) giveUp();
+              // Never trade real content for an error message. The card may already be
+              // showing the round from show_round's opening result, and in a host that
+              // refuses app-only calls that is the only state it will ever have —
+              // overwriting it with "Could not read round status here." would leave the
+              // creator worse off than if we had never polled.
+              if (!live && !painted) giveUp();
               if (attempts >= 2) stopped = true;
               return;
             }
             live = true;
+            painted = true;
             pushModelContext(status);
             loadMedia(status);
             if (giveUpTimer) {
@@ -1242,7 +1250,18 @@ const ROUND_STATUS_HTML = `<!doctype html>
           }
 
           if (message.method === 'ui/notifications/tool-result') {
-            var verdict = unwrap(message.params, looksLikeVerdict);
+            // show_round returns the whole round, so the opening result is already the
+            // thing the card exists to display — paint it now rather than showing
+            // "Reading round status..." until a poll returns. In a host that refuses the
+            // app-only call this is also the *only* state the card will ever have, which
+            // is why it renders as live rather than as the static gate-only fallback.
+            var opening = unwrap(message.params, looksLikeStatus);
+            if (opening && !live) {
+              painted = true;
+              render(opening);
+              schedule(opening.retryAfterSeconds);
+            }
+            var verdict = opening ? null : unwrap(message.params, looksLikeVerdict);
             if (verdict && !live) {
               seed = verdict;
               renderGateOnly(verdict);
