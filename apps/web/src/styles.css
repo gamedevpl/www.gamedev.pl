@@ -1460,7 +1460,8 @@ button:disabled {
   display: flex;
   justify-content: flex-end;
   flex-wrap: wrap;
-  gap: 8px;}
+  gap: 8px;
+}
 
 .card-actions button {
   pointer-events: auto;
