@@ -117,6 +117,79 @@ describe('applySourcePatch', () => {
     expect(result.content).toBe('line1\nline2x\nline3\n');
   });
 
+  // Production refusal: "patch is not a valid unified diff" when agents invent
+  // @@ -N,M counts that do not match the body (jsdiff throws mid-parse).
+  it('applies a multi-hunk patch with invented wrong @@ counts (TV Tycoon shape)', () => {
+    const base = [
+      '// TV Tycoon — station data, economy, staff routines and the day simulation.',
+      '',
+      'export const CANVAS_W = 960;',
+      'export const CANVAS_H = 600;',
+      "export type Phase = 'planning' | 'evening' | 'morning';",
+      'export type ReportLine = { slot: number; title: string; viewers: number; contract: string; ok: boolean };',
+      'export type Round = {',
+      '  rivalNote: string;',
+      '',
+      '  progIds: number;',
+      '  contractIds: number;',
+      '};',
+      'export function createRound() {',
+      '  return {',
+      "    rivalNote: '',",
+      '',
+      '    progIds: 1,',
+      '    contractIds: 1,',
+      '  };',
+      '}',
+      '',
+    ].join('\n');
+    const patch = [
+      '--- a/game/model.ts',
+      '+++ b/game/model.ts',
+      '@@ -1,4 +1,6 @@',
+      ' // TV Tycoon — station data, economy, staff routines and the day simulation.',
+      '+',
+      "+import type { RivalSlot } from './rival.ts';",
+      ' ',
+      ' export const CANVAS_W = 960;',
+      ' export const CANVAS_H = 600;',
+      '@@ -430,7 +432,16 @@',
+      " export type Phase = 'planning' | 'evening' | 'morning';",
+      '-export type ReportLine = { slot: number; title: string; viewers: number; contract: string; ok: boolean };',
+      '+export type ReportLine = {',
+      '+  slot: number;',
+      '+  title: string;',
+      '+  viewers: number;',
+      '+  contract: string;',
+      '+  ok: boolean;',
+      '+  rivalTitle: string;',
+      '+  rivalGenre: Genre | null;',
+      '+  contested: boolean;',
+      '+};',
+      '@@ -470,6 +481,9 @@',
+      '   rivalNote: string;',
+      '+  /** What TVMAX is airing tonight, slot by slot. */',
+      '+  rivalSchedule: RivalSlot[];',
+      '+  lastReason: string;',
+      ' ',
+      '   progIds: number;',
+      '   contractIds: number;',
+      '@@ -540,6 +554,8 @@',
+      "     rivalNote: '',",
+      '+    rivalSchedule: [],',
+      "+    lastReason: '',",
+      ' ',
+      '     progIds: 1,',
+      '     contractIds: 1,',
+      '',
+    ].join('\n');
+    const result = applySourcePatch({ content: base, path: 'game/model.ts', patch });
+    expect(result.replacements).toBe(4);
+    expect(result.content).toContain("import type { RivalSlot } from './rival.ts';");
+    expect(result.content).toContain('rivalSchedule: RivalSlot[]');
+    expect(result.content).toContain('contested: boolean');
+  });
+
   it('applies two bare @@ hunks in one file', () => {
     const base = 'alpha\nbeta\ngamma\n';
     const patch = [

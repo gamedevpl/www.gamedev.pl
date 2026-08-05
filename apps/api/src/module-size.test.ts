@@ -37,7 +37,7 @@ describe('module-size budget', () => {
     });
     expect(render).toMatch(/game\/art\.ts|game\/ui\.ts|game\/hud\.ts/);
     expect(render).toMatch(/Before adding more behavior/);
-    expect(render).toMatch(/patch_source_file/);
+    expect(render).toMatch(/patch_source_file\(\{ path, old, new \}\)/);
 
     const model = moduleTooLargeMessage({
       path: 'game/model.ts',

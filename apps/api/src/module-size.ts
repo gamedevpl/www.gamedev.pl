@@ -58,7 +58,7 @@ export function moduleTooLargeMessage(assessment: ModuleSizeAssessment): string 
     `${assessment.path} is ${assessment.lines} lines (${assessment.bytes} bytes) — over the soft budget ` +
     `(~${MODULE_SOFT_LIMIT_LINES} lines / ~${MODULE_SOFT_LIMIT_BYTES} bytes). ` +
     `Before adding more behavior, ${splitHintFor(assessment.path)}. ` +
-    `Use patch_source_file (unified diff) for later edits; do not keep expanding this monolith.`
+    `Use patch_source_file({ path, old, new }) for later edits; do not keep expanding this monolith.`
   );
 }
 

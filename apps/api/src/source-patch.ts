@@ -163,7 +163,7 @@ function assertPatchTargetsPath(path: string, patchText: string): number {
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     throw new SourcePatchError(
-      `patch is not a valid unified diff — pass ---/+++ headers and @@ hunks for one file (${detail})`,
+      `patch is not a valid unified diff (${detail}). Prefer old+new exact replace, or pass ---/+++ + @@ hunks for one file`,
     );
   }
   if (parsed.length === 0) {
