@@ -601,6 +601,12 @@
       "notice": "Runda ulepszeń rozpoczęta — to jest wątek nowej wersji.",
       "agentOpened": "Twój agent otworzył tę rundę ulepszeń — ten sam dzienny limit co przy starcie w Studio."
     },
+    "history": {
+      "summary": "Wcześniejsza runda",
+      "summaryPublished": "Opublikowana wersja",
+      "dismiss": "Ukryj",
+      "dismissAria": "Ukryj tę wcześniejszą rundę w wątku"
+    },
     "progress": {
       "checklistTitle": "Nad czym pracuje agent",
       "activityTitle": "Przebieg prac",

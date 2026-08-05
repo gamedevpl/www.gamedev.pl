@@ -249,6 +249,37 @@ export interface SubmissionStatusResponseBase {
    * round the creator did not initiate in the UI (BY-24).
    */
   openedBy?: 'creator' | 'agent';
+  /**
+   * Older jobs on the same slug (same owner), oldest first — so Studio can keep prior
+   * rounds in the chat as collapsed history instead of dropping them when an improve
+   * opens a new job. Absent when this is the only job, or the job has no slug yet.
+   */
+  priorRounds?: PriorRoundHistory[];
+}
+
+/**
+ * One finished (or superseded) build job's transcript, summarized for the tip job's
+ * status page. Entries are oldest→newest and capped; the full per-job store remains
+ * the source of truth.
+ */
+export interface PriorRoundHistory {
+  /** Stable id for client dismiss keys — the job number as a string. */
+  id: string;
+  createdAt: string;
+  /** Set when this job itself shipped. */
+  publishedAt?: string;
+  status: SubmissionStatus;
+  entries: PriorRoundEntry[];
+}
+
+/** One row inside a {@link PriorRoundHistory} block. */
+export interface PriorRoundEntry {
+  kind: 'revision' | 'event';
+  text: string;
+  createdAt: string;
+  /** Present on revisions an agent wrote on the creator's behalf. */
+  origin?: 'agent';
+  step?: BuildStep;
 }
 
 /**

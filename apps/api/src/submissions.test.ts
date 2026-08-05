@@ -3849,6 +3849,60 @@ describe('POST /api/submissions/:token/improve', () => {
     expect(await store.listPendingCreatorMessages(jobId)).toEqual([]);
     await app.close();
   });
+
+  it('attaches prior sibling rounds on the tip job’s status so Studio can keep history', async () => {
+    // Publishing is terminal → improve = new job with an empty live thread. Prior days of
+    // chat still live on the old job; status must surface them as priorRounds rather than
+    // looking deleted.
+    const stub = createGithubClientStub({});
+    const { backend } = createBackendStub();
+    const { app, store, authHeaders } = await createApp({
+      githubClient: stub.githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+    });
+
+    const published = await store.allocateJobId();
+    await store.createSubmission(published, 'g:test-user', 'History Game');
+    await store.setSubmissionSlug(published, 'history-game');
+    await store.setSubmissionPublishedAt(published, '2026-07-01T00:00:00.000Z');
+    await store.appendCreatorMessage(published, 'Make the lobby louder.');
+    await store.appendBuildEvent(published, {
+      kind: 'done',
+      step: 'polishing',
+      text: 'Lobby volume bumped for the opening scene.',
+      createdAt: '2026-07-01T01:00:00.000Z',
+    });
+
+    // Another creator's job on the same slug must never appear.
+    const foreign = await store.allocateJobId();
+    await store.createSubmission(foreign, 'g:other-user', 'History Game');
+    await store.setSubmissionSlug(foreign, 'history-game');
+    await store.appendCreatorMessage(foreign, 'Secret foreign note.');
+
+    const improve = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(published, secret)}/improve`,
+      headers: authHeaders,
+      payload: { feedback: 'Add a pause button on the schedule screen.' },
+    });
+    expect(improve.statusCode).toBe(200);
+    const tipToken = improve.json().token as string;
+
+    const status = await app.inject({ method: 'GET', url: `/api/submissions/${tipToken}` });
+    expect(status.statusCode).toBe(200);
+    const prior = status.json().priorRounds as
+      | Array<{ id: string; publishedAt?: string; entries: Array<{ kind: string; text: string }> }>
+      | undefined;
+    expect(prior).toHaveLength(1);
+    expect(prior![0]!.id).toBe(String(published));
+    expect(prior![0]!.publishedAt).toBe('2026-07-01T00:00:00.000Z');
+    expect(prior![0]!.entries.map((e) => e.text)).toEqual(
+      expect.arrayContaining(['Make the lobby louder.', 'Lobby volume bumped for the opening scene.']),
+    );
+    expect(prior![0]!.entries.some((e) => e.text.includes('foreign'))).toBe(false);
+    await app.close();
+  });
 });
 
 /**

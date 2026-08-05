@@ -16,6 +16,7 @@ import {
   type BuildEventKind,
   type BuildProgress,
   type BuildStep,
+  type PriorRoundHistory,
   type SubmissionApiError,
   type SubmissionPreview,
   type SubmissionStatus,
@@ -25,6 +26,7 @@ import { formatRelativeTime } from './relativeTime.js';
 import { connectCardMode, selfComposerRoute, selfStatusCopy, shouldShowConnectCard } from './selfBuildCopy.js';
 import { StudioConnectCard } from './StudioConnectCard.js';
 import { StudioLivePreview } from './StudioLivePreview.js';
+import { StudioPriorRounds } from './StudioPriorRounds.js';
 import { submitImprovement } from './studioApi.js';
 import { pollDelayMs } from './studioStatusPoll.js';
 import { recordStudioStep, type StudioStepDetail } from './visitTelemetry.js';
@@ -703,6 +705,8 @@ export function SubmissionStatusView({
                 token={token}
                 entries={activity}
                 emptyLabel={stateDescription}
+                priorRounds={status.slug && status.priorRounds?.length ? status.priorRounds : undefined}
+                priorSlug={status.slug}
                 stickNonce={isAwaitingOwnAgent(status) ? pendingRevisions.length + 1 : 0}
                 after={
                   isAwaitingOwnAgent(status) ? (
@@ -1566,12 +1570,17 @@ function ThreadStream({
   token,
   entries,
   emptyLabel,
+  priorRounds,
+  priorSlug,
   after,
   stickNonce = 0,
 }: {
   token: string;
   entries: ActivityEntry[];
   emptyLabel: string;
+  /** Superseded jobs on this game — collapsed above the live turns. */
+  priorRounds?: PriorRoundHistory[];
+  priorSlug?: string;
   /** Renders inside the scroller after the turns — tall surfaces (connect card) belong
    *  here, not in the pinned foot, or a phone has no room left for the conversation. */
   after?: ReactNode;
@@ -1600,6 +1609,9 @@ function ThreadStream({
 
   return (
     <div className="studio-thread-scroll" ref={scrollRef} onScroll={onScroll}>
+      {priorSlug && priorRounds && priorRounds.length > 0 ? (
+        <StudioPriorRounds slug={priorSlug} rounds={priorRounds} />
+      ) : null}
       {entries.length === 0 ? <p className="studio-thread-empty">{emptyLabel}</p> : null}
       <ol className="studio-thread-turns">
         {entries.map((entry, index) => {

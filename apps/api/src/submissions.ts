@@ -82,6 +82,8 @@ import {
   type BuildMediaItem,
   type BuildPlayableItem,
   type CreatorRevision,
+  type PriorRoundEntry,
+  type PriorRoundHistory,
   type SubmissionStatus,
   type SubmissionStatusResponse,
 } from './submission-status.js';
@@ -1578,6 +1580,81 @@ export async function registerSubmissionRoutes(
    * Serving a cached `stall: ended` beside fresh "now" events made Studio claim the
    * round finished while the thread was still moving.
    */
+  // Prior-round history is read on every status poll for a tip job, but changes only
+  // when a sibling gains messages — so a short cache avoids N sibling reads every 3s.
+  const priorRoundsCacheTtlMs = 30_000;
+  const maxPriorRounds = 6;
+  const maxPriorEntriesPerRound = 10;
+  const priorRoundsCache = new Map<string, { expiresAt: number; value: PriorRoundHistory[] }>();
+
+  /**
+   * Older jobs on the same slug, owned by the same creator — transcripts only, capped.
+   * Publishing is terminal, so an improve opens a new empty thread; without this the
+   * previous days of Studio chat look deleted even though they still live on those jobs.
+   */
+  async function loadPriorRounds(record: SubmissionRecord, locale: string): Promise<PriorRoundHistory[]> {
+    if (!store || !record.slug) return [];
+    const cacheKey = `${record.slug}:${record.issueNumber}:${locale}`;
+    const cached = priorRoundsCache.get(cacheKey);
+    const currentTime = now();
+    if (cached && cached.expiresAt > currentTime) return cached.value;
+
+    // Newest-first from the store; keep the most recent superseded jobs, then reverse
+    // so the chat log reads oldest → newest above the live round.
+    const siblings = (await store.listSubmissionsBySlug(record.slug))
+      .filter((sibling) => sibling.issueNumber !== record.issueNumber && sibling.ownerUid === record.ownerUid)
+      .slice(0, maxPriorRounds)
+      .reverse();
+
+    const rounds = await Promise.all(
+      siblings.map(async (sibling): Promise<PriorRoundHistory | null> => {
+        const [messages, rawEvents] = await Promise.all([
+          store!.listCreatorMessages(sibling.issueNumber, { limit: maxPriorEntriesPerRound }),
+          store!.listBuildEvents(sibling.issueNumber, { limit: maxPriorEntriesPerRound }),
+        ]);
+        const events = rawEvents.filter((event) => !isMcpPresenceEventText(event.text));
+        const revisionEntries: PriorRoundEntry[] = localizeRevisions(
+          messages.map((message) => ({
+            text: stripPlaytestContext(message.text),
+            createdAt: message.createdAt,
+            ...(message.origin === 'agent' ? { origin: 'agent' as const } : {}),
+            ...(message.textLocalized && message.locale
+              ? { textLocalized: stripPlaytestContext(message.textLocalized), locale: message.locale }
+              : {}),
+          })),
+          locale,
+        ).map((revision) => ({
+          kind: 'revision' as const,
+          text: revision.text,
+          createdAt: revision.createdAt,
+          ...(revision.origin === 'agent' ? { origin: 'agent' as const } : {}),
+        }));
+        const eventEntries: PriorRoundEntry[] = localizeEvents(events, locale).map((event) => ({
+          kind: 'event' as const,
+          text: event.text,
+          createdAt: event.createdAt,
+          ...(event.step ? { step: event.step } : {}),
+        }));
+        const entries = [...revisionEntries, ...eventEntries]
+          .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+          .slice(-maxPriorEntriesPerRound);
+        if (entries.length === 0) return null;
+        const state = sibling.state ?? 'queued';
+        return {
+          id: String(sibling.issueNumber),
+          createdAt: sibling.createdAt,
+          ...(sibling.publishedAt ? { publishedAt: sibling.publishedAt } : {}),
+          status: sibling.abandonedAt ? 'abandoned' : toSubmissionStatus(state),
+          entries,
+        };
+      }),
+    );
+
+    const value = rounds.filter((round): round is PriorRoundHistory => round !== null);
+    priorRoundsCache.set(cacheKey, { value, expiresAt: currentTime + priorRoundsCacheTtlMs });
+    return value;
+  }
+
   async function attachBuildEvents(
     status: SubmissionStatusResponse,
     issueNumber: number,
@@ -1625,6 +1702,15 @@ export async function registerSubmissionRoutes(
     });
     if (stall) next.stall = stall;
     else delete next.stall;
+
+    // Soft: sibling history must not 500 the live thread poll.
+    try {
+      const priorRounds = await loadPriorRounds(record, locale);
+      if (priorRounds.length > 0) next.priorRounds = priorRounds;
+      else delete next.priorRounds;
+    } catch {
+      delete next.priorRounds;
+    }
 
     return next;
   }
