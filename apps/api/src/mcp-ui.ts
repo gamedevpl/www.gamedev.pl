@@ -38,15 +38,19 @@ export const MCP_UI_MIME_TYPE = 'text/html;profile=mcp-app';
 export const ROUND_STATUS_RESOURCE_URI = 'ui://gamedevpl/round-status';
 
 /**
- * Tools that open the round view. The write tools are here deliberately: the card is
+ * Tools that open the round view. `submit_sources` is here deliberately: the card is
  * where a creator watches the round from, and the moment a delivery is submitted is
  * exactly when they want to. It renders live state from `get_round_status`, not from
  * the opening tool's payload, so opening it mid-delivery shows the build rather than a
  * frozen echo of the call.
+ *
+ * `open_round` is deliberately absent. It mints no session key and takes none — its own
+ * description sends the agent to `start()` for one — so a card opened there would have
+ * no credential to read status with, and would sit on "Reading round status…" forever.
+ * `start()` follows immediately and opens the view properly.
  */
 export const MCP_UI_TOOL_RESOURCES: Readonly<Record<string, string>> = Object.freeze({
   start: ROUND_STATUS_RESOURCE_URI,
-  open_round: ROUND_STATUS_RESOURCE_URI,
   submit_sources: ROUND_STATUS_RESOURCE_URI,
   get_gate_verdict: ROUND_STATUS_RESOURCE_URI,
 });
@@ -323,6 +327,8 @@ const ROUND_STATUS_HTML = `<!doctype html>
         var lastShotId = null;
         var live = false;
         var seed = null;
+        var inFlight = false;
+        var attempts = 0;
         var stopped = false;
         var timer = null;
 
@@ -400,6 +406,10 @@ const ROUND_STATUS_HTML = `<!doctype html>
           } catch (error) {
             return parsed.toISOString();
           }
+        }
+
+        function shotCaption(shot) {
+          return (shot.label ? shot.label + ' · ' : '') + formatTime(shot.createdAt);
         }
 
         function addRow(term, value) {
@@ -565,12 +575,21 @@ const ROUND_STATUS_HTML = `<!doctype html>
             noteEl.hidden = true;
           }
 
+          // Three cases, and the middle one is why this is not a one-liner: bytes arrive
+          // only when the frame changed, so an unchanged shot must keep the image it
+          // already has, and a round with no shot at all must clear a stale one.
           if (status.shot && status.shot.png) {
             shotImg.src = 'data:image/png;base64,' + status.shot.png;
-            shotCap.textContent = (status.shot.label ? status.shot.label + ' · ' : '') + formatTime(status.shot.createdAt);
+            shotCap.textContent = shotCaption(status.shot);
             shotEl.hidden = false;
+          } else if (status.shot && shotImg.getAttribute('src')) {
+            shotCap.textContent = shotCaption(status.shot);
+            shotEl.hidden = false;
+          } else {
+            shotEl.hidden = true;
+            shotImg.removeAttribute('src');
           }
-          if (status.shot && status.shot.id) lastShotId = status.shot.id;
+          lastShotId = status.shot && status.shot.id ? status.shot.id : null;
 
           metaList.textContent = '';
           if (gate) {
@@ -614,24 +633,30 @@ const ROUND_STATUS_HTML = `<!doctype html>
         }
 
         function poll() {
-          if (stopped || !sessionKey) return;
-          var args = { sessionKey: sessionKey };
+          if (stopped || inFlight) return;
+          inFlight = true;
+          attempts += 1;
+          // sessionKey is an optimisation, not a precondition: a Bearer-authenticated
+          // client never passes one, and the host proxies this call over the same
+          // authenticated connection either way.
+          var args = {};
+          if (sessionKey) args.sessionKey = sessionKey;
           if (lastShotId) args.sinceShotId = lastShotId;
           var id = nextId++;
           pendingCalls[id] = function (result, error) {
-            if (error) {
-              // A host that refuses app-only calls, or a retired key: fall back to the
-              // payload we were opened with rather than showing a broken card.
-              stopped = true;
-              log('warning', 'round status unavailable: ' + String(error));
-              if (!live && seed) renderGateOnly(seed);
-              return;
-            }
-            var status = unwrap(result, looksLikeStatus);
+            inFlight = false;
+            var status = error ? null : unwrap(result, looksLikeStatus);
             if (!status) {
-              stopped = true;
-              log('warning', 'round status arrived in an unrecognised shape');
-              if (!live && seed) renderGateOnly(seed);
+              // A host that refuses app-only calls, or a credential this view does not
+              // hold. Show what we were opened with rather than a card that never
+              // resolves, and stop after a couple of tries instead of looping.
+              log('warning', 'round status unavailable: ' + String(error || 'unrecognised shape'));
+              if (!live) {
+                if (seed) renderGateOnly(seed);
+                else summary.textContent = 'Could not read round status here.';
+                reportSize();
+              }
+              if (attempts >= 2) stopped = true;
               return;
             }
             live = true;
@@ -648,8 +673,13 @@ const ROUND_STATUS_HTML = `<!doctype html>
         }
 
         function noteSessionKey(value) {
-          if (typeof value === 'string' && value && !sessionKey) {
-            sessionKey = value;
+          if (typeof value !== 'string' || !value || sessionKey === value) return;
+          sessionKey = value;
+          // Worth one more attempt: the keyless poll may have been refused for want of
+          // exactly this.
+          if (!live) {
+            stopped = false;
+            attempts = 0;
             poll();
           }
         }
@@ -665,6 +695,7 @@ const ROUND_STATUS_HTML = `<!doctype html>
             notify('ui/notifications/initialized', {});
             log('debug', 'round view initialized');
             reportSize();
+            poll();
             return;
           }
 

@@ -109,12 +109,14 @@ describe('view capability in the correlator', () => {
     // base64url includes "-", so a marker can contain "-u". Searching for the separator
     // would split in the wrong place; slicing from the end cannot.
     let withSeparatorInside: string | null = null;
-    for (let i = 0; i < 4000 && !withSeparatorInside; i += 1) {
+    for (let i = 0; i < 200_000 && !withSeparatorInside; i += 1) {
       const candidate = markSessionIdUiCapable(`${'e'.repeat(30)}${String(i).padStart(6, '0')}`, secret);
       if (candidate.slice(-10).includes('-u')) withSeparatorInside = candidate;
     }
-    // Only assert when the search actually found one — otherwise this is vacuous.
-    if (withSeparatorInside) expect(sessionIdIsUiCapable(withSeparatorInside, secret)).toBe(true);
+    // Fail loudly rather than passing with no assertion — a conditional expect would
+    // hide the regression this exists to catch.
+    expect(withSeparatorInside).not.toBeNull();
+    expect(sessionIdIsUiCapable(withSeparatorInside, secret)).toBe(true);
   });
 
   it('stays a legal Mcp-Session-Id', () => {
@@ -179,10 +181,12 @@ describe('ui resources', () => {
     // submitting is exactly the moment a creator wants it open.
     expect(MCP_UI_TOOL_RESOURCES).toEqual({
       start: ROUND_STATUS_RESOURCE_URI,
-      open_round: ROUND_STATUS_RESOURCE_URI,
       submit_sources: ROUND_STATUS_RESOURCE_URI,
       get_gate_verdict: ROUND_STATUS_RESOURCE_URI,
     });
+    // open_round mints no session key and takes none, so a card opened there would have
+    // nothing to read status with.
+    expect(MCP_UI_TOOL_RESOURCES).not.toHaveProperty('open_round');
   });
 
   it('keeps the app-only tool read-only, since the model never sees it happen', () => {

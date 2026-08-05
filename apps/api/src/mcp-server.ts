@@ -3836,6 +3836,13 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       if (!tool) {
         return reply.send(jsonRpcError(message.id, -32601, `unknown tool: ${name}`));
       }
+      // visibility:["app"] is a contract, so enforce it rather than relying on the tool
+      // being absent from tools/list: a client that guesses the name would otherwise
+      // reach a tool its model was never meant to see. This refuses in exactly the
+      // situations views are already unavailable, so it cannot break a working view.
+      if (MCP_UI_APP_ONLY_TOOLS.has(name) && !sessionWantsUi(sessionHeader)) {
+        return reply.send(jsonRpcError(message.id, -32601, `unknown tool: ${name}`));
+      }
       const args = params.arguments && typeof params.arguments === 'object' ? params.arguments : {};
       const sessionKeyArg = typeof args.sessionKey === 'string' ? args.sessionKey.trim() : '';
       const userAgent = headerValue(request.headers['user-agent']);

@@ -2007,7 +2007,6 @@ describe('MCP Apps views (SEP-1865, Phase 0)', () => {
     // The tools that open the round view, and nothing else.
     expect(tools.filter((tool) => tool._meta?.ui?.resourceUri !== undefined).map((tool) => tool.name)).toEqual([
       'start',
-      'open_round',
       'submit_sources',
       'get_gate_verdict',
     ]);
@@ -2030,6 +2029,27 @@ describe('MCP Apps views (SEP-1865, Phase 0)', () => {
     const { sessionId: plain } = await initializeWith(app, false);
     const withoutUi = await listTools(app, plain);
     expect(withoutUi.some((tool) => tool.name === 'get_round_status')).toBe(false);
+
+    // Absent from the listing is not the same as unreachable. visibility:["app"] is a
+    // contract, so a client that guesses the name is refused rather than served — and
+    // this call carries a valid round credential, so it is the tool's own gate doing
+    // the refusing rather than the missing-credential challenge.
+    const guessed = await mcpCall(
+      app,
+      'tools/call',
+      { name: 'get_round_status', arguments: {} },
+      { 'mcp-session-id': plain, authorization: `Bearer ${roundKey(1)}` },
+    );
+    expect(guessed.json().error?.code).toBe(-32601);
+
+    // The same credential does reach it from a client that negotiated views.
+    const allowed = await mcpCall(
+      app,
+      'tools/call',
+      { name: 'get_round_status', arguments: {} },
+      { 'mcp-session-id': sessionId, authorization: `Bearer ${roundKey(1)}` },
+    );
+    expect(allowed.json().error).toBeUndefined();
   });
 
   it('does not let view polling pass for agent presence or trip agent nudges', async () => {
