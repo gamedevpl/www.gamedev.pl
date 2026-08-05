@@ -4,6 +4,11 @@
  * Chat-thin agents (Claude Chat especially) otherwise re-emit entire `render.ts` /
  * `model.ts` files on every tweak via `stage_source_file`. A unified diff keeps the
  * tool payload proportional to the edit — the format models already know well.
+ *
+ * Models often emit near-unified diffs that stock parsers reject: bare `@@` (no line
+ * numbers), approximate `@@ -N,M` counts, or context lines missing the leading space.
+ * We normalize those before apply so agents need matching context, not exact line
+ * arithmetic from a full-file re-read.
  */
 
 import { applyPatch, parsePatch } from 'diff';
@@ -23,9 +28,18 @@ export type ApplySourcePatchInput = {
   patch: string;
 };
 
+export type ApplyExactReplaceInput = {
+  content: string;
+  path: string;
+  /** Exact substring that must appear once in the file. */
+  old: string;
+  /** Replacement text (may be empty to delete). */
+  new: string;
+};
+
 export type ApplySourcePatchResult = {
   content: string;
-  /** Number of hunks applied. */
+  /** Number of hunks / replacements applied. */
   replacements: number;
 };
 
@@ -43,12 +57,118 @@ export function normalizePatchPath(raw: string): string {
   return path;
 }
 
+/** Numbered hunk header, optionally with a trailing function-context label. */
+const NUMBERED_HUNK_HEADER = /^@@\s+-(\d+)(?:,(\d+))?\s+\+(\d+)(?:,(\d+))?\s*@@(.*)$/;
+
+/**
+ * True for a line that starts a hunk: numbered `@@ -n,m +n,m @@` or bare `@@` /
+ * `@@ label` (no line numbers — common from chat models).
+ */
+function isHunkHeaderLine(line: string): boolean {
+  if (NUMBERED_HUNK_HEADER.test(line)) return true;
+  // Bare `@@` or `@@ some context` without `-N +N`.
+  return /^@@(?:\s.*)?$/.test(line) && !/^@@\s+-/.test(line);
+}
+
+function isHunkBoundary(line: string): boolean {
+  if (isHunkHeaderLine(line)) return true;
+  if (line.startsWith('diff ')) return true;
+  if (/^Index:\s/.test(line)) return true;
+  if (/^===/.test(line)) return true;
+  // Next file in a multi-file patch — not a hunk body line.
+  if (/^---\s+\S/.test(line) || /^\+\+\+\s+\S/.test(line)) return true;
+  return false;
+}
+
+/** Ensure each hunk body line has a unified-diff operation prefix. */
+function normalizeHunkBodyLine(line: string): string {
+  if (line.length === 0) return ' ';
+  const op = line[0]!;
+  if (op === '+' || op === '-' || op === ' ' || op === '\\') return line;
+  // Context line missing the leading space (LLM habit).
+  return ` ${line}`;
+}
+
+function countHunkLines(body: string[]): { oldLines: number; newLines: number } {
+  let oldLines = 0;
+  let newLines = 0;
+  for (const line of body) {
+    const op = line[0] ?? ' ';
+    if (op === '+') newLines++;
+    else if (op === '-') oldLines++;
+    else if (op === '\\') {
+      /* "\ No newline at end of file" — not counted */
+    } else {
+      oldLines++;
+      newLines++;
+    }
+  }
+  return { oldLines, newLines };
+}
+
+/**
+ * Rewrite agent-friendly near-unified diffs into something `diff` can parse:
+ * bare `@@` → numbered headers (counts from body; starts default to 1 — apply matches
+ * by context), wrong `,count` values → recounted, context lines missing a leading
+ * space → prefixed.
+ */
+export function normalizeUnifiedDiff(patchText: string): string {
+  // MCP / Windows clients often send CRLF. split('\n') would leave a trailing \r on
+  // every line, so applyPatch's exact context match fails against LF game sources.
+  // jsdiff itself tolerates CRLF patches; once we rewrite hunks we must too.
+  const text = patchText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const endsWithNewline = text.endsWith('\n');
+  const lines = text.split('\n');
+  // split keeps a trailing empty from a final newline; drop it so we don't treat it
+  // as a stray body line, then re-attach the newline at the end.
+  if (endsWithNewline && lines[lines.length - 1] === '') lines.pop();
+
+  const out: string[] = [];
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i]!;
+    if (!isHunkHeaderLine(line)) {
+      out.push(line);
+      i++;
+      continue;
+    }
+
+    const numbered = NUMBERED_HUNK_HEADER.exec(line);
+    const oldStart = numbered ? Number(numbered[1]) : 1;
+    const newStart = numbered ? Number(numbered[3]) : 1;
+    const label = numbered ? (numbered[5] ?? '').trimEnd() : '';
+    i++;
+
+    const body: string[] = [];
+    while (i < lines.length && !isHunkBoundary(lines[i]!)) {
+      body.push(normalizeHunkBodyLine(lines[i]!));
+      i++;
+    }
+    // Trailing blank lines after the last real change are not part of the hunk.
+    while (body.length > 0 && body[body.length - 1] === ' ') body.pop();
+
+    const { oldLines, newLines } = countHunkLines(body);
+    if (oldLines === 0 && newLines === 0) {
+      throw new SourcePatchError('patch hunk is empty — each @@ hunk needs context and/or +/- lines under it');
+    }
+
+    const labelSuffix = label.length > 0 ? ` ${label.trimStart()}` : '';
+    out.push(`@@ -${oldStart},${oldLines} +${newStart},${newLines} @@${labelSuffix}`);
+    out.push(...body);
+  }
+
+  return endsWithNewline || text.length === 0 ? `${out.join('\n')}\n` : out.join('\n');
+}
+
 function assertPatchTargetsPath(path: string, patchText: string): number {
   let parsed;
   try {
     parsed = parsePatch(patchText);
-  } catch {
-    throw new SourcePatchError('patch is not a valid unified diff — pass ---/+++ headers and @@ hunks for one file');
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new SourcePatchError(
+      `patch is not a valid unified diff (${detail}). Prefer old+new exact replace, or pass ---/+++ + @@ hunks for one file`,
+    );
   }
   if (parsed.length === 0) {
     throw new SourcePatchError('patch is empty — pass a unified diff with at least one @@ hunk');
@@ -79,7 +199,10 @@ function assertPatchTargetsPath(path: string, patchText: string): number {
 
   const hunks = file.hunks?.length ?? 0;
   if (hunks === 0) {
-    throw new SourcePatchError('patch has no @@ hunks — nothing to apply');
+    throw new SourcePatchError(
+      'patch has no @@ hunks — nothing to apply. Use a unified diff with hunks like ' +
+        '`@@ -10,6 +10,7 @@` (line numbers optional: bare `@@` is fine if context matches)',
+    );
   }
   return hunks;
 }
@@ -90,14 +213,25 @@ function assertPatchTargetsPath(path: string, patchText: string): number {
  */
 export function applySourcePatch(input: ApplySourcePatchInput): ApplySourcePatchResult {
   const path = input.path.trim();
-  const patch = input.patch.trim();
+  const rawPatch = input.patch.trim();
   if (!path) throw new SourcePatchError('path is required');
-  if (!patch) throw new SourcePatchError('patch must not be empty');
+  if (!rawPatch) throw new SourcePatchError('patch must not be empty');
+
+  let patch: string;
+  try {
+    patch = normalizeUnifiedDiff(rawPatch);
+  } catch (error) {
+    if (error instanceof SourcePatchError) throw error;
+    throw new SourcePatchError(
+      `patch could not be normalized — ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
 
   const hunks = assertPatchTargetsPath(path, patch);
 
   // fuzzFactor 0: context must match exactly. Stale hunks should re-get_sources and retry,
-  // not silently land on the wrong lines of a large render.ts.
+  // not silently land on the wrong lines of a large render.ts. Line numbers may be
+  // approximate — applyPatch still locates hunks by matching context lines.
   const next = applyPatch(input.content, patch, { fuzzFactor: 0 });
   if (next === false) {
     throw new SourcePatchError(
@@ -108,6 +242,47 @@ export function applySourcePatch(input: ApplySourcePatchInput): ApplySourcePatch
     throw new SourcePatchError('patch applied but made no changes');
   }
   return { content: next, replacements: hunks };
+}
+
+/**
+ * Exact unique substring replace — the chat-friendly alternative to unified diffs.
+ * `old` must appear exactly once; widen the snippet with surrounding lines if not.
+ */
+export function applyExactReplace(input: ApplyExactReplaceInput): ApplySourcePatchResult {
+  const path = input.path.trim();
+  if (!path) throw new SourcePatchError('path is required');
+  if (input.old.length === 0) {
+    throw new SourcePatchError('old must not be empty — pass the exact text to replace');
+  }
+  if (input.old === input.new) {
+    throw new SourcePatchError('old and new are identical — nothing to change');
+  }
+
+  // Advance by 1 so overlapping matches count (e.g. content "aaaa", old "aaa"
+  // has matches at 0 and 1). Skipping by old.length would falsely treat that as unique.
+  let occurrences = 0;
+  let from = 0;
+  while (true) {
+    const at = input.content.indexOf(input.old, from);
+    if (at === -1) break;
+    occurrences++;
+    from = at + 1;
+    if (occurrences > 1) break;
+  }
+
+  if (occurrences === 0) {
+    throw new SourcePatchError(
+      `old text not found in ${path} — copy the exact snippet from the current file (get_sources / staged base)`,
+    );
+  }
+  if (occurrences > 1) {
+    throw new SourcePatchError(
+      `old text matches more than once in ${path} — include more surrounding lines so it is unique`,
+    );
+  }
+
+  const content = input.content.replace(input.old, input.new);
+  return { content, replacements: 1 };
 }
 
 /** @deprecated Prefer {@link largeSourceFileHint} from `module-size.js`. Re-exported for callers. */

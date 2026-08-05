@@ -1535,6 +1535,78 @@ describe('agent build channel', () => {
       expect(staged.size).toBe(0);
     });
 
+    it('accepts old+new exact replace without a unified diff', async () => {
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      const { gamesStore, staged } = stubGamesStore();
+      app = await createApp(store, { gamesStore });
+
+      await app.inject({
+        method: 'PUT',
+        url: '/api/agent/build/sources/stage',
+        headers: agentHeaders(),
+        payload: {
+          slug: 'comet-courier',
+          path: 'game/render.ts',
+          content: 'export function paint() {\n  drawSky();\n}\n',
+        },
+      });
+
+      const patched = await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/sources/stage/patch',
+        headers: agentHeaders(),
+        payload: {
+          path: 'game/render.ts',
+          old: '  drawSky();\n',
+          new: '  drawSky();\n  drawHud();\n',
+        },
+      });
+      expect(patched.statusCode).toBe(200);
+      expect(patched.json()).toMatchObject({ accepted: true, replacements: 1, baseFrom: 'staged' });
+      expect(staged.get('game/render.ts')).toContain('drawHud()');
+    });
+
+    it('accepts a bare @@ patch (no line numbers) matched by context', async () => {
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      const { gamesStore, staged } = stubGamesStore();
+      app = await createApp(store, { gamesStore });
+
+      await app.inject({
+        method: 'PUT',
+        url: '/api/agent/build/sources/stage',
+        headers: agentHeaders(),
+        payload: {
+          slug: 'comet-courier',
+          path: 'game/render.ts',
+          content: 'export function paint() {\n  drawSky();\n}\n',
+        },
+      });
+
+      const patched = await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/sources/stage/patch',
+        headers: agentHeaders(),
+        payload: {
+          path: 'game/render.ts',
+          patch: [
+            '--- a/game/render.ts',
+            '+++ b/game/render.ts',
+            '@@',
+            ' export function paint() {',
+            '   drawSky();',
+            '+  drawHud();',
+            ' }',
+            '',
+          ].join('\n'),
+        },
+      });
+      expect(patched.statusCode).toBe(200);
+      expect(patched.json()).toMatchObject({ accepted: true, replacements: 1, baseFrom: 'staged' });
+      expect(staged.get('game/render.ts')).toContain('drawHud()');
+    });
+
     it('fromStaged fails closed when the delivery manifest lists unreadable paths', async () => {
       const store = new InMemoryStore();
       await seedSubmission(store);

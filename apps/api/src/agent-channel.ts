@@ -47,7 +47,7 @@ import {
 } from './kit-registry.js';
 import { seedPayload } from './seed-status.js';
 import { largeSourceFileHint } from './module-size.js';
-import { applySourcePatch, SourcePatchError } from './source-patch.js';
+import { applyExactReplace, applySourcePatch, SourcePatchError } from './source-patch.js';
 import { overlayGameSources } from './staged-preview.js';
 import { type CreatorMessage, type Store, type SubmissionRecord } from './store.js';
 import { BUILD_EVENT_KINDS, BUILD_STEPS, sanitizeCreatorText, type BuildEvent } from './submission-status.js';
@@ -259,20 +259,51 @@ const StageSourceInputSchema = z.object({
     .optional(),
 });
 
-const StageSourcePatchInputSchema = z.object({
-  path: z.string().trim().min(1).max(120),
-  /** Unified diff for this one path (`---` / `+++` + `@@` hunks). */
-  patch: z
-    .string()
-    .transform((value) => value.trim())
-    .pipe(z.string().min(1, 'patch must not be empty').max(400_000)),
-  slug: z
-    .string()
-    .trim()
-    .regex(/^[a-z0-9][a-z0-9-]*$/, 'slug must be lowercase letters, digits and dashes')
-    .max(64)
-    .optional(),
-});
+const StageSourcePatchInputSchema = z
+  .object({
+    path: z.string().trim().min(1).max(120),
+    /** Unified diff for this one path (`---` / `+++` + `@@` hunks). */
+    patch: z
+      .string()
+      .transform((value) => value.trim())
+      .pipe(z.string().min(1, 'patch must not be empty').max(400_000))
+      .optional(),
+    /** Exact unique substring to replace (pair with `new`). Prefer this over `patch` in chat. */
+    old: z.string().max(200_000).optional(),
+    /** Replacement for `old` (may be empty to delete). */
+    new: z.string().max(200_000).optional(),
+    slug: z
+      .string()
+      .trim()
+      .regex(/^[a-z0-9][a-z0-9-]*$/, 'slug must be lowercase letters, digits and dashes')
+      .max(64)
+      .optional(),
+  })
+  .superRefine((value, ctx) => {
+    const hasPatch = value.patch !== undefined;
+    const hasOld = value.old !== undefined;
+    const hasNew = value.new !== undefined;
+    if (hasPatch && (hasOld || hasNew)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'pass either patch (unified diff) or old+new (exact replace), not both',
+      });
+      return;
+    }
+    if (hasOld !== hasNew) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'old and new must be passed together for exact replace',
+      });
+      return;
+    }
+    if (!hasPatch && !hasOld) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'pass old+new (exact replace, preferred) or patch (unified diff)',
+      });
+    }
+  });
 
 const BuildPreviewInputSchema = z.object({
   html: z
@@ -1116,11 +1147,19 @@ export async function registerAgentChannelRoutes(
           });
         }
 
-        const patched = applySourcePatch({
-          content: base,
-          path: parsed.data.path,
-          patch: parsed.data.patch,
-        });
+        const patched =
+          parsed.data.old !== undefined && parsed.data.new !== undefined
+            ? applyExactReplace({
+                content: base,
+                path: parsed.data.path,
+                old: parsed.data.old,
+                new: parsed.data.new,
+              })
+            : applySourcePatch({
+                content: base,
+                path: parsed.data.path,
+                patch: parsed.data.patch!,
+              });
 
         const staged = await options.gamesStore.putStagedSourceFile({
           slug,
