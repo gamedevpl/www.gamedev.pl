@@ -1145,7 +1145,7 @@
     "saving": "Saving to Studio…",
     "saveFailed": "Couldn't save that just now.",
     "saveQuota": "You've created a lot today — try again tomorrow.",
-    "saveStoreOnly": "This game can't be saved to Studio yet.",
+    "saveNoSources": "This game can't be saved to Studio yet.",
     "saveNoChanges": "Change something first — then you can keep it.",
     "conceptSeed": "A game like {{slug}}, but my own version",
     "button": "Remix",

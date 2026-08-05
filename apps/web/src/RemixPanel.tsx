@@ -796,8 +796,8 @@ export function RemixPanel(props: {
       const text =
         err.status === 429
           ? t('remix.saveQuota')
-          : err.reason === 'store_only'
-            ? t('remix.saveStoreOnly')
+          : err.reason === 'no_sources'
+            ? t('remix.saveNoSources')
             : err.reason === 'no_changes'
               ? t('remix.saveNoChanges')
               : t('remix.saveFailed');

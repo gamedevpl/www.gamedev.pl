@@ -6,10 +6,9 @@
  * draft — playable in Studio, shareable via the existing draft toggle, never a
  * catalog entry. Derivative catalog publish stays a later, legal-gated track.
  *
- * Store-era games only for now: a repo-era game's full file set is not held in
- * the remix session (declaration + optional TS map), and inventing a second
- * source walk here would drift from the assembler's. Same boundary the
- * proposals on-ramp drew for code changes.
+ * Works for both catalog eras: store-era sessions already hold the full file
+ * set; repo-era sessions load it via {@link GitHubClient.getGameDeliverySources}
+ * at save time (declaration-only until then).
  */
 
 import {
@@ -37,11 +36,11 @@ export type RemixSaveInput = {
   ip: string;
   /** Parent game the remix was started from. */
   parentSlug: string;
-  /** Published version the remix was based on, when known. */
+  /** Published version / ref provenance when known. */
   parentVersion?: string;
   parentTitle: string;
   parentEngineRef?: string;
-  /** Merged game sources (base + overrides), store-era only. */
+  /** Merged game sources (base + overrides) ready for putCandidateSources. */
   sources: Record<string, string>;
   /** Client-held param values to bake into EDITOR.json defaults. */
   params?: RemixSaveParams;
@@ -160,7 +159,7 @@ async function isSlugTaken(store: Store, slug: string, except?: number): Promise
 }
 
 /**
- * Materialise a remixed store-era game as a private Studio draft under a new slug.
+ * Materialise a remixed game as a private Studio draft under a new slug.
  */
 export async function saveRemixAsStudioDraft(input: RemixSaveInput): Promise<RemixSaveResult> {
   const now = input.now ?? Date.now;

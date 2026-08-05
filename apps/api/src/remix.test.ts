@@ -98,7 +98,7 @@ function stubGitHubClient(
 ): GitHubClient {
   return {
     getGameFile: async (_ref: string, slug: string, path: string) =>
-      slug === 'dog-dash' || slug === 'repo-game' ? (SOURCES[path] ?? null) : null,
+      slug === 'dog-dash' || slug === 'repo-game' || slug === 'catalog-dash' ? (SOURCES[path] ?? null) : null,
     // The bundler's walk, stubbed: the game's own TypeScript, keyed relatively.
     getGameSourceMap: async (_ref: string, slug: string) => {
       sourceMapCalls.push(slug);
@@ -107,13 +107,20 @@ function stubGitHubClient(
       if (slug !== 'dog-dash') return null;
       return { 'game.ts': SOURCES['game.ts'], 'game/runtime.ts': SOURCES['game/runtime.ts'] };
     },
+    getGameDeliverySources: async (_ref: string, slug: string) => {
+      if (slug === 'dog-dash') return { ...SOURCES };
+      // Catalog-only fixture used by the eras tests — full delivery set, no store publication.
+      if (slug === 'catalog-dash') return { ...SOURCES };
+      return null;
+    },
+    getRefSha: async () => 'refsha1',
     // No kit declaration on this ref. The lane must still edit, and the
     // type-check gate must stand down rather than failing every candidate —
     // a fixture without the engine's declaration is not a broken game.
     getGameKitDeclaration: async () => null,
     getGameSources: async (_ref: string, slug: string, overrides?: Record<string, string>) => {
       // Like the real client: a slug with no game directory on the ref is null.
-      if (slug !== 'dog-dash') return null;
+      if (slug !== 'dog-dash' && slug !== 'catalog-dash') return null;
       seen.push(overrides);
       const runtime = overrides?.['game/runtime.ts'] ?? SOURCES['game/runtime.ts'];
       if (runtime.includes('SYNTAX ERROR')) return null;
@@ -617,8 +624,16 @@ describe('remix across the two catalog eras', () => {
   });
 
   /** No publication record → the repo-era path, exactly like a catalog game. */
-  async function repoEraApp(overrides: { sourceMapCalls?: string[]; codeLane?: unknown } = {}) {
-    const store = new InMemoryStore();
+  async function repoEraApp(
+    overrides: {
+      sourceMapCalls?: string[];
+      codeLane?: unknown;
+      gamesStore?: GamesStore;
+      store?: InMemoryStore;
+    } = {},
+  ) {
+    const store = overrides.store ?? new InMemoryStore();
+    await store.upsertUser({ uid: 'g:alice' });
     const seen: Array<Record<string, string> | undefined> = [];
     const instance = Fastify({ routerOptions: { maxParamLength: MAX_REMIX_ID_LENGTH } });
     instance.decorateRequest('user', null);
@@ -628,19 +643,20 @@ describe('remix across the two catalog eras', () => {
     });
     await registerRemixRoutes(instance, {
       store,
-      gamesStore: stubGamesStore(),
+      gamesStore: overrides.gamesStore ?? stubGamesStore(),
       githubClient: stubGitHubClient(seen, overrides.sourceMapCalls ?? []),
       publishedRef: 'main',
+      submissionTokenSecret: 'test-submission-secret',
       assistant: { assist: async () => ({ lane: 'params' }) } as EditorAssistant,
       codeLane: (overrides.codeLane ?? { run: async () => ({ ok: true }) }) as never,
     });
     await instance.ready();
-    return instance;
+    return { app: instance, store };
   }
 
   it('opens a repo-era game on its declaration alone, with the params lane live', async () => {
-    app = await repoEraApp();
-    const response = await app.inject({ method: 'POST', url: '/api/games/repo-game/remix', headers: alice });
+    ({ app } = await repoEraApp());
+    const response = await app!.inject({ method: 'POST', url: '/api/games/repo-game/remix', headers: alice });
     expect(response.statusCode).toBe(200);
     const body = response.json();
     // The declaration came from a file read, not from an assembly.
@@ -658,7 +674,7 @@ describe('remix across the two catalog eras', () => {
   it('edits a repo-era game by fetching its sources on the first request that needs them', async () => {
     const mapCalls: string[] = [];
     const seenSources: Array<Record<string, string>> = [];
-    app = await repoEraApp({
+    ({ app } = await repoEraApp({
       sourceMapCalls: mapCalls,
       codeLane: {
         run: async (
@@ -671,7 +687,7 @@ describe('remix across the two catalog eras', () => {
           return { ok: true, overrides: good, region: { file: 'game/runtime.ts', name: 'startGame' } };
         },
       },
-    });
+    }));
     const { remixId } = (await app.inject({ method: 'POST', url: '/api/games/dog-dash/remix', headers: alice })).json();
 
     // Opening cost nothing: the walk is not run until a rebuild is asked for.
@@ -734,12 +750,12 @@ describe('remix across the two catalog eras', () => {
   });
 
   it('declines the deep lane for a game whose sources will not assemble', async () => {
-    app = await repoEraApp({ codeLane: { run: async () => ({ ok: true }) } });
+    ({ app } = await repoEraApp({ codeLane: { run: async () => ({ ok: true }) } }));
     // `no-sources` has a manifest and a declaration but no assemblable code.
     const { remixId } = (
-      await app.inject({ method: 'POST', url: '/api/games/repo-game/remix', headers: alice })
+      await app!.inject({ method: 'POST', url: '/api/games/repo-game/remix', headers: alice })
     ).json();
-    const response = await app.inject({
+    const response = await app!.inject({
       method: 'POST',
       url: `/api/remixes/${remixId}/code`,
       headers: alice,
@@ -750,9 +766,39 @@ describe('remix across the two catalog eras', () => {
   });
 
   it('404s a slug with no manifest — a real absence, not a swallowed failure', async () => {
-    app = await repoEraApp();
-    const response = await app.inject({ method: 'POST', url: '/api/games/not-a-game/remix', headers: alice });
+    ({ app } = await repoEraApp());
+    const response = await app!.inject({ method: 'POST', url: '/api/games/not-a-game/remix', headers: alice });
     expect(response.statusCode).toBe(404);
+  });
+
+  it('saves a remixed catalog (repo-era) game into Studio by loading delivery sources', async () => {
+    const puts: Array<{ slug: string; files: Array<{ path: string; content: string }>; manifest: unknown }> = [];
+    const derived: Array<{ slug: string; version: string; name: string }> = [];
+    const built = await repoEraApp({ gamesStore: stubGamesStore({ puts, derived }) });
+    app = built.app;
+
+    const { remixId } = (
+      await app.inject({ method: 'POST', url: '/api/games/catalog-dash/remix', headers: alice })
+    ).json();
+    const saved = await app.inject({
+      method: 'POST',
+      url: `/api/remixes/${remixId}/save`,
+      headers: alice,
+      payload: { params: { dogScale: 2.5, tagline: 'go!' } },
+    });
+    expect(saved.statusCode).toBe(200);
+    const body = saved.json() as { slug: string; studioPath: string };
+    expect(body.slug).not.toBe('catalog-dash');
+    expect(puts).toHaveLength(1);
+    expect(puts[0].files.some((file) => file.path === 'SPEC.md')).toBe(true);
+    expect(puts[0].files.some((file) => file.path === 'index.html')).toBe(true);
+    expect(puts[0].files.some((file) => file.path === 'game.ts')).toBe(true);
+    expect((puts[0].manifest as { forkedFrom?: { slug: string; version?: string } }).forkedFrom).toEqual({
+      slug: 'catalog-dash',
+      version: 'refsha1',
+    });
+    expect(derived).toEqual([{ slug: body.slug, version: 'v-saved', name: 'preview.html' }]);
+    expect(await built.store.getPublication(body.slug)).toBeNull();
   });
 });
 

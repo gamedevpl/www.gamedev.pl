@@ -869,10 +869,11 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
    * Save as yours — fork the remixed sources into a private Studio draft.
    *
    * Earned: requires a real change (code overrides and/or non-default
-   * params/content). Store-era only: the session must already hold a full file
-   * set. Never publishes; the new job lands at ready_for_review with a
-   * preview-lane version and no gate.green, so the operator publish path
-   * refuses it until a real publish delivery exists.
+   * params/content). Works for store-era (sources already in the session) and
+   * repo-era (full delivery set loaded from the ref at save time). Never
+   * publishes; the new job lands at ready_for_review with a preview-lane
+   * version and no gate.green, so the operator publish path refuses it until a
+   * real publish delivery exists.
    */
   app.post(
     '/api/remixes/:id/save',
@@ -898,13 +899,6 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
         return reply.status(409).send({
           error: 'change something first — then you can keep it',
           reason: 'no_changes',
-        });
-      }
-
-      if (!session.fromStore) {
-        return reply.status(409).send({
-          error: 'this game cannot be saved to Studio yet',
-          reason: 'store_only',
         });
       }
 
@@ -935,17 +929,60 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
         }
       }
 
+      let baseSources: Record<string, string>;
+      if (session.fromStore) {
+        baseSources = session.sources;
+      } else {
+        // Repo-era: the session held only the declaration (and maybe a code-lane
+        // TS map). Assemble the full delivery set from the ref once, at the
+        // moment it is needed — same cost the code lane already pays, plus the
+        // fixed files putCandidateSources requires.
+        if (!options.githubClient) {
+          return reply.status(503).send({ error: 'could not save that just now', reason: 'sources_unavailable' });
+        }
+        let delivery: Record<string, string> | null;
+        try {
+          delivery = await options.githubClient.getGameDeliverySources(session.ref, session.slug);
+        } catch (error) {
+          request.log.error(
+            { err: error, slug: session.slug, ref: session.ref },
+            'remix save could not read delivery sources',
+          );
+          return reply.status(503).send({ error: 'could not save that just now', reason: 'sources_unavailable' });
+        }
+        if (!delivery) {
+          return reply.status(409).send({
+            error: 'this game cannot be saved to Studio yet',
+            reason: 'no_sources',
+          });
+        }
+        // Session declaration / any prior code-lane load wins over a fresh ref
+        // read for the same path — then overrides win on top.
+        baseSources = { ...delivery, ...session.sources };
+        session.sources = baseSources;
+        session.sourcesLoaded = true;
+      }
+
       const html = await rebuild(session);
       if (!html) {
         return reply.status(503).send({ error: 'could not save that just now', reason: 'rebuild_failed' });
       }
 
-      const sources = { ...session.sources, ...session.overrides };
+      const sources = { ...baseSources, ...session.overrides };
+      let parentVersion = session.parentVersion;
+      if (!parentVersion && options.githubClient?.getRefSha) {
+        try {
+          parentVersion = (await options.githubClient.getRefSha(session.ref)) ?? undefined;
+        } catch {
+          // Provenance is nice-to-have; a ref-sha miss must not block the save.
+        }
+      }
+
       const saved = await saveRemixAsStudioDraft({
         uid: request.user!.uid,
         ip: request.ip,
         parentSlug: session.slug,
-        parentVersion: session.parentVersion,
+        parentVersion,
         parentTitle: session.title,
         parentEngineRef: session.ref,
         sources,
