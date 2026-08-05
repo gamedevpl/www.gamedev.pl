@@ -11792,9 +11792,15 @@ button.builder-mode-selector:disabled {
   text-underline-offset: 3px;
 }
 
-.remix-keep-link:hover,
+.remix-keep-link:hover {
+  color: var(--text);
+}
+
 .remix-keep-link:focus-visible {
   color: var(--text);
+  border-radius: 4px;
+  outline: 2px solid var(--accent, #62dcff);
+  outline-offset: 2px;
 }
 
 .remix-keep-offer {

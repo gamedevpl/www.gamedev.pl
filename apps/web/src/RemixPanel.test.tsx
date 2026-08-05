@@ -633,6 +633,59 @@ describe('RemixPanel', () => {
     expect(container.querySelector('.remix-btn.is-primary')?.textContent).toBe('Undo');
     // A broken game is not something to keep — hide the Studio fork until they undo.
     expect(buttonNamed(container, 'Make it mine')).toBeNull();
+    expect(buttonNamed(container, 'Keep…')).toBeNull();
+    expect(container.querySelector('.remix-keep-offer')).toBeNull();
+  });
+
+  it('rolls back a Keep offer when the landing that earned it then breaks', async () => {
+    remixApi.startRemix.mockResolvedValue({
+      remixId: 'r1',
+      params: null,
+      values: null,
+      canAssist: false,
+      canCode: true,
+      suggestions: [],
+      expiresInMs: 3_600_000,
+    });
+    remixApi.remixCode
+      .mockResolvedValueOnce({
+        ok: true,
+        html: '<html>one</html>',
+        region: { file: 'game/render.ts', name: 'paintWorld' },
+        summary: { en: 'One.' },
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        html: '<html>two</html>',
+        region: { file: 'game/render.ts', name: 'paintWorld' },
+        summary: { en: 'Two.' },
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        html: '<html>broken</html>',
+        region: { file: 'game/render.ts', name: 'paintWorld' },
+        summary: { en: 'Three.' },
+      });
+    await draw();
+    await send('one');
+    await send('two');
+    await send('three');
+    expect(container.querySelector('.remix-keep-offer')).not.toBeNull();
+
+    await act(async () => {
+      const event = new MessageEvent('message', {
+        data: { source: 'gdpl-player', type: 'error', message: 'boom' },
+      });
+      Object.defineProperty(event, 'source', { value: frameWindow });
+      Object.defineProperty(event, 'origin', { value: 'null' });
+      window.dispatchEvent(event);
+    });
+
+    // The third landing did not stick — close the offer and do not leave the
+    // hatch hidden behind a stuck keepOfferOpen flag.
+    expect(container.querySelector('.remix-keep-offer')).toBeNull();
+    expect(buttonNamed(container, 'Keep…')).toBeNull();
+    expect(container.querySelector('.remix-result.is-broken')).not.toBeNull();
   });
 
   it('keeps the way back when the sheet is reopened over a running change', async () => {

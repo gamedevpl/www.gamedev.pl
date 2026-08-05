@@ -864,6 +864,12 @@ export function RemixPanel(props: {
       // game ran a frame. Without this the funnel counts a broken build as a
       // success and can never say whether the safety flow is working.
       recordRemixStep('broken');
+      // Counted as a landing when the rebuild returned; a throw means it was not
+      // one. Roll the counter back and close any Keep sheet that opened on the
+      // strength of that landing — otherwise keepOfferOpen stays true (hiding
+      // the header hatch) and the sheet pops back after Undo clears `broke`.
+      setSuccessCount((n) => Math.max(0, n - 1));
+      setKeepOfferOpen(false);
       setChanged((current) => (current ? { ...current, broke: true, canShare: false } : current));
     }
     function stop() {
@@ -1164,7 +1170,7 @@ export function RemixPanel(props: {
            * shouldn't wait for the third nudge. Hidden until then so the head
            * stays a title bar, not a toolbar.
            */}
-          {successCount >= 1 && !keepSaved && !keepOfferOpen ? (
+          {successCount >= 1 && !keepSaved && !keepOfferOpen && !changed?.broke ? (
             <button type="button" className="remix-keep-link" onClick={openKeepOffer}>
               {t('remix.keepOfferMenu')}
             </button>
