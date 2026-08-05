@@ -943,10 +943,17 @@ describe('remix save as yours', () => {
       payload: { params: { dogScale: 2, tagline: 'go!' } },
     });
     expect(saved.statusCode).toBe(200);
-    const body = saved.json() as { slug: string; token: string; version: string; studioPath: string };
+    const body = saved.json() as {
+      slug: string;
+      token: string;
+      version: string;
+      openPath: string;
+      studioPath: string;
+    };
     expect(body.slug).not.toBe('dog-dash');
     expect(body.slug).toMatch(/^remix-of-/);
-    expect(body.studioPath).toBe(`/studio/${body.slug}/playtest`);
+    expect(body.openPath).toBe(`/draft/${body.slug}`);
+    expect(body.studioPath).toBe(`/draft/${body.slug}`);
     expect(body.token).toBeTruthy();
     expect(puts).toHaveLength(1);
     expect(puts[0].slug).toBe(body.slug);

@@ -66,7 +66,10 @@ export type RemixSave = {
   slug: string;
   token: string;
   version: string;
-  studioPath: string;
+  /** Where to open the kept remix — the draft play theater, not Studio. */
+  openPath: string;
+  /** @deprecated Same as {@link openPath}; older APIs only sent this. */
+  studioPath?: string;
 };
 
 export type RemixApiError = Error & { status?: number; reason?: string; category?: string };

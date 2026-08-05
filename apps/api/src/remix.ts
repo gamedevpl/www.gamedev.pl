@@ -1140,14 +1140,17 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
       }
 
       session.expiresAt = now() + REMIX_TTL_MS;
-      // Land on playtest — the thread for a brand-new remix is empty and used to
-      // read as a stuck "Final check / waiting to go live" gate-green screen even
-      // though a remix never publishes and never ran the gate.
+      // Land on the draft play surface — same theater shape as a shared game, not
+      // Studio. The player was remixing while playing; dumping them into creator
+      // tooling (empty Final check / playtest chrome) is a mode switch they did
+      // not ask for. Studio stays on the shelf for later edits.
       return reply.send({
         slug: saved.slug,
         token: saved.token,
         version: saved.version,
-        studioPath: `/studio/${saved.slug}/playtest`,
+        openPath: `/draft/${saved.slug}`,
+        // Kept until clients that only read studioPath are gone.
+        studioPath: `/draft/${saved.slug}`,
       });
     },
   );
