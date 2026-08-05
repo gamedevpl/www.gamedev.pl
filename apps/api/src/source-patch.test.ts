@@ -1,6 +1,6 @@
 import { createPatch } from 'diff';
 import { describe, expect, it } from 'vitest';
-import { applySourcePatch, normalizePatchPath, SourcePatchError } from './source-patch.js';
+import { applySourcePatch, normalizePatchPath, normalizeUnifiedDiff, SourcePatchError } from './source-patch.js';
 
 describe('normalizePatchPath', () => {
   it('strips a/b prefixes, tabs, and quotes', () => {
@@ -8,6 +8,31 @@ describe('normalizePatchPath', () => {
     expect(normalizePatchPath('b/game/render.ts')).toBe('game/render.ts');
     expect(normalizePatchPath('game/render.ts\t2026-01-01 00:00:00')).toBe('game/render.ts');
     expect(normalizePatchPath('"game/render.ts"')).toBe('game/render.ts');
+  });
+});
+
+describe('normalizeUnifiedDiff', () => {
+  it('rewrites bare @@ hunks with counts derived from the body', () => {
+    const normalized = normalizeUnifiedDiff(
+      ['--- a/game/model.ts', '+++ b/game/model.ts', '@@', ' line1', '-line2', '+line2x', ' line3', ''].join('\n'),
+    );
+    expect(normalized).toContain('@@ -1,3 +1,3 @@');
+    expect(normalized).toContain('-line2');
+    expect(normalized).toContain('+line2x');
+  });
+
+  it('recounts wrong @@ line counts while keeping the start lines', () => {
+    const normalized = normalizeUnifiedDiff(
+      ['--- a/game.ts', '+++ b/game.ts', '@@ -10,1 +10,1 @@', ' line1', '-line2', '+line2x', ' line3', ''].join('\n'),
+    );
+    expect(normalized).toContain('@@ -10,3 +10,3 @@');
+  });
+
+  it('prefixes context lines that are missing the leading space', () => {
+    const normalized = normalizeUnifiedDiff(
+      ['--- a/game.ts', '+++ b/game.ts', '@@', 'line1', '-line2', '+line2x', 'line3', ''].join('\n'),
+    );
+    expect(normalized.split('\n')).toEqual(expect.arrayContaining([' line1', '-line2', '+line2x', ' line3']));
   });
 });
 
@@ -34,6 +59,76 @@ describe('applySourcePatch', () => {
     ].join('\n');
     const result = applySourcePatch({ content, path: 'game/render.ts', patch });
     expect(result.content).toBe('line1\nline2x\nline3\n');
+  });
+
+  it('applies a bare @@ hunk matched by context (no line numbers needed)', () => {
+    const patch = [
+      '--- a/game/model.ts',
+      '+++ b/game/model.ts',
+      '@@',
+      '   news: { icon: "x" },',
+      ' };',
+      ' ',
+      '+export const GENRES = [];',
+      '+',
+      ' export type Programme = { id: number };',
+      '',
+    ].join('\n');
+    const base = ['  news: { icon: "x" },', '};', '', 'export type Programme = { id: number };', ''].join('\n');
+    const result = applySourcePatch({ content: base, path: 'game/model.ts', patch });
+    expect(result.content).toContain('export const GENRES = [];');
+    expect(result.content).toContain('export type Programme');
+    expect(result.replacements).toBe(1);
+  });
+
+  it('applies when @@ line numbers are approximate but context matches', () => {
+    const patch = [
+      '--- a/game/render.ts',
+      '+++ b/game/render.ts',
+      '@@ -99,3 +99,3 @@',
+      ' line1',
+      '-line2',
+      '+line2x',
+      ' line3',
+      '',
+    ].join('\n');
+    const result = applySourcePatch({ content, path: 'game/render.ts', patch });
+    expect(result.content).toBe('line1\nline2x\nline3\n');
+  });
+
+  it('applies when @@ line counts are wrong but the body is complete', () => {
+    const patch = [
+      '--- a/game/render.ts',
+      '+++ b/game/render.ts',
+      '@@ -1,1 +1,1 @@',
+      ' line1',
+      '-line2',
+      '+line2x',
+      ' line3',
+      '',
+    ].join('\n');
+    const result = applySourcePatch({ content, path: 'game/render.ts', patch });
+    expect(result.content).toBe('line1\nline2x\nline3\n');
+  });
+
+  it('applies two bare @@ hunks in one file', () => {
+    const base = 'alpha\nbeta\ngamma\n';
+    const patch = [
+      '--- a/game.ts',
+      '+++ b/game.ts',
+      '@@',
+      ' alpha',
+      '-beta',
+      '+BETA',
+      ' gamma',
+      '@@',
+      ' gamma',
+      '+delta',
+      '',
+    ].join('\n');
+    const result = applySourcePatch({ content: base, path: 'game.ts', patch });
+    expect(result.content).toBe('alpha\nBETA\ngamma\ndelta\n');
+    expect(result.replacements).toBe(2);
   });
 
   it('refuses an empty patch', () => {
