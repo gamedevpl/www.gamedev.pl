@@ -10,6 +10,7 @@ import {
   spliceRegion,
   type SymbolRegion,
 } from './symbol-map.js';
+import { formatRemixTurns } from './remix-turns.js';
 
 /**
  * The code lane: a sentence becomes one scoped source edit, rebuilt server-side.
@@ -101,6 +102,11 @@ export interface CodeLaneRequest {
   /** Game-relative sources of the version being remixed. */
   sources: Record<string, string>;
   utterance: string;
+  /**
+   * Prior remix turns (oldest first). Optional — a first ask has nothing prior.
+   * Distinct from repair rounds inside this request.
+   */
+  history?: Array<{ utterance: string; summary?: string }>;
   game?: { title?: string; genre?: string };
   /**
    * `shared/game-kit.d.ts`, when the caller has it.
@@ -526,6 +532,7 @@ export class VertexCodeLane {
   }
 
   private pickPrompt(request: CodeLaneRequest, regions: SymbolRegion[]): string {
+    const prior = formatRemixTurns(request.history ?? []);
     return `You are choosing WHERE a change to a small browser game belongs. You do not write code in this step.
 
 Game: ${request.game?.title ?? request.slug}${request.game?.genre ? ` (${request.game.genre})` : ''}
@@ -547,7 +554,7 @@ Rules:
   one instead.
 - If the request is not about changing this game, or asks for something harmful, sexual, hateful, or aimed at a real person, answer {"decision":"reject"}.
 - "summary" is one short sentence in English (en) and Polish (pl) describing the change you expect to make.
-
+${prior ? `\n${prior}` : ''}
 Respond STRICTLY as JSON:
 {"decision":"edit","file":"game/runtime.ts","name":"startGame","summary":{"en":"...","pl":"..."}}
 
@@ -607,6 +614,7 @@ Respond STRICTLY as JSON and nothing else — no code fence before or after it, 
 every newline inside a string written as \\n:
 {"replacement":"...","summary":{"en":"...","pl":"..."}}`;
     }
+    const prior = formatRemixTurns(request.history ?? []);
     return `You are editing ONE region of a small browser game written in TypeScript.
 
 Game: ${request.game?.title ?? request.slug}
@@ -625,7 +633,7 @@ Rules:
 - You may only use what the region already has access to: this game's own modules (relative imports) and the global \`GameKit\`. There is no network, no external library, and no DOM outside the game canvas.
 - Change as little as possible. This is a tweak, not a rewrite.
 - "summary" is one short sentence in English (en) and Polish (pl) saying what you changed.
-
+${prior ? `\n${prior}` : ''}
 Respond STRICTLY as JSON and nothing else — no code fence before or after it, and
 every newline inside a string written as \\n:
 {"replacement":"export function startGame() {\\n  …\\n}","summary":{"en":"...","pl":"..."}}

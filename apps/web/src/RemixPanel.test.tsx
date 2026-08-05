@@ -725,6 +725,33 @@ describe('RemixPanel', () => {
     expect(buttonNamed(container, 'Keep…')).toBeNull();
   });
 
+  it('docks into a mini chat after the second landing', async () => {
+    remixApi.startRemix.mockResolvedValue({
+      remixId: 'r1',
+      params: { dogScale: { type: 'number', min: 0.5, max: 3, default: 1, label: { en: 'dog size' } } },
+      values: { dogScale: 1 },
+      canAssist: true,
+      canCode: false,
+      suggestions: [],
+      expiresInMs: 3_600_000,
+    });
+    remixApi.remixAssist
+      .mockResolvedValueOnce({ lane: 'params', values: { dogScale: 1.2 }, summary: { en: 'Bigger.' } })
+      .mockResolvedValueOnce({ lane: 'params', values: { dogScale: 1.4 }, summary: { en: 'Bigger still.' } });
+    await draw();
+
+    expect(container.querySelector('.remix-panel.is-chat')).toBeNull();
+    await send('a bit bigger');
+    expect(container.querySelector('.remix-panel.is-chat')).toBeNull();
+    await send('again');
+
+    expect(container.querySelector('.remix-panel.is-chat')).not.toBeNull();
+    expect(container.querySelector('.remix-transcript')).not.toBeNull();
+    const bubbles = Array.from(container.querySelectorAll('.remix-bubble')).map((el) => el.textContent);
+    expect(bubbles).toEqual(['a bit bigger', 'Bigger.', 'again', 'Bigger still.']);
+    expect(container.querySelector('.remix-title')?.textContent).toBe('Remix chat');
+  });
+
   it('offers to keep the remix after a few successful landings, with a name', async () => {
     remixApi.startRemix.mockResolvedValue({
       remixId: 'r1',
@@ -752,7 +779,7 @@ describe('RemixPanel', () => {
     expect(container.querySelector('.remix-keep-offer')).not.toBeNull();
     expect(container.querySelector('.remix-keep-heading')?.textContent).toBe('Keep this remix?');
     const name = container.querySelector<HTMLInputElement>('.remix-keep-field input');
-    expect(name?.value).toBe('Dog Dash');
+    expect(name?.value).toBe('Remix of Dog Dash');
     expect(buttonNamed(container, 'Keep in Studio')).not.toBeNull();
     expect(buttonNamed(container, 'Not now')).not.toBeNull();
     // Composer and Share/Undo wait behind the offer.

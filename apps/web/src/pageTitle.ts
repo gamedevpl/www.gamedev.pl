@@ -95,6 +95,13 @@ export function resolveDocumentTitle(route: AppRoute, ctx: DocumentTitleContext)
   }
 }
 
+/** Default name when keeping a remix — handle when claimed, otherwise a clear remix label. */
+export function suggestedKeepTitle(slug: string, handle?: string): string {
+  const base = humanizeSlug(slug);
+  const title = handle ? `${base} (edit by @${handle})` : `Remix of ${base}`;
+  return title.slice(0, 80);
+}
+
 /** Turn `sky-dodge` into `Sky Dodge` when the catalog hasn't loaded yet. */
 export function humanizeSlug(slug: string): string {
   return slug
