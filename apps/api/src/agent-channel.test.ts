@@ -174,7 +174,6 @@ describe('agent build channel', () => {
     await seedSubmission(store);
     const asked: string[] = [];
     const translator: Translator = {
-      translate: async (texts) => texts,
       toBilingual: async (text) => {
         asked.push(text);
         return { en: text, localized: `PL:${text}` };
@@ -212,7 +211,6 @@ describe('agent build channel', () => {
     const store = new InMemoryStore();
     await seedSubmission(store);
     const translator: Translator = {
-      translate: async (texts) => texts,
       toBilingual: async (text) => ({ en: `EN:${text}`, localized: text }),
     };
     app = await createApp(store, { translator });
@@ -239,7 +237,6 @@ describe('agent build channel', () => {
     await store.createSubmission(4242, 'g:owner', 'Squad game');
     await store.setSubmissionLocale(4242, 'en');
     const translator: Translator = {
-      translate: async (texts) => texts,
       toBilingual: async (text) => ({ en: `EN:${text}`, localized: `PL:${text}` }),
     };
     app = await createApp(store, { translator });
@@ -266,7 +263,6 @@ describe('agent build channel', () => {
     await seedSubmission(store);
     let calls = 0;
     const translator: Translator = {
-      translate: async (texts) => texts,
       toBilingual: async () => {
         calls++;
         return null;
@@ -295,7 +291,6 @@ describe('agent build channel', () => {
     await seedSubmission(store);
     let calls = 0;
     const translator: Translator = {
-      translate: async (texts) => texts,
       toBilingual: async () => {
         calls++;
         throw new Error('vertex is down');

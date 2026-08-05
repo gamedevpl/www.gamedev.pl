@@ -190,7 +190,6 @@ describe('MCP continue_draft', () => {
     await store.setSubmissionLocale(DRAFT_ISSUE, 'pl');
     const asked: Array<{ text: string; kind?: string }> = [];
     const translator: Translator = {
-      translate: async (texts) => texts,
       toBilingual: async (text, _locale, opts) => {
         asked.push({ text, kind: opts?.kind });
         return { en: text, localized: `PL:${text}` };
@@ -227,7 +226,6 @@ describe('MCP continue_draft', () => {
     await seedGreenDraft(store);
     await store.setSubmissionLocale(DRAFT_ISSUE, 'pl');
     const translator: Translator = {
-      translate: async (texts) => texts,
       toBilingual: async () => {
         throw new Error('vertex is down');
       },
@@ -257,7 +255,6 @@ describe('MCP continue_draft', () => {
     await store.setSubmissionLocale(DRAFT_ISSUE, 'pl');
     let calls = 0;
     const translator: Translator = {
-      translate: async (texts) => texts,
       toBilingual: async (text) => {
         calls++;
         return { en: text, localized: `PL:${text}` };

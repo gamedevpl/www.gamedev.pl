@@ -30,12 +30,6 @@ describe('normalizeLocale', () => {
 });
 
 describe('NoopTranslator', () => {
-  it('returns the input texts unchanged', async () => {
-    const translator = new NoopTranslator();
-    const texts = ['feat: add player jump', 'Wire up collision'];
-    expect(await translator.translate(texts, 'pl')).toEqual(texts);
-  });
-
   it('answers null rather than echoing, so callers cannot mislabel the source language', async () => {
     expect(await new NoopTranslator().toBilingual()).toBeNull();
   });
@@ -81,6 +75,46 @@ describe('VertexTranslator.toBilingual', () => {
     expect(calls).toBe(1);
   });
 
+  it('sends at temperature 0 with an abort signal and the prompt rules', async () => {
+    let seen: GenerationRequest | undefined;
+    const translator = new VertexTranslator({
+      client: genaicode(
+        stubProvider('{"en":"Added a player jump","pl":"Dodano skok gracza"}', (req) => {
+          seen = req;
+        }),
+      ),
+    });
+
+    await translator.toBilingual('feat: add player jump', 'pl');
+    expect(seen?.temperature).toBe(0);
+    expect(seen?.signal).toBeInstanceOf(AbortSignal);
+    // Concatenate parts so this stays valid if genaicode splits the prompt later.
+    const promptText = (seen?.prompt ?? []).map((part) => part.text ?? '').join('');
+    expect(promptText).toContain('Polish');
+    expect(promptText).toContain('feat: add player jump');
+    expect(promptText).toContain('JSON object');
+  });
+
+  it('gives a message its own prompt and its own cache entry', async () => {
+    // A change request must not be compressed the way a commit subject is, and a string
+    // rendered under one prompt is not a usable answer for the other.
+    const prompts: string[] = [];
+    const translator = new VertexTranslator({
+      client: genaicode(
+        stubProvider('{"en":"Make it bigger","pl":"Zrób to większe"}', (req) => {
+          prompts.push((req.prompt ?? []).map((part) => part.text ?? '').join(''));
+        }),
+      ),
+    });
+
+    await translator.toBilingual('Make it bigger', 'pl', { kind: 'message' });
+    await translator.toBilingual('Make it bigger', 'pl', { kind: 'log' });
+
+    expect(prompts).toHaveLength(2);
+    expect(prompts[0]).toContain('Never summarize');
+    expect(prompts[1]).toContain('one short line');
+  });
+
   it('serves a repeat from cache without a second call', async () => {
     let calls = 0;
     const translator = new VertexTranslator({
@@ -111,112 +145,7 @@ describe('VertexTranslator.toBilingual', () => {
   });
 });
 
-describe('VertexTranslator', () => {
-  it('skips the model for English targets and empty batches', async () => {
-    let calls = 0;
-    const translator = new VertexTranslator({
-      translateFetcher: async () => {
-        calls += 1;
-        return ['nie powinno'];
-      },
-    });
 
-    expect(await translator.translate(['feat: add jump'], 'en')).toEqual(['feat: add jump']);
-    expect(await translator.translate([], 'pl')).toEqual([]);
-    expect(calls).toBe(0);
-  });
-
-  it('uses translateFetcher and serves a cache hit without refetching', async () => {
-    let calls = 0;
-    const translator = new VertexTranslator({
-      translateFetcher: async (texts, locale) => {
-        calls += 1;
-        expect(locale).toBe('pl');
-        expect(texts).toEqual(['feat: add player jump']);
-        return ['Dodano skok gracza'];
-      },
-    });
-
-    expect(await translator.translate(['feat: add player jump'], 'pl-PL')).toEqual(['Dodano skok gracza']);
-    expect(await translator.translate(['feat: add player jump'], 'pl')).toEqual(['Dodano skok gracza']);
-    expect(calls).toBe(1);
-  });
-
-  it('fails open when the fetcher throws', async () => {
-    const translator = new VertexTranslator({
-      translateFetcher: async () => {
-        throw new Error('Vertex AI network timeout');
-      },
-    });
-
-    expect(await translator.translate(['feat: add jump'], 'pl')).toEqual(['feat: add jump']);
-  });
-});
-
-describe('VertexTranslator over a genaicode client', () => {
-  it('sends the batch at temperature 0 with an abort signal and the prompt rules', async () => {
-    let seen: GenerationRequest | undefined;
-    const translator = new VertexTranslator({
-      client: genaicode(
-        stubProvider(JSON.stringify(['Dodano skok gracza']), (req) => {
-          seen = req;
-        }),
-      ),
-    });
-
-    expect(await translator.translate(['feat: add player jump'], 'pl')).toEqual(['Dodano skok gracza']);
-    expect(seen).toBeDefined();
-    expect(seen?.temperature).toBe(0);
-    expect(seen?.signal).toBeInstanceOf(AbortSignal);
-    // Concatenate parts so this stays valid if genaicode splits the prompt later.
-    const promptText = (seen?.prompt ?? []).map((part) => part.text ?? '').join('');
-    expect(promptText).toContain('Polish');
-    expect(promptText).toContain('feat: add player jump');
-    expect(promptText).toContain('Return ONLY a JSON array of strings');
-  });
-
-  it('asks a message to be translated whole, on its own prompt and cache entry', async () => {
-    // The log prompt tells the model to keep every line short, which is right for a
-    // commit subject and wrong for a 2000-character change request: it would come back
-    // as a summary of the creator's own words with points missing.
-    const prompts: string[] = [];
-    const request = 'Zoom out the battlefield.\n\n1. Smaller units.\n2. More high ground.';
-    const translator = new VertexTranslator({
-      client: genaicode(
-        stubProvider(JSON.stringify(['przetłumaczone']), (req) => {
-          prompts.push((req.prompt ?? []).map((part) => part.text ?? '').join(''));
-        }),
-      ),
-    });
-
-    expect(await translator.translate([request], 'pl', { kind: 'message' })).toEqual(['przetłumaczone']);
-    const [messagePrompt] = prompts;
-    expect(messagePrompt).toContain('Never summarize, shorten, merge or omit anything');
-    expect(messagePrompt).not.toContain('Keep it to one short line each');
-    expect(messagePrompt).toContain(JSON.stringify([request]));
-
-    // The two kinds answer differently, so one must not serve the other's cache entry.
-    expect(await translator.translate([request], 'pl')).toEqual(['przetłumaczone']);
-    expect(prompts).toHaveLength(2);
-    expect(prompts[1]).toContain('Keep it to one short line each');
-  });
-
-  it('maps non-string JSON array entries to empty strings and keeps source text', async () => {
-    const translator = new VertexTranslator({
-      client: genaicode(stubProvider(JSON.stringify([42, null, 'ok']))),
-    });
-
-    // Non-string / empty mapped entries are not cached, so those sources stay as-is.
-    expect(await translator.translate(['a', 'b', 'c'], 'pl')).toEqual(['a', 'b', 'ok']);
-  });
-
-  it('fails open on a malformed or non-array response', async () => {
-    for (const body of ['not json at all', '', '{"nope": true}', '42']) {
-      const translator = new VertexTranslator({ client: genaicode(stubProvider(body)) });
-      expect(await translator.translate(['feat: add jump'], 'pl')).toEqual(['feat: add jump']);
-    }
-  });
-});
 
 describe('createTranslatorFromEnv', () => {
   const previous = process.env.TRANSLATE_BUILD_LOG;
