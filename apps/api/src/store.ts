@@ -750,8 +750,8 @@ export interface VisitEvent {
   via?: string;
   /**
    * `remix_step` with `step: 'offered'` or `'opened'`: which control it was —
-   * `bar` (the chrome bar) or `more` (the overflow menu it sheds into on narrow
-   * screens).
+   * `page` (the preview-first game page), `bar` (the chrome bar), or `more` (the
+   * overflow menu it sheds into on narrow screens).
    *
    * Its own field rather than a new meaning for `via` (what led someone to the
    * painter) or `entry` (the route a visit landed on) — both already mean

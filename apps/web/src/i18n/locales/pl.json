@@ -932,6 +932,16 @@
     "gameNamed": "{{title}}",
     "proposals": "Moje propozycje"
   },
+  "gamePage": {
+    "loading": "Ładowanie gry…",
+    "loadError": "Nie udało się wczytać strony gry.",
+    "missing": "Ta gra nie jest dostępna.",
+    "actions": "Akcje gry",
+    "playPreview": "Zagraj w {{title}} w trybie kinowym",
+    "openTheater": "Graj w trybie kinowym",
+    "screenshots": "Zrzuty ekranu",
+    "viewScreenshot": "Pokaż zrzut ekranu {{number}}"
+  },
   "creatorProfile": {
     "back": "Wróć",
     "loading": "Ładowanie profilu…",
@@ -941,6 +951,7 @@
     "gamesAria": "Opublikowane gry",
     "gamesHeading": "Gry ({{count}})",
     "noGames": "Brak opublikowanych gier.",
+    "openGamePage": "Otwórz stronę gry {{title}}",
     "openStudio": "Otwórz w Studio",
     "editorTitle": "Twój publiczny profil",
     "publishGateTitle": "Zajmij handle, żeby opublikować",

@@ -91,6 +91,8 @@ type GameTheaterProps = {
   controls?: string;
   /** Catalog touch support; `none` adds the keyboard-only line to the panel. */
   touch?: CatalogTouch | null;
+  /** Open the remix sheet on the first frame (the game-page Remix entry). */
+  initialRemixOpen?: boolean;
 };
 
 // Long enough that the bar never reacts like a hover tooltip, short enough to clear
@@ -140,6 +142,7 @@ export function GameTheater({
   creatorHandle = null,
   controls,
   touch = null,
+  initialRemixOpen = false,
 }: GameTheaterProps) {
   const { t } = useTranslation();
   const frameRef = useRef<HTMLIFrameElement | null>(null);
@@ -160,7 +163,7 @@ export function GameTheater({
    * declares paintable content — a door that opens onto nothing is the
    * `no_lane` lesson, and this menu does not repeat it.
    */
-  const [remixOpenNonce, setRemixOpenNonce] = useState(0);
+  const [remixOpenNonce, setRemixOpenNonce] = useState(initialRemixOpen ? 1 : 0);
   const [painterNonce, setPainterNonce] = useState(0);
   const [remixHasPainter, setRemixHasPainter] = useState(false);
   const onRemixCapabilities = useCallback((caps: { painter: boolean }) => setRemixHasPainter(caps.painter), []);

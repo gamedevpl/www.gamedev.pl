@@ -99,8 +99,8 @@ export interface VisitFunnel {
    * Whether the remix entry is worth the space it takes.
    *
    * `offered` is every visit shown the control; `opened` is every visit that
-   * pressed it; `byControl` splits the presses between the chrome bar and the
-   * overflow menu it sheds into on narrow screens. `medianSecondsToOpen` is
+   * pressed it; `byControl` splits the presses between the game page, chrome bar,
+   * and overflow menu. `medianSecondsToOpen` is
    * measured among visits that opened it — how long a player plays before they
    * want to change something.
    *
@@ -111,7 +111,7 @@ export interface VisitFunnel {
   remixEntry: {
     offered: number;
     opened: number;
-    byControl: Array<{ control: 'bar' | 'more' | 'unknown'; visits: number }>;
+    byControl: Array<{ control: 'page' | 'bar' | 'more' | 'unknown'; visits: number }>;
     medianSecondsToOpen: number | null;
   };
   /**
@@ -535,11 +535,13 @@ export function summarizeVisitFunnel(events: VisitEvent[]): VisitFunnel {
        * it reports only the visits we know were shown the control.
        */
       const opened = offered.filter((rollup) => rollup.remixSteps.has('opened'));
-      const doors = ['bar', 'more'] as const;
-      const byControl: Array<{ control: 'bar' | 'more' | 'unknown'; visits: number }> = doors.map((control) => ({
-        control,
-        visits: opened.filter((rollup) => rollup.remixControl === control).length,
-      }));
+      const doors = ['page', 'bar', 'more'] as const;
+      const byControl: Array<{ control: 'page' | 'bar' | 'more' | 'unknown'; visits: number }> = doors.map(
+        (control) => ({
+          control,
+          visits: opened.filter((rollup) => rollup.remixControl === control).length,
+        }),
+      );
       const unknown = opened.filter((rollup) => !doors.includes(rollup.remixControl as (typeof doors)[number])).length;
       if (unknown > 0) byControl.push({ control: 'unknown', visits: unknown });
       // Only visits that actually opened one carry a delay, so the median is over
