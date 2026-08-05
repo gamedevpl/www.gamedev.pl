@@ -1202,9 +1202,6 @@
     "releaseEditor": "publikacja z edytora",
     "gateGreen": "Zaakceptowane przez bramkę",
     "gateRed": "Bramka odrzuciła to wydanie",
-    "placeholder": {
-      "sources": "Podgląd źródeł gry tylko do odczytu. Celowo ostatnia zakładka — produktem jest gra. W budowie."
-    },
     "specHint": "to jest README gry",
     "statsHeading": "Aktywność",
     "statsPlays": "Rozegrania (ostatnie {{days}} dni)",
@@ -1284,6 +1281,18 @@
       "diffSummary": "plików: {{files}} · +{{added}} −{{removed}} · pokaż zmiany w kodzie",
       "diffTruncated": "(co najmniej)",
       "diffUncounted": "zmieniony"
+    },
+    "sources": {
+      "loading": "Wczytywanie źródeł…",
+      "error": "Nie udało się wczytać źródeł. Spróbuj za chwilę.",
+      "unavailable": "Źródła tej gry nie są publikowane. Gry z własnego repozytorium platformy trzymają kod tam.",
+      "intro": "plików: {{files}} · {{size}} · tylko do odczytu, dokładnie to, co działa",
+      "filesAria": "Pliki źródłowe",
+      "copy": "Kopiuj",
+      "copied": "Skopiowano",
+      "fileLoading": "Wczytywanie…",
+      "fileError": "Nie udało się wczytać tego pliku.",
+      "tooLarge": "Ten plik jest za duży, aby go tu pokazać."
     }
   }
 }

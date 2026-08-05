@@ -20,6 +20,7 @@ import { registerCreatorProfileRoutes } from './creator-profile-routes.js';
 import { registerGamePageRoutes, type GamePageRoutesOptions } from './game-page-routes.js';
 import { registerGameBoardRoutes, type GameBoardRoutesOptions } from './game-board-routes.js';
 import { registerGameReviewRoutes, type GameReviewRoutesOptions } from './game-review-routes.js';
+import { registerGameSourcesRoutes, type GameSourcesRoutesOptions } from './game-sources-routes.js';
 import { registerAccountDeletionRoutes, type AccountDeletionRoutesOptions } from './account-deletion-routes.js';
 import { registerCreatorStudioRoutes } from './creator-studio.js';
 import { registerEditorRoutes } from './editor-drafts.js';
@@ -125,6 +126,8 @@ export interface BuildAppOptions {
   gameBoardRoutes?: Partial<Omit<GameBoardRoutesOptions, 'store'>>;
   /** Seams for the side-by-side review surface. */
   gameReviewRoutes?: Partial<Omit<GameReviewRoutesOptions, 'store'>>;
+  /** Seams for the public read-only sources view. */
+  gameSourcesRoutes?: Partial<Omit<GameSourcesRoutesOptions, 'store'>>;
   /** Seams for delayed account erasure; defaults to OIDC-or-deny-all from env. */
   accountDeletionRoutes?: Partial<
     Omit<AccountDeletionRoutesOptions, 'store' | 'adminUids' | 'internalAuthVerifier'>
@@ -597,6 +600,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // and operator only, and it never publishes — that stays the operator action the
   // job-admin route implements, for the reasons documented there.
   await registerGameReviewRoutes(app, { store, gamesStore, adminUids, ...options.gameReviewRoutes });
+
+  // Public read-only sources for store-published creator games. Owner decision: code
+  // is worth reading, and the creator checkout already hands over the same bytes.
+  await registerGameSourcesRoutes(app, { store, gamesStore, ...options.gameSourcesRoutes });
   registerAccountDeletionRoutes(app, {
     store,
     adminUids,
@@ -692,7 +699,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // document, media, votes and every other `/api/games/:slug/*` route stay walled
     // during beta. The board's own owner-only column is gated in its handler, which
     // reads `request.user` — present or absent, the wall does not decide it.
-    if (/^\/api\/games\/[^/]+\/(page|board)(\?|$)/.test(request.url)) return;
+    // `sources` joins them: reading a published creator game's code needs no session,
+    // by the same decision that made the tab public at all.
+    if (/^\/api\/games\/[^/]+\/(page|board|sources)(\/file)?(\?|$)/.test(request.url)) return;
     // Internal endpoints (the Cloud Scheduler notification sweep) authenticate via
     // an OIDC token in the handler, not a session — the wall would 401 them first.
     if (request.url.startsWith('/api/internal/')) return;

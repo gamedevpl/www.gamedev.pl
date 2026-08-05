@@ -1198,9 +1198,6 @@
     "releaseEditor": "editor publish",
     "gateGreen": "Accepted by the gate",
     "gateRed": "Gate run failed",
-    "placeholder": {
-      "sources": "A read-only view of the game’s sources. Deliberately the last tab — the game is the product. In the works."
-    },
     "specHint": "this is the game’s README",
     "statsHeading": "Activity",
     "statsPlays": "Plays (last {{days}} days)",
@@ -1278,6 +1275,18 @@
       "diffSummary": "{{files}} files · +{{added}} −{{removed}} · show what changed in the code",
       "diffTruncated": "(at least)",
       "diffUncounted": "changed"
+    },
+    "sources": {
+      "loading": "Loading the sources…",
+      "error": "Could not load the sources. Try again in a moment.",
+      "unavailable": "This game’s sources are not published. Games that came from the platform’s own repository keep their code there.",
+      "intro": "{{files}} files · {{size}} · read-only, exactly what is running",
+      "filesAria": "Source files",
+      "copy": "Copy",
+      "copied": "Copied",
+      "fileLoading": "Loading…",
+      "fileError": "Could not load that file.",
+      "tooLarge": "This file is too large to show here."
     }
   }
 }
