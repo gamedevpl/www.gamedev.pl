@@ -178,6 +178,19 @@ export function submissionPushContent(
   return { title: copy.subject, body: `“${title}” ${copy.lead}` };
 }
 
+/**
+ * Push copy for "a game you follow has a new version".
+ *
+ * Its own function rather than a row in `notificationCopy`, which is keyed by
+ * submission type: this notification is about somebody else's game, addressed to a
+ * player rather than a creator, and folding it in would widen that table's meaning.
+ */
+export function followedGamePushContent(locale: Locale, title: string): { title: string; body: string } {
+  return locale === 'pl'
+    ? { title: 'Nowa wersja gry, którą obserwujesz', body: `„${title}” ma nową wersję.` }
+    : { title: 'A game you follow was updated', body: `“${title}” has a new version.` };
+}
+
 export function submissionNotificationMessage(
   to: string,
   locale: Locale,

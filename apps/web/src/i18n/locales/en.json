@@ -63,6 +63,12 @@
         "title": "Someone joined the beta waitlist",
         "body": "“{{title}}” asked to join the closed beta."
       }
+    },
+    "game": {
+      "new_version": {
+        "title": "A game you follow was updated",
+        "body": "“{{title}}” has a new version."
+      }
     }
   },
   "header": {
@@ -1178,7 +1184,6 @@
     "breadcrumbAria": "Game location",
     "play": "Play",
     "follow": "Follow",
-    "followSoon": "Coming soon — new-release notifications",
     "remix": "Remix",
     "remixHint": "Open the game and press the wrench to remix it",
     "tabsAria": "Game page sections",
@@ -1287,6 +1292,7 @@
       "fileLoading": "Loading…",
       "fileError": "Could not load that file.",
       "tooLarge": "This file is too large to show here."
-    }
+    },
+    "following": "Following"
   }
 }

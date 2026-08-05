@@ -21,6 +21,8 @@ import { registerGamePageRoutes, type GamePageRoutesOptions } from './game-page-
 import { registerGameBoardRoutes, type GameBoardRoutesOptions } from './game-board-routes.js';
 import { registerGameReviewRoutes, type GameReviewRoutesOptions } from './game-review-routes.js';
 import { registerGameSourcesRoutes, type GameSourcesRoutesOptions } from './game-sources-routes.js';
+import { registerGameFollowRoutes, type GameFollowRoutesOptions } from './game-follow-routes.js';
+import { createFollowerFanout } from './game-follow-notify.js';
 import { registerAccountDeletionRoutes, type AccountDeletionRoutesOptions } from './account-deletion-routes.js';
 import { registerCreatorStudioRoutes } from './creator-studio.js';
 import { registerEditorRoutes } from './editor-drafts.js';
@@ -128,6 +130,8 @@ export interface BuildAppOptions {
   gameReviewRoutes?: Partial<Omit<GameReviewRoutesOptions, 'store'>>;
   /** Seams for the public read-only sources view. */
   gameSourcesRoutes?: Partial<Omit<GameSourcesRoutesOptions, 'store'>>;
+  /** Seams for per-game following. */
+  gameFollowRoutes?: Partial<Omit<GameFollowRoutesOptions, 'store'>>;
   /** Seams for delayed account erasure; defaults to OIDC-or-deny-all from env. */
   accountDeletionRoutes?: Partial<
     Omit<AccountDeletionRoutesOptions, 'store' | 'adminUids' | 'internalAuthVerifier'>
@@ -513,6 +517,15 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // end up pointed at different buckets. Publishing re-reads the gate verdict off the
     // manifest rather than trusting the job's derived state.
     gamesStore,
+    // Tell followers a game they follow moved. Reuses the submission routes' own
+    // notification deps, so email and the unsubscribe token behave identically here.
+    notifyFollowers: async (event) => {
+      await createFollowerFanout({
+        store,
+        emitDeps: submissionSeams.buildNotifyDeps(),
+        log: { error: (context, message) => app.log.error(context, message) },
+      })(event);
+    },
   });
 
   // Creator control panel (docs/improvement-loop-plan.md IL-2 creator surface). Own
@@ -604,6 +617,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // Public read-only sources for store-published creator games. Owner decision: code
   // is worth reading, and the creator checkout already hands over the same bytes.
   await registerGameSourcesRoutes(app, { store, gamesStore, ...options.gameSourcesRoutes });
+
+  // Following a game: a subscription rather than a bookmark. The count is public,
+  // the follower list is not, and the only message it sends is "new version".
+  await registerGameFollowRoutes(app, { store, ...options.gameFollowRoutes });
   registerAccountDeletionRoutes(app, {
     store,
     adminUids,

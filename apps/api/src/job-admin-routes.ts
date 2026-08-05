@@ -127,7 +127,17 @@ export function buildJobQueue(records: SubmissionRecord[], now: number): JobQueu
 
 export async function registerJobAdminRoutes(
   app: FastifyInstance,
-  options: { store?: Store; adminUids?: Set<string>; gamesStore?: GamesStore; now?: () => number },
+  options: {
+    store?: Store;
+    adminUids?: Set<string>;
+    gamesStore?: GamesStore;
+    now?: () => number;
+    /**
+     * Fans a new version out to the game's followers (game-follow-notify.ts). Optional:
+     * a deployment without it publishes exactly as before, silently.
+     */
+    notifyFollowers?: (event: { slug: string; version: string; gameTitle: string; ownerUid: string }) => Promise<void>;
+  },
 ): Promise<void> {
   const { store, adminUids, gamesStore } = options;
   const now = options.now ?? Date.now;
@@ -209,6 +219,23 @@ export async function registerJobAdminRoutes(
     // and a terminal job is one sweep away from falling out of that set. `lastNotifiedStatus`
     // is left alone so the next sweep can still emit the published notification.
     await store.setSubmissionLastStatus(issueNumber, 'published');
+
+    // Tell the people who follow this game that it moved. Best-effort and after the
+    // publish has already happened: a notification that fails must never leave a game
+    // half-published, and the creator's own `submission.published` note comes from the
+    // sweep on its own path. The owner is skipped — they would get two.
+    if (options.notifyFollowers) {
+      try {
+        await options.notifyFollowers({
+          slug: record.slug,
+          version: record.deliveredVersion,
+          gameTitle: record.title,
+          ownerUid: record.ownerUid,
+        });
+      } catch (error) {
+        request.log.error({ err: error, slug: record.slug }, 'follower notification fan-out failed after publish');
+      }
+    }
 
     return reply.send({ ok: true, slug: record.slug, version: record.deliveredVersion, publishedAt: at });
   });

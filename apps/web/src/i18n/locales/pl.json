@@ -63,6 +63,12 @@
         "title": "Ktoś dołączył do listy oczekujących",
         "body": "„{{title}}” chce dołączyć do zamkniętej bety."
       }
+    },
+    "game": {
+      "new_version": {
+        "title": "Nowa wersja gry, którą obserwujesz",
+        "body": "„{{title}}” ma nową wersję."
+      }
     }
   },
   "header": {
@@ -1182,7 +1188,6 @@
     "breadcrumbAria": "Położenie gry",
     "play": "Zagraj",
     "follow": "Obserwuj",
-    "followSoon": "Wkrótce — powiadomienia o nowych wydaniach",
     "remix": "Odbij",
     "remixHint": "Otwórz grę i użyj klucza, aby ją odbić",
     "tabsAria": "Sekcje strony gry",
@@ -1293,6 +1298,7 @@
       "fileLoading": "Wczytywanie…",
       "fileError": "Nie udało się wczytać tego pliku.",
       "tooLarge": "Ten plik jest za duży, aby go tu pokazać."
-    }
+    },
+    "following": "Obserwujesz"
   }
 }

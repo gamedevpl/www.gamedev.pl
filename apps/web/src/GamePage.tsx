@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from './AuthContext.js';
 import { AuthModal } from './AuthModal.js';
+import { fetchGameFollow, setGameFollow, type GameFollowState } from './gameFollowApi.js';
 import { GameBoard } from './GameBoard.js';
 import { GameReview } from './GameReview.js';
 import { GameSources } from './GameSources.js';
@@ -53,6 +54,8 @@ export function GamePage({
   const [page, setPage] = useState<GamePageData | null>(null);
   const [state, setState] = useState<LoadState>('loading');
   const [authOpen, setAuthOpen] = useState(false);
+  const [follow, setFollow] = useState<GameFollowState | null>(null);
+  const [followBusy, setFollowBusy] = useState(false);
   const activeTab: ActiveTab = tab ?? 'game';
   // The frame mounts on first visit to the Gra tab and then stays mounted (hidden
   // by CSS on other tabs) so switching tabs never restarts a running game.
@@ -86,6 +89,39 @@ export function GamePage({
   useEffect(() => {
     if (page) onGameLoaded?.(page.entry.title);
   }, [page, onGameLoaded]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchGameFollow(slug)
+      .then((state) => {
+        if (!cancelled) setFollow(state);
+      })
+      .catch(() => {
+        // A follow count nobody can read is not worth a visible error on a page that
+        // is otherwise fine — the button simply stays countless.
+        if (!cancelled) setFollow(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [slug, user]);
+
+  const toggleFollow = useCallback(async () => {
+    // Signed out: the button is an invitation to sign in rather than a dead control.
+    if (!user) {
+      setAuthOpen(true);
+      return;
+    }
+    setFollowBusy(true);
+    try {
+      const next = await setGameFollow(slug, !(follow?.following ?? false));
+      setFollow(next);
+    } catch {
+      // Leave the previous state showing; the next load reconciles.
+    } finally {
+      setFollowBusy(false);
+    }
+  }, [user, slug, follow]);
 
   // The canonical address carries the owning studio's handle. A page with no
   // creator handle has no address in this namespace — platform and repo games
@@ -153,12 +189,13 @@ export function GamePage({
           </button>
           <button
             type="button"
-            className="secondary-btn"
-            disabled
-            title={t('gamePage.followSoon')}
-            aria-label={`${t('gamePage.follow')} — ${t('gamePage.followSoon')}`}
+            className={`secondary-btn${follow?.following ? ' is-following' : ''}`}
+            onClick={() => void toggleFollow()}
+            disabled={followBusy}
+            aria-pressed={follow?.following ?? false}
           >
-            <PixelIcon name="eye" size={13} /> {t('gamePage.follow')}
+            <PixelIcon name="eye" size={13} /> {follow?.following ? t('gamePage.following') : t('gamePage.follow')}
+            {follow && follow.followers > 0 ? <span className="game-page-follow-count">{follow.followers}</span> : null}
           </button>
           <button
             type="button"

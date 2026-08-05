@@ -88,6 +88,8 @@ export interface ErasePlayerSignalsResult {
   uid: string;
   /** Games where a vote was found (and cleared, unless this was a dry run). */
   votesCleared: string[];
+  /** Games this account followed (and unfollowed, unless this was a dry run). */
+  followsCleared: string[];
   /** Feedback rows found (and deleted, unless this was a dry run). */
   feedbackDeleted: number;
   /** Games whose saved progress was found (and deleted, unless this was a dry run). */
@@ -156,13 +158,23 @@ export async function erasePlayerSignals(options: ErasePlayerSignalsOptions): Pr
 
   const slugs = await store.listGameSlugs();
   const votesCleared: string[] = [];
+  const followsCleared: string[] = [];
   for (const slug of slugs) {
     const vote = await store.getVote(slug, uid);
-    if (vote === null) continue;
-    votesCleared.push(slug);
-    // `clearVote` is transactional and fixes the parent game's tallies; deleting the
-    // vote document directly would strand the counts.
-    if (!dryRun) await store.clearVote(slug, uid);
+    if (vote !== null) {
+      votesCleared.push(slug);
+      // `clearVote` is transactional and fixes the parent game's tallies; deleting the
+      // vote document directly would strand the counts.
+      if (!dryRun) await store.clearVote(slug, uid);
+    }
+
+    // Follows are keyed by uid as the document id, exactly like votes, so they are
+    // findable only by walking the games — and they are personal data for the same
+    // reason a vote is: they say which games this person cares about.
+    if (await store.isFollowingGame(slug, uid)) {
+      followsCleared.push(slug);
+      if (!dryRun) await store.clearGameFollow(slug, uid);
+    }
   }
 
   // Listed before deleting even on a real run, so the report names the games rather
@@ -203,6 +215,7 @@ export async function erasePlayerSignals(options: ErasePlayerSignalsOptions): Pr
   return {
     uid,
     votesCleared,
+    followsCleared,
     feedbackDeleted,
     savesDeleted,
     editorDraftsDeleted,

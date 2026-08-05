@@ -13363,3 +13363,16 @@ a.user-name--profile:focus-visible {
 .tok-key {
   color: #c9a3e0;
 }
+
+.game-page-follow-count {
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--panel-card);
+  font-size: 0.75rem;
+}
+
+.game-page-actions .secondary-btn.is-following {
+  border-color: var(--turquoise);
+  color: var(--turquoise);
+}

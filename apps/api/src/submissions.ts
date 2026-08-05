@@ -462,6 +462,15 @@ export interface SubmissionRoutesHandle {
    */
   getRepoPublishedCatalogEntry: (slug: string) => Promise<CatalogGameEntry | null>;
   /**
+   * The notification fan-out dependencies (mailer, base URL, unsubscribe secret) as
+   * this module resolved them.
+   *
+   * Exposed so a second emitter — the follower fan-out on publish — reaches the same
+   * mailer and the same unsubscribe secret rather than re-deriving them from env. Two
+   * derivations is two places for "respect the unsubscribe" to drift apart.
+   */
+  buildNotifyDeps: () => EmitDeps;
+  /**
    * Starts a post-publish improvement round, choosing job dispatch or a legacy issue.
    *
    * Exported rather than reimplemented so the suggestion inbox and the creator's own
@@ -1160,7 +1169,10 @@ export async function registerSubmissionRoutes(
    * chose to type them in; translating those would hand them back a paraphrase of their
    * own request, which is the bug the `origin` field exists to prevent.
    */
-  async function relayedMessageLocalization(origin: 'agent' | 'creator' | undefined, text: string): Promise<IntakeText> {
+  async function relayedMessageLocalization(
+    origin: 'agent' | 'creator' | undefined,
+    text: string,
+  ): Promise<IntakeText> {
     // A creator's own words are stored exactly as typed, in whatever language they chose.
     // Normalizing those would rewrite someone's own request back at them.
     if (origin !== 'agent') return { text };
@@ -4597,5 +4609,6 @@ export async function registerSubmissionRoutes(
     getRepoPublishedCatalogEntry: (slug) =>
       githubClient ? getPublishedCatalogEntry(githubClient, slug) : Promise.resolve(null),
     startImprovementRound,
+    buildNotifyDeps,
   };
 }

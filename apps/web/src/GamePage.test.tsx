@@ -37,6 +37,13 @@ vi.mock('./AuthModal.js', () => ({
     isOpen ? createElement('div', { 'data-testid': 'auth-modal' }) : null,
 }));
 
+const fetchGameFollow = vi.fn();
+const setGameFollowApi = vi.fn();
+vi.mock('./gameFollowApi.js', () => ({
+  fetchGameFollow: (...args: unknown[]) => fetchGameFollow(...args),
+  setGameFollow: (...args: unknown[]) => setGameFollowApi(...args),
+}));
+
 import { GamePage } from './GamePage.js';
 
 function pageData(overrides: Partial<GamePageData> = {}): GamePageData {
@@ -86,7 +93,10 @@ beforeEach(async () => {
   privateBeta = false;
   fetchGamePage.mockReset();
   frameMounts.mockReset();
+  fetchGameFollow.mockReset();
+  setGameFollowApi.mockReset();
   fetchGamePage.mockResolvedValue(pageData());
+  fetchGameFollow.mockResolvedValue({ slug: 'neon-courier', followers: 12, following: false });
   container = document.createElement('div');
   document.body.appendChild(container);
 });
@@ -185,6 +195,48 @@ describe('GamePage', () => {
 
     expect(container.textContent).toContain('This game page does not exist.');
     expect(container.querySelector('a[href="/play/neon-courier"]')).not.toBeNull();
+  });
+
+  it('follows a game for a signed-in visitor and shows the count', async () => {
+    authUser = { uid: 'g:player' };
+    setGameFollowApi.mockResolvedValue({ slug: 'neon-courier', followers: 13, following: true });
+    await renderPage();
+
+    const button = Array.from(container.querySelectorAll('button')).find((candidate) =>
+      candidate.textContent?.includes('Follow'),
+    );
+    expect(button?.textContent).toContain('12');
+    expect(button?.getAttribute('aria-pressed')).toBe('false');
+
+    await act(async () => {
+      button!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(setGameFollowApi).toHaveBeenCalledWith('neon-courier', true);
+    const after = Array.from(container.querySelectorAll('button')).find((candidate) =>
+      candidate.textContent?.includes('Following'),
+    );
+    expect(after?.getAttribute('aria-pressed')).toBe('true');
+    expect(after?.textContent).toContain('13');
+  });
+
+  it('invites a signed-out visitor to sign in rather than failing the follow', async () => {
+    authUser = null;
+    fetchGameFollow.mockResolvedValue({ slug: 'neon-courier', followers: 4, following: null });
+    await renderPage();
+
+    const button = Array.from(container.querySelectorAll('button')).find((candidate) =>
+      candidate.textContent?.includes('Follow'),
+    );
+    await act(async () => {
+      button!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(setGameFollowApi).not.toHaveBeenCalled();
+    expect(container.querySelector('[data-testid="auth-modal"]')).not.toBeNull();
   });
 
   it('reports the loaded title upward for document.title', async () => {
