@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { BuilderChoice } from './BuilderChoice.js';
+import { BuilderModeBadge } from './BuilderModeBadge.js';
 import { defaultBuilderFor, isBuilderKind, saveLastBuilder, type BuilderKind } from './builderKind.js';
 import { GameTheater } from './GameTheater.js';
 import { PixelIcon, type PixelIconName } from './PixelIcon.js';
@@ -1427,6 +1427,22 @@ function FeedbackPanel({
       ? 'statusView.feedback.composerHintBuilding'
       : 'statusView.feedback.composerHint';
 
+  // Sticky builder signal: always when the next send can choose (Change gated on
+  // silence), and while a self round is mid-flight so routing stays visible without
+  // re-staging the create-wizard tiles. Platform mid-round stays chrome-free.
+  const effectiveBuilder = chooseBuilder ? builder : (roundBuilder ?? builder);
+  const showBuilderBadge = chooseBuilder || effectiveBuilder === 'self';
+  const builderBadge = showBuilderBadge ? (
+    <div className="builder-mode-row">
+      <BuilderModeBadge
+        value={effectiveBuilder}
+        onChange={handleBuilderChange}
+        canChange={chooseBuilder}
+        disabled={state === 'sending'}
+      />
+    </div>
+  ) : null;
+
   // Standalone status page still shows a brief receipt next to Send. The studio
   // composer does not: the message is echoed into the thread immediately, so a
   // second "Sent!" under the box is the same confirmation twice.
@@ -1460,9 +1476,7 @@ function FeedbackPanel({
         className={`status-feedback status-composer is-compact${sending ? ' is-sending' : ''}`}
         aria-busy={sending || undefined}
       >
-        {chooseBuilder ? (
-          <BuilderChoice value={builder} onChange={handleBuilderChange} disabled={sending} compact />
-        ) : null}
+        {builderBadge}
         {routeNoteKey && !sending && state !== 'sent' && !error && !notice ? (
           <p className="status-feedback-route">{t(routeNoteKey)}</p>
         ) : null}
@@ -1527,9 +1541,7 @@ function FeedbackPanel({
     <div className="status-feedback status-composer">
       <h3 className="status-feedback-title">{t(titleKey)}</h3>
       <p className="status-feedback-hint">{t(hintKey)}</p>
-      {chooseBuilder ? (
-        <BuilderChoice value={builder} onChange={handleBuilderChange} disabled={state === 'sending'} />
-      ) : null}
+      {builderBadge}
       {routeNoteKey && state !== 'sent' && !error && !notice ? (
         <p className="status-feedback-route">{t(routeNoteKey)}</p>
       ) : null}

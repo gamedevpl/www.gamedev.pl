@@ -685,8 +685,8 @@ describe('SubmissionStatusView', () => {
     });
 
     // Routed from the state the server reported, not from a mode the creator picked.
-    // Published starts a new round, so the builder choice travels with the request
-    // (default: platform — the Gamedev.pl coding agent).
+    // Published starts a new round, so the sticky builder travels with the request
+    // (default: platform — the Gamedev.pl coding agent). Choice tiles stay in Change.
     expect(mockedSubmitImprovement).toHaveBeenCalledWith(
       'live-token',
       'The second level is far too hard, please add a checkpoint.',
@@ -694,7 +694,8 @@ describe('SubmissionStatusView', () => {
       'platform',
     );
     expect(mockedSubmitFeedback).not.toHaveBeenCalled();
-    expect(container.querySelector('.builder-choice')).not.toBeNull();
+    expect(container.querySelector('.builder-mode-badge')?.textContent).toContain('Gamedev.pl agent');
+    expect(container.querySelector('.builder-choice')).toBeNull();
 
     await act(async () => {
       root.unmount();
@@ -868,9 +869,19 @@ describe('SubmissionStatusView', () => {
       expect(container.querySelector('.studio-connect.is-resume')).not.toBeNull();
       expect(container.textContent).toContain('Continue with your agent');
       expect(container.textContent).not.toContain('Connect your coding agent');
-      // Quiet escape hatch: pick Gamedev.pl and send — API kills the self token.
-      expect(container.querySelector('.builder-choice')).not.toBeNull();
-      expect(container.textContent).toMatch(/Who builds this round/i); // Full first-time install stays under a closed disclosure — continue, not a reset.
+      // Quiet escape hatch: Change opens the builder modal — API kills the self token
+      // when platform is chosen and a note is sent. Tiles are not permanent chrome.
+      expect(container.querySelector('.builder-mode-badge')?.textContent).toContain('Your agent (MCP)');
+      expect(container.querySelector('.builder-mode-badge-change')).not.toBeNull();
+      expect(container.querySelector('.builder-choice')).toBeNull();
+      await act(async () => {
+        container
+          .querySelector('.builder-mode-badge-change')!
+          .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await flushEffects();
+      });
+      expect(document.body.querySelector('.builder-choice-modal')?.textContent).toMatch(/Who builds this round/i);
+      // Full first-time install stays under a closed disclosure — continue, not a reset.
       const details = container.querySelector<HTMLDetailsElement>('[data-testid="connect-setup-details"]');
       expect(details).not.toBeNull();
       expect(details?.open).toBe(false);
@@ -910,7 +921,9 @@ describe('SubmissionStatusView', () => {
 
       expect(container.querySelector('.studio-connect')).toBeNull();
       expect(container.querySelector('.status-warning')?.textContent).toMatch(/finished this round/i);
-      expect(container.querySelector('.builder-choice')).not.toBeNull();
+      expect(container.querySelector('.builder-mode-badge')?.textContent).toContain('Your agent (MCP)');
+      expect(container.querySelector('.builder-mode-badge-change')).not.toBeNull();
+      expect(container.querySelector('.builder-choice')).toBeNull();
       // Handoff, not mid-build — do not spin "Writing code" beside the finished chip.
       expect(container.querySelector('.studio-thread-context.is-active')).toBeNull();
       expect(container.querySelector('.studio-context-phase-spinner')).toBeNull();
@@ -985,6 +998,7 @@ describe('SubmissionStatusView', () => {
     expect(container.textContent).toContain('Needs a tweak');
     // Active repair round — builder is locked server-side; do not offer a switch that 409s.
     expect(container.querySelector('.builder-choice')).toBeNull();
+    expect(container.querySelector('.builder-mode-badge-change')).toBeNull();
 
     await act(async () => {
       root.unmount();
@@ -2369,7 +2383,7 @@ describe('SubmissionStatusView stop & retry', () => {
     });
   });
 
-  it('published composer defaults its builder chooser to the status defaultBuilder, over stale local memory', async () => {
+  it('published composer defaults its builder badge to the status defaultBuilder, over stale local memory', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     // Memory is keyed by token in localStorage, and a new job has a new token — so the
     // remembered choice is gone at exactly this boundary. The status payload's
@@ -2388,7 +2402,12 @@ describe('SubmissionStatusView stop & retry', () => {
       await flushEffects();
     });
 
-    const selected = container.querySelector('.builder-choice-option[aria-checked="true"]');
+    expect(container.querySelector('.builder-mode-badge')?.textContent).toContain(i18n.t('builder.badge.self'));
+    await act(async () => {
+      container.querySelector('.builder-mode-badge-change')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushEffects();
+    });
+    const selected = document.body.querySelector('.builder-choice-option[aria-checked="true"]');
     expect(selected?.textContent).toContain(i18n.t('builder.self.title'));
 
     await act(async () => {

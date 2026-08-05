@@ -6170,7 +6170,94 @@ a.user-name--profile:focus-visible {
   }
 }
 
-/* Who builds this round — confirm screen and new-round composer. Two options, not a
+/* Sticky builder signal above the composer — continuity, not a peer fork. */
+.builder-mode-row {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0 0 6px;
+  min-width: 0;
+}
+
+.builder-mode-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  min-width: 0;
+  padding: 3px 4px 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--panel-border, #33383d);
+  background: color-mix(in srgb, var(--panel, #1a1d21) 88%, transparent);
+  font-size: 0.75rem;
+  line-height: 1.2;
+  color: var(--muted, #94a3b8);
+}
+
+.builder-mode-badge.is-self {
+  border-color: color-mix(in srgb, var(--turquoise, #00e4ac) 45%, var(--panel-border, #33383d));
+  color: color-mix(in srgb, var(--turquoise, #00e4ac) 70%, var(--muted, #94a3b8));
+}
+
+.builder-mode-badge-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.builder-mode-badge-change {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--turquoise, #00e4ac) 14%, transparent);
+  color: var(--turquoise, #00e4ac);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.builder-mode-badge-change:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--turquoise, #00e4ac) 24%, transparent);
+}
+
+.builder-mode-badge-change:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.builder-choice-modal {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  padding: 28px 24px 20px;
+  max-width: 480px;
+  width: 92%;
+  position: relative;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+  text-align: left;
+}
+
+.builder-choice-modal-title {
+  margin: 0 28px 8px 0;
+  font-size: 1.2rem;
+  color: var(--text-heading, #fff);
+}
+
+.builder-choice-modal-lede {
+  margin: 0 0 16px;
+  color: var(--muted, #94a3b8);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.builder-choice-modal-done {
+  width: 100%;
+  margin-top: 16px;
+}
+
+/* Who builds this round — create wizard and Change modal. Two options, not a
    settings dig; selection is a pressed state, matching the QA chip language. */
 .builder-choice {
   margin: 0;

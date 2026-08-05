@@ -19,8 +19,9 @@ type BuilderChoiceProps = {
 /**
  * Who builds this round — platform team or the creator's own coding agent.
  *
- * Shown on the creation confirm screen and again whenever a new round is about to
- * start. Selection is a pair of pressed options, not a settings dig.
+ * Full two-up choice for the create wizard and the Change modal. Round-boundary
+ * Studio chrome uses {@link BuilderModeBadge} instead — sticky continuity with
+ * progressive disclosure, not a permanent peer fork above the composer.
  */
 export function BuilderChoice({
   value,
