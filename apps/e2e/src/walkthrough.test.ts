@@ -87,6 +87,15 @@ describe.skipIf(!prereq.ok)('signed-in walkthrough', () => {
     for (const candidate of candidates) {
       // Preview page → Play → theater. The iframe is not on the shareable page.
       await openPlayTheater(page, candidate.slug, 6_000);
+      // The theater bar mounts before PublishedGameFrame attaches the iframe, so a
+      // bare frames() scan right after openPlayTheater can miss a healthy game.
+      const attached = await page
+        .locator('iframe')
+        .first()
+        .waitFor({ state: 'attached', timeout: 30_000 })
+        .then(() => true)
+        .catch(() => false);
+      if (!attached) continue;
       const found = page.frames().find((f) => f !== page.mainFrame());
       if (!found) continue;
       // Games run in a sandboxed iframe (allow-scripts, no allow-same-origin). The
