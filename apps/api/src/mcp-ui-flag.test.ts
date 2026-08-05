@@ -29,8 +29,19 @@ describe('the MCP Apps views flag', () => {
 
   it('is never pinned on in either path', () => {
     // A literal would survive every attempt to turn it off from the settings page,
-    // which is the only place anyone will think to look.
-    expect(workflow).not.toMatch(/MCP_UI=(true|"true")/);
-    expect(script).not.toMatch(/MCP_UI=(true|"true")/);
+    // which is the only place anyone will think to look. Both spellings the parser
+    // accepts count as a pin, not just "true".
+    //
+    // Comments are stripped first: a pin is code, and the env-header docs legitimately
+    // name the values that switch views on. Matching unanchored matters — in the
+    // workflow a pin would sit mid-string inside the ENV_VARS list, not at line end.
+    const code = (source: string) =>
+      source
+        .split('\n')
+        .filter((line) => !/^\s*#/.test(line))
+        .join('\n');
+    const pinned = /MCP_UI=("?)(true|1)\1/i;
+    expect(code(workflow)).not.toMatch(pinned);
+    expect(code(script)).not.toMatch(pinned);
   });
 });

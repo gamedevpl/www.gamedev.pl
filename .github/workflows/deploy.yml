@@ -196,8 +196,9 @@ jobs:
           # rather than hand-set for the same reason as everything above. Turning it on is
           # inert for every client that does not declare the extension — they get the same
           # initialize result and tools/list they got before views existed — so the blast
-          # radius is limited to hosts that opted in. Absent or not "true" is that
-          # pre-views state, which is how the endpoint has always run in production.
+          # radius is limited to hosts that opted in. Enabled by "true" or "1",
+          # case-insensitive (mcpUiEnabled, apps/api/src/mcp-ui.ts); absent or any other
+          # value is the pre-views state the endpoint has always run in production.
           MCP_UI_VAL="${{ vars.MCP_UI }}"
           if [ -n "$MCP_UI_VAL" ]; then
             ENV_VARS="${ENV_VARS}|MCP_UI=${MCP_UI_VAL}"

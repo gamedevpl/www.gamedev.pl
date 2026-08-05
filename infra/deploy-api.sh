@@ -27,9 +27,10 @@
 #                               store app exists. Empty = /api/auth/apple returns 503)
 #   WEB_ORIGIN=...             (CORS allowed origins)
 #   PRIVATE_BETA=true          (gate all data reads behind a session + allowlist)
-#   MCP_UI=...                 ("true" opens MCP Apps views on /api/mcp — SEP-1865.
-#                               Inert for any client that does not negotiate the
-#                               extension; anything else keeps the pre-views contract)
+#   MCP_UI=...                 ("true" or "1", case-insensitive, opens MCP Apps views on
+#                               /api/mcp — SEP-1865. Inert for any client that does not
+#                               negotiate the extension; any other value keeps the
+#                               pre-views contract)
 #   BETA_ALLOWED_UIDS=...      (comma-separated g:<sub> values)
 #   ADMIN_UIDS=...             (comma-separated g:<sub> values; operator telemetry view)
 #   BETA_ALLOWED_EMAILS=...    (comma-separated verified email addresses)
