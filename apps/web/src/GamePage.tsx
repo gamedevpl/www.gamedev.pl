@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from './AuthContext.js';
 import { AuthModal } from './AuthModal.js';
-import { catalogMediaUrl, type CatalogEntry } from './catalog.js';
+import { catalogMediaUrl, gamePageHandle, type CatalogEntry } from './catalog.js';
 import { fetchGamePage, type GamePage as GamePageData } from './gamePageApi.js';
 import { PixelIcon } from './PixelIcon.js';
 import { ShareGameButton } from './ShareGameButton.js';
@@ -121,7 +121,10 @@ export function GamePage({
   const screenshot =
     screenshots.find((candidate) => candidate.file === selectedScreenshotFile) ?? primaryScreenshot;
   const authorPath = creator ? creatorPath(creator.handle) : null;
-  const authorLabel = platformAuthored ? t('catalog.platformAuthor') : (creator?.profileName ?? handle);
+  const authorLabel = platformAuthored
+    ? t('catalog.platformAuthor')
+    : creator?.profileName?.trim() || creator?.handle || t('catalog.platformAuthor');
+  const shareHandle = creator?.handle ?? gamePageHandle(entry);
 
   const play = () => {
     if (playGated) {
@@ -161,7 +164,7 @@ export function GamePage({
         </nav>
         <h1>{entry.title}</h1>
         {description ? <p className="game-page-description">{description}</p> : null}
-        <div className="game-page-actions" aria-label={t('gamePage.actions')}>
+        <div className="game-page-actions" role="group" aria-label={t('gamePage.actions')}>
           <button type="button" className="primary-btn" onClick={play}>
             <PixelIcon name="play" size={13} /> {t('gamePage.play')}
           </button>
@@ -169,7 +172,7 @@ export function GamePage({
           <button type="button" className="secondary-btn game-page-remix" onClick={remix}>
             <PixelIcon name="wrench" size={13} /> {t('gamePage.remix')}
           </button>
-          <ShareGameButton slug={slug} title={entry.title} path={gamePath(handle, slug)} />
+          <ShareGameButton slug={slug} title={entry.title} path={gamePath(shareHandle, slug)} />
         </div>
       </header>
 

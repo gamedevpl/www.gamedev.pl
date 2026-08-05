@@ -85,6 +85,23 @@ describe('VoteWidget', () => {
     expect(document.body.textContent).toMatch(/sign in to like/i);
   });
 
+  it('refreshes the public count after the visitor signs in', async () => {
+    votesApi.fetchVotes
+      .mockResolvedValueOnce({ up: 4, down: 1, mine: null })
+      .mockResolvedValueOnce({ up: 5, down: 1, mine: 'up' });
+    await draw();
+    expect(container.textContent).toContain('4');
+
+    authState.user = { uid: 'g:me' };
+    await act(async () => {
+      root!.render(<VoteWidget slug="brick-storm" />);
+    });
+
+    expect(votesApi.fetchVotes).toHaveBeenCalledTimes(2);
+    expect(container.textContent).toContain('5');
+    expect(upButton().getAttribute('aria-pressed')).toBe('true');
+  });
+
   it('a signed-in click casts an up vote and reflects the response', async () => {
     authState.user = { uid: 'g:me' };
     votesApi.fetchVotes.mockResolvedValue({ up: 4, down: 1, mine: null });

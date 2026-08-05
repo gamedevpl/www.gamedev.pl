@@ -150,11 +150,11 @@ describe('GamePage', () => {
 
     const thumbnails = container.querySelectorAll<HTMLButtonElement>('.game-page-screenshot');
     await act(async () => {
-      thumbnails[1].click();
+      thumbnails[0].click();
     });
 
-    expect(container.querySelector('.game-page-preview img')?.getAttribute('src')).toContain('battle.png?w=1280');
-    expect(thumbnails[1].getAttribute('aria-pressed')).toBe('true');
+    expect(container.querySelector('.game-page-preview img')?.getAttribute('src')).toContain('opening.png?w=1280');
+    expect(thumbnails[0].getAttribute('aria-pressed')).toBe('true');
     expect(playAction).not.toHaveBeenCalled();
   });
 

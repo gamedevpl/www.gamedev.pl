@@ -832,9 +832,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // stay authed (they are under /api/creators/:handle/availability and need a session).
     if (/^\/api\/creators\/[^/]+\/?(\?|$)/.test(request.url)) return;
     // The public game page (game-page-routes.ts) — a landing page has to load for a
-    // visitor with no session. Only `/page` and its board pass: the playable
-    // document, media, votes and every other `/api/games/:slug/*` route stay walled
-    // during beta. The board's own owner-only column is gated in its handler, which
+    // visitor with no session. The page, its board, and declared preview media pass:
+    // the playable document, votes and every other `/api/games/:slug/*` route stay
+    // walled during beta. The board's own owner-only column is gated in its handler, which
     // reads `request.user` — present or absent, the wall does not decide it.
     // `sources` joins them: reading a published creator game's code needs no session,
     // by the same decision that made the tab public at all. `follow` too, for its
@@ -842,7 +842,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // renders through the wall with one number silently missing is a worse answer
     // than either fully public or fully walled. Following still needs a session:
     // the PUT checks `request.user` in its own handler.
-    if (/^\/api\/games\/[^/]+\/(page|board|sources|follow)(\/file)?(\?|$)/.test(request.url)) return;
+    if (/^\/api\/games\/[^/]+\/(page|board|sources|follow|media)(\/[^?]*)?(\?|$)/.test(request.url)) return;
     // Internal endpoints (the Cloud Scheduler notification sweep) authenticate via
     // an OIDC token in the handler, not a session — the wall would 401 them first.
     if (request.url.startsWith('/api/internal/')) return;

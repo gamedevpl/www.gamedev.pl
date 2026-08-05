@@ -38,7 +38,7 @@ export function VoteWidget({ slug }: { slug: string }) {
     return () => {
       cancelled = true;
     };
-  }, [slug]);
+  }, [slug, user?.uid]);
 
   if (!counts) return null;
 
