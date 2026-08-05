@@ -717,8 +717,12 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // during beta. The board's own owner-only column is gated in its handler, which
     // reads `request.user` — present or absent, the wall does not decide it.
     // `sources` joins them: reading a published creator game's code needs no session,
-    // by the same decision that made the tab public at all.
-    if (/^\/api\/games\/[^/]+\/(page|board|sources)(\/file)?(\?|$)/.test(request.url)) return;
+    // by the same decision that made the tab public at all. `follow` too, for its
+    // *count* — the page shows it beside the play numbers, and a landing page that
+    // renders through the wall with one number silently missing is a worse answer
+    // than either fully public or fully walled. Following still needs a session:
+    // the PUT checks `request.user` in its own handler.
+    if (/^\/api\/games\/[^/]+\/(page|board|sources|follow)(\/file)?(\?|$)/.test(request.url)) return;
     // Internal endpoints (the Cloud Scheduler notification sweep) authenticate via
     // an OIDC token in the handler, not a session — the wall would 401 them first.
     if (request.url.startsWith('/api/internal/')) return;

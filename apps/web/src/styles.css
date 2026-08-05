@@ -13176,8 +13176,12 @@ a.user-name--profile:focus-visible {
 .game-review-diff-toggle {
   padding: 0;
   font-size: 0.8rem;
+  font-weight: 400;
   color: var(--muted);
   text-decoration: underline;
+  /* Same UA-default guard as the sources file list — this is a text control. */
+  background: transparent;
+  border: 0;
 }
 
 .game-review-diff-toggle:hover {
@@ -13255,8 +13259,13 @@ a.user-name--profile:focus-visible {
   padding: 5px 8px;
   border-radius: 5px;
   font-size: 0.8rem;
+  font-weight: 400;
   text-align: left;
   color: var(--muted);
+  /* The global `button` rule sets no background, so a bare button falls back to the
+     UA's light `buttonface` — which on this dark theme reads as an inverted pill. */
+  background: transparent;
+  border: 1px solid transparent;
 }
 
 .game-sources-file:hover {
@@ -13268,6 +13277,7 @@ a.user-name--profile:focus-visible {
   background: var(--panel-card);
   color: var(--text);
   font-weight: 600;
+  border-color: var(--panel-border);
 }
 
 .game-sources-file-path {

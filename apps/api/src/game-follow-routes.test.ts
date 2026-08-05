@@ -75,6 +75,29 @@ describe('game follow routes', () => {
     expect(unfollow.json()).toEqual({ slug: 'neon-courier', followers: 0, following: false });
   });
 
+  it('shows the count through the private-beta wall, but still needs a session to follow', async () => {
+    const store = new InMemoryStore();
+    await publish(store);
+    await store.upsertUser({ uid: 'g:player' });
+    await store.setGameFollow('neon-courier', 'g:someone', '2026-08-01T00:00:00.000Z');
+    const app = await buildApp({ store, sessionSecret, betaAllowedUids: 'g:player' });
+    apps.push(app);
+
+    // The page is public during closed beta; a count missing from it would be a
+    // hole rather than a policy.
+    const anonymous = await app.inject({ method: 'GET', url: '/api/games/neon-courier/follow' });
+    expect(anonymous.statusCode).toBe(200);
+    expect(anonymous.json()).toEqual({ slug: 'neon-courier', followers: 1, following: null });
+
+    // Following is still a session action — the wall passing it does not grant it.
+    const write = await app.inject({
+      method: 'PUT',
+      url: '/api/games/neon-courier/follow',
+      payload: { following: true },
+    });
+    expect(write.statusCode).toBe(401);
+  });
+
   it('refuses to follow an unpublished game, and refuses anonymously', async () => {
     const store = new InMemoryStore();
     await store.upsertUser({ uid: 'g:player' });
