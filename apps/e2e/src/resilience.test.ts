@@ -68,9 +68,17 @@ describe.skipIf(!prereq.ok)('error and edge routes', () => {
     const text = await bodyText();
     expect(text.length).toBeGreaterThan(0);
     // Preview-first `/play/<slug>`: an unknown slug is a missing game page, not a
-    // failed theater fetch. Keep the older "could not load / retry" wording too so
-    // a loadError state (catalog fetch failure) still passes this gate.
-    expect(text).toMatch(/does not exist|nie istnieje|could not load|nie udało|retry|ponów/i);
+    // failed theater fetch, so it renders `draft.notFound` ("isn't available yet…").
+    // The older "could not load / retry" wording stays accepted so a loadError state
+    // (catalog fetch failure) still passes this gate.
+    //
+    // What is being asserted is the *category* — the visitor gets an explanation rather
+    // than a blank or a crash. Pinning exact sentences is why this test went red on a
+    // copy change (#602) and blocked every deploy behind it, so match on the stable
+    // fragments of both locales rather than whole strings.
+    expect(text).toMatch(
+      /does not exist|nie istnieje|could not load|nie udało|retry|ponów|isn't available yet|nie jest jeszcze dostępna/i,
+    );
 
     expect(describeProblems(watcher.drain())).toBe('');
   });
