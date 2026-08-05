@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type MouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from './AuthContext.js';
 import { catalogMediaUrl, isPlatformAuthor, normalizeCatalogEntry, type CatalogEntry } from './catalog.js';
@@ -75,7 +75,11 @@ export function CreatorProfilePage({
 
   /** In-app navigation for links that must still be real, copyable hrefs. */
   const interceptTo = useCallback(
-    (path: string) => (event: { preventDefault: () => void }) => {
+    (path: string) => (event: MouseEvent<HTMLAnchorElement>) => {
+      // Keep native link behavior for new-tab/window gestures and non-primary
+      // buttons. SPA navigation is only the plain left-click path.
+      if (event.defaultPrevented || event.button !== 0) return;
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
       event.preventDefault();
       onNavigate?.(path);
     },

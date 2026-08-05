@@ -193,6 +193,46 @@ describe('CreatorProfilePage owner edit', () => {
     expect(onPlay).toHaveBeenCalledWith(expect.objectContaining({ slug: 'sky-dodge' }));
   });
 
+  it('preserves native modified-click behavior on game-page links', async () => {
+    fetchCreatorPage.mockResolvedValue(creatorPageWithGame());
+
+    const onNavigate = vi.fn();
+    await renderPage({ onNavigate });
+
+    const links = Array.from(container.querySelectorAll<HTMLAnchorElement>('a[href="/ada/sky-dodge"]'));
+    expect(links).toHaveLength(2);
+
+    const nativeDefaults: boolean[] = [];
+    const preventJsdomNavigation = (event: Event) => {
+      nativeDefaults.push(event.defaultPrevented);
+      event.preventDefault();
+    };
+    document.addEventListener('click', preventJsdomNavigation);
+    try {
+      for (const link of links) {
+        link.dispatchEvent(
+          new MouseEvent('click', {
+            bubbles: true,
+            cancelable: true,
+            metaKey: true,
+          }),
+        );
+        link.dispatchEvent(
+          new MouseEvent('click', {
+            bubbles: true,
+            button: 1,
+            cancelable: true,
+          }),
+        );
+      }
+    } finally {
+      document.removeEventListener('click', preventJsdomNavigation);
+    }
+
+    expect(nativeDefaults).toEqual([false, false, false, false]);
+    expect(onNavigate).not.toHaveBeenCalled();
+  });
+
   it('keeps per-game Studio links private to the owner', async () => {
     authUser = { uid: 'g:other', handle: 'bob' };
     fetchCreatorPage.mockResolvedValue(creatorPageWithGame());
