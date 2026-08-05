@@ -531,7 +531,7 @@ export function SubmissionStatusView({
   }, [status]);
 
   // No share link here any more. It used to be shown unconditionally and pointed at
-  // `/draft/<slug>`, which was readable by any signed-in visitor who knew the slug.
+  // `/play/<slug>`, which was readable by any signed-in visitor who knew the slug.
   // Sharing an unpublished game is now the creator's decision, made on one switch in
   // Creator Studio; advertising a link that 404s until that switch is on would be worse
   // than not offering one. A published game shares from the theater, as it always has.

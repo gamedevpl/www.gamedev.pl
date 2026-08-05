@@ -787,8 +787,9 @@ describe('remix across the two catalog eras', () => {
       payload: { params: { dogScale: 2.5, tagline: 'go!' } },
     });
     expect(saved.statusCode).toBe(200);
-    const body = saved.json() as { slug: string; studioPath: string };
+    const body = saved.json() as { slug: string; openPath: string };
     expect(body.slug).not.toBe('catalog-dash');
+    expect(body.openPath).toBe(`/play/${body.slug}`);
     expect(puts).toHaveLength(1);
     expect(puts[0].files.some((file) => file.path === 'SPEC.md')).toBe(true);
     expect(puts[0].files.some((file) => file.path === 'index.html')).toBe(true);
@@ -948,12 +949,10 @@ describe('remix save as yours', () => {
       token: string;
       version: string;
       openPath: string;
-      studioPath: string;
     };
     expect(body.slug).not.toBe('dog-dash');
     expect(body.slug).toMatch(/^remix-of-/);
     expect(body.openPath).toBe(`/play/${body.slug}`);
-    expect(body.studioPath).toBe(`/play/${body.slug}`);
     expect(body.token).toBeTruthy();
     expect(puts).toHaveLength(1);
     expect(puts[0].slug).toBe(body.slug);

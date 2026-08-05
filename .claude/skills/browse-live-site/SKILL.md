@@ -156,9 +156,9 @@ roughly in order of how often they turn up real issues:
 - **Error paths** — an unknown path (→ `notFound` view, real 404), an unknown game slug at
   `/play/<garbage>` (→ in-page "This game page does not exist." on the preview page, not a
   crash or a blank theater),
-  `/draft/<slug>` for something already published, a bogus `/status/<token>`, a bogus
-  `/join/<CODE>#<token>`. These should all render a friendly state, never a blank page or an
-  unhandled console exception.
+  a legacy `/draft/<slug>` (must rewrite to `/play/<slug>`), a bogus `/status/<token>`, a
+  bogus `/join/<CODE>#<token>`. These should all render a friendly state, never a blank page
+  or an unhandled console exception.
 - **`/health`** — renders "Not found" for a non-admin identity (including a token-authed
   bot); that's correct per `docs/agent-access-tokens.md`, not a bug.
 - **Signed-out pass** — a _second_, cookie-less browser context (`browser.newContext()`
@@ -182,7 +182,7 @@ Not every console error or 404 is a bug:
   console line is their _only_ report.
 - A 404 on `/api/admin/telemetry/*` from a non-admin bot identity, or on `/health` itself, is
   the intended behavior (unlisted admin route, 404s to everyone else).
-- A 404 on `/api/submissions/<garbage-token>` or `/api/drafts/<slug>` when you deliberately
+- A 404 on `/api/submissions/<garbage-token>` or `/api/games/<slug>` when you deliberately
   navigated to a bogus token/slug is the expected miss path, not a defect — check that the
   _page_ still rendered a friendly empty/error state, which is the actual thing worth verifying.
 

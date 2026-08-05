@@ -3,15 +3,15 @@ import { useTranslation } from 'react-i18next';
 import { fetchPublishedGame } from './catalog.js';
 import { GameTheater } from './GameTheater.js';
 
-type DraftViewProps = {
+type UnpublishedPlayViewProps = {
   slug: string;
   onExit: () => void;
   /**
-   * Reports the draft's real name (or null while loading / on error) so App can
+   * Reports the game's real name (or null while loading / on error) so App can
    * own `document.title` as the single writer — avoids stale titles when the
    * slug changes or the language switches mid-view.
    */
-  onDraftTitle?: (title: string | null) => void;
+  onTitle?: (title: string | null) => void;
 };
 
 /**
@@ -24,27 +24,27 @@ type DraftViewProps = {
  *
  * Legacy `/draft/<slug>` links rewrite to `/play/<slug>` in the router.
  */
-export function DraftView({ slug, onExit, onDraftTitle }: DraftViewProps) {
+export function UnpublishedPlayView({ slug, onExit, onTitle }: UnpublishedPlayViewProps) {
   const { t } = useTranslation();
-  const [draft, setDraft] = useState<{ title: string; html: string } | null>(null);
+  const [game, setGame] = useState<{ title: string; html: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    onDraftTitle?.(draft?.title ?? null);
-  }, [draft?.title, onDraftTitle]);
+    onTitle?.(game?.title ?? null);
+  }, [game?.title, onTitle]);
 
   useEffect(() => {
-    return () => onDraftTitle?.(null);
-  }, [onDraftTitle]);
+    return () => onTitle?.(null);
+  }, [onTitle]);
 
   useEffect(() => {
     let cancelled = false;
-    setDraft(null);
+    setGame(null);
     setError(null);
 
     fetchPublishedGame(slug)
       .then((result) => {
-        if (!cancelled) setDraft({ title: result.title, html: result.html });
+        if (!cancelled) setGame({ title: result.title, html: result.html });
       })
       .catch(() => {
         if (!cancelled) setError(t('draft.notFound'));
@@ -58,10 +58,10 @@ export function DraftView({ slug, onExit, onDraftTitle }: DraftViewProps) {
   // Same scroll lock the other players use: the theater is a fixed overlay, so the
   // page behind it must not scroll (or show through) while a game is open.
   useEffect(() => {
-    if (!draft) return;
+    if (!game) return;
     document.body.classList.add('player-open');
     return () => document.body.classList.remove('player-open');
-  }, [draft]);
+  }, [game]);
 
   if (error) {
     return (
@@ -84,7 +84,7 @@ export function DraftView({ slug, onExit, onDraftTitle }: DraftViewProps) {
     );
   }
 
-  if (!draft) {
+  if (!game) {
     return (
       <section className="panel status-panel">
         <p className="catalog-state">
@@ -96,9 +96,9 @@ export function DraftView({ slug, onExit, onDraftTitle }: DraftViewProps) {
 
   return (
     <GameTheater
-      title={draft.title}
+      title={game.title}
       badge={{ icon: 'wrench', label: t('statusView.draftBadge') }}
-      source={{ html: draft.html }}
+      source={{ html: game.html }}
       onExit={onExit}
     />
   );

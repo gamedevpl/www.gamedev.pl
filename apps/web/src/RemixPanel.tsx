@@ -884,7 +884,7 @@ export function RemixPanel(props: {
       });
       recordRemixStep('keep_clicked');
       // `/play/<slug>` — same permalink before and after publish. Studio is for later edits.
-      const path = result.openPath || result.studioPath || playPath(result.slug);
+      const path = result.openPath || playPath(result.slug);
       window.history.pushState(null, '', path);
       window.dispatchEvent(new PopStateEvent('popstate'));
       window.dispatchEvent(new CustomEvent(NAVIGATE_EVENT, { detail: { path } }));

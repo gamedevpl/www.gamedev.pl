@@ -3,7 +3,6 @@ import {
   canonicalPath,
   canonicalPlayPath,
   creatorPath,
-  draftPath,
   gamePath,
   joinPath,
   legalAnchor,
@@ -229,11 +228,6 @@ describe('path builders', () => {
     expect(canonicalPath('/ada')).toBeNull();
     expect(canonicalPath('/')).toBeNull();
     expect(canonicalPath('/NotAHandle')).toBeNull();
-  });
-
-  it('builds draftPath as an alias of playPath', () => {
-    expect(draftPath('space-runner')).toBe('/play/space-runner');
-    expect(parsePathRoute(draftPath('space-runner'))).toEqual({ view: 'play', slug: 'space-runner' });
   });
 
   it('builds a root creator path that round-trips', () => {

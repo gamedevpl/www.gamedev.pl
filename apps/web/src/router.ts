@@ -447,14 +447,6 @@ export function canonicalPlayPath(pathname: string): string | null {
 }
 
 /**
- * @deprecated Prefer {@link playPath}. Unpublished drafts share the `/play/<slug>`
- * permalink with published games; `/draft/` only remains as an inbound alias.
- */
-export function draftPath(slug: string): string {
-  return playPath(slug);
-}
-
-/**
  * Creator control panel. Optional `game` (a slug, or a legacy capability token)
  * deep-links into one game on the shelf; optional tab deep-links into a work surface
  * on that game.
@@ -484,7 +476,7 @@ export function navUpTarget(route: AppRoute): NavUpTarget | null {
     case 'join':
       return null;
     // `/play/:slug` is preview-first for catalog games; unpublished drafts open a
-    // theater (DraftView) that owns Close — Up stays for the static preview page.
+    // theater that owns Close — Up stays for the static preview page.
     case 'play':
       return { path: '/', labelKey: 'upHome' };
     case 'studio':

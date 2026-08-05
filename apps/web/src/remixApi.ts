@@ -68,8 +68,6 @@ export type RemixSave = {
   version: string;
   /** Where to open the kept remix — `/play/<slug>`, not Studio. */
   openPath: string;
-  /** @deprecated Same as {@link openPath}; older APIs only sent this. */
-  studioPath?: string;
 };
 
 export type RemixApiError = Error & { status?: number; reason?: string; category?: string };

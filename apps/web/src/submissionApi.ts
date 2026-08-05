@@ -353,20 +353,6 @@ export async function getSubmissionPreview(token: string): Promise<SubmissionPre
 }
 
 /**
- * @deprecated Prefer `GET /api/games/:slug` (`fetchPublishedGame`) — the lifetime
- * permalink for drafts and published games. This hits legacy `/api/drafts/:slug`.
- */
-export async function getDraftBySlug(slug: string): Promise<SubmissionPreview> {
-  const response = await fetch(`${API_BASE}/api/drafts/${encodeURIComponent(slug)}`, { credentials: 'include' });
-
-  if (!response.ok) {
-    await throwResponseError(response);
-  }
-
-  return (await response.json()) as SubmissionPreview;
-}
-
-/**
  * Stops a build for good: the API closes the issue and the agent's open PR. The
  * daily quota is not refunded — the agent time was already spent.
  */

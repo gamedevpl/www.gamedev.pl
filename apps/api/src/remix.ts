@@ -1149,8 +1149,6 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
         token: saved.token,
         version: saved.version,
         openPath: `/play/${saved.slug}`,
-        // Kept until clients that only read studioPath are gone.
-        studioPath: `/play/${saved.slug}`,
       });
     },
   );

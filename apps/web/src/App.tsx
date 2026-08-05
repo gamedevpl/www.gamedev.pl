@@ -7,7 +7,7 @@ import { NavHeader } from './NavHeader.js';
 import { HeroPromptSection } from './HeroPromptSection.js';
 import { ArcadeCatalog } from './ArcadeCatalog.js';
 import { CreatorStudioView } from './CreatorStudioView.js';
-import { DraftView } from './DraftView.js';
+import { UnpublishedPlayView } from './UnpublishedPlayView.js';
 import { AdminConsole } from './AdminConsole.js';
 import { PixelIcon } from './PixelIcon.js';
 import { CreatorQA, type QAQuestion } from './CreatorQA.js';
@@ -142,9 +142,8 @@ export function App() {
 
   // Multiplayer lobby state
   const [partyError, setPartyError] = useState<string | null>(null);
-  // Draft's real name, reported by DraftView once the preview loads. Cleared on
-  // unmount / slug change so the generic draft label returns while the next one loads.
-  const [draftTitle, setDraftTitle] = useState<string | null>(null);
+  // Unpublished `/play/<slug>` title, reported once the document loads.
+  const [unpublishedPlayTitle, setUnpublishedPlayTitle] = useState<string | null>(null);
   /** Display name for `/:handle` once the public profile loads. */
   const [creatorName, setCreatorName] = useState<string | null>(null);
   const [gameTitle, setGameTitle] = useState<string | null>(null);
@@ -156,7 +155,7 @@ export function App() {
     const playTitle =
       route.view === 'play'
         ? (catalogEntries.find((game) => game.slug === route.slug)?.title ??
-          draftTitle ??
+          unpublishedPlayTitle ??
           (stageContent?.type === 'catalog' && stageContent.game.slug === route.slug ? stageContent.game.title : null))
         : null;
     // Matched on either address the URL can carry: a slug now, a capability token on
@@ -190,7 +189,7 @@ export function App() {
       // carries its own title via playTitle, and leaving home must restore the home title.
       stageTitle: route.view === 'home' ? stageTitle : null,
     });
-  }, [route, stageContent, catalogEntries, savedSpecs, draftTitle, creatorName, gameTitle, t]);
+  }, [route, stageContent, catalogEntries, savedSpecs, unpublishedPlayTitle, creatorName, gameTitle, t]);
 
   useDocumentTitle(documentTitle);
 
@@ -721,8 +720,8 @@ export function App() {
     navigate('/');
   }, [navigate]);
 
-  // Unpublished `/play/<slug>` uses DraftView's own theater (not `stageContent`), so
-  // hide Up the same way — Close / the error home link own escape there.
+  // Unpublished `/play/<slug>` uses UnpublishedPlayView's own theater (not `stageContent`),
+  // so hide Up the same way — Close / the error home link own escape there.
   const playCatalogGame =
     route.view === 'play' ? (catalogEntries.find((game) => game.slug === route.slug) ?? null) : null;
   const unpublishedPlayTheater = route.view === 'play' && catalogStatus !== 'loading' && !playCatalogGame;
@@ -984,7 +983,7 @@ export function App() {
               ) : (
                 // Same `/play/<slug>` permalink before publish — API serves the draft to
                 // the owner (or anyone once sharing is on). Legacy `/draft/` rewrites here.
-                <DraftView slug={route.slug} onExit={exitOverlay} onDraftTitle={setDraftTitle} />
+                <UnpublishedPlayView slug={route.slug} onExit={exitOverlay} onTitle={setUnpublishedPlayTitle} />
               )
             ) : (
               <>
