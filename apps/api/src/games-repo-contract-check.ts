@@ -38,11 +38,14 @@ import {
   DELIVERY_RESERVED_SEGMENTS,
   extractDeliveryContract,
   extractGameKitModules,
+  extractGameKitVerticals,
   extractMaxBundleBytes,
   extractMusicContractSignals,
   GAME_KIT_MODULES,
+  GAME_KIT_VERTICAL_ENTRIES,
   MAX_PROJECT_BYTES,
   type DeliveryContract,
+  type GameKitModuleName,
 } from './games-repo-contract.js';
 import { isRateLimitResponse } from './github-rate-limit.js';
 
@@ -324,6 +327,50 @@ export async function runGamesRepoContractCheck(options: ContractCheckOptions): 
     log(`  ✓ GAME_KIT_MODULES (${remoteModules.length} modules)`);
   }
 
+  // Names agreeing is not the same as resolving to the same file. A module promoted to a
+  // vertical keeps its name in GAME_KIT_MODULES, so the check above stays green while this
+  // side still reads `shared/modules/<name>.ts` and finds nothing — which surfaces as
+  // "game sources not found on ref" in the nightly bake, one game short of a snapshot.
+  //
+  // An assemble source with no verticals literal at all is a shape this side does not
+  // recognize rather than evidence of drift — same tolerance the delivery half gets — so
+  // it becomes a note on an otherwise green run instead of a failure.
+  let remoteVerticals: Record<string, string>;
+  let verticalNote: string | null = null;
+  try {
+    remoteVerticals = extractGameKitVerticals(assembleSource);
+  } catch (error: unknown) {
+    remoteVerticals = {};
+    verticalNote = `GAME_KIT_VERTICALS not compared: ${error instanceof Error ? error.message : String(error)}`;
+  }
+  const verticalDrift: string[] = [];
+  for (const [name, remotePath] of Object.entries(remoteVerticals)) {
+    // Only modules this side recognizes matter: a vertical for a games-repo-only module
+    // is the website-behind case the module check already rules on.
+    if (!(GAME_KIT_MODULES as readonly string[]).includes(name)) continue;
+    const localPath = GAME_KIT_VERTICAL_ENTRIES[name as GameKitModuleName];
+    if (localPath === undefined) {
+      verticalDrift.push(`${name}: games-repo=${remotePath} website=(resolved as shared/modules/${name}.ts)`);
+    } else if (localPath !== remotePath) {
+      verticalDrift.push(`${name}: games-repo=${remotePath} website=${localPath}`);
+    }
+  }
+  if (verticalDrift.length > 0) {
+    return {
+      kind: 'drift',
+      reason:
+        `GAME_KIT_VERTICALS mismatch.\n${verticalDrift.map((entry) => `  ${entry}`).join('\n')}\n` +
+        `  Every games-repo vertical must resolve to the same entry path in ` +
+        `GAME_KIT_VERTICAL_ENTRIES in apps/api/src/games-repo-contract.ts, or the bake cannot ` +
+        `find the module's source and every game selecting it fails to publish.`,
+    };
+  }
+  if (verticalNote) {
+    log(`  – GAME_KIT_VERTICALS (not compared)`);
+  } else {
+    log(`  ✓ GAME_KIT_VERTICALS (${Object.keys(remoteVerticals).length} verticals)`);
+  }
+
   const remoteBudget = extractMaxBundleBytes(validateSource);
   if (remoteBudget > MAX_PROJECT_BYTES) {
     const assignLine =
@@ -366,6 +413,9 @@ export async function runGamesRepoContractCheck(options: ContractCheckOptions): 
   log('  ✓ music contract (__GAME_AUDIO_MUSIC__ + tracks + readMusicCatalog)');
 
   const notes: string[] = [];
+  if (verticalNote) {
+    notes.push(verticalNote);
+  }
   if (deliverySource === null) {
     notes.push(
       `${DELIVERY_CONTRACT_PATH} is absent from ${repo}@${ref} (404) — the delivery half was NOT ` +

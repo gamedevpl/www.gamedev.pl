@@ -6,6 +6,8 @@
  * `tools/lib/assemble.ts`, `tools/validate.ts` and `shared/delivery-contract.json`
  * still match `games-repo-contract.ts` on this side:
  *   - GAME_KIT_MODULES order
+ *   - GAME_KIT_VERTICALS entry paths (a module promoted to a vertical keeps its name,
+ *     so the order check alone cannot see the source move)
  *   - MAX_BUNDLE_BYTES === MAX_PROJECT_BYTES
  *   - music injection contract (tracks + __GAME_AUDIO_MUSIC__ + readMusicCatalog)
  *   - delivery contract (fixed files and their order, extra-module pattern, caps)

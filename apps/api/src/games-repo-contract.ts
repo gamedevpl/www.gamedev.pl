@@ -151,6 +151,38 @@ export const MUSIC_CONTRACT = {
   windowTracksName: '__GAME_MUSIC_TRACKS__',
 } as const;
 
+/**
+ * Modules whose source is not `shared/modules/<name>.ts` but a genre vertical with a
+ * private multi-file graph behind an index — games-repo assemble `GAME_KIT_VERTICALS`.
+ *
+ * Kept here rather than next to the bundler because it is a cross-repo value, and the
+ * lockstep check compares it: a module can be listed in {@link GAME_KIT_MODULES} on both
+ * sides — names agreeing, check green — while this side still looks for it under
+ * `shared/modules/`. That is not a 502 on one route, it is a bake failure, and a bake
+ * that fails on one game leaves the pointer on the previous snapshot and publishes
+ * nothing. `vehicles` became a vertical in games-repo #527 and this map did not follow;
+ * the nightly bake had to be the thing that noticed.
+ */
+export const GAME_KIT_VERTICAL_ENTRIES: Partial<Record<GameKitModuleName, string>> = {
+  vehicles: 'shared/verticals/vehicles/index.ts',
+  urban: 'shared/verticals/urban/index.ts',
+  racing: 'shared/verticals/racing/index.ts',
+  football: 'shared/verticals/football/index.ts',
+};
+
+/** Pull the `GAME_KIT_VERTICALS = { ... }` object literal out of games-repo assemble source. */
+export function extractGameKitVerticals(assembleSource: string): Record<string, string> {
+  const match = assembleSource.match(/GAME_KIT_VERTICALS\s*=\s*(?:Object\.freeze\()?\{([\s\S]*?)\}/);
+  if (!match) {
+    throw new Error('games-repo assemble source has no GAME_KIT_VERTICALS object');
+  }
+  const entries = [...match[1].matchAll(/['"]?([a-z0-9-]+)['"]?\s*:\s*['"]([^'"]+)['"]/g)];
+  if (entries.length === 0) {
+    throw new Error('games-repo GAME_KIT_VERTICALS object is empty');
+  }
+  return Object.fromEntries(entries.map((entry) => [entry[1], entry[2]]));
+}
+
 /** Pull the `GAME_KIT_MODULES = [ ... ]` array literal out of games-repo assemble source. */
 export function extractGameKitModules(assembleSource: string): string[] {
   const match = assembleSource.match(/GAME_KIT_MODULES\s*=\s*\[([\s\S]*?)\]/);
