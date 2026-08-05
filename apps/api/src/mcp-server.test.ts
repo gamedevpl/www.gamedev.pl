@@ -2007,7 +2007,6 @@ describe('MCP Apps views (SEP-1865, Phase 0)', () => {
     // The tools that open the round view, and nothing else.
     expect(tools.filter((tool) => tool._meta?.ui?.resourceUri !== undefined).map((tool) => tool.name)).toEqual([
       'start',
-      'submit_sources',
       'get_gate_verdict',
     ]);
   });
@@ -2083,6 +2082,40 @@ describe('MCP Apps views (SEP-1865, Phase 0)', () => {
     expect(after?.agentEndedAt).toBe(before?.agentEndedAt);
   });
 
+  it('still reports the verdict that closed the round, when read as a terminal receipt', async () => {
+    process.env.MCP_UI = 'true';
+    const store = new InMemoryStore();
+    await seedJob(store);
+    const { gamesStore } = stubGamesStore({ green: true, ranAt: '2026-08-01T12:00:00.000Z' });
+    app = await createApp(store, gamesStore);
+    const { sessionId } = await initializeWith(app, true);
+
+    const started = await callTool(app, 'start', { key: roundKey(1) }, { 'mcp-session-id': sessionId });
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    // A green publish closes the round — which also resets roundDeliveryCount to 0, so
+    // the "no deliveries, no verdict" rule would wrongly hide the verdict that just
+    // closed it and send the card back to polling a finished round.
+    await store.setSubmissionDeliveredVersion(ISSUE, 'v1');
+    await store.recordJobTransition(ISSUE, {
+      to: 'submitted',
+      at: '2026-08-01T11:00:00.000Z',
+      by: 'agent',
+      reason: 'sources_delivered',
+    });
+    await store.recordJobTransition(ISSUE, {
+      to: 'ready_for_review',
+      at: '2026-08-01T12:00:00.000Z',
+      by: 'gate',
+      reason: 'gate_green',
+    });
+    expect((await store.getSubmission(ISSUE))?.roundDeliveryCount ?? 0).toBe(0);
+
+    const status = await callTool(app, 'get_round_status', { sessionKey }, { 'mcp-session-id': sessionId });
+    expect(status.isError).toBe(false);
+    expect((status.structured as { gate: { status?: string } | null }).gate).toMatchObject({ status: 'green' });
+  });
+
   it('reports round state, and sends screenshot bytes only when the frame is new', async () => {
     process.env.MCP_UI = 'true';
     const store = new InMemoryStore();
@@ -2110,6 +2143,9 @@ describe('MCP Apps views (SEP-1865, Phase 0)', () => {
       retryAfterSeconds: number;
     };
     expect(status.phase).toBeTruthy();
+    // Nothing delivered this round, so there is no verdict for it. The channel would
+    // happily answer with the previous round's, which read as "this round was refused".
+    expect((first.structured as { gate: unknown }).gate).toBeNull();
     expect(status.note?.text).toContain('wiring the HUD');
     expect(status.shot?.png).toBe(TINY_PNG);
     expect(status.retryAfterSeconds).toBeGreaterThan(0);

@@ -181,9 +181,12 @@ describe('ui resources', () => {
     // submitting is exactly the moment a creator wants it open.
     expect(MCP_UI_TOOL_RESOURCES).toEqual({
       start: ROUND_STATUS_RESOURCE_URI,
-      submit_sources: ROUND_STATUS_RESOURCE_URI,
       get_gate_verdict: ROUND_STATUS_RESOURCE_URI,
     });
+    // The host renders one card per tool call carrying _meta.ui, so a turn that started
+    // a round and then delivered produced two identical cards. The card is live: the one
+    // from start already follows the delivery.
+    expect(MCP_UI_TOOL_RESOURCES).not.toHaveProperty('submit_sources');
     // open_round mints no session key and takes none, so a card opened there would have
     // nothing to read status with.
     expect(MCP_UI_TOOL_RESOURCES).not.toHaveProperty('open_round');
@@ -213,6 +216,31 @@ describe('ui resources', () => {
     // makes exactly one call and never recovers.
     const html = readUiResource(ROUND_STATUS_RESOURCE_URI)?.text ?? '';
     expect(html).toMatch(/if \(speculative\) \{[\s\S]{0,400}?if \(sessionKey\) \{[\s\S]{0,80}?poll\(\);/);
+  });
+
+  it('offers the creator the next move, in the exact ui/message shape the spec defines', () => {
+    const html = readUiResource(ROUND_STATUS_RESOURCE_URI)?.text ?? '';
+    expect(html).toContain("method: 'ui/message'");
+    // SEP-1865: params are { role, content: { type, text } } — a guessed shape would
+    // produce a button that silently does nothing.
+    expect(html).toContain("params: { role: 'user', content: { type: 'text', text: action.text } }");
+    // One action per gate outcome a creator can actually respond to.
+    for (const status of ['kit_outdated', 'red', 'preview_failed', 'preview_passed']) {
+      expect(html).toContain(`${status}: {`);
+    }
+    // Only once the agent has stopped: while it is still working it acts on a red gate
+    // itself, and a second instruction would talk over it.
+    expect(html).toContain('gateStatus && status.agentEnded ? ACTIONS[gateStatus] : null');
+    // A host that will not post for us must leave the words on screen to copy.
+    expect(html).toContain('actionHint.hidden = false');
+  });
+
+  it('does not print the gate detail twice, or lead with instructions meant for the agent', () => {
+    // kit_outdated returns the same long agent-facing text as both summary and report,
+    // which the card printed twice — once as its headline.
+    const html = readUiResource(ROUND_STATUS_RESOURCE_URI)?.text ?? '';
+    expect(html).toContain('gateSummary.length <= 180');
+    expect(html).toContain('detail !== summary.textContent');
   });
 
   it('stops polling once the agent has stopped and the gate has settled', () => {
