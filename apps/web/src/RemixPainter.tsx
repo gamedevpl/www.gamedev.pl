@@ -4,15 +4,15 @@ import { blankItem, itemProblems, setCell } from './editorContentTools.js';
 import type { EditorCollectionSpec, EditorContentDoc, EditorItemContent, EditorLabel } from './studioApi.js';
 
 /**
- * The declared content painter, in the remix sheet.
+ * The declared content painter for remix.
  *
- * The Studio's EditorPanel renders the same vocabulary for creators; this is
- * the player-shaped cut of it — one column, thumb-sized cells, no drafts and
- * no publish, because a remix's paintings live in the session and reach the
- * game over the bridge exactly like a slider move. The constraint mirror is
- * shared (`editorContentTools`), so a remixer who walls off a seed is told so
- * live — their content never reaches the server, which makes the live check
- * the *only* check they will ever see.
+ * Hosted in the full-bleed editor stage (not the remix chat sheet). The
+ * Studio's EditorPanel renders the same vocabulary for creators; this is the
+ * player-shaped cut — one column, thumb-sized cells, no drafts and no publish.
+ * Paintings live in the session and reach the game over the bridge exactly
+ * like a slider move. The constraint mirror is shared (`editorContentTools`),
+ * so a remixer who walls off a seed is told so live — their content never
+ * reaches the server, which makes the live check the *only* check they see.
  */
 
 export function RemixPainter(props: {

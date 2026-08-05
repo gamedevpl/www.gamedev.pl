@@ -6,7 +6,7 @@ import { PixelIcon } from './PixelIcon.js';
 import { useGameTelemetry } from './gamePlayer.js';
 import { rememberRecentPlay } from './recentPlays.js';
 import { recordGamePlayed } from './recommendationsApi.js';
-import { RemixPanel } from './RemixPanel.js';
+import { RemixPanel, type RemixEditorStage } from './RemixPanel.js';
 import type { RemixSession } from './remixApi.js';
 import { readSharedParams } from './remixApi.js';
 
@@ -75,6 +75,12 @@ export function PublishedGameFrame({
   const [remixSession, setRemixSession] = useState<RemixSession | null>(null);
   const [remixUndoable, setRemixUndoable] = useState(false);
   const [remixOpen, setRemixOpen] = useState(false);
+  /**
+   * Level-editor stage: the painter leaves the remix sheet and owns the theater.
+   * Focus flips Edit ↔ Play without unmounting the iframe or the painter — the
+   * host only restyles which surface is full-bleed vs bottom-right PiP.
+   */
+  const [editorStage, setEditorStage] = useState<RemixEditorStage>({ active: false, focus: 'edit' });
   const localFrameRef = useRef<HTMLIFrameElement | null>(null);
   const activeFrameRef = frameRef ?? localFrameRef;
   // Present only when the player arrived on a shared link; read once.
@@ -142,9 +148,22 @@ export function PublishedGameFrame({
   const frame = <GameFrame title={gameTitle} html={remixHtml ?? html} frameRef={activeFrameRef} embed={embed} />;
   if (!showRemix) return frame;
 
+  const hostClass = [
+    'remix-host',
+    editorStage.active ? 'is-editor-stage' : '',
+    editorStage.active ? `is-focus-${editorStage.focus}` : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
   return (
-    <div className="remix-host">
-      {frame}
+    <div className={hostClass}>
+      {/*
+       * Slot wrapper is `display: contents` while the sheet is up so the iframe
+       * still fills the theater; editor-stage CSS turns it into the PiP/full
+       * surface without remounting the frame.
+       */}
+      <div className="remix-game-slot">{frame}</div>
       {remixOpen || sharedParams ? (
         <RemixPanel
           slug={slug}
@@ -158,6 +177,7 @@ export function PublishedGameFrame({
           onClose={() => setRemixOpen(false)}
           painterRequest={painterNonce}
           onCapabilities={onRemixCapabilities}
+          onEditorStage={setEditorStage}
         />
       ) : null}
     </div>

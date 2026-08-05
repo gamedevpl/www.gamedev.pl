@@ -18,7 +18,13 @@ import {
   type RemixSuggestion,
 } from './remixApi.js';
 import { RemixPainter } from './RemixPainter.js';
-import type { EditorContentDoc, EditorLabel, EditorParamSpec, EditorParamValue } from './studioApi.js';
+import type {
+  EditorContentDoc,
+  EditorItemContent,
+  EditorLabel,
+  EditorParamSpec,
+  EditorParamValue,
+} from './studioApi.js';
 import type { RemixPaintedVia } from './visitTelemetry.js';
 import { NAVIGATE_EVENT, studioPath } from './router.js';
 
@@ -170,6 +176,12 @@ const SWAP_WATCH_MS = 6_000;
 
 type Note = { kind: 'ok' | 'info' | 'error'; text: string } | null;
 
+/** Theater takeover while the level painter is open — parent restyles the iframe slot. */
+export type RemixEditorStage = {
+  active: boolean;
+  focus: 'edit' | 'play';
+};
+
 export function RemixPanel(props: {
   slug: string;
   frameRef: MutableRefObject<HTMLIFrameElement | null>;
@@ -198,6 +210,11 @@ export function RemixPanel(props: {
   painterRequest?: number;
   /** Tells the theater whether this game has a painter to put in its menu. */
   onCapabilities?: (caps: { painter: boolean }) => void;
+  /**
+   * Reports editor-stage focus so the host can PiP the live game without
+   * unmounting it. Cleared when the painter closes (back to the remix sheet).
+   */
+  onEditorStage?: (stage: RemixEditorStage) => void;
 }) {
   const { t, i18n } = useTranslation();
   const { user } = useAuth();
@@ -247,6 +264,13 @@ export function RemixPanel(props: {
   const contentDocRef = useRef(contentDoc);
   contentDocRef.current = contentDoc;
   const [painterOpen, setPainterOpen] = useState(false);
+  /** After the stage has opened once, Done leaves a door back on the sheet. */
+  const [painterSeen, setPainterSeen] = useState(false);
+  /**
+   * Edit = map full-bleed + game PiP; Play = game full-bleed + map PiP.
+   * Both surfaces stay mounted — only focus (and host CSS) flips.
+   */
+  const [editorFocus, setEditorFocus] = useState<'edit' | 'play'>('edit');
   /**
    * Whether the suggestions accept a press yet.
    *
@@ -412,7 +436,23 @@ export function RemixPanel(props: {
   const openPainter = useCallback((door: RemixPaintedVia) => {
     if (painterDoorRef.current === null) painterDoorRef.current = door;
     setPainterOffer(false);
+    setPainterSeen(true);
+    setEditorFocus('edit');
     setPainterOpen(true);
+  }, []);
+
+  const painterStageActive = Boolean(painterOpen && session?.content && lane !== 'building');
+
+  // Host restyles the iframe slot from this signal — never remount the frame.
+  // Cleanup must NOT run on focus flips (that would flash the stage off); only
+  // report `active: false` when the painter closes or this panel unmounts.
+  useEffect(() => {
+    props.onEditorStage?.({ active: painterStageActive, focus: editorFocus });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- notify on stage/focus only
+  }, [painterStageActive, editorFocus]);
+  useEffect(() => {
+    return () => props.onEditorStage?.({ active: false, focus: 'edit' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- unmount only
   }, []);
 
   // The More-menu door. A nonce: the same entry chosen again reopens a painter
@@ -865,6 +905,112 @@ export function RemixPanel(props: {
     );
   }
 
+  /*
+   * Level editor owns the theater — not a widget inside the remix sheet.
+   * Done returns to the sheet (Keep/Share stay earned there). Edit ↔ Play only
+   * moves focus; the painter tree and the game iframe both stay mounted.
+   */
+  if (painterStageActive && session?.content) {
+    const collectionKey = Object.keys(session.content)[0];
+    const items = collectionKey ? ((contentDoc[collectionKey] as EditorItemContent[] | undefined) ?? []) : [];
+    const levelName =
+      typeof items[0]?.properties.name === 'string' && items[0].properties.name ? items[0].properties.name : null;
+
+    return (
+      <>
+        <div className={`remix-editor-stage is-focus-${editorFocus}`}>
+          <div className="remix-editor-chrome">
+            <div className="remix-editor-identity">
+              <span className="remix-editor-kicker">
+                {editorFocus === 'edit' ? t('remix.editorEditing') : t('remix.editorPlaying')}
+              </span>
+              <span className="remix-editor-name">{levelName || t('remix.editorTitle')}</span>
+            </div>
+            <div className="remix-editor-chrome-actions">
+              <div className="remix-editor-focus" role="group" aria-label={t('remix.editorFocusGroup')}>
+                <button
+                  type="button"
+                  className={`remix-editor-focus-btn${editorFocus === 'edit' ? ' is-on' : ''}`}
+                  aria-pressed={editorFocus === 'edit'}
+                  onClick={() => setEditorFocus('edit')}
+                >
+                  {t('remix.editorFocusEdit')}
+                </button>
+                <button
+                  type="button"
+                  className={`remix-editor-focus-btn${editorFocus === 'play' ? ' is-on' : ''}`}
+                  aria-pressed={editorFocus === 'play'}
+                  onClick={() => setEditorFocus('play')}
+                >
+                  {t('remix.editorFocusPlay')}
+                </button>
+              </div>
+              <button type="button" className="remix-editor-done" onClick={() => setPainterOpen(false)}>
+                {t('remix.editorDone')}
+              </button>
+            </div>
+          </div>
+
+          <div
+            className="remix-editor-body"
+            /*
+             * In Play focus the body is the map PiP — tap it to return to Edit.
+             * In Edit focus the board handles its own clicks; this wrapper stays inert.
+             */
+            onClick={editorFocus === 'play' ? () => setEditorFocus('edit') : undefined}
+            onKeyDown={
+              editorFocus === 'play'
+                ? (event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      setEditorFocus('edit');
+                    }
+                  }
+                : undefined
+            }
+            role={editorFocus === 'play' ? 'button' : undefined}
+            tabIndex={editorFocus === 'play' ? 0 : undefined}
+            aria-label={editorFocus === 'play' ? t('remix.editorFocusEdit') : undefined}
+          >
+            {editorFocus === 'play' ? (
+              <span className="remix-editor-pip-badge">
+                <span className="remix-editor-pip-dot" aria-hidden="true" />
+                {t('remix.editorPipMap')}
+              </span>
+            ) : null}
+            <RemixPainter content={session.content} doc={contentDoc} onChange={paintContent} />
+            {editorFocus === 'play' ? <span className="remix-editor-pip-cta">{t('remix.editorFocusEdit')}</span> : null}
+          </div>
+
+          {/*
+           * Covers the host-positioned game PiP in Edit focus so a tap flips to
+           * Play without fighting the iframe for the gesture.
+           */}
+          {editorFocus === 'edit' ? (
+            <button
+              type="button"
+              className="remix-editor-game-pip-hit"
+              onClick={() => setEditorFocus('play')}
+              aria-label={t('remix.editorFocusPlay')}
+            >
+              <span className="remix-editor-pip-badge">
+                <span className="remix-editor-pip-dot" aria-hidden="true" />
+                {t('remix.editorPipLive')}
+              </span>
+              <span className="remix-editor-pip-cta">{t('remix.editorFocusPlay')}</span>
+            </button>
+          ) : null}
+        </div>
+        <AuthModal
+          isOpen={authOpen}
+          onClose={() => setAuthOpen(false)}
+          title={t('remix.signInTitle')}
+          subtitle={t('remix.wallSubtitle')}
+        />
+      </>
+    );
+  }
+
   return (
     <div className="remix-panel">
       {/* The sheet's own handle. Decorative — closing is the labelled button. */}
@@ -876,18 +1022,6 @@ export function RemixPanel(props: {
           <PixelIcon name="close" size={12} />
         </button>
       </div>
-
-      {painterOpen && session?.content && lane !== 'building' ? (
-        <div className="remix-painter-host">
-          <div className="remix-painter-head">
-            <span className="remix-painter-title">{t('remix.editorTitle')}</span>
-            <button type="button" className="remix-btn is-quiet" onClick={() => setPainterOpen(false)}>
-              {t('remix.editorHide')}
-            </button>
-          </div>
-          <RemixPainter content={session.content} doc={contentDoc} onChange={paintContent} />
-        </div>
-      ) : null}
 
       {lane === 'building' ? (
         /*
@@ -1019,9 +1153,21 @@ export function RemixPanel(props: {
           {note.text}
         </p>
       ) : null}
-      {painterOffer && !painterOpen && session?.content ? (
+      {/*
+       * The brush no longer lives in the sheet, so leave a door back after Done,
+       * when the router proposed the editor, or when the painter is the only lane.
+       * Assist/code games that never opened it still rely on the quiet menu entry.
+       */}
+      {session?.content &&
+      !painterOpen &&
+      lane !== 'building' &&
+      (painterOffer || painterSeen || (!session.canAssist && !session.canCode)) ? (
         <div className="remix-actions-row">
-          <button type="button" className="remix-btn is-primary" onClick={() => openPainter('redirect')}>
+          <button
+            type="button"
+            className="remix-btn is-primary"
+            onClick={() => openPainter(painterOffer ? 'redirect' : (painterDoorRef.current ?? 'panel'))}
+          >
             {t('remix.openEditor')}
           </button>
         </div>

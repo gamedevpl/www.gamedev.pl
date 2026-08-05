@@ -268,10 +268,13 @@ describe('RemixPanel', () => {
     const offer = container.querySelector('.remix-actions-row .remix-btn.is-primary');
     expect(offer?.textContent).toBe('Open the level editor');
 
-    // Taking the offer opens the painter, rendered from the declaration.
+    // Taking the offer opens the full-bleed editor stage (not a sheet widget).
     await act(async () => {
       offer!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
+    expect(container.querySelector('.remix-editor-stage.is-focus-edit')).not.toBeNull();
+    expect(container.querySelector('.remix-panel')).toBeNull();
+    expect(buttonNamed(container, 'Done')).not.toBeNull();
     expect(container.querySelector('.remix-painter .editor-board')).not.toBeNull();
     expect(container.querySelectorAll('.remix-painter .editor-tile').length).toBe(2);
 
@@ -316,6 +319,7 @@ describe('RemixPanel', () => {
     });
     await draw();
 
+    expect(container.querySelector('.remix-editor-stage')).not.toBeNull();
     expect(container.querySelector('.remix-painter .editor-board')).not.toBeNull();
     expect(container.textContent).not.toContain("This game can't be remixed yet");
     expect(telemetry.recordRemixStep).not.toHaveBeenCalledWith('no_lane');
@@ -325,6 +329,71 @@ describe('RemixPanel', () => {
       cell.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(telemetry.recordRemixStep).toHaveBeenCalledWith('painted', { via: 'panel' });
+  });
+
+  it('flips Edit ↔ Play focus without unmounting the painter, and reports the stage', async () => {
+    const onEditorStage = vi.fn();
+    remixApi.startRemix.mockResolvedValue({
+      remixId: 'r1',
+      params: null,
+      values: null,
+      content: {
+        maps: {
+          widget: 'collection',
+          label: { en: 'Maps', pl: 'Mapy' },
+          itemLabel: { en: 'Map', pl: 'Mapa' },
+          min: 1,
+          max: 1,
+          item: {
+            widget: 'tilemap',
+            grid: { minCols: 3, maxCols: 8, minRows: 3, maxRows: 8 },
+            tiles: [{ key: 'path', char: '.', label: { en: 'Path', pl: 'Ścieżka' } }],
+            properties: {},
+            constraints: [],
+          },
+          defaults: [{ properties: {}, rows: ['...', '...', '...'] }],
+        },
+      },
+      canAssist: false,
+      canCode: false,
+      suggestions: [],
+      expiresInMs: 3_600_000,
+    });
+    root = createRoot(container);
+    await act(async () => {
+      root!.render(
+        <RemixPanel
+          slug="dog-dash"
+          frameRef={frameRef as never}
+          onSwapDocument={() => {}}
+          onClose={() => {}}
+          onEditorStage={onEditorStage}
+        />,
+      );
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(onEditorStage).toHaveBeenCalledWith({ active: true, focus: 'edit' });
+    expect(container.querySelector('.remix-editor-stage.is-focus-edit')).not.toBeNull();
+    const board = container.querySelector('.remix-painter .editor-board');
+    expect(board).not.toBeNull();
+
+    await act(async () => {
+      buttonNamed(container, 'Play')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(container.querySelector('.remix-editor-stage.is-focus-play')).not.toBeNull();
+    expect(onEditorStage).toHaveBeenCalledWith({ active: true, focus: 'play' });
+    // Same painter tree — focus is CSS, not a remount.
+    expect(container.querySelector('.remix-painter .editor-board')).toBe(board);
+
+    await act(async () => {
+      buttonNamed(container, 'Done')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(container.querySelector('.remix-editor-stage')).toBeNull();
+    expect(container.querySelector('.remix-panel')).not.toBeNull();
+    expect(onEditorStage).toHaveBeenCalledWith({ active: false, focus: 'edit' });
   });
 
   it('pushes the whole content document over the bridge, never params alone', async () => {
