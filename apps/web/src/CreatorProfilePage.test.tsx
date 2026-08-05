@@ -155,18 +155,19 @@ describe('CreatorProfilePage owner edit', () => {
     expect(container.querySelector('a[href="/studio/sky-dodge"]')?.classList.contains('secondary-btn')).toBe(true);
   });
 
-  it('sends both the title and the meta link to the game page, for anyone', async () => {
-    // The profile is the game page's strongest entry point: everything listed here has
-    // a handle by construction, so the address always resolves.
+  it('makes the title the game-page link and keeps Play as the theater action', async () => {
+    // The thumbnail is also a game-page link; a separate text link beside Play is
+    // deliberately omitted so the row has one clear navigation target.
     authUser = null;
     fetchCreatorPage.mockResolvedValue(creatorPageWithGame());
 
     await renderPage();
 
     const links = Array.from(container.querySelectorAll<HTMLAnchorElement>('a[href="/ada/sky-dodge"]'));
-    expect(links.length).toBe(2);
+    expect(links.length).toBe(1);
     expect(container.querySelector('.creator-profile-game-title a')?.textContent).toBe('Sky Dodge');
-    expect(links.some((link) => link.textContent?.includes('Game page'))).toBe(true);
+    expect(container.querySelector('a.creator-profile-game-thumb-link')?.getAttribute('href')).toBe('/play/sky-dodge');
+    expect(container.textContent).not.toContain('Game page');
     // Play still goes straight to the theater — the card did not lose its job.
     expect(
       Array.from(container.querySelectorAll('button')).some((button) => button.textContent?.includes('Play')),
