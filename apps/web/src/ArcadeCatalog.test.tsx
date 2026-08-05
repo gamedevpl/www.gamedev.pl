@@ -200,6 +200,41 @@ describe('ArcadeCatalog lazy media', () => {
     });
   });
 
+  it('makes the card the game-page link while keeping Play as the theater action', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ items: [] })));
+    const onPlayGame = vi.fn();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(ArcadeCatalog, {
+          catalogStatus: 'ready',
+          catalogError: null,
+          catalogEntries: [entries[0]!],
+          onPlayGame,
+          onPlayTogether: vi.fn(),
+          onRetryCatalog: vi.fn(),
+        }),
+      );
+      await flushEffects();
+    });
+
+    const cardLink = container.querySelector<HTMLAnchorElement>('.catalog-card-hit-area');
+    expect(cardLink?.getAttribute('href')).toBe('/gamedevpl/above-fold');
+    expect(container.querySelector('.ai-pill')).toBeNull();
+    expect(container.querySelector('.card-about-link')).toBeNull();
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.card-actions .primary-btn')?.click();
+    });
+    expect(onPlayGame).toHaveBeenCalledWith(entries[0]);
+
+    await act(async () => root.unmount());
+  });
+
   it('opens moments on video-less cards via the moments toggle', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ items: [] })));
