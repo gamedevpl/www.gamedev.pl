@@ -2383,4 +2383,61 @@ describe('SubmissionStatusView stop & retry', () => {
       root.unmount();
     });
   });
+
+  it('shows prior rounds collapsed above the live thread, and dismiss hides them', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    localStorage.clear();
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'building',
+      builder: 'self',
+      slug: 'tv-tycoon',
+      events: [{ id: 'e1', kind: 'step', step: 'mechanics', text: 'Working on the current round.', createdAt: '2026-08-05T08:00:00.000Z' }],
+      priorRounds: [
+        {
+          id: '101',
+          createdAt: '2026-08-01T10:00:00.000Z',
+          publishedAt: '2026-08-02T12:00:00.000Z',
+          status: 'published',
+          entries: [
+            { kind: 'revision', text: 'Make TVMAX louder.', createdAt: '2026-08-01T11:00:00.000Z' },
+            { kind: 'event', step: 'polishing', text: 'Competitor volume tuned.', createdAt: '2026-08-01T12:00:00.000Z' },
+          ],
+        },
+      ],
+    });
+    window.history.pushState(null, '', '/studio/history-token');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'history-token', embedded: true }));
+      await flushEffects();
+    });
+
+    const prior = container.querySelector('[data-testid="studio-prior-rounds"]');
+    expect(prior).not.toBeNull();
+    const details = prior?.querySelector('details.studio-prior-round');
+    expect(details).not.toBeNull();
+    expect(details?.hasAttribute('open')).toBe(false);
+    expect(prior?.textContent).toContain(i18n.t('statusView.history.summaryPublished'));
+    // Collapsed: entry text is in the DOM for expand, live round is separate.
+    expect(container.textContent).toContain('Make TVMAX louder.');
+    expect(container.textContent).toContain('Working on the current round.');
+
+    const dismiss = prior?.querySelector('.studio-prior-round-dismiss') as HTMLButtonElement;
+    expect(dismiss).not.toBeNull();
+    await act(async () => {
+      dismiss.click();
+      await flushEffects();
+    });
+    expect(container.querySelector('[data-testid="studio-prior-rounds"]')).toBeNull();
+    expect(localStorage.getItem('gamedev_prior_round_hide:tv-tycoon:101')).toBe('1');
+    expect(container.textContent).toContain('Working on the current round.');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
 });

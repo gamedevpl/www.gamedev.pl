@@ -163,6 +163,30 @@ export type SubmissionStatus = {
   failure?: { reason: string };
   /** Who opened this improvement round, when reported (BY-24). */
   openedBy?: 'creator' | 'agent';
+  /**
+   * Older jobs on the same game (same slug), oldest first — collapsed history so a
+   * new improve round does not make prior Studio chat look deleted. Optional: older
+   * API deploys omit it.
+   */
+  priorRounds?: PriorRoundHistory[];
+};
+
+/** One superseded build job's transcript, for the collapsed history blocks. */
+export type PriorRoundHistory = {
+  id: string;
+  createdAt: string;
+  publishedAt?: string;
+  status: SubmissionState;
+  entries: PriorRoundEntry[];
+};
+
+export type PriorRoundEntry = {
+  kind: 'revision' | 'event';
+  /** Untrusted text — render escaped. */
+  text: string;
+  createdAt: string;
+  origin?: 'agent';
+  step?: BuildStep;
 };
 
 export type BuildPlayableItem = {

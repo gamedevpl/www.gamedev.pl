@@ -597,6 +597,12 @@
       "notice": "Improvement round started — this is the new build thread.",
       "agentOpened": "Your agent opened this improvement round — same daily limit as starting one in Studio."
     },
+    "history": {
+      "summary": "Earlier round",
+      "summaryPublished": "Published version",
+      "dismiss": "Hide",
+      "dismissAria": "Hide this earlier round from the thread"
+    },
     "progress": {
       "checklistTitle": "What the agent is doing",
       "activityTitle": "Build activity",
