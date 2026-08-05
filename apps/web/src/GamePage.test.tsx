@@ -18,16 +18,6 @@ vi.mock('./AuthContext.js', () => ({
   useAuth: () => ({ user: authUser, privateBeta, refreshUser: vi.fn(), logout: vi.fn() }),
 }));
 
-// The frame fetches the playable document and records a play session on mount;
-// neither belongs in this test. The stub records mounts instead.
-const frameMounts = vi.fn();
-vi.mock('./PublishedGameFrame.js', () => ({
-  PublishedGameFrame: (props: { slug: string }) => {
-    frameMounts(props.slug);
-    return createElement('div', { 'data-testid': 'frame', 'data-slug': props.slug });
-  },
-}));
-
 vi.mock('./VoteWidget.js', () => ({
   VoteWidget: () => createElement('div', { 'data-testid': 'votes' }),
 }));
@@ -35,13 +25,6 @@ vi.mock('./VoteWidget.js', () => ({
 vi.mock('./AuthModal.js', () => ({
   AuthModal: ({ isOpen }: { isOpen: boolean }) =>
     isOpen ? createElement('div', { 'data-testid': 'auth-modal' }) : null,
-}));
-
-const fetchGameFollow = vi.fn();
-const setGameFollowApi = vi.fn();
-vi.mock('./gameFollowApi.js', () => ({
-  fetchGameFollow: (...args: unknown[]) => fetchGameFollow(...args),
-  setGameFollow: (...args: unknown[]) => setGameFollowApi(...args),
 }));
 
 import { GamePage } from './GamePage.js';
@@ -52,9 +35,15 @@ function pageData(overrides: Partial<GamePageData> = {}): GamePageData {
       slug: 'neon-courier',
       title: 'Neon Courier',
       genre: 'arcade',
-      controls: 'arrows',
+      controls: 'Arrows move, Space fires',
       status: 'published',
-      media: null,
+      media: {
+        screenshots: [
+          { name: 'opening', file: 'opening.png' },
+          { name: 'battle', file: 'battle.png' },
+        ],
+        video: null,
+      },
       multiplayer: null,
       saves: null,
       world: null,
@@ -72,13 +61,10 @@ function pageData(overrides: Partial<GamePageData> = {}): GamePageData {
       profileCreatedAt: '2026-07-01T00:00:00.000Z',
     },
     platformAuthored: false,
-    specMarkdown: '# Neon Courier\n\nDeliver packages before the last neon goes out.\n\n## Controls\n\n- arrows',
+    specMarkdown: '# Neon Courier\n\nDeliver packages before the last neon goes out.',
     modules: ['input', 'gameplay', 'gfx'],
     budget: { usedBytes: 147 * 1024, limitBytes: 252 * 1024 },
-    releases: [
-      { version: 'v3', createdAt: '2026-08-03T12:00:00.000Z', current: true, gateGreen: true },
-      { version: 'v1', createdAt: '2026-08-01T12:00:00.000Z', current: false, gateGreen: null },
-    ],
+    releases: [{ version: 'v3', createdAt: '2026-08-03T12:00:00.000Z', current: true, gateGreen: true }],
     stats: { plays: 4812, medianPlaySeconds: 360, windowDays: 28 },
     ...overrides,
   };
@@ -86,6 +72,8 @@ function pageData(overrides: Partial<GamePageData> = {}): GamePageData {
 
 let container: HTMLDivElement;
 let root: Root | null = null;
+let playAction: ReturnType<typeof vi.fn>;
+let remixAction: ReturnType<typeof vi.fn>;
 
 beforeEach(async () => {
   (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -93,11 +81,9 @@ beforeEach(async () => {
   authUser = null;
   privateBeta = false;
   fetchGamePage.mockReset();
-  frameMounts.mockReset();
-  fetchGameFollow.mockReset();
-  setGameFollowApi.mockReset();
   fetchGamePage.mockResolvedValue(pageData());
-  fetchGameFollow.mockResolvedValue({ slug: 'neon-courier', followers: 12, following: false });
+  playAction = vi.fn();
+  remixAction = vi.fn();
   container = document.createElement('div');
   document.body.appendChild(container);
 });
@@ -118,6 +104,8 @@ async function renderPage(props: Partial<Parameters<typeof GamePage>[0]> = {}) {
         handle: 'nightshift',
         slug: 'neon-courier',
         onNavigate: vi.fn(),
+        onPlay: playAction,
+        onRemix: remixAction,
         ...props,
       }),
     );
@@ -129,66 +117,83 @@ async function renderPage(props: Partial<Parameters<typeof GamePage>[0]> = {}) {
 }
 
 describe('GamePage', () => {
-  it('renders header, playable frame, spec sidebar, modules and budget', async () => {
+  it('renders a compact preview page without the game, SPEC, or legacy tabs', async () => {
     await renderPage();
 
     expect(container.textContent).toContain('Neon Courier');
     expect(container.textContent).toContain('Deliver packages before the last neon goes out.');
-    // The default tab mounts the game itself.
-    expect(container.querySelector('[data-testid="frame"]')?.getAttribute('data-slug')).toBe('neon-courier');
-    // Breadcrumb links to the owning studio.
-    expect(container.querySelector('a[href="/nightshift"]')).not.toBeNull();
-    // Sidebar facts.
-    expect(container.textContent).toContain('SPEC.md');
-    expect(container.textContent).toContain('gameplay');
-    expect(container.textContent).toContain('147 KiB of 252 KiB');
-    expect(container.textContent).toContain('4,812');
-    // Secondary tabs exist as real links.
-    expect(container.querySelector('a[href="/nightshift/neon-courier/releases"]')).not.toBeNull();
-    expect(container.querySelector('a[href="/nightshift/neon-courier/board"]')).not.toBeNull();
+    expect(container.querySelector('iframe')).toBeNull();
+    expect(container.querySelector('video')).toBeNull();
+    expect(container.textContent).not.toContain('SPEC.md');
+    expect(container.querySelector('.game-page-tabs')).toBeNull();
+    expect(container.querySelector('.game-page-preview img')?.getAttribute('src')).toContain('battle.png?w=1280');
+    expect(container.querySelectorAll('.game-page-screenshot')).toHaveLength(2);
+    expect(container.textContent).toContain('Arrows move, Space fires');
+    expect(container.querySelector('[data-testid="votes"]')).not.toBeNull();
   });
 
-  it('lists releases on the releases tab and keeps the frame mounted', async () => {
-    await renderPage({ tab: 'releases' });
+  it('opens the sandboxed theater only after an explicit Play action', async () => {
+    await renderPage();
 
-    expect(container.textContent).toContain('v3');
-    expect(container.textContent).toContain('current');
-    expect(container.textContent).toContain('v1');
-    // Frame is lazy: never armed because the game tab was never active.
-    expect(container.querySelector('[data-testid="frame"]')).toBeNull();
+    const preview = container.querySelector<HTMLButtonElement>('.game-page-preview');
+    expect(preview).not.toBeNull();
+    await act(async () => {
+      preview!.click();
+    });
+
+    expect(playAction).toHaveBeenCalledWith(expect.objectContaining({ slug: 'neon-courier' }));
+    expect(container.querySelector('iframe')).toBeNull();
   });
 
-  it('gates the frame behind sign-in during closed beta but renders the page', async () => {
+  it('lets visitors choose another screenshot without starting the game', async () => {
+    await renderPage();
+
+    const thumbnails = container.querySelectorAll<HTMLButtonElement>('.game-page-screenshot');
+    await act(async () => {
+      thumbnails[1].click();
+    });
+
+    expect(container.querySelector('.game-page-preview img')?.getAttribute('src')).toContain('battle.png?w=1280');
+    expect(thumbnails[1].getAttribute('aria-pressed')).toBe('true');
+    expect(playAction).not.toHaveBeenCalled();
+  });
+
+  it('opens Remix directly through the theater handoff', async () => {
+    await renderPage();
+
+    const remix = Array.from(container.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('Remix'),
+    );
+    expect(remix).toBeDefined();
+    await act(async () => {
+      remix!.click();
+    });
+
+    expect(remixAction).toHaveBeenCalledWith(expect.objectContaining({ slug: 'neon-courier' }));
+    expect(container.querySelector('iframe')).toBeNull();
+  });
+
+  it('keeps the preview public but gates Play during closed beta', async () => {
     privateBeta = true;
     await renderPage();
 
-    expect(container.querySelector('[data-testid="frame"]')).toBeNull();
-    expect(container.textContent).toContain('Playing is in closed beta');
-    // The page around the gate still renders for the anonymous visitor.
-    expect(container.textContent).toContain('Neon Courier');
-    expect(container.textContent).toContain('SPEC.md');
-
-    const cta = Array.from(container.querySelectorAll('button')).find((button) =>
-      button.textContent?.includes('Sign in'),
-    );
-    expect(cta).toBeDefined();
+    expect(container.querySelector('.game-page-preview')).not.toBeNull();
     await act(async () => {
-      cta!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      container.querySelector<HTMLButtonElement>('.game-page-actions .primary-btn')!.click();
     });
+
+    expect(playAction).not.toHaveBeenCalled();
     expect(container.querySelector('[data-testid="auth-modal"]')).not.toBeNull();
   });
 
-  it('replaces the URL when the handle is not the owning studio', async () => {
+  it('replaces the URL when the handle is not the owning creator', async () => {
     const onCanonicalPath = vi.fn();
     await renderPage({ handle: 'somebody_else', onCanonicalPath });
 
     expect(onCanonicalPath).toHaveBeenCalledWith('/nightshift/neon-courier');
   });
 
-  it('renders a platform-authored game under the platform handle, with no profile link', async () => {
-    // Most of the catalog predates creator profiles. Those games get a page too —
-    // the platform is named as the author instead of linking a profile that does
-    // not exist.
+  it('uses the catalog as the breadcrumb for platform-authored games', async () => {
     fetchGamePage.mockResolvedValue(
       pageData({
         entry: { ...pageData().entry, creatorHandle: 'gamedevpl', submittedBy: 'gamedev-platform' },
@@ -198,55 +203,8 @@ describe('GamePage', () => {
     );
     await renderPage({ handle: 'gamedevpl' });
 
-    expect(container.textContent).not.toContain('This game page does not exist.');
-    expect(container.textContent).toContain('Neon Courier');
-    // The breadcrumb goes to the catalog, not to a profile page that would 404.
-    expect(container.querySelector('a[href="/gamedevpl"]')).toBeNull();
     expect(container.querySelector('.game-page-breadcrumb a')?.getAttribute('href')).toBe('/');
-    // The team panel names the platform rather than an absent creator.
-    expect(container.querySelector('.game-page-team')?.textContent).toContain('built here');
-  });
-
-  it('follows a game for a signed-in visitor and shows the count', async () => {
-    authUser = { uid: 'g:player' };
-    setGameFollowApi.mockResolvedValue({ slug: 'neon-courier', followers: 13, following: true });
-    await renderPage();
-
-    const button = Array.from(container.querySelectorAll('button')).find((candidate) =>
-      candidate.textContent?.includes('Follow'),
-    );
-    expect(button?.textContent).toContain('12');
-    expect(button?.getAttribute('aria-pressed')).toBe('false');
-
-    await act(async () => {
-      button!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-    await act(async () => {
-      await Promise.resolve();
-    });
-
-    expect(setGameFollowApi).toHaveBeenCalledWith('neon-courier', true);
-    const after = Array.from(container.querySelectorAll('button')).find((candidate) =>
-      candidate.textContent?.includes('Following'),
-    );
-    expect(after?.getAttribute('aria-pressed')).toBe('true');
-    expect(after?.textContent).toContain('13');
-  });
-
-  it('invites a signed-out visitor to sign in rather than failing the follow', async () => {
-    authUser = null;
-    fetchGameFollow.mockResolvedValue({ slug: 'neon-courier', followers: 4, following: null });
-    await renderPage();
-
-    const button = Array.from(container.querySelectorAll('button')).find((candidate) =>
-      candidate.textContent?.includes('Follow'),
-    );
-    await act(async () => {
-      button!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-
-    expect(setGameFollowApi).not.toHaveBeenCalled();
-    expect(container.querySelector('[data-testid="auth-modal"]')).not.toBeNull();
+    expect(container.textContent).toContain('gamedev.pl');
   });
 
   it('reports the loaded title upward for document.title', async () => {
