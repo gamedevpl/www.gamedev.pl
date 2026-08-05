@@ -1116,7 +1116,7 @@ export function RemixPanel(props: {
             </span>
             <span>{changed.broke ? t('remix.brokeIt') : changed.text}</span>
           </p>
-          {changed.canShare || canPropose || undo || changed.undoCode ? (
+          {changed.canShare || canPropose || undo || changed.undoCode || !changed.broke ? (
             <div className="remix-actions-row">
               {changed.canShare ? (
                 <button type="button" className="remix-btn is-primary" onClick={() => void share()}>
@@ -1147,24 +1147,23 @@ export function RemixPanel(props: {
                   {t('remix.undo')}
                 </button>
               ) : null}
+              {/*
+               * Always quiet, never the row's primary. When Share is off (code-lane
+               * remixes) this used to fill the panel as the accent CTA and win every
+               * mis-tap; keep it a peer of Undo instead of inventing a second control
+               * language under the row.
+               */}
+              {!changed.broke ? (
+                <button
+                  type="button"
+                  className="remix-btn is-quiet"
+                  disabled={saving || lane !== 'idle'}
+                  onClick={() => void saveAsMine()}
+                >
+                  {saving ? t('remix.saving') : t('remix.makeItYours')}
+                </button>
+              ) : null}
             </div>
-          ) : null}
-          {/*
-           * Save-as-yours is a real exit, but not the moment's job. After a change
-           * lands the player is deciding whether they like it — Share, Propose, Undo,
-           * or another tweak. Forking into Studio is deliberate, so it stays reachable
-           * as a text control under the row rather than a full-width primary that wins
-           * every mis-tap when Share is off (code-lane remixes).
-           */}
-          {!changed.broke ? (
-            <button
-              type="button"
-              className="remix-keep-mine"
-              disabled={saving || lane !== 'idle'}
-              onClick={() => void saveAsMine()}
-            >
-              {saving ? t('remix.saving') : t('remix.makeItYours')}
-            </button>
           ) : null}
           {composer(true)}
         </>
