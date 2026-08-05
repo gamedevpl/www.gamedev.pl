@@ -245,9 +245,9 @@ describe('ui resources', () => {
     expect(MCP_UI_TOOL_RESOURCES).not.toHaveProperty('open_round');
   });
 
-  it('keeps the app-only tool read-only, since the model never sees it happen', () => {
+  it('keeps the app-only tools read-only, since the model never sees them happen', () => {
     // A hidden tool that writes is an audit hole: nothing in the transcript records it.
-    expect([...MCP_UI_APP_ONLY_TOOLS]).toEqual(['get_round_status']);
+    expect([...MCP_UI_APP_ONLY_TOOLS]).toEqual(['get_round_status', 'get_round_media']);
     expect([...MCP_UI_APP_ONLY_TOOLS].every((name) => name.startsWith('get_'))).toBe(true);
   });
 
@@ -313,6 +313,34 @@ describe('ui resources', () => {
     expect(html).toContain('was never given a round key');
     expect(html).toContain('The status call was refused.');
     expect(html).toContain("'with a round key, ' : 'without a round key, '");
+  });
+
+  it("shows the gate's own frames, which the agent has no browser to capture", () => {
+    const html = readUiResource(ROUND_STATUS_RESOURCE_URI)?.text ?? '';
+    expect(html).toContain("name: 'get_round_media'");
+    // data: URIs render in both hosts (verified in Claude and ChatGPT), which is what
+    // makes carrying the bytes viable at all — a signed URL would be blocked by the CSP.
+    expect(html).toContain("'data:image/png;base64,'");
+    // Fetched once per delivery, not once per poll: the strip does not change between
+    // polls and each frame is hundreds of kilobytes through the host.
+    expect(html).toContain('mediaKey === gate.deliveryId');
+    expect(html).toContain("gate.status === 'pending'");
+    // A frame written a moment after the verdict loses the first read; one retry, then
+    // stop, so a card cannot re-ask forever.
+    expect(html).toContain('mediaTries < 2');
+    // Megabytes cannot ride a postMessage and the CSP declares no domains, so the video
+    // is handed to the host to open rather than embedded.
+    expect(html).toContain("request('ui/open-link'");
+    // Never claims a complete strip when the budget dropped frames.
+    expect(html).toContain('framesOmitted');
+    // A run with no media says so instead of rendering an empty strip.
+    expect(html).toContain("'No frames: '");
+  });
+
+  it("clears a previous delivery's frames when it falls back to the opening payload", () => {
+    // Otherwise the strip from the last round stays on screen under a fresh verdict.
+    const html = readUiResource(ROUND_STATUS_RESOURCE_URI)?.text ?? '';
+    expect(html).toMatch(/gallery\.hidden = true;[\s\S]{0,80}galleryCap\.hidden = true;/);
   });
 
   it('polls, and degrades to the opening payload when a host refuses the app-only call', () => {

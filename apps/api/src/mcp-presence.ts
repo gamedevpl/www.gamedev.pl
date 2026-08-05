@@ -29,6 +29,7 @@ const NO_PULSE = new Set([
   // is not an agent working: pulsing here would refresh the heartbeat, hold off the
   // quiet stall, and keep self→platform handoff locked for as long as the tab is open.
   'get_round_status',
+  'get_round_media',
 ]);
 /**
  * Closed vocabulary for Studio thought headlines. Client translates via
