@@ -80,6 +80,15 @@ check, not a wait loop. When `status` is `pending`:
 - Back-to-back calls emit soft `warnings.code=gate_poll_backoff` (and keep
   re-emitting `call_end` after submit until `end`)
 
+**`stop` describes the round now, not forever.** It is point-in-time state, not a
+latch: a `stop: true` from an earlier poll is spent once that run stops. A later
+delivery makes the round live again and the next check answers `stop: false` /
+`access: active`. So a creator-led run does not inherit a previous run's stop, and an
+agent should read the `stop` in the response it just got rather than the one it
+remembers. (Observed 2026-08-05: an agent treated a stale `stop: true` as a standing
+prohibition and reported a protocol violation, while the response in front of it said
+`stop: false`.)
+
 ### `kit_outdated` — do not re-upload the tree
 
 When the gate returns `kit_outdated` (or soft copy says the kit rotated):
