@@ -245,11 +245,19 @@ async function listCreatorPublishedGames(
   profile: PublicCreatorProfile,
 ): Promise<CatalogGameEntry[]> {
   const records = await store.listSubmissionsByOwner(ownerUid, { limit: 100 });
+  // An improvement is a new job on an existing slug. When it publishes, both the
+  // original and the revise tip carry `publishedAt`, so listing every published
+  // record would put the same game on the profile twice. One card per slug —
+  // same collapse the Studio shelf already does. `listSubmissionsByOwner` is
+  // newest-first, so the first hit is the tip that won.
   const candidates = records.filter((record) => record.publishedAt && record.slug && !record.abandonedAt);
   const games: CatalogGameEntry[] = [];
+  const seenSlugs = new Set<string>();
 
   for (const record of candidates) {
     const slug = record.slug!;
+    if (seenSlugs.has(slug)) continue;
+    seenSlugs.add(slug);
     // archived / disabled publications must not stay on the public profile with a
     // dead Play button — same gate the play endpoint uses.
     const publication = await store.getPublication(slug);
