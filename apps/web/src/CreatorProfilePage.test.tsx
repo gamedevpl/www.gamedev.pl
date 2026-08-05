@@ -145,9 +145,14 @@ describe('CreatorProfilePage owner edit', () => {
     expect(container.querySelector<HTMLImageElement>('.creator-profile-game-thumb')?.getAttribute('src')).toBe(
       '/api/games/sky-dodge/media/opening.png',
     );
+    expect(container.querySelector<HTMLAnchorElement>('a.creator-profile-game-thumb-link')?.getAttribute('href')).toBe(
+      '/play/sky-dodge',
+    );
+    expect(container.textContent).not.toContain('Open game page');
     expect(container.querySelector<HTMLAnchorElement>('a[href="/studio/sky-dodge"]')?.textContent).toContain(
       'Open in Studio',
     );
+    expect(container.querySelector('a[href="/studio/sky-dodge"]')?.classList.contains('secondary-btn')).toBe(true);
   });
 
   it('sends both the title and the meta link to the game page, for anyone', async () => {

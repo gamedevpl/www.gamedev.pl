@@ -137,7 +137,7 @@ const RemixViaSchema = z.enum(['redirect', 'menu', 'panel']);
  * button they pressed, and collapsing the two would make every stored row
  * ambiguous the first time a third door exists.
  */
-const RemixControlSchema = z.enum(['bar', 'more']);
+const RemixControlSchema = z.enum(['bar', 'more', 'page']);
 /**
  * Which chrome surface opened How to play. Optional so a tab still running the previous
  * client can record the open without `via` — the aggregate treats missing as unknown

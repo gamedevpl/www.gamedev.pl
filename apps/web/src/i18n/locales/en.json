@@ -928,6 +928,16 @@
     "gameNamed": "{{title}}",
     "proposals": "My proposals"
   },
+  "gamePage": {
+    "loading": "Loading game…",
+    "loadError": "Could not load this game page.",
+    "missing": "This game is not available.",
+    "actions": "Game actions",
+    "playPreview": "Play {{title}} in theater mode",
+    "openTheater": "Play in theater",
+    "screenshots": "Screenshots",
+    "viewScreenshot": "View screenshot {{number}}"
+  },
   "creatorProfile": {
     "back": "Back",
     "loading": "Loading profile…",
@@ -937,6 +947,7 @@
     "gamesAria": "Published games",
     "gamesHeading": "Games ({{count}})",
     "noGames": "No published games yet.",
+    "openGamePage": "Open {{title}} game page",
     "openStudio": "Open in Studio",
     "editorTitle": "Your public profile",
     "publishGateTitle": "Claim a handle to publish",

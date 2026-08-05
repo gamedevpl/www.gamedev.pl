@@ -26,8 +26,19 @@ vi.mock('./gamePlayer', async () => {
 });
 
 vi.mock('./PublishedGameFrame', () => ({
-  PublishedGameFrame: ({ frameRef }: { frameRef?: { current: HTMLIFrameElement | null } }) => (
-    <iframe className="game-frame" title="game" ref={frameRef as React.Ref<HTMLIFrameElement>} />
+  PublishedGameFrame: ({
+    frameRef,
+    remixOpenNonce,
+  }: {
+    frameRef?: { current: HTMLIFrameElement | null };
+    remixOpenNonce?: number;
+  }) => (
+    <iframe
+      className="game-frame"
+      title="game"
+      ref={frameRef as React.Ref<HTMLIFrameElement>}
+      data-remix-open={remixOpenNonce ?? 0}
+    />
   ),
 }));
 
@@ -59,7 +70,7 @@ afterEach(() => {
   container.remove();
 });
 
-async function draw(props: { controls?: string; onExit?: () => void } = {}) {
+async function draw(props: { controls?: string; onExit?: () => void; initialRemixOpen?: boolean } = {}) {
   root = createRoot(container);
   await act(async () => {
     root!.render(
@@ -70,6 +81,7 @@ async function draw(props: { controls?: string; onExit?: () => void } = {}) {
         reportSlug="brick-storm"
         onExit={props.onExit ?? (() => undefined)}
         controls={props.controls}
+        initialRemixOpen={props.initialRemixOpen}
       />,
     );
   });
@@ -91,6 +103,11 @@ async function pressEscape() {
 }
 
 describe('GameTheater more menu', () => {
+  it('opens the remix surface immediately when entered from the game page', async () => {
+    await draw({ initialRemixOpen: true });
+    expect(container.querySelector('.game-frame')?.getAttribute('data-remix-open')).toBe('1');
+  });
+
   it('keeps the hamburger icon when open and highlights it instead of turning into an X', async () => {
     await draw();
     const more = container.querySelector('.theater-more-btn') as HTMLButtonElement;

@@ -22,7 +22,7 @@ export function CreatorProfilePage({
 }: {
   handle: string;
   onBack: () => void;
-  onPlay: (slug: string) => void;
+  onPlay: (game: CatalogEntry) => void;
   /** After the owner renames their handle — App should route to the new URL. */
   onNavigate?: (path: string) => void;
   /** Lets App set document.title once the display name is known. */
@@ -137,17 +137,23 @@ export function CreatorProfilePage({
                   : (game.submittedBy ?? profile?.profileName);
                 return (
                   <li key={game.slug} className="creator-profile-game">
-                    {poster ? (
-                      <img
-                        className="creator-profile-game-thumb"
-                        src={catalogMediaUrl(game.slug, poster)}
-                        alt=""
-                        width={160}
-                        height={90}
-                      />
-                    ) : (
-                      <span className="creator-profile-game-thumb creator-profile-game-thumb--empty" aria-hidden />
-                    )}
+                    <a
+                      className="creator-profile-game-thumb-link"
+                      href={playPath(game.slug)}
+                      aria-label={t('creatorProfile.openGamePage', { title: game.title })}
+                    >
+                      {poster ? (
+                        <img
+                          className="creator-profile-game-thumb"
+                          src={catalogMediaUrl(game.slug, poster)}
+                          alt=""
+                          width={160}
+                          height={90}
+                        />
+                      ) : (
+                        <span className="creator-profile-game-thumb creator-profile-game-thumb--empty" aria-hidden />
+                      )}
+                    </a>
                     <div className="creator-profile-game-meta">
                       <h3 className="creator-profile-game-title">
                         {/* Everything listed here has a handle by construction, so the
@@ -158,19 +164,12 @@ export function CreatorProfilePage({
                       </h3>
                       <p className="creator-profile-game-by">{t('player.byAuthor', { author })}</p>
                       <div className="creator-profile-game-actions">
-                        <button type="button" className="primary-btn" onClick={() => onPlay(game.slug)}>
+                        <button type="button" className="primary-btn" onClick={() => onPlay(game)}>
                           <PixelIcon name="play" size={13} /> {t('catalog.play')}
                         </button>
-                        <a
-                          className="creator-profile-game-link"
-                          href={gamePath(handle, game.slug)}
-                          onClick={interceptTo(gamePath(handle, game.slug))}
-                        >
-                          {t('creatorProfile.openGamePage')}
-                        </a>
                         {isOwner ? (
-                          <a className="creator-profile-game-link" href={studioPath(game.slug)}>
-                            {t('creatorProfile.openStudio')}
+                          <a className="secondary-btn creator-profile-studio-btn" href={studioPath(game.slug)}>
+                            <PixelIcon name="wrench" size={12} /> {t('creatorProfile.openStudio')}
                           </a>
                         ) : null}
                       </div>

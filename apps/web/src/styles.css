@@ -12357,7 +12357,188 @@ a.user-name--profile:focus-visible {
    that fed it went with it. `offered` / `opened` on the visit stream is what now
    answers whether the quieter door still gets used. */
 
+/* —— Published game page —— */
+.game-page {
+  width: min(1080px, calc(100% - 2rem));
+  margin: 0 auto;
+  padding: clamp(1.5rem, 4vw, 3.5rem) 0 4rem;
+}
+
+.game-page-header {
+  max-width: 850px;
+  margin-bottom: 1.25rem;
+}
+
+.game-page-kicker {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.game-page-kicker a {
+  color: var(--turquoise);
+}
+
+.game-page-genre {
+  padding: 0.15rem 0.55rem;
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  font-size: 0.75rem;
+}
+
+.game-page h1 {
+  margin: 0.4rem 0 1rem;
+  font-size: clamp(2rem, 5vw, 3.2rem);
+  line-height: 1;
+}
+
+.game-page-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.game-page-actions > .primary-btn,
+.game-page-actions > .secondary-btn,
+.game-page-actions .vote-btn {
+  min-height: 44px;
+}
+
+.game-page-actions .vote-widget {
+  display: contents;
+}
+
+.game-page-remix {
+  border-color: var(--turquoise);
+}
+
+.game-page-preview {
+  position: relative;
+  display: block;
+  width: 100%;
+  padding: 0;
+  overflow: hidden;
+  aspect-ratio: 16 / 9;
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  background: #07101e;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.game-page-preview:hover,
+.game-page-preview:focus-visible {
+  border-color: var(--turquoise);
+  box-shadow: 0 0 0 2px var(--turquoise-glow);
+}
+
+.game-page-preview img,
+.game-page-preview video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.game-page-preview-empty {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  color: var(--turquoise);
+  background: radial-gradient(circle at 50% 45%, rgba(0, 229, 183, 0.12), transparent 45%);
+}
+
+.game-page-preview-cta {
+  position: absolute;
+  left: 50%;
+  bottom: 1rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.65rem 0.9rem;
+  border-radius: 999px;
+  background: rgba(5, 12, 20, 0.88);
+  color: #fff;
+  font-weight: 700;
+  transform: translateX(-50%);
+  backdrop-filter: blur(8px);
+}
+
+.game-page-screenshots {
+  margin-top: 1.25rem;
+}
+
+.game-page-screenshots h2 {
+  margin: 0 0 0.65rem;
+  font-size: 1rem;
+}
+
+.game-page-screenshot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.65rem;
+}
+
+.game-page-screenshot {
+  display: block;
+  width: 100%;
+  padding: 0;
+  overflow: hidden;
+  aspect-ratio: 16 / 9;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: #07101e;
+  cursor: pointer;
+}
+
+.game-page-screenshot:hover,
+.game-page-screenshot:focus-visible,
+.game-page-screenshot.is-selected {
+  border-color: var(--turquoise);
+  box-shadow: 0 0 0 2px var(--turquoise-glow);
+}
+
+.game-page-screenshot img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.game-page-controls {
+  max-width: 760px;
+  margin-top: 1.25rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.game-page-controls h2 {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+}
+
+.game-page-controls p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.game-page-state {
+  max-width: 720px;
+  margin: 4rem auto;
+  padding: 1rem;
+  text-align: center;
+}
+
 /* —— Creator profiles —— */
+
 .creator-profile-page {
   max-width: 720px;
   margin: 0 auto;
@@ -12459,6 +12640,18 @@ a.user-name--profile:focus-visible {
   flex: 0 0 auto;
 }
 
+.creator-profile-game-thumb-link {
+  display: block;
+  flex: 0 0 auto;
+  border-radius: 6px;
+}
+
+.creator-profile-game-thumb-link:hover,
+.creator-profile-game-thumb-link:focus-visible {
+  outline: 2px solid var(--turquoise);
+  outline-offset: 3px;
+}
+
 .creator-profile-game-thumb--empty {
   display: block;
 }
@@ -12483,6 +12676,14 @@ a.user-name--profile:focus-visible {
 
 .creator-profile-game-link {
   font-size: 0.85rem;
+}
+
+.creator-profile-studio-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 44px;
+  text-decoration: none;
 }
 
 .card-author-link,
@@ -12861,6 +13062,31 @@ a.user-name--profile:focus-visible {
     width: 100%;
     height: auto;
     aspect-ratio: 16 / 9;
+  }
+
+  .creator-profile-game-thumb-link {
+    width: 100%;
+  }
+
+  .game-page {
+    width: min(100% - 1rem, 1080px);
+    padding-top: 1rem;
+  }
+
+  .game-page-actions > .primary-btn,
+  .game-page-actions > .secondary-btn,
+  .game-page-actions .vote-btn {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+
+  .game-page-preview {
+    border-radius: 8px;
+  }
+
+  .game-page-preview-cta {
+    bottom: 0.6rem;
+    white-space: nowrap;
   }
 }
 

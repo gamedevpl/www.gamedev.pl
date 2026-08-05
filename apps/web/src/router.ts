@@ -466,8 +466,8 @@ export function studioPath(game?: string, tab?: StudioTab): string {
  * Parent path for the NavHeader "Up" chevron — Android-style Up, not browser Back.
  *
  * Always a real in-app parent so a deep link still has somewhere safe to go.
- * Returns null when the surface owns its own escape (home, join, play/draft
- * theater, studio playtest overlay) or when Up would be meaningless.
+ * Returns null when the surface owns its own escape (home, join, draft theater,
+ * studio playtest overlay) or when Up would be meaningless.
  */
 export type NavUpTarget = {
   path: string;
@@ -482,9 +482,12 @@ export function navUpTarget(route: AppRoute): NavUpTarget | null {
     // the error-page home link own escape here, same as `/play`.
     case 'home':
     case 'join':
-    case 'play':
     case 'draft':
       return null;
+    // `/play/:slug` is now a preview-first page. The theater it opens hides the
+    // header through `stageContent`, so the visible static page gets a normal Up.
+    case 'play':
+      return { path: '/', labelKey: 'upHome' };
     case 'studio':
       // Playtest is a full-viewport theater with its own Close back to overview.
       if (route.tab === 'playtest') return null;

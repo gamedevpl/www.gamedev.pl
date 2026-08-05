@@ -8,14 +8,12 @@ import { AuthProvider } from './AuthContext.js';
 import i18n from './i18n/index.js';
 
 /**
- * Closing a game returns you to where you opened it from.
+ * Closing a game reveals the page that opened it.
  *
- * The exit used to be an unconditional trip home, which quietly threw away context
- * every time: a creator who opened their build from Creator Studio and closed it landed
- * on the catalog, several clicks away from the game they were in the middle of making.
- * Back is only safe when this tab has an in-app entry to go back to, so both halves are
- * guarded here — the deep link that must not walk off the site is as much the point as
- * the in-app open that must not lose its place.
+ * Published play is an in-place theater now: catalog/profile buttons open over their
+ * current page, while a shared `/play/<slug>` link first renders a static game page.
+ * Closing must therefore dismiss the theater without mutating browser history in either
+ * case. That keeps catalog position and leaves a shared link shareable after play.
  */
 
 async function flushEffects() {
@@ -78,7 +76,7 @@ describe('closing a full-viewport game', () => {
     vi.restoreAllMocks();
   });
 
-  it('goes back to whatever opened it, rather than home', async () => {
+  it('reveals the catalog that opened it without changing history', async () => {
     mockApi();
     window.history.pushState(null, '', '/');
     const { container, root } = await renderApp();
@@ -91,28 +89,7 @@ describe('closing a full-viewport game', () => {
       play?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await flushEffects();
     });
-    expect(window.location.pathname).toBe('/play/sky-dodge');
-
-    const exit = container.querySelector<HTMLButtonElement>('.exit-btn');
-    expect(exit).not.toBeNull();
-    await act(async () => {
-      exit?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      await flushEffects();
-    });
-
-    expect(back).toHaveBeenCalledTimes(1);
-
-    await act(async () => {
-      root.unmount();
-    });
-  });
-
-  it('goes home from a cold deep link, where Back would leave the site', async () => {
-    mockApi();
-    window.history.pushState(null, '', '/play/sky-dodge');
-    const { container, root } = await renderApp();
-
-    const back = vi.spyOn(window.history, 'back').mockImplementation(() => {});
+    expect(window.location.pathname).toBe('/');
 
     const exit = container.querySelector<HTMLButtonElement>('.exit-btn');
     expect(exit).not.toBeNull();
@@ -123,6 +100,37 @@ describe('closing a full-viewport game', () => {
 
     expect(back).not.toHaveBeenCalled();
     expect(window.location.pathname).toBe('/');
+    expect(container.querySelector('.exit-btn')).toBeNull();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('reveals the static game page behind a cold deep-link theater', async () => {
+    mockApi();
+    window.history.pushState(null, '', '/play/sky-dodge');
+    const { container, root } = await renderApp();
+
+    const back = vi.spyOn(window.history, 'back').mockImplementation(() => {});
+
+    const play = container.querySelector<HTMLButtonElement>('.game-page-actions .primary-btn');
+    expect(play).not.toBeNull();
+    await act(async () => {
+      play?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushEffects();
+    });
+
+    const exit = container.querySelector<HTMLButtonElement>('.exit-btn');
+    expect(exit).not.toBeNull();
+    await act(async () => {
+      exit?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushEffects();
+    });
+
+    expect(back).not.toHaveBeenCalled();
+    expect(window.location.pathname).toBe('/play/sky-dodge');
+    expect(container.querySelector('.game-page h1')?.textContent).toBe('Sky Dodge');
 
     await act(async () => {
       root.unmount();

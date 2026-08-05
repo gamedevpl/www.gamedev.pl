@@ -29,6 +29,7 @@ import { ContactPage } from './ContactPage.js';
 import { ProposalsPage } from './ProposalsPage.js';
 import { CreatorProfilePage } from './CreatorProfilePage.js';
 import { GamePage } from './GamePage.js';
+import { GameDetailPage } from './GameDetailPage.js';
 import { NotFoundPage } from './NotFoundPage.js';
 import { AppUpdateBanner } from './AppUpdateBanner.js';
 import { InstallPrompt } from './InstallPrompt.js';
@@ -66,7 +67,7 @@ import { createPartySession, type PartySession } from './mp/mpApi.js';
 import { parseOAuthReturnParam } from './oauthReturn.js';
 
 type StageContent =
-  | { type: 'catalog'; game: CatalogEntry }
+  | { type: 'catalog'; game: CatalogEntry; initialRemixOpen?: boolean }
   | { type: 'generated'; game: GeneratedGame; prompt: string }
   | { type: 'party'; game: CatalogEntry; session: PartySession };
 
@@ -99,8 +100,7 @@ export function App() {
   // Stage content
   const [stageContent, setStageContent] = useState<StageContent | null>(null);
   // Builds actually in flight, from the server — the header badge's source of truth.
-  // Paused while a game is on screen: the player covers the header, and a direct
-  // /play/<slug> link is meant to cost the game and nothing else.
+  // Paused while a game is on screen because the player covers the header.
   const activeBuildCount = useActiveBuildCount(myGamesRefreshKey, !stageContent);
 
   // Greenfield submission state
@@ -234,51 +234,6 @@ export function App() {
     return () => document.body.classList.remove('player-open');
   }, [stageContent]);
 
-  // The URL is the source of truth for playing a *published* game: opening
-  // `/play/<slug>` (via a click, a refresh, or a shared link) shows that game,
-  // and navigating away from it closes the player. Generated/party stages are
-  // ephemeral and are not represented in the route, so we only reconcile the
-  // 'catalog' stage here and leave those untouched.
-  useEffect(() => {
-    if (route.view === 'play') {
-      const entry = catalogEntries.find((game) => game.slug === route.slug);
-      if (stageContent?.type === 'catalog' && stageContent.game.slug === route.slug) {
-        if (entry && stageContent.game !== entry) {
-          setStageContent({ type: 'catalog', game: entry });
-        }
-        return;
-      }
-      const initialGame: CatalogEntry = entry ?? {
-        slug: route.slug,
-        title: route.slug
-          .split('-')
-          .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-          .join(' '),
-        genre: '',
-        controls: '',
-        status: 'published',
-        media: null,
-        multiplayer: null,
-        saves: null,
-        sensing: null,
-        world: null,
-        // A deep link that beat the catalog: assume no preference rather than
-        // nagging someone to rotate for a game whose spec we haven't read yet.
-        // The effect above swaps in the real entry once the catalog lands.
-        orientation: 'any',
-        // Same reasoning: unknown, not "keyboard only". The badge is a warning, and
-        // a deep link is no reason to show one.
-        touch: null,
-        submittedBy: null,
-      };
-      setStageContent({ type: 'catalog', game: initialGame });
-      document.getElementById('stage')?.scrollIntoView?.({ behavior: 'smooth' });
-    } else if (stageContent?.type === 'catalog') {
-      // Route moved off this game (Exit, back button, home) — close the player.
-      setStageContent(null);
-    }
-  }, [route, catalogEntries, stageContent]);
-
   // Guard against accidental reload/close while a game is open. The browser shows
   // its native "Leave site?" confirmation; games run in a sandboxed iframe with no
   // access to parent storage, so their internal progress can't be persisted here —
@@ -302,11 +257,9 @@ export function App() {
     // would just 401. Don't fetch (and don't render an error) until signed in.
     // Outside private beta, catalog reads stay public (owner decision).
     if (privateBeta && !user) return;
-    // Only the home page shows the gallery. On `/play/<slug>` the theater covers the
-    // whole viewport, so fetching the catalog (and, through it, every entry's media)
-    // is work nobody can see — a direct game link should cost the game, and nothing
-    // else. Leaving the route loads it, which is the first moment it's visible.
-    if (route.view !== 'home') return;
+    // Home renders the gallery; `/play/<slug>` renders one preview-first game page.
+    // Both need catalog metadata, but only Home mounts the grid itself.
+    if (route.view !== 'home' && route.view !== 'play') return;
 
     let cancelled = false;
     // Soft refreshes (Retry, pull-to-refresh) keep the last-good grid on screen —
@@ -754,7 +707,7 @@ export function App() {
   }, []);
 
   /**
-   * Closing a full-viewport overlay that owns the URL — a game, a draft.
+   * Closing a full-viewport overlay that owns the URL — currently a draft.
    *
    * Home was the unconditional answer, and it threw away context every time: a creator
    * who opened their build from Creator Studio and closed it landed on the catalog,
@@ -772,7 +725,7 @@ export function App() {
 
   // Header Up chevron — Android-style parent path, never history.back(). Hidden
   // while App owns a theater (`stageContent`) and on routes whose child owns one
-  // (`/play`, `/draft`, studio playtest — see navUpTarget).
+  // (`/draft`, studio playtest — see navUpTarget).
   const headerUp = useMemo(() => {
     if (stageContent) return null;
     const target = navUpTarget(route);
@@ -781,11 +734,18 @@ export function App() {
   }, [route, stageContent, t]);
 
   function handlePlayGame(game: CatalogEntry) {
-    // Published games are permalinked: drive play through the URL so a refresh or
-    // a shared link reopens the same game. The route→stage effect opens the stage.
-    navigate(playPath(game.slug));
+    // Explicit Play is the execution boundary. Shared `/play/<slug>` links land on a
+    // static preview first; catalog/profile Play buttons open the sandboxed theater
+    // immediately without making the preview page masquerade as a running game.
+    setStageContent({ type: 'catalog', game });
     // Soft refresh so "continue" / genre picks update after the next home visit.
     setRecommendationsRefreshKey((n) => n + 1);
+  }
+
+  function handleRemixGame(game: CatalogEntry) {
+    // The game still has to be mounted for Remix to swap and preview its document,
+    // but the sheet opens on the first frame — no theater detour and second wrench.
+    setStageContent({ type: 'catalog', game, initialRemixOpen: true });
   }
 
   async function handlePlayTogether(game: CatalogEntry) {
@@ -874,7 +834,7 @@ export function App() {
           <CreatorProfilePage
             handle={route.handle}
             onBack={() => navigate('/')}
-            onPlay={(slug) => navigate(playPath(slug))}
+            onPlay={handlePlayGame}
             onNavigate={navigate}
             onProfileLoaded={(profile: PublicCreatorProfile) => {
               setCreatorName(profile.profileName);
@@ -1009,41 +969,53 @@ export function App() {
           <DraftView slug={route.slug} onExit={exitOverlay} onDraftTitle={setDraftTitle} />
         ) : (
           <>
-            <div id="hero-prompt">
-              <HeroPromptSection
-                // Remount when a retry loads a new idea, so the prompt box picks it up.
-                key={retryPrompt ?? 'blank'}
-                initialPrompt={retryPrompt ?? ''}
-                catalogEntries={catalogEntries}
-                onPlayGame={handlePlayGame}
-                submissionStatus={submissionStatus}
-                submissionError={submissionError}
-                onSubmitSpec={(concept) => void handleSubmitSpec(concept)}
-                mockStatus={mockStatus}
-                mockError={mockError}
-                onGenerateMock={(prompt) => void handleGenerateMock(prompt)}
+            {route.view === 'play' ? (
+              <GameDetailPage
+                game={catalogEntries.find((game) => game.slug === route.slug) ?? null}
+                state={catalogStatus}
+                onPlay={handlePlayGame}
+                onRemix={handleRemixGame}
+                onRetry={handleRetryCatalog}
               />
-            </div>
+            ) : (
+              <>
+                <div id="hero-prompt">
+                  <HeroPromptSection
+                    // Remount when a retry loads a new idea, so the prompt box picks it up.
+                    key={retryPrompt ?? 'blank'}
+                    initialPrompt={retryPrompt ?? ''}
+                    catalogEntries={catalogEntries}
+                    onPlayGame={handlePlayGame}
+                    submissionStatus={submissionStatus}
+                    submissionError={submissionError}
+                    onSubmitSpec={(concept) => void handleSubmitSpec(concept)}
+                    mockStatus={mockStatus}
+                    mockError={mockError}
+                    onGenerateMock={(prompt) => void handleGenerateMock(prompt)}
+                  />
+                </div>
 
-            {/* Gated on the pending spec alone: the wizard is the naming step, which
+                {/* Gated on the pending spec alone: the wizard is the naming step, which
                 always happens, and the questions are the part that is sometimes empty.
                 It portals itself to a full-screen overlay, so nothing here positions it. */}
-            {pendingSpec && (
-              <CreatorQA
-                key={qaFormKey}
-                questions={qaQuestions}
-                initialConcept={pendingSpec.concept}
-                initialTitle={pendingSpec.title}
-                onSubmitWithConcept={handleQaComplete}
-                onTitleChange={handleQaTitleChange}
-                onCancel={handleQaCancel}
-                submitting={submissionStatus === 'loading' || submissionStatus === 'refining'}
-                error={submissionError}
-                initialAnswers={latestAnswersRef.current}
-                onAnswersChange={handleQaAnswersChange}
-                initialBuilder={qaBuilder}
-                onBuilderChange={handleQaBuilderChange}
-              />
+                {pendingSpec && (
+                  <CreatorQA
+                    key={qaFormKey}
+                    questions={qaQuestions}
+                    initialConcept={pendingSpec.concept}
+                    initialTitle={pendingSpec.title}
+                    onSubmitWithConcept={handleQaComplete}
+                    onTitleChange={handleQaTitleChange}
+                    onCancel={handleQaCancel}
+                    submitting={submissionStatus === 'loading' || submissionStatus === 'refining'}
+                    error={submissionError}
+                    initialAnswers={latestAnswersRef.current}
+                    onAnswersChange={handleQaAnswersChange}
+                    initialBuilder={qaBuilder}
+                    onBuilderChange={handleQaBuilderChange}
+                  />
+                )}
+              </>
             )}
 
             {stageContent?.type === 'party' && (
@@ -1085,13 +1057,14 @@ export function App() {
                 // it short so the title stays the hero of the bar.
                 badge={{ icon: 'sparkle', label: t('ai.generatedShort') }}
                 source={{ slug: stageContent.game.slug }}
-                onExit={exitOverlay}
+                onExit={() => setStageContent(null)}
                 orientation={stageContent.game.orientation}
                 reportSlug={stageContent.game.slug}
                 submittedBy={stageContent.game.submittedBy}
                 creatorHandle={stageContent.game.creatorHandle}
                 controls={stageContent.game.controls}
                 touch={stageContent.game.touch}
+                initialRemixOpen={stageContent.initialRemixOpen}
               />
             )}
 
@@ -1112,8 +1085,8 @@ export function App() {
 
             {partyError && <p className="error party-error">{partyError}</p>}
 
-            {/* Same reasoning as the catalog fetch: skip while /play covers the viewport. */}
-            {route.view !== 'play' && (
+            {/* The gallery is home content; game pages have their own compact surface. */}
+            {route.view === 'home' && (
               <ArcadeCatalog
                 catalogStatus={catalogStatus}
                 catalogError={catalogError}

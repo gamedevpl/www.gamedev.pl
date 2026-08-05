@@ -225,15 +225,16 @@ export type RemixStep =
 export type RemixPaintedVia = 'redirect' | 'menu' | 'panel';
 
 /**
- * Which door was used to open a remix: the chrome bar, or the overflow menu it
- * sheds into on narrow screens. Recorded on `offered` and `opened` only.
+ * Which door was used to open a remix: the game page, the theater chrome bar,
+ * or the overflow menu it sheds into on narrow screens. Recorded on `offered`
+ * and `opened` only.
  *
  * A separate field from `via` rather than more members on it. `via` answers
  * "what led someone to the painter" and this answers "which control did they
  * press"; one name covering both would make every historical row ambiguous the
- * day a third door appears.
+ * day another door appears.
  */
-export type RemixControl = 'bar' | 'more';
+export type RemixControl = 'bar' | 'more' | 'page';
 
 const FLUSH_AT = 5;
 const MAX_BATCH = 25;

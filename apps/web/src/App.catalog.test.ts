@@ -105,9 +105,8 @@ describe('catalog playback', () => {
     expect(previewButton?.textContent).toContain('Pause preview');
     expect(container.querySelectorAll('.catalog-moment')).toHaveLength(2);
 
-    // history.pushState fires nothing, so in-app navigation is announced explicitly
-    // for listeners outside App (analytics). Without it their only option is to
-    // monkey-patch history — see NAVIGATE_EVENT in router.ts.
+    // Explicit Play opens theater in place. `/play/:slug` is the shareable preview
+    // page now, so a catalog click must not navigate through it before starting.
     const navigations: string[] = [];
     const onNavigate = (event: Event) => {
       navigations.push((event as CustomEvent<NavigateEventDetail>).detail.path);
@@ -120,10 +119,8 @@ describe('catalog playback', () => {
       await flushEffects();
     });
 
-    expect(navigations).toEqual(['/play/sky-dodge']);
-    // Announced only after the URL is already the new one, so a listener that reads
-    // window.location instead of trusting `detail` still sees the same place.
-    expect(window.location.pathname).toBe('/play/sky-dodge');
+    expect(navigations).toEqual([]);
+    expect(window.location.pathname).toBe('/');
     window.removeEventListener(NAVIGATE_EVENT, onNavigate);
 
     const iframe = container.querySelector('iframe[title="Sky Dodge"]');
@@ -207,7 +204,7 @@ describe('catalog playback', () => {
     });
   });
 
-  it('opens game theater for direct play path routes even before catalog is loaded', async () => {
+  it('renders a static game page for direct play paths without loading the game iframe', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     const fetched: string[] = [];
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
@@ -220,7 +217,19 @@ describe('catalog playback', () => {
         return new Response(JSON.stringify({ status: 'ok', provider: 'mock', privateBeta: false }));
       }
       if (url.endsWith('/api/catalog')) {
-        return new Response(JSON.stringify([]));
+        return new Response(
+          JSON.stringify([
+            {
+              slug: 'football-3d-lite',
+              title: 'Football 3D Lite',
+              genre: 'sports',
+              controls: 'Arrow keys move',
+              status: 'published',
+              media: { screenshots: [{ name: 'match', file: 'match.png' }], video: null },
+              multiplayer: null,
+            },
+          ]),
+        );
       }
       if (url.includes('/api/recommendations')) {
         return new Response(JSON.stringify({ items: [] }));
@@ -229,6 +238,9 @@ describe('catalog playback', () => {
         return new Response(
           JSON.stringify({ slug: 'football-3d-lite', title: 'Football 3D Lite', html: '<canvas>football</canvas>' }),
         );
+      }
+      if (url.endsWith('/api/games/football-3d-lite/votes')) {
+        return new Response(JSON.stringify({ up: 2, down: 0, mine: null }));
       }
       if (/\/api\/games\/[^/]+\/played$/.test(new URL(url, 'http://localhost').pathname)) {
         return new Response(null, { status: 204 });
@@ -249,30 +261,14 @@ describe('catalog playback', () => {
       await flushEffects();
     });
 
-    const iframe = container.querySelector('iframe');
-    expect(iframe).not.toBeNull();
-    const srcdoc = iframe?.getAttribute('srcdoc') ?? '';
-    expect(srcdoc).toContain('<canvas>football</canvas>');
+    expect(container.querySelector('iframe')).toBeNull();
+    expect(container.querySelector('.game-page h1')?.textContent).toBe('Football 3D Lite');
+    expect(container.querySelector<HTMLImageElement>('.game-page-preview img')?.src).toContain('match.png?w=1280');
 
-    // A direct game link costs the game and nothing else: the gallery and the
-    // "your games" rail sit behind a full-viewport player, so they must not load.
-    expect(fetched.some((url) => url.includes('/api/catalog'))).toBe(false);
-    expect(fetched.some((url) => url.includes('/api/submissions/mine'))).toBe(false);
-    expect(fetched.some((url) => url.includes('/api/games/football-3d-lite'))).toBe(true);
-
-    // The header title comes from the game itself over the player bridge, since a
-    // direct link has no catalog entry to take one from.
-    await act(async () => {
-      window.dispatchEvent(
-        new MessageEvent('message', {
-          origin: 'null',
-          data: { source: 'gdpl-player', type: 'meta', title: 'Football 3D Lite', desc: 'Score a goal', muted: false },
-        }),
-      );
-      await flushEffects();
-    });
-    expect(container.querySelector('.theater-title-text')?.textContent).toBe('Football 3D Lite');
-    expect(container.querySelector('.theater-author')?.textContent).toMatch(/gamedev\.pl/);
+    // The page needs catalog metadata, but game code does not load until a deliberate
+    // Play/preview click crosses into theater.
+    expect(fetched.some((url) => url.includes('/api/catalog'))).toBe(true);
+    expect(fetched.some((url) => url.endsWith('/api/games/football-3d-lite'))).toBe(false);
 
     await act(async () => {
       root.unmount();

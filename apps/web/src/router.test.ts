@@ -327,10 +327,10 @@ describe('path builders', () => {
 });
 
 describe('navUpTarget', () => {
-  it('hides Up on home, join, play, draft, and studio playtest', () => {
+  it('hides Up on overlays and gives the static play page a home parent', () => {
     expect(navUpTarget({ view: 'home' })).toBeNull();
     expect(navUpTarget({ view: 'join', code: 'ABC123', token: 'tok' })).toBeNull();
-    expect(navUpTarget({ view: 'play', slug: 'sky-dodge' })).toBeNull();
+    expect(navUpTarget({ view: 'play', slug: 'sky-dodge' })).toEqual({ path: '/', labelKey: 'upHome' });
     expect(navUpTarget({ view: 'draft', slug: 'space-runner' })).toBeNull();
     expect(navUpTarget({ view: 'studio', game: 'tok', tab: 'playtest' })).toBeNull();
   });

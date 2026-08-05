@@ -271,18 +271,22 @@ describe('summarizeVisitFunnel', () => {
       // Shown it and never touched it — the whole reason `offered` exists.
       started('d'),
       remix('d', 'offered'),
+      started('e'),
+      remix('e', 'offered'),
+      remix('e', 'opened', { control: 'page', msSinceStart: 40_000 }),
     ]);
 
-    expect(funnel.remixEntry.offered).toBe(4);
-    expect(funnel.remixEntry.opened).toBe(3);
+    expect(funnel.remixEntry.offered).toBe(5);
+    expect(funnel.remixEntry.opened).toBe(4);
     expect(funnel.remixEntry.byControl).toEqual([
+      { control: 'page', visits: 1 },
       { control: 'bar', visits: 1 },
       { control: 'more', visits: 1 },
       { control: 'unknown', visits: 1 },
     ]);
-    // Median of the three that opened one — the visit that never did contributes
+    // Median of the four that opened one — the visit that never did contributes
     // no delay, because including it would measure the window rather than them.
-    expect(funnel.remixEntry.medianSecondsToOpen).toBe(60);
+    expect(funnel.remixEntry.medianSecondsToOpen).toBe(50);
   });
 
   it('never reports more opens than offers, even while old clients are still running', () => {
@@ -317,6 +321,7 @@ describe('summarizeVisitFunnel', () => {
     expect(funnel.remixEntry.opened).toBeLessThanOrEqual(funnel.remixEntry.offered);
     // The splits come from the same cohort, or they would disagree with the ratio.
     expect(funnel.remixEntry.byControl).toEqual([
+      { control: 'page', visits: 0 },
       { control: 'bar', visits: 1 },
       { control: 'more', visits: 0 },
     ]);

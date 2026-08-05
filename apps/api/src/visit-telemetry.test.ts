@@ -245,13 +245,13 @@ describe('POST /api/telemetry/visit', () => {
       flushMsSinceStart: 30_000,
       events: [
         { type: 'remix_step', step: 'offered', msSinceStart: 0 },
-        { type: 'remix_step', step: 'opened', control: 'bar', msSinceStart: 28_000 },
+        { type: 'remix_step', step: 'opened', control: 'page', msSinceStart: 28_000 },
       ],
     });
     expect(ok.statusCode).toBe(202);
     const stored = await store.listVisitEvents(today());
     expect(stored[0]).toMatchObject({ type: 'remix_step', step: 'offered' });
-    expect(stored[1]).toMatchObject({ type: 'remix_step', step: 'opened', control: 'bar', msSinceStart: 28_000 });
+    expect(stored[1]).toMatchObject({ type: 'remix_step', step: 'opened', control: 'page', msSinceStart: 28_000 });
 
     // Closed enum, like every other value that reaches a grouping key on an
     // endpoint anyone can reach.
