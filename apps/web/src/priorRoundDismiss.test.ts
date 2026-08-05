@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+
 import { describe, expect, it, beforeEach } from 'vitest';
 import { isPriorRoundDismissed, setPriorRoundDismissed } from './priorRoundDismiss.js';
 
