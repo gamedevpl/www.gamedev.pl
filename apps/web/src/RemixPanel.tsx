@@ -202,6 +202,8 @@ export function RemixPanel(props: {
   initialParams?: Record<string, EditorParamValue> | null;
   /** A request written before theater entry. It is consumed at most once. */
   initialRequest?: string | null;
+  /** Clears the one-shot request in the frame that outlives this panel. */
+  onInitialRequestConsumed?: () => void;
   /**
    * The session, owned by the parent so it outlives this sheet.
    *
@@ -554,6 +556,7 @@ export function RemixPanel(props: {
   useEffect(() => {
     if (user || stashedInitialRef.current || initialRequest.length < 2) return;
     stashedInitialRef.current = true;
+    props.onInitialRequestConsumed?.();
     setUtterance(initialRequest);
     void ask(initialRequest);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- one carried request, through the existing ask path
@@ -570,6 +573,7 @@ export function RemixPanel(props: {
     if (request === null) return;
     ranAutomaticRequestRef.current = true;
     if (pending !== null) recordRemixStep('signed_in');
+    if (pending === null) props.onInitialRequestConsumed?.();
     setUtterance(request);
     void ask(request, session);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once per session arrival

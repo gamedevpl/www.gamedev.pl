@@ -391,6 +391,17 @@ describe('catalog playback', () => {
     );
     expect(container.querySelector('.remix-panel')).not.toBeNull();
 
+    // The landing-page request is one-shot. Closing and reopening the in-game
+    // sheet must not spend or apply that same request again.
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.remix-close')!.click();
+    });
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.remix-btn')!.click();
+    });
+    await flushEffects();
+    expect(assistBodies).toEqual([{ utterance: 'make it faster', params: {} }]);
+
     await act(async () => {
       root.unmount();
     });

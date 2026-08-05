@@ -85,6 +85,10 @@ export function PublishedGameFrame({
   const [remixSession, setRemixSession] = useState<RemixSession | null>(null);
   const [remixUndoable, setRemixUndoable] = useState(false);
   const [remixOpen, setRemixOpen] = useState(false);
+  // The landing-page request is a one-shot handoff. Keep consumption above the
+  // panel because closing the sheet unmounts it; leaving the request on props
+  // would replay the same (potentially paid) change when the player reopened it.
+  const [pendingInitialRemixRequest, setPendingInitialRemixRequest] = useState(initialRemixRequest ?? null);
   /**
    * Level-editor stage: the painter leaves the remix sheet and owns the theater.
    * Focus flips Edit ↔ Play without unmounting the iframe or the painter — the
@@ -179,7 +183,8 @@ export function PublishedGameFrame({
           slug={slug}
           frameRef={activeFrameRef}
           initialParams={sharedParams}
-          initialRequest={initialRemixRequest}
+          initialRequest={pendingInitialRemixRequest}
+          onInitialRequestConsumed={() => setPendingInitialRemixRequest(null)}
           onSwapDocument={setRemixHtml}
           session={remixSession}
           onSession={setRemixSession}
