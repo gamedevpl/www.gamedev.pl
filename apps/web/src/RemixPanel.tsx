@@ -443,17 +443,37 @@ export function RemixPanel(props: {
 
   const painterStageActive = Boolean(painterOpen && session?.content && lane !== 'building');
 
+  // Latest callback in a ref — parents may pass a fresh arrow each render; the
+  // stage/focus effects must not re-bind (or flash) when only the identity changes.
+  const onEditorStageRef = useRef(props.onEditorStage);
+  onEditorStageRef.current = props.onEditorStage;
+
   // Host restyles the iframe slot from this signal — never remount the frame.
   // Cleanup must NOT run on focus flips (that would flash the stage off); only
   // report `active: false` when the painter closes or this panel unmounts.
   useEffect(() => {
-    props.onEditorStage?.({ active: painterStageActive, focus: editorFocus });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- notify on stage/focus only
+    onEditorStageRef.current?.({ active: painterStageActive, focus: editorFocus });
   }, [painterStageActive, editorFocus]);
   useEffect(() => {
-    return () => props.onEditorStage?.({ active: false, focus: 'edit' });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- unmount only
+    return () => onEditorStageRef.current?.({ active: false, focus: 'edit' });
   }, []);
+
+  // Play focus is CSS-only — the iframe does not reload — so hand keyboard focus
+  // into the game the way GameFrame does on first load (WASD / arrows otherwise
+  // stay on the chrome button that flipped the mode).
+  useEffect(() => {
+    if (!painterStageActive || editorFocus !== 'play') return;
+    const frame = props.frameRef.current;
+    if (!frame) return;
+    frame.focus();
+    frame.contentWindow?.focus();
+  }, [painterStageActive, editorFocus, props.frameRef]);
+
+  /** Leave the stage; always restore edit as the default for the next open. */
+  function closeEditorStage() {
+    setEditorFocus('edit');
+    setPainterOpen(false);
+  }
 
   // The More-menu door. A nonce: the same entry chosen again reopens a painter
   // the player closed, which a boolean prop cannot express.
@@ -945,7 +965,7 @@ export function RemixPanel(props: {
                   {t('remix.editorFocusPlay')}
                 </button>
               </div>
-              <button type="button" className="remix-editor-done" onClick={() => setPainterOpen(false)}>
+              <button type="button" className="remix-editor-done" onClick={closeEditorStage}>
                 {t('remix.editorDone')}
               </button>
             </div>

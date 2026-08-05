@@ -333,6 +333,11 @@ describe('RemixPanel', () => {
 
   it('flips Edit ↔ Play focus without unmounting the painter, and reports the stage', async () => {
     const onEditorStage = vi.fn();
+    const frameFocus = vi.fn();
+    const contentFocus = vi.fn();
+    const focusFrameRef = {
+      current: { focus: frameFocus, contentWindow: { focus: contentFocus, postMessage: () => {} } },
+    } as unknown as React.MutableRefObject<HTMLIFrameElement | null>;
     remixApi.startRemix.mockResolvedValue({
       remixId: 'r1',
       params: null,
@@ -364,7 +369,7 @@ describe('RemixPanel', () => {
       root!.render(
         <RemixPanel
           slug="dog-dash"
-          frameRef={frameRef as never}
+          frameRef={focusFrameRef as never}
           onSwapDocument={() => {}}
           onClose={() => {}}
           onEditorStage={onEditorStage}
@@ -384,16 +389,20 @@ describe('RemixPanel', () => {
       buttonNamed(container, 'Play')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(container.querySelector('.remix-editor-stage.is-focus-play')).not.toBeNull();
-    expect(onEditorStage).toHaveBeenCalledWith({ active: true, focus: 'play' });
+    expect(onEditorStage).toHaveBeenLastCalledWith({ active: true, focus: 'play' });
     // Same painter tree — focus is CSS, not a remount.
     expect(container.querySelector('.remix-painter .editor-board')).toBe(board);
+    // Keyboard input must land in the game without an extra click on the iframe.
+    expect(frameFocus).toHaveBeenCalled();
+    expect(contentFocus).toHaveBeenCalled();
 
     await act(async () => {
       buttonNamed(container, 'Done')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(container.querySelector('.remix-editor-stage')).toBeNull();
     expect(container.querySelector('.remix-panel')).not.toBeNull();
-    expect(onEditorStage).toHaveBeenCalledWith({ active: false, focus: 'edit' });
+    // Done from Play still clears with the default edit focus — not a stale 'play'.
+    expect(onEditorStage).toHaveBeenLastCalledWith({ active: false, focus: 'edit' });
   });
 
   it('pushes the whole content document over the bridge, never params alone', async () => {
