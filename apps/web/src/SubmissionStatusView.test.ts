@@ -924,9 +924,9 @@ describe('SubmissionStatusView', () => {
       expect(container.querySelector('.builder-mode-badge')?.textContent).toContain('Your agent (MCP)');
       expect(container.querySelector('.builder-mode-badge-change')).not.toBeNull();
       expect(container.querySelector('.builder-choice')).toBeNull();
-      // Handoff, not mid-build — do not spin "Writing code" beside the finished chip.
-      expect(container.querySelector('.studio-thread-context.is-active')).toBeNull();
-      expect(container.querySelector('.studio-context-phase-spinner')).toBeNull();
+      // Handoff, not mid-build — no live working turn and no foot "Writing code".
+      expect(container.querySelector('.studio-turn.is-working')).toBeNull();
+      expect(container.querySelector('.studio-thread-context')).toBeNull();
     } finally {
       await act(async () => {
         root.unmount();
@@ -1425,7 +1425,7 @@ describe('SubmissionStatusView', () => {
     });
   });
 
-  it('keeps build pulse in the foot without checklist fraction, stop, or Play', async () => {
+  it('keeps build pulse as the last transcript turn without checklist fraction, stop, or Play', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     mockedGetSubmissionStatus.mockResolvedValue({
       status: 'building',
@@ -1456,20 +1456,23 @@ describe('SubmissionStatusView', () => {
       await flushEffects();
     });
 
-    expect(container.querySelector('.studio-thread-context.is-active')).not.toBeNull();
-    expect(container.querySelector('.studio-context-phase-spinner')).not.toBeNull();
-    // Abandon / checklist / Play stay out of the foot — Claude-shaped chrome.
+    // Claude-shaped: "Writing code" is the last transcript turn with a pulse, not a foot bar.
+    const working = container.querySelector('.studio-turn.is-working');
+    expect(working).not.toBeNull();
+    expect(working?.textContent).toContain('Writing code');
+    expect(container.querySelector('.studio-turn-working-pulse')).not.toBeNull();
+    expect(container.querySelector('.studio-thread-context')).toBeNull();
+    // Abandon / checklist / Play stay out of the foot.
     expect(container.querySelector('.studio-context-stop')).toBeNull();
     expect(container.querySelector('.studio-context-progress')).toBeNull();
     expect(container.querySelector('.status-play-cta')).toBeNull();
-    expect(container.querySelector('.studio-thread-context .studio-slug')).toBeNull();
 
     await act(async () => {
       root.unmount();
     });
   });
 
-  it('flashes a presence thought in the thread bar without adding a chat turn', async () => {
+  it('flashes a presence thought on the live working turn, not as a permanent chat bubble', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     const at = new Date().toISOString();
     mockedGetSubmissionStatus.mockResolvedValue({
@@ -1492,10 +1495,53 @@ describe('SubmissionStatusView', () => {
       await flushEffects();
     });
 
-    expect(container.querySelector('.studio-thread-context.is-thought')).not.toBeNull();
-    expect(container.querySelector('.studio-context-phase')?.textContent).toContain('Browsing the Creator Kit');
-    // Thought stays out of the transcript.
-    expect(container.querySelector('.studio-turn')).toBeNull();
+    const working = container.querySelector('.studio-turn.is-working.is-thought');
+    expect(working).not.toBeNull();
+    expect(working?.textContent).toContain('Browsing the Creator Kit');
+    // Thought is the live working line — not a durable event bubble, and not the foot bar.
+    expect(container.querySelectorAll('.studio-turn:not(.is-working)')).toHaveLength(0);
+    expect(container.querySelector('.studio-thread-context')).toBeNull();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('does not leave Writing code in the foot after the self agent ends', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'building',
+      stall: 'ended',
+      builder: 'self',
+      agentEndedAt: '2026-08-05T12:15:00.000Z',
+      events: [
+        {
+          id: 'e1',
+          kind: 'step',
+          step: 'testing',
+          text: 'Preview build sent for checks.',
+          createdAt: '2026-08-05T12:10:00.000Z',
+        },
+      ],
+    });
+    await i18n.changeLanguage('en');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'ended-no-writing', embedded: true }));
+      await flushEffects();
+      await flushEffects();
+    });
+
+    expect(container.querySelector('.studio-turn.is-working')).toBeNull();
+    expect(container.querySelector('.studio-thread-context')).toBeNull();
+    expect(container.querySelector('.status-warning')?.textContent).toMatch(/finished this round/i);
+    // The finished event stays; the live "Writing code" line must not linger under it.
+    expect(container.textContent).toContain('Preview build sent for checks.');
+    expect(container.querySelector('.studio-thread-turns')?.textContent).not.toMatch(/Writing code/i);
 
     await act(async () => {
       root.unmount();

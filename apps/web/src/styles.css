@@ -5333,6 +5333,67 @@ a.user-name--profile:focus-visible {
   opacity: 0.7;
 }
 
+/* Live agent work — last transcript row, Claude-shaped. Pulse is a mascot-colour
+   square so motion reads without another spinner next to the composer. */
+.studio-turn.is-working {
+  margin-top: 2px;
+}
+
+.studio-turn-working {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.studio-turn-working-pulse {
+  width: 9px;
+  height: 9px;
+  flex: none;
+  border-radius: 2px;
+  background: var(--turquoise, #00e4ac);
+  box-shadow: 0 0 0 0 var(--turquoise-glow, rgba(0, 228, 172, 0.35));
+  animation: studio-working-pulse 1.4s ease-in-out infinite;
+}
+
+.studio-turn-working-label {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--text);
+  line-height: 1.35;
+}
+
+.studio-turn.is-working.is-thought .studio-turn-working-label {
+  color: var(--turquoise);
+  animation: studio-thought-flash 0.55s ease-out;
+}
+
+@keyframes studio-working-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(0.92);
+    box-shadow: 0 0 0 0 transparent;
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+    box-shadow: 0 0 0 4px var(--turquoise-glow, rgba(0, 228, 172, 0.28));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-turn-working-pulse {
+    animation: none;
+    opacity: 1;
+    box-shadow: none;
+  }
+
+  .studio-turn.is-working.is-thought .studio-turn-working-label {
+    animation: none;
+  }
+}
+
 .studio-turn-shots {
   display: flex;
   flex-wrap: wrap;
