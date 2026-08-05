@@ -149,7 +149,11 @@ describe('POST /api/admin/jobs/:issueNumber/publish', () => {
   const adminHeaders = { cookie: `${SESSION_COOKIE_NAME}=${mintSessionToken('g:boss', sessionSecret)}` };
 
   /** A store holding one delivered version, gated as told. */
-  function gamesStoreWith(gate: { green: boolean } | null, bundle = '<!doctype html>assembled') {
+  function gamesStoreWith(
+    gate: { green: boolean } | null,
+    bundle = '<!doctype html>assembled',
+    deliveryMode?: 'preview' | 'publish' | 'proposal',
+  ) {
     return {
       getManifest: async () => ({
         slug: 'comet-courier',
@@ -157,6 +161,7 @@ describe('POST /api/admin/jobs/:issueNumber/publish', () => {
         createdAt: '2026-07-30T10:00:00Z',
         issueNumber: 1_000_001,
         sourceFiles: ['SPEC.md'],
+        ...(deliveryMode ? { deliveryMode } : {}),
         ...(gate ? { gate: { ...gate, ranAt: '2026-07-30T11:00:00Z' } } : {}),
       }),
       getSourceFile: async () => '---\ntitle: Comet Courier\n---\n',
@@ -185,6 +190,38 @@ describe('POST /api/admin/jobs/:issueNumber/publish', () => {
     });
     return { app, store };
   }
+
+  it('refuses to publish a proposal version, however green its gate', async () => {
+    // The load-bearing refusal for the proposals feature. A proposal is somebody else's
+    // change, and a green gate on one says only that it runs — it becomes publishable when
+    // the game's owner accepts it, which rewrites the mode. Read off the manifest rather
+    // than from the proposal registry on purpose: this must hold for a caller who has
+    // never heard of proposals.
+    const { app, store } = await appWithJob(gamesStoreWith({ green: true }, undefined, 'proposal'));
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/admin/jobs/1000001/publish',
+      headers: adminHeaders,
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({ error: 'not_publishable' });
+    expect(await store.getPublication('comet-courier')).toBeNull();
+  });
+
+  it('refuses to publish a preview version for the same reason', async () => {
+    const { app, store } = await appWithJob(gamesStoreWith({ green: true }, undefined, 'preview'));
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/admin/jobs/1000001/publish',
+      headers: adminHeaders,
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(await store.getPublication('comet-courier')).toBeNull();
+  });
 
   it('publishes a gate-green build and records how it got there', async () => {
     const { app, store } = await appWithJob(gamesStoreWith({ green: true }));

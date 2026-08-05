@@ -9,7 +9,7 @@ import {
   type JobStall,
   type JobState,
 } from './job-state.js';
-import type { GamesStore } from './games-store.js';
+import { isPublishableMode, type GamesStore } from './games-store.js';
 import { BOT_UID_PREFIX, type Store, type SubmissionRecord } from './store.js';
 
 /**
@@ -199,6 +199,15 @@ export async function registerJobAdminRoutes(
     const manifest = await gamesStore.getManifest(record.slug, record.deliveredVersion);
     if (!manifest?.gate) return reply.code(409).send({ error: 'not_gated' });
     if (!manifest.gate.green) return reply.code(409).send({ error: 'gate_red' });
+    // A proposal is somebody else's change to this game, and a green gate on one says
+    // only that it runs. It becomes publishable when the game's owner accepts it, which
+    // rewrites the mode — so a version still in proposal mode has not been accepted, and
+    // publishing it here would route around the one consent this feature depends on.
+    // Read off the manifest rather than from the proposal registry deliberately: this
+    // refusal must hold even for a caller who never heard of proposals.
+    if (!isPublishableMode(manifest.deliveryMode)) {
+      return reply.code(409).send({ error: 'not_publishable' });
+    }
 
     const at = new Date(now()).toISOString();
     // Through `publishing` rather than straight to `published`: the intermediate state is

@@ -253,6 +253,14 @@ interface CachedStatus {
 export interface SubmissionRoutesOptions {
   githubToken?: string;
   gamesRepo?: string;
+  /**
+   * A game's published sources plus the base to pin a proposal to — the MCP proposal
+   * round's one read. Injected from `buildApp`, which is where the snapshot reader and
+   * games-repo credentials already live.
+   */
+  resolveProposalBase?: (
+    slug: string,
+  ) => Promise<{ base: import('./store.js').ProposalBase; files: import('./games-store.js').SourceFile[] } | null>;
   submissionTokenSecret?: string;
   /**
    * Localizes an agent-relayed change request on the write that stores it. Used by the
@@ -4388,11 +4396,29 @@ export async function registerSubmissionRoutes(
         const submission = await store.getSubmissionBySlug(record.slug);
         const owner = submission ? await store.getUser(submission.ownerUid) : null;
         const profile = owner ? toPublicCreatorProfile(owner) : null;
+        // Contributor credit, from the same read-time join and the same rule: the live
+        // version's manifest records which proposal it was adopted from, so the handle
+        // comes from that person's profile rather than from anything written into SPEC.
+        // Publish-gated like the owner byline — an unclaimed handle credits nobody, which
+        // is the same answer the catalog gives for an unclaimed creator.
+        const contributors: string[] = [];
+        try {
+          const manifest = await gamesStore.getManifest(record.slug, record.currentVersion);
+          if (manifest?.proposal?.proposerUid) {
+            const contributor = await store.getUser(manifest.proposal.proposerUid);
+            const contributorProfile = contributor ? toPublicCreatorProfile(contributor) : null;
+            if (contributorProfile?.handle) contributors.push(contributorProfile.handle);
+          }
+        } catch {
+          // A credit we cannot read is a credit we omit. Failing the catalog entry over a
+          // byline would take a working game off the site to protect a courtesy.
+        }
         entries.push({
           ...entry,
           status: 'published',
           submittedBy: profile ? profileBylineName(profile) : entry.submittedBy,
           creatorHandle: profile?.handle ?? null,
+          ...(contributors.length > 0 ? { contributorHandles: contributors } : {}),
         });
       }
       storeCatalogCache = { value: entries, expiresAt: now() + storeCatalogTtlMs };
@@ -4712,6 +4738,11 @@ export async function registerSubmissionRoutes(
     contentChecker,
     dailyImprovementQuota,
     dailyFeedbackQuota,
+    // Proposal rounds: an agent contributing to a game its creator does not own. Both
+    // seams come from the caller so this module keeps no games-repo or snapshot
+    // dependency; absent means the tools answer "not configured" rather than half-working.
+    resolveProposalBase: options.resolveProposalBase,
+    onSourcesDelivered: options.agentChannel?.onSourcesDelivered,
   });
 
   return {

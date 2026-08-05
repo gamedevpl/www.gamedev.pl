@@ -6,7 +6,7 @@
 // notification mails described in docs/notifications-plan.md.
 
 import type { EmailMessage } from './mailer.js';
-import type { OperatorNotificationType, SubmissionNotificationType } from './store.js';
+import type { OperatorNotificationType, ProposalNotificationType, SubmissionNotificationType } from './store.js';
 
 export type Locale = 'en' | 'pl';
 
@@ -159,6 +159,54 @@ const notificationCopy: Record<
   },
 };
 
+/**
+ * Proposal copy, kept apart from the submission table because the sentence has a
+ * different subject.
+ *
+ * A submission notification says "«your game» happened to you". A proposal notification
+ * says "somebody wants to change «your game»", or "the change you sent was decided" —
+ * the actor is a second person, and the lead has to name them or the mail reads as though
+ * the platform did something to the recipient's game on its own.
+ */
+const proposalCopy: Record<ProposalNotificationType, Record<Locale, { subject: string; lead: string; cta: string }>> = {
+  'proposal.awaiting_review': {
+    en: {
+      subject: 'Someone proposed a change to your game',
+      lead: 'has a proposed change waiting for you. It passed our checks and test run — you decide whether it lands.',
+      cta: 'Review it',
+    },
+    pl: {
+      subject: 'Ktoś zaproponował zmianę w twojej grze',
+      lead: 'ma czekającą propozycję zmiany. Przeszła nasze testy — ty decydujesz, czy trafi do gry.',
+      cta: 'Zobacz propozycję',
+    },
+  },
+  'proposal.decided': {
+    en: {
+      subject: 'Your proposal was reviewed',
+      lead: 'has been reviewed. Open it to see what the owner said.',
+      cta: 'See the decision',
+    },
+    pl: {
+      subject: 'Twoja propozycja została oceniona',
+      lead: 'została oceniona. Otwórz ją, aby zobaczyć odpowiedź autora.',
+      cta: 'Zobacz decyzję',
+    },
+  },
+  'proposal.merged': {
+    en: {
+      subject: 'Your contribution is live',
+      lead: 'is now part of the published game. You are a watcher on it — we will send a digest when it changes.',
+      cta: 'Play it',
+    },
+    pl: {
+      subject: 'Twoja zmiana jest na żywo',
+      lead: 'jest już częścią opublikowanej gry. Obserwujesz ją — wyślemy podsumowanie, gdy się zmieni.',
+      cta: 'Zagraj',
+    },
+  },
+};
+
 const unsubscribeLine: Record<Locale, string> = {
   en: 'You are receiving this because you submitted a game to gamedev.pl. Unsubscribe:',
   pl: 'Otrzymujesz tę wiadomość, ponieważ zgłosiłeś grę na gamedev.pl. Wypisz się:',
@@ -191,13 +239,41 @@ export function followedGamePushContent(locale: Locale, title: string): { title:
     : { title: 'A game you follow was updated', body: `“${title}” has a new version.` };
 }
 
+/** Short push copy for a proposal event, from the same strings as the email. */
+export function proposalPushContent(
+  locale: Locale,
+  type: ProposalNotificationType,
+  title: string,
+): { title: string; body: string } {
+  const copy = proposalCopy[type][locale];
+  return { title: copy.subject, body: `“${title}” ${copy.lead}` };
+}
+
+export function proposalNotificationMessage(
+  to: string,
+  locale: Locale,
+  type: ProposalNotificationType,
+  params: NotificationEmailParams,
+): EmailMessage {
+  return renderNotificationEmail(to, locale, proposalCopy[type][locale], params);
+}
+
 export function submissionNotificationMessage(
   to: string,
   locale: Locale,
   type: SubmissionNotificationType,
   params: NotificationEmailParams,
 ): EmailMessage {
-  const copy = notificationCopy[type][locale];
+  return renderNotificationEmail(to, locale, notificationCopy[type][locale], params);
+}
+
+/** The shared body. Both families render identically; only the strings differ. */
+function renderNotificationEmail(
+  to: string,
+  locale: Locale,
+  copy: { subject: string; lead: string; cta: string },
+  params: NotificationEmailParams,
+): EmailMessage {
   const title = params.title;
   const actionUrl = escapeHtml(params.actionUrl);
   const unsub = escapeHtml(params.unsubscribeUrl);

@@ -6,6 +6,7 @@ import type { BuilderKind } from './builder.js';
 import type { PublicationHealthCheck, PublicationRecord } from './games-store.js';
 import type { AvatarMode } from './creator-profile.js';
 import { nextRoundGeneration, transitionClosesRound, type JobState, type JobTransition } from './job-state.js';
+import type { DeclineReason, ProposalState, ProposalTransition } from './proposal-state.js';
 import type { BuildEvent, SubmissionStatus } from './submission-status.js';
 
 /**
@@ -876,7 +877,27 @@ export type NotificationType =
    * Someone asked to join the closed beta. Not a job alert — there is no issue number —
    * but it is still an operator action: approve (or not) via the waitlist tooling.
    */
-  | 'operator.waitlist_joined';
+  | 'operator.waitlist_joined'
+  /**
+   * A proposal is waiting on this creator — somebody proposed a change to one of their
+   * games and it passed our gate.
+   *
+   * Deliberately its own type rather than folded into the submission family: it is not
+   * about a job (a proposal has none, by design), and the submission copy renders
+   * "«your game» happened", where this is "somebody wants to change «your game»" — a
+   * different sentence with a different actor.
+   */
+  | 'proposal.awaiting_review'
+  /** A proposal this person sent was decided — accepted, declined, or bounced back. */
+  | 'proposal.decided'
+  /**
+   * A proposal this person sent is live in the game. The watcher relationship starts
+   * here: merged contributors get digest visibility, never approval rights.
+   */
+  | 'proposal.merged';
+
+/** The proposal family, split out for the same reason the submission one is. */
+export type ProposalNotificationType = Extract<NotificationType, `proposal.${string}`>;
 
 /**
  * The types that are about one submission, and so can render "«game title» happened".
@@ -1254,6 +1275,136 @@ export interface ReviewApproval {
   at: string;
   /** The uid that signed off, so an approval is attributable rather than ambient. */
   by: string;
+}
+
+/**
+ * What a proposal was built on top of.
+ *
+ * Two shapes because the catalog has two lanes. A store-lane game's base is the published
+ * version id, which is what `isBaseStale` compares. A repo-lane game has no store version
+ * — its sources come out of the games-repo archive at the ref the published snapshot was
+ * baked from — so the base pins that snapshot and commit instead. Keeping both in one
+ * discriminated union means the proposal record never has to ask which lane it is in;
+ * only the two places that resolve or re-check a base do.
+ */
+export type ProposalBase = { kind: 'store'; version: string } | { kind: 'repo'; snapshotId: string; sha: string };
+
+/** One turn in a proposal's conversation. Text is data — never instructions. */
+export interface ProposalMessage {
+  id: string;
+  /** `proposer` or `reviewer`. Not an actor union: only these two ever write here. */
+  from: 'proposer' | 'reviewer';
+  text: string;
+  createdAt: string;
+}
+
+/** Transitions and thread entries are capped the same way a job's are, for the same reason. */
+export const MAX_PROPOSAL_MESSAGES = 40;
+
+/**
+ * A proposed change to a game somebody else owns.
+ *
+ * The record is deliberately thin on content: it holds *about* the change (who, what
+ * target, which base, what state, what was decided) and points at the stored version that
+ * holds the change itself. That split is what keeps a proposal cheap to list — the ops
+ * queue and the proposer's tracker both read many of these and none of the sources.
+ *
+ * `targetOwnerUid` is denormalised from the owner-of-record at open time so the reviewer's
+ * queue is a single equality query rather than a join against every game's newest job. It
+ * is refreshed on every decision, so a slug that changes hands mid-review routes to
+ * whoever holds it when the decision is actually made.
+ */
+export interface ProposalRecord {
+  id: string;
+  targetSlug: string;
+  /** The owner-of-record when the proposal opened. `null` means platform-owned. */
+  targetOwnerUid: string | null;
+  proposerUid: string;
+  base: ProposalBase;
+  /**
+   * The stored version carrying the change, once one exists.
+   *
+   * Absent only in `draft`: a proposal that has never been sent has no version, which is
+   * also why nothing but `draft` may be missing it.
+   */
+  version?: string;
+  state: ProposalState;
+  stateSince: string;
+  transitions: ProposalTransition[];
+  /** Creator-supplied, moderated, sanitized. Rendered as text, never as markup. */
+  title: string;
+  description: string;
+  thread: ProposalMessage[];
+  /** Read off the version manifest — never trusted from `state`. */
+  gate?: { green: boolean; ranAt: string; report?: string; screenshot?: string };
+  /**
+   * Set when the gate found the proposal changes committed behavioural goldens
+   * (a TRACE diff). A finding for the reviewer, never an automatic refusal.
+   */
+  behaviouralDiff?: boolean;
+  decision?: {
+    at: string;
+    /** Who decided — the reviewing uid, or `platform` for an ops decision. */
+    byUid: string | null;
+    reviewer: 'platform' | 'creator';
+    reason?: DeclineReason;
+    /** Optional free text from the reviewer, moderated like any creator text. */
+    note?: string;
+    /** Set when a decline was reportable and a statement of reasons was sent. */
+    statementSentAt?: string;
+  };
+  /** The improvement job created on accept, so the merge can be followed to `merged`. */
+  adoptedJobId?: number;
+  /** Repo-lane only: the games-repo PR the apply-bot opened. */
+  mergePr?: { number: number; url: string; openedAt: string; mergedAt?: string };
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Ordering for every proposal list, defined once so the two stores cannot disagree.
+ *
+ * Newest first, because both audiences read these as "what happened lately". The id
+ * tie-break is not decorative: a supersede sweep stamps one timestamp across every
+ * proposal against a game that just published, so equal `updatedAt` is the norm rather
+ * than the exception, and Firestore guarantees no order among equal keys.
+ */
+export function compareProposals(a: ProposalRecord, b: ProposalRecord): number {
+  return b.updatedAt.localeCompare(a.updatedAt) || b.createdAt.localeCompare(a.createdAt) || a.id.localeCompare(b.id);
+}
+
+/**
+ * Whether a game accepts proposals at all, and from whom.
+ *
+ * Default `off`, and the default is the product decision rather than a placeholder: a
+ * creator who never asked for contributions must never discover them by being sent one.
+ * Stored per slug rather than per creator because it is a property of the game — a creator
+ * may well want help on one and not on another.
+ */
+export type ContributionMode = 'off' | 'review';
+
+export interface GameContributionSettings {
+  slug: string;
+  mode: ContributionMode;
+  updatedAt: string;
+  /** Who last changed it. Absent on platform defaults nobody has touched. */
+  updatedByUid?: string;
+}
+
+/**
+ * One person a creator will not take proposals from.
+ *
+ * Kept per blocking creator rather than as a global flag on the blocked account: blocking
+ * is a personal boundary, not a moderation verdict, and one creator's decision must not
+ * quietly become a platform-wide ban. Platform-wide refusal already exists and is
+ * `User.tier === 'blocked'`.
+ */
+export interface ContributorBlockRecord {
+  /** The creator who blocked. */
+  ownerUid: string;
+  /** The person blocked. */
+  blockedUid: string;
+  createdAt: string;
 }
 
 export type WaitlistStatus = 'pending' | 'approved' | 'rejected';
@@ -2013,6 +2164,45 @@ export interface Store {
     ownerUid?: string;
     limit?: number;
   }): Promise<SuggestionRecord[]>;
+  /** Writes a proposal whole. */
+  putProposal(record: ProposalRecord): Promise<void>;
+  /** One proposal by id, or null. */
+  getProposal(id: string): Promise<ProposalRecord | null>;
+  /**
+   * Proposals, newest first, optionally narrowed.
+   *
+   * The three filters are the three questions asked of this collection: "what have I
+   * sent?" (`proposerUid`), "what is waiting on me?" (`targetOwnerUid`, with `null`
+   * meaning the platform queue), and "what is open against this game?" (`targetSlug`,
+   * which the supersede sweep asks after every publish). Sorting is in memory via
+   * {@link compareProposals} for the same reason suggestions do it: a composite index per
+   * filter combination would be real infrastructure for a listing this size.
+   *
+   * `targetOwnerUid: null` is a real filter value, not "unset" — it selects
+   * platform-owned targets. Callers wanting everything simply omit the key.
+   */
+  listProposals(opts?: {
+    proposerUid?: string;
+    targetOwnerUid?: string | null;
+    targetSlug?: string;
+    state?: ProposalState[];
+    limit?: number;
+  }): Promise<ProposalRecord[]>;
+  /**
+   * A game's contribution setting, or null when nobody has ever set one.
+   *
+   * Null rather than a defaulted `off` on purpose: "never configured" and "deliberately
+   * turned off" are the same answer today, but they are different facts, and the day we
+   * want to prompt creators to consider contributions we will need to tell them apart.
+   */
+  getContributionSettings(slug: string): Promise<GameContributionSettings | null>;
+  putContributionSettings(record: GameContributionSettings): Promise<void>;
+  /** Whether `ownerUid` has blocked `blockedUid` from proposing to their games. */
+  isContributorBlocked(ownerUid: string, blockedUid: string): Promise<boolean>;
+  blockContributor(record: ContributorBlockRecord): Promise<void>;
+  unblockContributor(ownerUid: string, blockedUid: string): Promise<void>;
+  /** Everyone this creator has blocked — the settings surface's read. */
+  listContributorBlocks(ownerUid: string): Promise<ContributorBlockRecord[]>;
   /**
    * Every slug that has a `games/{slug}` entry — including games whose document does
    * not exist but which have subcollections (votes, feedback, scorecard).
@@ -2274,6 +2464,9 @@ export class InMemoryStore implements Store {
   // slug -> current scorecard
   private scorecards = new Map<string, Scorecard>();
   private suggestions = new Map<string, SuggestionRecord>();
+  private proposals = new Map<string, ProposalRecord>(); // id -> proposal
+  private contributionSettings = new Map<string, GameContributionSettings>(); // slug -> setting
+  private contributorBlocks = new Map<string, Map<string, ContributorBlockRecord>>(); // ownerUid -> blockedUid -> row
   private gameAutonomy = new Map<string, string>();
   private legacyGameSuggestions = new Set<string>();
   // tokenId -> personal access token record
@@ -3708,6 +3901,66 @@ export class InMemoryStore implements Store {
         // collection stayed small — the divergence that hides until it matters.
         .slice(0, opts?.limit ?? Number.MAX_SAFE_INTEGER)
     );
+  }
+
+  async putProposal(record: ProposalRecord): Promise<void> {
+    this.proposals.set(record.id, structuredClone(record));
+  }
+
+  async getProposal(id: string): Promise<ProposalRecord | null> {
+    const found = this.proposals.get(id);
+    return found ? structuredClone(found) : null;
+  }
+
+  async listProposals(opts?: {
+    proposerUid?: string;
+    targetOwnerUid?: string | null;
+    targetSlug?: string;
+    state?: ProposalState[];
+    limit?: number;
+  }): Promise<ProposalRecord[]> {
+    const wanted = opts?.state ? new Set(opts.state) : null;
+    // `'targetOwnerUid' in opts` rather than a truthiness test: `null` is a real filter
+    // value here (the platform queue), and `?? undefined` would silently widen it to
+    // "every proposal on the platform" — the one bug this filter must not have.
+    const filterByOwner = opts !== undefined && 'targetOwnerUid' in opts;
+    return [...this.proposals.values()]
+      .filter((record) => (opts?.proposerUid ? record.proposerUid === opts.proposerUid : true))
+      .filter((record) => (filterByOwner ? record.targetOwnerUid === opts.targetOwnerUid : true))
+      .filter((record) => (opts?.targetSlug ? record.targetSlug === opts.targetSlug : true))
+      .filter((record) => (wanted ? wanted.has(record.state) : true))
+      .map((record) => structuredClone(record))
+      .sort(compareProposals)
+      .slice(0, opts?.limit ?? Number.MAX_SAFE_INTEGER);
+  }
+
+  async getContributionSettings(slug: string): Promise<GameContributionSettings | null> {
+    const found = this.contributionSettings.get(slug);
+    return found ? { ...found } : null;
+  }
+
+  async putContributionSettings(record: GameContributionSettings): Promise<void> {
+    this.contributionSettings.set(record.slug, { ...record });
+  }
+
+  async isContributorBlocked(ownerUid: string, blockedUid: string): Promise<boolean> {
+    return this.contributorBlocks.get(ownerUid)?.has(blockedUid) ?? false;
+  }
+
+  async blockContributor(record: ContributorBlockRecord): Promise<void> {
+    const forOwner = this.contributorBlocks.get(record.ownerUid) ?? new Map<string, ContributorBlockRecord>();
+    forOwner.set(record.blockedUid, { ...record });
+    this.contributorBlocks.set(record.ownerUid, forOwner);
+  }
+
+  async unblockContributor(ownerUid: string, blockedUid: string): Promise<void> {
+    this.contributorBlocks.get(ownerUid)?.delete(blockedUid);
+  }
+
+  async listContributorBlocks(ownerUid: string): Promise<ContributorBlockRecord[]> {
+    return [...(this.contributorBlocks.get(ownerUid)?.values() ?? [])]
+      .map((record) => ({ ...record }))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || a.blockedUid.localeCompare(b.blockedUid));
   }
 
   async listGameSlugs(): Promise<string[]> {
@@ -6197,6 +6450,128 @@ export class FirestoreStore implements Store {
       cursor = snap.docs[snap.docs.length - 1];
     }
     return records.sort(compareSuggestions);
+  }
+
+  // Top-level, like suggestions and for the same reason: a proposal is read as a queue
+  // across games ("what is waiting on me", "what have I sent") far more often than per
+  // game, and the per-game read the supersede sweep needs is one equality filter away.
+  private proposalRef(id: string) {
+    return this.db.collection('proposals').doc(id);
+  }
+
+  // `{ownerUid}_{blockedUid}` as the document id rather than a subcollection under the
+  // owner: the hot read is "has A blocked B", which this answers as a point read, and a
+  // composite id keeps that true without an index. Uids cannot contain `_`.
+  private contributorBlockRef(ownerUid: string, blockedUid: string) {
+    return this.db.collection('contributorBlocks').doc(`${ownerUid}_${blockedUid}`);
+  }
+
+  async putProposal(record: ProposalRecord): Promise<void> {
+    // Whole-document `set`: a proposal is written by one owner at a time (the service
+    // reads, transitions, and writes it back), and a merge would let a stale decision
+    // survive beside a newer state.
+    await this.proposalRef(record.id).set(stripUndefined(record));
+  }
+
+  async getProposal(id: string): Promise<ProposalRecord | null> {
+    const snap = await this.proposalRef(id).get();
+    return snap.exists ? (snap.data() as ProposalRecord) : null;
+  }
+
+  async listProposals(opts?: {
+    proposerUid?: string;
+    targetOwnerUid?: string | null;
+    targetSlug?: string;
+    state?: ProposalState[];
+    limit?: number;
+  }): Promise<ProposalRecord[]> {
+    let query: FirebaseFirestore.Query = this.db.collection('proposals');
+    if (opts?.proposerUid) query = query.where('proposerUid', '==', opts.proposerUid);
+    // `null` is a real value — the platform queue — so this tests for the key's presence
+    // rather than its truthiness. Equality against `null` matches stored nulls in
+    // Firestore, which is why `targetOwnerUid` is written explicitly rather than omitted
+    // for platform-owned targets (see `stripUndefined`: it strips `undefined`, not `null`).
+    if (opts !== undefined && 'targetOwnerUid' in opts) {
+      query = query.where('targetOwnerUid', '==', opts.targetOwnerUid ?? null);
+    }
+    if (opts?.targetSlug) query = query.where('targetSlug', '==', opts.targetSlug);
+    // 12 states, well under the 30-value `in` cap.
+    if (opts?.state?.length) query = query.where('state', 'in', opts.state);
+
+    // No `orderBy`, paged rather than limited — same rule and same reasoning as
+    // `listSuggestions` above: ordering is restored in memory by the shared comparator so
+    // a filtered read never needs a composite index, and an unbounded caller must get
+    // every match rather than an arbitrary slice. The supersede sweep is exactly such a
+    // caller: a slice would leave stale proposals live against a game that just published.
+    const pageSize = 500;
+    if (opts?.limit !== undefined) {
+      const snap = await query.limit(opts.limit).get();
+      return snap.docs.map((doc) => doc.data() as ProposalRecord).sort(compareProposals);
+    }
+
+    const records: ProposalRecord[] = [];
+    let cursor: FirebaseFirestore.QueryDocumentSnapshot | undefined;
+    for (;;) {
+      const page = cursor ? query.startAfter(cursor).limit(pageSize) : query.limit(pageSize);
+      const snap = await page.get();
+      if (snap.empty) break;
+      records.push(...snap.docs.map((doc) => doc.data() as ProposalRecord));
+      if (snap.docs.length < pageSize) break;
+      cursor = snap.docs[snap.docs.length - 1];
+    }
+    return records.sort(compareProposals);
+  }
+
+  async getContributionSettings(slug: string): Promise<GameContributionSettings | null> {
+    const snap = await this.gameRef(slug).get();
+    const data = (snap.data() as { contributions?: { mode?: string; updatedAt?: string; updatedByUid?: string } })
+      ?.contributions;
+    if (!data) return null;
+    // Field-by-field rather than a cast: this rides on the shared `games/{slug}` document,
+    // so an unknown mode written by a future version must read as `off` rather than as
+    // whatever string happens to be stored — the failure direction that keeps a game shut
+    // rather than accidentally open.
+    return {
+      slug,
+      mode: data.mode === 'review' ? 'review' : 'off',
+      updatedAt: typeof data.updatedAt === 'string' ? data.updatedAt : '',
+      ...(typeof data.updatedByUid === 'string' ? { updatedByUid: data.updatedByUid } : {}),
+    };
+  }
+
+  async putContributionSettings(record: GameContributionSettings): Promise<void> {
+    // Merge, not whole-document: `games/{slug}` also carries `autonomy` and the
+    // publication registry, and a whole write here would drop what is live.
+    await this.gameRef(record.slug).set(
+      {
+        contributions: stripUndefined({
+          mode: record.mode,
+          updatedAt: record.updatedAt,
+          updatedByUid: record.updatedByUid,
+        }),
+      },
+      { merge: true },
+    );
+  }
+
+  async isContributorBlocked(ownerUid: string, blockedUid: string): Promise<boolean> {
+    const snap = await this.contributorBlockRef(ownerUid, blockedUid).get();
+    return snap.exists;
+  }
+
+  async blockContributor(record: ContributorBlockRecord): Promise<void> {
+    await this.contributorBlockRef(record.ownerUid, record.blockedUid).set(stripUndefined(record));
+  }
+
+  async unblockContributor(ownerUid: string, blockedUid: string): Promise<void> {
+    await this.contributorBlockRef(ownerUid, blockedUid).delete();
+  }
+
+  async listContributorBlocks(ownerUid: string): Promise<ContributorBlockRecord[]> {
+    const snap = await this.db.collection('contributorBlocks').where('ownerUid', '==', ownerUid).get();
+    return snap.docs
+      .map((doc) => doc.data() as ContributorBlockRecord)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || a.blockedUid.localeCompare(b.blockedUid));
   }
 
   async createAccessToken(record: AccessTokenRecord): Promise<void> {

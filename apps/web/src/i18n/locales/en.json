@@ -69,6 +69,20 @@
         "title": "A game you follow was updated",
         "body": "“{{title}}” has a new version."
       }
+    },
+    "proposal": {
+      "awaiting_review": {
+        "title": "A proposed change is waiting",
+        "body": "Someone proposed a change to {{title}}. It passed our checks — you decide."
+      },
+      "decided": {
+        "title": "Your proposal was reviewed",
+        "body": "Your proposal for {{title}} has a decision."
+      },
+      "merged": {
+        "title": "Your contribution is live",
+        "body": "Your change is now part of {{title}}."
+      }
     }
   },
   "header": {
@@ -226,7 +240,8 @@
       "last_played": "Last played",
       "alpha": "A–Z"
     },
-    "about": "About"
+    "about": "About",
+    "withContributions": "with contributions from"
   },
   "recommendations": {
     "reasonContinue": "Continue playing",
@@ -910,7 +925,8 @@
     "statusNamed": "Status · {{title}}",
     "studioNamed": "Studio · {{title}}",
     "creatorNamed": "{{title}}",
-    "gameNamed": "{{title}}"
+    "gameNamed": "{{title}}",
+    "proposals": "My proposals"
   },
   "creatorProfile": {
     "back": "Back",
@@ -1318,5 +1334,108 @@
     },
     "following": "Following",
     "rolePlatform": "built here"
+  },
+  "propose": {
+    "action": "Propose this change",
+    "title": "Propose to the owner",
+    "titlePlatform": "Propose to gamedev.pl",
+    "fieldTitle": "Title",
+    "fieldTitlePlaceholder": "What does your change do?",
+    "fieldDescription": "What changed and why",
+    "fieldDescriptionPlaceholder": "Say what you changed and what it improves.",
+    "submit": "Send proposal",
+    "sending": "Sending…",
+    "cancel": "Cancel",
+    "reassure": "Your change is checked and test-run before anyone sees it.",
+    "sent": "Sent. We'll check it, then the owner decides.",
+    "openCount": "{{count}} of {{max}} open proposals to this game.",
+    "errors": {
+      "contributions_off": "This game isn't taking proposals right now.",
+      "own_game": "This is your game — use Improve instead.",
+      "not_published": "This game isn't published right now.",
+      "too_many_open_here": "You already have the most proposals we allow for this game. Resolve one first.",
+      "too_many_open": "You have a lot of proposals open. Resolve some before sending more.",
+      "no_changes": "Change something first, then propose it.",
+      "not_proposable": "This game can't take proposals yet.",
+      "generic": "That didn't send. Try again in a moment."
+    }
+  },
+  "proposals": {
+    "navTitle": "My proposals",
+    "empty": "Nothing yet. Remix a game you like, then propose your change.",
+    "toOwner": "to {{handle}}",
+    "toPlatform": "to gamedev.pl",
+    "state": {
+      "checking": "checking",
+      "in_review": "in review",
+      "needs_work": "needs work",
+      "changes_requested": "changes requested",
+      "accepted": "accepted",
+      "merged": "live",
+      "declined": "declined",
+      "withdrawn": "withdrawn",
+      "superseded": "superseded",
+      "expired": "expired",
+      "draft": "draft"
+    },
+    "checksPassed": "checks passed",
+    "checksFailed": "checks failed",
+    "behaviouralDiff": "changes how the game plays",
+    "steps": {
+      "sent": "sent",
+      "checked": "checked & test-run",
+      "notified": "owner notified",
+      "decision": "decision"
+    },
+    "fromReviewer": "From the reviewer",
+    "withdraw": "Withdraw",
+    "rebuild": "Rebuild on latest",
+    "supersededHelp": "This game was updated since your proposal. Rebuild it against the latest version to resubmit.",
+    "expiredHelp": "This game went quiet, so the proposal timed out. It wasn't turned down.",
+    "watcher": "You're a watcher on this game — you'll get a digest when it changes.",
+    "mergedHelp": "Your change is live."
+  },
+  "reviews": {
+    "navTitle": "Proposals",
+    "cardTitle": "Proposal from {{handle}}",
+    "empty": "No proposals waiting on you.",
+    "play": "Play it",
+    "viewChanges": "View changes",
+    "accept": "Accept…",
+    "requestChanges": "Request changes",
+    "decline": "Decline",
+    "acceptHelp": "Accepting creates a new version for you — nothing goes live until you publish it.",
+    "expiresIn": "Expires in {{days}} days if unreviewed",
+    "changesPlaceholder": "What should they change?",
+    "declineReason": {
+      "label": "Why?",
+      "not_the_direction": "Not the direction for this game",
+      "duplicate": "Already done or already proposed",
+      "quality": "Not good enough as built",
+      "off_topic": "Unrelated to this game",
+      "unsafe": "Breaks the content rules",
+      "infringing": "Uses material they don't have rights to"
+    },
+    "declineNote": "Anything to add? (optional)",
+    "gateVerdict": "Test run",
+    "gateGreen": "green",
+    "gateRan": "Ran {{when}}",
+    "filesChanged": "{{count}} files changed",
+    "sandboxNote": "Runs sandboxed, like every game on gamedev.pl",
+    "contributions": {
+      "title": "Contributions",
+      "off": "Off",
+      "offHelp": "No one can propose changes to this game.",
+      "review": "Review proposals",
+      "reviewHelp": "Players and creators can propose changes. Every proposal is checked and test-run first, and you review each one — nothing changes your game without you.",
+      "blocked": "Blocked",
+      "blockedHelp": "Blocked people can't propose to any of your games.",
+      "unblock": "Unblock"
+    },
+    "diffSummary": "{{files}} files changed · +{{additions}} −{{deletions}}",
+    "diffEmpty": "No file changes to show.",
+    "diffTruncated": "This file's diff is long — showing the first part.",
+    "diffOmitted": "{{count}} more changed files not shown.",
+    "diffUnavailable": "Couldn't load the changes. You can still play it and read the description."
   }
 }

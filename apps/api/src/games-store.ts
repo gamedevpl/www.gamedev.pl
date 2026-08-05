@@ -101,8 +101,27 @@ export interface SourceFile {
 /**
  * Delivery lane. Preview is the vibe-coding loop (typecheck→smoke→build, no TRACE).
  * Publish is the sealed candidate the full gate judges for ready_for_review.
+ *
+ * `proposal` is a sealed candidate somebody who does not own the game delivered. It runs
+ * the same full gate as a publish — the reviewer has to be able to play it — but it is
+ * refused by every path that could make a version live until the game's owner adopts it,
+ * at which point {@link adoptProposalVersion} rewrites the mode to `publish`. That rewrite
+ * is the only way out, and it is why the guard is a stored fact rather than a lookup: a
+ * publish path that forgot to consult the proposal registry would still be safe.
  */
-export type DeliveryMode = 'preview' | 'publish';
+export type DeliveryMode = 'preview' | 'publish' | 'proposal';
+
+/**
+ * Whether a version in this mode may ever be published.
+ *
+ * Called by every path that can make a version live. Deliberately a named predicate
+ * rather than an inline `!== 'proposal'`: it is the single place the rule is stated, so a
+ * fourth mode cannot be added without an answer here.
+ */
+export function isPublishableMode(mode: DeliveryMode | undefined): boolean {
+  // Absent means a legacy manifest from before the field existed — those are publishes.
+  return mode !== 'preview' && mode !== 'proposal';
+}
 
 export class InvalidUploadError extends Error {
   constructor(message: string) {
@@ -307,6 +326,21 @@ export interface VersionManifest {
    * Preview versions must never carry a publishable {@link gate}.green.
    */
   deliveryMode?: DeliveryMode;
+  /**
+   * Set when this version was delivered as a proposal against a game the deliverer does
+   * not own. Provenance that outlives the proposal record: years later, "who wrote this
+   * and under what proposal" is answerable from the manifest alone.
+   */
+  proposal?: { id: string; proposerUid: string };
+  /**
+   * Set when the game's owner accepted the proposal above, at which point
+   * {@link VersionManifest.deliveryMode} flips from `proposal` to `publish`.
+   *
+   * Both fields survive the flip. `proposal` says who wrote it, `adopted` says who took
+   * responsibility for it — and a published game's contributor byline is read from the
+   * pair, so erasing either would erase the credit.
+   */
+  adopted?: { proposalId: string; byUid: string | null; at: string };
   /** Verdict of our own gate. A version without a green one is never publishable. */
   gate?: GateVerdict;
   /**
@@ -349,6 +383,11 @@ export type GateVerdict = {
   status?: 'kit_outdated';
   /** First capture PNG under the version prefix, when the run produced one. */
   screenshot?: string;
+  /**
+   * The candidate changes a committed behavioural golden — set only by the proposal lane,
+   * and only beside a green verdict. A finding for whoever reviews it, never a refusal.
+   */
+  behaviouralDiff?: boolean;
 };
 
 export type PublicationState = 'published' | 'archived' | 'disabled';
@@ -430,7 +469,26 @@ export interface GamesStore {
     forkedFrom?: { slug: string; version?: string };
     /** Preview skips TRACE/PLAYTEST; default publish. */
     mode?: DeliveryMode;
+    /** Marks the version as somebody else's proposed change — see {@link DeliveryMode}. */
+    proposal?: { id: string; proposerUid: string };
   }): Promise<{ version: string; manifest: VersionManifest }>;
+  /**
+   * Flips an accepted proposal version from `proposal` to `publish` and records who
+   * adopted it.
+   *
+   * The one door out of proposal mode, and deliberately narrow: it refuses a version that
+   * is not in proposal mode (so it cannot re-stamp an ordinary delivery), and it refuses
+   * one whose gate is not green (so acceptance cannot smuggle an unchecked change into the
+   * publishable set). Callers still have to have established that the caller may accept —
+   * this enforces the storage half of that rule, not the authorization half.
+   */
+  adoptProposalVersion(input: {
+    slug: string;
+    version: string;
+    proposalId: string;
+    byUid: string | null;
+    at?: string;
+  }): Promise<VersionManifest>;
   /**
    * Upserts one file into the job's staging buffer (does not run the gate).
    * Scoped by roundGeneration so a retired key cannot clobber a newer round's buffer.
@@ -492,6 +550,8 @@ export interface GamesStore {
       engineRef?: string;
       status?: 'kit_outdated';
       screenshot?: string;
+      /** Proposal lane only — see {@link GateVerdict.behaviouralDiff}. */
+      behaviouralDiff?: boolean;
     },
   ): Promise<void>;
   /**
@@ -672,8 +732,11 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
   return {
     async putCandidateSources(input) {
       assertSlug(input.slug);
-      const mode: DeliveryMode = input.mode === 'preview' ? 'preview' : 'publish';
-      const files = validateSourceUpload(input.files, mode);
+      const mode: DeliveryMode =
+        input.mode === 'preview' ? 'preview' : input.mode === 'proposal' ? 'proposal' : 'publish';
+      // A proposal is a sealed candidate — it must carry everything a publish carries,
+      // because the reviewer judges a full gate run, not a compile.
+      const files = validateSourceUpload(input.files, mode === 'proposal' ? 'publish' : mode);
       const at = new Date(now());
       const version = versionId(at);
       const prefix = versionPrefix(input.slug, version);
@@ -696,6 +759,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
         ...(input.kitEngineRef ? { kitEngineRef: input.kitEngineRef } : {}),
         ...(input.origin ? { origin: input.origin } : {}),
         ...(input.forkedFrom ? { forkedFrom: input.forkedFrom } : {}),
+        ...(input.proposal ? { proposal: input.proposal } : {}),
         sourceFiles: files.map((file) => file.path),
       };
       // Written last: a manifest is what makes a version real, so a run that dies
@@ -899,6 +963,30 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
       return collected.slice(0, limit);
     },
 
+    async adoptProposalVersion(input) {
+      const prefix = versionPrefix(input.slug, input.version);
+      const existing = await readObject(`${prefix}/manifest.json`);
+      if (!existing) throw new Error(`no manifest for ${input.slug}@${input.version}`);
+      const manifest = JSON.parse(existing.toString('utf8')) as VersionManifest;
+      if (manifest.deliveryMode !== 'proposal') {
+        // Not idempotent-by-accident: re-stamping an already-adopted version would
+        // rewrite who adopted it, and re-stamping an ordinary delivery would invent a
+        // proposal that never existed. Callers retrying a partial accept re-read first.
+        throw new InvalidUploadError(`${input.slug}@${input.version} is not a proposal version`);
+      }
+      if (!manifest.gate?.green) {
+        throw new InvalidUploadError(`${input.slug}@${input.version} has no green gate verdict`);
+      }
+      manifest.deliveryMode = 'publish';
+      manifest.adopted = {
+        proposalId: input.proposalId,
+        byUid: input.byUid,
+        at: input.at ?? new Date(now()).toISOString(),
+      };
+      await writeObject(`${prefix}/manifest.json`, Buffer.from(JSON.stringify(manifest, null, 2)), 'application/json');
+      return manifest;
+    },
+
     async putGateResult(slug, version, result) {
       const prefix = versionPrefix(slug, version);
       const existing = await readObject(`${prefix}/manifest.json`);
@@ -910,6 +998,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
         report: result.report,
         ...(result.status ? { status: result.status } : {}),
         ...(result.screenshot ? { screenshot: result.screenshot } : {}),
+        ...(result.behaviouralDiff ? { behaviouralDiff: true } : {}),
       };
       // First writer wins: the ref the *first* gate run checked against is the one the
       // verdict is reproducible against, and a re-run must not quietly repin it.

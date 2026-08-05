@@ -16,6 +16,7 @@ const copy: DocumentTitleCopy = {
   privacy: 'Privacy Policy',
   terms: 'Terms of Service',
   contact: 'Contact',
+  proposals: 'My proposals',
   notFound: 'Page not found',
   playNamed: 'Play {{title}}',
   draftNamed: 'Draft {{title}}',

@@ -50,9 +50,12 @@ export interface GateTriggerInput {
    * `health` re-runs the check against the current engine and records the verdict as
    * `manifest.health`, leaving the acceptance verdict alone. `preview` runs
    * `check:game --preview` and records `manifest.previewGate` (never publishable).
-   * Omitted means the acceptance (publish) gate, exactly as before.
+   * `proposal` runs the full acceptance check with one difference: a behavioural-golden
+   * mismatch becomes a finding rather than a refusal, because a proposal that changes how
+   * the game plays is supposed to change the golden. Omitted means the acceptance
+   * (publish) gate, exactly as before.
    */
-  mode?: 'health' | 'preview';
+  mode?: 'health' | 'preview' | 'proposal';
 }
 
 const DEFAULTS = {
@@ -139,7 +142,13 @@ function buildSpec(
             // `--health` is our own constant, appended from a two-value union, never
             // from input text.
             `npm run gate:run -w @gamedevpl/api -- --slug '${input.slug}' --version '${input.version}'` +
-              (input.mode === 'health' ? ' --health' : input.mode === 'preview' ? ' --preview' : ''),
+              (input.mode === 'health'
+                ? ' --health'
+                : input.mode === 'preview'
+                  ? ' --preview'
+                  : input.mode === 'proposal'
+                    ? ' --proposal'
+                    : ''),
           ].join('\n'),
         ],
       },
@@ -167,6 +176,7 @@ function buildSpec(
       'gate',
       ...(input.mode === 'health' ? ['health'] : []),
       ...(input.mode === 'preview' ? ['preview'] : []),
+      ...(input.mode === 'proposal' ? ['proposal'] : []),
       `slug-${input.slug}`,
     ],
   };

@@ -4,6 +4,7 @@ import { AdminJobsPanel } from './AdminJobsPanel.js';
 import { CostsPanel } from './CostsPanel.js';
 import { CreationLimitsPanel } from './CreationLimitsPanel.js';
 import { GameHealthView } from './GameHealthView.js';
+import { ProposalReviewPanel } from './ProposalReviewPanel.js';
 import { SuggestionsPanel } from './SuggestionsPanel.js';
 import { WaitlistPanel } from './WaitlistPanel.js';
 import { fetchAdminSummary, type AdminSummary, type OperatorAlert } from './adminApi.js';
@@ -29,6 +30,7 @@ const SECTION_LABELS: Record<AdminSection, string> = {
   limits: 'Limits',
   tokens: 'Tokens',
   suggestions: 'Suggestions',
+  proposals: 'Proposals',
   waitlist: 'Waitlist',
 };
 
@@ -262,6 +264,7 @@ export function AdminConsole({ section, onNavigate }: { section: AdminSection; o
       {section === 'limits' && <CreationLimitsPanel onChanged={() => void load()} />}
       {section === 'tokens' && <AccessTokensPanel />}
       {section === 'suggestions' && <SuggestionsPanel />}
+      {section === 'proposals' && <ProposalReviewPanel scope="platform" />}
       {section === 'waitlist' && <WaitlistPanel />}
     </section>
   );

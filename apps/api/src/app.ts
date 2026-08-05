@@ -23,6 +23,11 @@ import { registerGameReviewRoutes, type GameReviewRoutesOptions } from './game-r
 import { registerGameSourcesRoutes, type GameSourcesRoutesOptions } from './game-sources-routes.js';
 import { registerGameFollowRoutes, type GameFollowRoutesOptions } from './game-follow-routes.js';
 import { createFollowerFanout } from './game-follow-notify.js';
+import { createGitHubClient } from './github-client.js';
+import { registerProposalRoutes } from './proposal-routes.js';
+import { resolveProposalBase } from './proposal-base.js';
+import { applyProposalToRepo } from './proposal-apply-bot.js';
+import { createSnapshotReaderFromEnv, type GameSnapshotStore } from './game-snapshot.js';
 import { registerAccountDeletionRoutes, type AccountDeletionRoutesOptions } from './account-deletion-routes.js';
 import { registerCreatorStudioRoutes } from './creator-studio.js';
 import { registerEditorRoutes } from './editor-drafts.js';
@@ -44,6 +49,7 @@ import { resolveLocalGamesDir } from './local-games-repo.js';
 import { registerMultiplayerRoutes, type MultiplayerRoutesOptions } from './mp.js';
 import { createRelayClientFromEnv, isRelayOnly } from './mp-relay.js';
 import { registerNotificationRoutes } from './notifications.js';
+import { emitProposalNotification } from './notify.js';
 import { registerPlayerFeedbackRoutes, type PlayerFeedbackRoutesOptions } from './player-feedback.js';
 import { registerPushRoutes } from './push-routes.js';
 import { registerDigestRoutes, type DigestRoutesOptions } from './digest.js';
@@ -57,7 +63,7 @@ import {
 import { registerScorecardRoutes, type ScorecardRoutesOptions } from './scorecard.js';
 import { createInternalAuthVerifierFromEnv } from './internal-auth.js';
 import { registerRefineRoute, type SpecRefiner } from './refine.js';
-import { InMemoryStore, type Store } from './store.js';
+import { BOT_UID_PREFIX, InMemoryStore, type Store } from './store.js';
 import { registerSubmissionRoutes, type SubmissionRoutesOptions } from './submissions.js';
 import { mintToken } from './submission-token.js';
 import { registerTelemetryRoutes, type TelemetryRoutesOptions } from './telemetry.js';
@@ -249,8 +255,51 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     options.submissionRoutes?.agentChannel?.onSourcesDelivered ??
     createCloudBuildGateTrigger(gateTriggerOptionsFromEnv(), app.log);
 
+  /**
+   * The catalog lane's plumbing (research §4a), assembled once and shared.
+   *
+   * `snapshotReader` anchors a repo-lane proposal to the commit the live snapshot was baked
+   * from — the game a player is actually looking at when they decide to change it, which is
+   * also what makes drift detectable later. `gamesRepoClient` is what turns an accepted
+   * repo-lane proposal into a pull request; absent in deployments with no games-repo
+   * credentials, which degrades the feature to "reviewable but not yet merged back" rather
+   * than breaking it.
+   *
+   * Assembled here rather than beside the proposal routes because the MCP proposal tools
+   * are registered by `registerSubmissionRoutes` below and need the same base resolver —
+   * one definition, so an agent's proposal and a reviewer's diff cannot disagree about what
+   * a game's current sources are.
+   */
+  const proposalGithubToken = options.submissionRoutes?.githubToken ?? process.env.GITHUB_TOKEN;
+  const snapshotReader = createSnapshotReaderFromEnv();
+  const gamesRepoName =
+    options.submissionRoutes?.gamesRepo ?? process.env.GAMES_REPO ?? 'gamedevpl/www.gamedev.pl-games';
+  const gamesRepoClient =
+    options.submissionRoutes?.githubClient ??
+    (proposalGithubToken ? createGitHubClient({ token: proposalGithubToken, repo: gamesRepoName }) : null);
+
+  const proposalBaseOptions = {
+    store,
+    gamesStore,
+    snapshotStore: (snapshotReader as unknown as GameSnapshotStore | null) ?? null,
+    gamesRepo: gamesRepoName,
+    ...(proposalGithubToken ? { gamesRepoToken: proposalGithubToken } : {}),
+  };
+
+  const resolveBaseForProposal = async (slug: string) => {
+    try {
+      return await resolveProposalBase(proposalBaseOptions, slug);
+    } catch {
+      // A base we cannot read is not a proposal we can open, nor a diff we can compute.
+      // Callers degrade rather than fail: the review card falls back to "play it and read
+      // the description", and an agent is told it could not read that game's sources.
+      return null;
+    }
+  };
+
   const submissionSeams = await registerSubmissionRoutes(app, {
     ...options.submissionRoutes,
+    resolveProposalBase: resolveBaseForProposal,
     store,
     contentChecker,
     // So /api/mcp can tell a visitor the product is closed rather than sending them to
@@ -588,6 +637,71 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     assistant: options.editorAssistant ?? new VertexEditorAssistant(),
     codeLane: new VertexCodeLane(),
     contentChecker,
+    // Same gate the delivery path uses: a proposal is checked by exactly the machinery a
+    // creator's own upload is, or the reviewer would be judging something unverified.
+    onSourcesDelivered: gateTrigger,
+    notifyProposal: (event) =>
+      emitProposalNotification({ store, logError: (err, message) => app.log.error({ err }, message) }, event),
+  });
+
+  /**
+   * Proposals — the contribute-back exit. A change to a game somebody else owns,
+   * carried as a candidate version the proposer cannot publish.
+   *
+   * `adoptIntoJob` is the accept step's only side effect on the job world: it creates a
+   * job owned by the *target's* owner that already carries the gate-green version, so the
+   * owner publishes it through the ordinary route. Deliberately no dispatch — the change
+   * is already built, and handing it to an agent would rebuild what a human just approved.
+   */
+  await registerProposalRoutes(app, {
+    store,
+    gamesStore,
+    contentChecker,
+    adminUids,
+    // Both lanes, so the diff and an agent's proposal round ask one question.
+    // A base we cannot read is not a diff we can compute. The review card degrades to
+    // "play it and read the description", which is still a decision a human can make.
+    resolveBase: resolveBaseForProposal,
+    notify: (event) =>
+      emitProposalNotification({ store, logError: (err, message) => app.log.error({ err }, message) }, event),
+    snapshotPointer: snapshotReader ? () => snapshotReader.getPointer() : undefined,
+    applyToRepo: async (proposal) => {
+      if (!gamesStore) return null;
+      const applied = await applyProposalToRepo(
+        {
+          store,
+          gamesStore,
+          gamesRepoClient,
+          gamesRepo: gamesRepoName,
+          baseRef: process.env.GAMES_PUBLISHED_REF ?? 'main',
+          log: app.log,
+        },
+        proposal,
+      );
+      return applied.ok ? { number: applied.pr.number, url: applied.pr.url } : null;
+    },
+    adoptIntoJob: async ({ proposal, ownerUid }) => {
+      const source = await store.getSubmissionBySlug(proposal.targetSlug);
+      const at = new Date().toISOString();
+      const jobId = await store.allocateJobId();
+      // Owned by whoever holds the game, never by the proposer: this job is the owner's
+      // to publish, and a job on their slug owned by somebody else is a transfer.
+      await store.createSubmission(
+        jobId,
+        ownerUid ?? source?.ownerUid ?? BOT_UID_PREFIX + 'platform',
+        source?.title ?? proposal.targetSlug,
+      );
+      if (source?.locale) await store.setSubmissionLocale(jobId, source.locale);
+      await store.setSubmissionSlug(jobId, proposal.targetSlug);
+      await store.recordJobTransition(jobId, { to: 'queued', at, by: 'creator', reason: 'proposal_accepted' });
+      await store.recordJobTransition(jobId, { to: 'building', at, by: 'creator', reason: 'proposal_accepted' });
+      await store.setSubmissionDeliveredVersion(jobId, proposal.version!);
+      await store.recordJobTransition(jobId, { to: 'submitted', at, by: 'creator', reason: 'proposal_adopted' });
+      // Straight to review: the gate already ran on this exact version, and re-running it
+      // would ask the same question of the same bytes.
+      await store.recordJobTransition(jobId, { to: 'ready_for_review', at, by: 'gate', reason: 'gate_green' });
+      return { issueNumber: jobId };
+    },
   });
 
   // Publish-gated public identity. Building needs none of this; catalog bylines and

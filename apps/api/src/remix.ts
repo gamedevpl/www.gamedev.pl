@@ -15,6 +15,14 @@ import { assembleGameHtml } from './assemble.js';
 import type { GitHubClient } from './github-client.js';
 import { type EditingGate, type CreationGate } from './creation-limits.js';
 import { remixHasSavableChange, saveRemixAsStudioDraft } from './remix-save.js';
+import {
+  openProposal,
+  PROPOSAL_NO_JOB,
+  MAX_PROPOSAL_DESCRIPTION_LENGTH,
+  MAX_PROPOSAL_TITLE_LENGTH,
+  MIN_PROPOSAL_DESCRIPTION_LENGTH,
+  type ProposalDeps,
+} from './proposals.js';
 
 /**
  * Remix: a player bends a published game while playing it.
@@ -135,6 +143,14 @@ const AssistSchema = z.object({
   utterance: z.string().trim().min(2).max(MAX_UTTERANCE_LENGTH),
   params: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
 });
+const ProposeSchema = z.object({
+  title: z.string().trim().min(3, 'title is too short').max(MAX_PROPOSAL_TITLE_LENGTH),
+  description: z
+    .string()
+    .trim()
+    .min(MIN_PROPOSAL_DESCRIPTION_LENGTH, 'say a little more about what you changed')
+    .max(MAX_PROPOSAL_DESCRIPTION_LENGTH),
+});
 const ShareSchema = z.object({
   params: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
 });
@@ -193,6 +209,13 @@ function readRemixId(id: string): { uidTag: string; slug: string; expiresAt: num
 }
 
 export interface RemixRoutesOptions {
+  /** Tells somebody a proposal moved. Best effort — see ProposalDeps.notify. */
+  notifyProposal?: ProposalDeps['notify'];
+  /**
+   * Starts the gate on a delivered candidate. Shared with the delivery path so a
+   * proposal is checked by exactly the machinery a creator's own upload is.
+   */
+  onSourcesDelivered?: (input: { issueNumber: number; slug: string; version: string }) => void | Promise<unknown>;
   store?: Store;
   gamesStore?: GamesStore;
   githubClient?: GitHubClient;
@@ -814,6 +837,104 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
    * the gate exists to prevent. Text parameters are the only free-form surface
    * and go through moderation before a link exists.
    */
+  /**
+   * Turn this remix into a proposal — the contribute-back exit.
+   *
+   * Remix keeps its two existing exits (save as yours, share) and its founding rule: the
+   * session itself still never publishes, and nothing here writes to the game being
+   * remixed. What it produces is a *proposal* — an immutable candidate version the game's
+   * owner is asked about and may refuse. The boundary that moved is "a remix may not ask",
+   * not "a remix may publish".
+   *
+   * Store-lane only, and the 409 says so plainly. A repo-era game's code lives on the ref
+   * and this session holds only its declaration (see `loadSources`), so there is no file
+   * set here to propose. Declared-content proposals on repo games arrive when the
+   * archive-backed base lands; until then, offering the button and failing at submit would
+   * be worse than not offering it.
+   */
+  app.post(
+    '/api/remixes/:id/propose',
+    { config: { rateLimit: { max: 5, timeWindow: 60 * 60_000 } } },
+    async (request, reply) => {
+      if (!requireUser(request, reply)) return;
+      const session = await getSession(request);
+      if (!session) return reply.status(404).send({ error: 'this remix has expired — start a new one' });
+      if (!options.store || !options.gamesStore) return reply.status(503).send({ error: 'store_unavailable' });
+
+      const body = ProposeSchema.safeParse(request.body);
+      if (!body.success) {
+        return reply.status(400).send({ error: body.error.issues[0]?.message ?? 'invalid request' });
+      }
+      if (!session.fromStore) {
+        return reply.status(409).send({ error: 'not_proposable' });
+      }
+      if (Object.keys(session.overrides).length === 0) {
+        return reply.status(409).send({ error: 'no_changes' });
+      }
+
+      const publication = await options.store.getPublication(session.slug);
+      if (publication?.state !== 'published' || !publication.currentVersion) {
+        return reply.status(409).send({ error: 'not_published' });
+      }
+
+      // The proposed game is the base with the session's edits applied. Sent whole rather
+      // than as a patch because a version is a complete source set — the gate builds it,
+      // and "the files it ran" and "the files the reviewer reads" have to be the same
+      // thing.
+      const files = Object.entries({ ...session.sources, ...session.overrides }).map(([path, content]) => ({
+        path,
+        content,
+      }));
+
+      const result = await openProposal(
+        {
+          store: options.store,
+          gamesStore: options.gamesStore,
+          contentChecker: options.contentChecker,
+          log: request.log,
+          notify: options.notifyProposal,
+          now,
+        },
+        {
+          targetSlug: session.slug,
+          proposerUid: request.user!.uid,
+          title: body.data.title,
+          description: body.data.description,
+          base: { kind: 'store', version: publication.currentVersion },
+          files,
+        },
+      );
+      if (!result.ok) {
+        // Moderation refusals carry a category and every other refusal does not, so they
+        // are sent apart. Normalized here as well as in the domain layer because the
+        // client looks up `errors.contentRejected.<category>`, and JSON drops an
+        // undefined value rather than sending null.
+        if (result.error === 'content_rejected') {
+          return reply.status(422).send({ error: 'content_rejected', category: result.category ?? 'other' });
+        }
+        return reply.status(result.status).send({ error: result.error });
+      }
+
+      // The gate runs against the stored candidate exactly as it does for a creator's own
+      // delivery. Best effort, like every other gate dispatch: an unstarted gate leaves
+      // the proposal `submitted` and re-runnable, which is the safe direction — it cannot
+      // reach a reviewer, and it cannot publish.
+      if (options.onSourcesDelivered && result.proposal.version) {
+        // `PROPOSAL_NO_JOB` because a proposal deliberately has no job — see that
+        // constant. The trigger uses the number only to label the build.
+        void Promise.resolve(
+          options.onSourcesDelivered({
+            issueNumber: PROPOSAL_NO_JOB,
+            slug: session.slug,
+            version: result.proposal.version,
+          }),
+        ).catch((error: unknown) => request.log.error({ err: error }, 'proposal gate dispatch failed'));
+      }
+
+      return reply.send({ proposal: { id: result.proposal.id, state: 'checking' } });
+    },
+  );
+
   app.post(
     '/api/remixes/:id/share',
     { config: { rateLimit: { max: 10, timeWindow: 60_000 } } },

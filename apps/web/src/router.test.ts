@@ -360,3 +360,27 @@ describe('navUpTarget', () => {
     expect(navUpTarget({ view: 'notFound' })).toEqual({ path: '/', labelKey: 'upHome' });
   });
 });
+
+describe('proposals route', () => {
+  it('parses the tracker path', () => {
+    expect(parsePathRoute('/proposals')).toEqual({ view: 'proposals' });
+  });
+
+  it('does not swallow a handle that starts the same way', () => {
+    // `/proposals` is a first-class route, so it is also reserved against handles —
+    // the root namespace is shared with creator profiles.
+    expect(parsePathRoute('/proposalsx')).toEqual({ view: 'creator', handle: 'proposalsx' });
+  });
+
+  it('404s a deeper path rather than falling back to the tracker', () => {
+    expect(parsePathRoute('/proposals/123')).toEqual({ view: 'notFound' });
+  });
+});
+
+describe('reserved product segments', () => {
+  it('keeps /proposals as the tracker even though the root namespace holds handles', () => {
+    // `proposals` is also in the API's RESERVED_HANDLES, so no profile can claim it —
+    // this is the client half of that contract, and the ordering is defense in depth.
+    expect(parsePathRoute('/proposals')).toEqual({ view: 'proposals' });
+  });
+});

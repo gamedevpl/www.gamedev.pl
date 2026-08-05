@@ -11,6 +11,8 @@ import {
   normalizeLocale,
   operatorNotificationMessage,
   operatorPushContent,
+  proposalNotificationMessage,
+  proposalPushContent,
   submissionNotificationMessage,
   followedGamePushContent,
   submissionPushContent,
@@ -23,6 +25,7 @@ import { createPusherFromEnv, type Pusher } from './pusher.js';
 import type {
   NotificationType,
   OperatorNotificationType,
+  ProposalNotificationType,
   StoredNotification,
   SubmissionNotificationType,
   SubmissionRecord,
@@ -55,6 +58,11 @@ export function statusToEvent(status: SubmissionStatus): SubmissionNotificationT
 /** Narrows a stored notification's type, so the two audiences cannot be crossed by accident. */
 function isOperatorNotification(type: NotificationType): type is OperatorNotificationType {
   return type.startsWith('operator.');
+}
+
+/** Same narrowing for the proposal family, which has its own copy — see email-templates. */
+function isProposalNotification(type: NotificationType): type is ProposalNotificationType {
+  return type.startsWith('proposal.');
 }
 
 /**
@@ -126,6 +134,10 @@ async function maybeSendEmail(deps: EmitDeps, uid: string, notification: StoredN
       notification.type === 'creator.digest' ? `${unsubscribePath}&scope=digest` : unsubscribePath,
     );
     const locale = normalizeLocale(user.locale);
+    // Three families, three sentences. A proposal is not a submission event — the actor
+    // is a second person — so routing one through the submission copy would mail a
+    // creator "«your game» has a proposed change waiting for you" with no idea who from.
+    const emailParams = { title: notification.params.title ?? '', actionUrl, unsubscribeUrl };
     const message =
       notification.type === 'game.new_version'
         ? // Deliberately not emailed yet. An email about somebody else's game needs its
@@ -135,11 +147,9 @@ async function maybeSendEmail(deps: EmitDeps, uid: string, notification: StoredN
           null
         : notification.type === 'creator.digest'
           ? digestNotificationMessage(user.email, locale, digestEmailParams(notification, actionUrl, unsubscribeUrl))
-          : submissionNotificationMessage(user.email, locale, notification.type, {
-              title: notification.params.title ?? '',
-              actionUrl,
-              unsubscribeUrl,
-            });
+          : isProposalNotification(notification.type)
+            ? proposalNotificationMessage(user.email, locale, notification.type, emailParams)
+            : submissionNotificationMessage(user.email, locale, notification.type, emailParams);
 
     if (!message) return;
     await mailer.send(message);
@@ -179,7 +189,9 @@ async function maybePush(deps: EmitDeps, uid: string, notification: StoredNotifi
           : isOperatorNotification(notification.type)
             ? // English regardless of the reader's locale — see the operator copy's comment.
               operatorPushContent(notification.type, notification.params.title ?? '')
-            : submissionPushContent(locale, notification.type, notification.params.title ?? '');
+            : isProposalNotification(notification.type)
+              ? proposalPushContent(locale, notification.type, notification.params.title ?? '')
+              : submissionPushContent(locale, notification.type, notification.params.title ?? '');
     const payload = { title, body, url: absoluteAppUrl(appBaseUrl, notification.link), tag: notification.id };
 
     await Promise.all(
@@ -480,6 +492,51 @@ export async function emitSubmissionNotification(
     await maybePush(deps, event.uid, notification);
   }
 
+  return { created };
+}
+
+/** One proposal event, for whichever side of it is being told. */
+export interface ProposalNotificationEvent {
+  /** Who is being told — the reviewer for `awaiting_review`, the proposer otherwise. */
+  uid: string;
+  type: ProposalNotificationType;
+  proposalId: string;
+  /** The game's title, or its slug when no title is to hand. Rendered in the copy. */
+  gameTitle: string;
+}
+
+/**
+ * Tell somebody about a proposal.
+ *
+ * The id is keyed by proposal and event rather than by job, because a proposal has no job
+ * — deliberately, since one owned by the proposer against the target's slug is what the
+ * ownership rule reads as a transfer. Idempotent on that id, so a retried sweep or a
+ * double-decided race re-emits nothing.
+ *
+ * Links differ by audience: the reviewer goes to the game they own, the proposer to their
+ * own tracker. Sending both to one place is how somebody lands on a page that has no row
+ * for the thing they were just told about.
+ */
+export async function emitProposalNotification(
+  deps: EmitDeps,
+  event: ProposalNotificationEvent,
+): Promise<{ created: boolean }> {
+  const now = deps.now ? new Date(deps.now()).toISOString() : new Date().toISOString();
+  const shortType = event.type.slice('proposal.'.length);
+  const link = event.type === 'proposal.awaiting_review' ? '/studio' : '/proposals';
+
+  const { created, notification } = await deps.store.createNotification(event.uid, {
+    id: `prop-${event.proposalId}-${shortType}`,
+    type: event.type,
+    createdAt: now,
+    titleKey: `notifications.${event.type}.title`,
+    bodyKey: `notifications.${event.type}.body`,
+    params: { title: event.gameTitle },
+    link,
+  });
+
+  await maybeSendEmail(deps, event.uid, notification);
+  if (created) await maybePush(deps, event.uid, notification);
   return { created };
 }
 

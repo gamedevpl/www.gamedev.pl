@@ -62,7 +62,18 @@ export function isGamePageTab(value: string): value is GamePageTab {
  * things to look at. In the URL so a refresh, a bookmark, or the link in an alert
  * notification lands on the section it meant rather than on whichever one is first.
  */
-export const ADMIN_SECTIONS = ['queue', 'costs', 'telemetry', 'limits', 'tokens', 'suggestions', 'waitlist'] as const;
+export const ADMIN_SECTIONS = [
+  'queue',
+  'costs',
+  'telemetry',
+  'limits',
+  'tokens',
+  'suggestions',
+  // Proposals against platform-owned catalog games. Beside `suggestions` because both are
+  // inbound work the operator decides on, rather than something to look at.
+  'proposals',
+  'waitlist',
+] as const;
 export type AdminSection = (typeof ADMIN_SECTIONS)[number];
 
 export function isAdminSection(value: string): value is AdminSection {
@@ -110,6 +121,10 @@ export type AppRoute =
   // Public contact form. Same early-exit posture as legal: a contact point behind
   // sign-in is not a published contact point.
   | { view: 'contact' }
+  // The proposer's tracker: changes this person has proposed to other people's games,
+  // and what happened to them. Signed-in only, and deliberately its own address rather
+  // than a Studio tab — a proposal is not one of your games, and the shelf is.
+  | { view: 'proposals' }
   // Public creator profile. Reachable without a session — the byline destination for
   // published games. The canonical address is `/:handle`; `/creators/:handle` remains
   // an alias for links minted before profiles moved to the root namespace. Handle shape
@@ -166,6 +181,10 @@ const RESERVED_HANDLE_SEGMENTS = new Set([
   'play',
   'platform',
   'privacy',
+  // First-class product route (the proposer's tracker). Same reason as `studio` /
+  // `play`: `/proposals` resolves before the root-handle fallback, and without this
+  // the game-page matcher would read `/proposals/<slug>` as a game under that handle.
+  'proposals',
   'root',
   'status',
   'studio',
@@ -279,6 +298,10 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
 
   if (normalizedPath === '/studio') {
     return { view: 'studio' };
+  }
+
+  if (normalizedPath === '/proposals') {
+    return { view: 'proposals' };
   }
 
   // `/studio/:game` or `/studio/:game/:tab`. A third segment that is not a known
@@ -481,6 +504,7 @@ export function navUpTarget(route: AppRoute): NavUpTarget | null {
     case 'legal':
     case 'contact':
     case 'creator':
+    case 'proposals':
     case 'notFound':
       return { path: '/', labelKey: 'upHome' };
   }
@@ -534,6 +558,11 @@ export function creatorPath(handle: string): string {
 export function gamePath(handle: string, slug: string, tab?: GamePageTab): string {
   const base = `/${encodeURIComponent(handle)}/${encodeURIComponent(slug)}`;
   return tab ? `${base}/${tab}` : base;
+}
+
+/** The proposer's tracker. */
+export function proposalsPath(): string {
+  return '/proposals';
 }
 
 /**

@@ -28,6 +28,8 @@ import { StudioConnectCard } from './StudioConnectCard.js';
 import { StudioCreatorAgentKeyPanel } from './StudioCreatorAgentKeyPanel.js';
 import { StudioDetailsBuildProgress } from './StudioDetailsBuildProgress.js';
 import { StudioDetailsMedia } from './StudioDetailsMedia.js';
+import { ContributionsSetting } from './ContributionsSetting.js';
+import { ProposalReviewPanel } from './ProposalReviewPanel.js';
 import { StudioOAuthClientsPanel } from './StudioOAuthClientsPanel.js';
 import { StudioWorkspaceCheckoutPanel } from './StudioWorkspaceCheckoutPanel.js';
 import { SubmissionStatusView } from './SubmissionStatusView.js';
@@ -1192,6 +1194,23 @@ function DetailsPanel({
               </section>
             ) : null}
           </>
+        ) : null}
+
+        {/*
+         * Contributions live in the overview pane rather than getting a pane of their
+         * own: for the great majority of games the answer is "off" and stays off, and a
+         * tab per setting is how a rail becomes a menu. The review cards sit directly
+         * under the switch that produced them, so turning it on and seeing what arrives
+         * is one place rather than two.
+         *
+         * Only for a published game with a slug: there is nothing to propose against a
+         * draft, and offering the switch there would promise a door that does not exist.
+         */}
+        {activePane === 'overview' && game.slug && catalogLive ? (
+          <div className="studio-rail-contributions">
+            <ContributionsSetting slug={game.slug} />
+            <ProposalReviewPanel scope="mine" slug={game.slug} />
+          </div>
         ) : null}
 
         {activePane === 'connect' ? (

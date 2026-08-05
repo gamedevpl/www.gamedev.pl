@@ -41,7 +41,7 @@ const STUDIO_PATTERN = /^\/studio(?:\/[^/]+(?:\/(?:thread|details|playtest|overv
 // The operator console. Its sections are listed rather than matched loosely, so the
 // shell and the client's router agree about what is a real page and what is a typo —
 // the same contract the studio tabs above keep.
-const ADMIN_PATTERN = /^\/admin(?:\/(?:queue|costs|telemetry|limits|tokens|suggestions|waitlist))?$/;
+const ADMIN_PATTERN = /^\/admin(?:\/(?:queue|costs|telemetry|limits|tokens|suggestions|proposals|waitlist))?$/;
 /** Last path segment looks like a file (`sw.js`, `icon.png`, `foo.woff2`). */
 const STATIC_ASSET_PATTERN = /\/[^/]+\.[a-zA-Z0-9]+$/;
 
@@ -75,6 +75,10 @@ export function isKnownSpaShellPath(urlOrPath: string): boolean {
   if (pathname === '/privacy' || pathname === '/terms' || pathname === '/health' || pathname === '/contact') {
     return true;
   }
+  // The proposer's tracker. A real page, so a refresh on it boots 200 rather than 404 —
+  // and it is reached from a notification link, which is exactly the traffic a soft 404
+  // would make look broken.
+  if (pathname === '/proposals') return true;
 
   if (STUDIO_PATTERN.test(pathname)) return true;
   if (ADMIN_PATTERN.test(pathname)) return true;

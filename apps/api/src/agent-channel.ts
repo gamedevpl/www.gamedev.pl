@@ -403,7 +403,9 @@ export interface AgentChannelOptions {
      * `preview` runs `check:game --preview`. `health` is the operator re-gate.
      * Omitted means the acceptance (publish) gate.
      */
-    mode?: 'health' | 'preview';
+    // `proposal` is the lane where a behavioural-golden change is a finding rather than
+    // a refusal — see GateTriggerInput.mode. Kept in step with gate-trigger's union.
+    mode?: 'health' | 'preview' | 'proposal';
   }) => Promise<{ buildId?: string; accepted?: boolean } | void> | void;
 }
 

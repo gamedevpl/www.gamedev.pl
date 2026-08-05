@@ -446,6 +446,25 @@ function CatalogCard({
               })
             )}
           </p>
+          {/*
+           * Contributor credit — the growth loop, and the reason proposing is worth doing.
+           * Its own line rather than appended to the byline: the owner is who made the
+           * game, and a contributor sharing that sentence would blur authorship the
+           * ownership rules are careful to keep clear.
+           */}
+          {entry.contributorHandles && entry.contributorHandles.length > 0 ? (
+            <p className="card-contributors">
+              {t('catalog.withContributions')}{' '}
+              {entry.contributorHandles.map((handle, index) => (
+                <span key={handle}>
+                  {index > 0 ? ', ' : null}
+                  <a className="card-author-link" href={creatorPath(handle)}>
+                    @{handle}
+                  </a>
+                </span>
+              ))}
+            </p>
+          ) : null}
           <div className="card-actions">
             <button className="primary-btn" onClick={() => onPlayGame(entry)}>
               <PixelIcon name="play" size={13} /> {t('catalog.play')}
