@@ -27,6 +27,9 @@
 #                               store app exists. Empty = /api/auth/apple returns 503)
 #   WEB_ORIGIN=...             (CORS allowed origins)
 #   PRIVATE_BETA=true          (gate all data reads behind a session + allowlist)
+#   MCP_UI=...                 ("true" opens MCP Apps views on /api/mcp — SEP-1865.
+#                               Inert for any client that does not negotiate the
+#                               extension; anything else keeps the pre-views contract)
 #   BETA_ALLOWED_UIDS=...      (comma-separated g:<sub> values)
 #   ADMIN_UIDS=...             (comma-separated g:<sub> values; operator telemetry view)
 #   BETA_ALLOWED_EMAILS=...    (comma-separated verified email addresses)
@@ -252,7 +255,7 @@ done
 #
 # The rule this file already states for REMIX_DEBUG applies to every one of them: both
 # supported paths carry a flag, or neither should.
-for FLAG_VAR in SEED_DISPATCH CODE_LANE EDITOR_ASSIST MCP_AUTHORIZATION_SERVERS; do
+for FLAG_VAR in SEED_DISPATCH CODE_LANE EDITOR_ASSIST MCP_AUTHORIZATION_SERVERS MCP_UI; do
   eval "FLAG_VAL=\${${FLAG_VAR}:-}"
   if [ -n "${FLAG_VAL}" ]; then
     ENV_VARS="${ENV_VARS}|${FLAG_VAR}=${FLAG_VAL}"
