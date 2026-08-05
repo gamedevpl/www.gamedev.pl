@@ -177,7 +177,11 @@ export function GameReview({ slug }: { slug: string }) {
       ) : null}
 
       <div className="game-review-verdict">
-        {pending.approvedAt ? (
+        {!review.canSignOff ? (
+          // An operator reviews but does not sign off: the sign-off speaks for the
+          // creator, and the admin queue reads it back as exactly that.
+          <p className="game-review-note">{t('gamePage.review.operatorCannotSignOff')}</p>
+        ) : pending.approvedAt ? (
           <p className="game-review-approved">
             <PixelIcon name="check" size={13} />{' '}
             {t('gamePage.review.approved', { date: formatDate(pending.approvedAt, i18n.language) })}

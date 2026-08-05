@@ -36,6 +36,8 @@ export interface GameReview {
   candidate: ReviewCandidate | null;
   diff: ReviewDiff | null;
   viewerIsOperator: boolean;
+  /** Owners sign off; an operator looking at somebody else's game may not. */
+  canSignOff: boolean;
 }
 
 /** Thrown shape shared by the review reads, so the component can branch on access. */

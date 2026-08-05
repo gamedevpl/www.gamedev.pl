@@ -50,6 +50,11 @@ export interface GameReviewResponse {
   diff: SourceDiffSummary | null;
   /** True for an operator viewing somebody else's game. */
   viewerIsOperator: boolean;
+  /**
+   * Whether this viewer may record the sign-off. Owners can; operators looking at
+   * somebody else's game cannot, because the sign-off speaks for the creator.
+   */
+  canSignOff: boolean;
 }
 
 export interface GameReviewRoutesOptions {
@@ -74,7 +79,7 @@ export async function registerGameReviewRoutes(app: FastifyInstance, options: Ga
     request: { user?: { uid: string } | null },
     reply: { status: (code: number) => { send: (body: unknown) => unknown } },
     slug: string,
-  ): Promise<{ uid: string; isOperator: boolean; published: SubmissionRecord | null } | null> {
+  ): Promise<{ uid: string; isOperator: boolean; isOwner: boolean; published: SubmissionRecord | null } | null> {
     const uid = request.user?.uid;
     if (!uid) {
       reply.status(401).send({ error: 'authentication required' });
@@ -82,17 +87,22 @@ export async function registerGameReviewRoutes(app: FastifyInstance, options: Ga
     }
     const published = await store.getPublishedSubmissionBySlug(slug);
     const isOperator = adminUids.has(uid);
-    if (isOperator) return { uid, isOperator, published };
 
     // Ownership is asked of every job on the slug, not only the published one: the
     // candidate under review belongs to an improvement job, and on a game that has
     // never published there is no published record to ask at all.
+    //
+    // Asked of operators too, rather than short-circuiting on the admin list: an
+    // operator may *look* at any game, but the sign-off below means "the person who
+    // asked for this change played it and accepts it", and only the owner can say
+    // that. An operator who happens to own the game is still its owner.
     const submissions = await store.listSubmissionsBySlug(slug);
-    if (submissions.length === 0 || !submissions.some((record) => record.ownerUid === uid)) {
+    const isOwner = submissions.some((record) => record.ownerUid === uid);
+    if (!isOperator && !isOwner) {
       reply.status(404).send({ error: 'not_found' });
       return null;
     }
-    return { uid, isOperator: false, published };
+    return { uid, isOperator, isOwner, published };
   }
 
   /** The newest job on this slug that has delivered something awaiting review. */
@@ -126,6 +136,7 @@ export async function registerGameReviewRoutes(app: FastifyInstance, options: Ga
         candidate: null,
         diff: null,
         viewerIsOperator: actor.isOperator,
+        canSignOff: actor.isOwner,
       } satisfies GameReviewResponse);
     }
 
@@ -140,6 +151,7 @@ export async function registerGameReviewRoutes(app: FastifyInstance, options: Ga
           candidate: null,
           diff: null,
           viewerIsOperator: actor.isOperator,
+          canSignOff: actor.isOwner,
         } satisfies GameReviewResponse);
       }
 
@@ -167,6 +179,7 @@ export async function registerGameReviewRoutes(app: FastifyInstance, options: Ga
         },
         diff,
         viewerIsOperator: actor.isOperator,
+        canSignOff: actor.isOwner,
       };
       return reply.send(body);
     } catch (error) {
@@ -224,6 +237,13 @@ export async function registerGameReviewRoutes(app: FastifyInstance, options: Ga
       const actor = await authorize(request, reply, slug);
       if (!actor) return;
       if (!gamesStore) return reply.status(503).send({ error: 'games are not configured' });
+
+      // Operators review; only the owner signs off. The admin queue reads this back
+      // as `creatorApprovedAt`, so an operator recording it would have the queue
+      // report that the creator accepted a change they have never seen.
+      if (!actor.isOwner) {
+        return reply.status(403).send({ error: 'not_the_creator' });
+      }
 
       const record = await findCandidate(slug, actor.uid, actor.isOperator);
       if (!record || record.deliveredVersion !== version) {

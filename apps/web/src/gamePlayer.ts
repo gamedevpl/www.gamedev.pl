@@ -471,7 +471,21 @@ export function bindPlayRecorder(): (event: TelemetryEvent) => void {
   return (event) => void session.record(event);
 }
 
-export function useGameTelemetry(slug: string, enabled: boolean, slots?: number) {
+/**
+ * @param active Whether the frame is actually on screen. The game page keeps the frame
+ *   mounted while the visitor reads another tab so their run is not restarted, and a
+ *   hidden frame that kept accruing `play_time` would inflate focused play time and
+ *   every scorecard derived from it. Deliberately **not** folded into `enabled`:
+ *   tearing the session down and rebuilding it on each tab switch would emit a fresh
+ *   `game_opened` and `play_started` every time, inflating the denominators instead.
+ *   Read through a ref so toggling it never re-runs the effect.
+ */
+export function useGameTelemetry(slug: string, enabled: boolean, slots?: number, active = true) {
+  const activeRef = useRef(active);
+  useEffect(() => {
+    activeRef.current = active;
+  }, [active]);
+
   useEffect(() => {
     if (!enabled) return;
 
@@ -493,7 +507,9 @@ export function useGameTelemetry(slug: string, enabled: boolean, slots?: number)
     // the interval has actually elapsed with the page focused.
     const heartbeatSec = 15;
     const timer = window.setInterval(() => {
-      if (isPlayTimeAccruing(document)) session.record({ type: 'play_time', seconds: heartbeatSec });
+      if (activeRef.current && isPlayTimeAccruing(document)) {
+        session.record({ type: 'play_time', seconds: heartbeatSec });
+      }
     }, heartbeatSec * 1000);
 
     // Health and depth from inside the frame. `progress`/`score`/`end` arrive only

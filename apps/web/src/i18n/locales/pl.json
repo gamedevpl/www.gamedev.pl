@@ -1283,11 +1283,13 @@
         "unknown": "Nie udało się tego zapisać. Spróbuj za chwilę.",
         "gate_red": "Bramka odrzuciła tę budowę, więc nie można jej zaakceptować.",
         "not_gated": "Bramka jeszcze nie skończyła sprawdzać tej budowy.",
-        "not_found": "Tej wersji już nie ma — agent mógł dostarczyć nowszą."
+        "not_found": "Tej wersji już nie ma — agent mógł dostarczyć nowszą.",
+        "not_the_creator": "Tylko twórca gry może zaakceptować zmianę."
       },
       "diffSummary": "plików: {{files}} · +{{added}} −{{removed}} · pokaż zmiany w kodzie",
       "diffTruncated": "(co najmniej)",
-      "diffUncounted": "zmieniony"
+      "diffUncounted": "zmieniony",
+      "operatorCannotSignOff": "Przeglądasz jako operator. Akceptacja należy do twórcy — oznacza, że zagrał i przyjmuje zmianę."
     },
     "sources": {
       "loading": "Wczytywanie źródeł…",

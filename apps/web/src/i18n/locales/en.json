@@ -1277,11 +1277,13 @@
         "unknown": "Could not record that. Try again in a moment.",
         "gate_red": "The gate refused this build, so it cannot be signed off.",
         "not_gated": "The gate has not finished with this build yet.",
-        "not_found": "That version is gone — the agent may have delivered a newer one."
+        "not_found": "That version is gone — the agent may have delivered a newer one.",
+        "not_the_creator": "Only the game’s creator can sign off on a change."
       },
       "diffSummary": "{{files}} files · +{{added}} −{{removed}} · show what changed in the code",
       "diffTruncated": "(at least)",
-      "diffUncounted": "changed"
+      "diffUncounted": "changed",
+      "operatorCannotSignOff": "Reviewing as an operator. The sign-off is the creator’s to give — it says they played this and accept it."
     },
     "sources": {
       "loading": "Loading the sources…",

@@ -194,6 +194,34 @@ describe('game review routes', () => {
     expect(after.json().candidate.approvedAt).toEqual(expect.any(String));
   });
 
+  it('will not let an operator record the creator’s sign-off', async () => {
+    const store = new InMemoryStore();
+    await seedReview(store);
+    const app = await appWith(store, reviewGamesStore());
+
+    const approve = await app.inject({
+      method: 'POST',
+      url: '/api/games/neon-courier/review/v-candidate/approve',
+      headers: { cookie: authCookie('g:operator') },
+    });
+
+    // The admin queue reads `reviewApproval` back as `creatorApprovedAt`, so an
+    // operator recording it would have the queue report that the creator accepted a
+    // change they have never seen.
+    expect(approve.statusCode).toBe(403);
+    expect(approve.json()).toEqual({ error: 'not_the_creator' });
+    expect((await store.getSubmission(1_000_002))?.reviewApproval).toBeUndefined();
+
+    // The owner is unaffected, and an operator who *is* the owner would be too.
+    const owner = await app.inject({
+      method: 'POST',
+      url: '/api/games/neon-courier/review/v-candidate/approve',
+      headers: { cookie: authCookie('g:creator') },
+    });
+    expect(owner.statusCode).toBe(200);
+    expect((await store.getSubmission(1_000_002))?.reviewApproval).toMatchObject({ by: 'g:creator' });
+  });
+
   it('refuses a sign-off on a candidate the gate did not pass', async () => {
     const store = new InMemoryStore();
     await seedReview(store);
@@ -236,7 +264,12 @@ describe('game review routes', () => {
       url: '/api/games/neon-courier/review',
       headers: { cookie: authCookie('g:operator') },
     });
-    expect(operator.json()).toMatchObject({ viewerIsOperator: true, candidate: { version: 'v-candidate' } });
+    expect(operator.json()).toMatchObject({
+      viewerIsOperator: true,
+      candidate: { version: 'v-candidate' },
+      // An operator reviews, but the sign-off speaks for the creator.
+      canSignOff: false,
+    });
 
     // Once that job publishes, there is nothing under review any more.
     await store.setSubmissionPublishedAt(1_000_002, '2026-08-05T00:00:00.000Z');

@@ -51,6 +51,7 @@ function reviewData(overrides: Partial<GameReviewData> = {}): GameReviewData {
       truncated: false,
     },
     viewerIsOperator: false,
+    canSignOff: true,
     ...overrides,
   };
 }
@@ -150,6 +151,16 @@ describe('GameReview', () => {
     expect(approveCandidate).toHaveBeenCalledWith('neon-courier', 'v-candidate');
     expect(container.textContent).toContain('You signed off on this');
     expect(findButton('Looks good')).toBeUndefined();
+  });
+
+  it('tells an operator the sign-off is the creator’s, and offers no button', async () => {
+    fetchGameReview.mockResolvedValue(reviewData({ viewerIsOperator: true, canSignOff: false }));
+    await renderReview();
+
+    expect(container.textContent).toContain('sign-off is the creator');
+    expect(findButton('Looks good')).toBeUndefined();
+    // The comparison itself is still there — operators review, they just do not sign.
+    expect(container.querySelectorAll('[data-testid="frame"]')).toHaveLength(2);
   });
 
   it('will not offer a sign-off on a build the gate refused', async () => {

@@ -18,6 +18,12 @@ type PublishedGameFrameProps = {
   /** Connected controller slots, when this game was opened as a party session. */
   slots?: number;
   /**
+   * Whether this frame is currently on screen. The game page keeps it mounted behind
+   * another tab so a run is not restarted; play time must not accrue while it is
+   * hidden. Defaults true — every other caller shows the frame it mounts.
+   */
+  active?: boolean;
+  /**
    * Whether this surface offers Remix. Off for party mode and embeds, where the
    * frame is not the player's alone to bend.
    */
@@ -45,6 +51,7 @@ export function PublishedGameFrame({
   frameRef,
   embed,
   slots,
+  active = true,
   remixable,
   remixOpenNonce,
   painterNonce,
@@ -83,7 +90,7 @@ export function PublishedGameFrame({
   // Starts only once the document is in hand, so a session means "a game was handed
   // to a player" rather than "a card was clicked". A fetch that never resolves is a
   // catalog problem, and this is not the place that would report it.
-  useGameTelemetry(slug, html !== null, slots);
+  useGameTelemetry(slug, html !== null, slots, active);
 
   // Account play affinity (signed-in) + device-local recent list (everyone). Both are
   // best-effort and separate from anonymous play telemetry — see docs/recommendations.md.

@@ -243,7 +243,9 @@ export function GamePage({
         <main className="game-page-main">
           {frameArmed && !playGated ? (
             <section className={`game-page-frame${activeTab === 'game' ? '' : ' is-hidden'}`}>
-              <PublishedGameFrame slug={slug} title={entry.title} embed />
+              {/* Stays mounted across tab switches so a run is not restarted, and is
+                  told when it is hidden so play time stops accruing behind another tab. */}
+              <PublishedGameFrame slug={slug} title={entry.title} embed active={activeTab === 'game'} />
               <p className="game-page-sandbox-note">{t('gamePage.sandboxNote')}</p>
             </section>
           ) : null}
