@@ -24,10 +24,16 @@ const remixApi = vi.hoisted(() => ({
   remixAssist: vi.fn(),
   remixCode: vi.fn(),
   remixShare: vi.fn(),
+  remixSave: vi.fn(),
   remixUndo: vi.fn(),
   coerceSharedParams: (_specs: unknown, values: unknown) => values,
 }));
 vi.mock('./remixApi', () => remixApi);
+
+/** Button text is the stable handle — quiet/primary classes are shared by Keep and Undo. */
+function buttonNamed(root: ParentNode, name: string): HTMLButtonElement | null {
+  return Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find((b) => b.textContent === name) ?? null;
+}
 
 const telemetry = vi.hoisted(() => ({ recordRemixStep: vi.fn() }));
 vi.mock('./visitTelemetry', () => telemetry);
@@ -189,9 +195,10 @@ describe('RemixPanel', () => {
       container.querySelector('.remix-ask')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     });
 
-    // Earned: share is now the loudest thing on the panel, undo beside it.
+    // Earned: share is the loudest thing; Keep and Undo sit quiet beside it.
     expect(container.querySelector('.remix-btn.is-primary')?.textContent).toBe('Share my version');
-    expect(container.querySelector('.remix-btn.is-quiet')?.textContent).toBe('Undo');
+    expect(buttonNamed(container, 'Make it mine')?.classList.contains('is-quiet')).toBe(true);
+    expect(buttonNamed(container, 'Undo')?.classList.contains('is-quiet')).toBe(true);
     // And the way to a second change is still there, shrunk to a line.
     expect(container.querySelector('.remix-ask.is-compact')).not.toBeNull();
   });
@@ -209,7 +216,7 @@ describe('RemixPanel', () => {
     remixApi.remixAssist.mockResolvedValueOnce({ lane: 'params', values: { dogScale: 2 } });
     await draw();
     await send('bigger dog');
-    expect(container.querySelector('.remix-btn.is-quiet')?.textContent).toBe('Undo');
+    expect(buttonNamed(container, 'Undo')).not.toBeNull();
 
     // The follow-up misses. The player's way back to the state they liked must
     // survive it — that is the moment they want it most.
@@ -217,7 +224,8 @@ describe('RemixPanel', () => {
     await send('something impossible');
 
     expect(container.querySelector('.remix-note.is-error')).not.toBeNull();
-    expect(container.querySelector('.remix-btn.is-quiet')?.textContent).toBe('Undo');
+    expect(buttonNamed(container, 'Undo')).not.toBeNull();
+    expect(buttonNamed(container, 'Make it mine')).not.toBeNull();
   });
 
   it('proposes the painter for a content-shaped request instead of falling through to code', async () => {
@@ -479,18 +487,21 @@ describe('RemixPanel', () => {
 
     // The change landed and says so...
     expect(container.querySelector('.remix-result')?.textContent).toContain('carrots');
-    // ...and there is nothing to share, so nothing is offered.
-    expect(container.querySelector('.remix-btn.is-primary')).toBeNull();
+    // ...and there is nothing to share (code moves no declared value), so Keep
+    // is the primary offer and Share stays off.
+    expect(buttonNamed(container, 'Share my version')).toBeNull();
+    expect(buttonNamed(container, 'Make it mine')?.classList.contains('is-primary')).toBe(true);
 
     // But there is always a way back. A rebuild that compiles is not a rebuild
     // that plays, and the lane cannot tell the difference — so the player must
     // never be left holding a broken game and a composer.
-    const undo = container.querySelector('.remix-btn.is-quiet') as HTMLButtonElement;
-    expect(undo?.textContent).toBe('Undo');
+    const undo = buttonNamed(container, 'Undo');
+    expect(undo).not.toBeNull();
+    expect(undo!.classList.contains('is-quiet')).toBe(true);
 
     remixApi.remixUndo.mockResolvedValue({ ok: true, html: '<html>original</html>', undoable: false });
     await act(async () => {
-      undo.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      undo!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(remixApi.remixUndo).toHaveBeenCalledWith('r1');
     expect(swapped.at(-1)).toBe('<html>original</html>');
@@ -567,8 +578,10 @@ describe('RemixPanel', () => {
 
     // No second session was minted for the reopening...
     expect(remixApi.startRemix).not.toHaveBeenCalled();
-    // ...and the way back is offered before anything else is asked for.
-    expect(container.querySelector('.remix-btn')?.textContent).toBe('Undo');
+    // ...and the way back is offered — Keep sits beside it (change is running,
+    // nothing shareable yet) so Undo is no longer the sole button.
+    expect(buttonNamed(container, 'Undo')).not.toBeNull();
+    expect(buttonNamed(container, 'Make it mine')).not.toBeNull();
   });
 
   async function send(text: string) {
