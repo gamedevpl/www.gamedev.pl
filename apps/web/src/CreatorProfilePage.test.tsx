@@ -66,15 +66,15 @@ afterEach(() => {
   document.body.querySelectorAll('.claim-handle-modal-card, .modal-backdrop').forEach((node) => node.remove());
 });
 
-async function renderPage() {
+async function renderPage({ onNavigate = vi.fn(), onPlay = vi.fn() } = {}) {
   root = createRoot(container);
   await act(async () => {
     root!.render(
       createElement(CreatorProfilePage, {
         handle: 'ada',
         onBack: vi.fn(),
-        onPlay: vi.fn(),
-        onNavigate: vi.fn(),
+        onPlay,
+        onNavigate,
       }),
     );
   });
@@ -146,7 +146,7 @@ describe('CreatorProfilePage owner edit', () => {
       '/api/games/sky-dodge/media/opening.png',
     );
     expect(container.querySelector<HTMLAnchorElement>('a.creator-profile-game-thumb-link')?.getAttribute('href')).toBe(
-      '/play/sky-dodge',
+      '/ada/sky-dodge',
     );
     expect(container.textContent).not.toContain('Open game page');
     expect(container.querySelector<HTMLAnchorElement>('a[href="/studio/sky-dodge"]')?.textContent).toContain(
@@ -161,17 +161,36 @@ describe('CreatorProfilePage owner edit', () => {
     authUser = null;
     fetchCreatorPage.mockResolvedValue(creatorPageWithGame());
 
-    await renderPage();
+    const onNavigate = vi.fn();
+    const onPlay = vi.fn();
+    await renderPage({ onNavigate, onPlay });
 
     const links = Array.from(container.querySelectorAll<HTMLAnchorElement>('a[href="/ada/sky-dodge"]'));
-    expect(links.length).toBe(1);
+    expect(links.length).toBe(2);
     expect(container.querySelector('.creator-profile-game-title a')?.textContent).toBe('Sky Dodge');
-    expect(container.querySelector('a.creator-profile-game-thumb-link')?.getAttribute('href')).toBe('/play/sky-dodge');
+    const thumbnail = container.querySelector<HTMLAnchorElement>('a.creator-profile-game-thumb-link');
+    expect(thumbnail?.getAttribute('href')).toBe('/ada/sky-dodge');
+
+    await act(async () => {
+      thumbnail!.click();
+    });
+
+    expect(onNavigate).toHaveBeenCalledOnce();
+    expect(onNavigate).toHaveBeenCalledWith('/ada/sky-dodge');
+    expect(onPlay).not.toHaveBeenCalled();
     expect(container.textContent).not.toContain('Game page');
     // Play still goes straight to the theater — the card did not lose its job.
-    expect(
-      Array.from(container.querySelectorAll('button')).some((button) => button.textContent?.includes('Play')),
-    ).toBe(true);
+    const play = Array.from(container.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('Play'),
+    );
+    expect(play).toBeTruthy();
+
+    await act(async () => {
+      play!.click();
+    });
+
+    expect(onPlay).toHaveBeenCalledOnce();
+    expect(onPlay).toHaveBeenCalledWith(expect.objectContaining({ slug: 'sky-dodge' }));
   });
 
   it('keeps per-game Studio links private to the owner', async () => {

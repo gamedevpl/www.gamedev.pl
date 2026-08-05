@@ -5,7 +5,7 @@ import { catalogMediaUrl, isPlatformAuthor, normalizeCatalogEntry, type CatalogE
 import { fetchCreatorPage, type PublicCreatorProfile } from './creatorProfileApi.js';
 import { EditProfileModal } from './EditProfileModal.js';
 import { PixelIcon } from './PixelIcon.js';
-import { creatorPath, gamePath, playPath, studioPath } from './router.js';
+import { creatorPath, gamePath, studioPath } from './router.js';
 import { StudioCreatorProfileProvider } from './studioCreatorProfile.js';
 
 /**
@@ -132,6 +132,7 @@ export function CreatorProfilePage({
             <ul className="creator-profile-game-list">
               {games.map((game) => {
                 const poster = game.media?.screenshots[0]?.file;
+                const pagePath = gamePath(handle, game.slug);
                 const author = isPlatformAuthor(game.submittedBy)
                   ? t('catalog.platformAuthor')
                   : (game.submittedBy ?? profile?.profileName);
@@ -139,7 +140,8 @@ export function CreatorProfilePage({
                   <li key={game.slug} className="creator-profile-game">
                     <a
                       className="creator-profile-game-thumb-link"
-                      href={playPath(game.slug)}
+                      href={pagePath}
+                      onClick={interceptTo(pagePath)}
                       aria-label={t('creatorProfile.openGamePage', { title: game.title })}
                     >
                       {poster ? (
@@ -158,7 +160,7 @@ export function CreatorProfilePage({
                       <h3 className="creator-profile-game-title">
                         {/* Everything listed here has a handle by construction, so the
                             game page always resolves — the title is its natural door. */}
-                        <a href={gamePath(handle, game.slug)} onClick={interceptTo(gamePath(handle, game.slug))}>
+                        <a href={pagePath} onClick={interceptTo(pagePath)}>
                           {game.title}
                         </a>
                       </h3>
