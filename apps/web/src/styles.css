@@ -12033,7 +12033,11 @@ a.user-name--profile:focus-visible {
   display: block;
   position: absolute;
   inset: 0;
-  z-index: 4;
+  /*
+   * Above the theater chrome bar (z-index 10) so Edit/Play/Done are reachable;
+   * below install/update banners and auth modals (900+).
+   */
+  z-index: 60;
   background: #0a0f14;
 }
 
