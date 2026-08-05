@@ -12,6 +12,7 @@ import { Readable } from 'node:stream';
 import { createGunzip } from 'node:zlib';
 import type { GcsObjectStore } from './gcs-sign.js';
 import { KIT_ENTRY, KIT_ROOT_DIR, KitRegistryError, parseKitRegistry, parseKitSidecar } from './kit-registry.js';
+import { isKitEngineRefSupported } from './kit-window.js';
 import { readTarEntries } from './tar.js';
 
 /** Whole-file reads above this must use fragments instead. */
@@ -503,7 +504,7 @@ export function createKitFileStore(objectStore: GcsObjectStore): KitFileStore {
     return tree;
   }
 
-  async function readWindow(): Promise<{ current: string; previous: string | null }> {
+  async function readWindow(): Promise<{ current: string; previous: string | null; currentVersion?: string }> {
     const registryBody = await objectStore.readObject('kits/current.json');
     if (!registryBody) {
       throw new KitFilesError(
@@ -513,7 +514,11 @@ export function createKitFileStore(objectStore: GcsObjectStore): KitFileStore {
     }
     try {
       const registry = parseKitRegistry(registryBody.toString('utf8'));
-      return { current: registry.current, previous: registry.previous };
+      return {
+        current: registry.current,
+        previous: registry.previous,
+        ...(registry.currentVersion ? { currentVersion: registry.currentVersion } : {}),
+      };
     } catch (error) {
       if (error instanceof KitRegistryError) {
         throw new KitFilesError(error.code, error.message, { cause: error });
@@ -546,14 +551,55 @@ export function createKitFileStore(objectStore: GcsObjectStore): KitFileStore {
     return { engineRef: window.current, previous: window.previous, sha256 };
   }
 
+  /**
+   * The semver a kit was packed at, or null when it cannot be read.
+   *
+   * Null is the safe answer everywhere it is used: it drops the caller back to the
+   * N/N−1 floor rather than granting a compatibility claim the sidecar never made.
+   */
+  async function loadSidecarVersion(engineRef: string): Promise<string | null> {
+    const sidecarBody = await objectStore.readObject(`kits/${engineRef}.json`);
+    if (!sidecarBody) return null;
+    try {
+      return parseKitSidecar(sidecarBody.toString('utf8')).version ?? null;
+    } catch {
+      return null;
+    }
+  }
+
   async function loadTree(engineRef?: string): Promise<KitTree> {
     const window = await readWindow();
     const requested = engineRef?.trim() || window.current;
-    if (requested !== window.current && requested !== window.previous) {
+    // Same window as the gate, deliberately.
+    //
+    // Browsing used to enforce N/N−1 on its own, which put an agent in the position of
+    // being unable to *read* the kit it is building against while the gate would still
+    // accept the delivery — and the only way out was to re-fetch the kit mid-round,
+    // which is exactly the churn the semver window exists to stop. Read and verdict
+    // have to agree about which kits are alive.
+    const sidecarVersion =
+      requested !== window.current && requested !== window.previous && window.currentVersion
+        ? await loadSidecarVersion(requested)
+        : null;
+    const supported = isKitEngineRefSupported(
+      requested,
+      {
+        current: window.current,
+        previous: window.previous,
+        ...(window.currentVersion ? { currentVersion: window.currentVersion } : {}),
+        // Not read by the window rule; the registry document's own timestamp is
+        // irrelevant to whether a ref is compatible.
+        updatedAt: '',
+      },
+      sidecarVersion,
+    );
+    if (!supported) {
       throw new KitFilesError(
         'kit_revision_unsupported',
-        `engineRef ${requested} is outside the supported N/N−1 window (current=${window.current}` +
-          (window.previous ? `, previous=${window.previous}` : '') +
+        `engineRef ${requested} is outside the supported window (` +
+          (window.currentVersion
+            ? `current kit is v${window.currentVersion}; reads must share its major version`
+            : `current=${window.current}` + (window.previous ? `, previous=${window.previous}` : '')) +
           ') — re-run get_kit',
       );
     }

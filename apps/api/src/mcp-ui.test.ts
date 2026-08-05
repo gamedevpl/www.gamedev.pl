@@ -288,6 +288,31 @@ describe('ui resources', () => {
     expect(html).toContain('actionHint.hidden = false');
   });
 
+  it('turns the button into a copy control when the host refuses to post for us', () => {
+    // Claude refuses ui/message (owner test, 2026-08-05), and the spec version we target
+    // has no host capability to ask in advance — so this is the normal path, not the
+    // exception. Restoring the original label and printing the text underneath read as
+    // "the button did nothing": nothing told the creator the words were now theirs.
+    const html = readUiResource(ROUND_STATUS_RESOURCE_URI)?.text ?? '';
+    expect(html).toContain('offerToCopy');
+    expect(html).toContain("'Copy for your agent'");
+    expect(html).toContain('This chat app will not send it for you');
+
+    // Selection first and unconditionally: it needs no permission and always works, so
+    // the click visibly does something whatever the clipboard decides. A Copy button
+    // that silently fails is the dead button one level down.
+    expect(html).toContain('selection.addRange(range)');
+    expect(html).toContain("'Selected — press Ctrl/Cmd+C'");
+    // ...but only claimed when it actually took. A missing element or a host that
+    // returns no Selection would otherwise throw inside the click handler and leave the
+    // dead button this whole path exists to remove.
+    expect(html).toMatch(/if \(selected\) actionBtn\.textContent/);
+    expect(html).toContain('window.getSelection && window.getSelection()');
+    // Clipboard is the shortcut, never the mechanism — it needs a sandbox permission the
+    // host may not have granted, and rejects unhandled would be an unhandled rejection.
+    expect(html).toMatch(/navigator\.clipboard[\s\S]{0,400}?function \(\) \{\}/);
+  });
+
   it('does not print the gate detail twice, or lead with instructions meant for the agent', () => {
     // kit_outdated returns the same long agent-facing text as both summary and report,
     // which the card printed twice — once as its headline.

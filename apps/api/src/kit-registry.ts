@@ -5,15 +5,21 @@
  * in the bucket; it never invents an engineRef.
  */
 
+import { semverMajor } from './kit-window.js';
+
 export interface KitRegistry {
   current: string;
   previous: string | null;
+  /** Semver of `current`. Absent on documents written before versioning shipped. */
+  currentVersion?: string;
   updatedAt: string;
 }
 
 export interface KitSidecar {
   sha256: string;
   packedAt?: string;
+  /** Semver this kit was packed at. Absent on kits published before versioning. */
+  version?: string;
 }
 
 export class KitRegistryError extends Error {
@@ -46,9 +52,15 @@ export function parseKitRegistry(raw: string): KitRegistry {
   if (typeof obj.updatedAt !== 'string' || !obj.updatedAt) {
     throw new KitRegistryError('kit_registry_invalid', 'kits/current.json.updatedAt must be a non-empty string');
   }
+  // Dropped rather than rejected when malformed — see the same decision in
+  // kit-window.ts. A corrupt optional field must degrade to the narrower N/N−1 rule,
+  // never take the whole document down with it.
+  const currentVersion =
+    typeof obj.currentVersion === 'string' && semverMajor(obj.currentVersion) !== null ? obj.currentVersion : undefined;
   return {
     current: obj.current,
     previous: obj.previous,
+    ...(currentVersion === undefined ? {} : { currentVersion }),
     updatedAt: obj.updatedAt,
   };
 }
@@ -70,6 +82,7 @@ export function parseKitSidecar(raw: string): KitSidecar {
   return {
     sha256: obj.sha256.toLowerCase(),
     ...(typeof obj.packedAt === 'string' ? { packedAt: obj.packedAt } : {}),
+    ...(typeof obj.version === 'string' && obj.version ? { version: obj.version } : {}),
   };
 }
 

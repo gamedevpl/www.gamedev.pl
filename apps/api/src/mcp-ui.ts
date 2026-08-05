@@ -397,6 +397,9 @@ const ROUND_STATUS_HTML = `<!doctype html>
         white-space: pre-wrap;
         color: var(--gd-muted);
       }
+      /* One click selects the whole instruction. The creator is copying this by hand
+         on every host that will not post for them, so make that the easy path. */
+      .hintText { display: block; margin-top: 6px; color: var(--gd-fg); user-select: all; }
       .foot { margin: 12px 0 0; font-size: 11.5px; color: var(--gd-muted); }
       .live { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--gd-accent); margin-right: 6px; vertical-align: middle; }
       [hidden] { display: none !important; }
@@ -445,6 +448,7 @@ const ROUND_STATUS_HTML = `<!doctype html>
         var mediaKey = null;
         var mediaTriesFor = null;
         var mediaTries = 0;
+        var hostCaps = null;
         var REPORT_CONTEXT_LIMIT = 4000;
         var stopped = false;
         var timer = null;
@@ -662,12 +666,7 @@ const ROUND_STATUS_HTML = `<!doctype html>
             var id = nextId++;
             pendingCalls[id] = function (result, error) {
               if (error) {
-                // The host will not post for us — show the words so the creator can
-                // paste them rather than leaving a dead button.
-                actionBtn.textContent = action.label;
-                actionBtn.disabled = false;
-                actionHint.textContent = action.text;
-                actionHint.hidden = false;
+                offerToCopy(action);
               } else {
                 actionBtn.textContent = 'Sent to the agent';
               }
@@ -680,6 +679,62 @@ const ROUND_STATUS_HTML = `<!doctype html>
               params: { role: 'user', content: { type: 'text', text: action.text } }
             });
           };
+        }
+
+        /**
+         * What the button becomes when the host will not post for us.
+         *
+         * Claude refuses ui/message (owner test, 2026-08-05), and the spec version we
+         * target has no host capability to ask in advance — so this path is the normal
+         * one, not the exception. Restoring the original label and quietly printing the
+         * text below it read as "the button did nothing": the creator has no idea the
+         * words are now theirs to carry. So the button changes job instead, and says so.
+         */
+        function offerToCopy(action) {
+          actionBtn.disabled = false;
+          actionBtn.textContent = 'Copy for your agent';
+          actionBtn.onclick = function () {
+            // Selecting the text needs no permission, so try it first: whatever the
+            // clipboard does, the click should visibly do something. A Copy button that
+            // silently fails is the dead button again — which is the whole bug here, so
+            // the recovery must not be able to reintroduce it. Hence: attempt, verify,
+            // and only claim success when the selection actually took.
+            var selected = false;
+            try {
+              var target = document.getElementById('hintText');
+              var selection = window.getSelection && window.getSelection();
+              if (target && selection) {
+                var range = document.createRange();
+                range.selectNodeContents(target);
+                selection.removeAllRanges();
+                selection.addRange(range);
+                selected = String(selection).length > 0;
+              }
+            } catch (e) {}
+            if (selected) actionBtn.textContent = 'Selected — press Ctrl/Cmd+C';
+
+            // Clipboard access needs a sandbox permission the host may not have granted,
+            // so this is the shortcut, never the mechanism.
+            try {
+              var written = navigator.clipboard && navigator.clipboard.writeText(action.text);
+              if (written && written.then) {
+                written.then(function () {
+                  actionBtn.textContent = 'Copied — paste it to your agent';
+                }, function () {});
+              }
+            } catch (e) {}
+          };
+
+          actionHint.textContent = '';
+          var lead = document.createElement('span');
+          lead.textContent = 'This chat app will not send it for you. Give your agent these words:';
+          var body = document.createElement('span');
+          body.className = 'hintText';
+          body.id = 'hintText';
+          body.textContent = action.text;
+          actionHint.appendChild(lead);
+          actionHint.appendChild(body);
+          actionHint.hidden = false;
         }
 
         /** Terminal for a *round*: nothing further will arrive, so stop polling. */
@@ -1077,7 +1132,13 @@ const ROUND_STATUS_HTML = `<!doctype html>
 
           if (initializeId !== null && message.id === initializeId && !initialized) {
             initialized = true;
-            if (message.result) applyHostContext(message.result.hostContext);
+            if (message.result) {
+              applyHostContext(message.result.hostContext);
+              // Kept for the action button. The stable spec's HostCapabilities has no
+              // field for ui/message support at all — the draft adds one — so absence
+              // proves nothing today and we still have to try and see.
+              hostCaps = message.result.capabilities || null;
+            }
             notify('ui/notifications/initialized', {});
             log('debug', 'round view initialized');
             reportSize();

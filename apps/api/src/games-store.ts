@@ -26,6 +26,7 @@ import {
   DELIVERY_MAX_UPLOAD_BYTES,
   DELIVERY_RESERVED_SEGMENTS,
 } from './games-repo-contract.js';
+import { parseKitSidecar } from './kit-registry.js';
 import { KIT_REGISTRY_OBJECT, parseKitRegistry, type KitRegistry } from './kit-window.js';
 
 /**
@@ -581,6 +582,13 @@ export interface GamesStore {
    * not been published yet — callers must not invent a window from listing order.
    */
   getKitRegistry(): Promise<KitRegistry | null>;
+  /**
+   * The semver a given kit was packed at, from `kits/<engineRef>.json`.
+   *
+   * Null when the sidecar is missing, unreadable, or predates versioning — all of
+   * which mean "fall back to the N/N−1 window", never "refuse".
+   */
+  getKitVersion(engineRef: string): Promise<string | null>;
 }
 
 export interface GcsGamesStoreOptions {
@@ -1047,6 +1055,19 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
       const body = await readObject(KIT_REGISTRY_OBJECT);
       if (!body) return null;
       return parseKitRegistry(body.toString('utf8'));
+    },
+
+    async getKitVersion(engineRef) {
+      // The ref reaches here from a delivery manifest, so it is interpolated into an
+      // object path only after a shape check — never trust a claim to be a commit sha.
+      if (!/^[A-Za-z0-9-]+$/.test(engineRef)) return null;
+      const body = await readObject(`kits/${engineRef}.json`);
+      if (!body) return null;
+      try {
+        return parseKitSidecar(body.toString('utf8')).version ?? null;
+      } catch {
+        return null;
+      }
     },
   };
 }

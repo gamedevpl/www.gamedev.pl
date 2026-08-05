@@ -250,4 +250,73 @@ describe('createKitFileStore', () => {
       code: 'kit_revision_unsupported',
     });
   });
+
+  it('lets an agent keep reading the kit it is building against, same rule as the gate', async () => {
+    // Browse used to enforce N/N−1 on its own, so in a long round two same-major kits
+    // could publish and the agent could no longer read the kit whose delivery the gate
+    // would still accept — forcing exactly the mid-round kit churn semver removes.
+    const OLD = 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef';
+    const OLD_SHA = 'c'.repeat(64);
+    const objects = new Map<string, Buffer>([
+      [
+        'kits/current.json',
+        Buffer.from(
+          JSON.stringify({
+            current: ENGINE,
+            previous: PREV,
+            currentVersion: '1.4.2',
+            updatedAt: '2026-08-05T11:48:00.000Z',
+          }),
+        ),
+      ],
+      [`kits/${ENGINE}.json`, Buffer.from(JSON.stringify({ sha256: SHA, version: '1.4.2' }))],
+      [`kits/${ENGINE}.tgz`, kitTarball({ 'SKILL.md': '# current\n' })],
+      // Two generations back, same major.
+      [`kits/${OLD}.json`, Buffer.from(JSON.stringify({ sha256: OLD_SHA, version: '1.0.0' }))],
+      [`kits/${OLD}.tgz`, kitTarball({ 'SKILL.md': '# old\n' })],
+    ]);
+    const store: GcsObjectStore = {
+      readObject: async (name) => objects.get(name) ?? null,
+      objectExists: async (name) => objects.has(name),
+      signReadUrl: async () => 'https://signed.example/kit.tgz',
+    };
+    const kits = createKitFileStore(store);
+
+    const tree = await kits.loadTree(OLD);
+    expect(tree.engineRef).toBe(OLD);
+    expect(tree.files.get(`${KIT_ROOT_DIR}/SKILL.md`)?.toString('utf8')).toBe('# old\n');
+
+    // A different major is still refused, and says the rule rather than two SHAs.
+    const BREAKING = 'f'.repeat(40);
+    objects.set(`kits/${BREAKING}.json`, Buffer.from(JSON.stringify({ sha256: 'd'.repeat(64), version: '0.9.0' })));
+    objects.set(`kits/${BREAKING}.tgz`, kitTarball({ 'SKILL.md': '# breaking\n' }));
+    await expect(kits.loadTree(BREAKING)).rejects.toMatchObject({ code: 'kit_revision_unsupported' });
+    await expect(kits.loadTree(BREAKING)).rejects.toThrow(/major version/);
+  });
+
+  it('falls back to N/N−1 for browse when the registry is unversioned', async () => {
+    const OLD = 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef';
+    const objects = new Map<string, Buffer>([
+      [
+        'kits/current.json',
+        Buffer.from(JSON.stringify({ current: ENGINE, previous: PREV, updatedAt: '2026-08-03T00:00:00.000Z' })),
+      ],
+      [`kits/${ENGINE}.json`, Buffer.from(JSON.stringify({ sha256: SHA }))],
+      [`kits/${ENGINE}.tgz`, kitTarball({ 'SKILL.md': '# current\n' })],
+      // Versioned sidecar, unversioned registry: nothing to compare against, so the
+      // old floor must hold rather than the claim being taken at face value.
+      [`kits/${OLD}.json`, Buffer.from(JSON.stringify({ sha256: 'c'.repeat(64), version: '1.0.0' }))],
+      [`kits/${OLD}.tgz`, kitTarball({ 'SKILL.md': '# old\n' })],
+      [`kits/${PREV}.json`, Buffer.from(JSON.stringify({ sha256: PREV_SHA }))],
+      [`kits/${PREV}.tgz`, kitTarball({ 'SKILL.md': '# previous\n' })],
+    ]);
+    const store: GcsObjectStore = {
+      readObject: async (name) => objects.get(name) ?? null,
+      objectExists: async (name) => objects.has(name),
+      signReadUrl: async () => 'https://signed.example/kit.tgz',
+    };
+    const kits = createKitFileStore(store);
+    await expect(kits.loadTree(OLD)).rejects.toMatchObject({ code: 'kit_revision_unsupported' });
+    expect((await kits.loadTree(PREV)).engineRef).toBe(PREV);
+  });
 });

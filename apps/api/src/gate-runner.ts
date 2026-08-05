@@ -105,10 +105,19 @@ export interface GateRunnerDeps {
    */
   assembleBundle?: (harness: string, slug: string) => Promise<string | null>;
   /**
-   * The Creator Kit N/N−1 window. Injected so tests can fix the registry without GCS;
+   * The Creator Kit window. Injected so tests can fix the registry without GCS;
    * production reads `kits/current.json` via {@link GamesStore.getKitRegistry}.
    */
   readKitRegistry?: () => Promise<KitRegistry | null>;
+  /**
+   * The semver a given kit was packed at, from that ref's own sidecar.
+   *
+   * Read per-ref rather than kept in the registry because the registry cannot carry a
+   * list long enough to date an arbitrarily old delivery, and the sidecar is already
+   * immutable and written once per kit. Only consulted when the ref is neither current
+   * nor previous, so the common paths cost no extra read.
+   */
+  readKitVersion?: (engineRef: string) => Promise<string | null>;
 }
 
 const DEFAULT_ARTIFACT_ROOTS = {
@@ -199,7 +208,20 @@ export async function runGate(
   const previewStills = previewRun && process.env.GATE_PREVIEW_STILLS !== '0';
   if (!healthRun && manifest.kitEngineRef) {
     const registry = await (deps.readKitRegistry ?? (() => deps.store.getKitRegistry()))().catch(() => null);
-    if (registry && !isKitEngineRefSupported(manifest.kitEngineRef, registry)) {
+    // Only when the cheap checks did not already settle it, and only when the registry
+    // is versioned at all — an unversioned one cannot compare majors, so the read
+    // would buy nothing.
+    const needsVersion =
+      registry !== null &&
+      Boolean(registry.currentVersion) &&
+      manifest.kitEngineRef !== registry.current &&
+      manifest.kitEngineRef !== registry.previous;
+    const claimedVersion = needsVersion
+      ? await (deps.readKitVersion ?? ((ref: string) => deps.store.getKitVersion(ref)))(manifest.kitEngineRef).catch(
+          () => null,
+        )
+      : null;
+    if (registry && !isKitEngineRefSupported(manifest.kitEngineRef, registry, claimedVersion)) {
       return {
         green: false,
         status: 'kit_outdated',
