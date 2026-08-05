@@ -928,16 +928,6 @@
     "gameNamed": "{{title}}",
     "proposals": "My proposals"
   },
-  "gamePage": {
-    "loading": "Loading game…",
-    "loadError": "Could not load this game page.",
-    "missing": "This game is not available.",
-    "actions": "Game actions",
-    "playPreview": "Play {{title}} in theater mode",
-    "openTheater": "Play in theater",
-    "screenshots": "Screenshots",
-    "viewScreenshot": "View screenshot {{number}}"
-  },
   "creatorProfile": {
     "back": "Back",
     "loading": "Loading profile…",
@@ -1229,6 +1219,12 @@
     "missing": "This game page does not exist.",
     "missingPlayLink": "Try the direct play link instead",
     "error": "Could not load the game page. Try again in a moment.",
+    "loadError": "Could not load this game page.",
+    "actions": "Game actions",
+    "playPreview": "Play {{title}} in theater mode",
+    "openTheater": "Play in theater",
+    "screenshots": "Screenshots",
+    "viewScreenshot": "View screenshot {{number}}",
     "breadcrumbAria": "Game location",
     "play": "Play",
     "follow": "Follow",

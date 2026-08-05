@@ -1,6 +1,12 @@
 import type { APIRequestContext, Browser, BrowserContext, Frame, Page } from 'playwright-core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { e2ePrerequisites, launchSiteBrowser, signedInApiContext, signedInContext, visit } from './browser.js';
+import {
+  e2ePrerequisites,
+  launchSiteBrowser,
+  openPlayTheater,
+  signedInApiContext,
+  signedInContext,
+} from './browser.js';
 
 /**
  * Are published games actually playable on this deployment?
@@ -11,7 +17,8 @@ import { e2ePrerequisites, launchSiteBrowser, signedInApiContext, signedInContex
  * like. Every other check in `deploy.yml` stops at HTTP, and proving
  * `/api/games/<slug>` returns HTML says nothing about whether that HTML runs — a CSP
  * header, a sandbox change, a bundle regression or a broken assembler each return a
- * healthy 200 and a black screen.
+ * healthy 200 and a black screen. Visiting `/play/<slug>` alone is also not enough
+ * anymore: that URL is a preview page, and Play must be clicked before a frame exists.
  *
  * The verdict is by **breadth**, and that is the whole point of this file existing
  * separately. Games live in a separate, agent-maintained repo and change independently
@@ -108,7 +115,8 @@ async function sampleCanvas(frame: Frame): Promise<CanvasSample | null> {
 async function inspectGame(page: Page, slug: string): Promise<GameReport> {
   const report: GameReport = { slug, frameAppeared: false, sandbox: null, litPixels: -1, animated: false };
 
-  await visit(page, `/play/${encodeURIComponent(slug)}`, 4_000);
+  // Preview page first, then Play — the iframe does not exist until the theater opens.
+  await openPlayTheater(page, slug);
 
   const iframe = page.locator('iframe').first();
   report.sandbox = await iframe.getAttribute('sandbox').catch(() => null);
@@ -247,7 +255,7 @@ describe.skipIf(!prereq.ok)('published games are playable', () => {
     // code this app's DOM, storage and cookies.
     const sandboxes = new Set<string | null>();
     for (const slug of slugs) {
-      await visit(page, `/play/${encodeURIComponent(slug)}`, 2_000);
+      await openPlayTheater(page, slug, 2_000);
       // Wait for attachment before reading. On a cold start the frame arrives a moment
       // after the settle, and `getAttribute` on a not-yet-present element returns null —
       // which would read as "sandbox missing" and block promotion over a slow revision

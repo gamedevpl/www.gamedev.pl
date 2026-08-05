@@ -297,3 +297,23 @@ export async function visit(page: Page, path: string, settleMs = 3_000) {
   await page.waitForTimeout(settleMs);
   return response;
 }
+
+/**
+ * Open a published game's sandboxed theater from its shareable preview page.
+ *
+ * `/play/<slug>` is preview-first (`GameDetailPage`): screenshot/actions only, no
+ * iframe. Play is the explicit execution boundary that mounts `GameTheater`. The
+ * deploy browser gate must cross that boundary before asserting on frames, canvas
+ * liveness, or theater chrome — otherwise every check fails against a page that is
+ * working as designed.
+ */
+export async function openPlayTheater(page: Page, slug: string, settleMs = 4_000): Promise<void> {
+  await visit(page, `/play/${encodeURIComponent(slug)}`, settleMs);
+  // Class within the actions row, not `button.primary-btn` — the control is the
+  // primary action by role in the layout; tying the gate to the element type would
+  // fail a deploy over a harmless `<a class="primary-btn">` restyle.
+  const play = page.locator('.game-page-actions .primary-btn');
+  await play.waitFor({ state: 'visible', timeout: 30_000 });
+  await play.click();
+  await page.locator('.game-theater-bar').waitFor({ state: 'visible', timeout: 30_000 });
+}
