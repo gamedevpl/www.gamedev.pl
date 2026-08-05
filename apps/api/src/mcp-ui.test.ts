@@ -252,22 +252,19 @@ describe('ui resources', () => {
     expect(readUiResource(ROUND_STATUS_RESOURCE_URI)?._meta).toEqual(descriptor._meta);
   });
 
-  it('opens the round view from the tools a creator watches a round through', () => {
-    // Phase 0 attached the view to read tools only, on the reasoning that a card on a
-    // write tool would freeze a mid-delivery echo on screen. That no longer applies: the
-    // card renders live state from get_round_status rather than the opening payload, so
-    // submitting is exactly the moment a creator wants it open.
-    expect(MCP_UI_TOOL_RESOURCES).toEqual({
-      start: ROUND_STATUS_RESOURCE_URI,
-      get_gate_verdict: ROUND_STATUS_RESOURCE_URI,
-    });
-    // The host renders one card per tool call carrying _meta.ui, so a turn that started
-    // a round and then delivered produced two identical cards. The card is live: the one
-    // from start already follows the delivery.
-    expect(MCP_UI_TOOL_RESOURCES).not.toHaveProperty('submit_sources');
-    // open_round mints no session key and takes none, so a card opened there would have
-    // nothing to read status with.
-    expect(MCP_UI_TOOL_RESOURCES).not.toHaveProperty('open_round');
+  it('opens the round view from exactly one tool, which exists for nothing else', () => {
+    // This used to be `start` and `get_gate_verdict` — tools an agent calls for its own
+    // reasons — which made a card a side effect of workflow mechanics. An agent that
+    // re-ran `start` before each operation left one card per call (ChatGPT, 2026-08-05),
+    // and it was not doing anything wrong enough to forbid. Showing the creator
+    // something is now a deliberate act with a deliberate tool.
+    expect(MCP_UI_TOOL_RESOURCES).toEqual({ show_round: ROUND_STATUS_RESOURCE_URI });
+
+    // The host renders one card per call carrying _meta.ui, so every tool added here
+    // hands the card count back to whatever the agent happens to do.
+    for (const workflowTool of ['start', 'get_gate_verdict', 'submit_sources', 'open_round']) {
+      expect(MCP_UI_TOOL_RESOURCES).not.toHaveProperty(workflowTool);
+    }
   });
 
   it('keeps the app-only tools read-only, since the model never sees them happen', () => {

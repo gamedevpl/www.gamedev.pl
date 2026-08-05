@@ -15,7 +15,7 @@ private content into PRs).
 Source of truth: `SESSION_WORKFLOW` + `BEHAVIOURAL_CONTRACT` in
 `apps/api/src/mcp-server.ts` (returned by `start`, appended to every tool description).
 
-1. `start` → `get_brief` / `get_seed` / `get_sources` / `get_kit` as needed
+1. `start` → `show_round` (once) → `get_brief` / `get_seed` / `get_sources` / `get_kit` as needed
 2. Build; `report_progress`; `send_screenshot` when something draws
 3. Prefer `stage_source_file` (new/full rewrite) or `patch_source_file` (unified diff) then
    `submit_sources({ fromStaged: true, mode, kitEngineRef })`
@@ -188,6 +188,18 @@ cache), so a resume cannot keep showing “finished this round” next to live p
   MCP tools refuse an already-issued key with a reconnect instruction. Do not restore a
   per-game compatibility path in UI, API routes, or MCP tool handling.
 - An opener is checked by `start`; later calls use the returned round-scoped `sessionKey`.
+- **`show_round` is the only tool that opens the creator's status card**, and it exists for
+  nothing else. It used to hang off `start` and `get_gate_verdict`, which made the card a side
+  effect of workflow mechanics — an agent that re-ran `start` before each operation left one
+  card per call (ChatGPT, 2026-08-05). The host renders one card per call carrying `_meta.ui`,
+  so when adding a view, give it its own tool rather than attaching it to a tool agents call
+  for their own reasons.
+- **`start` is once per round.** The key is valid until `expiresAt` (hours), so re-running `start`
+  to "refresh" it is wrong: it costs a round trip each time and, in an MCP Apps host, leaves a
+  duplicate round card in the conversation per call. Re-run it only after a call is refused as
+  unauthenticated. Observed 2026-08-05: ChatGPT called `start` before each operation and said it
+  did so "to reacquire the key" — a fair reading of _short-lived_ that nothing in the contract
+  corrected. `SESSION_WORKFLOW`'s first step now does.
   Therefore revoking or rotating a creator key, revoking an OAuth grant, or detecting
   refresh-token reuse must also advance every open self round for that creator via
   `endOpenAgentSessions`. Revoking the opener alone would leave minted session keys live.

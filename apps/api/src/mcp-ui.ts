@@ -40,25 +40,24 @@ export const MCP_UI_MIME_TYPE = 'text/html;profile=mcp-app';
 export const ROUND_STATUS_RESOURCE_URI = 'ui://gamedevpl/round-status';
 
 /**
- * Tools that open the round view — kept deliberately few, because the host renders one
- * card per tool call that carries `_meta.ui`.
+ * The tool that opens the round view. Exactly one, and it exists for nothing else.
  *
- * `submit_sources` used to be here and was removed: an ordinary turn calls `start` and
- * then delivers, which rendered two cards showing identical state one above the other.
- * Nothing was lost by dropping it. The card is live, so the one opened at `start`
- * already follows the delivery and the gate on its own — that is the whole point of it.
+ * This used to be `start` and `get_gate_verdict` — tools an agent calls for their own
+ * reasons. That made a card a *side effect* of workflow mechanics, so behaviour we
+ * neither control nor should have to decided how many cards a conversation got: an
+ * agent that re-ran `start` before each operation to "reacquire the key" left one card
+ * per call (ChatGPT, 2026-08-05). It was not doing anything wrong enough to forbid, and
+ * no host-side reasoning fixes a cause that lives in the agent's own discretion.
  *
- * `get_gate_verdict` stays for the creator-led check on a later turn, when no `start`
- * precedes it. Doubling up there needs an agent that both opens a round and polls in
- * one turn, which the workflow tells it not to do (prefer `end`, let the card watch).
+ * So showing the creator something is now a deliberate act with a deliberate tool.
+ * Calling `show_round` twice asks for two cards, which is at least honest.
  *
- * `open_round` is deliberately absent for a different reason: it mints no session key
- * and takes none — its own description sends the agent to `start()` for one — so a card
- * opened there would have no credential and would sit on "Reading round status…".
+ * Keep this map at one entry unless a second surface genuinely needs its own view. The
+ * host renders one card per call that carries `_meta.ui`, and every tool added here
+ * hands that decision back to whatever the agent happens to do.
  */
 export const MCP_UI_TOOL_RESOURCES: Readonly<Record<string, string>> = Object.freeze({
-  start: ROUND_STATUS_RESOURCE_URI,
-  get_gate_verdict: ROUND_STATUS_RESOURCE_URI,
+  show_round: ROUND_STATUS_RESOURCE_URI,
 });
 
 /**
