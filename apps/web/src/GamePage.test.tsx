@@ -61,11 +61,7 @@ function pageData(overrides: Partial<GamePageData> = {}): GamePageData {
       profileCreatedAt: '2026-07-01T00:00:00.000Z',
     },
     platformAuthored: false,
-    specMarkdown: '# Neon Courier\n\nDeliver packages before the last neon goes out.',
-    modules: ['input', 'gameplay', 'gfx'],
-    budget: { usedBytes: 147 * 1024, limitBytes: 252 * 1024 },
-    releases: [{ version: 'v3', createdAt: '2026-08-03T12:00:00.000Z', current: true, gateGreen: true }],
-    stats: { plays: 4812, medianPlaySeconds: 360, windowDays: 28 },
+    description: 'Deliver packages before the last neon goes out.',
     ...overrides,
   };
 }
@@ -125,7 +121,6 @@ describe('GamePage', () => {
     expect(container.querySelector('iframe')).toBeNull();
     expect(container.querySelector('video')).toBeNull();
     expect(container.textContent).not.toContain('SPEC.md');
-    expect(container.querySelector('.game-page-tabs')).toBeNull();
     expect(container.querySelector('.game-page-preview img')?.getAttribute('src')).toContain('battle.png?w=1280');
     expect(container.querySelectorAll('.game-page-screenshot')).toHaveLength(2);
     expect(container.textContent).toContain('Arrows move, Space fires');

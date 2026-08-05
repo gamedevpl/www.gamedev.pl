@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from './AuthContext.js';
 import { AuthModal } from './AuthModal.js';
@@ -6,8 +6,7 @@ import { catalogMediaUrl, gamePageHandle, type CatalogEntry } from './catalog.js
 import { fetchGamePage, type GamePage as GamePageData } from './gamePageApi.js';
 import { PixelIcon } from './PixelIcon.js';
 import { ShareGameButton } from './ShareGameButton.js';
-import { creatorPath, gamePath, playPath, type GamePageTab } from './router.js';
-import { parseSpecBlocks } from './specBlocks.js';
+import { creatorPath, gamePath, playPath } from './router.js';
 import { recordRemixStep } from './visitTelemetry.js';
 import { VoteWidget } from './VoteWidget.js';
 
@@ -39,8 +38,6 @@ export function GamePage({
 }: {
   handle: string;
   slug: string;
-  /** Kept in the public prop shape so old tab routes can resolve to this page. */
-  tab?: GamePageTab;
   onNavigate: (path: string) => void;
   onCanonicalPath?: (path: string) => void;
   onGameLoaded?: (title: string) => void;
@@ -90,12 +87,6 @@ export function GamePage({
     }
   }, [state, page, canonicalHandle, handle, slug, onCanonicalPath]);
 
-  const description = useMemo(() => {
-    if (!page?.specMarkdown) return null;
-    const firstParagraph = parseSpecBlocks(page.specMarkdown).find((block) => block.kind === 'paragraph');
-    return firstParagraph && firstParagraph.kind === 'paragraph' ? firstParagraph.text : null;
-  }, [page]);
-
   if (state === 'loading') {
     return <p className="game-page-state">{t('gamePage.loading')}</p>;
   }
@@ -118,8 +109,7 @@ export function GamePage({
   const { entry, creator, platformAuthored } = page;
   const screenshots = entry.media?.screenshots ?? [];
   const primaryScreenshot = previewScreenshot(entry);
-  const screenshot =
-    screenshots.find((candidate) => candidate.file === selectedScreenshotFile) ?? primaryScreenshot;
+  const screenshot = screenshots.find((candidate) => candidate.file === selectedScreenshotFile) ?? primaryScreenshot;
   const authorPath = creator ? creatorPath(creator.handle) : null;
   const authorLabel = platformAuthored
     ? t('catalog.platformAuthor')
@@ -163,7 +153,7 @@ export function GamePage({
           {entry.genre ? <span className="game-page-genre">{entry.genre}</span> : null}
         </nav>
         <h1>{entry.title}</h1>
-        {description ? <p className="game-page-description">{description}</p> : null}
+        {page.description ? <p className="game-page-description">{page.description}</p> : null}
         <div className="game-page-actions" role="group" aria-label={t('gamePage.actions')}>
           <button type="button" className="primary-btn" onClick={play}>
             <PixelIcon name="play" size={13} /> {t('gamePage.play')}

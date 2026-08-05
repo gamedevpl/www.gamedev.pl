@@ -130,7 +130,6 @@ describe('parsePathRoute', () => {
         view: 'game',
         handle: 'nightshift',
         slug: 'neon-courier',
-        tab,
       });
     }
     // The platform namespace is an address even though nobody can claim it — it is
@@ -216,6 +215,10 @@ describe('path builders', () => {
     // An old tab name is not the current address for the surface that absorbed it.
     expect(canonicalPath('/studio/tv-tycoon/build')).toBe('/studio/tv-tycoon/thread');
     expect(canonicalPath('/studio/tv-tycoon/stats')).toBe('/studio/tv-tycoon/details');
+    expect(canonicalPath('/nightshift/neon-courier/board')).toBe('/nightshift/neon-courier');
+    expect(canonicalPath('/nightshift/neon-courier/review')).toBe('/nightshift/neon-courier');
+    expect(canonicalPath('/nightshift/neon-courier/releases')).toBe('/nightshift/neon-courier');
+    expect(canonicalPath('/nightshift/neon-courier/sources')).toBe('/nightshift/neon-courier');
   });
 
   it('leaves an address that is already current alone', () => {
@@ -243,17 +246,15 @@ describe('path builders', () => {
 
   it('builds a game page path that round-trips', () => {
     expect(gamePath('nightshift', 'neon-courier')).toBe('/nightshift/neon-courier');
-    expect(gamePath('nightshift', 'neon-courier', 'releases')).toBe('/nightshift/neon-courier/releases');
     expect(parsePathRoute(gamePath('nightshift', 'neon-courier'))).toEqual({
       view: 'game',
       handle: 'nightshift',
       slug: 'neon-courier',
     });
-    expect(parsePathRoute(gamePath('nightshift', 'neon-courier', 'board'))).toEqual({
+    expect(parsePathRoute('/nightshift/neon-courier/board')).toEqual({
       view: 'game',
       handle: 'nightshift',
       slug: 'neon-courier',
-      tab: 'board',
     });
   });
 

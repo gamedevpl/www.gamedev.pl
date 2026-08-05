@@ -42,18 +42,8 @@ export function isStudioTab(value: string): value is StudioTab {
   return parseStudioTab(value) !== null;
 }
 
-/**
- * Public game page tabs — the "repo page" layout at `/:handle/:slug`. The default
- * surface (the playable game) carries no URL segment, so only the four secondary
- * tabs appear here. Keep the vocabulary aligned with `GAME_PAGE_PATTERN` in
- * apps/api/src/spa-paths.ts.
- */
-export const GAME_PAGE_TABS = ['board', 'review', 'releases', 'sources'] as const;
-export type GamePageTab = (typeof GAME_PAGE_TABS)[number];
-
-export function isGamePageTab(value: string): value is GamePageTab {
-  return (GAME_PAGE_TABS as readonly string[]).includes(value);
-}
+/** Old game-page tabs now resolve to the compact page and are rewritten to its URL. */
+const LEGACY_GAME_PAGE_SEGMENTS = new Set(['board', 'review', 'releases', 'sources']);
 
 /**
  * Operator console sections, in the order they are offered.
@@ -130,12 +120,9 @@ export type AppRoute =
   // an alias for links minted before profiles moved to the root namespace. Handle shape
   // matches the API (`^[a-z][a-z0-9_]{2,23}$`).
   | { view: 'creator'; handle: string }
-  // Public game page — the "repo page" nested under the creator profile, GitHub-style
-  // (`/:handle/:slug`). Reachable without a session, same as the profile above: the
-  // page is a landing page, and only *playing* is gated during closed beta. `tab`
-  // absent is the default surface (the playable game); the named tabs are the
-  // board / review / releases / sources secondary surfaces.
-  | { view: 'game'; handle: string; slug: string; tab?: GamePageTab }
+  // Public game landing page nested under the creator profile (`/:handle/:slug`).
+  // Reachable without a session; only playing is gated during closed beta.
+  | { view: 'game'; handle: string; slug: string }
   // Unknown / invalid path. Kept as its own view so a typo or stale bookmark shows a
   // real 404 instead of silently dumping the visitor on the home catalog.
   | { view: 'notFound' };
@@ -340,7 +327,7 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
     return { view: 'creator', handle: rootHandle };
   }
 
-  // Public game page: `/:handle/:slug` (+ optional tab). Last for the same reason the
+  // Public game page: `/:handle/:slug` (+ an optional legacy tab alias). Last for the same reason the
   // root profile is late — every first-class segment above keeps its meaning, and the
   // product segments are additionally reserved at handle-claim time, so a real handle
   // can never collide with them. An unknown tab segment is a 404, not a fallback,
@@ -363,8 +350,8 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
       if (!tabSegment) {
         return { view: 'game', handle, slug };
       }
-      if (isGamePageTab(tabSegment)) {
-        return { view: 'game', handle, slug, tab: tabSegment };
+      if (LEGACY_GAME_PAGE_SEGMENTS.has(tabSegment)) {
+        return { view: 'game', handle, slug };
       }
     }
   }
@@ -427,7 +414,7 @@ export function canonicalPath(pathname: string): string | null {
       case 'creator':
         return creatorPath(route.handle);
       case 'game':
-        return gamePath(route.handle, route.slug, route.tab);
+        return gamePath(route.handle, route.slug);
       default:
         return null;
     }
@@ -557,10 +544,9 @@ export function creatorPath(handle: string): string {
   return `/${handle}`;
 }
 
-/** URL for a public game page, optionally deep-linked into a secondary tab. */
-export function gamePath(handle: string, slug: string, tab?: GamePageTab): string {
-  const base = `/${encodeURIComponent(handle)}/${encodeURIComponent(slug)}`;
-  return tab ? `${base}/${tab}` : base;
+/** URL for a public game page. */
+export function gamePath(handle: string, slug: string): string {
+  return `/${encodeURIComponent(handle)}/${encodeURIComponent(slug)}`;
 }
 
 /** The proposer's tracker. */

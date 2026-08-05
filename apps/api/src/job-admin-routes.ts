@@ -48,13 +48,6 @@ export interface JobQueueEntry {
   agentState?: string;
   /** Most recent transitions, newest first — how it got here. */
   recentTransitions: Array<{ to: JobState; at: string; by: string; reason?: string }>;
-  /**
-   * When the creator played the delivered candidate and signed off on it
-   * (game-review-routes.ts). Set only when the approval names the version this job
-   * actually delivered — an approval of a superseded candidate is not an approval of
-   * this one. Advisory: the operator still decides whether it may be on the site.
-   */
-  creatorApprovedAt?: string;
 }
 
 export interface JobQueueResponse {
@@ -111,9 +104,6 @@ export function buildJobQueue(records: SubmissionRecord[], now: number): JobQueu
         }),
         agentState: record.agentState,
         recentTransitions: (record.transitions ?? []).slice(-TRANSITIONS_SHOWN).reverse(),
-        ...(record.reviewApproval && record.reviewApproval.version === record.deliveredVersion
-          ? { creatorApprovedAt: record.reviewApproval.at }
-          : {}),
       };
     })
     .filter((entry): entry is JobQueueEntry => entry !== null)
