@@ -75,6 +75,24 @@ const SIM_CALL_TIMEOUT_MS = Math.max(MAX_TICK_MS * 8, 200);
  */
 const SIM_WAKE_TIMEOUT_MS = Math.max(MAX_WAKE_MS * 20, 1_000);
 
+/**
+ * Interrupt ceiling for building the realm: sim-math, the bootstrap, and the game bundle's
+ * own top level.
+ *
+ * Deliberately *not* derived from `MAX_TICK_MS`. Every other budget here bounds work the
+ * sim does every frame, and scaling the per-tick number is the right way to express those.
+ * Loading happens once per wake and is dominated by parsing and first-run compilation of a
+ * whole bundle on an isolate that is usually cold — a different quantity that only looked
+ * like the same one because it shared a constant. Pricing it at eight ticks is what turned
+ * a cold `gamedev-world` start into A6 on 2026-08-05, from the same shape of mistake the
+ * wake budget above already fixed: the sim was fine, the budget was not.
+ *
+ * The number is a stop for a top level that never returns, not a standard a healthy game
+ * has to meet. Seconds are cheap here because nothing is waiting on the isolate but the
+ * join that asked for it.
+ */
+const SIM_LOAD_TIMEOUT_MS = 5_000;
+
 export type ZoneStatus = 'sleeping' | 'live' | 'closed';
 
 export interface ZoneSnapshotStore {
@@ -413,6 +431,7 @@ export class Zone {
         simMathJs: sources.simMathJs,
         timeoutMs: SIM_CALL_TIMEOUT_MS,
         wakeTimeoutMs: SIM_WAKE_TIMEOUT_MS,
+        loadTimeoutMs: SIM_LOAD_TIMEOUT_MS,
         memoryMb: this.options.memoryMb ?? 64,
       });
 

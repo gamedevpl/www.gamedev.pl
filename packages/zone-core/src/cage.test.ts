@@ -5,10 +5,18 @@ import {
   createNodeVmCage,
   isSimTimeoutError,
   SimCageUnavailableError,
+  SimLoadError,
   unwrapNativeModule,
   type SimCage,
 } from './cage.js';
-import { CLOCK_SIM, COUNTER_SIM, INCOMPLETE_SIM, RANDOM_SIM, TEST_SIM_MATH_JS } from './testSims.js';
+import {
+  CLOCK_SIM,
+  COUNTER_SIM,
+  INCOMPLETE_SIM,
+  RANDOM_SIM,
+  SLOW_LOADING_SIM,
+  TEST_SIM_MATH_JS,
+} from './testSims.js';
 
 /**
  * The same suite runs against both cages, which is the actual claim being tested: the
@@ -150,6 +158,43 @@ describe.each(CAGES)('%s cage', (_name, make) => {
     resumed.dispose();
     cage.dispose();
   });
+
+  it('builds the realm on the load budget, not the per-tick one', async () => {
+    // A6 2026-08-05. A bundle whose top level outlasts a tick is not a runaway bundle —
+    // on a cold isolate that is an ordinary one — and refusing it costs a join that the
+    // shell then hides behind silent solo play. `loadTimeoutMs` is what separates the two
+    // budgets; without it this load is priced at 20 ms and the sim never gets to run.
+    const cage = await make();
+    const sim = await cage.load({
+      bundleJs: SLOW_LOADING_SIM,
+      simMathJs: TEST_SIM_MATH_JS,
+      timeoutMs: 30,
+      loadTimeoutMs: 20_000,
+      memoryMb: 32,
+    });
+    sim.init(1);
+    expect(sim.snapshot().state).toContain('warmed');
+    sim.dispose();
+    cage.dispose();
+  }, 30_000);
+
+  it('still bounds the load, on the load budget', async () => {
+    // The other half of widening it: a bigger number, not an absent one. Same bundle, same
+    // cage, budgets swapped — so this fails if `loadTimeoutMs` is ignored in either
+    // direction, which the pair above cannot show on its own.
+    const cage = await make();
+    await expect(
+      cage.load({
+        bundleJs: SLOW_LOADING_SIM,
+        simMathJs: TEST_SIM_MATH_JS,
+        timeoutMs: 20_000,
+        loadTimeoutMs: 30,
+        memoryMb: 32,
+      }),
+    ).rejects.toThrow(SimLoadError);
+    cage.dispose();
+  }, 30_000);
+
 });
 
 describe.skipIf(!isolate)('isolated-vm cage specifics', () => {
@@ -173,6 +218,23 @@ describe.skipIf(!isolate)('isolated-vm cage specifics', () => {
     sim.dispose();
     cage.dispose();
   }, 15_000);
+
+  it('stops a bundle whose top level never returns, however wide the load budget', async () => {
+    // The other half of widening the load budget: a bigger number, not an absent one.
+    // Lives here rather than in the shared suite for the same reason the runaway tick
+    // does — node:vm is the cage that cannot be trusted to take an infinite loop back.
+    const cage = await createIsolatedVmCage();
+    await expect(
+      cage.load({
+        bundleJs: 'var __SIM_BUNDLE__ = (function () { while (true) {} })();',
+        simMathJs: TEST_SIM_MATH_JS,
+        timeoutMs: 20,
+        loadTimeoutMs: 250,
+        memoryMb: 32,
+      }),
+    ).rejects.toThrow(SimLoadError);
+    cage.dispose();
+  }, 20_000);
 
   it('reports itself as preemptive, which the host checks before hosting anything', () => {
     expect(createNodeVmCage().preemptsRunawayTicks).toBe(false);

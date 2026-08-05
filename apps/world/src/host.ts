@@ -145,12 +145,16 @@ export class ZoneHost {
   async admit(ticket: string, connection: ZoneConnection): Promise<{ zoneId: string; slot: number; zone: Zone }> {
     const claims = verifyZoneTicket(ticket, this.options.secret, this.now());
 
+    // Named on every refusal past this point, and nowhere near `claims.player`: which game
+    // and which world is the whole question when a join fails, and neither says who.
+    const named = { slug: claims.slug, zoneId: claims.zone };
+
     const schema = await this.options.schemas.getSchema(claims.slug);
-    if (!schema) throw new ZoneAdmissionError('zone_not_found');
+    if (!schema) throw new ZoneAdmissionError('zone_not_found', named);
 
     let zone = this.zones.get(claims.zone);
     if (!zone) {
-      if (this.zones.size >= this.maxZones) throw new ZoneAdmissionError('host_full');
+      if (this.zones.size >= this.maxZones) throw new ZoneAdmissionError('host_full', named);
       zone = new Zone({
         id: claims.zone,
         slug: claims.slug,
@@ -180,8 +184,8 @@ export class ZoneHost {
         this.zones.delete(claims.zone);
         this.members.delete(claims.zone);
       }
-      if (error instanceof ZoneFullError) throw new ZoneAdmissionError('zone_full', { cause: error });
-      throw new ZoneAdmissionError('zone_unavailable', { cause: error });
+      if (error instanceof ZoneFullError) throw new ZoneAdmissionError('zone_full', { ...named, cause: error });
+      throw new ZoneAdmissionError('zone_unavailable', { ...named, cause: error });
     } finally {
       const pending = (this.admitting.get(claims.zone) ?? 1) - 1;
       if (pending > 0) this.admitting.set(claims.zone, pending);
@@ -272,11 +276,18 @@ export class ZoneHost {
  * hit, which is precisely the blindness the log line was added to end.
  */
 export class ZoneAdmissionError extends Error {
+  /** The game whose zone was refused, once the ticket has been verified enough to name it. */
+  readonly slug?: string;
+  /** The zone the ticket named. */
+  readonly zoneId?: string;
+
   constructor(
     public readonly reason: string,
-    options?: { cause?: unknown },
+    options?: { cause?: unknown; slug?: string; zoneId?: string },
   ) {
     super(reason, options);
     this.name = 'ZoneAdmissionError';
+    this.slug = options?.slug;
+    this.zoneId = options?.zoneId;
   }
 }

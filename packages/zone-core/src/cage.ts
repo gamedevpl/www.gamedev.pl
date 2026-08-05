@@ -63,6 +63,16 @@ export interface LoadSimOptions {
    * cannot eat the core; wake gets its own headroom.
    */
   wakeTimeoutMs?: number;
+  /**
+   * Wall-clock ceiling for building the realm — sim-math, the bootstrap and the game
+   * bundle's own top level. Defaults to `timeoutMs`.
+   *
+   * Same lesson as `wakeTimeoutMs`, learned again a cold start later (A6 2026-08-05):
+   * evaluating a whole bundle is not a tick, and pricing it as one refuses joins on a
+   * healthy sim whenever a cold isolate is slow. This budget is a stop for a bundle whose
+   * top level never returns, not a performance standard for one that does.
+   */
+  loadTimeoutMs?: number;
   /** Heap ceiling for the whole zone, in MiB. Ignored by the node:vm cage, which has none. */
   memoryMb: number;
 }
@@ -239,23 +249,24 @@ export async function createIsolatedVmCage(): Promise<SimCage> {
   return {
     kind: 'isolated-vm',
     preemptsRunawayTicks: true,
-    async load({ bundleJs, simMathJs, timeoutMs, wakeTimeoutMs, memoryMb }) {
+    async load({ bundleJs, simMathJs, timeoutMs, wakeTimeoutMs, loadTimeoutMs, memoryMb }) {
       const isolate = new ivm.Isolate({ memoryLimit: memoryMb });
       isolates.push(isolate);
       const context = isolate.createContextSync();
       const wakeBudget = wakeTimeoutMs ?? timeoutMs;
+      const loadBudget = loadTimeoutMs ?? timeoutMs;
 
       try {
         // Order matters: sim-math captures the exact-by-spec natives it builds on, so it
         // has to run while the original Math is still in place.
-        context.evalSync(simMathJs, { timeout: timeoutMs });
+        context.evalSync(simMathJs, { timeout: loadBudget });
         context.evalSync('globalThis.Math = globalThis.__SIM_MATH__; delete globalThis.__SIM_MATH__;');
         context.evalSync(scrubScript());
-        context.evalSync(BOOTSTRAP, { timeout: timeoutMs });
+        context.evalSync(BOOTSTRAP, { timeout: loadBudget });
 
         const attach = context.evalSync(
           `(function () { var f = ${wrapSimBundle(bundleJs)}; return globalThis.__zoneAttach(f); })()`,
-          { timeout: timeoutMs },
+          { timeout: loadBudget },
         );
         if (typeof attach === 'string' && attach.length > 0) {
           throw new SimLoadError(`sim.ts must export ${attach.split(',').join(' and ')}`);
@@ -311,20 +322,21 @@ export function createNodeVmCage(): SimCage {
   return {
     kind: 'node-vm',
     preemptsRunawayTicks: false,
-    async load({ bundleJs, simMathJs, timeoutMs, wakeTimeoutMs }) {
+    async load({ bundleJs, simMathJs, timeoutMs, wakeTimeoutMs, loadTimeoutMs }) {
       const context = vm.createContext({}, { codeGeneration: { strings: false, wasm: false }, name: 'zone-sim-realm' });
       const wakeBudget = wakeTimeoutMs ?? timeoutMs;
+      const loadBudget = loadTimeoutMs ?? timeoutMs;
 
       try {
-        vm.runInContext(simMathJs, context, { timeout: timeoutMs });
+        vm.runInContext(simMathJs, context, { timeout: loadBudget });
         vm.runInContext('globalThis.Math = globalThis.__SIM_MATH__; delete globalThis.__SIM_MATH__;', context);
         vm.runInContext(scrubScript(), context);
-        vm.runInContext(BOOTSTRAP, context, { timeout: timeoutMs });
+        vm.runInContext(BOOTSTRAP, context, { timeout: loadBudget });
 
         const missing = vm.runInContext(
           `(function () { var f = ${wrapSimBundle(bundleJs)}; return globalThis.__zoneAttach(f); })()`,
           context,
-          { timeout: timeoutMs, filename: 'sim.js' },
+          { timeout: loadBudget, filename: 'sim.js' },
         );
         if (typeof missing === 'string' && missing.length > 0) {
           throw new SimLoadError(`sim.ts must export ${missing.split(',').join(' and ')}`);

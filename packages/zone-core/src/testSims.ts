@@ -116,6 +116,24 @@ export const SLOW_SIM = bundleLike(`
   function wake(state) { return state; }
 `);
 
+/**
+ * Burns wall clock in its *top level* rather than in a tick — the shape A6 2026-08-05 hit,
+ * where a cold isolate spent longer building the realm than one tick is allowed to run.
+ *
+ * Sized past the per-tick budget and nowhere near the load budget, for the reason SLOW_SIM
+ * gives, and with the same mistake made once on the way here: at 8M iterations this took
+ * 22 ms against a 20 ms budget and passed whichever way the fix went, which is a test that
+ * only looks like one. 120M measures ~300 ms on a 2026 laptop, so it has to be decisive in
+ * both directions on anything within two orders of magnitude of that.
+ */
+export const SLOW_LOADING_SIM = bundleLike(`
+  var warmed = 0;
+  for (var w = 0; w < 120000000; w++) warmed += w % 7;
+  function init() { return { t: 0, warmed: warmed }; }
+  function tick(state) { state.t++; return state; }
+  function wake(state) { return state; }
+`);
+
 /** Puts something in its state that JSON cannot carry back. */
 export const UNSTORABLE_SIM = bundleLike(`
   function init() { return { t: 0, ratio: 0 }; }

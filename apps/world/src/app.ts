@@ -207,9 +207,17 @@ export async function buildWorldApp(options: WorldAppOptions): Promise<WorldApp>
           // Logging it was logging the fact that something failed to whoever already knew.
           // The unwrapped case keeps the error itself — that is a fault that escaped the
           // admission path entirely, and its own stack is the informative one.
+          //
+          // `slug` and `zoneId` ride along because the cause alone could not say which game
+          // failed: A6 2026-08-05 logged a bundle that timed out loading and left no way to
+          // find out whose bundle it was. They come off the verified ticket, so a refusal
+          // that never got that far simply has none.
           if (reason === 'zone_unavailable') {
-            const cause = error instanceof ZoneAdmissionError ? error.cause : undefined;
-            app.log.error({ err: cause ?? error, reason }, 'zone admission failed');
+            const admission = error instanceof ZoneAdmissionError ? error : undefined;
+            app.log.error(
+              { err: admission?.cause ?? error, reason, slug: admission?.slug, zoneId: admission?.zoneId },
+              'zone admission failed',
+            );
           }
           connection.close(reason);
         } finally {

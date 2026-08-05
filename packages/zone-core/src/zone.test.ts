@@ -343,6 +343,43 @@ describe('hibernation', () => {
     ]);
   });
 
+  it('gives loading its own budget rather than pricing it as a tick', async () => {
+    // The wiring half of A6 2026-08-05. `cage.test.ts` proves a cage honours a separate
+    // load budget; this proves the zone actually asks for one, which is the part that was
+    // missing — the cage was always willing to be told.
+    let seen: { timeoutMs: number; loadTimeoutMs?: number } | null = null;
+    const inner = createNodeVmCage();
+    const cage: SimCage = {
+      kind: 'node-vm',
+      preemptsRunawayTick: false,
+      async load(options) {
+        seen = { timeoutMs: options.timeoutMs, loadTimeoutMs: options.loadTimeoutMs };
+        return inner.load(options);
+      },
+      dispose: () => inner.dispose(),
+    };
+
+    const zone = new Zone({
+      id: 'ember-watch',
+      slug: 'ember-watch',
+      schema: SCHEMA,
+      cage,
+      source: simSource(COUNTER_SIM),
+      store: new FakeStore(),
+      broadcast: () => undefined,
+      sendTo: () => undefined,
+      now: () => 1_000_000,
+      newSeed: () => 4242,
+    });
+
+    await zone.join('player-a');
+    expect(seen).not.toBeNull();
+    expect(seen!.loadTimeoutMs).toBeGreaterThan(seen!.timeoutMs);
+    // Not an arbitrary floor: the failure was a cold isolate losing a race against a
+    // couple of hundred milliseconds, so a budget in that neighbourhood is no fix at all.
+    expect(seen!.loadTimeoutMs).toBeGreaterThanOrEqual(1_000);
+  });
+
   it('loses what a sim kept outside its state, which is why the gate checks for it', async () => {
     // Perfectly reproducible run to run, and gone the moment a zone sleeps. Check 23
     // catches this in CI; this is what it would have cost in production.

@@ -190,4 +190,21 @@ describe('a refused admission', () => {
 
     host.shutdown?.();
   });
+
+  it('names the game and the world, which the cause alone could not', async () => {
+    // A6 2026-08-05 logged a bundle that timed out loading and gave no way to find out
+    // whose bundle it was: the cause is a stack inside the cage, and the cage does not
+    // know what it is running. The slug comes off the verified ticket instead. Note what
+    // is deliberately absent — `claims.player` — since the host being unable to identify
+    // a person is the property that lets it run untrusted code at all.
+    const host = makeHost(failingSource(new Error('games repo said no')));
+
+    const error = await host.admit(ticketFor('p1'), silentConnection()).catch((caught) => caught);
+    expect(error).toBeInstanceOf(ZoneAdmissionError);
+    expect((error as ZoneAdmissionError).slug).toBe('ember-watch');
+    expect((error as ZoneAdmissionError).zoneId).toBe('ember-watch');
+    expect(JSON.stringify(error)).not.toContain('p1');
+
+    host.shutdown?.();
+  });
 });

@@ -2,8 +2,18 @@
 
 Entry point for alerts **A6** (zone admission failing) and **A7** (world service 5xx).
 
-**Last drilled: never.** (A6 wake-timeout path diagnosed from prod logs 2026-08-02; degrade
-fix covered by unit test, not a live drill.)
+**Last drilled: never.** (A6 wake-timeout path diagnosed from prod logs 2026-08-02 and the
+load-timeout path 2026-08-05; both fixes covered by unit tests, neither by a live drill.)
+
+**Check whether it was the deploy gate before you chase a player-facing outage.** The
+browser gate plays real games against the candidate revision from a GitHub Actions runner,
+which cold-starts `gamedev-world` — so an A6 whose timestamp falls inside a deploy is quite
+possibly CI rather than anybody's evening. Correlate with
+`gh run list --workflow="Deploy to Cloud Run"` and match the `Browser gate against the
+candidate` step's window against the incident. The second consequence is the one that
+bites: the gate **cannot fail on this**, because it inherits the shell's silent solo
+fallback like any other client. It went green through the 2026-08-05 incident it caused.
+A deploy passing its gate is not evidence that zones work.
 
 Read this first, because it changes what "working" looks like: when the zone host refuses
 a join, the shell falls back to solo play **without telling the player**. That is correct
@@ -45,14 +55,25 @@ attached to it is the diagnosis.
 
 Three causes have happened before and are worth checking by eye first:
 
-- **`Script execution timed out` inside `wake` / `tick` / `terrainHeight`** — catch-up
-  after hibernation blew the isolate budget. Seen on a cold `gamedev-world` start with
-  `biplane-skirmish` (A6 `0.oayobzkv6oet`, 2026-08-02 10:36Z): instance AUTOSCALING →
-  first `/zone/ws` failed in ~3s → retry four seconds later succeeded. Since the
-  wake-timeout degrade path landed, this should log
-  `zone wake catch-up skipped after timeout` at warn and **still admit** the player on
-  the last snapshot. If A6 is still firing on this message, the degrade path is not
-  deployed or a non-timeout error is wrapping it — check the revision.
+- **`Script execution timed out` — read the stack before anything else.** The message is
+  identical for two different faults and they have different fixes. `zone admission
+  failed` now carries `slug` and `zoneId`, so start by noting which game it is.
+  - **…inside `wake` / `tick` / `terrainHeight`** — catch-up after hibernation blew the
+    isolate budget. Seen on a cold `gamedev-world` start with `biplane-skirmish` (A6
+    `0.oayobzkv6oet`, 2026-08-02 10:36Z): instance AUTOSCALING → first `/zone/ws` failed
+    in ~3s → retry four seconds later succeeded. Since the wake-timeout degrade path
+    landed, this should log `zone wake catch-up skipped after timeout` at warn and
+    **still admit** the player on the last snapshot. If A6 is still firing on this
+    message, the degrade path is not deployed or a non-timeout error is wrapping it —
+    check the revision.
+  - **…inside `cage.load` / `loadSim`** (`SimLoadError`, stack through `Zone.wakeUp`) —
+    the *bundle's own top level* outran its budget, which the wake degrade does not cover
+    and never did. A6 `0.ob39ib29cgp5`, 2026-08-05 21:56Z, on a cold instance driven by
+    the deploy browser gate. Cause: load was priced at `SIM_CALL_TIMEOUT_MS` (200 ms,
+    eight ticks) — the same mistake the wake budget had already fixed, in the one place it
+    had not been applied. Fixed by `SIM_LOAD_TIMEOUT_MS` (5 s) in
+    `packages/zone-core/src/zone.ts`. A recurrence at *five seconds* is a different claim
+    entirely: that is a genuinely pathological bundle, so look at the game, not the host.
 - **`not a constructor` / anything about `Isolate`** — the isolate cage loaded but is not
   usable. The host boots, passes its own cage assertion, serves `/health`, and fails
   every join. Fixed once in `packages/zone-core/src/cage.ts`; a recurrence most likely
@@ -128,6 +149,11 @@ join is not necessarily a defect — a transient games-repo fetch or Firestore r
 do it, and recovering on the next attempt is the design working — but one has happened,
 it was never explained, and a second of the same shape should not be waved through as
 "probably that transient thing again".
+
+That warning has now paid for itself. 2026-08-05 was exactly that shape — one refused join
+on a host that was healthy before and after — and it was a real bug with a one-line fix,
+found only because the wrapper kept its `cause`. Treat "just the one, it recovered" as a
+thing to explain, not a thing to close.
 
 ## What this runbook does not cover
 
