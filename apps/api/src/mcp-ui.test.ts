@@ -2,12 +2,15 @@ import { describe, expect, it } from 'vitest';
 import {
   MCP_UI_EXTENSION,
   MCP_UI_MIME_TYPE,
+  MCP_UI_APP_ONLY_TOOLS,
   MCP_UI_TOOL_RESOURCES,
   ROUND_STATUS_RESOURCE_URI,
   clientDeclaresUi,
+  markSessionIdUiCapable,
   mcpUiEnabled,
   mcpUiServerCapability,
   readUiResource,
+  sessionIdIsUiCapable,
   uiResourceDescriptors,
 } from './mcp-ui.js';
 
@@ -74,6 +77,53 @@ describe('clientDeclaresUi', () => {
   });
 });
 
+describe('view capability in the correlator', () => {
+  const secret = 'shared-deploy-secret';
+
+  it('is readable by an instance that never saw the initialize that minted it', () => {
+    // The multi-instance property this exists for: Cloud Run does not pin a client to a
+    // revision, and in-memory capability did not survive the hop.
+    const marked = markSessionIdUiCapable('a'.repeat(36), secret);
+    expect(sessionIdIsUiCapable(marked, secret)).toBe(true);
+  });
+
+  it('leaves a non-negotiating client with an unchanged, non-capable id', () => {
+    expect(sessionIdIsUiCapable('a'.repeat(36), secret)).toBe(false);
+    expect(sessionIdIsUiCapable('', secret)).toBe(false);
+    expect(sessionIdIsUiCapable(null, secret)).toBe(false);
+  });
+
+  it('cannot be forged, guessed, or replayed under another secret', () => {
+    const marked = markSessionIdUiCapable('b'.repeat(36), secret);
+    expect(sessionIdIsUiCapable(marked, 'a-different-secret')).toBe(false);
+    expect(sessionIdIsUiCapable(marked, undefined)).toBe(false);
+    // Tampered marker, and a hand-written suffix that merely looks the part.
+    expect(sessionIdIsUiCapable(marked.slice(0, -1) + 'X', secret)).toBe(false);
+    expect(sessionIdIsUiCapable('c'.repeat(36) + '-uAAAAAAAAAA', secret)).toBe(false);
+    // A marker on a different base id does not transfer.
+    const suffix = marked.slice(-12);
+    expect(sessionIdIsUiCapable('d'.repeat(36) + suffix, secret)).toBe(false);
+  });
+
+  it('survives a marker that itself contains the separator', () => {
+    // base64url includes "-", so a marker can contain "-u". Searching for the separator
+    // would split in the wrong place; slicing from the end cannot.
+    let withSeparatorInside: string | null = null;
+    for (let i = 0; i < 200_000 && !withSeparatorInside; i += 1) {
+      const candidate = markSessionIdUiCapable(`${'e'.repeat(30)}${String(i).padStart(6, '0')}`, secret);
+      if (candidate.slice(-10).includes('-u')) withSeparatorInside = candidate;
+    }
+    // Fail loudly rather than passing with no assertion — a conditional expect would
+    // hide the regression this exists to catch.
+    expect(withSeparatorInside).not.toBeNull();
+    expect(sessionIdIsUiCapable(withSeparatorInside, secret)).toBe(true);
+  });
+
+  it('stays a legal Mcp-Session-Id', () => {
+    expect(markSessionIdUiCapable('f'.repeat(36), secret)).toMatch(/^[A-Za-z0-9_-]+$/);
+  });
+});
+
 describe('ui resources', () => {
   it('advertises the round-status card under the ui:// scheme with the SEP-1865 mime type', () => {
     const descriptors = uiResourceDescriptors();
@@ -124,7 +174,34 @@ describe('ui resources', () => {
     expect(html).not.toContain('arguments.callee');
   });
 
-  it('attaches views to read tools only — a card on a write tool would render mid-delivery', () => {
-    expect(MCP_UI_TOOL_RESOURCES).toEqual({ get_gate_verdict: ROUND_STATUS_RESOURCE_URI });
+  it('opens the round view from the tools a creator watches a round through', () => {
+    // Phase 0 attached the view to read tools only, on the reasoning that a card on a
+    // write tool would freeze a mid-delivery echo on screen. That no longer applies: the
+    // card renders live state from get_round_status rather than the opening payload, so
+    // submitting is exactly the moment a creator wants it open.
+    expect(MCP_UI_TOOL_RESOURCES).toEqual({
+      start: ROUND_STATUS_RESOURCE_URI,
+      submit_sources: ROUND_STATUS_RESOURCE_URI,
+      get_gate_verdict: ROUND_STATUS_RESOURCE_URI,
+    });
+    // open_round mints no session key and takes none, so a card opened there would have
+    // nothing to read status with.
+    expect(MCP_UI_TOOL_RESOURCES).not.toHaveProperty('open_round');
+  });
+
+  it('keeps the app-only tool read-only, since the model never sees it happen', () => {
+    // A hidden tool that writes is an audit hole: nothing in the transcript records it.
+    expect([...MCP_UI_APP_ONLY_TOOLS]).toEqual(['get_round_status']);
+    expect([...MCP_UI_APP_ONLY_TOOLS].every((name) => name.startsWith('get_'))).toBe(true);
+  });
+
+  it('polls, and degrades to the opening payload when a host refuses the app-only call', () => {
+    const html = readUiResource(ROUND_STATUS_RESOURCE_URI)?.text ?? '';
+    expect(html).toContain("name: 'get_round_status'");
+    expect(html).toContain('retryAfterSeconds');
+    // Stops on its own rather than polling a finished round forever.
+    expect(html).toContain('isFinished');
+    // The fallback path: no app-only tool call, no broken card.
+    expect(html).toContain('renderGateOnly');
   });
 });

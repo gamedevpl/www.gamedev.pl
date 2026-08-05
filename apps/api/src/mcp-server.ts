@@ -40,6 +40,7 @@ import { decodeCanonicalBase64Utf8, InvalidBase64Error } from './canonical-base6
 import { selfBuildDeliveryCap } from './builder.js';
 import type { BuilderKind } from './builder.js';
 import { MAX_UPLOAD_FILES, type GamesStore } from './games-store.js';
+import { detectStall, resolveJobState, toSubmissionStatus } from './job-state.js';
 import { largeSourceFileHint, moduleSizeWarnings } from './module-size.js';
 import type { GcsObjectStore } from './gcs-sign.js';
 import {
@@ -58,11 +59,14 @@ import {
 } from './mcp-debug-log.js';
 import { mcpMissingCredentialHint, sendMcpOAuthChallenge, shouldIssueMcpOAuthChallenge } from './mcp-oauth-metadata.js';
 import {
+  MCP_UI_APP_ONLY_TOOLS,
   MCP_UI_TOOL_RESOURCES,
   clientDeclaresUi,
+  markSessionIdUiCapable,
   mcpUiEnabled,
   mcpUiServerCapability,
   readUiResource,
+  sessionIdIsUiCapable,
   uiResourceDescriptors,
 } from './mcp-ui.js';
 import {
@@ -113,6 +117,8 @@ const MAX_MCP_BODY_BYTES = 2 * 1024 * 1024;
 const MAX_SCREENSHOT_BYTES = 700 * 1024;
 const MAX_SUBMIT_FILES = MAX_UPLOAD_FILES;
 
+/** How often the round view should re-read status. Matches the gate's own backoff. */
+const ROUND_STATUS_RETRY_AFTER_SECONDS = 30;
 const TRANSPORT_SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 const MAX_TRANSPORT_SESSIONS = 10_000;
 
@@ -441,15 +447,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
   const missingCredentialHint = mcpMissingCredentialHint(privateBeta);
   const uiEnabled = options.uiEnabled ?? mcpUiEnabled();
 
-  /**
-   * Transport sessions only — never consulted for authorization. `uiCapable` records
-   * whether this client declared the MCP Apps extension at initialize, so `_meta.ui` is
-   * only ever emitted to a client that asked for it. A correlator adopted from another
-   * instance has no recorded answer and is treated as not capable: the failure mode is a
-   * client that supports views not getting one, never a client being handed UI metadata
-   * it never negotiated.
-   */
-  const transportSessions = new Map<string, { createdAt: number; uiCapable?: boolean }>();
+  /** Transport sessions only — never consulted for authorization. */
+  const transportSessions = new Map<string, { createdAt: number }>();
   /**
    * Correlators explicitly terminated via DELETE on this instance. Prevents the
    * multi-instance adopt path from resurrecting a session the client just closed.
@@ -480,23 +479,18 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     }
   }
 
-  /**
-   * Record/refresh a transport correlator. Keeps any negotiated `uiCapable` answer —
-   * `start` and `open_round` re-set the session mid-round, and a plain overwrite there
-   * would silently drop a client's view capability partway through a round.
-   */
-  function noteTransportSession(sessionId: string, uiCapable?: boolean): void {
-    const existing = transportSessions.get(sessionId);
-    transportSessions.set(sessionId, {
-      createdAt: now(),
-      uiCapable: uiCapable ?? existing?.uiCapable ?? false,
-    });
+  /** Record/refresh a transport correlator. */
+  function noteTransportSession(sessionId: string): void {
+    transportSessions.set(sessionId, { createdAt: now() });
   }
 
-  /** Emit view metadata only for a flag-enabled server and a client that negotiated it. */
+  /**
+   * Emit view metadata only for a flag-enabled server and a client that negotiated it.
+   * The answer is read out of the correlator's signed marker, so every instance agrees
+   * — including one that never saw the `initialize` that minted it.
+   */
   function sessionWantsUi(sessionId: string | null): boolean {
-    if (!uiEnabled || !sessionId) return false;
-    return transportSessions.get(sessionId)?.uiCapable === true;
+    return uiEnabled && sessionIdIsUiCapable(sessionId, agentTokenSecret);
   }
 
   function pruneInvalidStartBuckets(currentTime: number): void {
@@ -732,6 +726,9 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     result: ToolResult,
   ): Promise<ToolResult> {
     if (result.isError) return result;
+    // Soft warnings steer the agent. A view polling status is not the agent: counting
+    // its calls would manufacture progress_stale, and it would never read the warning.
+    if (MCP_UI_APP_ONLY_TOOLS.has(toolName)) return result;
     if (!result.structuredContent || typeof result.structuredContent !== 'object') return result;
     if (Array.isArray(result.structuredContent)) return result;
 
@@ -3235,6 +3232,122 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       },
     },
 
+    /**
+     * App-only (SEP-1865 `visibility: ["app"]`): the round view calls this, the model
+     * never sees it. Read-only and presence-neutral by construction — see
+     * MCP_UI_APP_ONLY_TOOLS for why both matter.
+     */
+    get_round_status: {
+      annotations: { title: 'Round status for the round view', ...READS },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          phase: { type: 'string', description: 'Internal job state.' },
+          status: { type: 'string', description: 'Creator-facing projection of the phase.' },
+          stall: { type: ['string', 'null'] },
+          agentEnded: { type: 'boolean' },
+          title: { type: ['string', 'null'] },
+          slug: { type: ['string', 'null'] },
+          round: { type: 'number' },
+          deliveriesRemaining: { type: ['number', 'null'] },
+          note: {
+            type: ['object', 'null'],
+            properties: { text: { type: 'string' }, createdAt: { type: 'string' } },
+          },
+          shot: {
+            type: ['object', 'null'],
+            properties: {
+              id: { type: 'string' },
+              createdAt: { type: 'string' },
+              label: { type: ['string', 'null'] },
+              png: { type: 'string', description: 'base64 PNG; omitted when unchanged since sinceShotId.' },
+            },
+          },
+          gate: { type: ['object', 'null'] },
+          retryAfterSeconds: { type: 'number' },
+        },
+        required: ['phase', 'status', 'retryAfterSeconds'],
+      },
+      description:
+        'Round state for the gamedev.pl round view: phase, latest progress note, latest screenshot and the current ' +
+        'gate verdict in one read. Intended for the view, which polls it on retryAfterSeconds — pass sinceShotId to ' +
+        'skip re-sending screenshot bytes you already hold. Read-only, and deliberately does not count as agent ' +
+        'presence: a creator watching does not keep a quiet round looking alive.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          sessionKey: SESSION_KEY_PROP,
+          sinceShotId: {
+            type: 'string',
+            description: 'Screenshot id you already have; bytes are omitted when the latest shot still matches it.',
+          },
+        },
+        required: [],
+      },
+      handler: async (args, ctx) => {
+        const auth = await resolveAuth(ctx, args, { allowTerminalReceipt: true });
+        if (!('channelToken' in auth)) return auth;
+        if (!store) return toolErr('the MCP build endpoint is not configured');
+
+        const record = auth.record;
+        const state = resolveJobState(record) ?? 'queued';
+        const stall = detectStall({
+          state,
+          stateSince: record.stateSince ?? new Date(now()).toISOString(),
+          ...(record.lastAgentSignalAt ? { lastAgentSignalAt: record.lastAgentSignalAt } : {}),
+          ...(record.agentEndedAt ? { agentEndedAt: record.agentEndedAt } : {}),
+          ...(record.builder ? { builder: record.builder } : {}),
+          now: now(),
+        });
+
+        const [events, shots] = await Promise.all([
+          store.listBuildEvents(auth.issueNumber, { limit: 1 }),
+          store.listBuildShots(auth.issueNumber, { limit: 1 }),
+        ]);
+
+        const latestEvent = events[0];
+        const latestShot = shots[0];
+        const sinceShotId = typeof args.sinceShotId === 'string' ? args.sinceShotId.trim() : '';
+        let shot: Record<string, unknown> | null = null;
+        if (latestShot) {
+          // Bytes only when the view does not already hold this frame — a shot can be
+          // hundreds of KB of base64 and this is polled for the length of a round.
+          const full = latestShot.id !== sinceShotId ? await store.getBuildShot(auth.issueNumber, latestShot.id) : null;
+          shot = {
+            id: latestShot.id,
+            createdAt: latestShot.createdAt,
+            label: latestShot.labelLocalized ?? latestShot.label ?? null,
+            ...(full ? { png: full.data } : {}),
+          };
+        }
+
+        // The gate goes through the channel exactly as get_gate_verdict does, so both
+        // read one implementation of what a verdict means.
+        const gateRes = await injectChannel(ctx.request, 'GET', '/api/agent/build/gate', auth.channelToken);
+        const gate = gateRes.statusCode === 200 ? gateRes.json() : null;
+
+        const cap = record.builder === 'self' ? selfBuildDeliveryCap() : null;
+        const used = record.roundDeliveryCount ?? 0;
+
+        return toolOk({
+          phase: state,
+          status: toSubmissionStatus(state),
+          stall: stall ?? null,
+          agentEnded: Boolean(record.agentEndedAt),
+          title: record.title ?? null,
+          slug: record.slug ?? null,
+          round: record.roundGeneration ?? 1,
+          deliveriesRemaining: cap === null ? null : Math.max(0, cap - used),
+          note: latestEvent
+            ? { text: latestEvent.textLocalized ?? latestEvent.text, createdAt: latestEvent.createdAt }
+            : null,
+          shot,
+          gate,
+          retryAfterSeconds: ROUND_STATUS_RETRY_AFTER_SECONDS,
+        });
+      },
+    },
+
     get_gate_verdict: {
       annotations: { title: 'Check the gate once', ...READS },
       outputSchema: {
@@ -3559,8 +3672,9 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       // views existed — no `resources`, no `extensions`.
       const uiCapable = uiEnabled && clientDeclaresUi(params);
 
-      const sessionId = newMcpSessionId();
-      noteTransportSession(sessionId, uiCapable);
+      const sessionId =
+        uiCapable && agentTokenSecret ? markSessionIdUiCapable(newMcpSessionId(), agentTokenSecret) : newMcpSessionId();
+      noteTransportSession(sessionId);
       reply.header('Mcp-Session-Id', sessionId);
       reply.header('MCP-Session-Id', sessionId);
 
@@ -3661,17 +3775,27 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       const withUi = sessionWantsUi(sessionHeader);
       return reply.send(
         jsonRpcResult(message.id, {
-          tools: Object.entries(tools).map(([name, tool]) => {
-            const uiResourceUri = withUi ? MCP_UI_TOOL_RESOURCES[name] : undefined;
-            return {
-              name,
-              description: tool.description,
-              inputSchema: tool.inputSchema,
-              outputSchema: tool.outputSchema,
-              ...(tool.annotations ? { annotations: tool.annotations } : {}),
-              ...(uiResourceUri ? { _meta: { ui: { resourceUri: uiResourceUri, visibility: ['model', 'app'] } } } : {}),
-            };
-          }),
+          tools: Object.entries(tools)
+            // An app-only tool exists for the view. A client with no views would offer it
+            // to its model, which is exactly what visibility:["app"] forbids.
+            .filter(([name]) => withUi || !MCP_UI_APP_ONLY_TOOLS.has(name))
+            .map(([name, tool]) => {
+              const appOnly = withUi && MCP_UI_APP_ONLY_TOOLS.has(name);
+              const uiResourceUri = withUi ? MCP_UI_TOOL_RESOURCES[name] : undefined;
+              const uiMeta = appOnly
+                ? { visibility: ['app'] }
+                : uiResourceUri
+                  ? { resourceUri: uiResourceUri, visibility: ['model', 'app'] }
+                  : null;
+              return {
+                name,
+                description: tool.description,
+                inputSchema: tool.inputSchema,
+                outputSchema: tool.outputSchema,
+                ...(tool.annotations ? { annotations: tool.annotations } : {}),
+                ...(uiMeta ? { _meta: { ui: uiMeta } } : {}),
+              };
+            }),
         }),
       );
     }
@@ -3710,6 +3834,13 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       const name = typeof params.name === 'string' ? params.name : '';
       const tool = tools[name];
       if (!tool) {
+        return reply.send(jsonRpcError(message.id, -32601, `unknown tool: ${name}`));
+      }
+      // visibility:["app"] is a contract, so enforce it rather than relying on the tool
+      // being absent from tools/list: a client that guesses the name would otherwise
+      // reach a tool its model was never meant to see. This refuses in exactly the
+      // situations views are already unavailable, so it cannot break a working view.
+      if (MCP_UI_APP_ONLY_TOOLS.has(name) && !sessionWantsUi(sessionHeader)) {
         return reply.send(jsonRpcError(message.id, -32601, `unknown tool: ${name}`));
       }
       const args = params.arguments && typeof params.arguments === 'object' ? params.arguments : {};

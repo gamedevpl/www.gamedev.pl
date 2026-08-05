@@ -1,10 +1,16 @@
+import { createHmac, timingSafeEqual } from 'node:crypto';
+
 /**
- * MCP Apps (SEP-1865, extension `io.modelcontextprotocol/ui`) — Phase 0.
+ * MCP Apps (SEP-1865, extension `io.modelcontextprotocol/ui`).
  *
- * Phase 0 is a spike, not a feature: capability negotiation, a `ui://` resource
- * registry, and one **static** card that renders whatever tool result the host hands
- * it. There is no polling and no app-only tool yet — those are Phase 1, once the host
- * questions this phase exists to answer come back green.
+ * One `ui://` view — the round card — which the host renders inside the conversation.
+ * It opens from the tool the creator just ran, then keeps itself current by polling
+ * `get_round_status`, an app-only tool the model never sees. That is the point: the
+ * creator watches the gate without the agent spending tokens and tool-budget to look,
+ * which is the busy-poll problem `gate_poll_backoff` exists to paper over.
+ *
+ * When a host refuses the app-only call, the card falls back to rendering the payload
+ * it was opened with rather than showing something broken.
  *
  * Two rules hold this together, and both are load-bearing:
  *
@@ -28,17 +34,41 @@ export const MCP_UI_EXTENSION = 'io.modelcontextprotocol/ui';
 /** The only view content type SEP-1865 defines for its initial release. */
 export const MCP_UI_MIME_TYPE = 'text/html;profile=mcp-app';
 
-/** Phase 0's single view. */
+/** The round card: opened by a tool call, then live from `get_round_status`. */
 export const ROUND_STATUS_RESOURCE_URI = 'ui://gamedevpl/round-status';
 
 /**
- * Tools that carry `_meta.ui` when the client is UI-capable. Read tools only in
- * Phase 0 — a card attached to a write tool would render mid-delivery, which is a
- * Phase 1 conversation once the dashboard actually has live state to show.
+ * Tools that open the round view. `submit_sources` is here deliberately: the card is
+ * where a creator watches the round from, and the moment a delivery is submitted is
+ * exactly when they want to. It renders live state from `get_round_status`, not from
+ * the opening tool's payload, so opening it mid-delivery shows the build rather than a
+ * frozen echo of the call.
+ *
+ * `open_round` is deliberately absent. It mints no session key and takes none — its own
+ * description sends the agent to `start()` for one — so a card opened there would have
+ * no credential to read status with, and would sit on "Reading round status…" forever.
+ * `start()` follows immediately and opens the view properly.
  */
 export const MCP_UI_TOOL_RESOURCES: Readonly<Record<string, string>> = Object.freeze({
+  start: ROUND_STATUS_RESOURCE_URI,
+  submit_sources: ROUND_STATUS_RESOURCE_URI,
   get_gate_verdict: ROUND_STATUS_RESOURCE_URI,
 });
+
+/**
+ * Tools the view may call but the model may never see (`visibility: ["app"]`).
+ *
+ * This is the whole point of the dashboard: the view polls round state itself, so the
+ * agent stops paying tokens and tool-budget to find out whether the gate landed — the
+ * busy-poll problem `gate_poll_backoff` exists to paper over.
+ *
+ * Two invariants. They must stay **read-only**: a tool hidden from the model that can
+ * write is an audit hole, since nothing in the transcript would record the change. And
+ * they must stay **presence-neutral** — a creator idling with the chat open is a human
+ * watching, not an agent working, so polls must not refresh the heartbeat, clear
+ * `agentEndedAt`, or hold off the quiet stall that unlocks self→platform handoff.
+ */
+export const MCP_UI_APP_ONLY_TOOLS: ReadonlySet<string> = new Set(['get_round_status']);
 
 /** Off unless explicitly enabled — production stays on today's contract until the spike lands. */
 export function mcpUiEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
@@ -98,6 +128,51 @@ export function mcpUiServerCapability(): Record<string, unknown> {
   return { [MCP_UI_EXTENSION]: { mimeTypes: [MCP_UI_MIME_TYPE] } };
 }
 
+/**
+ * Capability travels in the correlator, signed — not in per-instance memory.
+ *
+ * Phase 0 recorded "did this client negotiate views?" on the in-process transport
+ * session map. Cloud Run is multi-instance and clients do not pin to a revision, so a
+ * request adopted by another instance read as not capable: `tools/list` would drop
+ * `_meta.ui` and `resources/read` would refuse, breaking a view mid-round. Single
+ * instance today (`--max-instances 1`) hid it; keying a durable surface off in-memory
+ * state does not survive contact with a second container.
+ *
+ * So `initialize` mints the id with a suffix any instance can verify with the shared
+ * secret. Unforgeable (HMAC), stateless, and invisible to clients that never negotiated
+ * — their ids are unchanged, and an id without a valid marker is simply not UI-capable.
+ */
+const UI_MARKER_SEPARATOR = '-u';
+const UI_MARKER_BYTES = 10;
+
+function uiMarker(baseId: string, secret: string): string {
+  return createHmac('sha256', secret).update(`mcp-ui-capable:${baseId}`).digest('base64url').slice(0, UI_MARKER_BYTES);
+}
+
+/** Stamp a freshly minted session id as belonging to a view-capable client. */
+export function markSessionIdUiCapable(sessionId: string, secret: string): string {
+  return `${sessionId}${UI_MARKER_SEPARATOR}${uiMarker(sessionId, secret)}`;
+}
+
+/**
+ * Does this correlator carry a valid view-capability marker? Any instance can answer,
+ * including one that never saw the `initialize` that minted it.
+ */
+export function sessionIdIsUiCapable(sessionId: string | null | undefined, secret: string | undefined): boolean {
+  if (!sessionId || !secret) return false;
+  // Slice from the end rather than searching for the separator: the marker is base64url
+  // and may itself contain "-u", so scanning would split in the wrong place.
+  const suffixLength = UI_MARKER_SEPARATOR.length + UI_MARKER_BYTES;
+  if (sessionId.length <= suffixLength) return false;
+  const baseId = sessionId.slice(0, -suffixLength);
+  if (sessionId.slice(-suffixLength, -UI_MARKER_BYTES) !== UI_MARKER_SEPARATOR) return false;
+  const marker = sessionId.slice(-UI_MARKER_BYTES);
+  const expected = uiMarker(baseId, secret);
+  const markerBuffer = Buffer.from(marker, 'utf8');
+  const expectedBuffer = Buffer.from(expected, 'utf8');
+  return markerBuffer.length === expectedBuffer.length && timingSafeEqual(markerBuffer, expectedBuffer);
+}
+
 interface UiResource {
   uri: string;
   name: string;
@@ -120,7 +195,7 @@ const ROUND_STATUS_HTML = `<!doctype html>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>gamedev.pl — round status</title>
+    <title>gamedev.pl — round</title>
     <style>
       :root {
         color-scheme: light dark;
@@ -151,7 +226,7 @@ const ROUND_STATUS_HTML = `<!doctype html>
         align-items: center;
         justify-content: space-between;
         gap: 12px;
-        margin-bottom: 10px;
+        margin-bottom: 4px;
       }
       .brand { font-weight: 600; letter-spacing: -0.01em; }
       .brand .dot { color: var(--gd-accent); }
@@ -165,11 +240,38 @@ const ROUND_STATUS_HTML = `<!doctype html>
         border: 1px solid currentColor;
         white-space: nowrap;
       }
-      .pill-waiting, .pill-pending { color: var(--gd-muted); }
-      .pill-green, .pill-preview_passed { color: var(--gd-accent); }
-      .pill-red, .pill-preview_failed { color: #ff6b6b; }
-      .pill-kit_outdated { color: #ffb454; }
+      .pill-waiting, .pill-pending, .pill-queued, .pill-dispatched { color: var(--gd-muted); }
+      .pill-building, .pill-submitted, .pill-gating { color: #6fb3ff; }
+      .pill-green, .pill-preview_passed, .pill-published { color: var(--gd-accent); }
+      .pill-red, .pill-preview_failed, .pill-failed { color: #ff6b6b; }
+      .pill-kit_outdated, .pill-needs_changes { color: #ffb454; }
+      .title { margin: 0 0 8px; font-size: 12.5px; color: var(--gd-muted); }
       .summary { margin: 0; font-size: 14px; line-height: 1.5; }
+      .note {
+        margin: 10px 0 0;
+        padding-left: 10px;
+        border-left: 2px solid var(--gd-accent);
+        font-size: 13px;
+        line-height: 1.45;
+      }
+      .note .when { display: block; margin-top: 2px; font-size: 11.5px; color: var(--gd-muted); }
+      .shot {
+        margin: 12px 0 0;
+        border: 1px solid var(--gd-border);
+        border-radius: 8px;
+        overflow: hidden;
+        line-height: 0;
+      }
+      /* Cap the frame: a tall screenshot would otherwise push the gate verdict and the
+         report off the bottom of an inline card. */
+      .shot img { width: 100%; max-height: 240px; object-fit: contain; display: block; background: #0c0e0f; }
+      .shot figcaption {
+        padding: 6px 8px;
+        font-size: 11.5px;
+        line-height: 1.3;
+        color: var(--gd-muted);
+        background: rgba(127, 127, 127, 0.08);
+      }
       .meta {
         display: grid;
         grid-template-columns: auto 1fr;
@@ -193,6 +295,7 @@ const ROUND_STATUS_HTML = `<!doctype html>
         overflow: auto;
       }
       .foot { margin: 12px 0 0; font-size: 11.5px; color: var(--gd-muted); }
+      .live { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--gd-accent); margin-right: 6px; vertical-align: middle; }
       [hidden] { display: none !important; }
     </style>
   </head>
@@ -202,7 +305,10 @@ const ROUND_STATUS_HTML = `<!doctype html>
         <span class="brand">gamedev<span class="dot">.pl</span></span>
         <span id="pill" class="pill pill-waiting">waiting</span>
       </div>
-      <p id="summary" class="summary">Waiting for the gate verdict…</p>
+      <p id="title" class="title" hidden></p>
+      <p id="summary" class="summary">Reading round status…</p>
+      <blockquote id="note" class="note" hidden></blockquote>
+      <figure id="shot" class="shot" hidden><img id="shotImg" alt="Latest frame from the build" /><figcaption id="shotCap"></figcaption></figure>
       <dl id="meta" class="meta"></dl>
       <pre id="report" class="report" hidden></pre>
       <p id="foot" class="foot"></p>
@@ -215,9 +321,24 @@ const ROUND_STATUS_HTML = `<!doctype html>
         var nextId = 1;
         var initializeId = null;
         var initialized = false;
+        var pendingCalls = {};
+
+        var sessionKey = null;
+        var lastShotId = null;
+        var live = false;
+        var seed = null;
+        var inFlight = false;
+        var attempts = 0;
+        var stopped = false;
+        var timer = null;
 
         var pill = document.getElementById('pill');
+        var titleEl = document.getElementById('title');
         var summary = document.getElementById('summary');
+        var noteEl = document.getElementById('note');
+        var shotEl = document.getElementById('shot');
+        var shotImg = document.getElementById('shotImg');
+        var shotCap = document.getElementById('shotCap');
         var metaList = document.getElementById('meta');
         var report = document.getElementById('report');
         var foot = document.getElementById('foot');
@@ -249,6 +370,9 @@ const ROUND_STATUS_HTML = `<!doctype html>
           });
         }
 
+        var hostLocale = undefined;
+        var hostTimeZone = undefined;
+
         function applyThemeVariables(variables) {
           if (!variables || typeof variables !== 'object') return;
           var names = Object.keys(variables);
@@ -260,14 +384,9 @@ const ROUND_STATUS_HTML = `<!doctype html>
           }
         }
 
-        var hostLocale = undefined;
-        var hostTimeZone = undefined;
-
         function applyHostContext(context) {
           if (!context || typeof context !== 'object') return;
-          if (typeof context.theme === 'string') {
-            document.documentElement.setAttribute('data-theme', context.theme);
-          }
+          if (typeof context.theme === 'string') document.documentElement.setAttribute('data-theme', context.theme);
           if (typeof context.locale === 'string') hostLocale = context.locale;
           if (typeof context.timeZone === 'string') hostTimeZone = context.timeZone;
           applyThemeVariables(context.themeVariables || context.theme_variables || context.cssVariables);
@@ -289,6 +408,10 @@ const ROUND_STATUS_HTML = `<!doctype html>
           }
         }
 
+        function shotCaption(shot) {
+          return (shot.label ? shot.label + ' · ' : '') + formatTime(shot.createdAt);
+        }
+
         function addRow(term, value) {
           if (value === undefined || value === null || value === '') return;
           var dt = document.createElement('dt');
@@ -300,10 +423,10 @@ const ROUND_STATUS_HTML = `<!doctype html>
         }
 
         /**
-         * Hosts differ in how they wrap a tool result, and pinning that down is half the
-         * point of this spike — so dig for the payload rather than assuming one shape.
+         * Hosts differ in how they wrap a tool result, so dig for the payload rather
+         * than assuming one shape.
          */
-        function extractVerdict(params) {
+        function unwrap(params, probe) {
           if (!params || typeof params !== 'object') return null;
           var candidates = [
             params.structuredContent,
@@ -313,11 +436,10 @@ const ROUND_STATUS_HTML = `<!doctype html>
             params
           ];
           for (var i = 0; i < candidates.length; i++) {
-            var candidate = candidates[i];
-            if (candidate && typeof candidate === 'object' && typeof candidate.status === 'string') return candidate;
+            if (candidates[i] && typeof candidates[i] === 'object' && probe(candidates[i])) return candidates[i];
           }
           var content =
-            (params.content) ||
+            params.content ||
             (params.result && params.result.content) ||
             (params.toolResult && params.toolResult.content);
           if (Array.isArray(content)) {
@@ -326,7 +448,7 @@ const ROUND_STATUS_HTML = `<!doctype html>
               if (!part || part.type !== 'text' || typeof part.text !== 'string') continue;
               try {
                 var parsed = JSON.parse(part.text);
-                if (parsed && typeof parsed === 'object' && typeof parsed.status === 'string') return parsed;
+                if (parsed && typeof parsed === 'object' && probe(parsed)) return parsed;
               } catch (error) {
                 /* not our JSON body — keep looking */
               }
@@ -335,7 +457,30 @@ const ROUND_STATUS_HTML = `<!doctype html>
           return null;
         }
 
-        var COPY = {
+        function looksLikeStatus(value) {
+          return typeof value.phase === 'string' && typeof value.status === 'string';
+        }
+
+        function looksLikeVerdict(value) {
+          return typeof value.status === 'string' && ('deliveryId' in value || 'lane' in value);
+        }
+
+        var PHASE_COPY = {
+          queued: 'Queued. The round is waiting to start.',
+          dispatched: 'Starting the agent…',
+          building: 'The agent is building.',
+          submitted: 'Sources delivered. The gate is picking them up.',
+          gating: 'The gate is checking this delivery.',
+          ready_for_review: 'Ready for review.',
+          publishing: 'Publishing…',
+          published: 'Published.',
+          needs_changes: 'Needs changes.',
+          failed: 'The round failed.',
+          canceled: 'The round was canceled.',
+          abandoned: 'The round was abandoned.'
+        };
+
+        var GATE_COPY = {
           pending: 'Gate status is pending.',
           green: 'Publish gate green — the round is complete.',
           red: 'Publish gate red. The report below says what failed.',
@@ -344,17 +489,37 @@ const ROUND_STATUS_HTML = `<!doctype html>
           kit_outdated: 'The Creator Kit rotated mid-round. Re-run get_kit, then resubmit with fromLatestDelivery.'
         };
 
-        function render(verdict) {
+        var STALL_COPY = {
+          no_agent_yet: 'Waiting for an agent to connect.',
+          not_dispatched: 'Not picked up yet.',
+          quiet: 'No signal from the agent for a while.',
+          ended: 'The agent has stopped.',
+          gate_not_started: 'The gate did not start.',
+          awaiting_input: 'Waiting on the creator.'
+        };
+
+        /** Terminal for a *round*: nothing further will arrive, so stop polling. */
+        function isFinished(status) {
+          var gate = status.gate;
+          if (gate && gate.status === 'green') return true;
+          return (
+            status.phase === 'published' ||
+            status.phase === 'canceled' ||
+            status.phase === 'abandoned' ||
+            status.phase === 'failed'
+          );
+        }
+
+        function renderGateOnly(verdict) {
           var status = typeof verdict.status === 'string' ? verdict.status : 'pending';
           pill.textContent = status.replace(/_/g, ' ');
           pill.className = 'pill pill-' + status;
           summary.textContent =
-            (typeof verdict.summary === 'string' && verdict.summary) || COPY[status] || 'Gate status: ' + status;
+            (typeof verdict.summary === 'string' && verdict.summary) || GATE_COPY[status] || 'Gate status: ' + status;
 
           metaList.textContent = '';
           addRow('Lane', verdict.lane);
           addRow('Delivery', verdict.deliveryId);
-          addRow('Version', verdict.version);
           addRow('Ran at', formatTime(verdict.ranAt));
           if (status === 'pending') {
             addRow('Next step', verdict.deliveryId ? 'Watch Studio' : 'Continue building');
@@ -376,6 +541,149 @@ const ROUND_STATUS_HTML = `<!doctype html>
           reportSize();
         }
 
+        function render(status) {
+          var gate = status.gate && typeof status.gate === 'object' ? status.gate : null;
+          var gateStatus = gate && typeof gate.status === 'string' ? gate.status : null;
+          var headline = gateStatus && gateStatus !== 'pending' ? gateStatus : status.phase;
+
+          pill.textContent = String(headline).replace(/_/g, ' ');
+          pill.className = 'pill pill-' + headline;
+
+          if (status.title) {
+            titleEl.textContent = status.slug ? status.title + ' · ' + status.slug : status.title;
+            titleEl.hidden = false;
+          } else {
+            titleEl.hidden = true;
+          }
+
+          var line = null;
+          if (gateStatus && gateStatus !== 'pending') {
+            line = (typeof gate.summary === 'string' && gate.summary) || GATE_COPY[gateStatus];
+          }
+          if (!line) line = PHASE_COPY[status.phase];
+          if (!line && gateStatus) line = GATE_COPY[gateStatus];
+          summary.textContent = line || 'Round status: ' + status.phase;
+
+          if (status.note && typeof status.note.text === 'string' && status.note.text) {
+            noteEl.textContent = status.note.text;
+            var when = document.createElement('span');
+            when.className = 'when';
+            when.textContent = formatTime(status.note.createdAt);
+            noteEl.appendChild(when);
+            noteEl.hidden = false;
+          } else {
+            noteEl.hidden = true;
+          }
+
+          // Three cases, and the middle one is why this is not a one-liner: bytes arrive
+          // only when the frame changed, so an unchanged shot must keep the image it
+          // already has, and a round with no shot at all must clear a stale one.
+          if (status.shot && status.shot.png) {
+            shotImg.src = 'data:image/png;base64,' + status.shot.png;
+            shotCap.textContent = shotCaption(status.shot);
+            shotEl.hidden = false;
+          } else if (status.shot && shotImg.getAttribute('src')) {
+            shotCap.textContent = shotCaption(status.shot);
+            shotEl.hidden = false;
+          } else {
+            shotEl.hidden = true;
+            shotImg.removeAttribute('src');
+          }
+          lastShotId = status.shot && status.shot.id ? status.shot.id : null;
+
+          metaList.textContent = '';
+          if (gate) {
+            addRow('Lane', gate.lane);
+            addRow('Delivery', gate.deliveryId);
+            addRow('Ran at', formatTime(gate.ranAt));
+          }
+          if (typeof status.deliveriesRemaining === 'number') {
+            addRow('Deliveries left', status.deliveriesRemaining);
+          }
+          if (status.stall && STALL_COPY[status.stall]) addRow('Note', STALL_COPY[status.stall]);
+
+          if (gate && typeof gate.report === 'string' && gate.report.trim()) {
+            report.textContent = gate.report;
+            report.hidden = false;
+          } else {
+            report.hidden = true;
+          }
+
+          if (isFinished(status)) {
+            foot.textContent = '';
+          } else if (gateStatus === 'pending' && gate && !gate.deliveryId) {
+            foot.textContent = 'Nothing has been delivered yet. Continue building and submit before checking again.';
+          } else {
+            foot.innerHTML = '';
+            var dot = document.createElement('span');
+            dot.className = 'live';
+            foot.appendChild(dot);
+            foot.appendChild(document.createTextNode('Updating on its own — no need to ask the agent.'));
+          }
+          reportSize();
+        }
+
+        function schedule(seconds) {
+          if (stopped || timer) return;
+          var delay = Math.max(10, Number(seconds) || 30) * 1000;
+          timer = setTimeout(function () {
+            timer = null;
+            poll();
+          }, delay);
+        }
+
+        function poll() {
+          if (stopped || inFlight) return;
+          inFlight = true;
+          attempts += 1;
+          // sessionKey is an optimisation, not a precondition: a Bearer-authenticated
+          // client never passes one, and the host proxies this call over the same
+          // authenticated connection either way.
+          var args = {};
+          if (sessionKey) args.sessionKey = sessionKey;
+          if (lastShotId) args.sinceShotId = lastShotId;
+          var id = nextId++;
+          pendingCalls[id] = function (result, error) {
+            inFlight = false;
+            var status = error ? null : unwrap(result, looksLikeStatus);
+            if (!status) {
+              // A host that refuses app-only calls, or a credential this view does not
+              // hold. Show what we were opened with rather than a card that never
+              // resolves, and stop after a couple of tries instead of looping.
+              log('warning', 'round status unavailable: ' + String(error || 'unrecognised shape'));
+              if (!live) {
+                if (seed) renderGateOnly(seed);
+                else summary.textContent = 'Could not read round status here.';
+                reportSize();
+              }
+              if (attempts >= 2) stopped = true;
+              return;
+            }
+            live = true;
+            render(status);
+            if (isFinished(status)) stopped = true;
+            else schedule(status.retryAfterSeconds);
+          };
+          post({
+            jsonrpc: '2.0',
+            id: id,
+            method: 'tools/call',
+            params: { name: 'get_round_status', arguments: args }
+          });
+        }
+
+        function noteSessionKey(value) {
+          if (typeof value !== 'string' || !value || sessionKey === value) return;
+          sessionKey = value;
+          // Worth one more attempt: the keyless poll may have been refused for want of
+          // exactly this.
+          if (!live) {
+            stopped = false;
+            attempts = 0;
+            poll();
+          }
+        }
+
         function onHostMessage(event) {
           if (host && host !== window && event.source !== host) return;
           var message = event.data;
@@ -385,15 +693,37 @@ const ROUND_STATUS_HTML = `<!doctype html>
             initialized = true;
             if (message.result) applyHostContext(message.result.hostContext);
             notify('ui/notifications/initialized', {});
-            log('debug', 'round-status view initialized');
+            log('debug', 'round view initialized');
             reportSize();
+            poll();
+            return;
+          }
+
+          if (message.id !== undefined && pendingCalls[message.id]) {
+            var handler = pendingCalls[message.id];
+            delete pendingCalls[message.id];
+            handler(message.result, message.error);
+            return;
+          }
+
+          // The arguments of the tool that opened this view carry the round's key.
+          if (message.method === 'ui/notifications/tool-input') {
+            var input = message.params && (message.params.arguments || message.params.input || message.params);
+            if (input && typeof input === 'object') noteSessionKey(input.sessionKey);
             return;
           }
 
           if (message.method === 'ui/notifications/tool-result') {
-            var verdict = extractVerdict(message.params);
-            if (verdict) render(verdict);
-            else log('warning', 'tool-result arrived in an unrecognised shape');
+            var verdict = unwrap(message.params, looksLikeVerdict);
+            if (verdict && !live) {
+              seed = verdict;
+              renderGateOnly(verdict);
+            }
+            // start returns the key in its result; the others carry it in their input.
+            var payload = unwrap(message.params, function (value) {
+              return typeof value.sessionKey === 'string';
+            });
+            if (payload) noteSessionKey(payload.sessionKey);
             return;
           }
 
@@ -403,6 +733,8 @@ const ROUND_STATUS_HTML = `<!doctype html>
           }
 
           if (message.method === 'ui/resource-teardown') {
+            stopped = true;
+            if (timer) clearTimeout(timer);
             window.removeEventListener('message', onHostMessage);
             window.removeEventListener('resize', reportSize);
           }
@@ -413,7 +745,7 @@ const ROUND_STATUS_HTML = `<!doctype html>
         initializeId = request('ui/initialize', {
           protocolVersion: '2026-01-26',
           capabilities: {},
-          clientInfo: { name: 'gamedevpl-round-status', version: '0.1.0' }
+          clientInfo: { name: 'gamedevpl-round-status', version: '0.2.0' }
         });
 
         window.addEventListener('resize', reportSize);
