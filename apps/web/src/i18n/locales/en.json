@@ -1199,7 +1199,6 @@
     "gateGreen": "Accepted by the gate",
     "gateRed": "Gate run failed",
     "placeholder": {
-      "review": "Reviewing a change here will mean playing two versions side by side for thirty seconds — not reading a diff. In the works.",
       "sources": "A read-only view of the game’s sources. Deliberately the last tab — the game is the product. In the works."
     },
     "specHint": "this is the game’s README",
@@ -1248,6 +1247,37 @@
         "not found": "That task is gone — the board may have moved on."
       },
       "note": "Four columns and nothing else. Handing a task to the agent starts a build; that is the only automation here."
+    },
+    "review": {
+      "loading": "Loading the review…",
+      "error": "Could not load the review. Try again in a moment.",
+      "signedOut": "Sign in as the game’s creator to review changes waiting to be played.",
+      "notYours": "Only this game’s creator can review changes waiting to be played.",
+      "empty": "Nothing waiting to be played. When the agent delivers a change, it lands here beside the live game so you can play both.",
+      "builtOn": "Built {{date}}",
+      "gatePassed": "gate passed",
+      "gateFailed": "gate failed",
+      "gatePending": "gate has not run yet",
+      "gateFailedHint": "The gate refused this build — ask for changes instead.",
+      "instruction": "Play both for thirty seconds. The one on the right is the change.",
+      "liveCaption": "Now",
+      "candidateCaption": "With this change",
+      "noLive": "Nothing is live yet — this would be the game’s first version.",
+      "noCandidate": "The built version could not be loaded.",
+      "approve": "Looks good",
+      "approving": "Recording…",
+      "approved": "You signed off on this {{date}}. An operator publishes it from here.",
+      "requestChanges": "Ask for changes",
+      "publishNote": "Signing off records that you played it and accept it. Putting a game on the site is a separate human check, so an operator does the publishing.",
+      "approveError": {
+        "unknown": "Could not record that. Try again in a moment.",
+        "gate_red": "The gate refused this build, so it cannot be signed off.",
+        "not_gated": "The gate has not finished with this build yet.",
+        "not_found": "That version is gone — the agent may have delivered a newer one."
+      },
+      "diffSummary": "{{files}} files · +{{added}} −{{removed}} · show what changed in the code",
+      "diffTruncated": "(at least)",
+      "diffUncounted": "changed"
     }
   }
 }

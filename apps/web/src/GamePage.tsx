@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from './AuthContext.js';
 import { AuthModal } from './AuthModal.js';
 import { GameBoard } from './GameBoard.js';
+import { GameReview } from './GameReview.js';
 import { fetchGamePage, type GamePage as GamePageData } from './gamePageApi.js';
 import { PixelIcon } from './PixelIcon.js';
 import { PublishedGameFrame } from './PublishedGameFrame.js';
@@ -237,8 +238,9 @@ export function GamePage({
           ) : null}
 
           {activeTab === 'board' ? <GameBoard slug={slug} /> : null}
+          {activeTab === 'review' ? <GameReview slug={slug} /> : null}
 
-          {activeTab === 'review' || activeTab === 'sources' ? (
+          {activeTab === 'sources' ? (
             <section className="game-page-placeholder">
               <h2>{t(`gamePage.tabs.${activeTab}`)}</h2>
               <p>{t(`gamePage.placeholder.${activeTab}`)}</p>

@@ -19,6 +19,7 @@ import { registerAuthPlugin, type GoogleAuthVerifier } from './auth.js';
 import { registerCreatorProfileRoutes } from './creator-profile-routes.js';
 import { registerGamePageRoutes, type GamePageRoutesOptions } from './game-page-routes.js';
 import { registerGameBoardRoutes, type GameBoardRoutesOptions } from './game-board-routes.js';
+import { registerGameReviewRoutes, type GameReviewRoutesOptions } from './game-review-routes.js';
 import { registerAccountDeletionRoutes, type AccountDeletionRoutesOptions } from './account-deletion-routes.js';
 import { registerCreatorStudioRoutes } from './creator-studio.js';
 import { registerEditorRoutes } from './editor-drafts.js';
@@ -122,6 +123,8 @@ export interface BuildAppOptions {
   gamePageRoutes?: Partial<Omit<GamePageRoutesOptions, 'store'>>;
   /** Seams for the game page's task board. */
   gameBoardRoutes?: Partial<Omit<GameBoardRoutesOptions, 'store'>>;
+  /** Seams for the side-by-side review surface. */
+  gameReviewRoutes?: Partial<Omit<GameReviewRoutesOptions, 'store'>>;
   /** Seams for delayed account erasure; defaults to OIDC-or-deny-all from env. */
   accountDeletionRoutes?: Partial<
     Omit<AccountDeletionRoutesOptions, 'store' | 'adminUids' | 'internalAuthVerifier'>
@@ -589,6 +592,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // The game page's task board. Reads only — assignment stays on the suggestion
   // inbox route, which owns the quota and the attribution.
   await registerGameBoardRoutes(app, { store, ...options.gameBoardRoutes });
+
+  // The review surface: a delivered candidate, playable beside what is live. Owner
+  // and operator only, and it never publishes — that stays the operator action the
+  // job-admin route implements, for the reasons documented there.
+  await registerGameReviewRoutes(app, { store, gamesStore, adminUids, ...options.gameReviewRoutes });
   registerAccountDeletionRoutes(app, {
     store,
     adminUids,

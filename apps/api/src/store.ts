@@ -354,6 +354,13 @@ export interface SubmissionRecord {
    * Empty when the creator skipped the panel or it had nothing to ask.
    */
   qa?: string[];
+  /**
+   * The creator's sign-off on a delivered candidate they played side by side with what
+   * is live (game-review-routes.ts). Advisory to the operator who publishes: it says the
+   * person who asked for the change has already accepted it. Never a publish itself, and
+   * never consulted as permission to become one.
+   */
+  reviewApproval?: ReviewApproval;
 }
 
 /**
@@ -1230,6 +1237,18 @@ export interface SuggestionRecord {
   updatedAt: string;
 }
 
+/**
+ * The creator's verdict after playing a delivered candidate side by side with what is
+ * live. Advisory to the operator who publishes; never a publish in itself.
+ */
+export interface ReviewApproval {
+  /** The version the creator played and accepted — not "the latest", which can move. */
+  version: string;
+  at: string;
+  /** The uid that signed off, so an approval is attributable rather than ambient. */
+  by: string;
+}
+
 export type WaitlistStatus = 'pending' | 'approved' | 'rejected';
 
 export interface WaitlistEntry {
@@ -1545,6 +1564,17 @@ export interface Store {
   setSubmissionPublishedAt(issueNumber: number, at: string): Promise<void>;
   /** Marks a submission abandoned by its creator. */
   setSubmissionAbandoned(issueNumber: number, at: string): Promise<void>;
+  /**
+   * Records that the creator played the candidate and signed off on it.
+   *
+   * Explicitly **not** a publish. Publishing stays the operator action it is
+   * (job-admin-routes.ts): the gate answers "does this run", a human answers "may this
+   * be on the site", and the second question is the moderation boundary the DSA and the
+   * AI Act care about. This records the *other* human's answer — the one who asked for
+   * the change and just played it — so an operator publishing sees that the creator has
+   * already accepted it rather than guessing.
+   */
+  setSubmissionReviewApproval(issueNumber: number, approval: ReviewApproval): Promise<void>;
   /** Turns the creator's shared draft link on (a timestamp) or off (null). */
   setDraftShared(issueNumber: number, at: string | null): Promise<void>;
   /**
@@ -2752,6 +2782,11 @@ export class InMemoryStore implements Store {
   async setSubmissionPreviewVersion(issueNumber: number, version: string): Promise<void> {
     const sub = this.submissions.get(issueNumber);
     if (sub) this.submissions.set(issueNumber, { ...sub, previewVersion: version });
+  }
+
+  async setSubmissionReviewApproval(issueNumber: number, approval: ReviewApproval): Promise<void> {
+    const sub = this.submissions.get(issueNumber);
+    if (sub) this.submissions.set(issueNumber, { ...sub, reviewApproval: structuredClone(approval) });
   }
 
   async recordDeliveryNudge(issueNumber: number): Promise<number> {
@@ -4707,6 +4742,10 @@ export class FirestoreStore implements Store {
 
   async setSubmissionPreviewVersion(issueNumber: number, version: string): Promise<void> {
     await this.db.collection('submissions').doc(String(issueNumber)).set({ previewVersion: version }, { merge: true });
+  }
+
+  async setSubmissionReviewApproval(issueNumber: number, approval: ReviewApproval): Promise<void> {
+    await this.db.collection('submissions').doc(String(issueNumber)).set({ reviewApproval: approval }, { merge: true });
   }
 
   async recordDeliveryNudge(issueNumber: number): Promise<number> {

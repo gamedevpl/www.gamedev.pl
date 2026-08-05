@@ -13040,3 +13040,168 @@ a.user-name--profile:focus-visible {
   color: var(--muted);
   max-width: 70ch;
 }
+
+/* The review surface — two playable frames, and the diff as a footnote. */
+
+.game-review-title {
+  margin: 0 0 4px;
+  font-size: 1.15rem;
+}
+
+.game-review-meta {
+  margin: 0 0 8px;
+  font-size: 0.85rem;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.game-review-gate {
+  padding: 1px 8px;
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  font-size: 0.75rem;
+}
+
+.game-review-gate.is-green {
+  border-color: rgba(74, 222, 128, 0.5);
+  color: #4ade80;
+}
+
+.game-review-gate.is-red {
+  border-color: rgba(242, 162, 162, 0.5);
+  color: #f2a2a2;
+}
+
+.game-review-instruction {
+  margin: 0 0 14px;
+  font-size: 0.9rem;
+}
+
+.game-review-panes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 760px) {
+  .game-review-panes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.game-review-pane {
+  margin: 0;
+  min-width: 0;
+}
+
+/* Half-width frames: the standalone .game-frame height would tower over them. */
+.game-review-pane .game-frame {
+  height: min(42vh, 420px);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: #000;
+}
+
+.game-review-caption {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.game-review-caption.is-candidate {
+  color: var(--turquoise);
+}
+
+.game-review-version {
+  font-family: ui-monospace, monospace;
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.game-review-missing {
+  margin: 0;
+  padding: 32px 16px;
+  border: 1px dashed var(--panel-border);
+  border-radius: 8px;
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.game-review-verdict {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.game-review-verdict .secondary-btn {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.game-review-approved {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+  color: #4ade80;
+}
+
+.game-review-note {
+  margin: 8px 0 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+  max-width: 70ch;
+}
+
+.game-review-diff {
+  margin-top: 16px;
+  border-top: 1px solid var(--panel-border);
+  padding-top: 10px;
+}
+
+.game-review-diff-toggle {
+  padding: 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+  text-decoration: underline;
+}
+
+.game-review-diff-toggle:hover {
+  color: var(--text);
+}
+
+.game-review-diff-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.8rem;
+}
+
+.game-review-diff-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.game-review-diff-counts {
+  color: var(--muted);
+  font-family: ui-monospace, monospace;
+  white-space: nowrap;
+}

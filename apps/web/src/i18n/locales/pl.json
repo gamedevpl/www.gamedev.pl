@@ -1203,7 +1203,6 @@
     "gateGreen": "Zaakceptowane przez bramkę",
     "gateRed": "Bramka odrzuciła to wydanie",
     "placeholder": {
-      "review": "Recenzja zmiany będzie tu oznaczać trzydzieści sekund grania w dwie wersje obok siebie — nie czytanie diffa. W budowie.",
       "sources": "Podgląd źródeł gry tylko do odczytu. Celowo ostatnia zakładka — produktem jest gra. W budowie."
     },
     "specHint": "to jest README gry",
@@ -1254,6 +1253,37 @@
         "not found": "Tego zadania już nie ma — tablica mogła się zmienić."
       },
       "note": "Cztery kolumny i nic więcej. Przekazanie zadania agentowi uruchamia budowę; to jedyna automatyka na tej tablicy."
+    },
+    "review": {
+      "loading": "Wczytywanie recenzji…",
+      "error": "Nie udało się wczytać recenzji. Spróbuj za chwilę.",
+      "signedOut": "Zaloguj się jako twórca gry, aby recenzować zmiany czekające na zagranie.",
+      "notYours": "Tylko twórca tej gry może recenzować zmiany czekające na zagranie.",
+      "empty": "Nic nie czeka na zagranie. Gdy agent dostarczy zmianę, pojawi się tutaj obok żywej gry, żebyś mógł zagrać w obie.",
+      "builtOn": "Zbudowane {{date}}",
+      "gatePassed": "bramka zaliczona",
+      "gateFailed": "bramka odrzuciła",
+      "gatePending": "bramka jeszcze nie sprawdziła",
+      "gateFailedHint": "Bramka odrzuciła tę budowę — poproś o poprawki.",
+      "instruction": "Zagraj w obie po trzydzieści sekund. Po prawej jest zmiana.",
+      "liveCaption": "Teraz",
+      "candidateCaption": "Z tą zmianą",
+      "noLive": "Nic jeszcze nie jest wydane — to byłaby pierwsza wersja gry.",
+      "noCandidate": "Nie udało się wczytać zbudowanej wersji.",
+      "approve": "Wygląda dobrze",
+      "approving": "Zapisywanie…",
+      "approved": "Zaakceptowano {{date}}. Publikacją zajmuje się operator.",
+      "requestChanges": "Poproś o poprawki",
+      "publishNote": "Akceptacja zapisuje, że zagrałeś i przyjmujesz zmianę. Wpuszczenie gry na stronę to osobne sprawdzenie przez człowieka, więc publikuje operator.",
+      "approveError": {
+        "unknown": "Nie udało się tego zapisać. Spróbuj za chwilę.",
+        "gate_red": "Bramka odrzuciła tę budowę, więc nie można jej zaakceptować.",
+        "not_gated": "Bramka jeszcze nie skończyła sprawdzać tej budowy.",
+        "not_found": "Tej wersji już nie ma — agent mógł dostarczyć nowszą."
+      },
+      "diffSummary": "plików: {{files}} · +{{added}} −{{removed}} · pokaż zmiany w kodzie",
+      "diffTruncated": "(co najmniej)",
+      "diffUncounted": "zmieniony"
     }
   }
 }
