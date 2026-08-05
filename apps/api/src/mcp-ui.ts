@@ -1059,6 +1059,10 @@ const ROUND_STATUS_HTML = `<!doctype html>
           var args = {};
           if (sessionKey) args.sessionKey = sessionKey;
           if (lastShotId) args.sinceShotId = lastShotId;
+          // The reader's language, so the server can apply the same rule Studio does:
+          // show the agent's localized note only when it matches who is reading. Without
+          // it the card showed a Polish note to an English reader.
+          if (hostLocale) args.locale = hostLocale;
           var id = nextId++;
           pendingCalls[id] = function (result, error) {
             inFlight = false;

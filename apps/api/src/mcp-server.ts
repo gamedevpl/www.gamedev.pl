@@ -122,6 +122,25 @@ const MAX_SCREENSHOT_BYTES = 700 * 1024;
 const MAX_SUBMIT_FILES = MAX_UPLOAD_FILES;
 
 /** How often the round view should re-read status. Matches the gate's own backoff. */
+/**
+ * The progress note in the language the *reader* is using.
+ *
+ * Same rule as the creator's thread (`submissions.ts`): an agent may send both an English
+ * `text` and a `textLocalized` in the creator's language, and the localized one is shown
+ * only when its locale matches the reader's. The card used to prefer `textLocalized`
+ * unconditionally, which handed a Polish note to a reader whose surface was English —
+ * the same event rendered in two languages depending on where you looked (owner, 2026-08-05).
+ *
+ * Locales are compared on the primary subtag, so `pl` matches `pl-PL`. No locale from the
+ * host means no claim about the reader, so English is the safe answer.
+ */
+function noteTextFor(event: { text: string; textLocalized?: string; locale?: string }, readerLocale: unknown): string {
+  if (!event.textLocalized || typeof event.locale !== 'string') return event.text;
+  if (typeof readerLocale !== 'string' || !readerLocale) return event.text;
+  const primary = (value: string) => value.trim().toLowerCase().split(/[-_]/)[0];
+  return primary(event.locale) === primary(readerLocale) ? event.textLocalized : event.text;
+}
+
 const ROUND_STATUS_RETRY_AFTER_SECONDS = 30;
 /** A card shows a strip, not a contact sheet; the bytes ride a postMessage. */
 const ROUND_MEDIA_MAX_FRAMES = 3;
@@ -3616,6 +3635,11 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         type: 'object',
         properties: {
           sessionKey: SESSION_KEY_PROP,
+          locale: {
+            type: 'string',
+            description:
+              "The reader's language (BCP-47), so a localized progress note is shown only to who can read it.",
+          },
           sinceShotId: {
             type: 'string',
             description: 'Screenshot id you already have; bytes are omitted when the latest shot still matches it.',
@@ -3688,9 +3712,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           slug: record.slug ?? null,
           round: record.roundGeneration ?? 1,
           deliveriesRemaining: cap === null ? null : Math.max(0, cap - used),
-          note: latestEvent
-            ? { text: latestEvent.textLocalized ?? latestEvent.text, createdAt: latestEvent.createdAt }
-            : null,
+          note: latestEvent ? { text: noteTextFor(latestEvent, args.locale), createdAt: latestEvent.createdAt } : null,
           shot,
           gate,
           retryAfterSeconds: ROUND_STATUS_RETRY_AFTER_SECONDS,
