@@ -194,14 +194,32 @@ interface UiResource {
  */
 const VIEW_DOMAIN = 'https://www.gamedev.pl';
 
+interface UiCsp {
+  readonly connectDomains: readonly string[];
+  readonly resourceDomains: readonly string[];
+  readonly frameDomains: readonly string[];
+}
+
+interface UiResourceMeta {
+  ui: { csp: UiCsp; domain: string };
+}
+
+/** What `resources/list` returns per view: everything but the body. */
+export type UiResourceDescriptor = Omit<UiResource, 'text'> & { _meta: UiResourceMeta };
+
+/** What `resources/read` returns: the body, plus the same declared metadata. */
+export type UiResourceContents = Pick<UiResource, 'uri' | 'mimeType' | 'text'> & { _meta: UiResourceMeta };
+
 /**
  * Declared per resource. Empty by design: the card inlines everything, screenshots
  * arrive as data URIs, and it calls tools through the host rather than the network.
  */
-const VIEW_CSP = Object.freeze({
-  connectDomains: [] as string[],
-  resourceDomains: [] as string[],
-  frameDomains: [] as string[],
+const VIEW_CSP: UiCsp = Object.freeze({
+  // Frozen individually: Object.freeze is shallow, and this one object is handed out
+  // on every resources/list and resources/read.
+  connectDomains: Object.freeze([]) as readonly string[],
+  resourceDomains: Object.freeze([]) as readonly string[],
+  frameDomains: Object.freeze([]) as readonly string[],
 });
 
 /**
@@ -386,6 +404,7 @@ const ROUND_STATUS_HTML = `<!doctype html>
         var speculative = false;
         var giveUpTimer = null;
         var contextKey = null;
+        var REPORT_CONTEXT_LIMIT = 4000;
         var stopped = false;
         var timer = null;
 
@@ -789,6 +808,14 @@ const ROUND_STATUS_HTML = `<!doctype html>
           var key = gate.status + ':' + (gate.deliveryId || '');
           if (key === contextKey) return;
           contextKey = key;
+          // The report, not the summary, is what says what broke — and the app-only
+          // status result never reaches the transcript, so without it here a follow-up
+          // 'fix it' still costs a tool call to discover the failure. Bounded, because
+          // this lands in the model's context whether or not it is ever used.
+          var report = typeof gate.report === 'string' ? gate.report.trim() : '';
+          if (report.length > REPORT_CONTEXT_LIMIT) {
+            report = report.slice(0, REPORT_CONTEXT_LIMIT) + '\\n… (truncated; call get_gate_verdict for the rest)';
+          }
           request('ui/update-model-context', {
             structuredContent: {
               slug: status.slug || null,
@@ -797,7 +824,8 @@ const ROUND_STATUS_HTML = `<!doctype html>
                 status: gate.status,
                 lane: gate.lane || null,
                 deliveryId: gate.deliveryId || null,
-                summary: typeof gate.summary === 'string' ? gate.summary : null
+                summary: typeof gate.summary === 'string' ? gate.summary : null,
+                report: report || null
               }
             }
           });
@@ -965,17 +993,17 @@ const UI_RESOURCES: readonly UiResource[] = Object.freeze([
 ]);
 
 /** What a host reads about a view: its CSP and the origin it belongs to. */
-function uiResourceMeta(): Record<string, unknown> {
+function uiResourceMeta(): UiResourceMeta {
   return { ui: { csp: VIEW_CSP, domain: VIEW_DOMAIN } };
 }
 
 /** Descriptors for `resources/list` — no bodies. */
-export function uiResourceDescriptors(): Array<Record<string, unknown>> {
+export function uiResourceDescriptors(): UiResourceDescriptor[] {
   return UI_RESOURCES.map(({ text: _text, ...descriptor }) => ({ ...descriptor, _meta: uiResourceMeta() }));
 }
 
 /** One `resources/read` content entry, or null when the URI is not ours. */
-export function readUiResource(uri: string): Record<string, unknown> | null {
+export function readUiResource(uri: string): UiResourceContents | null {
   const found = UI_RESOURCES.find((resource) => resource.uri === uri);
   if (!found) return null;
   return { uri: found.uri, mimeType: found.mimeType, text: found.text, _meta: uiResourceMeta() };
