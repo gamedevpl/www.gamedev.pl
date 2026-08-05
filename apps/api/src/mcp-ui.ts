@@ -1009,7 +1009,10 @@ const UI_RESOURCES: readonly UiResource[] = Object.freeze([
   },
 ]);
 
-/** What a host reads about a view: its CSP and the origin it belongs to. */
+/**
+ * What a host reads about a view: its CSP, twice — once in the standard shape and once
+ * in ChatGPT's. Deliberately no origin; see the note on `ui.domain` above.
+ */
 function uiResourceMeta(): UiResourceMeta {
   return {
     ui: { csp: VIEW_CSP },
