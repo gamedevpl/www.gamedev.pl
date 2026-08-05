@@ -271,7 +271,6 @@ function CatalogCard({
           stopPreview();
         }}
       >
-
         <a
           className="catalog-card-hit-area"
           href={gamePath(gamePageHandle(entry), entry.slug)}
