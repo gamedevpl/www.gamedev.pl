@@ -195,9 +195,10 @@ describe('RemixPanel', () => {
       container.querySelector('.remix-ask')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     });
 
-    // Earned: share is the loudest thing; Keep and Undo sit quiet beside it.
+    // Earned: share is the loudest thing; Undo sits quiet beside it. Save-as-yours
+    // is under the row as a text control — reachable, not a competing CTA.
     expect(container.querySelector('.remix-btn.is-primary')?.textContent).toBe('Share my version');
-    expect(buttonNamed(container, 'Make it mine')?.classList.contains('is-quiet')).toBe(true);
+    expect(container.querySelector('.remix-keep-mine')?.textContent).toBe('Make it mine');
     expect(buttonNamed(container, 'Undo')?.classList.contains('is-quiet')).toBe(true);
     // And the way to a second change is still there, shrunk to a line.
     expect(container.querySelector('.remix-ask.is-compact')).not.toBeNull();
@@ -565,10 +566,12 @@ describe('RemixPanel', () => {
 
     // The change landed and says so...
     expect(container.querySelector('.remix-result')?.textContent).toContain('carrots');
-    // ...and there is nothing to share (code moves no declared value), so Keep
-    // is the primary offer and Share stays off.
+    // ...and there is nothing to share (code moves no declared value), so Share
+    // stays off and Keep is a text control under the row — not a full-width
+    // primary that invites a mis-tap.
     expect(buttonNamed(container, 'Share my version')).toBeNull();
-    expect(buttonNamed(container, 'Make it mine')?.classList.contains('is-primary')).toBe(true);
+    expect(container.querySelector('.remix-btn.is-primary')).toBeNull();
+    expect(container.querySelector('.remix-keep-mine')?.textContent).toBe('Make it mine');
 
     // But there is always a way back. A rebuild that compiles is not a rebuild
     // that plays, and the lane cannot tell the difference — so the player must
@@ -624,6 +627,8 @@ describe('RemixPanel', () => {
     expect(container.querySelector('.remix-result.is-broken')).not.toBeNull();
     expect(container.querySelector('.remix-result')?.textContent).toContain('stopped the game working');
     expect(container.querySelector('.remix-btn.is-primary')?.textContent).toBe('Undo');
+    // A broken game is not something to keep — hide the Studio fork until they undo.
+    expect(container.querySelector('.remix-keep-mine')).toBeNull();
   });
 
   it('keeps the way back when the sheet is reopened over a running change', async () => {
@@ -656,10 +661,10 @@ describe('RemixPanel', () => {
 
     // No second session was minted for the reopening...
     expect(remixApi.startRemix).not.toHaveBeenCalled();
-    // ...and the way back is offered — Keep sits beside it (change is running,
-    // nothing shareable yet) so Undo is no longer the sole button.
+    // ...and the way back is offered. Keep is under the row as a text control
+    // (change is running, nothing shareable yet).
     expect(buttonNamed(container, 'Undo')).not.toBeNull();
-    expect(buttonNamed(container, 'Make it mine')).not.toBeNull();
+    expect(container.querySelector('.remix-keep-mine')).not.toBeNull();
   });
 
   async function send(text: string) {

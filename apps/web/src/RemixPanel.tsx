@@ -1116,27 +1116,11 @@ export function RemixPanel(props: {
             </span>
             <span>{changed.broke ? t('remix.brokeIt') : changed.text}</span>
           </p>
-          {changed.canShare || canPropose || undo || changed.undoCode || !changed.broke ? (
+          {changed.canShare || canPropose || undo || changed.undoCode ? (
             <div className="remix-actions-row">
               {changed.canShare ? (
                 <button type="button" className="remix-btn is-primary" onClick={() => void share()}>
                   {t('remix.share')}
-                </button>
-              ) : null}
-              {/*
-               * Earned: offered only after a change has landed. Forks the remixed
-               * sources into a private Studio draft — never a catalog publish.
-               * Quiet next to Share when both are available; primary when Share
-               * is not (code-only remixes).
-               */}
-              {!changed.broke ? (
-                <button
-                  type="button"
-                  className={`remix-btn ${changed.canShare ? 'is-quiet' : 'is-primary'}`}
-                  disabled={saving || lane !== 'idle'}
-                  onClick={() => void saveAsMine()}
-                >
-                  {saving ? t('remix.saving') : t('remix.makeItYours')}
                 </button>
               ) : null}
               {/*
@@ -1164,6 +1148,23 @@ export function RemixPanel(props: {
                 </button>
               ) : null}
             </div>
+          ) : null}
+          {/*
+           * Save-as-yours is a real exit, but not the moment's job. After a change
+           * lands the player is deciding whether they like it — Share, Propose, Undo,
+           * or another tweak. Forking into Studio is deliberate, so it stays reachable
+           * as a text control under the row rather than a full-width primary that wins
+           * every mis-tap when Share is off (code-lane remixes).
+           */}
+          {!changed.broke ? (
+            <button
+              type="button"
+              className="remix-keep-mine"
+              disabled={saving || lane !== 'idle'}
+              onClick={() => void saveAsMine()}
+            >
+              {saving ? t('remix.saving') : t('remix.makeItYours')}
+            </button>
           ) : null}
           {composer(true)}
         </>

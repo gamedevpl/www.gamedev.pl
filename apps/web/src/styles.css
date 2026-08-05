@@ -12082,6 +12082,36 @@ button.builder-mode-selector:disabled {
   font-weight: 500;
 }
 
+/*
+ * Save-as-yours under the action row — a text control, not a competing CTA.
+ * Sized for a deliberate tap; not flex-grown, not accent-filled.
+ */
+.remix-keep-mine {
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 4px 2px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.remix-keep-mine:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.remix-keep-mine:focus-visible {
+  outline: 2px solid var(--accent, #62dcff);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
 .remix-note {
   margin: 0;
   font-size: 0.86rem;
