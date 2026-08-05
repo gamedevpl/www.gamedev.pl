@@ -33,6 +33,39 @@ describe('createCloudBuildGateTrigger', () => {
     expect(steps[1]!.args[1]).not.toContain('--health');
   });
 
+  it('forwards the preview-stills kill switch into the build step, or the switch is inert', async () => {
+    // The gate runs inside this Cloud Build step, not in the API process, so an env var
+    // set on the service reaches it only if it is forwarded here. Without that, the
+    // advertised no-deploy kill switch does nothing — and a switch that is believed but
+    // dead is worse than none (Codex, #583).
+    const previous = process.env.GATE_PREVIEW_STILLS;
+    try {
+      process.env.GATE_PREVIEW_STILLS = '0';
+      const off = stubFetch();
+      await createCloudBuildGateTrigger({ ...OPTIONS, fetchImpl: off.impl })!({
+        slug: 'comet-courier',
+        version: 'v1',
+        mode: 'preview',
+      });
+      const offStep = (off.calls[0]!.body.steps as Array<{ env?: string[] }>)[1]!;
+      expect(offStep.env).toContain('GATE_PREVIEW_STILLS=0');
+
+      // Default: nothing forwarded, so the runner's own default (on) stands.
+      delete process.env.GATE_PREVIEW_STILLS;
+      const on = stubFetch();
+      await createCloudBuildGateTrigger({ ...OPTIONS, fetchImpl: on.impl })!({
+        slug: 'comet-courier',
+        version: 'v1',
+        mode: 'preview',
+      });
+      const onStep = (on.calls[0]!.body.steps as Array<{ env?: string[] }>)[1]!;
+      expect(onStep.env?.some((entry) => entry.startsWith('GATE_PREVIEW_STILLS'))).toBe(false);
+    } finally {
+      if (previous === undefined) delete process.env.GATE_PREVIEW_STILLS;
+      else process.env.GATE_PREVIEW_STILLS = previous;
+    }
+  });
+
   it('runs a health re-gate as the same build with the health flag and its own tag', async () => {
     const { impl, calls } = stubFetch();
     const trigger = createCloudBuildGateTrigger({ ...OPTIONS, fetchImpl: impl });

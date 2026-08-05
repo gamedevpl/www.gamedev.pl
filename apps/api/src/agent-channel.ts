@@ -2316,7 +2316,12 @@ export async function registerAgentChannelRoutes(
         : manifest.previewGate
           ? { ...manifest.previewGate, lane: 'preview' as const }
           : null;
-      const verdictScreenshot = verdict?.screenshot ?? null;
+      // Publish wins the *verdict* — it is the later, fuller run — but not the frame.
+      // A publish run that failed before capture names no screenshot, and preferring
+      // its silence over a preview frame that exists would report "no media" while the
+      // bytes sit in the bucket. Verdict precedence and evidence precedence are
+      // different questions; only the first one publish should win by default.
+      const verdictScreenshot = manifest.gate?.screenshot ?? manifest.previewGate?.screenshot ?? null;
 
       const metadataBody = await options.gamesStore.getDerivedArtifact(slug, version, 'media/metadata.json');
       const media = parseGameMedia(metadataBody?.toString('utf8') ?? null);

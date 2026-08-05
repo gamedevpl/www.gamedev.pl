@@ -449,6 +449,53 @@ describe('GET /api/agent/build/media (BY-28)', () => {
     expect(res.json().frames).toHaveLength(1);
   });
 
+  it('falls back to the preview screenshot when a run stored frames but no metadata', async () => {
+    // The path the lane change actually adds. With metadata present the allowlist does
+    // the work and previewGate.screenshot is never consulted, so a test that keeps the
+    // default artifacts proves lane reporting and nothing else (Copilot, #583).
+    const store = new InMemoryStore();
+    await seedDeliveredJob(store);
+    const artifacts = new Map<string, Buffer>([['media/opening.png', PNG]]);
+    const manifest = {
+      slug: SLUG,
+      version: VERSION,
+      issueNumber: ISSUE,
+      previewGate: { green: true, ranAt: '2026-08-05T06:00:00.000Z', screenshot: 'media/opening.png' },
+    };
+    app = await createApp(store, stubGamesStore({ artifacts, manifest }), stubObjectStore().objectStore);
+
+    const res = await app.inject({ method: 'GET', url: '/api/agent/build/media', headers: agentHeaders() });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ available: true, gate: { lane: 'preview' } });
+    expect(res.json().screenshots).toEqual([
+      { name: 'opening', file: 'opening.png', url: expect.stringContaining('opening.png') },
+    ]);
+    expect(res.json().frames).toHaveLength(1);
+  });
+
+  it('serves a preview frame when the publish verdict names none', async () => {
+    // Publish wins the verdict, but not the evidence: a publish run that failed before
+    // capture names no screenshot, and preferring its silence would report "no media"
+    // while the preview frame sits in the bucket (Copilot, #583).
+    const store = new InMemoryStore();
+    await seedDeliveredJob(store);
+    const artifacts = new Map<string, Buffer>([['media/opening.png', PNG]]);
+    const manifest = {
+      slug: SLUG,
+      version: VERSION,
+      issueNumber: ISSUE,
+      previewGate: { green: true, ranAt: '2026-08-05T06:00:00.000Z', screenshot: 'media/opening.png' },
+      gate: { green: false, ranAt: '2026-08-05T06:30:00.000Z' },
+    };
+    app = await createApp(store, stubGamesStore({ artifacts, manifest }), stubObjectStore().objectStore);
+
+    const res = await app.inject({ method: 'GET', url: '/api/agent/build/media', headers: agentHeaders() });
+
+    expect(res.json()).toMatchObject({ available: true, gate: { green: false, lane: 'publish' } });
+    expect(res.json().frames).toHaveLength(1);
+  });
+
   it('prefers the publish verdict when a delivery has both', async () => {
     // Publish is the later, fuller run and its media is what a creator would be shown.
     const store = new InMemoryStore();
