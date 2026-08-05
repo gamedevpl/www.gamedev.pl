@@ -932,16 +932,6 @@
     "gameNamed": "{{title}}",
     "proposals": "Moje propozycje"
   },
-  "gamePage": {
-    "loading": "Ładowanie gry…",
-    "loadError": "Nie udało się wczytać strony gry.",
-    "missing": "Ta gra nie jest dostępna.",
-    "actions": "Akcje gry",
-    "playPreview": "Zagraj w {{title}} w trybie kinowym",
-    "openTheater": "Graj w trybie kinowym",
-    "screenshots": "Zrzuty ekranu",
-    "viewScreenshot": "Pokaż zrzut ekranu {{number}}"
-  },
   "creatorProfile": {
     "back": "Wróć",
     "loading": "Ładowanie profilu…",
@@ -1233,6 +1223,12 @@
     "missing": "Ta strona gry nie istnieje.",
     "missingPlayLink": "Spróbuj bezpośredniego linku do gry",
     "error": "Nie udało się wczytać strony gry. Spróbuj za chwilę.",
+    "loadError": "Nie udało się wczytać strony gry.",
+    "actions": "Akcje gry",
+    "playPreview": "Zagraj w {{title}} w trybie kinowym",
+    "openTheater": "Graj w trybie kinowym",
+    "screenshots": "Zrzuty ekranu",
+    "viewScreenshot": "Pokaż zrzut ekranu {{number}}",
     "breadcrumbAria": "Położenie gry",
     "play": "Zagraj",
     "follow": "Obserwuj",

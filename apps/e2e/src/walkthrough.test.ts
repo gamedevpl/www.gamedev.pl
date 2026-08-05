@@ -6,6 +6,7 @@ import {
   describeProblems,
   e2ePrerequisites,
   launchSiteBrowser,
+  openPlayTheater,
   signedInApiContext,
   signedInContext,
   visit,
@@ -84,7 +85,8 @@ describe.skipIf(!prereq.ok)('signed-in walkthrough', () => {
 
     let frame: Frame | undefined;
     for (const candidate of candidates) {
-      await visit(page, `/play/${candidate.slug}`, 6_000);
+      // Preview page → Play → theater. The iframe is not on the shareable page.
+      await openPlayTheater(page, candidate.slug, 6_000);
       const found = page.frames().find((f) => f !== page.mainFrame());
       if (!found) continue;
       // Games run in a sandboxed iframe (allow-scripts, no allow-same-origin). The
@@ -201,7 +203,8 @@ describe.skipIf(!prereq.ok)('signed-in walkthrough', () => {
 
   it('offers a reportable path for illegal content (DSA art. 16)', async () => {
     const { slug } = singlePlayer();
-    await visit(page, `/play/${slug}`, 5_000);
+    // Report lives on the theater chrome (More menu), not the preview page.
+    await openPlayTheater(page, slug, 5_000);
 
     // The theater bar stays visible throughout play, so the report path in More
     // never requires recovering hidden chrome first.

@@ -138,8 +138,10 @@ roughly in order of how often they turn up real issues:
 
 - **Home** (`/`) — scroll to the bottom too; lazy-loaded catalog cards fetch media on scroll.
 - **Play a real game** (`/play/<slug>` for a `single-player` catalog entry from
-  `GET /api/catalog`) — click into the game's iframe and send keyboard input; a game that
-  never responds to input is the most user-visible failure mode there is.
+  `GET /api/catalog`) — the shareable page is **preview-first** (screenshot + Play;
+  no autoplaying iframe). Click Play (or the preview) to open the sandboxed theater,
+  then click into the game's iframe and send keyboard input; a game that never
+  responds to input is the most user-visible failure mode there is.
 - **Play alias rewrite** (`/ai/<slug>` or `/ay/<slug>`) — should 30x/rewrite to the canonical
   `/play/<slug>` (see `apps/web/src/router.ts`).
 - **Multiplayer lobby** — click "Play together" on a catalog entry with `multiplayer` set;
@@ -152,7 +154,8 @@ roughly in order of how often they turn up real issues:
 - **Language toggle** (EN/PL) — check strings actually swap, not just the button state.
 - **Static/legal routes** — `/privacy`, `/terms`.
 - **Error paths** — an unknown path (→ `notFound` view, real 404), an unknown game slug at
-  `/play/<garbage>` (→ in-page "Could not load this game" error state, not a crash),
+  `/play/<garbage>` (→ in-page "This game page does not exist." on the preview page, not a
+  crash or a blank theater),
   `/draft/<slug>` for something already published, a bogus `/status/<token>`, a bogus
   `/join/<CODE>#<token>`. These should all render a friendly state, never a blank page or an
   unhandled console exception.

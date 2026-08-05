@@ -67,9 +67,10 @@ describe.skipIf(!prereq.ok)('error and edge routes', () => {
 
     const text = await bodyText();
     expect(text.length).toBeGreaterThan(0);
-    // The player chrome stays up and offers a way out; the API's 404 underneath is
-    // expected and declared above.
-    expect(text).toMatch(/could not load|nie udało|retry|ponów/i);
+    // Preview-first `/play/<slug>`: an unknown slug is a missing game page, not a
+    // failed theater fetch. Keep the older "could not load / retry" wording too so
+    // a loadError state (catalog fetch failure) still passes this gate.
+    expect(text).toMatch(/does not exist|nie istnieje|could not load|nie udało|retry|ponów/i);
 
     expect(describeProblems(watcher.drain())).toBe('');
   });
