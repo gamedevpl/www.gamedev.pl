@@ -195,6 +195,24 @@ describe('ui resources', () => {
     expect([...MCP_UI_APP_ONLY_TOOLS].every((name) => name.startsWith('get_'))).toBe(true);
   });
 
+  it('does not paint a failure for the poll it makes before it has a key', () => {
+    // Observed in Claude: the first poll goes out before the opening tool's key
+    // arrives, and Claude refuses it. Rendering that as an error flashed
+    // "Could not read round status here." across the card a moment before it filled in.
+    const html = readUiResource(ROUND_STATUS_RESOURCE_URI)?.text ?? '';
+    expect(html).toContain('speculative');
+    // A key that never arrives is still a real failure — but on a timer, not instantly.
+    expect(html).toContain('giveUpTimer');
+    expect(html).toContain('Could not read round status here.');
+  });
+
+  it('stops polling once the agent has stopped and the gate has settled', () => {
+    // Nothing further can arrive, so an open tab must not cost a request every 30s
+    // for as long as it stays open.
+    const html = readUiResource(ROUND_STATUS_RESOURCE_URI)?.text ?? '';
+    expect(html).toContain("status.agentEnded && gate && gate.status && gate.status !== 'pending'");
+  });
+
   it('polls, and degrades to the opening payload when a host refuses the app-only call', () => {
     const html = readUiResource(ROUND_STATUS_RESOURCE_URI)?.text ?? '';
     expect(html).toContain("name: 'get_round_status'");
