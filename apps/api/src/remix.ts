@@ -987,14 +987,15 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
   );
 
   /**
-   * Save as yours — fork the remixed sources into a private Studio draft.
+   * Save as yours — fork the remixed sources into a private draft the player owns.
    *
    * Earned: requires a real change (code overrides and/or non-default
    * params/content). Works for store-era (sources already in the session) and
    * repo-era (full delivery set loaded from the ref at save time). Never
    * publishes; the new job lands at ready_for_review with a preview-lane
    * version and no gate.green, so the operator publish path refuses it until a
-   * real publish delivery exists.
+   * real publish delivery exists. The response opens `/draft/<slug>` (play
+   * theater), not Studio — Studio stays on the shelf for later edits.
    */
   app.post(
     '/api/remixes/:id/save',
