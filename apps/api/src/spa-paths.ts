@@ -20,6 +20,14 @@ const JOIN_PATTERN = /^\/join\/([A-Z0-9]{6})$/;
 const CREATOR_ALIAS_PATTERN = /^\/creators\/([a-z][a-z0-9_]{2,23})$/;
 const ROOT_CREATOR_PATTERN = /^\/([a-z][a-z0-9_]{2,23})$/;
 /**
+ * Public game page: `/:handle/:slug` with an optional tab segment — keep the tab
+ * vocabulary aligned with `GAME_PAGE_TABS` in apps/web/src/router.ts. The first
+ * segment shares the creator-handle grammar (and the reserved-handle check below),
+ * so `/play/x`, `/studio/x` etc. never reach this shape.
+ */
+const GAME_PAGE_PATTERN =
+  /^\/([a-z][a-z0-9_]{2,23})\/([a-z0-9]+(?:-[a-z0-9]+)*)(?:\/(?:board|review|releases|sources))?$/;
+/**
  * `/studio`, `/studio/:token`, `/studio/:token/:tab` — keep aligned with
  * `STUDIO_TAB_ALIASES` in apps/web/src/router.ts.
  *
@@ -97,6 +105,9 @@ export function isKnownSpaShellPath(urlOrPath: string): boolean {
 
   if (CREATOR_ALIAS_PATTERN.test(pathname)) return true;
   if (ROOT_CREATOR_PATTERN.test(pathname)) return !RESERVED_HANDLES.has(pathname.slice(1));
+
+  const gamePageMatch = pathname.match(GAME_PAGE_PATTERN);
+  if (gamePageMatch?.[1]) return !RESERVED_HANDLES.has(gamePageMatch[1]);
 
   return false;
 }

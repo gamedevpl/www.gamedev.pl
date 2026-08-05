@@ -17,6 +17,7 @@ import { registerAdminRoutes } from './admin.js';
 import { parseAppleClientIds, type AppleAuthVerifier } from './apple-auth.js';
 import { registerAuthPlugin, type GoogleAuthVerifier } from './auth.js';
 import { registerCreatorProfileRoutes } from './creator-profile-routes.js';
+import { registerGamePageRoutes, type GamePageRoutesOptions } from './game-page-routes.js';
 import { registerAccountDeletionRoutes, type AccountDeletionRoutesOptions } from './account-deletion-routes.js';
 import { registerCreatorStudioRoutes } from './creator-studio.js';
 import { registerEditorRoutes } from './editor-drafts.js';
@@ -116,6 +117,8 @@ export interface BuildAppOptions {
   suggestionInboxRoutes?: Partial<Omit<SuggestionInboxRoutesOptions, 'store'>>;
   /** Seams for the public contact form (mailer fake in tests). */
   contactRoutes?: ContactRoutesOptions;
+  /** Seams for the public game page (cache TTL / clock under test). */
+  gamePageRoutes?: Partial<Omit<GamePageRoutesOptions, 'store'>>;
   /** Seams for delayed account erasure; defaults to OIDC-or-deny-all from env. */
   accountDeletionRoutes?: Partial<
     Omit<AccountDeletionRoutesOptions, 'store' | 'adminUids' | 'internalAuthVerifier'>
@@ -567,6 +570,18 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     gamesStore,
     getRepoPublishedCatalogEntry: submissionSeams.getRepoPublishedCatalogEntry,
   });
+
+  // The public game page at `/:handle/:slug` — one aggregate read per game. Same
+  // open posture as the creator profile above (exempted from the beta wall below):
+  // the page is a landing page; playing is what stays gated during closed beta.
+  await registerGamePageRoutes(app, {
+    store,
+    gamesStore,
+    getRepoPublishedCatalogEntry: submissionSeams.getRepoPublishedCatalogEntry,
+    githubClient: submissionSeams.githubClient ?? undefined,
+    publishedRef: process.env.GAMES_PUBLISHED_REF ?? 'main',
+    ...options.gamePageRoutes,
+  });
   registerAccountDeletionRoutes(app, {
     store,
     adminUids,
@@ -657,6 +672,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // Public creator profiles — same posture as contact/legal. Availability checks
     // stay authed (they are under /api/creators/:handle/availability and need a session).
     if (/^\/api\/creators\/[^/]+\/?(\?|$)/.test(request.url)) return;
+    // The public game page (game-page-routes.ts) — a landing page has to load for a
+    // visitor with no session. Only `/page` passes: the playable document, media,
+    // votes and every other `/api/games/:slug/*` route stay walled during beta.
+    if (/^\/api\/games\/[^/]+\/page(\?|$)/.test(request.url)) return;
     // Internal endpoints (the Cloud Scheduler notification sweep) authenticate via
     // an OIDC token in the handler, not a session — the wall would 401 them first.
     if (request.url.startsWith('/api/internal/')) return;

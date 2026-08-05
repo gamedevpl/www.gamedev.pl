@@ -62,6 +62,11 @@ describe('isKnownSpaShellPath', () => {
     '/admin/tokens',
     '/admin/waitlist',
     '/join/K7M3QP',
+    '/nightshift/neon-courier',
+    '/nightshift/neon-courier/board',
+    '/nightshift/neon-courier/review',
+    '/nightshift/neon-courier/releases',
+    '/nightshift/neon-courier/sources',
   ])('treats %s as a known shell path (HTTP 200)', (path) => {
     expect(isKnownSpaShellPath(path)).toBe(true);
   });
@@ -83,6 +88,12 @@ describe('isKnownSpaShellPath', () => {
     '/join/lower1',
     '/join/TOOLONG9',
     '/join/K7M3QP/extra',
+    // Game page: reserved first segments, bad slugs, and unknown tabs stay 404.
+    '/studio/neon-courier/releases/extra',
+    '/play/neon-courier/board',
+    '/nightshift/Neon%20Courier',
+    '/nightshift/neon-courier/nope',
+    '/nightshift/neon-courier/board/extra',
   ])('treats %s as unknown (HTTP 404)', (path) => {
     expect(isKnownSpaShellPath(path)).toBe(false);
   });
