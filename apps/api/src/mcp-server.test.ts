@@ -2004,8 +2004,106 @@ describe('MCP Apps views (SEP-1865, Phase 0)', () => {
     const tools = await listTools(app, sessionId);
     const verdict = tools.find((tool) => tool.name === 'get_gate_verdict');
     expect(verdict?._meta?.ui?.resourceUri).toBe('ui://gamedevpl/round-status');
-    // Only the opted-in tool carries a view.
-    expect(tools.filter((tool) => tool._meta !== undefined).map((tool) => tool.name)).toEqual(['get_gate_verdict']);
+    // The tools that open the round view, and nothing else.
+    expect(tools.filter((tool) => tool._meta?.ui?.resourceUri !== undefined).map((tool) => tool.name)).toEqual([
+      'start',
+      'open_round',
+      'submit_sources',
+      'get_gate_verdict',
+    ]);
+  });
+
+  it('offers the app-only status tool to a view, and hides it from every other client', async () => {
+    process.env.MCP_UI = 'true';
+    const store = new InMemoryStore();
+    await seedJob(store);
+    app = await createApp(store);
+
+    const { sessionId } = await initializeWith(app, true);
+    const withUi = await listTools(app, sessionId);
+    const status = withUi.find((tool) => tool.name === 'get_round_status');
+    // visibility:["app"] — callable by the view, never offered to the model.
+    expect(status?._meta?.ui).toEqual({ visibility: ['app'] });
+    expect(status?._meta?.ui?.resourceUri).toBeUndefined();
+
+    // A client with no views must not even see it: it would hand it to its model.
+    const { sessionId: plain } = await initializeWith(app, false);
+    const withoutUi = await listTools(app, plain);
+    expect(withoutUi.some((tool) => tool.name === 'get_round_status')).toBe(false);
+  });
+
+  it('does not let view polling pass for agent presence or trip agent nudges', async () => {
+    process.env.MCP_UI = 'true';
+    const store = new InMemoryStore();
+    await seedJob(store);
+    app = await createApp(store);
+    const { sessionId } = await initializeWith(app, true);
+
+    const started = await callTool(app, 'start', { key: roundKey(1) }, { 'mcp-session-id': sessionId });
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    // Give the round a real heartbeat first, so the assertion below compares a
+    // timestamp against itself rather than undefined against undefined.
+    await callTool(app, 'report_progress', { sessionKey, text: 'agent is here' }, { 'mcp-session-id': sessionId });
+    const before = await store.getSubmission(ISSUE);
+    expect(before?.lastAgentSignalAt).toBeTruthy();
+
+    // A creator watching is not an agent working. Polling must not refresh the
+    // heartbeat — that would hold off the quiet stall and keep self→platform handoff
+    // locked for as long as the chat window stays open.
+    for (let i = 0; i < 8; i += 1) {
+      const polled = await callTool(app, 'get_round_status', { sessionKey }, { 'mcp-session-id': sessionId });
+      expect(polled.isError).toBe(false);
+      // Nudges are guidance for the agent; a view neither reads nor deserves them.
+      expect((polled.structured as { warnings?: unknown }).warnings).toBeUndefined();
+    }
+
+    const after = await store.getSubmission(ISSUE);
+    expect(after?.lastAgentSignalAt).toBe(before?.lastAgentSignalAt);
+    expect(after?.agentEndedAt).toBe(before?.agentEndedAt);
+  });
+
+  it('reports round state, and sends screenshot bytes only when the frame is new', async () => {
+    process.env.MCP_UI = 'true';
+    const store = new InMemoryStore();
+    await seedJob(store);
+    app = await createApp(store);
+    const { sessionId } = await initializeWith(app, true);
+
+    const started = await callTool(app, 'start', { key: roundKey(1) }, { 'mcp-session-id': sessionId });
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    await callTool(app, 'report_progress', { sessionKey, text: 'wiring the HUD' }, { 'mcp-session-id': sessionId });
+    await callTool(
+      app,
+      'send_screenshot',
+      { sessionKey, png: TINY_PNG, label: 'first draw' },
+      { 'mcp-session-id': sessionId },
+    );
+
+    const first = await callTool(app, 'get_round_status', { sessionKey }, { 'mcp-session-id': sessionId });
+    const status = first.structured as {
+      phase: string;
+      status: string;
+      note: { text: string } | null;
+      shot: { id: string; png?: string; label?: string | null } | null;
+      retryAfterSeconds: number;
+    };
+    expect(status.phase).toBeTruthy();
+    expect(status.note?.text).toContain('wiring the HUD');
+    expect(status.shot?.png).toBe(TINY_PNG);
+    expect(status.retryAfterSeconds).toBeGreaterThan(0);
+
+    // Polling for a whole round would otherwise re-send the same frame every time.
+    const again = await callTool(
+      app,
+      'get_round_status',
+      { sessionKey, sinceShotId: status.shot?.id },
+      { 'mcp-session-id': sessionId },
+    );
+    const repeat = (again.structured as { shot: { id: string; png?: string } | null }).shot;
+    expect(repeat?.id).toBe(status.shot?.id);
+    expect(repeat?.png).toBeUndefined();
   });
 
   it('serves the card over resources/list and resources/read', async () => {

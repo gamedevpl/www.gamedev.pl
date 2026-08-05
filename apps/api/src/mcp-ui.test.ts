@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   MCP_UI_EXTENSION,
   MCP_UI_MIME_TYPE,
+  MCP_UI_APP_ONLY_TOOLS,
   MCP_UI_TOOL_RESOURCES,
   ROUND_STATUS_RESOURCE_URI,
   clientDeclaresUi,
@@ -171,7 +172,32 @@ describe('ui resources', () => {
     expect(html).not.toContain('arguments.callee');
   });
 
-  it('attaches views to read tools only — a card on a write tool would render mid-delivery', () => {
-    expect(MCP_UI_TOOL_RESOURCES).toEqual({ get_gate_verdict: ROUND_STATUS_RESOURCE_URI });
+  it('opens the round view from the tools a creator watches a round through', () => {
+    // Phase 0 attached the view to read tools only, on the reasoning that a card on a
+    // write tool would freeze a mid-delivery echo on screen. That no longer applies: the
+    // card renders live state from get_round_status rather than the opening payload, so
+    // submitting is exactly the moment a creator wants it open.
+    expect(MCP_UI_TOOL_RESOURCES).toEqual({
+      start: ROUND_STATUS_RESOURCE_URI,
+      open_round: ROUND_STATUS_RESOURCE_URI,
+      submit_sources: ROUND_STATUS_RESOURCE_URI,
+      get_gate_verdict: ROUND_STATUS_RESOURCE_URI,
+    });
+  });
+
+  it('keeps the app-only tool read-only, since the model never sees it happen', () => {
+    // A hidden tool that writes is an audit hole: nothing in the transcript records it.
+    expect([...MCP_UI_APP_ONLY_TOOLS]).toEqual(['get_round_status']);
+    expect([...MCP_UI_APP_ONLY_TOOLS].every((name) => name.startsWith('get_'))).toBe(true);
+  });
+
+  it('polls, and degrades to the opening payload when a host refuses the app-only call', () => {
+    const html = readUiResource(ROUND_STATUS_RESOURCE_URI)?.text ?? '';
+    expect(html).toContain("name: 'get_round_status'");
+    expect(html).toContain('retryAfterSeconds');
+    // Stops on its own rather than polling a finished round forever.
+    expect(html).toContain('isFinished');
+    // The fallback path: no app-only tool call, no broken card.
+    expect(html).toContain('renderGateOnly');
   });
 });
