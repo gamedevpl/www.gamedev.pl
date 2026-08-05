@@ -35,7 +35,26 @@ Source of truth: `SESSION_WORKFLOW` + `BEHAVIOURAL_CONTRACT` in
 4. **Prefer `end` after the last successful `submit_sources`** if you will not deliver
    more — Studio shows the gate; do not sit in a `get_gate_verdict` loop
 5. Only call `get_gate_verdict` once when an already-available verdict would change
-   what you deliver (and `get_gate_media` after a publish verdict)
+   what you deliver — and when that check _does_ return a publish verdict, call
+   `get_gate_media` once before `end`
+
+### `get_gate_media` must stay reachable from the loop
+
+The step originally read "once a publish verdict lands", immediately after three steps
+telling the agent to `end` rather than wait for one. Agents that follow the workflow
+literally therefore never reached it: observed as Claude-family clients rarely calling
+`get_gate_media` while ChatGPT, treating the loop as advice, used it comfortably
+(owner test, 2026-08-03).
+
+It is now tied to **a verdict already in hand** — a state the loop genuinely reaches —
+and still forbids waiting for one. When editing this loop, keep that property: a step
+gated on a condition the loop is told to avoid is a step that does not exist.
+
+**Media exists only after a publish gate run.** The preview lane is typecheck → smoke →
+build, and `smoke` executes the game in `node:vm` against a _recording fake canvas_, not
+a browser — so no lane before publish produces pixels. Do not promise agents frames from
+a preview or from staged sources without first adding real capture compute, which is a
+cost and threat-model decision (see BY-28a in the ops plan), not a copy change.
 
 ### Never busy-poll `get_gate_verdict`
 
