@@ -12749,6 +12749,99 @@ button.builder-mode-selector:disabled {
   border-color: var(--turquoise);
 }
 
+body.remix-entry-open {
+  overflow: hidden;
+}
+
+.game-page-remix-backdrop {
+  position: fixed;
+  z-index: 1100;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(2, 7, 13, 0.78);
+  backdrop-filter: blur(6px);
+}
+
+.game-page-remix-dialog {
+  width: min(520px, 100%);
+  padding: clamp(1.2rem, 4vw, 1.75rem);
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  background: var(--panel);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
+}
+
+.game-page-remix-dialog-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.game-page-remix-dialog h2 {
+  margin: 0;
+  font-size: clamp(1.35rem, 4vw, 1.75rem);
+}
+
+.game-page-remix-dialog-head p {
+  margin: 0.5rem 0 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.game-page-remix-close {
+  display: grid;
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid var(--panel-border);
+  border-radius: 9px;
+  background: var(--panel-raised);
+  color: var(--text);
+  cursor: pointer;
+  place-items: center;
+}
+
+.game-page-remix-form {
+  display: grid;
+  gap: 0.65rem;
+  margin-top: 1.25rem;
+}
+
+.game-page-remix-form label {
+  font-weight: 700;
+}
+
+.game-page-remix-form textarea {
+  width: 100%;
+  min-height: 112px;
+  resize: vertical;
+  padding: 0.85rem;
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  line-height: 1.45;
+}
+
+.game-page-remix-form textarea:focus-visible,
+.game-page-remix-close:focus-visible {
+  border-color: var(--turquoise);
+  outline: 2px solid var(--turquoise-glow);
+  outline-offset: 2px;
+}
+
+.game-page-remix-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.65rem;
+  margin-top: 0.35rem;
+}
+
 .game-page-preview {
   position: relative;
   display: block;
@@ -13424,6 +13517,26 @@ button.builder-mode-selector:disabled {
   .game-page-preview-cta {
     bottom: 0.6rem;
     white-space: nowrap;
+  }
+
+  .game-page-remix-backdrop {
+    align-items: end;
+    padding: 0;
+  }
+
+  .game-page-remix-dialog {
+    width: 100%;
+    max-height: min(88dvh, 620px);
+    overflow-y: auto;
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: 16px 16px 0 0;
+  }
+
+  .game-page-remix-form-actions > button {
+    flex: 1;
+    justify-content: center;
   }
 }
 

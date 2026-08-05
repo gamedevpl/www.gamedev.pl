@@ -274,4 +274,125 @@ describe('catalog playback', () => {
       root.unmount();
     });
   });
+
+  it('opens the theater from a canonical game page and auto-starts its carried Remix request', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    const assistBodies: unknown[] = [];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.endsWith('/api/auth/me')) {
+        return new Response(JSON.stringify({ user: { uid: 'g:test', tier: 'standard' } }));
+      }
+      if (url.endsWith('/api/health')) {
+        return new Response(JSON.stringify({ status: 'ok', provider: 'mock', privateBeta: false }));
+      }
+      if (url.endsWith('/api/catalog')) {
+        return new Response(JSON.stringify([]));
+      }
+      if (url.includes('/api/recommendations')) {
+        return new Response(JSON.stringify({ items: [] }));
+      }
+      if (url.endsWith('/api/games/neon-courier/page')) {
+        return new Response(
+          JSON.stringify({
+            entry: {
+              slug: 'neon-courier',
+              title: 'Neon Courier',
+              genre: 'arcade',
+              controls: 'Arrows move',
+              status: 'published',
+              media: null,
+              multiplayer: null,
+              submittedBy: 'nightshift',
+              creatorHandle: 'nightshift',
+            },
+            creator: {
+              handle: 'nightshift',
+              profileName: 'Night Shift',
+              bio: '',
+              avatarUrl: null,
+              profileCreatedAt: '2026-07-01T00:00:00.000Z',
+            },
+            platformAuthored: false,
+            description: 'Deliver the last package before the city goes dark.',
+          }),
+        );
+      }
+      if (url.endsWith('/api/games/neon-courier/votes')) {
+        return new Response(JSON.stringify({ up: 2, down: 0, mine: null }));
+      }
+      if (url.endsWith('/api/games/neon-courier')) {
+        return new Response(
+          JSON.stringify({ slug: 'neon-courier', title: 'Neon Courier', html: '<canvas>neon</canvas>' }),
+        );
+      }
+      if (url.endsWith('/api/games/neon-courier/remix')) {
+        return new Response(
+          JSON.stringify({
+            remixId: 'r1',
+            params: null,
+            values: null,
+            canAssist: true,
+            canCode: true,
+            suggestions: [],
+            expiresInMs: 3_600_000,
+          }),
+        );
+      }
+      if (url.endsWith('/api/remixes/r1/assist')) {
+        assistBodies.push(JSON.parse(String(init?.body)));
+        return new Response(JSON.stringify({ lane: 'params', values: {} }));
+      }
+      if (url.endsWith('/api/games/neon-courier/contributions')) {
+        return new Response(JSON.stringify({ canPropose: false, reason: 'contributions_off' }));
+      }
+      if (/\/api\/games\/[^/]+\/played$/.test(new URL(url, 'http://localhost').pathname)) {
+        return new Response(null, { status: 204 });
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+
+    await i18n.changeLanguage('en');
+    window.history.pushState(null, '', '/nightshift/neon-courier');
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(AuthProvider, null, createElement(App)));
+      await flushEffects();
+      await flushEffects();
+      await flushEffects();
+    });
+
+    const remixButton = Array.from(container.querySelectorAll<HTMLButtonElement>('.game-page-actions button')).find(
+      (button) => button.textContent?.includes('Remix'),
+    );
+    await act(async () => {
+      remixButton?.click();
+    });
+    const request = container.querySelector<HTMLTextAreaElement>('#game-page-remix-request')!;
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+      setter?.call(request, 'make it faster');
+      request.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      container
+        .querySelector<HTMLFormElement>('.game-page-remix-form')!
+        .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    });
+
+    await vi.waitFor(() => {
+      expect(assistBodies).toEqual([{ utterance: 'make it faster', params: {} }]);
+    });
+    expect(container.querySelector('iframe[title="Neon Courier"]')?.getAttribute('sandbox')).toBe(
+      'allow-scripts allow-pointer-lock',
+    );
+    expect(container.querySelector('.remix-panel')).not.toBeNull();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
 });

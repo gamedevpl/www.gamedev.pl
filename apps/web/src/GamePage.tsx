@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from './AuthContext.js';
 import { AuthModal } from './AuthModal.js';
@@ -42,7 +42,7 @@ export function GamePage({
   onCanonicalPath?: (path: string) => void;
   onGameLoaded?: (title: string) => void;
   onPlay?: (game: CatalogEntry) => void;
-  onRemix?: (game: CatalogEntry) => void;
+  onRemix: (game: CatalogEntry, request: string) => void;
 }) {
   const { t } = useTranslation();
   const { user, privateBeta } = useAuth();
@@ -50,6 +50,10 @@ export function GamePage({
   const [state, setState] = useState<LoadState>('loading');
   const [authOpen, setAuthOpen] = useState(false);
   const [selectedScreenshotFile, setSelectedScreenshotFile] = useState<string | null>(null);
+  const [remixEntryOpen, setRemixEntryOpen] = useState(false);
+  const [remixRequest, setRemixRequest] = useState('');
+  const remixButtonRef = useRef<HTMLButtonElement | null>(null);
+  const remixInputRef = useRef<HTMLTextAreaElement | null>(null);
 
   const playGated = privateBeta && !user;
 
@@ -86,6 +90,41 @@ export function GamePage({
       onCanonicalPath?.(gamePath(canonicalHandle, slug));
     }
   }, [state, page, canonicalHandle, handle, slug, onCanonicalPath]);
+
+  useEffect(() => {
+    if (!remixEntryOpen) return;
+    const trigger = remixButtonRef.current;
+    document.body.classList.add('remix-entry-open');
+    remixInputRef.current?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setRemixEntryOpen(false);
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const dialog = remixInputRef.current?.closest<HTMLElement>('[role="dialog"]');
+      if (!dialog) return;
+      const stops = [...dialog.querySelectorAll<HTMLElement>('textarea, button:not(:disabled)')];
+      const first = stops[0];
+      const last = stops[stops.length - 1];
+      if (!first || !last) return;
+      const outside = !dialog.contains(document.activeElement);
+      if (event.shiftKey && (document.activeElement === first || outside)) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || outside)) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.classList.remove('remix-entry-open');
+      window.removeEventListener('keydown', onKeyDown);
+      trigger?.focus();
+    };
+  }, [remixEntryOpen]);
 
   if (state === 'loading') {
     return <p className="game-page-state">{t('gamePage.loading')}</p>;
@@ -125,14 +164,19 @@ export function GamePage({
     if (!onPlay) onNavigate(playPath(slug));
   };
 
-  const remix = () => {
-    if (playGated) {
-      setAuthOpen(true);
-      return;
-    }
+  const openRemixEntry = () => {
     recordRemixStep('opened', { control: 'page' });
-    onRemix?.(entry);
-    if (!onRemix) onNavigate(playPath(slug));
+    setRemixEntryOpen(true);
+  };
+
+  const closeRemixEntry = () => setRemixEntryOpen(false);
+
+  const startRemix = (event: FormEvent) => {
+    event.preventDefault();
+    const request = remixRequest.trim();
+    if (request.length < 2) return;
+    setRemixEntryOpen(false);
+    onRemix(entry, request);
   };
 
   return (
@@ -159,7 +203,7 @@ export function GamePage({
             <PixelIcon name="play" size={13} /> {t('gamePage.play')}
           </button>
           <VoteWidget slug={slug} />
-          <button type="button" className="secondary-btn game-page-remix" onClick={remix}>
+          <button type="button" className="secondary-btn game-page-remix" onClick={openRemixEntry} ref={remixButtonRef}>
             <PixelIcon name="wrench" size={13} /> {t('gamePage.remix')}
           </button>
           <ShareGameButton slug={slug} title={entry.title} path={gamePath(shareHandle, slug)} />
@@ -224,6 +268,54 @@ export function GamePage({
           <h2 id="game-page-controls-title">{t('player.howToPlay')}</h2>
           <p>{entry.controls}</p>
         </section>
+      ) : null}
+
+      {remixEntryOpen ? (
+        <div className="game-page-remix-backdrop" onClick={closeRemixEntry}>
+          <section
+            className="game-page-remix-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="game-page-remix-title"
+            aria-describedby="game-page-remix-description"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="game-page-remix-dialog-head">
+              <div>
+                <h2 id="game-page-remix-title">{t('gamePage.remixEntryTitle')}</h2>
+                <p id="game-page-remix-description">{t('gamePage.remixEntryDescription')}</p>
+              </div>
+              <button
+                type="button"
+                className="game-page-remix-close"
+                onClick={closeRemixEntry}
+                aria-label={t('gamePage.remixEntryClose')}
+              >
+                <PixelIcon name="close" size={14} />
+              </button>
+            </div>
+            <form className="game-page-remix-form" onSubmit={startRemix}>
+              <label htmlFor="game-page-remix-request">{t('gamePage.remixEntryLabel')}</label>
+              <textarea
+                id="game-page-remix-request"
+                ref={remixInputRef}
+                value={remixRequest}
+                onChange={(event) => setRemixRequest(event.target.value)}
+                placeholder={t('gamePage.remixEntryPlaceholder')}
+                maxLength={240}
+                rows={4}
+              />
+              <div className="game-page-remix-form-actions">
+                <button type="button" className="secondary-btn" onClick={closeRemixEntry}>
+                  {t('gamePage.remixEntryCancel')}
+                </button>
+                <button type="submit" className="primary-btn" disabled={remixRequest.trim().length < 2}>
+                  <PixelIcon name="wrench" size={13} /> {t('gamePage.remixEntrySubmit')}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
       ) : null}
 
       <AuthModal isOpen={authOpen} onClose={() => setAuthOpen(false)} />

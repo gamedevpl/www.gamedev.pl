@@ -35,6 +35,8 @@ type PublishedGameFrameProps = {
    * is untouched by either — these add doors, they do not move the invitation.
    */
   remixOpenNonce?: number;
+  /** A landing-page request to start after the remix session is ready. */
+  initialRemixRequest?: string;
   painterNonce?: number;
   /** Reports whether this game's remix has a painter, for the menu to show its entry. */
   onRemixCapabilities?: (caps: { painter: boolean }) => void;
@@ -54,6 +56,7 @@ export function PublishedGameFrame({
   active = true,
   remixable,
   remixOpenNonce,
+  initialRemixRequest,
   painterNonce,
   onRemixCapabilities,
 }: PublishedGameFrameProps) {
@@ -176,6 +179,7 @@ export function PublishedGameFrame({
           slug={slug}
           frameRef={activeFrameRef}
           initialParams={sharedParams}
+          initialRequest={initialRemixRequest}
           onSwapDocument={setRemixHtml}
           session={remixSession}
           onSession={setRemixSession}

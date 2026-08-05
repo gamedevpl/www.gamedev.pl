@@ -200,6 +200,8 @@ export function RemixPanel(props: {
   onClose: () => void;
   /** Shared values from a `?remix=` link, already parsed. */
   initialParams?: Record<string, EditorParamValue> | null;
+  /** A request written before theater entry. It is consumed at most once. */
+  initialRequest?: string | null;
   /**
    * The session, owned by the parent so it outlives this sheet.
    *
@@ -544,19 +546,34 @@ export function RemixPanel(props: {
     if (painterRequest > 0) openPainter('menu');
   }, [painterRequest, openPainter]);
 
-  // The reward lands the second they're through the wall: once the session
-  // exists and a stashed request is waiting, run it with no further taps.
-  const ranPendingRef = useRef(false);
+  // A landing-page request follows the same wall as a request typed here. Ask
+  // once while signed out so the words enter the existing tab-scoped stash;
+  // no session or model request is created before sign-in.
+  const stashedInitialRef = useRef(false);
+  const initialRequest = props.initialRequest?.trim().slice(0, MAX_UTTERANCE) ?? '';
   useEffect(() => {
-    if (!session || ranPendingRef.current) return;
+    if (user || stashedInitialRef.current || initialRequest.length < 2) return;
+    stashedInitialRef.current = true;
+    setUtterance(initialRequest);
+    void ask(initialRequest);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one carried request, through the existing ask path
+  }, [user, initialRequest]);
+
+  // The reward lands the second they're through the wall: once the session
+  // exists, prefer a stashed request and otherwise start the carried request.
+  // One ref guards both sources so a stale stash and a new entry cannot spend twice.
+  const ranAutomaticRequestRef = useRef(false);
+  useEffect(() => {
+    if (!session || ranAutomaticRequestRef.current) return;
     const pending = takePending(props.slug);
-    if (pending === null) return;
-    ranPendingRef.current = true;
-    recordRemixStep('signed_in');
-    setUtterance(pending);
-    void ask(pending, session);
+    const request = pending ?? (initialRequest.length >= 2 ? initialRequest : null);
+    if (request === null) return;
+    ranAutomaticRequestRef.current = true;
+    if (pending !== null) recordRemixStep('signed_in');
+    setUtterance(request);
+    void ask(request, session);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once per session arrival
-  }, [session, props.slug]);
+  }, [session, props.slug, initialRequest]);
 
   // The field grows to the sentence rather than scrolling it out of sight: a
   // one-line box teaches people to write search terms, and search terms are the

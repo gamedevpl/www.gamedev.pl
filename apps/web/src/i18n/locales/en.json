@@ -1246,7 +1246,14 @@
     "screenshots": "Screenshots",
     "viewScreenshot": "View screenshot {{number}}",
     "breadcrumbAria": "Game location",
-    "remix": "Remix"
+    "remix": "Remix",
+    "remixEntryTitle": "What would you change?",
+    "remixEntryDescription": "Describe one change. We'll open the game and start the remix for you.",
+    "remixEntryLabel": "Change request",
+    "remixEntryPlaceholder": "For example: make the game faster",
+    "remixEntryClose": "Close remix request",
+    "remixEntryCancel": "Cancel",
+    "remixEntrySubmit": "Start remix"
   },
   "propose": {
     "action": "Propose this change",

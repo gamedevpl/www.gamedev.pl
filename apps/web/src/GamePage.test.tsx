@@ -153,7 +153,7 @@ describe('GamePage', () => {
     expect(playAction).not.toHaveBeenCalled();
   });
 
-  it('opens Remix directly through the theater handoff', async () => {
+  it('opens a focused Remix entry without handing off to the theater', async () => {
     await renderPage();
 
     const remix = Array.from(container.querySelectorAll('button')).find((button) =>
@@ -164,7 +164,54 @@ describe('GamePage', () => {
       remix!.click();
     });
 
-    expect(remixAction).toHaveBeenCalledWith(expect.objectContaining({ slug: 'neon-courier' }));
+    const dialog = container.querySelector('[role="dialog"]');
+    expect(dialog).not.toBeNull();
+    expect(dialog?.getAttribute('aria-modal')).toBe('true');
+    expect(document.activeElement).toBe(container.querySelector('#game-page-remix-request'));
+    expect(remixAction).not.toHaveBeenCalled();
+    expect(container.querySelector('iframe')).toBeNull();
+  });
+
+  it('blocks a blank Remix request', async () => {
+    await renderPage();
+    await act(async () => {
+      Array.from(container.querySelectorAll('button'))
+        .find((button) => button.textContent?.includes('Remix'))!
+        .click();
+    });
+
+    const form = container.querySelector<HTMLFormElement>('.game-page-remix-form')!;
+    await act(async () => {
+      form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    });
+
+    expect(remixAction).not.toHaveBeenCalled();
+    expect(container.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(container.querySelector<HTMLButtonElement>('.game-page-remix-form .primary-btn')?.disabled).toBe(true);
+  });
+
+  it('hands a non-empty request to the theater exactly once', async () => {
+    await renderPage();
+    await act(async () => {
+      Array.from(container.querySelectorAll('button'))
+        .find((button) => button.textContent?.includes('Remix'))!
+        .click();
+    });
+
+    const input = container.querySelector<HTMLTextAreaElement>('#game-page-remix-request')!;
+    await act(async () => {
+      nativeSetValue(input, '  make the game faster  ');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      container
+        .querySelector<HTMLFormElement>('.game-page-remix-form')!
+        .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    });
+
+    expect(remixAction).toHaveBeenCalledTimes(1);
+    expect(remixAction).toHaveBeenCalledWith(expect.objectContaining({ slug: 'neon-courier' }), 'make the game faster');
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
     expect(container.querySelector('iframe')).toBeNull();
   });
 
@@ -208,3 +255,8 @@ describe('GamePage', () => {
     expect(onGameLoaded).toHaveBeenCalledWith('Neon Courier');
   });
 });
+
+function nativeSetValue(el: HTMLTextAreaElement, value: string) {
+  const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+  setter?.call(el, value);
+}
