@@ -689,6 +689,10 @@
       "gating": "Automatyczne testy sprawdzają, czy gra działa bez zarzutu.",
       "ready_for_review": "Twoja gra przeszła wszystkie testy. Czeka na ostatnie spojrzenie przed publikacją."
     },
+    "remix": {
+      "label": "Twój remiks",
+      "ready": "Twój remiks jest zapisany jako prywatny szkic. Zagraj, udostępnij link albo powiedz, co zmienić."
+    },
     "phaseLabels": {
       "dispatched": "Uruchamianie agenta"
     },

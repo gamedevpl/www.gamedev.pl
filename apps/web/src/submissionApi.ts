@@ -106,6 +106,12 @@ export type SubmissionStatus = {
   status: SubmissionState;
   phase?: BuildPhase;
   slug?: string;
+  /**
+   * `'remix'` when this Studio draft was saved from an in-player remix (private
+   * preview-lane fork). Used so Final-check / "going live" copy is not shown for
+   * a remix that never ran the gate and never publishes by itself.
+   */
+  draftOrigin?: 'remix';
   /** Present while an unmerged PR is open: the game can be previewed from its branch. */
   preview?: { slug: string };
   /** Present while an unmerged PR is open: live build signals mined from the PR. */

@@ -883,7 +883,9 @@ export function RemixPanel(props: {
         ...(contentEditedRef.current ? { content: contentDocRef.current } : {}),
       });
       recordRemixStep('keep_clicked');
-      const path = result.studioPath || studioPath(result.slug);
+      // Prefer the API path (playtest) so a saved remix opens on the game, not an
+      // empty Final-check thread. Fallback keeps the same tab if an older API omits it.
+      const path = result.studioPath || studioPath(result.slug, 'playtest');
       window.history.pushState(null, '', path);
       window.dispatchEvent(new PopStateEvent('popstate'));
       window.dispatchEvent(new CustomEvent(NAVIGATE_EVENT, { detail: { path } }));

@@ -946,7 +946,7 @@ describe('remix save as yours', () => {
     const body = saved.json() as { slug: string; token: string; version: string; studioPath: string };
     expect(body.slug).not.toBe('dog-dash');
     expect(body.slug).toMatch(/^remix-of-/);
-    expect(body.studioPath).toBe(`/studio/${body.slug}`);
+    expect(body.studioPath).toBe(`/studio/${body.slug}/playtest`);
     expect(body.token).toBeTruthy();
     expect(puts).toHaveLength(1);
     expect(puts[0].slug).toBe(body.slug);
@@ -966,9 +966,16 @@ describe('remix save as yours', () => {
     expect(job?.state).toBe('ready_for_review');
     expect(job?.previewVersion).toBe('v-saved');
     expect(job?.deliveredVersion).toBe('v-saved');
+    expect(job?.transitions?.some((transition) => transition.reason === 'remix_saved')).toBe(true);
     // The parent publication is untouched — this is a fork, not an overwrite.
     expect(await built.store.getPublication('dog-dash')).toMatchObject({ state: 'published', currentVersion: 'v1' });
     expect(await built.store.getPublication(body.slug)).toBeNull();
+
+    // Preview assembly must see baked defaults — not the parent's — or Studio plays
+    // the original game after "Make it mine" (Codex P2 on #590).
+    const saveRebuild = built.seen.at(-1);
+    expect(saveRebuild?.['EDITOR.json']).toContain('"dogScale"');
+    expect(saveRebuild?.['EDITOR.json']).toMatch(/"default"\s*:\s*2/);
   });
 
   it('refuses save with nothing changed', async () => {

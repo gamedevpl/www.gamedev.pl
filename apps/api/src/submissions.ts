@@ -2040,6 +2040,11 @@ export async function registerSubmissionRoutes(
       // lossy by design, and the page needs the loss back to describe the wait honestly.
       ...(record.abandonedAt ? {} : { phase: state }),
       ...(record.slug ? { slug: record.slug } : {}),
+      // Remix save-as-yours records `remix_saved` on the queued→building→ready path.
+      // Surface that so Studio can tell a private remix draft from a gate-green build.
+      ...((record.transitions ?? []).some((transition) => transition.reason === 'remix_saved')
+        ? { draftOrigin: 'remix' as const }
+        : {}),
     };
     // Studio's play surface only fetches `/preview` when `preview.slug` is set (the
     // same signal the PR-derived path used to emit). A self-build delivery has no PR

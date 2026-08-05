@@ -685,6 +685,10 @@
       "gating": "Automated checks are making sure your game actually runs clean.",
       "ready_for_review": "Your game passed every check. It's waiting for the last look before going live."
     },
+    "remix": {
+      "label": "Your remix",
+      "ready": "Your remix is saved as a private draft. Play it, share the link, or say what to change."
+    },
     "phaseLabels": {
       "dispatched": "Starting agent"
     },

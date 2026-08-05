@@ -471,11 +471,17 @@ export function SubmissionStatusView({
    * copy rather than being written twice and drifting. Self rounds replace the
    * platform "an agent picks it up" sentence while still waiting to connect.
    */
+  // Remix save-as-yours reuses ready_for_review / in_review so Studio treats the
+  // draft as playable — but gate-green "passed every check / waiting to go live"
+  // is a lie for that path (no gate, never publishes). Own copy when the API says so.
+  const isRemixDraft = status?.draftOrigin === 'remix';
   const stateDescription = status
     ? selfCopy === 'no_agent_yet'
       ? t('statusView.stall.no_agent_yet')
-      : (status.phase ? t(`statusView.phases.${status.phase}`, { defaultValue: '' }) : '') ||
-        t(`statusView.states.${status.status}.description`)
+      : isRemixDraft && (status.phase === 'ready_for_review' || status.status === 'in_review')
+        ? t('statusView.remix.ready')
+        : (status.phase ? t(`statusView.phases.${status.phase}`, { defaultValue: '' }) : '') ||
+          t(`statusView.states.${status.status}.description`)
     : '';
 
   // Studio telemetry: first agent signal + gate verdict, with builder dimension.
@@ -798,9 +804,11 @@ export function SubmissionStatusView({
                       ? selfCopy === 'no_agent_yet'
                         ? t('connect.waiting')
                         : t('connect.resume.waiting')
-                      : status.phase === 'dispatched'
-                        ? t('statusView.phaseLabels.dispatched')
-                        : t(`statusView.states.${status.status}.label`)
+                      : isRemixDraft && (status.status === 'in_review' || status.phase === 'ready_for_review')
+                        ? t('statusView.remix.label')
+                        : status.phase === 'dispatched'
+                          ? t('statusView.phaseLabels.dispatched')
+                          : t(`statusView.states.${status.status}.label`)
                   }
                   thought={
                     isAwaitingOwnAgent(status) ||

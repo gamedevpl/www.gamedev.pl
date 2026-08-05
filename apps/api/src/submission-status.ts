@@ -163,6 +163,13 @@ export interface SubmissionStatusResponseBase {
   phase?: JobState;
   slug?: string;
   /**
+   * How this draft first landed in Studio, when that is not an ordinary agent build.
+   * `'remix'` means save-as-yours from an in-player remix: preview-lane, no gate run,
+   * never a catalog publication by itself. Studio uses this so gate-green copy
+   * ("passed every check / waiting to go live") is not shown for a private remix.
+   */
+  draftOrigin?: 'remix';
+  /**
    * Signal to attempt/poll Studio draft loading via `/api/submissions/:token/preview`.
    * Set for an open PR (slug on that branch) and for a native/self-build job once the
    * gate has stored `bundle.html` or `preview.html` for the delivered version.

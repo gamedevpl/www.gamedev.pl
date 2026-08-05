@@ -14,7 +14,7 @@ import { logModerationRejection } from './moderation-metrics.js';
 import { assembleGameHtml } from './assemble.js';
 import type { GitHubClient } from './github-client.js';
 import { type EditingGate, type CreationGate } from './creation-limits.js';
-import { remixHasSavableChange, saveRemixAsStudioDraft } from './remix-save.js';
+import { bakeRemixEditorDefaults, remixHasSavableChange, saveRemixAsStudioDraft } from './remix-save.js';
 import {
   openProposal,
   PROPOSAL_NO_JOB,
@@ -1084,12 +1084,20 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
         session.sourcesLoaded = true;
       }
 
-      const html = await rebuild(session);
+      // Bake params/content into EDITOR.json *before* assembling preview.html.
+      // A slider- or paint-only remix never touches session.overrides — the values
+      // live only on the request body until this bake. Rebuilding first would store
+      // the parent's defaults as Studio's playable draft (Codex P2 on #590).
+      const sources = { ...baseSources, ...session.overrides };
+      const files = Object.entries(sources).map(([path, content]) => ({ path, content }));
+      bakeRemixEditorDefaults(files, session.definition, body.data.params, body.data.content);
+      const bakedSources = Object.fromEntries(files.map((file) => [file.path, file.content]));
+
+      const html = await rebuild(session, bakedSources);
       if (!html) {
         return reply.status(503).send({ error: 'could not save that just now', reason: 'rebuild_failed' });
       }
 
-      const sources = { ...baseSources, ...session.overrides };
       let parentVersion = session.parentVersion;
       if (!parentVersion && options.githubClient?.getRefSha) {
         try {
@@ -1106,7 +1114,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
         parentVersion,
         parentTitle: session.title,
         parentEngineRef: session.ref,
-        sources,
+        sources: bakedSources,
         params: body.data.params,
         content: body.data.content,
         title: wantedTitle,
@@ -1132,11 +1140,14 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
       }
 
       session.expiresAt = now() + REMIX_TTL_MS;
+      // Land on playtest — the thread for a brand-new remix is empty and used to
+      // read as a stuck "Final check / waiting to go live" gate-green screen even
+      // though a remix never publishes and never ran the gate.
       return reply.send({
         slug: saved.slug,
         token: saved.token,
         version: saved.version,
-        studioPath: `/studio/${saved.slug}`,
+        studioPath: `/studio/${saved.slug}/playtest`,
       });
     },
   );
