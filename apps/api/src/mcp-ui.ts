@@ -329,6 +329,8 @@ const ROUND_STATUS_HTML = `<!doctype html>
         var seed = null;
         var inFlight = false;
         var attempts = 0;
+        var speculative = false;
+        var giveUpTimer = null;
         var stopped = false;
         var timer = null;
 
@@ -502,6 +504,9 @@ const ROUND_STATUS_HTML = `<!doctype html>
         function isFinished(status) {
           var gate = status.gate;
           if (gate && gate.status === 'green') return true;
+          // Agent gone and a verdict already in: nothing further will arrive until
+          // somebody acts, and that act opens a fresh card.
+          if (status.agentEnded && gate && gate.status && gate.status !== 'pending') return true;
           return (
             status.phase === 'published' ||
             status.phase === 'canceled' ||
@@ -623,6 +628,14 @@ const ROUND_STATUS_HTML = `<!doctype html>
           reportSize();
         }
 
+        function giveUp() {
+          giveUpTimer = null;
+          if (live) return;
+          if (seed) renderGateOnly(seed);
+          else summary.textContent = 'Could not read round status here.';
+          reportSize();
+        }
+
         function schedule(seconds) {
           if (stopped || timer) return;
           var delay = Math.max(10, Number(seconds) || 30) * 1000;
@@ -636,9 +649,12 @@ const ROUND_STATUS_HTML = `<!doctype html>
           if (stopped || inFlight) return;
           inFlight = true;
           attempts += 1;
-          // sessionKey is an optimisation, not a precondition: a Bearer-authenticated
-          // client never passes one, and the host proxies this call over the same
-          // authenticated connection either way.
+          // Without a key this is a guess: hosts differ on whether they carry the
+          // connection's own credential into an app-only call, and Claude does not.
+          speculative = !sessionKey;
+          // Observed in Claude: a view does not inherit the connection's credential, so
+          // a keyless call is refused. We still make it — a host that does carry the
+          // credential answers immediately, and the refusal costs nothing visible.
           var args = {};
           if (sessionKey) args.sessionKey = sessionKey;
           if (lastShotId) args.sinceShotId = lastShotId;
@@ -647,19 +663,30 @@ const ROUND_STATUS_HTML = `<!doctype html>
             inFlight = false;
             var status = error ? null : unwrap(result, looksLikeStatus);
             if (!status) {
-              // A host that refuses app-only calls, or a credential this view does not
-              // hold. Show what we were opened with rather than a card that never
-              // resolves, and stop after a couple of tries instead of looping.
               log('warning', 'round status unavailable: ' + String(error || 'unrecognised shape'));
-              if (!live) {
-                if (seed) renderGateOnly(seed);
-                else summary.textContent = 'Could not read round status here.';
-                reportSize();
+              if (speculative) {
+                // The key can land while this very request is in flight, in which case
+                // noteSessionKey's own poll() was dropped as already in flight. Retry
+                // here, or the card waits out the whole give-up timer while holding a
+                // usable credential.
+                if (sessionKey) {
+                  poll();
+                  return;
+                }
+                // Stay quiet and wait for the opening tool to hand us its key. Only if
+                // one never arrives is this a real failure worth showing.
+                if (!giveUpTimer) giveUpTimer = setTimeout(giveUp, 20000);
+                return;
               }
+              if (!live) giveUp();
               if (attempts >= 2) stopped = true;
               return;
             }
             live = true;
+            if (giveUpTimer) {
+              clearTimeout(giveUpTimer);
+              giveUpTimer = null;
+            }
             render(status);
             if (isFinished(status)) stopped = true;
             else schedule(status.retryAfterSeconds);
@@ -675,9 +702,12 @@ const ROUND_STATUS_HTML = `<!doctype html>
         function noteSessionKey(value) {
           if (typeof value !== 'string' || !value || sessionKey === value) return;
           sessionKey = value;
-          // Worth one more attempt: the keyless poll may have been refused for want of
-          // exactly this.
+          // Worth another attempt: the keyless poll was refused for want of exactly this.
           if (!live) {
+            if (giveUpTimer) {
+              clearTimeout(giveUpTimer);
+              giveUpTimer = null;
+            }
             stopped = false;
             attempts = 0;
             poll();
@@ -735,6 +765,7 @@ const ROUND_STATUS_HTML = `<!doctype html>
           if (message.method === 'ui/resource-teardown') {
             stopped = true;
             if (timer) clearTimeout(timer);
+            if (giveUpTimer) clearTimeout(giveUpTimer);
             window.removeEventListener('message', onHostMessage);
             window.removeEventListener('resize', reportSize);
           }
