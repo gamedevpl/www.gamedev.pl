@@ -1162,7 +1162,10 @@ export async function registerSubmissionRoutes(
    * chose to type them in; translating those would hand them back a paraphrase of their
    * own request, which is the bug the `origin` field exists to prevent.
    */
-  async function relayedMessageLocalization(origin: 'agent' | 'creator' | undefined, text: string): Promise<IntakeText> {
+  async function relayedMessageLocalization(
+    origin: 'agent' | 'creator' | undefined,
+    text: string,
+  ): Promise<IntakeText> {
     // A creator's own words are stored exactly as typed, in whatever language they chose.
     // Normalizing those would rewrite someone's own request back at them.
     if (origin !== 'agent') return { text };
@@ -1585,7 +1588,24 @@ export async function registerSubmissionRoutes(
   const priorRoundsCacheTtlMs = 30_000;
   const maxPriorRounds = 6;
   const maxPriorEntriesPerRound = 10;
+  const maxCachedPriorRounds = 100;
   const priorRoundsCache = new Map<string, { expiresAt: number; value: PriorRoundHistory[] }>();
+
+  function rememberPriorRounds(cacheKey: string, entry: { expiresAt: number; value: PriorRoundHistory[] }): void {
+    // Drop expired keys first so TTL is not a soft leak on a busy instance (Copilot).
+    const nowMs = entry.expiresAt - priorRoundsCacheTtlMs;
+    for (const [key, cached] of priorRoundsCache) {
+      if (cached.expiresAt <= nowMs) priorRoundsCache.delete(key);
+    }
+    // Insertion-order Map: delete-before-set moves this key to newest; drop the oldest
+    // when full, matching draftPreviewCache.
+    priorRoundsCache.delete(cacheKey);
+    if (priorRoundsCache.size >= maxCachedPriorRounds) {
+      const oldestKey = priorRoundsCache.keys().next().value;
+      if (oldestKey !== undefined) priorRoundsCache.delete(oldestKey);
+    }
+    priorRoundsCache.set(cacheKey, entry);
+  }
 
   /**
    * Older jobs on the same slug, owned by the same creator — transcripts only, capped.
@@ -1599,10 +1619,17 @@ export async function registerSubmissionRoutes(
     const currentTime = now();
     if (cached && cached.expiresAt > currentTime) return cached.value;
 
-    // Newest-first from the store; keep the most recent superseded jobs, then reverse
-    // so the chat log reads oldest → newest above the live round.
+    // Only jobs that started *before* this one (Codex): an old status token must not
+    // surface later improve rounds as "earlier" history. Newest-first from the store;
+    // keep the most recent superseded jobs, then reverse so the chat log reads
+    // oldest → newest above the live round.
     const siblings = (await store.listSubmissionsBySlug(record.slug))
-      .filter((sibling) => sibling.issueNumber !== record.issueNumber && sibling.ownerUid === record.ownerUid)
+      .filter(
+        (sibling) =>
+          sibling.issueNumber !== record.issueNumber &&
+          sibling.ownerUid === record.ownerUid &&
+          sibling.createdAt < record.createdAt,
+      )
       .slice(0, maxPriorRounds)
       .reverse();
 
@@ -1651,7 +1678,7 @@ export async function registerSubmissionRoutes(
     );
 
     const value = rounds.filter((round): round is PriorRoundHistory => round !== null);
-    priorRoundsCache.set(cacheKey, { value, expiresAt: currentTime + priorRoundsCacheTtlMs });
+    rememberPriorRounds(cacheKey, { value, expiresAt: currentTime + priorRoundsCacheTtlMs });
     return value;
   }
 

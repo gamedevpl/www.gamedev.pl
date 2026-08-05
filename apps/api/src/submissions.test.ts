@@ -3892,8 +3892,7 @@ describe('POST /api/submissions/:token/improve', () => {
     const status = await app.inject({ method: 'GET', url: `/api/submissions/${tipToken}` });
     expect(status.statusCode).toBe(200);
     const prior = status.json().priorRounds as
-      | Array<{ id: string; publishedAt?: string; entries: Array<{ kind: string; text: string }> }>
-      | undefined;
+      Array<{ id: string; publishedAt?: string; entries: Array<{ kind: string; text: string }> }> | undefined;
     expect(prior).toHaveLength(1);
     expect(prior![0]!.id).toBe(String(published));
     expect(prior![0]!.publishedAt).toBe('2026-07-01T00:00:00.000Z');
@@ -3901,6 +3900,16 @@ describe('POST /api/submissions/:token/improve', () => {
       expect.arrayContaining(['Make the lobby louder.', 'Lobby volume bumped for the opening scene.']),
     );
     expect(prior![0]!.entries.some((e) => e.text.includes('foreign'))).toBe(false);
+
+    // An old status token must not list later improve rounds as "earlier" history
+    // (Codex): the published job's status stays its own thread only.
+    const oldStatus = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(published, secret)}`,
+    });
+    expect(oldStatus.statusCode).toBe(200);
+    expect(oldStatus.json().priorRounds).toBeUndefined();
+
     await app.close();
   });
 });
