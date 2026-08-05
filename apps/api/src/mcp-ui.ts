@@ -311,6 +311,8 @@ const ROUND_STATUS_HTML = `<!doctype html>
         cursor: pointer;
       }
       .action:hover:not(:disabled) { background: rgba(0, 228, 172, 0.12); }
+      /* Custom colours can leave the platform focus ring invisible on this card. */
+      .action:focus-visible { outline: 2px solid var(--gd-accent); outline-offset: 2px; }
       .action:disabled { color: var(--gd-muted); border-color: var(--gd-border); cursor: default; }
       .hint {
         margin: 8px 0 0;
