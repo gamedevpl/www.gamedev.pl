@@ -276,7 +276,8 @@ function CatalogCard({
           className="catalog-card-hit-area"
           href={gamePath(gamePageHandle(entry), entry.slug)}
           aria-label={`${entry.title} — ${t('catalog.openGame')}`}
-        />        {videoUrl ? (
+        />
+        {videoUrl ? (
           <video
             ref={videoRef}
             className="catalog-preview"
