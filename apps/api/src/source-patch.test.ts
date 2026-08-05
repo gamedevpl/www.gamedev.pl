@@ -1,6 +1,12 @@
 import { createPatch } from 'diff';
 import { describe, expect, it } from 'vitest';
-import { applySourcePatch, normalizePatchPath, normalizeUnifiedDiff, SourcePatchError } from './source-patch.js';
+import {
+  applyExactReplace,
+  applySourcePatch,
+  normalizePatchPath,
+  normalizeUnifiedDiff,
+  SourcePatchError,
+} from './source-patch.js';
 
 describe('normalizePatchPath', () => {
   it('strips a/b prefixes, tabs, and quotes', () => {
@@ -149,5 +155,35 @@ describe('applySourcePatch', () => {
   it('refuses a stale context (no fuzzy apply)', () => {
     const patch = createPatch('game.ts', content, 'line1\nline2x\nline3\n');
     expect(() => applySourcePatch({ content: 'different\n', path: 'game.ts', patch })).toThrow(/did not apply/);
+  });
+});
+
+describe('applyExactReplace', () => {
+  const content = 'line1\nline2\nline3\n';
+
+  it('replaces a unique substring', () => {
+    const result = applyExactReplace({
+      content,
+      path: 'game.ts',
+      old: 'line2\n',
+      new: 'line2x\n',
+    });
+    expect(result.content).toBe('line1\nline2x\nline3\n');
+    expect(result.replacements).toBe(1);
+  });
+
+  it('refuses a missing substring', () => {
+    expect(() => applyExactReplace({ content, path: 'game.ts', old: 'missing', new: 'x' })).toThrow(/not found/);
+  });
+
+  it('refuses a non-unique substring', () => {
+    expect(() =>
+      applyExactReplace({
+        content: 'aa\naa\n',
+        path: 'game.ts',
+        old: 'aa\n',
+        new: 'b\n',
+      }),
+    ).toThrow(/more than once/);
   });
 });

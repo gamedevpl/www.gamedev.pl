@@ -28,9 +28,18 @@ export type ApplySourcePatchInput = {
   patch: string;
 };
 
+export type ApplyExactReplaceInput = {
+  content: string;
+  path: string;
+  /** Exact substring that must appear once in the file. */
+  old: string;
+  /** Replacement text (may be empty to delete). */
+  new: string;
+};
+
 export type ApplySourcePatchResult = {
   content: string;
-  /** Number of hunks applied. */
+  /** Number of hunks / replacements applied. */
   replacements: number;
 };
 
@@ -229,6 +238,45 @@ export function applySourcePatch(input: ApplySourcePatchInput): ApplySourcePatch
     throw new SourcePatchError('patch applied but made no changes');
   }
   return { content: next, replacements: hunks };
+}
+
+/**
+ * Exact unique substring replace — the chat-friendly alternative to unified diffs.
+ * `old` must appear exactly once; widen the snippet with surrounding lines if not.
+ */
+export function applyExactReplace(input: ApplyExactReplaceInput): ApplySourcePatchResult {
+  const path = input.path.trim();
+  if (!path) throw new SourcePatchError('path is required');
+  if (input.old.length === 0) {
+    throw new SourcePatchError('old must not be empty — pass the exact text to replace');
+  }
+  if (input.old === input.new) {
+    throw new SourcePatchError('old and new are identical — nothing to change');
+  }
+
+  let occurrences = 0;
+  let from = 0;
+  while (true) {
+    const at = input.content.indexOf(input.old, from);
+    if (at === -1) break;
+    occurrences++;
+    from = at + input.old.length;
+    if (occurrences > 1) break;
+  }
+
+  if (occurrences === 0) {
+    throw new SourcePatchError(
+      `old text not found in ${path} — copy the exact snippet from the current file (get_sources / staged base)`,
+    );
+  }
+  if (occurrences > 1) {
+    throw new SourcePatchError(
+      `old text matches more than once in ${path} — include more surrounding lines so it is unique`,
+    );
+  }
+
+  const content = input.content.replace(input.old, input.new);
+  return { content, replacements: 1 };
 }
 
 /** @deprecated Prefer {@link largeSourceFileHint} from `module-size.js`. Re-exported for callers. */

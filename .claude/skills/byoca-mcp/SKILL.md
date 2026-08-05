@@ -19,9 +19,9 @@ Source of truth: `SESSION_WORKFLOW` + `BEHAVIOURAL_CONTRACT` in
 2. Build; `report_progress`; `send_screenshot` when something draws
 3. Prefer `stage_source_file` (new/full rewrite) or `patch_source_file` (unified diff) then
    `submit_sources({ fromStaged: true, mode, kitEngineRef })`
-   - **Edits:** `patch_source_file({ path, patch })` with a unified diff
-     (`---` / `+++` + `@@` hunks for one file). `@@` line numbers are optional — bare
-     `@@` is fine; the server matches by context. Do not re-emit whole `render.ts` /
+   - **Edits:** prefer `patch_source_file({ path, old, new })` (exact unique substring
+     replace — no diff format). Or `patch_source_file({ path, patch })` with a unified
+     diff (`---` / `+++` + `@@` hunks; bare `@@` ok). Do not re-emit whole `render.ts` /
      `model.ts` files through `stage_source_file`
    - **Modules:** soft budget ~350 lines / ~12 KiB per `game/*.ts`. Honour
      `warnings.code=module_too_large` (on `get_sources` / `get_seed` / stage / patch)

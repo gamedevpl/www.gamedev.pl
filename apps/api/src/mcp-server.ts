@@ -316,7 +316,7 @@ const BEHAVIOURAL_CONTRACT = [
   // language they did not choose, which is the whole reason the field exists.
   "Write progress in the creator's language: when get_brief.locales[0] is not 'en', send report_progress with textLocalized and locale as well as the English text.",
   'Send a screenshot as soon as the game draws anything playable.',
-  'While iterating, deliver with mode=preview (no TRACE required). Prefer stage_source_file for new/rewritten paths and patch_source_file({ path, patch }) with a unified diff for edits (bare @@ ok — matched by context; never re-emit a whole large render.ts/model.ts). Honour warnings.code=module_too_large by splitting before more feature work. Then submit_sources({ fromStaged:true, mode:"preview", kitEngineRef }) — fromStaged overlays onto the latest delivery/seed so only changed paths need staging. Avoid one giant files[] payload. Only mode=publish needs TRACE/PLAYTEST and can go green.',
+  'While iterating, deliver with mode=preview (no TRACE required). Prefer stage_source_file for new/rewritten paths and patch_source_file for edits — prefer old+new exact replace; patch=unified diff also works (never re-emit a whole large render.ts/model.ts). Honour warnings.code=module_too_large by splitting before more feature work. Then submit_sources({ fromStaged:true, mode:"preview", kitEngineRef }) — fromStaged overlays onto the latest delivery/seed so only changed paths need staging. Avoid one giant files[] payload. Only mode=publish needs TRACE/PLAYTEST and can go green.',
   'Run kit checks green (at least check:static) before submit_sources when you have a local kit checkout; otherwise submit and let the gate run checks.',
   'After submit_sources, if you will not deliver more this round, call end (required — warnings.code=call_end; submit already unlocks creator handoff). Prefer end over sitting in a get_gate_verdict loop — Studio shows the gate. Do not stop after submit alone without end.',
   'Honour stop immediately — do not continue after stop:true.',
@@ -345,7 +345,7 @@ const SESSION_WORKFLOW: readonly string[] = [
   'get_kit — keep engineRef for submit_sources; prefer read_kit_files for several known small paths (else list_kit_files / search_kit_files / read_kit_file / read_kit_file_fragment) when shell unpack is unavailable; otherwise unpack via the returned one-liner and follow SKILL.md locally. Never dump the whole kit into context.',
   'Build the game — continuing the seed or sources you fetched, otherwise from the kit; report_progress before and after long steps. Soft module budget: keep each game/*.ts under ~350 lines / ~12 KiB. When a file approaches that, split cohesive pieces (render→art/ui/hud/rooms; model→tables/layout/types; runtime→systems) before more feature work. Honour warnings.code=module_too_large the same way you honour call_end — act, then continue.',
   'send_screenshot as soon as the game draws anything playable.',
-  'While iterating: stage_source_file({ path, content }) for new or fully rewritten paths; for edits prefer patch_source_file({ path, patch }) with a unified diff (---/+++ + @@ hunks for ONE file). Context lines must match exactly; @@ line numbers are optional (bare @@ is fine — the server matches by context). Stage only changed paths — never re-upload the whole tree. Then submit_sources({ fromStaged: true, mode: "preview", kitEngineRef }) — fromStaged overlays onto the latest delivery/seed. TRACE/PLAYTEST not required; Studio gets a playable draft after typecheck→smoke→build. Inline files[] still works for tiny trees.',
+  'While iterating: stage_source_file({ path, content }) for new or fully rewritten paths; for edits prefer patch_source_file({ path, old, new }) — exact unique substring replace, no unified-diff arithmetic. Or patch_source_file({ path, patch }) with a unified diff (bare @@ ok). Stage only changed paths — never re-upload the whole tree. Then submit_sources({ fromStaged: true, mode: "preview", kitEngineRef }) — fromStaged overlays onto the latest delivery/seed. TRACE/PLAYTEST not required; Studio gets a playable draft after typecheck→smoke→build. Inline files[] still works for tiny trees.',
   'Staging is already visible: once index.html, game.ts, style.css and GAME.json are present across staging + delivery/seed, the platform assembles a live playable preview — without waiting for submit or the gate. Stage a runnable tree early and keep staging/patching as you work; a buffer that does not compile simply leaves the previous preview up.',
   'After every successful submit_sources: creator handoff is already unlocked; still call end immediately if you will not deliver more (warnings.code=call_end). Prefer end over sitting in a get_gate_verdict loop — Studio shows the gate. submit alone leaves your MCP session open — end sets stop:true. ChatGPT-class agents often stop after submit; end closes the session cleanly.',
   'Only call get_gate_verdict once when an already-available verdict would change what you deliver. It is not a wait loop. Pending with a deliveryId returns stop:true: stop immediately and let Studio show the eventual result. Pending with deliveryId:null returns stop:false because you checked too early — continue building and call submit_sources; do not check again before a delivery. A later creator-led run may check a delivered gate again. Preview lane: preview_passed / preview_failed — fix and re-preview on the SAME key; preview_passed does NOT end the round.',
@@ -2715,7 +2715,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     },
 
     patch_source_file: {
-      annotations: { title: 'Patch one staged source file', ...WRITES },
+      annotations: { title: 'Edit one staged source file', ...WRITES },
       outputSchema: {
         type: 'object',
         properties: {
@@ -2747,14 +2747,13 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         required: ['ok', 'path', 'bytes', 'replacements', 'baseFrom', 'staged', 'stop', 'pendingMessages'],
       },
       description:
-        'Apply a unified diff to ONE existing path and write the result into the staging buffer. ' +
+        'Edit ONE existing path in the staging buffer without re-uploading the whole file. ' +
         'Prefer this over stage_source_file whenever the file already exists (from get_sources, a prior stage, or the seed) — ' +
         'especially for large game/render.ts or game/model.ts files. ' +
-        'patch must be a unified diff for that single file. Example with line numbers: ' +
-        '"--- a/game/render.ts\\n+++ b/game/render.ts\\n@@ -10,6 +10,7 @@\\n context\\n-old\\n+new\\n context\\n". ' +
-        'Bare @@ (no line numbers) is also accepted — hunks are located by matching context lines, so you do not need get_sources just to count lines. ' +
-        'Context must match exactly (no fuzzy apply). Prefix context lines with a leading space; +/- for changes. ' +
-        'Multi-file patches are refused — call once per path. ' +
+        'PREFERRED: pass old + new (exact unique substring replace) — no @@ line numbers, no diff format. ' +
+        'ALTERNATE: pass patch as a unified diff for that single file ' +
+        '("--- a/game/render.ts\\n+++ b/game/render.ts\\n@@\\n context\\n-old\\n+new\\n context\\n"; bare @@ ok). ' +
+        'old must match exactly once; widen the snippet if it is ambiguous. Do not pass patch together with old/new. ' +
         'Then submit_sources({ fromStaged: true, mode, kitEngineRef }); fromStaged overlays onto the latest delivery/seed so you only need the patched paths staged. ' +
         BEHAVIOURAL_CONTRACT,
       inputSchema: {
@@ -2763,25 +2762,41 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           sessionKey: SESSION_KEY_PROP,
           path: {
             type: 'string',
-            description: 'Game-relative path (e.g. game/render.ts). Must match the ---/+++ headers.',
+            description: 'Game-relative path (e.g. game/render.ts). For unified diffs, must match the ---/+++ headers.',
+          },
+          old: {
+            type: 'string',
+            description: 'Exact text to find (must appear once). Prefer old+new over patch. Pass together with new.',
+          },
+          new: {
+            type: 'string',
+            description: 'Replacement text for old (may be empty to delete). Pass together with old.',
           },
           patch: {
             type: 'string',
             description:
-              'Unified diff for this one file only (`--- a/<path>` / `+++ b/<path>` plus one or more @@ hunks). ' +
-              '@@ line numbers optional — bare `@@` is fine when context matches.',
+              'Unified diff for this one file only (alternative to old+new). Bare `@@` hunks are fine when context matches.',
           },
           slug: { type: 'string' },
         },
-        required: ['path', 'patch'],
+        required: ['path'],
       },
       handler: async (args, ctx) => {
         const auth = await resolveAuth(ctx, args);
         if (!('channelToken' in auth)) return auth;
         const path = typeof args.path === 'string' ? args.path.trim() : '';
         if (!path) return toolErr('path is required');
-        if (typeof args.patch !== 'string' || args.patch.trim().length === 0) {
-          return toolErr('patch is required (unified diff text)');
+        const hasPatch = typeof args.patch === 'string' && args.patch.trim().length > 0;
+        const hasOld = typeof args.old === 'string';
+        const hasNew = typeof args.new === 'string';
+        if (hasPatch && (hasOld || hasNew)) {
+          return toolErr('pass either old+new (exact replace) or patch (unified diff), not both');
+        }
+        if (hasOld !== hasNew) {
+          return toolErr('old and new must be passed together');
+        }
+        if (!hasPatch && !hasOld) {
+          return toolErr('pass old+new (preferred) or patch (unified diff)');
         }
         const slug =
           typeof args.slug === 'string' && args.slug.trim() ? args.slug.trim() : (auth.record.slug ?? undefined);
@@ -2792,7 +2807,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           auth.channelToken,
           {
             path,
-            patch: args.patch,
+            ...(hasPatch ? { patch: args.patch } : { old: args.old, new: args.new }),
             ...(slug ? { slug } : {}),
           },
         );
