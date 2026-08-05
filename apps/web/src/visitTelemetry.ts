@@ -27,7 +27,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 
 /** Where a visit is, coarsely. Route parameters (tokens, slugs) never travel. */
 export type VisitRouteKind =
-  // `draft` remains for historical rows; `/draft/<slug>` now rewrites to `play`.
+  // `draft` is historical only — new visits on `/draft/<slug>` emit `play`.
   'home' | 'play' | 'draft' | 'status' | 'join' | 'legal' | 'health' | 'studio' | 'game' | 'notFound';
 
 export type VisitEvent =
@@ -337,7 +337,9 @@ export function routeKind(view: string): VisitRouteKind {
     case 'studio':
     case 'notFound':
       return view;
-    // Legacy view name — `/draft/` parses as `play` now; keep the bucket for old events.
+    // Legacy view name — `/draft/` parses as `play` now. Map here too so any leftover
+    // caller still reports `play` (the `draft` VisitRouteKind only remains for reading
+    // historical rows, not for new emissions).
     case 'draft':
       return 'play';
     // The public game page is its own acquisition surface — the funnel's question 2

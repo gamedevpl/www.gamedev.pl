@@ -722,9 +722,11 @@ export function App() {
 
   // Unpublished `/play/<slug>` uses UnpublishedPlayView's own theater (not `stageContent`),
   // so hide Up the same way — Close / the error home link own escape there.
+  // Only after the catalog is ready: a catalog *error* must keep GameDetailPage's
+  // retry UI, not look like a missing draft.
   const playCatalogGame =
     route.view === 'play' ? (catalogEntries.find((game) => game.slug === route.slug) ?? null) : null;
-  const unpublishedPlayTheater = route.view === 'play' && catalogStatus !== 'loading' && !playCatalogGame;
+  const unpublishedPlayTheater = route.view === 'play' && catalogStatus === 'ready' && !playCatalogGame;
 
   // Header Up chevron — Android-style parent path, never history.back(). Hidden
   // while a theater owns the viewport (`stageContent`, unpublished play, studio playtest).
@@ -970,9 +972,13 @@ export function App() {
         ) : (
           <>
             {route.view === 'play' ? (
-              catalogStatus === 'loading' && !playCatalogGame ? (
-                <p className="game-page-state">{t('gamePage.loading')}</p>
-              ) : playCatalogGame ? (
+              unpublishedPlayTheater ? (
+                // Same `/play/<slug>` permalink before publish — API serves the draft to
+                // the owner (or anyone once sharing is on). Legacy `/draft/` rewrites here.
+                // Only when catalog is ready and the slug is absent — catalog errors keep
+                // GameDetailPage's retry UI below.
+                <UnpublishedPlayView slug={route.slug} onExit={exitOverlay} onTitle={setUnpublishedPlayTitle} />
+              ) : (
                 <GameDetailPage
                   game={playCatalogGame}
                   state={catalogStatus}
@@ -980,10 +986,6 @@ export function App() {
                   onRemix={handleRemixGame}
                   onRetry={handleRetryCatalog}
                 />
-              ) : (
-                // Same `/play/<slug>` permalink before publish — API serves the draft to
-                // the owner (or anyone once sharing is on). Legacy `/draft/` rewrites here.
-                <UnpublishedPlayView slug={route.slug} onExit={exitOverlay} onTitle={setUnpublishedPlayTitle} />
               )
             ) : (
               <>
