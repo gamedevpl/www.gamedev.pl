@@ -247,17 +247,17 @@ queued.
 
 ## Key code
 
-| Area                         | Path                                                        |
-| ---------------------------- | ----------------------------------------------------------- |
-| MCP tools                    | `apps/api/src/mcp-server.ts`                                |
-| Account-session invalidation | `apps/api/src/agent-session-revocation.ts`                  |
-| Channel (`POST …/end`, …)    | `apps/api/src/agent-channel.ts`                             |
-| Stall / `ended`              | `apps/api/src/job-state.ts` (`detectStall`)                 |
-| Handoff gate                 | `apps/api/src/builder.ts` (`allowsSelfToPlatformHandoff`)   |
-| Live staged preview          | `apps/api/src/staged-preview.ts`                            |
-| Studio live-preview frame    | `apps/web/src/StudioLivePreview.tsx`                        |
-| Feedback / resume            | `apps/api/src/submissions.ts`                               |
-| Studio copy / builder choice | `apps/web/src/selfBuildCopy.ts`, `SubmissionStatusView.tsx` |
+| Area                         | Path                                                                                                                                                                      |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| MCP tools                    | `apps/api/src/mcp-server.ts`                                                                                                                                              |
+| Account-session invalidation | `apps/api/src/agent-session-revocation.ts`                                                                                                                                |
+| Channel (`POST …/end`, …)    | `apps/api/src/agent-channel.ts`                                                                                                                                           |
+| Stall / `ended`              | `apps/api/src/job-state.ts` (`detectStall`)                                                                                                                               |
+| Handoff gate                 | `apps/api/src/builder.ts` (`allowsSelfToPlatformHandoff`)                                                                                                                 |
+| Live staged preview          | `apps/api/src/staged-preview.ts`                                                                                                                                          |
+| Studio live-preview frame    | `apps/web/src/StudioLivePreview.tsx`                                                                                                                                      |
+| Feedback / resume            | `apps/api/src/submissions.ts`                                                                                                                                             |
+| Studio copy / builder choice | `apps/web/src/selfBuildCopy.ts`, `BuilderModeBadge.tsx`, `SubmissionStatusView.tsx` (sticky badge + Change modal at round boundaries; full two-up stays in create wizard) |
 
 ## Safety invariant (unchanged)
 

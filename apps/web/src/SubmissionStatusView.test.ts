@@ -685,8 +685,8 @@ describe('SubmissionStatusView', () => {
     });
 
     // Routed from the state the server reported, not from a mode the creator picked.
-    // Published starts a new round, so the builder choice travels with the request
-    // (default: platform — the Gamedev.pl coding agent).
+    // Published starts a new round, so the sticky builder travels with the request
+    // (default: platform — the Gamedev.pl coding agent). Choice tiles stay in Change.
     expect(mockedSubmitImprovement).toHaveBeenCalledWith(
       'live-token',
       'The second level is far too hard, please add a checkpoint.',
@@ -694,7 +694,8 @@ describe('SubmissionStatusView', () => {
       'platform',
     );
     expect(mockedSubmitFeedback).not.toHaveBeenCalled();
-    expect(container.querySelector('.builder-choice')).not.toBeNull();
+    expect(container.querySelector('.builder-mode-selector')?.textContent).toContain('Gamedev.pl');
+    expect(container.querySelector('.builder-choice')).toBeNull();
 
     await act(async () => {
       root.unmount();
@@ -868,9 +869,19 @@ describe('SubmissionStatusView', () => {
       expect(container.querySelector('.studio-connect.is-resume')).not.toBeNull();
       expect(container.textContent).toContain('Continue with your agent');
       expect(container.textContent).not.toContain('Connect your coding agent');
-      // Quiet escape hatch: pick Gamedev.pl and send — API kills the self token.
-      expect(container.querySelector('.builder-choice')).not.toBeNull();
-      expect(container.textContent).toMatch(/Who builds this round/i); // Full first-time install stays under a closed disclosure — continue, not a reset.
+      // Quiet escape hatch: Change opens the builder modal — API kills the self token
+      // when platform is chosen and a note is sent. Tiles are not permanent chrome.
+      expect(container.querySelector('.builder-mode-selector')?.textContent).toContain('Your agent');
+      expect(container.querySelector('button.builder-mode-selector')).not.toBeNull();
+      expect(container.querySelector('.builder-choice')).toBeNull();
+      await act(async () => {
+        container
+          .querySelector('button.builder-mode-selector')!
+          .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await flushEffects();
+      });
+      expect(document.body.querySelector('.builder-choice-modal')?.textContent).toMatch(/Who builds this round/i);
+      // Full first-time install stays under a closed disclosure — continue, not a reset.
       const details = container.querySelector<HTMLDetailsElement>('[data-testid="connect-setup-details"]');
       expect(details).not.toBeNull();
       expect(details?.open).toBe(false);
@@ -910,10 +921,12 @@ describe('SubmissionStatusView', () => {
 
       expect(container.querySelector('.studio-connect')).toBeNull();
       expect(container.querySelector('.status-warning')?.textContent).toMatch(/finished this round/i);
-      expect(container.querySelector('.builder-choice')).not.toBeNull();
-      // Handoff, not mid-build — do not spin "Writing code" beside the finished chip.
-      expect(container.querySelector('.studio-thread-context.is-active')).toBeNull();
-      expect(container.querySelector('.studio-context-phase-spinner')).toBeNull();
+      expect(container.querySelector('.builder-mode-selector')?.textContent).toContain('Your agent');
+      expect(container.querySelector('button.builder-mode-selector')).not.toBeNull();
+      expect(container.querySelector('.builder-choice')).toBeNull();
+      // Handoff, not mid-build — no live working turn and no foot "Writing code".
+      expect(container.querySelector('.studio-turn.is-working')).toBeNull();
+      expect(container.querySelector('.studio-thread-context')).toBeNull();
     } finally {
       await act(async () => {
         root.unmount();
@@ -985,6 +998,7 @@ describe('SubmissionStatusView', () => {
     expect(container.textContent).toContain('Needs a tweak');
     // Active repair round — builder is locked server-side; do not offer a switch that 409s.
     expect(container.querySelector('.builder-choice')).toBeNull();
+    expect(container.querySelector('button.builder-mode-selector')).toBeNull();
 
     await act(async () => {
       root.unmount();
@@ -1411,7 +1425,7 @@ describe('SubmissionStatusView', () => {
     });
   });
 
-  it('keeps build pulse in the foot without checklist fraction, stop, or Play', async () => {
+  it('keeps build pulse as the last transcript turn without checklist fraction, stop, or Play', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     mockedGetSubmissionStatus.mockResolvedValue({
       status: 'building',
@@ -1442,20 +1456,23 @@ describe('SubmissionStatusView', () => {
       await flushEffects();
     });
 
-    expect(container.querySelector('.studio-thread-context.is-active')).not.toBeNull();
-    expect(container.querySelector('.studio-context-phase-spinner')).not.toBeNull();
-    // Abandon / checklist / Play stay out of the foot — Claude-shaped chrome.
+    // Claude-shaped: "Writing code" is the last transcript turn with a pulse, not a foot bar.
+    const working = container.querySelector('.studio-turn.is-working');
+    expect(working).not.toBeNull();
+    expect(working?.textContent).toContain('Writing code');
+    expect(container.querySelector('.studio-turn-working-pulse')).not.toBeNull();
+    expect(container.querySelector('.studio-thread-context')).toBeNull();
+    // Abandon / checklist / Play stay out of the foot.
     expect(container.querySelector('.studio-context-stop')).toBeNull();
     expect(container.querySelector('.studio-context-progress')).toBeNull();
     expect(container.querySelector('.status-play-cta')).toBeNull();
-    expect(container.querySelector('.studio-thread-context .studio-slug')).toBeNull();
 
     await act(async () => {
       root.unmount();
     });
   });
 
-  it('flashes a presence thought in the thread bar without adding a chat turn', async () => {
+  it('flashes a presence thought on the live working turn, not as a permanent chat bubble', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     const at = new Date().toISOString();
     mockedGetSubmissionStatus.mockResolvedValue({
@@ -1478,10 +1495,53 @@ describe('SubmissionStatusView', () => {
       await flushEffects();
     });
 
-    expect(container.querySelector('.studio-thread-context.is-thought')).not.toBeNull();
-    expect(container.querySelector('.studio-context-phase')?.textContent).toContain('Browsing the Creator Kit');
-    // Thought stays out of the transcript.
-    expect(container.querySelector('.studio-turn')).toBeNull();
+    const working = container.querySelector('.studio-turn.is-working.is-thought');
+    expect(working).not.toBeNull();
+    expect(working?.textContent).toContain('Browsing the Creator Kit');
+    // Thought is the live working line — not a durable event bubble, and not the foot bar.
+    expect(container.querySelectorAll('.studio-turn:not(.is-working)')).toHaveLength(0);
+    expect(container.querySelector('.studio-thread-context')).toBeNull();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('does not leave Writing code in the foot after the self agent ends', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'building',
+      stall: 'ended',
+      builder: 'self',
+      agentEndedAt: '2026-08-05T12:15:00.000Z',
+      events: [
+        {
+          id: 'e1',
+          kind: 'step',
+          step: 'testing',
+          text: 'Preview build sent for checks.',
+          createdAt: '2026-08-05T12:10:00.000Z',
+        },
+      ],
+    });
+    await i18n.changeLanguage('en');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'ended-no-writing', embedded: true }));
+      await flushEffects();
+      await flushEffects();
+    });
+
+    expect(container.querySelector('.studio-turn.is-working')).toBeNull();
+    expect(container.querySelector('.studio-thread-context')).toBeNull();
+    expect(container.querySelector('.status-warning')?.textContent).toMatch(/finished this round/i);
+    // The finished event stays; the live "Writing code" line must not linger under it.
+    expect(container.textContent).toContain('Preview build sent for checks.');
+    expect(container.querySelector('.studio-thread-turns')?.textContent).not.toMatch(/Writing code/i);
 
     await act(async () => {
       root.unmount();
@@ -2369,7 +2429,7 @@ describe('SubmissionStatusView stop & retry', () => {
     });
   });
 
-  it('published composer defaults its builder chooser to the status defaultBuilder, over stale local memory', async () => {
+  it('published composer defaults its builder badge to the status defaultBuilder, over stale local memory', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     // Memory is keyed by token in localStorage, and a new job has a new token — so the
     // remembered choice is gone at exactly this boundary. The status payload's
@@ -2388,7 +2448,14 @@ describe('SubmissionStatusView stop & retry', () => {
       await flushEffects();
     });
 
-    const selected = container.querySelector('.builder-choice-option[aria-checked="true"]');
+    expect(container.querySelector('.builder-mode-selector')?.textContent).toContain(i18n.t('builder.badge.self'));
+    await act(async () => {
+      container
+        .querySelector('button.builder-mode-selector')!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushEffects();
+    });
+    const selected = document.body.querySelector('.builder-choice-option[aria-checked="true"]');
     expect(selected?.textContent).toContain(i18n.t('builder.self.title'));
 
     await act(async () => {

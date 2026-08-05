@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { BuilderChoice } from './BuilderChoice.js';
+import { BuilderModeBadge } from './BuilderModeBadge.js';
 import { defaultBuilderFor, isBuilderKind, saveLastBuilder, type BuilderKind } from './builderKind.js';
 import { GameTheater } from './GameTheater.js';
 import { PixelIcon, type PixelIconName } from './PixelIcon.js';
@@ -142,7 +142,8 @@ function latestAgentActivityAt(status: SubmissionStatus | null): number | null {
 const PRESENCE_THOUGHT_MS = 90_000;
 
 /**
- * Ambient MCP presence for the thread bar — a thought headline, not a chat row.
+ * Ambient MCP presence for the live working turn — a thought headline on the
+ * pulsing last transcript row, not a durable chat bubble.
  * Fresh for {@link PRESENCE_THOUGHT_MS}; cleared server-side when real progress arrives.
  */
 function presenceThought(
@@ -684,6 +685,16 @@ export function SubmissionStatusView({
           t('statusView.gallery.caption'),
         )
       : [];
+    const agentWorking = Boolean(status && isAgentWorkActive(status));
+    const workingThought = status && agentWorking ? presenceThought(status) : null;
+    const workingThoughtLabel =
+      workingThought != null ? t(`statusView.presence.${workingThought.key}`, { defaultValue: '' }) : '';
+    const workingPhaseLabel =
+      status && agentWorking
+        ? status.phase === 'dispatched'
+          ? t('statusView.phaseLabels.dispatched')
+          : t(`statusView.states.${status.status}.label`)
+        : '';
     return (
       <>
         <div className="studio-thread">
@@ -713,7 +724,18 @@ export function SubmissionStatusView({
                 emptyLabel={stateDescription}
                 priorRounds={status.slug && status.priorRounds?.length ? status.priorRounds : undefined}
                 priorSlug={status.slug}
-                stickNonce={isAwaitingOwnAgent(status) ? pendingRevisions.length + 1 : 0}
+                stickNonce={(isAwaitingOwnAgent(status) ? pendingRevisions.length + 1 : 0) + (agentWorking ? 1 : 0)}
+                working={
+                  agentWorking
+                    ? {
+                        label: workingPhaseLabel,
+                        thoughtLabel: workingThoughtLabel || null,
+                        thoughtKey: workingThought?.key ?? null,
+                        thoughtAt: workingThought?.at ?? null,
+                        heartbeatAt,
+                      }
+                    : null
+                }
                 after={
                   isAwaitingOwnAgent(status) ? (
                     <StudioConnectCard
@@ -796,31 +818,34 @@ export function SubmissionStatusView({
                   </button>
                 ) : null}
 
-                {/* One waiting caption. While the connect card owns the thread, do not
-                    also spin "Writing code" — the agent is not writing; we are waiting. */}
-                <ThreadContextBar
-                  phase={
-                    isAwaitingOwnAgent(status)
-                      ? selfCopy === 'no_agent_yet'
-                        ? t('connect.waiting')
-                        : t('connect.resume.waiting')
-                      : isRemixDraft && (status.status === 'in_review' || status.phase === 'ready_for_review')
-                        ? t('statusView.remix.label')
-                        : status.phase === 'dispatched'
-                          ? t('statusView.phaseLabels.dispatched')
-                          : t(`statusView.states.${status.status}.label`)
-                  }
-                  thought={
-                    isAwaitingOwnAgent(status) ||
-                    TERMINAL_STATUSES.has(status.status) ||
-                    status.status === 'in_review' ||
-                    status.phase === 'ready_for_review'
-                      ? null
-                      : presenceThought(status)
-                  }
-                  heartbeatAt={isAwaitingOwnAgent(status) ? null : heartbeatAt}
-                  active={isAgentWorkActive(status)}
-                />
+                {/* Active "Writing code" lives as the last transcript turn (Claude-shaped).
+                    The foot bar is only for waiting / review captions — and never when the
+                    agent already called end (stall chip covers that; "Writing code" would lie). */}
+                {!isAgentWorkActive(status) && status.stall !== 'ended' && !status.agentEndedAt ? (
+                  <ThreadContextBar
+                    phase={
+                      isAwaitingOwnAgent(status)
+                        ? selfCopy === 'no_agent_yet'
+                          ? t('connect.waiting')
+                          : t('connect.resume.waiting')
+                        : isRemixDraft && (status.status === 'in_review' || status.phase === 'ready_for_review')
+                          ? t('statusView.remix.label')
+                          : status.phase === 'dispatched'
+                            ? t('statusView.phaseLabels.dispatched')
+                            : t(`statusView.states.${status.status}.label`)
+                    }
+                    thought={
+                      isAwaitingOwnAgent(status) ||
+                      TERMINAL_STATUSES.has(status.status) ||
+                      status.status === 'in_review' ||
+                      status.phase === 'ready_for_review'
+                        ? null
+                        : presenceThought(status)
+                    }
+                    heartbeatAt={isAwaitingOwnAgent(status) ? null : heartbeatAt}
+                    active={false}
+                  />
+                ) : null}
 
                 {/* Before the first agent signal there is nobody to receive a note — the
                     connect card is the only move. Quiet / gate-green still keep the box
@@ -1427,6 +1452,20 @@ function FeedbackPanel({
       ? 'statusView.feedback.composerHintBuilding'
       : 'statusView.feedback.composerHint';
 
+  // Sticky builder signal in the composer toolbar (Claude/Cursor shape): always when
+  // the next send can choose, and while a self round is mid-flight so routing stays
+  // visible. Platform mid-round stays chrome-free — no selector until a boundary.
+  const effectiveBuilder = chooseBuilder ? builder : (roundBuilder ?? builder);
+  const showBuilderBadge = chooseBuilder || effectiveBuilder === 'self';
+  const builderSelector = showBuilderBadge ? (
+    <BuilderModeBadge
+      value={effectiveBuilder}
+      onChange={handleBuilderChange}
+      canChange={chooseBuilder}
+      disabled={state === 'sending'}
+    />
+  ) : null;
+
   // Standalone status page still shows a brief receipt next to Send. The studio
   // composer does not: the message is echoed into the thread immediately, so a
   // second "Sent!" under the box is the same confirmation twice.
@@ -1448,11 +1487,9 @@ function FeedbackPanel({
       </div>
     ) : null;
 
-  // Compact is the thread's composer: a field and a send, the way a reply box looks
-  // everywhere else. The heading and the standing hint paragraph were page furniture —
-  // fine on a page read once, noise under a conversation you come back to. What the hint
-  // said still matters, so it becomes the placeholder: it is on screen exactly while the
-  // box is empty, which is when "where does this go?" is the open question.
+  // Compact is the thread's composer in the Claude / Cursor / Copilot shape: a clean
+  // field on top, controls in a bottom toolbar (builder selector left, send right).
+  // The heading and standing hint were page furniture — the placeholder carries them.
   if (compact) {
     const sending = state === 'sending';
     return (
@@ -1460,47 +1497,42 @@ function FeedbackPanel({
         className={`status-feedback status-composer is-compact${sending ? ' is-sending' : ''}`}
         aria-busy={sending || undefined}
       >
-        {chooseBuilder ? (
-          <BuilderChoice value={builder} onChange={handleBuilderChange} disabled={sending} compact />
-        ) : null}
         {routeNoteKey && !sending && state !== 'sent' && !error && !notice ? (
           <p className="status-feedback-route">{t(routeNoteKey)}</p>
         ) : null}
-        {/* Field and send on one line. The button used to sit on a row of its own below
-            the box, which cost a phone screen an entire line to say what an arrow beside
-            the text says — and put the thing you tap furthest from the thing you typed.
-            Icon-only, so it stays a button rather than becoming a second column: the word
-            is longer in Polish than in English and would have set the width. */}
-        <div className="status-composer-row">
-          <textarea
-            ref={inputRef}
-            className="status-feedback-input"
-            value={text}
-            onChange={(event) => {
-              setText(event.target.value);
-              autoGrow();
-              if (state === 'sent') setState('idle');
-            }}
-            placeholder={t(composerHintKey)}
-            aria-label={t(titleKey)}
-            rows={1}
-            maxLength={2000}
-            disabled={sending}
-          />
-          <button
-            type="button"
-            className="primary-btn status-composer-send"
-            onClick={() => void send()}
-            disabled={sending || trimmed.length < 10}
-            aria-label={sending ? t('statusView.feedback.sending') : t('statusView.feedback.submit')}
-            title={sending ? t('statusView.feedback.sending') : t('statusView.feedback.submit')}
-          >
-            {sending ? (
-              <span className="status-composer-send-spinner" aria-hidden="true" />
-            ) : (
-              <PixelIcon name="arrowRight" size={13} />
-            )}
-          </button>
+        <textarea
+          ref={inputRef}
+          className="status-feedback-input"
+          value={text}
+          onChange={(event) => {
+            setText(event.target.value);
+            autoGrow();
+            if (state === 'sent') setState('idle');
+          }}
+          placeholder={t(composerHintKey)}
+          aria-label={t(titleKey)}
+          rows={1}
+          maxLength={2000}
+          disabled={sending}
+        />
+        <div className="status-composer-toolbar">
+          <div className="status-composer-toolbar-left">{builderSelector}</div>
+          <div className="status-composer-toolbar-right">
+            <button
+              type="button"
+              className="primary-btn status-composer-send"
+              onClick={() => void send()}
+              disabled={sending || trimmed.length < 10}
+              aria-label={sending ? t('statusView.feedback.sending') : t('statusView.feedback.submit')}
+              title={sending ? t('statusView.feedback.sending') : t('statusView.feedback.submit')}
+            >
+              {sending ? (
+                <span className="status-composer-send-spinner" aria-hidden="true" />
+              ) : (
+                <PixelIcon name="arrowRight" size={13} />
+              )}
+            </button>
+          </div>
         </div>
         {/* Failures, in-flight, and "kept but nothing started" still need a row — they
             ask the creator to wait or act. A plain Sent receipt does not: the thread
@@ -1527,9 +1559,7 @@ function FeedbackPanel({
     <div className="status-feedback status-composer">
       <h3 className="status-feedback-title">{t(titleKey)}</h3>
       <p className="status-feedback-hint">{t(hintKey)}</p>
-      {chooseBuilder ? (
-        <BuilderChoice value={builder} onChange={handleBuilderChange} disabled={state === 'sending'} />
-      ) : null}
+      {builderSelector ? <div className="builder-mode-row">{builderSelector}</div> : null}
       {routeNoteKey && state !== 'sent' && !error && !notice ? (
         <p className="status-feedback-route">{t(routeNoteKey)}</p>
       ) : null}
@@ -1574,6 +1604,16 @@ function FeedbackPanel({
  * bottom as the agent talks — unless the reader has scrolled up, which is them saying
  * they are reading something and would like it to stay put.
  */
+type ThreadWorkingState = {
+  /** Coarse phase — "Writing code" / "Starting agent". */
+  label: string;
+  /** Fresh ambient presence thought, when one is flashing. */
+  thoughtLabel: string | null;
+  thoughtKey: string | null;
+  thoughtAt: number | null;
+  heartbeatAt: number | null;
+};
+
 function ThreadStream({
   token,
   entries,
@@ -1581,6 +1621,7 @@ function ThreadStream({
   priorRounds,
   priorSlug,
   after,
+  working = null,
   stickNonce = 0,
 }: {
   token: string;
@@ -1592,12 +1633,18 @@ function ThreadStream({
   /** Renders inside the scroller after the turns — tall surfaces (connect card) belong
    *  here, not in the pinned foot, or a phone has no room left for the conversation. */
   after?: ReactNode;
-  /** Bump when `after` appears/disappears so a stick-to-bottom reader still sees it. */
+  /**
+   * Live agent work — last row in the transcript (Claude-shaped), not a foot caption.
+   * Pulses while the agent is mid-build; cleared the moment work is no longer active.
+   */
+  working?: ThreadWorkingState | null;
+  /** Bump when `after` / `working` appears so a stick-to-bottom reader still sees it. */
   stickNonce?: number;
 }) {
   const { t, i18n } = useTranslation();
   const [zoomed, setZoomed] = useState<BuildMediaItem | null>(null);
   const [broken, setBroken] = useState<string[]>([]);
+  const [, setThoughtTick] = useState(0);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const stickToBottomRef = useRef(true);
 
@@ -1613,14 +1660,34 @@ function ThreadStream({
     const pane = scrollRef.current;
     if (!pane || !stickToBottomRef.current) return;
     pane.scrollTop = pane.scrollHeight;
-  }, [entries.length, stickNonce]);
+  }, [entries.length, stickNonce, working?.label, working?.thoughtLabel]);
+
+  // Presence ages out client-side; one timeout at expiry so the working line falls
+  // back to the coarse phase without waiting on the next status poll.
+  useEffect(() => {
+    if (!working?.thoughtAt || !working.thoughtLabel) return;
+    const remaining = working.thoughtAt + PRESENCE_THOUGHT_MS - Date.now();
+    if (remaining <= 0) {
+      setThoughtTick((n) => n + 1);
+      return;
+    }
+    const id = window.setTimeout(() => setThoughtTick((n) => n + 1), remaining);
+    return () => window.clearTimeout(id);
+  }, [working?.thoughtAt, working?.thoughtLabel]);
+
+  const thoughtFresh =
+    working?.thoughtAt != null &&
+    working.thoughtLabel != null &&
+    working.thoughtLabel.length > 0 &&
+    Date.now() - working.thoughtAt <= PRESENCE_THOUGHT_MS;
+  const workingHeadline = thoughtFresh && working?.thoughtLabel ? working.thoughtLabel : working?.label;
 
   return (
     <div className="studio-thread-scroll" ref={scrollRef} onScroll={onScroll}>
       {priorSlug && priorRounds && priorRounds.length > 0 ? (
         <StudioPriorRounds slug={priorSlug} rounds={priorRounds} />
       ) : null}
-      {entries.length === 0 ? <p className="studio-thread-empty">{emptyLabel}</p> : null}
+      {entries.length === 0 && !working ? <p className="studio-thread-empty">{emptyLabel}</p> : null}
       <ol className="studio-thread-turns">
         {entries.map((entry, index) => {
           const mine = entry.kind === 'revision';
@@ -1671,6 +1738,26 @@ function ThreadStream({
             </li>
           );
         })}
+        {working && workingHeadline ? (
+          <li className={`studio-turn is-working${thoughtFresh ? ' is-thought' : ''}`} aria-live="polite">
+            <div
+              className="studio-turn-working"
+              key={
+                thoughtFresh && working.thoughtKey
+                  ? `thought:${working.thoughtKey}:${working.thoughtAt}`
+                  : `phase:${working.label}`
+              }
+            >
+              <span className="studio-turn-working-pulse" aria-hidden="true" />
+              <span className="studio-turn-working-label">{workingHeadline}</span>
+            </div>
+            {working.heartbeatAt !== null ? (
+              <span className="studio-turn-time">
+                <BuildHeartbeat at={working.heartbeatAt} />
+              </span>
+            ) : null}
+          </li>
+        ) : null}
       </ol>
       {after}
       {zoomed ? <ShotLightbox token={token} item={zoomed} onClose={() => setZoomed(null)} /> : null}
