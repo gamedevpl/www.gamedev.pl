@@ -106,9 +106,18 @@ describe('kit window (kits/current.json)', () => {
       }
     });
 
-    it('rejects a malformed currentVersion loudly, since it gates every delivery', () => {
-      expect(() => parseKitRegistry(JSON.stringify({ ...VERSIONED, currentVersion: '' }))).toThrow(/currentVersion/);
-      expect(() => parseKitRegistry(JSON.stringify({ ...VERSIONED, currentVersion: 7 }))).toThrow(/currentVersion/);
+    it('drops a malformed currentVersion instead of taking the whole registry down', () => {
+      // The trap: the gate reads this registry through `.catch(() => null)`, and a null
+      // registry SKIPS the kit check entirely. Throwing here would not refuse a corrupt
+      // document — it would wave every delivery through, including a different major.
+      // Degrading to N/N−1 is the narrow answer; throwing was the wide one.
+      for (const bad of ['', 7, '1.4', 'v1.4.2', null, {}]) {
+        const parsed = parseKitRegistry(JSON.stringify({ ...VERSIONED, currentVersion: bad }));
+        expect(parsed.currentVersion).toBeUndefined();
+        // ...and with no version to compare, the old floor is what remains.
+        expect(isKitEngineRefSupported(OLD, parsed, '1.0.0')).toBe(false);
+        expect(isKitEngineRefSupported(parsed.current, parsed)).toBe(true);
+      }
       expect(parseKitRegistry(JSON.stringify(VERSIONED)).currentVersion).toBe('1.4.2');
     });
 

@@ -303,6 +303,11 @@ describe('ui resources', () => {
     // that silently fails is the dead button one level down.
     expect(html).toContain('selection.addRange(range)');
     expect(html).toContain("'Selected — press Ctrl/Cmd+C'");
+    // ...but only claimed when it actually took. A missing element or a host that
+    // returns no Selection would otherwise throw inside the click handler and leave the
+    // dead button this whole path exists to remove.
+    expect(html).toMatch(/if \(selected\) actionBtn\.textContent/);
+    expect(html).toContain('window.getSelection && window.getSelection()');
     // Clipboard is the shortcut, never the mechanism — it needs a sandbox permission the
     // host may not have granted, and rejects unhandled would be an unhandled rejection.
     expect(html).toMatch(/navigator\.clipboard[\s\S]{0,400}?function \(\) \{\}/);

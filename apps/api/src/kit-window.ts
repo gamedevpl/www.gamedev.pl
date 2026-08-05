@@ -70,13 +70,22 @@ export function parseKitRegistry(raw: string): KitRegistry {
   if (typeof obj.updatedAt !== 'string' || !obj.updatedAt) {
     throw new Error('kits/current.json.updatedAt must be a non-empty string');
   }
-  if (!(obj.currentVersion === undefined || (typeof obj.currentVersion === 'string' && obj.currentVersion))) {
-    throw new Error('kits/current.json.currentVersion must be a non-empty string when present');
-  }
+  // Deliberately NOT loud, unlike the fields above.
+  //
+  // The gate reads this registry through a `.catch(() => null)`, and a null registry
+  // skips the kit check entirely — so throwing here would not refuse a bad document, it
+  // would wave *every* delivery through, including one from a different major. A
+  // corrupt optional field must degrade to the narrower rule, never the wider one.
+  // Dropping it falls back to N/N−1, which is what this ref had before versions existed.
+  //
+  // The publisher validates the same value strictly, which is the right asymmetry:
+  // loud where a human is watching a build, safe where a verdict depends on it.
+  const currentVersion =
+    typeof obj.currentVersion === 'string' && semverMajor(obj.currentVersion) !== null ? obj.currentVersion : undefined;
   return {
     current: obj.current,
     previous: obj.previous,
-    ...(obj.currentVersion === undefined ? {} : { currentVersion: obj.currentVersion }),
+    ...(currentVersion === undefined ? {} : { currentVersion }),
     updatedAt: obj.updatedAt,
   };
 }

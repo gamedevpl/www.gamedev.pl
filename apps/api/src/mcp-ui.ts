@@ -694,15 +694,24 @@ const ROUND_STATUS_HTML = `<!doctype html>
           actionBtn.disabled = false;
           actionBtn.textContent = 'Copy for your agent';
           actionBtn.onclick = function () {
-            // Selecting the text always works and needs no permission, so do that first
-            // and unconditionally: whatever the clipboard does, the click visibly did
-            // something. A Copy button that silently fails is the dead button again.
-            var range = document.createRange();
-            range.selectNodeContents(document.getElementById('hintText'));
-            var selection = window.getSelection();
-            selection.removeAllRanges();
-            selection.addRange(range);
-            actionBtn.textContent = 'Selected — press Ctrl/Cmd+C';
+            // Selecting the text needs no permission, so try it first: whatever the
+            // clipboard does, the click should visibly do something. A Copy button that
+            // silently fails is the dead button again — which is the whole bug here, so
+            // the recovery must not be able to reintroduce it. Hence: attempt, verify,
+            // and only claim success when the selection actually took.
+            var selected = false;
+            try {
+              var target = document.getElementById('hintText');
+              var selection = window.getSelection && window.getSelection();
+              if (target && selection) {
+                var range = document.createRange();
+                range.selectNodeContents(target);
+                selection.removeAllRanges();
+                selection.addRange(range);
+                selected = String(selection).length > 0;
+              }
+            } catch (e) {}
+            if (selected) actionBtn.textContent = 'Selected — press Ctrl/Cmd+C';
 
             // Clipboard access needs a sandbox permission the host may not have granted,
             // so this is the shortcut, never the mechanism.
