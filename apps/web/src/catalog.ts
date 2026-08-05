@@ -266,6 +266,9 @@ function parseCatalogSubmittedBy(value: unknown): string | null {
   return trimmed.slice(0, 40);
 }
 
+/** Thrown by {@link fetchPublishedGame} so callers can tell a miss from a glitch. */
+export type GameFetchError = Error & { status?: number };
+
 export async function fetchPublishedGame(slug: string): Promise<PublishedGame> {
   // Credentialed because a game is playable at this address before it is published —
   // by its creator always, by anyone else once the creator shares it. Without the
@@ -273,7 +276,11 @@ export async function fetchPublishedGame(slug: string): Promise<PublishedGame> {
   const response = await fetch(`${API_BASE}/api/games/${encodeURIComponent(slug)}`, { credentials: 'include' });
 
   if (!response.ok) {
-    throw new Error(await readApiErrorMessage(response, `Game request failed (${response.status})`));
+    const error = new Error(
+      await readApiErrorMessage(response, `Game request failed (${response.status})`),
+    ) as GameFetchError;
+    error.status = response.status;
+    throw error;
   }
 
   const body = (await response.json()) as PublishedGame;

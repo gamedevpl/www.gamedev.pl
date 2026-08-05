@@ -14,7 +14,7 @@ import { logModerationRejection } from './moderation-metrics.js';
 import { assembleGameHtml } from './assemble.js';
 import type { GitHubClient } from './github-client.js';
 import { type EditingGate, type CreationGate } from './creation-limits.js';
-import { remixHasSavableChange, saveRemixAsStudioDraft } from './remix-save.js';
+import { bakeRemixEditorDefaults, remixHasSavableChange, saveRemixAsStudioDraft } from './remix-save.js';
 import {
   openProposal,
   PROPOSAL_NO_JOB,
@@ -987,14 +987,15 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
   );
 
   /**
-   * Save as yours — fork the remixed sources into a private Studio draft.
+   * Save as yours — fork the remixed sources into a private draft the player owns.
    *
    * Earned: requires a real change (code overrides and/or non-default
    * params/content). Works for store-era (sources already in the session) and
    * repo-era (full delivery set loaded from the ref at save time). Never
    * publishes; the new job lands at ready_for_review with a preview-lane
    * version and no gate.green, so the operator publish path refuses it until a
-   * real publish delivery exists.
+   * real publish delivery exists. The response opens `/play/<slug>` — the same
+   * lifetime permalink a published game uses — not Studio.
    */
   app.post(
     '/api/remixes/:id/save',
@@ -1084,12 +1085,20 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
         session.sourcesLoaded = true;
       }
 
-      const html = await rebuild(session);
+      // Bake params/content into EDITOR.json *before* assembling preview.html.
+      // A slider- or paint-only remix never touches session.overrides — the values
+      // live only on the request body until this bake. Rebuilding first would store
+      // the parent's defaults as Studio's playable draft (Codex P2 on #590).
+      const sources = { ...baseSources, ...session.overrides };
+      const files = Object.entries(sources).map(([path, content]) => ({ path, content }));
+      bakeRemixEditorDefaults(files, session.definition, body.data.params, body.data.content);
+      const bakedSources = Object.fromEntries(files.map((file) => [file.path, file.content]));
+
+      const html = await rebuild(session, bakedSources);
       if (!html) {
         return reply.status(503).send({ error: 'could not save that just now', reason: 'rebuild_failed' });
       }
 
-      const sources = { ...baseSources, ...session.overrides };
       let parentVersion = session.parentVersion;
       if (!parentVersion && options.githubClient?.getRefSha) {
         try {
@@ -1106,7 +1115,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
         parentVersion,
         parentTitle: session.title,
         parentEngineRef: session.ref,
-        sources,
+        sources: bakedSources,
         params: body.data.params,
         content: body.data.content,
         title: wantedTitle,
@@ -1132,11 +1141,14 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
       }
 
       session.expiresAt = now() + REMIX_TTL_MS;
+      // Lifetime permalink — `/play/<slug>` serves the draft to its owner (and to
+      // anyone once sharing is on). Not Studio: the player was remixing while
+      // playing; creator tooling stays on the shelf for later edits.
       return reply.send({
         slug: saved.slug,
         token: saved.token,
         version: saved.version,
-        studioPath: `/studio/${saved.slug}`,
+        openPath: `/play/${saved.slug}`,
       });
     },
   );

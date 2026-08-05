@@ -3,7 +3,6 @@ import {
   canonicalPath,
   canonicalPlayPath,
   creatorPath,
-  draftPath,
   gamePath,
   joinPath,
   legalAnchor,
@@ -45,8 +44,8 @@ describe('parsePathRoute', () => {
     expect(parsePathRoute('/play/')).toEqual({ view: 'notFound' });
   });
 
-  it('parses a draft permalink and rejects non-slugs', () => {
-    expect(parsePathRoute('/draft/space-runner')).toEqual({ view: 'draft', slug: 'space-runner' });
+  it('treats legacy /draft/<slug> as the /play/<slug> permalink', () => {
+    expect(parsePathRoute('/draft/space-runner')).toEqual({ view: 'play', slug: 'space-runner' });
     expect(parsePathRoute('/draft/..%2Fadmin')).toEqual({ view: 'notFound' });
     expect(parsePathRoute('/draft/')).toEqual({ view: 'notFound' });
   });
@@ -199,7 +198,7 @@ describe('path builders', () => {
     expect(canonicalPlayPath('/ay/sky-dodge')).toBe('/play/sky-dodge');
     expect(canonicalPlayPath('/ai/sky-dodge')).toBe('/play/sky-dodge');
     expect(canonicalPlayPath('/play/sky-dodge')).toBeNull();
-    expect(canonicalPlayPath('/draft/sky-dodge')).toBeNull();
+    expect(canonicalPlayPath('/draft/sky-dodge')).toBe('/play/sky-dodge');
     expect(canonicalPlayPath('/')).toBeNull();
   });
 
@@ -208,6 +207,7 @@ describe('path builders', () => {
     // ago — but the bar is put back on the current address so a copied URL survives.
     expect(canonicalPath('/ay/sky-dodge')).toBe('/play/sky-dodge');
     expect(canonicalPath('/ai/sky-dodge')).toBe('/play/sky-dodge');
+    expect(canonicalPath('/draft/sky-dodge')).toBe('/play/sky-dodge');
     expect(canonicalPath('/health')).toBe('/admin/telemetry');
     expect(canonicalPath('/status/tok-abc')).toBe('/studio/tok-abc');
     expect(canonicalPath('/creators/ada')).toBe('/ada');
@@ -226,14 +226,8 @@ describe('path builders', () => {
     expect(canonicalPath('/studio/tok-abc/thread')).toBeNull();
     expect(canonicalPath('/studio')).toBeNull();
     expect(canonicalPath('/ada')).toBeNull();
-    expect(canonicalPath('/draft/sky-dodge')).toBeNull();
     expect(canonicalPath('/')).toBeNull();
     expect(canonicalPath('/NotAHandle')).toBeNull();
-  });
-
-  it('builds a draft path that round-trips', () => {
-    expect(draftPath('space-runner')).toBe('/draft/space-runner');
-    expect(parsePathRoute(draftPath('space-runner'))).toEqual({ view: 'draft', slug: 'space-runner' });
   });
 
   it('builds a root creator path that round-trips', () => {
@@ -331,7 +325,6 @@ describe('navUpTarget', () => {
     expect(navUpTarget({ view: 'home' })).toBeNull();
     expect(navUpTarget({ view: 'join', code: 'ABC123', token: 'tok' })).toBeNull();
     expect(navUpTarget({ view: 'play', slug: 'sky-dodge' })).toEqual({ path: '/', labelKey: 'upHome' });
-    expect(navUpTarget({ view: 'draft', slug: 'space-runner' })).toBeNull();
     expect(navUpTarget({ view: 'studio', game: 'tok', tab: 'playtest' })).toBeNull();
   });
 

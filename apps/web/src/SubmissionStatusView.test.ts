@@ -429,6 +429,44 @@ describe('SubmissionStatusView', () => {
     });
   });
 
+  it('describes a remix draft as a private save, not as waiting to go live', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'in_review',
+      phase: 'ready_for_review',
+      draftOrigin: 'remix',
+      slug: 'remix-of-dog-dash',
+      preview: { slug: 'remix-of-dog-dash' },
+      progress: { headSha: 'v1', commits: [], checklist: [] },
+    });
+    mockedGetSubmissionPreview.mockResolvedValue({
+      slug: 'remix-of-dog-dash',
+      title: 'Remix of Dog Dash',
+      html: '<!doctype html><canvas id="game"></canvas>',
+    });
+    await i18n.changeLanguage('en');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'remix-draft-token', embedded: true }));
+      await flushEffects();
+      await flushEffects();
+    });
+
+    expect(container.textContent).toContain('private draft');
+    expect(container.textContent).not.toContain('waiting for the last look');
+    expect(container.textContent).not.toContain('passed every check');
+    expect(container.querySelector('.studio-context-phase')?.textContent).toMatch(/Your remix/i);
+    expect(container.querySelector('.studio-context-phase')?.textContent).not.toMatch(/Final check/i);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it('loads Studio preview for a self-build ready_for_review job with no channel playable', async () => {
     // BY-14c: self deliveries land in the games store; status advertises preview.slug
     // (no playable[]). The embedded thread must still fetch /preview and offer Play.
@@ -2391,7 +2429,15 @@ describe('SubmissionStatusView stop & retry', () => {
       status: 'building',
       builder: 'self',
       slug: 'tv-tycoon',
-      events: [{ id: 'e1', kind: 'step', step: 'mechanics', text: 'Working on the current round.', createdAt: '2026-08-05T08:00:00.000Z' }],
+      events: [
+        {
+          id: 'e1',
+          kind: 'step',
+          step: 'mechanics',
+          text: 'Working on the current round.',
+          createdAt: '2026-08-05T08:00:00.000Z',
+        },
+      ],
       priorRounds: [
         {
           id: '101',
@@ -2400,7 +2446,12 @@ describe('SubmissionStatusView stop & retry', () => {
           status: 'published',
           entries: [
             { kind: 'revision', text: 'Make TVMAX louder.', createdAt: '2026-08-01T11:00:00.000Z' },
-            { kind: 'event', step: 'polishing', text: 'Competitor volume tuned.', createdAt: '2026-08-01T12:00:00.000Z' },
+            {
+              kind: 'event',
+              step: 'polishing',
+              text: 'Competitor volume tuned.',
+              createdAt: '2026-08-01T12:00:00.000Z',
+            },
           ],
         },
       ],

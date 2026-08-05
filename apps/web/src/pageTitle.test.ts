@@ -9,7 +9,6 @@ import {
 
 const copy: DocumentTitleCopy = {
   home: 'Gamedev.pl — Describe a game, play it',
-  draft: 'A game in the making',
   join: 'Join the game',
   health: 'Telemetry',
   studio: 'Creator Studio',
@@ -19,7 +18,6 @@ const copy: DocumentTitleCopy = {
   proposals: 'My proposals',
   notFound: 'Page not found',
   playNamed: 'Play {{title}}',
-  draftNamed: 'Draft {{title}}',
   studioNamed: 'Studio · {{title}}',
   creatorNamed: '{{title}}',
   gameNamed: '{{title}}',
@@ -72,12 +70,9 @@ describe('resolveDocumentTitle', () => {
     expect(resolveDocumentTitle({ view: 'play', slug: 'sky-dodge' }, { copy })).toBe('Play Sky Dodge — Gamedev.pl');
   });
 
-  it('titles draft / studio / join / health / legal routes', () => {
-    expect(resolveDocumentTitle({ view: 'draft', slug: 'space-runner' }, { copy })).toBe(
-      'A game in the making — Gamedev.pl',
-    );
-    expect(resolveDocumentTitle({ view: 'draft', slug: 'space-runner' }, { copy, draftTitle: 'Space Runner' })).toBe(
-      'Draft Space Runner — Gamedev.pl',
+  it('titles studio / join / health / legal routes', () => {
+    expect(resolveDocumentTitle({ view: 'play', slug: 'space-runner' }, { copy, playTitle: 'Space Runner' })).toBe(
+      'Play Space Runner — Gamedev.pl',
     );
     expect(resolveDocumentTitle({ view: 'studio' }, { copy })).toBe('Creator Studio — Gamedev.pl');
     expect(resolveDocumentTitle({ view: 'studio', game: 'tok' }, { copy, studioTitle: 'Coin Catcher' })).toBe(

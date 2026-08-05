@@ -26,7 +26,6 @@ export function brandedNamedTitle(template: string, title: string): string {
 export type DocumentTitleCopy = {
   /** Full home title, e.g. "Gamedev.pl — Describe a game, play it". */
   home: string;
-  draft: string;
   join: string;
   health: string;
   studio: string;
@@ -37,8 +36,6 @@ export type DocumentTitleCopy = {
   notFound: string;
   /** Prefixed template for a playable game name, e.g. "Play {{title}}". */
   playNamed: string;
-  /** Prefixed template for a draft's real name, e.g. "Draft {{title}}". */
-  draftNamed: string;
   /** Prefixed template when studio is deep-linked to a named game. */
   studioNamed: string;
   /** Prefixed template for a creator profile, e.g. "{{title}}" (same placeholder as playNamed). */
@@ -49,12 +46,10 @@ export type DocumentTitleCopy = {
 
 export type DocumentTitleContext = {
   copy: DocumentTitleCopy;
-  /** Known title for the game on a `/play/<slug>` route (catalog or humanized slug). */
+  /** Known title for the game on a `/play/<slug>` route (catalog, draft, or humanized slug). */
   playTitle?: string | null;
   /** Known title for a `/studio/<token>` (or legacy `/status/<token>`) submission. */
   studioTitle?: string | null;
-  /** Real draft name once `/draft/<slug>` finishes loading; null while pending. */
-  draftTitle?: string | null;
   /** Title of an ephemeral theater open on the home route (generated / party). */
   stageTitle?: string | null;
   /** Display name for `/:handle` once the profile loads. */
@@ -73,10 +68,6 @@ export function resolveDocumentTitle(route: AppRoute, ctx: DocumentTitleContext)
       return ctx.stageTitle ? brandedNamedTitle(ctx.copy.playNamed, ctx.stageTitle) : ctx.copy.home;
     case 'play':
       return brandedNamedTitle(ctx.copy.playNamed, ctx.playTitle?.trim() || humanizeSlug(route.slug));
-    case 'draft':
-      return ctx.draftTitle?.trim()
-        ? brandedNamedTitle(ctx.copy.draftNamed, ctx.draftTitle)
-        : brandedPageTitle(ctx.copy.draft);
     case 'join':
       return brandedPageTitle(ctx.copy.join);
     case 'admin':

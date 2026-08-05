@@ -7,7 +7,7 @@ import { NavHeader } from './NavHeader.js';
 import { HeroPromptSection } from './HeroPromptSection.js';
 import { ArcadeCatalog } from './ArcadeCatalog.js';
 import { CreatorStudioView } from './CreatorStudioView.js';
-import { DraftView } from './DraftView.js';
+import { UnpublishedPlayView } from './UnpublishedPlayView.js';
 import { AdminConsole } from './AdminConsole.js';
 import { PixelIcon } from './PixelIcon.js';
 import { CreatorQA, type QAQuestion } from './CreatorQA.js';
@@ -142,9 +142,8 @@ export function App() {
 
   // Multiplayer lobby state
   const [partyError, setPartyError] = useState<string | null>(null);
-  // Draft's real name, reported by DraftView once the preview loads. Cleared on
-  // unmount / slug change so the generic draft label returns while the next one loads.
-  const [draftTitle, setDraftTitle] = useState<string | null>(null);
+  // Unpublished `/play/<slug>` title, reported once the document loads.
+  const [unpublishedPlayTitle, setUnpublishedPlayTitle] = useState<string | null>(null);
   /** Display name for `/:handle` once the public profile loads. */
   const [creatorName, setCreatorName] = useState<string | null>(null);
   const [gameTitle, setGameTitle] = useState<string | null>(null);
@@ -156,6 +155,7 @@ export function App() {
     const playTitle =
       route.view === 'play'
         ? (catalogEntries.find((game) => game.slug === route.slug)?.title ??
+          unpublishedPlayTitle ??
           (stageContent?.type === 'catalog' && stageContent.game.slug === route.slug ? stageContent.game.title : null))
         : null;
     // Matched on either address the URL can carry: a slug now, a capability token on
@@ -168,7 +168,6 @@ export function App() {
     return resolveDocumentTitle(route, {
       copy: {
         home: t('pageTitle.home'),
-        draft: t('pageTitle.draft'),
         join: t('pageTitle.join'),
         health: t('pageTitle.health'),
         studio: t('pageTitle.studio'),
@@ -178,21 +177,19 @@ export function App() {
         proposals: t('pageTitle.proposals'),
         notFound: t('pageTitle.notFound'),
         playNamed: t('pageTitle.playNamed'),
-        draftNamed: t('pageTitle.draftNamed'),
         studioNamed: t('pageTitle.studioNamed'),
         creatorNamed: t('pageTitle.creatorNamed'),
         gameNamed: t('pageTitle.gameNamed'),
       },
       playTitle,
       studioTitle,
-      draftTitle: route.view === 'draft' ? draftTitle : null,
       creatorName: route.view === 'creator' ? creatorName : null,
       gameTitle: route.view === 'game' ? gameTitle : null,
       // Only surface ephemeral theaters while still on home — `/play/<slug>` already
       // carries its own title via playTitle, and leaving home must restore the home title.
       stageTitle: route.view === 'home' ? stageTitle : null,
     });
-  }, [route, stageContent, catalogEntries, savedSpecs, draftTitle, creatorName, gameTitle, t]);
+  }, [route, stageContent, catalogEntries, savedSpecs, unpublishedPlayTitle, creatorName, gameTitle, t]);
 
   useDocumentTitle(documentTitle);
 
@@ -723,15 +720,22 @@ export function App() {
     navigate('/');
   }, [navigate]);
 
+  // Unpublished `/play/<slug>` uses UnpublishedPlayView's own theater (not `stageContent`),
+  // so hide Up the same way — Close / the error home link own escape there.
+  // Only after the catalog is ready: a catalog *error* must keep GameDetailPage's
+  // retry UI, not look like a missing draft.
+  const playCatalogGame =
+    route.view === 'play' ? (catalogEntries.find((game) => game.slug === route.slug) ?? null) : null;
+  const unpublishedPlayTheater = route.view === 'play' && catalogStatus === 'ready' && !playCatalogGame;
+
   // Header Up chevron — Android-style parent path, never history.back(). Hidden
-  // while App owns a theater (`stageContent`) and on routes whose child owns one
-  // (`/draft`, studio playtest — see navUpTarget).
+  // while a theater owns the viewport (`stageContent`, unpublished play, studio playtest).
   const headerUp = useMemo(() => {
-    if (stageContent) return null;
+    if (stageContent || unpublishedPlayTheater) return null;
     const target = navUpTarget(route);
     if (!target) return null;
     return { path: target.path, ariaLabel: t(`header.${target.labelKey}`) };
-  }, [route, stageContent, t]);
+  }, [route, stageContent, unpublishedPlayTheater, t]);
 
   function handlePlayGame(game: CatalogEntry) {
     // Explicit Play is the execution boundary. Shared `/play/<slug>` links land on a
@@ -965,18 +969,24 @@ export function App() {
               setPendingScrollTarget('hero-prompt');
             }}
           />
-        ) : route.view === 'draft' ? (
-          <DraftView slug={route.slug} onExit={exitOverlay} onDraftTitle={setDraftTitle} />
         ) : (
           <>
             {route.view === 'play' ? (
-              <GameDetailPage
-                game={catalogEntries.find((game) => game.slug === route.slug) ?? null}
-                state={catalogStatus}
-                onPlay={handlePlayGame}
-                onRemix={handleRemixGame}
-                onRetry={handleRetryCatalog}
-              />
+              unpublishedPlayTheater ? (
+                // Same `/play/<slug>` permalink before publish — API serves the draft to
+                // the owner (or anyone once sharing is on). Legacy `/draft/` rewrites here.
+                // Only when catalog is ready and the slug is absent — catalog errors keep
+                // GameDetailPage's retry UI below.
+                <UnpublishedPlayView slug={route.slug} onExit={exitOverlay} onTitle={setUnpublishedPlayTitle} />
+              ) : (
+                <GameDetailPage
+                  game={playCatalogGame}
+                  state={catalogStatus}
+                  onPlay={handlePlayGame}
+                  onRemix={handleRemixGame}
+                  onRetry={handleRetryCatalog}
+                />
+              )
             ) : (
               <>
                 <div id="hero-prompt">

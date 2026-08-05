@@ -689,6 +689,10 @@
       "gating": "Automatyczne testy sprawdzają, czy gra działa bez zarzutu.",
       "ready_for_review": "Twoja gra przeszła wszystkie testy. Czeka na ostatnie spojrzenie przed publikacją."
     },
+    "remix": {
+      "label": "Twój remiks",
+      "ready": "Twój remiks jest zapisany jako prywatny szkic. Zagraj, udostępnij link albo powiedz, co zmienić."
+    },
     "phaseLabels": {
       "dispatched": "Uruchamianie agenta"
     },
@@ -918,14 +922,12 @@
   "pageTitle": {
     "home": "Gamedev.pl — Opisz grę, zagraj w nią",
     "status": "Twoja gra jest w trakcie tworzenia",
-    "draft": "Gra w trakcie tworzenia",
     "join": "Dołącz do gry",
     "health": "Telemetria",
     "studio": "Studio Twórcy",
     "notFound": "Nie znaleziono strony",
     "contact": "Kontakt",
     "playNamed": "Graj: {{title}}",
-    "draftNamed": "Szkic: {{title}}",
     "statusNamed": "Status · {{title}}",
     "studioNamed": "Studio · {{title}}",
     "creatorNamed": "{{title}}",

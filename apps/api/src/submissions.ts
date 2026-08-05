@@ -2040,6 +2040,11 @@ export async function registerSubmissionRoutes(
       // lossy by design, and the page needs the loss back to describe the wait honestly.
       ...(record.abandonedAt ? {} : { phase: state }),
       ...(record.slug ? { slug: record.slug } : {}),
+      // Remix save-as-yours records `remix_saved` on the queued→building→ready path.
+      // Surface that so Studio can tell a private remix draft from a gate-green build.
+      ...((record.transitions ?? []).some((transition) => transition.reason === 'remix_saved')
+        ? { draftOrigin: 'remix' as const }
+        : {}),
     };
     // Studio's play surface only fetches `/preview` when `preview.slug` is set (the
     // same signal the PR-derived path used to emit). A self-build delivery has no PR
@@ -4252,11 +4257,11 @@ export async function registerSubmissionRoutes(
   );
 
   /**
-   * A shareable link to an in-progress game: `/draft/<slug>` resolves the same way a
-   * published game's `/play/<slug>` does. Read-only by construction — it carries no
-   * status token, so a friend can watch the game take shape but cannot send change
-   * requests or spend the creator's quota. The slug is learned from status polls and
-   * stored on the submission, so this needs no PR search.
+   * Legacy draft fetch — prefer `GET /api/games/:slug`, which is the lifetime
+   * permalink for both drafts and published games. Kept for older clients; the SPA
+   * rewrites `/draft/<slug>` → `/play/<slug>` and loads through `/api/games/:slug`.
+   * Read-only by construction — no status token, so a friend can watch but cannot
+   * send change requests or spend the creator's quota.
    */
   app.get('/api/drafts/:slug', async (request, reply) => {
     if (!githubClient) {

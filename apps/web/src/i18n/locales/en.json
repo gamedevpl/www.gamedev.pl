@@ -685,6 +685,10 @@
       "gating": "Automated checks are making sure your game actually runs clean.",
       "ready_for_review": "Your game passed every check. It's waiting for the last look before going live."
     },
+    "remix": {
+      "label": "Your remix",
+      "ready": "Your remix is saved as a private draft. Play it, share the link, or say what to change."
+    },
     "phaseLabels": {
       "dispatched": "Starting agent"
     },
@@ -914,14 +918,12 @@
   "pageTitle": {
     "home": "Gamedev.pl — Describe a game, play it",
     "status": "Your game is in the works",
-    "draft": "A game in the making",
     "join": "Join the game",
     "health": "Telemetry",
     "studio": "Creator Studio",
     "notFound": "Page not found",
     "contact": "Contact",
     "playNamed": "Play {{title}}",
-    "draftNamed": "Draft {{title}}",
     "statusNamed": "Status · {{title}}",
     "studioNamed": "Studio · {{title}}",
     "creatorNamed": "{{title}}",
