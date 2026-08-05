@@ -313,6 +313,15 @@ describe('ui resources', () => {
     expect(html).toContain('was never given a round key');
     expect(html).toContain('The status call was refused.');
     expect(html).toContain("'with a round key, ' : 'without a round key, '");
+
+    // Appended, not substituted: the static fallback may have just put the gate's own
+    // report in that block, and a note about our polling must not evict it.
+    expect(html).toContain("report.textContent + '\\n\\n' + diagnostic");
+
+    // Never JSON.stringify a value the host handed us. Structured clone carries cycles,
+    // and this runs inside the message handler — a throw there takes the card's whole
+    // update path down, turning a failed read into a frozen card.
+    expect(html).not.toContain('JSON.stringify(error)');
   });
 
   it("shows the gate's own frames, which the agent has no browser to capture", () => {

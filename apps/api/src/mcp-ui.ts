@@ -843,11 +843,19 @@ const ROUND_STATUS_HTML = `<!doctype html>
           // Say which of the two ways it failed. Without this a screenshot of a broken
           // card is indistinguishable between "the host never gave this view a round
           // key" and "the host refused the call", and those need opposite fixes.
-          report.textContent =
+          var diagnostic =
             lastFailure ||
             (sessionKey
               ? 'The status call was refused.'
               : 'This view was never given a round key, so it could not ask.');
+          // Appended, never substituted. renderGateOnly may have just put the gate's own
+          // report here, and that is what the creator came to read — a diagnostic about
+          // our polling is the footnote, not the headline.
+          // The escapes are doubled on purpose: this file is a template literal, so a
+          // bare \\n here would emit a real line break inside a JS string and break the
+          // view. tsc and lint both pass it; only the browser notices.
+          report.textContent =
+            report.hidden || !report.textContent ? diagnostic : report.textContent + '\\n\\n' + diagnostic;
           report.hidden = false;
           reportSize();
         }
@@ -1001,8 +1009,12 @@ const ROUND_STATUS_HTML = `<!doctype html>
             inFlight = false;
             var status = error ? null : unwrap(result, looksLikeStatus);
             if (!status) {
+              // Never JSON.stringify a value the host handed us: structured clone
+              // carries cycles, and a throw here is inside the message handler, which
+              // would take the card's whole update path down with it. A plain coercion
+              // says less and cannot fail.
               var reason = error
-                ? 'call refused: ' + (error.message || JSON.stringify(error)).slice(0, 200)
+                ? 'call refused: ' + String(error.message || error.code || error).slice(0, 200)
                 : 'the reply was not round status';
               lastFailure = (sessionKey ? 'with a round key, ' : 'without a round key, ') + reason;
               log('warning', 'round status unavailable: ' + lastFailure);
