@@ -3817,13 +3817,21 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
                   ? // visibility defaults to ["model", "app"], so a launcher says nothing.
                     { resourceUri: uiResourceUri }
                   : null;
+              // ChatGPT rendered the card but could not call the app-only tool from it.
+              // Its own compatibility keys say the same things as `_meta.ui`, so declare
+              // both rather than guess which one a host actually reads.
+              const openAiMeta = appOnly
+                ? { 'openai/widgetAccessible': true }
+                : uiResourceUri
+                  ? { 'openai/outputTemplate': uiResourceUri }
+                  : null;
               return {
                 name,
                 description: tool.description,
                 inputSchema: tool.inputSchema,
                 outputSchema: tool.outputSchema,
                 ...(tool.annotations ? { annotations: tool.annotations } : {}),
-                ...(uiMeta ? { _meta: { ui: uiMeta } } : {}),
+                ...(uiMeta ? { _meta: { ui: uiMeta, ...openAiMeta } } : {}),
               };
             }),
         }),

@@ -187,12 +187,23 @@ interface UiResource {
   text: string;
 }
 
-/**
- * Origin the view is attributed to. Required by ChatGPT when submitting a plugin with
- * UI; inert everywhere else. It identifies the view, and grants it nothing on our site —
- * the card is served as inline HTML and never runs with our origin's authority.
+/*
+ * `ui.domain` is deliberately NOT declared, after declaring it broke Claude.
+ *
+ * It is not our origin. Claude validates it against a value derived from the connector
+ * URL the *user* typed:
+ *
+ *   sha256(<connector URL>).hex.slice(0, 32) + '.claudemcpcontent.com'
+ *
+ * — so `https://www.gamedev.pl/api/mcp`, the same with a trailing slash, and the apex
+ * spelling each produce a different expected domain. A static resource cannot know which
+ * one a given creator configured, and a wrong value fails validation exactly as ours did
+ * ("ui.domain validation failed for connector …" in the Claude console).
+ *
+ * Omitting it is what worked before. The only thing it gates is ChatGPT plugin
+ * submission, which is owner-gated and not imminent; when that day comes this needs to be
+ * derived per request from the URL the client actually called, not hardcoded.
  */
-const VIEW_DOMAIN = 'https://www.gamedev.pl';
 
 interface UiCsp {
   readonly connectDomains: readonly string[];
@@ -201,7 +212,13 @@ interface UiCsp {
 }
 
 interface UiResourceMeta {
-  ui: { csp: UiCsp; domain: string };
+  ui: { csp: UiCsp };
+  /** ChatGPT reads its own compatibility key rather than `ui.csp`. */
+  'openai/widgetCSP': {
+    connect_domains: readonly string[];
+    resource_domains: readonly string[];
+    frame_domains: readonly string[];
+  };
 }
 
 /** What `resources/list` returns per view: everything but the body. */
@@ -992,9 +1009,22 @@ const UI_RESOURCES: readonly UiResource[] = Object.freeze([
   },
 ]);
 
-/** What a host reads about a view: its CSP and the origin it belongs to. */
+/**
+ * What a host reads about a view: its CSP, twice — once in the standard shape and once
+ * in ChatGPT's. Deliberately no origin; see the note on `ui.domain` above.
+ */
 function uiResourceMeta(): UiResourceMeta {
-  return { ui: { csp: VIEW_CSP, domain: VIEW_DOMAIN } };
+  return {
+    ui: { csp: VIEW_CSP },
+    // Same declaration in the shape ChatGPT reads. It showed a "CSP off" badge against
+    // the modern key alone, and both are documented, so we say it twice rather than
+    // guess which one a host honours.
+    'openai/widgetCSP': {
+      connect_domains: VIEW_CSP.connectDomains,
+      resource_domains: VIEW_CSP.resourceDomains,
+      frame_domains: VIEW_CSP.frameDomains,
+    },
+  };
 }
 
 /** Descriptors for `resources/list` — no bodies. */
