@@ -1203,7 +1203,6 @@
     "gateGreen": "Zaakceptowane przez bramkę",
     "gateRed": "Bramka odrzuciła to wydanie",
     "placeholder": {
-      "board": "Tu pojawi się tablica zadań: zadania do wzięcia, zadania budowane przez agenta i zmiany czekające na zagranie. W budowie.",
       "review": "Recenzja zmiany będzie tu oznaczać trzydzieści sekund grania w dwie wersje obok siebie — nie czytanie diffa. W budowie.",
       "sources": "Podgląd źródeł gry tylko do odczytu. Celowo ostatnia zakładka — produktem jest gra. W budowie."
     },
@@ -1223,6 +1222,38 @@
     "budgetHeading": "Budżet autora",
     "budgetOf": "{{used}} z {{limit}}",
     "budgetAria": "Budżet autora: {{used}} z {{limit}}",
-    "latestReleaseHeading": "Ostatnie wydanie"
+    "latestReleaseHeading": "Ostatnie wydanie",
+    "board": {
+      "loading": "Wczytywanie tablicy…",
+      "error": "Nie udało się wczytać tablicy. Spróbuj za chwilę.",
+      "columns": {
+        "open": "Do wzięcia",
+        "building": "Buduje się",
+        "review": "Do zagrania",
+        "released": "Wydane"
+      },
+      "openPrivate": "Zadania do wzięcia widzi tylko twórca gry — pochodzą z danych o rozgrywce, których ta strona nie publikuje.",
+      "openEmpty": "Nic otwartego. Nocny przebieg otworzy zadanie, gdy dane o rozgrywce je pokażą.",
+      "buildingEmpty": "Nic się teraz nie buduje.",
+      "reviewEmpty": "Nic nie czeka na zagranie.",
+      "releasedEmpty": "Nic jeszcze nie wydano.",
+      "assign": "Przekaż agentowi",
+      "assigning": "Przekazywanie…",
+      "taskFallback": "Zadanie",
+      "byAgent": "agent",
+      "byCreator": "twórca",
+      "class": {
+        "defect": "błąd",
+        "friction": "tarcie",
+        "design-change": "projekt"
+      },
+      "assignError": {
+        "unknown": "Nie udało się przekazać zadania. Spróbuj za chwilę.",
+        "quota_exceeded": "Wyczerpany dzienny limit ulepszeń. Spróbuj jutro.",
+        "authentication required": "Zaloguj się jako twórca gry, aby przekazywać zadania.",
+        "not found": "Tego zadania już nie ma — tablica mogła się zmienić."
+      },
+      "note": "Cztery kolumny i nic więcej. Przekazanie zadania agentowi uruchamia budowę; to jedyna automatyka na tej tablicy."
+    }
   }
 }

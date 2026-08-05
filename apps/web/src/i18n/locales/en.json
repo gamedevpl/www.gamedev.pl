@@ -1199,7 +1199,6 @@
     "gateGreen": "Accepted by the gate",
     "gateRed": "Gate run failed",
     "placeholder": {
-      "board": "The task board lands here: open tasks anyone can pick up, tasks being built by the agent, and changes waiting to be played. In the works.",
       "review": "Reviewing a change here will mean playing two versions side by side for thirty seconds — not reading a diff. In the works.",
       "sources": "A read-only view of the game’s sources. Deliberately the last tab — the game is the product. In the works."
     },
@@ -1217,6 +1216,38 @@
     "budgetHeading": "Author budget",
     "budgetOf": "{{used}} of {{limit}}",
     "budgetAria": "Author budget: {{used}} of {{limit}}",
-    "latestReleaseHeading": "Latest release"
+    "latestReleaseHeading": "Latest release",
+    "board": {
+      "loading": "Loading the board…",
+      "error": "Could not load the board. Try again in a moment.",
+      "columns": {
+        "open": "Up for grabs",
+        "building": "Building",
+        "review": "To play",
+        "released": "Released"
+      },
+      "openPrivate": "Open tasks are private to the game’s creator — they come from play data this page does not publish.",
+      "openEmpty": "Nothing open. The nightly pass opens a task when the play data shows one.",
+      "buildingEmpty": "Nothing being built right now.",
+      "reviewEmpty": "Nothing waiting to be played.",
+      "releasedEmpty": "Nothing released yet.",
+      "assign": "Hand to the agent",
+      "assigning": "Handing over…",
+      "taskFallback": "Task",
+      "byAgent": "agent",
+      "byCreator": "creator",
+      "class": {
+        "defect": "bug",
+        "friction": "friction",
+        "design-change": "design"
+      },
+      "assignError": {
+        "unknown": "Could not hand that task over. Try again in a moment.",
+        "quota_exceeded": "Daily improvement limit reached. Try again tomorrow.",
+        "authentication required": "Sign in as the game’s creator to hand tasks over.",
+        "not found": "That task is gone — the board may have moved on."
+      },
+      "note": "Four columns and nothing else. Handing a task to the agent starts a build; that is the only automation here."
+    }
   }
 }

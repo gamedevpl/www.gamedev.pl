@@ -12914,3 +12914,129 @@ a.user-name--profile:focus-visible {
   color: var(--muted);
   font-size: 0.9rem;
 }
+
+/* The task board — four columns, and deliberately nothing else. */
+
+.game-board-columns {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 900px) {
+  .game-board-columns {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .game-board-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.game-board-column {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 10px;
+  min-width: 0;
+}
+
+.game-board-column-heading {
+  margin: 0 0 10px;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.game-board-column-count {
+  margin-left: 4px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--panel-card);
+  color: var(--text);
+}
+
+.game-board-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.game-board-card {
+  background: var(--panel-card);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  padding: 10px;
+}
+
+.game-board-card-title {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  overflow-wrap: break-word;
+}
+
+.game-board-card-detail {
+  margin: 6px 0 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.game-board-card-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.game-board-card-by,
+.game-board-card-when {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.game-board-class {
+  padding: 1px 8px;
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  font-size: 0.72rem;
+  text-transform: lowercase;
+}
+
+.game-board-class--defect {
+  border-color: rgba(242, 162, 162, 0.5);
+  color: #f2a2a2;
+}
+
+.game-board-assign {
+  padding: 3px 10px;
+  font-size: 0.78rem;
+}
+
+.game-board-empty {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.game-board-error {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--error);
+  border-radius: 6px;
+  color: var(--error);
+  font-size: 0.85rem;
+}
+
+.game-board-note {
+  margin: 14px 0 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+  max-width: 70ch;
+}

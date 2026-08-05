@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from './AuthContext.js';
 import { AuthModal } from './AuthModal.js';
+import { GameBoard } from './GameBoard.js';
 import { fetchGamePage, type GamePage as GamePageData } from './gamePageApi.js';
 import { PixelIcon } from './PixelIcon.js';
 import { PublishedGameFrame } from './PublishedGameFrame.js';
@@ -235,7 +236,9 @@ export function GamePage({
             </section>
           ) : null}
 
-          {activeTab === 'board' || activeTab === 'review' || activeTab === 'sources' ? (
+          {activeTab === 'board' ? <GameBoard slug={slug} /> : null}
+
+          {activeTab === 'review' || activeTab === 'sources' ? (
             <section className="game-page-placeholder">
               <h2>{t(`gamePage.tabs.${activeTab}`)}</h2>
               <p>{t(`gamePage.placeholder.${activeTab}`)}</p>

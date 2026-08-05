@@ -18,6 +18,7 @@ import { parseAppleClientIds, type AppleAuthVerifier } from './apple-auth.js';
 import { registerAuthPlugin, type GoogleAuthVerifier } from './auth.js';
 import { registerCreatorProfileRoutes } from './creator-profile-routes.js';
 import { registerGamePageRoutes, type GamePageRoutesOptions } from './game-page-routes.js';
+import { registerGameBoardRoutes, type GameBoardRoutesOptions } from './game-board-routes.js';
 import { registerAccountDeletionRoutes, type AccountDeletionRoutesOptions } from './account-deletion-routes.js';
 import { registerCreatorStudioRoutes } from './creator-studio.js';
 import { registerEditorRoutes } from './editor-drafts.js';
@@ -119,6 +120,8 @@ export interface BuildAppOptions {
   contactRoutes?: ContactRoutesOptions;
   /** Seams for the public game page (cache TTL / clock under test). */
   gamePageRoutes?: Partial<Omit<GamePageRoutesOptions, 'store'>>;
+  /** Seams for the game page's task board. */
+  gameBoardRoutes?: Partial<Omit<GameBoardRoutesOptions, 'store'>>;
   /** Seams for delayed account erasure; defaults to OIDC-or-deny-all from env. */
   accountDeletionRoutes?: Partial<
     Omit<AccountDeletionRoutesOptions, 'store' | 'adminUids' | 'internalAuthVerifier'>
@@ -582,6 +585,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     publishedRef: process.env.GAMES_PUBLISHED_REF ?? 'main',
     ...options.gamePageRoutes,
   });
+
+  // The game page's task board. Reads only — assignment stays on the suggestion
+  // inbox route, which owns the quota and the attribution.
+  await registerGameBoardRoutes(app, { store, ...options.gameBoardRoutes });
   registerAccountDeletionRoutes(app, {
     store,
     adminUids,
@@ -673,9 +680,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // stay authed (they are under /api/creators/:handle/availability and need a session).
     if (/^\/api\/creators\/[^/]+\/?(\?|$)/.test(request.url)) return;
     // The public game page (game-page-routes.ts) — a landing page has to load for a
-    // visitor with no session. Only `/page` passes: the playable document, media,
-    // votes and every other `/api/games/:slug/*` route stay walled during beta.
-    if (/^\/api\/games\/[^/]+\/page(\?|$)/.test(request.url)) return;
+    // visitor with no session. Only `/page` and its board pass: the playable
+    // document, media, votes and every other `/api/games/:slug/*` route stay walled
+    // during beta. The board's own owner-only column is gated in its handler, which
+    // reads `request.user` — present or absent, the wall does not decide it.
+    if (/^\/api\/games\/[^/]+\/(page|board)(\?|$)/.test(request.url)) return;
     // Internal endpoints (the Cloud Scheduler notification sweep) authenticate via
     // an OIDC token in the handler, not a session — the wall would 401 them first.
     if (request.url.startsWith('/api/internal/')) return;
