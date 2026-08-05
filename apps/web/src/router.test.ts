@@ -376,3 +376,11 @@ describe('proposals route', () => {
     expect(parsePathRoute('/proposals/123')).toEqual({ view: 'notFound' });
   });
 });
+
+describe('reserved product segments', () => {
+  it('keeps /proposals as the tracker even though the root namespace holds handles', () => {
+    // `proposals` is also in the API's RESERVED_HANDLES, so no profile can claim it —
+    // this is the client half of that contract, and the ordering is defense in depth.
+    expect(parsePathRoute('/proposals')).toEqual({ view: 'proposals' });
+  });
+});
