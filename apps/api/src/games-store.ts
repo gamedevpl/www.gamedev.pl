@@ -291,8 +291,17 @@ export interface VersionManifest {
    * `game/editor-content.ts`), no agent involved. The gate reads it to know the
    * committed TRACE.json golden predates this content and must be re-derived
    * (`npm run trace -- --accept`) before `check:game` replays it.
+   *
+   * `'remix'` marks a private Studio draft forked from a published game via the
+   * player remix panel — sources copied (with baked editor defaults), no agent.
+   * Never a catalog publication by itself; see {@link forkedFrom}.
    */
-  origin?: 'editor';
+  origin?: 'editor' | 'remix';
+  /**
+   * Parent game this version was forked from, when {@link origin} is `'remix'`.
+   * Attribution / genealogy — not a publish path.
+   */
+  forkedFrom?: { slug: string; version?: string };
   /**
    * Which lane produced this version. Absent on legacy manifests (= publish).
    * Preview versions must never carry a publishable {@link gate}.green.
@@ -415,8 +424,10 @@ export interface GamesStore {
     engineRef?: string;
     /** Creator Kit engineRef the sources were built against (BY-06). */
     kitEngineRef?: string;
-    /** Content-only Studio publish — see {@link VersionManifest.origin}. */
-    origin?: 'editor';
+    /** Content-only Studio publish or remix fork — see {@link VersionManifest.origin}. */
+    origin?: 'editor' | 'remix';
+    /** Parent provenance for remix forks — see {@link VersionManifest.forkedFrom}. */
+    forkedFrom?: { slug: string; version?: string };
     /** Preview skips TRACE/PLAYTEST; default publish. */
     mode?: DeliveryMode;
   }): Promise<{ version: string; manifest: VersionManifest }>;
@@ -675,6 +686,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
         deliveryMode: mode,
         ...(input.kitEngineRef ? { kitEngineRef: input.kitEngineRef } : {}),
         ...(input.origin ? { origin: input.origin } : {}),
+        ...(input.forkedFrom ? { forkedFrom: input.forkedFrom } : {}),
         sourceFiles: files.map((file) => file.path),
       };
       // Written last: a manifest is what makes a version real, so a run that dies

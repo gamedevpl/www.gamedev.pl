@@ -13,7 +13,8 @@ import type { ContentChecker } from './moderation.js';
 import { logModerationRejection } from './moderation-metrics.js';
 import { assembleGameHtml } from './assemble.js';
 import type { GitHubClient } from './github-client.js';
-import type { EditingGate } from './creation-limits.js';
+import { type EditingGate, type CreationGate } from './creation-limits.js';
+import { remixHasSavableChange, saveRemixAsStudioDraft } from './remix-save.js';
 
 /**
  * Remix: a player bends a published game while playing it.
@@ -29,14 +30,15 @@ import type { EditingGate } from './creation-limits.js';
  * rather than per IP. Nothing else about the shape changes, so lifting this is
  * deleting a guard, not rebuilding a surface.
  *
- *  - **A remix never publishes.** There is no path from here into the games
- *    store, the catalog, or the gate. The only durable things it can produce are
- *    a share link of *declared parameter values* and a prefilled game concept —
- *    both of which go through the ordinary front doors.
+ *  - **A remix never publishes.** There is no path from here into the catalog.
+ *    The durable exits go through ordinary front doors: a share link of *declared
+ *    parameter values*, and **save as yours** — a private Studio draft under a
+ *    new slug (preview-lane sources + provenance, never a publication).
  *  - **Params never touch this server.** A slider moves the running game over
  *    the existing `editor:content` bridge, client-side, in under a frame. Only
  *    natural language and code need a round trip, which is why those are the
- *    only routes here.
+ *    only edit routes here. Save receives params/content only to bake them into
+ *    the draft's EDITOR.json defaults.
  *  - **The player never supplies code.** The session holds the accumulated
  *    source overrides server-side and the client holds only an id, so nothing a
  *    browser sends is ever compiled. What comes back is a whole document for the
@@ -58,8 +60,7 @@ import type { EditingGate } from './creation-limits.js';
  * declaration, and the parameter values (which the client holds and re-pushes).
  * What does not is the accumulated code edits, because those are the one thing
  * too big to put in a URL — a rebuilt session starts from the published game.
- * If remixes ever become durable (the "save this as yours" path growing teeth),
- * that is the moment to give them a real home.
+ * Save-as-yours is the moment those edits get a real home: a Studio draft.
  */
 
 export const REMIX_TTL_MS = 60 * 60_000;
@@ -96,6 +97,8 @@ interface RemixSession {
    * a repo game keeps the ref as its base and carries only the edit.
    */
   fromStore: boolean;
+  /** Published version this remix was started from, when the game is store-era. */
+  parentVersion?: string;
   /**
    * Whether the game's own sources are in hand for the code lane to map.
    *
@@ -134,6 +137,11 @@ const AssistSchema = z.object({
 });
 const ShareSchema = z.object({
   params: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
+});
+const SaveSchema = z.object({
+  title: z.string().trim().min(2).max(80).optional(),
+  params: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
+  content: z.record(z.string(), z.unknown()).optional(),
 });
 
 /**
@@ -195,6 +203,11 @@ export interface RemixRoutesOptions {
   contentChecker?: ContentChecker;
   /** The platform-wide editing spend breaker — both model lanes ride it. */
   editingGate?: EditingGate;
+  /** Same breaker createGame uses — save spends a creation slot. */
+  creationGate?: CreationGate | null;
+  /** HMAC secret for the Studio status token returned on save. */
+  submissionTokenSecret?: string;
+  dailySubmissionQuota?: number;
   /**
    * Whether the caller has hung up mid-rebuild. Defaults to the socket state;
    * injectable because that is the one thing a test cannot produce through
@@ -301,6 +314,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
       ref: loaded.ref,
       sources: loaded.sources,
       fromStore: loaded.fromStore,
+      ...(loaded.parentVersion ? { parentVersion: loaded.parentVersion } : {}),
       sourcesLoaded: loaded.fromStore,
       overrides: {},
       history: [],
@@ -331,9 +345,12 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
    * now a question about a manifest, and a read that *fails* is reported as a
    * failure rather than as an absence.
    */
-  async function loadSources(
-    slug: string,
-  ): Promise<{ sources: Record<string, string>; ref: string; fromStore: boolean } | null> {
+  async function loadSources(slug: string): Promise<{
+    sources: Record<string, string>;
+    ref: string;
+    fromStore: boolean;
+    parentVersion?: string;
+  } | null> {
     const gamesStore = options.gamesStore;
     const publication = options.store ? await options.store.getPublication(slug) : null;
     if (gamesStore && publication?.state === 'published') {
@@ -346,7 +363,12 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
         }),
       );
       const sources = Object.fromEntries(entries.filter((entry): entry is [string, string] => entry !== null));
-      return { sources, ref: manifest.engineRef ?? options.publishedRef ?? 'main', fromStore: true };
+      return {
+        sources,
+        ref: manifest.engineRef ?? options.publishedRef ?? 'main',
+        fromStore: true,
+        parentVersion: publication.currentVersion,
+      };
     }
 
     if (!options.githubClient || !options.publishedRef) return null;
@@ -425,6 +447,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
         ref: loaded.ref,
         sources: loaded.sources,
         fromStore: loaded.fromStore,
+        ...(loaded.parentVersion ? { parentVersion: loaded.parentVersion } : {}),
         sourcesLoaded: loaded.fromStore,
         overrides: {},
         history: [],
@@ -838,6 +861,161 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
         /** Compact enough for a URL; the play page validates it again on arrival. */
         code: Buffer.from(JSON.stringify(shared), 'utf8').toString('base64url'),
         codeEditsExcluded: session.codeEdits > 0,
+      });
+    },
+  );
+
+  /**
+   * Save as yours — fork the remixed sources into a private Studio draft.
+   *
+   * Earned: requires a real change (code overrides and/or non-default
+   * params/content). Works for store-era (sources already in the session) and
+   * repo-era (full delivery set loaded from the ref at save time). Never
+   * publishes; the new job lands at ready_for_review with a preview-lane
+   * version and no gate.green, so the operator publish path refuses it until a
+   * real publish delivery exists.
+   */
+  app.post(
+    '/api/remixes/:id/save',
+    { config: { rateLimit: { max: 5, timeWindow: 60_000 } } },
+    async (request, reply) => {
+      if (!requireUser(request, reply)) return;
+      if (!options.store || !options.gamesStore || !options.submissionTokenSecret) {
+        return reply.status(503).send({ error: 'saving is not configured', reason: 'not_configured' });
+      }
+      const session = await getSession(request);
+      if (!session) return reply.status(404).send({ error: 'this remix has expired — start a new one' });
+      const body = SaveSchema.safeParse(request.body ?? {});
+      if (!body.success) return reply.status(400).send({ error: 'invalid request' });
+
+      if (
+        !remixHasSavableChange({
+          overrides: session.overrides,
+          definition: session.definition,
+          params: body.data.params,
+          content: body.data.content,
+        })
+      ) {
+        return reply.status(409).send({
+          error: 'change something first — then you can keep it',
+          reason: 'no_changes',
+        });
+      }
+
+      // Text params (and free-form content strings) go through moderation before
+      // they become defaults on a durable draft — same bar as share. The title
+      // does too, including the default "Remix of …" so a hostile parent slug
+      // cannot smuggle text into the creator's shelf label.
+      const wantedTitle = (body.data.title?.trim() || `Remix of ${session.title}`).trim();
+      const textFields: string[] = [wantedTitle];
+      const specs = session.definition?.params;
+      if (specs && body.data.params) {
+        for (const [name, spec] of Object.entries(specs)) {
+          if (spec.type === 'text' && typeof body.data.params[name] === 'string') {
+            const text = (body.data.params[name] as string).trim();
+            if (text) textFields.push(text);
+          }
+        }
+      }
+      if (textFields.length > 0 && options.contentChecker) {
+        const verdict = await options.contentChecker.checkFields(textFields);
+        if (!verdict.allowed) {
+          logModerationRejection(request.log, {
+            surface: 'remix_save',
+            uid: request.user?.uid,
+            category: verdict.category,
+          });
+          return reply.status(422).send({ error: 'that text was rejected', category: verdict.category ?? 'other' });
+        }
+      }
+
+      let baseSources: Record<string, string>;
+      if (session.fromStore) {
+        baseSources = session.sources;
+      } else {
+        // Repo-era: the session held only the declaration (and maybe a code-lane
+        // TS map). Assemble the full delivery set from the ref once, at the
+        // moment it is needed — same cost the code lane already pays, plus the
+        // fixed files putCandidateSources requires.
+        if (!options.githubClient) {
+          return reply.status(503).send({ error: 'could not save that just now', reason: 'sources_unavailable' });
+        }
+        let delivery: Record<string, string> | null;
+        try {
+          delivery = await options.githubClient.getGameDeliverySources(session.ref, session.slug);
+        } catch (error) {
+          request.log.error(
+            { err: error, slug: session.slug, ref: session.ref },
+            'remix save could not read delivery sources',
+          );
+          return reply.status(503).send({ error: 'could not save that just now', reason: 'sources_unavailable' });
+        }
+        if (!delivery) {
+          return reply.status(409).send({
+            error: 'this game cannot be saved to Studio yet',
+            reason: 'no_sources',
+          });
+        }
+        // Session declaration / any prior code-lane load wins over a fresh ref
+        // read for the same path — then overrides win on top.
+        baseSources = { ...delivery, ...session.sources };
+        session.sources = baseSources;
+        session.sourcesLoaded = true;
+      }
+
+      const html = await rebuild(session);
+      if (!html) {
+        return reply.status(503).send({ error: 'could not save that just now', reason: 'rebuild_failed' });
+      }
+
+      const sources = { ...baseSources, ...session.overrides };
+      let parentVersion = session.parentVersion;
+      if (!parentVersion && options.githubClient?.getRefSha) {
+        try {
+          parentVersion = (await options.githubClient.getRefSha(session.ref)) ?? undefined;
+        } catch {
+          // Provenance is nice-to-have; a ref-sha miss must not block the save.
+        }
+      }
+
+      const saved = await saveRemixAsStudioDraft({
+        uid: request.user!.uid,
+        ip: request.ip,
+        parentSlug: session.slug,
+        parentVersion,
+        parentTitle: session.title,
+        parentEngineRef: session.ref,
+        sources,
+        params: body.data.params,
+        content: body.data.content,
+        title: wantedTitle,
+        html,
+        definition: session.definition,
+        store: options.store,
+        gamesStore: options.gamesStore,
+        creationGate: options.creationGate,
+        submissionTokenSecret: options.submissionTokenSecret,
+        dailySubmissionQuota: options.dailySubmissionQuota,
+        now,
+        log: request.log,
+      });
+
+      if (!saved.ok) {
+        if (saved.error === 'content_rejected') {
+          return reply.status(saved.status).send({ error: saved.error, category: saved.category ?? 'other' });
+        }
+        return reply.status(saved.status).send({
+          error: saved.error,
+          ...(saved.reason ? { reason: saved.reason } : {}),
+        });
+      }
+
+      session.expiresAt = now() + REMIX_TTL_MS;
+      return reply.send({
+        slug: saved.slug,
+        token: saved.token,
+        version: saved.version,
+        studioPath: `/studio/${saved.slug}`,
       });
     },
   );

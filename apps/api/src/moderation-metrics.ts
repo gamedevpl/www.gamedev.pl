@@ -49,6 +49,7 @@ export type ModerationSurface =
   | 'remix_assist' // a player's tuning request on a published game
   | 'remix_code' // a player's code-change request on a published game
   | 'remix_share' // declared text a player is about to put behind a share link
+  | 'remix_save' // title / text params baked into a private Studio fork
   | 'contact' // the public contact form, no session required
   | 'mock_prompt'; // the dev-only mock generator route
 

@@ -2,6 +2,7 @@ import path from 'node:path';
 import { build, transform } from 'esbuild';
 import { classifyTouchSource, type CatalogGameTouch } from './catalog-touch.js';
 import {
+  DELIVERY_FIXED_FILES,
   GAME_KIT_MODULES,
   GAME_KIT_VERTICAL_ENTRIES,
   SOURCE_GRAPH_BUDGET_BYTES,
@@ -489,6 +490,17 @@ export interface GitHubClient {
    * the whole catalog could only be tuned through declared parameters.
    */
   getGameSourceMap(ref: string, slug: string): Promise<Record<string, string> | null>;
+  /**
+   * Full deliverable source set for a repo-era game: the TS import graph plus
+   * every fixed delivery file that exists on the ref (`SPEC.md`, `index.html`,
+   * …). Used to fork a remix into a Studio draft when the session never held a
+   * store copy — the code-lane map alone is not enough to pass
+   * `putCandidateSources` (preview still requires SPEC + index + game.ts).
+   *
+   * Null when the game has no entry point (same absence as {@link getGameSourceMap}).
+   * A missing optional fixed file is omitted rather than failing the whole set.
+   */
+  getGameDeliverySources(ref: string, slug: string): Promise<Record<string, string> | null>;
   /**
    * `shared/game-kit.d.ts` — the ambient declaration every game is written
    * against.
@@ -1247,6 +1259,26 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
       // of", and the two would drift the first time an import convention moved.
       await bundleGameTypeScript(entry, ref, slug, undefined, collected);
       return Object.fromEntries(collected);
+    },
+
+    async getGameDeliverySources(ref, slug) {
+      const modules = await this.getGameSourceMap(ref, slug);
+      if (!modules) return null;
+      // Fixed files the store delivery contract accepts. Read in parallel; absent
+      // ones (TRACE on a preview-only fork, AGENT on an older game) are skipped.
+      // game.ts is already in `modules` from the walk — re-reading it is fine and
+      // keeps this list identical to DELIVERY_FIXED_FILES rather than a fork of it.
+      const fixedEntries = await Promise.all(
+        DELIVERY_FIXED_FILES.map(async (relative) => {
+          const content = await readRawFile(`games/${slug}/${relative}`, ref);
+          return content === null ? null : ([relative, content] as const);
+        }),
+      );
+      const sources: Record<string, string> = { ...modules };
+      for (const entry of fixedEntries) {
+        if (entry) sources[entry[0]] = entry[1];
+      }
+      return sources;
     },
 
     async getGameKitDeclaration(ref) {
