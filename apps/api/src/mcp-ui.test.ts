@@ -303,6 +303,18 @@ describe('ui resources', () => {
     expect(html).toContain("status.agentEnded && gate && gate.status && gate.status !== 'pending'");
   });
 
+  it('says which way a status read failed, so a screenshot is enough to diagnose it', () => {
+    // Observed in ChatGPT: one card read status fine (screenshot, note and gate all
+    // live) while a later one in the same session did not. "Could not read round status
+    // here." cannot distinguish "this view was never handed a round key" from "the host
+    // refused the call", and those need opposite fixes.
+    const html = readUiResource(ROUND_STATUS_RESOURCE_URI)?.text ?? '';
+    expect(html).toContain('lastFailure');
+    expect(html).toContain('was never given a round key');
+    expect(html).toContain('The status call was refused.');
+    expect(html).toContain("'with a round key, ' : 'without a round key, '");
+  });
+
   it('polls, and degrades to the opening payload when a host refuses the app-only call', () => {
     const html = readUiResource(ROUND_STATUS_RESOURCE_URI)?.text ?? '';
     expect(html).toContain("name: 'get_round_status'");

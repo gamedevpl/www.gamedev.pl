@@ -421,6 +421,7 @@ const ROUND_STATUS_HTML = `<!doctype html>
         var speculative = false;
         var giveUpTimer = null;
         var contextKey = null;
+        var lastFailure = null;
         var REPORT_CONTEXT_LIMIT = 4000;
         var stopped = false;
         var timer = null;
@@ -807,8 +808,20 @@ const ROUND_STATUS_HTML = `<!doctype html>
         function giveUp() {
           giveUpTimer = null;
           if (live) return;
-          if (seed) renderGateOnly(seed);
-          else summary.textContent = 'Could not read round status here.';
+          if (seed) {
+            renderGateOnly(seed);
+          } else {
+            summary.textContent = 'Could not read round status here.';
+          }
+          // Say which of the two ways it failed. Without this a screenshot of a broken
+          // card is indistinguishable between "the host never gave this view a round
+          // key" and "the host refused the call", and those need opposite fixes.
+          report.textContent =
+            lastFailure ||
+            (sessionKey
+              ? 'The status call was refused.'
+              : 'This view was never given a round key, so it could not ask.');
+          report.hidden = false;
           reportSize();
         }
 
@@ -875,7 +888,11 @@ const ROUND_STATUS_HTML = `<!doctype html>
             inFlight = false;
             var status = error ? null : unwrap(result, looksLikeStatus);
             if (!status) {
-              log('warning', 'round status unavailable: ' + String(error || 'unrecognised shape'));
+              var reason = error
+                ? 'call refused: ' + (error.message || JSON.stringify(error)).slice(0, 200)
+                : 'the reply was not round status';
+              lastFailure = (sessionKey ? 'with a round key, ' : 'without a round key, ') + reason;
+              log('warning', 'round status unavailable: ' + lastFailure);
               if (speculative) {
                 // The key can land while this very request is in flight, in which case
                 // noteSessionKey's own poll() was dropped as already in flight. Retry
