@@ -9,11 +9,21 @@ import {
   DELIVERY_MAX_UPLOAD_BYTES,
   DELIVERY_RESERVED_SEGMENTS,
   GAME_KIT_MODULES,
+  GAME_KIT_VERTICAL_ENTRIES,
   MAX_PROJECT_BYTES,
 } from './games-repo-contract.js';
 
+const VERTICALS_SOURCE = `
+  const GAME_KIT_VERTICALS = Object.freeze({
+${Object.entries(GAME_KIT_VERTICAL_ENTRIES)
+  .map(([name, entry]) => `    ${name}: '${entry}',`)
+  .join('\n')}
+  });
+`;
+
 const ASSEMBLE_SOURCE = `
   const GAME_KIT_MODULES = [${GAME_KIT_MODULES.map((name) => `'${name}'`).join(', ')}];
+  ${VERTICALS_SOURCE}
   const catalog = readMusicCatalog();
   const track = catalog.tracks[name];
   out += 'window.__GAME_AUDIO_MUSIC__ = ' + JSON.stringify(name);
@@ -115,6 +125,7 @@ describe('runGamesRepoContractCheck', () => {
     const withoutAheadExtras = GAME_KIT_MODULES.filter((name) => !aheadModules.has(name));
     const olderAssemble = `
       const GAME_KIT_MODULES = [${withoutAheadExtras.map((name) => `'${name}'`).join(', ')}];
+      ${VERTICALS_SOURCE}
       const catalog = readMusicCatalog();
       const track = catalog.tracks[name];
       out += 'window.__GAME_AUDIO_MUSIC__ = ' + JSON.stringify(name);
@@ -161,6 +172,46 @@ describe('runGamesRepoContractCheck', () => {
     expect(outcome.kind).toBe('drift');
     expect(outcome.kind === 'drift' && outcome.reason).toContain('Undeclared or expired website-ahead modules');
     expect(outcome.kind === 'drift' && outcome.reason).toContain('collision');
+  });
+
+  it('reports drift when a module moved to a vertical this side still reads from shared/modules', async () => {
+    // The regression that broke the nightly bake: games-repo #527 promoted `vehicles` to
+    // a vertical. Both sides still listed the name, so the module check stayed green while
+    // the bake looked for shared/modules/vehicles.ts and reported the game as missing.
+    const assembleWithNewVertical = ASSEMBLE_SOURCE.replace(
+      "urban: 'shared/verticals/urban/index.ts',",
+      "urban: 'shared/verticals/urban/index.ts',\n    gfx3d: 'shared/verticals/gfx3d/index.ts',",
+    );
+    const { fetchImpl } = createFetch({
+      ...agreeingPages(),
+      'tools/lib/assemble.ts': [ok(assembleWithNewVertical)],
+    });
+
+    const outcome = await runGamesRepoContractCheck({ ...BASE, fetchImpl });
+    expect(outcome.kind).toBe('drift');
+    expect(outcome.kind === 'drift' && outcome.reason).toContain('GAME_KIT_VERTICALS mismatch');
+    expect(outcome.kind === 'drift' && outcome.reason).toContain('shared/modules/gfx3d.ts');
+  });
+
+  it('reports drift when a shared vertical resolves to a different entry path', async () => {
+    const movedEntry = ASSEMBLE_SOURCE.replace(
+      "urban: 'shared/verticals/urban/index.ts',",
+      "urban: 'shared/verticals/urban/entry.ts',",
+    );
+    const { fetchImpl } = createFetch({ ...agreeingPages(), 'tools/lib/assemble.ts': [ok(movedEntry)] });
+
+    const outcome = await runGamesRepoContractCheck({ ...BASE, fetchImpl });
+    expect(outcome.kind).toBe('drift');
+    expect(outcome.kind === 'drift' && outcome.reason).toContain('shared/verticals/urban/entry.ts');
+  });
+
+  it('notes rather than fails when the games tip has no verticals literal to compare', async () => {
+    const noVerticals = ASSEMBLE_SOURCE.replace(VERTICALS_SOURCE, '');
+    const { fetchImpl } = createFetch({ ...agreeingPages(), 'tools/lib/assemble.ts': [ok(noVerticals)] });
+
+    const outcome = await runGamesRepoContractCheck({ ...BASE, fetchImpl });
+    expect(outcome.kind).toBe('ok');
+    expect(outcome.kind === 'ok' && outcome.notes?.[0]).toContain('GAME_KIT_VERTICALS not compared');
   });
 
   it('skips without a token so forks and fresh clones stay green', async () => {

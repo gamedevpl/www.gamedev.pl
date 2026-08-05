@@ -8,10 +8,12 @@ import {
   DELIVERY_RESERVED_SEGMENTS,
   extractDeliveryContract,
   extractGameKitModules,
+  extractGameKitVerticals,
   extractMaxBundleBytes,
   extractMusicContractSignals,
   GAME_BUDGET_BYTES,
   GAME_KIT_MODULES,
+  GAME_KIT_VERTICAL_ENTRIES,
   GAMEKIT_PLATFORM_BYTES,
   MAX_PROJECT_BYTES,
   MUSIC_CONTRACT,
@@ -223,6 +225,34 @@ describe('games-repo source extractors', () => {
       ] as const;
     `;
     expect(extractGameKitModules(source)).toEqual([...GAME_KIT_MODULES]);
+  });
+
+  it('reads GAME_KIT_VERTICALS from an assemble.ts-shaped source', () => {
+    const source = `
+      const GAME_KIT_VERTICALS = Object.freeze({
+        vehicles: 'shared/verticals/vehicles/index.ts',
+        urban: 'shared/verticals/urban/index.ts',
+        racing: 'shared/verticals/racing/index.ts',
+        football: 'shared/verticals/football/index.ts',
+      });
+    `;
+    expect(extractGameKitVerticals(source)).toEqual(GAME_KIT_VERTICAL_ENTRIES);
+  });
+
+  it('rejects an assemble source with no verticals to compare', () => {
+    expect(() => extractGameKitVerticals('const GAME_KIT_MODULES = [];')).toThrow(/no GAME_KIT_VERTICALS object/);
+    expect(() => extractGameKitVerticals('const GAME_KIT_VERTICALS = Object.freeze({});')).toThrow(
+      /GAME_KIT_VERTICALS object is empty/,
+    );
+  });
+
+  it('resolves every vertical to a games-repo path, never to shared/modules', () => {
+    // The regression behind the failed nightly bake: `vehicles` was a name both sides
+    // knew, but only the games repo knew it had moved out of shared/modules.
+    for (const [name, entry] of Object.entries(GAME_KIT_VERTICAL_ENTRIES)) {
+      expect(GAME_KIT_MODULES).toContain(name);
+      expect(entry).toBe(`shared/verticals/${name}/index.ts`);
+    }
   });
 
   it('evaluates MAX_BUNDLE_BYTES from the single platform ceiling', () => {
