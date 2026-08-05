@@ -23,7 +23,7 @@ import { registerEditorRoutes } from './editor-drafts.js';
 import { VertexEditorAssistant, type EditorAssistant } from './editor-assist.js';
 import { VertexCodeLane } from './code-lane.js';
 import { registerRemixRoutes, MAX_REMIX_ID_LENGTH } from './remix.js';
-import { createEditingGate } from './creation-limits.js';
+import { createEditingGate, createCreationGate } from './creation-limits.js';
 import { createGenerator } from './generator.js';
 import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
 import { registerContactRoutes, type ContactRoutesOptions } from './contact.js';
@@ -543,15 +543,21 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   });
 
   /**
-   * Remix — the player-facing half of live editing. Anonymous by design (no
-   * session required to bend a game), ephemeral by design (nothing here can
-   * publish), and gated by its own two flags: EDITOR_ASSIST for the tuning
-   * router it shares with the Studio, CODE_LANE for real source edits.
+   * Remix — the player-facing half of live editing. Signed-in for now (model
+   * spend), ephemeral by default, with two durable exits that never publish:
+   * share (param links) and save-as-yours (private Studio draft). Gated by
+   * EDITOR_ASSIST / CODE_LANE for the edit lanes; save spends a creation slot.
    */
+  const creationGate = createCreationGate({
+    store,
+    logWarn: (payload, msg) => app.log.warn(payload, msg),
+  });
   await registerRemixRoutes(app, {
     store,
     gamesStore,
     editingGate,
+    creationGate,
+    submissionTokenSecret,
     githubClient: submissionSeams.githubClient ?? undefined,
     publishedRef: process.env.GAMES_PUBLISHED_REF ?? 'main',
     assistant: options.editorAssistant ?? new VertexEditorAssistant(),

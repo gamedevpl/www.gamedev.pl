@@ -1,14 +1,19 @@
-import type { EditorCollectionSpec, EditorLabel, EditorParamSpec, EditorParamValue } from './studioApi.js';
+import type {
+  EditorCollectionSpec,
+  EditorContentDoc,
+  EditorLabel,
+  EditorParamSpec,
+  EditorParamValue,
+} from './studioApi.js';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 
 /**
- * The player-facing half of live editing (ops repo: realtime-game-editing-plan §D).
- *
- * A remix needs no account and never publishes. Parameter values live here in the
- * browser and reach the running game over the existing `editor:content` bridge —
- * no round trip, which is what makes a slider feel like a slider. Only the two
- * model lanes talk to the server.
+ * A remix needs a session and never publishes on its own. Parameter values live
+ * here in the browser and reach the running game over the existing
+ * `editor:content` bridge — no round trip, which is what makes a slider feel
+ * like a slider. Only the model lanes and the save/share exits talk to the
+ * server.
  */
 
 /**
@@ -57,7 +62,14 @@ export type RemixShare = {
   codeEditsExcluded: boolean;
 };
 
-export type RemixApiError = Error & { status?: number };
+export type RemixSave = {
+  slug: string;
+  token: string;
+  version: string;
+  studioPath: string;
+};
+
+export type RemixApiError = Error & { status?: number; reason?: string; category?: string };
 
 async function post<T>(path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
@@ -68,8 +80,21 @@ async function post<T>(path: string, body?: unknown, signal?: AbortSignal): Prom
     ...(signal ? { signal } : {}),
   });
   if (!response.ok) {
-    const error = new Error(`request failed with ${response.status}`) as RemixApiError;
+    let reason: string | undefined;
+    let category: string | undefined;
+    let message = `request failed with ${response.status}`;
+    try {
+      const payload = (await response.json()) as { error?: string; reason?: string; category?: string };
+      if (typeof payload.error === 'string' && payload.error) message = payload.error;
+      if (typeof payload.reason === 'string') reason = payload.reason;
+      if (typeof payload.category === 'string') category = payload.category;
+    } catch {
+      // Body may be empty; status is enough for the caller.
+    }
+    const error = new Error(message) as RemixApiError;
     error.status = response.status;
+    error.reason = reason;
+    error.category = category;
     throw error;
   }
   return (await response.json()) as T;
@@ -104,6 +129,24 @@ export function remixUndo(remixId: string): Promise<{ ok: true; html: string; un
 
 export function remixShare(remixId: string, params: Record<string, EditorParamValue>): Promise<RemixShare> {
   return post<RemixShare>(`/api/remixes/${encodeURIComponent(remixId)}/share`, { params });
+}
+
+/**
+ * Fork the remixed sources into a private Studio draft under a new slug.
+ *
+ * Never publishes. Params and painted content travel with the request so the
+ * server can bake them into EDITOR.json — they never lived there during the
+ * ephemeral remix.
+ */
+export function remixSave(
+  remixId: string,
+  body: {
+    title?: string;
+    params?: Record<string, EditorParamValue>;
+    content?: EditorContentDoc;
+  },
+): Promise<RemixSave> {
+  return post<RemixSave>(`/api/remixes/${encodeURIComponent(remixId)}/save`, body);
 }
 
 /**

@@ -9,6 +9,7 @@ import {
   coerceSharedParams,
   remixAssist,
   remixCode,
+  remixSave,
   remixShare,
   remixUndo,
   startRemix,
@@ -19,6 +20,7 @@ import {
 import { RemixPainter } from './RemixPainter.js';
 import type { EditorContentDoc, EditorLabel, EditorParamSpec, EditorParamValue } from './studioApi.js';
 import type { RemixPaintedVia } from './visitTelemetry.js';
+import { NAVIGATE_EVENT, studioPath } from './router.js';
 
 /**
  * Remix: a player bends a published game while playing it.
@@ -221,6 +223,7 @@ export function RemixPanel(props: {
   const failStreakRef = useRef(0);
   const [undo, setUndo] = useState<Record<string, EditorParamValue> | null>(null);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   /** The last change that landed, and whether there is anything to share of it. */
   const [changed, setChanged] = useState<{
     text: string;
@@ -501,6 +504,24 @@ export function RemixPanel(props: {
     setValues(next);
     pushToGame(next);
     recordRemixStep('tuned');
+    setChanged({
+      text: t('remix.changeStanding'),
+      canShare: hasShareableValues(session?.params ?? null, next),
+    });
+  }
+
+  /** The player painted — update the doc, tell the funnel, and land it after the stroke. */
+  function paintContent(next: EditorContentDoc) {
+    setContentDoc(next);
+    contentDocRef.current = next;
+    contentEditedRef.current = true;
+    recordRemixStep('painted', { via: painterDoorRef.current ?? 'menu' });
+    pushContentSoon(next);
+    setChanged({
+      text: t('remix.changeStanding'),
+      // Painted maps do not travel in a share link today.
+      canShare: hasShareableValues(session?.params ?? null, valuesRef.current),
+    });
   }
 
   async function ask(textOverride?: string, sessionOverride?: RemixSession) {
@@ -724,15 +745,6 @@ export function RemixPanel(props: {
     setChanged(null);
   }
 
-  /** The player painted — update the doc, tell the funnel, and land it after the stroke. */
-  function paintContent(next: EditorContentDoc) {
-    setContentDoc(next);
-    contentDocRef.current = next;
-    contentEditedRef.current = true;
-    recordRemixStep('painted', { via: painterDoorRef.current ?? 'menu' });
-    pushContentSoon(next);
-  }
-
   async function share() {
     if (!session) return;
     try {
@@ -755,6 +767,43 @@ export function RemixPanel(props: {
       });
     } catch {
       setNote({ kind: 'error', text: t('remix.shareFailed') });
+    }
+  }
+
+  /**
+   * Keep the remixed sources as a private Studio draft under a new slug.
+   *
+   * Earned: only offered after a change has landed. Navigates to Studio on
+   * success — the remix panel has nowhere left to point once the draft exists.
+   */
+  async function saveAsMine() {
+    if (!session || saving) return;
+    setSaving(true);
+    setNote(null);
+    try {
+      const result = await remixSave(session.remixId, {
+        params: valuesRef.current,
+        ...(contentEditedRef.current ? { content: contentDocRef.current } : {}),
+      });
+      recordRemixStep('keep_clicked');
+      const path = result.studioPath || studioPath(result.slug);
+      window.history.pushState(null, '', path);
+      window.dispatchEvent(new PopStateEvent('popstate'));
+      window.dispatchEvent(new CustomEvent(NAVIGATE_EVENT, { detail: { path } }));
+      props.onClose();
+    } catch (error) {
+      const err = error as RemixApiError;
+      const text =
+        err.status === 429
+          ? t('remix.saveQuota')
+          : err.reason === 'store_only'
+            ? t('remix.saveStoreOnly')
+            : err.reason === 'no_changes'
+              ? t('remix.saveNoChanges')
+              : t('remix.saveFailed');
+      setNote({ kind: 'error', text });
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -875,11 +924,27 @@ export function RemixPanel(props: {
             </span>
             <span>{changed.broke ? t('remix.brokeIt') : changed.text}</span>
           </p>
-          {changed.canShare || undo || changed.undoCode ? (
+          {changed.canShare || undo || changed.undoCode || !changed.broke ? (
             <div className="remix-actions-row">
               {changed.canShare ? (
                 <button type="button" className="remix-btn is-primary" onClick={() => void share()}>
                   {t('remix.share')}
+                </button>
+              ) : null}
+              {/*
+               * Earned: offered only after a change has landed. Forks the remixed
+               * sources into a private Studio draft — never a catalog publish.
+               * Quiet next to Share when both are available; primary when Share
+               * is not (code-only remixes).
+               */}
+              {!changed.broke ? (
+                <button
+                  type="button"
+                  className={`remix-btn ${changed.canShare ? 'is-quiet' : 'is-primary'}`}
+                  disabled={saving || lane !== 'idle'}
+                  onClick={() => void saveAsMine()}
+                >
+                  {saving ? t('remix.saving') : t('remix.makeItYours')}
                 </button>
               ) : null}
               {undo || changed.undoCode ? (
@@ -888,7 +953,7 @@ export function RemixPanel(props: {
                   // A broken game makes going back the only thing worth doing,
                   // so it stops being the quiet option.
                   className={`remix-btn ${changed.broke ? 'is-primary' : 'is-quiet'}`}
-                  disabled={lane !== 'idle'}
+                  disabled={lane !== 'idle' || saving}
                   onClick={() => (changed.undoCode ? void undoCode() : undoLast())}
                 >
                   {t('remix.undo')}
@@ -1032,13 +1097,9 @@ export function RemixPanel(props: {
       ) : null}
 
       {/*
-       * No standing "make this yours" (owner decision, 2026-08-02). It sat under
-       * the composer from the first frame — before anything had been changed —
-       * so it read as the panel's purpose rather than as a next step, and it was
-       * the only thing on screen whenever no lane could answer. The intended
-       * shape is earned and sequential: change something, share it, and forking
-       * follows from the share. Until that sequence exists, the panel offers
-       * nothing it has not earned.
+       * Save-as-yours is earned and sequential: change something first, then
+       * keep it. The button lives in the post-change actions row above — never
+       * as a standing CTA under an empty composer (owner decision, 2026-08-02).
        */}
       {/*
        * Expert mode is the owner's debug surface, not the player's, so its share

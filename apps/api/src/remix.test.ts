@@ -55,7 +55,10 @@ const SOURCES: Record<string, string> = {
   'game/runtime.ts': '/** Start it. */\nexport function startGame() {\n  return 0.16;\n}\n',
 };
 
-function stubGamesStore(): GamesStore {
+function stubGamesStore(captures?: {
+  puts?: Array<{ slug: string; files: Array<{ path: string; content: string }>; manifest: unknown }>;
+  derived?: Array<{ slug: string; version: string; name: string }>;
+}): GamesStore {
   return {
     getManifest: async () => ({
       slug: 'dog-dash',
@@ -66,6 +69,25 @@ function stubGamesStore(): GamesStore {
       sourceFiles: Object.keys(SOURCES),
     }),
     getSourceFile: async (_slug: string, _version: string, path: string) => SOURCES[path] ?? null,
+    putCandidateSources: async (input) => {
+      const version = 'v-saved';
+      const manifest = {
+        slug: input.slug,
+        version,
+        createdAt: 'now',
+        issueNumber: input.issueNumber,
+        engineRef: input.engineRef,
+        deliveryMode: input.mode ?? 'publish',
+        origin: input.origin,
+        forkedFrom: input.forkedFrom,
+        sourceFiles: input.files.map((file) => file.path),
+      };
+      captures?.puts?.push({ slug: input.slug, files: input.files, manifest });
+      return { version, manifest };
+    },
+    putDerivedArtifact: async (slug, version, name) => {
+      captures?.derived?.push({ slug, version, name });
+    },
   } as unknown as GamesStore;
 }
 
@@ -106,9 +128,12 @@ async function buildTestApp(
     codeLane?: unknown;
     isAbandoned?: () => boolean;
     now?: () => number;
+    gamesStore?: GamesStore;
+    submissionTokenSecret?: string;
   } = {},
 ) {
   const store = new InMemoryStore();
+  await store.upsertUser({ uid: 'g:alice' });
   await store.setPublication({
     slug: 'dog-dash',
     state: 'published',
@@ -129,16 +154,17 @@ async function buildTestApp(
   });
   await registerRemixRoutes(app, {
     store,
-    gamesStore: stubGamesStore(),
+    gamesStore: overrides.gamesStore ?? stubGamesStore(),
     githubClient: stubGitHubClient(seen),
     publishedRef: 'main',
+    submissionTokenSecret: overrides.submissionTokenSecret ?? 'test-submission-secret',
     ...(overrides.assistant ? { assistant: overrides.assistant } : {}),
     ...(overrides.codeLane ? { codeLane: overrides.codeLane as never } : {}),
     ...(overrides.isAbandoned ? { isAbandoned: overrides.isAbandoned } : {}),
     ...(overrides.now ? { now: overrides.now } : {}),
   });
   await app.ready();
-  return { app, seen };
+  return { app, seen, store };
 }
 
 const alice = { 'x-test-uid': 'g:alice' };
@@ -163,7 +189,7 @@ describe('remix routes', () => {
     app = built.app;
     const start = await app.inject({ method: 'POST', url: '/api/games/dog-dash/remix' });
     expect(start.statusCode).toBe(401);
-    for (const lane of ['assist', 'code', 'share']) {
+    for (const lane of ['assist', 'code', 'share', 'save']) {
       const response = await app.inject({
         method: 'POST',
         url: `/api/remixes/whatever/${lane}`,
@@ -823,6 +849,94 @@ describe('remix survives an instance change', () => {
       payload: { utterance: 'make the dog bigger' },
     });
     expect(response.statusCode).toBe(404);
+  });
+});
+
+describe('remix save as yours', () => {
+  let app: FastifyInstance | null = null;
+
+  beforeEach(() => {
+    process.env.EDITOR_ASSIST = 'true';
+    process.env.CODE_LANE = 'true';
+  });
+
+  afterEach(async () => {
+    delete process.env.EDITOR_ASSIST;
+    delete process.env.CODE_LANE;
+    if (app) await app.close();
+    app = null;
+  });
+
+  it('saves a remixed store game as a private Studio draft — never a publication', async () => {
+    const puts: Array<{ slug: string; files: Array<{ path: string; content: string }>; manifest: unknown }> = [];
+    const derived: Array<{ slug: string; version: string; name: string }> = [];
+    const built = await buildTestApp({
+      gamesStore: stubGamesStore({ puts, derived }),
+      assistant: {
+        assist: async () => ({
+          lane: 'params',
+          patches: [{ key: 'dogScale', value: 2 }],
+          values: { dogScale: 2, tagline: 'go!' },
+          summary: { en: 'Bigger dog.', pl: 'Większy pies.' },
+        }),
+      } as EditorAssistant,
+    });
+    app = built.app;
+    const { remixId } = (await app.inject({ method: 'POST', url: '/api/games/dog-dash/remix', headers: alice })).json();
+    await app.inject({
+      method: 'POST',
+      url: `/api/remixes/${remixId}/assist`,
+      headers: alice,
+      payload: { utterance: 'bigger dog', params: { dogScale: 1, tagline: 'go!' } },
+    });
+
+    const saved = await app.inject({
+      method: 'POST',
+      url: `/api/remixes/${remixId}/save`,
+      headers: alice,
+      payload: { params: { dogScale: 2, tagline: 'go!' } },
+    });
+    expect(saved.statusCode).toBe(200);
+    const body = saved.json() as { slug: string; token: string; version: string; studioPath: string };
+    expect(body.slug).not.toBe('dog-dash');
+    expect(body.slug).toMatch(/^remix-of-/);
+    expect(body.studioPath).toBe(`/studio/${body.slug}`);
+    expect(body.token).toBeTruthy();
+    expect(puts).toHaveLength(1);
+    expect(puts[0].slug).toBe(body.slug);
+    expect(
+      (puts[0].manifest as { origin?: string; forkedFrom?: { slug: string; version?: string }; deliveryMode?: string })
+        .origin,
+    ).toBe('remix');
+    expect((puts[0].manifest as { forkedFrom?: { slug: string; version?: string } }).forkedFrom).toEqual({
+      slug: 'dog-dash',
+      version: 'v1',
+    });
+    expect((puts[0].manifest as { deliveryMode?: string }).deliveryMode).toBe('preview');
+    expect(derived).toEqual([{ slug: body.slug, version: 'v-saved', name: 'preview.html' }]);
+
+    const job = await built.store.getSubmissionBySlug(body.slug);
+    expect(job?.ownerUid).toBe('g:alice');
+    expect(job?.state).toBe('ready_for_review');
+    expect(job?.previewVersion).toBe('v-saved');
+    expect(job?.deliveredVersion).toBe('v-saved');
+    // The parent publication is untouched — this is a fork, not an overwrite.
+    expect(await built.store.getPublication('dog-dash')).toMatchObject({ state: 'published', currentVersion: 'v1' });
+    expect(await built.store.getPublication(body.slug)).toBeNull();
+  });
+
+  it('refuses save with nothing changed', async () => {
+    const built = await buildTestApp();
+    app = built.app;
+    const { remixId } = (await app.inject({ method: 'POST', url: '/api/games/dog-dash/remix', headers: alice })).json();
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/remixes/${remixId}/save`,
+      headers: alice,
+      payload: { params: { dogScale: 1, tagline: 'go!' } },
+    });
+    expect(response.statusCode).toBe(409);
+    expect(response.json().reason).toBe('no_changes');
   });
 });
 
