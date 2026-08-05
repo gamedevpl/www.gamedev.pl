@@ -152,17 +152,18 @@ describe('ui resources', () => {
     expect(readUiResource('')).toBeNull();
   });
 
-  it('declares its CSP and origin rather than relying on the host default', () => {
+  it('declares its CSP in both shapes, and no origin', () => {
     // Same effect as the deny-all default, but stated: ChatGPT will not accept a
     // template for submission without it, and an empty frameDomains is a deliberate
     // signal that nothing is nested yet (declaring one triggers stricter review).
     for (const meta of [uiResourceDescriptors()[0]?._meta, readUiResource(ROUND_STATUS_RESOURCE_URI)?._meta]) {
       expect(meta).toMatchObject({
-        ui: {
-          csp: { connectDomains: [], resourceDomains: [], frameDomains: [] },
-          domain: 'https://www.gamedev.pl',
-        },
+        ui: { csp: { connectDomains: [], resourceDomains: [], frameDomains: [] } },
+        'openai/widgetCSP': { connect_domains: [], resource_domains: [], frame_domains: [] },
       });
+      // Not declared on purpose: Claude validates ui.domain against a hash of the
+      // connector URL the user typed, which a static resource cannot know.
+      expect(meta).not.toHaveProperty('ui.domain');
     }
   });
 
