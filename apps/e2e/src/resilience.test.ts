@@ -75,11 +75,13 @@ describe.skipIf(!prereq.ok)('error and edge routes', () => {
     expect(describeProblems(watcher.drain())).toBe('');
   });
 
-  it('explains an unavailable draft rather than blanking', async () => {
-    // A published game has no draft, so this is the "already published, or still
-    // starting up" path in DraftView.
+  it('rewrites legacy /draft links onto /play and stays usable', async () => {
+    // `/draft/<slug>` is an inbound alias of the lifetime `/play/<slug>` permalink.
+    // A published catalog game resolves to the preview page; an unknown slug still
+    // shows a missing/unavailable state rather than a blank shell.
     await visit(page, '/draft/apex-sprint', 3_000);
 
+    expect(new URL(page.url()).pathname).toBe('/play/apex-sprint');
     expect((await bodyText()).length).toBeGreaterThan(0);
     expect(describeProblems(watcher.drain())).toBe('');
   });

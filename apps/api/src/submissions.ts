@@ -4257,11 +4257,11 @@ export async function registerSubmissionRoutes(
   );
 
   /**
-   * A shareable link to an in-progress game: `/draft/<slug>` resolves the same way a
-   * published game's `/play/<slug>` does. Read-only by construction — it carries no
-   * status token, so a friend can watch the game take shape but cannot send change
-   * requests or spend the creator's quota. The slug is learned from status polls and
-   * stored on the submission, so this needs no PR search.
+   * Legacy draft fetch — prefer `GET /api/games/:slug`, which is the lifetime
+   * permalink for both drafts and published games. Kept for older clients; the SPA
+   * rewrites `/draft/<slug>` → `/play/<slug>` and loads through `/api/games/:slug`.
+   * Read-only by construction — no status token, so a friend can watch but cannot
+   * send change requests or spend the creator's quota.
    */
   app.get('/api/drafts/:slug', async (request, reply) => {
     if (!githubClient) {

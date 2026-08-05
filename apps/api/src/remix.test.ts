@@ -952,8 +952,8 @@ describe('remix save as yours', () => {
     };
     expect(body.slug).not.toBe('dog-dash');
     expect(body.slug).toMatch(/^remix-of-/);
-    expect(body.openPath).toBe(`/draft/${body.slug}`);
-    expect(body.studioPath).toBe(`/draft/${body.slug}`);
+    expect(body.openPath).toBe(`/play/${body.slug}`);
+    expect(body.studioPath).toBe(`/play/${body.slug}`);
     expect(body.token).toBeTruthy();
     expect(puts).toHaveLength(1);
     expect(puts[0].slug).toBe(body.slug);

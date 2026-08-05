@@ -156,6 +156,7 @@ export function App() {
     const playTitle =
       route.view === 'play'
         ? (catalogEntries.find((game) => game.slug === route.slug)?.title ??
+          draftTitle ??
           (stageContent?.type === 'catalog' && stageContent.game.slug === route.slug ? stageContent.game.title : null))
         : null;
     // Matched on either address the URL can carry: a slug now, a capability token on
@@ -168,7 +169,6 @@ export function App() {
     return resolveDocumentTitle(route, {
       copy: {
         home: t('pageTitle.home'),
-        draft: t('pageTitle.draft'),
         join: t('pageTitle.join'),
         health: t('pageTitle.health'),
         studio: t('pageTitle.studio'),
@@ -178,14 +178,12 @@ export function App() {
         proposals: t('pageTitle.proposals'),
         notFound: t('pageTitle.notFound'),
         playNamed: t('pageTitle.playNamed'),
-        draftNamed: t('pageTitle.draftNamed'),
         studioNamed: t('pageTitle.studioNamed'),
         creatorNamed: t('pageTitle.creatorNamed'),
         gameNamed: t('pageTitle.gameNamed'),
       },
       playTitle,
       studioTitle,
-      draftTitle: route.view === 'draft' ? draftTitle : null,
       creatorName: route.view === 'creator' ? creatorName : null,
       gameTitle: route.view === 'game' ? gameTitle : null,
       // Only surface ephemeral theaters while still on home — `/play/<slug>` already
@@ -723,15 +721,20 @@ export function App() {
     navigate('/');
   }, [navigate]);
 
+  // Unpublished `/play/<slug>` uses DraftView's own theater (not `stageContent`), so
+  // hide Up the same way — Close / the error home link own escape there.
+  const playCatalogGame =
+    route.view === 'play' ? (catalogEntries.find((game) => game.slug === route.slug) ?? null) : null;
+  const unpublishedPlayTheater = route.view === 'play' && catalogStatus !== 'loading' && !playCatalogGame;
+
   // Header Up chevron — Android-style parent path, never history.back(). Hidden
-  // while App owns a theater (`stageContent`) and on routes whose child owns one
-  // (`/draft`, studio playtest — see navUpTarget).
+  // while a theater owns the viewport (`stageContent`, unpublished play, studio playtest).
   const headerUp = useMemo(() => {
-    if (stageContent) return null;
+    if (stageContent || unpublishedPlayTheater) return null;
     const target = navUpTarget(route);
     if (!target) return null;
     return { path: target.path, ariaLabel: t(`header.${target.labelKey}`) };
-  }, [route, stageContent, t]);
+  }, [route, stageContent, unpublishedPlayTheater, t]);
 
   function handlePlayGame(game: CatalogEntry) {
     // Explicit Play is the execution boundary. Shared `/play/<slug>` links land on a
@@ -965,18 +968,24 @@ export function App() {
               setPendingScrollTarget('hero-prompt');
             }}
           />
-        ) : route.view === 'draft' ? (
-          <DraftView slug={route.slug} onExit={exitOverlay} onDraftTitle={setDraftTitle} />
         ) : (
           <>
             {route.view === 'play' ? (
-              <GameDetailPage
-                game={catalogEntries.find((game) => game.slug === route.slug) ?? null}
-                state={catalogStatus}
-                onPlay={handlePlayGame}
-                onRemix={handleRemixGame}
-                onRetry={handleRetryCatalog}
-              />
+              catalogStatus === 'loading' && !playCatalogGame ? (
+                <p className="game-page-state">{t('gamePage.loading')}</p>
+              ) : playCatalogGame ? (
+                <GameDetailPage
+                  game={playCatalogGame}
+                  state={catalogStatus}
+                  onPlay={handlePlayGame}
+                  onRemix={handleRemixGame}
+                  onRetry={handleRetryCatalog}
+                />
+              ) : (
+                // Same `/play/<slug>` permalink before publish — API serves the draft to
+                // the owner (or anyone once sharing is on). Legacy `/draft/` rewrites here.
+                <DraftView slug={route.slug} onExit={exitOverlay} onDraftTitle={setDraftTitle} />
+              )
             ) : (
               <>
                 <div id="hero-prompt">

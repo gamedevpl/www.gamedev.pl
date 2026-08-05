@@ -24,7 +24,7 @@ const FALLBACK_SLUG = 'game';
 
 /**
  * Path segments the app itself uses. None of them can currently collide — a game slug
- * is always addressed under `/play/`, `/draft/` or `/studio/` — but a game called
+ * is always addressed under `/play/` or `/studio/` — but a game called
  * "admin" is a trap laid for the next person who adds a route, and the cost of not
  * laying it is this list.
  */

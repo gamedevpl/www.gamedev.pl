@@ -353,8 +353,8 @@ export async function getSubmissionPreview(token: string): Promise<SubmissionPre
 }
 
 /**
- * The read-only, shareable form of a draft: addressed by slug like a published game,
- * with no status token involved — so a shared link can't send change requests.
+ * @deprecated Prefer `GET /api/games/:slug` (`fetchPublishedGame`) — the lifetime
+ * permalink for drafts and published games. This hits legacy `/api/drafts/:slug`.
  */
 export async function getDraftBySlug(slug: string): Promise<SubmissionPreview> {
   const response = await fetch(`${API_BASE}/api/drafts/${encodeURIComponent(slug)}`, { credentials: 'include' });

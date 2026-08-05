@@ -110,7 +110,7 @@ describe('route kinds follow the real router', () => {
   it.each([
     ['/', 'home'],
     ['/play/arena-tag', 'play'],
-    ['/draft/space-hop', 'draft'],
+    ['/draft/space-hop', 'play'],
     ['/privacy', 'legal'],
     ['/terms', 'legal'],
     ['/contact', 'legal'],

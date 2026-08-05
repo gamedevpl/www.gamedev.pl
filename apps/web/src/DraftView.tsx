@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { fetchPublishedGame } from './catalog.js';
 import { GameTheater } from './GameTheater.js';
-import { getDraftBySlug, type SubmissionApiError, type SubmissionPreview } from './submissionApi.js';
 
 type DraftViewProps = {
   slug: string;
@@ -15,14 +15,18 @@ type DraftViewProps = {
 };
 
 /**
- * `/draft/<slug>` — an in-progress game opened by permalink instead of by status
- * token. This is the shareable view: it can play the build, and nothing else. The
- * creator's own status page keeps the token, and with it the ability to request
- * changes; anyone they send this link to just gets to watch the game take shape.
+ * Unpublished half of `/play/<slug>`.
+ *
+ * Catalog games render {@link GameDetailPage} on the same URL. When the slug is
+ * not in the catalog yet (owner draft, or a draft someone shared), this view
+ * loads the playable document via `GET /api/games/:slug` and opens the theater
+ * — the lifetime permalink stays `/play/<slug>` before and after publish.
+ *
+ * Legacy `/draft/<slug>` links rewrite to `/play/<slug>` in the router.
  */
 export function DraftView({ slug, onExit, onDraftTitle }: DraftViewProps) {
   const { t } = useTranslation();
-  const [draft, setDraft] = useState<SubmissionPreview | null>(null);
+  const [draft, setDraft] = useState<{ title: string; html: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -38,14 +42,12 @@ export function DraftView({ slug, onExit, onDraftTitle }: DraftViewProps) {
     setDraft(null);
     setError(null);
 
-    getDraftBySlug(slug)
+    fetchPublishedGame(slug)
       .then((result) => {
-        if (!cancelled) setDraft(result);
+        if (!cancelled) setDraft({ title: result.title, html: result.html });
       })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        const apiError = err as SubmissionApiError;
-        setError(apiError.status === 404 || apiError.status === 409 ? t('draft.notFound') : t('draft.error'));
+      .catch(() => {
+        if (!cancelled) setError(t('draft.notFound'));
       });
 
     return () => {

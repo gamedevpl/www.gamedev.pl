@@ -994,8 +994,8 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
    * repo-era (full delivery set loaded from the ref at save time). Never
    * publishes; the new job lands at ready_for_review with a preview-lane
    * version and no gate.green, so the operator publish path refuses it until a
-   * real publish delivery exists. The response opens `/draft/<slug>` (play
-   * theater), not Studio — Studio stays on the shelf for later edits.
+   * real publish delivery exists. The response opens `/play/<slug>` — the same
+   * lifetime permalink a published game uses — not Studio.
    */
   app.post(
     '/api/remixes/:id/save',
@@ -1141,17 +1141,16 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
       }
 
       session.expiresAt = now() + REMIX_TTL_MS;
-      // Land on the draft play surface — same theater shape as a shared game, not
-      // Studio. The player was remixing while playing; dumping them into creator
-      // tooling (empty Final check / playtest chrome) is a mode switch they did
-      // not ask for. Studio stays on the shelf for later edits.
+      // Lifetime permalink — `/play/<slug>` serves the draft to its owner (and to
+      // anyone once sharing is on). Not Studio: the player was remixing while
+      // playing; creator tooling stays on the shelf for later edits.
       return reply.send({
         slug: saved.slug,
         token: saved.token,
         version: saved.version,
-        openPath: `/draft/${saved.slug}`,
+        openPath: `/play/${saved.slug}`,
         // Kept until clients that only read studioPath are gone.
-        studioPath: `/draft/${saved.slug}`,
+        studioPath: `/play/${saved.slug}`,
       });
     },
   );

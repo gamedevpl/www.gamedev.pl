@@ -27,6 +27,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 
 /** Where a visit is, coarsely. Route parameters (tokens, slugs) never travel. */
 export type VisitRouteKind =
+  // `draft` remains for historical rows; `/draft/<slug>` now rewrites to `play`.
   'home' | 'play' | 'draft' | 'status' | 'join' | 'legal' | 'health' | 'studio' | 'game' | 'notFound';
 
 export type VisitEvent =
@@ -324,19 +325,21 @@ export function utmFields(
 /**
  * The route's kind, with every parameter discarded.
  *
- * Status and join routes carry capability tokens; play and draft carry a slug.
+ * Status and join routes carry capability tokens; play carries a slug.
  * Reducing to the bare view name here is what guarantees none of them can reach the
  * wire, rather than relying on each call site to remember.
  */
 export function routeKind(view: string): VisitRouteKind {
   switch (view) {
     case 'play':
-    case 'draft':
     case 'join':
     case 'legal':
     case 'studio':
     case 'notFound':
       return view;
+    // Legacy view name — `/draft/` parses as `play` now; keep the bucket for old events.
+    case 'draft':
+      return 'play';
     // The public game page is its own acquisition surface — the funnel's question 2
     // ("does a visit that arrives on a game page play a second game") needs it
     // distinguishable from a direct /play deep link, so it does not fold into `play`.

@@ -66,7 +66,7 @@ export type RemixSave = {
   slug: string;
   token: string;
   version: string;
-  /** Where to open the kept remix — the draft play theater, not Studio. */
+  /** Where to open the kept remix — `/play/<slug>`, not Studio. */
   openPath: string;
   /** @deprecated Same as {@link openPath}; older APIs only sent this. */
   studioPath?: string;

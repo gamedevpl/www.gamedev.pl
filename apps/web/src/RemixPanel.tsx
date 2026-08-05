@@ -28,7 +28,7 @@ import type {
   EditorParamValue,
 } from './studioApi.js';
 import type { RemixPaintedVia } from './visitTelemetry.js';
-import { draftPath, NAVIGATE_EVENT } from './router.js';
+import { NAVIGATE_EVENT, playPath } from './router.js';
 
 /**
  * Remix: a player bends a published game while playing it.
@@ -883,8 +883,8 @@ export function RemixPanel(props: {
         ...(contentEditedRef.current ? { content: contentDocRef.current } : {}),
       });
       recordRemixStep('keep_clicked');
-      // Draft theater — stay in a play surface. Studio is for later edits from the shelf.
-      const path = result.openPath || result.studioPath || draftPath(result.slug);
+      // `/play/<slug>` — same permalink before and after publish. Studio is for later edits.
+      const path = result.openPath || result.studioPath || playPath(result.slug);
       window.history.pushState(null, '', path);
       window.dispatchEvent(new PopStateEvent('popstate'));
       window.dispatchEvent(new CustomEvent(NAVIGATE_EVENT, { detail: { path } }));

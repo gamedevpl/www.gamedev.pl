@@ -87,10 +87,6 @@ export type AppRoute =
   // catalog. Only published games are permalinkable — generated/party stages are
   // ephemeral and stay off the route.
   | { view: 'play'; slug: string }
-  // An in-progress game, addressed exactly like a published one. This is the
-  // shareable form of a build: it carries no status token, so it grants watching
-  // rights only — no change requests, no quota spend.
-  | { view: 'draft'; slug: string }
   // A phone that scanned a lobby QR. The room code is a path segment; the join
   // token rides in the fragment so it never hits access logs or Referer
   // (see docs/path-routing-plan.md § Join, docs/multiplayer-plan.md §4.3).
@@ -266,11 +262,14 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
     }
   }
 
+  // Legacy `/draft/<slug>` — same game as `/play/<slug>`. Parsed as play so the
+  // canonical rewrite below puts the bar on the lifetime permalink; the app used
+  // to keep a separate theater-only view here after /play became preview-first.
   const draftMatch = normalizedPath.match(/^\/draft\/([^/]+)$/);
   if (draftMatch?.[1]) {
     const slug = decodeSegment(draftMatch[1]);
     if (slug && SLUG_PATTERN.test(slug)) {
-      return { view: 'draft', slug };
+      return { view: 'play', slug };
     }
   }
 
@@ -447,8 +446,12 @@ export function canonicalPlayPath(pathname: string): string | null {
   return pathname === canonical ? null : canonical;
 }
 
+/**
+ * @deprecated Prefer {@link playPath}. Unpublished drafts share the `/play/<slug>`
+ * permalink with published games; `/draft/` only remains as an inbound alias.
+ */
 export function draftPath(slug: string): string {
-  return `/draft/${encodeURIComponent(slug)}`;
+  return playPath(slug);
 }
 
 /**
@@ -466,8 +469,8 @@ export function studioPath(game?: string, tab?: StudioTab): string {
  * Parent path for the NavHeader "Up" chevron — Android-style Up, not browser Back.
  *
  * Always a real in-app parent so a deep link still has somewhere safe to go.
- * Returns null when the surface owns its own escape (home, join, draft theater,
- * studio playtest overlay) or when Up would be meaningless.
+ * Returns null when the surface owns its own escape (home, join, studio playtest
+ * overlay) or when Up would be meaningless.
  */
 export type NavUpTarget = {
   path: string;
@@ -477,15 +480,11 @@ export type NavUpTarget = {
 
 export function navUpTarget(route: AppRoute): NavUpTarget | null {
   switch (route.view) {
-    // Draft opens GameTheater inside DraftView without App `stageContent`, so the
-    // header would otherwise keep an Up control behind the aria-modal. Close /
-    // the error-page home link own escape here, same as `/play`.
     case 'home':
     case 'join':
-    case 'draft':
       return null;
-    // `/play/:slug` is now a preview-first page. The theater it opens hides the
-    // header through `stageContent`, so the visible static page gets a normal Up.
+    // `/play/:slug` is preview-first for catalog games; unpublished drafts open a
+    // theater (DraftView) that owns Close — Up stays for the static preview page.
     case 'play':
       return { path: '/', labelKey: 'upHome' };
     case 'studio':
