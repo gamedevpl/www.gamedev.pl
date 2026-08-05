@@ -254,13 +254,15 @@ export function applyExactReplace(input: ApplyExactReplaceInput): ApplySourcePat
     throw new SourcePatchError('old and new are identical — nothing to change');
   }
 
+  // Advance by 1 so overlapping matches count (e.g. content "aaaa", old "aaa"
+  // has matches at 0 and 1). Skipping by old.length would falsely treat that as unique.
   let occurrences = 0;
   let from = 0;
   while (true) {
     const at = input.content.indexOf(input.old, from);
     if (at === -1) break;
     occurrences++;
-    from = at + input.old.length;
+    from = at + 1;
     if (occurrences > 1) break;
   }
 

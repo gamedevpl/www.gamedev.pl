@@ -259,4 +259,15 @@ describe('applyExactReplace', () => {
       }),
     ).toThrow(/more than once/);
   });
+
+  it('refuses overlapping non-unique matches', () => {
+    expect(() =>
+      applyExactReplace({
+        content: 'aaaa',
+        path: 'game.ts',
+        old: 'aaa',
+        new: 'b',
+      }),
+    ).toThrow(/more than once/);
+  });
 });
