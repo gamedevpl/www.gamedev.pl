@@ -195,9 +195,12 @@ describe('RemixPanel', () => {
       container.querySelector('.remix-ask')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     });
 
-    // Earned: share is the loudest thing; Keep and Undo sit quiet beside it.
+    // Earned: share is the loudest thing; Undo sits quiet beside it. Keep is
+    // not on the row — it waits for a few landings, with a header escape hatch.
     expect(container.querySelector('.remix-btn.is-primary')?.textContent).toBe('Share my version');
-    expect(buttonNamed(container, 'Make it mine')?.classList.contains('is-quiet')).toBe(true);
+    expect(buttonNamed(container, 'Make it mine')).toBeNull();
+    expect(buttonNamed(container, 'Keep in Studio')).toBeNull();
+    expect(buttonNamed(container, 'Keep…')).not.toBeNull();
     expect(buttonNamed(container, 'Undo')?.classList.contains('is-quiet')).toBe(true);
     // And the way to a second change is still there, shrunk to a line.
     expect(container.querySelector('.remix-ask.is-compact')).not.toBeNull();
@@ -225,7 +228,9 @@ describe('RemixPanel', () => {
 
     expect(container.querySelector('.remix-note.is-error')).not.toBeNull();
     expect(buttonNamed(container, 'Undo')).not.toBeNull();
-    expect(buttonNamed(container, 'Make it mine')).not.toBeNull();
+    // Keep stays off the row; the header hatch is enough after one landing.
+    expect(buttonNamed(container, 'Make it mine')).toBeNull();
+    expect(buttonNamed(container, 'Keep…')).not.toBeNull();
   });
 
   it('proposes the painter for a content-shaped request instead of falling through to code', async () => {
@@ -566,11 +571,11 @@ describe('RemixPanel', () => {
     // The change landed and says so...
     expect(container.querySelector('.remix-result')?.textContent).toContain('carrots');
     // ...and there is nothing to share (code moves no declared value), so Share
-    // stays off and Keep stays quiet beside Undo — never promoted to the accent
-    // CTA that used to fill the row and invite a mis-tap.
+    // stays off. Keep is not a row CTA — after one landing only the header hatch.
     expect(buttonNamed(container, 'Share my version')).toBeNull();
     expect(container.querySelector('.remix-btn.is-primary')).toBeNull();
-    expect(buttonNamed(container, 'Make it mine')?.classList.contains('is-quiet')).toBe(true);
+    expect(buttonNamed(container, 'Make it mine')).toBeNull();
+    expect(buttonNamed(container, 'Keep…')).not.toBeNull();
 
     // But there is always a way back. A rebuild that compiles is not a rebuild
     // that plays, and the lane cannot tell the difference — so the player must
@@ -660,10 +665,92 @@ describe('RemixPanel', () => {
 
     // No second session was minted for the reopening...
     expect(remixApi.startRemix).not.toHaveBeenCalled();
-    // ...and the way back is offered — Keep sits quiet beside it (change is
-    // running, nothing shareable yet) so Undo is no longer the sole button.
+    // ...and the way back is offered. Keep is not on the row for a reopen that
+    // has not yet landed a fresh change in this mount.
     expect(buttonNamed(container, 'Undo')).not.toBeNull();
-    expect(buttonNamed(container, 'Make it mine')?.classList.contains('is-quiet')).toBe(true);
+    expect(buttonNamed(container, 'Make it mine')).toBeNull();
+    expect(buttonNamed(container, 'Keep…')).toBeNull();
+  });
+
+  it('offers to keep the remix after a few successful landings, with a name', async () => {
+    remixApi.startRemix.mockResolvedValue({
+      remixId: 'r1',
+      params: { dogScale: { type: 'number', min: 0.5, max: 3, default: 1, label: { en: 'dog size' } } },
+      values: { dogScale: 1 },
+      canAssist: true,
+      canCode: false,
+      suggestions: [],
+      expiresInMs: 3_600_000,
+    });
+    remixApi.remixAssist
+      .mockResolvedValueOnce({ lane: 'params', values: { dogScale: 1.2 } })
+      .mockResolvedValueOnce({ lane: 'params', values: { dogScale: 1.4 } })
+      .mockResolvedValueOnce({ lane: 'params', values: { dogScale: 1.6 } });
+    remixApi.remixSave.mockResolvedValue({ slug: 'my-dog-dash', openPath: '/play/my-dog-dash' });
+    await draw();
+
+    await send('a bit bigger');
+    expect(container.querySelector('.remix-keep-offer')).toBeNull();
+    await send('a bit bigger still');
+    expect(container.querySelector('.remix-keep-offer')).toBeNull();
+    await send('even bigger');
+
+    // Third landing: the sheet, not a row button.
+    expect(container.querySelector('.remix-keep-offer')).not.toBeNull();
+    expect(container.querySelector('.remix-keep-heading')?.textContent).toBe('Keep this remix?');
+    const name = container.querySelector<HTMLInputElement>('.remix-keep-field input');
+    expect(name?.value).toBe('Dog Dash');
+    expect(buttonNamed(container, 'Keep in Studio')).not.toBeNull();
+    expect(buttonNamed(container, 'Not now')).not.toBeNull();
+    // Composer and Share/Undo wait behind the offer.
+    expect(container.querySelector('.remix-ask')).toBeNull();
+
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+      setter?.call(name!, 'Carrot Dash');
+      name!.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      buttonNamed(container, 'Keep in Studio')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(remixApi.remixSave).toHaveBeenCalledWith(
+      'r1',
+      expect.objectContaining({ title: 'Carrot Dash', params: { dogScale: 1.6 } }),
+    );
+    expect(telemetry.recordRemixStep).toHaveBeenCalledWith('keep_clicked');
+  });
+
+  it('does not re-offer Keep after dismiss; the header hatch still works', async () => {
+    remixApi.startRemix.mockResolvedValue({
+      remixId: 'r1',
+      params: { dogScale: { type: 'number', min: 0.5, max: 3, default: 1, label: { en: 'dog size' } } },
+      values: { dogScale: 1 },
+      canAssist: true,
+      canCode: false,
+      suggestions: [],
+      expiresInMs: 3_600_000,
+    });
+    remixApi.remixAssist.mockResolvedValue({ lane: 'params', values: { dogScale: 2 } });
+    await draw();
+    await send('bigger');
+    await send('bigger');
+    await send('bigger');
+    expect(container.querySelector('.remix-keep-offer')).not.toBeNull();
+
+    await act(async () => {
+      buttonNamed(container, 'Not now')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(container.querySelector('.remix-keep-offer')).toBeNull();
+    expect(buttonNamed(container, 'Keep…')).not.toBeNull();
+
+    // Another landing must not reopen the nag.
+    await send('bigger again');
+    expect(container.querySelector('.remix-keep-offer')).toBeNull();
+
+    await act(async () => {
+      buttonNamed(container, 'Keep…')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(container.querySelector('.remix-keep-offer')).not.toBeNull();
   });
 
   async function send(text: string) {

@@ -28,7 +28,11 @@ import type {
   EditorParamValue,
 } from './studioApi.js';
 import type { RemixPaintedVia } from './visitTelemetry.js';
+import { humanizeSlug } from './pageTitle.js';
 import { NAVIGATE_EVENT, playPath } from './router.js';
+
+/** Successful landings before we offer to keep the remix in Studio. */
+const KEEP_OFFER_AFTER = 3;
 
 /**
  * Remix: a player bends a published game while playing it.
@@ -243,6 +247,18 @@ export function RemixPanel(props: {
   const [undo, setUndo] = useState<Record<string, EditorParamValue> | null>(null);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  /**
+   * How many times a change has actually landed this session.
+   *
+   * The keep-in-Studio offer waits until this crosses {@link KEEP_OFFER_AFTER}:
+   * forking on the first nudge trains people to tap a big button instead of
+   * playing, and the name they would give then is not yet earned.
+   */
+  const [successCount, setSuccessCount] = useState(0);
+  const [keepOfferOpen, setKeepOfferOpen] = useState(false);
+  const [keepOfferDismissed, setKeepOfferDismissed] = useState(false);
+  const [keepSaved, setKeepSaved] = useState(false);
+  const [keepTitle, setKeepTitle] = useState('');
   /**
    * Whether this game takes proposals from this player.
    *
@@ -552,6 +568,14 @@ export function RemixPanel(props: {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only on arrival
   }, [props.undoable]);
 
+  // Engagement threshold: after a few landings, ask once whether to keep it.
+  // Dismissed stays dismissed for the session; the header "Keep…" is the escape.
+  useEffect(() => {
+    if (successCount < KEEP_OFFER_AFTER || keepOfferDismissed || keepSaved || keepOfferOpen) return;
+    setKeepTitle((current) => current.trim() || humanizeSlug(props.slug));
+    setKeepOfferOpen(true);
+  }, [successCount, keepOfferDismissed, keepSaved, keepOfferOpen, props.slug]);
+
   // A panel that opened onto nothing. Recorded against the same `opened`
   // denominator so the share of visits that met a game with no way in is a
   // number rather than an anecdote — it is the difference between "people are
@@ -594,6 +618,21 @@ export function RemixPanel(props: {
       direction = isOn ? 'off' : 'on';
     }
     return t(`remix.try.${direction}`, { label: name });
+  }
+
+  /** A change the player can see and play — the only ones that count toward Keep. */
+  function noteSuccessfulChange() {
+    setSuccessCount((n) => n + 1);
+  }
+
+  function openKeepOffer() {
+    setKeepTitle((current) => current.trim() || humanizeSlug(props.slug));
+    setKeepOfferOpen(true);
+  }
+
+  function dismissKeepOffer() {
+    setKeepOfferOpen(false);
+    setKeepOfferDismissed(true);
   }
 
   function setParam(key: string, value: EditorParamValue) {
@@ -665,6 +704,7 @@ export function RemixPanel(props: {
             text: label(result.summary) || t('remix.applied'),
             canShare: hasShareableValues(active.params, next),
           });
+          noteSuccessfulChange();
           return;
         }
         if (result.lane === 'reject') {
@@ -737,6 +777,7 @@ export function RemixPanel(props: {
         props.onSwapDocument(result.html);
         watchSwappedDocument();
         window.setTimeout(() => pushToGame(valuesRef.current), 400);
+        noteSuccessfulChange();
       } else {
         recordRemixStep(result.reason === 'refused' ? 'refused' : 'handoff');
         props.frameRef.current?.contentWindow?.postMessage({ source: 'gdpl-host', type: 'resume' }, '*');
@@ -875,14 +916,19 @@ export function RemixPanel(props: {
    */
   async function saveAsMine() {
     if (!session || saving) return;
+    const title = keepTitle.trim();
+    if (title.length < 2) return;
     setSaving(true);
     setNote(null);
     try {
       const result = await remixSave(session.remixId, {
+        title,
         params: valuesRef.current,
         ...(contentEditedRef.current ? { content: contentDocRef.current } : {}),
       });
       recordRemixStep('keep_clicked');
+      setKeepSaved(true);
+      setKeepOfferOpen(false);
       // `/play/<slug>` — same permalink before and after publish. Studio is for later edits.
       const path = result.openPath || playPath(result.slug);
       window.history.pushState(null, '', path);
@@ -923,6 +969,41 @@ export function RemixPanel(props: {
   // The composer is the door. Signed out we cannot know the lanes yet, and the
   // honest answer is to accept the words and let the wall decide — so it types.
   const canType = session ? session.canAssist || session.canCode : true;
+
+  function keepOfferForm() {
+    return (
+      <section className="remix-keep-offer" aria-labelledby="remix-keep-heading">
+        <h3 id="remix-keep-heading" className="remix-keep-heading">
+          {t('remix.keepOfferTitle')}
+        </h3>
+        <p className="remix-keep-body">{t('remix.keepOfferBody')}</p>
+        <label className="remix-keep-field">
+          <span>{t('remix.keepOfferName')}</span>
+          <input
+            type="text"
+            value={keepTitle}
+            maxLength={80}
+            placeholder={t('remix.keepOfferNamePlaceholder')}
+            disabled={saving}
+            onChange={(event) => setKeepTitle(event.target.value)}
+          />
+        </label>
+        <div className="remix-actions-row">
+          <button
+            type="button"
+            className="remix-btn is-primary"
+            disabled={saving || keepTitle.trim().length < 2 || lane !== 'idle'}
+            onClick={() => void saveAsMine()}
+          >
+            {saving ? t('remix.saving') : t('remix.keepOfferConfirm')}
+          </button>
+          <button type="button" className="remix-btn is-quiet" disabled={saving} onClick={dismissKeepOffer}>
+            {t('remix.keepOfferDismiss')}
+          </button>
+        </div>
+      </section>
+    );
+  }
 
   /** The composer, in its two sizes: the door, and the way back for a second change. */
   function composer(compact: boolean) {
@@ -1076,9 +1157,22 @@ export function RemixPanel(props: {
 
       <div className="remix-head">
         <span className="remix-title">{t('remix.title')}</span>
-        <button type="button" className="remix-close" onClick={props.onClose} aria-label={t('remix.close')}>
-          <PixelIcon name="close" size={12} />
-        </button>
+        <div className="remix-head-actions">
+          {/*
+           * Escape hatch once they've earned a landing: the auto-offer waits for
+           * a few successes, but someone who already knows they want to keep it
+           * shouldn't wait for the third nudge. Hidden until then so the head
+           * stays a title bar, not a toolbar.
+           */}
+          {successCount >= 1 && !keepSaved && !keepOfferOpen ? (
+            <button type="button" className="remix-keep-link" onClick={openKeepOffer}>
+              {t('remix.keepOfferMenu')}
+            </button>
+          ) : null}
+          <button type="button" className="remix-close" onClick={props.onClose} aria-label={t('remix.close')}>
+            <PixelIcon name="close" size={12} />
+          </button>
+        </div>
       </div>
 
       {lane === 'building' ? (
@@ -1116,57 +1210,49 @@ export function RemixPanel(props: {
             </span>
             <span>{changed.broke ? t('remix.brokeIt') : changed.text}</span>
           </p>
-          {changed.canShare || canPropose || undo || changed.undoCode || !changed.broke ? (
-            <div className="remix-actions-row">
-              {changed.canShare ? (
-                <button type="button" className="remix-btn is-primary" onClick={() => void share()}>
-                  {t('remix.share')}
-                </button>
+          {keepOfferOpen && !changed.broke ? (
+            keepOfferForm()
+          ) : (
+            <>
+              {changed.canShare || canPropose || undo || changed.undoCode ? (
+                <div className="remix-actions-row">
+                  {changed.canShare ? (
+                    <button type="button" className="remix-btn is-primary" onClick={() => void share()}>
+                      {t('remix.share')}
+                    </button>
+                  ) : null}
+                  {/*
+                   * The third exit. Remix's two originals — save as yours, share — are
+                   * unchanged and still never publish; this one asks the owner, who may say
+                   * no. It appears only once a change has landed and only for a game whose
+                   * owner opted in, so it is offered when there is something to offer and to
+                   * somebody who can receive it.
+                   */}
+                  {canPropose && !proposing && !proposed ? (
+                    <button type="button" className="remix-btn is-quiet" onClick={() => setProposing(true)}>
+                      {t('propose.action')}
+                    </button>
+                  ) : null}
+                  {undo || changed.undoCode ? (
+                    <button
+                      type="button"
+                      // A broken game makes going back the only thing worth doing,
+                      // so it stops being the quiet option.
+                      className={`remix-btn ${changed.broke ? 'is-primary' : 'is-quiet'}`}
+                      disabled={lane !== 'idle' || saving}
+                      onClick={() => (changed.undoCode ? void undoCode() : undoLast())}
+                    >
+                      {t('remix.undo')}
+                    </button>
+                  ) : null}
+                </div>
               ) : null}
-              {/*
-               * The third exit. Remix's two originals — save as yours, share — are
-               * unchanged and still never publish; this one asks the owner, who may say
-               * no. It appears only once a change has landed and only for a game whose
-               * owner opted in, so it is offered when there is something to offer and to
-               * somebody who can receive it.
-               */}
-              {canPropose && !proposing && !proposed ? (
-                <button type="button" className="remix-btn is-quiet" onClick={() => setProposing(true)}>
-                  {t('propose.action')}
-                </button>
-              ) : null}
-              {undo || changed.undoCode ? (
-                <button
-                  type="button"
-                  // A broken game makes going back the only thing worth doing,
-                  // so it stops being the quiet option.
-                  className={`remix-btn ${changed.broke ? 'is-primary' : 'is-quiet'}`}
-                  disabled={lane !== 'idle' || saving}
-                  onClick={() => (changed.undoCode ? void undoCode() : undoLast())}
-                >
-                  {t('remix.undo')}
-                </button>
-              ) : null}
-              {/*
-               * Always quiet, never the row's primary. When Share is off (code-lane
-               * remixes) this used to fill the panel as the accent CTA and win every
-               * mis-tap; keep it a peer of Undo instead of inventing a second control
-               * language under the row.
-               */}
-              {!changed.broke ? (
-                <button
-                  type="button"
-                  className="remix-btn is-quiet"
-                  disabled={saving || lane !== 'idle'}
-                  onClick={() => void saveAsMine()}
-                >
-                  {saving ? t('remix.saving') : t('remix.makeItYours')}
-                </button>
-              ) : null}
-            </div>
-          ) : null}
-          {composer(true)}
+              {composer(true)}
+            </>
+          )}
         </>
+      ) : keepOfferOpen ? (
+        keepOfferForm()
       ) : canType ? (
         <>
           {composer(false)}
