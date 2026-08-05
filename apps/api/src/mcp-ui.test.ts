@@ -181,9 +181,12 @@ describe('ui resources', () => {
     // submitting is exactly the moment a creator wants it open.
     expect(MCP_UI_TOOL_RESOURCES).toEqual({
       start: ROUND_STATUS_RESOURCE_URI,
-      submit_sources: ROUND_STATUS_RESOURCE_URI,
       get_gate_verdict: ROUND_STATUS_RESOURCE_URI,
     });
+    // The host renders one card per tool call carrying _meta.ui, so a turn that started
+    // a round and then delivered produced two identical cards. The card is live: the one
+    // from start already follows the delivery.
+    expect(MCP_UI_TOOL_RESOURCES).not.toHaveProperty('submit_sources');
     // open_round mints no session key and takes none, so a card opened there would have
     // nothing to read status with.
     expect(MCP_UI_TOOL_RESOURCES).not.toHaveProperty('open_round');

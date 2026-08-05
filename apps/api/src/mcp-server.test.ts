@@ -2007,7 +2007,6 @@ describe('MCP Apps views (SEP-1865, Phase 0)', () => {
     // The tools that open the round view, and nothing else.
     expect(tools.filter((tool) => tool._meta?.ui?.resourceUri !== undefined).map((tool) => tool.name)).toEqual([
       'start',
-      'submit_sources',
       'get_gate_verdict',
     ]);
   });

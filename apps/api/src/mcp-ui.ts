@@ -38,20 +38,24 @@ export const MCP_UI_MIME_TYPE = 'text/html;profile=mcp-app';
 export const ROUND_STATUS_RESOURCE_URI = 'ui://gamedevpl/round-status';
 
 /**
- * Tools that open the round view. `submit_sources` is here deliberately: the card is
- * where a creator watches the round from, and the moment a delivery is submitted is
- * exactly when they want to. It renders live state from `get_round_status`, not from
- * the opening tool's payload, so opening it mid-delivery shows the build rather than a
- * frozen echo of the call.
+ * Tools that open the round view — kept deliberately few, because the host renders one
+ * card per tool call that carries `_meta.ui`.
  *
- * `open_round` is deliberately absent. It mints no session key and takes none — its own
- * description sends the agent to `start()` for one — so a card opened there would have
- * no credential to read status with, and would sit on "Reading round status…" forever.
- * `start()` follows immediately and opens the view properly.
+ * `submit_sources` used to be here and was removed: an ordinary turn calls `start` and
+ * then delivers, which rendered two cards showing identical state one above the other.
+ * Nothing was lost by dropping it. The card is live, so the one opened at `start`
+ * already follows the delivery and the gate on its own — that is the whole point of it.
+ *
+ * `get_gate_verdict` stays for the creator-led check on a later turn, when no `start`
+ * precedes it. Doubling up there needs an agent that both opens a round and polls in
+ * one turn, which the workflow tells it not to do (prefer `end`, let the card watch).
+ *
+ * `open_round` is deliberately absent for a different reason: it mints no session key
+ * and takes none — its own description sends the agent to `start()` for one — so a card
+ * opened there would have no credential and would sit on "Reading round status…".
  */
 export const MCP_UI_TOOL_RESOURCES: Readonly<Record<string, string>> = Object.freeze({
   start: ROUND_STATUS_RESOURCE_URI,
-  submit_sources: ROUND_STATUS_RESOURCE_URI,
   get_gate_verdict: ROUND_STATUS_RESOURCE_URI,
 });
 
