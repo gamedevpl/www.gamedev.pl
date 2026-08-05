@@ -516,6 +516,40 @@ const ROUND_STATUS_HTML = `<!doctype html>
           if (typeof context.locale === 'string') hostLocale = context.locale;
           if (typeof context.timeZone === 'string') hostTimeZone = context.timeZone;
           applyThemeVariables(context.themeVariables || context.theme_variables || context.cssVariables);
+          applyContainerDimensions(context.containerDimensions);
+        }
+
+        /**
+         * Honour the frame the host actually gave us.
+         *
+         * SEP-1865 says a view should read containerDimensions and size itself to match:
+         * a height is fixed and the view fills it, a maxHeight is a ceiling the view may
+         * grow up to, and an absent field means unbounded. We ignored it entirely,
+         *
+         * (No backticks in this comment on purpose — the whole view is a TS template
+         * literal, and one would end it. tsc catches that; it is still a wasted round.)
+         * which is fine in a host that sizes to our size-changed notification and wrong in
+         * one that does not — ChatGPT left the card sitting at the top of a much taller
+         * frame with dead space under it (owner, 2026-08-05).
+         *
+         * Filling a fixed frame does not conjure content, but it makes the card look
+         * deliberate rather than broken, and it is what the spec asks for.
+         */
+        function applyContainerDimensions(dimensions) {
+          if (!dimensions || typeof dimensions !== 'object') return;
+          var root = document.documentElement;
+          if (typeof dimensions.height === 'number' && dimensions.height > 0) {
+            root.style.height = '100%';
+            document.body.style.minHeight = '100%';
+            document.body.style.boxSizing = 'border-box';
+          } else if (typeof dimensions.maxHeight === 'number' && dimensions.maxHeight > 0) {
+            root.style.maxHeight = dimensions.maxHeight + 'px';
+          }
+          if (typeof dimensions.width === 'number' && dimensions.width > 0) {
+            root.style.width = '100%';
+          } else if (typeof dimensions.maxWidth === 'number' && dimensions.maxWidth > 0) {
+            root.style.maxWidth = dimensions.maxWidth + 'px';
+          }
         }
 
         /** Gate timestamps are ISO; show them in the reader's locale and zone. */

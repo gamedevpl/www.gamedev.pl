@@ -377,6 +377,21 @@ describe('ui resources', () => {
     expect(html).toMatch(/gallery\.hidden = true;[\s\S]{0,80}galleryCap\.hidden = true;/);
   });
 
+  it('sizes itself to the frame the host gave it, per the spec it implements', () => {
+    // Observed in ChatGPT: the card sat at the top of a much taller frame with dead
+    // space beneath. SEP-1865 has containerDimensions in hostContext for exactly this —
+    // a fixed height is the host's decision and the view is meant to fill it. We were
+    // reading theme, locale and timeZone from hostContext and ignoring dimensions.
+    const html = readUiResource(ROUND_STATUS_RESOURCE_URI)?.text ?? '';
+    expect(html).toContain('applyContainerDimensions');
+    expect(html).toContain('context.containerDimensions');
+    // Fixed fills, flexible caps — the two modes the spec defines, kept distinct.
+    expect(html).toMatch(/dimensions\.height[\s\S]{0,220}?'100%'/);
+    expect(html).toContain('dimensions.maxHeight + ');
+    // Absent means unbounded: no dimensions, no styling, same as before this existed.
+    expect(html).toContain("if (!dimensions || typeof dimensions !== 'object') return;");
+  });
+
   it('polls, and degrades to the opening payload when a host refuses the app-only call', () => {
     const html = readUiResource(ROUND_STATUS_RESOURCE_URI)?.text ?? '';
     expect(html).toContain("name: 'get_round_status'");
