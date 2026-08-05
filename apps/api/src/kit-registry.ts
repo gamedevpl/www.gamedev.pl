@@ -14,6 +14,8 @@ export interface KitRegistry {
 export interface KitSidecar {
   sha256: string;
   packedAt?: string;
+  /** Semver this kit was packed at. Absent on kits published before versioning. */
+  version?: string;
 }
 
 export class KitRegistryError extends Error {
@@ -70,6 +72,7 @@ export function parseKitSidecar(raw: string): KitSidecar {
   return {
     sha256: obj.sha256.toLowerCase(),
     ...(typeof obj.packedAt === 'string' ? { packedAt: obj.packedAt } : {}),
+    ...(typeof obj.version === 'string' && obj.version ? { version: obj.version } : {}),
   };
 }
 

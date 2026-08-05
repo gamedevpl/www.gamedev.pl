@@ -381,6 +381,92 @@ describe('runGate', () => {
     expect(run).toHaveBeenCalled();
   });
 
+  it('accepts a two-generations-old kit when it shares the current major', async () => {
+    // The case that cost three consecutive rounds: seven kits landed in ten hours, so
+    // the agent's ref was out of N/N−1 by the time it submitted. Nothing about those
+    // merges could break a game, and now nothing about them refuses one.
+    const old = 'cccccccccccccccccccccccccccccccccccccccc';
+    const { store } = stubStore({ getManifest: async () => ({ ...MANIFEST, kitEngineRef: old }) });
+    const run = vi.fn(async () => ({ code: 0, output: '' }));
+    const readKitVersion = vi.fn(async () => '1.0.0');
+
+    const outcome = await runGate('comet-courier', 'v1', {
+      store,
+      prepareHarness: harnessDir,
+      run,
+      assembleBundle: stubAssemble,
+      readKitRegistry: async () => ({
+        current: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        previous: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+        currentVersion: '1.4.2',
+        updatedAt: '2026-08-05T11:48:00.000Z',
+      }),
+      readKitVersion,
+    });
+
+    expect(outcome.green).toBe(true);
+    expect(outcome.status).toBeUndefined();
+    expect(readKitVersion).toHaveBeenCalledWith(old);
+    expect(run).toHaveBeenCalled();
+  });
+
+  it('still refuses a delivery from a previous major', async () => {
+    // A major bump means existing creator sources no longer compile — the one case the
+    // window exists to catch, and widening must not swallow it.
+    const old = 'cccccccccccccccccccccccccccccccccccccccc';
+    const { store } = stubStore({ getManifest: async () => ({ ...MANIFEST, kitEngineRef: old }) });
+    const prepareHarness = vi.fn(async () => harnessDir());
+    const run = vi.fn(async () => ({ code: 0, output: '' }));
+
+    const outcome = await runGate('comet-courier', 'v1', {
+      store,
+      prepareHarness,
+      run,
+      assembleBundle: stubAssemble,
+      readKitRegistry: async () => ({
+        current: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        previous: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+        currentVersion: '2.0.0',
+        updatedAt: '2026-08-05T11:48:00.000Z',
+      }),
+      readKitVersion: async () => '1.4.2',
+    });
+
+    expect(outcome).toMatchObject({ green: false, status: 'kit_outdated' });
+    expect(outcome.report).toContain('current kit is v2.0.0');
+    expect(prepareHarness).not.toHaveBeenCalled();
+  });
+
+  it('does not spend a sidecar read when the registry is unversioned or the ref is current', async () => {
+    // The common paths must cost nothing extra, and an unversioned registry cannot
+    // compare majors — reading would buy only latency.
+    const readKitVersion = vi.fn(async () => '1.0.0');
+    const current = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+    const { store } = stubStore({ getManifest: async () => ({ ...MANIFEST, kitEngineRef: current }) });
+    await runGate('comet-courier', 'v1', {
+      store,
+      prepareHarness: harnessDir,
+      run: async () => ({ code: 0, output: '' }),
+      assembleBundle: stubAssemble,
+      readKitRegistry: async () => ({ current, previous: null, currentVersion: '1.4.2', updatedAt: 'x' }),
+      readKitVersion,
+    });
+    expect(readKitVersion).not.toHaveBeenCalled();
+
+    const { store: store2 } = stubStore({
+      getManifest: async () => ({ ...MANIFEST, kitEngineRef: 'cccccccccccccccccccccccccccccccccccccccc' }),
+    });
+    await runGate('comet-courier', 'v1', {
+      store: store2,
+      prepareHarness: harnessDir,
+      run: async () => ({ code: 0, output: '' }),
+      assembleBundle: stubAssemble,
+      readKitRegistry: async () => ({ current, previous: null, updatedAt: 'x' }),
+      readKitVersion,
+    });
+    expect(readKitVersion).not.toHaveBeenCalled();
+  });
+
   it('serves the assembler’s document, not the games repo’s own build output', async () => {
     // The repo's `dist/` build is its idea of a playable page. Serve-time policy — the
     // restrictive CSP, the provenance marking, the credential scan, the byte budget —

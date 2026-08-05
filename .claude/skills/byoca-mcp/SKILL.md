@@ -100,6 +100,16 @@ When the gate returns `kit_outdated` (or soft copy says the kit rotated):
    copies the last candidate; optional `files[]` only for paths you actually changed
 3. Do **not** `get_sources` + `stage_source_file` every path again (burns connector tokens)
 
+The window is **same-major semver**, not the last two published kits. `shared/kit-version.json`
+in the games repo declares the kit's contract version; the gate accepts any delivery whose kit
+shares its major, however many kits have landed since. So a `kit_outdated` verdict now means a
+genuine breaking change, not that the repo merged twice while the agent was working.
+
+It used to mean the latter, and often did: on 2026-08-05 seven kits published in ten hours, a
+`get_kit` answer was good for 45–90 minutes, and three consecutive rounds were refused for age —
+one over a commit that added an internal probe script. `apps/api/src/kit-window.ts` is the rule;
+the games repo's `docs/kit-versioning.md` is when to bump.
+
 ### Staging is creator-visible (live staged preview)
 
 `apps/api/src/staged-preview.ts` assembles the **staging buffer itself** and stores it as
