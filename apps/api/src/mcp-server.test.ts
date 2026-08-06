@@ -2012,6 +2012,63 @@ describe('MCP Apps views (SEP-1865, Phase 0)', () => {
     ]);
   });
 
+  it('reminds a view-capable agent to open the card, then stops asking', async () => {
+    // Observed 2026-08-05: ChatGPT never called show_round on its own — the creator had
+    // to ask for it, which makes the card non-existent rather than occasionally missing.
+    // Same lesson call_end taught: a workflow step alone does not reach these agents.
+    process.env.MCP_UI = 'true';
+    const store = new InMemoryStore();
+    await seedJob(store);
+    app = await createApp(store);
+    const { sessionId } = await initializeWith(app, true);
+    const started = await callTool(app, 'start', { key: roundKey(1) }, { 'mcp-session-id': sessionId });
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    const codes = async () => {
+      const res = await callTool(app, 'get_brief', { sessionKey }, { 'mcp-session-id': sessionId });
+      return ((res.structured as { warnings?: Array<{ code: string }> }).warnings ?? []).map((w) => w.code);
+    };
+
+    expect(await codes()).toContain('card_unopened');
+
+    // Bounded: the card is for the creator, not the build. An agent that ignores it is
+    // not doing anything wrong, and a warning on every response would crowd out the
+    // ones that matter.
+    await codes();
+    await codes();
+    expect(await codes()).not.toContain('card_unopened');
+  });
+
+  it('stops reminding once the card is open, and never reminds a client with no views', async () => {
+    process.env.MCP_UI = 'true';
+    const store = new InMemoryStore();
+    await seedJob(store);
+    app = await createApp(store);
+    const { sessionId } = await initializeWith(app, true);
+    const started = await callTool(app, 'start', { key: roundKey(1) }, { 'mcp-session-id': sessionId });
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    await callTool(app, 'show_round', { sessionKey }, { 'mcp-session-id': sessionId });
+    const after = await callTool(app, 'get_brief', { sessionKey }, { 'mcp-session-id': sessionId });
+    expect(
+      ((after.structured as { warnings?: Array<{ code: string }> }).warnings ?? []).map((w) => w.code),
+    ).not.toContain('card_unopened');
+
+    // A client with no views has no card to open. Telling Claude Code or a headless
+    // agent to call show_round is noise about a surface it does not have.
+    const store2 = new InMemoryStore();
+    await seedJob(store2);
+    await app.close();
+    app = await createApp(store2);
+    const { sessionId: plain } = await initializeWith(app, false);
+    const plainStart = await callTool(app, 'start', { key: roundKey(1) }, { 'mcp-session-id': plain });
+    const plainKey = (plainStart.structured as { sessionKey: string }).sessionKey;
+    const plainRes = await callTool(app, 'get_brief', { sessionKey: plainKey }, { 'mcp-session-id': plain });
+    expect(
+      ((plainRes.structured as { warnings?: Array<{ code: string }> }).warnings ?? []).map((w) => w.code),
+    ).not.toContain('card_unopened');
+  });
+
   it('gives the card its key on the opening result, and stays visible to the model', async () => {
     process.env.MCP_UI = 'true';
     const store = new InMemoryStore();

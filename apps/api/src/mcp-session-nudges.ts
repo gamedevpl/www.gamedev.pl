@@ -8,7 +8,13 @@
  */
 
 export type NudgeCode =
-  'progress_stale' | 'inbox_pending' | 'seed_unread' | 'call_end' | 'gate_not_started' | 'gate_poll_backoff';
+  | 'progress_stale'
+  | 'inbox_pending'
+  | 'seed_unread'
+  | 'call_end'
+  | 'gate_not_started'
+  | 'gate_poll_backoff'
+  | 'card_unopened';
 
 export interface NudgeWarning {
   code: NudgeCode;
@@ -32,12 +38,26 @@ export interface JobNudgeState {
   awaitingEnd: boolean;
   /** Wall-clock ms of the last successful get_gate_verdict in this tracker. */
   lastGatePollAt: number | null;
+  /** True once show_round has opened the creator's card in this round. */
+  cardOpened: boolean;
+  /** How many times we have asked for it, so the reminder cannot become noise. */
+  cardRemindersSent: number;
 }
 
 /** Minimum wall-clock gap used to detect repeated gate checks inside one agent run. */
 export const GATE_POLL_MIN_INTERVAL_MS = 25_000;
 /** Informational delay before a later creator-led run checks a pending gate again. */
 export const GATE_POLL_RETRY_AFTER_SECONDS = 30;
+
+/**
+ * How many times to ask an agent to open the creator's card before letting it go.
+ *
+ * Bounded because the card is for the creator, not the build: an agent that ignores it
+ * is not doing anything wrong, and a warning repeated on every response would crowd out
+ * the ones that matter. Three is enough to catch an agent that simply did not notice
+ * the step.
+ */
+export const CARD_REMINDER_LIMIT = 3;
 
 /** No progress for this long (wall clock) → `progress_stale`. */
 export const PROGRESS_STALE_MS = 90_000;
@@ -99,7 +119,9 @@ export interface McpNudgeTracker {
   /** `nowMs` is only used if the job has never been ensured — callers should pass the injected clock. */
   notePendingCount(jobId: number, count: number, nowMs: number): void;
   noteToolSuccess(jobId: number, toolName: string, nowMs: number): void;
-  warningsFor(jobId: number, toolName: string, nowMs: number): NudgeWarning[];
+  /** Called when show_round has put a card in front of the creator. */
+  noteCardOpened(jobId: number, nowMs: number): void;
+  warningsFor(jobId: number, toolName: string, nowMs: number, options?: { uiCapable?: boolean }): NudgeWarning[];
   /** Test helper. */
   peek(jobId: number): JobNudgeState | undefined;
 }
@@ -124,10 +146,16 @@ export function createMcpNudgeTracker(
         seedStatus: null,
         awaitingEnd: false,
         lastGatePollAt: null,
+        cardOpened: false,
+        cardRemindersSent: 0,
       };
       states.set(jobId, state);
     }
     return state;
+  }
+
+  function noteCardOpened(jobId: number, nowMs: number): void {
+    ensure(jobId, nowMs).cardOpened = true;
   }
 
   function noteProgress(jobId: number, nowMs: number): void {
@@ -186,9 +214,37 @@ export function createMcpNudgeTracker(
     }
   }
 
-  function warningsFor(jobId: number, toolName: string, nowMs: number): NudgeWarning[] {
+  function warningsFor(
+    jobId: number,
+    toolName: string,
+    nowMs: number,
+    options: { uiCapable?: boolean } = {},
+  ): NudgeWarning[] {
     const state = ensure(jobId, nowMs);
     const warnings: NudgeWarning[] = [];
+
+    // Only where a card can actually render. Telling Claude Code or a headless agent to
+    // call show_round is noise about a surface it does not have.
+    //
+    // Observed 2026-08-05: ChatGPT never called show_round on its own and the creator
+    // had to ask for it, which makes the card effectively non-existent rather than
+    // occasionally missing. The workflow step alone was not enough — the same lesson
+    // `call_end` taught, so it gets the same remedy.
+    if (
+      options.uiCapable &&
+      !state.cardOpened &&
+      state.cardRemindersSent < CARD_REMINDER_LIMIT &&
+      toolName !== 'show_round' &&
+      toolName !== 'start'
+    ) {
+      state.cardRemindersSent += 1;
+      warnings.push({
+        code: 'card_unopened',
+        message:
+          'The creator has no status card for this round — call show_round once so they can watch the build ' +
+          'and the gate without asking you. It is a read; it changes nothing.',
+      });
+    }
 
     if (!PROGRESS_NUDGE_EXEMPT.has(toolName)) {
       const anchor = state.lastProgressAt ?? state.startedAt;
@@ -259,6 +315,7 @@ export function createMcpNudgeTracker(
     noteEnded,
     notePendingCount,
     noteToolSuccess,
+    noteCardOpened,
     warningsFor,
     peek: (jobId) => states.get(jobId),
   };
