@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { canonicalAppBaseUrl } from './canonical-app-url.js';
 
 /**
  * MCP Apps (SEP-1865, extension `io.modelcontextprotocol/ui`).
@@ -58,6 +59,14 @@ export const ROUND_STATUS_RESOURCE_URI = 'ui://gamedevpl/round-status';
  */
 export const MCP_UI_TOOL_RESOURCES: Readonly<Record<string, string>> = Object.freeze({
   show_round: ROUND_STATUS_RESOURCE_URI,
+  // Same card, second intent. "Show me the screenshots" is not "watch this round" — it
+  // names a delivery that may belong to an earlier round — but it wants the same
+  // furniture around the pictures, so it opens the same view rather than a second one.
+  //
+  // This is the exception the note above allows for, and it is worth stating why it
+  // qualifies: `get_gate_media` puts frames in front of the *model*, which can look at
+  // them and cannot show them. A view is the only surface that reaches the creator.
+  show_media: ROUND_STATUS_RESOURCE_URI,
 });
 
 /**
@@ -240,11 +249,20 @@ export type UiResourceContents = Pick<UiResource, 'uri' | 'mimeType' | 'text'> &
 /**
  * Where the card is allowed to send the reader.
  *
- * Only our own site: every link the card offers is a gamedev.pl page (the gate
- * recording today, the game theater in V3). A wider list would let a future card hand
- * the host somewhere we did not intend.
+ * Only our own site: every link the card offers is a gamedev.pl page — the gate
+ * recording, and the game theater the Play button opens. A wider list would let a
+ * future card hand the host somewhere we did not intend.
+ *
+ * Derived from `canonicalAppBaseUrl()` rather than written out, because the server
+ * builds the Play URL from the same function. Hardcoding this list once meant the two
+ * could disagree, and they did: the link was built from `WEB_ORIGIN`, whose first entry
+ * in production is the Cloud Run service URL, so every production link pointed at an
+ * origin this list did not allow (Codex, #617). A view whose allowlist and whose links
+ * come from one source cannot have that bug.
  */
-const LINK_DOMAINS: readonly string[] = Object.freeze(['https://www.gamedev.pl']);
+function linkDomains(): readonly string[] {
+  return Object.freeze([canonicalAppBaseUrl()]);
+}
 
 /**
  * The origin ChatGPT associates with this hosted component.
@@ -321,6 +339,10 @@ const ROUND_STATUS_HTML = `<!doctype html>
         margin-bottom: 4px;
       }
       .brand { font-weight: 600; letter-spacing: -0.01em; }
+      /* Links the host opens for us, so they are spans rather than anchors — an <a> in
+         a sandboxed frame with no navigation permission does nothing when clicked. */
+      .linked { cursor: pointer; }
+      .linked:hover { text-decoration: underline; }
       .brand .dot { color: var(--gd-accent); }
       .pill {
         font-size: 12px;
@@ -332,7 +354,7 @@ const ROUND_STATUS_HTML = `<!doctype html>
         border: 1px solid currentColor;
         white-space: nowrap;
       }
-      .pill-waiting, .pill-pending, .pill-queued, .pill-dispatched { color: var(--gd-muted); }
+      .pill-waiting, .pill-pending, .pill-queued, .pill-dispatched, .pill-stopped { color: var(--gd-muted); }
       .pill-building, .pill-submitted, .pill-gating { color: #6fb3ff; }
       .pill-green, .pill-preview_passed, .pill-published { color: var(--gd-accent); }
       .pill-red, .pill-preview_failed, .pill-failed { color: #ff6b6b; }
@@ -442,7 +464,7 @@ const ROUND_STATUS_HTML = `<!doctype html>
   <body>
     <main class="card">
       <div class="head">
-        <span class="brand">gamedev<span class="dot">.pl</span></span>
+        <span id="brand" class="brand">gamedev<span class="dot">.pl</span></span>
         <span id="pill" class="pill pill-waiting">waiting</span>
       </div>
       <p id="title" class="title" hidden></p>
@@ -453,6 +475,9 @@ const ROUND_STATUS_HTML = `<!doctype html>
       <p id="galleryCap" class="galleryCap" hidden></p>
       <dl id="meta" class="meta"></dl>
       <pre id="report" class="report" hidden></pre>
+      <div id="playRow" class="actions" hidden>
+        <button id="playBtn" type="button" class="action"></button>
+      </div>
       <div id="actionRow" class="actions" hidden>
         <button id="actionBtn" type="button" class="action"></button>
         <p id="actionHint" class="hint" hidden></p>
@@ -496,6 +521,9 @@ const ROUND_STATUS_HTML = `<!doctype html>
         var shotEl = document.getElementById('shot');
         var shotImg = document.getElementById('shotImg');
         var shotCap = document.getElementById('shotCap');
+        var playRow = document.getElementById('playRow');
+        var playBtn = document.getElementById('playBtn');
+        var brandEl = document.getElementById('brand');
         var actionRow = document.getElementById('actionRow');
         var actionBtn = document.getElementById('actionBtn');
         var actionHint = document.getElementById('actionHint');
@@ -525,12 +553,31 @@ const ROUND_STATUS_HTML = `<!doctype html>
           notify('notifications/message', { level: level, logger: 'gamedevpl-round-status', data: text });
         }
 
+        /**
+         * Report what the content needs, never what the frame currently is.
+         *
+         * This used to send documentElement.scrollHeight, which was the content height
+         * until applyContainerDimensions started setting html{height:100%} to fill a
+         * host-declared frame. After that the two became the same number: the card
+         * filled 400px, reported 400px, and the host had no reason to ever shrink —
+         * leaving a slab of empty space under the content (owner, 2026-08-06).
+         *
+         * Measuring the card instead breaks the loop. Filling the frame stays a
+         * cosmetic choice; the size we ask for stays honest either way.
+         */
         function reportSize() {
+          var card = document.querySelector('.card');
+          var height = card
+            ? Math.ceil(card.getBoundingClientRect().height) + BODY_PADDING * 2
+            : document.documentElement.scrollHeight;
           notify('ui/notifications/size-changed', {
-            height: document.documentElement.scrollHeight,
-            width: document.documentElement.scrollWidth
+            height: height,
+            width: card ? Math.ceil(card.getBoundingClientRect().width) + BODY_PADDING * 2 : document.documentElement.scrollWidth
           });
         }
+
+        /** Keep in step with body{padding} in the stylesheet above. */
+        var BODY_PADDING = 12;
 
         var hostLocale = undefined;
         var hostTimeZone = undefined;
@@ -718,6 +765,73 @@ const ROUND_STATUS_HTML = `<!doctype html>
           }
         };
 
+        /**
+         * The invitation to play — the step the whole flow exists for.
+         *
+         * The card shows what the agent built; the theater is where it is played. This
+         * is the hand-off between them, and it is a link rather than an embedded game on
+         * purpose: gamedev.pl's theater already does fullscreen, pointer lock and touch,
+         * and a chat card cannot.
+         *
+         * Only offered when there is genuinely something to play. A round that has not
+         * delivered yet would open a page saying so, which is a worse answer than no
+         * button at all.
+         */
+        /**
+         * Make an element open a URL through the host.
+         *
+         * Not an anchor: the view is sandboxed without allow-top-navigation, so a real
+         * href is inert. ui/open-link is the only way out, and the origin is on the
+         * card's redirect allowlist by construction (both come from canonicalAppBaseUrl).
+         *
+         * No backticks anywhere in this file below the template literal opener — one
+         * ends the literal. That has cost four iterations in this workstream.
+         */
+        function linkify(element, url, label) {
+          if (!element || typeof url !== 'string' || !url) {
+            if (element) {
+              element.className = element.className.replace(/ ?linked/, '');
+              element.onclick = null;
+              element.removeAttribute('role');
+              element.removeAttribute('title');
+            }
+            return;
+          }
+          if (element.className.indexOf('linked') === -1) element.className += ' linked';
+          element.setAttribute('role', 'link');
+          if (label) element.setAttribute('title', label);
+          element.onclick = function () {
+            request('ui/open-link', { url: url });
+          };
+        }
+
+        function renderPlay(status, gateStatus) {
+          // The URL is built server-side (playUrlFor): this view is one string served to
+          // every environment, so an origin baked in here would send a staging card's
+          // Play button to production.
+          var url = typeof status.playUrl === 'string' ? status.playUrl : '';
+          // Every state here implies assembly succeeded. needs_changes was in this list
+          // and should not have been: a publish run that fails before assembly lands
+          // there with neither a bundle nor a preview stored, so the button would have
+          // sent the creator to the exact "not available yet" page it exists to avoid
+          // (Codex, #617). A red gate is precisely when there may be nothing to play.
+          var playable =
+            url &&
+            (status.phase === 'ready_for_review' ||
+              status.phase === 'published' ||
+              gateStatus === 'green' ||
+              gateStatus === 'preview_passed');
+          if (!playable) {
+            playRow.hidden = true;
+            return;
+          }
+          playBtn.textContent = status.phase === 'published' ? 'Play it' : 'Play the latest build';
+          playBtn.onclick = function () {
+            request('ui/open-link', { url: url });
+          };
+          playRow.hidden = false;
+        }
+
         function renderAction(status, gateStatus) {
           // Only once the agent has stopped: while it is still working it will act on a
           // red gate itself, and a second instruction would just talk over it.
@@ -845,6 +959,7 @@ const ROUND_STATUS_HTML = `<!doctype html>
           }
 
           actionRow.hidden = true;
+          playRow.hidden = true;
           gallery.hidden = true;
           galleryCap.hidden = true;
           foot.textContent =
@@ -859,7 +974,19 @@ const ROUND_STATUS_HTML = `<!doctype html>
         function render(status) {
           var gate = status.gate && typeof status.gate === 'object' ? status.gate : null;
           var gateStatus = gate && typeof gate.status === 'string' ? gate.status : null;
-          var headline = gateStatus && gateStatus !== 'pending' ? gateStatus : status.phase;
+          // The pill has to agree with the sentence under it. The phase lags reality —
+          // an agent that has stopped still reads as 'dispatched' for a while — so a
+          // card showed DISPATCHED above "The agent has stopped without delivering."
+          // (owner, 2026-08-06). The summary below already ranks the phase last; the
+          // pill was left on the old rule and contradicted it.
+          var headline =
+            gateStatus && gateStatus !== 'pending'
+              ? gateStatus
+              : gate && gate.deliveryId
+                ? 'gating'
+                : status.agentEnded
+                  ? 'stopped'
+                  : status.phase;
 
           pill.textContent = String(headline).replace(/_/g, ' ');
           pill.className = 'pill pill-' + headline;
@@ -870,6 +997,10 @@ const ROUND_STATUS_HTML = `<!doctype html>
           } else {
             titleEl.hidden = true;
           }
+          // The wordmark goes to the site; the game name goes to its round in Studio,
+          // which is valid whether or not anything is playable yet.
+          linkify(brandEl, status.siteUrl, 'Open gamedev.pl');
+          linkify(titleEl, status.studioUrl, 'Open this round in Creator Studio');
 
           // Order matters, and the job's own phase comes last: it lags reality. An agent
           // that has delivered and called end still reads as 'building' for a while, so
@@ -933,8 +1064,14 @@ const ROUND_STATUS_HTML = `<!doctype html>
           if (typeof status.deliveriesRemaining === 'number') {
             addRow('Deliveries left', status.deliveriesRemaining);
           }
-          if (status.stall && STALL_COPY[status.stall] && STALL_COPY[status.stall] !== summary.textContent) {
-            addRow('Note', STALL_COPY[status.stall]);
+          // Say it once. The stall row used to compare whole strings, so "The agent has
+          // stopped." sat under a summary reading "The agent has stopped without
+          // delivering." — the same fact twice, in two shapes.
+          var stallLine = status.stall ? STALL_COPY[status.stall] : '';
+          // Escape doubled: this file is a TS template literal, so a single backslash
+          // here emits /.$/ — "strip any last character" rather than "strip a period".
+          if (stallLine && summary.textContent.indexOf(stallLine.replace(/\\.$/, '')) === -1) {
+            addRow('Note', stallLine);
           }
 
           var detail = gate && typeof gate.report === 'string' ? gate.report.trim() : '';
@@ -950,6 +1087,7 @@ const ROUND_STATUS_HTML = `<!doctype html>
             report.hidden = true;
           }
 
+          renderPlay(status, gateStatus);
           renderAction(status, gateStatus);
 
           if (isFinished(status)) {
@@ -1038,14 +1176,25 @@ const ROUND_STATUS_HTML = `<!doctype html>
          * captures on both lanes; the card is already here when the verdict lands.
          */
         function loadMedia(status) {
+          // Two ways in. Watching a round, the frames arrive when that round's gate
+          // settles. Asked to *show* media, the delivery is named up front and may
+          // belong to an earlier round entirely — which is the case the gallery could
+          // not serve: a creator asking "show me the screenshot" opens a round that has
+          // delivered nothing, so there is no gate here to hang the frames off.
           var gate = status.gate;
-          if (!gate || !gate.deliveryId || gate.status === 'pending') return;
-          if (mediaKey === gate.deliveryId) return;
-          if (mediaTriesFor !== gate.deliveryId) {
-            mediaTriesFor = gate.deliveryId;
+          var wanted =
+            typeof status.mediaDeliveryId === 'string' && status.mediaDeliveryId
+              ? status.mediaDeliveryId
+              : gate && gate.deliveryId && gate.status !== 'pending'
+                ? gate.deliveryId
+                : null;
+          if (!wanted) return;
+          if (mediaKey === wanted) return;
+          if (mediaTriesFor !== wanted) {
+            mediaTriesFor = wanted;
             mediaTries = 0;
           }
-          mediaKey = gate.deliveryId;
+          mediaKey = wanted;
           var id = nextId++;
           pendingCalls[id] = function (result, error) {
             if (error) {
@@ -1064,7 +1213,7 @@ const ROUND_STATUS_HTML = `<!doctype html>
             if (!media) return;
             renderMedia(media);
           };
-          var args = { deliveryId: gate.deliveryId };
+          var args = { deliveryId: wanted };
           if (sessionKey) args.sessionKey = sessionKey;
           post({ jsonrpc: '2.0', id: id, method: 'tools/call', params: { name: 'get_round_media', arguments: args } });
         }
@@ -1151,9 +1300,7 @@ const ROUND_STATUS_HTML = `<!doctype html>
               // carries cycles, and a throw here is inside the message handler, which
               // would take the card's whole update path down with it. A plain coercion
               // says less and cannot fail.
-              var reason = error
-                ? 'call refused: ' + String(error.message || error.code || error).slice(0, 200)
-                : 'the reply was not round status';
+              var reason = error ? 'call refused: ' + ourError(error.message || error.code || error) : 'the reply was not round status';
               lastFailure = (sessionKey ? 'with a round key, ' : 'without a round key, ') + reason;
               log('warning', 'round status unavailable: ' + lastFailure);
               if (speculative) {
@@ -1197,6 +1344,34 @@ const ROUND_STATUS_HTML = `<!doctype html>
             method: 'tools/call',
             params: { name: 'get_round_status', arguments: args }
           });
+        }
+
+        /**
+         * Our message, dug out of the host's wrapper.
+         *
+         * A refused call came back as "Error code: INVALID_ARGUMENT; Error:
+         * RuntimeException: Error calling MCP tool: [TextContent(type='text',
+         * text='{"error":"OAuth access proves your identity only — call start()..."
+         * and the card printed that verbatim, truncated mid-sentence (owner,
+         * 2026-08-06). The only part a creator can act on is the JSON inside it.
+         *
+         * The closing quote is optional on purpose: the host truncates its own wrapper,
+         * so the case that actually shows up is a message cut off mid-sentence with no
+         * terminator. Requiring one matched nothing and printed the whole blob.
+         *
+         * Escapes are doubled throughout: this whole view is a TS template literal.
+         */
+        function ourError(raw) {
+          var text = String(raw === null || raw === undefined ? '' : raw);
+          var match = /"error"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)/.exec(text);
+          if (match) {
+            try {
+              return JSON.parse('"' + match[1] + '"');
+            } catch (e) {
+              return match[1];
+            }
+          }
+          return text.length > 160 ? text.slice(0, 160) + '…' : text;
         }
 
         function noteSessionKey(value) {
@@ -1259,6 +1434,9 @@ const ROUND_STATUS_HTML = `<!doctype html>
             if (opening && !live) {
               painted = true;
               render(opening);
+              // show_media names a delivery that need not belong to this round, so the
+              // frames load from the opening result rather than waiting for a gate.
+              loadMedia(opening);
               schedule(opening.retryAfterSeconds);
             }
             var verdict = opening ? null : unwrap(message.params, looksLikeVerdict);
@@ -1337,7 +1515,7 @@ function uiResourceMeta(): UiResourceMeta {
       // has no permission to follow, and the Play button V3 is built around would be
       // the same. An empty CSP is right for what the card *fetches* — it fetches
       // nothing — but link targets are a different question and were never answered.
-      redirect_domains: LINK_DOMAINS,
+      redirect_domains: linkDomains(),
     },
   };
 }

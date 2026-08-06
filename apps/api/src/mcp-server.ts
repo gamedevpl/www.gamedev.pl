@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { looksLikeCreatorAgentKey } from './agent-creator-key.js';
+import { canonicalAppBaseUrl } from './canonical-app-url.js';
 import {
   resolveCreatorAgentKeyForOpenRound,
   resolveCreatorAgentKeyForStart,
@@ -174,6 +175,43 @@ const ROUND_STATUS_OUTPUT_SCHEMA: Record<string, unknown> = {
   },
   required: ['phase', 'status', 'retryAfterSeconds'],
 };
+
+/**
+ * Where the creator plays what the agent just built.
+ *
+ * Built here rather than in the view because the view is served to every environment
+ * from one string: an origin baked into it would send a staging card's Play button to
+ * production.
+ *
+ * `canonicalAppBaseUrl()` rather than `WEB_ORIGIN`, and the distinction is load-bearing.
+ * WEB_ORIGIN is a CORS allowlist — in production it begins with the Cloud Run service
+ * URL — so taking its first entry produced a link to an origin that is not in the view's
+ * `redirect_domains`, which ChatGPT would refuse. The button would have been dead in
+ * production and fine everywhere we tested it (Codex, #617). The card's link allowlist
+ * is derived from this same function so the two cannot drift apart again.
+ */
+function playUrlFor(slug: string | null | undefined): string | null {
+  if (!slug) return null;
+  return `${canonicalAppBaseUrl()}/play/${encodeURIComponent(slug)}`;
+}
+
+/**
+ * The round's home in Creator Studio — where the creator manages this build.
+ *
+ * The card's title links here rather than to /play, which the Play button already
+ * covers. It is also always valid: Studio shows a round whether or not anything is
+ * playable yet, so it has none of the "not available" risk that keeps the Play button
+ * off a red gate.
+ */
+function studioUrlFor(slug: string | null | undefined): string | null {
+  if (!slug) return null;
+  return `${canonicalAppBaseUrl()}/studio/${encodeURIComponent(slug)}`;
+}
+
+/** The site itself, for the card's wordmark. */
+function siteUrl(): string {
+  return canonicalAppBaseUrl();
+}
 
 const ROUND_STATUS_RETRY_AFTER_SECONDS = 30;
 /** A card shows a strip, not a contact sheet; the bytes ride a postMessage. */
@@ -415,6 +453,7 @@ const SESSION_WORKFLOW: readonly string[] = [
   // corrected.
   'Hold the sessionKey start gave you for the whole round and pass it on every call. Do not re-run start to refresh it — it is valid until expiresAt. Re-run start only if a call is refused as unauthenticated.',
   "show_round — once, right after start. In a client that renders MCP Apps views this puts a live status card in the creator's chat that follows the build and the gate on its own, so they can watch without you polling. Calling it again renders a second card.",
+  'show_media — whenever the creator asks to see the game. get_gate_media attaches frames for YOU to look at; those attachments do not reach the creator, so describing them is all you can do with it. show_media is what actually puts the pictures in front of them.',
   'get_brief — read the brief; if seedAvailable or seedStatus=available, get_seed and continue that draft. If seedStatus=pending, browse the kit lightly then recheck get_seed before scaffolding.',
   // An improvement round has no seed (seeds are a new-game facility) and its brief is
   // the change request alone, so nothing above this told the agent a game already
@@ -3692,6 +3731,61 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     },
 
     /**
+     * Show the creator the gate's pictures — the only way to actually show them.
+     *
+     * `get_gate_media` attaches frames as image blocks, which reach the *model*: it can
+     * look at them and describe them. There is no path back out. Asked to display them,
+     * ChatGPT answered "the image attachments apparently didn't render in your view"
+     * and the creator saw nothing (owner, 2026-08-06). A tool result is input to a
+     * model, not output to a person.
+     *
+     * A view is the only surface that puts pixels in the conversation without going
+     * through the model, so this is not a nicer way to show a picture — it is the way.
+     *
+     * Deliberately carries no bytes. The card fetches them over the app-only
+     * `get_round_media`, so a megabyte of base64 never enters the model's context — the
+     * same reason that tool exists at all.
+     */
+    show_media: {
+      annotations: { title: "Show the creator the gate's screenshots", ...READS },
+      description:
+        "Render the gate's screenshots for a delivery in the creator's chat, at a size they can actually look at, " +
+        'with the gameplay recording and a link to play. ' +
+        'Use this when the creator asks to see the game — get_gate_media lets *you* look at the frames, but its ' +
+        'attachments are input to you rather than something the creator sees. ' +
+        'Defaults to the latest delivery. Only clients that render MCP Apps views show anything. ' +
+        BEHAVIOURAL_CONTRACT,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          sessionKey: SESSION_KEY_PROP,
+          deliveryId: { type: 'string', description: "Delivery to show; default is the round's latest." },
+        },
+        required: [],
+      },
+      outputSchema: ROUND_STATUS_OUTPUT_SCHEMA,
+      handler: async (args, ctx) => {
+        const status = await tools.get_round_status.handler(args, ctx);
+        if (status.isError) return status;
+        const auth = await resolveAuth(ctx, args, { allowTerminalReceipt: true });
+        const record = 'record' in auth ? auth.record : null;
+        const wanted =
+          (typeof args.deliveryId === 'string' && args.deliveryId.trim()) ||
+          record?.previewVersion ||
+          record?.deliveredVersion ||
+          null;
+        return toolOk({
+          ...(status.structuredContent as Record<string, unknown>),
+          // Names the delivery the card should fetch frames for. It need not belong to
+          // this round: "show me the screenshot" opens a round that has delivered
+          // nothing, and the frames the creator means are the previous one's.
+          mediaDeliveryId: wanted,
+          ...(typeof args.sessionKey === 'string' ? { sessionKey: args.sessionKey } : {}),
+        });
+      },
+    },
+
+    /**
      * App-only (SEP-1865 `visibility: ["app"]`): the round view calls this, the model
      * never sees it. Read-only and presence-neutral by construction — see
      * MCP_UI_APP_ONLY_TOOLS for why both matter.
@@ -3783,6 +3877,9 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           agentEnded: Boolean(record.agentEndedAt),
           title: record.title ?? null,
           slug: record.slug ?? null,
+          playUrl: playUrlFor(record.slug),
+          studioUrl: studioUrlFor(record.slug),
+          siteUrl: siteUrl(),
           round: record.roundGeneration ?? 1,
           deliveriesRemaining: cap === null ? null : Math.max(0, cap - used),
           note: latestEvent ? { text: noteTextFor(latestEvent, args.locale), createdAt: latestEvent.createdAt } : null,

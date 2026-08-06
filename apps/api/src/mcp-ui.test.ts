@@ -258,7 +258,13 @@ describe('ui resources', () => {
     // re-ran `start` before each operation left one card per call (ChatGPT, 2026-08-05),
     // and it was not doing anything wrong enough to forbid. Showing the creator
     // something is now a deliberate act with a deliberate tool.
-    expect(MCP_UI_TOOL_RESOURCES).toEqual({ show_round: ROUND_STATUS_RESOURCE_URI });
+    expect(MCP_UI_TOOL_RESOURCES).toEqual({
+      show_round: ROUND_STATUS_RESOURCE_URI,
+      // Second intent, same card. get_gate_media puts frames in front of the *model*,
+      // which can look at them and cannot show them — a view is the only surface that
+      // reaches the creator, so "show me the screenshots" needs one too.
+      show_media: ROUND_STATUS_RESOURCE_URI,
+    });
 
     // The host renders one card per call carrying _meta.ui, so every tool added here
     // hands the card count back to whatever the agent happens to do.
@@ -291,6 +297,63 @@ describe('ui resources', () => {
     // makes exactly one call and never recovers.
     const html = readUiResource(ROUND_STATUS_RESOURCE_URI)?.text ?? '';
     expect(html).toMatch(/if \(speculative\) \{[\s\S]{0,400}?if \(sessionKey\) \{[\s\S]{0,80}?poll\(\);/);
+  });
+
+  it('asks for the height its content needs, not the height of the frame it was given', () => {
+    // documentElement.scrollHeight was the content height until applyContainerDimensions
+    // began setting html{height:100%} to fill a host-declared frame. After that the card
+    // filled 400px, reported 400px, and the host never shrank it — a slab of empty space
+    // under the content. Measuring the card breaks the loop. Mutation-checked in the
+    // browser: reverting to scrollHeight reports 520 where this reports 287.
+    const html = readUiResource(ROUND_STATUS_RESOURCE_URI)?.text ?? '';
+    expect(html).toContain("var card = document.querySelector('.card');");
+    expect(html).toContain('card.getBoundingClientRect().height');
+  });
+
+  it('opens the wordmark and the game name through the host', () => {
+    // Anchors are inert here: the view is sandboxed without allow-top-navigation, so
+    // ui/open-link is the only way out. Both origins come from canonicalAppBaseUrl, the
+    // same function the redirect allowlist is built from, so they cannot fall outside it.
+    const html = readUiResource(ROUND_STATUS_RESOURCE_URI)?.text ?? '';
+    expect(html).toContain('function linkify(element, url, label)');
+    expect(html).toContain("linkify(brandEl, status.siteUrl, 'Open gamedev.pl')");
+    expect(html).toContain('linkify(titleEl, status.studioUrl,');
+    // The title goes to Studio rather than /play: the Play button already covers play,
+    // and Studio is valid whether or not anything is playable yet.
+    expect(html).not.toContain('linkify(titleEl, status.playUrl');
+    // A missing URL removes the affordance rather than leaving a dead click target.
+    expect(html).toContain("element.className.replace(/ ?linked/, '')");
+  });
+
+  it('invites the creator to play, once there is something to play', () => {
+    // The step the whole flow exists for: the card shows what the agent built, the
+    // theater is where it gets played. A link rather than an embedded game on purpose —
+    // gamedev.pl's theater does fullscreen, pointer lock and touch; a chat card cannot.
+    const html = readUiResource(ROUND_STATUS_RESOURCE_URI)?.text ?? '';
+    expect(html).toContain('renderPlay');
+    // The URL comes from the server (playUrlFor), never baked into the view — one
+    // string is served to every environment, so an origin here would send a staging
+    // card's Play button to production. The self-contained test above enforces it.
+    expect(html).toContain('status.playUrl');
+    // The link and the allowlist that permits it come from one function, so they cannot
+    // disagree — they did once, and every production link was non-allowlisted.
+    expect(html).not.toContain('https://www.gamedev.pl/play/');
+    // Uses the same host hand-off the gate recording does — the mechanism whose
+    // permission (`redirect_domains`) was missing until the CSP work.
+    expect(html).toMatch(/playBtn\.onclick[\s\S]{0,120}?request\('ui\/open-link'/);
+
+    // Not offered when a round has delivered nothing: the link would open a page saying
+    // the game is not available, which is a worse answer than no button.
+    for (const phase of ['ready_for_review', 'published']) {
+      expect(html).toContain(`status.phase === '${phase}'`);
+    }
+    expect(html).toContain("gateStatus === 'preview_passed'");
+    // needs_changes is deliberately absent: a publish run that fails before assembly
+    // lands there with neither a bundle nor a preview, so the button would have sent
+    // the creator to the "not available yet" page it exists to avoid. A red gate is
+    // exactly when there may be nothing to play.
+    expect(html).not.toContain("status.phase === 'needs_changes' ||");
+    expect(html).toContain('playRow.hidden = true;');
   });
 
   it('offers the creator the next move, in the exact ui/message shape the spec defines', () => {
@@ -335,6 +398,26 @@ describe('ui resources', () => {
     expect(html).toMatch(/navigator\.clipboard[\s\S]{0,400}?function \(\) \{\}/);
   });
 
+  it('does not put a pill on the card that contradicts the sentence under it', () => {
+    // Observed: DISPATCHED above "The agent has stopped without delivering." The phase
+    // lags reality, which the summary already accounts for by ranking it last — the
+    // pill was left on the old rule and disagreed with the text beside it.
+    const html = readUiResource(ROUND_STATUS_RESOURCE_URI)?.text ?? '';
+    expect(html).toMatch(/headline =[\s\S]{0,320}?status\.agentEnded[\s\S]{0,40}?'stopped'/);
+    // A delivery in flight reads as gating rather than whatever the job record still says.
+    expect(html).toMatch(/gate && gate\.deliveryId[\s\S]{0,40}?'gating'/);
+    // The new state needs a colour, or it falls through to an unstyled pill.
+    expect(html).toContain('.pill-stopped');
+  });
+
+  it('states a stall once, not once per shape', () => {
+    // "The agent has stopped." sat in the Note row under a summary reading "The agent
+    // has stopped without delivering." — same fact twice. Whole-string comparison could
+    // not see that one contains the other.
+    const html = readUiResource(ROUND_STATUS_RESOURCE_URI)?.text ?? '';
+    expect(html).toContain("summary.textContent.indexOf(stallLine.replace(/\\.$/, '')) === -1");
+  });
+
   it('does not print the gate detail twice, or lead with instructions meant for the agent', () => {
     // kit_outdated returns the same long agent-facing text as both summary and report,
     // which the card printed twice — once as its headline.
@@ -360,6 +443,20 @@ describe('ui resources', () => {
     expect(html).toContain("addRow('Round', status.round)");
   });
 
+  it('shows our message, not the exception wrapper a host puts around it', () => {
+    // A refused call surfaced as: Error code: INVALID_ARGUMENT; Error: RuntimeException:
+    // Error calling MCP tool: [TextContent(type='text', text='{"error":"OAuth access
+    // proves your identity only — call start()… — printed verbatim and cut off
+    // mid-sentence. The only actionable part is the JSON inside it.
+    const html = readUiResource(ROUND_STATUS_RESOURCE_URI)?.text ?? '';
+    expect(html).toContain('function ourError(raw)');
+    // No closing quote required: the host truncates its own wrapper, so the message
+    // that actually arrives has no terminator. Demanding one matched nothing.
+    expect(html).toContain('/"error"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)/');
+    // And a blob with no JSON of ours in it is trimmed rather than dumped whole.
+    expect(html).toContain('text.slice(0, 160)');
+  });
+
   it('says which way a status read failed, so a screenshot is enough to diagnose it', () => {
     // Observed in ChatGPT: one card read status fine (screenshot, note and gate all
     // live) while a later one in the same session did not. "Could not read round status
@@ -381,6 +478,21 @@ describe('ui resources', () => {
     expect(html).not.toContain('JSON.stringify(error)');
   });
 
+  it('loads frames for a named delivery, not only the round it is watching', () => {
+    // The gallery hung off the current round's gate, so a creator asking "show me the
+    // screenshot" got nothing: that request opens a round which has delivered nothing,
+    // and the frames they meant belong to the previous one.
+    const html = readUiResource(ROUND_STATUS_RESOURCE_URI)?.text ?? '';
+    expect(html).toContain('status.mediaDeliveryId');
+    // Still falls back to the round's own settled gate when no delivery is named.
+    expect(html).toMatch(/gate && gate\.deliveryId && gate\.status !== 'pending'/);
+    // And the named delivery is what gets fetched.
+    expect(html).toContain('var args = { deliveryId: wanted };');
+    // Loaded from the opening result — show_media names the delivery up front, so the
+    // card must not wait for a gate that will never settle in this round.
+    expect(html).toMatch(/render\(opening\);[\s\S]{0,220}?loadMedia\(opening\);/);
+  });
+
   it("shows the gate's own frames, which the agent has no browser to capture", () => {
     const html = readUiResource(ROUND_STATUS_RESOURCE_URI)?.text ?? '';
     expect(html).toContain("name: 'get_round_media'");
@@ -389,7 +501,7 @@ describe('ui resources', () => {
     expect(html).toContain("'data:image/png;base64,'");
     // Fetched once per delivery, not once per poll: the strip does not change between
     // polls and each frame is hundreds of kilobytes through the host.
-    expect(html).toContain('mediaKey === gate.deliveryId');
+    expect(html).toContain('mediaKey === wanted');
     expect(html).toContain("gate.status === 'pending'");
     // A frame written a moment after the verdict loses the first read; one retry, then
     // stop, so a card cannot re-ask forever.
