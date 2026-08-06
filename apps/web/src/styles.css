@@ -8601,6 +8601,36 @@ button.builder-mode-selector:disabled {
   .telem-trends-charts {
     grid-template-columns: 1fr 1fr;
   }
+
+  .telem-trends-charts > :last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+}
+
+.telem-trends-kpis {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem 1.75rem;
+  margin: 0 0 1.25rem;
+  padding: 0;
+  list-style: none;
+}
+
+.telem-trends-kpis li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.telem-trends-kpi-value {
+  font-size: 1.25rem;
+  line-height: 1.1;
+  color: var(--turquoise);
+}
+
+.telem-trends-kpi-label {
+  font-size: 0.75rem;
+  color: var(--muted);
 }
 
 .telem-line {
@@ -8630,6 +8660,18 @@ button.builder-mode-selector:disabled {
   fill: var(--muted);
   font-size: 10px;
   font-family: inherit;
+}
+
+.telem-line-axis--right {
+  fill: #fbbf24;
+}
+
+.telem-line-axis-tag {
+  margin-left: 0.25rem;
+  font-size: 0.65rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .telem-line-path {

@@ -19,7 +19,7 @@ function visit(partial: Partial<VisitEvent> & Pick<VisitEvent, 'visitId' | 'type
 
 describe('summarizeVisitDay', () => {
   it('counts distinct visits, every play, and distinct creations', () => {
-    const point = summarizeVisitDay('2026-08-01', [
+    const { activity } = summarizeVisitDay('2026-08-01', [
       visit({ visitId: 'a', type: 'visit_started' }),
       visit({ visitId: 'b', type: 'visit_started' }),
       visit({ visitId: 'a', type: 'play_started', msSinceStart: 1000 }),
@@ -28,7 +28,7 @@ describe('summarizeVisitDay', () => {
       visit({ visitId: 'a', type: 'create_step', step: 'submission_created' }),
       visit({ visitId: 'a', type: 'create_step', step: 'submission_created' }),
     ]);
-    expect(point).toEqual({
+    expect(activity).toEqual({
       date: '2026-08-01',
       visits: 2,
       plays: 2,
@@ -37,8 +37,28 @@ describe('summarizeVisitDay', () => {
     });
   });
 
+  it('counts MCP adoption rungs as distinct self visits', () => {
+    const { mcp } = summarizeVisitDay('2026-08-01', [
+      visit({ visitId: 'a', type: 'studio_step', step: 'builder_chosen', builder: 'self' }),
+      visit({ visitId: 'b', type: 'studio_step', step: 'builder_chosen', builder: 'platform' }),
+      visit({ visitId: 'a', type: 'studio_step', step: 'connect_copied', builder: 'self', detail: 'install' }),
+      visit({ visitId: 'a', type: 'studio_step', step: 'connect_deeplink', builder: 'self', detail: 'cursor' }),
+      visit({ visitId: 'a', type: 'studio_step', step: 'agent_signaled', builder: 'self' }),
+      visit({ visitId: 'c', type: 'studio_step', step: 'gate_verdict', builder: 'self', detail: 'green' }),
+    ]);
+    expect(mcp).toEqual({
+      date: '2026-08-01',
+      selfChosen: 1,
+      platformChosen: 1,
+      connected: 1,
+      signaled: 1,
+      gateVerdicts: 1,
+      truncated: false,
+    });
+  });
+
   it('marks the day truncated when the caller says so', () => {
-    expect(summarizeVisitDay('2026-08-01', [], true).truncated).toBe(true);
+    expect(summarizeVisitDay('2026-08-01', [], true).activity.truncated).toBe(true);
   });
 });
 
@@ -117,17 +137,41 @@ describe('rollupTrends + rollingAverage', () => {
         truncated: false,
       },
     ];
+    const mcp = [
+      {
+        date: '2026-08-03',
+        selfChosen: 2,
+        platformChosen: 1,
+        connected: 1,
+        signaled: 1,
+        gateVerdicts: 0,
+        truncated: false,
+      },
+      {
+        date: '2026-08-04',
+        selfChosen: 1,
+        platformChosen: 0,
+        connected: 1,
+        signaled: 0,
+        gateVerdicts: 1,
+        truncated: false,
+      },
+    ];
     const retention = [
       { date: '2026-08-03', eligible: 2, returned: 1, rate: 0.5 },
       { date: '2026-08-04', eligible: 2, returned: 2, rate: 1 },
     ];
-    const weeks = rollupTrends(activity, retention, 'week');
+    const weeks = rollupTrends(activity, mcp, retention, 'week');
     expect(weeks).toHaveLength(1);
     expect(weeks[0]).toMatchObject({
       key: '2026-08-03',
       visits: 30,
       plays: 13,
       creations: 1,
+      selfChosen: 3,
+      connected: 2,
+      signaled: 1,
+      gateVerdicts: 1,
       retentionEligible: 4,
       retentionReturned: 3,
       retentionRate: 0.75,

@@ -47,6 +47,17 @@ describe('GET /api/admin/telemetry/trends', () => {
     const body = res.json() as TrendsResponse;
     expect(body.days).toEqual([today]);
     expect(body.activity).toEqual([{ date: today, visits: 2, plays: 1, creations: 1, truncated: false }]);
+    expect(body.mcp).toEqual([
+      {
+        date: today,
+        selfChosen: 0,
+        platformChosen: 0,
+        connected: 0,
+        signaled: 0,
+        gateVerdicts: 0,
+        truncated: false,
+      },
+    ]);
     expect(body.retention).toHaveLength(1);
     await app.close();
   });

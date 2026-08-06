@@ -1,4 +1,4 @@
-import type { DailyActivityPoint, DailyRetentionPoint } from './healthApi.js';
+import type { DailyActivityPoint, DailyMcpPoint, DailyRetentionPoint } from './healthApi.js';
 
 /**
  * Client-side rollups over the daily trends payload.
@@ -19,6 +19,11 @@ export interface RolledTrendPoint {
   visits: number;
   plays: number;
   creations: number;
+  selfChosen: number;
+  platformChosen: number;
+  connected: number;
+  signaled: number;
+  gateVerdicts: number;
   retentionRate: number | null;
   retentionEligible: number;
   retentionReturned: number;
@@ -27,23 +32,32 @@ export interface RolledTrendPoint {
 
 export function rollupTrends(
   activity: DailyActivityPoint[],
+  mcp: DailyMcpPoint[],
   retention: DailyRetentionPoint[],
   grain: TrendGrain,
 ): RolledTrendPoint[] {
+  const mcpByDate = new Map(mcp.map((row) => [row.date, row]));
+  const retentionByDate = new Map(retention.map((row) => [row.date, row]));
+
   if (grain === 'day') {
-    const byDate = new Map(retention.map((row) => [row.date, row]));
     return activity.map((row) => {
-      const ret = byDate.get(row.date);
+      const mcpRow = mcpByDate.get(row.date);
+      const ret = retentionByDate.get(row.date);
       return {
         key: row.date,
         label: row.date.slice(5),
         visits: row.visits,
         plays: row.plays,
         creations: row.creations,
+        selfChosen: mcpRow?.selfChosen ?? 0,
+        platformChosen: mcpRow?.platformChosen ?? 0,
+        connected: mcpRow?.connected ?? 0,
+        signaled: mcpRow?.signaled ?? 0,
+        gateVerdicts: mcpRow?.gateVerdicts ?? 0,
         retentionRate: ret?.rate ?? null,
         retentionEligible: ret?.eligible ?? 0,
         retentionReturned: ret?.returned ?? 0,
-        truncated: row.truncated,
+        truncated: row.truncated || mcpRow?.truncated === true,
       };
     });
   }
@@ -55,12 +69,16 @@ export function rollupTrends(
       visits: number;
       plays: number;
       creations: number;
+      selfChosen: number;
+      platformChosen: number;
+      connected: number;
+      signaled: number;
+      gateVerdicts: number;
       retentionEligible: number;
       retentionReturned: number;
       truncated: boolean;
     }
   >();
-  const retentionByDate = new Map(retention.map((row) => [row.date, row]));
 
   for (const row of activity) {
     const { key, label } = periodKey(row.date, grain);
@@ -69,6 +87,11 @@ export function rollupTrends(
       visits: 0,
       plays: 0,
       creations: 0,
+      selfChosen: 0,
+      platformChosen: 0,
+      connected: 0,
+      signaled: 0,
+      gateVerdicts: 0,
       retentionEligible: 0,
       retentionReturned: 0,
       truncated: false,
@@ -76,6 +99,15 @@ export function rollupTrends(
     bucket.visits += row.visits;
     bucket.plays += row.plays;
     bucket.creations += row.creations;
+    const mcpRow = mcpByDate.get(row.date);
+    if (mcpRow) {
+      bucket.selfChosen += mcpRow.selfChosen;
+      bucket.platformChosen += mcpRow.platformChosen;
+      bucket.connected += mcpRow.connected;
+      bucket.signaled += mcpRow.signaled;
+      bucket.gateVerdicts += mcpRow.gateVerdicts;
+      if (mcpRow.truncated) bucket.truncated = true;
+    }
     if (row.truncated) bucket.truncated = true;
     const ret = retentionByDate.get(row.date);
     if (ret) {
@@ -91,6 +123,11 @@ export function rollupTrends(
     visits: bucket.visits,
     plays: bucket.plays,
     creations: bucket.creations,
+    selfChosen: bucket.selfChosen,
+    platformChosen: bucket.platformChosen,
+    connected: bucket.connected,
+    signaled: bucket.signaled,
+    gateVerdicts: bucket.gateVerdicts,
     retentionEligible: bucket.retentionEligible,
     retentionReturned: bucket.retentionReturned,
     retentionRate: bucket.retentionEligible === 0 ? null : bucket.retentionReturned / bucket.retentionEligible,

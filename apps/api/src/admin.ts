@@ -24,6 +24,7 @@ import {
   summarizeVisitDay,
   trendPartitions,
   type DailyActivityPoint,
+  type DailyMcpPoint,
   type DailyRetentionPoint,
   type TelemetryTrends,
 } from './telemetry-trends.js';
@@ -557,6 +558,7 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
 
     const requested = trendPartitions(parsed.data.days ?? DEFAULT_TREND_DAYS, now());
     const activity: DailyActivityPoint[] = [];
+    const mcp: DailyMcpPoint[] = [];
     const scanned: string[] = [];
     let truncated = false;
     let readTotal = 0;
@@ -572,7 +574,9 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
       const dayTruncated = dayEvents.length >= limit;
       if (dayTruncated) truncated = true;
       readTotal += dayEvents.length;
-      activity.push(summarizeVisitDay(dateStr, dayEvents, dayTruncated));
+      const day = summarizeVisitDay(dateStr, dayEvents, dayTruncated);
+      activity.push(day.activity);
+      mcp.push(day.mcp);
       scanned.push(dateStr);
     }
 
@@ -592,7 +596,7 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
       now(),
     );
 
-    const body: TrendsResponse = { days: scanned, truncated, activity, retention };
+    const body: TrendsResponse = { days: scanned, truncated, activity, mcp, retention };
     return reply.status(200).send(body);
   });
 

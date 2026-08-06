@@ -162,6 +162,16 @@ export interface DailyActivityPoint {
   truncated: boolean;
 }
 
+export interface DailyMcpPoint {
+  date: string;
+  selfChosen: number;
+  platformChosen: number;
+  connected: number;
+  signaled: number;
+  gateVerdicts: number;
+  truncated: boolean;
+}
+
 export interface DailyRetentionPoint {
   date: string;
   eligible: number;
@@ -173,6 +183,7 @@ export interface TrendsResponse {
   days: string[];
   truncated: boolean;
   activity: DailyActivityPoint[];
+  mcp: DailyMcpPoint[];
   retention: DailyRetentionPoint[];
 }
 

@@ -10,8 +10,8 @@ import {
 } from './telemetryTrends.js';
 
 /**
- * Trend strip for the telemetry tab: visits / plays / creations and D7 return
- * over time, with grain and rolling-average toggles.
+ * Trend strip for the telemetry tab: visits / plays / creations, MCP adoption,
+ * and D7 return over time, with grain and rolling-average toggles.
  *
  * Fetches its own window (30 / 90 days) rather than sharing the funnel's 1/7/30
  * selector — a one-day trend chart is not a trend chart.
@@ -34,7 +34,23 @@ const COLOR = {
   plays: 'var(--accent-blue)',
   creations: '#fbbf24',
   retention: 'var(--turquoise)',
+  selfChosen: 'var(--accent-blue)',
+  connected: '#fbbf24',
+  signaled: 'var(--turquoise)',
+  gate: '#c084fc',
 };
+
+function maybeRoll(values: number[], periodWindow: number, rolling: RollingWindow, label: string, color: string) {
+  if (periodWindow === 0) {
+    return { id: label.toLowerCase().replace(/\s+/g, '-'), label, color, values };
+  }
+  return {
+    id: `${label.toLowerCase().replace(/\s+/g, '-')}-avg`,
+    label: `${label} (${rolling}d avg)`,
+    color,
+    values: rollingAverage(values, periodWindow),
+  };
+}
 
 export function TelemetryTrendsPanel() {
   const [days, setDays] = useState<(typeof WINDOWS)[number]>(30);
@@ -66,41 +82,70 @@ export function TelemetryTrendsPanel() {
 
   const rolled = useMemo(() => {
     if (!data) return [];
-    return rollupTrends(data.activity, data.retention, grain);
+    return rollupTrends(data.activity, data.mcp ?? [], data.retention, grain);
   }, [data, grain]);
 
   const periodWindow = rollingPeriods(grain, rolling);
+
+  const totals = useMemo(() => {
+    const selfChosen = rolled.reduce((sum, row) => sum + row.selfChosen, 0);
+    const platformChosen = rolled.reduce((sum, row) => sum + row.platformChosen, 0);
+    const connected = rolled.reduce((sum, row) => sum + row.connected, 0);
+    const signaled = rolled.reduce((sum, row) => sum + row.signaled, 0);
+    const chosen = selfChosen + platformChosen;
+    return {
+      selfChosen,
+      platformChosen,
+      connected,
+      signaled,
+      selfShare: chosen === 0 ? null : selfChosen / chosen,
+      connectToSignal: connected === 0 ? null : signaled / connected,
+    };
+  }, [rolled]);
 
   const activitySeries = useMemo(() => {
     const visits = rolled.map((row) => row.visits);
     const plays = rolled.map((row) => row.plays);
     const creations = rolled.map((row) => row.creations);
-    if (periodWindow === 0) {
-      return [
-        { id: 'visits', label: 'Visits', color: COLOR.visits, values: visits },
-        { id: 'plays', label: 'Plays', color: COLOR.plays, values: plays },
-        { id: 'creations', label: 'Creations', color: COLOR.creations, values: creations },
-      ];
-    }
+    const visitsSeries = maybeRoll(visits, periodWindow, rolling, 'Visits', COLOR.visits);
+    const playsSeries = maybeRoll(plays, periodWindow, rolling, 'Plays', COLOR.plays);
+    const creationsSeries = {
+      ...maybeRoll(creations, periodWindow, rolling, 'Creations', COLOR.creations),
+      axis: 'right' as const,
+    };
+    return [visitsSeries, playsSeries, creationsSeries];
+  }, [rolled, periodWindow, rolling]);
+
+  const mcpSeries = useMemo(() => {
     return [
-      {
-        id: 'visits-avg',
-        label: `Visits (${rolling}d avg)`,
-        color: COLOR.visits,
-        values: rollingAverage(visits, periodWindow),
-      },
-      {
-        id: 'plays-avg',
-        label: `Plays (${rolling}d avg)`,
-        color: COLOR.plays,
-        values: rollingAverage(plays, periodWindow),
-      },
-      {
-        id: 'creations-avg',
-        label: `Creations (${rolling}d avg)`,
-        color: COLOR.creations,
-        values: rollingAverage(creations, periodWindow),
-      },
+      maybeRoll(
+        rolled.map((row) => row.selfChosen),
+        periodWindow,
+        rolling,
+        'Self chosen',
+        COLOR.selfChosen,
+      ),
+      maybeRoll(
+        rolled.map((row) => row.connected),
+        periodWindow,
+        rolling,
+        'Connected',
+        COLOR.connected,
+      ),
+      maybeRoll(
+        rolled.map((row) => row.signaled),
+        periodWindow,
+        rolling,
+        'Agent signaled',
+        COLOR.signaled,
+      ),
+      maybeRoll(
+        rolled.map((row) => row.gateVerdicts),
+        periodWindow,
+        rolling,
+        'Gate verdicts',
+        COLOR.gate,
+      ),
     ];
   }, [rolled, periodWindow, rolling]);
 
@@ -170,12 +215,41 @@ export function TelemetryTrendsPanel() {
 
       {state === 'ready' && data && (
         <>
+          <ul className="telem-trends-kpis">
+            <li>
+              <span className="telem-trends-kpi-value">
+                {totals.selfShare === null ? '—' : `${Math.round(totals.selfShare * 100)}%`}
+              </span>
+              <span className="telem-trends-kpi-label">chose self (MCP)</span>
+            </li>
+            <li>
+              <span className="telem-trends-kpi-value">{totals.connected}</span>
+              <span className="telem-trends-kpi-label">connected</span>
+            </li>
+            <li>
+              <span className="telem-trends-kpi-value">{totals.signaled}</span>
+              <span className="telem-trends-kpi-label">agent signaled</span>
+            </li>
+            <li>
+              <span className="telem-trends-kpi-value">
+                {totals.connectToSignal === null ? '—' : `${Math.round(totals.connectToSignal * 100)}%`}
+              </span>
+              <span className="telem-trends-kpi-label">connect → signal</span>
+            </li>
+          </ul>
+
           <div className="telem-trends-charts">
             <LineChart
-              title="Visits, plays, creations"
+              title="Visits & plays (creations on right)"
               labels={rolled.map((row) => row.label)}
               series={activitySeries}
               emptyMessage="No visit activity in this window."
+            />
+            <LineChart
+              title="MCP adoption (self-build)"
+              labels={rolled.map((row) => row.label)}
+              series={mcpSeries}
+              emptyMessage="No studio / MCP steps in this window."
             />
             <LineChart
               title="Creator D7 return"
@@ -186,8 +260,9 @@ export function TelemetryTrendsPanel() {
             />
           </div>
           <p className="health-note">
-            Activity is UTC day partitions from the visit stream. D7 return is plotted on the day a creator&apos;s
-            window closes (publish + 7), so every point is a resolved outcome
+            Activity and MCP rungs are UTC day partitions from the visit stream (`studio_step` for self-build). D7
+            return is plotted on the day a creator&apos;s window closes (publish + 7), so every point is a resolved
+            outcome
             {data.days.length > 0 && (
               <>
                 . Window: {data.days[0]} → {data.days[data.days.length - 1]}

@@ -10,13 +10,17 @@ import { returnedAfterPublish } from './creator-metrics.js';
  * averages are pure rollups over those points (same module, same tests), so the
  * three timescales cannot drift from each other.
  *
- * Visits / plays / creations come from the anonymous visit stream, partitioned
- * by UTC day. Retention is the Stage 0 D7 return rate, plotted on the day a
- * creator's 7-day window closes (the first day the outcome is knowable) — not
- * on the publish day, which would be a prediction.
+ * Visits / plays / creations and MCP (studio_step) adoption come from the
+ * anonymous visit stream, partitioned by UTC day. Retention is the Stage 0 D7
+ * return rate, plotted on the day a creator's 7-day window closes (the first
+ * day the outcome is knowable) — not on the publish day, which would be a
+ * prediction.
  */
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Connect steps that mean "this visit reached an MCP install surface". */
+const MCP_CONNECT_STEPS = new Set(['connect_copied', 'connect_deeplink', 'connect_restored']);
 
 export type TrendGrain = 'day' | 'week' | 'month';
 
@@ -30,6 +34,28 @@ export interface DailyActivityPoint {
   /** Distinct visits that reached `submission_created` that day. */
   creations: number;
   /** True when this day's read hit its cap, so the counts are a floor. */
+  truncated: boolean;
+}
+
+/**
+ * BYOCA / self-build MCP adoption for one day (visit-stream `studio_step`).
+ *
+ * Counts are distinct visits per rung. `signaled` is the usage signal — an agent
+ * actually talked to `/api/mcp`. Connect without signal is install friction;
+ * signal without a gate verdict is still a working connector.
+ */
+export interface DailyMcpPoint {
+  date: string;
+  /** Visits that chose the self (BYOCA) builder. */
+  selfChosen: number;
+  /** Visits that chose the platform builder — the adoption denominator's other half. */
+  platformChosen: number;
+  /** Visits that copied a connect snippet, used a deeplink, or restored a key. */
+  connected: number;
+  /** Visits that got an agent signal over MCP. */
+  signaled: number;
+  /** Visits that reached a gate verdict on a self round. */
+  gateVerdicts: number;
   truncated: boolean;
 }
 
@@ -51,14 +77,25 @@ export interface TelemetryTrends {
   days: string[];
   truncated: boolean;
   activity: DailyActivityPoint[];
+  mcp: DailyMcpPoint[];
   retention: DailyRetentionPoint[];
 }
 
-/** One day's activity from its visit-event partition. */
-export function summarizeVisitDay(dateStr: string, events: VisitEvent[], truncated = false): DailyActivityPoint {
+/** One day's activity + MCP adoption from its visit-event partition. */
+export function summarizeVisitDay(
+  dateStr: string,
+  events: VisitEvent[],
+  truncated = false,
+): { activity: DailyActivityPoint; mcp: DailyMcpPoint } {
   const started = new Set<string>();
   const created = new Set<string>();
   let plays = 0;
+
+  const selfChosen = new Set<string>();
+  const platformChosen = new Set<string>();
+  const connected = new Set<string>();
+  const signaled = new Set<string>();
+  const gateVerdicts = new Set<string>();
 
   for (const event of events) {
     if (event.type === 'visit_started') {
@@ -67,15 +104,37 @@ export function summarizeVisitDay(dateStr: string, events: VisitEvent[], truncat
       plays += 1;
     } else if (event.type === 'create_step' && event.step === 'submission_created') {
       created.add(event.visitId);
+    } else if (event.type === 'studio_step' && event.step) {
+      const builder = event.builder ?? 'self';
+      if (event.step === 'builder_chosen') {
+        if (builder === 'platform') platformChosen.add(event.visitId);
+        else selfChosen.add(event.visitId);
+      } else if (builder === 'self' || builder === undefined) {
+        // Connect / signal / gate are only meaningful for the self (MCP) lane.
+        if (MCP_CONNECT_STEPS.has(event.step)) connected.add(event.visitId);
+        else if (event.step === 'agent_signaled') signaled.add(event.visitId);
+        else if (event.step === 'gate_verdict') gateVerdicts.add(event.visitId);
+      }
     }
   }
 
   return {
-    date: dateStr,
-    visits: started.size,
-    plays,
-    creations: created.size,
-    truncated,
+    activity: {
+      date: dateStr,
+      visits: started.size,
+      plays,
+      creations: created.size,
+      truncated,
+    },
+    mcp: {
+      date: dateStr,
+      selfChosen: selfChosen.size,
+      platformChosen: platformChosen.size,
+      connected: connected.size,
+      signaled: signaled.size,
+      gateVerdicts: gateVerdicts.size,
+      truncated,
+    },
   };
 }
 
@@ -144,6 +203,11 @@ export interface RolledPoint {
   visits: number;
   plays: number;
   creations: number;
+  selfChosen: number;
+  platformChosen: number;
+  connected: number;
+  signaled: number;
+  gateVerdicts: number;
   /** Retention over the period: null when no cohort closed inside it. */
   retentionRate: number | null;
   retentionEligible: number;
@@ -151,26 +215,35 @@ export interface RolledPoint {
   truncated: boolean;
 }
 
-/** Roll daily activity + retention up to week or month. Day grain is a pass-through. */
+/** Roll daily activity + MCP + retention up to week or month. Day grain is a pass-through. */
 export function rollupTrends(
   activity: DailyActivityPoint[],
+  mcp: DailyMcpPoint[],
   retention: DailyRetentionPoint[],
   grain: TrendGrain,
 ): RolledPoint[] {
+  const mcpByDate = new Map(mcp.map((row) => [row.date, row]));
+  const retentionByDate = new Map(retention.map((row) => [row.date, row]));
+
   if (grain === 'day') {
-    const byDate = new Map(retention.map((row) => [row.date, row]));
     return activity.map((row) => {
-      const ret = byDate.get(row.date);
+      const mcpRow = mcpByDate.get(row.date);
+      const ret = retentionByDate.get(row.date);
       return {
         key: row.date,
         label: row.date.slice(5), // mm-dd — short axis labels
         visits: row.visits,
         plays: row.plays,
         creations: row.creations,
+        selfChosen: mcpRow?.selfChosen ?? 0,
+        platformChosen: mcpRow?.platformChosen ?? 0,
+        connected: mcpRow?.connected ?? 0,
+        signaled: mcpRow?.signaled ?? 0,
+        gateVerdicts: mcpRow?.gateVerdicts ?? 0,
         retentionRate: ret?.rate ?? null,
         retentionEligible: ret?.eligible ?? 0,
         retentionReturned: ret?.returned ?? 0,
-        truncated: row.truncated,
+        truncated: row.truncated || mcpRow?.truncated === true,
       };
     });
   }
@@ -182,13 +255,16 @@ export function rollupTrends(
       visits: number;
       plays: number;
       creations: number;
+      selfChosen: number;
+      platformChosen: number;
+      connected: number;
+      signaled: number;
+      gateVerdicts: number;
       retentionEligible: number;
       retentionReturned: number;
       truncated: boolean;
     }
   >();
-
-  const retentionByDate = new Map(retention.map((row) => [row.date, row]));
 
   for (const row of activity) {
     const { key, label } = periodKey(row.date, grain);
@@ -197,6 +273,11 @@ export function rollupTrends(
       visits: 0,
       plays: 0,
       creations: 0,
+      selfChosen: 0,
+      platformChosen: 0,
+      connected: 0,
+      signaled: 0,
+      gateVerdicts: 0,
       retentionEligible: 0,
       retentionReturned: 0,
       truncated: false,
@@ -204,6 +285,15 @@ export function rollupTrends(
     bucket.visits += row.visits;
     bucket.plays += row.plays;
     bucket.creations += row.creations;
+    const mcpRow = mcpByDate.get(row.date);
+    if (mcpRow) {
+      bucket.selfChosen += mcpRow.selfChosen;
+      bucket.platformChosen += mcpRow.platformChosen;
+      bucket.connected += mcpRow.connected;
+      bucket.signaled += mcpRow.signaled;
+      bucket.gateVerdicts += mcpRow.gateVerdicts;
+      if (mcpRow.truncated) bucket.truncated = true;
+    }
     if (row.truncated) bucket.truncated = true;
     const ret = retentionByDate.get(row.date);
     if (ret) {
@@ -219,6 +309,11 @@ export function rollupTrends(
     visits: bucket.visits,
     plays: bucket.plays,
     creations: bucket.creations,
+    selfChosen: bucket.selfChosen,
+    platformChosen: bucket.platformChosen,
+    connected: bucket.connected,
+    signaled: bucket.signaled,
+    gateVerdicts: bucket.gateVerdicts,
     retentionEligible: bucket.retentionEligible,
     retentionReturned: bucket.retentionReturned,
     retentionRate: bucket.retentionEligible === 0 ? null : bucket.retentionReturned / bucket.retentionEligible,

@@ -174,6 +174,8 @@ export interface LineSeries {
   values: Array<number | null>;
   /** Dashed stroke — used for rolling averages over the raw series. */
   dashed?: boolean;
+  /** Right axis for low-volume series (creations) that would flatline on the left scale. */
+  axis?: 'left' | 'right';
 }
 
 /**
@@ -181,36 +183,51 @@ export interface LineSeries {
  *
  * Null values break the path (a gap), so a day with no retention cohort does not
  * invent a zero that looks like a crash. Y-axis is nice-scaled from the data.
+ * Optional right axis keeps low-volume series readable beside high-volume ones.
  */
 export function LineChart({
   title,
   labels,
   series,
   formatY = (value: number) => String(Math.round(value)),
+  formatYRight,
   emptyMessage = 'No data in this window.',
 }: {
   title: string;
   labels: string[];
   series: LineSeries[];
   formatY?: (value: number) => string;
+  formatYRight?: (value: number) => string;
   emptyMessage?: string;
 }) {
   const width = 640;
   const height = 200;
-  const pad = { top: 16, right: 12, bottom: 28, left: 40 };
+  const hasRight = series.some((s) => (s.axis ?? 'left') === 'right');
+  const pad = { top: 16, right: hasRight ? 40 : 12, bottom: 28, left: 40 };
   const innerW = width - pad.left - pad.right;
   const innerH = height - pad.top - pad.bottom;
 
-  const allValues = series.flatMap((s) => s.values).filter((value): value is number => value !== null);
-  const empty = labels.length === 0 || allValues.length === 0;
-  const yMax = empty ? 1 : niceCeil(Math.max(...allValues, 0));
+  const leftValues = series
+    .filter((s) => (s.axis ?? 'left') === 'left')
+    .flatMap((s) => s.values)
+    .filter((value): value is number => value !== null);
+  const rightValues = series
+    .filter((s) => s.axis === 'right')
+    .flatMap((s) => s.values)
+    .filter((value): value is number => value !== null);
+  const empty = labels.length === 0 || (leftValues.length === 0 && rightValues.length === 0);
+  const yMaxLeft = empty || leftValues.length === 0 ? 1 : niceCeil(Math.max(...leftValues, 0));
+  const yMaxRight = rightValues.length === 0 ? 1 : niceCeil(Math.max(...rightValues, 0));
   const yMin = 0;
+  const rightFormat = formatYRight ?? formatY;
 
   const xAt = (index: number): number =>
     labels.length <= 1 ? pad.left + innerW / 2 : pad.left + (index / (labels.length - 1)) * innerW;
-  const yAt = (value: number): number => pad.top + innerH - ((value - yMin) / (yMax - yMin || 1)) * innerH;
+  const yAtLeft = (value: number): number => pad.top + innerH - ((value - yMin) / (yMaxLeft - yMin || 1)) * innerH;
+  const yAtRight = (value: number): number => pad.top + innerH - ((value - yMin) / (yMaxRight - yMin || 1)) * innerH;
 
-  const ticks = [0, 0.5, 1].map((fraction) => yMin + (yMax - yMin) * fraction);
+  const leftTicks = [0, 0.5, 1].map((fraction) => yMin + (yMaxLeft - yMin) * fraction);
+  const rightTicks = [0, 0.5, 1].map((fraction) => yMin + (yMaxRight - yMin) * fraction);
   const labelStep = Math.max(1, Math.ceil(labels.length / 7));
 
   return (
@@ -226,23 +243,44 @@ export function LineChart({
             role="img"
             aria-label={`${title}: ${series.map((s) => s.label).join(', ')}`}
           >
-            {ticks.map((tick) => (
-              <g key={tick}>
-                <line className="telem-line-grid" x1={pad.left} x2={pad.left + innerW} y1={yAt(tick)} y2={yAt(tick)} />
-                <text className="telem-line-axis" x={pad.left - 6} y={yAt(tick) + 3} textAnchor="end">
+            {leftTicks.map((tick) => (
+              <g key={`L${tick}`}>
+                <line
+                  className="telem-line-grid"
+                  x1={pad.left}
+                  x2={pad.left + innerW}
+                  y1={yAtLeft(tick)}
+                  y2={yAtLeft(tick)}
+                />
+                <text className="telem-line-axis" x={pad.left - 6} y={yAtLeft(tick) + 3} textAnchor="end">
                   {formatY(tick)}
                 </text>
               </g>
             ))}
-            {series.map((s) => (
-              <path
-                key={s.id}
-                className={s.dashed ? 'telem-line-path is-dashed' : 'telem-line-path'}
-                d={linePath(s.values, xAt, yAt)}
-                stroke={s.color}
-                fill="none"
-              />
-            ))}
+            {hasRight &&
+              rightTicks.map((tick) => (
+                <text
+                  key={`R${tick}`}
+                  className="telem-line-axis telem-line-axis--right"
+                  x={pad.left + innerW + 6}
+                  y={yAtRight(tick) + 3}
+                  textAnchor="start"
+                >
+                  {rightFormat(tick)}
+                </text>
+              ))}
+            {series.map((s) => {
+              const yAt = s.axis === 'right' ? yAtRight : yAtLeft;
+              return (
+                <path
+                  key={s.id}
+                  className={s.dashed ? 'telem-line-path is-dashed' : 'telem-line-path'}
+                  d={linePath(s.values, xAt, yAt)}
+                  stroke={s.color}
+                  fill="none"
+                />
+              );
+            })}
             {labels.map((label, index) =>
               index % labelStep === 0 || index === labels.length - 1 ? (
                 <text
@@ -265,6 +303,7 @@ export function LineChart({
                   style={{ background: s.color, borderColor: s.color }}
                 />
                 {s.label}
+                {s.axis === 'right' ? <span className="telem-line-axis-tag">right</span> : null}
               </li>
             ))}
           </ul>

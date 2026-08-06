@@ -116,6 +116,15 @@ function respondWith(body: HealthResponse | null, status = 200, funnel?: VisitsR
           activity: [...body.days]
             .reverse()
             .map((date) => ({ date, visits: 0, plays: 0, creations: 0, truncated: false })),
+          mcp: [...body.days].reverse().map((date) => ({
+            date,
+            selfChosen: 0,
+            platformChosen: 0,
+            connected: 0,
+            signaled: 0,
+            gateVerdicts: 0,
+            truncated: false,
+          })),
           retention: [...body.days]
             .reverse()
             .map((date) => ({ date, eligible: 0, returned: 0, rate: null as number | null })),
