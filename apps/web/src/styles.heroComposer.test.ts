@@ -29,19 +29,19 @@ function firstRuleBody(selector: string): string {
 describe('desktop hero composer pill', () => {
   it('uses a fixed-height grid so + / field / mic / send share one centerline', () => {
     // Flex + wrapping placeholders previously put text above/below the icon midline.
-    // height:auto + 4px pad around 36px cells — a fixed 44px border-box shell
-    // only left 34px after pad/border, so 36px controls overflowed high.
+    // height:auto + equal pad around 36px cells — a fixed border-box shell
+    // clipped the controls. align-content:center puts the placeholder on the
+    // same midline as the icon buttons (Chromium form-control centering).
     const bar = firstRuleBody('.prompt-composer-bar');
     expect(bar).toMatch(/display:\s*grid/);
     expect(bar).toMatch(/align-items:\s*center/);
     expect(bar).toMatch(/height:\s*auto/);
-    expect(bar).toMatch(/padding:\s*7px 8px 1px/);
+    expect(bar).toMatch(/padding:\s*4px 8px/);
     expect(bar).toMatch(/grid-template-columns:\s*36px minmax\(0,\s*1fr\) 36px 36px/);
 
     const input = firstRuleBody('.big-prompt-input');
     expect(input).toMatch(/height:\s*36px/);
-    expect(input).toMatch(/line-height:\s*34px/);
-    expect(input).toMatch(/padding:\s*2px 2px 0/);
+    expect(input).toMatch(/align-content:\s*center/);
     expect(input).toMatch(/font-size:\s*16px/);
     expect(input).not.toMatch(/field-sizing:/);
     expect(input).not.toMatch(/min-height:\s*128px/);
