@@ -107,6 +107,19 @@ function respondWith(body: HealthResponse | null, status = 200, funnel?: VisitsR
   // an unrouted URL would fall through to the health body and render as a scorecard.
   const scorecardsBody: ScorecardsResponse | null =
     body === null ? null : { scorecards: [], newestComputedAt: null, oldestComputedAt: null };
+  const trendsBody =
+    body === null
+      ? null
+      : {
+          days: [...body.days].reverse(),
+          truncated: false,
+          activity: [...body.days]
+            .reverse()
+            .map((date) => ({ date, visits: 0, plays: 0, creations: 0, truncated: false })),
+          retention: [...body.days]
+            .reverse()
+            .map((date) => ({ date, eligible: 0, returned: 0, rate: null as number | null })),
+        };
 
   return vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
     const url = String(input);
@@ -114,9 +127,11 @@ function respondWith(body: HealthResponse | null, status = 200, funnel?: VisitsR
       ? visitsBody
       : url.includes('/telemetry/creators')
         ? creatorsBody
-        : url.includes('/admin/scorecards')
-          ? scorecardsBody
-          : body;
+        : url.includes('/telemetry/trends')
+          ? trendsBody
+          : url.includes('/admin/scorecards')
+            ? scorecardsBody
+            : body;
     return payload === null ? new Response(null, { status }) : new Response(JSON.stringify(payload), { status: 200 });
   }) as MockInstance<typeof globalThis.fetch>;
 }

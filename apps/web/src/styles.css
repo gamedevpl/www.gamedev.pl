@@ -8561,6 +8561,118 @@ button.builder-mode-selector:disabled {
   word-break: break-word;
 }
 
+/* ——— Telemetry trends: time series over visits / plays / creations / D7 ——— */
+.telem-trends {
+  margin: 0 0 2rem;
+  padding: 1.25rem 1.25rem 1.5rem;
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.telem-trends-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.telem-trends-title {
+  margin: 0;
+  font-size: 1.125rem;
+  color: var(--text);
+}
+
+.telem-trends-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+}
+
+.telem-trends-charts {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+}
+
+@media (min-width: 960px) {
+  .telem-trends-charts {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.telem-line {
+  margin: 0;
+  min-width: 0;
+}
+
+.telem-line-title {
+  margin: 0 0 0.5rem;
+  font-size: 0.9375rem;
+  color: var(--text);
+  font-style: normal;
+}
+
+.telem-line-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.telem-line-grid {
+  stroke: var(--panel-border);
+  stroke-width: 1;
+}
+
+.telem-line-axis {
+  fill: var(--muted);
+  font-size: 10px;
+  font-family: inherit;
+}
+
+.telem-line-path {
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.telem-line-path.is-dashed {
+  stroke-dasharray: 5 4;
+  stroke-width: 2.25;
+}
+
+.telem-line-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.telem-line-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.telem-line-swatch {
+  width: 0.75rem;
+  height: 0.25rem;
+  border-radius: 1px;
+  display: inline-block;
+}
+
+.telem-line-swatch.is-dashed {
+  background: transparent !important;
+  border-top: 2px dashed;
+  height: 0;
+}
+
 .funnel h2,
 .health-section-title {
   margin: 0 0 0.75rem;

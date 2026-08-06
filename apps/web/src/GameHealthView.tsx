@@ -15,6 +15,7 @@ import { CreatorMetricsPanel } from './CreatorMetricsPanel.js';
 import { GrowthPanel } from './GrowthPanel.js';
 import { ScorecardPanel } from './ScorecardPanel.js';
 import { TelemetryOverview } from './TelemetryOverview.js';
+import { TelemetryTrendsPanel } from './TelemetryTrendsPanel.js';
 
 /**
  * Operator view over play telemetry (docs/improvement-loop-plan.md IL-2).
@@ -157,6 +158,8 @@ export function GameHealthView() {
       {state === 'ready' && data && visits && creators?.metrics && (
         <TelemetryOverview health={data} visits={visits} creators={creators} />
       )}
+
+      {state === 'ready' && <TelemetryTrendsPanel />}
 
       {/* The one business number, above the panels that carry its ingredients. Needs all
           three reads at once — it is their product — so it simply stays absent when any

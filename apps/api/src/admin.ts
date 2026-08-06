@@ -19,6 +19,14 @@ import {
 } from './operator-alerts.js';
 import { summarizeVisitFunnel, type VisitFunnel } from './visit-funnel.js';
 import { summarizeCreatorMetrics, type CreatorMetrics } from './creator-metrics.js';
+import {
+  summarizeRetentionByEligibilityDay,
+  summarizeVisitDay,
+  trendPartitions,
+  type DailyActivityPoint,
+  type DailyRetentionPoint,
+  type TelemetryTrends,
+} from './telemetry-trends.js';
 import { DEFAULT_CREATION_LIMITS_TTL_MS, resolveDefaultGlobalDailyCap } from './creation-limits.js';
 import {
   BOT_UID_PREFIX,
@@ -51,6 +59,9 @@ import {
 /** Widest window one request may ask for. Each day is a separate Firestore query. */
 const MAX_DAYS = 30;
 const DEFAULT_DAYS = 7;
+/** Trends need a longer window than a funnel glance — still bounded, still per-day. */
+const MAX_TREND_DAYS = 90;
+const DEFAULT_TREND_DAYS = 30;
 /** Per-partition read cap, matching the store's own default. */
 const MAX_EVENTS_PER_DAY = 1000;
 /**
@@ -63,10 +74,19 @@ const MAX_EVENTS_PER_DAY = 1000;
  * degrade by narrowing the window rather than by silently costing thirty times more.
  */
 const MAX_EVENTS_PER_REQUEST = 5_000;
+/** Trends walk every day in the window and discard events after summarizing, so the
+ *  total can be wider than the funnel reads without holding them all in memory. */
+const MAX_TREND_EVENTS_PER_REQUEST = 20_000;
 
 const QuerySchema = z.object({
   days: z.coerce.number().int().min(1).max(MAX_DAYS).optional(),
 });
+
+const TrendsQuerySchema = z.object({
+  days: z.coerce.number().int().min(1).max(MAX_TREND_DAYS).optional(),
+});
+
+export type TrendsResponse = TelemetryTrends;
 
 export interface AdminRoutesOptions {
   store: Store;
@@ -515,6 +535,64 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
     );
 
     const body: VisitsResponse = { days: scanned, truncated, funnel: summarizeVisitFunnel(events) };
+    return reply.status(200).send(body);
+  });
+
+  /**
+   * Daily activity + D7 retention series for trend charts.
+   *
+   * Separate from the funnel reads: those answer "what happened in this window" as
+   * one aggregate; this answers "is it getting better" as a time series. Each day is
+   * summarized and discarded so a 90-day walk does not hold 90 days of raw events.
+   */
+  app.get('/api/admin/telemetry/trends', async (request, reply) => {
+    if (!isAdminSession(request, adminUids)) {
+      return reply.status(404).send({ error: 'not found' });
+    }
+
+    const parsed = TrendsQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid query' });
+    }
+
+    const requested = trendPartitions(parsed.data.days ?? DEFAULT_TREND_DAYS, now());
+    const activity: DailyActivityPoint[] = [];
+    const scanned: string[] = [];
+    let truncated = false;
+    let readTotal = 0;
+
+    for (const dateStr of requested) {
+      const remaining = MAX_TREND_EVENTS_PER_REQUEST - readTotal;
+      if (remaining <= 0) {
+        truncated = true;
+        break;
+      }
+      const limit = Math.min(MAX_EVENTS_PER_DAY, remaining);
+      const dayEvents = await store.listVisitEvents(dateStr, { limit });
+      const dayTruncated = dayEvents.length >= limit;
+      if (dayTruncated) truncated = true;
+      readTotal += dayEvents.length;
+      activity.push(summarizeVisitDay(dateStr, dayEvents, dayTruncated));
+      scanned.push(dateStr);
+    }
+
+    const submissions = (await store.listRecentlyPublished(MAX_SUBMISSIONS_SAMPLED)).filter(
+      (submission) => !submission.ownerUid.startsWith(BOT_UID_PREFIX),
+    );
+    const usersByUid = new Map<string, User>();
+    for (const uid of new Set(submissions.map((submission) => submission.ownerUid))) {
+      const user = await store.getUser(uid);
+      if (user) usersByUid.set(uid, user);
+    }
+
+    const retention: DailyRetentionPoint[] = summarizeRetentionByEligibilityDay(
+      submissions,
+      usersByUid,
+      scanned,
+      now(),
+    );
+
+    const body: TrendsResponse = { days: scanned, truncated, activity, retention };
     return reply.status(200).send(body);
   });
 

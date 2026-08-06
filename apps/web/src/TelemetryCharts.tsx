@@ -166,3 +166,139 @@ function polar(cx: number, cy: number, r: number, angleDeg: number): { x: number
   const rad = (angleDeg * Math.PI) / 180;
   return { x: cx + r * Math.cos(rad), y: cy - r * Math.sin(rad) };
 }
+
+export interface LineSeries {
+  id: string;
+  label: string;
+  color: string;
+  values: Array<number | null>;
+  /** Dashed stroke — used for rolling averages over the raw series. */
+  dashed?: boolean;
+}
+
+/**
+ * Multi-series line chart for trend observation.
+ *
+ * Null values break the path (a gap), so a day with no retention cohort does not
+ * invent a zero that looks like a crash. Y-axis is nice-scaled from the data.
+ */
+export function LineChart({
+  title,
+  labels,
+  series,
+  formatY = (value: number) => String(Math.round(value)),
+  emptyMessage = 'No data in this window.',
+}: {
+  title: string;
+  labels: string[];
+  series: LineSeries[];
+  formatY?: (value: number) => string;
+  emptyMessage?: string;
+}) {
+  const width = 640;
+  const height = 200;
+  const pad = { top: 16, right: 12, bottom: 28, left: 40 };
+  const innerW = width - pad.left - pad.right;
+  const innerH = height - pad.top - pad.bottom;
+
+  const allValues = series.flatMap((s) => s.values).filter((value): value is number => value !== null);
+  const empty = labels.length === 0 || allValues.length === 0;
+  const yMax = empty ? 1 : niceCeil(Math.max(...allValues, 0));
+  const yMin = 0;
+
+  const xAt = (index: number): number =>
+    labels.length <= 1 ? pad.left + innerW / 2 : pad.left + (index / (labels.length - 1)) * innerW;
+  const yAt = (value: number): number => pad.top + innerH - ((value - yMin) / (yMax - yMin || 1)) * innerH;
+
+  const ticks = [0, 0.5, 1].map((fraction) => yMin + (yMax - yMin) * fraction);
+  const labelStep = Math.max(1, Math.ceil(labels.length / 7));
+
+  return (
+    <figure className="telem-line">
+      <figcaption className="telem-line-title">{title}</figcaption>
+      {empty ? (
+        <p className="health-empty">{emptyMessage}</p>
+      ) : (
+        <>
+          <svg
+            className="telem-line-svg"
+            viewBox={`0 0 ${width} ${height}`}
+            role="img"
+            aria-label={`${title}: ${series.map((s) => s.label).join(', ')}`}
+          >
+            {ticks.map((tick) => (
+              <g key={tick}>
+                <line className="telem-line-grid" x1={pad.left} x2={pad.left + innerW} y1={yAt(tick)} y2={yAt(tick)} />
+                <text className="telem-line-axis" x={pad.left - 6} y={yAt(tick) + 3} textAnchor="end">
+                  {formatY(tick)}
+                </text>
+              </g>
+            ))}
+            {series.map((s) => (
+              <path
+                key={s.id}
+                className={s.dashed ? 'telem-line-path is-dashed' : 'telem-line-path'}
+                d={linePath(s.values, xAt, yAt)}
+                stroke={s.color}
+                fill="none"
+              />
+            ))}
+            {labels.map((label, index) =>
+              index % labelStep === 0 || index === labels.length - 1 ? (
+                <text
+                  key={`${label}-${index}`}
+                  className="telem-line-axis"
+                  x={xAt(index)}
+                  y={height - 8}
+                  textAnchor="middle"
+                >
+                  {label}
+                </text>
+              ) : null,
+            )}
+          </svg>
+          <ul className="telem-line-legend">
+            {series.map((s) => (
+              <li key={s.id}>
+                <span
+                  className={s.dashed ? 'telem-line-swatch is-dashed' : 'telem-line-swatch'}
+                  style={{ background: s.color, borderColor: s.color }}
+                />
+                {s.label}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </figure>
+  );
+}
+
+/** Polyline that gaps across nulls instead of dropping to zero. */
+function linePath(
+  values: Array<number | null>,
+  xAt: (index: number) => number,
+  yAt: (value: number) => number,
+): string {
+  let d = '';
+  let drawing = false;
+  values.forEach((value, index) => {
+    if (value === null) {
+      drawing = false;
+      return;
+    }
+    const command = drawing ? 'L' : 'M';
+    d += `${command}${xAt(index)} ${yAt(value)} `;
+    drawing = true;
+  });
+  return d.trim();
+}
+
+function niceCeil(value: number): number {
+  if (value <= 0) return 1;
+  if (value <= 1) return 1;
+  const magnitude = 10 ** Math.floor(Math.log10(value));
+  const normalized = value / magnitude;
+  const nice = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10;
+  return nice * magnitude;
+}
