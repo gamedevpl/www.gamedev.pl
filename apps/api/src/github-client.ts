@@ -5,6 +5,7 @@ import {
   DELIVERY_FIXED_FILES,
   GAME_KIT_MODULES,
   GAME_KIT_VERTICAL_ENTRIES,
+  MUSIC_CONTRACT,
   SOURCE_GRAPH_BUDGET_BYTES,
   type GameKitModuleName,
 } from './games-repo-contract.js';
@@ -1359,17 +1360,17 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
         );
       }
 
-      // Music: shared catalog plus optional per-game `music.json`, then inject the
+      // Music: shared catalog plus optional per-game music.json, then inject the
       // autoplay name plus every track this game can reach — not the whole catalog.
       // MCP / self-build agents cannot edit `shared/`, so custom scores ship beside
       // the game (MUSIC_CONTRACT.gameMusicPath) and merge here.
       if (manifest.music !== null) {
-        const musicSource = await readRawFile('shared/audio/music.json', ref);
+        const musicSource = await readRawFile(MUSIC_CONTRACT.catalogPath, ref);
         if (musicSource === null) {
           return null;
         }
         const catalogTracks = parseMusicTracks(musicSource);
-        const gameMusicSource = await gameFile('music.json');
+        const gameMusicSource = await gameFile(MUSIC_CONTRACT.gameMusicPath);
         const gameTracks = gameMusicSource === null ? null : parseGameMusicTracks(gameMusicSource);
         const tracks = mergeMusicTrackMaps(catalogTracks, gameTracks);
         // `Object.hasOwn`, not `tracks[name] !== undefined`: the catalog comes from

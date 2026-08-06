@@ -1,10 +1,12 @@
 /**
  * Tracker-style music track parsing shared by serve-time assembly.
  *
- * The shared catalog (`shared/audio/music.json`) and an optional per-game
- * `music.json` use the same `{ version, tracks }` envelope. Self-build agents
- * cannot edit `shared/`, so custom scores ship in the game delivery and merge
- * here at assemble time.
+ * Real catalogs (shared + per-game) use `{ version: 1, tracks: { id: track } }`.
+ * `parseMusicCatalogTracks` is deliberately loose: it only requires a `tracks` map,
+ * so serve-time fixtures and older stubs without `version` still resolve membership.
+ * Per-game deliveries go through `parseGameMusicTracks`, which enforces the full
+ * tracker contract (version, bpm/steps/channels). Self-build agents cannot edit
+ * `shared/`, so custom scores ship in the game delivery and merge here.
  */
 
 const VALID_WAVES = new Set(['sine', 'square', 'triangle', 'saw', 'noise']);
