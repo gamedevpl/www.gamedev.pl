@@ -153,7 +153,7 @@ export function NavHeader({ activeBuildCount, onNavigate, onHome, onStudio, upTa
             aria-expanded={isMenuOpen}
             aria-label={
               activeBuildCount > 0
-                ? `${t('header.navStudio')}: ${t('header.activeBuilds', { count: activeBuildCount })}`
+                ? `Menu — ${t('header.activeBuilds', { count: activeBuildCount })}`
                 : 'Toggle Navigation Menu'
             }
             onClick={() => setIsMenuOpen((prev) => !prev)}
