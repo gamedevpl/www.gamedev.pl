@@ -15,8 +15,9 @@ import i18n from './i18n/index.js';
 // A stable identity, as the real context has: `user` is state there, so it does
 // not change on every render.
 const alice = { uid: 'g:alice' };
+let authUser: typeof alice | null = alice;
 vi.mock('./AuthContext', () => ({
-  useAuth: () => ({ user: alice, signInWithGoogleToken: vi.fn(), logout: vi.fn() }),
+  useAuth: () => ({ user: authUser, signInWithGoogleToken: vi.fn(), logout: vi.fn() }),
 }));
 
 const remixApi = vi.hoisted(() => ({
@@ -49,6 +50,8 @@ let swapped: string[] = [];
 beforeEach(async () => {
   (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   await i18n.changeLanguage('en');
+  authUser = alice;
+  window.sessionStorage.clear();
   container = document.createElement('div');
   document.body.appendChild(container);
   swapped = [];
@@ -67,17 +70,22 @@ afterEach(() => {
 const frameWindow = { postMessage: () => {} } as unknown as Window;
 const frameRef = { current: { contentWindow: frameWindow } } as unknown as React.RefObject<HTMLIFrameElement>;
 
-async function draw() {
+function panel(props: { initialRequest?: string } = {}) {
+  return (
+    <RemixPanel
+      slug="dog-dash"
+      frameRef={frameRef as never}
+      onSwapDocument={(html) => swapped.push(html)}
+      onClose={() => {}}
+      initialRequest={props.initialRequest}
+    />
+  );
+}
+
+async function draw(props: { initialRequest?: string } = {}) {
   root = createRoot(container);
   await act(async () => {
-    root!.render(
-      <RemixPanel
-        slug="dog-dash"
-        frameRef={frameRef as never}
-        onSwapDocument={(html) => swapped.push(html)}
-        onClose={() => {}}
-      />,
-    );
+    root!.render(panel(props));
   });
   await act(async () => {
     await Promise.resolve();
@@ -85,6 +93,61 @@ async function draw() {
 }
 
 describe('RemixPanel', () => {
+  it('auto-starts a carried request exactly once after the session is ready', async () => {
+    remixApi.startRemix.mockResolvedValue({
+      remixId: 'r1',
+      params: { speed: { type: 'number', min: 1, max: 3, default: 1, label: { en: 'speed' } } },
+      values: { speed: 1 },
+      canAssist: true,
+      canCode: true,
+      suggestions: [],
+      expiresInMs: 3_600_000,
+    });
+    remixApi.remixAssist.mockResolvedValue({ lane: 'params', values: { speed: 2 } });
+
+    await draw({ initialRequest: '  make it faster  ' });
+    await vi.waitFor(() => {
+      expect(remixApi.remixAssist).toHaveBeenCalledTimes(1);
+    });
+
+    expect(remixApi.remixAssist).toHaveBeenCalledWith('r1', 'make it faster', { speed: 1 });
+    expect(remixApi.remixCode).not.toHaveBeenCalled();
+    expect(telemetry.recordRemixStep).toHaveBeenCalledWith('typed');
+    expect(telemetry.recordRemixStep).toHaveBeenCalledWith('asked');
+  });
+
+  it('carries a signed-out request through the existing pending-request wall', async () => {
+    authUser = null;
+    remixApi.startRemix.mockResolvedValue({
+      remixId: 'r1',
+      params: null,
+      values: null,
+      canAssist: true,
+      canCode: true,
+      suggestions: [],
+      expiresInMs: 3_600_000,
+    });
+    remixApi.remixAssist.mockResolvedValue({ lane: 'params', values: {} });
+
+    await draw({ initialRequest: 'make it faster' });
+
+    expect(remixApi.startRemix).not.toHaveBeenCalled();
+    expect(remixApi.remixAssist).not.toHaveBeenCalled();
+    expect(telemetry.recordRemixStep).toHaveBeenCalledWith('typed');
+    expect(telemetry.recordRemixStep).toHaveBeenCalledWith('wall_shown');
+
+    authUser = alice;
+    await act(async () => {
+      root!.render(panel({ initialRequest: 'make it faster' }));
+    });
+    await vi.waitFor(() => {
+      expect(remixApi.remixAssist).toHaveBeenCalledTimes(1);
+    });
+
+    expect(remixApi.remixAssist).toHaveBeenCalledWith('r1', 'make it faster', {});
+    expect(telemetry.recordRemixStep).toHaveBeenCalledWith('signed_in');
+  });
+
   it('says why there is no prompt when no lane answers for this game', async () => {
     remixApi.startRemix.mockResolvedValue({
       remixId: 'r1',

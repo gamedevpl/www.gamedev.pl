@@ -29,15 +29,18 @@ vi.mock('./PublishedGameFrame', () => ({
   PublishedGameFrame: ({
     frameRef,
     remixOpenNonce,
+    initialRemixRequest,
   }: {
     frameRef?: { current: HTMLIFrameElement | null };
     remixOpenNonce?: number;
+    initialRemixRequest?: string;
   }) => (
     <iframe
       className="game-frame"
       title="game"
       ref={frameRef as React.Ref<HTMLIFrameElement>}
       data-remix-open={remixOpenNonce ?? 0}
+      data-remix-request={initialRemixRequest ?? ''}
     />
   ),
 }));
@@ -70,7 +73,9 @@ afterEach(() => {
   container.remove();
 });
 
-async function draw(props: { controls?: string; onExit?: () => void; initialRemixOpen?: boolean } = {}) {
+async function draw(
+  props: { controls?: string; onExit?: () => void; initialRemixOpen?: boolean; initialRemixRequest?: string } = {},
+) {
   root = createRoot(container);
   await act(async () => {
     root!.render(
@@ -82,6 +87,7 @@ async function draw(props: { controls?: string; onExit?: () => void; initialRemi
         onExit={props.onExit ?? (() => undefined)}
         controls={props.controls}
         initialRemixOpen={props.initialRemixOpen}
+        initialRemixRequest={props.initialRemixRequest}
       />,
     );
   });
@@ -103,9 +109,10 @@ async function pressEscape() {
 }
 
 describe('GameTheater more menu', () => {
-  it('opens the remix surface immediately when entered from the game page', async () => {
-    await draw({ initialRemixOpen: true });
+  it('opens the remix surface with the request entered on the game page', async () => {
+    await draw({ initialRemixOpen: true, initialRemixRequest: 'make it faster' });
     expect(container.querySelector('.game-frame')?.getAttribute('data-remix-open')).toBe('1');
+    expect(container.querySelector('.game-frame')?.getAttribute('data-remix-request')).toBe('make it faster');
   });
 
   it('keeps the hamburger icon when open and highlights it instead of turning into an X', async () => {

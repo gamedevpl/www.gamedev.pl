@@ -1250,7 +1250,14 @@
     "screenshots": "Zrzuty ekranu",
     "viewScreenshot": "Pokaż zrzut ekranu {{number}}",
     "breadcrumbAria": "Położenie gry",
-    "remix": "Odbij"
+    "remix": "Odbij",
+    "remixEntryTitle": "Co chcesz zmienić?",
+    "remixEntryDescription": "Opisz jedną zmianę. Otworzymy grę i od razu rozpoczniemy remiks.",
+    "remixEntryLabel": "Opis zmiany",
+    "remixEntryPlaceholder": "Na przykład: przyspiesz grę",
+    "remixEntryClose": "Zamknij opis remiksu",
+    "remixEntryCancel": "Anuluj",
+    "remixEntrySubmit": "Rozpocznij remiks"
   },
   "propose": {
     "action": "Zaproponuj tę zmianę",

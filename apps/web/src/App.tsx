@@ -67,7 +67,7 @@ import { createPartySession, type PartySession } from './mp/mpApi.js';
 import { parseOAuthReturnParam } from './oauthReturn.js';
 
 type StageContent =
-  | { type: 'catalog'; game: CatalogEntry; initialRemixOpen?: boolean }
+  | { type: 'catalog'; game: CatalogEntry; initialRemixOpen?: boolean; initialRemixRequest?: string }
   | { type: 'generated'; game: GeneratedGame; prompt: string }
   | { type: 'party'; game: CatalogEntry; session: PartySession };
 
@@ -746,10 +746,10 @@ export function App() {
     setRecommendationsRefreshKey((n) => n + 1);
   }
 
-  function handleRemixGame(game: CatalogEntry) {
+  function handleRemixGame(game: CatalogEntry, initialRemixRequest?: string) {
     // The game still has to be mounted for Remix to swap and preview its document,
     // but the sheet opens on the first frame — no theater detour and second wrench.
-    setStageContent({ type: 'catalog', game, initialRemixOpen: true });
+    setStageContent({ type: 'catalog', game, initialRemixOpen: true, initialRemixRequest });
   }
 
   async function handlePlayTogether(game: CatalogEntry) {
@@ -823,6 +823,7 @@ export function App() {
           controls={stageContent.game.controls}
           touch={stageContent.game.touch}
           initialRemixOpen={stageContent.initialRemixOpen}
+          initialRemixRequest={stageContent.initialRemixRequest}
         />
       )}
 

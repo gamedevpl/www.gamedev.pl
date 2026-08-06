@@ -35,6 +35,8 @@ type PublishedGameFrameProps = {
    * is untouched by either — these add doors, they do not move the invitation.
    */
   remixOpenNonce?: number;
+  /** A landing-page request to start after the remix session is ready. */
+  initialRemixRequest?: string;
   painterNonce?: number;
   /** Reports whether this game's remix has a painter, for the menu to show its entry. */
   onRemixCapabilities?: (caps: { painter: boolean }) => void;
@@ -54,6 +56,7 @@ export function PublishedGameFrame({
   active = true,
   remixable,
   remixOpenNonce,
+  initialRemixRequest,
   painterNonce,
   onRemixCapabilities,
 }: PublishedGameFrameProps) {
@@ -82,6 +85,10 @@ export function PublishedGameFrame({
   const [remixSession, setRemixSession] = useState<RemixSession | null>(null);
   const [remixUndoable, setRemixUndoable] = useState(false);
   const [remixOpen, setRemixOpen] = useState(false);
+  // The landing-page request is a one-shot handoff. Keep consumption above the
+  // panel because closing the sheet unmounts it; leaving the request on props
+  // would replay the same (potentially paid) change when the player reopened it.
+  const [pendingInitialRemixRequest, setPendingInitialRemixRequest] = useState(initialRemixRequest ?? null);
   /**
    * Level-editor stage: the painter leaves the remix sheet and owns the theater.
    * Focus flips Edit ↔ Play without unmounting the iframe or the painter — the
@@ -176,6 +183,8 @@ export function PublishedGameFrame({
           slug={slug}
           frameRef={activeFrameRef}
           initialParams={sharedParams}
+          initialRequest={pendingInitialRemixRequest}
+          onInitialRequestConsumed={() => setPendingInitialRemixRequest(null)}
           onSwapDocument={setRemixHtml}
           session={remixSession}
           onSession={setRemixSession}
