@@ -1,0 +1,26 @@
+{
+  "name": "gamedev-pl",
+  "owner": {
+    "name": "gamedev.pl",
+    "url": "https://www.gamedev.pl"
+  },
+  "description": "Build browser games on gamedev.pl from Claude.",
+  "plugins": [
+    {
+      "name": "gamedev-pl",
+      "source": "./listings/mcp/claude-plugin",
+      "description": "Build browser games on gamedev.pl from your coding agent.",
+      "version": "1.0.1",
+      "author": { "name": "gamedev.pl", "url": "https://www.gamedev.pl" },
+      "homepage": "https://www.gamedev.pl",
+      "license": "GPL-3.0-only",
+      "keywords": ["games", "game-development", "browser-games", "mcp", "gamedev"],
+      "mcpServers": {
+        "gamedevpl": {
+          "type": "http",
+          "url": "https://www.gamedev.pl/api/mcp"
+        }
+      }
+    }
+  ]
+}
