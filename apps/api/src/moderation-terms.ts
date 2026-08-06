@@ -97,7 +97,14 @@ export const CATEGORY_TERMS: CategoryTerms[] = [
 // PII patterns don't need en/pl split — email/phone/address shapes are language-agnostic.
 export const PII_PATTERNS: RegExp[] = [
   /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i, // email
-  /(\+?\d{1,3}[\s.-]?)?(\(?\d{2,4}\)?[\s.-]?){2,4}\d{2,4}/, // phone-ish digit run
+  // Phone-ish digit run, anchored so it cannot fire inside a longer alphanumeric token.
+  //
+  // Without the boundaries this matched the digits buried in our own identifiers: a
+  // creator asking to "show the screenshot from delivery v20260806T005029733Z-38da4c"
+  // was refused as PII (owner, 2026-08-06), and engine SHAs like
+  // 648092d7e36bc302d981e58c842829b6b4b8029f matched the same way. A phone number is
+  // not glued to letters; a version id always is.
+  /(?<![A-Za-z0-9])(\+?\d{1,3}[\s.-]?)?(\(?\d{2,4}\)?[\s.-]?){2,4}\d{2,4}(?![A-Za-z0-9])/,
   /\b\d{1,5}\s+[a-ząćęłńóśźż]+\s+(street|st\.|avenue|ave\.|road|rd\.|ulica|ul\.)\b/i, // street address
 ];
 
