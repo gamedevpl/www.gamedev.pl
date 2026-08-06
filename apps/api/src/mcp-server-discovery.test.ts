@@ -43,19 +43,36 @@ describe('buildMcpServerJsonDocument (BY-18c)', () => {
     expect((doc.description as string).length).toBeLessThanOrEqual(100);
   });
 
-  // A directory entry is built from this description, so the gate belongs in front of the
-  // install rather than behind it. Both variants have to clear the schema's 100-char cap.
-  it('says creating is closed beta while the beta is on, and drops it when open', () => {
+  // Owner decision (2026-08-06): one description regardless of PRIVATE_BETA, matching what
+  // is published to the official registry. The beta gate is signalled by websiteUrl (the
+  // homepage) instead of by the description.
+  it('describes the server the same way whether or not the closed beta is on', () => {
     process.env.CANONICAL_HOST = 'www.gamedev.pl';
 
-    const beta = buildMcpServerJsonDocument({ privateBeta: true }).description as string;
-    expect(beta).toMatch(/closed beta/i);
-    expect(beta).toMatch(/waitlist/i);
-    expect(beta.length).toBeLessThanOrEqual(100);
+    process.env.PRIVATE_BETA = 'true';
+    const beta = buildMcpServerJsonDocument().description as string;
+    process.env.PRIVATE_BETA = 'false';
+    const open = buildMcpServerJsonDocument().description as string;
 
-    const open = buildMcpServerJsonDocument({ privateBeta: false }).description as string;
-    expect(open).not.toMatch(/beta/i);
-    expect(open.length).toBeLessThanOrEqual(100);
+    expect(beta).toBe(open);
+    expect(beta).not.toMatch(/beta|waitlist/i);
+    expect(beta.length).toBeLessThanOrEqual(100);
+  });
+
+  // The published registry entry and this document describe the same server, so they must
+  // not drift. Registry versions are immutable — a change here is a bump in both files.
+  it('matches the server.json published to the official registry', async () => {
+    process.env.CANONICAL_HOST = 'www.gamedev.pl';
+    const { readFile } = await import('node:fs/promises');
+    const published = JSON.parse(
+      await readFile(new URL('../../../listings/mcp/official-registry/server.json', import.meta.url), 'utf8'),
+    ) as Record<string, unknown>;
+    const doc = buildMcpServerJsonDocument();
+
+    expect(doc.version).toBe(published.version);
+    expect(doc.description).toBe(published.description);
+    expect(doc.websiteUrl).toBe(published.websiteUrl);
+    expect(doc.name).toBe(published.name);
   });
 });
 
@@ -95,7 +112,7 @@ describe(`GET ${MCP_SERVER_JSON_PATH} (BY-18c)`, () => {
       _meta: { 'pl.gamedev/auth': { oauth_protected_resource: string } };
     };
     expect(body.remotes[0]?.url).toBe(`https://www.gamedev.pl${MCP_ENDPOINT_PATH}`);
-    expect(body.websiteUrl).toBe('https://www.gamedev.pl/studio');
+    expect(body.websiteUrl).toBe('https://www.gamedev.pl');
     expect(body._meta['pl.gamedev/auth'].oauth_protected_resource).toBe(
       `https://www.gamedev.pl${OAUTH_PROTECTED_RESOURCE_PATH}`,
     );

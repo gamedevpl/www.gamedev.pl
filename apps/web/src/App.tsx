@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { generateGame, type GeneratedGame, type GenerateGameApiError } from './api.js';
 import { fetchCatalog, type CatalogEntry } from './catalog.js';
@@ -412,14 +413,36 @@ export function App() {
   // Menu navigation is scroll-to-section, but the sections only exist on the home
   // route — from a status page we have to go home first and scroll once the target
   // has mounted (the Games gallery may still be loading).
-  const handleNavigateSection = (sectionId: string) => {
+  // Create Game also focuses the prompt so the visitor can type immediately — that
+  // is intentional on phones too (unlike page-load autofocus, which would pop the
+  // keyboard before they asked for it). Focus must happen inside the click (or a
+  // flushSync mount still in that gesture); a later timer will not open the
+  // keyboard on iOS Safari.
+  const focusHeroPromptInput = () => {
+    const input = document.querySelector<HTMLTextAreaElement>('#hero-prompt .big-prompt-input');
+    input?.focus({ preventScroll: true });
+  };
+
+  const scrollAndFocusSection = (sectionId: string): boolean => {
     const element = document.getElementById(sectionId);
-    if (element) {
-      element.scrollIntoView?.({ behavior: 'smooth' });
-      return;
-    }
+    if (!element) return false;
+    element.scrollIntoView?.({ behavior: 'smooth' });
+    if (sectionId === 'hero-prompt') focusHeroPromptInput();
+    return true;
+  };
+
+  const handleNavigateSection = (sectionId: string) => {
+    if (scrollAndFocusSection(sectionId)) return;
+
+    // Mount home inside this click so focus still counts as a user gesture.
+    flushSync(() => {
+      navigate('/');
+    });
+    if (scrollAndFocusSection(sectionId)) return;
+
+    // Node still missing (unusual for hero-prompt) — scroll when it appears.
+    // Do not focus from the timer: that is outside the gesture window.
     setPendingScrollTarget(sectionId);
-    navigate('/');
   };
 
   useEffect(() => {
@@ -1124,7 +1147,6 @@ export function App() {
                 onRetryCatalog={handleRetryCatalog}
                 recommendationsRefreshKey={recommendationsRefreshKey}
                 creatorGamesRefreshKey={myGamesRefreshKey}
-                onOpenStudio={() => navigate(studioPath())}
               />
             )}
           </>

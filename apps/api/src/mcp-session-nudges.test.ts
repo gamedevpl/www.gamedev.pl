@@ -83,6 +83,19 @@ describe('mcp-session-nudges', () => {
     ).not.toContain('call_end');
   });
 
+  it('keeps call_end armed after noteToolSuccess on progress (end is what clears it)', () => {
+    // applySessionNudges must not clear awaitingEnd on report_progress / stage —
+    // only must_fix_gate on the reply suppresses call_end (review, #627).
+    const nudges = createMcpNudgeTracker();
+    const t0 = 1_000_000;
+    nudges.noteSubmitSuccess(1, t0);
+    nudges.noteToolSuccess(1, 'report_progress', t0 + 1);
+    nudges.noteToolSuccess(1, 'stage_source_file', t0 + 2);
+    expect(nudges.warningsFor(1, 'get_brief', t0 + 3).map((w) => w.code)).toContain('call_end');
+    nudges.noteEnded(1, t0 + 4);
+    expect(nudges.warningsFor(1, 'get_brief', t0 + 5).map((w) => w.code)).not.toContain('call_end');
+  });
+
   it('soft-warns gate_poll_backoff on tight get_gate_verdict loops', () => {
     const nudges = createMcpNudgeTracker();
     const t0 = 1_000_000;

@@ -160,8 +160,10 @@ adjacent flow, close the gap in the same change or flag it explicitly in the PR:
     conflated with clipboard copies. `create_step` may also carry optional `builder` once
     chosen. Same three-place contract (`visitTelemetry.ts`, `visit-telemetry.ts`,
     `VisitEvent` in `store.ts`). Time-to-first agent signal is `msSinceStart` on
-    `agent_signaled`. No admin rollup yet — emission and schema first; a VisitFunnelPanel
-    Studio block is a follow-up.
+    `agent_signaled`. ~~No admin rollup yet~~ — **closed 2026-08-06**: daily MCP adoption
+    series (`selfChosen` / `connected` / `signaled` / `gateVerdicts`) on
+    `GET /api/admin/telemetry/trends`, rendered on the Trends strip of the operator
+    telemetry tab beside visits/plays/creations.
 - ~~How-to-play opens recorded but unreadable~~ — **closed 2026-07-31** for the read
   path that [#395](https://github.com/gamedevpl/www.gamedev.pl/issues/395) needs:
   `how_to_play_opened` carries `via: 'bar' | 'more'` and optional `reopen: true` (same

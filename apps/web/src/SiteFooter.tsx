@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import githubIcon from './assets/github-mark-white.svg';
 import { bugReportUrl, REPO_URL } from './github.js';
 import { OPERATOR_LEGAL_NAME } from './legal/operator.js';
 import { contactPath, legalPath } from './router.js';
@@ -45,7 +46,8 @@ export function SiteFooter() {
       {/* The project half of the footer. Read at render time rather than in an effect so
           the link always carries the id of the visit the reporter is actually in. */}
       <nav className="site-footer__links site-footer__project" aria-label={t('footer.projectNav')}>
-        <a href={REPO_URL} target="_blank" rel="noreferrer noopener">
+        <a href={REPO_URL} target="_blank" rel="noreferrer noopener" className="site-footer__github">
+          <img src={githubIcon} alt="" width="14" height="14" />
           {t('footer.openSource')}
         </a>
         <a

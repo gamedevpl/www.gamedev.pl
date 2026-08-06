@@ -226,11 +226,6 @@ a {
 }
 
 .language-switcher {
-  display: flex;
-  gap: 4px;
-}
-
-.language-switcher button {
   background: transparent;
   color: var(--muted);
   border: 1px solid var(--panel-border);
@@ -238,23 +233,43 @@ a {
   padding: 4px 10px;
   font-size: 13px;
   font-weight: 600;
+  cursor: pointer;
 }
 
-.language-switcher button.active {
-  background: var(--turquoise);
-  color: #0b221d;
-  border-color: var(--turquoise);
+.language-switcher:hover {
+  color: var(--text);
+  border-color: var(--muted);
 }
 
-.app-header .github img {
-  width: 24px;
-  height: 24px;
-  opacity: 0.8;
-  transition: opacity 0.2s;
+.user-avatar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 50%;
 }
 
-.app-header .github img:hover {
-  opacity: 1;
+.user-avatar-btn:focus-visible {
+  outline: 2px solid var(--turquoise);
+  outline-offset: 2px;
+}
+
+.user-name--settings {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.user-name--settings:hover {
+  text-decoration: underline;
 }
 
 /* HAMBURGER MENU */
@@ -263,6 +278,7 @@ a {
 }
 
 .hamburger-btn {
+  position: relative;
   background: var(--panel-card);
   border: 1px solid var(--panel-border);
   color: var(--text);
@@ -312,8 +328,16 @@ a {
   color: var(--turquoise);
 }
 
-/* Language, GitHub and sign-out live in the header bar on a desktop. The
-   mobile breakpoint hides them there and reveals this group instead. */
+/* Foot of the menu — separated from Create Game / Studio on every width. */
+.dropdown-menu .nav-link--sign-out {
+  margin-top: 6px;
+  padding-top: 16px;
+  border-top: 1px solid var(--panel-border);
+  border-radius: 0;
+}
+
+/* Language lives in the header bar on a desktop. The mobile breakpoint
+   hides it there and reveals this group instead. */
 .menu-extras {
   display: none;
 }
@@ -1092,9 +1116,11 @@ button:disabled {
   min-width: 0;
 }
 
-/* Compact Studio entry next to Games — live count + wrench in one control so
-   in-progress work never owns a catalog grid cell (or shoves published cards). */
-.catalog-studio-chip {
+/* Compact Studio entry in the top nav — live count + wrench in one control so
+   in-progress work stays in chrome rather than owning a catalog grid cell.
+   Phones hide this chip: Studio + the count live in the hamburger instead. */
+.studio-chip {
+  position: relative;
   display: inline-flex;
   flex: none;
   align-items: center;
@@ -1110,35 +1136,57 @@ button:disabled {
   cursor: pointer;
 }
 
-.catalog-studio-chip:hover,
-.catalog-studio-chip:focus-visible {
+.studio-chip:hover,
+.studio-chip:focus-visible {
   border-color: var(--turquoise);
   color: var(--turquoise);
 }
 
-.catalog-studio-chip.is-live {
+.studio-chip.is-live {
   border-color: rgba(56, 189, 248, 0.35);
   background: rgba(56, 189, 248, 0.1);
   color: var(--accent-blue);
 }
 
-.catalog-studio-chip.is-live:hover,
-.catalog-studio-chip.is-live:focus-visible {
+.studio-chip.is-live:hover,
+.studio-chip.is-live:focus-visible {
   border-color: var(--turquoise);
   color: var(--turquoise);
 }
 
-.catalog-studio-chip-count {
+.studio-chip-count {
   font-weight: 700;
 }
 
-.catalog-studio-chip .live-dot {
+.studio-chip .live-dot {
   background: var(--accent-blue);
 }
 
-@media (pointer: coarse), (max-width: 768px) {
-  .catalog-studio-chip {
-    min-height: 44px;
+.hamburger-live-badge {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .studio-chip {
+    display: none;
+  }
+
+  /* Glance count while the menu is closed — the Studio row repeats it once open. */
+  .hamburger-live-badge {
+    display: block;
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: 8px;
+    background: var(--accent-blue, #38bdf8);
+    color: #0b221d;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 16px;
+    text-align: center;
   }
 }
 
@@ -3087,12 +3135,9 @@ body.player-open {
     gap: 8px;
   }
 
-  /* Relocated into .menu-extras inside the dropdown. Signing out in
-     particular should not sit one thumb-width from the menu button. */
+  /* Relocated into .menu-extras inside the dropdown. */
   .header-actions > .language-switcher,
-  .header-actions > .github,
-  .user-profile-badge .user-name,
-  .user-profile-badge .logout-btn {
+  .user-profile-badge .user-name {
     display: none;
   }
 
@@ -3105,14 +3150,16 @@ body.player-open {
     border-top: 1px solid var(--panel-border);
   }
 
-  .menu-extras .language-switcher {
-    gap: 8px;
-    padding: 4px 4px 0;
+  /* Sign out already drew the divider; don't stack a second rule above language. */
+  .dropdown-menu .nav-link--sign-out + .menu-extras {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
   }
 
-  .menu-extras .language-switcher button {
-    flex: 1;
+  .menu-extras .language-switcher {
     min-height: 44px;
+    width: 100%;
   }
 
   /* Thumb-sized targets. 44px is the iOS HIG floor; below it, taps miss. */
@@ -3143,6 +3190,22 @@ body.player-open {
 
   .user-profile-badge {
     padding: 4px;
+  }
+
+  .user-avatar-btn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .user-profile-badge .notif-trigger {
+    width: 44px;
+    height: 44px;
+  }
+
+  /* The mic / upload / sketch row sat at 30x26 — under half a fingertip. */
+  .prompt-icon-btn {
+    min-width: 44px;
+    min-height: 44px;
   }
 
   /* Composer: same 44px row for + / field / mic; Build on the next grid row.
@@ -3838,24 +3901,6 @@ a.user-name--profile:focus-visible {
   color: var(--turquoise, #3dd6c6);
   text-decoration: underline;
   text-underline-offset: 2px;
-}
-
-.logout-btn {
-  background: none;
-  border: none;
-  color: var(--muted);
-  cursor: pointer;
-  font-size: 0.9rem;
-  opacity: 0.7;
-  padding: 2px 4px;
-  transition:
-    opacity 0.2s ease,
-    color 0.2s ease;
-}
-
-.logout-btn:hover {
-  color: var(--text);
-  opacity: 1;
 }
 
 /* How-to-play and Mic shed to the More menu earlier than sound and fullscreen do
@@ -8043,6 +8088,21 @@ button.builder-mode-selector:disabled {
   margin: 1.25rem auto 0;
 }
 
+.site-footer__github {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.site-footer__github img {
+  opacity: 0.7;
+}
+
+.site-footer__github:hover img,
+.site-footer__github:focus-visible img {
+  opacity: 1;
+}
+
 .site-footer a {
   color: var(--muted);
   text-decoration: none;
@@ -8469,6 +8529,332 @@ button.builder-mode-selector:disabled {
 /* Visit funnel — the operator page's second stream (see VisitFunnelPanel.tsx). */
 .funnel {
   margin: 1.5rem 0 2.5rem;
+}
+
+/* ——— Telemetry overview: gauges + distribution histograms ——— */
+.telem-overview {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  margin: 0.5rem 0 2rem;
+  padding: 1.25rem 1.25rem 1.5rem;
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.telem-overview-gauges {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+  gap: 0.75rem 1rem;
+  justify-items: center;
+}
+
+.telem-overview-charts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 1.5rem;
+}
+
+.telem-gauge {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  min-width: 0;
+  width: 100%;
+  max-width: 8.5rem;
+}
+
+.telem-gauge-svg {
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.telem-gauge-track {
+  stroke: var(--panel-border);
+  stroke-width: 8;
+  stroke-linecap: round;
+}
+
+.telem-gauge-fill {
+  stroke: var(--turquoise);
+  stroke-width: 8;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.4s ease;
+}
+
+.telem-gauge--warn .telem-gauge-fill {
+  stroke: #fbbf24;
+}
+
+.telem-gauge--bad .telem-gauge-fill {
+  stroke: var(--error);
+}
+
+.telem-gauge--idle .telem-gauge-fill,
+.telem-gauge.is-empty .telem-gauge-fill {
+  stroke: var(--muted);
+}
+
+.telem-gauge-target {
+  stroke: var(--text);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  opacity: 0.55;
+}
+
+.telem-gauge-value {
+  fill: var(--turquoise);
+  font-size: 1.15rem;
+  font-weight: 600;
+  font-family: inherit;
+}
+
+.telem-gauge--warn .telem-gauge-value {
+  fill: #fbbf24;
+}
+
+.telem-gauge--bad .telem-gauge-value {
+  fill: var(--error);
+}
+
+.telem-gauge.is-empty .telem-gauge-value,
+.telem-gauge--idle .telem-gauge-value {
+  fill: var(--muted);
+}
+
+.telem-gauge-label {
+  font-size: 0.75rem;
+  line-height: 1.25;
+  color: var(--muted);
+  text-align: center;
+}
+
+.telem-histogram {
+  margin: 0;
+  min-width: 0;
+}
+
+.telem-histogram-title {
+  margin: 0 0 0.65rem;
+  font-size: 0.9375rem;
+  color: var(--text);
+  font-style: normal;
+}
+
+.telem-histogram-plot {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.4rem;
+  min-height: 9rem;
+  padding-top: 0.25rem;
+}
+
+.telem-histogram-col {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  height: 9rem;
+}
+
+.telem-histogram-count {
+  font-size: 0.7rem;
+  line-height: 1;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.telem-histogram-track {
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: 2.25rem;
+  display: flex;
+  align-items: flex-end;
+  border-radius: 4px 4px 0 0;
+  background: rgba(148, 163, 184, 0.08);
+}
+
+.telem-histogram-bar {
+  width: 100%;
+  min-height: 2px;
+  border-radius: 4px 4px 0 0;
+  background: var(--turquoise);
+  transition: height 0.35s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .telem-histogram-bar,
+  .telem-gauge-fill {
+    transition: none;
+  }
+}
+
+.telem-histogram-label {
+  font-size: 0.7rem;
+  line-height: 1.2;
+  color: var(--muted);
+  text-align: center;
+  word-break: break-word;
+}
+
+/* ——— Telemetry trends: time series over visits / plays / creations / D7 ——— */
+.telem-trends {
+  margin: 0 0 2rem;
+  padding: 1.25rem 1.25rem 1.5rem;
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.telem-trends-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.telem-trends-title {
+  margin: 0;
+  font-size: 1.125rem;
+  color: var(--text);
+}
+
+.telem-trends-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+}
+
+.telem-trends-charts {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+}
+
+@media (min-width: 960px) {
+  .telem-trends-charts {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .telem-trends-charts > :last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+}
+
+.telem-trends-kpis {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem 1.75rem;
+  margin: 0 0 1.25rem;
+  padding: 0;
+  list-style: none;
+}
+
+.telem-trends-kpis li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.telem-trends-kpi-value {
+  font-size: 1.25rem;
+  line-height: 1.1;
+  color: var(--turquoise);
+}
+
+.telem-trends-kpi-label {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.telem-line {
+  margin: 0;
+  min-width: 0;
+}
+
+.telem-line-title {
+  margin: 0 0 0.5rem;
+  font-size: 0.9375rem;
+  color: var(--text);
+  font-style: normal;
+}
+
+.telem-line-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.telem-line-grid {
+  stroke: var(--panel-border);
+  stroke-width: 1;
+}
+
+.telem-line-axis {
+  fill: var(--muted);
+  font-size: 10px;
+  font-family: inherit;
+}
+
+.telem-line-axis--right {
+  fill: #fbbf24;
+}
+
+.telem-line-axis-tag {
+  margin-left: 0.25rem;
+  font-size: 0.65rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.telem-line-path {
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.telem-line-path.is-dashed {
+  stroke-dasharray: 5 4;
+  stroke-width: 2.25;
+}
+
+.telem-line-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.telem-line-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.telem-line-swatch {
+  width: 0.75rem;
+  height: 0.25rem;
+  border-radius: 1px;
+  display: inline-block;
+}
+
+.telem-line-swatch.is-dashed {
+  background: transparent !important;
+  border-top: 2px dashed;
+  height: 0;
 }
 
 .funnel h2,

@@ -11,10 +11,20 @@
 
 ## Proposed listing copy
 
+**The description deliberately does not mention the closed beta.** Registry 1.0.0 carried
+"Creating is closed beta (waitlist)"; 1.0.1 dropped it, and this copy follows that
+decision so the two listings say the same thing. The gate is still disclosed where it
+actually protects someone — the server's `initialize` instructions and the 401 hint both
+name the closed beta and the waitlist, so no one can install and _use_ it without being
+told. A one-line directory description is not where that belongs. Do not "helpfully"
+re-add it here without changing the registry entry too; it has already flip-flopped once.
+
+## Proposed listing copy (fields)
+
 | Field              | Value                                                                                                                                       |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | Name               | gamedev.pl                                                                                                                                  |
-| Short description  | Build and improve browser games on gamedev.pl from your coding agent.                                                                       |
+| Short description  | Build browser games on gamedev.pl from your coding agent.                                                                                   |
 | MCP URL            | `https://www.gamedev.pl/api/mcp`                                                                                                            |
 | Transport          | Streamable HTTP                                                                                                                             |
 | Auth               | OAuth (discover via `/.well-known/oauth-protected-resource`) or creator-supplied `Authorization` header — never embedded in an install link |

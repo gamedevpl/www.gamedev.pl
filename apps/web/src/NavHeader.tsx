@@ -10,7 +10,6 @@ import { PixelIcon } from './PixelIcon.js';
 import { fetchAdminSummary } from './adminApi.js';
 import { creatorPath } from './router.js';
 import { usePageScrolling } from './usePageScrolling.js';
-import githubIcon from './assets/github-mark-white.svg';
 
 type NavHeaderProps = {
   /** Builds currently in flight for the signed-in creator. Server-derived, not a local tally. */
@@ -97,6 +96,11 @@ export function NavHeader({
     onHome();
   };
 
+  const openAccountSettings = () => {
+    setIsMenuOpen(false);
+    setIsAccountSettingsOpen(true);
+  };
+
   return (
     <header className="app-header">
       <div className="logo-brand">
@@ -126,24 +130,34 @@ export function NavHeader({
       <div className="header-actions">
         {user ? (
           <div className="user-profile-badge">
-            {user.picture ? (
-              <img src={user.picture} alt="" className="user-avatar" width="24" height="24" />
-            ) : (
-              <span className="user-avatar-placeholder">
-                <PixelIcon name="user" size={16} />
-              </span>
-            )}
+            {/* Avatar opens account settings so deletion stays reachable after the
+                menu item was removed — especially for creators who have not claimed
+                a handle yet (Edit Profile is not available to them). */}
+            <button
+              type="button"
+              className="user-avatar-btn"
+              onClick={openAccountSettings}
+              aria-label={t('creatorProfile.accountSettings')}
+              title={t('creatorProfile.accountSettings')}
+            >
+              {user.picture ? (
+                <img src={user.picture} alt="" className="user-avatar" width="24" height="24" />
+              ) : (
+                <span className="user-avatar-placeholder">
+                  <PixelIcon name="user" size={16} />
+                </span>
+              )}
+            </button>
             {user.handle ? (
               <a className="user-name user-name--profile" href={creatorPath(user.handle)}>
                 {user.profileName || `@${user.handle}`}
               </a>
             ) : (
-              <span className="user-name">{user.name || user.email || 'User'}</span>
+              <button type="button" className="user-name user-name--settings" onClick={openAccountSettings}>
+                {user.name || user.email || 'User'}
+              </button>
             )}
             <NotificationBell />
-            <button className="logout-btn" onClick={logout} title={t('header.signOut')}>
-              {t('header.signOut')}
-            </button>
           </div>
         ) : (
           <button className="sign-in-btn" onClick={() => setIsAuthModalOpen(true)}>
@@ -151,27 +165,49 @@ export function NavHeader({
           </button>
         )}
 
-        <LanguageSwitcher />
-
-        <a
-          className="github"
-          href="https://github.com/gamedevpl/www.gamedev.pl"
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label={t('header.githubAria')}
+        {/* Rich Studio chip — desktop only. On a phone the hamburger already lists
+            Studio next to Create Game; the live count rides on that menu row (and a
+            small badge on the menu button) so the header stays logo · session · menu. */}
+        <button
+          type="button"
+          className={`studio-chip${activeBuildCount > 0 ? ' is-live' : ''}`}
+          onClick={onStudio}
+          aria-label={
+            activeBuildCount > 0
+              ? `${t('myGames.liveCount', { count: activeBuildCount })} — ${t('myGames.openStudio')}`
+              : t('myGames.openStudio')
+          }
         >
-          <img src={githubIcon} alt="" width="20" height="20" />
-        </a>
+          {activeBuildCount > 0 ? (
+            <>
+              <span className="live-dot" aria-hidden="true" />
+              <span className="studio-chip-count">{t('myGames.liveCount', { count: activeBuildCount })}</span>
+            </>
+          ) : null}
+          <PixelIcon name="wrench" size={12} />
+          <span className="studio-chip-label">{t('myGames.openStudio')}</span>
+        </button>
+
+        <LanguageSwitcher />
 
         <div className="hamburger-container">
           <button
             type="button"
             className="hamburger-btn"
             aria-expanded={isMenuOpen}
-            aria-label="Toggle Navigation Menu"
+            aria-label={
+              activeBuildCount > 0
+                ? `Menu — ${t('header.activeBuilds', { count: activeBuildCount })}`
+                : 'Toggle Navigation Menu'
+            }
             onClick={() => setIsMenuOpen((prev) => !prev)}
           >
             {isMenuOpen ? <PixelIcon name="close" size={16} /> : <PixelIcon name="menu" size={16} />}
+            {activeBuildCount > 0 && !isMenuOpen ? (
+              <span className="hamburger-live-badge" aria-hidden="true">
+                {activeBuildCount > 99 ? '99+' : activeBuildCount}
+              </span>
+            ) : null}
           </button>
 
           {isMenuOpen && (
@@ -179,13 +215,6 @@ export function NavHeader({
               <button className="nav-link" onClick={() => handleNavClick('hero-prompt')}>
                 <PixelIcon name="sparkle" size={14} /> {t('header.navPrompt')}
               </button>
-              <button className="nav-link" onClick={() => handleNavClick('arcade')}>
-                <PixelIcon name="gamepad" size={14} /> {t('header.navArcade')}
-              </button>
-              {/* Studio is the creator home. The home page only keeps a short
-                  "your games" gist; the full shelf + build/playtest/improve loop
-                  lives here. Always offered — unsigned visitors get the sign-in
-                  prompt inside Studio rather than a dead "My Games" scroll target. */}
               <button
                 className="nav-link"
                 onClick={() => {
@@ -194,20 +223,19 @@ export function NavHeader({
                 }}
               >
                 <PixelIcon name="wrench" size={14} /> {t('header.navStudio')}
-                {activeBuildCount > 0 && (
-                  // The bare number reads as "Studio 2" to a screen reader; say what it counts.
+                {activeBuildCount > 0 ? (
                   <span
                     className="specs-count-badge"
                     aria-label={t('header.activeBuilds', { count: activeBuildCount })}
                   >
                     {activeBuildCount}
                   </span>
-                )}
+                ) : null}
               </button>
 
               {/* Operators only — everyone else never learns this exists, which is the
                   same posture the API takes when asked. */}
-              {isOperator && (
+              {isOperator ? (
                 <button
                   className="nav-link"
                   onClick={() => {
@@ -216,52 +244,31 @@ export function NavHeader({
                   }}
                 >
                   <PixelIcon name="wrench" size={14} /> Operator
-                  {alertCount !== null && alertCount > 0 && (
+                  {alertCount !== null && alertCount > 0 ? (
                     <span className="specs-count-badge" aria-label={`${alertCount} waiting on you`}>
                       {alertCount}
                     </span>
-                  )}
+                  ) : null}
                 </button>
-              )}
+              ) : null}
 
-              {user && (
+              {/* Sign out lives at the foot of the menu on every width — not beside
+                  the avatar, where it competed with the bell and the menu button. */}
+              {user ? (
                 <button
-                  className="nav-link"
+                  className="nav-link nav-link--sign-out"
                   onClick={() => {
                     setIsMenuOpen(false);
-                    setIsAccountSettingsOpen(true);
+                    logout();
                   }}
                 >
-                  <PixelIcon name="user" size={14} /> {t('creatorProfile.accountSettings')}
+                  <PixelIcon name="user" size={14} /> {t('header.signOut')}
                 </button>
-              )}
+              ) : null}
 
-              {/* Controls that live in the header bar on a desktop but cannot fit
-                  beside it on a phone. Hidden above the mobile breakpoint, where
-                  the header itself still shows them. */}
+              {/* Language lives in the header bar on a desktop. On a phone it
+                  cannot fit beside the avatar, so this group reveals it instead. */}
               <div className="menu-extras">
-                {user && (
-                  <button
-                    className="nav-link"
-                    onClick={() => {
-                      setIsMenuOpen(false);
-                      logout();
-                    }}
-                  >
-                    <PixelIcon name="user" size={14} /> {t('header.signOut')}
-                  </button>
-                )}
-
-                <a
-                  className="nav-link"
-                  href="https://github.com/gamedevpl/www.gamedev.pl"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={() => setIsMenuOpen(false)}
-                >
-                  <img src={githubIcon} alt="" width="14" height="14" /> GitHub
-                </a>
-
                 <LanguageSwitcher />
               </div>
             </nav>

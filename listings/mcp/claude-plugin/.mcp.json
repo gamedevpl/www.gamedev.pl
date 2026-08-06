@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "gamedevpl": {
+      "type": "http",
+      "url": "https://www.gamedev.pl/api/mcp"
+    }
+  }
+}

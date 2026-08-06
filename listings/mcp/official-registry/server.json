@@ -2,9 +2,9 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "pl.gamedev/creator",
   "title": "gamedev.pl",
-  "description": "Build browser games on gamedev.pl from your coding agent. Creating is closed beta (waitlist).",
-  "version": "1.0.0",
-  "websiteUrl": "https://www.gamedev.pl/studio",
+  "description": "Build browser games on gamedev.pl from your coding agent.",
+  "version": "1.0.1",
+  "websiteUrl": "https://www.gamedev.pl",
   "repository": {
     "url": "https://github.com/gamedevpl/www.gamedev.pl",
     "source": "github",
@@ -21,8 +21,11 @@
       "oauth_protected_resource": "https://www.gamedev.pl/.well-known/oauth-protected-resource"
     },
     "pl.gamedev/listing": {
-      "status": "draft-not-submitted",
-      "note": "Do not publish until the owner clears terms and consent. Live copy is served at /.well-known/mcp/server.json. Strip this pl.gamedev/listing block before running mcp-publisher — it is a repo-side marker, not registry content."
+      "status": "published",
+      "publishedAt": "2026-08-06",
+      "note": "Published to the official MCP Registry as pl.gamedev/creator 1.0.1 (1.0.0 was the first publish; versions are immutable). Live copy is served at /.well-known/mcp/server.json. Strip this pl.gamedev/listing block before running mcp-publisher — it is a repo-side marker, not registry content.",
+      "auth": "DNS domain proof on gamedev.pl (TXT v=MCPv1; k=ed25519), signed out-of-process by Google KMS: projects/gamedevpl/locations/global/keyRings/mcp/cryptoKeys/registry/cryptoKeyVersions/1. No private key file exists.",
+      "metaCaveat": "The official registry preserves only _meta[\"io.modelcontextprotocol.registry/publisher-provided\"] and silently drops all other keys, so pl.gamedev/auth above is NOT present in the registry entry. It is retained here because it is valid for the /.well-known/mcp/server.json copy, where the generic server.json spec permits custom reverse-DNS namespaces."
     }
   }
 }

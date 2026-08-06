@@ -56,6 +56,9 @@ describe('SiteFooter project links', () => {
     expect(repoLink).toBeDefined();
     // Leaving the site: opened in a new tab, and without handing over the referrer opener.
     expect(repoLink?.rel).toContain('noopener');
+    // Repo mark lives in the footer now — not the header chrome.
+    expect(repoLink?.classList.contains('site-footer__github')).toBe(true);
+    expect(repoLink?.querySelector('img')).not.toBeNull();
   });
 
   it('sends Contact to the in-app form, not GitHub issues or a bare mailto', () => {

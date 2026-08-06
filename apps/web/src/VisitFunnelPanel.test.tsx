@@ -110,24 +110,6 @@ describe('VisitFunnelPanel', () => {
     expect(text).toContain('direct');
   });
 
-  it('labels the time-to-play buckets in human units, including the overflow', () => {
-    const text = render(
-      response({
-        visits: 3,
-        visitsWithPlay: 3,
-        plays: 3,
-        timeToFirstPlay: [
-          { upToSeconds: 30, visits: 1 },
-          { upToSeconds: 180, visits: 1 },
-          { upToSeconds: null, visits: 1 },
-        ],
-      }),
-    );
-    expect(text).toContain('≤ 30s');
-    expect(text).toContain('≤ 3m');
-    expect(text).toContain('slower');
-  });
-
   it('shows campaigns only when some visit carried UTM values', () => {
     expect(render(response({ visits: 2 }))).not.toContain('Campaigns');
 
@@ -141,7 +123,7 @@ describe('VisitFunnelPanel', () => {
     expect(withCampaign).toContain('linkedin / beta');
   });
 
-  it('renders the depth table so a multi-game sitting is visible', () => {
+  it('still reports median depth after the distribution charts moved to the overview', () => {
     const text = render(
       response({
         visits: 2,
@@ -154,8 +136,8 @@ describe('VisitFunnelPanel', () => {
         ],
       }),
     );
-    expect(text).toContain('Games per visit');
     expect(text).toContain('median games / playing visit');
+    expect(text).toContain('2');
   });
 
   it('renders the waitlist funnel as a share of clicks, not of all visits', () => {
