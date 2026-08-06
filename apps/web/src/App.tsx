@@ -13,6 +13,7 @@ import { PixelIcon } from './PixelIcon.js';
 import { CreatorQA, type QAQuestion } from './CreatorQA.js';
 import { deriveTitleFromConcept } from './gameTitle.js';
 import {
+  adminPath,
   canonicalPath,
   creatorPath,
   NAVIGATE_EVENT,
@@ -862,6 +863,7 @@ export function App() {
           onNavigate={handleNavigateSection}
           onHome={() => navigate('/')}
           onStudio={() => navigate(studioPath())}
+          onAdmin={() => navigate(adminPath())}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -882,6 +884,7 @@ export function App() {
           onNavigate={handleNavigateSection}
           onHome={() => navigate('/')}
           onStudio={() => navigate(studioPath())}
+          onAdmin={() => navigate(adminPath())}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -902,6 +905,7 @@ export function App() {
           onNavigate={handleNavigateSection}
           onHome={() => navigate('/')}
           onStudio={() => navigate(studioPath())}
+          onAdmin={() => navigate(adminPath())}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -937,6 +941,7 @@ export function App() {
           onNavigate={handleNavigateSection}
           onHome={() => navigate('/')}
           onStudio={() => navigate(studioPath())}
+          onAdmin={() => navigate(adminPath())}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -971,6 +976,7 @@ export function App() {
           onNavigate={handleNavigateSection}
           onHome={() => navigate('/')}
           onStudio={() => navigate(studioPath())}
+          onAdmin={() => navigate(adminPath())}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -992,6 +998,7 @@ export function App() {
           onNavigate={handleNavigateSection}
           onHome={() => navigate('/')}
           onStudio={() => navigate(studioPath())}
+          onAdmin={() => navigate(adminPath())}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -1020,6 +1027,7 @@ export function App() {
         onNavigate={handleNavigateSection}
         onHome={() => navigate('/')}
         onStudio={() => navigate(studioPath())}
+        onAdmin={() => navigate(adminPath())}
         upTarget={headerUp}
         onUp={navigate}
       />
