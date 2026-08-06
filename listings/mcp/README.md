@@ -19,13 +19,14 @@ as of 2026-08; we intentionally ship the official registry shape instead.
 
 ## Artifacts in this folder
 
-| Path                                                                                 | Target                                 | Status                                                                                                   |
-| ------------------------------------------------------------------------------------ | -------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| [`official-registry/server.json`](./official-registry/server.json)                   | Official MCP Registry                  | ✅ **Published 2026-08-06** as `pl.gamedev/creator` 1.0.1 — see below                                     |
-| [`github-mcp-registry/listing.md`](./github-mcp-registry/listing.md)                 | GitHub MCP Registry (Copilot, VS Code) | Prerequisite now met (official-registry publication); curation request to partnerships@github.com is owner-gated |
-| [`cursor-directory/listing.md`](./cursor-directory/listing.md)                       | Cursor Marketplace + cursor.directory  | Draft — https://cursor.com/marketplace/publish (official, reviewed) and https://cursor.directory/plugins/new (community) |
-| [`claude-connectors-directory/listing.md`](./claude-connectors-directory/listing.md) | Claude Connectors Directory            | Draft — portal at https://claude.ai/admin-settings/directory/submissions/new (**requires Team/Enterprise org**) |
-| [`chatgpt-apps-connector/listing.md`](./chatgpt-apps-connector/listing.md)           | ChatGPT + Codex Plugin directory       | Draft — https://platform.openai.com/plugins (identity-verified Platform org)                             |
+| Path                                                                                 | Target                                  | Status                                                                                                                                                                   |
+| ------------------------------------------------------------------------------------ | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [`official-registry/server.json`](./official-registry/server.json)                   | Official MCP Registry                   | ✅ **Published 2026-08-06** as `pl.gamedev/creator` 1.0.1 — see below                                                                                                    |
+| [`github-mcp-registry/listing.md`](./github-mcp-registry/listing.md)                 | GitHub MCP Registry (Copilot, VS Code)  | Prerequisite now met (official-registry publication); curation request to partnerships@github.com is owner-gated                                                         |
+| [`claude-plugin/`](./claude-plugin/)                                                 | Claude plugin (self-hosted marketplace) | No submission and no review — users add `gamedevpl/www.gamedev.pl` as a marketplace. Catalog: [`.claude-plugin/marketplace.json`](../../.claude-plugin/marketplace.json) |
+| [`cursor-directory/listing.md`](./cursor-directory/listing.md)                       | Cursor Marketplace + cursor.directory   | Draft — https://cursor.com/marketplace/publish (official, reviewed) and https://cursor.directory/plugins/new (community)                                                 |
+| [`claude-connectors-directory/listing.md`](./claude-connectors-directory/listing.md) | Claude Connectors Directory             | Draft — portal at https://claude.ai/admin-settings/directory/submissions/new (**requires Team/Enterprise org**)                                                          |
+| [`chatgpt-apps-connector/listing.md`](./chatgpt-apps-connector/listing.md)           | ChatGPT + Codex Plugin directory        | Draft — https://platform.openai.com/plugins (identity-verified Platform org)                                                                                             |
 
 Not pursued: the **Gemini CLI extensions gallery** would be self-serve (public manifest
 repo + `gemini-cli-extension` topic, crawled daily), but listing there requires a
@@ -92,17 +93,17 @@ Published versions are **immutable**: re-publishing an existing version number i
 outright, so every change ships as a version bump in `server.json` (cap: 10 000 versions
 per server). Republish when any of these change:
 
-| Change | Republish? |
-| --- | --- |
-| The MCP endpoint URL (`remotes[].url`) | **Yes — urgent.** Clients resolve the server from this. A stale URL is a broken integration for everyone who installed from the registry |
-| `description`, `title`, `websiteUrl` | Yes, when you want the change reflected — the registry serves its own copy and does not re-crawl `/.well-known/` |
-| Adding or removing a transport / remote | Yes |
-| Repository URL moves | Yes |
-| Anything under `publisher-provided` `_meta` | Yes |
-| Server goes away, or is superseded | No — use `mcp-publisher status --status deprecated\|deleted` instead of a publish |
-| Editing `/.well-known/mcp/server.json` only | **No** — that copy is served live by the app and is independent |
-| Editing the `pl.gamedev/listing` marker block | **No** — repo-side bookkeeping, stripped before publishing |
-| Rotating the KMS key | **No.** Update the DNS TXT record to the new public key; that re-authorises publishing but does not change the entry |
+| Change                                        | Republish?                                                                                                                               |
+| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| The MCP endpoint URL (`remotes[].url`)        | **Yes — urgent.** Clients resolve the server from this. A stale URL is a broken integration for everyone who installed from the registry |
+| `description`, `title`, `websiteUrl`          | Yes, when you want the change reflected — the registry serves its own copy and does not re-crawl `/.well-known/`                         |
+| Adding or removing a transport / remote       | Yes                                                                                                                                      |
+| Repository URL moves                          | Yes                                                                                                                                      |
+| Anything under `publisher-provided` `_meta`   | Yes                                                                                                                                      |
+| Server goes away, or is superseded            | No — use `mcp-publisher status --status deprecated\|deleted` instead of a publish                                                        |
+| Editing `/.well-known/mcp/server.json` only   | **No** — that copy is served live by the app and is independent                                                                          |
+| Editing the `pl.gamedev/listing` marker block | **No** — repo-side bookkeeping, stripped before publishing                                                                               |
+| Rotating the KMS key                          | **No.** Update the DNS TXT record to the new public key; that re-authorises publishing but does not change the entry                     |
 
 Bump `version` in `official-registry/server.json` in the same commit as whatever
 substantive change prompted it, so the repo and the registry cannot disagree about what
