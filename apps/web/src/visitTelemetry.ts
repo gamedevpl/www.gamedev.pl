@@ -187,8 +187,8 @@ export type AssistStep = 'asked' | 'applied' | 'handoff' | 'rejected';
  * A real funnel this time, and the first two rungs are the whole thesis: of the
  * people who open a remix, how many touch anything at all. `tuned` is that
  * number — the one metric the plan says validates or falsifies the bet for free.
- * The tail (`shared`, `keep_clicked`) is where retention turns into either a
- * visitor or a creator.
+ * The tail (`shared`, `keep_clicked`, `proposed`) is where retention turns into
+ * either a visitor, a creator, or a contributor.
  */
 export type RemixStep =
   // The denominator for every rung below it: this visit was *shown* the way in.
@@ -212,7 +212,8 @@ export type RemixStep =
   | 'handoff'
   | 'refused'
   | 'shared'
-  | 'keep_clicked';
+  | 'keep_clicked'
+  | 'proposed'; // sent a change back for review — the contribute-back exit
 
 /**
  * Which door led to the painter: the router proposing it after a content-shaped

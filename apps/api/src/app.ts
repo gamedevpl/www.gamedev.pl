@@ -628,6 +628,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     assistant: options.editorAssistant ?? new VertexEditorAssistant(),
     codeLane: new VertexCodeLane(),
     contentChecker,
+    // Same resolver MCP proposal tools and the review diff use — catalog remix propose
+    // reads one game's archive at the live snapshot commit through this seam.
+    resolveProposalBase: resolveBaseForProposal,
     // Same gate the delivery path uses: a proposal is checked by exactly the machinery a
     // creator's own upload is, or the reviewer would be judging something unverified.
     onSourcesDelivered: gateTrigger,

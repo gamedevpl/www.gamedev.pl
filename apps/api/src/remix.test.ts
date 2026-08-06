@@ -137,6 +137,11 @@ async function buildTestApp(
     now?: () => number;
     gamesStore?: GamesStore;
     submissionTokenSecret?: string;
+    resolveProposalBase?: (slug: string) => Promise<{
+      base: { kind: 'store'; version: string } | { kind: 'repo'; snapshotId: string; sha: string };
+      files: Array<{ path: string; content: string }>;
+    } | null>;
+    onSourcesDelivered?: (input: { issueNumber: number; slug: string; version: string }) => void;
   } = {},
 ) {
   const store = new InMemoryStore();
@@ -169,6 +174,8 @@ async function buildTestApp(
     ...(overrides.codeLane ? { codeLane: overrides.codeLane as never } : {}),
     ...(overrides.isAbandoned ? { isAbandoned: overrides.isAbandoned } : {}),
     ...(overrides.now ? { now: overrides.now } : {}),
+    ...(overrides.resolveProposalBase ? { resolveProposalBase: overrides.resolveProposalBase } : {}),
+    ...(overrides.onSourcesDelivered ? { onSourcesDelivered: overrides.onSourcesDelivered } : {}),
   });
   await app.ready();
   return { app, seen, store };
@@ -662,6 +669,11 @@ describe('remix across the two catalog eras', () => {
       codeLane?: unknown;
       gamesStore?: GamesStore;
       store?: InMemoryStore;
+      resolveProposalBase?: (slug: string) => Promise<{
+        base: { kind: 'store'; version: string } | { kind: 'repo'; snapshotId: string; sha: string };
+        files: Array<{ path: string; content: string }>;
+      } | null>;
+      onSourcesDelivered?: (input: { issueNumber: number; slug: string; version: string }) => void;
     } = {},
   ) {
     const store = overrides.store ?? new InMemoryStore();
@@ -681,6 +693,8 @@ describe('remix across the two catalog eras', () => {
       submissionTokenSecret: 'test-submission-secret',
       assistant: { assist: async () => ({ lane: 'params' }) } as EditorAssistant,
       codeLane: (overrides.codeLane ?? { run: async () => ({ ok: true }) }) as never,
+      ...(overrides.resolveProposalBase ? { resolveProposalBase: overrides.resolveProposalBase } : {}),
+      ...(overrides.onSourcesDelivered ? { onSourcesDelivered: overrides.onSourcesDelivered } : {}),
     });
     await instance.ready();
     return { app: instance, store };
@@ -1028,6 +1042,199 @@ describe('remix save as yours', () => {
     });
     expect(response.statusCode).toBe(409);
     expect(response.json().reason).toBe('no_changes');
+  });
+});
+
+describe('remix propose', () => {
+  let app: FastifyInstance | null = null;
+
+  beforeEach(() => {
+    process.env.EDITOR_ASSIST = 'true';
+    process.env.CODE_LANE = 'true';
+  });
+
+  afterEach(async () => {
+    delete process.env.EDITOR_ASSIST;
+    delete process.env.CODE_LANE;
+    if (app) await app.close();
+    app = null;
+  });
+
+  const PROPOSE_BODY = {
+    title: 'makes game harder',
+    description: 'Reduced the race time limit so rounds feel tighter and more tense.',
+    params: { dogScale: 2, tagline: 'go!' },
+  };
+
+  it('proposes a params-only change on a store-lane game', async () => {
+    const puts: Array<{ slug: string; files: Array<{ path: string; content: string }>; manifest: unknown }> = [];
+    const gated: Array<{ issueNumber: number; slug: string; version: string }> = [];
+    const built = await buildTestApp({
+      gamesStore: stubGamesStore({ puts }),
+      onSourcesDelivered: (input) => {
+        gated.push(input);
+      },
+    });
+    app = built.app;
+
+    const { remixId } = (await app.inject({ method: 'POST', url: '/api/games/dog-dash/remix', headers: alice })).json();
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/remixes/${remixId}/propose`,
+      headers: alice,
+      payload: PROPOSE_BODY,
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ proposal: { state: 'checking' } });
+    expect(puts).toHaveLength(1);
+    expect(puts[0].slug).toBe('dog-dash');
+    expect((puts[0].manifest as { deliveryMode?: string }).deliveryMode).toBe('proposal');
+    const editor = puts[0].files.find((file) => file.path === 'EDITOR.json')?.content ?? '';
+    expect(editor).toMatch(/"default"\s*:\s*2/);
+    expect(gated).toHaveLength(1);
+    expect(gated[0].slug).toBe('dog-dash');
+
+    const proposals = await built.store.listProposals({ proposerUid: 'g:alice' });
+    expect(proposals).toHaveLength(1);
+    expect(proposals[0]).toMatchObject({
+      targetSlug: 'dog-dash',
+      base: { kind: 'store', version: 'v1' },
+      state: 'submitted',
+    });
+  });
+
+  it('proposes a catalog (repo-lane) remix once the archive-backed base is wired', async () => {
+    const puts: Array<{ slug: string; files: Array<{ path: string; content: string }>; manifest: unknown }> = [];
+    const built = await buildTestApp({
+      gamesStore: stubGamesStore({ puts }),
+      resolveProposalBase: async (slug) => {
+        if (slug !== 'catalog-dash') return null;
+        return {
+          base: { kind: 'repo', snapshotId: 'snap-1', sha: 'abc123def' },
+          files: Object.entries(SOURCES).map(([path, content]) => ({ path, content })),
+        };
+      },
+    });
+    // No publication for catalog-dash — repo-era start path.
+    app = built.app;
+    // buildTestApp publishes dog-dash; catalog-dash is reached through the same github stub.
+    const { remixId } = (
+      await app.inject({ method: 'POST', url: '/api/games/catalog-dash/remix', headers: alice })
+    ).json();
+
+    const refused = await app.inject({
+      method: 'POST',
+      url: `/api/remixes/${remixId}/propose`,
+      headers: alice,
+      payload: { title: 'x', description: 'short' },
+    });
+    // Sanity: without a resolver on a *different* harness this used to 409 not_proposable.
+    // Here the resolver is wired; a short description is just validation.
+    expect(refused.statusCode).toBe(400);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/remixes/${remixId}/propose`,
+      headers: alice,
+      payload: PROPOSE_BODY,
+    });
+    expect(response.statusCode).toBe(200);
+    expect(puts).toHaveLength(1);
+    expect(puts[0].slug).toBe('catalog-dash');
+    expect(puts[0].files.some((file) => file.path === 'game.ts')).toBe(true);
+    expect(puts[0].files.some((file) => file.path === 'SPEC.md')).toBe(true);
+
+    const proposals = await built.store.listProposals({ proposerUid: 'g:alice' });
+    expect(proposals).toHaveLength(1);
+    expect(proposals[0]).toMatchObject({
+      targetSlug: 'catalog-dash',
+      targetOwnerUid: null,
+      base: { kind: 'repo', snapshotId: 'snap-1', sha: 'abc123def' },
+      state: 'submitted',
+    });
+  });
+
+  it('keeps the snapshot-pinned base when session.sources drift from publishedRef', async () => {
+    // Repo-lane sessions load EDITOR.json from publishedRef at start; the proposal base
+    // is pinned to the snapshot commit. If those disagree, the candidate must still
+    // start from the snapshot — otherwise `base` and the files disagree.
+    const snapshotEditor = JSON.stringify({
+      version: 1,
+      params: {
+        dogScale: { type: 'number', min: 0.5, max: 3, default: 1, label: { en: 'Dog size' } },
+        tagline: { type: 'text', max: 40, default: 'snapshot!', label: { en: 'Tagline' } },
+      },
+    });
+    const puts: Array<{ slug: string; files: Array<{ path: string; content: string }> }> = [];
+    const built = await buildTestApp({
+      gamesStore: stubGamesStore({ puts }),
+      resolveProposalBase: async (slug) => {
+        if (slug !== 'catalog-dash') return null;
+        return {
+          base: { kind: 'repo', snapshotId: 'snap-1', sha: 'snapsha' },
+          files: Object.entries({ ...SOURCES, 'EDITOR.json': snapshotEditor }).map(([path, content]) => ({
+            path,
+            content,
+          })),
+        };
+      },
+    });
+    app = built.app;
+    const { remixId } = (
+      await app.inject({ method: 'POST', url: '/api/games/catalog-dash/remix', headers: alice })
+    ).json();
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/remixes/${remixId}/propose`,
+      headers: alice,
+      payload: {
+        title: 'keep the pin',
+        description: 'Candidate must start from the snapshot commit, not publishedRef.',
+        params: { dogScale: 2, tagline: 'snapshot!' },
+      },
+    });
+    expect(response.statusCode).toBe(200);
+    const editor = puts[0]?.files.find((file) => file.path === 'EDITOR.json')?.content ?? '';
+    // Snapshot's default tagline survived; publishedRef's "go!" did not leak in.
+    expect(editor).toContain('snapshot!');
+    expect(editor).not.toContain('"go!"');
+    expect(editor).toMatch(/"default"\s*:\s*2/);
+  });
+
+  it('still refuses a catalog remix when the archive base is unavailable', async () => {
+    const built = await buildTestApp({
+      resolveProposalBase: async () => null,
+    });
+    app = built.app;
+    const { remixId } = (
+      await app.inject({ method: 'POST', url: '/api/games/catalog-dash/remix', headers: alice })
+    ).json();
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/remixes/${remixId}/propose`,
+      headers: alice,
+      payload: PROPOSE_BODY,
+    });
+    expect(response.statusCode).toBe(409);
+    expect(response.json().error).toBe('not_proposable');
+  });
+
+  it('refuses propose with nothing changed', async () => {
+    const built = await buildTestApp();
+    app = built.app;
+    const { remixId } = (await app.inject({ method: 'POST', url: '/api/games/dog-dash/remix', headers: alice })).json();
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/remixes/${remixId}/propose`,
+      headers: alice,
+      payload: {
+        title: 'no real change',
+        description: 'Trying to propose the defaults should not open a review.',
+        params: { dogScale: 1, tagline: 'go!' },
+      },
+    });
+    expect(response.statusCode).toBe(409);
+    expect(response.json().error).toBe('no_changes');
   });
 });
 

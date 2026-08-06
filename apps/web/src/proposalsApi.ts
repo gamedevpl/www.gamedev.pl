@@ -135,12 +135,18 @@ export function checkContributions(slug: string): Promise<ContributionEligibilit
 /**
  * Turn the current remix session into a proposal.
  *
- * The session's edits become a complete candidate source set server-side; nothing the
- * browser holds is sent as code.
+ * Code overrides stay on the session; params and painted content live only in the
+ * browser (same as save), so they travel with this request for the server to bake into
+ * the candidate. Nothing the browser holds is compiled as game code.
  */
 export function proposeFromRemix(
   remixId: string,
-  input: { title: string; description: string },
+  input: {
+    title: string;
+    description: string;
+    params?: Record<string, string | number | boolean>;
+    content?: Record<string, unknown>;
+  },
 ): Promise<{ proposal: { id: string; state: ProposalState } }> {
   return post(`/api/remixes/${encodeURIComponent(remixId)}/propose`, input);
 }

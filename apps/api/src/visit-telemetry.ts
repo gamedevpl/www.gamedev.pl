@@ -128,6 +128,7 @@ const RemixStepSchema = z.enum([
   'refused',
   'shared',
   'keep_clicked',
+  'proposed',
 ]);
 /** Which door led to the painter — recorded on `painted`, closed like every grouping key. */
 const RemixViaSchema = z.enum(['redirect', 'menu', 'panel']);
