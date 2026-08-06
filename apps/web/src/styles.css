@@ -417,23 +417,17 @@ a {
   flex: 1;
   min-width: 0;
   width: auto;
+  align-self: center;
   background: transparent;
   border: none;
   border-radius: 0;
-  padding: 8px 4px;
+  padding: 0 4px;
   color: #fff;
   font-family: inherit;
   font-size: 1rem;
-  line-height: 1.35;
-  resize: none;
-  height: 24px;
-  min-height: 24px;
-  max-height: 7.5em;
-  overflow-x: hidden;
-  overflow-y: auto;
-  field-sizing: content;
+  line-height: 36px;
+  height: 36px;
   box-shadow: none;
-  transition: none;
 }
 
 .big-prompt-input:focus {
@@ -445,9 +439,7 @@ a {
 
 .big-prompt-input::placeholder {
   color: var(--muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 36px;
 }
 
 .hero-prompt-card.drag-over .prompt-composer-bar {
