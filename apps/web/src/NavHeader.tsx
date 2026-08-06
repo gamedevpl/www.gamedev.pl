@@ -111,9 +111,6 @@ export function NavHeader({ activeBuildCount, onNavigate, onHome, onStudio, upTa
               </button>
             )}
             <NotificationBell />
-            <button className="logout-btn" onClick={logout} title={t('header.signOut')}>
-              {t('header.signOut')}
-            </button>
           </div>
         ) : (
           <button className="sign-in-btn" onClick={() => setIsAuthModalOpen(true)}>
@@ -189,22 +186,23 @@ export function NavHeader({ activeBuildCount, onNavigate, onHome, onStudio, upTa
                 ) : null}
               </button>
 
-              {/* Controls that live in the header bar on a desktop but cannot fit
-                  beside it on a phone. Hidden above the mobile breakpoint, where
-                  the header itself still shows them. */}
-              <div className="menu-extras">
-                {user && (
-                  <button
-                    className="nav-link"
-                    onClick={() => {
-                      setIsMenuOpen(false);
-                      logout();
-                    }}
-                  >
-                    <PixelIcon name="user" size={14} /> {t('header.signOut')}
-                  </button>
-                )}
+              {/* Sign out lives at the foot of the menu on every width — not beside
+                  the avatar, where it competed with the bell and the menu button. */}
+              {user ? (
+                <button
+                  className="nav-link nav-link--sign-out"
+                  onClick={() => {
+                    setIsMenuOpen(false);
+                    logout();
+                  }}
+                >
+                  <PixelIcon name="user" size={14} /> {t('header.signOut')}
+                </button>
+              ) : null}
 
+              {/* Language lives in the header bar on a desktop. On a phone it
+                  cannot fit beside the avatar, so this group reveals it instead. */}
+              <div className="menu-extras">
                 <LanguageSwitcher />
               </div>
             </nav>

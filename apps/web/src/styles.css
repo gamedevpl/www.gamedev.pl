@@ -328,8 +328,16 @@ a {
   color: var(--turquoise);
 }
 
-/* Language, GitHub and sign-out live in the header bar on a desktop. The
-   mobile breakpoint hides them there and reveals this group instead. */
+/* Foot of the menu — separated from Create Game / Studio on every width. */
+.dropdown-menu .nav-link--sign-out {
+  margin-top: 6px;
+  padding-top: 16px;
+  border-top: 1px solid var(--panel-border);
+  border-radius: 0;
+}
+
+/* Language lives in the header bar on a desktop. The mobile breakpoint
+   hides it there and reveals this group instead. */
 .menu-extras {
   display: none;
 }
@@ -3016,11 +3024,9 @@ body.player-open {
     gap: 8px;
   }
 
-  /* Relocated into .menu-extras inside the dropdown. Signing out in
-     particular should not sit one thumb-width from the menu button. */
+  /* Relocated into .menu-extras inside the dropdown. */
   .header-actions > .language-switcher,
-  .user-profile-badge .user-name,
-  .user-profile-badge .logout-btn {
+  .user-profile-badge .user-name {
     display: none;
   }
 
@@ -3031,6 +3037,13 @@ body.player-open {
     margin-top: 6px;
     padding-top: 10px;
     border-top: 1px solid var(--panel-border);
+  }
+
+  /* Sign out already drew the divider; don't stack a second rule above language. */
+  .dropdown-menu .nav-link--sign-out + .menu-extras {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
   }
 
   .menu-extras .language-switcher {
@@ -3748,24 +3761,6 @@ a.user-name--profile:focus-visible {
   color: var(--turquoise, #3dd6c6);
   text-decoration: underline;
   text-underline-offset: 2px;
-}
-
-.logout-btn {
-  background: none;
-  border: none;
-  color: var(--muted);
-  cursor: pointer;
-  font-size: 0.9rem;
-  opacity: 0.7;
-  padding: 2px 4px;
-  transition:
-    opacity 0.2s ease,
-    color 0.2s ease;
-}
-
-.logout-btn:hover {
-  color: var(--text);
-  opacity: 1;
 }
 
 /* How-to-play and Mic shed to the More menu earlier than sound and fullscreen do
