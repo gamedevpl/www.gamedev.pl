@@ -121,6 +121,28 @@ export function NavHeader({ activeBuildCount, onNavigate, onHome, onStudio, upTa
           </button>
         )}
 
+        {/* Rich Studio chip — relocated from the Games header so in-progress work
+            stays visible in chrome without owning a catalog grid cell. */}
+        <button
+          type="button"
+          className={`studio-chip${activeBuildCount > 0 ? ' is-live' : ''}`}
+          onClick={onStudio}
+          aria-label={
+            activeBuildCount > 0
+              ? `${t('myGames.liveCount', { count: activeBuildCount })} — ${t('myGames.openStudio')}`
+              : t('myGames.openStudio')
+          }
+        >
+          {activeBuildCount > 0 ? (
+            <>
+              <span className="live-dot" aria-hidden="true" />
+              <span className="studio-chip-count">{t('myGames.liveCount', { count: activeBuildCount })}</span>
+            </>
+          ) : null}
+          <PixelIcon name="wrench" size={12} />
+          <span className="studio-chip-label">{t('myGames.openStudio')}</span>
+        </button>
+
         <LanguageSwitcher />
 
         <div className="hamburger-container">
@@ -139,13 +161,9 @@ export function NavHeader({ activeBuildCount, onNavigate, onHome, onStudio, upTa
               <button className="nav-link" onClick={() => handleNavClick('hero-prompt')}>
                 <PixelIcon name="sparkle" size={14} /> {t('header.navPrompt')}
               </button>
-              {/* Studio is the creator home. The home page only keeps a short
-                  "your games" gist; the full shelf + build/playtest/improve loop
-                  lives here. Always offered — unsigned visitors get the sign-in
-                  prompt inside Studio rather than a dead "My Games" scroll target.
-                  Arcade / Operator / Account settings were dropped from this menu:
-                  the catalog is already on the home page, operators reach the
-                  console by URL, and account settings open from the avatar. */}
+              {/* Studio also lives as the rich chip in the header bar; keep a plain
+                  menu entry for the same destination so phone users who open the
+                  hamburger still find it next to Create Game. */}
               <button
                 className="nav-link"
                 onClick={() => {
@@ -154,15 +172,6 @@ export function NavHeader({ activeBuildCount, onNavigate, onHome, onStudio, upTa
                 }}
               >
                 <PixelIcon name="wrench" size={14} /> {t('header.navStudio')}
-                {activeBuildCount > 0 && (
-                  // The bare number reads as "Studio 2" to a screen reader; say what it counts.
-                  <span
-                    className="specs-count-badge"
-                    aria-label={t('header.activeBuilds', { count: activeBuildCount })}
-                  >
-                    {activeBuildCount}
-                  </span>
-                )}
               </button>
 
               {/* Controls that live in the header bar on a desktop but cannot fit

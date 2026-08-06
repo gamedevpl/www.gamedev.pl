@@ -17,12 +17,7 @@ import {
   type CatalogSortMode,
   type CatalogSortSignals,
 } from './catalogSort.js';
-import {
-  CREATOR_LIVE_STATUSES,
-  loadCreatorGames,
-  publishedCreatorSlugs,
-  type CreatorGameItem,
-} from './creatorGames.js';
+import { loadCreatorGames, publishedCreatorSlugs, type CreatorGameItem } from './creatorGames.js';
 import { MascotMoment } from './Mascot.js';
 import { PixelIcon } from './PixelIcon.js';
 import { getRecentPlays } from './recentPlays.js';
@@ -44,9 +39,8 @@ type ArcadeCatalogProps = {
   onRetryCatalog: () => void;
   /** Bump after a play so the grid can re-sort from fresh affinity. */
   recommendationsRefreshKey?: number;
-  /** Bump after a new submission so the Studio chip refreshes. */
+  /** Bump after a new submission so Yours pins refresh. */
   creatorGamesRefreshKey?: number;
-  onOpenStudio?: () => void;
 };
 
 function humanizeMoment(name: string): string {
@@ -395,75 +389,75 @@ function CatalogCard({
         <div className="catalog-overlay">
           <div className="card-copy">
             <h3 className="card-title">
-            {entry.title}
-            {entry.multiplayer && (
-              <span className="card-party-badge">
-                <PixelIcon name="phone" size={12} /> {t('party.playersBadge', { max: entry.multiplayer.maxPlayers })}
-              </span>
-            )}
-            {/* Says what the game will do, not what this visitor will get: a signed-out
+              {entry.title}
+              {entry.multiplayer && (
+                <span className="card-party-badge">
+                  <PixelIcon name="phone" size={12} /> {t('party.playersBadge', { max: entry.multiplayer.maxPlayers })}
+                </span>
+              )}
+              {/* Says what the game will do, not what this visitor will get: a signed-out
                 player sees the badge and no save, which is the honest ordering — the
                 promise belongs to the game, and signing in is what claims it. */}
-            {entry.saves === 'player' && (
-              <span className="card-saves-badge">
-                <PixelIcon name="clock" size={12} /> {t('catalog.savesBadge')}
-              </span>
-            )}
-            {/* The one badge that is about other people rather than about the game.
+              {entry.saves === 'player' && (
+                <span className="card-saves-badge">
+                  <PixelIcon name="clock" size={12} /> {t('catalog.savesBadge')}
+                </span>
+              )}
+              {/* The one badge that is about other people rather than about the game.
                 Worth its own colour: "somebody else has been here" is a different kind
                 of reason to click than "this remembers you". */}
-            {entry.world === 'shared' && (
-              <span className="card-world-badge">
-                <PixelIcon name="star" size={12} /> {t('catalog.worldBadge')}
-              </span>
-            )}
-            {/* Advisory, like saves: says the game answers tilt where the device offers
+              {entry.world === 'shared' && (
+                <span className="card-world-badge">
+                  <PixelIcon name="star" size={12} /> {t('catalog.worldBadge')}
+                </span>
+              )}
+              {/* Advisory, like saves: says the game answers tilt where the device offers
                 it, while the keyboard stays the whole game everywhere else. Reuses the
                 party pill style — it is the same "how you can drive this" family. */}
-            {entry.sensing === 'tilt' && (
-              <span className="card-party-badge" title={t('catalog.tiltTooltip')}>
-                <PixelIcon name="phone" size={12} /> {t('catalog.tiltBadge')}
-              </span>
-            )}
-            {entry.sensing === 'backdrop' && (
-              <span className="card-party-badge" title={t('catalog.cameraTooltip')}>
-                <PixelIcon name="phone" size={12} /> {t('catalog.cameraBadge')}
-              </span>
-            )}
-          </h3>
-          <p className="card-author">
-            {entry.creatorHandle && !isPlatformAuthor(entry.submittedBy) ? (
-              <>
-                {t('player.byAuthorPrefix')}
-                <a className="card-author-link" href={creatorPath(entry.creatorHandle)}>
-                  {entry.submittedBy}
-                </a>
-              </>
-            ) : (
-              t('player.byAuthor', {
-                author: isPlatformAuthor(entry.submittedBy) ? t('catalog.platformAuthor') : entry.submittedBy,
-              })
-            )}
-          </p>
-          {/*
-           * Contributor credit — the growth loop, and the reason proposing is worth doing.
-           * Its own line rather than appended to the byline: the owner is who made the
-           * game, and a contributor sharing that sentence would blur authorship the
-           * ownership rules are careful to keep clear.
-           */}
-          {entry.contributorHandles && entry.contributorHandles.length > 0 ? (
-            <p className="card-contributors">
-              {t('catalog.withContributions')}{' '}
-              {entry.contributorHandles.map((handle, index) => (
-                <span key={handle}>
-                  {index > 0 ? ', ' : null}
-                  <a className="card-author-link" href={creatorPath(handle)}>
-                    @{handle}
-                  </a>
+              {entry.sensing === 'tilt' && (
+                <span className="card-party-badge" title={t('catalog.tiltTooltip')}>
+                  <PixelIcon name="phone" size={12} /> {t('catalog.tiltBadge')}
                 </span>
-              ))}
+              )}
+              {entry.sensing === 'backdrop' && (
+                <span className="card-party-badge" title={t('catalog.cameraTooltip')}>
+                  <PixelIcon name="phone" size={12} /> {t('catalog.cameraBadge')}
+                </span>
+              )}
+            </h3>
+            <p className="card-author">
+              {entry.creatorHandle && !isPlatformAuthor(entry.submittedBy) ? (
+                <>
+                  {t('player.byAuthorPrefix')}
+                  <a className="card-author-link" href={creatorPath(entry.creatorHandle)}>
+                    {entry.submittedBy}
+                  </a>
+                </>
+              ) : (
+                t('player.byAuthor', {
+                  author: isPlatformAuthor(entry.submittedBy) ? t('catalog.platformAuthor') : entry.submittedBy,
+                })
+              )}
             </p>
-          ) : null}
+            {/*
+             * Contributor credit — the growth loop, and the reason proposing is worth doing.
+             * Its own line rather than appended to the byline: the owner is who made the
+             * game, and a contributor sharing that sentence would blur authorship the
+             * ownership rules are careful to keep clear.
+             */}
+            {entry.contributorHandles && entry.contributorHandles.length > 0 ? (
+              <p className="card-contributors">
+                {t('catalog.withContributions')}{' '}
+                {entry.contributorHandles.map((handle, index) => (
+                  <span key={handle}>
+                    {index > 0 ? ', ' : null}
+                    <a className="card-author-link" href={creatorPath(handle)}>
+                      @{handle}
+                    </a>
+                  </span>
+                ))}
+              </p>
+            ) : null}
           </div>
           <div className="card-actions">
             <button className="primary-btn" onClick={() => onPlayGame(entry)}>
@@ -526,7 +520,6 @@ export function ArcadeCatalog({
   onRetryCatalog,
   recommendationsRefreshKey = 0,
   creatorGamesRefreshKey = 0,
-  onOpenStudio,
 }: ArcadeCatalogProps) {
   const { t, i18n } = useTranslation();
   const { user, loading: authLoading } = useAuth();
@@ -644,12 +637,6 @@ export function ArcadeCatalog({
   }, [sortMenuOpen]);
 
   const mySlugs = useMemo(() => publishedCreatorSlugs(creatorItems), [creatorItems]);
-  const hasInProgress = useMemo(() => creatorItems.some((item) => item.status !== 'published'), [creatorItems]);
-  const liveCount = useMemo(
-    () => creatorItems.filter((item) => item.status !== null && CREATOR_LIVE_STATUSES.has(item.status)).length,
-    [creatorItems],
-  );
-  const showStudioChip = Boolean(onOpenStudio) && (hasInProgress || mySlugs.size > 0);
 
   const hasCatalog = catalogStatus === 'ready' && catalogEntries.length > 0;
   // My games only makes sense when signed in and you have a published game of yours.
@@ -725,33 +712,11 @@ export function ArcadeCatalog({
           : t('catalog.empty');
   const showEmpty = layoutReady && displayedEntries.length === 0;
 
-  const studioChipLabel =
-    liveCount > 0
-      ? `${t('myGames.liveCount', { count: liveCount })} — ${t('myGames.openStudio')}`
-      : t('myGames.openStudio');
-
   return (
     <section id="arcade" className="arcade-section">
       <div className="arcade-header">
         <div className="arcade-title-row">
           <h2 className="arcade-title">{t('catalog.title')}</h2>
-          {showStudioChip ? (
-            <button
-              type="button"
-              className={`catalog-studio-chip${liveCount > 0 ? ' is-live' : ''}`}
-              onClick={onOpenStudio}
-              aria-label={studioChipLabel}
-            >
-              {liveCount > 0 ? (
-                <>
-                  <span className="live-dot" aria-hidden="true" />
-                  <span className="catalog-studio-chip-count">{t('myGames.liveCount', { count: liveCount })}</span>
-                </>
-              ) : null}
-              <PixelIcon name="wrench" size={12} />
-              <span className="catalog-studio-chip-label">{t('myGames.openStudio')}</span>
-            </button>
-          ) : null}
         </div>
         {showControls ? (
           <div className="catalog-toolbar" role="group" aria-label={t('catalog.toolbarLabel')}>

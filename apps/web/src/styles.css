@@ -996,9 +996,9 @@ button:disabled {
   min-width: 0;
 }
 
-/* Compact Studio entry next to Games — live count + wrench in one control so
-   in-progress work never owns a catalog grid cell (or shoves published cards). */
-.catalog-studio-chip {
+/* Compact Studio entry in the top nav — live count + wrench in one control so
+   in-progress work stays in chrome rather than owning a catalog grid cell. */
+.studio-chip {
   display: inline-flex;
   flex: none;
   align-items: center;
@@ -1014,35 +1014,41 @@ button:disabled {
   cursor: pointer;
 }
 
-.catalog-studio-chip:hover,
-.catalog-studio-chip:focus-visible {
+.studio-chip:hover,
+.studio-chip:focus-visible {
   border-color: var(--turquoise);
   color: var(--turquoise);
 }
 
-.catalog-studio-chip.is-live {
+.studio-chip.is-live {
   border-color: rgba(56, 189, 248, 0.35);
   background: rgba(56, 189, 248, 0.1);
   color: var(--accent-blue);
 }
 
-.catalog-studio-chip.is-live:hover,
-.catalog-studio-chip.is-live:focus-visible {
+.studio-chip.is-live:hover,
+.studio-chip.is-live:focus-visible {
   border-color: var(--turquoise);
   color: var(--turquoise);
 }
 
-.catalog-studio-chip-count {
+.studio-chip-count {
   font-weight: 700;
 }
 
-.catalog-studio-chip .live-dot {
+.studio-chip .live-dot {
   background: var(--accent-blue);
 }
 
 @media (pointer: coarse), (max-width: 768px) {
-  .catalog-studio-chip {
+  .studio-chip {
     min-height: 44px;
+  }
+
+  /* Phone chrome is tight: keep the live signal, drop the "Studio" word —
+     the wrench still names the destination, and the hamburger still lists it. */
+  .studio-chip.is-live .studio-chip-label {
+    display: none;
   }
 }
 

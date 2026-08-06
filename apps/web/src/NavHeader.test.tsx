@@ -177,6 +177,61 @@ describe('NavHeader menu', () => {
   });
 });
 
+describe('NavHeader Studio chip', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+    vi.restoreAllMocks();
+  });
+
+  it('shows the rich live chip in the header and opens Studio', async () => {
+    await i18n.changeLanguage('en');
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith('/api/auth/me')) {
+        return new Response(JSON.stringify({ user: { uid: 'g:ada', tier: 'standard', name: 'Ada' } }));
+      }
+      if (url.endsWith('/api/health')) {
+        return new Response(JSON.stringify({ status: 'ok', provider: 'mock', privateBeta: false }));
+      }
+      return new Response('{}', { status: 404 });
+    });
+
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    const onStudio = vi.fn();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        createElement(
+          AuthProvider,
+          null,
+          createElement(NavHeader, {
+            activeBuildCount: 9,
+            onNavigate: vi.fn(),
+            onHome: vi.fn(),
+            onStudio,
+            upTarget: null,
+          }),
+        ),
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const chip = container.querySelector<HTMLButtonElement>('button.studio-chip');
+    expect(chip).not.toBeNull();
+    expect(chip?.classList.contains('is-live')).toBe(true);
+    expect(chip?.textContent).toMatch(/9 in progress/i);
+    expect(chip?.textContent).toMatch(/Studio/i);
+
+    await act(async () => chip?.click());
+    expect(onStudio).toHaveBeenCalledOnce();
+
+    await act(async () => root.unmount());
+  });
+});
+
 describe('NavHeader profile link', () => {
   afterEach(() => {
     document.body.innerHTML = '';
