@@ -150,6 +150,8 @@ const StartSchema = z.object({
 const AssistSchema = z.object({
   utterance: z.string().trim().min(2).max(MAX_UTTERANCE_LENGTH),
   params: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
+  /** Player UI language (`en` / `pl`) — steers which summary side the model writes carefully. */
+  locale: z.string().trim().min(2).max(16).optional(),
 });
 const ProposeSchema = z.object({
   title: z.string().trim().min(3, 'title is too short').max(MAX_PROPOSAL_TITLE_LENGTH),
@@ -560,6 +562,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
           utterance: body.data.utterance,
           game: { title: session.title },
           history: session.turns,
+          ...(body.data.locale ? { locale: body.data.locale } : {}),
         });
         if (result.lane !== 'params' || !result.patches?.length) {
           return reply.send({
@@ -705,6 +708,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
             utterance: body.data.utterance,
             history: session.turns,
             game: { title: session.title },
+            ...(body.data.locale ? { locale: body.data.locale } : {}),
             ...(kit ? { kit } : {}),
             modules,
           },

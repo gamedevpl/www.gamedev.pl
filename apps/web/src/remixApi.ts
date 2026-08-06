@@ -109,12 +109,26 @@ export function remixAssist(
   remixId: string,
   utterance: string,
   params: Record<string, EditorParamValue>,
+  locale?: string,
 ): Promise<RemixAssistResponse> {
-  return post<RemixAssistResponse>(`/api/remixes/${encodeURIComponent(remixId)}/assist`, { utterance, params });
+  return post<RemixAssistResponse>(`/api/remixes/${encodeURIComponent(remixId)}/assist`, {
+    utterance,
+    params,
+    ...(locale ? { locale } : {}),
+  });
 }
 
-export function remixCode(remixId: string, utterance: string, signal?: AbortSignal): Promise<RemixCodeResponse> {
-  return post<RemixCodeResponse>(`/api/remixes/${encodeURIComponent(remixId)}/code`, { utterance }, signal);
+export function remixCode(
+  remixId: string,
+  utterance: string,
+  signal?: AbortSignal,
+  locale?: string,
+): Promise<RemixCodeResponse> {
+  return post<RemixCodeResponse>(
+    `/api/remixes/${encodeURIComponent(remixId)}/code`,
+    { utterance, ...(locale ? { locale } : {}) },
+    signal,
+  );
 }
 
 /**

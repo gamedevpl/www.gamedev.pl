@@ -263,7 +263,7 @@ describe('RemixPanel', () => {
     expect(container.querySelector('.remix-btn.is-primary')?.textContent).toBe('Share my version');
     expect(buttonNamed(container, 'Make it mine')).toBeNull();
     expect(buttonNamed(container, 'Keep in Studio')).toBeNull();
-    expect(buttonNamed(container, 'Keep…')).not.toBeNull();
+    expect(buttonNamed(container, 'Save to Studio')).not.toBeNull();
     expect(buttonNamed(container, 'Undo')?.classList.contains('is-quiet')).toBe(true);
     // And the way to a second change is still there, shrunk to a line.
     expect(container.querySelector('.remix-ask.is-compact')).not.toBeNull();
@@ -293,7 +293,7 @@ describe('RemixPanel', () => {
     expect(buttonNamed(container, 'Undo')).not.toBeNull();
     // Keep stays off the row; the header hatch is enough after one landing.
     expect(buttonNamed(container, 'Make it mine')).toBeNull();
-    expect(buttonNamed(container, 'Keep…')).not.toBeNull();
+    expect(buttonNamed(container, 'Save to Studio')).not.toBeNull();
   });
 
   it('proposes the painter for a content-shaped request instead of falling through to code', async () => {
@@ -638,7 +638,7 @@ describe('RemixPanel', () => {
     expect(buttonNamed(container, 'Share my version')).toBeNull();
     expect(container.querySelector('.remix-btn.is-primary')).toBeNull();
     expect(buttonNamed(container, 'Make it mine')).toBeNull();
-    expect(buttonNamed(container, 'Keep…')).not.toBeNull();
+    expect(buttonNamed(container, 'Save to Studio')).not.toBeNull();
 
     // But there is always a way back. A rebuild that compiles is not a rebuild
     // that plays, and the lane cannot tell the difference — so the player must
@@ -696,7 +696,7 @@ describe('RemixPanel', () => {
     expect(container.querySelector('.remix-btn.is-primary')?.textContent).toBe('Undo');
     // A broken game is not something to keep — hide the Studio fork until they undo.
     expect(buttonNamed(container, 'Make it mine')).toBeNull();
-    expect(buttonNamed(container, 'Keep…')).toBeNull();
+    expect(buttonNamed(container, 'Save to Studio')).toBeNull();
     expect(container.querySelector('.remix-keep-offer')).toBeNull();
   });
 
@@ -747,7 +747,7 @@ describe('RemixPanel', () => {
     // The third landing did not stick — close the offer and do not leave the
     // hatch hidden behind a stuck keepOfferOpen flag.
     expect(container.querySelector('.remix-keep-offer')).toBeNull();
-    expect(buttonNamed(container, 'Keep…')).toBeNull();
+    expect(buttonNamed(container, 'Save to Studio')).toBeNull();
     expect(container.querySelector('.remix-result.is-broken')).not.toBeNull();
   });
 
@@ -785,7 +785,7 @@ describe('RemixPanel', () => {
     // has not yet landed a fresh change in this mount.
     expect(buttonNamed(container, 'Undo')).not.toBeNull();
     expect(buttonNamed(container, 'Make it mine')).toBeNull();
-    expect(buttonNamed(container, 'Keep…')).toBeNull();
+    expect(buttonNamed(container, 'Save to Studio')).toBeNull();
   });
 
   it('docks into a mini chat after the second landing', async () => {
@@ -810,9 +810,60 @@ describe('RemixPanel', () => {
 
     expect(container.querySelector('.remix-panel.is-chat')).not.toBeNull();
     expect(container.querySelector('.remix-transcript')).not.toBeNull();
-    const bubbles = Array.from(container.querySelectorAll('.remix-bubble')).map((el) => el.textContent);
+    const bubbles = Array.from(container.querySelectorAll('.remix-bubble-text')).map((el) => el.textContent);
     expect(bubbles).toEqual(['a bit bigger', 'Bigger.', 'again', 'Bigger still.']);
     expect(container.querySelector('.remix-title')?.textContent).toBe('Remix chat');
+    // Undo sits on the last assistant turn, not in the Share/Propose action row.
+    expect(container.querySelector('.remix-bubble-undo')?.textContent).toBe('Undo');
+    expect(container.querySelector('.remix-actions-row .remix-btn')?.textContent ?? null).not.toBe('Undo');
+
+    await act(async () => {
+      container
+        .querySelector('.remix-close[aria-label="Collapse chat"]')!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(container.querySelector('.remix-panel.is-collapsed')).not.toBeNull();
+    await act(async () => {
+      container.querySelector('.remix-collapsed-hit')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(container.querySelector('.remix-panel.is-collapsed')).toBeNull();
+  });
+
+  it('keeps failures out of the chat transcript', async () => {
+    remixApi.startRemix.mockResolvedValue({
+      remixId: 'r1',
+      params: null,
+      values: null,
+      canAssist: false,
+      canCode: true,
+      suggestions: [],
+      expiresInMs: 3_600_000,
+    });
+    remixApi.remixCode
+      .mockResolvedValueOnce({
+        ok: true,
+        html: '<html>one</html>',
+        region: { file: 'game/a.ts', name: 'a' },
+        summary: { en: 'One.', pl: 'Jeden.' },
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        html: '<html>two</html>',
+        region: { file: 'game/a.ts', name: 'a' },
+        summary: { en: 'Two.', pl: 'Dwa.' },
+      })
+      .mockRejectedValueOnce(Object.assign(new Error('down'), { status: 503 }));
+    await draw();
+    await send('one');
+    await send('two');
+    expect(container.querySelector('.remix-panel.is-chat')).not.toBeNull();
+
+    await send('three');
+    const texts = Array.from(container.querySelectorAll('.remix-bubble-text')).map((el) => el.textContent);
+    // The ask stays; the failure is a note, not an assistant bubble.
+    expect(texts).toContain('three');
+    expect(texts.join(' ')).not.toMatch(/napping|too long|Couldn't do that/i);
+    expect(container.querySelector('.remix-note')?.textContent).toMatch(/play|napping|Couldn't/i);
   });
 
   it('offers to keep the remix after a few successful landings, with a name', async () => {
@@ -884,14 +935,14 @@ describe('RemixPanel', () => {
       buttonNamed(container, 'Not now')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(container.querySelector('.remix-keep-offer')).toBeNull();
-    expect(buttonNamed(container, 'Keep…')).not.toBeNull();
+    expect(buttonNamed(container, 'Save to Studio')).not.toBeNull();
 
     // Another landing must not reopen the nag.
     await send('bigger again');
     expect(container.querySelector('.remix-keep-offer')).toBeNull();
 
     await act(async () => {
-      buttonNamed(container, 'Keep…')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      buttonNamed(container, 'Save to Studio')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(container.querySelector('.remix-keep-offer')).not.toBeNull();
   });

@@ -108,6 +108,8 @@ export interface CodeLaneRequest {
    */
   history?: Array<{ utterance: string; summary?: string }>;
   game?: { title?: string; genre?: string };
+  /** Player UI language — both summary sides are still required; this steers quality. */
+  locale?: string;
   /**
    * `shared/game-kit.d.ts`, when the caller has it.
    *
@@ -554,6 +556,9 @@ Rules:
   one instead.
 - If the request is not about changing this game, or asks for something harmful, sexual, hateful, or aimed at a real person, answer {"decision":"reject"}.
 - "summary" is one short sentence in English (en) and Polish (pl) describing the change you expect to make.
+  Write real Polish in "pl" (not an English copy). Prefer the player's own language for tone${
+    request.locale ? ` (their UI is ${request.locale})` : ''
+  }.
 ${prior ? `\n${prior}` : ''}
 Respond STRICTLY as JSON:
 {"decision":"edit","file":"game/runtime.ts","name":"startGame","summary":{"en":"...","pl":"..."}}
@@ -633,6 +638,7 @@ Rules:
 - You may only use what the region already has access to: this game's own modules (relative imports) and the global \`GameKit\`. There is no network, no external library, and no DOM outside the game canvas.
 - Change as little as possible. This is a tweak, not a rewrite.
 - "summary" is one short sentence in English (en) and Polish (pl) saying what you changed.
+  Write real Polish in "pl" (not an English copy). Never put compiler/JSON repair notes in summary.
 ${prior ? `\n${prior}` : ''}
 Respond STRICTLY as JSON and nothing else — no code fence before or after it, and
 every newline inside a string written as \\n:
