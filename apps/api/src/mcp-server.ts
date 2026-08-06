@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { looksLikeCreatorAgentKey } from './agent-creator-key.js';
+import { canonicalAppBaseUrl } from './canonical-app-url.js';
 import {
   resolveCreatorAgentKeyForOpenRound,
   resolveCreatorAgentKeyForStart,
@@ -180,18 +181,18 @@ const ROUND_STATUS_OUTPUT_SCHEMA: Record<string, unknown> = {
  *
  * Built here rather than in the view because the view is served to every environment
  * from one string: an origin baked into it would send a staging card's Play button to
- * production. `WEB_ORIGIN` already pins the deployed site; `APP_BASE_URL` is the
- * fallback the OAuth paths use.
+ * production.
  *
- * Null when neither is configured — the card simply offers no button, which is better
- * than guessing an origin and handing the host a link to nowhere.
+ * `canonicalAppBaseUrl()` rather than `WEB_ORIGIN`, and the distinction is load-bearing.
+ * WEB_ORIGIN is a CORS allowlist — in production it begins with the Cloud Run service
+ * URL — so taking its first entry produced a link to an origin that is not in the view's
+ * `redirect_domains`, which ChatGPT would refuse. The button would have been dead in
+ * production and fine everywhere we tested it (Codex, #617). The card's link allowlist
+ * is derived from this same function so the two cannot drift apart again.
  */
 function playUrlFor(slug: string | null | undefined): string | null {
   if (!slug) return null;
-  const configured = (process.env.WEB_ORIGIN ?? '').split(',')[0]?.trim() || process.env.APP_BASE_URL?.trim() || '';
-  const origin = configured.replace(/\/+$/, '');
-  if (!/^https?:\/\//.test(origin)) return null;
-  return `${origin}/play/${encodeURIComponent(slug)}`;
+  return `${canonicalAppBaseUrl()}/play/${encodeURIComponent(slug)}`;
 }
 
 const ROUND_STATUS_RETRY_AFTER_SECONDS = 30;

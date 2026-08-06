@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { canonicalAppBaseUrl } from './canonical-app-url.js';
 
 /**
  * MCP Apps (SEP-1865, extension `io.modelcontextprotocol/ui`).
@@ -248,11 +249,20 @@ export type UiResourceContents = Pick<UiResource, 'uri' | 'mimeType' | 'text'> &
 /**
  * Where the card is allowed to send the reader.
  *
- * Only our own site: every link the card offers is a gamedev.pl page (the gate
- * recording today, the game theater in V3). A wider list would let a future card hand
- * the host somewhere we did not intend.
+ * Only our own site: every link the card offers is a gamedev.pl page — the gate
+ * recording, and the game theater the Play button opens. A wider list would let a
+ * future card hand the host somewhere we did not intend.
+ *
+ * Derived from `canonicalAppBaseUrl()` rather than written out, because the server
+ * builds the Play URL from the same function. Hardcoding this list once meant the two
+ * could disagree, and they did: the link was built from `WEB_ORIGIN`, whose first entry
+ * in production is the Cloud Run service URL, so every production link pointed at an
+ * origin this list did not allow (Codex, #617). A view whose allowlist and whose links
+ * come from one source cannot have that bug.
  */
-const LINK_DOMAINS: readonly string[] = Object.freeze(['https://www.gamedev.pl']);
+function linkDomains(): readonly string[] {
+  return Object.freeze([canonicalAppBaseUrl()]);
+}
 
 /**
  * The origin ChatGPT associates with this hosted component.
@@ -748,11 +758,15 @@ const ROUND_STATUS_HTML = `<!doctype html>
           // every environment, so an origin baked in here would send a staging card's
           // Play button to production.
           var url = typeof status.playUrl === 'string' ? status.playUrl : '';
+          // Every state here implies assembly succeeded. needs_changes was in this list
+          // and should not have been: a publish run that fails before assembly lands
+          // there with neither a bundle nor a preview stored, so the button would have
+          // sent the creator to the exact "not available yet" page it exists to avoid
+          // (Codex, #617). A red gate is precisely when there may be nothing to play.
           var playable =
             url &&
             (status.phase === 'ready_for_review' ||
               status.phase === 'published' ||
-              status.phase === 'needs_changes' ||
               gateStatus === 'green' ||
               gateStatus === 'preview_passed');
           if (!playable) {
@@ -1445,7 +1459,7 @@ function uiResourceMeta(): UiResourceMeta {
       // has no permission to follow, and the Play button V3 is built around would be
       // the same. An empty CSP is right for what the card *fetches* — it fetches
       // nothing — but link targets are a different question and were never answered.
-      redirect_domains: LINK_DOMAINS,
+      redirect_domains: linkDomains(),
     },
   };
 }

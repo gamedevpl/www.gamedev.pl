@@ -309,16 +309,24 @@ describe('ui resources', () => {
     // string is served to every environment, so an origin here would send a staging
     // card's Play button to production. The self-contained test above enforces it.
     expect(html).toContain('status.playUrl');
+    // The link and the allowlist that permits it come from one function, so they cannot
+    // disagree — they did once, and every production link was non-allowlisted.
+    expect(html).not.toContain('https://www.gamedev.pl/play/');
     // Uses the same host hand-off the gate recording does — the mechanism whose
     // permission (`redirect_domains`) was missing until the CSP work.
     expect(html).toMatch(/playBtn\.onclick[\s\S]{0,120}?request\('ui\/open-link'/);
 
     // Not offered when a round has delivered nothing: the link would open a page saying
     // the game is not available, which is a worse answer than no button.
-    for (const phase of ['ready_for_review', 'published', 'needs_changes']) {
+    for (const phase of ['ready_for_review', 'published']) {
       expect(html).toContain(`status.phase === '${phase}'`);
     }
     expect(html).toContain("gateStatus === 'preview_passed'");
+    // needs_changes is deliberately absent: a publish run that fails before assembly
+    // lands there with neither a bundle nor a preview, so the button would have sent
+    // the creator to the "not available yet" page it exists to avoid. A red gate is
+    // exactly when there may be nothing to play.
+    expect(html).not.toContain("status.phase === 'needs_changes' ||");
     expect(html).toContain('playRow.hidden = true;');
   });
 
