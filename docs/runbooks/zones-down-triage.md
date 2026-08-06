@@ -2,8 +2,9 @@
 
 Entry point for alerts **A6** (zone admission failing) and **A7** (world service 5xx).
 
-**Last drilled: never.** (A6 wake-timeout path diagnosed from prod logs 2026-08-02 and the
-load-timeout path 2026-08-05; both fixes covered by unit tests, neither by a live drill.)
+**Last drilled: never.** (A6 timeout paths diagnosed from prod logs on 2026-08-02, 08-05
+and 08-06; all three fixes covered by unit tests, none by a live drill. The first two were
+each right about their own call and wrong about the problem — see step 1.)
 
 **Check whether it was the deploy gate before you chase a player-facing outage.** The
 browser gate plays real games against the candidate revision from a GitHub Actions runner,
@@ -55,25 +56,29 @@ attached to it is the diagnosis.
 
 Three causes have happened before and are worth checking by eye first:
 
-- **`Script execution timed out` — read the stack before anything else.** The message is
-  identical for two different faults and they have different fixes. `zone admission
-  failed` now carries `slug` and `zoneId`, so start by noting which game it is.
-  - **…inside `wake` / `tick` / `terrainHeight`** — catch-up after hibernation blew the
-    isolate budget. Seen on a cold `gamedev-world` start with `biplane-skirmish` (A6
-    `0.oayobzkv6oet`, 2026-08-02 10:36Z): instance AUTOSCALING → first `/zone/ws` failed
-    in ~3s → retry four seconds later succeeded. Since the wake-timeout degrade path
-    landed, this should log `zone wake catch-up skipped after timeout` at warn and
-    **still admit** the player on the last snapshot. If A6 is still firing on this
-    message, the degrade path is not deployed or a non-timeout error is wrapping it —
-    check the revision.
-  - **…inside `cage.load` / `loadSim`** (`SimLoadError`, stack through `Zone.wakeUp`) —
-    the *bundle's own top level* outran its budget, which the wake degrade does not cover
-    and never did. A6 `0.ob39ib29cgp5`, 2026-08-05 21:56Z, on a cold instance driven by
-    the deploy browser gate. Cause: load was priced at `SIM_CALL_TIMEOUT_MS` (200 ms,
-    eight ticks) — the same mistake the wake budget had already fixed, in the one place it
-    had not been applied. Fixed by `SIM_LOAD_TIMEOUT_MS` (5 s) in
-    `packages/zone-core/src/zone.ts`. A recurrence at *five seconds* is a different claim
-    entirely: that is a genuinely pathological bundle, so look at the game, not the host.
+- **`Script execution timed out` — and do not go looking for what was slow.** This one
+  message accounts for five of the eight admission failures ever logged, and the stack
+  named a different innocent function every time: `sin` (08-02 10:36Z), `cos` (08-02
+  14:49Z), `reduce` (08-02 21:42Z), `loadSim` (08-05 21:56Z), `nextRandom` (08-06 00:31Z).
+  Nothing was expensive — the last one blew 200 ms restoring **167 draws of a 1.2 KB
+  state**, which is microseconds of work.
+
+  The budgets are wall-clock and `isolated-vm` runs the sim on its own thread, so on a
+  1-CPU instance that thread loses the core to the games-repo fetch, the Firestore read or
+  GC and spends the budget without executing. Every fix that widened one call moved the
+  loss to the next: wake (08-02) → load (08-05) → restore (08-06). Since 2026-08-06 all
+  four once-per-join calls — realm construction, `init`, `restore`, `wake` — share
+  `SIM_STARTUP_TIMEOUT_MS` (5 s), and the host runs on `--cpu 2` so the sim thread is not
+  fighting the host thread. Ticks keep the tight ceiling; that is the one carrying the
+  safety property.
+
+  **So if this recurs, it is a real finding, not another budget to widen.** Five seconds
+  of wall clock for a once-per-join call on two cores is not something a healthy sim runs
+  out of. Note the slug (`zone admission failed` carries `slug` and `zoneId` since 08-06)
+  and look at that game. The one exception worth checking first: a `wake` timeout is
+  *expected* to degrade rather than refuse — it should log `zone wake catch-up skipped
+  after timeout` at warn and still admit on the last snapshot, so a `wake` stack reaching
+  A6 at all means the degrade path is not deployed or something is wrapping the error.
 - **`not a constructor` / anything about `Isolate`** — the isolate cage loaded but is not
   usable. The host boots, passes its own cage assertion, serves `/health`, and fails
   every join. Fixed once in `packages/zone-core/src/cage.ts`; a recurrence most likely

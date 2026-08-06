@@ -52,27 +52,28 @@ export interface LoadSimOptions {
   bundleJs: string;
   /** The games repo's `shared/sim-math.ts`, transpiled. Installed as `Math`. */
   simMathJs: string;
-  /** Wall-clock ceiling for one call into the sim (init / tick / restore / snapshot). */
+  /** Wall-clock ceiling for one steady-state call into the sim (tick / snapshot). */
   timeoutMs: number;
   /**
-   * Wall-clock ceiling for `wake` alone. Defaults to `timeoutMs`.
+   * Wall-clock ceiling for bringing a zone up: building the realm (sim-math, the
+   * bootstrap, the bundle's top level) and the `init` / `restore` / `wake` that follow it.
+   * Defaults to `timeoutMs`.
    *
-   * Wake is once per hibernation and may run many catch-up ticks; keeping it on the
-   * per-tick budget is how a cold Cloud Run isolate turns a healthy sim into
-   * `zone_unavailable` (A6 2026-08-02, biplane-skirmish). Tick stays short so one zone
-   * cannot eat the core; wake gets its own headroom.
-   */
-  wakeTimeoutMs?: number;
-  /**
-   * Wall-clock ceiling for building the realm — sim-math, the bootstrap and the game
-   * bundle's own top level. Defaults to `timeoutMs`.
+   * One budget rather than one per call, because A6 taught the same lesson three times
+   * before anyone read it as a pattern. Wake was moved off the per-tick budget on
+   * 2026-08-02, load on 2026-08-05, and on 2026-08-06 the timeout simply reappeared in
+   * `restore` — the next call still priced per-frame. The stacks were the tell all along:
+   * across five timeouts the interrupt landed in `sin`, `cos`, `reduce`, `loadSim` and
+   * `nextRandom`, five different innocent functions. Nothing was slow. These budgets are
+   * wall-clock, `isolated-vm` runs the sim on its own thread, and on a 1-CPU instance that
+   * thread competes with the games-repo fetch, the Firestore read and GC on the main one —
+   * so a descheduled isolate spends the budget without executing.
    *
-   * Same lesson as `wakeTimeoutMs`, learned again a cold start later (A6 2026-08-05):
-   * evaluating a whole bundle is not a tick, and pricing it as one refuses joins on a
-   * healthy sim whenever a cold isolate is slow. This budget is a stop for a bundle whose
-   * top level never returns, not a performance standard for one that does.
+   * Ticks keep the tight ceiling, which is the one that matters: by tick time the zone is
+   * live and the instance is warm. Everything here happens once per join, with nothing
+   * waiting on it but the join itself.
    */
-  loadTimeoutMs?: number;
+  startupTimeoutMs?: number;
   /** Heap ceiling for the whole zone, in MiB. Ignored by the node:vm cage, which has none. */
   memoryMb: number;
 }
@@ -249,24 +250,23 @@ export async function createIsolatedVmCage(): Promise<SimCage> {
   return {
     kind: 'isolated-vm',
     preemptsRunawayTicks: true,
-    async load({ bundleJs, simMathJs, timeoutMs, wakeTimeoutMs, loadTimeoutMs, memoryMb }) {
+    async load({ bundleJs, simMathJs, timeoutMs, startupTimeoutMs, memoryMb }) {
       const isolate = new ivm.Isolate({ memoryLimit: memoryMb });
       isolates.push(isolate);
       const context = isolate.createContextSync();
-      const wakeBudget = wakeTimeoutMs ?? timeoutMs;
-      const loadBudget = loadTimeoutMs ?? timeoutMs;
+      const startupBudget = startupTimeoutMs ?? timeoutMs;
 
       try {
         // Order matters: sim-math captures the exact-by-spec natives it builds on, so it
         // has to run while the original Math is still in place.
-        context.evalSync(simMathJs, { timeout: loadBudget });
+        context.evalSync(simMathJs, { timeout: startupBudget });
         context.evalSync('globalThis.Math = globalThis.__SIM_MATH__; delete globalThis.__SIM_MATH__;');
         context.evalSync(scrubScript());
-        context.evalSync(BOOTSTRAP, { timeout: loadBudget });
+        context.evalSync(BOOTSTRAP, { timeout: startupBudget });
 
         const attach = context.evalSync(
           `(function () { var f = ${wrapSimBundle(bundleJs)}; return globalThis.__zoneAttach(f); })()`,
-          { timeout: loadBudget },
+          { timeout: startupBudget },
         );
         if (typeof attach === 'string' && attach.length > 0) {
           throw new SimLoadError(`sim.ts must export ${attach.split(',').join(' and ')}`);
@@ -286,10 +286,11 @@ export async function createIsolatedVmCage(): Promise<SimCage> {
       };
 
       return {
-        init: (seed) => void call<number>('__zoneInit', [seed]),
-        restore: (seed, stateJson, draws) => void call('__zoneRestore', [seed, stateJson, draws]),
+        // init / restore / wake are the zone coming up; tick is the zone running.
+        init: (seed) => void call<number>('__zoneInit', [seed], startupBudget),
+        restore: (seed, stateJson, draws) => void call('__zoneRestore', [seed, stateJson, draws], startupBudget),
         tick: (events) => void call('__zoneTick', [JSON.stringify(events)]),
-        wake: (elapsedMs) => void call('__zoneWake', [elapsedMs], wakeBudget),
+        wake: (elapsedMs) => void call('__zoneWake', [elapsedMs], startupBudget),
         snapshot: () => ({ state: call<string>('__zoneState', []), draws: call<number>('__zoneDraws', []) }),
         dispose: () => {
           if (!isolate.isDisposed) isolate.dispose();
@@ -322,21 +323,20 @@ export function createNodeVmCage(): SimCage {
   return {
     kind: 'node-vm',
     preemptsRunawayTicks: false,
-    async load({ bundleJs, simMathJs, timeoutMs, wakeTimeoutMs, loadTimeoutMs }) {
+    async load({ bundleJs, simMathJs, timeoutMs, startupTimeoutMs }) {
       const context = vm.createContext({}, { codeGeneration: { strings: false, wasm: false }, name: 'zone-sim-realm' });
-      const wakeBudget = wakeTimeoutMs ?? timeoutMs;
-      const loadBudget = loadTimeoutMs ?? timeoutMs;
+      const startupBudget = startupTimeoutMs ?? timeoutMs;
 
       try {
-        vm.runInContext(simMathJs, context, { timeout: loadBudget });
+        vm.runInContext(simMathJs, context, { timeout: startupBudget });
         vm.runInContext('globalThis.Math = globalThis.__SIM_MATH__; delete globalThis.__SIM_MATH__;', context);
         vm.runInContext(scrubScript(), context);
-        vm.runInContext(BOOTSTRAP, context, { timeout: loadBudget });
+        vm.runInContext(BOOTSTRAP, context, { timeout: startupBudget });
 
         const missing = vm.runInContext(
           `(function () { var f = ${wrapSimBundle(bundleJs)}; return globalThis.__zoneAttach(f); })()`,
           context,
-          { timeout: loadBudget, filename: 'sim.js' },
+          { timeout: startupBudget, filename: 'sim.js' },
         );
         if (typeof missing === 'string' && missing.length > 0) {
           throw new SimLoadError(`sim.ts must export ${missing.split(',').join(' and ')}`);
@@ -356,11 +356,16 @@ export function createNodeVmCage(): SimCage {
 
       let disposed = false;
       return {
-        init: (seed) => void call('__zoneInit(__seed)', { __seed: seed }),
+        // init / restore / wake are the zone coming up; tick is the zone running.
+        init: (seed) => void call('__zoneInit(__seed)', { __seed: seed }, startupBudget),
         restore: (seed, stateJson, draws) =>
-          void call('__zoneRestore(__seed, __state, __draws)', { __seed: seed, __state: stateJson, __draws: draws }),
+          void call(
+            '__zoneRestore(__seed, __state, __draws)',
+            { __seed: seed, __state: stateJson, __draws: draws },
+            startupBudget,
+          ),
         tick: (events) => void call('__zoneTick(__events)', { __events: JSON.stringify(events) }),
-        wake: (elapsedMs) => void call('__zoneWake(__elapsed)', { __elapsed: elapsedMs }, wakeBudget),
+        wake: (elapsedMs) => void call('__zoneWake(__elapsed)', { __elapsed: elapsedMs }, startupBudget),
         snapshot: () => ({ state: call<string>('__zoneState()'), draws: call<number>('__zoneDraws()') }),
         dispose: () => {
           // Nothing to release: a node:vm context is ordinary garbage. The flag exists so

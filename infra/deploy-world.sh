@@ -57,6 +57,23 @@ echo "==> Deploying to Cloud Run (scale-to-zero)"
 #
 # --timeout 3600 is Cloud Run's ceiling and it bounds a session, not a world: the client
 # reconnects and the zone wakes where it stopped.
+#
+# --cpu 2 is about `isolated-vm`, not about throughput. The sim runs on its own thread, so
+# on a single core it competes with the main thread's games-repo fetch, Firestore read and
+# GC — and the cage's ceilings are wall-clock, so a descheduled isolate spends its budget
+# without executing. That is the mechanism behind five A6 timeouts landing in five
+# unrelated leaf functions (`sin`, `cos`, `reduce`, `loadSim`, `nextRandom`) between
+# 2026-08-02 and 2026-08-06, none of which was doing anything expensive. A second core
+# lets the sim run while the host is doing host work. The wide startup budget in
+# zone-core/src/zone.ts is the other half; this is the half that treats the cause.
+# Cost: CPU bills while a request is in flight, and a zone session holds its socket open,
+# so an occupied zone costs roughly double. An empty one still scales to zero and costs
+# nothing, which is where this service spends almost all of its time.
+#
+# --cpu-boost is stated here rather than inherited. The deployed service already carried
+# `startup-cpu-boost: true` with nothing in this script asking for it — it survived only
+# because `gcloud run deploy` preserves annotations it is not told to change, which is the
+# same way a hand-set value quietly disappears the first time something does change it.
 gcloud run deploy "$SERVICE" \
   --image "$IMAGE" \
   --region "$REGION" \
@@ -65,7 +82,8 @@ gcloud run deploy "$SERVICE" \
   --allow-unauthenticated \
   --min-instances 0 \
   --max-instances 1 \
-  --cpu 1 \
+  --cpu 2 \
+  --cpu-boost \
   --memory 512Mi \
   --timeout 3600 \
   --port 8081 \

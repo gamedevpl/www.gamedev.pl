@@ -343,17 +343,17 @@ describe('hibernation', () => {
     ]);
   });
 
-  it('gives loading its own budget rather than pricing it as a tick', async () => {
-    // The wiring half of A6 2026-08-05. `cage.test.ts` proves a cage honours a separate
-    // load budget; this proves the zone actually asks for one, which is the part that was
-    // missing — the cage was always willing to be told.
-    let seen: { timeoutMs: number; loadTimeoutMs?: number } | null = null;
+  it('gives coming up its own budget rather than pricing it as a tick', async () => {
+    // The wiring half of A6 2026-08-05/06. `cage.test.ts` proves a cage honours a separate
+    // startup budget; this proves the zone actually asks for one, which is the part that
+    // was missing — the cage was always willing to be told.
+    let seen: { timeoutMs: number; startupTimeoutMs?: number } | null = null;
     const inner = createNodeVmCage();
     const cage: SimCage = {
       kind: 'node-vm',
       preemptsRunawayTick: false,
       async load(options) {
-        seen = { timeoutMs: options.timeoutMs, loadTimeoutMs: options.loadTimeoutMs };
+        seen = { timeoutMs: options.timeoutMs, startupTimeoutMs: options.startupTimeoutMs };
         return inner.load(options);
       },
       dispose: () => inner.dispose(),
@@ -374,10 +374,11 @@ describe('hibernation', () => {
 
     await zone.join('player-a');
     expect(seen).not.toBeNull();
-    expect(seen!.loadTimeoutMs).toBeGreaterThan(seen!.timeoutMs);
-    // Not an arbitrary floor: the failure was a cold isolate losing a race against a
-    // couple of hundred milliseconds, so a budget in that neighbourhood is no fix at all.
-    expect(seen!.loadTimeoutMs).toBeGreaterThanOrEqual(1_000);
+    expect(seen!.startupTimeoutMs).toBeGreaterThan(seen!.timeoutMs);
+    // Not an arbitrary floor: every one of these failures was an isolate losing a race
+    // against a couple of hundred milliseconds, so a budget in that neighbourhood is no
+    // fix at all.
+    expect(seen!.startupTimeoutMs).toBeGreaterThanOrEqual(1_000);
   });
 
   it('loses what a sim kept outside its state, which is why the gate checks for it', async () => {

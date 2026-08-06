@@ -3,7 +3,6 @@ import {
   checksumState,
   MAX_STATE_BYTES,
   MAX_TICK_MS,
-  MAX_WAKE_MS,
   ZONE_SNAPSHOT_VERSION,
   type TickHz,
   type ZoneEvent,
@@ -60,38 +59,34 @@ const OVERRUN_LIMIT = 20;
 const MAX_PENDING_PER_SLOT = 8;
 
 /**
- * Interrupt ceiling for init / tick / restore. Headroom over `MAX_TICK_MS` so one GC
+ * Interrupt ceiling for a tick — the zone running. Headroom over `MAX_TICK_MS` so one GC
  * pause is not a zone death; still short enough that a runaway tick cannot eat the core.
  */
 const SIM_CALL_TIMEOUT_MS = Math.max(MAX_TICK_MS * 8, 200);
 
 /**
- * Interrupt ceiling for `wake` alone.
+ * Interrupt ceiling for a zone coming up: building the realm, then `init` / `restore` /
+ * `wake`.
  *
- * Wake is once per hibernation and may catch up hundreds of ticks. Pinning it to the
- * per-tick budget is what turned a cold `gamedev-world` start into A6 on 2026-08-02
- * (`biplane-skirmish`, `Script execution timed out` inside `terrainHeight`/`sin`). A
- * second join four seconds later succeeded — the sim was fine; the budget was not.
+ * Deliberately *not* derived from `MAX_TICK_MS`, and deliberately one number rather than
+ * one per call. A6 fired three times on the same fault before the shape of it was read
+ * correctly — wake moved off the per-tick budget on 2026-08-02, load on 2026-08-05, and on
+ * 2026-08-06 the timeout came back in `restore`, the next call still priced per-frame.
+ * Each fix was right about its own call and wrong about the problem.
+ *
+ * What the stacks were saying: across five timeouts the interrupt landed in `sin`, `cos`,
+ * `reduce`, `loadSim` and `nextRandom` — five unrelated leaf functions, none of them slow.
+ * `biplane-skirmish` blew 200 ms restoring 167 draws of a 1.2 KB state, which is
+ * microseconds of work. These ceilings are wall-clock and `isolated-vm` runs the sim on
+ * its own thread; on a 1-CPU instance that thread competes with the games-repo fetch, the
+ * Firestore read and GC on the main one, so a descheduled isolate spends the budget
+ * without executing. Widening one call only moves the loss to the next narrowest.
+ *
+ * Seconds are cheap here because this happens once per join and nothing waits on it but
+ * that join. The tick budget above is the one holding the actual safety property, and it
+ * is untouched: by tick time the zone is live and the instance is warm.
  */
-const SIM_WAKE_TIMEOUT_MS = Math.max(MAX_WAKE_MS * 20, 1_000);
-
-/**
- * Interrupt ceiling for building the realm: sim-math, the bootstrap, and the game bundle's
- * own top level.
- *
- * Deliberately *not* derived from `MAX_TICK_MS`. Every other budget here bounds work the
- * sim does every frame, and scaling the per-tick number is the right way to express those.
- * Loading happens once per wake and is dominated by parsing and first-run compilation of a
- * whole bundle on an isolate that is usually cold — a different quantity that only looked
- * like the same one because it shared a constant. Pricing it at eight ticks is what turned
- * a cold `gamedev-world` start into A6 on 2026-08-05, from the same shape of mistake the
- * wake budget above already fixed: the sim was fine, the budget was not.
- *
- * The number is a stop for a top level that never returns, not a standard a healthy game
- * has to meet. Seconds are cheap here because nothing is waiting on the isolate but the
- * join that asked for it.
- */
-const SIM_LOAD_TIMEOUT_MS = 5_000;
+const SIM_STARTUP_TIMEOUT_MS = 5_000;
 
 export type ZoneStatus = 'sleeping' | 'live' | 'closed';
 
@@ -430,8 +425,7 @@ export class Zone {
         bundleJs: sources.bundleJs,
         simMathJs: sources.simMathJs,
         timeoutMs: SIM_CALL_TIMEOUT_MS,
-        wakeTimeoutMs: SIM_WAKE_TIMEOUT_MS,
-        loadTimeoutMs: SIM_LOAD_TIMEOUT_MS,
+        startupTimeoutMs: SIM_STARTUP_TIMEOUT_MS,
         memoryMb: this.options.memoryMb ?? 64,
       });
 

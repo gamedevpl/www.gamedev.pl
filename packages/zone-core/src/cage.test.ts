@@ -159,17 +159,17 @@ describe.each(CAGES)('%s cage', (_name, make) => {
     cage.dispose();
   });
 
-  it('builds the realm on the load budget, not the per-tick one', async () => {
+  it('builds the realm on the startup budget, not the per-tick one', async () => {
     // A6 2026-08-05. A bundle whose top level outlasts a tick is not a runaway bundle —
     // on a cold isolate that is an ordinary one — and refusing it costs a join that the
-    // shell then hides behind silent solo play. `loadTimeoutMs` is what separates the two
-    // budgets; without it this load is priced at 20 ms and the sim never gets to run.
+    // shell then hides behind silent solo play. `startupTimeoutMs` is what separates the
+    // two budgets; without it this load is priced at 30 ms and the sim never gets to run.
     const cage = await make();
     const sim = await cage.load({
       bundleJs: SLOW_LOADING_SIM,
       simMathJs: TEST_SIM_MATH_JS,
       timeoutMs: 30,
-      loadTimeoutMs: 20_000,
+      startupTimeoutMs: 20_000,
       memoryMb: 32,
     });
     sim.init(1);
@@ -178,9 +178,31 @@ describe.each(CAGES)('%s cage', (_name, make) => {
     cage.dispose();
   }, 30_000);
 
-  it('still bounds the load, on the load budget', async () => {
+  it('restores on the startup budget, not the per-tick one', async () => {
+    // A6 2026-08-06, the third of these. Widening the load budget alone left `restore` on
+    // the per-tick one, and the next cold start put the timeout straight back — in
+    // `nextRandom`, which `__zoneRestore` calls once per recorded draw to walk the
+    // generator back to its position. That replay is the honest way to make this call
+    // expensive on demand, so it is what the test uses.
+    const cage = await make();
+    const sim = await cage.load({
+      bundleJs: COUNTER_SIM,
+      simMathJs: TEST_SIM_MATH_JS,
+      timeoutMs: 30,
+      startupTimeoutMs: 20_000,
+      memoryMb: 32,
+    });
+    sim.init(7);
+    const { state } = sim.snapshot();
+
+    expect(() => sim.restore(7, state, 20_000_000)).not.toThrow();
+    sim.dispose();
+    cage.dispose();
+  }, 30_000);
+
+  it('still bounds coming up, on the startup budget', async () => {
     // The other half of widening it: a bigger number, not an absent one. Same bundle, same
-    // cage, budgets swapped — so this fails if `loadTimeoutMs` is ignored in either
+    // cage, budgets swapped — so this fails if `startupTimeoutMs` is ignored in either
     // direction, which the pair above cannot show on its own.
     const cage = await make();
     await expect(
@@ -188,7 +210,7 @@ describe.each(CAGES)('%s cage', (_name, make) => {
         bundleJs: SLOW_LOADING_SIM,
         simMathJs: TEST_SIM_MATH_JS,
         timeoutMs: 20_000,
-        loadTimeoutMs: 30,
+        startupTimeoutMs: 30,
         memoryMb: 32,
       }),
     ).rejects.toThrow(SimLoadError);
@@ -219,8 +241,8 @@ describe.skipIf(!isolate)('isolated-vm cage specifics', () => {
     cage.dispose();
   }, 15_000);
 
-  it('stops a bundle whose top level never returns, however wide the load budget', async () => {
-    // The other half of widening the load budget: a bigger number, not an absent one.
+  it('stops a bundle whose top level never returns, however wide the startup budget', async () => {
+    // The other half of widening the startup budget: a bigger number, not an absent one.
     // Lives here rather than in the shared suite for the same reason the runaway tick
     // does — node:vm is the cage that cannot be trusted to take an infinite loop back.
     const cage = await createIsolatedVmCage();
@@ -229,7 +251,7 @@ describe.skipIf(!isolate)('isolated-vm cage specifics', () => {
         bundleJs: 'var __SIM_BUNDLE__ = (function () { while (true) {} })();',
         simMathJs: TEST_SIM_MATH_JS,
         timeoutMs: 20,
-        loadTimeoutMs: 250,
+        startupTimeoutMs: 250,
         memoryMb: 32,
       }),
     ).rejects.toThrow(SimLoadError);
