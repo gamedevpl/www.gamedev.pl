@@ -174,6 +174,63 @@ describe('NavHeader menu', () => {
     await act(async () => root.unmount());
   });
 
+  it('asks to navigate to the hero prompt when Create Game is clicked', async () => {
+    const onNavigate = vi.fn();
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith('/api/auth/me')) {
+        return new Response(JSON.stringify({ user: null }));
+      }
+      if (url.endsWith('/api/health')) {
+        return new Response(JSON.stringify({ status: 'ok', provider: 'mock', privateBeta: false }));
+      }
+      return new Response('{}', { status: 404 });
+    });
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        createElement(
+          AuthProvider,
+          null,
+          createElement(NavHeader, {
+            activeBuildCount: 0,
+            onNavigate,
+            onHome: vi.fn(),
+            onStudio: vi.fn(),
+            onAdmin: vi.fn(),
+            upTarget: null,
+          }),
+        ),
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const hamburger = container.querySelector('.hamburger-btn') as HTMLButtonElement;
+    await act(async () => {
+      hamburger.click();
+      await Promise.resolve();
+    });
+
+    const createGame = Array.from(container.querySelectorAll<HTMLButtonElement>('.nav-link')).find((btn) =>
+      /Create Game/i.test(btn.textContent ?? ''),
+    );
+    expect(createGame).toBeDefined();
+    await act(async () => {
+      createGame?.click();
+      await Promise.resolve();
+    });
+
+    expect(onNavigate).toHaveBeenCalledWith('hero-prompt');
+    expect(container.querySelector('.dropdown-menu')).toBeNull();
+
+    await act(async () => root.unmount());
+  });
+
   it('hides Operator from non-operators', async () => {
     const { container, root } = await renderSignedIn(false);
     const labels = Array.from(container.querySelectorAll('.nav-link')).map((el) => el.textContent ?? '');
