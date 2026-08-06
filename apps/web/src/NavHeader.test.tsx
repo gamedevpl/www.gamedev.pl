@@ -163,6 +163,68 @@ describe('NavHeader menu', () => {
     // GitHub left the header; the footer carries the repo link instead.
     expect(container.querySelector('a.github')).toBeNull();
     expect(labels.some((text) => /GitHub/i.test(text))).toBe(false);
+    // Sign out sits at the foot of the menu, not beside the avatar.
+    expect(container.querySelector('.logout-btn')).toBeNull();
+    expect(labels.some((text) => /Sign out/i.test(text))).toBe(true);
+    expect(container.querySelector('.nav-link--sign-out')).not.toBeNull();
+
+    await act(async () => root.unmount());
+  });
+
+  it('signs out from the menu foot and closes the menu', async () => {
+    const logoutSpy = vi.fn().mockResolvedValue(undefined);
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.endsWith('/api/auth/me')) {
+        return new Response(JSON.stringify({ user: { uid: 'g:boss', tier: 'free', name: 'Boss' } }));
+      }
+      if (url.endsWith('/api/auth/logout') && init && typeof init === 'object' && init.method === 'POST') {
+        logoutSpy();
+        return new Response(JSON.stringify({ ok: true }));
+      }
+      if (url.endsWith('/api/health')) {
+        return new Response(JSON.stringify({ status: 'ok', provider: 'mock', privateBeta: false }));
+      }
+      return new Response('{}', { status: 404 });
+    });
+
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        createElement(
+          AuthProvider,
+          null,
+          createElement(NavHeader, {
+            activeBuildCount: 0,
+            onNavigate: vi.fn(),
+            onHome: vi.fn(),
+            onStudio: vi.fn(),
+            upTarget: null,
+          }),
+        ),
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const hamburger = container.querySelector('.hamburger-btn') as HTMLButtonElement;
+    await act(async () => {
+      hamburger.click();
+      await Promise.resolve();
+    });
+
+    const signOut = container.querySelector<HTMLButtonElement>('.nav-link--sign-out');
+    expect(signOut).not.toBeNull();
+    await act(async () => {
+      signOut?.click();
+      await Promise.resolve();
+    });
+
+    expect(logoutSpy).toHaveBeenCalledOnce();
+    expect(container.querySelector('.dropdown-menu')).toBeNull();
 
     await act(async () => root.unmount());
   });
