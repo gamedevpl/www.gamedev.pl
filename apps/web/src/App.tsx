@@ -415,7 +415,9 @@ export function App() {
   // has mounted (the Games gallery may still be loading).
   // Create Game also focuses the prompt so the visitor can type immediately — that
   // is intentional on phones too (unlike page-load autofocus, which would pop the
-  // keyboard before they asked for it).
+  // keyboard before they asked for it). Focus must happen inside the click (or a
+  // flushSync mount still in that gesture); a later timer will not open the
+  // keyboard on iOS Safari.
   const focusHeroPromptInput = () => {
     const input = document.querySelector<HTMLTextAreaElement>('#hero-prompt .big-prompt-input');
     input?.focus({ preventScroll: true });
@@ -432,16 +434,15 @@ export function App() {
   const handleNavigateSection = (sectionId: string) => {
     if (scrollAndFocusSection(sectionId)) return;
 
-    // Flush home so #hero-prompt can mount inside this click. Focusing from the
-    // pending-scroll interval alone is often ignored on iOS Safari (no user gesture).
+    // Mount home inside this click so focus still counts as a user gesture.
     flushSync(() => {
-      setPendingScrollTarget(sectionId);
       navigate('/');
     });
-    if (scrollAndFocusSection(sectionId)) {
-      setPendingScrollTarget(null);
-      return;
-    }
+    if (scrollAndFocusSection(sectionId)) return;
+
+    // Node still missing (unusual for hero-prompt) — scroll when it appears.
+    // Do not focus from the timer: that is outside the gesture window.
+    setPendingScrollTarget(sectionId);
   };
 
   useEffect(() => {
@@ -452,7 +453,6 @@ export function App() {
       const element = document.getElementById(pendingScrollTarget);
       if (element) {
         element.scrollIntoView?.({ behavior: 'smooth' });
-        if (pendingScrollTarget === 'hero-prompt') focusHeroPromptInput();
       }
       // Give a still-loading section a moment to appear, then stop either way.
       if (element || (attempts += 1) > 20) {
