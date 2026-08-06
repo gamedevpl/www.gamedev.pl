@@ -925,7 +925,11 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     if (toolName === 'submit_sources' && data.ok === true) {
       nudgeTracker.noteSubmitSuccess(jobId, nowMs);
     }
-    const nudgeWarnings: NudgeWarning[] = nudgeTracker.warningsFor(jobId, toolName, nowMs);
+    if (toolName === 'show_round') nudgeTracker.noteCardOpened(jobId, nowMs);
+    const nudgeWarnings: NudgeWarning[] = nudgeTracker.warningsFor(jobId, toolName, nowMs, {
+      // Only nudge toward a card in a client that can render one.
+      uiCapable: sessionWantsUi((ctx.request.headers['mcp-session-id'] as string | undefined) ?? null),
+    });
     const prior = Array.isArray(data.warnings)
       ? (data.warnings as NudgeWarning[]).filter(
           (w) => w && typeof w === 'object' && typeof w.code === 'string' && typeof w.message === 'string',
@@ -995,7 +999,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     warnings: {
       type: 'array',
       description:
-        'Soft session nudges (progress_stale, inbox_pending, call_end, seed_unread, gate_not_started, gate_poll_backoff, module_too_large). Not errors — act on them, then continue the workflow. module_too_large means split that game/*.ts module before adding more behavior.',
+        'Soft session nudges (progress_stale, inbox_pending, call_end, seed_unread, gate_not_started, gate_poll_backoff, module_too_large, card_unopened). Not errors — act on them, then continue the workflow. module_too_large means split that game/*.ts module before adding more behavior. card_unopened means the creator has no status card yet — call show_round once.',
       items: {
         type: 'object',
         properties: {
@@ -1009,6 +1013,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
               'gate_not_started',
               'gate_poll_backoff',
               'module_too_large',
+              'card_unopened',
             ],
           },
           message: { type: 'string' },

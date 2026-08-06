@@ -189,7 +189,10 @@ cache), so a resume cannot keep showing “finished this round” next to live p
   per-game compatibility path in UI, API routes, or MCP tool handling.
 - An opener is checked by `start`; later calls use the returned round-scoped `sessionKey`.
 - **`show_round` is the only tool that opens the creator's status card**, and it exists for
-  nothing else. It used to hang off `start` and `get_gate_verdict`, which made the card a side
+  nothing else. Agents do not call it on their own — ChatGPT never did until the creator
+  asked (2026-08-05) — so a view-capable session that has not opened one gets a bounded
+  `warnings.code=card_unopened` nudge, the same remedy `call_end` needed. Never sent to a
+  client with no views. It used to hang off `start` and `get_gate_verdict`, which made the card a side
   effect of workflow mechanics — an agent that re-ran `start` before each operation left one
   card per call (ChatGPT, 2026-08-05). The host renders one card per call carrying `_meta.ui`,
   so when adding a view, give it its own tool rather than attaching it to a tool agents call
