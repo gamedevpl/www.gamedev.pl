@@ -430,29 +430,30 @@ export function HeroPromptSection({
               >
                 <PixelIcon name="mic" size={18} />
               </button>
-              <button
-                type="submit"
-                className="primary-btn build-btn"
-                disabled={
-                  submissionStatus !== 'idle' ||
-                  mockStatus === 'loading' ||
-                  (!promptText.trim() && attachments.length === 0)
-                }
-              >
-                <PixelIcon name="rocket" size={16} />{' '}
-                {/* Three states, not two: the refiner runs for a few seconds before
-                    anything is submitted, and saying "Submitting…" through it was the
-                    creator's first impression of a feature that had just started
-                    working at all. */}
-                <span className="build-btn-label">
-                  {submissionStatus === 'refining'
-                    ? t('qa.analyzing')
-                    : submissionStatus === 'loading' || mockStatus === 'loading'
-                      ? t('submit.submitting')
-                      : t('hero.buildGameButton')}
-                </span>
-              </button>
             </div>
+
+            <button
+              type="submit"
+              className="primary-btn build-btn"
+              disabled={
+                submissionStatus !== 'idle' ||
+                mockStatus === 'loading' ||
+                (!promptText.trim() && attachments.length === 0)
+              }
+            >
+              <PixelIcon name="rocket" size={16} />{' '}
+              {/* Three states, not two: the refiner runs for a few seconds before
+                  anything is submitted, and saying "Submitting…" through it was the
+                  creator's first impression of a feature that had just started
+                  working at all. */}
+              <span className="build-btn-label">
+                {submissionStatus === 'refining'
+                  ? t('qa.analyzing')
+                  : submissionStatus === 'loading' || mockStatus === 'loading'
+                    ? t('submit.submitting')
+                    : t('hero.buildGameButton')}
+              </span>
+            </button>
           </div>
 
           {(micNotice || isListening) && (

@@ -536,6 +536,8 @@ a {
   border-radius: 999px;
   font-size: 0.92rem;
   white-space: nowrap;
+  flex-shrink: 0;
+  align-self: center;
 }
 
 .mic-btn.listening {
@@ -3113,32 +3115,36 @@ body.player-open {
     min-height: 44px;
   }
 
-  /* rows=2 at 1.15rem clipped the placeholder mid-word and left a scrollbar in
-     an empty field. 16px is the floor that keeps iOS from zooming; the height
-     is sized for the narrowest phone we support, where the Polish hint takes
-     four lines. A textarea cannot grow to its own placeholder, so this is a
-     floor rather than a fit — wider phones get a little slack instead. */
+  /* Composer tools sit in the pill bar now — no overlay over the textarea.
+     iOS still needs ≥16px to avoid focus-zoom; the old 128px floor was for a
+     tall card textarea and made this pill look like a crushed box. */
   .big-prompt-input {
     font-size: 16px;
-    padding: 14px 16px;
-    min-height: 128px;
+    padding: 10px 4px;
+    min-height: 0;
   }
 
-  /* Composer tools sit in the pill bar now — no overlay over the textarea. */
   .prompt-icon-btn {
     width: 44px;
     height: 44px;
   }
 
   .prompt-composer-bar {
+    flex-wrap: wrap;
+    align-items: center;
     padding: 8px;
     border-radius: 24px;
-    gap: 6px;
+    gap: 8px;
   }
 
+  /* Full-width CTA under + | field | mic — Polish "Stwórz Moją Grę" needs the
+     row; leaving it inline ate the placeholder. */
   .prompt-composer-bar .build-btn {
+    flex: 1 1 100%;
+    width: 100%;
     min-height: 44px;
-    padding: 0 14px;
+    padding: 0 16px;
+    order: 10;
   }
 
   .chip-btn,
