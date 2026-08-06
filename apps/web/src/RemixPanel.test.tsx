@@ -110,7 +110,7 @@ describe('RemixPanel', () => {
       expect(remixApi.remixAssist).toHaveBeenCalledTimes(1);
     });
 
-    expect(remixApi.remixAssist).toHaveBeenCalledWith('r1', 'make it faster', { speed: 1 });
+    expect(remixApi.remixAssist).toHaveBeenCalledWith('r1', 'make it faster', { speed: 1 }, 'en');
     expect(remixApi.remixCode).not.toHaveBeenCalled();
     expect(telemetry.recordRemixStep).toHaveBeenCalledWith('typed');
     expect(telemetry.recordRemixStep).toHaveBeenCalledWith('asked');
@@ -144,7 +144,7 @@ describe('RemixPanel', () => {
       expect(remixApi.remixAssist).toHaveBeenCalledTimes(1);
     });
 
-    expect(remixApi.remixAssist).toHaveBeenCalledWith('r1', 'make it faster', {});
+    expect(remixApi.remixAssist).toHaveBeenCalledWith('r1', 'make it faster', {}, 'en');
     expect(telemetry.recordRemixStep).toHaveBeenCalledWith('signed_in');
   });
 
