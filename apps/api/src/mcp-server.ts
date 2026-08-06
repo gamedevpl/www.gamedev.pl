@@ -1173,6 +1173,12 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
    * capped number of deliveries, moving the pointer that decides what publishes, or
    * making creator messages stop appearing all fail that test, so they are marked
    * honestly even though nothing is erased.
+   *
+   * The staging tools joined this set after OpenAI's submission scan: re-staging a path
+   * overwrites it, a patch can remove lines, and clearing deletes. They had spread
+   * `WRITES` with a `destructiveHint: true` override, which produced the right hint while
+   * inheriting a constant whose comment promises the opposite — so the label is the fix,
+   * not just the value.
    */
   const CONSUMES = {
     readOnlyHint: false,
@@ -3191,11 +3197,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     },
 
     stage_source_file: {
-      // Destructive because staging the same path again overwrites what was there —
-      // see this tool's own description. `destructiveHint: false` promises a purely
-      // additive call and lets a client skip its confirmation prompt on that basis, which
-      // would be wrong for a silent overwrite. Flagged by OpenAI's submission scan.
-      annotations: { title: 'Stage one source file', ...WRITES, destructiveHint: true },
+      // Overwrites the same path if staged again, so it is not additive.
+      annotations: { title: 'Stage one source file', ...CONSUMES },
       outputSchema: {
         type: 'object',
         properties: {
@@ -3303,9 +3306,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     },
 
     patch_source_file: {
-      // Destructive: editing replaces existing staged content, and a patch can remove
-      // lines outright. Bounded to the staging area, but "bounded" is not "additive".
-      annotations: { title: 'Edit one staged source file', ...WRITES, destructiveHint: true },
+      // Replaces existing staged content, and a patch can remove lines outright.
+      annotations: { title: 'Edit one staged source file', ...CONSUMES },
       outputSchema: {
         type: 'object',
         properties: {
@@ -3494,10 +3496,9 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     },
 
     clear_staged_sources: {
-      // Destructive: it deletes staged files. We previously argued staging is
-      // undelivered scratch space so nothing creator-visible is lost — true, but the
-      // hint describes the operation, not the blast radius, and this one removes data.
-      annotations: { title: 'Clear staged source files', ...WRITES, destructiveHint: true },
+      // Deletes staged files. Undelivered scratch space, so nothing creator-visible is
+      // lost — but the hint describes the operation, not the blast radius.
+      annotations: { title: 'Clear staged source files', ...CONSUMES },
       outputSchema: {
         type: 'object',
         properties: {
