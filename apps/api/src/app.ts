@@ -75,6 +75,7 @@ import { isKnownSpaShellPath, looksLikeStaticAsset } from './spa-paths.js';
 import { logModerationRejection } from './moderation-metrics.js';
 import { registerOAuthProtectedResourceRoutes } from './mcp-oauth-metadata.js';
 import { registerMcpServerDiscoveryRoutes } from './mcp-server-discovery.js';
+import { registerOpenAiAppsChallengeRoute } from './openai-apps-challenge.js';
 import { registerOAuthAuthorizationServerRoutes } from './oauth-as.js';
 import { registerCreatorAgentKeyRoutes } from './creator-agent-key-routes.js';
 
@@ -755,6 +756,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // Registry-shaped server.json for remote discovery (BY-18c). Public, cacheable;
   // auth facts stay in the PRM document above — this only links to it.
   registerMcpServerDiscoveryRoutes(app);
+  // Domain proof for the ChatGPT/Codex plugin submission. 404s until the portal issues a
+  // token and it is configured — see openai-apps-challenge.ts.
+  registerOpenAiAppsChallengeRoute(app);
 
   const oauthSessionSecret = options.sessionSecret ?? process.env.SESSION_SECRET ?? 'dev-session-secret-change-me';
   const oauthSessionSecretPrev = options.sessionSecretPrev ?? process.env.SESSION_SECRET_PREV;
