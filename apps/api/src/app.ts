@@ -532,6 +532,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     reviewerUids,
     adminUids,
     listCatalog: defaultReviewCatalog,
+    emitDeps: submissionSeams.buildNotifyDeps(),
     ...options.reviewRoutes,
   });
 

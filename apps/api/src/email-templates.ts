@@ -438,6 +438,11 @@ const operatorCopy: Record<OperatorNotificationType, { subject: string; lead: st
     lead: 'asked to join the closed beta.',
     cta: 'Open telemetry',
   },
+  'operator.review_sweep': {
+    subject: 'A review sweep is ready',
+    lead: 'has games waiting on the review desk.',
+    cta: 'Open the review desk',
+  },
 };
 
 export function operatorPushContent(type: OperatorNotificationType, title: string): { title: string; body: string } {

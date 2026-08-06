@@ -23,11 +23,20 @@ export interface ReviewQueueItem {
   media: ReviewQueueMedia | null;
 }
 
+export interface ReviewQueueSweepHint {
+  id: string;
+  status: 'active' | 'paused' | 'completed' | 'cancelled';
+  total: number;
+  released: number;
+}
+
 export interface ReviewQueueResponse {
   source: 'catalog' | 'creator' | 'all';
   remaining: number;
   assessed: number;
   items: ReviewQueueItem[];
+  sweep?: ReviewQueueSweepHint | null;
+  emptyReason?: 'no_active_sweep' | 'sweep_paused' | 'queue_clear' | null;
 }
 
 export interface GameAssessment {

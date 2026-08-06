@@ -70,6 +70,7 @@ export function ReviewDesk() {
   const [source, setSource] = useState<SourceFilter>('all');
   const [items, setItems] = useState<ReviewQueueItem[]>([]);
   const [assessed, setAssessed] = useState(0);
+  const [emptyReason, setEmptyReason] = useState<'no_active_sweep' | 'sweep_paused' | 'queue_clear' | null>(null);
   const [state, setState] = useState<LoadState>('loading');
   const [note, setNote] = useState('');
   const [noteOrigin, setNoteOrigin] = useState<AssessmentNoteOrigin>('none');
@@ -116,6 +117,7 @@ export function ReviewDesk() {
         if (cancelled) return;
         setItems(queue.items);
         setAssessed(queue.assessed);
+        setEmptyReason(queue.emptyReason ?? (queue.items.length === 0 ? 'queue_clear' : null));
         setState(queue.items.length === 0 ? 'empty' : 'ready');
       })
       .catch(() => {
@@ -346,7 +348,11 @@ export function ReviewDesk() {
 
       {state === 'empty' || !current ? (
         <p className="review-desk-status" role="status">
-          {t('review.empty')}
+          {emptyReason === 'no_active_sweep'
+            ? t('review.emptyNoSweep')
+            : emptyReason === 'sweep_paused'
+              ? t('review.emptyPaused')
+              : t('review.empty')}
         </p>
       ) : (
         <>

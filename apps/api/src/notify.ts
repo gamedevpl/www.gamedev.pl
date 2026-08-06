@@ -330,6 +330,50 @@ const OPERATOR_ALERT_LINK = '/admin/queue';
 /** Waitlist joins land on the membership panel — that is where the applicant is acted on. */
 const WAITLIST_ALERT_LINK = '/admin/waitlist';
 
+/** Review sweeps land on the desk the recipient can act on. */
+const REVIEW_SWEEP_LINK = '/review';
+
+/**
+ * Tell every reviewer (and admin) a review sweep is waiting.
+ *
+ * Same fan-out as operator alerts — in-app + email + push, no unsubscribe — because
+ * these are trusted colleagues on an allowlist, not creators. Idempotent per
+ * `notificationId` so "Notify again" after releasing more games uses a new id
+ * (e.g. `review-sweep-{id}-r{n}`) while a double-click on Start is a no-op.
+ */
+export async function emitReviewSweep(
+  deps: EmitDeps & { reviewerUids: Iterable<string> },
+  event: { notificationId: string; title: string; detail?: string },
+): Promise<{ created: number }> {
+  const createdAt = deps.now ? new Date(deps.now()).toISOString() : new Date().toISOString();
+  const type: OperatorNotificationType = 'operator.review_sweep';
+  let created = 0;
+
+  for (const uid of deps.reviewerUids) {
+    const result = await deps.store.createNotification(uid, {
+      id: event.notificationId,
+      type,
+      createdAt,
+      titleKey: `notifications.${type}.title`,
+      bodyKey: `notifications.${type}.body`,
+      params: {
+        title: event.title,
+        ...(event.detail ? { detail: event.detail } : {}),
+      },
+      link: REVIEW_SWEEP_LINK,
+    });
+    if (!result.created) continue;
+    created += 1;
+    await sendOperatorEmail(deps, uid, event.notificationId, type, REVIEW_SWEEP_LINK, {
+      title: event.title,
+      ...(event.detail ? { detail: event.detail } : {}),
+    });
+    await maybePush(deps, uid, result.notification);
+  }
+
+  return { created };
+}
+
 /**
  * Best-effort, like every other send here: a failed alert email must not fail the caller.
  *

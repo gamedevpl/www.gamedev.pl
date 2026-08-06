@@ -872,6 +872,11 @@ export type NotificationType =
    */
   | 'operator.waitlist_joined'
   /**
+   * An operator opened (or re-notified) a review sweep. Fan-out goes to every uid in
+   * `REVIEWER_UIDS` ∪ `ADMIN_UIDS` — the people who can open `/review`.
+   */
+  | 'operator.review_sweep'
+  /**
    * A proposal is waiting on this creator — somebody proposed a change to one of their
    * games and it passed our gate.
    *
@@ -988,6 +993,38 @@ export type AssessmentSource = 'catalog' | 'creator';
 export type AssessmentNoteOrigin = 'text' | 'speech' | 'none';
 export type AssessmentInputMethod = 'touch' | 'mouse' | 'mixed';
 export type AssessmentPlatform = 'ios' | 'android' | 'mac' | 'windows' | 'linux' | 'other';
+export type ReviewSweepStatus = 'active' | 'paused' | 'completed' | 'cancelled';
+export type ReviewSweepSource = 'catalog' | 'creator' | 'all';
+
+/**
+ * An operator-dispatched review pass (docs/game-assessment-plan.md).
+ *
+ * One active (or paused) sweep at a time. The desk only shows the released prefix
+ * of `slugs`; the rest stay in the pool until drip or a manual release unlocks them.
+ */
+export interface ReviewSweep {
+  id: string;
+  status: ReviewSweepStatus;
+  source: ReviewSweepSource;
+  /** Stable snapshot of games in this pass, in desk order. */
+  slugs: string[];
+  /**
+   * Manual unlock floor. Combined with `releasePerDay` while active — see
+   * `effectiveReleasedCount` in `review-sweep.ts`.
+   */
+  releasedCount: number;
+  /** Extra games unlocked per UTC day while active; null = no drip. */
+  releasePerDay: number | null;
+  startedAt: string;
+  note: string | null;
+  createdAt: string;
+  createdBy: string;
+  updatedAt: string;
+  updatedBy: string;
+  /** When reviewers were last notified about this sweep. */
+  notifiedAt: string | null;
+  notifiedCount: number;
+}
 
 /**
  * Where the reviewer was sitting when they committed the verdict.
@@ -1029,6 +1066,7 @@ export interface GameAssessment {
 }
 
 export const GAME_ASSESSMENTS_COLLECTION = 'gameAssessments';
+export const REVIEW_SWEEPS_COLLECTION = 'reviewSweeps';
 
 /** Build the document id used as the upsert key for one reviewer on one game. */
 export function gameAssessmentId(slug: string, reviewerUid: string): string {
@@ -2170,6 +2208,16 @@ export interface Store {
   countGameAssessmentsByUid(uid: string): Promise<number>;
   /** Delete every assessment a person left. Returns how many went. */
   deleteGameAssessmentsByUid(uid: string): Promise<number>;
+  /** The open (active or paused) review sweep, if any. */
+  getOpenReviewSweep(): Promise<ReviewSweep | null>;
+  getReviewSweep(id: string): Promise<ReviewSweep | null>;
+  /** Newest first. Bounded for the operator panel. */
+  listReviewSweeps(opts?: { limit?: number }): Promise<ReviewSweep[]>;
+  createReviewSweep(sweep: ReviewSweep): Promise<ReviewSweep>;
+  updateReviewSweep(
+    id: string,
+    patch: Partial<Omit<ReviewSweep, 'id' | 'createdAt' | 'createdBy' | 'slugs' | 'source'>>,
+  ): Promise<ReviewSweep | null>;
   /** Overwrites a game's current scorecard (docs/improvement-loop-plan.md IL-2). */
   putScorecard(slug: string, scorecard: Scorecard): Promise<void>;
   /** A game's current scorecard, or null before the first sweep has run for it. */
@@ -2518,6 +2566,7 @@ export class InMemoryStore implements Store {
   private playerFeedback = new Map<string, PlayerFeedbackRecord[]>();
   /** id (`slug:uid`) -> assessment. Mirrors top-level `gameAssessments`. */
   private gameAssessments = new Map<string, GameAssessment>();
+  private reviewSweeps = new Map<string, ReviewSweep>();
   // uid -> (slug -> saved progress)
   private gameSaves = new Map<string, Map<string, GameSaveRecord>>();
   private editorDrafts = new Map<string, Map<string, EditorDraftRecord>>();
@@ -3953,6 +4002,54 @@ export class InMemoryStore implements Store {
       }
     }
     return deleted;
+  }
+
+  async getOpenReviewSweep(): Promise<ReviewSweep | null> {
+    const open = Array.from(this.reviewSweeps.values()).filter(
+      (row) => row.status === 'active' || row.status === 'paused',
+    );
+    open.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    return open[0] ? { ...open[0], slugs: [...open[0].slugs] } : null;
+  }
+
+  async getReviewSweep(id: string): Promise<ReviewSweep | null> {
+    const row = this.reviewSweeps.get(id);
+    return row ? { ...row, slugs: [...row.slugs] } : null;
+  }
+
+  async listReviewSweeps(opts?: { limit?: number }): Promise<ReviewSweep[]> {
+    const limit = opts?.limit ?? 20;
+    return Array.from(this.reviewSweeps.values())
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, limit)
+      .map((row) => ({ ...row, slugs: [...row.slugs] }));
+  }
+
+  async createReviewSweep(sweep: ReviewSweep): Promise<ReviewSweep> {
+    for (const [id, row] of this.reviewSweeps) {
+      if (row.status === 'active' || row.status === 'paused') {
+        this.reviewSweeps.set(id, {
+          ...row,
+          status: 'cancelled',
+          updatedAt: sweep.createdAt,
+          updatedBy: sweep.createdBy,
+        });
+      }
+    }
+    const record: ReviewSweep = { ...sweep, slugs: [...sweep.slugs] };
+    this.reviewSweeps.set(record.id, record);
+    return { ...record, slugs: [...record.slugs] };
+  }
+
+  async updateReviewSweep(
+    id: string,
+    patch: Partial<Omit<ReviewSweep, 'id' | 'createdAt' | 'createdBy' | 'slugs' | 'source'>>,
+  ): Promise<ReviewSweep | null> {
+    const existing = this.reviewSweeps.get(id);
+    if (!existing) return null;
+    const record: ReviewSweep = { ...existing, ...patch, id: existing.id, slugs: [...existing.slugs] };
+    this.reviewSweeps.set(id, record);
+    return { ...record, slugs: [...record.slugs] };
   }
 
   async putScorecard(slug: string, scorecard: Scorecard): Promise<void> {
@@ -6486,6 +6583,77 @@ export class FirestoreStore implements Store {
       await batch.commit();
     }
     return snap.docs.length;
+  }
+
+  private reviewSweepsCollection() {
+    return this.db.collection(REVIEW_SWEEPS_COLLECTION);
+  }
+
+  private hydrateReviewSweep(id: string, data: Omit<ReviewSweep, 'id'>): ReviewSweep {
+    return {
+      ...data,
+      id,
+      slugs: Array.isArray(data.slugs) ? data.slugs.filter((s): s is string => typeof s === 'string') : [],
+      note: data.note ?? null,
+      releasePerDay: data.releasePerDay ?? null,
+      notifiedAt: data.notifiedAt ?? null,
+      notifiedCount: typeof data.notifiedCount === 'number' ? data.notifiedCount : 0,
+    };
+  }
+
+  async getOpenReviewSweep(): Promise<ReviewSweep | null> {
+    // Two equality queries rather than `in` + orderBy — avoids a composite index for a
+    // collection that holds a handful of rows. Prefer active over paused when both exist
+    // (should not; create cancels the previous open sweep).
+    const [active, paused] = await Promise.all([
+      this.reviewSweepsCollection().where('status', '==', 'active').limit(5).get(),
+      this.reviewSweepsCollection().where('status', '==', 'paused').limit(5).get(),
+    ]);
+    const rows = [...active.docs, ...paused.docs]
+      .map((d) => this.hydrateReviewSweep(d.id, d.data() as Omit<ReviewSweep, 'id'>))
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    return rows[0] ?? null;
+  }
+
+  async getReviewSweep(id: string): Promise<ReviewSweep | null> {
+    const snap = await this.reviewSweepsCollection().doc(id).get();
+    if (!snap.exists) return null;
+    return this.hydrateReviewSweep(id, snap.data() as Omit<ReviewSweep, 'id'>);
+  }
+
+  async listReviewSweeps(opts?: { limit?: number }): Promise<ReviewSweep[]> {
+    const limit = opts?.limit ?? 20;
+    const snap = await this.reviewSweepsCollection().orderBy('createdAt', 'desc').limit(limit).get();
+    return snap.docs.map((d) => this.hydrateReviewSweep(d.id, d.data() as Omit<ReviewSweep, 'id'>));
+  }
+
+  async createReviewSweep(sweep: ReviewSweep): Promise<ReviewSweep> {
+    const open = await this.getOpenReviewSweep();
+    if (open) {
+      await this.reviewSweepsCollection().doc(open.id).set(
+        {
+          status: 'cancelled',
+          updatedAt: sweep.createdAt,
+          updatedBy: sweep.createdBy,
+        },
+        { merge: true },
+      );
+    }
+    const { id, ...body } = sweep;
+    await this.reviewSweepsCollection().doc(id).set(body);
+    return { ...sweep, slugs: [...sweep.slugs] };
+  }
+
+  async updateReviewSweep(
+    id: string,
+    patch: Partial<Omit<ReviewSweep, 'id' | 'createdAt' | 'createdBy' | 'slugs' | 'source'>>,
+  ): Promise<ReviewSweep | null> {
+    const ref = this.reviewSweepsCollection().doc(id);
+    const existing = await ref.get();
+    if (!existing.exists) return null;
+    await ref.set(patch, { merge: true });
+    const snap = await ref.get();
+    return this.hydrateReviewSweep(id, snap.data() as Omit<ReviewSweep, 'id'>);
   }
 
   // `current` is a fixed doc id, so a game has exactly one scorecard and the sweep

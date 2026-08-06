@@ -24,7 +24,9 @@ judgment_ from someone who knows what the shelf should feel like.
 | Rationale     | Free text and/or browser speech-to-text (same Web Speech API as the hero mic). Only the transcript is stored — no audio upload.      |
 | Client env    | Viewport, screen size, DPR, input method (`touch`/`mouse`/`mixed`), platform, lang, truncated UA — stored on the row at commit time. |
 | Storage       | `gameAssessments/{slug}:{reviewerUid}` — one row per reviewer per game; a second pass overwrites.                                    |
-| Operator read | `/admin/assessments` — aggregate keep/cut/skip per game plus recent notes (with env line).                                           |
+| Operator read | `/admin/assessments` — **review sweeps** (dispatch / rate / pause / notify) plus keep/cut aggregates and recent notes.               |
+| Sweeps        | Operator opens a bounded pass; desk shows only the released prefix. `releasePerDay` drips more; manual Release more / all.           |
+| Notify        | Starting or re-notifying a sweep fans out `operator.review_sweep` to `REVIEWER_UIDS` ∪ admins (in-app + email + push).               |
 
 ## Non-goals (this steel thread)
 
@@ -56,9 +58,14 @@ Grant access by adding a colleague's uid to `REVIEWER_UIDS` on the Cloud Run ser
 | `POST` | `/api/review/assessments`                        | reviewer | `{ slug, source, title?, creatorHandle?, verdict, note?, noteOrigin?, clientContext? }` |
 | `GET`  | `/api/review/assessments/mine`                   | reviewer | This reviewer's rows (progress / re-edit)                                               |
 | `GET`  | `/api/admin/assessments`                         | admin    | Aggregate + recent rows for the operator tab                                            |
+| `GET`  | `/api/admin/review-sweeps`                       | admin    | Open sweep + progress + recent history                                                  |
+| `POST` | `/api/admin/review-sweeps`                       | admin    | Start a sweep (`source`, `maxGames`, `releasePerDay?`, `note?`, `notify?`)              |
+| `POST` | `/api/admin/review-sweeps/:id`                   | admin    | Pause / resume / complete / cancel, release more/all, change rate, notify again         |
 
-Notes are moderated and sanitized when non-empty (same checker as player feedback).
-`skip` and empty notes are allowed so a fast pass is not blocked on writing.
+The desk queue is **empty until an operator opens a sweep**. Released games unlock by
+`releasePerDay` (UTC drip) and/or manual Release controls. Notes are moderated and
+sanitized when non-empty. `skip` and empty notes are allowed so a fast pass is not
+blocked on writing.
 
 ## Instrumentation
 

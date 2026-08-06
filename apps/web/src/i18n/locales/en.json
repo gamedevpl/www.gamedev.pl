@@ -62,6 +62,10 @@
       "waitlist_joined": {
         "title": "Someone joined the beta waitlist",
         "body": "“{{title}}” asked to join the closed beta."
+      },
+      "review_sweep": {
+        "title": "A review sweep is ready",
+        "body": "“{{title}}” has games waiting on the review desk."
       }
     },
     "game": {
@@ -945,6 +949,8 @@
     "loading": "Loading the queue…",
     "denied": "This desk is only for reviewers.",
     "empty": "Queue clear — nothing left to assess in this filter.",
+    "emptyNoSweep": "No active review sweep. An operator opens one from the Assessments console.",
+    "emptyPaused": "The current review sweep is paused. Check back when it resumes.",
     "noteLabel": "Why? (optional — speak or type)",
     "notePlaceholder": "What should we keep, cut, or fix?",
     "micStart": "Start voice note",
