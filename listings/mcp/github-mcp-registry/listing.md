@@ -12,10 +12,11 @@
 
 ## How listing works (curated; slowest queue of all channels)
 
-1. **Prerequisite:** publish to the official MCP Registry
-   (registry.modelcontextprotocol.io) under the `pl.gamedev/*` namespace — see
-   [`../official-registry/server.json`](../official-registry/server.json). Validate
-   cleanly with `mcp-registry-validator`.
+1. ~~**Prerequisite:** publish to the official MCP Registry~~ — ✅ **done 2026-08-06.**
+   `pl.gamedev/creator` 1.0.1 is live at registry.modelcontextprotocol.io under the
+   `pl.gamedev/*` namespace (DNS domain proof on `gamedev.pl`). See
+   [`../official-registry/server.json`](../official-registry/server.json) and
+   [`../README.md`](../README.md). This step no longer blocks the curation request.
 2. **Request curation:** email `partnerships@github.com` asking for inclusion in the
    GitHub MCP Registry. No form, no published SLA; community servers have waited
    weeks-to-months. Version updates auto-sync from the official registry once onboarded.
