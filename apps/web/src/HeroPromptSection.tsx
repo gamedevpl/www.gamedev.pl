@@ -8,7 +8,6 @@ import { getQuota } from './submissionApi.js';
 
 /**
  * Gemini-style composer: one pill bar holds attach / prompt / mic / build.
- * Suggestion chips live below the bar so they stop competing with the CTA row.
  */
 
 type HeroPromptSectionProps = {
@@ -246,8 +245,6 @@ export function HeroPromptSection({
   };
 
   const matchedGame = useMemo(() => findMatchingGame(promptText, catalogEntries), [promptText, catalogEntries]);
-
-  const suggestions = [t('suggestions.dodge'), t('suggestions.collect'), t('suggestions.space')];
 
   const handleFiles = (files: FileList | File[]) => {
     Array.from(files).forEach((file) => {
@@ -516,21 +513,11 @@ export function HeroPromptSection({
             </div>
           )}
 
-          <div className="prompt-ideas">
-            <span className="prompt-ideas-label">{t('hero.tryIdeas')}</span>
-            <div className="chip-container">
-              {suggestions.map((suggestion) => (
-                <button key={suggestion} type="button" className="chip-btn" onClick={() => setPromptText(suggestion)}>
-                  + {suggestion}
-                </button>
-              ))}
-            </div>
-            {quota && quota.limit !== null ? (
-              <span className={`quota-note${quota.used >= quota.limit ? ' is-spent' : ''}`}>
-                {t('hero.quotaLeft', { left: Math.max(0, quota.limit - quota.used), limit: quota.limit })}
-              </span>
-            ) : null}
-          </div>
+          {quota && quota.limit !== null ? (
+            <span className={`quota-note${quota.used >= quota.limit ? ' is-spent' : ''}`}>
+              {t('hero.quotaLeft', { left: Math.max(0, quota.limit - quota.used), limit: quota.limit })}
+            </span>
+          ) : null}
         </form>
 
         {submissionError && <p className="error">{submissionError}</p>}

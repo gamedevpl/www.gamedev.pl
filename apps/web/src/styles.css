@@ -901,23 +901,6 @@ a {
   color: var(--text);
 }
 
-.prompt-ideas {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px 12px;
-  padding: 0 4px;
-}
-
-.prompt-ideas-label {
-  flex-shrink: 0;
-  font-size: 0.78rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
 .prompt-controls-bar {
   display: flex;
   flex-direction: row;
@@ -3224,18 +3207,6 @@ body.player-open {
 
   .hero-prompt-card {
     padding: 0;
-  }
-
-  .prompt-ideas {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 8px;
-    padding: 0;
-  }
-
-  .prompt-ideas-label,
-  .prompt-ideas .quota-note {
-    padding: 0 4px;
   }
 
   .prompt-controls-bar {
@@ -7795,11 +7766,14 @@ button.builder-mode-selector:disabled {
   color: var(--muted);
 }
 
-/* Today's allowance, under the idea chips. */
+/* Today's allowance, under the composer. */
 .quota-note {
+  display: block;
   margin: 0;
+  padding: 0 8px;
   font-size: 0.8rem;
   color: var(--muted);
+  text-align: center;
 }
 
 .quota-note.is-spent {
@@ -13786,9 +13760,7 @@ body.remix-entry-open {
     padding-left: max(1rem, env(safe-area-inset-left));
     border: 0;
     border-radius: 0;
-    background:
-      radial-gradient(circle at 100% 0, rgba(0, 229, 183, 0.1), transparent 36%),
-      var(--panel);
+    background: radial-gradient(circle at 100% 0, rgba(0, 229, 183, 0.1), transparent 36%), var(--panel);
     box-shadow: none;
   }
 

@@ -53,7 +53,7 @@ describe('HeroPromptSection', () => {
     expect(micBtn).not.toBeNull();
     expect(buildBtn).not.toBeNull();
     expect(container.querySelector('.prompt-composer-bar')).not.toBeNull();
-    expect(container.querySelectorAll('.chip-btn')).toHaveLength(3);
+    expect(container.querySelectorAll('.chip-btn')).toHaveLength(0);
 
     await act(async () => root.unmount());
   });

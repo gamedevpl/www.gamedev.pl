@@ -108,7 +108,6 @@
     "buildGameButton": "Build My Game",
     "attachMenu": "Add",
     "attachMenuAria": "Add an image or sketch",
-    "tryIdeas": "Try an idea",
     "instantMockButton": "Quick Local Mock",
     "smartFoundTitle": "Found matching game: {{title}}",
     "smartPlayBtn": "Play {{title}} Now",
