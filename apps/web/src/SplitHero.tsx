@@ -20,8 +20,6 @@ export function SplitHero({
   const { t } = useTranslation();
   const [promptText, setPromptText] = useState('');
 
-  const suggestions = [t('suggestions.dodge'), t('suggestions.collect'), t('suggestions.space')];
-
   return (
     <section className="hero-section">
       <div className="hero-header">
@@ -79,14 +77,6 @@ export function SplitHero({
               placeholder={t('hero.quickPromptPlaceholder')}
               rows={3}
             />
-
-            <div className="chip-container">
-              {suggestions.map((suggestion) => (
-                <button key={suggestion} type="button" className="chip-btn" onClick={() => setPromptText(suggestion)}>
-                  + {suggestion}
-                </button>
-              ))}
-            </div>
 
             <div className="quick-actions">
               <button

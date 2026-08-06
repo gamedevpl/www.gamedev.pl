@@ -389,17 +389,20 @@ a {
   gap: 14px;
 }
 
-/* One Gemini-style pill: attach | single-line field | mic + build. */
+/* One Gemini-style pill: grid keeps + / field / mic / send on one centerline. */
 .prompt-composer-bar {
-  display: flex;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) 36px 36px;
   align-items: center;
-  gap: 6px;
+  column-gap: 8px;
   width: 100%;
+  height: 52px;
   min-height: 52px;
+  box-sizing: border-box;
   background: rgba(22, 28, 34, 0.92);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 999px;
-  padding: 6px 6px 6px 8px;
+  padding: 8px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
   transition:
     border-color 0.25s ease,
@@ -413,44 +416,52 @@ a {
     0 0 16px rgba(0, 228, 172, 0.1);
 }
 
+.prompt-attach,
+.prompt-bar-actions {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  margin: 0;
+  padding: 0;
+  flex-shrink: 0;
+}
+
 .big-prompt-input {
-  flex: 1;
+  width: 100%;
   min-width: 0;
-  width: auto;
-  align-self: center;
-  background: transparent;
+  height: 36px;
+  margin: 0;
+  padding: 0;
   border: none;
   border-radius: 0;
-  padding: 0 4px;
+  background: transparent;
   color: #fff;
   font-family: inherit;
   font-size: 1rem;
   line-height: 36px;
-  height: 36px;
   box-shadow: none;
+  appearance: none;
+  -webkit-appearance: none;
 }
 
 .big-prompt-input:focus {
   outline: none;
-  border-color: transparent;
-  box-shadow: none;
   background: transparent;
 }
 
 .big-prompt-input::placeholder {
   color: var(--muted);
   line-height: 36px;
+  opacity: 1;
 }
 
 .hero-prompt-card.drag-over .prompt-composer-bar {
   border-color: #38bdf8;
   background: rgba(56, 189, 248, 0.1);
   box-shadow: 0 0 24px rgba(56, 189, 248, 0.28);
-}
-
-.prompt-attach {
-  position: relative;
-  flex-shrink: 0;
 }
 
 .prompt-attach-menu {
@@ -492,34 +503,38 @@ a {
   color: #fff;
 }
 
-.prompt-bar-actions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex-shrink: 0;
-}
-
-.prompt-icon-btn {
+.prompt-composer-bar .prompt-icon-btn {
   background: transparent;
-  border: 1px solid transparent;
+  border: none;
   color: var(--muted);
-  font-size: 1.2rem;
   width: 36px;
   height: 36px;
+  min-width: 36px;
+  min-height: 36px;
   padding: 0;
+  margin: 0;
   border-radius: 999px;
   cursor: pointer;
-  transition: all 0.2s ease;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex: none;
+  font-weight: 700;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
 }
 
-.prompt-icon-btn:hover,
-.prompt-icon-btn.is-open {
+.prompt-composer-bar .prompt-icon-btn:hover,
+.prompt-composer-bar .prompt-icon-btn.is-open {
   background: rgba(255, 255, 255, 0.1);
   color: #fff;
-  transform: none;
+}
+
+.prompt-composer-bar .prompt-icon-btn svg,
+.prompt-composer-bar .build-btn svg {
+  display: block;
+  flex: none;
 }
 
 /* Desktop: circular send — label stays for a11y/tests, clipped visually. */
@@ -531,12 +546,17 @@ a {
   gap: 0;
   width: 36px;
   height: 36px;
+  min-width: 36px;
   min-height: 36px;
   padding: 0;
+  margin: 0;
+  border: none;
   border-radius: 999px;
   font-size: 0.92rem;
+  font-weight: 700;
   white-space: nowrap;
-  flex-shrink: 0;
+  flex: none;
+  box-sizing: border-box;
 }
 
 .prompt-composer-bar .build-btn-label {
@@ -3120,15 +3140,32 @@ body.player-open {
     padding: 4px;
   }
 
-  /* The mic / upload / sketch row sat at 30x26 — under half a fingertip. */
-  .prompt-icon-btn {
+  /* Composer: same 44px row for + / field / mic; Build on the next grid row.
+     iOS still needs ≥16px text to avoid focus-zoom. */
+  .prompt-composer-bar {
+    grid-template-columns: 44px minmax(0, 1fr) 44px;
+    grid-template-rows: 44px auto;
+    height: auto;
+    min-height: 0;
+    row-gap: 8px;
+    column-gap: 6px;
+    padding: 8px;
+    border-radius: 22px;
+  }
+
+  .prompt-attach,
+  .prompt-bar-actions {
+    width: 44px;
+    height: 44px;
+  }
+
+  .prompt-composer-bar .prompt-icon-btn {
+    width: 44px;
+    height: 44px;
     min-width: 44px;
     min-height: 44px;
   }
 
-  /* Composer tools sit in the pill bar now — no overlay over the field.
-     iOS still needs ≥16px to avoid focus-zoom. Single-line <input> keeps the
-     placeholder on the same centerline as + / mic / send. */
   .big-prompt-input {
     font-size: 16px;
     height: 44px;
@@ -3139,30 +3176,13 @@ body.player-open {
     line-height: 44px;
   }
 
-  .prompt-icon-btn {
-    width: 44px;
-    height: 44px;
-  }
-
-  .prompt-composer-bar {
-    flex-wrap: wrap;
-    align-items: center;
-    min-height: 0;
-    padding: 6px;
-    border-radius: 22px;
-    gap: 6px;
-  }
-
-  /* Full-width labeled CTA under + | field | mic. Icon-only send is too quiet
-     on a phone; reveal the clipped desktop label again. */
   .prompt-composer-bar .build-btn {
-    flex: 1 1 100%;
+    grid-column: 1 / -1;
     width: 100%;
-    height: auto;
+    height: 44px;
     min-height: 44px;
     padding: 0 16px;
     gap: 8px;
-    order: 10;
     border-radius: 999px;
   }
 
