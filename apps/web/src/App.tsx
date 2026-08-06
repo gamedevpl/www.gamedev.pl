@@ -22,6 +22,7 @@ import {
   navUpTarget,
   parsePathRoute,
   playPath,
+  reviewPath,
   studioPath,
   type AppRoute,
 } from './router.js';
@@ -889,6 +890,7 @@ export function App() {
           onHome={() => navigate('/')}
           onStudio={() => navigate(studioPath())}
           onAdmin={() => navigate(adminPath())}
+          onReview={() => navigate(reviewPath())}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -910,6 +912,7 @@ export function App() {
           onHome={() => navigate('/')}
           onStudio={() => navigate(studioPath())}
           onAdmin={() => navigate(adminPath())}
+          onReview={() => navigate(reviewPath())}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -931,6 +934,7 @@ export function App() {
           onHome={() => navigate('/')}
           onStudio={() => navigate(studioPath())}
           onAdmin={() => navigate(adminPath())}
+          onReview={() => navigate(reviewPath())}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -967,6 +971,7 @@ export function App() {
           onHome={() => navigate('/')}
           onStudio={() => navigate(studioPath())}
           onAdmin={() => navigate(adminPath())}
+          onReview={() => navigate(reviewPath())}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -1002,6 +1007,7 @@ export function App() {
           onHome={() => navigate('/')}
           onStudio={() => navigate(studioPath())}
           onAdmin={() => navigate(adminPath())}
+          onReview={() => navigate(reviewPath())}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -1024,6 +1030,7 @@ export function App() {
           onHome={() => navigate('/')}
           onStudio={() => navigate(studioPath())}
           onAdmin={() => navigate(adminPath())}
+          onReview={() => navigate(reviewPath())}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -1053,6 +1060,7 @@ export function App() {
         onHome={() => navigate('/')}
         onStudio={() => navigate(studioPath())}
         onAdmin={() => navigate(adminPath())}
+        onReview={() => navigate(reviewPath())}
         upTarget={headerUp}
         onUp={navigate}
       />

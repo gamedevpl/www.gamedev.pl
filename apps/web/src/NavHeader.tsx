@@ -21,6 +21,8 @@ type NavHeaderProps = {
   onStudio: () => void;
   /** Opens the operator console. Only ever called from a link only operators are shown. */
   onAdmin: () => void;
+  /** Opens the reviewer assessment desk. Only ever called from a link only reviewers see. */
+  onReview: () => void;
   /**
    * Android-style Up target for non-home surfaces. Null on home, join, play, and
    * while an immersive theater owns escape. Never history.back() — deep links
@@ -36,6 +38,7 @@ export function NavHeader({
   onHome,
   onStudio,
   onAdmin,
+  onReview,
   upTarget = null,
   onUp,
 }: NavHeaderProps) {
@@ -58,6 +61,8 @@ export function NavHeader({
    */
   const [alertCount, setAlertCount] = useState<number | null>(null);
   const isOperator = user?.admin === true;
+  // Same union the API uses: admins are reviewers even if only `admin` is on the session.
+  const isReviewer = user?.reviewer === true || isOperator;
 
   useEffect(() => {
     if (!isOperator) {
@@ -249,6 +254,20 @@ export function NavHeader({
                       {alertCount}
                     </span>
                   ) : null}
+                </button>
+              ) : null}
+
+              {/* Reviewers only — same unlisted-door posture as Operator. Hardcoded
+                  English like Operator: one person (or a small allowlist) reads this. */}
+              {isReviewer ? (
+                <button
+                  className="nav-link"
+                  onClick={() => {
+                    setIsMenuOpen(false);
+                    onReview();
+                  }}
+                >
+                  <PixelIcon name="star" size={14} /> Review
                 </button>
               ) : null}
 

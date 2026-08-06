@@ -506,6 +506,11 @@ export function adminPath(section: AdminSection = 'queue'): string {
   return `/admin/${section}`;
 }
 
+/** Path for the reviewer assessment desk (docs/game-assessment-plan.md). */
+export function reviewPath(): string {
+  return '/review';
+}
+
 /** QR / share URL path+fragment for a multiplayer lobby guest. */
 export function joinPath(code: string, token: string): string {
   return `/join/${code}#${token}`;
