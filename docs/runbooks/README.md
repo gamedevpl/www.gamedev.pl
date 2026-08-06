@@ -154,7 +154,7 @@ GitHub **repository variable** and confirm the name appears in _both_
 [`.github/workflows/deploy.yml`](../../.github/workflows/deploy.yml) and
 [`infra/deploy-api.sh`](../../infra/deploy-api.sh). Threaded today:
 
-`ADMIN_UIDS`, `APPLE_CLIENT_IDS`, `BETA_ALLOWED_EMAILS`, `BETA_ALLOWED_UIDS`,
+`ADMIN_UIDS`, `REVIEWER_UIDS`, `APPLE_CLIENT_IDS`, `BETA_ALLOWED_EMAILS`, `BETA_ALLOWED_UIDS`,
 `CANONICAL_HOST`, `CODE_LANE`, `EDITOR_ASSIST`, `GOOGLE_OAUTH_CLIENT_ID`,
 `MCP_AUTHORIZATION_SERVERS`, `MP_RELAY_URL`, `REMIX_DEBUG`, `SEED_DISPATCH`,
 `TRANSLATE_BUILD_LOG`, `VAPID_*`, `VERTEX_MODEL`, `VERTEX_REGION`, `ZONE_HOST_URL`, and

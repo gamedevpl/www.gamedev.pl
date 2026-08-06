@@ -63,6 +63,8 @@ export const ADMIN_SECTIONS = [
   // inbound work the operator decides on, rather than something to look at.
   'proposals',
   'waitlist',
+  // Reviewer assessment aggregates (docs/game-assessment-plan.md).
+  'assessments',
 ] as const;
 export type AdminSection = (typeof ADMIN_SECTIONS)[number];
 
@@ -86,6 +88,8 @@ export type AppRoute =
   // to everyone else. `/health` still resolves here (telemetry) — it was the whole
   // surface before there was a console, and links to it are in people's bookmarks.
   | { view: 'admin'; section: AdminSection }
+  // Reviewer assessment desk. Unlisted like `/admin`; 404 unless the session is a reviewer.
+  | { view: 'review' }
   // Creator control panel: own games, draft build (ex-status), playtest, improve.
   //
   // `game` addresses one game on the creator's shelf. It is a **slug** — games are
@@ -168,6 +172,7 @@ const RESERVED_HANDLE_SEGMENTS = new Set([
   // `play`: `/proposals` resolves before the root-handle fallback, and without this
   // the game-page matcher would read `/proposals/<slug>` as a game under that handle.
   'proposals',
+  'review',
   'root',
   'status',
   'studio',
@@ -267,6 +272,10 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
 
   if (normalizedPath === '/admin') {
     return { view: 'admin', section: 'queue' };
+  }
+
+  if (normalizedPath === '/review') {
+    return { view: 'review' };
   }
 
   const adminMatch = normalizedPath.match(/^\/admin\/([^/]+)$/);
@@ -482,6 +491,7 @@ export function navUpTarget(route: AppRoute): NavUpTarget | null {
       // owner, so Up goes to that profile rather than to the homepage.
       return { path: creatorPath(route.handle), labelKey: 'upCreator' };
     case 'admin':
+    case 'review':
     case 'legal':
     case 'contact':
     case 'creator':

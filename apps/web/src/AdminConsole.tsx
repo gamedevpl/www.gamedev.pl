@@ -7,6 +7,7 @@ import { GameHealthView } from './GameHealthView.js';
 import { ProposalReviewPanel } from './ProposalReviewPanel.js';
 import { SuggestionsPanel } from './SuggestionsPanel.js';
 import { WaitlistPanel } from './WaitlistPanel.js';
+import { AdminAssessmentsPanel } from './AdminAssessmentsPanel.js';
 import { fetchAdminSummary, type AdminSummary, type OperatorAlert } from './adminApi.js';
 import { ADMIN_SECTIONS, adminPath, type AdminSection } from './router.js';
 
@@ -32,6 +33,7 @@ const SECTION_LABELS: Record<AdminSection, string> = {
   suggestions: 'Suggestions',
   proposals: 'Proposals',
   waitlist: 'Waitlist',
+  assessments: 'Assessments',
 };
 
 const ALERT_COPY: Record<OperatorAlert['kind'], string> = {
@@ -266,6 +268,7 @@ export function AdminConsole({ section, onNavigate }: { section: AdminSection; o
       {section === 'suggestions' && <SuggestionsPanel />}
       {section === 'proposals' && <ProposalReviewPanel scope="platform" />}
       {section === 'waitlist' && <WaitlistPanel />}
+      {section === 'assessments' && <AdminAssessmentsPanel />}
     </section>
   );
 }

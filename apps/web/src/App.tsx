@@ -10,6 +10,7 @@ import { ArcadeCatalog } from './ArcadeCatalog.js';
 import { CreatorStudioView } from './CreatorStudioView.js';
 import { UnpublishedPlayView } from './UnpublishedPlayView.js';
 import { AdminConsole } from './AdminConsole.js';
+import { ReviewDesk } from './ReviewDesk.js';
 import { PixelIcon } from './PixelIcon.js';
 import { CreatorQA, type QAQuestion } from './CreatorQA.js';
 import { deriveTitleFromConcept } from './gameTitle.js';
@@ -171,6 +172,7 @@ export function App() {
         home: t('pageTitle.home'),
         join: t('pageTitle.join'),
         health: t('pageTitle.health'),
+        review: t('pageTitle.review'),
         studio: t('pageTitle.studio'),
         privacy: t('legal.privacy'),
         terms: t('legal.terms'),
@@ -1062,6 +1064,8 @@ export function App() {
       <main className="content">
         {route.view === 'admin' ? (
           <AdminConsole section={route.section} onNavigate={navigate} />
+        ) : route.view === 'review' ? (
+          <ReviewDesk />
         ) : route.view === 'studio' ? (
           <CreatorStudioView
             selectedGame={route.game}

@@ -196,6 +196,15 @@ config**: no Secret Manager entry, no Cloud Run env var, nothing to rotate at th
 infrastructure level. The only prerequisite is that `ADMIN_UIDS` already contains your uid,
 which it must for the operator telemetry views anyway.
 
+### Reviewer assessment desk
+
+Trusted colleagues who walk the catalog (and shared creator drafts) with keep/cut
+judgments use the unlisted `/review` desk — see
+[`game-assessment-plan.md`](./game-assessment-plan.md). Set plain env
+`REVIEWER_UIDS` to a comma-separated list of uids (same shape as `ADMIN_UIDS`).
+Admins are reviewers automatically. Locally, `REVIEWER_UIDS=dev:local` (or
+`dev:<handle>` after `POST /api/auth/dev`) unlocks the desk against the in-memory store.
+
 Issue one the same way you approve a beta tester — from a shell with gcloud credentials for
 the project:
 

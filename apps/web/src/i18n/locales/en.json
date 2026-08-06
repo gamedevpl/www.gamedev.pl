@@ -922,6 +922,7 @@
     "status": "Your game is in the works",
     "join": "Join the game",
     "health": "Telemetry",
+    "review": "Game review",
     "studio": "Creator Studio",
     "notFound": "Page not found",
     "contact": "Contact",
@@ -931,6 +932,33 @@
     "creatorNamed": "{{title}}",
     "gameNamed": "{{title}}",
     "proposals": "My proposals"
+  },
+  "review": {
+    "title": "Review desk",
+    "progress": "{{assessed}} done · {{remaining}} left",
+    "sourceLabel": "Queue source",
+    "source": {
+      "all": "All",
+      "catalog": "Catalog",
+      "creator": "Creator drafts"
+    },
+    "loading": "Loading the queue…",
+    "denied": "This desk is only for reviewers.",
+    "empty": "Queue clear — nothing left to assess in this filter.",
+    "noteLabel": "Why? (optional — speak or type)",
+    "notePlaceholder": "What should we keep, cut, or fix?",
+    "micStart": "Start voice note",
+    "micStop": "Stop listening",
+    "micStartShort": "Mic",
+    "micStopShort": "Stop",
+    "micUnsupported": "Voice notes need a browser with speech recognition.",
+    "micDenied": "Microphone permission denied.",
+    "micError": "Speech error: {{error}}",
+    "actionsLabel": "Verdict",
+    "keep": "Keep",
+    "cut": "Cut",
+    "skip": "Skip",
+    "error": "Could not save that assessment."
   },
   "creatorProfile": {
     "back": "Back",

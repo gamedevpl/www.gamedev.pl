@@ -83,6 +83,7 @@ describe('parsePathRoute', () => {
   it('parses the unlisted operator console, and keeps its old address working', () => {
     expect(parsePathRoute('/admin')).toEqual({ view: 'admin', section: 'queue' });
     expect(parsePathRoute('/admin/telemetry')).toEqual({ view: 'admin', section: 'telemetry' });
+    expect(parsePathRoute('/admin/assessments')).toEqual({ view: 'admin', section: 'assessments' });
     // `/health` was the whole operator page before the console existed, and is what is
     // in the operator's bookmarks — it resolves to the section it used to be.
     expect(parsePathRoute('/health')).toEqual({ view: 'admin', section: 'telemetry' });
@@ -92,6 +93,10 @@ describe('parsePathRoute', () => {
     // navigation, and a throw there takes the whole app down.
     expect(parsePathRoute('/admin/%E0')).toEqual({ view: 'notFound' });
     expect(parsePathRoute('/health/brick-storm')).toEqual({ view: 'notFound' });
+  });
+
+  it('parses the unlisted reviewer assessment desk', () => {
+    expect(parsePathRoute('/review')).toEqual({ view: 'review' });
   });
 
   it('parses the creator studio route', () => {

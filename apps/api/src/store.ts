@@ -973,6 +973,43 @@ export interface PlayerFeedbackRecord {
 }
 
 /**
+ * One editorial judgment from a reviewer on one game (docs/game-assessment-plan.md).
+ *
+ * Top-level collection `gameAssessments/{slug}:{reviewerUid}` rather than under the
+ * game: the desk needs "everything this reviewer has done" and the operator summary
+ * needs "every assessment", and both are one query on a top-level collection. A
+ * subcollection under `games/{slug}` would make the reviewer progress read a walk.
+ *
+ * One row per reviewer per game — a second pass overwrites. The note is moderated
+ * free text (typed or speech-to-text); no audio is stored.
+ */
+export type AssessmentVerdict = 'keep' | 'cut' | 'skip';
+export type AssessmentSource = 'catalog' | 'creator';
+export type AssessmentNoteOrigin = 'text' | 'speech' | 'none';
+
+export interface GameAssessment {
+  /** `${slug}:${reviewerUid}` — stable upsert key. */
+  id: string;
+  slug: string;
+  title: string;
+  source: AssessmentSource;
+  creatorHandle: string | null;
+  reviewerUid: string;
+  verdict: AssessmentVerdict;
+  note: string;
+  noteOrigin: AssessmentNoteOrigin;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const GAME_ASSESSMENTS_COLLECTION = 'gameAssessments';
+
+/** Build the document id used as the upsert key for one reviewer on one game. */
+export function gameAssessmentId(slug: string, reviewerUid: string): string {
+  return `${slug}:${reviewerUid}`;
+}
+
+/**
  * One player's saved progress in one game (docs/persistent-world-plan.md P1).
  *
  * Stored at `users/{uid}/gameSaves/{slug}` — under the *player*, not under the game,
@@ -2078,6 +2115,26 @@ export interface Store {
    * a thousand notes costs about the same as one with three.
    */
   countPlayerFeedback(slug: string): Promise<number>;
+  /**
+   * Upsert one reviewer's judgment on a game (docs/game-assessment-plan.md).
+   * Id is `${slug}:${reviewerUid}`; a second pass updates verdict/note in place.
+   */
+  upsertGameAssessment(
+    input: Omit<GameAssessment, 'id' | 'createdAt' | 'updatedAt'> & { createdAt?: string },
+  ): Promise<GameAssessment>;
+  /** One reviewer's assessment of one game, or null. */
+  getGameAssessment(slug: string, reviewerUid: string): Promise<GameAssessment | null>;
+  /** Everything one reviewer has assessed, newest first. */
+  listGameAssessmentsByReviewer(reviewerUid: string): Promise<GameAssessment[]>;
+  /**
+   * Recent assessments across every reviewer, newest first.
+   * Bounded — the operator tab is one page, not a paginated archive.
+   */
+  listGameAssessments(opts?: { limit?: number }): Promise<GameAssessment[]>;
+  /** How many assessment rows a person left — erase preview. */
+  countGameAssessmentsByUid(uid: string): Promise<number>;
+  /** Delete every assessment a person left. Returns how many went. */
+  deleteGameAssessmentsByUid(uid: string): Promise<number>;
   /** Overwrites a game's current scorecard (docs/improvement-loop-plan.md IL-2). */
   putScorecard(slug: string, scorecard: Scorecard): Promise<void>;
   /** A game's current scorecard, or null before the first sweep has run for it. */
@@ -2424,6 +2481,8 @@ export class InMemoryStore implements Store {
   private follows = new Map<string, Map<string, string>>();
   // slug -> feedback rows, newest last (reversed on read)
   private playerFeedback = new Map<string, PlayerFeedbackRecord[]>();
+  /** id (`slug:uid`) -> assessment. Mirrors top-level `gameAssessments`. */
+  private gameAssessments = new Map<string, GameAssessment>();
   // uid -> (slug -> saved progress)
   private gameSaves = new Map<string, Map<string, GameSaveRecord>>();
   private editorDrafts = new Map<string, Map<string, EditorDraftRecord>>();
@@ -3797,6 +3856,67 @@ export class InMemoryStore implements Store {
 
   async countPlayerFeedback(slug: string): Promise<number> {
     return this.playerFeedback.get(slug)?.length ?? 0;
+  }
+
+  async upsertGameAssessment(
+    input: Omit<GameAssessment, 'id' | 'createdAt' | 'updatedAt'> & { createdAt?: string },
+  ): Promise<GameAssessment> {
+    const id = gameAssessmentId(input.slug, input.reviewerUid);
+    const existing = this.gameAssessments.get(id);
+    const now = new Date().toISOString();
+    const record: GameAssessment = {
+      id,
+      slug: input.slug,
+      title: input.title,
+      source: input.source,
+      creatorHandle: input.creatorHandle,
+      reviewerUid: input.reviewerUid,
+      verdict: input.verdict,
+      note: input.note,
+      noteOrigin: input.noteOrigin,
+      createdAt: existing?.createdAt ?? input.createdAt ?? now,
+      updatedAt: now,
+    };
+    this.gameAssessments.set(id, record);
+    return { ...record };
+  }
+
+  async getGameAssessment(slug: string, reviewerUid: string): Promise<GameAssessment | null> {
+    const record = this.gameAssessments.get(gameAssessmentId(slug, reviewerUid));
+    return record ? { ...record } : null;
+  }
+
+  async listGameAssessmentsByReviewer(reviewerUid: string): Promise<GameAssessment[]> {
+    return Array.from(this.gameAssessments.values())
+      .filter((row) => row.reviewerUid === reviewerUid)
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.slug.localeCompare(b.slug))
+      .map((row) => ({ ...row }));
+  }
+
+  async listGameAssessments(opts?: { limit?: number }): Promise<GameAssessment[]> {
+    const sorted = Array.from(this.gameAssessments.values())
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.slug.localeCompare(b.slug))
+      .map((row) => ({ ...row }));
+    return opts?.limit !== undefined ? sorted.slice(0, opts.limit) : sorted;
+  }
+
+  async countGameAssessmentsByUid(uid: string): Promise<number> {
+    let total = 0;
+    for (const row of this.gameAssessments.values()) {
+      if (row.reviewerUid === uid) total += 1;
+    }
+    return total;
+  }
+
+  async deleteGameAssessmentsByUid(uid: string): Promise<number> {
+    let deleted = 0;
+    for (const [id, row] of this.gameAssessments) {
+      if (row.reviewerUid === uid) {
+        this.gameAssessments.delete(id);
+        deleted += 1;
+      }
+    }
+    return deleted;
   }
 
   async putScorecard(slug: string, scorecard: Scorecard): Promise<void> {
@@ -6247,6 +6367,87 @@ export class FirestoreStore implements Store {
   async countPlayerFeedback(slug: string): Promise<number> {
     const snap = await this.feedbackCollection(slug).count().get();
     return snap.data().count;
+  }
+
+  private gameAssessmentsCollection() {
+    return this.db.collection(GAME_ASSESSMENTS_COLLECTION);
+  }
+
+  async upsertGameAssessment(
+    input: Omit<GameAssessment, 'id' | 'createdAt' | 'updatedAt'> & { createdAt?: string },
+  ): Promise<GameAssessment> {
+    const id = gameAssessmentId(input.slug, input.reviewerUid);
+    const ref = this.gameAssessmentsCollection().doc(id);
+    const now = new Date().toISOString();
+    const existing = await ref.get();
+    const createdAt =
+      existing.exists && typeof existing.data()?.createdAt === 'string'
+        ? (existing.data()!.createdAt as string)
+        : (input.createdAt ?? now);
+    const record: GameAssessment = {
+      id,
+      slug: input.slug,
+      title: input.title,
+      source: input.source,
+      creatorHandle: input.creatorHandle,
+      reviewerUid: input.reviewerUid,
+      verdict: input.verdict,
+      note: input.note,
+      noteOrigin: input.noteOrigin,
+      createdAt,
+      updatedAt: now,
+    };
+    await ref.set({
+      slug: record.slug,
+      title: record.title,
+      source: record.source,
+      creatorHandle: record.creatorHandle,
+      reviewerUid: record.reviewerUid,
+      verdict: record.verdict,
+      note: record.note,
+      noteOrigin: record.noteOrigin,
+      createdAt: record.createdAt,
+      updatedAt: record.updatedAt,
+    });
+    return record;
+  }
+
+  async getGameAssessment(slug: string, reviewerUid: string): Promise<GameAssessment | null> {
+    const id = gameAssessmentId(slug, reviewerUid);
+    const snap = await this.gameAssessmentsCollection().doc(id).get();
+    if (!snap.exists) return null;
+    return { id, ...(snap.data() as Omit<GameAssessment, 'id'>) };
+  }
+
+  async listGameAssessmentsByReviewer(reviewerUid: string): Promise<GameAssessment[]> {
+    // Equality only — no orderBy — so a single-field index is enough and we do not need
+    // a composite index deploy before the desk works. Sort in memory; a reviewer's set
+    // is small (one row per game they touched).
+    const snap = await this.gameAssessmentsCollection().where('reviewerUid', '==', reviewerUid).get();
+    return snap.docs
+      .map((d) => ({ id: d.id, ...(d.data() as Omit<GameAssessment, 'id'>) }))
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.slug.localeCompare(b.slug));
+  }
+
+  async listGameAssessments(opts?: { limit?: number }): Promise<GameAssessment[]> {
+    const ordered = this.gameAssessmentsCollection().orderBy('updatedAt', 'desc');
+    const snap = await (opts?.limit === undefined ? ordered : ordered.limit(opts.limit)).get();
+    return snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<GameAssessment, 'id'>) }));
+  }
+
+  async countGameAssessmentsByUid(uid: string): Promise<number> {
+    const snap = await this.gameAssessmentsCollection().where('reviewerUid', '==', uid).count().get();
+    return snap.data().count;
+  }
+
+  async deleteGameAssessmentsByUid(uid: string): Promise<number> {
+    const snap = await this.gameAssessmentsCollection().where('reviewerUid', '==', uid).get();
+    for (let index = 0; index < snap.docs.length; index += 400) {
+      const batch = this.db.batch();
+      for (const doc of snap.docs.slice(index, index + 400)) batch.delete(doc.ref);
+      await batch.commit();
+    }
+    return snap.docs.length;
   }
 
   // `current` is a fixed doc id, so a game has exactly one scorecard and the sweep

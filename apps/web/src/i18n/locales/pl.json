@@ -926,6 +926,7 @@
     "status": "Twoja gra jest w trakcie tworzenia",
     "join": "Dołącz do gry",
     "health": "Telemetria",
+    "review": "Ocena gier",
     "studio": "Studio Twórcy",
     "notFound": "Nie znaleziono strony",
     "contact": "Kontakt",
@@ -935,6 +936,33 @@
     "creatorNamed": "{{title}}",
     "gameNamed": "{{title}}",
     "proposals": "Moje propozycje"
+  },
+  "review": {
+    "title": "Biurko ocen",
+    "progress": "{{assessed}} zrobione · {{remaining}} zostało",
+    "sourceLabel": "Źródło kolejki",
+    "source": {
+      "all": "Wszystko",
+      "catalog": "Katalog",
+      "creator": "Szkice twórców"
+    },
+    "loading": "Ładowanie kolejki…",
+    "denied": "To biurko jest tylko dla recenzentów.",
+    "empty": "Kolejka pusta — nic więcej do oceny w tym filtrze.",
+    "noteLabel": "Dlaczego? (opcjonalnie — mów lub pisz)",
+    "notePlaceholder": "Co zostawić, wyciąć albo poprawić?",
+    "micStart": "Zacznij notatkę głosową",
+    "micStop": "Zatrzymaj nagrywanie",
+    "micStartShort": "Mikrofon",
+    "micStopShort": "Stop",
+    "micUnsupported": "Notatki głosowe wymagają przeglądarki z rozpoznawaniem mowy.",
+    "micDenied": "Brak zgody na mikrofon.",
+    "micError": "Błąd mowy: {{error}}",
+    "actionsLabel": "Werdykt",
+    "keep": "Zostaw",
+    "cut": "Wytnij",
+    "skip": "Pomiń",
+    "error": "Nie udało się zapisać oceny."
   },
   "creatorProfile": {
     "back": "Wróć",
