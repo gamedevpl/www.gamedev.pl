@@ -226,11 +226,6 @@ a {
 }
 
 .language-switcher {
-  display: flex;
-  gap: 4px;
-}
-
-.language-switcher button {
   background: transparent;
   color: var(--muted);
   border: 1px solid var(--panel-border);
@@ -238,23 +233,43 @@ a {
   padding: 4px 10px;
   font-size: 13px;
   font-weight: 600;
+  cursor: pointer;
 }
 
-.language-switcher button.active {
-  background: var(--turquoise);
-  color: #0b221d;
-  border-color: var(--turquoise);
+.language-switcher:hover {
+  color: var(--text);
+  border-color: var(--muted);
 }
 
-.app-header .github img {
-  width: 24px;
-  height: 24px;
-  opacity: 0.8;
-  transition: opacity 0.2s;
+.user-avatar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 50%;
 }
 
-.app-header .github img:hover {
-  opacity: 1;
+.user-avatar-btn:focus-visible {
+  outline: 2px solid var(--turquoise);
+  outline-offset: 2px;
+}
+
+.user-name--settings {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.user-name--settings:hover {
+  text-decoration: underline;
 }
 
 /* HAMBURGER MENU */
@@ -263,6 +278,7 @@ a {
 }
 
 .hamburger-btn {
+  position: relative;
   background: var(--panel-card);
   border: 1px solid var(--panel-border);
   color: var(--text);
@@ -981,9 +997,11 @@ button:disabled {
   min-width: 0;
 }
 
-/* Compact Studio entry next to Games — live count + wrench in one control so
-   in-progress work never owns a catalog grid cell (or shoves published cards). */
-.catalog-studio-chip {
+/* Compact Studio entry in the top nav — live count + wrench in one control so
+   in-progress work stays in chrome rather than owning a catalog grid cell.
+   Phones hide this chip: Studio + the count live in the hamburger instead. */
+.studio-chip {
+  position: relative;
   display: inline-flex;
   flex: none;
   align-items: center;
@@ -999,35 +1017,57 @@ button:disabled {
   cursor: pointer;
 }
 
-.catalog-studio-chip:hover,
-.catalog-studio-chip:focus-visible {
+.studio-chip:hover,
+.studio-chip:focus-visible {
   border-color: var(--turquoise);
   color: var(--turquoise);
 }
 
-.catalog-studio-chip.is-live {
+.studio-chip.is-live {
   border-color: rgba(56, 189, 248, 0.35);
   background: rgba(56, 189, 248, 0.1);
   color: var(--accent-blue);
 }
 
-.catalog-studio-chip.is-live:hover,
-.catalog-studio-chip.is-live:focus-visible {
+.studio-chip.is-live:hover,
+.studio-chip.is-live:focus-visible {
   border-color: var(--turquoise);
   color: var(--turquoise);
 }
 
-.catalog-studio-chip-count {
+.studio-chip-count {
   font-weight: 700;
 }
 
-.catalog-studio-chip .live-dot {
+.studio-chip .live-dot {
   background: var(--accent-blue);
 }
 
-@media (pointer: coarse), (max-width: 768px) {
-  .catalog-studio-chip {
-    min-height: 44px;
+.hamburger-live-badge {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .studio-chip {
+    display: none;
+  }
+
+  /* Glance count while the menu is closed — the Studio row repeats it once open. */
+  .hamburger-live-badge {
+    display: block;
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: 8px;
+    background: var(--accent-blue, #38bdf8);
+    color: #0b221d;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 16px;
+    text-align: center;
   }
 }
 
@@ -2979,7 +3019,6 @@ body.player-open {
   /* Relocated into .menu-extras inside the dropdown. Signing out in
      particular should not sit one thumb-width from the menu button. */
   .header-actions > .language-switcher,
-  .header-actions > .github,
   .user-profile-badge .user-name,
   .user-profile-badge .logout-btn {
     display: none;
@@ -2995,13 +3034,8 @@ body.player-open {
   }
 
   .menu-extras .language-switcher {
-    gap: 8px;
-    padding: 4px 4px 0;
-  }
-
-  .menu-extras .language-switcher button {
-    flex: 1;
     min-height: 44px;
+    width: 100%;
   }
 
   /* Thumb-sized targets. 44px is the iOS HIG floor; below it, taps miss. */
@@ -3032,6 +3066,16 @@ body.player-open {
 
   .user-profile-badge {
     padding: 4px;
+  }
+
+  .user-avatar-btn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .user-profile-badge .notif-trigger {
+    width: 44px;
+    height: 44px;
   }
 
   /* The mic / upload / sketch row sat at 30x26 — under half a fingertip. */
@@ -7905,6 +7949,21 @@ button.builder-mode-selector:disabled {
 .site-footer__project {
   max-width: 68rem;
   margin: 1.25rem auto 0;
+}
+
+.site-footer__github {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.site-footer__github img {
+  opacity: 0.7;
+}
+
+.site-footer__github:hover img,
+.site-footer__github:focus-visible img {
+  opacity: 1;
 }
 
 .site-footer a {
@@ -13688,9 +13747,7 @@ body.remix-entry-open {
     padding-left: max(1rem, env(safe-area-inset-left));
     border: 0;
     border-radius: 0;
-    background:
-      radial-gradient(circle at 100% 0, rgba(0, 229, 183, 0.1), transparent 36%),
-      var(--panel);
+    background: radial-gradient(circle at 100% 0, rgba(0, 229, 183, 0.1), transparent 36%), var(--panel);
     box-shadow: none;
   }
 

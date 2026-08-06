@@ -569,7 +569,7 @@ describe('ArcadeCatalog soft-refresh failure', () => {
   });
 });
 
-describe('ArcadeCatalog Studio chip', () => {
+describe('ArcadeCatalog in-progress builds', () => {
   beforeEach(async () => {
     installIntersectionObserverMock();
     mockSignedOutAuth();
@@ -588,7 +588,7 @@ describe('ArcadeCatalog Studio chip', () => {
     vi.restoreAllMocks();
   });
 
-  it('keeps in-progress builds out of the grid and surfaces them on the Studio chip', async () => {
+  it('keeps in-progress builds out of the grid (Studio chip lives in the header)', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     vi.spyOn(AuthContextModule, 'useAuth').mockReturnValue({
       user: { uid: 'test-user', tier: 'standard' },
@@ -610,7 +610,6 @@ describe('ArcadeCatalog Studio chip', () => {
       });
     });
 
-    const onOpenStudio = vi.fn();
     const container = document.createElement('div');
     document.body.appendChild(container);
     const root = createRoot(container);
@@ -624,13 +623,12 @@ describe('ArcadeCatalog Studio chip', () => {
           onPlayGame: vi.fn(),
           onPlayTogether: vi.fn(),
           onRetryCatalog: vi.fn(),
-          onOpenStudio,
         }),
       );
       await flushEffects();
     });
 
-    // Signed-in paint waits for the shelf so Yours pins + Studio chip land with the grid.
+    // Signed-in paint waits for the shelf so Yours pins land with the grid.
     expect(container.querySelectorAll('.catalog-card')).toHaveLength(0);
     expect(container.querySelector('.catalog-state')?.textContent).toMatch(/Loading/i);
 
@@ -663,15 +661,7 @@ describe('ArcadeCatalog Studio chip', () => {
 
     expect(container.querySelectorAll('.catalog-card')).toHaveLength(2);
     expect(container.querySelectorAll('.catalog-build-card')).toHaveLength(0);
-    const chip = container.querySelector<HTMLButtonElement>('.catalog-studio-chip');
-    expect(chip?.classList.contains('is-live')).toBe(true);
-    expect(chip?.textContent).toMatch(/2 in progress/i);
-    expect(chip?.textContent).toMatch(/Studio/i);
-
-    await act(async () => {
-      chip?.click();
-    });
-    expect(onOpenStudio).toHaveBeenCalledOnce();
+    expect(container.querySelector('.studio-chip, .catalog-studio-chip')).toBeNull();
 
     await act(async () => {
       root.unmount();

@@ -44,7 +44,6 @@ describe('NavHeader Up chevron', () => {
             onNavigate: vi.fn(),
             onHome: vi.fn(),
             onStudio: vi.fn(),
-            onAdmin: vi.fn(),
             upTarget: { path: '/studio', ariaLabel: 'Back to Studio' },
             onUp,
           }),
@@ -82,7 +81,6 @@ describe('NavHeader Up chevron', () => {
             onNavigate: vi.fn(),
             onHome: vi.fn(),
             onStudio: vi.fn(),
-            onAdmin: vi.fn(),
             upTarget: null,
           }),
         ),
@@ -97,42 +95,33 @@ describe('NavHeader Up chevron', () => {
   });
 });
 
-// The console has been reachable only by typing its URL, which is why the one operator
-// surface with something to do on it was also the one nothing linked to.
-describe('NavHeader operator link', () => {
+describe('NavHeader menu', () => {
   beforeEach(async () => {
     await i18n.changeLanguage('en');
-    // The badge polls; the tests that care about that advance the clock themselves.
-    vi.useFakeTimers({ shouldAdvanceTime: true });
   });
 
   afterEach(() => {
     document.body.innerHTML = '';
-    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
-  async function renderWith(summary: { status: number; body: unknown }, admin = true) {
+  async function renderSignedIn(admin = false) {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = String(input);
       if (url.endsWith('/api/auth/me')) {
-        // The session says whether this account is an operator; the nav never asks an
-        // operator endpoint to find out.
         return new Response(
-          JSON.stringify({ user: { uid: 'g:boss', tier: 'free', ...(admin ? { admin: true } : {}) } }),
+          JSON.stringify({
+            user: { uid: 'g:boss', tier: 'free', name: 'Boss', ...(admin ? { admin: true } : {}) },
+          }),
         );
       }
       if (url.endsWith('/api/health')) {
         return new Response(JSON.stringify({ status: 'ok', provider: 'mock', privateBeta: false }));
       }
-      if (url.endsWith('/api/admin/summary')) {
-        return new Response(JSON.stringify(summary.body), { status: summary.status });
-      }
       return new Response('{}', { status: 404 });
     });
 
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-    const onAdmin = vi.fn();
     const container = document.createElement('div');
     document.body.appendChild(container);
     const root = createRoot(container);
@@ -142,11 +131,10 @@ describe('NavHeader operator link', () => {
           AuthProvider,
           null,
           createElement(NavHeader, {
-            activeBuildCount: 0,
+            activeBuildCount: 2,
             onNavigate: vi.fn(),
             onHome: vi.fn(),
             onStudio: vi.fn(),
-            onAdmin,
             upTarget: null,
           }),
         ),
@@ -155,74 +143,99 @@ describe('NavHeader operator link', () => {
       await Promise.resolve();
     });
 
-    // The menu holds the link; open it the way a reader would.
     const hamburger = container.querySelector('.hamburger-btn') as HTMLButtonElement;
     await act(async () => {
       hamburger.click();
       await Promise.resolve();
     });
-    return { container, root, onAdmin };
+    return { container, root };
   }
 
-  it('offers the console, with what is waiting, to an operator', async () => {
-    const { container, root, onAdmin } = await renderWith({
-      status: 200,
-      body: {
-        alerts: [
-          {
-            id: 'op-1-review_ready',
-            kind: 'review_ready',
-            issueNumber: 1,
-            title: 'X',
-            ownerUid: 'g:1',
-            since: '2026-07-30T11:00:00Z',
-          },
-        ],
-        queue: { active: 1, stalled: 0, byState: {} },
-        limits: { paused: false, globalDailySubmissionCap: 50, todaySubmissions: 0 },
-      },
-    });
+  it('keeps Create Game and Studio, and drops Arcade / Operator / Account settings', async () => {
+    const { container, root } = await renderSignedIn(true);
+    const labels = Array.from(container.querySelectorAll('.nav-link')).map((el) => el.textContent ?? '');
 
-    const link = Array.from(container.querySelectorAll('.nav-link')).find((element) =>
-      element.textContent?.includes('Operator'),
-    ) as HTMLButtonElement;
-    expect(link).toBeTruthy();
-    expect(link.querySelector('.specs-count-badge')?.textContent).toBe('1');
-
-    await act(async () => link.click());
-    expect(onAdmin).toHaveBeenCalled();
+    expect(labels.some((text) => /Create Game/i.test(text))).toBe(true);
+    expect(labels.some((text) => /Studio/i.test(text))).toBe(true);
+    expect(labels.some((text) => /Arcade/i.test(text))).toBe(false);
+    expect(labels.some((text) => /Operator/i.test(text))).toBe(false);
+    expect(labels.some((text) => /Account settings/i.test(text))).toBe(false);
+    // GitHub left the header; the footer carries the repo link instead.
+    expect(container.querySelector('a.github')).toBeNull();
+    expect(labels.some((text) => /GitHub/i.test(text))).toBe(false);
 
     await act(async () => root.unmount());
   });
 
-  it('never asks an operator endpoint on behalf of someone who is not one', async () => {
-    // The 404 probe this replaced put an error in every non-operator's console on every
-    // page load — which is most people, on most page loads, and is what failed the
-    // deploy gate. A non-operator now makes no operator request at all.
-    const { root } = await renderWith({ status: 404, body: { error: 'not found' } }, false);
+  it('never probes an operator endpoint from the chrome', async () => {
+    const { root } = await renderSignedIn(true);
     const summaryCalls = () =>
       vi.mocked(globalThis.fetch).mock.calls.filter(([input]) => String(input).endsWith('/api/admin/summary')).length;
 
     expect(summaryCalls()).toBe(0);
+    await act(async () => root.unmount());
+  });
+});
+
+describe('NavHeader Studio chip', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+    vi.restoreAllMocks();
+  });
+
+  it('shows the rich live chip in the header and opens Studio', async () => {
+    await i18n.changeLanguage('en');
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith('/api/auth/me')) {
+        return new Response(JSON.stringify({ user: { uid: 'g:ada', tier: 'standard', name: 'Ada' } }));
+      }
+      if (url.endsWith('/api/health')) {
+        return new Response(JSON.stringify({ status: 'ok', provider: 'mock', privateBeta: false }));
+      }
+      return new Response('{}', { status: 404 });
+    });
+
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    const onStudio = vi.fn();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
     await act(async () => {
-      vi.advanceTimersByTime(10 * 60_000);
+      root.render(
+        createElement(
+          AuthProvider,
+          null,
+          createElement(NavHeader, {
+            activeBuildCount: 9,
+            onNavigate: vi.fn(),
+            onHome: vi.fn(),
+            onStudio,
+            upTarget: null,
+          }),
+        ),
+      );
+      await Promise.resolve();
       await Promise.resolve();
     });
 
-    expect(summaryCalls()).toBe(0);
+    const chip = container.querySelector<HTMLButtonElement>('button.studio-chip');
+    expect(chip).not.toBeNull();
+    expect(chip?.classList.contains('is-live')).toBe(true);
+    expect(chip?.textContent).toMatch(/9 in progress/i);
+    expect(chip?.textContent).toMatch(/Studio/i);
 
-    await act(async () => root.unmount());
-  });
+    await act(async () => chip?.click());
+    expect(onStudio).toHaveBeenCalledOnce();
 
-  it('shows nobody else that there is a console at all', async () => {
-    // A session with no `admin` flag is the API's answer for a signed-in non-admin, and
-    // the nav treats it as the whole answer: no link, no badge, nothing to notice.
-    const { container, root } = await renderWith({ status: 404, body: { error: 'not found' } }, false);
-
-    const link = Array.from(container.querySelectorAll('.nav-link')).find((element) =>
-      element.textContent?.includes('Operator'),
+    // Menu carries the same count for phones (where the chip is CSS-hidden).
+    const hamburger = container.querySelector<HTMLButtonElement>('.hamburger-btn');
+    expect(hamburger?.querySelector('.hamburger-live-badge')?.textContent).toBe('9');
+    await act(async () => hamburger?.click());
+    const studioLink = Array.from(container.querySelectorAll<HTMLButtonElement>('.nav-link')).find((el) =>
+      /Studio/i.test(el.textContent ?? ''),
     );
-    expect(link).toBeUndefined();
+    expect(studioLink?.querySelector('.specs-count-badge')?.textContent).toBe('9');
 
     await act(async () => root.unmount());
   });
@@ -271,7 +284,6 @@ describe('NavHeader profile link', () => {
             onNavigate: vi.fn(),
             onHome: vi.fn(),
             onStudio: vi.fn(),
-            onAdmin: vi.fn(),
             upTarget: null,
           }),
         ),
@@ -288,7 +300,7 @@ describe('NavHeader profile link', () => {
     await act(async () => root.unmount());
   });
 
-  it('does not link the account name when no handle is claimed', async () => {
+  it('opens account settings from the avatar when no handle is claimed', async () => {
     await i18n.changeLanguage('en');
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = String(input);
@@ -315,7 +327,6 @@ describe('NavHeader profile link', () => {
             onNavigate: vi.fn(),
             onHome: vi.fn(),
             onStudio: vi.fn(),
-            onAdmin: vi.fn(),
             upTarget: null,
           }),
         ),
@@ -327,14 +338,66 @@ describe('NavHeader profile link', () => {
     expect(container.querySelector('a.user-name--profile')).toBeNull();
     expect(container.querySelector('.user-name')?.textContent).toBe('Ada Lovelace');
 
-    const hamburger = container.querySelector('.hamburger-btn') as HTMLButtonElement;
-    await act(async () => hamburger.click());
-    const accountSettings = Array.from(container.querySelectorAll<HTMLButtonElement>('.nav-link')).find((element) =>
-      element.textContent?.includes('Account settings'),
-    );
-    expect(accountSettings).toBeTruthy();
-    await act(async () => accountSettings?.click());
+    const avatar = container.querySelector<HTMLButtonElement>('button.user-avatar-btn');
+    expect(avatar).not.toBeNull();
+    await act(async () => avatar?.click());
     expect(document.body.querySelector('.account-settings-modal-card')).not.toBeNull();
+
+    await act(async () => root.unmount());
+  });
+});
+
+describe('LanguageSwitcher in header', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+    vi.restoreAllMocks();
+  });
+
+  it('renders one button that toggles to the other language', async () => {
+    await i18n.changeLanguage('en');
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith('/api/auth/me')) {
+        return new Response(JSON.stringify({ user: null }));
+      }
+      if (url.endsWith('/api/health')) {
+        return new Response(JSON.stringify({ status: 'ok', provider: 'mock', privateBeta: false }));
+      }
+      return new Response('{}', { status: 404 });
+    });
+
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        createElement(
+          AuthProvider,
+          null,
+          createElement(NavHeader, {
+            activeBuildCount: 0,
+            onNavigate: vi.fn(),
+            onHome: vi.fn(),
+            onStudio: vi.fn(),
+            upTarget: null,
+          }),
+        ),
+      );
+      await Promise.resolve();
+    });
+
+    const switcher = container.querySelector<HTMLButtonElement>('button.language-switcher');
+    // Header + (closed) menu: only the header instance is mounted while the menu is closed.
+    expect(switcher).not.toBeNull();
+    expect(switcher?.textContent).toBe('PL');
+
+    await act(async () => {
+      switcher?.click();
+      await Promise.resolve();
+    });
+    expect(i18n.language).toMatch(/^pl/);
+    expect(container.querySelector('button.language-switcher')?.textContent).toBe('EN');
 
     await act(async () => root.unmount());
   });
