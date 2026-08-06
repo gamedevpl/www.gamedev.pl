@@ -104,7 +104,7 @@
   "hero": {
     "mainTitle": "Turn any idea into a playable web game",
     "mainSubtitle": "Type what you want to play or build. AI agents code, test, and host it live.",
-    "bigPromptPlaceholder": "Ask for a game to play or build…",
+    "bigPromptPlaceholder": "Describe a game…",
     "buildGameButton": "Build My Game",
     "attachMenu": "Add",
     "attachMenuAria": "Add an image or sketch",

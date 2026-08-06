@@ -27,12 +27,42 @@ describe('mobile hero composer pill', () => {
     expect(rule).toMatch(/font-size:\s*16px/);
   });
 
-  it('puts Build on its own full-width row under + | field | mic', () => {
+  it('puts Build on its own full-width labeled row under + | field | mic', () => {
     const bar = lastRuleBody('.prompt-composer-bar');
     expect(bar).toMatch(/flex-wrap:\s*wrap/);
 
     const build = lastRuleBody('.prompt-composer-bar .build-btn');
     expect(build).toMatch(/flex:\s*1 1 100%/);
     expect(build).toMatch(/width:\s*100%/);
+  });
+});
+
+describe('desktop hero composer pill', () => {
+  it('keeps Build as a circular icon send with a clipped label', () => {
+    // First (desktop) rule — lastIndex would hit the phone override.
+    const marker = '.prompt-composer-bar .build-btn {';
+    const start = css.indexOf(marker);
+    expect(start).toBeGreaterThan(-1);
+    const end = css.indexOf('}', start);
+    const rule = css.slice(start + marker.length, end);
+    expect(rule).toMatch(/width:\s*36px/);
+    expect(rule).toMatch(/height:\s*36px/);
+    expect(rule).toMatch(/border-radius:\s*999px/);
+
+    const labelStart = css.indexOf('.prompt-composer-bar .build-btn-label {');
+    expect(labelStart).toBeGreaterThan(-1);
+    const labelEnd = css.indexOf('}', labelStart);
+    const labelRule = css.slice(labelStart, labelEnd);
+    expect(labelRule).toMatch(/clip:\s*rect\(0,\s*0,\s*0,\s*0\)/);
+  });
+
+  it('centers a compact single-line bar instead of bottom-aligning a tall field', () => {
+    const marker = '.prompt-composer-bar {';
+    const start = css.indexOf(marker);
+    const end = css.indexOf('}', start);
+    const rule = css.slice(start + marker.length, end);
+    expect(rule).toMatch(/align-items:\s*center/);
+    expect(rule).toMatch(/min-height:\s*52px/);
+    expect(rule).not.toMatch(/align-items:\s*flex-end/);
   });
 });

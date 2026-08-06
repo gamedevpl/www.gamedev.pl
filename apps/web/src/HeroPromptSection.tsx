@@ -406,8 +406,10 @@ export function HeroPromptSection({
                 setPromptText(e.target.value);
                 // Grow with the text on browsers that lack `field-sizing: content`.
                 const el = e.target;
-                el.style.height = 'auto';
-                el.style.height = `${Math.min(el.scrollHeight, 9 * 16 * 1.45)}px`;
+                el.style.height = '24px';
+                if (el.value) {
+                  el.style.height = `${Math.min(el.scrollHeight, 7.5 * 16)}px`;
+                }
               }}
               placeholder={t('hero.bigPromptPlaceholder')}
               rows={1}
@@ -435,17 +437,32 @@ export function HeroPromptSection({
             <button
               type="submit"
               className="primary-btn build-btn"
+              title={
+                submissionStatus === 'refining'
+                  ? t('qa.analyzing')
+                  : submissionStatus === 'loading' || mockStatus === 'loading'
+                    ? t('submit.submitting')
+                    : t('hero.buildGameButton')
+              }
+              aria-label={
+                submissionStatus === 'refining'
+                  ? t('qa.analyzing')
+                  : submissionStatus === 'loading' || mockStatus === 'loading'
+                    ? t('submit.submitting')
+                    : t('hero.buildGameButton')
+              }
               disabled={
                 submissionStatus !== 'idle' ||
                 mockStatus === 'loading' ||
                 (!promptText.trim() && attachments.length === 0)
               }
             >
-              <PixelIcon name="rocket" size={16} />{' '}
+              <PixelIcon name="rocket" size={16} />
               {/* Three states, not two: the refiner runs for a few seconds before
                   anything is submitted, and saying "Submitting…" through it was the
                   creator's first impression of a feature that had just started
-                  working at all. */}
+                  working at all. Visually clipped on desktop (circular send);
+                  shown on the phone's full-width row. */}
               <span className="build-btn-label">
                 {submissionStatus === 'refining'
                   ? t('qa.analyzing')
