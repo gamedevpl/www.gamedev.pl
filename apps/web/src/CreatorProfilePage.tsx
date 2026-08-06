@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type MouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from './AuthContext.js';
 import { catalogMediaUrl, isPlatformAuthor, normalizeCatalogEntry, type CatalogEntry } from './catalog.js';
 import { fetchCreatorPage, type PublicCreatorProfile } from './creatorProfileApi.js';
 import { EditProfileModal } from './EditProfileModal.js';
 import { PixelIcon } from './PixelIcon.js';
-import { creatorPath, gamePath, playPath, studioPath } from './router.js';
+import { creatorPath, gamePath, studioPath } from './router.js';
 import { StudioCreatorProfileProvider } from './studioCreatorProfile.js';
 
 /**
@@ -75,7 +75,11 @@ export function CreatorProfilePage({
 
   /** In-app navigation for links that must still be real, copyable hrefs. */
   const interceptTo = useCallback(
-    (path: string) => (event: { preventDefault: () => void }) => {
+    (path: string) => (event: MouseEvent<HTMLAnchorElement>) => {
+      // Keep native link behavior for new-tab/window gestures and non-primary
+      // buttons. SPA navigation is only the plain left-click path.
+      if (event.defaultPrevented || event.button !== 0) return;
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
       event.preventDefault();
       onNavigate?.(path);
     },
@@ -132,6 +136,7 @@ export function CreatorProfilePage({
             <ul className="creator-profile-game-list">
               {games.map((game) => {
                 const poster = game.media?.screenshots[0]?.file;
+                const pagePath = gamePath(handle, game.slug);
                 const author = isPlatformAuthor(game.submittedBy)
                   ? t('catalog.platformAuthor')
                   : (game.submittedBy ?? profile?.profileName);
@@ -139,7 +144,8 @@ export function CreatorProfilePage({
                   <li key={game.slug} className="creator-profile-game">
                     <a
                       className="creator-profile-game-thumb-link"
-                      href={playPath(game.slug)}
+                      href={pagePath}
+                      onClick={interceptTo(pagePath)}
                       aria-label={t('creatorProfile.openGamePage', { title: game.title })}
                     >
                       {poster ? (
@@ -158,7 +164,7 @@ export function CreatorProfilePage({
                       <h3 className="creator-profile-game-title">
                         {/* Everything listed here has a handle by construction, so the
                             game page always resolves — the title is its natural door. */}
-                        <a href={gamePath(handle, game.slug)} onClick={interceptTo(gamePath(handle, game.slug))}>
+                        <a href={pagePath} onClick={interceptTo(pagePath)}>
                           {game.title}
                         </a>
                       </h3>
