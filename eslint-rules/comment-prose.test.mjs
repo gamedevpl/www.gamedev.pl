@@ -69,6 +69,17 @@ describe('findCommentProseViolations', () => {
     expect(findCommentProseViolations(`const url = "https://example.com/path";\n`)).toEqual([]);
     expect(findCommentProseViolations('const s = `line // not a comment`;\n')).toEqual([]);
   });
+
+  it('does not treat line-leading // inside a multi-line template as a comment', () => {
+    const code = [
+      'const source = `',
+      '  // this looks like a full-line comment',
+      '  // and so does this second line',
+      '`;',
+      '',
+    ].join('\n');
+    expect(findCommentProseViolations(code)).toEqual([]);
+  });
 });
 
 describe('countCommentProseWords', () => {

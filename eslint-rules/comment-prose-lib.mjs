@@ -55,7 +55,9 @@ function stripBlockDecor(text) {
 }
 
 /**
- * Walk TypeScript / TSX source, skipping string/template literals.
+ * Single stateful walk: only treat `//` / `/*` as comments outside strings
+ * and templates (including multi-line `` `…` `` bodies).
+ *
  * @param {string} source
  * @returns {{ kind: string, startLine: number, endLine: number, words: number, preview: string }[]}
  */
@@ -67,33 +69,111 @@ export function findCommentProseViolations(source) {
   let i = 0;
   let line = 1;
   const n = source.length;
+  /** Column of first non-whitespace on the current line, or -1 if none yet. */
+  let lineNonWsCol = -1;
+  let col = 0;
+
+  const atLineStartCode = () => lineNonWsCol === -1;
 
   while (i < n) {
-    const lineStart = i;
-    while (i < n && (source[i] === ' ' || source[i] === '\t')) i += 1;
+    const ch = source[i];
+    const next = source[i + 1];
 
-    if (i < n && source[i] === '/' && source[i + 1] === '/') {
-      i += 2;
-      const textStart = i;
-      while (i < n && source[i] !== '\n') i += 1;
-      fullLines.push({ line, text: source.slice(textStart, i).trim() });
-      if (i < n && source[i] === '\n') {
-        line += 1;
+    if (ch === '\n') {
+      line += 1;
+      col = 0;
+      lineNonWsCol = -1;
+      i += 1;
+      continue;
+    }
+
+    if (ch === ' ' || ch === '\t') {
+      col += 1;
+      i += 1;
+      continue;
+    }
+
+    // Capture before marking this column as code — full-line `//` must still win.
+    const wasLineStart = atLineStartCode();
+    if (lineNonWsCol === -1) lineNonWsCol = col;
+
+    // String / template first — never collect comments from inside them.
+    if (ch === '"' || ch === "'" || ch === '`') {
+      const quote = ch;
+      i += 1;
+      col += 1;
+      while (i < n) {
+        if (source[i] === '\\') {
+          i += 2;
+          col += 2;
+          continue;
+        }
+        if (source[i] === '\n') {
+          if (quote !== '`') break;
+          line += 1;
+          col = 0;
+          lineNonWsCol = -1;
+          i += 1;
+          continue;
+        }
+        if (source[i] === quote) {
+          i += 1;
+          col += 1;
+          break;
+        }
         i += 1;
+        col += 1;
       }
       continue;
     }
 
-    if (i < n && source[i] === '/' && source[i + 1] === '*') {
+    if (ch === '/' && next === '/') {
+      const startLine = line;
+      const fullLine = wasLineStart;
+      i += 2;
+      col += 2;
+      const textStart = i;
+      while (i < n && source[i] !== '\n') {
+        i += 1;
+        col += 1;
+      }
+      const text = source.slice(textStart, i).trim();
+      const words = wordCount(text);
+      if (fullLine) {
+        fullLines.push({ line: startLine, text });
+      } else if (words > COMMENT_PROSE_MAX_WORDS) {
+        violations.push({
+          kind: 'trailing',
+          startLine,
+          endLine: startLine,
+          words,
+          preview: previewOf(text),
+        });
+      }
+      continue;
+    }
+
+    if (ch === '/' && next === '*') {
       const startLine = line;
       i += 2;
+      col += 2;
       const textStart = i;
       while (i < n - 1 && !(source[i] === '*' && source[i + 1] === '/')) {
-        if (source[i] === '\n') line += 1;
+        if (source[i] === '\n') {
+          line += 1;
+          col = 0;
+          lineNonWsCol = -1;
+          i += 1;
+          continue;
+        }
         i += 1;
+        col += 1;
       }
       const raw = source.slice(textStart, i);
-      if (i < n - 1) i += 2;
+      if (i < n - 1) {
+        i += 2;
+        col += 2;
+      }
       const cleaned = stripBlockDecor(raw);
       const words = wordCount(cleaned);
       if (line > startLine || words > COMMENT_PROSE_MAX_WORDS) {
@@ -105,87 +185,11 @@ export function findCommentProseViolations(source) {
           preview: previewOf(cleaned),
         });
       }
-      while (i < n && (source[i] === ' ' || source[i] === '\t')) i += 1;
-      if (i < n && source[i] === '\n') {
-        line += 1;
-        i += 1;
-      }
       continue;
     }
 
-    i = lineStart;
-    while (i < n && source[i] !== '\n') {
-      const ch = source[i];
-      const next = source[i + 1];
-
-      if (ch === '"' || ch === "'" || ch === '`') {
-        const quote = ch;
-        i += 1;
-        while (i < n) {
-          if (source[i] === '\\') {
-            i += 2;
-            continue;
-          }
-          if (source[i] === '\n' && quote !== '`') break;
-          if (source[i] === quote) {
-            i += 1;
-            break;
-          }
-          if (source[i] === '\n') line += 1;
-          i += 1;
-        }
-        continue;
-      }
-
-      if (ch === '/' && next === '/') {
-        const nl = source.indexOf('\n', i);
-        const end = nl === -1 ? n : nl;
-        const text = source.slice(i + 2, end).trim();
-        const words = wordCount(text);
-        if (words > COMMENT_PROSE_MAX_WORDS) {
-          violations.push({
-            kind: 'trailing',
-            startLine: line,
-            endLine: line,
-            words,
-            preview: previewOf(text),
-          });
-        }
-        i = end;
-        break;
-      }
-
-      if (ch === '/' && next === '*') {
-        const startLine = line;
-        i += 2;
-        const textStart = i;
-        while (i < n - 1 && !(source[i] === '*' && source[i + 1] === '/')) {
-          if (source[i] === '\n') line += 1;
-          i += 1;
-        }
-        const raw = source.slice(textStart, i);
-        if (i < n - 1) i += 2;
-        const cleaned = stripBlockDecor(raw);
-        const words = wordCount(cleaned);
-        if (line > startLine || words > COMMENT_PROSE_MAX_WORDS) {
-          violations.push({
-            kind: 'block',
-            startLine,
-            endLine: line,
-            words,
-            preview: previewOf(cleaned),
-          });
-        }
-        continue;
-      }
-
-      i += 1;
-    }
-
-    if (i < n && source[i] === '\n') {
-      line += 1;
-      i += 1;
-    }
+    i += 1;
+    col += 1;
   }
 
   /** @type {{ line: number, text: string }[]} */
@@ -293,6 +297,11 @@ export function loadCommentProseBaseline(filePath = COMMENT_PROSE_BASELINE_PATH)
   const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8'));
   if (parsed.version !== 1 || typeof parsed.files !== 'object' || parsed.files === null) {
     throw new Error(`invalid comment-prose baseline at ${filePath}`);
+  }
+  if (parsed.maxWords !== COMMENT_PROSE_MAX_WORDS) {
+    throw new Error(
+      `comment-prose baseline maxWords ${parsed.maxWords} != COMMENT_PROSE_MAX_WORDS ${COMMENT_PROSE_MAX_WORDS}`,
+    );
   }
   return parsed;
 }
