@@ -1462,6 +1462,8 @@ describe('SubmissionStatusView', () => {
     expect(working?.textContent).toContain('Writing code');
     expect(container.querySelector('.studio-turn-working-pulse')).not.toBeNull();
     expect(container.querySelector('.studio-thread-context')).toBeNull();
+    // Empty runway under the turns so the last message can scroll to the top of the pane.
+    expect(container.querySelector('.studio-thread-scroll-pad')).not.toBeNull();
     // Abandon / checklist / Play stay out of the foot.
     expect(container.querySelector('.studio-context-stop')).toBeNull();
     expect(container.querySelector('.studio-context-progress')).toBeNull();

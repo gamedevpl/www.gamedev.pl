@@ -216,11 +216,15 @@ describe.skipIf(!prereq.ok)('the studio thread as an app screen', () => {
 
       const shell = await page.evaluate(() => {
         const scroller = document.querySelector('.studio-thread-scroll');
+        const pad = document.querySelector('.studio-thread-scroll-pad');
         const detail = document.querySelector('.studio-detail');
         const layout = document.querySelector('.studio-layout');
         return {
           pageScroll: document.documentElement.scrollHeight - document.documentElement.clientHeight,
           scrollerOverflowY: scroller ? getComputedStyle(scroller).overflowY : null,
+          hasScrollPad: Boolean(pad),
+          // Pad must add real slack: last turn can scroll toward the top of the pane.
+          scrollerSlack: scroller && pad ? scroller.scrollHeight - scroller.clientHeight : 0,
           gameOpen: Boolean(document.querySelector('.studio-layout.is-game-open')),
           compactShelf: Boolean(layout?.classList.contains('is-compact-shelf')),
           shelfOpen: Boolean(layout?.classList.contains('is-shelf-open')),
@@ -248,6 +252,10 @@ describe.skipIf(!prereq.ok)('the studio thread as an app screen', () => {
       expect(shell.scrollerOverflowY, 'the transcript needs its own scroller once the page has none').toMatch(
         /^(auto|scroll)$/,
       );
+
+      // Claude/Cursor shape: empty runway under the turns so the last message can rise.
+      expect(shell.hasScrollPad, 'transcript needs a bottom pad for last-turn scroll').toBe(true);
+      expect(shell.scrollerSlack, 'bottom pad must create scrollable slack in the transcript').toBeGreaterThan(80);
 
       // Desktop compact rail (~56px) leaves the work surface owning the rest of the window.
       if (viewport.width >= 801) {

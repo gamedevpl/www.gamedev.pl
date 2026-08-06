@@ -1760,6 +1760,9 @@ function ThreadStream({
         ) : null}
       </ol>
       {after}
+      {/* Empty runway under the turns — Claude/Cursor shape. Lets the reader scroll
+          until the last message sits at the top of the pane, not stuck on the fold. */}
+      <div className="studio-thread-scroll-pad" aria-hidden="true" />
       {zoomed ? <ShotLightbox token={token} item={zoomed} onClose={() => setZoomed(null)} /> : null}
     </div>
   );
