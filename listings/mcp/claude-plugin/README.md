@@ -1,68 +1,76 @@
 # gamedev.pl — Claude plugin
 
-The plugin body for the marketplace declared at
-[`.claude-plugin/marketplace.json`](../../../.claude-plugin/marketplace.json) in the repo
-root. Install it with:
+Build and improve browser games on [gamedev.pl](https://www.gamedev.pl) from Claude.
+
+The plugin connects Claude to the gamedev.pl remote MCP server, so you can open a build
+round, read the brief and starter kit, stage and submit game sources, poll the automated
+quality gate, and exchange messages with the creator — without leaving the conversation.
+Games run in the browser and publish to a public catalog.
+
+> **Creating games is currently in closed beta.** Anyone can install this plugin and
+> inspect its tools, but building needs an approved creator account —
+> [join the waitlist](https://www.gamedev.pl). The server says so when it connects, so you
+> will not discover it only after trying to build something.
+
+## Install
+
+In Claude Code:
 
 ```
 /plugin marketplace add gamedevpl/www.gamedev.pl
 /plugin install gamedev-pl@gamedev-pl
 ```
 
-or from claude.ai: **Settings → Plugins → Add → Add marketplace**, then
+In claude.ai: **Settings → Plugins → Add → Add marketplace**, then
 `gamedevpl/www.gamedev.pl`.
 
-### Installing the plugin does not connect the server — that is deliberate
+**Then approve the `gamedevpl` connector.** Installing the plugin does not connect the
+server on its own, and that is deliberate: a plugin comes from a repository rather than
+from you, so Claude puts every MCP server a plugin declares behind the same per-server
+approval as a project `.mcp.json`. Without that gate, installing a third-party plugin
+could silently attach a remote server to your assistant. Two steps, on purpose.
 
-There is one more step after install: the `gamedevpl` MCP server has to be enabled as a
-connector. It is not automatic and should not be. A plugin comes from a repository rather
-than from you, so Claude puts every MCP server a plugin declares behind **the same
-per-server approval as a project `.mcp.json`** — otherwise installing a third-party plugin
-could silently attach a remote server to your assistant.
+## What you can do with it
 
-So the honest instruction is two steps, not one: **install the plugin, then approve the
-`gamedevpl` connector.** Verified working 2026-08-06 — once approved, the tools load and
-the server's closed-beta notice comes through with them.
+- **Start a new game** from a description and have Claude build, submit and iterate on it
+  until the quality gate passes.
+- **Improve a game you already published**, by opening an improvement round so Claude
+  reads the existing sources before changing them.
+- **Fix what the gate flagged** — read the verdict, patch the sources, resubmit.
 
-## Why this lives in its own directory
+## Links
 
-The plugin's `source` deliberately points here rather than at the repository root. Claude
-discovers plugin components (`skills/`, `commands/`, `agents/`, hooks) from the plugin
-root, and this repository's `.claude/` directory holds internal tooling that is not part
-of any published plugin — including a skill describing the private ops repo. Rooting the
-plugin at a directory that contains only its own manifest means component discovery can
-only ever find what we put here on purpose.
+- Site and waitlist: <https://www.gamedev.pl>
+- Creator Studio: <https://www.gamedev.pl/studio>
+- Source: <https://github.com/gamedevpl/www.gamedev.pl> (GPL-3.0-only)
+- The same server in the official MCP Registry: `pl.gamedev/creator`
 
-## Where the MCP server is declared, and why in two places
+---
 
-[`.mcp.json`](./.mcp.json) in this directory is the one that matters: the documented
-locations for a plugin's MCP config are **`.mcp.json` in the plugin root, or inline in the
-plugin's own `plugin.json`** — _not_ the marketplace entry. The first cut declared it only
-in the marketplace entry, and the plugin installed cleanly while exposing no tools at all,
-which is a confusing failure because nothing errors.
+## Maintainer notes
 
-`plugin.json` points at that file explicitly (`"mcpServers": "./.mcp.json"`), and the
-marketplace entry keeps its inline copy so a loader reading either finds the same server.
-`plugin-manifests.test.ts` asserts all of them agree with the published registry entry and
-with each other, so none can be updated alone.
+Not needed to use the plugin; kept here because each point is a decision that cost
+something to learn.
 
-## What it does
+**The plugin is rooted here, not at the repository root.** Claude discovers plugin
+components (`skills/`, `commands/`, `agents/`, hooks) from the plugin root, and this
+repository's `.claude/` directory holds internal tooling that is not part of any published
+plugin — including a skill describing the private ops repo. Rooting the plugin at a
+directory containing only its own manifest means discovery can only find what we put here
+deliberately. `plugin-manifests.test.ts` pins that path.
 
-Connects Claude to the gamedev.pl remote MCP server so a creator can open a build round,
-read the brief and starter kit, stage and submit game sources, poll the quality gate, and
-exchange messages — from Claude instead of the web editor.
+**The MCP server is declared in [`.mcp.json`](./.mcp.json), and that is the one that
+matters.** A plugin's MCP config is read from `.mcp.json` in the plugin root or inline in
+its own `plugin.json` — _not_ from the marketplace entry. The first cut declared it only
+in the marketplace entry; the plugin installed cleanly and exposed no tools, with nothing
+erroring anywhere. `plugin.json` now points at the file explicitly and the marketplace
+entry keeps an inline copy, so either read path finds the same server.
 
-Creating games is in closed beta. The server says so on connect and in its 401 response;
-anyone can install it and list its tools, but writes need an approved creator account.
+**Versioning is independent** of the Cursor plugin and of the MCP server's registry entry,
+even though all three started at 1.0.1. Claude uses the plugin version to detect updates,
+so a change to what the plugin exposes must ship a bump — otherwise an installed copy
+keeps serving the cached version. 1.0.2 was exactly that: it added the `.mcp.json` that
+1.0.1 lacked. The registry entry versions the _server_ and is immutable once published.
 
-## Versioning
-
-This plugin versions independently of the Cursor plugin and of the MCP server's registry
-entry, even though all three started at 1.0.1. Claude uses the plugin version to detect
-updates, so a fix that changes what the plugin exposes **must** ship a bump — an installed
-copy will otherwise keep serving the cached, broken version on refresh. 1.0.2 is exactly
-that case: it added the `.mcp.json` that 1.0.1 was missing.
-
-The registry entry versions the _server_ and is immutable once published, so it moves only
-when the server itself changes. `plugin-manifests.test.ts` asserts the plugin's own two
-declarations agree, and deliberately does not tie them to the other two lines.
+**Both manifests are validated** with `claude plugin validate listings/mcp/claude-plugin`
+and `claude plugin validate .` before submission.
