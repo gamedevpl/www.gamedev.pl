@@ -1,18 +1,20 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from './AuthContext.js';
+import { catalogMediaUrl } from './catalog.js';
 import { PublishedGameFrame } from './PublishedGameFrame.js';
+import { captureReviewClientContext } from './reviewClientContext.js';
 import { fetchReviewQueue, submitAssessment, type ReviewQueueItem } from './reviewApi.js';
 import type { AssessmentNoteOrigin, AssessmentVerdict } from './reviewTypes.js';
 
 /**
  * Reviewer swipe desk (docs/game-assessment-plan.md).
  *
- * Unlisted `/review`. A trusted colleague walks catalog games and shared creator
- * drafts, swipes keep/cut, and leaves a short reason — typed or spoken via the
- * same Web Speech API as the hero mic. Deliberately untranslated chrome for the
- * operator console's neighbor would be wrong here: reviewers may be Polish-
- * speaking colleagues, so the strings go through i18n.
+ * Unlisted `/review`. Default surface is the catalog MP4 + screenshots — a tiny
+ * sandboxed iframe is a poor place to actually play, and editorial judgment is
+ * mostly "does this look / feel like shelf material". Optional Try play mounts
+ * the live game without writing play telemetry. Verdicts sit in a sticky dock
+ * (thumb zone on phones) so Cut/Keep never scroll away under the media.
  */
 
 interface SpeechRecognitionResultItem {
@@ -53,6 +55,15 @@ type LoadState = 'loading' | 'ready' | 'empty' | 'denied' | 'error';
 
 const SWIPE_THRESHOLD_PX = 80;
 
+function defaultScreenshotIndex(screenshots: Array<{ name: string }>): number {
+  const idx = screenshots.findIndex((shot) => shot.name !== 'opening');
+  return idx >= 0 ? idx : 0;
+}
+
+function hasPreviewMedia(item: ReviewQueueItem): boolean {
+  return Boolean(item.media?.video || (item.media?.screenshots.length ?? 0) > 0);
+}
+
 export function ReviewDesk() {
   const { t } = useTranslation();
   const { user, loading: authLoading } = useAuth();
@@ -69,14 +80,22 @@ export function ReviewDesk() {
   const [busy, setBusy] = useState(false);
   const [flash, setFlash] = useState<AssessmentVerdict | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [playing, setPlaying] = useState(false);
+  const [shotIndex, setShotIndex] = useState(0);
 
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const speechBaseRef = useRef('');
   const pointerStart = useRef<{ x: number; y: number } | null>(null);
   const dragXRef = useRef(0);
   const dragYRef = useRef(0);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
 
   const current = items[0] ?? null;
+  const screenshots = current?.media?.screenshots ?? [];
+  const selectedShot = screenshots[shotIndex] ?? screenshots[0] ?? null;
+  const videoFile = current?.media?.video ?? null;
+  const posterUrl = current && selectedShot ? catalogMediaUrl(current.slug, selectedShot.file, 640) : undefined;
+  const videoUrl = current && videoFile ? catalogMediaUrl(current.slug, videoFile) : null;
 
   useEffect(() => {
     return () => recognitionRef.current?.stop();
@@ -108,6 +127,31 @@ export function ReviewDesk() {
       cancelled = true;
     };
   }, [authLoading, user?.reviewer, source]);
+
+  // Creator drafts (and catalog games with no gate media) open in play mode —
+  // there is nothing else to show. Catalog cards with media stay on the preview.
+  // Keyed on slug only: advancing the queue is what remounts card chrome, not a
+  // fresh object identity for the same game.
+  useEffect(() => {
+    if (!current) return;
+    setPlaying(!hasPreviewMedia(current));
+    setShotIndex(defaultScreenshotIndex(current.media?.screenshots ?? []));
+    setDragX(0);
+    setDragY(0);
+    dragXRef.current = 0;
+    dragYRef.current = 0;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset on game change only
+  }, [current?.slug]);
+
+  useEffect(() => {
+    if (!videoUrl || playing) return;
+    const video = videoRef.current;
+    if (!video) return;
+    void Promise.resolve(video.play()).then(
+      () => undefined,
+      () => undefined,
+    );
+  }, [videoUrl, playing, current?.slug]);
 
   useEffect(() => {
     if (!current || busy) return;
@@ -152,6 +196,7 @@ export function ReviewDesk() {
         verdict,
         note: note.trim() || undefined,
         noteOrigin: note.trim() ? noteOrigin : 'none',
+        clientContext: captureReviewClientContext(),
       });
       setItems((prev) => prev.slice(1));
       setAssessed((n) => n + 1);
@@ -219,9 +264,9 @@ export function ReviewDesk() {
   };
 
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (busy || !current) return;
-    // Don't steal pointer from the note / buttons / iframe chrome.
-    if ((event.target as HTMLElement).closest('textarea, button, a, input, iframe')) return;
+    if (busy || !current || playing) return;
+    // Don't steal pointer from controls / media chrome.
+    if ((event.target as HTMLElement).closest('textarea, button, a, input, video, img')) return;
     pointerStart.current = { x: event.clientX, y: event.clientY };
     event.currentTarget.setPointerCapture(event.pointerId);
   };
@@ -275,6 +320,7 @@ export function ReviewDesk() {
   const keepHint = dragX > 40;
   const cutHint = dragX < -40;
   const skipHint = dragY > 40 && Math.abs(dragY) > Math.abs(dragX);
+  const showMedia = Boolean(current && !playing && hasPreviewMedia(current));
 
   return (
     <section className="review-desk">
@@ -304,84 +350,171 @@ export function ReviewDesk() {
         </p>
       ) : (
         <>
-          <div
-            className={`review-card${flash ? ` is-${flash}` : ''}`}
-            style={{
-              transform: `translate(${dragX}px, ${Math.max(0, dragY) * 0.4}px) rotate(${tilt}deg)`,
-            }}
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={onPointerUp}
-            onPointerCancel={onPointerUp}
-          >
-            <div className="review-card-meta">
-              <h2 className="review-card-title">{current.title}</h2>
-              <p className="review-card-byline">
-                <span className="review-card-slug">{current.slug}</span>
-                {current.creatorHandle ? <span> · @{current.creatorHandle}</span> : null}
-                <span> · {t(`review.source.${current.source}`)}</span>
-              </p>
-            </div>
+          <div className="review-scroll">
+            <div
+              className={`review-card${flash ? ` is-${flash}` : ''}`}
+              style={
+                playing
+                  ? undefined
+                  : {
+                      transform: `translate(${dragX}px, ${Math.max(0, dragY) * 0.4}px) rotate(${tilt}deg)`,
+                    }
+              }
+              onPointerDown={onPointerDown}
+              onPointerMove={onPointerMove}
+              onPointerUp={onPointerUp}
+              onPointerCancel={onPointerUp}
+            >
+              <div className="review-card-meta">
+                <h2 className="review-card-title">{current.title}</h2>
+                <p className="review-card-byline">
+                  <span className="review-card-slug">{current.slug}</span>
+                  {current.creatorHandle ? <span> · @{current.creatorHandle}</span> : null}
+                  <span> · {t(`review.source.${current.source}`)}</span>
+                </p>
+              </div>
 
-            <div className="review-card-stage">
-              <PublishedGameFrame slug={current.slug} title={current.title} embed remixable={false} trackPlay={false} />
-              {keepHint ? <div className="review-stamp is-keep">{t('review.keep')}</div> : null}
-              {cutHint ? <div className="review-stamp is-cut">{t('review.cut')}</div> : null}
-              {skipHint ? <div className="review-stamp is-skip">{t('review.skip')}</div> : null}
+              <div className={`review-card-stage${playing ? ' is-playing' : ''}`}>
+                {playing ? (
+                  <PublishedGameFrame
+                    slug={current.slug}
+                    title={current.title}
+                    embed
+                    remixable={false}
+                    trackPlay={false}
+                  />
+                ) : showMedia ? (
+                  <>
+                    {videoUrl ? (
+                      <video
+                        ref={videoRef}
+                        className="review-preview-video"
+                        src={videoUrl}
+                        poster={posterUrl}
+                        muted
+                        loop
+                        playsInline
+                        controls
+                        preload="metadata"
+                      />
+                    ) : posterUrl ? (
+                      <img
+                        className="review-preview-still"
+                        src={posterUrl}
+                        alt={t('review.previewImage', { title: current.title })}
+                        decoding="async"
+                      />
+                    ) : null}
+                  </>
+                ) : (
+                  <div className="review-preview-empty">
+                    <p>{t('review.noMedia')}</p>
+                    <button type="button" className="review-play-btn" onClick={() => setPlaying(true)}>
+                      {t('review.tryPlay')}
+                    </button>
+                  </div>
+                )}
+                {keepHint ? <div className="review-stamp is-keep">{t('review.keep')}</div> : null}
+                {cutHint ? <div className="review-stamp is-cut">{t('review.cut')}</div> : null}
+                {skipHint ? <div className="review-stamp is-skip">{t('review.skip')}</div> : null}
+              </div>
+
+              {showMedia && screenshots.length > 1 ? (
+                <div className="review-shots" role="list" aria-label={t('review.shotsLabel')}>
+                  {screenshots.map((shot, index) => (
+                    <button
+                      key={shot.file}
+                      type="button"
+                      role="listitem"
+                      className={index === shotIndex ? 'review-shot is-active' : 'review-shot'}
+                      aria-pressed={index === shotIndex}
+                      aria-label={t('review.shotNamed', { name: shot.name })}
+                      onClick={() => setShotIndex(index)}
+                    >
+                      <img src={catalogMediaUrl(current.slug, shot.file, 96)} alt="" loading="lazy" decoding="async" />
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+
+              <div className="review-stage-tools">
+                {hasPreviewMedia(current) ? (
+                  <button
+                    type="button"
+                    className={playing ? 'review-play-btn is-active' : 'review-play-btn'}
+                    aria-pressed={playing}
+                    onClick={() => setPlaying((prev) => !prev)}
+                  >
+                    {playing ? t('review.showPreview') : t('review.tryPlay')}
+                  </button>
+                ) : null}
+              </div>
             </div>
           </div>
 
-          <div className="review-note">
-            <label className="review-note-label" htmlFor="review-note">
-              {t('review.noteLabel')}
-            </label>
-            <div className="review-note-row">
-              <textarea
-                id="review-note"
-                className="review-note-input"
-                rows={2}
-                value={note}
-                maxLength={2000}
-                placeholder={t('review.notePlaceholder')}
-                onChange={(event) => {
-                  setNote(event.target.value);
-                  if (event.target.value.trim()) {
-                    setNoteOrigin((prev) => (prev === 'speech' ? 'speech' : 'text'));
-                  } else {
-                    setNoteOrigin('none');
-                  }
-                }}
-              />
+          <div className="review-dock">
+            <div className="review-note">
+              <label className="review-note-label" htmlFor="review-note">
+                {t('review.noteLabel')}
+              </label>
+              <div className="review-note-row">
+                <textarea
+                  id="review-note"
+                  className="review-note-input"
+                  rows={2}
+                  value={note}
+                  maxLength={2000}
+                  placeholder={t('review.notePlaceholder')}
+                  onChange={(event) => {
+                    setNote(event.target.value);
+                    if (event.target.value.trim()) {
+                      setNoteOrigin((prev) => (prev === 'speech' ? 'speech' : 'text'));
+                    } else {
+                      setNoteOrigin('none');
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  className={isListening ? 'review-mic is-live' : 'review-mic'}
+                  aria-pressed={isListening}
+                  aria-label={isListening ? t('review.micStop') : t('review.micStart')}
+                  onClick={toggleMic}
+                >
+                  {isListening ? t('review.micStopShort') : t('review.micStartShort')}
+                </button>
+              </div>
+              {micNotice ? (
+                <p className="review-mic-notice" role="status">
+                  {micNotice}
+                </p>
+              ) : null}
+            </div>
+
+            <div className="review-actions" role="group" aria-label={t('review.actionsLabel')}>
+              <button type="button" className="review-action is-cut" disabled={busy} onClick={() => void commit('cut')}>
+                {t('review.cut')}
+                <span className="review-action-hint">←</span>
+              </button>
               <button
                 type="button"
-                className={isListening ? 'review-mic is-live' : 'review-mic'}
-                aria-pressed={isListening}
-                aria-label={isListening ? t('review.micStop') : t('review.micStart')}
-                onClick={toggleMic}
+                className="review-action is-skip"
+                disabled={busy}
+                onClick={() => void commit('skip')}
               >
-                {isListening ? t('review.micStopShort') : t('review.micStartShort')}
+                {t('review.skip')}
+                <span className="review-action-hint">↓</span>
+              </button>
+              <button
+                type="button"
+                className="review-action is-keep"
+                disabled={busy}
+                onClick={() => void commit('keep')}
+              >
+                {t('review.keep')}
+                <span className="review-action-hint">→</span>
               </button>
             </div>
-            {micNotice ? (
-              <p className="review-mic-notice" role="status">
-                {micNotice}
-              </p>
-            ) : null}
-          </div>
-
-          <div className="review-actions" role="group" aria-label={t('review.actionsLabel')}>
-            <button type="button" className="review-action is-cut" disabled={busy} onClick={() => void commit('cut')}>
-              {t('review.cut')}
-              <span className="review-action-hint">←</span>
-            </button>
-            <button type="button" className="review-action is-skip" disabled={busy} onClick={() => void commit('skip')}>
-              {t('review.skip')}
-              <span className="review-action-hint">↓</span>
-            </button>
-            <button type="button" className="review-action is-keep" disabled={busy} onClick={() => void commit('keep')}>
-              {t('review.keep')}
-              <span className="review-action-hint">→</span>
-            </button>
           </div>
         </>
       )}

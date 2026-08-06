@@ -5,6 +5,7 @@ import type { ContentChecker } from './moderation.js';
 import { logModerationRejection } from './moderation-metrics.js';
 import { sanitizeCreatorText } from './submission-status.js';
 import type {
+  AssessmentClientContext,
   AssessmentNoteOrigin,
   AssessmentSource,
   AssessmentVerdict,
@@ -27,11 +28,18 @@ const MAX_NOTE = 2000;
 const MAX_ADMIN_ROWS = 200;
 const MAX_QUEUE = 500;
 
+export interface ReviewCatalogMedia {
+  screenshots: Array<{ name: string; file: string }>;
+  video: string | null;
+}
+
 export interface ReviewCatalogEntry {
   slug: string;
   title: string;
   creatorHandle: string | null;
   genre?: string | null;
+  /** Gate-produced stills + MP4 when the catalog knows them. */
+  media?: ReviewCatalogMedia | null;
 }
 
 export interface ReviewQueueItem {
@@ -42,6 +50,8 @@ export interface ReviewQueueItem {
   genre: string | null;
   /** Present for creator-source items that are still unpublished. */
   issueNumber: number | null;
+  /** Catalog preview media; null for creator drafts that have not published yet. */
+  media: ReviewCatalogMedia | null;
 }
 
 export interface ReviewRoutesOptions {
@@ -63,6 +73,20 @@ const QueueQuerySchema = z.object({
   source: z.enum(['catalog', 'creator', 'all']).optional(),
 });
 
+const ClientContextSchema = z
+  .object({
+    viewportW: z.number().int().min(1).max(10000),
+    viewportH: z.number().int().min(1).max(10000),
+    screenW: z.number().int().min(1).max(10000),
+    screenH: z.number().int().min(1).max(10000),
+    dpr: z.number().min(0.5).max(4),
+    input: z.enum(['touch', 'mouse', 'mixed']),
+    platform: z.enum(['ios', 'android', 'mac', 'windows', 'linux', 'other']),
+    lang: z.string().trim().min(1).max(32).nullable().optional(),
+    ua: z.string().trim().min(1).max(160).nullable().optional(),
+  })
+  .strict();
+
 const AssessmentBodySchema = z.object({
   slug: z.string().trim().min(1).max(80).regex(SLUG_PATTERN, 'invalid slug'),
   source: z.enum(['catalog', 'creator']),
@@ -71,7 +95,23 @@ const AssessmentBodySchema = z.object({
   verdict: z.enum(['keep', 'cut', 'skip']),
   note: z.string().max(MAX_NOTE).optional(),
   noteOrigin: z.enum(['text', 'speech', 'none']).optional(),
+  clientContext: ClientContextSchema.optional(),
 });
+
+function normalizeClientContext(raw: z.infer<typeof ClientContextSchema> | undefined): AssessmentClientContext | null {
+  if (!raw) return null;
+  return {
+    viewportW: raw.viewportW,
+    viewportH: raw.viewportH,
+    screenW: raw.screenW,
+    screenH: raw.screenH,
+    dpr: raw.dpr,
+    input: raw.input,
+    platform: raw.platform,
+    lang: raw.lang ?? null,
+    ua: raw.ua ?? null,
+  };
+}
 
 export function isReviewer(
   uid: string | undefined,
@@ -153,6 +193,7 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
           creatorHandle: entry.creatorHandle,
           genre: entry.genre ?? null,
           issueNumber: null,
+          media: entry.media ?? null,
         });
         if (items.length >= MAX_QUEUE) break;
       }
@@ -179,6 +220,7 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
           creatorHandle,
           genre: null,
           issueNumber: record.issueNumber,
+          media: null,
         });
         if (items.length >= MAX_QUEUE) break;
       }
@@ -246,6 +288,7 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
       verdict,
       note,
       noteOrigin,
+      clientContext: normalizeClientContext(body.data.clientContext),
     });
 
     return { assessment };

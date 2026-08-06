@@ -1,6 +1,16 @@
-import type { AssessmentNoteOrigin, AssessmentSource, AssessmentVerdict } from './reviewTypes.js';
+import type {
+  AssessmentClientContext,
+  AssessmentNoteOrigin,
+  AssessmentSource,
+  AssessmentVerdict,
+} from './reviewTypes.js';
 
 const API_BASE = '';
+
+export interface ReviewQueueMedia {
+  screenshots: Array<{ name: string; file: string }>;
+  video: string | null;
+}
 
 export interface ReviewQueueItem {
   slug: string;
@@ -9,6 +19,8 @@ export interface ReviewQueueItem {
   creatorHandle: string | null;
   genre: string | null;
   issueNumber: number | null;
+  /** Gate-produced catalog media; null for unpublished creator drafts. */
+  media: ReviewQueueMedia | null;
 }
 
 export interface ReviewQueueResponse {
@@ -28,6 +40,7 @@ export interface GameAssessment {
   verdict: AssessmentVerdict;
   note: string;
   noteOrigin: AssessmentNoteOrigin;
+  clientContext: AssessmentClientContext | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -40,6 +53,7 @@ export interface SubmitAssessmentInput {
   verdict: AssessmentVerdict;
   note?: string;
   noteOrigin?: AssessmentNoteOrigin;
+  clientContext?: AssessmentClientContext | null;
 }
 
 export interface AdminAssessmentsResponse {

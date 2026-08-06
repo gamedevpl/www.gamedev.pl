@@ -19,9 +19,12 @@ judgment_ from someone who knows what the shelf should feel like.
 | Surface       | Unlisted `/review`. 404 to everyone else (API answers 404, not 403).                                                                 |
 | Queue         | **Catalog** (published) and **Creator** (delivered, shared drafts that are not yet published). Private unshared drafts stay private. |
 | Gesture       | Swipe right = keep, left = cut, down/button = skip. Keyboard: `→` / `←` / `↓`.                                                       |
+| Preview       | Catalog **MP4 + screenshots** first (gate media). Optional **Try play** mounts the sandboxed game without play telemetry.            |
+| Mobile dock   | Note + Cut/Skip/Keep sit in a **sticky bottom dock** (thumb zone). Install/update banners lift the dock via `:has(...)`.             |
 | Rationale     | Free text and/or browser speech-to-text (same Web Speech API as the hero mic). Only the transcript is stored — no audio upload.      |
+| Client env    | Viewport, screen size, DPR, input method (`touch`/`mouse`/`mixed`), platform, lang, truncated UA — stored on the row at commit time. |
 | Storage       | `gameAssessments/{slug}:{reviewerUid}` — one row per reviewer per game; a second pass overwrites.                                    |
-| Operator read | `/admin/assessments` — aggregate keep/cut/skip per game plus recent notes.                                                           |
+| Operator read | `/admin/assessments` — aggregate keep/cut/skip per game plus recent notes (with env line).                                           |
 
 ## Non-goals (this steel thread)
 
@@ -47,12 +50,12 @@ Grant access by adding a colleague's uid to `REVIEWER_UIDS` on the Cloud Run ser
 
 ## API
 
-| Method | Path                                             | Who      | Body / query                                                            |
-| ------ | ------------------------------------------------ | -------- | ----------------------------------------------------------------------- |
-| `GET`  | `/api/review/queue?source=catalog\|creator\|all` | reviewer | Queue of games not yet assessed by this reviewer                        |
-| `POST` | `/api/review/assessments`                        | reviewer | `{ slug, source, title?, creatorHandle?, verdict, note?, noteOrigin? }` |
-| `GET`  | `/api/review/assessments/mine`                   | reviewer | This reviewer's rows (progress / re-edit)                               |
-| `GET`  | `/api/admin/assessments`                         | admin    | Aggregate + recent rows for the operator tab                            |
+| Method | Path                                             | Who      | Body / query                                                                            |
+| ------ | ------------------------------------------------ | -------- | --------------------------------------------------------------------------------------- |
+| `GET`  | `/api/review/queue?source=catalog\|creator\|all` | reviewer | Queue of games not yet assessed by this reviewer                                        |
+| `POST` | `/api/review/assessments`                        | reviewer | `{ slug, source, title?, creatorHandle?, verdict, note?, noteOrigin?, clientContext? }` |
+| `GET`  | `/api/review/assessments/mine`                   | reviewer | This reviewer's rows (progress / re-edit)                                               |
+| `GET`  | `/api/admin/assessments`                         | admin    | Aggregate + recent rows for the operator tab                                            |
 
 Notes are moderated and sanitized when non-empty (same checker as player feedback).
 `skip` and empty notes are allowed so a fast pass is not blocked on writing.
@@ -71,3 +74,9 @@ into the existing `health` bucket (same unlisted-console posture as `/admin`).
 - Optional export / CSV for offline curation sessions.
 - Tie cut consensus into the improvement-loop suggestion router as a _signal class_,
   never as raw note text.
+- **Reviewer-captured clip attached to an assessment.** The live game runs in a sandboxed
+  iframe with no `allow-same-origin`, so the parent page cannot call
+  `canvas.captureStream()` / `MediaRecorder` on the game. A PNG still is already possible
+  via the playtest bridge (`capturePng` in `gamePlayer.ts`). A reviewer video would need
+  either a bridge-exported stream from the game document or a server-side capture — not
+  the catalog MP4, which is already shown on the desk.

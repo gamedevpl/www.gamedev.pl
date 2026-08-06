@@ -14671,14 +14671,18 @@ body.remix-entry-open {
   color: var(--muted);
 }
 
-/* Reviewer assessment desk (docs/game-assessment-plan.md) */
+/* Reviewer assessment desk (docs/game-assessment-plan.md)
+   Shape is written once outside media queries: scrollable media above a sticky
+   dock that holds the note + Cut/Skip/Keep. Phone rules only change sizes. */
 .review-desk {
   width: min(720px, 100%);
   margin: 0 auto;
-  padding: 1rem 1rem 5.5rem;
+  padding: 1rem 1rem 0;
   display: flex;
   flex-direction: column;
-  gap: 0.9rem;
+  gap: 0.75rem;
+  /* Fill the viewport under the site header so the dock can stick to the bottom. */
+  min-height: calc(100dvh - 4.5rem);
 }
 
 .review-desk-header {
@@ -14687,6 +14691,7 @@ body.remix-entry-open {
   align-items: flex-end;
   justify-content: space-between;
   gap: 0.75rem;
+  flex: none;
 }
 
 .review-desk-title {
@@ -14722,6 +14727,13 @@ body.remix-entry-open {
   color: var(--text);
   border-color: var(--turquoise);
   background: rgba(0, 228, 172, 0.1);
+}
+
+.review-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 
 .review-card {
@@ -14769,12 +14781,93 @@ body.remix-entry-open {
   background: #000;
 }
 
+.review-card-stage.is-playing {
+  /* Live play needs more vertical room than a muted preview loop. */
+  aspect-ratio: 16 / 11;
+  min-height: min(52dvh, 420px);
+}
+
 .review-card-stage .game-frame,
-.review-card-stage iframe {
+.review-card-stage iframe,
+.review-preview-video,
+.review-preview-still {
   width: 100%;
   height: 100%;
   border: 0;
   display: block;
+  object-fit: contain;
+  background: #000;
+}
+
+.review-preview-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+.review-preview-empty p {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.review-shots {
+  display: flex;
+  gap: 0.4rem;
+  padding: 0.55rem 0.75rem;
+  overflow-x: auto;
+}
+
+.review-shot {
+  flex: none;
+  width: 56px;
+  height: 36px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #111;
+  cursor: pointer;
+}
+
+.review-shot.is-active {
+  border-color: var(--turquoise);
+}
+
+.review-shot img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.review-stage-tools {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.45rem 0.75rem 0.7rem;
+}
+
+.review-play-btn {
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  background: var(--panel-card);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 0.4rem 0.85rem;
+  cursor: pointer;
+}
+
+.review-play-btn.is-active {
+  border-color: var(--turquoise);
+  color: var(--turquoise);
 }
 
 .review-stamp {
@@ -14788,6 +14881,7 @@ body.remix-entry-open {
   text-transform: uppercase;
   pointer-events: none;
   background: rgba(15, 20, 24, 0.55);
+  z-index: 2;
 }
 
 .review-stamp.is-keep {
@@ -14813,6 +14907,30 @@ body.remix-entry-open {
   border-color: var(--muted);
 }
 
+/* Sticky verdict dock — always in the thumb zone; media scrolls above it. */
+.review-dock {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin: 0 -1rem;
+  padding: 0.65rem 1rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--panel-border);
+  background: color-mix(in srgb, var(--bg, #0f1418) 92%, transparent);
+  backdrop-filter: blur(10px);
+}
+
+/* Install / update banners pin to the bottom edge too — lift the dock so Cut/Keep
+   stay reachable (same coexistence rule as the studio shell). */
+.app:has(.install-prompt) .review-dock,
+.app:has(.app-update) .review-dock {
+  bottom: 5.5rem;
+  padding-bottom: 0.75rem;
+}
+
 .review-note-label {
   display: block;
   margin-bottom: 0.35rem;
@@ -14828,14 +14946,15 @@ body.remix-entry-open {
 
 .review-note-input {
   flex: 1;
-  resize: vertical;
-  min-height: 3.2rem;
+  resize: none;
+  min-height: 2.6rem;
+  max-height: 5.5rem;
   border: 1px solid var(--panel-border);
   border-radius: 12px;
   background: var(--panel-card);
   color: var(--text);
   font: inherit;
-  padding: 0.65rem 0.8rem;
+  padding: 0.55rem 0.75rem;
 }
 
 .review-mic {
@@ -14882,6 +15001,7 @@ body.remix-entry-open {
   font: inherit;
   font-weight: 700;
   padding: 0.85rem 0.5rem;
+  min-height: 44px;
   cursor: pointer;
   display: flex;
   flex-direction: column;
@@ -14982,22 +15102,44 @@ body.remix-entry-open {
   font-size: 0.88rem;
 }
 
+.admin-assessments-env {
+  margin: 0.2rem 0 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
 @media (max-width: 640px) {
   .review-desk {
-    /* Leave room for the install/update banners that share the bottom edge. */
-    padding-bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+    padding-top: 0.65rem;
+    gap: 0.55rem;
+    min-height: calc(100dvh - 3.75rem);
   }
 
-  /* Shorter than 4/5 so the note + Cut/Skip/Keep row stay on the first screen
-     with the game — a swipe desk that forces a scroll to reach the verdict
-     buttons is not a swipe desk. */
-  .review-card-stage {
-    aspect-ratio: 16 / 11;
-    max-height: min(42dvh, 280px);
+  .review-desk-title {
+    font-size: 1.2rem;
+  }
+
+  .review-card-meta {
+    padding: 0.65rem 0.75rem 0.35rem;
+  }
+
+  /* Preview stays compact; the sticky dock owns the verdicts. Live play grows. */
+  .review-card-stage:not(.is-playing) {
+    aspect-ratio: 16 / 10;
+    max-height: min(38dvh, 260px);
+  }
+
+  .review-card-stage.is-playing {
+    min-height: min(46dvh, 340px);
+  }
+
+  .review-note-label {
+    font-size: 0.78rem;
   }
 
   .review-action {
-    padding: 0.75rem 0.35rem;
+    padding: 0.7rem 0.3rem;
     font-size: 0.92rem;
   }
 }

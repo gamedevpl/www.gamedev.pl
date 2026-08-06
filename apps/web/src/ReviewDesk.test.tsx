@@ -49,6 +49,13 @@ beforeEach(async () => {
         creatorHandle: null,
         genre: 'arcade',
         issueNumber: null,
+        media: {
+          screenshots: [
+            { name: 'opening', file: 'opening.png' },
+            { name: 'mid', file: 'mid.png' },
+          ],
+          video: 'gameplay.mp4',
+        },
       },
       {
         slug: 'neon-courier',
@@ -57,6 +64,7 @@ beforeEach(async () => {
         creatorHandle: 'ada',
         genre: 'racing',
         issueNumber: null,
+        media: { screenshots: [{ name: 'opening', file: 'opening.png' }], video: null },
       },
     ],
   });
@@ -70,6 +78,7 @@ beforeEach(async () => {
     verdict: input.verdict,
     note: '',
     noteOrigin: 'none',
+    clientContext: null,
     createdAt: '2026-08-06T00:00:00.000Z',
     updatedAt: '2026-08-06T00:00:00.000Z',
   }));
@@ -93,7 +102,7 @@ async function flush() {
 }
 
 describe('ReviewDesk', () => {
-  it('loads the queue and advances on Keep', async () => {
+  it('shows catalog preview media and advances on Keep', async () => {
     root = createRoot(container);
     await act(async () => {
       root!.render(<ReviewDesk />);
@@ -101,8 +110,12 @@ describe('ReviewDesk', () => {
     await flush();
 
     expect(container.textContent).toContain('Sky Dodge');
+    expect(container.querySelector('video.review-preview-video')).toBeTruthy();
+    expect(container.querySelector('[data-testid="frame"]')).toBeNull();
+    expect(container.querySelector('.review-dock')).toBeTruthy();
     expect(container.querySelector('#review-note')).toBeTruthy();
     expect(container.textContent).toMatch(/Mic/);
+    expect(container.textContent).toMatch(/Try play/);
 
     const keep = Array.from(container.querySelectorAll('button')).find((button) =>
       button.textContent?.includes('Keep'),
@@ -114,9 +127,39 @@ describe('ReviewDesk', () => {
     await flush();
 
     expect(reviewApi.submitAssessment).toHaveBeenCalledWith(
-      expect.objectContaining({ slug: 'sky-dodge', verdict: 'keep' }),
+      expect.objectContaining({
+        slug: 'sky-dodge',
+        verdict: 'keep',
+        clientContext: expect.objectContaining({
+          viewportW: expect.any(Number),
+          viewportH: expect.any(Number),
+          input: expect.stringMatching(/^(touch|mouse|mixed)$/),
+          platform: expect.any(String),
+        }),
+      }),
     );
     expect(container.textContent).toContain('Neon Courier');
+  });
+
+  it('mounts the live frame when Try play is pressed', async () => {
+    root = createRoot(container);
+    await act(async () => {
+      root!.render(<ReviewDesk />);
+    });
+    await flush();
+
+    const tryPlay = Array.from(container.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('Try play'),
+    );
+    expect(tryPlay).toBeTruthy();
+    await act(async () => {
+      tryPlay!.click();
+    });
+    await flush();
+
+    expect(container.querySelector('[data-testid="frame"]')?.textContent).toContain('sky-dodge');
+    expect(container.querySelector('video.review-preview-video')).toBeNull();
+    expect(container.textContent).toMatch(/Show preview/);
   });
 
   it('sends cut when the Cut control is pressed', async () => {

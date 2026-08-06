@@ -59,8 +59,26 @@ describe('reviewer assessment desk', () => {
       reviewRoutes: {
         listCatalog: async () =>
           opts.catalog ?? [
-            { slug: 'sky-dodge', title: 'Sky Dodge', creatorHandle: null, genre: 'arcade' },
-            { slug: 'neon-courier', title: 'Neon Courier', creatorHandle: 'ada', genre: 'racing' },
+            {
+              slug: 'sky-dodge',
+              title: 'Sky Dodge',
+              creatorHandle: null,
+              genre: 'arcade',
+              media: {
+                screenshots: [
+                  { name: 'opening', file: 'opening.png' },
+                  { name: 'mid', file: 'mid.png' },
+                ],
+                video: 'gameplay.mp4',
+              },
+            },
+            {
+              slug: 'neon-courier',
+              title: 'Neon Courier',
+              creatorHandle: 'ada',
+              genre: 'racing',
+              media: { screenshots: [{ name: 'opening', file: 'opening.png' }], video: null },
+            },
           ],
       },
     });
@@ -83,9 +101,18 @@ describe('reviewer assessment desk', () => {
 
     const queue = await app.inject({ method: 'GET', url: '/api/review/queue', headers: { cookie: reviewer } });
     expect(queue.statusCode).toBe(200);
-    const body = JSON.parse(queue.body) as { remaining: number; items: Array<{ slug: string }> };
+    const body = JSON.parse(queue.body) as {
+      remaining: number;
+      items: Array<{ slug: string; media: { video: string | null; screenshots: unknown[] } | null }>;
+    };
     expect(body.remaining).toBe(2);
     expect(body.items.map((i) => i.slug)).toEqual(['sky-dodge', 'neon-courier']);
+    expect(body.items[0].media).toEqual(
+      expect.objectContaining({
+        video: 'gameplay.mp4',
+        screenshots: expect.arrayContaining([expect.objectContaining({ file: 'mid.png' })]),
+      }),
+    );
   });
 
   it('lets admins review without being listed in REVIEWER_UIDS', async () => {
@@ -121,12 +148,49 @@ describe('reviewer assessment desk', () => {
     expect(assessment.verdict).toBe('cut');
     expect(assessment.noteOrigin).toBe('speech');
     expect(assessment.note).toContain('mushy');
+    expect(assessment.clientContext).toBeNull();
 
     const queue = await app.inject({ method: 'GET', url: '/api/review/queue', headers: { cookie } });
     const body = JSON.parse(queue.body) as { remaining: number; assessed: number; items: Array<{ slug: string }> };
     expect(body.assessed).toBe(1);
     expect(body.remaining).toBe(1);
     expect(body.items.map((i) => i.slug)).toEqual(['neon-courier']);
+  });
+
+  it('stores reviewer client context with the verdict', async () => {
+    const { app } = await makeApp();
+    const cookie = await sessionCookie(app, 'reviewer');
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/review/assessments',
+      headers: { cookie },
+      payload: {
+        slug: 'sky-dodge',
+        source: 'catalog',
+        verdict: 'keep',
+        clientContext: {
+          viewportW: 390,
+          viewportH: 844,
+          screenW: 390,
+          screenH: 844,
+          dpr: 3,
+          input: 'touch',
+          platform: 'ios',
+          lang: 'en-US',
+          ua: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)',
+        },
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).assessment.clientContext).toEqual(
+      expect.objectContaining({
+        viewportW: 390,
+        viewportH: 844,
+        input: 'touch',
+        platform: 'ios',
+        dpr: 3,
+      }),
+    );
   });
 
   it('allows skip without a note and rejects moderated notes', async () => {
@@ -236,8 +300,9 @@ describe('reviewer assessment desk', () => {
         creatorHandle: null,
         reviewerUid: 'dev:reviewer',
         verdict: i % 2 === 0 ? 'keep' : 'cut',
-        note: null,
+        note: '',
         noteOrigin: 'none',
+        clientContext: null,
       });
     }
 

@@ -508,6 +508,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
           title: entry.title,
           creatorHandle: entry.creatorHandle ?? null,
           genre: entry.genre,
+          media: entry.media ?? null,
         }));
       }
     } catch {
@@ -522,6 +523,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         title: entry.title,
         creatorHandle: entry.creatorHandle ?? null,
         genre: entry.genre,
+        media: entry.media ?? null,
       }));
   };
   await registerReviewRoutes(app, {

@@ -958,7 +958,13 @@
     "keep": "Keep",
     "cut": "Cut",
     "skip": "Skip",
-    "error": "Could not save that assessment."
+    "error": "Could not save that assessment.",
+    "tryPlay": "Try play",
+    "showPreview": "Show preview",
+    "noMedia": "No preview media yet — try the live game.",
+    "previewImage": "Preview of {{title}}",
+    "shotsLabel": "Screenshots",
+    "shotNamed": "Screenshot {{name}}"
   },
   "creatorProfile": {
     "back": "Back",

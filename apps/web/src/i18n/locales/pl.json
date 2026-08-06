@@ -962,7 +962,13 @@
     "keep": "Zostaw",
     "cut": "Wytnij",
     "skip": "Pomiń",
-    "error": "Nie udało się zapisać oceny."
+    "error": "Nie udało się zapisać oceny.",
+    "tryPlay": "Zagraj",
+    "showPreview": "Pokaż podgląd",
+    "noMedia": "Brak podglądu — spróbuj żywej gry.",
+    "previewImage": "Podgląd: {{title}}",
+    "shotsLabel": "Zrzuty ekranu",
+    "shotNamed": "Zrzut {{name}}"
   },
   "creatorProfile": {
     "back": "Wróć",
