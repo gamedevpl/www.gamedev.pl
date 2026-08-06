@@ -29,16 +29,19 @@ function firstRuleBody(selector: string): string {
 describe('desktop hero composer pill', () => {
   it('uses a fixed-height grid so + / field / mic / send share one centerline', () => {
     // Flex + wrapping placeholders previously put text above/below the icon midline.
-    // A 52px grid row with 36px cells is the contract that stops that.
+    // A 44px shell around 36px cells is the contract — taller padding made the
+    // placeholder read as floating above the visual centerline.
     const bar = firstRuleBody('.prompt-composer-bar');
     expect(bar).toMatch(/display:\s*grid/);
     expect(bar).toMatch(/align-items:\s*center/);
-    expect(bar).toMatch(/height:\s*52px/);
+    expect(bar).toMatch(/height:\s*44px/);
+    expect(bar).toMatch(/padding:\s*4px 6px/);
     expect(bar).toMatch(/grid-template-columns:\s*36px minmax\(0,\s*1fr\) 36px 36px/);
 
     const input = firstRuleBody('.big-prompt-input');
     expect(input).toMatch(/height:\s*36px/);
     expect(input).toMatch(/line-height:\s*36px/);
+    expect(input).toMatch(/font-size:\s*16px/);
     expect(input).not.toMatch(/field-sizing:/);
     expect(input).not.toMatch(/min-height:\s*128px/);
   });
