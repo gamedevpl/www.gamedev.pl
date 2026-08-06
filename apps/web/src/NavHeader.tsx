@@ -121,9 +121,8 @@ export function NavHeader({ activeBuildCount, onNavigate, onHome, onStudio, upTa
           </button>
         )}
 
-        {/* Rich Studio chip on desktop; on a phone it collapses into an icon that
-            visually joins the avatar/bell pill (still its own ≥44px control — blending
-            the hit targets would make three actions fight one fingertip). */}
+        {/* Rich Studio chip on desktop; on a phone it collapses to a solid icon
+            button matching the hamburger — own 44px target, count as a corner badge. */}
         <button
           type="button"
           className={`studio-chip${activeBuildCount > 0 ? ' is-live' : ''}`}
@@ -142,11 +141,13 @@ export function NavHeader({ activeBuildCount, onNavigate, onHome, onStudio, upTa
           ) : null}
           <span className="studio-chip-icon" aria-hidden="true">
             <PixelIcon name="wrench" size={14} />
-            {activeBuildCount > 0 ? (
-              <span className="studio-chip-badge">{activeBuildCount > 99 ? '99+' : activeBuildCount}</span>
-            ) : null}
           </span>
           <span className="studio-chip-label">{t('myGames.openStudio')}</span>
+          {activeBuildCount > 0 ? (
+            <span className="studio-chip-badge" aria-hidden="true">
+              {activeBuildCount > 99 ? '99+' : activeBuildCount}
+            </span>
+          ) : null}
         </button>
 
         <LanguageSwitcher />

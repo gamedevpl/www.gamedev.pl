@@ -1053,19 +1053,36 @@ button:disabled {
   display: none;
 }
 
-/* Phone only — not `(pointer: coarse)` alone. A wide touch laptop still has room
-   for the rich chip; collapsing there would hide the count behind an icon for no
-   chrome gain. The avatar/bell merge also only works once name/sign-out are hidden. */
+/* Phone: drop the rich pill for a solid icon button that matches the hamburger.
+   No visual merge with the avatar/bell chip — that read as a broken D-shape. */
 @media (max-width: 768px) {
   .studio-chip {
     min-width: 44px;
     min-height: 44px;
     justify-content: center;
-    padding: 0 10px;
+    padding: 6px;
     gap: 0;
+    border-radius: 8px;
+    background: var(--panel-card);
+    border: 1px solid var(--panel-border);
+    color: var(--text);
   }
 
-  /* Icon-only: the full phrase stays in aria-label; the badge carries the glance count. */
+  .studio-chip.is-live {
+    /* Keep the solid chrome; the badge carries the live signal. */
+    border-color: var(--panel-border);
+    background: var(--panel-card);
+    color: var(--text);
+  }
+
+  .studio-chip:hover,
+  .studio-chip:focus-visible,
+  .studio-chip.is-live:hover,
+  .studio-chip.is-live:focus-visible {
+    border-color: var(--turquoise);
+    color: var(--turquoise);
+  }
+
   .studio-chip .live-dot,
   .studio-chip-count,
   .studio-chip-label {
@@ -1075,8 +1092,8 @@ button:disabled {
   .studio-chip-badge {
     display: block;
     position: absolute;
-    top: -7px;
-    right: -9px;
+    top: 2px;
+    right: 2px;
     min-width: 16px;
     height: 16px;
     padding: 0 4px;
@@ -1087,39 +1104,6 @@ button:disabled {
     font-weight: 700;
     line-height: 16px;
     text-align: center;
-  }
-
-  /* Signed-in: join the avatar/bell pill so chrome reads as one chip, but keep
-     three separate buttons — a shared hit target would fail the 44px floor and
-     make Studio/account/notifications compete for the same thumb. */
-  .user-profile-badge {
-    border-top-right-radius: 0;
-    border-bottom-right-radius: 0;
-    border-right-color: transparent;
-  }
-
-  .user-profile-badge + .studio-chip {
-    /* Cancel the header-actions gap so the two pills share one outline. */
-    margin-left: -9px;
-    border-top-left-radius: 0;
-    border-bottom-left-radius: 0;
-  }
-
-  .user-profile-badge + .studio-chip:not(.is-live) {
-    background: var(--panel-card);
-    border-color: var(--panel-border);
-    color: var(--text);
-  }
-
-  .user-avatar-btn {
-    min-width: 44px;
-    min-height: 44px;
-  }
-
-  /* Match the Studio icon floor so the blended pill is three equal thumb targets. */
-  .user-profile-badge .notif-trigger {
-    width: 44px;
-    height: 44px;
   }
 }
 
