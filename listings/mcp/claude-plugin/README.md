@@ -30,6 +30,18 @@ from you, so Claude puts every MCP server a plugin declares behind the same per-
 approval as a project `.mcp.json`. Without that gate, installing a third-party plugin
 could silently attach a remote server to your assistant. Two steps, on purpose.
 
+### Verified surfaces
+
+| Surface       | Verified   | How far the check went                                                                      |
+| ------------- | ---------- | ------------------------------------------------------------------------------------------- |
+| claude.ai     | 2026-08-06 | Plugin installs, connector approves, tools load, server's own notice arrives with them      |
+| Claude Cowork | 2026-08-06 | The above, plus an authenticated `create_game` round-trip returning a real `jobId` and slug |
+| Claude Code   | —          | Not yet exercised through the plugin path                                                   |
+
+Recorded because "installs cleanly" and "actually exposes the server" turned out to be
+independent: 1.0.1 did the first and not the second, and nothing errored in between. A
+surface is only listed here once a tool call has really run on it.
+
 ## What you can do with it
 
 - **Start a new game** from a description and have Claude build, submit and iterate on it
