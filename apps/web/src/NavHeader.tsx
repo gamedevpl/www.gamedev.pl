@@ -121,8 +121,9 @@ export function NavHeader({ activeBuildCount, onNavigate, onHome, onStudio, upTa
           </button>
         )}
 
-        {/* Rich Studio chip — relocated from the Games header so in-progress work
-            stays visible in chrome without owning a catalog grid cell. */}
+        {/* Rich Studio chip on desktop; on a phone it collapses into an icon that
+            visually joins the avatar/bell pill (still its own ≥44px control — blending
+            the hit targets would make three actions fight one fingertip). */}
         <button
           type="button"
           className={`studio-chip${activeBuildCount > 0 ? ' is-live' : ''}`}
@@ -139,7 +140,12 @@ export function NavHeader({ activeBuildCount, onNavigate, onHome, onStudio, upTa
               <span className="studio-chip-count">{t('myGames.liveCount', { count: activeBuildCount })}</span>
             </>
           ) : null}
-          <PixelIcon name="wrench" size={12} />
+          <span className="studio-chip-icon" aria-hidden="true">
+            <PixelIcon name="wrench" size={14} />
+            {activeBuildCount > 0 ? (
+              <span className="studio-chip-badge">{activeBuildCount > 99 ? '99+' : activeBuildCount}</span>
+            ) : null}
+          </span>
           <span className="studio-chip-label">{t('myGames.openStudio')}</span>
         </button>
 

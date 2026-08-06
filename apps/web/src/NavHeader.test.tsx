@@ -224,6 +224,8 @@ describe('NavHeader Studio chip', () => {
     expect(chip?.classList.contains('is-live')).toBe(true);
     expect(chip?.textContent).toMatch(/9 in progress/i);
     expect(chip?.textContent).toMatch(/Studio/i);
+    expect(chip?.querySelector('.studio-chip-badge')?.textContent).toBe('9');
+    expect(chip?.getAttribute('aria-label')).toMatch(/9 in progress/i);
 
     await act(async () => chip?.click());
     expect(onStudio).toHaveBeenCalledOnce();

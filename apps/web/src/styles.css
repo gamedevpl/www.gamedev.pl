@@ -999,6 +999,7 @@ button:disabled {
 /* Compact Studio entry in the top nav — live count + wrench in one control so
    in-progress work stays in chrome rather than owning a catalog grid cell. */
 .studio-chip {
+  position: relative;
   display: inline-flex;
   flex: none;
   align-items: center;
@@ -1040,15 +1041,85 @@ button:disabled {
   background: var(--accent-blue);
 }
 
-@media (pointer: coarse), (max-width: 768px) {
+.studio-chip-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Desktop keeps the written count; the numeric badge is the phone-compact form. */
+.studio-chip-badge {
+  display: none;
+}
+
+/* Phone only — not `(pointer: coarse)` alone. A wide touch laptop still has room
+   for the rich chip; collapsing there would hide the count behind an icon for no
+   chrome gain. The avatar/bell merge also only works once name/sign-out are hidden. */
+@media (max-width: 768px) {
   .studio-chip {
+    min-width: 44px;
+    min-height: 44px;
+    justify-content: center;
+    padding: 0 10px;
+    gap: 0;
+  }
+
+  /* Icon-only: the full phrase stays in aria-label; the badge carries the glance count. */
+  .studio-chip .live-dot,
+  .studio-chip-count,
+  .studio-chip-label {
+    display: none;
+  }
+
+  .studio-chip-badge {
+    display: block;
+    position: absolute;
+    top: -7px;
+    right: -9px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: 8px;
+    background: var(--accent-blue, #38bdf8);
+    color: #0b221d;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 16px;
+    text-align: center;
+  }
+
+  /* Signed-in: join the avatar/bell pill so chrome reads as one chip, but keep
+     three separate buttons — a shared hit target would fail the 44px floor and
+     make Studio/account/notifications compete for the same thumb. */
+  .user-profile-badge {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+    border-right-color: transparent;
+  }
+
+  .user-profile-badge + .studio-chip {
+    /* Cancel the header-actions gap so the two pills share one outline. */
+    margin-left: -9px;
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+  }
+
+  .user-profile-badge + .studio-chip:not(.is-live) {
+    background: var(--panel-card);
+    border-color: var(--panel-border);
+    color: var(--text);
+  }
+
+  .user-avatar-btn {
+    min-width: 44px;
     min-height: 44px;
   }
 
-  /* Phone chrome is tight: keep the live signal, drop the "Studio" word —
-     the wrench still names the destination, and the hamburger still lists it. */
-  .studio-chip.is-live .studio-chip-label {
-    display: none;
+  /* Match the Studio icon floor so the blended pill is three equal thumb targets. */
+  .user-profile-badge .notif-trigger {
+    width: 44px;
+    height: 44px;
   }
 }
 
