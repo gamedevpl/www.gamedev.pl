@@ -54,12 +54,26 @@ describe('.claude-plugin marketplace', () => {
     name: string;
     source: string;
     description: string;
+    version?: string;
     license?: string;
     mcpServers?: Record<string, { url?: string; type?: string }>;
   }
 
+  // Both declarations point at the same endpoint, so neither can be updated alone.
+  // Compare whole entries rather than one field, and sort keys so the assertion does not
+  // depend on JSON insertion order or on there only ever being one server.
+  it('keeps the marketplace entry and the plugin .mcp.json in agreement', () => {
+    const inline = entry.mcpServers as Record<string, unknown>;
+    const file = pluginMcp.mcpServers as Record<string, unknown>;
+    expect(Object.keys(inline).sort()).toEqual(Object.keys(file).sort());
+    for (const key of Object.keys(file)) {
+      expect(inline[key], `server "${key}" differs between the two declarations`).toEqual(file[key]);
+    }
+  });
+
   const entries = marketplace.plugins as MarketplacePlugin[];
   const entry = entries[0];
+  const pluginMcp = readJson('listings/mcp/claude-plugin/.mcp.json');
 
   it('lists exactly the one plugin we intend to publish', () => {
     expect(entries).toHaveLength(1);
@@ -71,15 +85,35 @@ describe('.claude-plugin marketplace', () => {
     expect(plugin.description).toBe(registry.description);
   });
 
+  /**
+   * The first cut declared mcpServers only in the marketplace entry, and the plugin
+   * installed with no tools: the documented locations are `.mcp.json` in the plugin root
+   * or inline in the plugin's own manifest, and the plugin directory had neither. Assert
+   * the file exists and is wired, because "installs cleanly" and "actually exposes the
+   * server" turned out to be different things.
+   */
+  it('ships an .mcp.json in the plugin root, which is where the loader looks', () => {
+    const servers = pluginMcp.mcpServers as Record<string, { url?: string; type?: string }>;
+    const remotes = registry.remotes as Array<{ url: string }>;
+    expect(servers.gamedevpl.url).toBe(remotes[0]?.url);
+    expect(servers.gamedevpl.type).toBe('http');
+    expect(plugin.mcpServers).toBe('./.mcp.json');
+  });
+
   it('advertises the endpoint the registry publishes', () => {
     const remotes = registry.remotes as Array<{ url: string }>;
     expect(entry.mcpServers?.gamedevpl?.url).toBe(remotes[0]?.url);
   });
 
-  it('never ships a credential in the install config', () => {
-    const serialized = JSON.stringify(entry.mcpServers ?? {}).toLowerCase();
-    for (const marker of ['authorization', 'bearer', 'token', 'apikey', 'api_key', 'secret', 'key']) {
-      expect(serialized, `marketplace.json must not carry ${marker}`).not.toContain(marker);
+  it('never ships a credential in either install config', () => {
+    for (const [label, config] of [
+      ['marketplace.json', entry.mcpServers ?? {}],
+      ['.mcp.json', pluginMcp.mcpServers ?? {}],
+    ] as const) {
+      const serialized = JSON.stringify(config).toLowerCase();
+      for (const marker of ['authorization', 'bearer', 'token', 'apikey', 'api_key', 'secret', 'key']) {
+        expect(serialized, `${label} must not carry ${marker}`).not.toContain(marker);
+      }
     }
   });
 
@@ -95,9 +129,27 @@ describe('.claude-plugin marketplace', () => {
     expect(entry.source).not.toBe('.');
   });
 
-  it('agrees with the Cursor manifest on licence and version', () => {
+  /**
+   * Three version lines coincided at 1.0.1 and an earlier revision of this test asserted
+   * they must stay equal — which would have blocked the fix that required bumping one of
+   * them. They are independent artifacts:
+   *
+   *   - the registry `server.json` versions the MCP *server*, and is immutable once
+   *     published, so it moves only when the server itself changes;
+   *   - `.cursor-plugin/plugin.json` versions the Cursor plugin;
+   *   - the Claude plugin versions the Claude plugin, and had to ship 1.0.2 because
+   *     Claude uses that number to detect an update, and 1.0.1 was broken.
+   *
+   * Licence is a genuinely shared fact, so that one still has to agree.
+   */
+  it('agrees with the Cursor manifest on licence, but versions independently', () => {
     const cursor = readJson('.cursor-plugin/plugin.json');
     expect(plugin.license).toBe(cursor.license);
-    expect(plugin.version).toBe(cursor.version);
+  });
+
+  // These two declare the *same* artifact, so a bump in one without the other ships a
+  // plugin whose advertised version disagrees with itself.
+  it('versions the plugin identically in its manifest and its marketplace entry', () => {
+    expect(plugin.version).toBe(entry.version);
   });
 });
