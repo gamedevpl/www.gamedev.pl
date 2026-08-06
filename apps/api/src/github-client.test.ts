@@ -704,7 +704,107 @@ describe('getGameSources', () => {
     }) as unknown as typeof fetch;
     const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
 
-    await expect(client.getGameSources('main', 'raid')).rejects.toThrow(/music track not in catalog/);
+    await expect(client.getGameSources('main', 'raid')).rejects.toThrow(/music track not found/);
+  });
+
+  it('embeds a custom track from the game music.json delivery', async () => {
+    // Self-build / MCP agents cannot edit shared/audio/music.json. A custom score
+    // ships as games/<slug>/music.json and merges with the catalog at assemble time.
+    const customTrack = {
+      bpm: 110,
+      steps: 8,
+      gain: 0.2,
+      channels: [
+        {
+          wave: 'square',
+          gain: 0.5,
+          pattern: ['C4', null, 'E4', null, 'G4', null, 'E4', null],
+        },
+      ],
+    };
+    const files = new Map<string, string | Uint8Array>([
+      ['games/raid/index.html', '<canvas id="game"></canvas>'],
+      ['games/raid/game.ts', 'const game: { update(): void } = { update() {} }; GameKit.mount(game);'],
+      ['games/raid/style.css', '.game { color: teal; }'],
+      ['games/raid/SPEC.md', specMd({ title: 'Raid' })],
+      [
+        'games/raid/GAME.json',
+        JSON.stringify({
+          engine: { modules: ['input', 'audio'] },
+          audio: { sounds: ['ui-toggle'], music: 'raid-theme', musicTracks: ['calm-theme'] },
+        }),
+      ],
+      ['games/raid/music.json', JSON.stringify({ version: 1, tracks: { 'raid-theme': customTrack } })],
+      ['shared/game-shell.css', '.shell { display: grid; }'],
+      ['shared/modules/core.ts', 'window.GameKit = { mount() {} };'],
+      ['shared/modules/input.ts', 'GameKit.createInput = function (): void {};'],
+      ['shared/modules/audio.ts', 'GameKit.createAudio = function (): void {};'],
+      ['shared/audio/assets/ui-toggle.wav', new Uint8Array([1, 2])],
+      [
+        'shared/audio/music.json',
+        JSON.stringify({ tracks: { 'calm-theme': { loop: true, data: 'data:audio/mpeg;base64,AAA=' } } }),
+      ],
+    ]);
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const pathname = new URL(String(input)).pathname;
+      const marker = '/contents/';
+      const path = decodeURIComponent(pathname.slice(pathname.indexOf(marker) + marker.length));
+      const value = files.get(path);
+      return value === undefined ? new Response('not found', { status: 404 }) : new Response(value, { status: 200 });
+    }) as unknown as typeof fetch;
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+
+    const sources = await client.getGameSources('main', 'raid');
+
+    expect(sources?.gameJs).toContain('window.__GAME_AUDIO_MUSIC__ = "raid-theme";');
+    expect(sources?.gameJs).toContain('"raid-theme"');
+    expect(sources?.gameJs).toContain('"calm-theme"');
+    expect(sources?.gameJs).toContain('"bpm":110');
+  });
+
+  it('rejects a game music.json that redefines a shared catalog track', async () => {
+    const files = new Map<string, string | Uint8Array>([
+      ['games/raid/index.html', '<canvas id="game"></canvas>'],
+      ['games/raid/game.ts', 'const game: { update(): void } = { update() {} }; GameKit.mount(game);'],
+      ['games/raid/style.css', '.game { color: teal; }'],
+      ['games/raid/SPEC.md', specMd({ title: 'Raid' })],
+      [
+        'games/raid/GAME.json',
+        JSON.stringify({
+          engine: { modules: ['input', 'audio'] },
+          audio: { sounds: ['ui-toggle'], music: 'calm-theme' },
+        }),
+      ],
+      [
+        'games/raid/music.json',
+        JSON.stringify({
+          version: 1,
+          tracks: {
+            'calm-theme': {
+              bpm: 100,
+              steps: 8,
+              channels: [{ wave: 'sine', pattern: ['C4', null, 'E4', null, 'G4', null, 'E4', null] }],
+            },
+          },
+        }),
+      ],
+      ['shared/game-shell.css', '.shell { display: grid; }'],
+      ['shared/modules/core.ts', 'window.GameKit = { mount() {} };'],
+      ['shared/modules/input.ts', 'GameKit.createInput = function (): void {};'],
+      ['shared/modules/audio.ts', 'GameKit.createAudio = function (): void {};'],
+      ['shared/audio/assets/ui-toggle.wav', new Uint8Array([1, 2])],
+      ['shared/audio/music.json', JSON.stringify({ tracks: { 'calm-theme': { loop: true } } })],
+    ]);
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const pathname = new URL(String(input)).pathname;
+      const marker = '/contents/';
+      const path = decodeURIComponent(pathname.slice(pathname.indexOf(marker) + marker.length));
+      const value = files.get(path);
+      return value === undefined ? new Response('not found', { status: 404 }) : new Response(value, { status: 200 });
+    }) as unknown as typeof fetch;
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+
+    await expect(client.getGameSources('main', 'raid')).rejects.toThrow(/redefines shared catalog track/);
   });
 
   it('rejects a musicTracks list that repeats the autoplay track', async () => {

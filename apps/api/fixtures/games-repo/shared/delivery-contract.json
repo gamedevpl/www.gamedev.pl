@@ -4,6 +4,7 @@
   "fixedFiles": [
     "SPEC.md",
     "GAME.json",
+    "music.json",
     "CAPTURE.json",
     "ACCEPTANCE.json",
     "TRACE.json",
