@@ -302,6 +302,26 @@ describe('games-repo source extractors', () => {
     });
   });
 
+  /**
+   * Per-game `music.json` moved catalog resolution behind `resolveMusicTracksForGame`,
+   * which merges the shared catalog with an optional per-game one. The contract still
+   * only accepted `readMusicCatalog`, so every PR went red on a games-repo change — the
+   * failure this case exists to prevent recurring.
+   */
+  it('accepts resolveMusicTracksForGame, the reader per-game music.json introduced', () => {
+    const source = `
+      import { readAudioCatalog, resolveMusicTracksForGame } from '../audio.ts';
+      const musicTracksMap = resolveMusicTracksForGame(slug);
+      const tracks = { [musicName]: musicTracksMap[musicName] };
+      out += \`window.__GAME_AUDIO_MUSIC__ = \${JSON.stringify(musicName)};\`;
+    `;
+    expect(extractMusicContractSignals(source)).toEqual({
+      injectsMusicName: true,
+      readsTracksKey: true,
+      readsMusicCatalog: true,
+    });
+  });
+
   it('still accepts the older inline music.json catalog read', () => {
     const source = `
       const catalog = JSON.parse(await read('shared/audio/music.json'));

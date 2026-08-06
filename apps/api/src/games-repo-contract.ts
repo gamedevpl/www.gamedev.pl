@@ -150,8 +150,18 @@ export const MUSIC_CONTRACT = {
   catalogPath: 'shared/audio/music.json',
   /** Optional deliverable beside GAME.json — custom tracker tracks for this game only. */
   gameMusicPath: 'music.json',
-  /** Function assemble.ts calls to load the music catalog (post-refactor lockstep). */
-  catalogReader: 'readMusicCatalog',
+  /**
+   * Functions assemble.ts may call to resolve a game's music tracks, newest first.
+   *
+   * Several are accepted on purpose. The games repo and this contract deploy
+   * independently, so a rename lands on one side before the other, and a single
+   * hard-coded name turns every unrelated PR red until both sides ship — which is
+   * exactly what `resolveMusicTracksForGame` did when per-game `music.json` landed.
+   * Accepting the predecessors keeps a staggered rollout green without weakening the
+   * check: the assertion is still "assemble resolves music from a catalog", and every
+   * name here does that.
+   */
+  catalogReaders: ['resolveMusicTracksForGame', 'readMusicCatalog'],
   catalogTracksKey: 'tracks',
   windowMusicName: '__GAME_AUDIO_MUSIC__',
   windowTracksName: '__GAME_MUSIC_TRACKS__',
@@ -226,11 +236,10 @@ export function extractMusicContractSignals(assembleSource: string): {
   return {
     injectsMusicName: new RegExp(`${MUSIC_CONTRACT.windowMusicName}\\s*=`).test(assembleSource),
     readsTracksKey: new RegExp(`\\b${MUSIC_CONTRACT.catalogTracksKey}\\b`).test(assembleSource),
-    // Prefer the post-refactor reader; keep the historical catalog path as a
-    // fallback so an older games-repo tip still clears the check during a
-    // staggered rollout.
+    // Any accepted reader satisfies this, with the historical catalog path kept as a
+    // final fallback so an older games-repo tip still clears the check.
     readsMusicCatalog:
-      new RegExp(`\\b${MUSIC_CONTRACT.catalogReader}\\s*\\(`).test(assembleSource) ||
+      MUSIC_CONTRACT.catalogReaders.some((reader) => new RegExp(`\\b${reader}\\s*\\(`).test(assembleSource)) ||
       new RegExp(catalogPathPattern).test(assembleSource),
   };
 }
