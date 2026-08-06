@@ -27,39 +27,44 @@ export const MCP_SERVER_JSON_PATH = '/.well-known/mcp/server.json';
 /** Reverse-DNS name for the remote server (registry namespace rules). */
 export const MCP_SERVER_REGISTRY_NAME = 'pl.gamedev/creator';
 
-/** Product version advertised in server.json — independent of the monorepo package version. */
-export const MCP_SERVER_DESCRIPTOR_VERSION = '1.0.0';
+/**
+ * Product version advertised in server.json — independent of the monorepo package version.
+ *
+ * This must track what is actually published to the official MCP Registry
+ * (`listings/mcp/official-registry/server.json`), because the two documents describe the
+ * same server and a client may read either. Registry versions are immutable, so any change
+ * to the fields below ships as a bump in both places.
+ */
+export const MCP_SERVER_DESCRIPTOR_VERSION = '1.0.1';
 
 const METADATA_CACHE_CONTROL = 'public, max-age=3600';
 
 const SERVER_SCHEMA_URL = 'https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json';
 
 /**
- * Description maxLength is 100 in the registry schema — both of these must stay under it.
+ * Description maxLength is 100 in the registry schema.
  *
- * The closed-beta variant is not decoration. This descriptor is what a directory entry is
- * built from, and a listing that promises "build games from your agent" to someone who
- * cannot get an account is a bait-and-switch discovered only after install. Saying it in
- * the description puts the gate in front of the install rather than behind it.
+ * Owner decision (2026-08-06): one description, with no closed-beta clause. This previously
+ * had a `PRIVATE_BETA` variant that appended "Creating is closed beta (waitlist)", on the
+ * reasoning that a listing promising "build games from your agent" to someone who cannot get
+ * an account is a bait-and-switch found only after install. That trade-off is now accepted
+ * deliberately: `websiteUrl` points at the homepage, which is where the beta gate is
+ * explained, so the signal moved rather than disappearing.
+ *
+ * Keep this byte-identical to `listings/mcp/official-registry/server.json` — the published
+ * registry entry is built from that file, and the two describe the same server.
  */
-const SERVER_DESCRIPTION = 'Build and improve browser games on gamedev.pl from your coding agent.';
-const SERVER_DESCRIPTION_PRIVATE_BETA =
-  'Build browser games on gamedev.pl from your coding agent. Creating is closed beta (waitlist).';
+const SERVER_DESCRIPTION = 'Build browser games on gamedev.pl from your coding agent.';
 
-function serverDescription(privateBeta: boolean): string {
-  return privateBeta ? SERVER_DESCRIPTION_PRIVATE_BETA : SERVER_DESCRIPTION;
-}
-
-export function buildMcpServerJsonDocument(options: { privateBeta?: boolean } = {}): Record<string, unknown> {
+export function buildMcpServerJsonDocument(): Record<string, unknown> {
   const origin = canonicalAppBaseUrl();
-  const privateBeta = options.privateBeta ?? (process.env.PRIVATE_BETA ?? '').toLowerCase() === 'true';
   return {
     $schema: SERVER_SCHEMA_URL,
     name: MCP_SERVER_REGISTRY_NAME,
     title: 'gamedev.pl',
-    description: serverDescription(privateBeta),
+    description: SERVER_DESCRIPTION,
     version: MCP_SERVER_DESCRIPTOR_VERSION,
-    websiteUrl: `${origin}/studio`,
+    websiteUrl: origin,
     repository: {
       url: 'https://github.com/gamedevpl/www.gamedev.pl',
       source: 'github',
@@ -81,11 +86,11 @@ export function buildMcpServerJsonDocument(options: { privateBeta?: boolean } = 
   };
 }
 
-export function registerMcpServerDiscoveryRoutes(app: FastifyInstance, options: { privateBeta?: boolean } = {}): void {
+export function registerMcpServerDiscoveryRoutes(app: FastifyInstance): void {
   app.get(MCP_SERVER_JSON_PATH, async (_request, reply) => {
     return reply
       .header('Cache-Control', METADATA_CACHE_CONTROL)
       .type('application/json')
-      .send(buildMcpServerJsonDocument({ privateBeta: options.privateBeta }));
+      .send(buildMcpServerJsonDocument());
   });
 }
