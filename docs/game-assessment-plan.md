@@ -21,7 +21,8 @@ judgment_ from someone who knows what the shelf should feel like.
 | Gesture       | Swipe right = keep, left = cut, down/button = skip. Keyboard: `→` / `←` / `↓`.                                                       |
 | Preview       | Catalog **MP4 + screenshots** first (gate media). Optional **Try play** mounts the sandboxed game without play telemetry.            |
 | Mobile dock   | Note + Cut/Skip/Keep sit in a **sticky bottom dock** (thumb zone). Install/update banners lift the dock via `:has(...)`.             |
-| Rationale     | Free text and/or browser speech-to-text (same Web Speech API as the hero mic). Only the transcript is stored — no audio upload.      |
+| Rationale     | **Required** free text and/or speech-to-text (same Web Speech API as the hero mic). Transcript only — no audio upload.               |
+| Checklist     | Required marks for **graphics / gameplay / fun / sound / controls** — each `ok` · `weak` · `bad`.                                    |
 | Client env    | Viewport, screen size, DPR, input method (`touch`/`mouse`/`mixed`), platform, lang, truncated UA — stored on the row at commit time. |
 | Storage       | `gameAssessments/{slug}:{reviewerUid}` — one row per reviewer per game; a second pass overwrites.                                    |
 | Operator read | `/admin/assessments` — **review sweeps** (dispatch / rate / pause / notify) plus keep/cut aggregates and recent notes.               |
@@ -32,7 +33,7 @@ judgment_ from someone who knows what the shelf should feel like.
 
 - Auto-unpublishing or auto-filing issues from a cut — the desk records judgment; acting
   on it stays a human operator decision.
-- Scoring rubrics, star ratings, or multi-axis forms — one verdict + one note.
+- Star ratings or free-form rubrics beyond the fixed five-axis checklist.
 - Granting reviewers access to _private_ (unshared) creator drafts.
 - Feeding raw assessment notes into agent prompts — same "aggregates leave the building"
   rule as player feedback until a later IL phase deliberately opts in.
@@ -78,20 +79,20 @@ Unset / empty means nobody extra is a reviewer. Locally: `REVIEWER_UIDS=dev:loca
 
 ## API
 
-| Method | Path                                             | Who      | Body / query                                                                            |
-| ------ | ------------------------------------------------ | -------- | --------------------------------------------------------------------------------------- |
-| `GET`  | `/api/review/queue?source=catalog\|creator\|all` | reviewer | Queue of games not yet assessed by this reviewer                                        |
-| `POST` | `/api/review/assessments`                        | reviewer | `{ slug, source, title?, creatorHandle?, verdict, note?, noteOrigin?, clientContext? }` |
-| `GET`  | `/api/review/assessments/mine`                   | reviewer | This reviewer's rows (progress / re-edit)                                               |
-| `GET`  | `/api/admin/assessments`                         | admin    | Aggregate + recent rows for the operator tab                                            |
-| `GET`  | `/api/admin/review-sweeps`                       | admin    | Open sweep + progress + recent history                                                  |
-| `POST` | `/api/admin/review-sweeps`                       | admin    | Start a sweep (`source`, `maxGames`, `releasePerDay?`, `note?`, `notify?`)              |
-| `POST` | `/api/admin/review-sweeps/:id`                   | admin    | Pause / resume / complete / cancel, release more/all, change rate, notify again         |
+| Method | Path                                             | Who      | Body / query                                                                                      |
+| ------ | ------------------------------------------------ | -------- | ------------------------------------------------------------------------------------------------- |
+| `GET`  | `/api/review/queue?source=catalog\|creator\|all` | reviewer | Queue of games not yet assessed by this reviewer                                                  |
+| `POST` | `/api/review/assessments`                        | reviewer | `{ slug, source, title?, creatorHandle?, verdict, note, checklist, noteOrigin?, clientContext? }` |
+| `GET`  | `/api/review/assessments/mine`                   | reviewer | This reviewer's rows (progress / re-edit)                                                         |
+| `GET`  | `/api/admin/assessments`                         | admin    | Aggregate + recent rows for the operator tab                                                      |
+| `GET`  | `/api/admin/review-sweeps`                       | admin    | Open sweep + progress + recent history                                                            |
+| `POST` | `/api/admin/review-sweeps`                       | admin    | Start a sweep (`source`, `maxGames`, `releasePerDay?`, `note?`, `notify?`)                        |
+| `POST` | `/api/admin/review-sweeps/:id`                   | admin    | Pause / resume / complete / cancel, release more/all, change rate, notify again                   |
 
 The desk queue is **empty until an operator opens a sweep**. Released games unlock by
-`releasePerDay` (UTC drip) and/or manual Release controls. Notes are moderated and
-sanitized when non-empty. `skip` and empty notes are allowed so a fast pass is not
-blocked on writing.
+`releasePerDay` (UTC drip) and/or manual Release controls. Every verdict (including
+`skip`) needs a **non-empty note** and a complete checklist (`graphics` / `gameplay` /
+`fun` / `sound` / `controls`, each `ok|weak|bad`). Notes are moderated and sanitized.
 
 ## Instrumentation
 

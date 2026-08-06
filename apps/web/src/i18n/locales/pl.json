@@ -955,8 +955,22 @@
     "empty": "Kolejka pusta — nic więcej do oceny w tym filtrze.",
     "emptyNoSweep": "Brak aktywnego przeglądu. Operator uruchamia go w konsoli Ocen.",
     "emptyPaused": "Bieżący przegląd jest wstrzymany. Wróć, gdy zostanie wznowiony.",
-    "noteLabel": "Dlaczego? (opcjonalnie — mów lub pisz)",
+    "checklistLabel": "Lista kontrolna",
+    "checklist": {
+      "graphics": "Grafika",
+      "gameplay": "Rozgrywka",
+      "fun": "Zabawa",
+      "sound": "Dźwięk",
+      "controls": "Sterowanie"
+    },
+    "checklistMark": {
+      "ok": "Ok",
+      "weak": "Słabo",
+      "bad": "Źle"
+    },
+    "noteLabel": "Dlaczego? (wymagane — mów lub pisz)",
     "notePlaceholder": "Co zostawić, wyciąć albo poprawić?",
+    "formIncomplete": "Najpierw oceń każdy punkt listy i zostaw krótką notatkę.",
     "micStart": "Zacznij notatkę głosową",
     "micStop": "Zatrzymaj nagrywanie",
     "micStartShort": "Mikrofon",

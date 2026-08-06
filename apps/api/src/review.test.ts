@@ -33,6 +33,14 @@ async function sessionCookie(app: Awaited<ReturnType<typeof buildApp>>, uid = 'l
   return `gamedev_session=${cookie!.value}`;
 }
 
+const sampleChecklist = {
+  graphics: 'ok',
+  gameplay: 'weak',
+  fun: 'ok',
+  sound: 'bad',
+  controls: 'ok',
+} as const;
+
 describe('reviewer assessment desk', () => {
   const apps: Array<Awaited<ReturnType<typeof buildApp>>> = [];
 
@@ -210,6 +218,7 @@ describe('reviewer assessment desk', () => {
         verdict: 'cut',
         note: 'Controls feel mushy on mobile and the goal is unclear.',
         noteOrigin: 'speech',
+        checklist: sampleChecklist,
       },
     });
     expect(cut.statusCode).toBe(200);
@@ -217,6 +226,7 @@ describe('reviewer assessment desk', () => {
     expect(assessment.verdict).toBe('cut');
     expect(assessment.noteOrigin).toBe('speech');
     expect(assessment.note).toContain('mushy');
+    expect(assessment.checklist).toEqual(sampleChecklist);
     expect(assessment.clientContext).toBeNull();
 
     const queue = await app.inject({ method: 'GET', url: '/api/review/queue', headers: { cookie } });
@@ -237,6 +247,8 @@ describe('reviewer assessment desk', () => {
         slug: 'sky-dodge',
         source: 'catalog',
         verdict: 'keep',
+        note: 'Plays clean on a phone.',
+        checklist: sampleChecklist,
         clientContext: {
           viewportW: 390,
           viewportH: 844,
@@ -262,18 +274,30 @@ describe('reviewer assessment desk', () => {
     );
   });
 
-  it('allows skip without a note and rejects moderated notes', async () => {
+  it('requires note and checklist, and rejects moderated notes', async () => {
     const { app } = await makeApp({ contentChecker: rejectAll });
     const cookie = await sessionCookie(app, 'reviewer');
 
-    const skip = await app.inject({
+    const missing = await app.inject({
       method: 'POST',
       url: '/api/review/assessments',
       headers: { cookie },
       payload: { slug: 'sky-dodge', source: 'catalog', verdict: 'skip' },
     });
-    expect(skip.statusCode).toBe(200);
-    expect(JSON.parse(skip.body).assessment.noteOrigin).toBe('none');
+    expect(missing.statusCode).toBe(400);
+
+    const noChecklist = await app.inject({
+      method: 'POST',
+      url: '/api/review/assessments',
+      headers: { cookie },
+      payload: {
+        slug: 'sky-dodge',
+        source: 'catalog',
+        verdict: 'skip',
+        note: 'Need more time with this one.',
+      },
+    });
+    expect(noChecklist.statusCode).toBe(400);
 
     const blocked = await app.inject({
       method: 'POST',
@@ -284,6 +308,7 @@ describe('reviewer assessment desk', () => {
         source: 'catalog',
         verdict: 'cut',
         note: 'this would be rejected',
+        checklist: sampleChecklist,
       },
     });
     expect(blocked.statusCode).toBe(422);
@@ -339,6 +364,7 @@ describe('reviewer assessment desk', () => {
         verdict: 'keep',
         note: 'Solid loop, ship it.',
         noteOrigin: 'text',
+        checklist: sampleChecklist,
       },
     });
 
@@ -378,8 +404,9 @@ describe('reviewer assessment desk', () => {
         creatorHandle: null,
         reviewerUid: 'dev:reviewer',
         verdict: i % 2 === 0 ? 'keep' : 'cut',
-        note: '',
-        noteOrigin: 'none',
+        note: 'seed',
+        noteOrigin: 'text',
+        checklist: { ...sampleChecklist },
         clientContext: null,
       });
     }

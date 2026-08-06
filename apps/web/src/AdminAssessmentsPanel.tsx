@@ -7,6 +7,7 @@ import {
   type ReviewSweepsResponse,
   type ReviewSweepSource,
 } from './adminApi.js';
+import { formatAssessmentChecklist } from './reviewChecklist.js';
 import { formatAssessmentClientContext } from './reviewClientContext.js';
 import { fetchAdminAssessments, type AdminAssessmentsResponse } from './reviewApi.js';
 
@@ -166,10 +167,12 @@ export function AdminAssessmentsPanel() {
           <ul className="admin-assessments-recent">
             {data.recent.map((row) => {
               const env = formatAssessmentClientContext(row.clientContext);
+              const checklist = formatAssessmentChecklist(row.checklist);
               return (
                 <li key={row.id}>
                   <span className={`admin-verdict is-${row.verdict}`}>{row.verdict}</span> <strong>{row.title}</strong>
                   <span className="admin-assessments-slug"> {row.slug}</span>
+                  {checklist ? <div className="admin-assessments-checklist">{checklist}</div> : null}
                   {env ? <div className="admin-assessments-env">{env}</div> : null}
                   {row.note ? <p className="admin-assessments-note">{row.note}</p> : null}
                 </li>

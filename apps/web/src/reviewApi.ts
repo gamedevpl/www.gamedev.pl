@@ -1,4 +1,5 @@
 import type {
+  AssessmentChecklist,
   AssessmentClientContext,
   AssessmentNoteOrigin,
   AssessmentSource,
@@ -48,6 +49,7 @@ export interface GameAssessment {
   verdict: AssessmentVerdict;
   note: string;
   noteOrigin: AssessmentNoteOrigin;
+  checklist: AssessmentChecklist | null;
   clientContext: AssessmentClientContext | null;
   createdAt: string;
   updatedAt: string;
@@ -59,8 +61,9 @@ export interface SubmitAssessmentInput {
   title?: string;
   creatorHandle?: string | null;
   verdict: AssessmentVerdict;
-  note?: string;
-  noteOrigin?: AssessmentNoteOrigin;
+  note: string;
+  noteOrigin?: Exclude<AssessmentNoteOrigin, 'none'>;
+  checklist: AssessmentChecklist;
   clientContext?: AssessmentClientContext | null;
 }
 

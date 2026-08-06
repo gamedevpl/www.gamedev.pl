@@ -3,9 +3,21 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from './AuthContext.js';
 import { catalogMediaUrl } from './catalog.js';
 import { PublishedGameFrame } from './PublishedGameFrame.js';
+import {
+  ASSESSMENT_CHECKLIST_KEYS,
+  ASSESSMENT_CHECKLIST_MARKS,
+  emptyAssessmentChecklist,
+  isChecklistComplete,
+} from './reviewChecklist.js';
 import { captureReviewClientContext } from './reviewClientContext.js';
 import { fetchReviewQueue, submitAssessment, type ReviewQueueItem } from './reviewApi.js';
-import type { AssessmentNoteOrigin, AssessmentVerdict } from './reviewTypes.js';
+import type {
+  AssessmentChecklist,
+  AssessmentChecklistKey,
+  AssessmentChecklistMark,
+  AssessmentNoteOrigin,
+  AssessmentVerdict,
+} from './reviewTypes.js';
 
 interface SpeechRecognitionResultItem {
   transcript: string;
@@ -64,6 +76,7 @@ export function ReviewDesk() {
   const [state, setState] = useState<LoadState>('loading');
   const [note, setNote] = useState('');
   const [noteOrigin, setNoteOrigin] = useState<AssessmentNoteOrigin>('none');
+  const [checklist, setChecklist] = useState<Partial<AssessmentChecklist>>(() => emptyAssessmentChecklist());
   const [isListening, setIsListening] = useState(false);
   const [micNotice, setMicNotice] = useState<string | null>(null);
   const [dragX, setDragX] = useState(0);
@@ -163,16 +176,23 @@ export function ReviewDesk() {
     return () => window.removeEventListener('keydown', onKey);
   });
 
-  const resetNote = () => {
+  const resetForm = () => {
     setNote('');
     setNoteOrigin('none');
+    setChecklist(emptyAssessmentChecklist());
     setMicNotice(null);
     recognitionRef.current?.stop();
     setIsListening(false);
   };
 
+  const formReady = note.trim().length > 0 && isChecklistComplete(checklist);
+
   const commit = async (verdict: AssessmentVerdict) => {
     if (!current || busy) return;
+    if (!note.trim() || !isChecklistComplete(checklist)) {
+      setError(t('review.formIncomplete'));
+      return;
+    }
     setBusy(true);
     setError(null);
     setFlash(verdict);
@@ -183,13 +203,14 @@ export function ReviewDesk() {
         title: current.title,
         creatorHandle: current.creatorHandle,
         verdict,
-        note: note.trim() || undefined,
-        noteOrigin: note.trim() ? noteOrigin : 'none',
+        note: note.trim(),
+        noteOrigin: noteOrigin === 'speech' ? 'speech' : 'text',
+        checklist,
         clientContext: captureReviewClientContext(),
       });
       setItems((prev) => prev.slice(1));
       setAssessed((n) => n + 1);
-      resetNote();
+      resetForm();
       setDragX(0);
       setDragY(0);
       dragXRef.current = 0;
@@ -200,6 +221,11 @@ export function ReviewDesk() {
       setBusy(false);
       window.setTimeout(() => setFlash(null), 280);
     }
+  };
+
+  const setChecklistMark = (key: AssessmentChecklistKey, mark: AssessmentChecklistMark) => {
+    setChecklist((prev) => ({ ...prev, [key]: mark }));
+    setError(null);
   };
 
   const toggleMic = () => {
@@ -446,6 +472,33 @@ export function ReviewDesk() {
           </div>
 
           <div className="review-dock">
+            <fieldset className="review-checklist">
+              <legend className="review-checklist-legend">{t('review.checklistLabel')}</legend>
+              {ASSESSMENT_CHECKLIST_KEYS.map((key) => (
+                <div key={key} className="review-checklist-row">
+                  <span className="review-checklist-facet">{t(`review.checklist.${key}`)}</span>
+                  <div className="review-checklist-marks" role="group" aria-label={t(`review.checklist.${key}`)}>
+                    {ASSESSMENT_CHECKLIST_MARKS.map((mark) => (
+                      <button
+                        key={mark}
+                        type="button"
+                        className={
+                          checklist[key] === mark
+                            ? `review-checklist-mark is-${mark} is-active`
+                            : `review-checklist-mark is-${mark}`
+                        }
+                        aria-pressed={checklist[key] === mark}
+                        disabled={busy}
+                        onClick={() => setChecklistMark(key, mark)}
+                      >
+                        {t(`review.checklistMark.${mark}`)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </fieldset>
+
             <div className="review-note">
               <label className="review-note-label" htmlFor="review-note">
                 {t('review.noteLabel')}
@@ -455,11 +508,13 @@ export function ReviewDesk() {
                   id="review-note"
                   className="review-note-input"
                   rows={2}
+                  required
                   value={note}
                   maxLength={2000}
                   placeholder={t('review.notePlaceholder')}
                   onChange={(event) => {
                     setNote(event.target.value);
+                    setError(null);
                     if (event.target.value.trim()) {
                       setNoteOrigin((prev) => (prev === 'speech' ? 'speech' : 'text'));
                     } else {
@@ -485,14 +540,19 @@ export function ReviewDesk() {
             </div>
 
             <div className="review-actions" role="group" aria-label={t('review.actionsLabel')}>
-              <button type="button" className="review-action is-cut" disabled={busy} onClick={() => void commit('cut')}>
+              <button
+                type="button"
+                className="review-action is-cut"
+                disabled={busy || !formReady}
+                onClick={() => void commit('cut')}
+              >
                 {t('review.cut')}
                 <span className="review-action-hint">←</span>
               </button>
               <button
                 type="button"
                 className="review-action is-skip"
-                disabled={busy}
+                disabled={busy || !formReady}
                 onClick={() => void commit('skip')}
               >
                 {t('review.skip')}
@@ -501,7 +561,7 @@ export function ReviewDesk() {
               <button
                 type="button"
                 className="review-action is-keep"
-                disabled={busy}
+                disabled={busy || !formReady}
                 onClick={() => void commit('keep')}
               >
                 {t('review.keep')}

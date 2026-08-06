@@ -980,6 +980,14 @@ export type AssessmentSource = 'catalog' | 'creator';
 export type AssessmentNoteOrigin = 'text' | 'speech' | 'none';
 export type AssessmentInputMethod = 'touch' | 'mouse' | 'mixed';
 export type AssessmentPlatform = 'ios' | 'android' | 'mac' | 'windows' | 'linux' | 'other';
+export type AssessmentChecklistMark = 'ok' | 'weak' | 'bad';
+export type AssessmentChecklist = {
+  graphics: AssessmentChecklistMark;
+  gameplay: AssessmentChecklistMark;
+  fun: AssessmentChecklistMark;
+  sound: AssessmentChecklistMark;
+  controls: AssessmentChecklistMark;
+};
 export type ReviewSweepStatus = 'active' | 'paused' | 'completed' | 'cancelled';
 export type ReviewSweepSource = 'catalog' | 'creator' | 'all';
 
@@ -1025,7 +1033,8 @@ export interface GameAssessment {
   verdict: AssessmentVerdict;
   note: string;
   noteOrigin: AssessmentNoteOrigin;
-  // Null when the row predates clientContext.
+  // Null on rows written before checklist / clientContext shipped.
+  checklist: AssessmentChecklist | null;
   clientContext: AssessmentClientContext | null;
   createdAt: string;
   updatedAt: string;
@@ -1038,11 +1047,12 @@ export function gameAssessmentId(slug: string, reviewerUid: string): string {
   return `${slug}:${reviewerUid}`;
 }
 
-// Missing clientContext becomes null, not undefined.
+// Missing checklist / clientContext become null, not undefined.
 export function hydrateGameAssessment(id: string, data: Omit<GameAssessment, 'id'>): GameAssessment {
   return {
     ...data,
     id,
+    checklist: data.checklist ?? null,
     clientContext: data.clientContext ?? null,
   };
 }
@@ -3910,6 +3920,7 @@ export class InMemoryStore implements Store {
       verdict: input.verdict,
       note: input.note,
       noteOrigin: input.noteOrigin,
+      checklist: input.checklist ?? null,
       clientContext: input.clientContext ?? null,
       createdAt: existing?.createdAt ?? input.createdAt ?? now,
       updatedAt: now,
@@ -6479,6 +6490,7 @@ export class FirestoreStore implements Store {
       verdict: input.verdict,
       note: input.note,
       noteOrigin: input.noteOrigin,
+      checklist: input.checklist ?? null,
       clientContext: input.clientContext ?? null,
       createdAt,
       updatedAt: now,
@@ -6492,6 +6504,7 @@ export class FirestoreStore implements Store {
       verdict: record.verdict,
       note: record.note,
       noteOrigin: record.noteOrigin,
+      checklist: record.checklist,
       clientContext: record.clientContext,
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,

@@ -68,7 +68,7 @@ beforeEach(async () => {
       },
     ],
   });
-  reviewApi.submitAssessment.mockImplementation(async (input: { slug: string; verdict: string }) => ({
+  reviewApi.submitAssessment.mockImplementation(async (input: { slug: string; verdict: string; note: string }) => ({
     id: `${input.slug}:dev:reviewer`,
     slug: input.slug,
     title: input.slug,
@@ -76,8 +76,15 @@ beforeEach(async () => {
     creatorHandle: null,
     reviewerUid: 'dev:reviewer',
     verdict: input.verdict,
-    note: '',
-    noteOrigin: 'none',
+    note: input.note,
+    noteOrigin: 'text',
+    checklist: {
+      graphics: 'ok',
+      gameplay: 'ok',
+      fun: 'ok',
+      sound: 'ok',
+      controls: 'ok',
+    },
     clientContext: null,
     createdAt: '2026-08-06T00:00:00.000Z',
     updatedAt: '2026-08-06T00:00:00.000Z',
@@ -101,6 +108,29 @@ async function flush() {
   });
 }
 
+async function fillRequiredForm() {
+  const note = container.querySelector('#review-note') as HTMLTextAreaElement | null;
+  expect(note).toBeTruthy();
+  const nativeInputValueSetter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+  await act(async () => {
+    nativeInputValueSetter?.call(note!, 'Solid first pass.');
+    note!.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+
+  for (const facet of ['Graphics', 'Gameplay', 'Fun', 'Sound', 'Controls']) {
+    const row = Array.from(container.querySelectorAll('.review-checklist-row')).find((el) =>
+      el.textContent?.includes(facet),
+    );
+    expect(row).toBeTruthy();
+    const ok = Array.from(row!.querySelectorAll('button')).find((button) => button.textContent?.trim() === 'Ok');
+    expect(ok).toBeTruthy();
+    await act(async () => {
+      ok!.click();
+    });
+  }
+  await flush();
+}
+
 describe('ReviewDesk', () => {
   it('shows catalog preview media and advances on Keep', async () => {
     root = createRoot(container);
@@ -114,6 +144,7 @@ describe('ReviewDesk', () => {
     expect(container.querySelector('[data-testid="frame"]')).toBeNull();
     expect(container.querySelector('.review-dock')).toBeTruthy();
     expect(container.querySelector('#review-note')).toBeTruthy();
+    expect(container.querySelector('.review-checklist')).toBeTruthy();
     expect(container.textContent).toMatch(/Mic/);
     expect(container.textContent).toMatch(/Try play/);
 
@@ -121,6 +152,9 @@ describe('ReviewDesk', () => {
       button.textContent?.includes('Keep'),
     );
     expect(keep).toBeTruthy();
+    expect(keep!.disabled).toBe(true);
+    await fillRequiredForm();
+    expect(keep!.disabled).toBe(false);
     await act(async () => {
       keep!.click();
     });
@@ -130,6 +164,14 @@ describe('ReviewDesk', () => {
       expect.objectContaining({
         slug: 'sky-dodge',
         verdict: 'keep',
+        note: 'Solid first pass.',
+        checklist: {
+          graphics: 'ok',
+          gameplay: 'ok',
+          fun: 'ok',
+          sound: 'ok',
+          controls: 'ok',
+        },
         clientContext: expect.objectContaining({
           viewportW: expect.any(Number),
           viewportH: expect.any(Number),
@@ -169,6 +211,7 @@ describe('ReviewDesk', () => {
     });
     await flush();
 
+    await fillRequiredForm();
     const cut = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('Cut'));
     await act(async () => {
       cut!.click();
@@ -176,7 +219,12 @@ describe('ReviewDesk', () => {
     await flush();
 
     expect(reviewApi.submitAssessment).toHaveBeenCalledWith(
-      expect.objectContaining({ slug: 'sky-dodge', verdict: 'cut' }),
+      expect.objectContaining({
+        slug: 'sky-dodge',
+        verdict: 'cut',
+        note: 'Solid first pass.',
+        checklist: expect.objectContaining({ graphics: 'ok', controls: 'ok' }),
+      }),
     );
   });
 });

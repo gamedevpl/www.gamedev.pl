@@ -951,8 +951,22 @@
     "empty": "Queue clear — nothing left to assess in this filter.",
     "emptyNoSweep": "No active review sweep. An operator opens one from the Assessments console.",
     "emptyPaused": "The current review sweep is paused. Check back when it resumes.",
-    "noteLabel": "Why? (optional — speak or type)",
+    "checklistLabel": "Checklist",
+    "checklist": {
+      "graphics": "Graphics",
+      "gameplay": "Gameplay",
+      "fun": "Fun",
+      "sound": "Sound",
+      "controls": "Controls"
+    },
+    "checklistMark": {
+      "ok": "Ok",
+      "weak": "Weak",
+      "bad": "Bad"
+    },
+    "noteLabel": "Why? (required — speak or type)",
     "notePlaceholder": "What should we keep, cut, or fix?",
+    "formIncomplete": "Mark every checklist item and leave a short note first.",
     "micStart": "Start voice note",
     "micStop": "Stop listening",
     "micStartShort": "Mic",

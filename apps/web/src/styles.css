@@ -14931,6 +14931,72 @@ body.remix-entry-open {
   padding-bottom: 0.75rem;
 }
 
+.review-checklist {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.review-checklist-legend {
+  padding: 0;
+  margin: 0 0 0.15rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.review-checklist-row {
+  display: grid;
+  grid-template-columns: 5.5rem 1fr;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.review-checklist-facet {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.review-checklist-marks {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.3rem;
+}
+
+.review-checklist-mark {
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  min-height: 36px;
+  cursor: pointer;
+  padding: 0.25rem 0.2rem;
+}
+
+.review-checklist-mark.is-active.is-ok {
+  color: var(--text);
+  border-color: rgba(0, 228, 172, 0.55);
+  background: rgba(0, 228, 172, 0.12);
+}
+
+.review-checklist-mark.is-active.is-weak {
+  color: var(--text);
+  border-color: rgba(255, 196, 72, 0.55);
+  background: rgba(255, 196, 72, 0.12);
+}
+
+.review-checklist-mark.is-active.is-bad {
+  color: var(--text);
+  border-color: rgba(255, 107, 107, 0.55);
+  background: rgba(255, 107, 107, 0.12);
+}
+
 .review-note-label {
   display: block;
   margin-bottom: 0.35rem;
@@ -15010,8 +15076,8 @@ body.remix-entry-open {
 }
 
 .review-action:disabled {
-  opacity: 0.55;
-  cursor: wait;
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .review-action-hint {
@@ -15102,7 +15168,8 @@ body.remix-entry-open {
   font-size: 0.88rem;
 }
 
-.admin-assessments-env {
+.admin-assessments-env,
+.admin-assessments-checklist {
   margin: 0.2rem 0 0;
   color: var(--muted);
   font-size: 0.75rem;

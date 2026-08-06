@@ -4,6 +4,7 @@ import { isAdmin, isAdminSession } from './admin.js';
 import type { ContentChecker } from './moderation.js';
 import { logModerationRejection } from './moderation-metrics.js';
 import { emitReviewSweep, type EmitDeps } from './notify.js';
+import { ASSESSMENT_CHECKLIST_KEYS, isAssessmentChecklist } from './review-checklist.js';
 import {
   effectiveReleasedCount,
   MAX_RELEASE_PER_DAY,
@@ -14,6 +15,7 @@ import {
 } from './review-sweep.js';
 import { sanitizeCreatorText } from './submission-status.js';
 import type {
+  AssessmentChecklist,
   AssessmentClientContext,
   AssessmentNoteOrigin,
   AssessmentSource,
@@ -28,6 +30,16 @@ import type {
 const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
 const MAX_NOTE = 2000;
 const MAX_ADMIN_ROWS = 200;
+const ChecklistMarkSchema = z.enum(['ok', 'weak', 'bad']);
+const ChecklistSchema = z
+  .object({
+    graphics: ChecklistMarkSchema,
+    gameplay: ChecklistMarkSchema,
+    fun: ChecklistMarkSchema,
+    sound: ChecklistMarkSchema,
+    controls: ChecklistMarkSchema,
+  })
+  .strict();
 const MAX_QUEUE = 500;
 
 export interface ReviewCatalogMedia {
@@ -87,8 +99,9 @@ const AssessmentBodySchema = z.object({
   title: z.string().trim().min(1).max(120).optional(),
   creatorHandle: z.string().trim().min(1).max(40).nullable().optional(),
   verdict: z.enum(['keep', 'cut', 'skip']),
-  note: z.string().max(MAX_NOTE).optional(),
-  noteOrigin: z.enum(['text', 'speech', 'none']).optional(),
+  note: z.string().trim().min(1).max(MAX_NOTE),
+  noteOrigin: z.enum(['text', 'speech']).optional(),
+  checklist: ChecklistSchema,
   clientContext: ClientContextSchema.optional(),
 });
 
@@ -306,30 +319,34 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
       return reply.status(400).send({ error: body.error.issues[0]?.message ?? 'invalid request' });
     }
 
-    const rawNote = (body.data.note ?? '').trim();
-    let note = '';
-    let noteOrigin: AssessmentNoteOrigin = body.data.noteOrigin ?? (rawNote ? 'text' : 'none');
-    if (rawNote) {
-      const sanitized = sanitizeCreatorText(rawNote, { singleLine: false }).slice(0, MAX_NOTE);
-      if (!sanitized) {
-        return reply.status(400).send({ error: 'note is empty after sanitization' });
-      }
-      const fieldsToModerate = sanitized === rawNote ? [rawNote] : [rawNote, sanitized];
-      const moderation = await contentChecker.checkFields(fieldsToModerate);
-      if (!moderation.allowed) {
-        logModerationRejection(request.log, {
-          surface: 'review_assessment',
-          uid: request.user!.uid,
-          category: moderation.category,
-        });
-        return reply.status(422).send({ error: 'content_rejected', category: moderation.category ?? 'other' });
-      }
-      note = sanitized;
-      if (noteOrigin === 'none') noteOrigin = 'text';
-    } else {
-      noteOrigin = 'none';
+    const rawNote = body.data.note.trim();
+    const sanitized = sanitizeCreatorText(rawNote, { singleLine: false }).slice(0, MAX_NOTE);
+    if (!sanitized) {
+      return reply.status(400).send({ error: 'note is required' });
+    }
+    const fieldsToModerate = sanitized === rawNote ? [rawNote] : [rawNote, sanitized];
+    const moderation = await contentChecker.checkFields(fieldsToModerate);
+    if (!moderation.allowed) {
+      logModerationRejection(request.log, {
+        surface: 'review_assessment',
+        uid: request.user!.uid,
+        category: moderation.category,
+      });
+      return reply.status(422).send({ error: 'content_rejected', category: moderation.category ?? 'other' });
     }
 
+    const checklist: AssessmentChecklist = body.data.checklist;
+    if (!isAssessmentChecklist(checklist)) {
+      return reply.status(400).send({ error: 'checklist is incomplete' });
+    }
+    // Guard new axes if Zod schema drifts.
+    for (const key of ASSESSMENT_CHECKLIST_KEYS) {
+      if (!checklist[key]) {
+        return reply.status(400).send({ error: `checklist.${key} is required` });
+      }
+    }
+
+    const noteOrigin: AssessmentNoteOrigin = body.data.noteOrigin === 'speech' ? 'speech' : 'text';
     const verdict: AssessmentVerdict = body.data.verdict;
     const source: AssessmentSource = body.data.source;
     const title = body.data.title?.trim() || body.data.slug;
@@ -342,8 +359,9 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
       creatorHandle,
       reviewerUid: request.user!.uid,
       verdict,
-      note,
+      note: sanitized,
       noteOrigin,
+      checklist,
       clientContext: normalizeClientContext(body.data.clientContext),
     });
 
