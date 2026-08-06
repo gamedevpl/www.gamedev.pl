@@ -323,13 +323,13 @@ describe('LanguageSwitcher in header', () => {
       await Promise.resolve();
     });
 
-    const switchers = container.querySelectorAll('button.language-switcher');
+    const switcher = container.querySelector<HTMLButtonElement>('button.language-switcher');
     // Header + (closed) menu: only the header instance is mounted while the menu is closed.
-    expect(switchers).toHaveLength(1);
-    expect(switchers[0]?.textContent).toBe('PL');
+    expect(switcher).not.toBeNull();
+    expect(switcher?.textContent).toBe('PL');
 
     await act(async () => {
-      switchers[0]?.click();
+      switcher?.click();
       await Promise.resolve();
     });
     expect(i18n.language).toMatch(/^pl/);
