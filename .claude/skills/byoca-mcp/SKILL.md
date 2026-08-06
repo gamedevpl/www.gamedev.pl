@@ -35,6 +35,9 @@ Source of truth: `SESSION_WORKFLOW` + `BEHAVIOURAL_CONTRACT` in
    - Each stage may also publish a **live preview** of the buffer — see below
 4. **Prefer `end` after the last successful `submit_sources`** if you will not deliver
    more — Studio shows the gate; do not sit in a `get_gate_verdict` loop
+   - **`preview_failed` / `red`:** do **not** stop at `stage_source_file` / `show_round`.
+     Honour `warnings.code=must_fix_gate`, fix, then `submit_sources` again on the same
+     key. Staging alone leaves the creator card on the refused delivery.
 5. Only call `get_gate_verdict` once when an already-available verdict would change
    what you deliver — and when that check _does_ return a publish verdict, call
    `get_gate_media` once before `end`
@@ -219,14 +222,16 @@ cache), so a resume cannot keep showing “finished this round” next to live p
 
 Merged by `applySessionNudges` / submit handler. Act, then continue:
 
-| Code                | Meaning                                                                          |
-| ------------------- | -------------------------------------------------------------------------------- |
-| `call_end`          | Call `end` when finished iterating this round                                    |
-| `gate_not_started`  | Delivery ok but Cloud Build did not start — no preview yet                       |
-| `gate_poll_backoff` | Repeated one-shot gate check — stop checking; build/submit or honour `stop:true` |
-| `progress_stale`    | Call `report_progress`                                                           |
-| `inbox_pending`     | `read_inbox` → apply → `ack_inbox`                                               |
-| `seed_unread`       | Call `get_seed` before scaffolding from the kit                                  |
+| Code                | Meaning                                                                                                                                                                    |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `call_end`          | Call `end` when finished iterating this round                                                                                                                              |
+| `must_fix_gate`     | Last delivery refused (`preview_failed` / `red` / `kit_outdated`) — fix and **`submit_sources` again**; staging alone does not re-run the gate or refresh the creator card |
+| `must_deliver`      | Nothing delivered yet — submit before finishing                                                                                                                            |
+| `gate_not_started`  | Delivery ok but Cloud Build did not start — no preview yet                                                                                                                 |
+| `gate_poll_backoff` | Repeated one-shot gate check — stop checking; build/submit or honour `stop:true`                                                                                           |
+| `progress_stale`    | Call `report_progress`                                                                                                                                                     |
+| `inbox_pending`     | `read_inbox` → apply → `ack_inbox`                                                                                                                                         |
+| `seed_unread`       | Call `get_seed` before scaffolding from the kit                                                                                                                            |
 
 ## Builder handoff (Studio)
 

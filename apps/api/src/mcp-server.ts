@@ -412,12 +412,102 @@ function pendingMessagesFromChannel(body: {
   return body.pendingMessages ?? body.pending ?? [];
 }
 
-function stopFromChannel(body: { control?: { stop?: boolean; reason?: string } }): {
+type ChannelControlBody = {
+  control?: {
+    stop?: boolean;
+    reason?: string;
+    mustFixGate?: string;
+    mustDeliver?: string;
+  };
+};
+
+function stopFromChannel(body: ChannelControlBody): {
   stop: boolean;
   reason?: string;
 } {
   const stop = Boolean(body.control?.stop);
   return stop ? { stop: true, ...(body.control?.reason ? { reason: body.control.reason } : {}) } : { stop: false };
+}
+
+/**
+ * Soft warnings the channel already computed — MCP used to drop them.
+ *
+ * Observed 2026-08-06: after preview_failed Claude kept staging and calling show_round
+ * while the creator's card sat on the refused delivery. The channel had been saying
+ * `mustFixGate` on every write; stopFromChannel only forwarded stop/reason, so the
+ * model never saw the one instruction that mattered: submit again.
+ */
+function warningsFromChannel(body: ChannelControlBody): Array<{ code: string; message: string }> {
+  const warnings: Array<{ code: string; message: string }> = [];
+  const fix = typeof body.control?.mustFixGate === 'string' ? body.control.mustFixGate.trim() : '';
+  if (fix) {
+    // Do not append a hard-coded mode=preview example — the channel message already
+    // names preview / publish / kit_outdated remedies, and a preview-only suffix
+    // contradicted publish red and kit_outdated (review, #627).
+    warnings.push({
+      code: 'must_fix_gate',
+      message:
+        fix +
+        ' Staging alone does not re-run the gate or update the creator card — when the fix is ready, ' +
+        'call submit_sources again on this same key (same mode as the refused delivery; for kit_outdated use ' +
+        'fromLatestDelivery with a fresh kitEngineRef).',
+    });
+  }
+  const deliver = typeof body.control?.mustDeliver === 'string' ? body.control.mustDeliver.trim() : '';
+  if (deliver) {
+    warnings.push({ code: 'must_deliver', message: deliver });
+  }
+  return warnings;
+}
+
+/** stop + soft warnings derived from a channel write body. */
+function channelControlFields(
+  body: ChannelControlBody,
+  extraWarnings: Array<{ code: string; message: string }> = [],
+): {
+  stop: boolean;
+  reason?: string;
+  warnings?: Array<{ code: string; message: string }>;
+} {
+  const warnings = [...extraWarnings, ...warningsFromChannel(body)];
+  return {
+    ...stopFromChannel(body),
+    ...(warnings.length > 0 ? { warnings } : {}),
+  };
+}
+
+/** Gate statuses that mean "fix and deliver again" — not a finished round. */
+function gateNeedsResubmit(status: unknown): boolean {
+  return status === 'preview_failed' || status === 'red' || status === 'kit_outdated';
+}
+
+function mustFixGateWarningForStatus(status: string, deliveryId?: string | null): NudgeWarning {
+  const delivery = deliveryId ? ` (${deliveryId})` : '';
+  if (status === 'kit_outdated') {
+    return {
+      code: 'must_fix_gate',
+      message:
+        `The gate refused the last delivery${delivery} as kit_outdated. Re-run get_kit for a fresh engineRef, then ` +
+        'submit_sources({ fromLatestDelivery: true, mode, kitEngineRef }) — do not only stage; staging alone ' +
+        'does not re-run the gate.',
+    };
+  }
+  if (status === 'preview_failed') {
+    return {
+      code: 'must_fix_gate',
+      message:
+        `The preview check refused the last delivery${delivery}. Fix typecheck/smoke/build, then ` +
+        'submit_sources({ fromStaged: true, mode: "preview", kitEngineRef }) on this same key. ' +
+        'Staging alone does not re-run the gate or refresh the creator card.',
+    };
+  }
+  return {
+    code: 'must_fix_gate',
+    message:
+      `The publish gate refused the last delivery${delivery}. Read the gate report, fix, then ` +
+      'submit_sources({ fromStaged: true, mode: "publish", kitEngineRef }) on this same key. ' +
+      'Staging alone does not re-run the gate.',
+  };
 }
 
 const BEHAVIOURAL_CONTRACT = [
@@ -428,8 +518,9 @@ const BEHAVIOURAL_CONTRACT = [
   "Write progress in the creator's language: when get_brief.locales[0] is not 'en', send report_progress with textLocalized and locale as well as the English text.",
   'Send a screenshot as soon as the game draws anything playable.',
   'While iterating, deliver with mode=preview (no TRACE required). Prefer stage_source_file for new/rewritten paths and patch_source_file for edits — prefer old+new exact replace; patch=unified diff also works (never re-emit a whole large render.ts/model.ts). Honour warnings.code=module_too_large by splitting before more feature work. Then submit_sources({ fromStaged:true, mode:"preview", kitEngineRef }) — fromStaged overlays onto the latest delivery/seed so only changed paths need staging. Avoid one giant files[] payload. Only mode=publish needs TRACE/PLAYTEST and can go green.',
+  'If the last gate was preview_failed / red / kit_outdated (warnings.code=must_fix_gate), fix then submit_sources again — do not stop at stage/patch/show_round. Staging does not re-run the gate; the creator card stays on the refused delivery until you submit.',
   'Run kit checks green (at least check:static) before submit_sources when you have a local kit checkout; otherwise submit and let the gate run checks.',
-  'After submit_sources, if you will not deliver more this round, call end (required — warnings.code=call_end; submit already unlocks creator handoff). Prefer end over sitting in a get_gate_verdict loop — Studio shows the gate. Do not stop after submit alone without end.',
+  'After submit_sources, if you will not deliver more this round, call end (required — warnings.code=call_end; submit already unlocks creator handoff). Prefer end over sitting in a get_gate_verdict loop — Studio shows the gate. Do not stop after submit alone without end. If you are fixing a refused gate, ignore call_end until after the next submit_sources.',
   'Honour stop immediately — do not continue after stop:true.',
   'gateStarted true means Cloud Build accepted the gate create; gateStarted false after ok submit means no preview is assembling — honour warnings.code=gate_not_started.',
   'Treat get_gate_verdict as a one-shot check, never a polling loop. Pending with a deliveryId returns stop:true: stop immediately and let Studio show the eventual result. Pending with deliveryId:null means you checked before delivering: stop is false, so continue building and call submit_sources instead of checking again. A later creator-led run may check a delivered gate again. Honour warnings.code=gate_poll_backoff on repeated checks.',
@@ -477,7 +568,7 @@ const SESSION_WORKFLOW: readonly string[] = [
   // as advice, did. It is now tied to a verdict already in hand, which is a moment the
   // loop actually reaches, and it still forbids waiting for one.
   "get_gate_media — whenever you already hold a publish verdict (green or red), call it once before you end. It attaches the gate's own frames as images: the only evidence of whether the game truly draws, and the thing to show the creator. On red especially, a frame often names what the report cannot describe. Never wait for a verdict in order to call it — if the gate is pending, end and let Studio show the result. Both lanes carry frames: a preview verdict has stills too, so you can see whether your game draws while you are still iterating. The reply says which lane took them (gate.lane) — a green preview means it typechecks, smokes and assembles, never that it is publish-ready.",
-  'red / preview_failed: read the report, fix, and resubmit on the SAME key (preview while iterating; publish when sealing).',
+  'red / preview_failed: read the report, fix, and submit_sources again on the SAME key (preview while iterating; publish when sealing). Honour warnings.code=must_fix_gate — staging/patching alone does NOT re-run the gate or update the creator card; the card stays on the refused delivery until you submit.',
   'kit_outdated: re-run get_kit for a fresh engineRef, then submit_sources({ fromLatestDelivery: true, mode, kitEngineRef }) — do NOT get_sources + re-stage the whole tree (burns tokens). Only pass files[] for paths you actually changed.',
   // Green closes the round before the next tool call; writes and non-receipt reads then
   // reject the retired key (terminal-receipt tests). Any final progress/inbox work must
@@ -846,17 +937,21 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
   async function writePiggyback(
     request: FastifyRequest,
     channelToken: string,
-  ): Promise<{ stop: boolean; reason?: string; pendingMessages: unknown[] }> {
+  ): Promise<{
+    stop: boolean;
+    reason?: string;
+    pendingMessages: unknown[];
+    warnings?: Array<{ code: string; message: string }>;
+  }> {
     const inbox = await injectChannel(request, 'GET', '/api/agent/build/inbox', channelToken);
     if (inbox.statusCode !== 200) {
       return { stop: false, pendingMessages: [] };
     }
-    const body = inbox.json() as {
+    const body = inbox.json() as ChannelControlBody & {
       pending?: Array<{ id: string; text: string; createdAt: string }>;
-      control?: { stop?: boolean; reason?: string };
     };
     return {
-      ...stopFromChannel(body),
+      ...channelControlFields(body),
       pendingMessages: pendingMessagesFromChannel(body),
     };
   }
@@ -921,11 +1016,25 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       const auth = await resolveAuth(ctx, args);
       if ('channelToken' in auth) {
         const piggy = await writePiggyback(ctx.request, auth.channelToken);
+        const priorWarnings = Array.isArray(data.warnings)
+          ? (data.warnings as NudgeWarning[]).filter(
+              (w) => w && typeof w === 'object' && typeof w.code === 'string' && typeof w.message === 'string',
+            )
+          : [];
+        const piggyWarnings = Array.isArray(piggy.warnings)
+          ? piggy.warnings.filter(
+              (w) => w && typeof w === 'object' && typeof w.code === 'string' && typeof w.message === 'string',
+            )
+          : [];
         data = {
           ...data,
           pendingMessages: piggy.pendingMessages,
           stop: piggy.stop,
           ...(piggy.reason ? { reason: piggy.reason } : {}),
+          // must_fix_gate / must_deliver ride the inbox piggyback on kit/browse reads —
+          // without this, recovery paths discarded the new warning and re-emitted call_end
+          // instead (review, #627).
+          ...(piggyWarnings.length > 0 ? { warnings: [...priorWarnings, ...piggyWarnings] } : {}),
         };
         piggybacked = true;
       }
@@ -964,17 +1073,56 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     if (toolName === 'submit_sources' && data.ok === true) {
       nudgeTracker.noteSubmitSuccess(jobId, nowMs);
     }
+    // Do not clear awaitingEnd on stage/progress/screenshot. A normal post-submit
+    // progress note must keep call_end armed; suppress call_end only while
+    // must_fix_gate is present on this reply (review, #627).
     if (toolName === 'show_round') nudgeTracker.noteCardOpened(jobId, nowMs);
-    const nudgeWarnings: NudgeWarning[] = nudgeTracker.warningsFor(jobId, toolName, nowMs, {
-      // Only nudge toward a card in a client that can render one.
-      uiCapable: sessionWantsUi((ctx.request.headers['mcp-session-id'] as string | undefined) ?? null),
-    });
-    const prior = Array.isArray(data.warnings)
+
+    // show_round nests the verdict under `gate`; get_gate_verdict puts status/deliveryId
+    // on the root. Surface must_fix_gate either way — even when the agent never hits a
+    // write (Claude opened a card and staged nothing yet, or only polled the verdict).
+    const gateObj =
+      data.gate && typeof data.gate === 'object' && !Array.isArray(data.gate)
+        ? (data.gate as { status?: unknown; deliveryId?: unknown })
+        : null;
+    const gateStatus =
+      gateObj && typeof gateObj.status === 'string'
+        ? gateObj.status
+        : toolName === 'get_gate_verdict' && typeof data.status === 'string'
+          ? data.status
+          : null;
+    const gateDelivery =
+      gateObj && typeof gateObj.deliveryId === 'string'
+        ? gateObj.deliveryId
+        : typeof data.deliveryId === 'string'
+          ? data.deliveryId
+          : null;
+    const prior: NudgeWarning[] = Array.isArray(data.warnings)
       ? (data.warnings as NudgeWarning[]).filter(
           (w) => w && typeof w === 'object' && typeof w.code === 'string' && typeof w.message === 'string',
         )
       : [];
-    const warnings = [...prior, ...nudgeWarnings];
+    const hasMustFix = prior.some((w) => w.code === 'must_fix_gate');
+    if (
+      !hasMustFix &&
+      gateStatus &&
+      gateNeedsResubmit(gateStatus) &&
+      (toolName === 'show_round' || toolName === 'get_gate_verdict' || toolName === 'report_progress')
+    ) {
+      prior.push(mustFixGateWarningForStatus(gateStatus, gateDelivery));
+    }
+
+    const nudgeWarnings: NudgeWarning[] = nudgeTracker.warningsFor(jobId, toolName, nowMs, {
+      // Only nudge toward a card in a client that can render one.
+      uiCapable: sessionWantsUi((ctx.request.headers['mcp-session-id'] as string | undefined) ?? null),
+    });
+    // When a refused gate still needs a fix, call_end is the wrong next step — drop it
+    // so must_fix_gate is the loud instruction.
+    const filteredNudges =
+      prior.some((w) => w.code === 'must_fix_gate') || nudgeWarnings.some((w) => w.code === 'must_fix_gate')
+        ? nudgeWarnings.filter((w) => w.code !== 'call_end')
+        : nudgeWarnings;
+    const warnings = [...prior, ...filteredNudges];
     if (warnings.length === 0 && !piggybacked) {
       return result;
     }
@@ -1038,7 +1186,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     warnings: {
       type: 'array',
       description:
-        'Soft session nudges (progress_stale, inbox_pending, call_end, seed_unread, gate_not_started, gate_poll_backoff, module_too_large, card_unopened). Not errors — act on them, then continue the workflow. module_too_large means split that game/*.ts module before adding more behavior. card_unopened means the creator has no status card yet — call show_round once.',
+        'Soft session nudges (progress_stale, inbox_pending, call_end, seed_unread, gate_not_started, gate_poll_backoff, module_too_large, card_unopened, must_fix_gate, must_deliver). Not errors — act on them, then continue the workflow. module_too_large means split that game/*.ts module before adding more behavior. card_unopened means the creator has no status card yet — call show_round once. must_fix_gate means the last delivery was refused — fix and submit_sources again; staging alone does not re-run the gate.',
       items: {
         type: 'object',
         properties: {
@@ -1053,6 +1201,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
               'gate_poll_backoff',
               'module_too_large',
               'card_unopened',
+              'must_fix_gate',
+              'must_deliver',
             ],
           },
           message: { type: 'string' },
@@ -2969,7 +3119,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         return toolOk({
           ok: body.accepted !== false,
           ...(body.rejected ? { rejected: body.rejected } : {}),
-          ...stopFromChannel(body),
+          ...channelControlFields(body),
           pendingMessages: pendingMessagesFromChannel(body),
         });
       },
@@ -3034,7 +3184,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         return toolOk({
           ok: body.accepted !== false,
           ...(body.rejected ? { rejected: body.rejected } : {}),
-          ...stopFromChannel(body),
+          ...channelControlFields(body),
           pendingMessages: pendingMessagesFromChannel(body),
         });
       },
@@ -3075,6 +3225,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         'for edits to an existing path prefer patch_source_file so you do not re-emit a whole large file. ' +
         'Prefer over a giant submit_sources files[] when the tree is large (Claude Chat often truncates huge tool JSON). ' +
         'Call once per path, then submit_sources({ fromStaged: true, mode, kitEngineRef }). Overwrites the same path if staged again. ' +
+        'After preview_failed / red (warnings.code=must_fix_gate), staging alone does not re-run the gate — you must submit_sources again. ' +
         'Keep modules modest — if hint warns the file is large, split into cohesive game/*.ts modules. ' +
         BEHAVIOURAL_CONTRACT,
       inputSchema: {
@@ -3139,9 +3290,9 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           ...(body.rejected ? { rejected: body.rejected } : {}),
           path: body.path ?? path,
           bytes: body.bytes ?? 0,
-          ...(hint ? { hint, warnings: [{ code: 'module_too_large' as const, message: hint }] } : {}),
+          ...(hint ? { hint } : {}),
           staged: body.staged ?? { files: [], totalBytes: 0, maxBytes: 0, maxFiles: 0 },
-          ...stopFromChannel(body),
+          ...channelControlFields(body, hint ? [{ code: 'module_too_large' as const, message: hint }] : []),
           pendingMessages: pendingMessagesFromChannel(body),
         });
       },
@@ -3274,9 +3425,9 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           bytes: body.bytes ?? 0,
           replacements: body.replacements ?? 0,
           baseFrom: body.baseFrom ?? 'staged',
-          ...(hint ? { hint, warnings: [{ code: 'module_too_large' as const, message: hint }] } : {}),
+          ...(hint ? { hint } : {}),
           staged: body.staged ?? { files: [], totalBytes: 0, maxBytes: 0, maxFiles: 0 },
-          ...stopFromChannel(body),
+          ...channelControlFields(body, hint ? [{ code: 'module_too_large' as const, message: hint }] : []),
           pendingMessages: pendingMessagesFromChannel(body),
         });
       },
@@ -3389,7 +3540,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         return toolOk({
           ok: body.accepted !== false,
           cleared: body.cleared ?? 0,
-          ...stopFromChannel(body),
+          ...channelControlFields(body),
           pendingMessages: pendingMessagesFromChannel(body),
         });
       },
@@ -3623,9 +3774,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           gateStarted,
           ...(typeof body.buildId === 'string' && body.buildId ? { buildId: body.buildId } : {}),
           deliveriesRemaining: cap === null ? null : Math.max(0, cap - used),
-          ...stopFromChannel(body),
+          ...channelControlFields(body, warnings),
           pendingMessages: pendingMessagesFromChannel(body),
-          ...(warnings.length > 0 ? { warnings } : {}),
         });
       },
     },
@@ -3707,6 +3857,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         'screenshot, gate verdict, deliveries left. It refreshes itself and stops when the round settles, so ' +
         'the creator can watch without you polling. ' +
         'Call it ONCE per round, after start — a second call renders a second card. ' +
+        'A preview_failed / red card is not finished: honour warnings.code=must_fix_gate, fix, and ' +
+        'submit_sources again — show_round alone does not re-run the gate. ' +
         'Only clients that render MCP Apps views see anything; elsewhere it is a plain status read. ' +
         BEHAVIOURAL_CONTRACT,
       inputSchema: {
@@ -4238,7 +4390,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         return toolOk({
           messages: pendingMessagesFromChannel(body),
           pendingMessages: pendingMessagesFromChannel(body),
-          ...stopFromChannel(body),
+          ...channelControlFields(body),
           ...(body.gate ? { gate: body.gate } : {}),
         });
       },
@@ -4284,7 +4436,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         }
         // Ack is a write — always piggyback stop/pending (fresh read if channel omitted).
         const piggy = body.pending
-          ? { ...stopFromChannel(body), pendingMessages: pendingMessagesFromChannel(body) }
+          ? { ...channelControlFields(body), pendingMessages: pendingMessagesFromChannel(body) }
           : await writePiggyback(ctx.request, auth.channelToken);
         return toolOk({
           ok: body.ok !== false,
