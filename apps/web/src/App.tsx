@@ -411,10 +411,19 @@ export function App() {
   // Menu navigation is scroll-to-section, but the sections only exist on the home
   // route — from a status page we have to go home first and scroll once the target
   // has mounted (the Games gallery may still be loading).
+  // Create Game also focuses the prompt so the visitor can type immediately — that
+  // is intentional on phones too (unlike page-load autofocus, which would pop the
+  // keyboard before they asked for it).
+  const focusHeroPromptInput = () => {
+    const input = document.querySelector<HTMLTextAreaElement>('#hero-prompt .big-prompt-input');
+    input?.focus({ preventScroll: true });
+  };
+
   const handleNavigateSection = (sectionId: string) => {
     const element = document.getElementById(sectionId);
     if (element) {
       element.scrollIntoView?.({ behavior: 'smooth' });
+      if (sectionId === 'hero-prompt') focusHeroPromptInput();
       return;
     }
     setPendingScrollTarget(sectionId);
@@ -429,6 +438,7 @@ export function App() {
       const element = document.getElementById(pendingScrollTarget);
       if (element) {
         element.scrollIntoView?.({ behavior: 'smooth' });
+        if (pendingScrollTarget === 'hero-prompt') focusHeroPromptInput();
       }
       // Give a still-loading section a moment to appear, then stop either way.
       if (element || (attempts += 1) > 20) {
