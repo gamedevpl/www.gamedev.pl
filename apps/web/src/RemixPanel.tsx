@@ -291,6 +291,8 @@ export function RemixPanel(props: {
   const gripDragRef = useRef<{ startY: number; moved: boolean } | null>(null);
   /** Set when a grip drag already acted, so the trailing click does not toggle again. */
   const gripDragConsumedRef = useRef(false);
+  /** Only the newest swap is watched — older listeners would stack and over-count breaks. */
+  const swapWatchStopRef = useRef<(() => void) | null>(null);
   /**
    * Whether this game takes proposals from this player.
    *
@@ -757,7 +759,12 @@ export function RemixPanel(props: {
       gripDragConsumedRef.current = false;
       return;
     }
-    if (!chatMode) return;
+    // Pre-chat the grip is Close (label + click/keyboard). In chat it toggles
+    // the dock — drag already covers expand/collapse for pointer users.
+    if (!chatMode) {
+      props.onClose();
+      return;
+    }
     setChatExpanded((open) => !open);
   }
 
@@ -998,6 +1005,7 @@ export function RemixPanel(props: {
 
   /** Listen for the new build throwing, for a few seconds after the swap. */
   function watchSwappedDocument() {
+    swapWatchStopRef.current?.();
     function onMessage(event: MessageEvent) {
       if (event.origin !== 'null') return;
       // Read the frame's window at delivery time: the swap replaced the document,
@@ -1021,8 +1029,10 @@ export function RemixPanel(props: {
     function stop() {
       window.removeEventListener('message', onMessage);
       window.clearTimeout(timer);
+      if (swapWatchStopRef.current === stop) swapWatchStopRef.current = null;
     }
     const timer = window.setTimeout(stop, SWAP_WATCH_MS);
+    swapWatchStopRef.current = stop;
     window.addEventListener('message', onMessage);
   }
 
@@ -1207,10 +1217,10 @@ export function RemixPanel(props: {
         {chatTurns.map((turn) => (
           <li key={turn.id} className={`remix-bubble is-${turn.role}`}>
             <span className="remix-bubble-text">{turn.text}</span>
-            {turn.canUndo && (undo || changed?.undoCode) && !changed?.broke ? (
+            {turn.canUndo && (undo || changed?.undoCode) ? (
               <button
                 type="button"
-                className="remix-bubble-undo"
+                className={`remix-bubble-undo${changed?.broke ? ' is-urgent' : ''}`}
                 disabled={lane !== 'idle' || saving}
                 onClick={() => (changed?.undoCode ? void undoCode() : undoLast())}
               >

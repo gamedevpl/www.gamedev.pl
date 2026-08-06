@@ -829,6 +829,57 @@ describe('RemixPanel', () => {
     expect(container.querySelector('.remix-panel.is-collapsed')).toBeNull();
   });
 
+  it('keeps Undo on the last bubble when a chat-mode rebuild breaks', async () => {
+    remixApi.startRemix.mockResolvedValue({
+      remixId: 'r1',
+      params: null,
+      values: null,
+      canAssist: false,
+      canCode: true,
+      suggestions: [],
+      expiresInMs: 3_600_000,
+    });
+    remixApi.remixCode
+      .mockResolvedValueOnce({
+        ok: true,
+        html: '<html>one</html>',
+        region: { file: 'game/a.ts', name: 'a' },
+        summary: { en: 'One.', pl: 'Jeden.' },
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        html: '<html>two</html>',
+        region: { file: 'game/a.ts', name: 'a' },
+        summary: { en: 'Two.', pl: 'Dwa.' },
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        html: '<html>broken</html>',
+        region: { file: 'game/a.ts', name: 'a' },
+        summary: { en: 'Three.', pl: 'Trzy.' },
+      });
+    await draw();
+    await send('one');
+    await send('two');
+    await send('three');
+    expect(container.querySelector('.remix-bubble-undo')).not.toBeNull();
+
+    await act(async () => {
+      const event = new MessageEvent('message', {
+        data: { source: 'gdpl-player', type: 'error', message: 'boom' },
+      });
+      Object.defineProperty(event, 'source', { value: frameWindow });
+      Object.defineProperty(event, 'origin', { value: 'null' });
+      window.dispatchEvent(event);
+    });
+
+    expect(container.querySelector('.remix-result.is-broken')).not.toBeNull();
+    // Chat mode is still on after a later landing breaks — Undo must stay on the bubble.
+    expect(container.querySelector('.remix-panel.is-chat')).not.toBeNull();
+    expect(container.querySelector('.remix-bubble-undo')).not.toBeNull();
+    expect(container.querySelector('.remix-bubble-undo.is-urgent')).not.toBeNull();
+  });
+
   it('keeps failures out of the chat transcript', async () => {
     remixApi.startRemix.mockResolvedValue({
       remixId: 'r1',

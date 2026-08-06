@@ -9,7 +9,13 @@ describe('remix chat copy', () => {
     );
   });
 
-  it('follows the UI locale when the utterance is ASCII', () => {
+  it('detects Polish without diacritics via common words', () => {
+    expect(summaryLangFor('dodaj psa', 'en')).toBe('pl');
+    expect(summaryLangFor('niech pies skacze', 'en')).toBe('pl');
+    expect(summaryLangFor('mozesz zrobic samochody', 'en')).toBe('pl');
+  });
+
+  it('follows the UI locale when the utterance is ASCII English', () => {
     expect(summaryLangFor('make it bigger', 'pl')).toBe('pl');
     expect(summaryLangFor('make it bigger', 'en')).toBe('en');
   });

@@ -12435,6 +12435,11 @@ button.builder-mode-selector:disabled {
   cursor: default;
 }
 
+.remix-bubble-undo.is-urgent {
+  color: var(--text);
+  font-weight: 600;
+}
+
 .remix-host .remix-panel.is-chat.is-collapsed {
   max-height: none;
   padding: 8px 12px 10px;
