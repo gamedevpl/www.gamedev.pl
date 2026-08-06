@@ -33,6 +33,9 @@
 #                               pre-views contract)
 #   BETA_ALLOWED_UIDS=...      (comma-separated g:<sub> values)
 #   ADMIN_UIDS=...             (comma-separated g:<sub> values; operator telemetry view)
+#   REVIEWER_UIDS=...          (comma-separated g:<sub> values; /review assessment desk.
+#                               Admins are reviewers automatically — this list is for
+#                               trusted colleagues who are not operators.)
 #   BETA_ALLOWED_EMAILS=...    (comma-separated verified email addresses)
 #   MAIL_FROM=...              (RFC 5322 sender; defaults to noreply@mail.gamedev.pl)
 #   INVITE_URL=...             (where invitees land; defaults to https://www.gamedev.pl)
@@ -279,6 +282,12 @@ fi
 # Unset means the route admits nobody, which is the correct default.
 if [ -n "${ADMIN_UIDS:-}" ]; then
   ENV_VARS="${ENV_VARS}|ADMIN_UIDS=${ADMIN_UIDS}"
+fi
+# Reviewer assessment desk (/review). Same posture as ADMIN_UIDS — session-only, PATs
+# never count. Admins are reviewers too, so this list is only for non-operator colleagues.
+# Unset means nobody extra is a reviewer.
+if [ -n "${REVIEWER_UIDS:-}" ]; then
+  ENV_VARS="${ENV_VARS}|REVIEWER_UIDS=${REVIEWER_UIDS}"
 fi
 if [ -n "$MAIL_FROM" ]; then
   ENV_VARS="${ENV_VARS}|MAIL_FROM=${MAIL_FROM}"

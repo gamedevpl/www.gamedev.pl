@@ -200,10 +200,20 @@ which it must for the operator telemetry views anyway.
 
 Trusted colleagues who walk the catalog (and shared creator drafts) with keep/cut
 judgments use the unlisted `/review` desk — see
-[`game-assessment-plan.md`](./game-assessment-plan.md). Set plain env
-`REVIEWER_UIDS` to a comma-separated list of uids (same shape as `ADMIN_UIDS`).
+[`game-assessment-plan.md`](./game-assessment-plan.md) (includes the grant/revoke steps).
+
+`REVIEWER_UIDS` is a GitHub repository variable (comma-separated `g:<sub>` uids), threaded
+by both [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml) and
+[`infra/deploy-api.sh`](../infra/deploy-api.sh) — same durability rule as `ADMIN_UIDS`.
 Admins are reviewers automatically. Locally, `REVIEWER_UIDS=dev:local` (or
 `dev:<handle>` after `POST /api/auth/dev`) unlocks the desk against the in-memory store.
+
+```bash
+gh variable set REVIEWER_UIDS --body "g:111...,g:222..."
+gh workflow run deploy.yml
+```
+
+### Minting a token
 
 Issue one the same way you approve a beta tester — from a shell with gcloud credentials for
 the project:

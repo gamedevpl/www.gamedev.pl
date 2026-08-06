@@ -46,9 +46,35 @@ Mirror the operator console:
    (`REVIEWER_UIDS` ∪ `ADMIN_UIDS`)).
 3. Non-reviewers get **404**.
 
-Grant access by adding a colleague's uid to `REVIEWER_UIDS` on the Cloud Run service
-(and ensuring they are already on the closed-beta allowlist / waitlist). Locally:
-`REVIEWER_UIDS=dev:local` (or pass `reviewerUids` into `buildApp` in tests).
+## Managing reviewers
+
+Same shape as `ADMIN_UIDS` — a **GitHub repository variable**, not a Firestore CLI like
+`beta:approve`. Hand-editing Cloud Run env is wiped on the next deploy
+([runbooks/README.md](./runbooks/README.md) — "Runtime levers").
+
+1. Colleague must already be on the closed beta (waitlist approved / allowlist).
+2. Find their uid (`g:<google-sub>`):
+   - Operator console → Waitlist (approved row), or
+   - Firestore `waitlist` where `email == …`, or
+   - Ask them to open `/api/auth/me` while signed in.
+3. Set / update the durable variable and redeploy:
+
+```bash
+# Read current value, then append the new uid (comma-separated, no spaces).
+gh variable get REVIEWER_UIDS
+gh variable set REVIEWER_UIDS --body "g:111...,g:222..."
+
+# Either path threads the var into Cloud Run:
+gh workflow run deploy.yml
+# or: REVIEWER_UIDS='g:111...,g:222...' ./infra/deploy-api.sh
+```
+
+4. After the revision is live they see **Review** in the hamburger and can open `/review`.
+   The desk stays empty until an operator starts a **review sweep** on Assessments.
+
+Admins are reviewers automatically — do not duplicate their uids in `REVIEWER_UIDS`.
+Unset / empty means nobody extra is a reviewer. Locally: `REVIEWER_UIDS=dev:local`
+(or pass `reviewerUids` into `buildApp` in tests).
 
 ## API
 
