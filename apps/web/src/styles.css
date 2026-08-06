@@ -14984,11 +14984,16 @@ body.remix-entry-open {
 
 @media (max-width: 640px) {
   .review-desk {
-    padding-bottom: 6.5rem;
+    /* Leave room for the install/update banners that share the bottom edge. */
+    padding-bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
   }
 
+  /* Shorter than 4/5 so the note + Cut/Skip/Keep row stay on the first screen
+     with the game — a swipe desk that forces a scroll to reach the verdict
+     buttons is not a swipe desk. */
   .review-card-stage {
-    aspect-ratio: 4 / 5;
+    aspect-ratio: 16 / 11;
+    max-height: min(42dvh, 280px);
   }
 
   .review-action {
