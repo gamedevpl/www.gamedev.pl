@@ -910,12 +910,17 @@ describe('POST /api/mcp (BY-05)', () => {
     const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
 
     // list_examples is a hot read — should carry inbox piggyback without a separate read_inbox.
+    // Also forwards channel must_deliver when nothing has been submitted yet (review, #627).
     const examples = await callTool(app, 'list_examples', { sessionKey }, { 'mcp-session-id': sessionId });
     expect(examples.isError).toBe(false);
     expect(examples.structured).toMatchObject({
       pendingMessages: [expect.objectContaining({ text: 'Add a power-up' })],
-      warnings: [expect.objectContaining({ code: 'inbox_pending' })],
     });
+    const warningCodes = ((examples.structured as { warnings?: Array<{ code: string }> }).warnings ?? []).map(
+      (w) => w.code,
+    );
+    expect(warningCodes).toContain('inbox_pending');
+    expect(warningCodes).toContain('must_deliver');
   });
 
   it('rejects oversized screenshots at the MCP layer', async () => {
@@ -1238,8 +1243,12 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(staged.isError).toBe(false);
     const warnings = (staged.structured as { warnings?: Array<{ code: string; message: string }> }).warnings ?? [];
     expect(warnings.some((w) => w.code === 'must_fix_gate')).toBe(true);
-    expect(warnings.find((w) => w.code === 'must_fix_gate')?.message).toMatch(/submit_sources/i);
+    expect(warnings.find((w) => w.code === 'must_fix_gate')?.message).toMatch(/submit_sources again/i);
     expect(warnings.find((w) => w.code === 'must_fix_gate')?.message).toMatch(/Staging alone/i);
+    // Must not hard-code mode=preview — that contradicts publish red / kit_outdated.
+    expect(warnings.find((w) => w.code === 'must_fix_gate')?.message).not.toMatch(/mode:\s*"preview"/);
+    // call_end is suppressed on this reply while must_fix_gate is present.
+    expect(warnings.some((w) => w.code === 'call_end')).toBe(false);
 
     const shown = await callTool(app, 'show_round', { sessionKey }, { 'mcp-session-id': sessionId });
     expect(shown.isError).toBe(false);

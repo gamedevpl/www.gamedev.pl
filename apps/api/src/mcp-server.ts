@@ -441,12 +441,16 @@ function warningsFromChannel(body: ChannelControlBody): Array<{ code: string; me
   const warnings: Array<{ code: string; message: string }> = [];
   const fix = typeof body.control?.mustFixGate === 'string' ? body.control.mustFixGate.trim() : '';
   if (fix) {
+    // Do not append a hard-coded mode=preview example — the channel message already
+    // names preview / publish / kit_outdated remedies, and a preview-only suffix
+    // contradicted publish red and kit_outdated (review, #627).
     warnings.push({
       code: 'must_fix_gate',
       message:
         fix +
         ' Staging alone does not re-run the gate or update the creator card — when the fix is ready, ' +
-        'call submit_sources({ fromStaged: true, mode: "preview", kitEngineRef }) on this same key.',
+        'call submit_sources again on this same key (same mode as the refused delivery; for kit_outdated use ' +
+        'fromLatestDelivery with a fresh kitEngineRef).',
     });
   }
   const deliver = typeof body.control?.mustDeliver === 'string' ? body.control.mustDeliver.trim() : '';
@@ -1012,11 +1016,25 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       const auth = await resolveAuth(ctx, args);
       if ('channelToken' in auth) {
         const piggy = await writePiggyback(ctx.request, auth.channelToken);
+        const priorWarnings = Array.isArray(data.warnings)
+          ? (data.warnings as NudgeWarning[]).filter(
+              (w) => w && typeof w === 'object' && typeof w.code === 'string' && typeof w.message === 'string',
+            )
+          : [];
+        const piggyWarnings = Array.isArray(piggy.warnings)
+          ? piggy.warnings.filter(
+              (w) => w && typeof w === 'object' && typeof w.code === 'string' && typeof w.message === 'string',
+            )
+          : [];
         data = {
           ...data,
           pendingMessages: piggy.pendingMessages,
           stop: piggy.stop,
           ...(piggy.reason ? { reason: piggy.reason } : {}),
+          // must_fix_gate / must_deliver ride the inbox piggyback on kit/browse reads —
+          // without this, recovery paths discarded the new warning and re-emitted call_end
+          // instead (review, #627).
+          ...(piggyWarnings.length > 0 ? { warnings: [...priorWarnings, ...piggyWarnings] } : {}),
         };
         piggybacked = true;
       }
@@ -1055,16 +1073,9 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     if (toolName === 'submit_sources' && data.ok === true) {
       nudgeTracker.noteSubmitSuccess(jobId, nowMs);
     }
-    // Resuming after submit (fix a refused gate, or keep iterating) — call_end would
-    // tell Claude to end instead of submit_sources again (owner, 2026-08-06).
-    if (
-      toolName === 'stage_source_file' ||
-      toolName === 'patch_source_file' ||
-      toolName === 'report_progress' ||
-      toolName === 'send_screenshot'
-    ) {
-      nudgeTracker.noteEnded(jobId, nowMs);
-    }
+    // Do not clear awaitingEnd on stage/progress/screenshot. A normal post-submit
+    // progress note must keep call_end armed; suppress call_end only while
+    // must_fix_gate is present on this reply (review, #627).
     if (toolName === 'show_round') nudgeTracker.noteCardOpened(jobId, nowMs);
 
     // show_round nests the verdict under `gate`; get_gate_verdict puts status/deliveryId

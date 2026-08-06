@@ -428,11 +428,16 @@ describe('ui resources', () => {
 
   it('keeps polling after a fixable gate refusal so a resumed agent refreshes the card', () => {
     // Observed 2026-08-06: PREVIEW FAILED + agentEnded froze the card while Claude
-    // staged fixes above it. Fixable verdicts must stay live.
+    // staged fixes above it. Fixable verdicts must stay live — but only after terminal
+    // phases are checked, or a canceled round with a leftover preview_failed would poll
+    // forever (review, #627).
     const html = readUiResource(ROUND_STATUS_RESOURCE_URI)?.text ?? '';
     expect(html).toContain("gate.status === 'preview_failed'");
     expect(html).toContain("gate.status === 'kit_outdated'");
-    expect(html).toContain('return false;');
+    const canceledAt = html.indexOf("status.phase === 'canceled'");
+    const previewFailedAt = html.indexOf("gate.status === 'preview_failed'");
+    expect(canceledAt).toBeGreaterThan(-1);
+    expect(previewFailedAt).toBeGreaterThan(canceledAt);
     // Still stop once a publish gate is green (or the round is truly terminal).
     expect(html).toContain("gate.status === 'green') return true");
   });
