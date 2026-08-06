@@ -3104,6 +3104,16 @@ body.player-open {
     padding: 4px;
   }
 
+  .user-avatar-btn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .user-profile-badge .notif-trigger {
+    width: 44px;
+    height: 44px;
+  }
+
   /* The mic / upload / sketch row sat at 30x26 — under half a fingertip. */
   .prompt-icon-btn {
     min-width: 44px;
