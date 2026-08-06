@@ -1,10 +1,10 @@
 import type { FastifyInstance } from 'fastify';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from './app.js';
 import { mintAgentToken, STALE_AGENT_TOKEN_REASON } from './agent-token.js';
 import { mintGameAgentKey } from './agent-game-key.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
-import { consentToken, OAUTH_AS_METADATA_PATH } from './oauth-as.js';
+import { cimdSupportsPublicClientAuth, consentToken, OAUTH_AS_METADATA_PATH } from './oauth-as.js';
 import { pkceChallengeS256 } from './oauth-pkce.js';
 import { AS_ACCESS_TOKEN_TTL_MS, generateAsAccessToken, generateAsRefreshToken } from './oauth-tokens.js';
 import { MCP_ENDPOINT_PATH } from './self-build-connect.js';
@@ -404,6 +404,83 @@ describe('OAuth authorization server (BY-18b)', () => {
       headers: { cookie: sessionCookie('g:creator') },
     });
     expect((again.json() as unknown[]).length).toBe(0);
+  });
+
+  it('accepts ChatGPT-shaped CIMD that prefers private_key_jwt but also supports none', async () => {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:creator' });
+    app = await buildOAuthApp(store);
+
+    const clientIdUrl = 'https://chatgpt.com/oauth/test-client/client.json';
+    const redirectUri = 'https://chatgpt.com/connector/oauth/test-client';
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      expect(String(input)).toBe(clientIdUrl);
+      return new Response(
+        JSON.stringify({
+          client_id: clientIdUrl,
+          client_name: 'ChatGPT',
+          redirect_uris: [redirectUri],
+          token_endpoint_auth_method: 'private_key_jwt',
+          token_endpoint_auth_methods_supported: ['none', 'private_key_jwt'],
+          jwks_uri: 'https://chatgpt.com/oauth/jwks.json',
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      const verifier = 'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk';
+      const tokens = await authorizeAndExchange(app, clientIdUrl, redirectUri, verifier);
+      expect(tokens.access_token).toMatch(/^gdpl_oat_/);
+      expect(fetchMock).toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('still rejects CIMD clients that cannot use none', async () => {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:creator' });
+    app = await buildOAuthApp(store);
+
+    const clientIdUrl = 'https://example.com/oauth/secret-only/client.json';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              client_id: clientIdUrl,
+              redirect_uris: ['https://example.com/callback'],
+              token_endpoint_auth_method: 'private_key_jwt',
+              token_endpoint_auth_methods_supported: ['private_key_jwt'],
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          ),
+      ),
+    );
+
+    try {
+      const challenge = pkceChallengeS256('dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk');
+      const res = await app.inject({
+        method: 'GET',
+        url: '/oauth/authorize',
+        headers: { cookie: sessionCookie('g:creator') },
+        query: {
+          response_type: 'code',
+          client_id: clientIdUrl,
+          redirect_uri: 'https://example.com/callback',
+          scope: 'mcp',
+          code_challenge: challenge,
+          code_challenge_method: 'S256',
+        },
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toEqual({ error: 'invalid_client' });
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 
@@ -846,5 +923,31 @@ describe('oauth token helpers', () => {
     });
     expect(refused.statusCode).toBe(403);
     await app.close();
+  });
+});
+
+describe('cimdSupportsPublicClientAuth', () => {
+  it('accepts ChatGPT RP Metadata Choices listing none alongside private_key_jwt', () => {
+    expect(
+      cimdSupportsPublicClientAuth({
+        token_endpoint_auth_method: 'private_key_jwt',
+        token_endpoint_auth_methods_supported: ['none', 'private_key_jwt'],
+      }),
+    ).toBe(true);
+  });
+
+  it('accepts legacy none-only documents (claude.ai shape)', () => {
+    expect(cimdSupportsPublicClientAuth({ token_endpoint_auth_method: 'none' })).toBe(true);
+    expect(cimdSupportsPublicClientAuth({})).toBe(true);
+  });
+
+  it('rejects clients that only speak private_key_jwt', () => {
+    expect(
+      cimdSupportsPublicClientAuth({
+        token_endpoint_auth_method: 'private_key_jwt',
+        token_endpoint_auth_methods_supported: ['private_key_jwt'],
+      }),
+    ).toBe(false);
+    expect(cimdSupportsPublicClientAuth({ token_endpoint_auth_method: 'private_key_jwt' })).toBe(false);
   });
 });

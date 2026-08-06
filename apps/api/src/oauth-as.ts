@@ -105,6 +105,21 @@ interface CimdDocument {
   client_name?: string;
   redirect_uris: string[];
   token_endpoint_auth_method?: string;
+  // RP Metadata Choices: methods ChatGPT can actually use.
+  token_endpoint_auth_methods_supported?: string[];
+}
+
+// Prefer Choices list; ChatGPT prefers private_key_jwt but also supports none.
+export function cimdSupportsPublicClientAuth(body: {
+  token_endpoint_auth_method?: string;
+  token_endpoint_auth_methods_supported?: string[];
+}): boolean {
+  const supported = body.token_endpoint_auth_methods_supported;
+  if (Array.isArray(supported) && supported.length > 0) {
+    return supported.includes('none');
+  }
+  const method = body.token_endpoint_auth_method;
+  return method === undefined || method === 'none';
 }
 
 async function fetchCimdClient(clientIdUrl: string, nowMs: number): Promise<OAuthClientRecord | null> {
@@ -132,7 +147,7 @@ async function fetchCimdClient(clientIdUrl: string, nowMs: number): Promise<OAut
 
   if (body.client_id !== clientIdUrl) return null;
   if (!Array.isArray(body.redirect_uris) || body.redirect_uris.length === 0) return null;
-  if (body.token_endpoint_auth_method && body.token_endpoint_auth_method !== 'none') return null;
+  if (!cimdSupportsPublicClientAuth(body)) return null;
 
   const client: OAuthClientRecord = {
     clientId: clientIdUrl,
