@@ -3,7 +3,7 @@ import cookie from '@fastify/cookie';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { OAuth2Client } from 'google-auth-library';
 import { z } from 'zod';
-import { isAccessTokenExpired, looksLikeAccessToken, parseAccessToken, verifyTokenSecret } from './access-token.js';
+import { resolveAccessTokenUser } from './access-token-service.js';
 import { isAdmin, isAdminSession } from './admin.js';
 import { resolveAppleAccount } from './apple-account.js';
 import { createAppleAuthVerifierFromEnv, parseAppleClientIds, type AppleAuthVerifier } from './apple-auth.js';
@@ -332,50 +332,18 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
    * Resolve a personal access token from the Authorization header
    * (docs/agent-access-tokens.md).
    *
-   * Returns null — never throws — for every failure, so a bad token is simply an
-   * unauthenticated request and the route's own 401 explains it. Distinguishing
-   * "expired" from "revoked" from "never existed" in the response would only tell a
-   * caller holding a stolen token which one they hold.
-   *
-   * This API carries other Bearer credentials that are not PATs (the build channel's
-   * per-issue tokens, the scheduler's OIDC tokens). The `gdpl_pat_` prefix check is
-   * what keeps those out of here — they fall through untouched to the handlers that
-   * do understand them.
+   * The checks themselves live in access-token-service.ts, shared with the browser
+   * sign-in form, so the header and the form can never disagree about which tokens are
+   * good. What is specific to this door is the question of which Bearer credentials are
+   * even candidates: this API carries others that are not PATs (the build channel's
+   * per-issue tokens, the scheduler's OIDC tokens), and the `gdpl_pat_` prefix check
+   * inside the resolver is what keeps those out — they fall through untouched to the
+   * handlers that do understand them.
    */
   const getAccessTokenUser = async (request: FastifyRequest): Promise<User | null> => {
     const bearer = readBearerToken(request.headers.authorization);
-    if (!bearer || !looksLikeAccessToken(bearer)) return null;
-
-    let tokenId: string;
-    let secret: string;
-    try {
-      ({ tokenId, secret } = parseAccessToken(bearer));
-    } catch {
-      return null;
-    }
-
-    const record = await store.getAccessToken(tokenId);
-    if (!record) return null;
-    if (!verifyTokenSecret(secret, record.secretHash)) return null;
-    // Fail closed on corrupt/missing expiresAt (NaN from Date.parse would
-    // otherwise read as "not expired").
-    if (isAccessTokenExpired(record.expiresAt, Date.now())) return null;
-
-    const user = await store.getUser(record.uid);
-    if (!user || user.deletionScheduledFor) return null;
-
-    // Last-use tracking, coarsened to a day so a chatty agent costs one write rather
-    // than one per request — the question it answers ("is anything still using this
-    // token?") does not need finer resolution. Best-effort by design: bookkeeping must
-    // never turn a working request into a failing one.
-    const nowIso = new Date().toISOString();
-    if (record.lastUsedAt?.slice(0, 10) !== nowIso.slice(0, 10)) {
-      void store.touchAccessToken(tokenId, nowIso).catch(() => {
-        /* same contract as every other measurement in this file */
-      });
-    }
-
-    return user;
+    if (!bearer) return null;
+    return resolveAccessTokenUser(store, bearer);
   };
 
   app.decorateRequest('user', null);
