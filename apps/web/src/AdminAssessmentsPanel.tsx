@@ -30,6 +30,10 @@ export function AdminAssessmentsPanel() {
   const load = useCallback(async () => {
     try {
       const [assessments, sweepBody] = await Promise.all([fetchAdminAssessments(), fetchReviewSweeps()]);
+      if (!sweepBody) {
+        setError(true);
+        return;
+      }
       setData(assessments);
       setSweeps(sweepBody);
       setError(false);
