@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { formatAssessmentClientContext } from './reviewClientContext.js';
 import { fetchAdminAssessments, type AdminAssessmentsResponse } from './reviewApi.js';
 
 /**
@@ -70,13 +71,17 @@ export function AdminAssessmentsPanel() {
 
       <h3 className="admin-assessments-recent-title">Recent</h3>
       <ul className="admin-assessments-recent">
-        {data.recent.map((row) => (
-          <li key={row.id}>
-            <span className={`admin-verdict is-${row.verdict}`}>{row.verdict}</span> <strong>{row.title}</strong>
-            <span className="admin-assessments-slug"> {row.slug}</span>
-            {row.note ? <p className="admin-assessments-note">{row.note}</p> : null}
-          </li>
-        ))}
+        {data.recent.map((row) => {
+          const env = formatAssessmentClientContext(row.clientContext);
+          return (
+            <li key={row.id}>
+              <span className={`admin-verdict is-${row.verdict}`}>{row.verdict}</span> <strong>{row.title}</strong>
+              <span className="admin-assessments-slug"> {row.slug}</span>
+              {env ? <div className="admin-assessments-env">{env}</div> : null}
+              {row.note ? <p className="admin-assessments-note">{row.note}</p> : null}
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

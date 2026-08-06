@@ -986,6 +986,30 @@ export interface PlayerFeedbackRecord {
 export type AssessmentVerdict = 'keep' | 'cut' | 'skip';
 export type AssessmentSource = 'catalog' | 'creator';
 export type AssessmentNoteOrigin = 'text' | 'speech' | 'none';
+export type AssessmentInputMethod = 'touch' | 'mouse' | 'mixed';
+export type AssessmentPlatform = 'ios' | 'android' | 'mac' | 'windows' | 'linux' | 'other';
+
+/**
+ * Where the reviewer was sitting when they committed the verdict.
+ *
+ * Identity-attached on purpose (the row already names `reviewerUid`) — this is
+ * operator context for "cut on a phone vs keep on desktop", not anonymous play
+ * telemetry. Keep it structured and short; never put free-text blobs here.
+ */
+export interface AssessmentClientContext {
+  viewportW: number;
+  viewportH: number;
+  screenW: number;
+  screenH: number;
+  /** `window.devicePixelRatio`, clamped. */
+  dpr: number;
+  input: AssessmentInputMethod;
+  platform: AssessmentPlatform;
+  /** Browser language tag, when present. */
+  lang: string | null;
+  /** Truncated user-agent for debugging odd cases; optional. */
+  ua: string | null;
+}
 
 export interface GameAssessment {
   /** `${slug}:${reviewerUid}` — stable upsert key. */
@@ -998,6 +1022,8 @@ export interface GameAssessment {
   verdict: AssessmentVerdict;
   note: string;
   noteOrigin: AssessmentNoteOrigin;
+  /** Present on new rows; absent on assessments written before this field existed. */
+  clientContext: AssessmentClientContext | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -1007,6 +1033,15 @@ export const GAME_ASSESSMENTS_COLLECTION = 'gameAssessments';
 /** Build the document id used as the upsert key for one reviewer on one game. */
 export function gameAssessmentId(slug: string, reviewerUid: string): string {
   return `${slug}:${reviewerUid}`;
+}
+
+/** Older rows predate `clientContext` — treat a missing field as null, never undefined. */
+export function hydrateGameAssessment(id: string, data: Omit<GameAssessment, 'id'>): GameAssessment {
+  return {
+    ...data,
+    id,
+    clientContext: data.clientContext ?? null,
+  };
 }
 
 /**
@@ -3874,6 +3909,7 @@ export class InMemoryStore implements Store {
       verdict: input.verdict,
       note: input.note,
       noteOrigin: input.noteOrigin,
+      clientContext: input.clientContext ?? null,
       createdAt: existing?.createdAt ?? input.createdAt ?? now,
       updatedAt: now,
     };
@@ -3883,20 +3919,20 @@ export class InMemoryStore implements Store {
 
   async getGameAssessment(slug: string, reviewerUid: string): Promise<GameAssessment | null> {
     const record = this.gameAssessments.get(gameAssessmentId(slug, reviewerUid));
-    return record ? { ...record } : null;
+    return record ? hydrateGameAssessment(record.id, record) : null;
   }
 
   async listGameAssessmentsByReviewer(reviewerUid: string): Promise<GameAssessment[]> {
     return Array.from(this.gameAssessments.values())
       .filter((row) => row.reviewerUid === reviewerUid)
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.slug.localeCompare(b.slug))
-      .map((row) => ({ ...row }));
+      .map((row) => hydrateGameAssessment(row.id, row));
   }
 
   async listGameAssessments(opts?: { limit?: number }): Promise<GameAssessment[]> {
     const sorted = Array.from(this.gameAssessments.values())
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.slug.localeCompare(b.slug))
-      .map((row) => ({ ...row }));
+      .map((row) => hydrateGameAssessment(row.id, row));
     return opts?.limit !== undefined ? sorted.slice(0, opts.limit) : sorted;
   }
 
@@ -6394,6 +6430,7 @@ export class FirestoreStore implements Store {
       verdict: input.verdict,
       note: input.note,
       noteOrigin: input.noteOrigin,
+      clientContext: input.clientContext ?? null,
       createdAt,
       updatedAt: now,
     };
@@ -6406,6 +6443,7 @@ export class FirestoreStore implements Store {
       verdict: record.verdict,
       note: record.note,
       noteOrigin: record.noteOrigin,
+      clientContext: record.clientContext,
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,
     });
@@ -6416,7 +6454,7 @@ export class FirestoreStore implements Store {
     const id = gameAssessmentId(slug, reviewerUid);
     const snap = await this.gameAssessmentsCollection().doc(id).get();
     if (!snap.exists) return null;
-    return { id, ...(snap.data() as Omit<GameAssessment, 'id'>) };
+    return hydrateGameAssessment(id, snap.data() as Omit<GameAssessment, 'id'>);
   }
 
   async listGameAssessmentsByReviewer(reviewerUid: string): Promise<GameAssessment[]> {
@@ -6425,14 +6463,14 @@ export class FirestoreStore implements Store {
     // is small (one row per game they touched).
     const snap = await this.gameAssessmentsCollection().where('reviewerUid', '==', reviewerUid).get();
     return snap.docs
-      .map((d) => ({ id: d.id, ...(d.data() as Omit<GameAssessment, 'id'>) }))
+      .map((d) => hydrateGameAssessment(d.id, d.data() as Omit<GameAssessment, 'id'>))
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.slug.localeCompare(b.slug));
   }
 
   async listGameAssessments(opts?: { limit?: number }): Promise<GameAssessment[]> {
     const ordered = this.gameAssessmentsCollection().orderBy('updatedAt', 'desc');
     const snap = await (opts?.limit === undefined ? ordered : ordered.limit(opts.limit)).get();
-    return snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<GameAssessment, 'id'>) }));
+    return snap.docs.map((d) => hydrateGameAssessment(d.id, d.data() as Omit<GameAssessment, 'id'>));
   }
 
   async countGameAssessmentsByUid(uid: string): Promise<number> {
