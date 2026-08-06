@@ -54,16 +54,21 @@ describe('.claude-plugin marketplace', () => {
     name: string;
     source: string;
     description: string;
+    version?: string;
     license?: string;
     mcpServers?: Record<string, { url?: string; type?: string }>;
   }
 
   // Both declarations point at the same endpoint, so neither can be updated alone.
+  // Compare whole entries rather than one field, and sort keys so the assertion does not
+  // depend on JSON insertion order or on there only ever being one server.
   it('keeps the marketplace entry and the plugin .mcp.json in agreement', () => {
-    const inline = entry.mcpServers as Record<string, { url?: string }>;
-    const file = pluginMcp.mcpServers as Record<string, { url?: string }>;
-    expect(Object.keys(inline)).toEqual(Object.keys(file));
-    expect(inline.gamedevpl.url).toBe(file.gamedevpl.url);
+    const inline = entry.mcpServers as Record<string, unknown>;
+    const file = pluginMcp.mcpServers as Record<string, unknown>;
+    expect(Object.keys(inline).sort()).toEqual(Object.keys(file).sort());
+    for (const key of Object.keys(file)) {
+      expect(inline[key], `server "${key}" differs between the two declarations`).toEqual(file[key]);
+    }
   });
 
   const entries = marketplace.plugins as MarketplacePlugin[];
@@ -124,9 +129,27 @@ describe('.claude-plugin marketplace', () => {
     expect(entry.source).not.toBe('.');
   });
 
-  it('agrees with the Cursor manifest on licence and version', () => {
+  /**
+   * Three version lines coincided at 1.0.1 and an earlier revision of this test asserted
+   * they must stay equal — which would have blocked the fix that required bumping one of
+   * them. They are independent artifacts:
+   *
+   *   - the registry `server.json` versions the MCP *server*, and is immutable once
+   *     published, so it moves only when the server itself changes;
+   *   - `.cursor-plugin/plugin.json` versions the Cursor plugin;
+   *   - the Claude plugin versions the Claude plugin, and had to ship 1.0.2 because
+   *     Claude uses that number to detect an update, and 1.0.1 was broken.
+   *
+   * Licence is a genuinely shared fact, so that one still has to agree.
+   */
+  it('agrees with the Cursor manifest on licence, but versions independently', () => {
     const cursor = readJson('.cursor-plugin/plugin.json');
     expect(plugin.license).toBe(cursor.license);
-    expect(plugin.version).toBe(cursor.version);
+  });
+
+  // These two declare the *same* artifact, so a bump in one without the other ships a
+  // plugin whose advertised version disagrees with itself.
+  it('versions the plugin identically in its manifest and its marketplace entry', () => {
+    expect(plugin.version).toBe(entry.version);
   });
 });

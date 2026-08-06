@@ -42,3 +42,15 @@ exchange messages — from Claude instead of the web editor.
 
 Creating games is in closed beta. The server says so on connect and in its 401 response;
 anyone can install it and list its tools, but writes need an approved creator account.
+
+## Versioning
+
+This plugin versions independently of the Cursor plugin and of the MCP server's registry
+entry, even though all three started at 1.0.1. Claude uses the plugin version to detect
+updates, so a fix that changes what the plugin exposes **must** ship a bump — an installed
+copy will otherwise keep serving the cached, broken version on refresh. 1.0.2 is exactly
+that case: it added the `.mcp.json` that 1.0.1 was missing.
+
+The registry entry versions the _server_ and is immutable once published, so it moves only
+when the server itself changes. `plugin-manifests.test.ts` asserts the plugin's own two
+declarations agree, and deliberately does not tie them to the other two lines.
