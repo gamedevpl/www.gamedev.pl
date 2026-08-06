@@ -70,6 +70,7 @@ let container: HTMLDivElement;
 let root: Root | null = null;
 let playAction: ReturnType<typeof vi.fn>;
 let remixAction: ReturnType<typeof vi.fn>;
+const originalVisualViewport = window.visualViewport;
 
 beforeEach(async () => {
   (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -90,6 +91,15 @@ afterEach(() => {
   });
   root = null;
   container.remove();
+  if (originalVisualViewport === undefined) {
+    Reflect.deleteProperty(window, 'visualViewport');
+  } else {
+    Object.defineProperty(window, 'visualViewport', {
+      value: originalVisualViewport,
+      configurable: true,
+      writable: true,
+    });
+  }
 });
 
 async function renderPage(props: Partial<Parameters<typeof GamePage>[0]> = {}) {
@@ -110,6 +120,31 @@ async function renderPage(props: Partial<Parameters<typeof GamePage>[0]> = {}) {
     await fetchGamePage.mock.results[0]?.value.catch(() => {});
     await Promise.resolve();
   });
+}
+
+function stubVisualViewport(height: number, offsetTop = 0) {
+  const listeners = new Map<string, Set<() => void>>();
+  const viewport = {
+    height,
+    offsetTop,
+    addEventListener: (type: string, listener: () => void) => {
+      if (!listeners.has(type)) listeners.set(type, new Set());
+      listeners.get(type)!.add(listener);
+    },
+    removeEventListener: (type: string, listener: () => void) => listeners.get(type)?.delete(listener),
+  };
+  Object.defineProperty(window, 'visualViewport', { value: viewport, configurable: true, writable: true });
+  return {
+    async emit(type: 'resize' | 'scroll', next: { height?: number; offsetTop?: number }) {
+      if (next.height !== undefined) viewport.height = next.height;
+      if (next.offsetTop !== undefined) viewport.offsetTop = next.offsetTop;
+      await act(async () => {
+        listeners.get(type)?.forEach((listener) => listener());
+        await Promise.resolve();
+      });
+    },
+    listenerCount: () => (listeners.get('resize')?.size ?? 0) + (listeners.get('scroll')?.size ?? 0),
+  };
 }
 
 describe('GamePage', () => {
@@ -170,6 +205,32 @@ describe('GamePage', () => {
     expect(document.activeElement).toBe(container.querySelector('#game-page-remix-request'));
     expect(remixAction).not.toHaveBeenCalled();
     expect(container.querySelector('iframe')).toBeNull();
+  });
+
+  it('follows the visual viewport so the mobile keyboard cannot cover the actions', async () => {
+    const viewport = stubVisualViewport(844);
+    await renderPage();
+
+    await act(async () => {
+      Array.from(container.querySelectorAll('button'))
+        .find((button) => button.textContent?.includes('Remix'))!
+        .click();
+    });
+
+    const backdrop = container.querySelector<HTMLElement>('.game-page-remix-backdrop')!;
+    expect(backdrop.classList.contains('is-viewport-tracked')).toBe(true);
+    expect(backdrop.style.getPropertyValue('--remix-entry-viewport-height')).toBe('844px');
+
+    await viewport.emit('resize', { height: 480 });
+    expect(backdrop.style.getPropertyValue('--remix-entry-viewport-height')).toBe('480px');
+
+    await viewport.emit('scroll', { offsetTop: 54 });
+    expect(backdrop.style.getPropertyValue('--remix-entry-viewport-offset')).toBe('54px');
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.game-page-remix-close')!.click();
+    });
+    expect(viewport.listenerCount()).toBe(0);
   });
 
   it('blocks a blank Remix request', async () => {

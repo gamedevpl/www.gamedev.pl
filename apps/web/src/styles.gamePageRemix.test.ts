@@ -21,7 +21,10 @@ describe('game-page Remix entry on phones', () => {
 
     expect(backdrop).toMatch(/background:\s*var\(--bg\)/);
     expect(backdrop).toMatch(/backdrop-filter:\s*none/);
-    expect(dialog).toMatch(/height:\s*100dvh/);
+    expect(backdrop).toMatch(/bottom:\s*auto/);
+    expect(backdrop).toMatch(/height:\s*100vh/);
+    expect(backdrop).toMatch(/height:\s*100dvh/);
+    expect(dialog).toMatch(/height:\s*100%/);
     expect(dialog).toMatch(/max-height:\s*none/);
     expect(dialog).toMatch(/border:\s*0/);
     expect(dialog).toMatch(/border-radius:\s*0/);
@@ -39,5 +42,12 @@ describe('game-page Remix entry on phones', () => {
     expect(actions).toMatch(/grid-template-columns:\s*minmax\(0,\s*0\.65fr\) minmax\(0,\s*1\.55fr\)/);
     expect(phoneRule('.game-page-remix-form-actions > button')).toMatch(/min-height:\s*52px/);
     expect(phoneRule(".game-page-remix-form-actions > button[type='submit']")).toMatch(/white-space:\s*nowrap/);
+  });
+
+  it('hands sizing to the visual viewport when the keyboard changes it', () => {
+    const tracked = phoneRule('.game-page-remix-backdrop.is-viewport-tracked');
+
+    expect(tracked).toMatch(/height:\s*var\(--remix-entry-viewport-height,\s*100dvh\)/);
+    expect(tracked).toMatch(/transform:\s*translateY\(var\(--remix-entry-viewport-offset,\s*0px\)\)/);
   });
 });

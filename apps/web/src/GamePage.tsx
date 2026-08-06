@@ -52,7 +52,9 @@ export function GamePage({
   const [selectedScreenshotFile, setSelectedScreenshotFile] = useState<string | null>(null);
   const [remixEntryOpen, setRemixEntryOpen] = useState(false);
   const [remixRequest, setRemixRequest] = useState('');
+  const [remixTracksViewport, setRemixTracksViewport] = useState(false);
   const remixButtonRef = useRef<HTMLButtonElement | null>(null);
+  const remixBackdropRef = useRef<HTMLDivElement | null>(null);
   const remixInputRef = useRef<HTMLTextAreaElement | null>(null);
 
   const playGated = privateBeta && !user;
@@ -94,7 +96,28 @@ export function GamePage({
   useEffect(() => {
     if (!remixEntryOpen) return;
     const trigger = remixButtonRef.current;
+    const backdrop = remixBackdropRef.current;
+    const viewport = window.visualViewport;
+    let syncViewport: (() => void) | null = null;
+
     document.body.classList.add('remix-entry-open');
+
+    // `100dvh` follows mobile browser chrome, but iOS only shrinks the visual
+    // viewport for its keyboard. Measure that viewport directly so the action row
+    // remains above the keys, including when Safari pans to reveal the textarea.
+    if (viewport && backdrop) {
+      syncViewport = () => {
+        backdrop.style.setProperty('--remix-entry-viewport-height', `${viewport.height}px`);
+        backdrop.style.setProperty('--remix-entry-viewport-offset', `${viewport.offsetTop}px`);
+      };
+      syncViewport();
+      setRemixTracksViewport(true);
+      viewport.addEventListener('resize', syncViewport);
+      viewport.addEventListener('scroll', syncViewport);
+    } else {
+      setRemixTracksViewport(false);
+    }
+
     remixInputRef.current?.focus();
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -122,6 +145,10 @@ export function GamePage({
     return () => {
       document.body.classList.remove('remix-entry-open');
       window.removeEventListener('keydown', onKeyDown);
+      if (viewport && syncViewport) {
+        viewport.removeEventListener('resize', syncViewport);
+        viewport.removeEventListener('scroll', syncViewport);
+      }
       trigger?.focus();
     };
   }, [remixEntryOpen]);
@@ -271,7 +298,11 @@ export function GamePage({
       ) : null}
 
       {remixEntryOpen ? (
-        <div className="game-page-remix-backdrop" onClick={closeRemixEntry}>
+        <div
+          ref={remixBackdropRef}
+          className={`game-page-remix-backdrop${remixTracksViewport ? ' is-viewport-tracked' : ''}`}
+          onClick={closeRemixEntry}
+        >
           <section
             className="game-page-remix-dialog"
             role="dialog"

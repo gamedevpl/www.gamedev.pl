@@ -13521,18 +13521,29 @@ body.remix-entry-open {
   }
 
   .game-page-remix-backdrop {
+    top: 0;
+    right: 0;
+    bottom: auto;
+    left: 0;
     align-items: stretch;
+    height: 100vh;
+    height: 100dvh;
     padding: 0;
     background: var(--bg);
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
   }
 
+  .game-page-remix-backdrop.is-viewport-tracked {
+    height: var(--remix-entry-viewport-height, 100dvh);
+    transform: translateY(var(--remix-entry-viewport-offset, 0px));
+  }
+
   .game-page-remix-dialog {
     display: flex;
     flex-direction: column;
     width: 100%;
-    height: 100dvh;
+    height: 100%;
     max-height: none;
     overflow-y: auto;
     padding-top: max(1.25rem, env(safe-area-inset-top));
