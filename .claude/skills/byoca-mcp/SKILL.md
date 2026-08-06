@@ -188,8 +188,14 @@ cache), so a resume cannot keep showing “finished this round” next to live p
   MCP tools refuse an already-issued key with a reconnect instruction. Do not restore a
   per-game compatibility path in UI, API routes, or MCP tool handling.
 - An opener is checked by `start`; later calls use the returned round-scoped `sessionKey`.
-- **`show_round` is the only tool that opens the creator's status card**, and it exists for
-  nothing else. Agents do not call it on their own — ChatGPT never did until the creator
+- **`show_media` is how the creator sees the game.** `get_gate_media` attaches frames as
+  image blocks, which reach the _model_ — it can look at them and describe them, and there is
+  no path back out. Asked to display them, ChatGPT answered "the image attachments apparently
+  didn't render in your view" and the creator saw nothing (2026-08-06). A tool result is input
+  to a model, not output to a person, so a view is the only surface that puts pixels in the
+  conversation. `show_media` carries no bytes: the card fetches them over the app-only
+  `get_round_media`, keeping a megabyte of base64 out of the model's context.
+- **`show_round` opens the creator's status card**, and exists for nothing else. Agents do not call it on their own — ChatGPT never did until the creator
   asked (2026-08-05) — so a view-capable session that has not opened one gets a bounded
   `warnings.code=card_unopened` nudge, the same remedy `call_end` needed. Never sent to a
   client with no views. It used to hang off `start` and `get_gate_verdict`, which made the card a side

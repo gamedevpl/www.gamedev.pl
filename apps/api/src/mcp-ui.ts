@@ -58,6 +58,14 @@ export const ROUND_STATUS_RESOURCE_URI = 'ui://gamedevpl/round-status';
  */
 export const MCP_UI_TOOL_RESOURCES: Readonly<Record<string, string>> = Object.freeze({
   show_round: ROUND_STATUS_RESOURCE_URI,
+  // Same card, second intent. "Show me the screenshots" is not "watch this round" — it
+  // names a delivery that may belong to an earlier round — but it wants the same
+  // furniture around the pictures, so it opens the same view rather than a second one.
+  //
+  // This is the exception the note above allows for, and it is worth stating why it
+  // qualifies: `get_gate_media` puts frames in front of the *model*, which can look at
+  // them and cannot show them. A view is the only surface that reaches the creator.
+  show_media: ROUND_STATUS_RESOURCE_URI,
 });
 
 /**
@@ -1098,14 +1106,25 @@ const ROUND_STATUS_HTML = `<!doctype html>
          * captures on both lanes; the card is already here when the verdict lands.
          */
         function loadMedia(status) {
+          // Two ways in. Watching a round, the frames arrive when that round's gate
+          // settles. Asked to *show* media, the delivery is named up front and may
+          // belong to an earlier round entirely — which is the case the gallery could
+          // not serve: a creator asking "show me the screenshot" opens a round that has
+          // delivered nothing, so there is no gate here to hang the frames off.
           var gate = status.gate;
-          if (!gate || !gate.deliveryId || gate.status === 'pending') return;
-          if (mediaKey === gate.deliveryId) return;
-          if (mediaTriesFor !== gate.deliveryId) {
-            mediaTriesFor = gate.deliveryId;
+          var wanted =
+            typeof status.mediaDeliveryId === 'string' && status.mediaDeliveryId
+              ? status.mediaDeliveryId
+              : gate && gate.deliveryId && gate.status !== 'pending'
+                ? gate.deliveryId
+                : null;
+          if (!wanted) return;
+          if (mediaKey === wanted) return;
+          if (mediaTriesFor !== wanted) {
+            mediaTriesFor = wanted;
             mediaTries = 0;
           }
-          mediaKey = gate.deliveryId;
+          mediaKey = wanted;
           var id = nextId++;
           pendingCalls[id] = function (result, error) {
             if (error) {
@@ -1124,7 +1143,7 @@ const ROUND_STATUS_HTML = `<!doctype html>
             if (!media) return;
             renderMedia(media);
           };
-          var args = { deliveryId: gate.deliveryId };
+          var args = { deliveryId: wanted };
           if (sessionKey) args.sessionKey = sessionKey;
           post({ jsonrpc: '2.0', id: id, method: 'tools/call', params: { name: 'get_round_media', arguments: args } });
         }
@@ -1211,9 +1230,7 @@ const ROUND_STATUS_HTML = `<!doctype html>
               // carries cycles, and a throw here is inside the message handler, which
               // would take the card's whole update path down with it. A plain coercion
               // says less and cannot fail.
-              var reason = error
-                ? 'call refused: ' + String(error.message || error.code || error).slice(0, 200)
-                : 'the reply was not round status';
+              var reason = error ? 'call refused: ' + ourError(error.message || error.code || error) : 'the reply was not round status';
               lastFailure = (sessionKey ? 'with a round key, ' : 'without a round key, ') + reason;
               log('warning', 'round status unavailable: ' + lastFailure);
               if (speculative) {
@@ -1257,6 +1274,34 @@ const ROUND_STATUS_HTML = `<!doctype html>
             method: 'tools/call',
             params: { name: 'get_round_status', arguments: args }
           });
+        }
+
+        /**
+         * Our message, dug out of the host's wrapper.
+         *
+         * A refused call came back as "Error code: INVALID_ARGUMENT; Error:
+         * RuntimeException: Error calling MCP tool: [TextContent(type='text',
+         * text='{"error":"OAuth access proves your identity only — call start()..."
+         * and the card printed that verbatim, truncated mid-sentence (owner,
+         * 2026-08-06). The only part a creator can act on is the JSON inside it.
+         *
+         * The closing quote is optional on purpose: the host truncates its own wrapper,
+         * so the case that actually shows up is a message cut off mid-sentence with no
+         * terminator. Requiring one matched nothing and printed the whole blob.
+         *
+         * Escapes are doubled throughout: this whole view is a TS template literal.
+         */
+        function ourError(raw) {
+          var text = String(raw === null || raw === undefined ? '' : raw);
+          var match = /"error"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)/.exec(text);
+          if (match) {
+            try {
+              return JSON.parse('"' + match[1] + '"');
+            } catch (e) {
+              return match[1];
+            }
+          }
+          return text.length > 160 ? text.slice(0, 160) + '…' : text;
         }
 
         function noteSessionKey(value) {
@@ -1319,6 +1364,9 @@ const ROUND_STATUS_HTML = `<!doctype html>
             if (opening && !live) {
               painted = true;
               render(opening);
+              // show_media names a delivery that need not belong to this round, so the
+              // frames load from the opening result rather than waiting for a gate.
+              loadMedia(opening);
               schedule(opening.retryAfterSeconds);
             }
             var verdict = opening ? null : unwrap(message.params, looksLikeVerdict);

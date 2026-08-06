@@ -2007,9 +2007,14 @@ describe('MCP Apps views (SEP-1865, Phase 0)', () => {
     expect(shower?._meta?.['openai/outputTemplate']).toBe('ui://gamedevpl/round-status');
     // Exactly one tool opens the card. Attaching it to a tool the agent calls for its own
     // reasons made the card count a side effect of agent discretion.
-    expect(tools.filter((tool) => tool._meta?.ui?.resourceUri !== undefined).map((tool) => tool.name)).toEqual([
-      'show_round',
-    ]);
+    // Two intents, one card: watching a round, and being shown its pictures. Both are
+    // deliberate tools rather than side effects of workflow calls.
+    expect(
+      tools
+        .filter((tool) => tool._meta?.ui?.resourceUri !== undefined)
+        .map((tool) => tool.name)
+        .sort(),
+    ).toEqual(['show_media', 'show_round']);
   });
 
   it('reminds a view-capable agent to open the card, then stops asking', async () => {

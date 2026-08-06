@@ -434,6 +434,7 @@ const SESSION_WORKFLOW: readonly string[] = [
   // corrected.
   'Hold the sessionKey start gave you for the whole round and pass it on every call. Do not re-run start to refresh it — it is valid until expiresAt. Re-run start only if a call is refused as unauthenticated.',
   "show_round — once, right after start. In a client that renders MCP Apps views this puts a live status card in the creator's chat that follows the build and the gate on its own, so they can watch without you polling. Calling it again renders a second card.",
+  'show_media — whenever the creator asks to see the game. get_gate_media attaches frames for YOU to look at; those attachments do not reach the creator, so describing them is all you can do with it. show_media is what actually puts the pictures in front of them.',
   'get_brief — read the brief; if seedAvailable or seedStatus=available, get_seed and continue that draft. If seedStatus=pending, browse the kit lightly then recheck get_seed before scaffolding.',
   // An improvement round has no seed (seeds are a new-game facility) and its brief is
   // the change request alone, so nothing above this told the agent a game already
@@ -3707,6 +3708,61 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         if (status.isError || typeof args.sessionKey !== 'string') return status;
         const data = { ...(status.structuredContent as Record<string, unknown>), sessionKey: args.sessionKey };
         return toolOk(data);
+      },
+    },
+
+    /**
+     * Show the creator the gate's pictures — the only way to actually show them.
+     *
+     * `get_gate_media` attaches frames as image blocks, which reach the *model*: it can
+     * look at them and describe them. There is no path back out. Asked to display them,
+     * ChatGPT answered "the image attachments apparently didn't render in your view"
+     * and the creator saw nothing (owner, 2026-08-06). A tool result is input to a
+     * model, not output to a person.
+     *
+     * A view is the only surface that puts pixels in the conversation without going
+     * through the model, so this is not a nicer way to show a picture — it is the way.
+     *
+     * Deliberately carries no bytes. The card fetches them over the app-only
+     * `get_round_media`, so a megabyte of base64 never enters the model's context — the
+     * same reason that tool exists at all.
+     */
+    show_media: {
+      annotations: { title: "Show the creator the gate's screenshots", ...READS },
+      description:
+        "Render the gate's screenshots for a delivery in the creator's chat, at a size they can actually look at, " +
+        'with the gameplay recording and a link to play. ' +
+        'Use this when the creator asks to see the game — get_gate_media lets *you* look at the frames, but its ' +
+        'attachments are input to you rather than something the creator sees. ' +
+        'Defaults to the latest delivery. Only clients that render MCP Apps views show anything. ' +
+        BEHAVIOURAL_CONTRACT,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          sessionKey: SESSION_KEY_PROP,
+          deliveryId: { type: 'string', description: "Delivery to show; default is the round's latest." },
+        },
+        required: [],
+      },
+      outputSchema: ROUND_STATUS_OUTPUT_SCHEMA,
+      handler: async (args, ctx) => {
+        const status = await tools.get_round_status.handler(args, ctx);
+        if (status.isError) return status;
+        const auth = await resolveAuth(ctx, args, { allowTerminalReceipt: true });
+        const record = 'record' in auth ? auth.record : null;
+        const wanted =
+          (typeof args.deliveryId === 'string' && args.deliveryId.trim()) ||
+          record?.previewVersion ||
+          record?.deliveredVersion ||
+          null;
+        return toolOk({
+          ...(status.structuredContent as Record<string, unknown>),
+          // Names the delivery the card should fetch frames for. It need not belong to
+          // this round: "show me the screenshot" opens a round that has delivered
+          // nothing, and the frames the creator means are the previous one's.
+          mediaDeliveryId: wanted,
+          ...(typeof args.sessionKey === 'string' ? { sessionKey: args.sessionKey } : {}),
+        });
       },
     },
 
