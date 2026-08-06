@@ -23,6 +23,10 @@ export function ProposeComposer(props: {
   /** How many proposals this person already has open against this game, if known. */
   openCount?: number;
   maxOpen?: number;
+  /** Current remix param values — baked into the candidate the way save bakes them. */
+  params?: Record<string, string | number | boolean>;
+  /** Painted collections, when the player edited them. */
+  content?: Record<string, unknown>;
   onSent: () => void;
   onCancel: () => void;
 }) {
@@ -39,7 +43,12 @@ export function ProposeComposer(props: {
     setSending(true);
     setError(null);
     try {
-      await proposeFromRemix(props.remixId, { title: title.trim(), description: description.trim() });
+      await proposeFromRemix(props.remixId, {
+        title: title.trim(),
+        description: description.trim(),
+        ...(props.params ? { params: props.params } : {}),
+        ...(props.content ? { content: props.content } : {}),
+      });
       props.onSent();
     } catch (caught) {
       // Every refusal the API can give has its own sentence, because "something went

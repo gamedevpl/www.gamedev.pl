@@ -15,7 +15,13 @@ import { logModerationRejection } from './moderation-metrics.js';
 import { assembleGameHtml } from './assemble.js';
 import type { GitHubClient } from './github-client.js';
 import { type EditingGate, type CreationGate } from './creation-limits.js';
-import { bakeRemixEditorDefaults, remixHasSavableChange, saveRemixAsStudioDraft } from './remix-save.js';
+import {
+  bakeRemixEditorDefaults,
+  remixHasSavableChange,
+  saveRemixAsStudioDraft,
+  type RemixSaveContent,
+  type RemixSaveParams,
+} from './remix-save.js';
 import {
   openProposal,
   PROPOSAL_NO_JOB,
@@ -24,6 +30,8 @@ import {
   MIN_PROPOSAL_DESCRIPTION_LENGTH,
   type ProposalDeps,
 } from './proposals.js';
+import type { ProposalBase } from './store.js';
+import type { SourceFile } from './games-store.js';
 
 /**
  * Remix: a player bends a published game while playing it.
@@ -46,8 +54,8 @@ import {
  *  - **Params never touch this server.** A slider moves the running game over
  *    the existing `editor:content` bridge, client-side, in under a frame. Only
  *    natural language and code need a round trip, which is why those are the
- *    only edit routes here. Save receives params/content only to bake them into
- *    the draft's EDITOR.json defaults.
+ *    only edit routes here. Save and propose receive params/content only to bake
+ *    them into EDITOR.json defaults (draft or proposal candidate).
  *  - **The player never supplies code.** The session holds the accumulated
  *    source overrides server-side and the client holds only an id, so nothing a
  *    browser sends is ever compiled. What comes back is a whole document for the
@@ -158,6 +166,13 @@ const ProposeSchema = z.object({
     .trim()
     .min(MIN_PROPOSAL_DESCRIPTION_LENGTH, 'say a little more about what you changed')
     .max(MAX_PROPOSAL_DESCRIPTION_LENGTH),
+  /**
+   * Client-held param / paint values. Same shape save accepts: the session never stores
+   * them (params ride the bridge; paint is client-only until a durable exit), so the
+   * propose exit has to bring them in to bake into the candidate's EDITOR.json.
+   */
+  params: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
+  content: z.record(z.string(), z.unknown()).optional(),
 });
 const ShareSchema = z.object({
   params: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
@@ -224,6 +239,15 @@ export interface RemixRoutesOptions {
    * proposal is checked by exactly the machinery a creator's own upload is.
    */
   onSourcesDelivered?: (input: { issueNumber: number; slug: string; version: string }) => void | Promise<unknown>;
+  /**
+   * Published sources + base pin for a proposal, both lanes.
+   *
+   * Same resolver the MCP proposal tools and the review diff use — one answer to
+   * "what is this game right now", so a remix propose cannot disagree with either.
+   * Absent means catalog (repo-lane) propose stays closed; store-lane still works
+   * from the session's own sources.
+   */
+  resolveProposalBase?: (slug: string) => Promise<{ base: ProposalBase; files: SourceFile[] } | null>;
   store?: Store;
   gamesStore?: GamesStore;
   githubClient?: GitHubClient;
@@ -864,14 +888,13 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
    * Remix keeps its two existing exits (save as yours, share) and its founding rule: the
    * session itself still never publishes, and nothing here writes to the game being
    * remixed. What it produces is a *proposal* — an immutable candidate version the game's
-   * owner is asked about and may refuse. The boundary that moved is "a remix may not ask",
-   * not "a remix may publish".
+   * owner (or the platform, for catalog games) is asked about and may refuse. The
+   * boundary that moved is "a remix may not ask", not "a remix may publish".
    *
-   * Store-lane only, and the 409 says so plainly. A repo-era game's code lives on the ref
-   * and this session holds only its declaration (see `loadSources`), so there is no file
-   * set here to propose. Declared-content proposals on repo games arrive when the
-   * archive-backed base lands; until then, offering the button and failing at submit would
-   * be worse than not offering it.
+   * Both catalog eras. Store-lane sessions already hold the published sources; repo-lane
+   * sessions hold only the declaration (see `loadSources`), so the complete file set and
+   * the base pin come from `resolveProposalBase` — the same archive-backed read the MCP
+   * proposal tools use. Accept on a repo-lane proposal still lands via the apply-bot PR.
    */
   app.post(
     '/api/remixes/:id/propose',
@@ -886,26 +909,76 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
       if (!body.success) {
         return reply.status(400).send({ error: body.error.issues[0]?.message ?? 'invalid request' });
       }
-      if (!session.fromStore) {
-        return reply.status(409).send({ error: 'not_proposable' });
-      }
-      if (Object.keys(session.overrides).length === 0) {
+
+      const params = body.data.params as RemixSaveParams | undefined;
+      const content = body.data.content as RemixSaveContent | undefined;
+      if (
+        !remixHasSavableChange({
+          overrides: session.overrides,
+          definition: session.definition,
+          params,
+          content,
+        })
+      ) {
         return reply.status(409).send({ error: 'no_changes' });
       }
 
-      const publication = await options.store.getPublication(session.slug);
-      if (publication?.state !== 'published' || !publication.currentVersion) {
-        return reply.status(409).send({ error: 'not_published' });
+      // Free-form text baked into EDITOR.json gets the same bar save uses — title and
+      // description are moderated inside openProposal, but param strings would otherwise
+      // skip the checker and land in a candidate the gate never re-reads as prose.
+      const textFields: string[] = [];
+      const specs = session.definition?.params;
+      if (specs && params) {
+        for (const [name, spec] of Object.entries(specs)) {
+          if (spec.type === 'text' && typeof params[name] === 'string') {
+            const text = (params[name] as string).trim();
+            if (text) textFields.push(text);
+          }
+        }
+      }
+      if (textFields.length > 0 && options.contentChecker) {
+        const verdict = await options.contentChecker.checkFields(textFields);
+        if (!verdict.allowed) {
+          logModerationRejection(request.log, {
+            surface: 'proposal',
+            uid: request.user?.uid,
+            category: verdict.category,
+          });
+          return reply.status(422).send({ error: 'content_rejected', category: verdict.category ?? 'other' });
+        }
       }
 
-      // The proposed game is the base with the session's edits applied. Sent whole rather
-      // than as a patch because a version is a complete source set — the gate builds it,
-      // and "the files it ran" and "the files the reviewer reads" have to be the same
-      // thing.
-      const files = Object.entries({ ...session.sources, ...session.overrides }).map(([path, content]) => ({
-        path,
-        content,
-      }));
+      let base: ProposalBase;
+      let baseSources: Record<string, string>;
+
+      if (options.resolveProposalBase) {
+        const resolved = await options.resolveProposalBase(session.slug);
+        if (!resolved) {
+          // Resolver already collapsed every unavailable reason to null (see app.ts).
+          // Catalog games without an archive pin, and store games without a live
+          // publication, look the same from here: the contribute-back door is shut.
+          return reply.status(409).send({ error: 'not_proposable' });
+        }
+        base = resolved.base;
+        baseSources = Object.fromEntries(resolved.files.map((file) => [file.path, file.content]));
+      } else if (session.fromStore) {
+        // Test / degraded deployments that never wired the shared resolver: the session
+        // already holds the store-lane sources, so propose can still work for those.
+        const publication = await options.store.getPublication(session.slug);
+        if (publication?.state !== 'published' || !publication.currentVersion) {
+          return reply.status(409).send({ error: 'not_published' });
+        }
+        base = { kind: 'store', version: publication.currentVersion };
+        baseSources = session.sources;
+      } else {
+        return reply.status(409).send({ error: 'not_proposable' });
+      }
+
+      // Session declaration / any prior code-lane load wins over a fresh base read for
+      // the same path — then overrides win on top. Same merge save uses for repo-era.
+      const merged = { ...baseSources, ...session.sources, ...session.overrides };
+      const files = Object.entries(merged).map(([path, fileContent]) => ({ path, content: fileContent }));
+      bakeRemixEditorDefaults(files, session.definition, params, content);
 
       const result = await openProposal(
         {
@@ -921,7 +994,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
           proposerUid: request.user!.uid,
           title: body.data.title,
           description: body.data.description,
-          base: { kind: 'store', version: publication.currentVersion },
+          base,
           files,
         },
       );

@@ -275,10 +275,11 @@ export function RemixPanel(props: {
   /**
    * Whether this game takes proposals from this player.
    *
-   * Asked once per session rather than assumed: contributions are off by default, and a
-   * button that appears for every game and fails on most of them would teach players to
-   * ignore it. `null` means we have not asked yet, which renders as no button at all —
-   * the honest state, since we do not know.
+   * Asked once per session rather than assumed: creator games are off until they opt in,
+   * and a button that appears for every game and fails on most of them would teach players
+   * to ignore it. Catalog (platform-owned) games are open by default. `null` means we have
+   * not asked yet, which renders as no button at all — the honest state, since we do not
+   * know.
    */
   const [canPropose, setCanPropose] = useState<boolean | null>(null);
   const [proposing, setProposing] = useState(false);
@@ -1530,6 +1531,8 @@ export function RemixPanel(props: {
       {proposing && session ? (
         <ProposeComposer
           remixId={session.remixId}
+          params={valuesRef.current}
+          {...(contentEditedRef.current ? { content: contentDocRef.current } : {})}
           onSent={() => {
             setProposing(false);
             setProposed(true);
