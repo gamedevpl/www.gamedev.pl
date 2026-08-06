@@ -195,6 +195,24 @@ function playUrlFor(slug: string | null | undefined): string | null {
   return `${canonicalAppBaseUrl()}/play/${encodeURIComponent(slug)}`;
 }
 
+/**
+ * The round's home in Creator Studio — where the creator manages this build.
+ *
+ * The card's title links here rather than to /play, which the Play button already
+ * covers. It is also always valid: Studio shows a round whether or not anything is
+ * playable yet, so it has none of the "not available" risk that keeps the Play button
+ * off a red gate.
+ */
+function studioUrlFor(slug: string | null | undefined): string | null {
+  if (!slug) return null;
+  return `${canonicalAppBaseUrl()}/studio/${encodeURIComponent(slug)}`;
+}
+
+/** The site itself, for the card's wordmark. */
+function siteUrl(): string {
+  return canonicalAppBaseUrl();
+}
+
 const ROUND_STATUS_RETRY_AFTER_SECONDS = 30;
 /** A card shows a strip, not a contact sheet; the bytes ride a postMessage. */
 const ROUND_MEDIA_MAX_FRAMES = 3;
@@ -3860,6 +3878,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           title: record.title ?? null,
           slug: record.slug ?? null,
           playUrl: playUrlFor(record.slug),
+          studioUrl: studioUrlFor(record.slug),
+          siteUrl: siteUrl(),
           round: record.roundGeneration ?? 1,
           deliveriesRemaining: cap === null ? null : Math.max(0, cap - used),
           note: latestEvent ? { text: noteTextFor(latestEvent, args.locale), createdAt: latestEvent.createdAt } : null,

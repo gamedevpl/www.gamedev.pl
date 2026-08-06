@@ -339,6 +339,10 @@ const ROUND_STATUS_HTML = `<!doctype html>
         margin-bottom: 4px;
       }
       .brand { font-weight: 600; letter-spacing: -0.01em; }
+      /* Links the host opens for us, so they are spans rather than anchors — an <a> in
+         a sandboxed frame with no navigation permission does nothing when clicked. */
+      .linked { cursor: pointer; }
+      .linked:hover { text-decoration: underline; }
       .brand .dot { color: var(--gd-accent); }
       .pill {
         font-size: 12px;
@@ -460,7 +464,7 @@ const ROUND_STATUS_HTML = `<!doctype html>
   <body>
     <main class="card">
       <div class="head">
-        <span class="brand">gamedev<span class="dot">.pl</span></span>
+        <span id="brand" class="brand">gamedev<span class="dot">.pl</span></span>
         <span id="pill" class="pill pill-waiting">waiting</span>
       </div>
       <p id="title" class="title" hidden></p>
@@ -519,6 +523,7 @@ const ROUND_STATUS_HTML = `<!doctype html>
         var shotCap = document.getElementById('shotCap');
         var playRow = document.getElementById('playRow');
         var playBtn = document.getElementById('playBtn');
+        var brandEl = document.getElementById('brand');
         var actionRow = document.getElementById('actionRow');
         var actionBtn = document.getElementById('actionBtn');
         var actionHint = document.getElementById('actionHint');
@@ -548,12 +553,31 @@ const ROUND_STATUS_HTML = `<!doctype html>
           notify('notifications/message', { level: level, logger: 'gamedevpl-round-status', data: text });
         }
 
+        /**
+         * Report what the content needs, never what the frame currently is.
+         *
+         * This used to send documentElement.scrollHeight, which was the content height
+         * until applyContainerDimensions started setting html{height:100%} to fill a
+         * host-declared frame. After that the two became the same number: the card
+         * filled 400px, reported 400px, and the host had no reason to ever shrink —
+         * leaving a slab of empty space under the content (owner, 2026-08-06).
+         *
+         * Measuring the card instead breaks the loop. Filling the frame stays a
+         * cosmetic choice; the size we ask for stays honest either way.
+         */
         function reportSize() {
+          var card = document.querySelector('.card');
+          var height = card
+            ? Math.ceil(card.getBoundingClientRect().height) + BODY_PADDING * 2
+            : document.documentElement.scrollHeight;
           notify('ui/notifications/size-changed', {
-            height: document.documentElement.scrollHeight,
-            width: document.documentElement.scrollWidth
+            height: height,
+            width: card ? Math.ceil(card.getBoundingClientRect().width) + BODY_PADDING * 2 : document.documentElement.scrollWidth
           });
         }
+
+        /** Keep in step with body{padding} in the stylesheet above. */
+        var BODY_PADDING = 12;
 
         var hostLocale = undefined;
         var hostTimeZone = undefined;
@@ -753,6 +777,34 @@ const ROUND_STATUS_HTML = `<!doctype html>
          * delivered yet would open a page saying so, which is a worse answer than no
          * button at all.
          */
+        /**
+         * Make an element open a URL through the host.
+         *
+         * Not an anchor: the view is sandboxed without allow-top-navigation, so a real
+         * href is inert. ui/open-link is the only way out, and the origin is on the
+         * card's redirect allowlist by construction (both come from canonicalAppBaseUrl).
+         *
+         * No backticks anywhere in this file below the template literal opener — one
+         * ends the literal. That has cost four iterations in this workstream.
+         */
+        function linkify(element, url, label) {
+          if (!element || typeof url !== 'string' || !url) {
+            if (element) {
+              element.className = element.className.replace(/ ?linked/, '');
+              element.onclick = null;
+              element.removeAttribute('role');
+              element.removeAttribute('title');
+            }
+            return;
+          }
+          if (element.className.indexOf('linked') === -1) element.className += ' linked';
+          element.setAttribute('role', 'link');
+          if (label) element.setAttribute('title', label);
+          element.onclick = function () {
+            request('ui/open-link', { url: url });
+          };
+        }
+
         function renderPlay(status, gateStatus) {
           // The URL is built server-side (playUrlFor): this view is one string served to
           // every environment, so an origin baked in here would send a staging card's
@@ -945,6 +997,10 @@ const ROUND_STATUS_HTML = `<!doctype html>
           } else {
             titleEl.hidden = true;
           }
+          // The wordmark goes to the site; the game name goes to its round in Studio,
+          // which is valid whether or not anything is playable yet.
+          linkify(brandEl, status.siteUrl, 'Open gamedev.pl');
+          linkify(titleEl, status.studioUrl, 'Open this round in Creator Studio');
 
           // Order matters, and the job's own phase comes last: it lags reality. An agent
           // that has delivered and called end still reads as 'building' for a while, so

@@ -299,6 +299,32 @@ describe('ui resources', () => {
     expect(html).toMatch(/if \(speculative\) \{[\s\S]{0,400}?if \(sessionKey\) \{[\s\S]{0,80}?poll\(\);/);
   });
 
+  it('asks for the height its content needs, not the height of the frame it was given', () => {
+    // documentElement.scrollHeight was the content height until applyContainerDimensions
+    // began setting html{height:100%} to fill a host-declared frame. After that the card
+    // filled 400px, reported 400px, and the host never shrank it — a slab of empty space
+    // under the content. Measuring the card breaks the loop. Mutation-checked in the
+    // browser: reverting to scrollHeight reports 520 where this reports 287.
+    const html = readUiResource(ROUND_STATUS_RESOURCE_URI)?.text ?? '';
+    expect(html).toContain("var card = document.querySelector('.card');");
+    expect(html).toContain('card.getBoundingClientRect().height');
+  });
+
+  it('opens the wordmark and the game name through the host', () => {
+    // Anchors are inert here: the view is sandboxed without allow-top-navigation, so
+    // ui/open-link is the only way out. Both origins come from canonicalAppBaseUrl, the
+    // same function the redirect allowlist is built from, so they cannot fall outside it.
+    const html = readUiResource(ROUND_STATUS_RESOURCE_URI)?.text ?? '';
+    expect(html).toContain('function linkify(element, url, label)');
+    expect(html).toContain("linkify(brandEl, status.siteUrl, 'Open gamedev.pl')");
+    expect(html).toContain('linkify(titleEl, status.studioUrl,');
+    // The title goes to Studio rather than /play: the Play button already covers play,
+    // and Studio is valid whether or not anything is playable yet.
+    expect(html).not.toContain('linkify(titleEl, status.playUrl');
+    // A missing URL removes the affordance rather than leaving a dead click target.
+    expect(html).toContain("element.className.replace(/ ?linked/, '')");
+  });
+
   it('invites the creator to play, once there is something to play', () => {
     // The step the whole flow exists for: the card shows what the agent built, the
     // theater is where it gets played. A link rather than an embedded game on purpose —
