@@ -105,9 +105,15 @@ never be committed or pasted into a game, an issue, or a PR description. Full gu
   `_`.
 - **Small, focused files.** One clear responsibility per file (see how
   `packages/game-generator/src` splits `types` / `mock` / `index`).
-- **No unnecessary comments.** Comment _why_, not _what_; let types and names carry the rest.
-  Where comments exist in this repo they explain non-obvious safety/design decisions (e.g. why
-  the iframe has no `allow-same-origin`) — match that bar.
+- **Comments are one-liners only — no prose.** A comment is a `//` line of at most **12
+  words**, saying _why_, never narrating _what_. Forbidden: multi-line `/* */` / `/** */`
+  blocks, stacked `//` paragraphs, and essay headers. If the knowledge matters beyond one
+  line, put it in `docs/` or a skill — not above the function. `npm run comment-prose` (also
+  part of `npm run lint`) freezes each file's prose-comment word count in
+  `eslint-rules/comment-prose-baseline.json`; new files start at 0. When you touch a file
+  that still carries debt, shrink it and run `npm run comment-prose -- --write`. See
+  [`comment-prose-debt.md`](./comment-prose-debt.md). Safety comments that stay (e.g. why the
+  iframe has no `allow-same-origin`) must still fit the one-liner bar.
 - **Validate untrusted input** at the API boundary with `zod`. Treat the generator as an
   untrusted seam.
 - **Prettier** formats everything; don't hand-format against it.
