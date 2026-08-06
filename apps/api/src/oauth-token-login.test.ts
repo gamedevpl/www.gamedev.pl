@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { generateAccessToken } from './access-token.js';
 import { buildApp } from './app.js';
 import { mintSessionToken, readSessionToken, SESSION_COOKIE_NAME } from './auth.js';
-import { formToken, sanitizeOAuthReturnPath, TOKEN_LOGIN_PATH } from './oauth-token-login.js';
+import { newCsrfNonce, originAllowed, sanitizeOAuthReturnPath, TOKEN_LOGIN_PATH } from './oauth-token-login.js';
 import { InMemoryStore } from './store.js';
 
 /**
@@ -29,24 +29,49 @@ async function mintToken(app: Awaited<ReturnType<typeof buildApp>>, uid: string)
   return res.json().token as string;
 }
 
+const CSRF_COOKIE = 'gamedev_token_login_csrf';
+
+function cookieFrom(res: { headers: Record<string, unknown> }, name: string): string | null {
+  const raw = res.headers['set-cookie'];
+  const all = Array.isArray(raw) ? raw : typeof raw === 'string' ? [raw] : [];
+  const hit = all.find((c) => c.startsWith(`${name}=`));
+  if (!hit) return null;
+  const value = hit.slice(`${name}=`.length).split(';')[0];
+  return value === '' ? null : value;
+}
+
+/**
+ * The real browser sequence: load the page, keep the CSRF cookie it set, submit the
+ * nonce it rendered. Tests that skip the GET are testing an attacker, not a visitor.
+ */
+async function visitAndPost(
+  app: Awaited<ReturnType<typeof buildApp>>,
+  fields: Record<string, string>,
+): Promise<Awaited<ReturnType<typeof app.inject>>> {
+  const page = await app.inject({ method: 'GET', url: TOKEN_LOGIN_PATH });
+  const nonce = cookieFrom(page, CSRF_COOKIE)!;
+  expect(page.body).toContain(`name="form_token" value="${nonce}"`);
+  return post(app, { form_token: nonce, ...fields }, `${CSRF_COOKIE}=${nonce}`);
+}
+
 function post(
   app: Awaited<ReturnType<typeof buildApp>>,
   fields: Record<string, string>,
-  at = Date.now(),
+  cookie?: string,
 ): ReturnType<typeof app.inject> {
   return app.inject({
     method: 'POST',
     url: TOKEN_LOGIN_PATH,
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    payload: new URLSearchParams({ form_token: formToken(sessionSecret, at), ...fields }).toString(),
+    headers: {
+      'content-type': 'application/x-www-form-urlencoded',
+      ...(cookie ? { cookie } : {}),
+    },
+    payload: new URLSearchParams(fields).toString(),
   });
 }
 
 function sessionFrom(res: { headers: Record<string, unknown> }): string | null {
-  const raw = res.headers['set-cookie'];
-  const all = Array.isArray(raw) ? raw : typeof raw === 'string' ? [raw] : [];
-  const hit = all.find((c) => c.startsWith(`${SESSION_COOKIE_NAME}=`));
-  return hit ? hit.slice(`${SESSION_COOKIE_NAME}=`.length).split(';')[0] : null;
+  return cookieFrom(res, SESSION_COOKIE_NAME);
 }
 
 describe('sanitizeOAuthReturnPath', () => {
@@ -63,6 +88,28 @@ describe('sanitizeOAuthReturnPath', () => {
     expect(sanitizeOAuthReturnPath('/oauth/authorizex')).toBeNull();
     expect(sanitizeOAuthReturnPath('/studio')).toBeNull();
     expect(sanitizeOAuthReturnPath('/oauth/authorize\r\nSet-Cookie: x=1')).toBeNull();
+  });
+});
+
+describe('originAllowed', () => {
+  const req = (origin?: string) => ({ headers: origin === undefined ? {} : { origin } });
+
+  it('accepts the canonical origin and refuses any other, in production', () => {
+    expect(originAllowed(req('https://www.gamedev.pl'), true)).toBe(true);
+    expect(originAllowed(req('https://evil.example'), true)).toBe(false);
+    expect(originAllowed(req('http://www.gamedev.pl'), true)).toBe(false);
+  });
+
+  it('allows a request that sends no Origin at all', () => {
+    // Not every form POST carries one, and this is the third layer behind
+    // SameSite=Strict and the double-submit nonce — it must not be the one that
+    // decides a legitimate submission is an attack.
+    expect(originAllowed(req(), true)).toBe(true);
+    expect(originAllowed(req(''), true)).toBe(true);
+  });
+
+  it('does not enforce outside production, where the canonical origin is not the dev one', () => {
+    expect(originAllowed(req('http://localhost:5173'), false)).toBe(true);
   });
 });
 
@@ -124,7 +171,7 @@ describe('POST /oauth/token-login', () => {
     const app = await appWith(store);
     const token = await mintToken(app, 'bot:reviewer');
 
-    const res = await post(app, { token });
+    const res = await visitAndPost(app, { token });
 
     expect(res.statusCode).toBe(302);
     expect(res.headers.location).toBe('/studio');
@@ -139,7 +186,7 @@ describe('POST /oauth/token-login', () => {
     const app = await appWith(store);
     const token = await mintToken(app, 'bot:reviewer');
 
-    const res = await post(app, { token });
+    const res = await visitAndPost(app, { token });
 
     expect(readSessionToken(sessionFrom(res)!, sessionSecret).src).toBe('token');
   });
@@ -151,7 +198,7 @@ describe('POST /oauth/token-login', () => {
     await store.upsertUser({ uid: 'g:boss2' });
     const token = await mintToken(app, 'g:boss');
 
-    const res = await post(app, { token });
+    const res = await visitAndPost(app, { token });
     const cookie = sessionFrom(res)!;
 
     const mint = await app.inject({
@@ -170,7 +217,7 @@ describe('POST /oauth/token-login', () => {
     const app = await appWith(store);
     const token = await mintToken(app, 'bot:reviewer');
 
-    const res = await post(app, { token, oauth_return: '/oauth/authorize?client_id=abc' });
+    const res = await visitAndPost(app, { token, oauth_return: '/oauth/authorize?client_id=abc' });
 
     expect(res.statusCode).toBe(302);
     expect(res.headers.location).toBe('/oauth/authorize?client_id=abc');
@@ -180,7 +227,7 @@ describe('POST /oauth/token-login', () => {
     const app = await appWith(store);
     const token = await mintToken(app, 'bot:reviewer');
 
-    const res = await post(app, { token, oauth_return: 'https://evil.example/steal' });
+    const res = await visitAndPost(app, { token, oauth_return: 'https://evil.example/steal' });
 
     expect(res.headers.location).toBe('/studio');
   });
@@ -190,7 +237,7 @@ describe('POST /oauth/token-login', () => {
     // getting far enough to approve an MCP client.
     const app = await appWith(store, { betaAllowedUids: 'g:boss' });
     const token = await mintToken(app, 'bot:reviewer');
-    const cookie = sessionFrom(await post(app, { token }))!;
+    const cookie = sessionFrom(await visitAndPost(app, { token }))!;
 
     const authorize = await app.inject({
       method: 'GET',
@@ -209,49 +256,106 @@ describe('POST /oauth/token-login', () => {
     const app = await appWith(store);
     const token = await mintToken(app, 'bot:reviewer');
 
-    const res = await app.inject({
-      method: 'POST',
-      url: TOKEN_LOGIN_PATH,
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      payload: new URLSearchParams({ token }).toString(),
-    });
+    const res = await post(app, { token });
 
     expect(res.statusCode).toBe(403);
     expect(sessionFrom(res)).toBeNull();
   });
 
-  it('rejects a form token minted from a different secret', async () => {
-    // Login CSRF: sameSite=lax does not stop a top-level cross-site form POST, and the
-    // next thing this flow does is ask the browser to approve durable write access.
+  it('rejects a nonce the attacker fetched for themselves', async () => {
+    // The bypass this replaced: the form token used to be an HMAC over a time bucket,
+    // identical for every visitor that hour. Anyone could load the page, read a valid
+    // token, and put it in a cross-site form — the check passed, and the login CSRF it
+    // existed to stop went through. Binding the nonce to a cookie is what closes it,
+    // so the attack has to be the test.
     const app = await appWith(store);
     const token = await mintToken(app, 'bot:reviewer');
 
-    const res = await app.inject({
-      method: 'POST',
-      url: TOKEN_LOGIN_PATH,
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      payload: new URLSearchParams({ token, form_token: formToken('somebody-elses-secret', Date.now()) }).toString(),
-    });
+    // The attacker loads the page and keeps the nonce it rendered...
+    const attackerPage = await app.inject({ method: 'GET', url: TOKEN_LOGIN_PATH });
+    const attackerNonce = cookieFrom(attackerPage, CSRF_COOKIE)!;
+    expect(attackerPage.body).toContain(`value="${attackerNonce}"`);
+
+    // ...and puts it in a form the victim's browser submits. That browser carries no
+    // CSRF cookie of its own, because SameSite=Strict withholds it cross-site.
+    const res = await post(app, { token, form_token: attackerNonce });
 
     expect(res.statusCode).toBe(403);
     expect(sessionFrom(res)).toBeNull();
   });
 
-  it('rejects a form token from a stale bucket but accepts the previous one', async () => {
+  it("rejects a nonce that is not the one in this browser's cookie", async () => {
     const app = await appWith(store);
     const token = await mintToken(app, 'bot:reviewer');
-    const hourMs = 60 * 60 * 1000;
+    const page = await app.inject({ method: 'GET', url: TOKEN_LOGIN_PATH });
+    const mine = cookieFrom(page, CSRF_COOKIE)!;
 
-    const stale = await post(app, { token }, Date.now() - 3 * hourMs);
-    expect(stale.statusCode).toBe(403);
+    const res = await post(app, { token, form_token: newCsrfNonce() }, `${CSRF_COOKIE}=${mine}`);
 
-    const recent = await post(app, { token }, Date.now() - hourMs);
-    expect(recent.statusCode).toBe(302);
+    expect(res.statusCode).toBe(403);
+    expect(sessionFrom(res)).toBeNull();
+  });
+
+  it('rejects a malformed nonce without measuring it against anything', async () => {
+    const app = await appWith(store);
+    const token = await mintToken(app, 'bot:reviewer');
+    const nonce = cookieFrom(await app.inject({ method: 'GET', url: TOKEN_LOGIN_PATH }), CSRF_COOKIE)!;
+
+    for (const bad of ['', 'x'.repeat(100_000), `${nonce}!`, nonce.slice(0, 42)]) {
+      const res = await post(app, { token, form_token: bad }, `${CSRF_COOKIE}=${nonce}`);
+      expect(res.statusCode).toBe(403);
+      expect(sessionFrom(res)).toBeNull();
+    }
+  });
+
+  it('hands back a submittable form when it refuses', async () => {
+    // A refusal that renders a dead nonce would strand the visitor in a loop of
+    // "that form expired" with no way out.
+    const app = await appWith(store);
+    const token = await mintToken(app, 'bot:reviewer');
+
+    const refused = await post(app, { token });
+    expect(refused.statusCode).toBe(403);
+
+    const nonce = cookieFrom(refused, CSRF_COOKIE)!;
+    expect(refused.body).toContain(`name="form_token" value="${nonce}"`);
+
+    const retry = await post(app, { token, form_token: nonce }, `${CSRF_COOKIE}=${nonce}`);
+    expect(retry.statusCode).toBe(302);
+  });
+
+  it('reuses the nonce a second tab already holds', async () => {
+    const app = await appWith(store);
+    const first = await app.inject({ method: 'GET', url: TOKEN_LOGIN_PATH });
+    const nonce = cookieFrom(first, CSRF_COOKIE)!;
+
+    const second = await app.inject({
+      method: 'GET',
+      url: TOKEN_LOGIN_PATH,
+      headers: { cookie: `${CSRF_COOKIE}=${nonce}` },
+    });
+
+    // No re-issue, and the same value rendered — otherwise opening a second tab would
+    // silently break the form sitting in the first.
+    expect(cookieFrom(second, CSRF_COOKIE)).toBeNull();
+    expect(second.body).toContain(`value="${nonce}"`);
+  });
+
+  it('clears the nonce once it has been spent', async () => {
+    const app = await appWith(store);
+    const token = await mintToken(app, 'bot:reviewer');
+    const nonce = cookieFrom(await app.inject({ method: 'GET', url: TOKEN_LOGIN_PATH }), CSRF_COOKIE)!;
+
+    const res = await post(app, { token, form_token: nonce }, `${CSRF_COOKIE}=${nonce}`);
+
+    expect(res.statusCode).toBe(302);
+    const setCookies = res.headers['set-cookie'] as string[];
+    expect(setCookies.some((c) => c.startsWith(`${CSRF_COOKIE}=;`))).toBe(true);
   });
 
   it('refuses an unknown token without saying why', async () => {
     const app = await appWith(store);
-    const res = await post(app, { token: generateAccessToken().token });
+    const res = await visitAndPost(app, { token: generateAccessToken().token });
 
     expect(res.statusCode).toBe(401);
     expect(sessionFrom(res)).toBeNull();
@@ -261,14 +365,14 @@ describe('POST /oauth/token-login', () => {
 
   it('refuses a credential that is not a personal access token at all', async () => {
     const app = await appWith(store);
-    const res = await post(app, { token: 'gdpl_oat_something_else' });
+    const res = await visitAndPost(app, { token: 'gdpl_oat_something_else' });
     expect(res.statusCode).toBe(401);
     expect(sessionFrom(res)).toBeNull();
   });
 
   it('refuses an empty submission', async () => {
     const app = await appWith(store);
-    const res = await post(app, { token: '   ' });
+    const res = await visitAndPost(app, { token: '   ' });
     expect(res.statusCode).toBe(400);
     expect(sessionFrom(res)).toBeNull();
   });
@@ -287,7 +391,7 @@ describe('POST /oauth/token-login', () => {
       expiresAt: new Date(Date.now() - 24 * 3600 * 1000).toISOString(),
     });
 
-    const res = await post(app, { token: generated.token });
+    const res = await visitAndPost(app, { token: generated.token });
 
     expect(res.statusCode).toBe(401);
     expect(sessionFrom(res)).toBeNull();
@@ -298,7 +402,7 @@ describe('POST /oauth/token-login', () => {
     const token = await mintToken(app, 'bot:reviewer');
     await store.upsertUser({ uid: 'bot:reviewer', tier: 'blocked' });
 
-    const res = await post(app, { token });
+    const res = await visitAndPost(app, { token });
 
     expect(res.statusCode).toBe(403);
     expect(sessionFrom(res)).toBeNull();

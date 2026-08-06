@@ -1,6 +1,7 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
-import type { FastifyInstance } from 'fastify';
+import { randomBytes, timingSafeEqual } from 'node:crypto';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { resolveAccessTokenUser } from './access-token-service.js';
+import { canonicalAppBaseUrl } from './canonical-app-url.js';
 import { DEFAULT_SESSION_DURATION_SECONDS, mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import { escapeHtml, MASCOT_SVG, OAUTH_PAGE_STYLES } from './oauth-page-chrome.js';
 import type { Store } from './store.js';
@@ -8,11 +9,23 @@ import type { Store } from './store.js';
 export const TOKEN_LOGIN_PATH = '/oauth/token-login';
 
 /**
- * How long a rendered form stays submittable. Stateless: the token is an HMAC over a
- * time bucket, so accepting the current and previous bucket gives every visitor at
- * least this long and at most twice it, with nothing to store or expire.
+ * Per-browser CSRF nonce, carried in its own cookie and echoed by the form.
+ *
+ * The first version of this was an HMAC over a time bucket, which proved only that a
+ * form had been rendered *recently* — not that it had been rendered for *this* browser.
+ * Anyone could fetch the page, read a currently-valid token, and put it in a cross-site
+ * form; the check passed and the login CSRF it was supposed to stop went through. The
+ * value has to be one the attacker cannot read, which means one the victim's browser
+ * holds.
+ *
+ * Scoped to this path so it rides on nothing else, and `SameSite=Strict` so it is not
+ * even sent on the cross-site POST that would spend it.
  */
-const FORM_TOKEN_TTL_MS = 60 * 60 * 1000;
+const CSRF_COOKIE_NAME = 'gamedev_token_login_csrf';
+const CSRF_COOKIE_MAX_AGE_SECONDS = 60 * 60;
+/** 32 random bytes, base64url. Anchored and fixed-length, so a huge candidate is
+ *  rejected in constant time without ever being copied into a Buffer. */
+const CSRF_NONCE_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 
 export interface TokenLoginOptions {
   store: Store;
@@ -39,18 +52,36 @@ export function sanitizeOAuthReturnPath(path: string): string | null {
   return trimmed;
 }
 
-export function formToken(secret: string, nowMs: number, bucketOffset = 0): string {
-  const bucket = Math.floor(nowMs / FORM_TOKEN_TTL_MS) - bucketOffset;
-  return createHmac('sha256', secret).update(`oauth-token-login-v1:${bucket}`).digest('hex');
+export function newCsrfNonce(): string {
+  return randomBytes(32).toString('base64url');
 }
 
-function formTokenValid(candidate: string, secret: string, nowMs: number): boolean {
-  // Current and previous bucket, so a form rendered at 10:59 still submits at 11:01.
-  return [0, 1].some((offset) => {
-    const a = Buffer.from(candidate, 'utf8');
-    const b = Buffer.from(formToken(secret, nowMs, offset), 'utf8');
-    return a.length === b.length && timingSafeEqual(a, b);
-  });
+/**
+ * Double submit: the nonce in the cookie must equal the nonce in the form body.
+ *
+ * Both sides are format-checked before either becomes a Buffer, so an oversized or
+ * malformed submission costs a regex and nothing else.
+ */
+function csrfValid(cookieNonce: unknown, submitted: unknown): boolean {
+  if (typeof cookieNonce !== 'string' || !CSRF_NONCE_PATTERN.test(cookieNonce)) return false;
+  if (typeof submitted !== 'string' || !CSRF_NONCE_PATTERN.test(submitted)) return false;
+  // Equal lengths guaranteed by the pattern above, so timingSafeEqual cannot throw.
+  return timingSafeEqual(Buffer.from(cookieNonce, 'utf8'), Buffer.from(submitted, 'utf8'));
+}
+
+/**
+ * Third layer, behind SameSite=Strict and the double-submit nonce.
+ *
+ * Enforced in production only: browsers send `Origin` on same-origin POSTs too, and the
+ * canonical origin is `https://www.gamedev.pl` by default — so enforcing it everywhere
+ * would refuse every form submitted against a dev server on localhost. That makes this
+ * the one check here that depends on deployment config, which is exactly why it is not
+ * the one the other two lean on.
+ */
+export function originAllowed(request: Pick<FastifyRequest, 'headers'>, isProd: boolean): boolean {
+  const origin = request.headers.origin;
+  if (!isProd || typeof origin !== 'string' || origin === '') return true;
+  return origin === canonicalAppBaseUrl();
 }
 
 /**
@@ -143,15 +174,32 @@ export function registerTokenLoginRoutes(app: FastifyInstance, options: TokenLog
     });
   }
 
+  const setCsrfCookie = (reply: FastifyReply, nonce: string) => {
+    reply.setCookie(CSRF_COOKIE_NAME, nonce, {
+      path: TOKEN_LOGIN_PATH,
+      httpOnly: true,
+      secure: isProd,
+      sameSite: 'strict',
+      maxAge: CSRF_COOKIE_MAX_AGE_SECONDS,
+    });
+  };
+
   app.get(TOKEN_LOGIN_PATH, async (request, reply) => {
     const raw = (request.query as { oauth_return?: string }).oauth_return;
+
+    // Reused when the browser already holds one, so a second tab does not invalidate
+    // the form open in the first.
+    const held = request.cookies[CSRF_COOKIE_NAME];
+    const nonce = typeof held === 'string' && CSRF_NONCE_PATTERN.test(held) ? held : newCsrfNonce();
+    if (nonce !== held) setCsrfCookie(reply, nonce);
+
     return reply
       .type('text/html')
       .header('cache-control', 'no-store')
       .send(
         tokenLoginHtml({
           oauthReturn: typeof raw === 'string' ? sanitizeOAuthReturnPath(raw) : null,
-          formToken: formToken(sessionSecret, now()),
+          formToken: nonce,
         }),
       );
   });
@@ -166,21 +214,27 @@ export function registerTokenLoginRoutes(app: FastifyInstance, options: TokenLog
       const oauthReturn = typeof body.oauth_return === 'string' ? sanitizeOAuthReturnPath(body.oauth_return) : null;
       const nowMs = now();
 
-      const fail = (status: number, error: string) =>
-        reply
+      // A refusal has to hand back a form that can actually be submitted, so it carries
+      // the browser's live nonce — minting one if the reason for the refusal was that
+      // the browser had none.
+      const held = request.cookies[CSRF_COOKIE_NAME];
+      const liveNonce = typeof held === 'string' && CSRF_NONCE_PATTERN.test(held) ? held : newCsrfNonce();
+
+      const fail = (status: number, error: string) => {
+        if (liveNonce !== held) setCsrfCookie(reply, liveNonce);
+        return reply
           .status(status)
           .type('text/html')
           .header('cache-control', 'no-store')
-          .send(tokenLoginHtml({ oauthReturn, formToken: formToken(sessionSecret, nowMs), error }));
+          .send(tokenLoginHtml({ oauthReturn, formToken: liveNonce, error }));
+      };
 
-      // Login CSRF: `sameSite: 'lax'` does not stop a top-level cross-site form POST, so
-      // without this an attacker could silently sign a visitor's browser into an account
-      // the attacker controls — and the next thing this flow does is ask that browser to
-      // approve durable write access. Proving the POST came from a form we served is
-      // cheap and closes it.
-      if (typeof body.form_token !== 'string' || !formTokenValid(body.form_token, sessionSecret, nowMs)) {
-        return fail(403, 'That form expired. Try again.');
-      }
+      // Login CSRF. `sameSite: 'lax'` on the session cookie does not stop a top-level
+      // cross-site form POST, and the next thing this flow does is ask the browser to
+      // approve durable write access — so an attacker who can silently sign a visitor
+      // into an account they control gets that approval from someone else's browser.
+      if (!originAllowed(request, isProd)) return fail(403, 'That request did not come from gamedev.pl.');
+      if (!csrfValid(held, body.form_token)) return fail(403, 'That form expired. Reload and try again.');
 
       const token = typeof body.token === 'string' ? body.token.trim() : '';
       if (!token) return fail(400, 'Paste an access token.');
@@ -205,6 +259,10 @@ export function registerTokenLoginRoutes(app: FastifyInstance, options: TokenLog
           maxAge: DEFAULT_SESSION_DURATION_SECONDS,
         },
       );
+
+      // Spent. The next visit mints a fresh one rather than reusing a nonce that has
+      // already been exchanged for a session.
+      reply.clearCookie(CSRF_COOKIE_NAME, { path: TOKEN_LOGIN_PATH });
 
       return reply.redirect(oauthReturn ?? '/studio');
     },

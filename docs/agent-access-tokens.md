@@ -225,9 +225,11 @@ Practical notes:
 - **Revoking the token does not revoke OAuth grants approved during that session.** The
   grant is its own record with its own lifetime. Close a review by revoking the token
   _and_ removing the grant in Studio → connected apps.
-- The form carries a one-hour CSRF token, so a page left open overnight needs a reload.
-  `sameSite: 'lax'` does not stop a top-level cross-site form POST, and the next thing
-  this flow does is ask the browser to approve durable write access.
+- The form carries a per-browser CSRF nonce in a `SameSite=Strict` cookie, valid an hour,
+  so a page left open overnight needs a reload. It has to be per-browser, not merely
+  per-hour: a nonce anyone could fetch for themselves is one an attacker can put in a
+  cross-site form, and the next thing this flow does is ask the browser to approve
+  durable write access.
 
 ## CI: the authenticated deploy smoke
 
