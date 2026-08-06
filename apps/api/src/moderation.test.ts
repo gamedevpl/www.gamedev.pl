@@ -61,6 +61,11 @@ describe('moderateText', () => {
     expect(moderateText('call 555-123-4567')).toMatchObject({ allowed: false, category: 'pii' });
     expect(moderateText('(555) 123 4567')).toMatchObject({ allowed: false, category: 'pii' });
     expect(moderateText('reach me on 5551234567')).toMatchObject({ allowed: false, category: 'pii' });
+    // Extensions, including the compact form. Anchoring the pattern against trailing
+    // letters rejected this outright until the x/ext tail became part of the number.
+    for (const withExtension of ['555-123-4567x89', '555-123-4567 x89', '555-123-4567 ext. 89']) {
+      expect(moderateText(withExtension)).toMatchObject({ allowed: false, category: 'pii' });
+    }
   });
 
   it('does not read our own identifiers as a phone number', () => {

@@ -104,7 +104,14 @@ export const PII_PATTERNS: RegExp[] = [
   // was refused as PII (owner, 2026-08-06), and engine SHAs like
   // 648092d7e36bc302d981e58c842829b6b4b8029f matched the same way. A phone number is
   // not glued to letters; a version id always is.
-  /(?<![A-Za-z0-9])(\+?\d{1,3}[\s.-]?)?(\(?\d{2,4}\)?[\s.-]?){2,4}\d{2,4}(?![A-Za-z0-9])/,
+  //
+  // The extension suffix is matched rather than merely tolerated. A bare trailing
+  // boundary rejected 555-123-4567x89 outright — the compact form people actually
+  // write — so an x/ext tail is now part of the number. That keeps the boundary
+  // meaningful: the only letters allowed to follow are the ones that mean "extension",
+  // which is what separates a phone from an identifier rather than "any letter at all"
+  // (Codex, #626).
+  /(?<![A-Za-z0-9])(\+?\d{1,3}[\s.-]?)?(\(?\d{2,4}\)?[\s.-]?){2,4}\d{2,4}(?:\s?(?:x|ext\.?)\s?\d{1,5})?(?![A-Za-z0-9])/i,
   /\b\d{1,5}\s+[a-ząćęłńóśźż]+\s+(street|st\.|avenue|ave\.|road|rd\.|ulica|ul\.)\b/i, // street address
 ];
 
