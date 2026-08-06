@@ -404,7 +404,7 @@ a {
   background: rgba(22, 28, 34, 0.92);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 999px;
-  padding: 5px 8px 3px;
+  padding: 7px 8px 1px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
   transition:
     border-color 0.25s ease,
@@ -436,16 +436,16 @@ a {
   min-width: 0;
   height: 36px;
   margin: 0;
-  /* 1px top pad drops Proxima's placeholder onto the icon midline; without it
-     the glyph sits a hair above the 36px control center in Chrome. */
-  padding: 1px 2px 0;
+  /* 2px top pad drops Proxima's placeholder onto the icon midline; without it
+     the glyph sits above the 36px control center in Chrome. */
+  padding: 2px 2px 0;
   border: none;
   border-radius: 0;
   background: transparent;
   color: #fff;
   font-family: inherit;
   font-size: 16px;
-  line-height: 35px;
+  line-height: 34px;
   box-sizing: border-box;
   box-shadow: none;
   appearance: none;
