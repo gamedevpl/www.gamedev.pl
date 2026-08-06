@@ -369,90 +369,149 @@ a {
 }
 
 .hero-prompt-card {
-  max-width: 820px;
+  max-width: 760px;
   margin: 0 auto;
-  background: var(--panel);
-  border: 1px solid rgba(0, 228, 172, 0.3);
-  border-radius: 16px;
-  padding: 20px;
-  box-shadow:
-    0 12px 36px rgba(0, 0, 0, 0.4),
-    0 0 16px rgba(0, 228, 172, 0.12);
-  transition:
-    border-color 0.3s,
-    box-shadow 0.3s;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  box-shadow: none;
 }
 
 .hero-prompt-card:focus-within {
-  border-color: var(--turquoise);
-  box-shadow:
-    0 16px 40px rgba(0, 0, 0, 0.5),
-    0 0 24px var(--turquoise-glow);
+  border-color: transparent;
+  box-shadow: none;
 }
 
 .prompt-box-form {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
+}
+
+/* One Gemini-style pill: attach | growing field | mic + build. */
+.prompt-composer-bar {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  width: 100%;
+  background: rgba(22, 28, 34, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 28px;
+  padding: 10px 12px 10px 10px;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.35);
+  transition:
+    border-color 0.25s ease,
+    box-shadow 0.25s ease;
+}
+
+.hero-prompt-card:focus-within .prompt-composer-bar {
+  border-color: rgba(0, 228, 172, 0.45);
+  box-shadow:
+    0 12px 36px rgba(0, 0, 0, 0.4),
+    0 0 20px rgba(0, 228, 172, 0.12);
 }
 
 .big-prompt-input {
-  width: 100%;
-  background: #090d11;
-  border: 1.5px solid rgba(0, 228, 172, 0.4);
-  border-radius: 12px;
-  padding: 18px 20px;
+  flex: 1;
+  min-width: 0;
+  width: auto;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 10px 4px;
   color: #fff;
   font-family: inherit;
-  font-size: 1.15rem;
-  line-height: 1.5;
-  resize: vertical;
-  box-shadow: 0 0 12px rgba(0, 228, 172, 0.12);
-  transition: all 0.25s ease;
+  font-size: 1.05rem;
+  line-height: 1.45;
+  resize: none;
+  min-height: 1.45em;
+  max-height: 9em;
+  overflow-y: auto;
+  field-sizing: content;
+  box-shadow: none;
+  transition: none;
 }
 
 .big-prompt-input:focus {
   outline: none;
-  border-color: var(--turquoise);
-  box-shadow:
-    0 0 20px var(--turquoise-glow),
-    0 0 2px var(--turquoise);
-  background: #0d1218;
+  border-color: transparent;
+  box-shadow: none;
+  background: transparent;
 }
 
-.hero-prompt-card.drag-over {
+.big-prompt-input::placeholder {
+  color: var(--muted);
+}
+
+.hero-prompt-card.drag-over .prompt-composer-bar {
   border-color: #38bdf8;
-  background: rgba(56, 189, 248, 0.08);
-  box-shadow: 0 0 24px rgba(56, 189, 248, 0.3);
+  background: rgba(56, 189, 248, 0.1);
+  box-shadow: 0 0 24px rgba(56, 189, 248, 0.28);
 }
 
-.prompt-textarea-wrapper {
+.prompt-attach {
   position: relative;
-  width: 100%;
+  flex-shrink: 0;
+  align-self: center;
 }
 
-.prompt-media-actions {
+.prompt-attach-menu {
   position: absolute;
-  right: 14px;
-  bottom: 14px;
+  left: 0;
+  bottom: calc(100% + 8px);
+  z-index: 20;
+  min-width: 180px;
+  padding: 6px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.prompt-attach-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  background: rgba(9, 13, 17, 0.85);
-  padding: 4px 8px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  -webkit-backdrop-filter: blur(4px);
-  backdrop-filter: blur(4px);
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.92rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.prompt-attach-item:hover,
+.prompt-attach-item:focus-visible {
+  background: rgba(0, 228, 172, 0.1);
+  color: #fff;
+}
+
+.prompt-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  align-self: center;
 }
 
 .prompt-icon-btn {
-  background: transparent;
-  border: none;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid transparent;
   color: var(--muted);
   font-size: 1.2rem;
-  padding: 4px 6px;
-  border-radius: 6px;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 999px;
   cursor: pointer;
   transition: all 0.2s ease;
   display: flex;
@@ -460,10 +519,23 @@ a {
   justify-content: center;
 }
 
-.prompt-icon-btn:hover {
-  background: rgba(255, 255, 255, 0.15);
+.prompt-icon-btn:hover,
+.prompt-icon-btn.is-open {
+  background: rgba(255, 255, 255, 0.12);
   color: #fff;
-  transform: translateY(-1px);
+  transform: none;
+}
+
+.prompt-composer-bar .build-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 999px;
+  font-size: 0.92rem;
+  white-space: nowrap;
 }
 
 .mic-btn.listening {
@@ -489,8 +561,9 @@ a {
 .mic-notice-text {
   font-size: 0.85rem;
   color: #f43f5e;
-  margin: -6px 0 4px;
+  margin: 0;
   text-align: left;
+  padding: 0 8px;
 }
 
 /* ATTACHMENTS PREVIEW */
@@ -826,6 +899,23 @@ a {
   margin: 4px 0 0;
   font-size: 0.95rem;
   color: var(--text);
+}
+
+.prompt-ideas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+  padding: 0 4px;
+}
+
+.prompt-ideas-label {
+  flex-shrink: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
 .prompt-controls-bar {
@@ -3051,24 +3141,21 @@ body.player-open {
     min-height: 128px;
   }
 
-  /* That pill is absolutely positioned over the textarea, where it covered a
-     third of the box — including the placeholder that tells you what to write.
-     Thumb-sizing the buttons made it worse. There is no room to float anything
-     over a 375px input, so on a phone it becomes a plain row underneath. */
-  .prompt-textarea-wrapper {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+  /* Composer tools sit in the pill bar now — no overlay over the textarea. */
+  .prompt-icon-btn {
+    width: 44px;
+    height: 44px;
   }
 
-  .prompt-media-actions {
-    position: static;
-    align-self: flex-start;
-    padding: 0;
-    background: none;
-    border: none;
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
+  .prompt-composer-bar {
+    padding: 8px;
+    border-radius: 24px;
+    gap: 6px;
+  }
+
+  .prompt-composer-bar .build-btn {
+    min-height: 44px;
+    padding: 0 14px;
   }
 
   .chip-btn,
@@ -3136,7 +3223,19 @@ body.player-open {
   }
 
   .hero-prompt-card {
-    padding: 14px;
+    padding: 0;
+  }
+
+  .prompt-ideas {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 0;
+  }
+
+  .prompt-ideas-label,
+  .prompt-ideas .quota-note {
+    padding: 0 4px;
   }
 
   .prompt-controls-bar {
@@ -3147,29 +3246,29 @@ body.player-open {
 
   /* Wrapped, three suggestions stacked into 148px — a fifth of an iPhone SE,
      spent on examples. One swipeable row costs 44px and still reaches all of
-     them. The negative margin lets the strip bleed to the card edge, so a
+     them. The negative margin lets the strip bleed to the content edge, so a
      half-visible third chip signals there is more to swipe to. */
   .chip-container {
     flex-wrap: nowrap;
     justify-content: flex-start;
     overflow-x: auto;
-    margin: 0 -14px;
-    padding: 0 14px;
+    margin: 0 -12px;
+    padding: 0 12px;
     scroll-snap-type: x proximity;
     /* Snapping aligns a chip to the scrollport edge — and the scrollport edge is
-       the card border, because of the bleed above. Without this the browser
-       scrolls the 14px padding away to satisfy the snap, and the first chip comes
-       to rest sliced by the border. scroll-padding moves the snap edge inwards so
+       the content edge, because of the bleed above. Without this the browser
+       scrolls the 12px padding away to satisfy the snap, and the first chip comes
+       to rest sliced by the viewport. scroll-padding moves the snap edge inwards so
        the inset the padding exists to create actually survives. */
-    scroll-padding: 0 14px;
+    scroll-padding: 0 12px;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
-    /* Soften the bleed. A chip running past the card was cut dead on the glowing
-       border, which reads as broken layout rather than as more-to-swipe. Both
-       ends of the strip are empty at their scroll extremes, so each fade only
-       bites while there is something under it left to reach. */
-    -webkit-mask-image: linear-gradient(to right, transparent, #000 14px, #000 calc(100% - 14px), transparent);
-    mask-image: linear-gradient(to right, transparent, #000 14px, #000 calc(100% - 14px), transparent);
+    /* Soften the bleed. A chip running past the edge was cut dead, which reads as
+       broken layout rather than as more-to-swipe. Both ends of the strip are empty
+       at their scroll extremes, so each fade only bites while there is something
+       under it left to reach. */
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 12px, #000 calc(100% - 12px), transparent);
+    mask-image: linear-gradient(to right, transparent, #000 12px, #000 calc(100% - 12px), transparent);
   }
 
   .chip-container::-webkit-scrollbar {
@@ -7696,10 +7795,9 @@ button.builder-mode-selector:disabled {
   color: var(--muted);
 }
 
-/* Today's allowance, next to the build button. */
+/* Today's allowance, under the idea chips. */
 .quota-note {
-  align-self: center;
-  margin-right: 10px;
+  margin: 0;
   font-size: 0.8rem;
   color: var(--muted);
 }
@@ -8278,7 +8376,7 @@ button.builder-mode-selector:disabled {
   color: var(--muted);
   font-size: 0.8rem;
   line-height: 1.55;
-  text-align: left;
+  text-align: center;
 }
 
 .ai-notice svg {

@@ -104,8 +104,11 @@
   "hero": {
     "mainTitle": "Turn any idea into a playable web game",
     "mainSubtitle": "Type what you want to play or build. AI agents code, test, and host it live.",
-    "bigPromptPlaceholder": "Type what you want to play or build... (e.g. a platformer, space shooter, dodge falling rocks, cyberpunk rhythm game)",
+    "bigPromptPlaceholder": "Ask for a game to play or build…",
     "buildGameButton": "Build My Game",
+    "attachMenu": "Add",
+    "attachMenuAria": "Add an image or sketch",
+    "tryIdeas": "Try an idea",
     "instantMockButton": "Quick Local Mock",
     "smartFoundTitle": "Found matching game: {{title}}",
     "smartPlayBtn": "Play {{title}} Now",
