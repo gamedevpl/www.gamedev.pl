@@ -458,10 +458,10 @@ Writes one file into the round's staging area in preparation for delivery.
 Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
 ```
 
-**Destructive: False**
+**Destructive: True**
 
 ```
-It writes only to staging, which is scratch space that has not been delivered or published. Nothing the creator can see or that is live is affected.
+Marked destructive because staging the same path again overwrites what was previously staged there. Nothing delivered or published is touched — staging is scratch space for the next delivery — but the call is not purely additive, so a client should be free to confirm it rather than assume it is safe to repeat.
 ```
 
 ## `patch_source_file`
@@ -478,10 +478,10 @@ Edits a file that is already staged, so it writes state.
 Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
 ```
 
-**Destructive: False**
+**Destructive: True**
 
 ```
-It can only overwrite content inside the round's staging area. It cannot reach delivered or published sources, so nothing live or creator-visible is lost.
+Marked destructive because editing replaces existing staged content, and a patch can remove lines outright. It is bounded to the round's staging area and cannot reach delivered or published sources, but bounded is not the same as additive.
 ```
 
 ## `list_staged_sources`
@@ -518,10 +518,10 @@ Empties the round's staging area, so it writes state.
 Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
 ```
 
-**Destructive: False**
+**Destructive: True**
 
 ```
-It discards only undelivered scratch space. Nothing delivered, published or creator-visible is removed, and the agent can stage the files again. We would accept a stricter reading here if you prefer this marked destructive.
+Marked destructive because it deletes staged files. They are undelivered scratch space, so nothing creator-visible or live is lost and the agent can stage them again — but the hint describes what the operation does, and this one removes data.
 ```
 
 ## `submit_sources`
