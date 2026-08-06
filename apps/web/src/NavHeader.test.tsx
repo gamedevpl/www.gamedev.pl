@@ -224,11 +224,18 @@ describe('NavHeader Studio chip', () => {
     expect(chip?.classList.contains('is-live')).toBe(true);
     expect(chip?.textContent).toMatch(/9 in progress/i);
     expect(chip?.textContent).toMatch(/Studio/i);
-    expect(chip?.querySelector('.studio-chip-badge')?.textContent).toBe('9');
-    expect(chip?.getAttribute('aria-label')).toMatch(/9 in progress/i);
 
     await act(async () => chip?.click());
     expect(onStudio).toHaveBeenCalledOnce();
+
+    // Menu carries the same count for phones (where the chip is CSS-hidden).
+    const hamburger = container.querySelector<HTMLButtonElement>('.hamburger-btn');
+    expect(hamburger?.querySelector('.hamburger-live-badge')?.textContent).toBe('9');
+    await act(async () => hamburger?.click());
+    const studioLink = Array.from(container.querySelectorAll<HTMLButtonElement>('.nav-link')).find((el) =>
+      /Studio/i.test(el.textContent ?? ''),
+    );
+    expect(studioLink?.querySelector('.specs-count-badge')?.textContent).toBe('9');
 
     await act(async () => root.unmount());
   });

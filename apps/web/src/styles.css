@@ -278,6 +278,7 @@ a {
 }
 
 .hamburger-btn {
+  position: relative;
   background: var(--panel-card);
   border: 1px solid var(--panel-border);
   color: var(--text);
@@ -997,7 +998,8 @@ button:disabled {
 }
 
 /* Compact Studio entry in the top nav — live count + wrench in one control so
-   in-progress work stays in chrome rather than owning a catalog grid cell. */
+   in-progress work stays in chrome rather than owning a catalog grid cell.
+   Phones hide this chip: Studio + the count live in the hamburger instead. */
 .studio-chip {
   position: relative;
   display: inline-flex;
@@ -1041,55 +1043,17 @@ button:disabled {
   background: var(--accent-blue);
 }
 
-.studio-chip-icon {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* Desktop keeps the written count; the numeric badge is the phone-compact form. */
-.studio-chip-badge {
+.hamburger-live-badge {
   display: none;
 }
 
-/* Phone: drop the rich pill for a solid icon button that matches the hamburger.
-   No visual merge with the avatar/bell chip — that read as a broken D-shape. */
 @media (max-width: 768px) {
   .studio-chip {
-    min-width: 44px;
-    min-height: 44px;
-    justify-content: center;
-    padding: 6px;
-    gap: 0;
-    border-radius: 8px;
-    background: var(--panel-card);
-    border: 1px solid var(--panel-border);
-    color: var(--text);
-  }
-
-  .studio-chip.is-live {
-    /* Keep the solid chrome; the badge carries the live signal. */
-    border-color: var(--panel-border);
-    background: var(--panel-card);
-    color: var(--text);
-  }
-
-  .studio-chip:hover,
-  .studio-chip:focus-visible,
-  .studio-chip.is-live:hover,
-  .studio-chip.is-live:focus-visible {
-    border-color: var(--turquoise);
-    color: var(--turquoise);
-  }
-
-  .studio-chip .live-dot,
-  .studio-chip-count,
-  .studio-chip-label {
     display: none;
   }
 
-  .studio-chip-badge {
+  /* Glance count while the menu is closed — the Studio row repeats it once open. */
+  .hamburger-live-badge {
     display: block;
     position: absolute;
     top: 2px;

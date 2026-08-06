@@ -121,8 +121,9 @@ export function NavHeader({ activeBuildCount, onNavigate, onHome, onStudio, upTa
           </button>
         )}
 
-        {/* Rich Studio chip on desktop; on a phone it collapses to a solid icon
-            button matching the hamburger — own 44px target, count as a corner badge. */}
+        {/* Rich Studio chip — desktop only. On a phone the hamburger already lists
+            Studio next to Create Game; the live count rides on that menu row (and a
+            small badge on the menu button) so the header stays logo · session · menu. */}
         <button
           type="button"
           className={`studio-chip${activeBuildCount > 0 ? ' is-live' : ''}`}
@@ -139,15 +140,8 @@ export function NavHeader({ activeBuildCount, onNavigate, onHome, onStudio, upTa
               <span className="studio-chip-count">{t('myGames.liveCount', { count: activeBuildCount })}</span>
             </>
           ) : null}
-          <span className="studio-chip-icon" aria-hidden="true">
-            <PixelIcon name="wrench" size={14} />
-          </span>
+          <PixelIcon name="wrench" size={12} />
           <span className="studio-chip-label">{t('myGames.openStudio')}</span>
-          {activeBuildCount > 0 ? (
-            <span className="studio-chip-badge" aria-hidden="true">
-              {activeBuildCount > 99 ? '99+' : activeBuildCount}
-            </span>
-          ) : null}
         </button>
 
         <LanguageSwitcher />
@@ -157,10 +151,19 @@ export function NavHeader({ activeBuildCount, onNavigate, onHome, onStudio, upTa
             type="button"
             className="hamburger-btn"
             aria-expanded={isMenuOpen}
-            aria-label="Toggle Navigation Menu"
+            aria-label={
+              activeBuildCount > 0
+                ? `${t('header.navStudio')}: ${t('header.activeBuilds', { count: activeBuildCount })}`
+                : 'Toggle Navigation Menu'
+            }
             onClick={() => setIsMenuOpen((prev) => !prev)}
           >
             {isMenuOpen ? <PixelIcon name="close" size={16} /> : <PixelIcon name="menu" size={16} />}
+            {activeBuildCount > 0 && !isMenuOpen ? (
+              <span className="hamburger-live-badge" aria-hidden="true">
+                {activeBuildCount > 99 ? '99+' : activeBuildCount}
+              </span>
+            ) : null}
           </button>
 
           {isMenuOpen && (
@@ -168,9 +171,6 @@ export function NavHeader({ activeBuildCount, onNavigate, onHome, onStudio, upTa
               <button className="nav-link" onClick={() => handleNavClick('hero-prompt')}>
                 <PixelIcon name="sparkle" size={14} /> {t('header.navPrompt')}
               </button>
-              {/* Studio also lives as the rich chip in the header bar; keep a plain
-                  menu entry for the same destination so phone users who open the
-                  hamburger still find it next to Create Game. */}
               <button
                 className="nav-link"
                 onClick={() => {
@@ -179,6 +179,14 @@ export function NavHeader({ activeBuildCount, onNavigate, onHome, onStudio, upTa
                 }}
               >
                 <PixelIcon name="wrench" size={14} /> {t('header.navStudio')}
+                {activeBuildCount > 0 ? (
+                  <span
+                    className="specs-count-badge"
+                    aria-label={t('header.activeBuilds', { count: activeBuildCount })}
+                  >
+                    {activeBuildCount}
+                  </span>
+                ) : null}
               </button>
 
               {/* Controls that live in the header bar on a desktop but cannot fit
