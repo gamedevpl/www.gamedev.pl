@@ -57,15 +57,36 @@ describe('moderateText', () => {
       category: 'pii',
     });
     expect(moderateText('call me at +48 512 345 678')).toMatchObject({ allowed: false, category: 'pii' });
+    // Still caught in the shapes people actually write them in.
+    expect(moderateText('call 555-123-4567')).toMatchObject({ allowed: false, category: 'pii' });
+    expect(moderateText('(555) 123 4567')).toMatchObject({ allowed: false, category: 'pii' });
+    expect(moderateText('reach me on 5551234567')).toMatchObject({ allowed: false, category: 'pii' });
+    // Extensions, including the compact form. Anchoring the pattern against trailing
+    // letters rejected this outright until the x/ext tail became part of the number.
+    for (const withExtension of ['555-123-4567x89', '555-123-4567 x89', '555-123-4567 ext. 89']) {
+      expect(moderateText(withExtension)).toMatchObject({ allowed: false, category: 'pii' });
+    }
+  });
+
+  it('does not read our own identifiers as a phone number', () => {
+    // Observed 2026-08-06: a creator asking to "show the screenshot from delivery
+    // v20260806T005029733Z-38da4c" was refused as PII. The phone pattern had no
+    // boundaries, so it fired on the digits buried inside a version id — and on engine
+    // SHAs the same way. Every one of these is a string our own tools hand the agent.
+    for (const text of [
+      'Show the latest preview screenshot from delivery v20260806T005029733Z-38da4c.',
+      'delivery v20260806T011419323Z-669ea1',
+      'built against engine 648092d7e36bc302d981e58c842829b6b4b8029f',
+      'kitEngineRef=bab4c2a46edb5f143779da6820cb2a6810bb8f9f',
+      'buildId a257d859-a09d-4bab-8a16-00ee973bf14b',
+    ]) {
+      expect(moderateText(text)).toEqual({ allowed: true });
+    }
   });
 
   it('can allow PII when a contact body is expected to name a person', () => {
-    expect(
-      moderateText('Please call me back at +48 512 345 678', { allowPii: true }),
-    ).toEqual({ allowed: true });
-    expect(
-      moderateText('Also email other@example.com if needed', { allowPii: true }),
-    ).toEqual({ allowed: true });
+    expect(moderateText('Please call me back at +48 512 345 678', { allowPii: true })).toEqual({ allowed: true });
+    expect(moderateText('Also email other@example.com if needed', { allowPii: true })).toEqual({ allowed: true });
   });
 
   it('rejects specs with too many outbound links', () => {
