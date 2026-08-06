@@ -345,6 +345,9 @@ const ROUND_STATUS_HTML = `<!doctype html>
       .linked:hover { text-decoration: underline; }
       .brand .dot { color: var(--gd-accent); }
       .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
         font-size: 12px;
         font-weight: 600;
         text-transform: uppercase;
@@ -355,12 +358,72 @@ const ROUND_STATUS_HTML = `<!doctype html>
         white-space: nowrap;
       }
       .pill-waiting, .pill-pending, .pill-queued, .pill-dispatched, .pill-stopped { color: var(--gd-muted); }
-      .pill-building, .pill-submitted, .pill-gating { color: #6fb3ff; }
+      .pill-building, .pill-submitted, .pill-gating, .pill-publishing { color: #6fb3ff; }
       .pill-green, .pill-preview_passed, .pill-published { color: var(--gd-accent); }
       .pill-red, .pill-preview_failed, .pill-failed { color: #ff6b6b; }
       .pill-kit_outdated, .pill-needs_changes { color: #ffb454; }
+      /* Pulse live pills so a 30s poll does not look frozen. */
+      .pulse-sq {
+        display: none;
+        width: 7px;
+        height: 7px;
+        flex: 0 0 auto;
+        background: currentColor;
+        border-radius: 1px;
+      }
+      .pill-live .pulse-sq {
+        display: inline-block;
+        animation: gd-pulse-sq 1.15s ease-in-out infinite;
+      }
+      @keyframes gd-pulse-sq {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.3; transform: scale(0.82); }
+      }
       .title { margin: 0 0 8px; font-size: 12.5px; color: var(--gd-muted); }
       .summary { margin: 0; font-size: 14px; line-height: 1.5; }
+      .activity {
+        margin: 10px 0 0;
+        font-size: 13px;
+        line-height: 1.45;
+        color: var(--gd-fg);
+      }
+      .activity .pulse-sq {
+        display: inline-block;
+        margin-right: 8px;
+        vertical-align: middle;
+        color: var(--gd-accent);
+        animation: gd-pulse-sq 1.15s ease-in-out infinite;
+      }
+      .activity .when { display: block; margin: 2px 0 0 15px; font-size: 11.5px; color: var(--gd-muted); }
+      .stages {
+        list-style: none;
+        margin: 10px 0 0;
+        padding: 0;
+        display: grid;
+        gap: 5px;
+      }
+      .stages li {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12.5px;
+        color: var(--gd-muted);
+      }
+      .stages li.current { color: var(--gd-fg); }
+      .stages li.done { color: var(--gd-accent); }
+      .stages .mark {
+        width: 7px;
+        height: 7px;
+        border-radius: 1px;
+        background: currentColor;
+        flex: 0 0 auto;
+        opacity: 0.45;
+      }
+      .stages li.current .mark {
+        opacity: 1;
+        animation: gd-pulse-sq 1.15s ease-in-out infinite;
+      }
+      .stages li.done .mark { opacity: 1; }
       .note {
         margin: 10px 0 0;
         padding-left: 10px;
@@ -386,17 +449,50 @@ const ROUND_STATUS_HTML = `<!doctype html>
         color: var(--gd-muted);
         background: rgba(127, 127, 127, 0.08);
       }
+      .details {
+        margin: 12px 0 0;
+        border: 1px solid var(--gd-border);
+        border-radius: 8px;
+        padding: 0 10px;
+        font-size: 12.5px;
+        color: var(--gd-muted);
+      }
+      .details > summary {
+        cursor: pointer;
+        list-style: none;
+        padding: 8px 0;
+        user-select: none;
+      }
+      .details > summary::-webkit-details-marker { display: none; }
+      .details > summary::before {
+        content: '';
+        display: inline-block;
+        width: 0;
+        height: 0;
+        border-top: 4px solid transparent;
+        border-bottom: 4px solid transparent;
+        border-left: 5px solid currentColor;
+        margin-right: 8px;
+        vertical-align: middle;
+      }
+      .details[open] > summary::before {
+        border-left: 4px solid transparent;
+        border-right: 4px solid transparent;
+        border-top: 5px solid currentColor;
+        border-bottom: 0;
+        margin-right: 7px;
+      }
       .meta {
         display: grid;
         grid-template-columns: auto 1fr;
         gap: 4px 14px;
-        margin: 12px 0 0;
+        margin: 0 0 10px;
         font-size: 12.5px;
       }
       .meta dt { color: var(--gd-muted); }
-      .meta dd { margin: 0; word-break: break-word; }
+      .meta dd { margin: 0; color: var(--gd-fg); word-break: break-word; }
       .report {
-        margin: 12px 0 0;
+        margin: 0 0 10px;
         padding: 10px;
         border-radius: 8px;
         border: 1px solid var(--gd-border);
@@ -407,7 +503,9 @@ const ROUND_STATUS_HTML = `<!doctype html>
         white-space: pre-wrap;
         max-height: 220px;
         overflow: auto;
+        color: var(--gd-fg);
       }
+      .report-fail { margin: 12px 0 0; }
       /* The gate's own frames: a strip, so several fit without pushing the verdict off. */
       .gallery {
         display: grid;
@@ -465,16 +563,22 @@ const ROUND_STATUS_HTML = `<!doctype html>
     <main class="card">
       <div class="head">
         <span id="brand" class="brand">gamedev<span class="dot">.pl</span></span>
-        <span id="pill" class="pill pill-waiting">waiting</span>
+        <span id="pill" class="pill pill-waiting"><span class="pulse-sq" aria-hidden="true"></span><span id="pillLabel">waiting</span></span>
       </div>
       <p id="title" class="title" hidden></p>
       <p id="summary" class="summary">Reading round status…</p>
+      <p id="activity" class="activity" hidden></p>
+      <ul id="stages" class="stages" hidden></ul>
       <blockquote id="note" class="note" hidden></blockquote>
       <figure id="shot" class="shot" hidden><img id="shotImg" alt="Latest frame from the build" /><figcaption id="shotCap"></figcaption></figure>
       <div id="gallery" class="gallery" hidden></div>
       <p id="galleryCap" class="galleryCap" hidden></p>
-      <dl id="meta" class="meta"></dl>
-      <pre id="report" class="report" hidden></pre>
+      <pre id="failReport" class="report report-fail" hidden></pre>
+      <details id="details" class="details" hidden>
+        <summary>Technical details</summary>
+        <dl id="meta" class="meta"></dl>
+        <pre id="report" class="report" hidden></pre>
+      </details>
       <div id="playRow" class="actions" hidden>
         <button id="playBtn" type="button" class="action"></button>
       </div>
@@ -515,8 +619,11 @@ const ROUND_STATUS_HTML = `<!doctype html>
         var timer = null;
 
         var pill = document.getElementById('pill');
+        var pillLabel = document.getElementById('pillLabel');
         var titleEl = document.getElementById('title');
         var summary = document.getElementById('summary');
+        var activityEl = document.getElementById('activity');
+        var stagesEl = document.getElementById('stages');
         var noteEl = document.getElementById('note');
         var shotEl = document.getElementById('shot');
         var shotImg = document.getElementById('shotImg');
@@ -529,8 +636,10 @@ const ROUND_STATUS_HTML = `<!doctype html>
         var actionHint = document.getElementById('actionHint');
         var gallery = document.getElementById('gallery');
         var galleryCap = document.getElementById('galleryCap');
+        var detailsEl = document.getElementById('details');
         var metaList = document.getElementById('meta');
         var report = document.getElementById('report');
+        var failReport = document.getElementById('failReport');
         var foot = document.getElementById('foot');
 
         function post(payload) {
@@ -665,6 +774,81 @@ const ROUND_STATUS_HTML = `<!doctype html>
           metaList.appendChild(dd);
         }
 
+        function setPill(headline) {
+          var key = String(headline || 'waiting');
+          var label = key === 'green' ? 'published' : key;
+          pillLabel.textContent = label.replace(/_/g, ' ');
+          pill.className = 'pill pill-' + key + (LIVE_HEADLINES[key] ? ' pill-live' : '');
+        }
+
+        function looksAgentFacing(text) {
+          return /submit_sources|TRACE|get_kit|mode=publish|kitEngineRef|call_end|get_gate_/i.test(text);
+        }
+
+        function setActivity(text, when) {
+          if (!text) {
+            activityEl.hidden = true;
+            activityEl.textContent = '';
+            return;
+          }
+          activityEl.textContent = '';
+          var mark = document.createElement('span');
+          mark.className = 'pulse-sq';
+          mark.setAttribute('aria-hidden', 'true');
+          activityEl.appendChild(mark);
+          activityEl.appendChild(document.createTextNode(text));
+          if (when) {
+            var stamp = document.createElement('span');
+            stamp.className = 'when';
+            stamp.textContent = formatTime(when);
+            activityEl.appendChild(stamp);
+          }
+          activityEl.hidden = false;
+        }
+
+        function setStages(lane, active) {
+          if (!active) {
+            stagesEl.hidden = true;
+            stagesEl.textContent = '';
+            return;
+          }
+          var labels = lane === 'publish' ? PUBLISH_GATE_STAGES : PREVIEW_GATE_STAGES;
+          stagesEl.textContent = '';
+          for (var i = 0; i < labels.length; i++) {
+            var li = document.createElement('li');
+            // Indeterminate: gate does not stream the active step.
+            li.className = 'current';
+            var mark = document.createElement('span');
+            mark.className = 'mark';
+            mark.setAttribute('aria-hidden', 'true');
+            li.appendChild(mark);
+            li.appendChild(document.createTextNode(labels[i]));
+            stagesEl.appendChild(li);
+          }
+          stagesEl.hidden = false;
+        }
+
+        function setDetailsVisible(hasRows, detailText, preferFailSurface) {
+          var hasDetail = typeof detailText === 'string' && detailText.trim().length > 0;
+          if (preferFailSurface && hasDetail) {
+            failReport.textContent = detailText.trim();
+            failReport.hidden = false;
+            report.hidden = true;
+            report.textContent = '';
+          } else {
+            failReport.hidden = true;
+            failReport.textContent = '';
+            if (hasDetail) {
+              report.textContent = detailText.trim();
+              report.hidden = false;
+            } else {
+              report.hidden = true;
+              report.textContent = '';
+            }
+          }
+          detailsEl.hidden = !(hasRows || (hasDetail && !preferFailSurface));
+        }
+
         /**
          * Hosts differ in how they wrap a tool result, so dig for the payload rather
          * than assuming one shape.
@@ -709,11 +893,11 @@ const ROUND_STATUS_HTML = `<!doctype html>
         }
 
         var PHASE_COPY = {
-          queued: 'Queued. The round is waiting to start.',
+          queued: 'In the queue — waiting to start.',
           dispatched: 'Starting the agent…',
-          building: 'The agent is building.',
-          submitted: 'Sources delivered. The gate is picking them up.',
-          gating: 'The gate is checking this delivery.',
+          building: 'The agent is building your game.',
+          submitted: 'Sources delivered. Automated checks are starting…',
+          gating: 'Running automated checks on this build.',
           ready_for_review: 'Ready for review.',
           publishing: 'Publishing…',
           published: 'Published.',
@@ -724,11 +908,11 @@ const ROUND_STATUS_HTML = `<!doctype html>
         };
 
         var GATE_COPY = {
-          pending: 'Gate status is pending.',
-          green: 'Publish gate green — the round is complete.',
-          red: 'Publish gate red. The report below says what failed.',
-          preview_passed: 'Preview gate passed — the build runs. Publish still needs a green publish gate.',
-          preview_failed: 'Preview gate failed. The report below says what broke.',
+          pending: 'Checks are still running.',
+          green: 'Published — this round is complete.',
+          red: 'Publish check failed. See what broke below.',
+          preview_passed: 'Preview check passed — the game runs. Keep iterating, then publish when you are happy with it.',
+          preview_failed: 'Preview check failed. See what broke below.',
           kit_outdated: 'The Creator Kit changed mid-round, so this delivery has to be rebuilt against the new one.'
         };
 
@@ -740,6 +924,38 @@ const ROUND_STATUS_HTML = `<!doctype html>
           gate_not_started: 'The gate did not start.',
           awaiting_input: 'Waiting on the creator.'
         };
+
+        /** Closed presence keys — same vocabulary as mcp-presence.ts. */
+        var PRESENCE_COPY = {
+          reading_brief: 'Reading the build brief…',
+          loading_seed: 'Loading the seed draft…',
+          fetching_kit: 'Fetching Creator Kit metadata…',
+          browsing_kit: 'Browsing the Creator Kit…',
+          searching_kit: 'Searching the Creator Kit…',
+          reading_kit: 'Reading Creator Kit files…',
+          loading_sources: 'Loading existing game sources…',
+          browsing_examples: 'Browsing example games…',
+          reading_example: 'Reading an example game…',
+          checking_staged: 'Checking staged sources…',
+          checking_inbox: 'Checking creator notes…',
+          waiting_checks: 'Waiting on automated checks…',
+          reviewing_captures: 'Reviewing gate captures…',
+          staging_sources: 'Staging source files…'
+        };
+
+        var LIVE_HEADLINES = {
+          queued: 1,
+          dispatched: 1,
+          building: 1,
+          submitted: 1,
+          gating: 1,
+          pending: 1,
+          publishing: 1
+        };
+
+        /** Gate check chain — shown while checks run (no fake step progress). */
+        var PREVIEW_GATE_STAGES = ['Typecheck', 'Smoke', 'Build', 'Capture'];
+        var PUBLISH_GATE_STAGES = ['Typecheck', 'Smoke', 'Build', 'Trace', 'Capture', 'Validate'];
 
         var ACTIONS = {
           kit_outdated: {
@@ -955,10 +1171,16 @@ const ROUND_STATUS_HTML = `<!doctype html>
 
         function renderGateOnly(verdict) {
           var status = typeof verdict.status === 'string' ? verdict.status : 'pending';
-          pill.textContent = status.replace(/_/g, ' ');
-          pill.className = 'pill pill-' + status;
+          setPill(status);
+          var gateSummary = typeof verdict.summary === 'string' ? verdict.summary : '';
           summary.textContent =
-            (typeof verdict.summary === 'string' && verdict.summary) || GATE_COPY[status] || 'Gate status: ' + status;
+            (gateSummary && !looksAgentFacing(gateSummary) ? gateSummary : '') ||
+            GATE_COPY[status] ||
+            gateSummary ||
+            'Gate status: ' + status;
+
+          setActivity(null);
+          setStages(verdict.lane, status === 'pending' && verdict.deliveryId);
 
           metaList.textContent = '';
           addRow('Lane', verdict.lane);
@@ -967,14 +1189,13 @@ const ROUND_STATUS_HTML = `<!doctype html>
           if (status === 'pending') {
             addRow('Next step', verdict.deliveryId ? 'Watch Studio' : 'Continue building');
           }
+          var detail = typeof verdict.report === 'string' ? verdict.report : '';
+          if (!detail && gateSummary && looksAgentFacing(gateSummary)) detail = gateSummary;
+          var failed =
+            status === 'red' || status === 'preview_failed' || status === 'kit_outdated';
+          setDetailsVisible(metaList.childNodes.length > 0, detail, failed);
 
-          if (typeof verdict.report === 'string' && verdict.report.trim()) {
-            report.textContent = verdict.report;
-            report.hidden = false;
-          } else {
-            report.hidden = true;
-          }
-
+          noteEl.hidden = true;
           actionRow.hidden = true;
           playRow.hidden = true;
           gallery.hidden = true;
@@ -1005,8 +1226,7 @@ const ROUND_STATUS_HTML = `<!doctype html>
                   ? 'stopped'
                   : status.phase;
 
-          pill.textContent = String(headline).replace(/_/g, ' ');
-          pill.className = 'pill pill-' + headline;
+          setPill(headline);
 
           if (status.title) {
             titleEl.textContent = status.slug ? status.title + ' · ' + status.slug : status.title;
@@ -1024,11 +1244,12 @@ const ROUND_STATUS_HTML = `<!doctype html>
           // leading with the phase told a creator the agent was working while the note
           // right below it said the agent had stopped.
           var line = null;
+          var gateSummary = gate && typeof gate.summary === 'string' ? gate.summary : '';
           if (gateStatus && gateStatus !== 'pending') {
-            var gateSummary = typeof gate.summary === 'string' ? gate.summary : '';
-            line = (gateSummary.length && gateSummary.length <= 180 ? gateSummary : '') || GATE_COPY[gateStatus] || gateSummary;
+            // Creator-facing GATE_COPY; channel summaries stay in details.
+            line = GATE_COPY[gateStatus] || gateSummary;
           } else if (gate && gate.deliveryId) {
-            line = 'Delivered — the gate is checking it.';
+            line = 'Delivered — automated checks are running.';
           } else if (status.agentEnded) {
             line = 'The agent has stopped without delivering.';
           }
@@ -1036,8 +1257,35 @@ const ROUND_STATUS_HTML = `<!doctype html>
           if (!line && gateStatus) line = GATE_COPY[gateStatus];
           summary.textContent = line || 'Round status: ' + status.phase;
 
-          if (status.note && typeof status.note.text === 'string' && status.note.text) {
-            noteEl.textContent = status.note.text;
+          // Presence or latest note while live; settled cards use the bordered note.
+          var presence =
+            status.presence && typeof status.presence === 'object' ? status.presence : null;
+          var presenceKey = presence && typeof presence.key === 'string' ? presence.key : '';
+          var presenceLine = presenceKey && PRESENCE_COPY[presenceKey] ? PRESENCE_COPY[presenceKey] : '';
+          var live =
+            LIVE_HEADLINES[headline] ||
+            (gateStatus === 'pending' && gate && gate.deliveryId);
+          var noteText =
+            status.note && typeof status.note.text === 'string' ? status.note.text : '';
+          var showStages =
+            headline === 'gating' ||
+            headline === 'submitted' ||
+            (gateStatus === 'pending' && gate && gate.deliveryId);
+          if (live && presenceLine && !showStages) {
+            setActivity(presenceLine, presence.at);
+          } else if (live && noteText && (headline === 'building' || headline === 'dispatched')) {
+            setActivity(noteText, status.note.createdAt);
+          } else if (live && headline === 'queued') {
+            setActivity(STALL_COPY[status.stall] || 'Waiting for an agent to pick this up…', null);
+          } else {
+            setActivity(null);
+          }
+
+          setStages(gate && gate.lane, showStages);
+
+          // Avoid duplicating the note when the activity line already shows it.
+          if (noteText && !(live && (headline === 'building' || headline === 'dispatched'))) {
+            noteEl.textContent = noteText;
             var when = document.createElement('span');
             when.className = 'when';
             when.textContent = formatTime(status.note.createdAt);
@@ -1092,17 +1340,23 @@ const ROUND_STATUS_HTML = `<!doctype html>
           }
 
           var detail = gate && typeof gate.report === 'string' ? gate.report.trim() : '';
-          if (!detail && gate && typeof gate.summary === 'string' && gate.summary.length > 180) {
-            // A long agent-facing summary is the detail, even when the gate sent no
-            // separate report.
-            detail = gate.summary.trim();
+          // Unused channel summary still belongs in Technical details.
+          if (
+            gateSummary &&
+            gateSummary.trim() &&
+            gateSummary.trim() !== summary.textContent &&
+            (looksAgentFacing(gateSummary) || gateSummary.length > 180 || !detail)
+          ) {
+            detail = detail
+              ? gateSummary.trim() + '\\n\\n' + detail
+              : gateSummary.trim();
           }
-          if (detail && detail !== summary.textContent) {
-            report.textContent = detail;
-            report.hidden = false;
-          } else {
-            report.hidden = true;
-          }
+          if (detail && detail === summary.textContent) detail = '';
+          var failed =
+            gateStatus === 'red' ||
+            gateStatus === 'preview_failed' ||
+            gateStatus === 'kit_outdated';
+          setDetailsVisible(metaList.childNodes.length > 0, detail, failed);
 
           renderPlay(status, gateStatus);
           renderAction(status, gateStatus);
@@ -1146,6 +1400,7 @@ const ROUND_STATUS_HTML = `<!doctype html>
           report.textContent =
             report.hidden || !report.textContent ? diagnostic : report.textContent + '\\n\\n' + diagnostic;
           report.hidden = false;
+          detailsEl.hidden = false;
           reportSize();
         }
 
@@ -1492,6 +1747,15 @@ const ROUND_STATUS_HTML = `<!doctype html>
         });
 
         window.addEventListener('resize', reportSize);
+
+        // Standalone harness only — hosts keep parent !== window.
+        if (host === window) {
+          window.__gamedevRoundCard = {
+            render: render,
+            renderGateOnly: renderGateOnly,
+            renderMedia: renderMedia
+          };
+        }
       })();
     </script>
   </body>

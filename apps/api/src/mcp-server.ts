@@ -161,6 +161,10 @@ const ROUND_STATUS_OUTPUT_SCHEMA: Record<string, unknown> = {
       type: ['object', 'null'],
       properties: { text: { type: 'string' }, createdAt: { type: 'string' } },
     },
+    presence: {
+      type: ['object', 'null'],
+      properties: { key: { type: 'string' }, at: { type: 'string' } },
+    },
     shot: {
       type: ['object', 'null'],
       properties: {
@@ -4045,6 +4049,9 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           round: record.roundGeneration ?? 1,
           deliveriesRemaining: cap === null ? null : Math.max(0, cap - used),
           note: latestEvent ? { text: noteTextFor(latestEvent, args.locale), createdAt: latestEvent.createdAt } : null,
+          presence: record.lastAgentPresence
+            ? { key: record.lastAgentPresence.key, at: record.lastAgentPresence.at }
+            : null,
           shot,
           gate,
           retryAfterSeconds: ROUND_STATUS_RETRY_AFTER_SECONDS,

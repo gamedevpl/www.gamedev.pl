@@ -419,11 +419,34 @@ describe('ui resources', () => {
   });
 
   it('does not print the gate detail twice, or lead with instructions meant for the agent', () => {
-    // kit_outdated returns the same long agent-facing text as both summary and report,
-    // which the card printed twice — once as its headline.
+    // Settled gates lead with GATE_COPY; agent summaries stay in details.
     const html = readUiResource(ROUND_STATUS_RESOURCE_URI)?.text ?? '';
-    expect(html).toContain('gateSummary.length <= 180');
-    expect(html).toContain('detail !== summary.textContent');
+    expect(html).toContain('GATE_COPY[gateStatus]');
+    expect(html).toContain('looksAgentFacing');
+    expect(html).toContain("detail && detail === summary.textContent) detail = ''");
+  });
+
+  it('pulses live phases and keeps operator metadata behind Technical details', () => {
+    const html = readUiResource(ROUND_STATUS_RESOURCE_URI)?.text ?? '';
+    expect(html).toContain('pill-live');
+    expect(html).toContain('gd-pulse-sq');
+    expect(html).toContain('PREVIEW_GATE_STAGES');
+    expect(html).toContain('Technical details');
+    expect(html).toContain('setDetailsVisible');
+    expect(html).toContain('report-fail');
+    expect(html).toContain('preferFailSurface');
+    expect(html).toContain('Preview check passed — the game runs');
+    expect(html).not.toMatch(/GATE_COPY[\s\S]{0,400}?submit_sources/);
+  });
+
+  it('surfaces presence / progress as a live activity line while building or gating', () => {
+    const html = readUiResource(ROUND_STATUS_RESOURCE_URI)?.text ?? '';
+    expect(html).toContain('PRESENCE_COPY');
+    expect(html).toContain('id="activity"');
+    expect(html).toContain('setActivity');
+    expect(html).toContain('id="stages"');
+    expect(html).toContain("'Typecheck'");
+    expect(html).toContain("'Capture'");
   });
 
   it('keeps polling after a fixable gate refusal so a resumed agent refreshes the card', () => {
