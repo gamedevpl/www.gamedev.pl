@@ -277,4 +277,24 @@ describe('code lane', () => {
     expect(codeLaneEnabled({} as NodeJS.ProcessEnv)).toBe(false);
     expect(codeLaneEnabled({ CODE_LANE: 'true' } as unknown as NodeJS.ProcessEnv)).toBe(true);
   });
+
+  it('puts prior remix turns into the pick and edit prompts', async () => {
+    const { client, prompts } = stubClient([
+      { decision: 'edit', file: 'game/runtime.ts', name: 'startGame' },
+      { replacement: 'export function startGame() {\n  return 0.08;\n}' },
+    ]);
+    await new VertexCodeLane({ client }).run(
+      {
+        slug: 'g',
+        sources: SOURCES,
+        utterance: 'again',
+        history: [{ utterance: 'make it faster', summary: 'Raised the pace.' }],
+      },
+      async () => ({ ok: true }),
+    );
+    expect(prompts[0]).toContain('make it faster');
+    expect(prompts[0]).toContain('Raised the pace.');
+    expect(prompts[1]).toContain('make it faster');
+    expect(prompts[1]).toContain("The player's request");
+  });
 });

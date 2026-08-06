@@ -269,6 +269,38 @@ describe('remix routes', () => {
     expect(response.json()).toMatchObject({ lane: 'params', patches: [{ key: 'dogScale', value: 1.4 }] });
   });
 
+  it('hands the assist lane prior turns on a follow-up', async () => {
+    const seen: Array<Array<{ utterance: string; summary?: string }> | undefined> = [];
+    const built = await buildTestApp({
+      assistant: {
+        assist: async (request) => {
+          seen.push(request.history);
+          return {
+            lane: 'params',
+            patches: [{ key: 'dogScale', value: 1.4 }],
+            summary: { en: 'Made the dog bigger.', pl: 'Pies większy.' },
+          };
+        },
+      } as EditorAssistant,
+    });
+    app = built.app;
+    const { remixId } = (await app.inject({ method: 'POST', url: '/api/games/dog-dash/remix', headers: alice })).json();
+    await app.inject({
+      method: 'POST',
+      url: `/api/remixes/${remixId}/assist`,
+      headers: alice,
+      payload: { utterance: 'bigger dog', params: { dogScale: 1, tagline: 'go!' } },
+    });
+    await app.inject({
+      method: 'POST',
+      url: `/api/remixes/${remixId}/assist`,
+      headers: alice,
+      payload: { utterance: 'again', params: { dogScale: 1.4, tagline: 'go!' } },
+    });
+    expect(seen[0]).toEqual([]);
+    expect(seen[1]).toEqual([{ utterance: 'bigger dog', summary: 'Made the dog bigger.' }]);
+  });
+
   it('rebuilds a whole document for a code edit, and only after it builds', async () => {
     const codeLane = {
       run: async (_request: unknown, build: (o: Record<string, string>) => Promise<{ ok: boolean }>) => {

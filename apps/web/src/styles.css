@@ -12286,10 +12286,77 @@ button.builder-mode-selector:disabled {
   overflow-y: auto;
 }
 
+/*
+ * After the second landing the sheet docks as a mini chat: taller, with its
+ * own scroller for the transcript so the composer stays pinned at the bottom.
+ * Written once outside media queries — phone and desktop share the shape;
+ * only the dock edge differs at 720px.
+ */
+.remix-host .remix-panel.is-chat {
+  max-height: min(78%, calc(100% - 16px));
+  overflow: hidden;
+  gap: 10px;
+}
+
+.remix-transcript {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-height: 72px;
+  max-height: 40vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.remix-panel.is-chat .remix-transcript {
+  max-height: none;
+}
+
+.remix-bubble {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 12px;
+  font-size: 0.88rem;
+  line-height: 1.4;
+  max-width: 92%;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.remix-bubble.is-user {
+  align-self: flex-end;
+  background: var(--panel-card, #1a2430);
+  border: 1px solid var(--panel-border, #2b333f);
+  color: var(--text);
+}
+
+.remix-bubble.is-assistant {
+  align-self: flex-start;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--muted);
+  padding-left: 2px;
+}
+
+.remix-bubble.is-pending {
+  font-style: italic;
+}
+
 @media (min-width: 720px) {
   .remix-host .remix-panel {
     left: auto;
     width: 320px;
+  }
+
+  .remix-host .remix-panel.is-chat {
+    top: 8px;
+    bottom: 8px;
+    max-height: none;
+    width: 300px;
   }
 }
 

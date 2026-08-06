@@ -28,11 +28,15 @@ import type {
   EditorParamValue,
 } from './studioApi.js';
 import type { RemixPaintedVia } from './visitTelemetry.js';
-import { humanizeSlug } from './pageTitle.js';
+import { suggestedKeepTitle } from './pageTitle.js';
 import { NAVIGATE_EVENT, playPath } from './router.js';
 
 /** Successful landings before we offer to keep the remix in Studio. */
 const KEEP_OFFER_AFTER = 3;
+/** After this many landings the sheet becomes a mini sidebar chat. */
+const CHAT_MODE_AFTER = 2;
+
+type ChatTurn = { id: string; role: 'user' | 'assistant'; text: string };
 
 /**
  * Remix: a player bends a published game while playing it.
@@ -259,6 +263,11 @@ export function RemixPanel(props: {
   const [keepOfferDismissed, setKeepOfferDismissed] = useState(false);
   const [keepSaved, setKeepSaved] = useState(false);
   const [keepTitle, setKeepTitle] = useState('');
+  /**
+   * Visible conversation for the mini-chat. Server session.turns feeds the
+   * model; this list is what the player reads after the panel docks.
+   */
+  const [chatTurns, setChatTurns] = useState<ChatTurn[]>([]);
   /**
    * Whether this game takes proposals from this player.
    *
@@ -572,9 +581,20 @@ export function RemixPanel(props: {
   // Dismissed stays dismissed for the session; the header "Keep…" is the escape.
   useEffect(() => {
     if (successCount < KEEP_OFFER_AFTER || keepOfferDismissed || keepSaved || keepOfferOpen) return;
-    setKeepTitle((current) => current.trim() || humanizeSlug(props.slug));
+    setKeepTitle((current) => current.trim() || suggestedKeepTitle(props.slug, user?.handle));
     setKeepOfferOpen(true);
-  }, [successCount, keepOfferDismissed, keepSaved, keepOfferOpen, props.slug]);
+  }, [successCount, keepOfferDismissed, keepSaved, keepOfferOpen, props.slug, user?.handle]);
+
+  const chatMode = successCount >= CHAT_MODE_AFTER;
+  const transcriptRef = useRef<HTMLOListElement | null>(null);
+
+  // Keep the newest bubble in view when the mini-chat grows.
+  useEffect(() => {
+    if (!chatMode) return;
+    const el = transcriptRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [chatMode, chatTurns, lane]);
 
   // A panel that opened onto nothing. Recorded against the same `opened`
   // denominator so the share of visits that met a game with no way in is a
@@ -626,8 +646,14 @@ export function RemixPanel(props: {
   }
 
   function openKeepOffer() {
-    setKeepTitle((current) => current.trim() || humanizeSlug(props.slug));
+    setKeepTitle((current) => current.trim() || suggestedKeepTitle(props.slug, user?.handle));
     setKeepOfferOpen(true);
+  }
+
+  function appendChat(role: ChatTurn['role'], text: string) {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    setChatTurns((prev) => [...prev, { id: `${Date.now()}-${prev.length}`, role, text: trimmed }]);
   }
 
   function dismissKeepOffer() {
@@ -680,6 +706,7 @@ export function RemixPanel(props: {
     // here loses its Undo the moment a follow-up fails — and a follow-up that
     // fails is exactly when the player most wants the last good state back.
     setAsked(text);
+    appendChat('user', text);
     recordRemixStep('asked');
 
     // The tuning lane first: it is cheaper, faster, and covers most of what
@@ -697,11 +724,13 @@ export function RemixPanel(props: {
           setUtterance('');
           setLane('idle');
           recordRemixStep('applied');
+          const summary = label(result.summary) || t('remix.applied');
+          appendChat('assistant', summary);
           // Share is offered whenever there is anything shareable — a link
           // carries declared values, so a game with no declaration has nothing
           // to put in one, and offering it there would be a broken promise.
           setChanged({
-            text: label(result.summary) || t('remix.applied'),
+            text: summary,
             canShare: hasShareableValues(active.params, next),
           });
           noteSuccessfulChange();
@@ -710,7 +739,9 @@ export function RemixPanel(props: {
         if (result.lane === 'reject') {
           setLane('idle');
           recordRemixStep('refused');
-          setNote({ kind: 'error', text: label(result.summary) || t('remix.refused') });
+          const textOut = label(result.summary) || t('remix.refused');
+          appendChat('assistant', textOut);
+          setNote({ kind: 'error', text: textOut });
           return;
         }
         // A content-shaped request, and this game has a painter: the honest
@@ -721,26 +752,33 @@ export function RemixPanel(props: {
         if (result.lane === 'content' && active.content) {
           setLane('idle');
           setPainterOffer(true);
-          setNote({ kind: 'info', text: label(result.summary) || t('remix.editorOffer') });
+          const textOut = label(result.summary) || t('remix.editorOffer');
+          appendChat('assistant', textOut);
+          setNote({ kind: 'info', text: textOut });
           return;
         }
         // `code` (or `content` with nothing to paint): falls through to the code lane below.
         if (!active.canCode) {
           setLane('idle');
           recordRemixStep('handoff');
-          setNote({ kind: 'info', text: label(result.summary) || t('remix.needsCode') });
+          const textOut = label(result.summary) || t('remix.needsCode');
+          appendChat('assistant', textOut);
+          setNote({ kind: 'info', text: textOut });
           return;
         }
       } catch (error) {
         setLane('idle');
         const status = (error as RemixApiError).status;
-        setNote({ kind: 'error', text: status === 429 ? t('remix.quota') : t('remix.unavailable') });
+        const textOut = status === 429 ? t('remix.quota') : t('remix.unavailable');
+        appendChat('assistant', textOut);
+        setNote({ kind: 'error', text: textOut });
         return;
       }
     }
 
     if (!active.canCode) {
       recordRemixStep('handoff');
+      appendChat('assistant', t('remix.needsCode'));
       setNote({ kind: 'info', text: t('remix.needsCode') });
       return;
     }
@@ -758,11 +796,13 @@ export function RemixPanel(props: {
         failStreakRef.current = 0;
         recordRemixStep('applied');
         setUtterance('');
+        const summary = `${label(result.summary) || t('remix.rebuilt')} ${t('remix.restarted')}`;
+        appendChat('assistant', summary);
         // A code change cannot travel in a link (the gate exists so generated
         // code never reaches a stranger), but the settings can — and the share
         // copy says exactly that rather than implying the whole remix went.
         setChanged({
-          text: `${label(result.summary) || t('remix.rebuilt')} ${t('remix.restarted')}`,
+          text: summary,
           // A code change on its own carries nothing: the link is a diff of
           // declared values, and this one moved none of them.
           canShare: hasShareableValues(active.params, valuesRef.current),
@@ -781,18 +821,20 @@ export function RemixPanel(props: {
       } else {
         recordRemixStep(result.reason === 'refused' ? 'refused' : 'handoff');
         props.frameRef.current?.contentWindow?.postMessage({ source: 'gdpl-host', type: 'resume' }, '*');
+        const textOut =
+          label(result.summary) ||
+          // Each reason gets its own words. A refusal was reading as "too big",
+          // which tells the player to try something smaller for a request that
+          // size had nothing to do with.
+          (result.reason === 'refused'
+            ? t('remix.refused')
+            : result.reason === 'did_not_compile'
+              ? t('remix.couldNotBuild')
+              : t('remix.tooBig'));
+        appendChat('assistant', textOut);
         setNote({
           kind: result.reason === 'refused' ? 'error' : 'info',
-          text:
-            label(result.summary) ||
-            // Each reason gets its own words. A refusal was reading as "too big",
-            // which tells the player to try something smaller for a request that
-            // size had nothing to do with.
-            (result.reason === 'refused'
-              ? t('remix.refused')
-              : result.reason === 'did_not_compile'
-                ? t('remix.couldNotBuild')
-                : t('remix.tooBig')),
+          text: textOut,
         });
       }
     } catch (error) {
@@ -802,15 +844,17 @@ export function RemixPanel(props: {
       failStreakRef.current += 1;
       const status = (error as RemixApiError).status;
       const timedOut = controller.signal.aborted;
+      const textOut = timedOut
+        ? t('remix.tookTooLong')
+        : status === 429
+          ? t('remix.quota')
+          : failStreakRef.current >= 2
+            ? t('remix.napping')
+            : t('remix.unavailable');
+      appendChat('assistant', textOut);
       setNote({
         kind: timedOut ? 'info' : 'error',
-        text: timedOut
-          ? t('remix.tookTooLong')
-          : status === 429
-            ? t('remix.quota')
-            : failStreakRef.current >= 2
-              ? t('remix.napping')
-              : t('remix.unavailable'),
+        text: textOut,
       });
     } finally {
       window.clearTimeout(slowTimer);
@@ -1050,6 +1094,53 @@ export function RemixPanel(props: {
     );
   }
 
+  /** Mini-chat scrollback — only after the panel has docked into chat mode. */
+  function transcript() {
+    if (!chatMode || chatTurns.length === 0) return null;
+    return (
+      <ol ref={transcriptRef} className="remix-transcript" aria-label={t('remix.chatAria')}>
+        {chatTurns.map((turn) => (
+          <li key={turn.id} className={`remix-bubble is-${turn.role}`}>
+            {turn.text}
+          </li>
+        ))}
+        {lane === 'asking' || lane === 'building' ? (
+          <li className="remix-bubble is-assistant is-pending" aria-live="polite">
+            {lane === 'building' ? t('remix.building') : t('remix.asking')}
+          </li>
+        ) : null}
+      </ol>
+    );
+  }
+
+  function actionRow() {
+    if (!changed || !(changed.canShare || canPropose || undo || changed.undoCode)) return null;
+    return (
+      <div className="remix-actions-row">
+        {changed.canShare ? (
+          <button type="button" className="remix-btn is-primary" onClick={() => void share()}>
+            {t('remix.share')}
+          </button>
+        ) : null}
+        {canPropose && !proposing && !proposed ? (
+          <button type="button" className="remix-btn is-quiet" onClick={() => setProposing(true)}>
+            {t('propose.action')}
+          </button>
+        ) : null}
+        {undo || changed.undoCode ? (
+          <button
+            type="button"
+            className={`remix-btn ${changed.broke ? 'is-primary' : 'is-quiet'}`}
+            disabled={lane !== 'idle' || saving}
+            onClick={() => (changed.undoCode ? void undoCode() : undoLast())}
+          >
+            {t('remix.undo')}
+          </button>
+        ) : null}
+      </div>
+    );
+  }
+
   /*
    * Level editor owns the theater — not a widget inside the remix sheet.
    * Done returns to the sheet (Keep/Share stay earned there). Edit ↔ Play only
@@ -1157,12 +1248,12 @@ export function RemixPanel(props: {
   }
 
   return (
-    <div className="remix-panel">
+    <div className={`remix-panel${chatMode ? ' is-chat' : ''}`}>
       {/* The sheet's own handle. Decorative — closing is the labelled button. */}
       <span className="remix-grip" aria-hidden="true" />
 
       <div className="remix-head">
-        <span className="remix-title">{t('remix.title')}</span>
+        <span className="remix-title">{chatMode ? t('remix.chatTitle') : t('remix.title')}</span>
         <div className="remix-head-actions">
           {/*
            * Escape hatch once they've earned a landing: the auto-offer waits for
@@ -1181,7 +1272,9 @@ export function RemixPanel(props: {
         </div>
       </div>
 
-      {lane === 'building' ? (
+      {transcript()}
+
+      {lane === 'building' && !chatMode ? (
         /*
          * The wait has a subject. The game is frozen and dimmed behind the sheet
          * rather than replaced, and the player's own words are echoed back, so
@@ -1202,57 +1295,43 @@ export function RemixPanel(props: {
           </span>
           <p className="remix-note">{slow ? t('remix.buildingSlow') : t('remix.buildingWait')}</p>
         </>
+      ) : lane === 'building' && chatMode ? (
+        <>
+          <span className="remix-bar" aria-hidden="true">
+            <i />
+          </span>
+          <p className="remix-note">{slow ? t('remix.buildingSlow') : t('remix.buildingWait')}</p>
+        </>
       ) : changed ? (
         /*
          * The reward, and it is earned: share is the loudest thing here only
          * because a change has actually landed. Undo sits beside it, quiet, and
          * the composer shrinks to a line and waits — the second change is the
-         * one that turns a remix into a habit.
+         * one that turns a remix into a habit. After that landing the sheet
+         * docks into a mini chat and the transcript carries the story instead
+         * of a single status line.
          */
         <>
-          <p className={`remix-result${changed.broke ? ' is-broken' : ''}`} role="status">
-            <span className="remix-tick" aria-hidden="true">
-              {changed.broke ? '!' : '✓'}
-            </span>
-            <span>{changed.broke ? t('remix.brokeIt') : changed.text}</span>
-          </p>
+          {!chatMode ? (
+            <p className={`remix-result${changed.broke ? ' is-broken' : ''}`} role="status">
+              <span className="remix-tick" aria-hidden="true">
+                {changed.broke ? '!' : '✓'}
+              </span>
+              <span>{changed.broke ? t('remix.brokeIt') : changed.text}</span>
+            </p>
+          ) : changed.broke ? (
+            <p className="remix-result is-broken" role="status">
+              <span className="remix-tick" aria-hidden="true">
+                !
+              </span>
+              <span>{t('remix.brokeIt')}</span>
+            </p>
+          ) : null}
           {keepOfferOpen && !changed.broke ? (
             keepOfferForm()
           ) : (
             <>
-              {changed.canShare || canPropose || undo || changed.undoCode ? (
-                <div className="remix-actions-row">
-                  {changed.canShare ? (
-                    <button type="button" className="remix-btn is-primary" onClick={() => void share()}>
-                      {t('remix.share')}
-                    </button>
-                  ) : null}
-                  {/*
-                   * The third exit. Remix's two originals — save as yours, share — are
-                   * unchanged and still never publish; this one asks the owner, who may say
-                   * no. It appears only once a change has landed and only for a game whose
-                   * owner opted in, so it is offered when there is something to offer and to
-                   * somebody who can receive it.
-                   */}
-                  {canPropose && !proposing && !proposed ? (
-                    <button type="button" className="remix-btn is-quiet" onClick={() => setProposing(true)}>
-                      {t('propose.action')}
-                    </button>
-                  ) : null}
-                  {undo || changed.undoCode ? (
-                    <button
-                      type="button"
-                      // A broken game makes going back the only thing worth doing,
-                      // so it stops being the quiet option.
-                      className={`remix-btn ${changed.broke ? 'is-primary' : 'is-quiet'}`}
-                      disabled={lane !== 'idle' || saving}
-                      onClick={() => (changed.undoCode ? void undoCode() : undoLast())}
-                    >
-                      {t('remix.undo')}
-                    </button>
-                  ) : null}
-                </div>
-              ) : null}
+              {actionRow()}
               {composer(true)}
             </>
           )}
@@ -1261,7 +1340,7 @@ export function RemixPanel(props: {
         keepOfferForm()
       ) : canType ? (
         <>
-          {composer(false)}
+          {composer(chatMode)}
           {showSuggestions ? (
             /*
              * Three things worth saying, derived from what this game can

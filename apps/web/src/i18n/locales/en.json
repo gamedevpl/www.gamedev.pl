@@ -1157,6 +1157,8 @@
   },
   "remix": {
     "title": "Remix",
+    "chatTitle": "Remix chat",
+    "chatAria": "Remix conversation",
     "close": "Close",
     "starting": "Starting your remix…",
     "placeholder": "Say what to change…",

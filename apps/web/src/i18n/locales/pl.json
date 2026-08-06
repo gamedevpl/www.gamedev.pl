@@ -1161,6 +1161,8 @@
   },
   "remix": {
     "title": "Remiks",
+    "chatTitle": "Czat remiksu",
+    "chatAria": "Rozmowa remiksu",
     "close": "Zamknij",
     "starting": "Przygotowuję remiks…",
     "placeholder": "Powiedz, co zmienić…",

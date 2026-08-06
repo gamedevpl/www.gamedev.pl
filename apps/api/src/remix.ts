@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { PARAMS_KEY, parseEditorDefinition, type EditorDefinition } from './editor-contract.js';
 import { EDITOR_FILE } from './editor-contract.js';
 import { applyAssistPatches, assistEnabled, MAX_UTTERANCE_LENGTH, type EditorAssistant } from './editor-assist.js';
+import { rememberRemixTurn, type RemixTurn } from './remix-turns.js';
 import { codeLaneDebugEnabled, codeLaneEnabled, type VertexCodeLane } from './code-lane.js';
 import { typeCheckGame } from './type-check.js';
 import { buildSuggestions } from './remix-suggestions.js';
@@ -99,6 +100,13 @@ interface RemixSession {
    * by the same ceiling as the edits themselves.
    */
   history: Array<Record<string, string>>;
+  /**
+   * Successful remix asks this session has already answered (oldest first).
+   *
+   * Fed into assist/code prompts so "again" / "more" / pronouns resolve against
+   * the conversation. Not the undo stack — that is `history` above.
+   */
+  turns: RemixTurn[];
   /**
    * Whether the game's authoritative copy is the store's. It decides where a
    * rebuild's base comes from: a store game's files replace the ref's entirely,
@@ -341,6 +349,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
       sourcesLoaded: loaded.fromStore,
       overrides: {},
       history: [],
+      turns: [],
       definition: editorJson ? parseEditorDefinition(editorJson).definition : null,
       title: claims.slug,
       codeEdits: 0,
@@ -474,6 +483,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
         sourcesLoaded: loaded.fromStore,
         overrides: {},
         history: [],
+        turns: [],
         definition,
         title: params.data.slug,
         codeEdits: 0,
@@ -549,6 +559,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
           content,
           utterance: body.data.utterance,
           game: { title: session.title },
+          history: session.turns,
         });
         if (result.lane !== 'params' || !result.patches?.length) {
           return reply.send({
@@ -560,6 +571,11 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
         if (applied.patches.length === 0) {
           return reply.send({ lane: 'code', ...(result.summary ? { summary: result.summary } : {}) });
         }
+        session.turns = rememberRemixTurn(session.turns, {
+          utterance: body.data.utterance,
+          ...(result.summary?.en ? { summary: result.summary.en } : {}),
+        });
+        session.expiresAt = now() + REMIX_TTL_MS;
         return reply.send({
           lane: 'params',
           patches: applied.patches,
@@ -687,6 +703,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
             slug: session.slug,
             sources: current,
             utterance: body.data.utterance,
+            history: session.turns,
             game: { title: session.title },
             ...(kit ? { kit } : {}),
             modules,
@@ -761,6 +778,10 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
         if (session.history.length > MAX_CODE_EDITS) session.history.shift();
         session.overrides = { ...session.overrides, ...outcome.overrides };
         session.codeEdits += 1;
+        session.turns = rememberRemixTurn(session.turns, {
+          utterance: body.data.utterance,
+          ...(outcome.summary?.en ? { summary: outcome.summary.en } : {}),
+        });
         session.expiresAt = now() + REMIX_TTL_MS;
         const html = await rebuild(session);
         if (!html) return reply.status(500).send({ ok: false, reason: 'error' });
