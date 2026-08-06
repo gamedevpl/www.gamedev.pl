@@ -23,12 +23,7 @@ type PublishedGameFrameProps = {
    * hidden. Defaults true — every other caller shows the frame it mounts.
    */
   active?: boolean;
-  /**
-   * Whether opening this frame counts as a player play — telemetry, affinity, and
-   * the device-local recent list. Off for editorial surfaces (review desk) that
-   * mount catalog games without intending to contaminate health scorecards.
-   * Defaults true.
-   */
+  // Off on review desk so editorial play does not skew telemetry.
   trackPlay?: boolean;
   /**
    * Whether this surface offers Remix. Off for party mode and embeds, where the

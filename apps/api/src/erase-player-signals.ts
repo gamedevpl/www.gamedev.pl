@@ -92,7 +92,6 @@ export interface ErasePlayerSignalsResult {
   followsCleared: string[];
   /** Feedback rows found (and deleted, unless this was a dry run). */
   feedbackDeleted: number;
-  /** Reviewer assessments found (and deleted, unless this was a dry run). */
   assessmentsDeleted: number;
   /** Games whose saved progress was found (and deleted, unless this was a dry run). */
   savesDeleted: string[];
@@ -158,8 +157,7 @@ export async function erasePlayerSignals(options: ErasePlayerSignalsOptions): Pr
     ? await store.countPlayerFeedbackByUid(uid)
     : await store.deletePlayerFeedbackByUid(uid);
 
-  // Reviewer notes are attributed free text (typed or speech-to-text). Same erase
-  // promise as player feedback: leaving the platform removes the judgments they left.
+  // Erase reviewer assessments with the same promise as feedback.
   const assessmentsDeleted = dryRun
     ? await store.countGameAssessmentsByUid(uid)
     : await store.deleteGameAssessmentsByUid(uid);

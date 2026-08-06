@@ -330,17 +330,9 @@ const OPERATOR_ALERT_LINK = '/admin/queue';
 /** Waitlist joins land on the membership panel — that is where the applicant is acted on. */
 const WAITLIST_ALERT_LINK = '/admin/waitlist';
 
-/** Review sweeps land on the desk the recipient can act on. */
 const REVIEW_SWEEP_LINK = '/review';
 
-/**
- * Tell every reviewer (and admin) a review sweep is waiting.
- *
- * Same fan-out as operator alerts — in-app + email + push, no unsubscribe — because
- * these are trusted colleagues on an allowlist, not creators. Idempotent per
- * `notificationId` so "Notify again" after releasing more games uses a new id
- * (e.g. `review-sweep-{id}-r{n}`) while a double-click on Start is a no-op.
- */
+// Fan out review-sweep alerts to every reviewer.
 export async function emitReviewSweep(
   deps: EmitDeps & { reviewerUids: Iterable<string> },
   event: { notificationId: string; title: string; detail?: string },

@@ -21,7 +21,6 @@ type NavHeaderProps = {
   onStudio: () => void;
   /** Opens the operator console. Only ever called from a link only operators are shown. */
   onAdmin: () => void;
-  /** Opens the reviewer assessment desk. Only ever called from a link only reviewers see. */
   onReview: () => void;
   /**
    * Android-style Up target for non-home surfaces. Null on home, join, play, and
@@ -61,7 +60,6 @@ export function NavHeader({
    */
   const [alertCount, setAlertCount] = useState<number | null>(null);
   const isOperator = user?.admin === true;
-  // Same union the API uses: admins are reviewers even if only `admin` is on the session.
   const isReviewer = user?.reviewer === true || isOperator;
 
   useEffect(() => {
@@ -257,8 +255,6 @@ export function NavHeader({
                 </button>
               ) : null}
 
-              {/* Reviewers only — same unlisted-door posture as Operator. Hardcoded
-                  English like Operator: one person (or a small allowlist) reads this. */}
               {isReviewer ? (
                 <button
                   className="nav-link"

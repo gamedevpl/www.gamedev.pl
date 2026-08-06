@@ -234,11 +234,7 @@ export interface AuthPluginOptions {
    * everybody who is not an operator, which is most people.
    */
   adminUids?: Set<string>;
-  /**
-   * Reviewers for the assessment desk (docs/game-assessment-plan.md).
-   * Same "hint only" contract as `adminUids` — every review route re-checks.
-   * Admins are treated as reviewers even when absent from this set.
-   */
+  // Reviewer desk hint only; every review route re-checks.
   reviewerUids?: Set<string>;
 }
 
@@ -824,9 +820,7 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
     if (request.user.tier === 'blocked') {
       return reply.status(403).send({ error: 'account is blocked' });
     }
-    // Session checks, not bare uid checks: a PAT acts as its user but is never treated
-    // as an operator or reviewer, and the flags the client draws its doors from must not
-    // disagree with the routes behind those doors.
+    // PAT sessions never expose operator or reviewer doors.
     return sessionPayload(request.user, {
       admin: isAdminSession(request, adminUids),
       reviewer: isReviewerSession(request, reviewerUids, adminUids),
@@ -837,9 +831,7 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
 /**
  * The session as the client is told it. Adds derived flags to the stored user.
  *
- * `admin` / `reviewer` are present only when true, so a client that has never heard of
- * them is unaffected, and a reader cannot mistake `admin: false` for a claim about
- * anything other than this request.
+ * `admin` and `reviewer` appear only when true.
  */
 function sessionPayload(
   user: User,

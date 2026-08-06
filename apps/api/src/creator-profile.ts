@@ -57,8 +57,6 @@ export const RESERVED_HANDLES: ReadonlySet<string> = new Set([
   // `studio` and `play` are: `/proposals` resolves to that surface before the root-handle
   // fallback, so a claimed handle of this name would have an unreachable profile.
   'proposals',
-  // Reviewer assessment desk (docs/game-assessment-plan.md). Reserved like `admin`
-  // / `studio` so `/review` cannot be claimed as a creator handle.
   'review',
   'root',
   'status',

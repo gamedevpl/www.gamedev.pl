@@ -17,10 +17,7 @@ export interface User {
    * else a console error on every page load.
    */
   admin?: boolean;
-  /**
-   * Present, and true, only for a reviewer (or admin) on a browser session.
-   * Same "hint only" contract as `admin` — every review route re-checks the allowlist.
-   */
+  // Reviewer desk hint only; routes re-check the allowlist.
   reviewer?: boolean;
   /** Public handle when claimed — required to publish, never the Google/Apple name. */
   handle?: string;

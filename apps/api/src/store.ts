@@ -871,10 +871,7 @@ export type NotificationType =
    * but it is still an operator action: approve (or not) via the waitlist tooling.
    */
   | 'operator.waitlist_joined'
-  /**
-   * An operator opened (or re-notified) a review sweep. Fan-out goes to every uid in
-   * `REVIEWER_UIDS` ∪ `ADMIN_UIDS` — the people who can open `/review`.
-   */
+  // Operator started a review sweep; notify reviewers.
   | 'operator.review_sweep'
   /**
    * A proposal is waiting on this creator — somebody proposed a change to one of their
@@ -977,17 +974,7 @@ export interface PlayerFeedbackRecord {
   createdAt: string;
 }
 
-/**
- * One editorial judgment from a reviewer on one game (docs/game-assessment-plan.md).
- *
- * Top-level collection `gameAssessments/{slug}:{reviewerUid}` rather than under the
- * game: the desk needs "everything this reviewer has done" and the operator summary
- * needs "every assessment", and both are one query on a top-level collection. A
- * subcollection under `games/{slug}` would make the reviewer progress read a walk.
- *
- * One row per reviewer per game — a second pass overwrites. The note is moderated
- * free text (typed or speech-to-text); no audio is stored.
- */
+// Reviewer verdict on one game; see game-assessment-plan.md.
 export type AssessmentVerdict = 'keep' | 'cut' | 'skip';
 export type AssessmentSource = 'catalog' | 'creator';
 export type AssessmentNoteOrigin = 'text' | 'speech' | 'none';
@@ -996,24 +983,14 @@ export type AssessmentPlatform = 'ios' | 'android' | 'mac' | 'windows' | 'linux'
 export type ReviewSweepStatus = 'active' | 'paused' | 'completed' | 'cancelled';
 export type ReviewSweepSource = 'catalog' | 'creator' | 'all';
 
-/**
- * An operator-dispatched review pass (docs/game-assessment-plan.md).
- *
- * One active (or paused) sweep at a time. The desk only shows the released prefix
- * of `slugs`; the rest stay in the pool until drip or a manual release unlocks them.
- */
+// Operator review pass; one active sweep at a time.
 export interface ReviewSweep {
   id: string;
   status: ReviewSweepStatus;
   source: ReviewSweepSource;
-  /** Stable snapshot of games in this pass, in desk order. */
   slugs: string[];
-  /**
-   * Manual unlock floor. Combined with `releasePerDay` while active — see
-   * `effectiveReleasedCount` in `review-sweep.ts`.
-   */
+  // Manual unlock floor combined with releasePerDay drip.
   releasedCount: number;
-  /** Extra games unlocked per UTC day while active; null = no drip. */
   releasePerDay: number | null;
   startedAt: string;
   note: string | null;
@@ -1021,35 +998,24 @@ export interface ReviewSweep {
   createdBy: string;
   updatedAt: string;
   updatedBy: string;
-  /** When reviewers were last notified about this sweep. */
   notifiedAt: string | null;
   notifiedCount: number;
 }
 
-/**
- * Where the reviewer was sitting when they committed the verdict.
- *
- * Identity-attached on purpose (the row already names `reviewerUid`) — this is
- * operator context for "cut on a phone vs keep on desktop", not anonymous play
- * telemetry. Keep it structured and short; never put free-text blobs here.
- */
+// Reviewer device context at verdict; not play telemetry.
 export interface AssessmentClientContext {
   viewportW: number;
   viewportH: number;
   screenW: number;
   screenH: number;
-  /** `window.devicePixelRatio`, clamped. */
   dpr: number;
   input: AssessmentInputMethod;
   platform: AssessmentPlatform;
-  /** Browser language tag, when present. */
   lang: string | null;
-  /** Truncated user-agent for debugging odd cases; optional. */
   ua: string | null;
 }
 
 export interface GameAssessment {
-  /** `${slug}:${reviewerUid}` — stable upsert key. */
   id: string;
   slug: string;
   title: string;
@@ -1059,7 +1025,7 @@ export interface GameAssessment {
   verdict: AssessmentVerdict;
   note: string;
   noteOrigin: AssessmentNoteOrigin;
-  /** Present on new rows; absent on assessments written before this field existed. */
+  // Null when the row predates clientContext.
   clientContext: AssessmentClientContext | null;
   createdAt: string;
   updatedAt: string;
@@ -1068,12 +1034,11 @@ export interface GameAssessment {
 export const GAME_ASSESSMENTS_COLLECTION = 'gameAssessments';
 export const REVIEW_SWEEPS_COLLECTION = 'reviewSweeps';
 
-/** Build the document id used as the upsert key for one reviewer on one game. */
 export function gameAssessmentId(slug: string, reviewerUid: string): string {
   return `${slug}:${reviewerUid}`;
 }
 
-/** Older rows predate `clientContext` — treat a missing field as null, never undefined. */
+// Missing clientContext becomes null, not undefined.
 export function hydrateGameAssessment(id: string, data: Omit<GameAssessment, 'id'>): GameAssessment {
   return {
     ...data,
@@ -2188,30 +2153,18 @@ export interface Store {
    * a thousand notes costs about the same as one with three.
    */
   countPlayerFeedback(slug: string): Promise<number>;
-  /**
-   * Upsert one reviewer's judgment on a game (docs/game-assessment-plan.md).
-   * Id is `${slug}:${reviewerUid}`; a second pass updates verdict/note in place.
-   */
+  // Upsert reviewer verdict; second pass overwrites in place.
   upsertGameAssessment(
     input: Omit<GameAssessment, 'id' | 'createdAt' | 'updatedAt'> & { createdAt?: string },
   ): Promise<GameAssessment>;
-  /** One reviewer's assessment of one game, or null. */
   getGameAssessment(slug: string, reviewerUid: string): Promise<GameAssessment | null>;
-  /** Everything one reviewer has assessed, newest first. */
   listGameAssessmentsByReviewer(reviewerUid: string): Promise<GameAssessment[]>;
-  /**
-   * Recent assessments across every reviewer, newest first.
-   * Bounded — the operator tab is one page, not a paginated archive.
-   */
+  // Recent assessments across reviewers; bounded operator page.
   listGameAssessments(opts?: { limit?: number }): Promise<GameAssessment[]>;
-  /** How many assessment rows a person left — erase preview. */
   countGameAssessmentsByUid(uid: string): Promise<number>;
-  /** Delete every assessment a person left. Returns how many went. */
   deleteGameAssessmentsByUid(uid: string): Promise<number>;
-  /** The open (active or paused) review sweep, if any. */
   getOpenReviewSweep(): Promise<ReviewSweep | null>;
   getReviewSweep(id: string): Promise<ReviewSweep | null>;
-  /** Newest first. Bounded for the operator panel. */
   listReviewSweeps(opts?: { limit?: number }): Promise<ReviewSweep[]>;
   createReviewSweep(sweep: ReviewSweep): Promise<ReviewSweep>;
   updateReviewSweep(
@@ -2564,7 +2517,6 @@ export class InMemoryStore implements Store {
   private follows = new Map<string, Map<string, string>>();
   // slug -> feedback rows, newest last (reversed on read)
   private playerFeedback = new Map<string, PlayerFeedbackRecord[]>();
-  /** id (`slug:uid`) -> assessment. Mirrors top-level `gameAssessments`. */
   private gameAssessments = new Map<string, GameAssessment>();
   private reviewSweeps = new Map<string, ReviewSweep>();
   // uid -> (slug -> saved progress)
@@ -6555,9 +6507,7 @@ export class FirestoreStore implements Store {
   }
 
   async listGameAssessmentsByReviewer(reviewerUid: string): Promise<GameAssessment[]> {
-    // Equality only — no orderBy — so a single-field index is enough and we do not need
-    // a composite index deploy before the desk works. Sort in memory; a reviewer's set
-    // is small (one row per game they touched).
+    // Equality query only; sort in memory.
     const snap = await this.gameAssessmentsCollection().where('reviewerUid', '==', reviewerUid).get();
     return snap.docs
       .map((d) => hydrateGameAssessment(d.id, d.data() as Omit<GameAssessment, 'id'>))
@@ -6602,9 +6552,7 @@ export class FirestoreStore implements Store {
   }
 
   async getOpenReviewSweep(): Promise<ReviewSweep | null> {
-    // Two equality queries rather than `in` + orderBy — avoids a composite index for a
-    // collection that holds a handful of rows. Prefer active over paused when both exist
-    // (should not; create cancels the previous open sweep).
+    // Two equality queries avoid a composite index.
     const [active, paused] = await Promise.all([
       this.reviewSweepsCollection().where('status', '==', 'active').limit(5).get(),
       this.reviewSweepsCollection().where('status', '==', 'paused').limit(5).get(),

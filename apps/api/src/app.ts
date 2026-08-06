@@ -142,9 +142,8 @@ export interface BuildAppOptions {
   betaAllowedEmails?: string;
   // Uids (comma-separated) allowed to read the operator telemetry view
   adminUids?: string;
-  /** Uids (comma-separated) allowed on the reviewer assessment desk. Admins are included automatically. */
   reviewerUids?: string;
-  /** Seams for the reviewer desk; defaults to snapshot/GitHub catalog when configured. */
+  // Seams for reviewer desk; defaults to snapshot/GitHub catalog.
   reviewRoutes?: Omit<ReviewRoutesOptions, 'store' | 'contentChecker' | 'adminUids' | 'reviewerUids'>;
 }
 
@@ -242,7 +241,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // So the session can tell the client whether to offer the operator console. Not
     // authorization — every operator route still checks this same set itself.
     adminUids,
-    // Same hint contract for the reviewer assessment desk.
+    // Same hint contract for the reviewer desk.
     reviewerUids,
   });
 
@@ -493,10 +492,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     creationLimitsTtlMs: options.submissionRoutes?.creationLimitsTtlMs,
   });
 
-  // Reviewer assessment desk (docs/game-assessment-plan.md). Prefer the same client the
-  // public catalog uses (`submissionSeams.githubClient`) — that is the local checkout in
-  // laptop/dev and the GitHub client in production — so `/review` and `/api/catalog`
-  // cannot disagree about what is published. Snapshot first when present (production).
+  // Review catalog matches /api/catalog; snapshot first in prod.
   const publishedRef = process.env.GAMES_REPO_REF?.trim() || 'main';
   const reviewCatalogClient = submissionSeams.githubClient ?? gamesRepoClient;
   const defaultReviewCatalog = async () => {
