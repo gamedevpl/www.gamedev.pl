@@ -104,6 +104,7 @@ describe('every moderating module reports its rejections', () => {
       'proposals.ts',
       'refine.ts',
       'remix.ts',
+      'review.ts',
       'submissions.ts',
       'worlds.ts',
     ]);

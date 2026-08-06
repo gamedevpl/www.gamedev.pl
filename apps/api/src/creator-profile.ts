@@ -57,6 +57,7 @@ export const RESERVED_HANDLES: ReadonlySet<string> = new Set([
   // `studio` and `play` are: `/proposals` resolves to that surface before the root-handle
   // fallback, so a claimed handle of this name would have an unreachable profile.
   'proposals',
+  'review',
   'root',
   'status',
   'studio',

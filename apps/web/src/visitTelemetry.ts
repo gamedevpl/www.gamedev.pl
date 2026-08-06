@@ -352,6 +352,9 @@ export function routeKind(view: string): VisitRouteKind {
     // recording it. Renaming the bucket would split one surface's history in two.
     case 'admin':
       return 'health';
+    // Reviewer desk is the same unlisted-console posture as `/admin`.
+    case 'review':
+      return 'health';
     // Contact shares the public-chrome posture of legal pages (reachable without a
     // session, outside the creator funnel). Folding it into `legal` keeps the
     // visit vocabulary stable without inventing a new funnel bucket for a form.

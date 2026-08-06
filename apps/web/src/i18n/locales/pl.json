@@ -62,6 +62,10 @@
       "waitlist_joined": {
         "title": "Ktoś dołączył do listy oczekujących",
         "body": "„{{title}}” chce dołączyć do zamkniętej bety."
+      },
+      "review_sweep": {
+        "title": "Przegląd gier jest gotowy",
+        "body": "„{{title}}” czeka na biurku ocen."
       }
     },
     "game": {
@@ -926,6 +930,7 @@
     "status": "Twoja gra jest w trakcie tworzenia",
     "join": "Dołącz do gry",
     "health": "Telemetria",
+    "review": "Ocena gier",
     "studio": "Studio Twórcy",
     "notFound": "Nie znaleziono strony",
     "contact": "Kontakt",
@@ -935,6 +940,56 @@
     "creatorNamed": "{{title}}",
     "gameNamed": "{{title}}",
     "proposals": "Moje propozycje"
+  },
+  "review": {
+    "title": "Biurko ocen",
+    "progress": "{{assessed}} zrobione · {{remaining}} zostało",
+    "sourceLabel": "Źródło kolejki",
+    "source": {
+      "all": "Wszystko",
+      "catalog": "Katalog",
+      "creator": "Szkice twórców"
+    },
+    "loading": "Ładowanie kolejki…",
+    "denied": "To biurko jest tylko dla recenzentów.",
+    "loadError": "Nie udało się wczytać kolejki ocen. Spróbuj ponownie.",
+    "empty": "Kolejka pusta — nic więcej do oceny w tym filtrze.",
+    "emptyNoSweep": "Brak aktywnego przeglądu. Operator uruchamia go w konsoli Ocen.",
+    "emptyPaused": "Bieżący przegląd jest wstrzymany. Wróć, gdy zostanie wznowiony.",
+    "checklistLabel": "Lista kontrolna",
+    "checklist": {
+      "graphics": "Grafika",
+      "gameplay": "Rozgrywka",
+      "fun": "Zabawa",
+      "sound": "Dźwięk",
+      "controls": "Sterowanie"
+    },
+    "checklistMark": {
+      "ok": "Ok",
+      "weak": "Słabo",
+      "bad": "Źle"
+    },
+    "noteLabel": "Dlaczego? (wymagane — mów lub pisz)",
+    "notePlaceholder": "Co zostawić, wyciąć albo poprawić?",
+    "formIncomplete": "Najpierw oceń każdy punkt listy i zostaw krótką notatkę.",
+    "micStart": "Zacznij notatkę głosową",
+    "micStop": "Zatrzymaj nagrywanie",
+    "micStartShort": "Mikrofon",
+    "micStopShort": "Stop",
+    "micUnsupported": "Notatki głosowe wymagają przeglądarki z rozpoznawaniem mowy.",
+    "micDenied": "Brak zgody na mikrofon.",
+    "micError": "Błąd mowy: {{error}}",
+    "actionsLabel": "Werdykt",
+    "keep": "Zostaw",
+    "cut": "Wytnij",
+    "skip": "Pomiń",
+    "error": "Nie udało się zapisać oceny.",
+    "tryPlay": "Zagraj",
+    "showPreview": "Pokaż podgląd",
+    "noMedia": "Brak podglądu — spróbuj żywej gry.",
+    "previewImage": "Podgląd: {{title}}",
+    "shotsLabel": "Zrzuty ekranu",
+    "shotNamed": "Zrzut {{name}}"
   },
   "creatorProfile": {
     "back": "Wróć",

@@ -112,4 +112,20 @@ describe('PublishedGameFrame telemetry', () => {
     expect(payloads(telemetryBodies(fetchSpy)[0].events)).toEqual([{ type: 'game_opened' }]);
     await act(async () => root.unmount());
   });
+
+  it('stays silent when trackPlay is off — editorial mounts are not plays', async () => {
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(<PublishedGameFrame slug="space-hop" title="Space Hop" embed trackPlay={false} />);
+    });
+
+    expect(telemetryBodies(fetchSpy)).toHaveLength(0);
+
+    await act(async () => {
+      root.unmount();
+    });
+
+    expect(telemetryBodies(fetchSpy)).toHaveLength(0);
+  });
 });

@@ -45,6 +45,7 @@ describe('NavHeader Up chevron', () => {
             onHome: vi.fn(),
             onStudio: vi.fn(),
             onAdmin: vi.fn(),
+            onReview: vi.fn(),
             upTarget: { path: '/studio', ariaLabel: 'Back to Studio' },
             onUp,
           }),
@@ -83,6 +84,7 @@ describe('NavHeader Up chevron', () => {
             onHome: vi.fn(),
             onStudio: vi.fn(),
             onAdmin: vi.fn(),
+            onReview: vi.fn(),
             upTarget: null,
           }),
         ),
@@ -138,6 +140,7 @@ describe('NavHeader menu', () => {
             onHome: vi.fn(),
             onStudio: vi.fn(),
             onAdmin: vi.fn(),
+            onReview: vi.fn(),
             upTarget: null,
           }),
         ),
@@ -154,13 +157,14 @@ describe('NavHeader menu', () => {
     return { container, root };
   }
 
-  it('keeps Create Game and Studio, restores Operator for admins, drops Arcade / Account settings', async () => {
+  it('keeps Create Game and Studio, restores Operator and Review for admins, drops Arcade / Account settings', async () => {
     const { container, root } = await renderSignedIn(true);
     const labels = Array.from(container.querySelectorAll('.nav-link')).map((el) => el.textContent ?? '');
 
     expect(labels.some((text) => /Create Game/i.test(text))).toBe(true);
     expect(labels.some((text) => /Studio/i.test(text))).toBe(true);
     expect(labels.some((text) => /Operator/i.test(text))).toBe(true);
+    expect(labels.some((text) => /^Review$|Review/.test(text))).toBe(true);
     expect(labels.some((text) => /Arcade/i.test(text))).toBe(false);
     expect(labels.some((text) => /Account settings/i.test(text))).toBe(false);
     // GitHub left the header; the footer carries the repo link instead.
@@ -202,6 +206,7 @@ describe('NavHeader menu', () => {
             onHome: vi.fn(),
             onStudio: vi.fn(),
             onAdmin: vi.fn(),
+            onReview: vi.fn(),
             upTarget: null,
           }),
         ),
@@ -231,10 +236,73 @@ describe('NavHeader menu', () => {
     await act(async () => root.unmount());
   });
 
-  it('hides Operator from non-operators', async () => {
+  it('hides Operator and Review from non-operators', async () => {
     const { container, root } = await renderSignedIn(false);
     const labels = Array.from(container.querySelectorAll('.nav-link')).map((el) => el.textContent ?? '');
     expect(labels.some((text) => /Operator/i.test(text))).toBe(false);
+    expect(labels.some((text) => /\bReview\b/.test(text))).toBe(false);
+    await act(async () => root.unmount());
+  });
+
+  it('offers Review to a reviewer who is not an operator', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith('/api/auth/me')) {
+        return new Response(
+          JSON.stringify({
+            user: { uid: 'g:reviewer', tier: 'free', name: 'Reviewer', reviewer: true },
+          }),
+        );
+      }
+      if (url.endsWith('/api/health')) {
+        return new Response(JSON.stringify({ status: 'ok', provider: 'mock', privateBeta: false }));
+      }
+      return new Response('{}', { status: 404 });
+    });
+
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    const onReview = vi.fn();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        createElement(
+          AuthProvider,
+          null,
+          createElement(NavHeader, {
+            activeBuildCount: 0,
+            onNavigate: vi.fn(),
+            onHome: vi.fn(),
+            onStudio: vi.fn(),
+            onAdmin: vi.fn(),
+            onReview,
+            upTarget: null,
+          }),
+        ),
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const hamburger = container.querySelector('.hamburger-btn') as HTMLButtonElement;
+    await act(async () => {
+      hamburger.click();
+      await Promise.resolve();
+    });
+
+    const labels = Array.from(container.querySelectorAll('.nav-link')).map((el) => el.textContent ?? '');
+    expect(labels.some((text) => /Operator/i.test(text))).toBe(false);
+    const review = Array.from(container.querySelectorAll<HTMLButtonElement>('.nav-link')).find((btn) =>
+      /\bReview\b/.test(btn.textContent ?? ''),
+    );
+    expect(review).toBeDefined();
+    await act(async () => {
+      review?.click();
+      await Promise.resolve();
+    });
+    expect(onReview).toHaveBeenCalled();
+
     await act(async () => root.unmount());
   });
 
@@ -270,6 +338,7 @@ describe('NavHeader menu', () => {
             onHome: vi.fn(),
             onStudio: vi.fn(),
             onAdmin: vi.fn(),
+            onReview: vi.fn(),
             upTarget: null,
           }),
         ),
@@ -343,6 +412,7 @@ describe('NavHeader operator link', () => {
 
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     const onAdmin = vi.fn();
+    const onReview = vi.fn();
     const container = document.createElement('div');
     document.body.appendChild(container);
     const root = createRoot(container);
@@ -357,6 +427,7 @@ describe('NavHeader operator link', () => {
             onHome: vi.fn(),
             onStudio: vi.fn(),
             onAdmin,
+            onReview,
             upTarget: null,
           }),
         ),
@@ -371,7 +442,7 @@ describe('NavHeader operator link', () => {
       hamburger.click();
       await Promise.resolve();
     });
-    return { container, root, onAdmin };
+    return { container, root, onAdmin, onReview };
   }
 
   it('offers the console, with what is waiting, to an operator', async () => {
@@ -473,6 +544,7 @@ describe('NavHeader Studio chip', () => {
             onHome: vi.fn(),
             onStudio,
             onAdmin: vi.fn(),
+            onReview: vi.fn(),
             upTarget: null,
           }),
         ),
@@ -547,6 +619,7 @@ describe('NavHeader profile link', () => {
             onHome: vi.fn(),
             onStudio: vi.fn(),
             onAdmin: vi.fn(),
+            onReview: vi.fn(),
             upTarget: null,
           }),
         ),
@@ -591,6 +664,7 @@ describe('NavHeader profile link', () => {
             onHome: vi.fn(),
             onStudio: vi.fn(),
             onAdmin: vi.fn(),
+            onReview: vi.fn(),
             upTarget: null,
           }),
         ),
@@ -645,6 +719,7 @@ describe('LanguageSwitcher in header', () => {
             onHome: vi.fn(),
             onStudio: vi.fn(),
             onAdmin: vi.fn(),
+            onReview: vi.fn(),
             upTarget: null,
           }),
         ),

@@ -330,6 +330,42 @@ const OPERATOR_ALERT_LINK = '/admin/queue';
 /** Waitlist joins land on the membership panel — that is where the applicant is acted on. */
 const WAITLIST_ALERT_LINK = '/admin/waitlist';
 
+const REVIEW_SWEEP_LINK = '/review';
+
+// Fan out review-sweep alerts to every reviewer.
+export async function emitReviewSweep(
+  deps: EmitDeps & { reviewerUids: Iterable<string> },
+  event: { notificationId: string; title: string; detail?: string },
+): Promise<{ created: number }> {
+  const createdAt = deps.now ? new Date(deps.now()).toISOString() : new Date().toISOString();
+  const type: OperatorNotificationType = 'operator.review_sweep';
+  let created = 0;
+
+  for (const uid of deps.reviewerUids) {
+    const result = await deps.store.createNotification(uid, {
+      id: event.notificationId,
+      type,
+      createdAt,
+      titleKey: `notifications.${type}.title`,
+      bodyKey: `notifications.${type}.body`,
+      params: {
+        title: event.title,
+        ...(event.detail ? { detail: event.detail } : {}),
+      },
+      link: REVIEW_SWEEP_LINK,
+    });
+    if (!result.created) continue;
+    created += 1;
+    await sendOperatorEmail(deps, uid, event.notificationId, type, REVIEW_SWEEP_LINK, {
+      title: event.title,
+      ...(event.detail ? { detail: event.detail } : {}),
+    });
+    await maybePush(deps, uid, result.notification);
+  }
+
+  return { created };
+}
+
 /**
  * Best-effort, like every other send here: a failed alert email must not fail the caller.
  *

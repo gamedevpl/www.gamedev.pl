@@ -17,6 +17,8 @@ export interface User {
    * else a console error on every page load.
    */
   admin?: boolean;
+  // Reviewer desk hint only; routes re-check the allowlist.
+  reviewer?: boolean;
   /** Public handle when claimed — required to publish, never the Google/Apple name. */
   handle?: string;
   profileName?: string;

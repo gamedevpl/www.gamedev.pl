@@ -5,6 +5,7 @@ import { OAuth2Client } from 'google-auth-library';
 import { z } from 'zod';
 import { resolveAccessTokenUser } from './access-token-service.js';
 import { isAdmin, isAdminSession } from './admin.js';
+import { isReviewer, isReviewerSession } from './review.js';
 import { resolveAppleAccount } from './apple-account.js';
 import { createAppleAuthVerifierFromEnv, parseAppleClientIds, type AppleAuthVerifier } from './apple-auth.js';
 import { readBearerToken } from './bearer.js';
@@ -233,6 +234,8 @@ export interface AuthPluginOptions {
    * everybody who is not an operator, which is most people.
    */
   adminUids?: Set<string>;
+  // Reviewer desk hint only; every review route re-checks.
+  reviewerUids?: Set<string>;
 }
 
 const GoogleAuthSchema = z.object({
@@ -289,6 +292,7 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
 
   const effectiveSessionSecret = sessionSecret ?? 'dev-session-secret-change-me';
   const adminUids = options.adminUids;
+  const reviewerUids = options.reviewerUids;
   const sessionSecretPrev = options.sessionSecretPrev ?? process.env.SESSION_SECRET_PREV;
 
   const verifier = options.googleAuthVerifier ?? new DefaultGoogleAuthVerifier(googleClientId);
@@ -481,7 +485,10 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
           maxAge: DEFAULT_SESSION_DURATION_SECONDS,
         });
 
-        return sessionPayload(user, isAdmin(user.uid, adminUids));
+        return sessionPayload(user, {
+          admin: isAdmin(user.uid, adminUids),
+          reviewer: isReviewer(user.uid, reviewerUids, adminUids),
+        });
       } catch (err) {
         const message = err instanceof Error ? err.message : 'google token verification failed';
         return reply.status(401).send({ error: message });
@@ -579,7 +586,10 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
           maxAge: DEFAULT_SESSION_DURATION_SECONDS,
         });
 
-        return sessionPayload(user, isAdmin(user.uid, adminUids));
+        return sessionPayload(user, {
+          admin: isAdmin(user.uid, adminUids),
+          reviewer: isReviewer(user.uid, reviewerUids, adminUids),
+        });
       } catch (err) {
         const message = err instanceof Error ? err.message : 'apple token verification failed';
         return reply.status(401).send({ error: message });
@@ -789,7 +799,10 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
       maxAge: DEFAULT_SESSION_DURATION_SECONDS,
     });
 
-    return sessionPayload(user, isAdmin(user.uid, adminUids));
+    return sessionPayload(user, {
+      admin: isAdmin(user.uid, adminUids),
+      reviewer: isReviewer(user.uid, reviewerUids, adminUids),
+    });
   });
 
   app.post('/api/auth/logout', async (_request, reply) => {
@@ -807,22 +820,27 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
     if (request.user.tier === 'blocked') {
       return reply.status(403).send({ error: 'account is blocked' });
     }
-    // `isAdminSession`, not `isAdmin`: a request authenticated with a personal access
-    // token acts as its user but is never treated as an operator, and the flag the client
-    // draws its door from must not disagree with the routes behind that door.
-    return sessionPayload(request.user, isAdminSession(request, adminUids));
+    // PAT sessions never expose operator or reviewer doors.
+    return sessionPayload(request.user, {
+      admin: isAdminSession(request, adminUids),
+      reviewer: isReviewerSession(request, reviewerUids, adminUids),
+    });
   });
 }
 
 /**
- * The session as the client is told it. Adds one derived flag to the stored user.
+ * The session as the client is told it. Adds derived flags to the stored user.
  *
- * `admin` is present only when true, so a client that has never heard of it is
- * unaffected, and a reader cannot mistake `admin: false` for a claim about anything
- * other than this request.
+ * `admin` and `reviewer` appear only when true.
  */
-function sessionPayload(user: User, isOperator: boolean): { user: User & { admin?: true } } {
-  return { user: isOperator ? { ...user, admin: true } : user };
+function sessionPayload(
+  user: User,
+  flags: { admin?: boolean; reviewer?: boolean },
+): { user: User & { admin?: true; reviewer?: true } } {
+  const next: User & { admin?: true; reviewer?: true } = { ...user };
+  if (flags.admin) next.admin = true;
+  if (flags.reviewer) next.reviewer = true;
+  return { user: next };
 }
 
 export function checkUserAccess(request: FastifyRequest, reply: FastifyReply): boolean {

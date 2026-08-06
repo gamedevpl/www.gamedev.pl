@@ -61,6 +61,8 @@ describe('isKnownSpaShellPath', () => {
     '/admin/telemetry',
     '/admin/tokens',
     '/admin/waitlist',
+    '/admin/assessments',
+    '/review',
     '/join/K7M3QP',
     '/nightshift/neon-courier',
     // The platform's namespace is reserved against claiming but is a real address:

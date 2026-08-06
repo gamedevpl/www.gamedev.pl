@@ -92,6 +92,7 @@ export interface ErasePlayerSignalsResult {
   followsCleared: string[];
   /** Feedback rows found (and deleted, unless this was a dry run). */
   feedbackDeleted: number;
+  assessmentsDeleted: number;
   /** Games whose saved progress was found (and deleted, unless this was a dry run). */
   savesDeleted: string[];
   /** Editor drafts found under the account (and deleted, unless this was a dry run). */
@@ -156,6 +157,11 @@ export async function erasePlayerSignals(options: ErasePlayerSignalsOptions): Pr
     ? await store.countPlayerFeedbackByUid(uid)
     : await store.deletePlayerFeedbackByUid(uid);
 
+  // Erase reviewer assessments with the same promise as feedback.
+  const assessmentsDeleted = dryRun
+    ? await store.countGameAssessmentsByUid(uid)
+    : await store.deleteGameAssessmentsByUid(uid);
+
   const slugs = await store.listGameSlugs();
   const votesCleared: string[] = [];
   const followsCleared: string[] = [];
@@ -217,6 +223,7 @@ export async function erasePlayerSignals(options: ErasePlayerSignalsOptions): Pr
     votesCleared,
     followsCleared,
     feedbackDeleted,
+    assessmentsDeleted,
     savesDeleted,
     editorDraftsDeleted,
     affinityCleared,

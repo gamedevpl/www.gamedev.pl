@@ -89,6 +89,102 @@ export async function setCreationLimits(patch: {
   return { error: body.error ?? `request failed (${res.status})` };
 }
 
+export type ReviewSweepStatus = 'active' | 'paused' | 'completed' | 'cancelled';
+export type ReviewSweepSource = 'catalog' | 'creator' | 'all';
+
+export interface ReviewSweepProgress {
+  total: number;
+  released: number;
+  remainingInPool: number;
+  assessedReleased: number;
+  status: ReviewSweepStatus;
+  releasePerDay: number | null;
+}
+
+export interface ReviewSweepOpen {
+  id: string;
+  status: ReviewSweepStatus;
+  source: ReviewSweepSource;
+  slugs: string[];
+  releasedCount: number;
+  releasePerDay: number | null;
+  startedAt: string;
+  note: string | null;
+  createdAt: string;
+  createdBy: string;
+  notifiedAt: string | null;
+  notifiedCount: number;
+  progress: ReviewSweepProgress;
+  slugsPreview: string[];
+}
+
+export interface ReviewSweepListItem {
+  id: string;
+  status: ReviewSweepStatus;
+  source: ReviewSweepSource;
+  total: number;
+  released: number;
+  createdAt: string;
+  createdBy: string;
+  notifiedAt: string | null;
+  notifiedCount: number;
+  releasePerDay: number | null;
+  note: string | null;
+}
+
+export interface ReviewSweepsResponse {
+  open: ReviewSweepOpen | null;
+  recent: ReviewSweepListItem[];
+  reviewerCount: number;
+}
+
+export async function fetchReviewSweeps(): Promise<ReviewSweepsResponse | null> {
+  const res = await fetch(`${API_BASE}/api/admin/review-sweeps`, { credentials: 'include' });
+  if (res.status === 404 || res.status === 401) return null;
+  if (!res.ok) throw new Error(`review sweeps failed (${res.status})`);
+  return (await res.json()) as ReviewSweepsResponse;
+}
+
+export async function createReviewSweep(input: {
+  source?: ReviewSweepSource;
+  maxGames?: number;
+  releasePerDay?: number | null;
+  note?: string | null;
+  notify?: boolean;
+}): Promise<{ sweep: ReviewSweepOpen; notified: number } | { error: string }> {
+  const res = await fetch(`${API_BASE}/api/admin/review-sweeps`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  if (res.ok) return (await res.json()) as { sweep: ReviewSweepOpen; notified: number };
+  const body = (await res.json().catch(() => ({}))) as { error?: string };
+  return { error: body.error ?? `request failed (${res.status})` };
+}
+
+export async function patchReviewSweep(
+  id: string,
+  patch: {
+    status?: ReviewSweepStatus;
+    releaseMore?: number;
+    releaseAll?: boolean;
+    releasePerDay?: number | null;
+    notify?: boolean;
+    note?: string | null;
+  },
+): Promise<{ sweep: ReviewSweepOpen; notified: number } | { error: string }> {
+  const res = await fetch(`${API_BASE}/api/admin/review-sweeps/${encodeURIComponent(id)}`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(patch),
+  });
+  if (res.ok) return (await res.json()) as { sweep: ReviewSweepOpen; notified: number };
+  const body = (await res.json().catch(() => ({}))) as { error?: string };
+  return { error: body.error ?? `request failed (${res.status})` };
+}
+
 export interface Suggestion {
   slug: string;
   class: 'defect' | 'friction' | 'design-change' | 'healthy' | 'insufficient-data';

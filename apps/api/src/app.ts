@@ -48,6 +48,7 @@ import { createRelayClientFromEnv, isRelayOnly } from './mp-relay.js';
 import { registerNotificationRoutes } from './notifications.js';
 import { emitProposalNotification } from './notify.js';
 import { registerPlayerFeedbackRoutes, type PlayerFeedbackRoutesOptions } from './player-feedback.js';
+import { registerReviewRoutes, type ReviewRoutesOptions } from './review.js';
 import { registerPushRoutes } from './push-routes.js';
 import { registerDigestRoutes, type DigestRoutesOptions } from './digest.js';
 import { parseBatchSize, registerHealthSweepRoutes, type HealthSweepRoutesOptions } from './game-health.js';
@@ -141,6 +142,9 @@ export interface BuildAppOptions {
   betaAllowedEmails?: string;
   // Uids (comma-separated) allowed to read the operator telemetry view
   adminUids?: string;
+  reviewerUids?: string;
+  // Seams for reviewer desk; defaults to snapshot/GitHub catalog.
+  reviewRoutes?: Omit<ReviewRoutesOptions, 'store' | 'contentChecker' | 'adminUids' | 'reviewerUids'>;
 }
 
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
@@ -213,6 +217,13 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       .filter(Boolean),
   );
 
+  const reviewerUids = new Set(
+    (options.reviewerUids ?? process.env.REVIEWER_UIDS ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
+  );
+
   const contentChecker = options.contentChecker ?? createDefaultContentChecker();
 
   // Auth plugin registers cookies, /api/auth/* endpoints, and user session decorator.
@@ -230,6 +241,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // So the session can tell the client whether to offer the operator console. Not
     // authorization — every operator route still checks this same set itself.
     adminUids,
+    // Same hint contract for the reviewer desk.
+    reviewerUids,
   });
 
   // Where a delivered game is stored, and what verifies it. Resolved once and shared by
@@ -477,6 +490,46 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     adminUids,
     globalDailySubmissionCap: options.submissionRoutes?.globalDailySubmissionCap,
     creationLimitsTtlMs: options.submissionRoutes?.creationLimitsTtlMs,
+  });
+
+  // Review catalog matches /api/catalog; snapshot first in prod.
+  const publishedRef = process.env.GAMES_REPO_REF?.trim() || 'main';
+  const reviewCatalogClient = submissionSeams.githubClient ?? gamesRepoClient;
+  const defaultReviewCatalog = async () => {
+    try {
+      const fromSnapshot = snapshotReader ? await snapshotReader.getCatalog() : null;
+      if (fromSnapshot && fromSnapshot.length > 0) {
+        return fromSnapshot.map((entry) => ({
+          slug: entry.slug,
+          title: entry.title,
+          creatorHandle: entry.creatorHandle ?? null,
+          genre: entry.genre,
+          media: entry.media ?? null,
+        }));
+      }
+    } catch {
+      // Fall through to the repo / local client.
+    }
+    if (!reviewCatalogClient) return [];
+    const entries = await reviewCatalogClient.getCatalog(publishedRef);
+    return entries
+      .filter((entry) => entry.status === 'published')
+      .map((entry) => ({
+        slug: entry.slug,
+        title: entry.title,
+        creatorHandle: entry.creatorHandle ?? null,
+        genre: entry.genre,
+        media: entry.media ?? null,
+      }));
+  };
+  await registerReviewRoutes(app, {
+    store,
+    contentChecker,
+    reviewerUids,
+    adminUids,
+    listCatalog: defaultReviewCatalog,
+    emitDeps: submissionSeams.buildNotifyDeps(),
+    ...options.reviewRoutes,
   });
 
   // The nightly Distill step (docs/improvement-loop-plan.md IL-2): rolls the telemetry
