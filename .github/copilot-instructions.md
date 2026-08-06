@@ -34,7 +34,10 @@ See [`docs/architecture.md`](../docs/architecture.md#sandboxed-game-execution).
   correct specifier for you — including `./dir/index.js` where `./dir` is a directory.
 - **TypeScript strict** — `strict`, `noUnusedLocals`, `noUnusedParameters`,
   `noFallthroughCasesInSwitch`. Prefix intentionally-unused args with `_`.
-- **Small, focused files**; comment _why_, not _what_.
+- **Small, focused files**; comments are **one `//` line, ≤12 words, why only** — no
+  block essays, no stacked `//` paragraphs. Enforced by `npm run comment-prose` (in
+  `npm run lint`); per-file baselines in `eslint-rules/comment-prose-baseline.json` may
+  shrink but must not grow. See [`docs/comment-prose-debt.md`](../docs/comment-prose-debt.md).
 - **Validate untrusted input** at the API boundary with `zod`. Treat the generator as an
   untrusted seam.
 - Prettier formats everything; ESLint runs with **zero warnings allowed**.

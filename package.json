@@ -20,7 +20,9 @@
     "e2e": "npm run e2e -w @gamedevpl/e2e",
     "contract:games-repo": "npm run contract:games-repo -w @gamedevpl/api",
     "snapshot:publish": "npm run snapshot:publish -w @gamedevpl/api --",
-    "lint": "eslint . --report-unused-disable-directives --max-warnings 0",
+    "lint": "eslint . --report-unused-disable-directives --max-warnings 0 && npm run comment-prose",
+    "// comment-prose": "Check 34 twin for this repo: // one-liners ≤12 words; per-file baseline ratchet. See docs/comment-prose-debt.md.",
+    "comment-prose": "node eslint-rules/comment-prose-check.mjs",
     "type-check": "npm run build:packages && npm run type-check --workspaces --if-present",
     "prepare": "husky install"
   },
