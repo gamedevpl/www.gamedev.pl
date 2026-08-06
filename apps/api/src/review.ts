@@ -183,7 +183,7 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
   async function collectPool(source: ReviewSweepSource): Promise<ReviewQueueItem[]> {
     const items: ReviewQueueItem[] = [];
     if (source === 'catalog' || source === 'all') {
-      let catalog: ReviewCatalogEntry[] = [];
+      let catalog: ReviewCatalogEntry[];
       try {
         catalog = await listCatalog();
       } catch {
