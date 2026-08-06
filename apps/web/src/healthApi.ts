@@ -154,6 +154,51 @@ export async function fetchCreatorMetrics(): Promise<CreatorsResponse | null> {
   return (await res.json()) as CreatorsResponse;
 }
 
+export interface DailyActivityPoint {
+  date: string;
+  visits: number;
+  plays: number;
+  creations: number;
+  truncated: boolean;
+}
+
+export interface DailyMcpPoint {
+  date: string;
+  selfChosen: number;
+  platformChosen: number;
+  connected: number;
+  signaled: number;
+  gateVerdicts: number;
+  truncated: boolean;
+}
+
+export interface DailyRetentionPoint {
+  date: string;
+  eligible: number;
+  returned: number;
+  rate: number | null;
+}
+
+export interface TrendsResponse {
+  days: string[];
+  truncated: boolean;
+  activity: DailyActivityPoint[];
+  mcp: DailyMcpPoint[];
+  retention: DailyRetentionPoint[];
+}
+
+/** Same 404-means-not-for-you contract as the other operator reads. */
+export async function fetchTelemetryTrends(days: number): Promise<TrendsResponse | null> {
+  const res = await fetch(`${API_BASE}/api/admin/telemetry/trends?days=${days}`, {
+    credentials: 'include',
+  });
+  if (res.status === 404 || res.status === 401) return null;
+  if (!res.ok) {
+    throw new Error(`Trends request failed (${res.status})`);
+  }
+  return (await res.json()) as TrendsResponse;
+}
+
 /**
  * The stored output of the nightly scorecard sweep, as written for IL-3.
  *
