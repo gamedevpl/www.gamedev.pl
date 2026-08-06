@@ -430,22 +430,22 @@ a {
   flex-shrink: 0;
 }
 
+/* Input matches the 36px icon buttons. Equal vertical pad around a 24px
+   line box keeps the placeholder on the same midline as + / mic / send —
+   a taller content box with top-aligned text was the “floating high” look. */
 .big-prompt-input {
   width: 100%;
   min-width: 0;
   height: 36px;
   margin: 0;
-  padding: 0 2px;
+  padding: 6px 2px;
   border: none;
   border-radius: 0;
   background: transparent;
   color: #fff;
   font-family: inherit;
   font-size: 16px;
-  line-height: normal;
-  /* Chromium centers form-control text with align-content; without it the
-     placeholder sits high in the 36px field and looks off the icon midline. */
-  align-content: center;
+  line-height: 24px;
   box-sizing: border-box;
   box-shadow: none;
   appearance: none;
@@ -460,7 +460,7 @@ a {
 .big-prompt-input::placeholder {
   color: var(--muted);
   opacity: 1;
-  line-height: normal;
+  line-height: 24px;
 }
 
 .hero-prompt-card.drag-over .prompt-composer-bar {
@@ -3174,13 +3174,14 @@ body.player-open {
 
   .big-prompt-input {
     font-size: 16px;
+    /* Match the 44px icon row with equal pad around the 24px line box. */
     height: 44px;
-    line-height: 44px;
-    padding: 0 2px;
+    line-height: 24px;
+    padding: 10px 2px;
   }
 
   .big-prompt-input::placeholder {
-    line-height: 44px;
+    line-height: 24px;
   }
 
   .prompt-composer-bar .build-btn {
