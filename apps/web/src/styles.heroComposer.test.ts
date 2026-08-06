@@ -35,12 +35,13 @@ describe('desktop hero composer pill', () => {
     expect(bar).toMatch(/display:\s*grid/);
     expect(bar).toMatch(/align-items:\s*center/);
     expect(bar).toMatch(/height:\s*auto/);
-    expect(bar).toMatch(/padding:\s*4px 6px/);
+    expect(bar).toMatch(/padding:\s*5px 8px 3px/);
     expect(bar).toMatch(/grid-template-columns:\s*36px minmax\(0,\s*1fr\) 36px 36px/);
 
     const input = firstRuleBody('.big-prompt-input');
     expect(input).toMatch(/height:\s*36px/);
-    expect(input).toMatch(/line-height:\s*36px/);
+    expect(input).toMatch(/line-height:\s*35px/);
+    expect(input).toMatch(/padding:\s*1px 2px 0/);
     expect(input).toMatch(/font-size:\s*16px/);
     expect(input).not.toMatch(/field-sizing:/);
     expect(input).not.toMatch(/min-height:\s*128px/);

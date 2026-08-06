@@ -390,8 +390,8 @@ a {
 }
 
 /* One Gemini-style pill: grid keeps + / field / mic / send on one centerline.
-   No fixed height — with border-box, height:44px − pad − border left only 34px
-   for 36px controls, so the row overflowed and content sat high in the shell. */
+   height:auto so border-box can't clip 36px cells. Slightly heavier top pad
+   counters the top-biased empty look inside the rounded stroke. */
 .prompt-composer-bar {
   display: grid;
   grid-template-columns: 36px minmax(0, 1fr) 36px 36px;
@@ -404,7 +404,7 @@ a {
   background: rgba(22, 28, 34, 0.92);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 999px;
-  padding: 4px 6px;
+  padding: 5px 8px 3px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
   transition:
     border-color 0.25s ease,
@@ -436,16 +436,16 @@ a {
   min-width: 0;
   height: 36px;
   margin: 0;
-  padding: 0 2px;
+  /* 1px top pad drops Proxima's placeholder onto the icon midline; without it
+     the glyph sits a hair above the 36px control center in Chrome. */
+  padding: 1px 2px 0;
   border: none;
   border-radius: 0;
   background: transparent;
   color: #fff;
   font-family: inherit;
   font-size: 16px;
-  /* Match the control height so the caret/placeholder share the icon midline.
-     A padded 16px line over-corrected and sat low; equal line-box = icons. */
-  line-height: 36px;
+  line-height: 35px;
   box-sizing: border-box;
   box-shadow: none;
   appearance: none;
@@ -459,7 +459,7 @@ a {
 
 .big-prompt-input::placeholder {
   color: var(--muted);
-  line-height: 36px;
+  line-height: 35px;
   opacity: 1;
 }
 
