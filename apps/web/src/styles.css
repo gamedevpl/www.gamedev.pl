@@ -5153,7 +5153,12 @@ a.user-name--profile:focus-visible {
    on the last line and you cannot lift it. `100%` is the scrollport when the shell
    gives the thread a height; `min-height` covers the page-scroll phone band where
    the scrollport height is indefinite. vh first, then dvh — same pairing as
-   `.beta-splash` / `.qa-wizard`, so browsers without dvh keep the runway. */
+   `.beta-splash` / `.qa-wizard`, so browsers without dvh keep the runway.
+
+   A percentage of the scrollport cannot create overflow on an empty thread
+   (H−4.5rem ≤ H), and that is fine: the runway matters once there is a last
+   turn to lift. The browser gate checks pad height and slack-with-a-stand-in
+   turn, not scrollHeight on the empty fixture. */
 .studio-thread-scroll-pad {
   flex: none;
   height: calc(100% - 4.5rem);

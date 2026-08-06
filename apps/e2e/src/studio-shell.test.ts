@@ -219,12 +219,32 @@ describe.skipIf(!prereq.ok)('the studio thread as an app screen', () => {
         const pad = document.querySelector('.studio-thread-scroll-pad');
         const detail = document.querySelector('.studio-detail');
         const layout = document.querySelector('.studio-layout');
+        // The fixture thread is empty/short. A pad sized as a fraction of the
+        // scrollport cannot create overflow by itself (percentage of H is ≤ H),
+        // so "scrollHeight - clientHeight" is the wrong signal here — it would
+        // stay ~0 even with a correct Claude/Cursor runway. Measure the pad
+        // against the scrollport instead, and prove slack with a stand-in turn.
+        let padHeight = 0;
+        let scrollerClientHeight = 0;
+        let slackWithTurn = 0;
+        if (scroller && pad) {
+          padHeight = pad.getBoundingClientRect().height;
+          scrollerClientHeight = scroller.clientHeight;
+          const turn = document.createElement('div');
+          turn.dataset.e2eInjected = 'true';
+          // Taller than the 4.5rem the pad leaves, so max-scroll is non-trivial.
+          turn.style.cssText = 'height:200px;flex:none;';
+          pad.before(turn);
+          slackWithTurn = scroller.scrollHeight - scroller.clientHeight;
+          turn.remove();
+        }
         return {
           pageScroll: document.documentElement.scrollHeight - document.documentElement.clientHeight,
           scrollerOverflowY: scroller ? getComputedStyle(scroller).overflowY : null,
           hasScrollPad: Boolean(pad),
-          // Pad must add real slack: last turn can scroll toward the top of the pane.
-          scrollerSlack: scroller && pad ? scroller.scrollHeight - scroller.clientHeight : 0,
+          padHeight,
+          scrollerClientHeight,
+          slackWithTurn,
           gameOpen: Boolean(document.querySelector('.studio-layout.is-game-open')),
           compactShelf: Boolean(layout?.classList.contains('is-compact-shelf')),
           shelfOpen: Boolean(layout?.classList.contains('is-shelf-open')),
@@ -255,7 +275,15 @@ describe.skipIf(!prereq.ok)('the studio thread as an app screen', () => {
 
       // Claude/Cursor shape: empty runway under the turns so the last message can rise.
       expect(shell.hasScrollPad, 'transcript needs a bottom pad for last-turn scroll').toBe(true);
-      expect(shell.scrollerSlack, 'bottom pad must create scrollable slack in the transcript').toBeGreaterThan(80);
+      expect(shell.padHeight, 'bottom pad needs real height (not a zero-height spacer)').toBeGreaterThan(80);
+      expect(
+        shell.padHeight,
+        'bottom pad should be roughly one scrollport so the last turn can rise to the top',
+      ).toBeGreaterThan(shell.scrollerClientHeight * 0.5);
+      expect(
+        shell.slackWithTurn,
+        'with a turn above the pad, the transcript must become scrollable',
+      ).toBeGreaterThan(80);
 
       // Desktop compact rail (~56px) leaves the work surface owning the rest of the window.
       if (viewport.width >= 801) {
