@@ -1,5 +1,11 @@
-import { generateAccessToken, isAccessTokenExpired } from './access-token.js';
-import { BOT_UID_PREFIX, type AccessTokenRecord, type Store } from './store.js';
+import {
+  generateAccessToken,
+  isAccessTokenExpired,
+  looksLikeAccessToken,
+  parseAccessToken,
+  verifyTokenSecret,
+} from './access-token.js';
+import { BOT_UID_PREFIX, type AccessTokenRecord, type Store, type User } from './store.js';
 
 export { isAccessTokenExpired } from './access-token.js';
 
@@ -99,6 +105,55 @@ export async function mintAccessTokenFor(store: Store, params: MintAccessTokenPa
   await store.createAccessToken(record);
 
   return { token, record, accountCreated: !existing };
+}
+
+/**
+ * Resolve a personal access token string to the account it belongs to
+ * (docs/agent-access-tokens.md).
+ *
+ * Shared by the two doors a token can arrive at: the `Authorization: Bearer` header on
+ * the API, and the sign-in form at /oauth/token-login where a human pastes one into a
+ * browser. Both must agree on every check — prefix, expiry, revocation, deleted accounts
+ * — because a token the header path refuses but the form path accepts would be a way in
+ * that no amount of reading either file alone would reveal.
+ *
+ * Returns null — never throws — for every failure. Distinguishing "expired" from
+ * "revoked" from "never existed" would only tell a caller holding a stolen token which
+ * one they hold.
+ */
+export async function resolveAccessTokenUser(store: Store, token: string, nowMs = Date.now()): Promise<User | null> {
+  if (!looksLikeAccessToken(token)) return null;
+
+  let tokenId: string;
+  let secret: string;
+  try {
+    ({ tokenId, secret } = parseAccessToken(token));
+  } catch {
+    return null;
+  }
+
+  const record = await store.getAccessToken(tokenId);
+  if (!record) return null;
+  if (!verifyTokenSecret(secret, record.secretHash)) return null;
+  // Fail closed on corrupt/missing expiresAt (NaN from Date.parse would otherwise read
+  // as "not expired").
+  if (isAccessTokenExpired(record.expiresAt, nowMs)) return null;
+
+  const user = await store.getUser(record.uid);
+  if (!user || user.deletionScheduledFor) return null;
+
+  // Last-use tracking, coarsened to a day so a chatty agent costs one write rather than
+  // one per request — the question it answers ("is anything still using this token?")
+  // does not need finer resolution. Best-effort by design: bookkeeping must never turn a
+  // working request into a failing one.
+  const nowIso = new Date(nowMs).toISOString();
+  if (record.lastUsedAt?.slice(0, 10) !== nowIso.slice(0, 10)) {
+    void store.touchAccessToken(tokenId, nowIso).catch(() => {
+      /* same contract as every other measurement in this file */
+    });
+  }
+
+  return user;
 }
 
 /** The safe projection of a token record — everything except the hash of the secret. */

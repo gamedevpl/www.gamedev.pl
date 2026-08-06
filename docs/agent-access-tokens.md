@@ -197,6 +197,38 @@ Traps, in the order an agent will hit them:
 - **Production cookies carry `Secure`** — they travel over HTTPS only, so the same
   script pointed at a plain-HTTP host will not authenticate.
 
+**Signing in as a human, in a browser** — `/oauth/token-login` is the same exchange
+with a form instead of a header. Paste the token, get the session cookie, land in the
+studio (or back at `/oauth/authorize`, if that is where you came from).
+
+It exists because sign-in on this site is Google or Apple and nothing else. That is fine
+for creators and useless for anyone who has to reach the OAuth consent screen without a
+Google account — a marketplace reviewer testing the MCP connector, most immediately, and
+OpenAI's plugin review explicitly forbids 2FA and account creation on a test credential.
+Handing over a shared Google login would mean disabling 2FA on an account Google will
+challenge anyway the moment it is used from an unfamiliar IP.
+
+The page adds no authority: it is `POST /api/auth/session` with a form on the front, the
+cookie carries the same `src: 'token'` stamp, and the operator surfaces refuse it
+identically. It is **not** the bypass route `AGENTS.md` says does not exist — there is
+still no way in without a token, and a token still only exists because an operator minted
+one. That is what stands in for registration: no signup, because the credential cannot be
+self-served.
+
+Practical notes:
+
+- **Not linked from anywhere**, and `noindex`. Reviewers get the URL out of band.
+- **Give it its own account and its own expiry.** `npm run token:mint -w @gamedevpl/api --
+--uid bot:reviewer --name "openai review" --days 30` scopes the blast radius to one
+  account holding nothing but sample games, and expires it on the review window rather
+  than the 90-day default.
+- **Revoking the token does not revoke OAuth grants approved during that session.** The
+  grant is its own record with its own lifetime. Close a review by revoking the token
+  _and_ removing the grant in Studio → connected apps.
+- The form carries a one-hour CSRF token, so a page left open overnight needs a reload.
+  `sameSite: 'lax'` does not stop a top-level cross-site form POST, and the next thing
+  this flow does is ask the browser to approve durable write access.
+
 ## CI: the authenticated deploy smoke
 
 `deploy.yml` runs two layers of this on every candidate revision, **before traffic
@@ -255,7 +287,8 @@ issuing a credential is an admission decision in itself.
 | File                                   | What it holds                                                       |
 | -------------------------------------- | ------------------------------------------------------------------- |
 | `apps/api/src/access-token.ts`         | Pure format, mint, hash, verify — no I/O                            |
-| `apps/api/src/access-token-service.ts` | The shared issuance rules (namespace, cap, expiry)                  |
+| `apps/api/src/access-token-service.ts` | Shared issuance rules (namespace, cap, expiry) and token resolution |
 | `apps/api/src/access-token-routes.ts`  | Operator HTTP surface                                               |
 | `apps/api/src/auth.ts`                 | Bearer resolution in the `onRequest` hook; `POST /api/auth/session` |
+| `apps/api/src/oauth-token-login.ts`    | `/oauth/token-login` — the same exchange as a browser form          |
 | `apps/api/scripts/access-token.ts`     | The `token:mint` / `token:list` / `token:revoke` CLI                |

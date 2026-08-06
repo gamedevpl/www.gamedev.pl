@@ -77,6 +77,7 @@ import { registerOAuthProtectedResourceRoutes } from './mcp-oauth-metadata.js';
 import { registerMcpServerDiscoveryRoutes } from './mcp-server-discovery.js';
 import { registerOpenAiAppsChallengeRoute } from './openai-apps-challenge.js';
 import { registerOAuthAuthorizationServerRoutes } from './oauth-as.js';
+import { registerTokenLoginRoutes } from './oauth-token-login.js';
 import { registerCreatorAgentKeyRoutes } from './creator-agent-key-routes.js';
 
 const GenerateRequestSchema = z.object({
@@ -767,6 +768,11 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     sessionSecret: oauthSessionSecret,
     sessionSecretPrev: oauthSessionSecretPrev,
   });
+
+  // Browser sign-in for accounts that hold a personal access token instead of a Google
+  // or Apple identity. Registered right after the AS because the only reason it exists
+  // is to get such an account to the consent screen above.
+  registerTokenLoginRoutes(app, { store, sessionSecret: oauthSessionSecret });
 
   // Creator-wide MCP opener (BY-27a). Needs the same HMAC secret as per-game keys.
   if (submissionTokenSecret) {
