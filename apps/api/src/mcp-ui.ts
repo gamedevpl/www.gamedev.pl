@@ -332,7 +332,7 @@ const ROUND_STATUS_HTML = `<!doctype html>
         border: 1px solid currentColor;
         white-space: nowrap;
       }
-      .pill-waiting, .pill-pending, .pill-queued, .pill-dispatched { color: var(--gd-muted); }
+      .pill-waiting, .pill-pending, .pill-queued, .pill-dispatched, .pill-stopped { color: var(--gd-muted); }
       .pill-building, .pill-submitted, .pill-gating { color: #6fb3ff; }
       .pill-green, .pill-preview_passed, .pill-published { color: var(--gd-accent); }
       .pill-red, .pill-preview_failed, .pill-failed { color: #ff6b6b; }
@@ -900,7 +900,19 @@ const ROUND_STATUS_HTML = `<!doctype html>
         function render(status) {
           var gate = status.gate && typeof status.gate === 'object' ? status.gate : null;
           var gateStatus = gate && typeof gate.status === 'string' ? gate.status : null;
-          var headline = gateStatus && gateStatus !== 'pending' ? gateStatus : status.phase;
+          // The pill has to agree with the sentence under it. The phase lags reality —
+          // an agent that has stopped still reads as 'dispatched' for a while — so a
+          // card showed DISPATCHED above "The agent has stopped without delivering."
+          // (owner, 2026-08-06). The summary below already ranks the phase last; the
+          // pill was left on the old rule and contradicted it.
+          var headline =
+            gateStatus && gateStatus !== 'pending'
+              ? gateStatus
+              : gate && gate.deliveryId
+                ? 'gating'
+                : status.agentEnded
+                  ? 'stopped'
+                  : status.phase;
 
           pill.textContent = String(headline).replace(/_/g, ' ');
           pill.className = 'pill pill-' + headline;
@@ -974,8 +986,14 @@ const ROUND_STATUS_HTML = `<!doctype html>
           if (typeof status.deliveriesRemaining === 'number') {
             addRow('Deliveries left', status.deliveriesRemaining);
           }
-          if (status.stall && STALL_COPY[status.stall] && STALL_COPY[status.stall] !== summary.textContent) {
-            addRow('Note', STALL_COPY[status.stall]);
+          // Say it once. The stall row used to compare whole strings, so "The agent has
+          // stopped." sat under a summary reading "The agent has stopped without
+          // delivering." — the same fact twice, in two shapes.
+          var stallLine = status.stall ? STALL_COPY[status.stall] : '';
+          // Escape doubled: this file is a TS template literal, so a single backslash
+          // here emits /.$/ — "strip any last character" rather than "strip a period".
+          if (stallLine && summary.textContent.indexOf(stallLine.replace(/\\.$/, '')) === -1) {
+            addRow('Note', stallLine);
           }
 
           var detail = gate && typeof gate.report === 'string' ? gate.report.trim() : '';

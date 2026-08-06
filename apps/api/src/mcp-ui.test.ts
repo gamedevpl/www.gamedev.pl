@@ -358,6 +358,26 @@ describe('ui resources', () => {
     expect(html).toMatch(/navigator\.clipboard[\s\S]{0,400}?function \(\) \{\}/);
   });
 
+  it('does not put a pill on the card that contradicts the sentence under it', () => {
+    // Observed: DISPATCHED above "The agent has stopped without delivering." The phase
+    // lags reality, which the summary already accounts for by ranking it last — the
+    // pill was left on the old rule and disagreed with the text beside it.
+    const html = readUiResource(ROUND_STATUS_RESOURCE_URI)?.text ?? '';
+    expect(html).toMatch(/headline =[\s\S]{0,320}?status\.agentEnded[\s\S]{0,40}?'stopped'/);
+    // A delivery in flight reads as gating rather than whatever the job record still says.
+    expect(html).toMatch(/gate && gate\.deliveryId[\s\S]{0,40}?'gating'/);
+    // The new state needs a colour, or it falls through to an unstyled pill.
+    expect(html).toContain('.pill-stopped');
+  });
+
+  it('states a stall once, not once per shape', () => {
+    // "The agent has stopped." sat in the Note row under a summary reading "The agent
+    // has stopped without delivering." — same fact twice. Whole-string comparison could
+    // not see that one contains the other.
+    const html = readUiResource(ROUND_STATUS_RESOURCE_URI)?.text ?? '';
+    expect(html).toContain("summary.textContent.indexOf(stallLine.replace(/\\.$/, '')) === -1");
+  });
+
   it('does not print the gate detail twice, or lead with instructions meant for the agent', () => {
     // kit_outdated returns the same long agent-facing text as both summary and report,
     // which the card printed twice — once as its headline.
