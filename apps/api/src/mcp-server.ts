@@ -175,6 +175,25 @@ const ROUND_STATUS_OUTPUT_SCHEMA: Record<string, unknown> = {
   required: ['phase', 'status', 'retryAfterSeconds'],
 };
 
+/**
+ * Where the creator plays what the agent just built.
+ *
+ * Built here rather than in the view because the view is served to every environment
+ * from one string: an origin baked into it would send a staging card's Play button to
+ * production. `WEB_ORIGIN` already pins the deployed site; `APP_BASE_URL` is the
+ * fallback the OAuth paths use.
+ *
+ * Null when neither is configured — the card simply offers no button, which is better
+ * than guessing an origin and handing the host a link to nowhere.
+ */
+function playUrlFor(slug: string | null | undefined): string | null {
+  if (!slug) return null;
+  const configured = (process.env.WEB_ORIGIN ?? '').split(',')[0]?.trim() || process.env.APP_BASE_URL?.trim() || '';
+  const origin = configured.replace(/\/+$/, '');
+  if (!/^https?:\/\//.test(origin)) return null;
+  return `${origin}/play/${encodeURIComponent(slug)}`;
+}
+
 const ROUND_STATUS_RETRY_AFTER_SECONDS = 30;
 /** A card shows a strip, not a contact sheet; the bytes ride a postMessage. */
 const ROUND_MEDIA_MAX_FRAMES = 3;
@@ -3783,6 +3802,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           agentEnded: Boolean(record.agentEndedAt),
           title: record.title ?? null,
           slug: record.slug ?? null,
+          playUrl: playUrlFor(record.slug),
           round: record.roundGeneration ?? 1,
           deliveriesRemaining: cap === null ? null : Math.max(0, cap - used),
           note: latestEvent ? { text: noteTextFor(latestEvent, args.locale), createdAt: latestEvent.createdAt } : null,

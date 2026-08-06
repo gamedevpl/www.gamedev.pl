@@ -453,6 +453,9 @@ const ROUND_STATUS_HTML = `<!doctype html>
       <p id="galleryCap" class="galleryCap" hidden></p>
       <dl id="meta" class="meta"></dl>
       <pre id="report" class="report" hidden></pre>
+      <div id="playRow" class="actions" hidden>
+        <button id="playBtn" type="button" class="action"></button>
+      </div>
       <div id="actionRow" class="actions" hidden>
         <button id="actionBtn" type="button" class="action"></button>
         <p id="actionHint" class="hint" hidden></p>
@@ -496,6 +499,8 @@ const ROUND_STATUS_HTML = `<!doctype html>
         var shotEl = document.getElementById('shot');
         var shotImg = document.getElementById('shotImg');
         var shotCap = document.getElementById('shotCap');
+        var playRow = document.getElementById('playRow');
+        var playBtn = document.getElementById('playBtn');
         var actionRow = document.getElementById('actionRow');
         var actionBtn = document.getElementById('actionBtn');
         var actionHint = document.getElementById('actionHint');
@@ -718,6 +723,41 @@ const ROUND_STATUS_HTML = `<!doctype html>
           }
         };
 
+        /**
+         * The invitation to play — the step the whole flow exists for.
+         *
+         * The card shows what the agent built; the theater is where it is played. This
+         * is the hand-off between them, and it is a link rather than an embedded game on
+         * purpose: gamedev.pl's theater already does fullscreen, pointer lock and touch,
+         * and a chat card cannot.
+         *
+         * Only offered when there is genuinely something to play. A round that has not
+         * delivered yet would open a page saying so, which is a worse answer than no
+         * button at all.
+         */
+        function renderPlay(status, gateStatus) {
+          // The URL is built server-side (playUrlFor): this view is one string served to
+          // every environment, so an origin baked in here would send a staging card's
+          // Play button to production.
+          var url = typeof status.playUrl === 'string' ? status.playUrl : '';
+          var playable =
+            url &&
+            (status.phase === 'ready_for_review' ||
+              status.phase === 'published' ||
+              status.phase === 'needs_changes' ||
+              gateStatus === 'green' ||
+              gateStatus === 'preview_passed');
+          if (!playable) {
+            playRow.hidden = true;
+            return;
+          }
+          playBtn.textContent = status.phase === 'published' ? 'Play it' : 'Play the latest build';
+          playBtn.onclick = function () {
+            request('ui/open-link', { url: url });
+          };
+          playRow.hidden = false;
+        }
+
         function renderAction(status, gateStatus) {
           // Only once the agent has stopped: while it is still working it will act on a
           // red gate itself, and a second instruction would just talk over it.
@@ -845,6 +885,7 @@ const ROUND_STATUS_HTML = `<!doctype html>
           }
 
           actionRow.hidden = true;
+          playRow.hidden = true;
           gallery.hidden = true;
           galleryCap.hidden = true;
           foot.textContent =
@@ -950,6 +991,7 @@ const ROUND_STATUS_HTML = `<!doctype html>
             report.hidden = true;
           }
 
+          renderPlay(status, gateStatus);
           renderAction(status, gateStatus);
 
           if (isFinished(status)) {

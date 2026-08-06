@@ -293,6 +293,29 @@ describe('ui resources', () => {
     expect(html).toMatch(/if \(speculative\) \{[\s\S]{0,400}?if \(sessionKey\) \{[\s\S]{0,80}?poll\(\);/);
   });
 
+  it('invites the creator to play, once there is something to play', () => {
+    // The step the whole flow exists for: the card shows what the agent built, the
+    // theater is where it gets played. A link rather than an embedded game on purpose —
+    // gamedev.pl's theater does fullscreen, pointer lock and touch; a chat card cannot.
+    const html = readUiResource(ROUND_STATUS_RESOURCE_URI)?.text ?? '';
+    expect(html).toContain('renderPlay');
+    // The URL comes from the server (playUrlFor), never baked into the view — one
+    // string is served to every environment, so an origin here would send a staging
+    // card's Play button to production. The self-contained test above enforces it.
+    expect(html).toContain('status.playUrl');
+    // Uses the same host hand-off the gate recording does — the mechanism whose
+    // permission (`redirect_domains`) was missing until the CSP work.
+    expect(html).toMatch(/playBtn\.onclick[\s\S]{0,120}?request\('ui\/open-link'/);
+
+    // Not offered when a round has delivered nothing: the link would open a page saying
+    // the game is not available, which is a worse answer than no button.
+    for (const phase of ['ready_for_review', 'published', 'needs_changes']) {
+      expect(html).toContain(`status.phase === '${phase}'`);
+    }
+    expect(html).toContain("gateStatus === 'preview_passed'");
+    expect(html).toContain('playRow.hidden = true;');
+  });
+
   it('offers the creator the next move, in the exact ui/message shape the spec defines', () => {
     const html = readUiResource(ROUND_STATUS_RESOURCE_URI)?.text ?? '';
     expect(html).toContain("method: 'ui/message'");
