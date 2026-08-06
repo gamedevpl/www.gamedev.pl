@@ -7,6 +7,10 @@ import { type VisitFunnel, type VisitsResponse } from './healthApi.js';
  * before that and which no per-game view can reach: how many arrivals there were, how
  * many reached a game at all, how fast, how deep, and where they came from.
  *
+ * Time-to-first-play and games-per-visit distributions live in TelemetryOverview at
+ * the top of the tab (histograms); this panel keeps the medians in its headline row
+ * and the acquisition / creation / edit funnels below.
+ *
  * Untranslated for the same reason as the rest of this page — a single-operator
  * surface no player can reach.
  */
@@ -78,12 +82,6 @@ const HOW_TO_ENTRY_LABELS: Record<string, string> = {
   home: 'arcade (home)',
 };
 
-function bucketLabel(upToSeconds: number | null): string {
-  if (upToSeconds === null) return 'slower';
-  if (upToSeconds < 60) return `≤ ${upToSeconds}s`;
-  return `≤ ${Math.round(upToSeconds / 60)}m`;
-}
-
 /** A labelled count with its share of visits, for the small ranked tables. */
 function RankedRows({ rows, whole }: { rows: Array<{ label: string; visits: number; plays: number }>; whole: number }) {
   return (
@@ -150,58 +148,6 @@ export function VisitFunnelPanel({ data }: { data: VisitsResponse }) {
       </ul>
 
       <div className="funnel-grid">
-        <div className="funnel-block">
-          <h3>Time to first play</h3>
-          {funnel.timeToFirstPlay.length === 0 ? (
-            <p className="health-empty">No visit reached a game.</p>
-          ) : (
-            <table className="health-table">
-              <thead>
-                <tr>
-                  <th scope="col">Within</th>
-                  <th scope="col" className="num">
-                    Visits
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {funnel.timeToFirstPlay.map((row) => (
-                  <tr key={String(row.upToSeconds)}>
-                    <td>{bucketLabel(row.upToSeconds)}</td>
-                    <td className="num">{row.visits}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-
-        <div className="funnel-block">
-          <h3>Games per visit</h3>
-          {funnel.depth.length === 0 ? (
-            <p className="health-empty">No visit reached a game.</p>
-          ) : (
-            <table className="health-table">
-              <thead>
-                <tr>
-                  <th scope="col">Games</th>
-                  <th scope="col" className="num">
-                    Visits
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {funnel.depth.map((row) => (
-                  <tr key={row.plays}>
-                    <td>{row.plays}</td>
-                    <td className="num">{row.visits}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-
         <div className="funnel-block">
           <h3>Creating</h3>
           {funnel.creating.every((row) => row.visits === 0) ? (

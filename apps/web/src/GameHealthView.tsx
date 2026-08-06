@@ -14,6 +14,7 @@ import { VisitFunnelPanel } from './VisitFunnelPanel.js';
 import { CreatorMetricsPanel } from './CreatorMetricsPanel.js';
 import { GrowthPanel } from './GrowthPanel.js';
 import { ScorecardPanel } from './ScorecardPanel.js';
+import { TelemetryOverview } from './TelemetryOverview.js';
 
 /**
  * Operator view over play telemetry (docs/improvement-loop-plan.md IL-2).
@@ -151,6 +152,12 @@ export function GameHealthView() {
         Promise.all and one error state, so a creators payload of an unexpected shape
         would otherwise blank the game-health table too.
       */}
+      {/* Overview first: gauges + distribution histograms, then the panels that
+          carry the same numbers in prose. Needs all three reads — same gate as Growth. */}
+      {state === 'ready' && data && visits && creators?.metrics && (
+        <TelemetryOverview health={data} visits={visits} creators={creators} />
+      )}
+
       {/* The one business number, above the panels that carry its ingredients. Needs all
           three reads at once — it is their product — so it simply stays absent when any
           of them failed to load. */}
