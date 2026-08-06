@@ -105,6 +105,29 @@ interface CimdDocument {
   client_name?: string;
   redirect_uris: string[];
   token_endpoint_auth_method?: string;
+  /** OpenID Connect RP Metadata Choices — methods the client can use. */
+  token_endpoint_auth_methods_supported?: string[];
+}
+
+/**
+ * Whether a CIMD document can authenticate against an AS that only speaks `none`.
+ *
+ * ChatGPT prefers `private_key_jwt` in `token_endpoint_auth_method` but also lists
+ * `none` in `token_endpoint_auth_methods_supported`. Rejecting on the preferred field
+ * alone made every ChatGPT connector install fail with `invalid_client` after sign-in.
+ * ChatGPT intersects that list with our AS metadata and uses `none` when we do not
+ * advertise `private_key_jwt` (https://developers.openai.com/apps-sdk/build/auth).
+ */
+export function cimdSupportsPublicClientAuth(body: {
+  token_endpoint_auth_method?: string;
+  token_endpoint_auth_methods_supported?: string[];
+}): boolean {
+  const supported = body.token_endpoint_auth_methods_supported;
+  if (Array.isArray(supported) && supported.length > 0) {
+    return supported.includes('none');
+  }
+  const method = body.token_endpoint_auth_method;
+  return method === undefined || method === 'none';
 }
 
 async function fetchCimdClient(clientIdUrl: string, nowMs: number): Promise<OAuthClientRecord | null> {
@@ -132,7 +155,7 @@ async function fetchCimdClient(clientIdUrl: string, nowMs: number): Promise<OAut
 
   if (body.client_id !== clientIdUrl) return null;
   if (!Array.isArray(body.redirect_uris) || body.redirect_uris.length === 0) return null;
-  if (body.token_endpoint_auth_method && body.token_endpoint_auth_method !== 'none') return null;
+  if (!cimdSupportsPublicClientAuth(body)) return null;
 
   const client: OAuthClientRecord = {
     clientId: clientIdUrl,
