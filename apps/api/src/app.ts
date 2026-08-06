@@ -493,10 +493,12 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     creationLimitsTtlMs: options.submissionRoutes?.creationLimitsTtlMs,
   });
 
-  // Reviewer assessment desk (docs/game-assessment-plan.md). Catalog lane prefers the
-  // snapshot (same source the public catalog uses in production); falls back to the
-  // games-repo client; empty when neither is configured (local mock).
+  // Reviewer assessment desk (docs/game-assessment-plan.md). Prefer the same client the
+  // public catalog uses (`submissionSeams.githubClient`) — that is the local checkout in
+  // laptop/dev and the GitHub client in production — so `/review` and `/api/catalog`
+  // cannot disagree about what is published. Snapshot first when present (production).
   const publishedRef = process.env.GAMES_REPO_REF?.trim() || 'main';
+  const reviewCatalogClient = submissionSeams.githubClient ?? gamesRepoClient;
   const defaultReviewCatalog = async () => {
     try {
       const fromSnapshot = snapshotReader ? await snapshotReader.getCatalog() : null;
@@ -509,10 +511,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
         }));
       }
     } catch {
-      // Fall through to the repo client.
+      // Fall through to the repo / local client.
     }
-    if (!gamesRepoClient) return [];
-    const entries = await gamesRepoClient.getCatalog(publishedRef);
+    if (!reviewCatalogClient) return [];
+    const entries = await reviewCatalogClient.getCatalog(publishedRef);
     return entries
       .filter((entry) => entry.status === 'published')
       .map((entry) => ({
