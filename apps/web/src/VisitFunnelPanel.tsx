@@ -50,6 +50,7 @@ const REMIX_LABELS: Record<string, string> = {
   refused: 'was refused',
   shared: 'shared their version',
   keep_clicked: 'clicked "make it mine"',
+  proposed: 'sent a proposal',
 };
 
 const REMIX_VIA_LABELS: Record<string, string> = {

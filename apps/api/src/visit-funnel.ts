@@ -241,6 +241,11 @@ export const REMIX_STEPS = [
   'refused',
   'shared',
   'keep_clicked',
+  // The contribute-back exit: this visit successfully sent a proposal. Beside
+  // `shared` / `keep_clicked` rather than below them — a visit may propose without
+  // sharing a link or keeping a draft, and without this rung "opened the composer"
+  // and "sent a reviewable change" are the same number.
+  'proposed',
 ] as const;
 
 export type RemixStep = (typeof REMIX_STEPS)[number];

@@ -1154,6 +1154,53 @@ describe('remix propose', () => {
     });
   });
 
+  it('keeps the snapshot-pinned base when session.sources drift from publishedRef', async () => {
+    // Repo-lane sessions load EDITOR.json from publishedRef at start; the proposal base
+    // is pinned to the snapshot commit. If those disagree, the candidate must still
+    // start from the snapshot — otherwise `base` and the files disagree.
+    const snapshotEditor = JSON.stringify({
+      version: 1,
+      params: {
+        dogScale: { type: 'number', min: 0.5, max: 3, default: 1, label: { en: 'Dog size' } },
+        tagline: { type: 'text', max: 40, default: 'snapshot!', label: { en: 'Tagline' } },
+      },
+    });
+    const puts: Array<{ slug: string; files: Array<{ path: string; content: string }> }> = [];
+    const built = await buildTestApp({
+      gamesStore: stubGamesStore({ puts }),
+      resolveProposalBase: async (slug) => {
+        if (slug !== 'catalog-dash') return null;
+        return {
+          base: { kind: 'repo', snapshotId: 'snap-1', sha: 'snapsha' },
+          files: Object.entries({ ...SOURCES, 'EDITOR.json': snapshotEditor }).map(([path, content]) => ({
+            path,
+            content,
+          })),
+        };
+      },
+    });
+    app = built.app;
+    const { remixId } = (
+      await app.inject({ method: 'POST', url: '/api/games/catalog-dash/remix', headers: alice })
+    ).json();
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/remixes/${remixId}/propose`,
+      headers: alice,
+      payload: {
+        title: 'keep the pin',
+        description: 'Candidate must start from the snapshot commit, not publishedRef.',
+        params: { dogScale: 2, tagline: 'snapshot!' },
+      },
+    });
+    expect(response.statusCode).toBe(200);
+    const editor = puts[0]?.files.find((file) => file.path === 'EDITOR.json')?.content ?? '';
+    // Snapshot's default tagline survived; publishedRef's "go!" did not leak in.
+    expect(editor).toContain('snapshot!');
+    expect(editor).not.toContain('"go!"');
+    expect(editor).toMatch(/"default"\s*:\s*2/);
+  });
+
   it('still refuses a catalog remix when the archive base is unavailable', async () => {
     const built = await buildTestApp({
       resolveProposalBase: async () => null,

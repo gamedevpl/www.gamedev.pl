@@ -974,9 +974,12 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
         return reply.status(409).send({ error: 'not_proposable' });
       }
 
-      // Session declaration / any prior code-lane load wins over a fresh base read for
-      // the same path — then overrides win on top. Same merge save uses for repo-era.
-      const merged = { ...baseSources, ...session.sources, ...session.overrides };
+      // Overrides only on top of the pinned base. Repo-lane `session.sources` starts as
+      // EDITOR.json (and may later hold a code-lane map) read from `publishedRef`, which
+      // can drift from the snapshot commit the base is pinned to — spreading it here would
+      // replace snapshot files and make the candidate disagree with `base`. Code edits
+      // land in `overrides`; params/content are baked below.
+      const merged = { ...baseSources, ...session.overrides };
       const files = Object.entries(merged).map(([path, fileContent]) => ({ path, content: fileContent }));
       bakeRemixEditorDefaults(files, session.definition, params, content);
 

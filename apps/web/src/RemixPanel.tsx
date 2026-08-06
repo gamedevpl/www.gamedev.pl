@@ -1534,6 +1534,7 @@ export function RemixPanel(props: {
           params={valuesRef.current}
           {...(contentEditedRef.current ? { content: contentDocRef.current } : {})}
           onSent={() => {
+            recordRemixStep('proposed');
             setProposing(false);
             setProposed(true);
           }}
