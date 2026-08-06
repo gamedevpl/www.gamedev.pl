@@ -13521,23 +13521,78 @@ body.remix-entry-open {
   }
 
   .game-page-remix-backdrop {
-    align-items: end;
+    align-items: stretch;
     padding: 0;
+    background: var(--bg);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
   }
 
   .game-page-remix-dialog {
+    display: flex;
+    flex-direction: column;
     width: 100%;
-    max-height: min(88dvh, 620px);
+    height: 100dvh;
+    max-height: none;
     overflow-y: auto;
-    border-right: 0;
-    border-bottom: 0;
-    border-left: 0;
-    border-radius: 16px 16px 0 0;
+    padding-top: max(1.25rem, env(safe-area-inset-top));
+    padding-right: max(1rem, env(safe-area-inset-right));
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+    padding-left: max(1rem, env(safe-area-inset-left));
+    border: 0;
+    border-radius: 0;
+    background:
+      radial-gradient(circle at 100% 0, rgba(0, 229, 183, 0.1), transparent 36%),
+      var(--panel);
+    box-shadow: none;
+  }
+
+  .game-page-remix-dialog-head {
+    gap: 0.75rem;
+  }
+
+  .game-page-remix-dialog h2 {
+    font-size: clamp(1.5rem, 7vw, 1.85rem);
+  }
+
+  .game-page-remix-dialog-head p {
+    max-width: 32rem;
+    font-size: 1rem;
+  }
+
+  .game-page-remix-form {
+    flex: 1;
+    grid-template-rows: auto minmax(8rem, 1fr) auto;
+    min-height: 0;
+    margin-top: clamp(1.5rem, 7dvh, 3.5rem);
+  }
+
+  .game-page-remix-form textarea {
+    height: 100%;
+    min-height: clamp(8rem, 34dvh, 18rem);
+    resize: none;
+    border-color: rgba(0, 229, 183, 0.45);
+    background: rgba(5, 10, 16, 0.72);
+    font-size: 1rem;
+  }
+
+  .game-page-remix-form-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 0.65fr) minmax(0, 1.55fr);
+    gap: 0.75rem;
+    width: 100%;
+    margin-top: 0.75rem;
   }
 
   .game-page-remix-form-actions > button {
-    flex: 1;
+    min-height: 52px;
     justify-content: center;
+    padding-inline: 0.75rem;
+    font-size: clamp(0.85rem, 4vw, 0.95rem);
+  }
+
+  .game-page-remix-form-actions > button[type='submit'] {
+    white-space: nowrap;
   }
 }
 
