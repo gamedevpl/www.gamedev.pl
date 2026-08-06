@@ -1,4 +1,4 @@
-import { useState, type MouseEvent } from 'react';
+import { useEffect, useState, type MouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from './AuthContext.js';
 import { AccountSettingsModal } from './AccountSettingsModal.js';
@@ -7,6 +7,7 @@ import { LanguageSwitcher } from './LanguageSwitcher.js';
 import { Mascot } from './Mascot.js';
 import { NotificationBell } from './NotificationBell.js';
 import { PixelIcon } from './PixelIcon.js';
+import { fetchAdminSummary } from './adminApi.js';
 import { creatorPath } from './router.js';
 import { usePageScrolling } from './usePageScrolling.js';
 
@@ -18,6 +19,8 @@ type NavHeaderProps = {
   onHome: () => void;
   /** Opens the creator control panel. */
   onStudio: () => void;
+  /** Opens the operator console. Only ever called from a link only operators are shown. */
+  onAdmin: () => void;
   /**
    * Android-style Up target for non-home surfaces. Null on home, join, play, and
    * while an immersive theater owns escape. Never history.back() — deep links
@@ -27,7 +30,15 @@ type NavHeaderProps = {
   onUp?: (path: string) => void;
 };
 
-export function NavHeader({ activeBuildCount, onNavigate, onHome, onStudio, upTarget = null, onUp }: NavHeaderProps) {
+export function NavHeader({
+  activeBuildCount,
+  onNavigate,
+  onHome,
+  onStudio,
+  onAdmin,
+  upTarget = null,
+  onUp,
+}: NavHeaderProps) {
   const { t } = useTranslation();
   const { user, logout } = useAuth();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -35,6 +46,42 @@ export function NavHeader({ activeBuildCount, onNavigate, onHome, onStudio, upTa
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   // Header mark mimes the visitor: pull a phone and scroll a tiny feed while the page moves.
   const pageScrolling = usePageScrolling();
+  /**
+   * How many jobs are waiting on this person. Only ever read for an operator.
+   *
+   * Whether someone *is* one comes from the session (`user.admin`) rather than from
+   * probing an operator endpoint and reading its 404 as "no". That probe was the
+   * obvious implementation and the wrong one: it asked a settled question on every page
+   * load, and for everybody who is not an operator — which is everybody — it answered
+   * with an error in the browser console. The deploy gate that fails on console errors
+   * caught it, correctly.
+   */
+  const [alertCount, setAlertCount] = useState<number | null>(null);
+  const isOperator = user?.admin === true;
+
+  useEffect(() => {
+    if (!isOperator) {
+      setAlertCount(null);
+      return;
+    }
+    let cancelled = false;
+    const read = () =>
+      fetchAdminSummary()
+        .then((summary) => {
+          if (!cancelled) setAlertCount(summary ? summary.alerts.length : 0);
+        })
+        .catch(() => {
+          // A failed read is not evidence of anything; leave the badge as it was.
+        });
+    void read();
+    // Slower than the console's own poll: this is a badge somebody glances at, not a
+    // queue they are working, and it rides along on every page of the site.
+    const timer = setInterval(read, 120_000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [isOperator]);
 
   const handleNavClick = (sectionId: string) => {
     onNavigate(sectionId);
@@ -185,6 +232,25 @@ export function NavHeader({ activeBuildCount, onNavigate, onHome, onStudio, upTa
                   </span>
                 ) : null}
               </button>
+
+              {/* Operators only — everyone else never learns this exists, which is the
+                  same posture the API takes when asked. */}
+              {isOperator ? (
+                <button
+                  className="nav-link"
+                  onClick={() => {
+                    setIsMenuOpen(false);
+                    onAdmin();
+                  }}
+                >
+                  <PixelIcon name="wrench" size={14} /> Operator
+                  {alertCount !== null && alertCount > 0 ? (
+                    <span className="specs-count-badge" aria-label={`${alertCount} waiting on you`}>
+                      {alertCount}
+                    </span>
+                  ) : null}
+                </button>
+              ) : null}
 
               {/* Sign out lives at the foot of the menu on every width — not beside
                   the avatar, where it competed with the bell and the menu button. */}
