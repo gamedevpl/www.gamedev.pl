@@ -158,6 +158,18 @@ const StartSchema = z.object({
 const AssistSchema = z.object({
   utterance: z.string().trim().min(2).max(MAX_UTTERANCE_LENGTH),
   params: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
+  /**
+   * Player UI language (`en` / `pl`) — steers which summary side the model writes carefully.
+   * BCP-47-ish only: interpolated into prompts outside the quoted utterance, so it
+   * must not carry whitespace, quotes, or newlines a hostile client could smuggle.
+   */
+  locale: z
+    .string()
+    .trim()
+    .min(2)
+    .max(16)
+    .regex(/^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/)
+    .optional(),
 });
 const ProposeSchema = z.object({
   title: z.string().trim().min(3, 'title is too short').max(MAX_PROPOSAL_TITLE_LENGTH),
@@ -584,6 +596,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
           utterance: body.data.utterance,
           game: { title: session.title },
           history: session.turns,
+          ...(body.data.locale ? { locale: body.data.locale } : {}),
         });
         if (result.lane !== 'params' || !result.patches?.length) {
           return reply.send({
@@ -729,6 +742,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
             utterance: body.data.utterance,
             history: session.turns,
             game: { title: session.title },
+            ...(body.data.locale ? { locale: body.data.locale } : {}),
             ...(kit ? { kit } : {}),
             modules,
           },

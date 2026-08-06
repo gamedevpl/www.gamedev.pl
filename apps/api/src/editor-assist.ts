@@ -219,6 +219,9 @@ Rules:
 - Relative requests ("a bit faster", "much bigger") move the CURRENT value by a sensible amount: roughly 15% of the range for "a bit", roughly 40% for a strong request.
 - If the request names no setting you can map it to, do NOT guess — use "code".
 - "summary" is one short sentence, written in both English (en) and Polish (pl), saying what you changed or why you could not.
+  Write real Polish in "pl" (not an English copy)${
+    request.locale ? `. The player's UI language is ${request.locale}` : ''
+  }.
 ${prior ? `\n${prior}` : ''}
 Respond STRICTLY as JSON:
 {"lane":"params","patches":[{"key":"someKey","value":1.3}],"summary":{"en":"...","pl":"..."}}

@@ -11768,11 +11768,38 @@ button.builder-mode-selector:disabled {
 }
 
 .remix-grip {
+  display: block;
+  width: 48px;
+  height: 18px;
+  margin: -4px auto 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: grab;
+  touch-action: none;
+  position: relative;
+}
+
+.remix-grip::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
   width: 34px;
   height: 4px;
   border-radius: 2px;
   background: var(--panel-border, #2b333f);
-  margin: -2px auto 0;
+  transform: translate(-50%, -50%);
+}
+
+.remix-grip:active {
+  cursor: grabbing;
+}
+
+.remix-grip:focus-visible {
+  outline: 2px solid var(--accent, #62dcff);
+  outline-offset: 2px;
+  border-radius: 8px;
 }
 
 .remix-head {
@@ -12363,6 +12390,90 @@ button.builder-mode-selector:disabled {
 
 .remix-bubble.is-pending {
   font-style: italic;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-width: 100%;
+}
+
+.remix-bubble.is-pending .remix-bar {
+  width: 100%;
+}
+
+.remix-bubble-text {
+  display: block;
+}
+
+.remix-bubble-undo {
+  margin-top: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.remix-bubble-undo:hover,
+.remix-bubble-undo:focus-visible {
+  color: var(--text);
+}
+
+.remix-bubble-undo:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid var(--accent, #62dcff);
+  outline-offset: 2px;
+}
+
+.remix-bubble-undo:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.remix-bubble-undo.is-urgent {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.remix-host .remix-panel.is-chat.is-collapsed {
+  max-height: none;
+  padding: 8px 12px 10px;
+  gap: 4px;
+}
+
+.remix-collapsed-hit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  padding: 4px 2px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.remix-collapsed-hit .remix-title {
+  flex: 1 1 auto;
+}
+
+.remix-collapsed-hint {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.remix-collapsed-hit:focus-visible {
+  border-radius: 8px;
+  outline: 2px solid var(--accent, #62dcff);
+  outline-offset: 2px;
 }
 
 @media (min-width: 720px) {
@@ -12376,6 +12487,12 @@ button.builder-mode-selector:disabled {
     bottom: 8px;
     max-height: none;
     width: 300px;
+  }
+
+  .remix-host .remix-panel.is-chat.is-collapsed {
+    top: auto;
+    bottom: 8px;
+    width: 220px;
   }
 }
 

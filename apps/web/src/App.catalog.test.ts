@@ -384,7 +384,7 @@ describe('catalog playback', () => {
     });
 
     await vi.waitFor(() => {
-      expect(assistBodies).toEqual([{ utterance: 'make it faster', params: {} }]);
+      expect(assistBodies).toEqual([{ utterance: 'make it faster', params: {}, locale: 'en' }]);
     });
     expect(container.querySelector('iframe[title="Neon Courier"]')?.getAttribute('sandbox')).toBe(
       'allow-scripts allow-pointer-lock',
@@ -400,7 +400,7 @@ describe('catalog playback', () => {
       container.querySelector<HTMLButtonElement>('.remix-btn')!.click();
     });
     await flushEffects();
-    expect(assistBodies).toEqual([{ utterance: 'make it faster', params: {} }]);
+    expect(assistBodies).toEqual([{ utterance: 'make it faster', params: {}, locale: 'en' }]);
 
     await act(async () => {
       root.unmount();

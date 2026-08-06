@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MutableRefObject,
+  type PointerEvent as ReactPointerEvent,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import { PixelIcon } from './PixelIcon.js';
 import { BRIDGE_NAMESPACE, PROTOCOL_VERSION } from './mp/protocol.js';
@@ -29,14 +37,17 @@ import type {
 } from './studioApi.js';
 import type { RemixPaintedVia } from './visitTelemetry.js';
 import { suggestedKeepTitle } from './pageTitle.js';
+import { ingestRemixSummary } from './remixChatCopy.js';
 import { NAVIGATE_EVENT, playPath } from './router.js';
 
 /** Successful landings before we offer to keep the remix in Studio. */
 const KEEP_OFFER_AFTER = 3;
 /** After this many landings the sheet becomes a mini sidebar chat. */
 const CHAT_MODE_AFTER = 2;
+/** Pointer travel (px) before a grip drag counts as expand/collapse. */
+const GRIP_DRAG_PX = 40;
 
-type ChatTurn = { id: string; role: 'user' | 'assistant'; text: string };
+type ChatTurn = { id: string; role: 'user' | 'assistant'; text: string; canUndo?: boolean };
 
 /**
  * Remix: a player bends a published game while playing it.
@@ -272,6 +283,16 @@ export function RemixPanel(props: {
    * model; this list is what the player reads after the panel docks.
    */
   const [chatTurns, setChatTurns] = useState<ChatTurn[]>([]);
+  /**
+   * Chat dock: expanded is the full sidebar; collapsed is a thin reopen strip.
+   * Resets to expanded whenever chat mode is first earned.
+   */
+  const [chatExpanded, setChatExpanded] = useState(true);
+  const gripDragRef = useRef<{ startY: number; moved: boolean } | null>(null);
+  /** Set when a grip drag already acted, so the trailing click does not toggle again. */
+  const gripDragConsumedRef = useRef(false);
+  /** Only the newest swap is watched — older listeners would stack and over-count breaks. */
+  const swapWatchStopRef = useRef<(() => void) | null>(null);
   /**
    * Whether this game takes proposals from this player.
    *
@@ -610,13 +631,18 @@ export function RemixPanel(props: {
   const chatMode = successCount >= CHAT_MODE_AFTER;
   const transcriptRef = useRef<HTMLOListElement | null>(null);
 
+  // First time we dock into chat, open expanded so the transcript is visible.
+  useEffect(() => {
+    if (chatMode) setChatExpanded(true);
+  }, [chatMode]);
+
   // Keep the newest bubble in view when the mini-chat grows.
   useEffect(() => {
-    if (!chatMode) return;
+    if (!chatMode || !chatExpanded) return;
     const el = transcriptRef.current;
     if (!el) return;
     el.scrollTop = el.scrollHeight;
-  }, [chatMode, chatTurns, lane]);
+  }, [chatMode, chatExpanded, chatTurns, lane]);
 
   // A panel that opened onto nothing. Recorded against the same `opened`
   // denominator so the share of visits that met a game with no way in is a
@@ -672,10 +698,75 @@ export function RemixPanel(props: {
     setKeepOfferOpen(true);
   }
 
-  function appendChat(role: ChatTurn['role'], text: string) {
+  function appendChat(role: ChatTurn['role'], text: string, options?: { canUndo?: boolean }) {
     const trimmed = text.trim();
     if (!trimmed) return;
-    setChatTurns((prev) => [...prev, { id: `${Date.now()}-${prev.length}`, role, text: trimmed }]);
+    setChatTurns((prev) => {
+      const cleared = options?.canUndo ? prev.map((turn) => (turn.canUndo ? { ...turn, canUndo: false } : turn)) : prev;
+      return [
+        ...cleared,
+        {
+          id: `${Date.now()}-${cleared.length}`,
+          role,
+          text: trimmed,
+          ...(options?.canUndo ? { canUndo: true } : {}),
+        },
+      ];
+    });
+  }
+
+  /** Player-facing summary from a bilingual model reply. */
+  function summaryFor(utteranceText: string, summary: EditorLabel | undefined, fallback: string): string {
+    return ingestRemixSummary(summary, utteranceText, i18n.language, fallback);
+  }
+
+  function onGripPointerDown(event: ReactPointerEvent<HTMLElement>) {
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    gripDragConsumedRef.current = false;
+    gripDragRef.current = { startY: event.clientY, moved: false };
+  }
+
+  function onGripPointerMove(event: ReactPointerEvent<HTMLElement>) {
+    const drag = gripDragRef.current;
+    if (!drag) return;
+    const dy = event.clientY - drag.startY;
+    if (Math.abs(dy) < GRIP_DRAG_PX) return;
+    drag.moved = true;
+    gripDragConsumedRef.current = true;
+    if (!chatMode) {
+      // Pre-chat sheet: a clear downward drag dismisses — the grip finally does a job.
+      if (dy > GRIP_DRAG_PX) {
+        gripDragRef.current = null;
+        props.onClose();
+      }
+      return;
+    }
+    if (dy > GRIP_DRAG_PX) {
+      gripDragRef.current = null;
+      setChatExpanded(false);
+    } else if (dy < -GRIP_DRAG_PX) {
+      gripDragRef.current = null;
+      setChatExpanded(true);
+    }
+  }
+
+  function onGripPointerUp() {
+    gripDragRef.current = null;
+  }
+
+  function onGripActivate() {
+    // A completed drag already changed state — don't toggle again on the click.
+    if (gripDragConsumedRef.current) {
+      gripDragConsumedRef.current = false;
+      return;
+    }
+    // Pre-chat the grip is Close (label + click/keyboard). In chat it toggles
+    // the dock — drag already covers expand/collapse for pointer users.
+    if (!chatMode) {
+      props.onClose();
+      return;
+    }
+    setChatExpanded((open) => !open);
   }
 
   function dismissKeepOffer() {
@@ -733,10 +824,12 @@ export function RemixPanel(props: {
 
     // The tuning lane first: it is cheaper, faster, and covers most of what
     // people ask for. Only what it declines is worth a rebuild.
+    const locale = i18n.language;
+
     if (active.canAssist) {
       setLane('asking');
       try {
-        const result = await remixAssist(active.remixId, text, valuesRef.current);
+        const result = await remixAssist(active.remixId, text, valuesRef.current, locale);
         if (result.lane === 'params' && result.values) {
           const before = valuesRef.current;
           const next = result.values;
@@ -746,8 +839,8 @@ export function RemixPanel(props: {
           setUtterance('');
           setLane('idle');
           recordRemixStep('applied');
-          const summary = label(result.summary) || t('remix.applied');
-          appendChat('assistant', summary);
+          const summary = summaryFor(text, result.summary, t('remix.applied'));
+          appendChat('assistant', summary, { canUndo: true });
           // Share is offered whenever there is anything shareable — a link
           // carries declared values, so a game with no declaration has nothing
           // to put in one, and offering it there would be a broken promise.
@@ -761,9 +854,9 @@ export function RemixPanel(props: {
         if (result.lane === 'reject') {
           setLane('idle');
           recordRemixStep('refused');
-          const textOut = label(result.summary) || t('remix.refused');
-          appendChat('assistant', textOut);
-          setNote({ kind: 'error', text: textOut });
+          // Soft refusals stay as a note, not a chat turn — the thread is for
+          // changes that landed, not for the model's "no".
+          setNote({ kind: 'error', text: summaryFor(text, result.summary, t('remix.refused')) });
           return;
         }
         // A content-shaped request, and this game has a painter: the honest
@@ -774,33 +867,26 @@ export function RemixPanel(props: {
         if (result.lane === 'content' && active.content) {
           setLane('idle');
           setPainterOffer(true);
-          const textOut = label(result.summary) || t('remix.editorOffer');
-          appendChat('assistant', textOut);
-          setNote({ kind: 'info', text: textOut });
+          setNote({ kind: 'info', text: summaryFor(text, result.summary, t('remix.editorOffer')) });
           return;
         }
         // `code` (or `content` with nothing to paint): falls through to the code lane below.
         if (!active.canCode) {
           setLane('idle');
           recordRemixStep('handoff');
-          const textOut = label(result.summary) || t('remix.needsCode');
-          appendChat('assistant', textOut);
-          setNote({ kind: 'info', text: textOut });
+          setNote({ kind: 'info', text: summaryFor(text, result.summary, t('remix.needsCode')) });
           return;
         }
       } catch (error) {
         setLane('idle');
         const status = (error as RemixApiError).status;
-        const textOut = status === 429 ? t('remix.quota') : t('remix.unavailable');
-        appendChat('assistant', textOut);
-        setNote({ kind: 'error', text: textOut });
+        setNote({ kind: 'error', text: status === 429 ? t('remix.quota') : t('remix.unavailable') });
         return;
       }
     }
 
     if (!active.canCode) {
       recordRemixStep('handoff');
-      appendChat('assistant', t('remix.needsCode'));
       setNote({ kind: 'info', text: t('remix.needsCode') });
       return;
     }
@@ -813,13 +899,14 @@ export function RemixPanel(props: {
     const slowTimer = window.setTimeout(() => setSlow(true), SLOW_AFTER_MS);
     const hardTimer = window.setTimeout(() => controller.abort(), CODE_TIMEOUT_MS);
     try {
-      const result = await remixCode(active.remixId, text, controller.signal);
+      const result = await remixCode(active.remixId, text, controller.signal, locale);
       if (result.ok) {
         failStreakRef.current = 0;
         recordRemixStep('applied');
         setUtterance('');
-        const summary = `${label(result.summary) || t('remix.rebuilt')} ${t('remix.restarted')}`;
-        appendChat('assistant', summary);
+        const summary = `${summaryFor(text, result.summary, t('remix.rebuilt'))} ${t('remix.restarted')}`;
+        const undoable = result.undoable !== false;
+        appendChat('assistant', summary, { canUndo: undoable });
         // A code change cannot travel in a link (the gate exists so generated
         // code never reaches a stranger), but the settings can — and the share
         // copy says exactly that rather than implying the whole remix went.
@@ -830,9 +917,9 @@ export function RemixPanel(props: {
           canShare: hasShareableValues(active.params, valuesRef.current),
           // A rebuild that compiles is not a rebuild that plays, and the lane
           // cannot tell the difference. One tap back is the safety net.
-          undoCode: result.undoable !== false,
+          undoCode: undoable,
         });
-        props.onUndoable?.(result.undoable !== false);
+        props.onUndoable?.(undoable);
         setUndo(null);
         // The swap replaces the whole document, so the new build boots fresh and
         // the values the player has set are re-sent once it says hello.
@@ -844,7 +931,7 @@ export function RemixPanel(props: {
         recordRemixStep(result.reason === 'refused' ? 'refused' : 'handoff');
         props.frameRef.current?.contentWindow?.postMessage({ source: 'gdpl-host', type: 'resume' }, '*');
         const textOut =
-          label(result.summary) ||
+          summaryFor(text, result.summary, '') ||
           // Each reason gets its own words. A refusal was reading as "too big",
           // which tells the player to try something smaller for a request that
           // size had nothing to do with.
@@ -853,7 +940,8 @@ export function RemixPanel(props: {
             : result.reason === 'did_not_compile'
               ? t('remix.couldNotBuild')
               : t('remix.tooBig'));
-        appendChat('assistant', textOut);
+        // Failures are ephemeral notes — they must not accumulate in the thread
+        // (timeouts especially read as the agent "saying" something).
         setNote({
           kind: result.reason === 'refused' ? 'error' : 'info',
           text: textOut,
@@ -866,17 +954,15 @@ export function RemixPanel(props: {
       failStreakRef.current += 1;
       const status = (error as RemixApiError).status;
       const timedOut = controller.signal.aborted;
-      const textOut = timedOut
-        ? t('remix.tookTooLong')
-        : status === 429
-          ? t('remix.quota')
-          : failStreakRef.current >= 2
-            ? t('remix.napping')
-            : t('remix.unavailable');
-      appendChat('assistant', textOut);
       setNote({
         kind: timedOut ? 'info' : 'error',
-        text: textOut,
+        text: timedOut
+          ? t('remix.tookTooLong')
+          : status === 429
+            ? t('remix.quota')
+            : failStreakRef.current >= 2
+              ? t('remix.napping')
+              : t('remix.unavailable'),
       });
     } finally {
       window.clearTimeout(slowTimer);
@@ -907,7 +993,9 @@ export function RemixPanel(props: {
       // More history behind it: the button stays, because the server can still
       // give another step back and the player has no other way to ask for it.
       setChanged(result.undoable ? { text: t('remix.changeStanding'), canShare: false, undoCode: true } : null);
-      setNote({ kind: 'ok', text: t('remix.undone') });
+      setChatTurns((prev) => prev.map((turn) => (turn.canUndo ? { ...turn, canUndo: false } : turn)));
+      if (chatMode) appendChat('assistant', t('remix.undone'), { canUndo: result.undoable });
+      else setNote({ kind: 'ok', text: t('remix.undone') });
     } catch {
       props.frameRef.current?.contentWindow?.postMessage({ source: 'gdpl-host', type: 'resume' }, '*');
       setNote({ kind: 'error', text: t('remix.undoFailed') });
@@ -918,6 +1006,7 @@ export function RemixPanel(props: {
 
   /** Listen for the new build throwing, for a few seconds after the swap. */
   function watchSwappedDocument() {
+    swapWatchStopRef.current?.();
     function onMessage(event: MessageEvent) {
       if (event.origin !== 'null') return;
       // Read the frame's window at delivery time: the swap replaced the document,
@@ -941,8 +1030,10 @@ export function RemixPanel(props: {
     function stop() {
       window.removeEventListener('message', onMessage);
       window.clearTimeout(timer);
+      if (swapWatchStopRef.current === stop) swapWatchStopRef.current = null;
     }
     const timer = window.setTimeout(stop, SWAP_WATCH_MS);
+    swapWatchStopRef.current = stop;
     window.addEventListener('message', onMessage);
   }
 
@@ -953,6 +1044,8 @@ export function RemixPanel(props: {
     setUndo(null);
     setNote(null);
     setChanged(null);
+    setChatTurns((prev) => prev.map((turn) => (turn.canUndo ? { ...turn, canUndo: false } : turn)));
+    if (chatMode) appendChat('assistant', t('remix.undone'));
   }
 
   async function share() {
@@ -1119,16 +1212,34 @@ export function RemixPanel(props: {
   /** Mini-chat scrollback — only after the panel has docked into chat mode. */
   function transcript() {
     if (!chatMode || chatTurns.length === 0) return null;
+    const working = lane === 'asking' || lane === 'building';
     return (
       <ol ref={transcriptRef} className="remix-transcript" aria-label={t('remix.chatAria')}>
         {chatTurns.map((turn) => (
           <li key={turn.id} className={`remix-bubble is-${turn.role}`}>
-            {turn.text}
+            <span className="remix-bubble-text">{turn.text}</span>
+            {turn.canUndo && (undo || changed?.undoCode) ? (
+              <button
+                type="button"
+                className={`remix-bubble-undo${changed?.broke ? ' is-urgent' : ''}`}
+                disabled={lane !== 'idle' || saving}
+                onClick={() => (changed?.undoCode ? void undoCode() : undoLast())}
+              >
+                {t('remix.undo')}
+              </button>
+            ) : null}
           </li>
         ))}
-        {lane === 'asking' || lane === 'building' ? (
+        {working ? (
           <li className="remix-bubble is-assistant is-pending" aria-live="polite">
-            {lane === 'building' ? t('remix.building') : t('remix.asking')}
+            <span className="remix-bubble-text">
+              {lane === 'building' ? (slow ? t('remix.buildingSlow') : t('remix.building')) : t('remix.asking')}
+            </span>
+            {lane === 'building' ? (
+              <span className="remix-bar" aria-hidden="true">
+                <i />
+              </span>
+            ) : null}
           </li>
         ) : null}
       </ol>
@@ -1136,7 +1247,10 @@ export function RemixPanel(props: {
   }
 
   function actionRow() {
-    if (!changed || !(changed.canShare || canPropose || undo || changed.undoCode)) return null;
+    // In chat mode Undo lives on the last assistant bubble — the row keeps
+    // Share / Propose only, so it does not compete with the message it undoes.
+    const showUndo = !chatMode && Boolean(undo || changed?.undoCode);
+    if (!changed || !(changed.canShare || canPropose || showUndo)) return null;
     return (
       <div className="remix-actions-row">
         {changed.canShare ? (
@@ -1149,7 +1263,7 @@ export function RemixPanel(props: {
             {t('propose.action')}
           </button>
         ) : null}
-        {undo || changed.undoCode ? (
+        {showUndo ? (
           <button
             type="button"
             className={`remix-btn ${changed.broke ? 'is-primary' : 'is-quiet'}`}
@@ -1160,6 +1274,21 @@ export function RemixPanel(props: {
           </button>
         ) : null}
       </div>
+    );
+  }
+
+  function grip() {
+    return (
+      <button
+        type="button"
+        className="remix-grip"
+        aria-label={chatMode ? (chatExpanded ? t('remix.collapse') : t('remix.expand')) : t('remix.close')}
+        onPointerDown={onGripPointerDown}
+        onPointerMove={onGripPointerMove}
+        onPointerUp={onGripPointerUp}
+        onPointerCancel={onGripPointerUp}
+        onClick={onGripActivate}
+      />
     );
   }
 
@@ -1269,10 +1398,22 @@ export function RemixPanel(props: {
     );
   }
 
+  if (chatMode && !chatExpanded) {
+    return (
+      <div className="remix-panel is-chat is-collapsed">
+        {grip()}
+        <button type="button" className="remix-collapsed-hit" onClick={() => setChatExpanded(true)}>
+          <span className="remix-title">{t('remix.chatTitle')}</span>
+          <span className="remix-collapsed-hint">{t('remix.expand')}</span>
+          <PixelIcon name="expand" size={12} />
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div className={`remix-panel${chatMode ? ' is-chat' : ''}`}>
-      {/* The sheet's own handle. Decorative — closing is the labelled button. */}
-      <span className="remix-grip" aria-hidden="true" />
+    <div className={`remix-panel${chatMode ? ' is-chat' : ''}${chatMode && chatExpanded ? ' is-expanded' : ''}`}>
+      {grip()}
 
       <div className="remix-head">
         <span className="remix-title">{chatMode ? t('remix.chatTitle') : t('remix.title')}</span>
@@ -1286,6 +1427,16 @@ export function RemixPanel(props: {
           {successCount >= 1 && !keepSaved && !keepOfferOpen && !changed?.broke ? (
             <button type="button" className="remix-keep-link" onClick={openKeepOffer}>
               {t('remix.keepOfferMenu')}
+            </button>
+          ) : null}
+          {chatMode ? (
+            <button
+              type="button"
+              className="remix-close"
+              onClick={() => setChatExpanded(false)}
+              aria-label={t('remix.collapse')}
+            >
+              <PixelIcon name="collapse" size={12} />
             </button>
           ) : null}
           <button type="button" className="remix-close" onClick={props.onClose} aria-label={t('remix.close')}>
@@ -1318,12 +1469,9 @@ export function RemixPanel(props: {
           <p className="remix-note">{slow ? t('remix.buildingSlow') : t('remix.buildingWait')}</p>
         </>
       ) : lane === 'building' && chatMode ? (
-        <>
-          <span className="remix-bar" aria-hidden="true">
-            <i />
-          </span>
-          <p className="remix-note">{slow ? t('remix.buildingSlow') : t('remix.buildingWait')}</p>
-        </>
+        // Loading lives under the last turn in the transcript — only the
+        // composer stays here so they can see the thread while they wait.
+        composer(true)
       ) : changed ? (
         /*
          * The reward, and it is earned: share is the loudest thing here only
