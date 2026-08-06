@@ -14,7 +14,9 @@ export type NudgeCode =
   | 'call_end'
   | 'gate_not_started'
   | 'gate_poll_backoff'
-  | 'card_unopened';
+  | 'card_unopened'
+  | 'must_fix_gate'
+  | 'must_deliver';
 
 export interface NudgeWarning {
   code: NudgeCode;

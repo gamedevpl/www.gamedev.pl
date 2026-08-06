@@ -46,8 +46,15 @@ function stubGitHub(): GitHubClient {
   };
 }
 
-function stubGamesStore(gate?: { green: boolean; ranAt?: string; report?: string; status?: string }) {
+function stubGamesStore(gate?: {
+  green: boolean;
+  ranAt?: string;
+  report?: string;
+  status?: string;
+  lane?: 'preview' | 'publish';
+}) {
   const stored: Array<{ slug: string; files: unknown[]; kitEngineRef?: string }> = [];
+  const staged = new Map<string, { path: string; content: string; bytes: number }>();
   const gamesStore = {
     putCandidateSources: async (input: {
       slug: string;
@@ -60,22 +67,60 @@ function stubGamesStore(gate?: { green: boolean; ranAt?: string; report?: string
       stored.push(input);
       return { version: 'v1', manifest: {} as never };
     },
-    getManifest: async () =>
-      gate
-        ? {
-            gate: {
-              green: gate.green,
-              ranAt: gate.ranAt ?? '2026-08-01T12:00:00.000Z',
-              ...(gate.report ? { report: gate.report } : {}),
-              ...(gate.status ? { status: gate.status } : {}),
-            },
-          }
-        : null,
+    getManifest: async () => {
+      if (!gate) return null;
+      const ranAt = gate.ranAt ?? '2026-08-01T12:00:00.000Z';
+      if (gate.lane === 'preview' || gate.status === 'preview_failed' || gate.status === 'preview_passed') {
+        return {
+          previewGate: {
+            green: gate.green,
+            ranAt,
+            ...(gate.report ? { report: gate.report } : {}),
+            ...(gate.status === 'kit_outdated' ? { status: 'kit_outdated' } : {}),
+          },
+        };
+      }
+      return {
+        gate: {
+          green: gate.green,
+          ranAt,
+          ...(gate.report ? { report: gate.report } : {}),
+          ...(gate.status ? { status: gate.status } : {}),
+        },
+      };
+    },
     getSourceFile: async () => null,
     putGateResult: async () => {},
     putDerivedArtifact: async () => {},
     getDerivedArtifact: async () => null,
     getKitRegistry: async () => null,
+    putStagedSourceFile: async (input: { path: string; content: string }) => {
+      const bytes = Buffer.byteLength(input.content, 'utf8');
+      staged.set(input.path, { path: input.path, content: input.content, bytes });
+      const files = [...staged.values()].map((f) => ({ path: f.path, bytes: f.bytes }));
+      return {
+        path: input.path,
+        bytes,
+        files,
+        totalBytes: files.reduce((sum, f) => sum + f.bytes, 0),
+        maxBytes: 1_500_000,
+        maxFiles: 64,
+        updatedAt: new Date().toISOString(),
+      };
+    },
+    getStagedSourceFiles: async () => [...staged.values()].map((f) => ({ path: f.path, content: f.content })),
+    getStagedSourceFile: async (input: { path: string }) => staged.get(input.path)?.content ?? null,
+    listStagedSources: async () => ({
+      files: [...staged.values()].map((f) => ({ path: f.path, bytes: f.bytes })),
+      totalBytes: [...staged.values()].reduce((sum, f) => sum + f.bytes, 0),
+      maxBytes: 1_500_000,
+      maxFiles: 64,
+    }),
+    clearStagedSources: async () => {
+      const cleared = staged.size;
+      staged.clear();
+      return { cleared };
+    },
   } as unknown as GamesStore;
   return { gamesStore, stored };
 }
@@ -487,7 +532,7 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(joined).toMatch(/Do not report_progress, read_inbox, or ack after green/i);
     expect(joined).toMatch(/terminal receipt/i);
     // Both failure branches are covered.
-    expect(joined).toMatch(/red \/ preview_failed:.*resubmit on the SAME key/i);
+    expect(joined).toMatch(/red \/ preview_failed:.*submit_sources again on the SAME key/i);
     expect(joined).toMatch(/kit_outdated:.*fromLatestDelivery/i);
     expect(joined).toMatch(/do NOT get_sources \+ re-stage/i);
 
@@ -1163,6 +1208,44 @@ describe('POST /api/mcp (BY-05)', () => {
     );
     expect(bad.isError).toBe(true);
     expect(JSON.stringify(bad.structured)).toMatch(/invalid base64/i);
+  });
+
+  it('forwards must_fix_gate on stage after preview_failed so Claude submits again', async () => {
+    // Observed 2026-08-06: channel already said mustFixGate; MCP dropped it, Claude kept
+    // staging + show_round, and the creator card stayed on PREVIEW FAILED.
+    const store = new InMemoryStore();
+    await seedJob(store);
+    await store.setSubmissionDeliveredVersion(ISSUE, 'v1');
+    await store.incrementRoundDeliveryCount(ISSUE);
+    const { gamesStore } = stubGamesStore({
+      green: false,
+      lane: 'preview',
+      status: 'preview_failed',
+      report: 'typecheck failed: missing export',
+      ranAt: '2026-08-06T11:22:00.000Z',
+    });
+    app = await createApp(store, gamesStore);
+    const sessionId = await initialize(app);
+    const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    const staged = await callTool(
+      app,
+      'stage_source_file',
+      { sessionKey, path: 'game.ts', content: 'export const fixed = true;\n' },
+      { 'mcp-session-id': sessionId },
+    );
+    expect(staged.isError).toBe(false);
+    const warnings = (staged.structured as { warnings?: Array<{ code: string; message: string }> }).warnings ?? [];
+    expect(warnings.some((w) => w.code === 'must_fix_gate')).toBe(true);
+    expect(warnings.find((w) => w.code === 'must_fix_gate')?.message).toMatch(/submit_sources/i);
+    expect(warnings.find((w) => w.code === 'must_fix_gate')?.message).toMatch(/Staging alone/i);
+
+    const shown = await callTool(app, 'show_round', { sessionKey }, { 'mcp-session-id': sessionId });
+    expect(shown.isError).toBe(false);
+    const showWarnings = (shown.structured as { warnings?: Array<{ code: string }> }).warnings ?? [];
+    expect(showWarnings.some((w) => w.code === 'must_fix_gate')).toBe(true);
+    expect((shown.structured as { gate?: { status?: string } }).gate?.status).toBe('preview_failed');
   });
 
   describe('terminal receipt (generation one behind) on all three transports', () => {

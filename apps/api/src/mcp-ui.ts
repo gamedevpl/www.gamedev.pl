@@ -925,8 +925,19 @@ const ROUND_STATUS_HTML = `<!doctype html>
         function isFinished(status) {
           var gate = status.gate;
           if (gate && gate.status === 'green') return true;
-          // Agent gone and a verdict already in: nothing further will arrive until
-          // somebody acts, and that act opens a fresh card.
+          // Fixable refusals are not terminal. Freezing here left creators staring at
+          // PREVIEW FAILED while the agent staged fixes above the card (2026-08-06) —
+          // and a resumed agent clears agentEndedAt, but a stopped poll never notices.
+          if (
+            gate &&
+            (gate.status === 'preview_failed' ||
+              gate.status === 'red' ||
+              gate.status === 'kit_outdated')
+          ) {
+            return false;
+          }
+          // Agent gone and a non-fixable verdict already in: nothing further will arrive
+          // until somebody acts, and that act opens a fresh card.
           if (status.agentEnded && gate && gate.status && gate.status !== 'pending') return true;
           return (
             status.phase === 'published' ||

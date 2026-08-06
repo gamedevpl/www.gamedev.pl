@@ -426,9 +426,20 @@ describe('ui resources', () => {
     expect(html).toContain('detail !== summary.textContent');
   });
 
+  it('keeps polling after a fixable gate refusal so a resumed agent refreshes the card', () => {
+    // Observed 2026-08-06: PREVIEW FAILED + agentEnded froze the card while Claude
+    // staged fixes above it. Fixable verdicts must stay live.
+    const html = readUiResource(ROUND_STATUS_RESOURCE_URI)?.text ?? '';
+    expect(html).toContain("gate.status === 'preview_failed'");
+    expect(html).toContain("gate.status === 'kit_outdated'");
+    expect(html).toContain('return false;');
+    // Still stop once a publish gate is green (or the round is truly terminal).
+    expect(html).toContain("gate.status === 'green') return true");
+  });
+
   it('stops polling once the agent has stopped and the gate has settled', () => {
     // Nothing further can arrive, so an open tab must not cost a request every 30s
-    // for as long as it stays open.
+    // for as long as it stays open — except fixable refusals (see above).
     const html = readUiResource(ROUND_STATUS_RESOURCE_URI)?.text ?? '';
     expect(html).toContain("status.agentEnded && gate && gate.status && gate.status !== 'pending'");
   });

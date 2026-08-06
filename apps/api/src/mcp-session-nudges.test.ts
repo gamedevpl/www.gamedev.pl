@@ -83,6 +83,17 @@ describe('mcp-session-nudges', () => {
     ).not.toContain('call_end');
   });
 
+  it('clears awaitingEnd when the agent resumes after submit (noteEnded)', () => {
+    const nudges = createMcpNudgeTracker();
+    const t0 = 1_000_000;
+    nudges.noteSubmitSuccess(1, t0);
+    expect(nudges.warningsFor(1, 'get_brief', t0).map((w) => w.code)).toContain('call_end');
+    // applySessionNudges calls noteEnded on stage/patch/progress so call_end does not
+    // fight must_fix_gate while Claude is fixing a refused gate.
+    nudges.noteEnded(1, t0 + 1);
+    expect(nudges.warningsFor(1, 'get_brief', t0 + 2).map((w) => w.code)).not.toContain('call_end');
+  });
+
   it('soft-warns gate_poll_backoff on tight get_gate_verdict loops', () => {
     const nudges = createMcpNudgeTracker();
     const t0 = 1_000_000;
