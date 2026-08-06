@@ -1,4 +1,4 @@
-import { useEffect, useState, type MouseEvent } from 'react';
+import { useState, type MouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from './AuthContext.js';
 import { AccountSettingsModal } from './AccountSettingsModal.js';
@@ -7,10 +7,8 @@ import { LanguageSwitcher } from './LanguageSwitcher.js';
 import { Mascot } from './Mascot.js';
 import { NotificationBell } from './NotificationBell.js';
 import { PixelIcon } from './PixelIcon.js';
-import { fetchAdminSummary } from './adminApi.js';
 import { creatorPath } from './router.js';
 import { usePageScrolling } from './usePageScrolling.js';
-import githubIcon from './assets/github-mark-white.svg';
 
 type NavHeaderProps = {
   /** Builds currently in flight for the signed-in creator. Server-derived, not a local tally. */
@@ -20,8 +18,6 @@ type NavHeaderProps = {
   onHome: () => void;
   /** Opens the creator control panel. */
   onStudio: () => void;
-  /** Opens the operator console. Only ever called from a link only operators are shown. */
-  onAdmin: () => void;
   /**
    * Android-style Up target for non-home surfaces. Null on home, join, play, and
    * while an immersive theater owns escape. Never history.back() — deep links
@@ -31,15 +27,7 @@ type NavHeaderProps = {
   onUp?: (path: string) => void;
 };
 
-export function NavHeader({
-  activeBuildCount,
-  onNavigate,
-  onHome,
-  onStudio,
-  onAdmin,
-  upTarget = null,
-  onUp,
-}: NavHeaderProps) {
+export function NavHeader({ activeBuildCount, onNavigate, onHome, onStudio, upTarget = null, onUp }: NavHeaderProps) {
   const { t } = useTranslation();
   const { user, logout } = useAuth();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -47,42 +35,6 @@ export function NavHeader({
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   // Header mark mimes the visitor: pull a phone and scroll a tiny feed while the page moves.
   const pageScrolling = usePageScrolling();
-  /**
-   * How many jobs are waiting on this person. Only ever read for an operator.
-   *
-   * Whether someone *is* one comes from the session (`user.admin`) rather than from
-   * probing an operator endpoint and reading its 404 as "no". That probe was the
-   * obvious implementation and the wrong one: it asked a settled question on every page
-   * load, and for everybody who is not an operator — which is everybody — it answered
-   * with an error in the browser console. The deploy gate that fails on console errors
-   * caught it, correctly.
-   */
-  const [alertCount, setAlertCount] = useState<number | null>(null);
-  const isOperator = user?.admin === true;
-
-  useEffect(() => {
-    if (!isOperator) {
-      setAlertCount(null);
-      return;
-    }
-    let cancelled = false;
-    const read = () =>
-      fetchAdminSummary()
-        .then((summary) => {
-          if (!cancelled) setAlertCount(summary ? summary.alerts.length : 0);
-        })
-        .catch(() => {
-          // A failed read is not evidence of anything; leave the badge as it was.
-        });
-    void read();
-    // Slower than the console's own poll: this is a badge somebody glances at, not a
-    // queue they are working, and it rides along on every page of the site.
-    const timer = setInterval(read, 120_000);
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
-  }, [isOperator]);
 
   const handleNavClick = (sectionId: string) => {
     onNavigate(sectionId);
@@ -95,6 +47,11 @@ export function NavHeader({
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
     onHome();
+  };
+
+  const openAccountSettings = () => {
+    setIsMenuOpen(false);
+    setIsAccountSettingsOpen(true);
   };
 
   return (
@@ -126,19 +83,32 @@ export function NavHeader({
       <div className="header-actions">
         {user ? (
           <div className="user-profile-badge">
-            {user.picture ? (
-              <img src={user.picture} alt="" className="user-avatar" width="24" height="24" />
-            ) : (
-              <span className="user-avatar-placeholder">
-                <PixelIcon name="user" size={16} />
-              </span>
-            )}
+            {/* Avatar opens account settings so deletion stays reachable after the
+                menu item was removed — especially for creators who have not claimed
+                a handle yet (Edit Profile is not available to them). */}
+            <button
+              type="button"
+              className="user-avatar-btn"
+              onClick={openAccountSettings}
+              aria-label={t('creatorProfile.accountSettings')}
+              title={t('creatorProfile.accountSettings')}
+            >
+              {user.picture ? (
+                <img src={user.picture} alt="" className="user-avatar" width="24" height="24" />
+              ) : (
+                <span className="user-avatar-placeholder">
+                  <PixelIcon name="user" size={16} />
+                </span>
+              )}
+            </button>
             {user.handle ? (
               <a className="user-name user-name--profile" href={creatorPath(user.handle)}>
                 {user.profileName || `@${user.handle}`}
               </a>
             ) : (
-              <span className="user-name">{user.name || user.email || 'User'}</span>
+              <button type="button" className="user-name user-name--settings" onClick={openAccountSettings}>
+                {user.name || user.email || 'User'}
+              </button>
             )}
             <NotificationBell />
             <button className="logout-btn" onClick={logout} title={t('header.signOut')}>
@@ -152,16 +122,6 @@ export function NavHeader({
         )}
 
         <LanguageSwitcher />
-
-        <a
-          className="github"
-          href="https://github.com/gamedevpl/www.gamedev.pl"
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label={t('header.githubAria')}
-        >
-          <img src={githubIcon} alt="" width="20" height="20" />
-        </a>
 
         <div className="hamburger-container">
           <button
@@ -179,13 +139,13 @@ export function NavHeader({
               <button className="nav-link" onClick={() => handleNavClick('hero-prompt')}>
                 <PixelIcon name="sparkle" size={14} /> {t('header.navPrompt')}
               </button>
-              <button className="nav-link" onClick={() => handleNavClick('arcade')}>
-                <PixelIcon name="gamepad" size={14} /> {t('header.navArcade')}
-              </button>
               {/* Studio is the creator home. The home page only keeps a short
                   "your games" gist; the full shelf + build/playtest/improve loop
                   lives here. Always offered — unsigned visitors get the sign-in
-                  prompt inside Studio rather than a dead "My Games" scroll target. */}
+                  prompt inside Studio rather than a dead "My Games" scroll target.
+                  Arcade / Operator / Account settings were dropped from this menu:
+                  the catalog is already on the home page, operators reach the
+                  console by URL, and account settings open from the avatar. */}
               <button
                 className="nav-link"
                 onClick={() => {
@@ -205,37 +165,6 @@ export function NavHeader({
                 )}
               </button>
 
-              {/* Operators only — everyone else never learns this exists, which is the
-                  same posture the API takes when asked. */}
-              {isOperator && (
-                <button
-                  className="nav-link"
-                  onClick={() => {
-                    setIsMenuOpen(false);
-                    onAdmin();
-                  }}
-                >
-                  <PixelIcon name="wrench" size={14} /> Operator
-                  {alertCount !== null && alertCount > 0 && (
-                    <span className="specs-count-badge" aria-label={`${alertCount} waiting on you`}>
-                      {alertCount}
-                    </span>
-                  )}
-                </button>
-              )}
-
-              {user && (
-                <button
-                  className="nav-link"
-                  onClick={() => {
-                    setIsMenuOpen(false);
-                    setIsAccountSettingsOpen(true);
-                  }}
-                >
-                  <PixelIcon name="user" size={14} /> {t('creatorProfile.accountSettings')}
-                </button>
-              )}
-
               {/* Controls that live in the header bar on a desktop but cannot fit
                   beside it on a phone. Hidden above the mobile breakpoint, where
                   the header itself still shows them. */}
@@ -251,16 +180,6 @@ export function NavHeader({
                     <PixelIcon name="user" size={14} /> {t('header.signOut')}
                   </button>
                 )}
-
-                <a
-                  className="nav-link"
-                  href="https://github.com/gamedevpl/www.gamedev.pl"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={() => setIsMenuOpen(false)}
-                >
-                  <img src={githubIcon} alt="" width="14" height="14" /> GitHub
-                </a>
 
                 <LanguageSwitcher />
               </div>
