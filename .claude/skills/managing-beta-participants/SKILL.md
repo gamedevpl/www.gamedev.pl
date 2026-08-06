@@ -114,6 +114,14 @@ gh variable set BETA_ALLOWED_EMAILS --repo gamedevpl/www.gamedev.pl --body "user
 
 Updating repo variables takes effect on the next Cloud Run deployment triggered via `deploy.yml`.
 
+### Reviewers (`REVIEWER_UIDS`) — not the waitlist
+
+Granting `/review` desk access is a separate allowlist from closed beta. It is **not**
+`beta:approve` and not a Firestore write — set the GitHub repository variable
+`REVIEWER_UIDS` (comma-separated `g:<sub>` uids) and redeploy. Admins are reviewers
+automatically. Full steps:
+[`docs/game-assessment-plan.md`](../../docs/game-assessment-plan.md) → "Managing reviewers".
+
 ---
 
 ## Inspection & Debugging
