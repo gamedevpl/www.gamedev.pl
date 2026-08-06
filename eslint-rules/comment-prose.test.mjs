@@ -53,9 +53,11 @@ describe('findCommentProseViolations', () => {
     expect(issues[0].kind).toBe('block');
   });
 
-  it('allows a short single-line block comment', () => {
+  it('flags a short single-line block comment — // only', () => {
     const code = `/** Sandbox: no allow-same-origin. */\nexport const N = 1;\n`;
-    expect(findCommentProseViolations(code)).toEqual([]);
+    const issues = findCommentProseViolations(code);
+    expect(issues).toHaveLength(1);
+    expect(issues[0].kind).toBe('block');
   });
 
   it('flags a long trailing comment', () => {
@@ -78,6 +80,19 @@ describe('findCommentProseViolations', () => {
       '`;',
       '',
     ].join('\n');
+    expect(findCommentProseViolations(code)).toEqual([]);
+  });
+
+  it('still scans // inside ${…} interpolations', () => {
+    const words = Array.from({ length: COMMENT_PROSE_MAX_WORDS + 1 }, (_, i) => `w${i}`).join(' ');
+    const code = ['const s = `hi ${', `  // ${words}`, '  x', '}`;', ''].join('\n');
+    const issues = findCommentProseViolations(code);
+    expect(issues).toHaveLength(1);
+    expect(issues[0].kind).toBe('long');
+  });
+
+  it('ignores braces inside strings within ${…}', () => {
+    const code = 'const s = `a ${"}"} b ${\'}\'} c`;\n';
     expect(findCommentProseViolations(code)).toEqual([]);
   });
 });

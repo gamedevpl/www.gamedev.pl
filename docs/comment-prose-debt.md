@@ -7,11 +7,11 @@ Same seal as games-repo Check 34. Models have been writing multi-paragraph comme
 
 **Rule for `apps/**/*.ts(x)` and `packages/**/*.ts(x)`** (fixtures excluded):
 
-| Allowed                                         | Forbidden                            |
-| ----------------------------------------------- | ------------------------------------ |
-| One `//` line, ≤ **12** words, saying _why_     | Multi-line `/* */` / `/** */` blocks |
-| A blank line between unrelated short `//` notes | Stacked `//` lines (a paragraph)     |
-| Knowledge in `docs/` / skills                   | Essay headers above functions        |
+| Allowed                                         | Forbidden                               |
+| ----------------------------------------------- | --------------------------------------- |
+| One `//` line, ≤ **12** words, saying _why_     | Any `/* */` / `/** */` block (use `//`) |
+| A blank line between unrelated short `//` notes | Stacked `//` lines (a paragraph)        |
+| Knowledge in `docs/` / skills                   | Essay headers above functions           |
 
 Enforce: `eslint-rules/comment-prose-lib.mjs` via `npm run comment-prose` (also part of
 `npm run lint`).

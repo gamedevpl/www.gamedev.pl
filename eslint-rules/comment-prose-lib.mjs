@@ -6,7 +6,7 @@
  *
  * - `//` one-liners only, ≤ COMMENT_PROSE_MAX_WORDS words, saying why
  * - no adjacent full-line `//` stacks
- * - no multi-line `/* *\/` blocks (short single-line blocks tolerated)
+ * - no `/* *\/` / `/** *\/` blocks at all (rewrite as `//`)
  *
  * Debt is frozen per file in comment-prose-baseline.json (may shrink, not grow).
  * New files have baseline 0.
@@ -55,8 +55,8 @@ function stripBlockDecor(text) {
 }
 
 /**
- * Single stateful walk: only treat `//` / `/*` as comments outside strings
- * and templates (including multi-line `` `…` `` bodies).
+ * Stateful walk over TypeScript/TSX. Template literal *text* is ignored;
+ * `${…}` interpolations are scanned as code (brace-depth aware).
  *
  * @param {string} source
  * @returns {{ kind: string, startLine: number, endLine: number, words: number, preview: string }[]}
@@ -69,128 +69,177 @@ export function findCommentProseViolations(source) {
   let i = 0;
   let line = 1;
   const n = source.length;
-  /** Column of first non-whitespace on the current line, or -1 if none yet. */
   let lineNonWsCol = -1;
   let col = 0;
 
   const atLineStartCode = () => lineNonWsCol === -1;
 
-  while (i < n) {
-    const ch = source[i];
-    const next = source[i + 1];
+  const bumpNewline = () => {
+    line += 1;
+    col = 0;
+    lineNonWsCol = -1;
+  };
 
-    if (ch === '\n') {
-      line += 1;
-      col = 0;
-      lineNonWsCol = -1;
-      i += 1;
-      continue;
-    }
+  /**
+   * Scan code. When `braceDepth` is a number (template `${…}`), return after the
+   * matching `}` — braces inside strings/comments/nested templates do not count.
+   * @param {number | null} [braceDepth]
+   */
+  function scanCode(braceDepth = null) {
+    while (i < n) {
+      const ch = source[i];
+      const next = source[i + 1];
 
-    if (ch === ' ' || ch === '\t') {
-      col += 1;
-      i += 1;
-      continue;
-    }
+      if (ch === '\n') {
+        bumpNewline();
+        i += 1;
+        continue;
+      }
 
-    // Capture before marking this column as code — full-line `//` must still win.
-    const wasLineStart = atLineStartCode();
-    if (lineNonWsCol === -1) lineNonWsCol = col;
+      if (ch === ' ' || ch === '\t') {
+        col += 1;
+        i += 1;
+        continue;
+      }
 
-    // String / template first — never collect comments from inside them.
-    if (ch === '"' || ch === "'" || ch === '`') {
-      const quote = ch;
-      i += 1;
-      col += 1;
-      while (i < n) {
-        if (source[i] === '\\') {
-          i += 2;
-          col += 2;
-          continue;
-        }
-        if (source[i] === '\n') {
-          if (quote !== '`') break;
-          line += 1;
-          col = 0;
-          lineNonWsCol = -1;
-          i += 1;
-          continue;
-        }
-        if (source[i] === quote) {
+      const wasLineStart = atLineStartCode();
+      if (lineNonWsCol === -1) lineNonWsCol = col;
+
+      if (ch === '"' || ch === "'") {
+        const quote = ch;
+        i += 1;
+        col += 1;
+        while (i < n) {
+          if (source[i] === '\\') {
+            i += 2;
+            col += 2;
+            continue;
+          }
+          if (source[i] === '\n') break;
+          if (source[i] === quote) {
+            i += 1;
+            col += 1;
+            break;
+          }
           i += 1;
           col += 1;
-          break;
         }
-        i += 1;
-        col += 1;
+        continue;
       }
-      continue;
-    }
 
-    if (ch === '/' && next === '/') {
-      const startLine = line;
-      const fullLine = wasLineStart;
-      i += 2;
-      col += 2;
-      const textStart = i;
-      while (i < n && source[i] !== '\n') {
+      if (ch === '`') {
         i += 1;
         col += 1;
+        scanTemplate();
+        continue;
       }
-      const text = source.slice(textStart, i).trim();
-      const words = wordCount(text);
-      if (fullLine) {
-        fullLines.push({ line: startLine, text });
-      } else if (words > COMMENT_PROSE_MAX_WORDS) {
-        violations.push({
-          kind: 'trailing',
-          startLine,
-          endLine: startLine,
-          words,
-          preview: previewOf(text),
-        });
-      }
-      continue;
-    }
 
-    if (ch === '/' && next === '*') {
-      const startLine = line;
-      i += 2;
-      col += 2;
-      const textStart = i;
-      while (i < n - 1 && !(source[i] === '*' && source[i + 1] === '/')) {
-        if (source[i] === '\n') {
-          line += 1;
-          col = 0;
-          lineNonWsCol = -1;
-          i += 1;
-          continue;
-        }
-        i += 1;
-        col += 1;
-      }
-      const raw = source.slice(textStart, i);
-      if (i < n - 1) {
+      if (ch === '/' && next === '/') {
+        const startLine = line;
+        const fullLine = wasLineStart;
         i += 2;
         col += 2;
+        const textStart = i;
+        while (i < n && source[i] !== '\n') {
+          i += 1;
+          col += 1;
+        }
+        const text = source.slice(textStart, i).trim();
+        const words = wordCount(text);
+        if (fullLine) {
+          fullLines.push({ line: startLine, text });
+        } else if (words > COMMENT_PROSE_MAX_WORDS) {
+          violations.push({
+            kind: 'trailing',
+            startLine,
+            endLine: startLine,
+            words,
+            preview: previewOf(text),
+          });
+        }
+        continue;
       }
-      const cleaned = stripBlockDecor(raw);
-      const words = wordCount(cleaned);
-      if (line > startLine || words > COMMENT_PROSE_MAX_WORDS) {
+
+      if (ch === '/' && next === '*') {
+        const startLine = line;
+        i += 2;
+        col += 2;
+        const textStart = i;
+        while (i < n - 1 && !(source[i] === '*' && source[i + 1] === '/')) {
+          if (source[i] === '\n') {
+            bumpNewline();
+            i += 1;
+            continue;
+          }
+          i += 1;
+          col += 1;
+        }
+        const raw = source.slice(textStart, i);
+        if (i < n - 1) {
+          i += 2;
+          col += 2;
+        }
+        const cleaned = stripBlockDecor(raw);
+        const words = wordCount(cleaned);
+        // Any block comment is prose — rewrite as `//`.
         violations.push({
           kind: 'block',
           startLine,
           endLine: line,
-          words,
+          words: Math.max(words, 1),
           preview: previewOf(cleaned),
         });
+        continue;
       }
-      continue;
-    }
 
-    i += 1;
-    col += 1;
+      if (braceDepth !== null && ch === '{') {
+        braceDepth += 1;
+        i += 1;
+        col += 1;
+        continue;
+      }
+      if (braceDepth !== null && ch === '}') {
+        braceDepth -= 1;
+        i += 1;
+        col += 1;
+        if (braceDepth === 0) return;
+        continue;
+      }
+
+      i += 1;
+      col += 1;
+    }
   }
+
+  function scanTemplate() {
+    while (i < n) {
+      if (source[i] === '\\') {
+        i += 2;
+        col += 2;
+        continue;
+      }
+      if (source[i] === '\n') {
+        bumpNewline();
+        i += 1;
+        continue;
+      }
+      if (source[i] === '`') {
+        i += 1;
+        col += 1;
+        return;
+      }
+      if (source[i] === '$' && source[i + 1] === '{') {
+        i += 2;
+        col += 2;
+        scanCode(1);
+        continue;
+      }
+      i += 1;
+      col += 1;
+    }
+  }
+
+  scanCode(null);
 
   /** @type {{ line: number, text: string }[]} */
   let stack = [];
@@ -244,7 +293,6 @@ function shouldSkipDirent(name, isDirectory) {
 }
 
 /**
- * List repo-relative `.ts` / `.tsx` paths under COMMENT_PROSE_ROOTS.
  * @param {string} [root]
  * @returns {string[]}
  */
