@@ -1,0 +1,11 @@
+{
+  "name": "gamedev-pl",
+  "displayName": "gamedev.pl",
+  "description": "Build browser games on gamedev.pl from your coding agent.",
+  "version": "1.0.1",
+  "author": "gamedev.pl",
+  "license": "GPL-3.0",
+  "homepage": "https://www.gamedev.pl",
+  "repository": "https://github.com/gamedevpl/www.gamedev.pl",
+  "keywords": ["games", "game-development", "browser-games", "mcp", "gamedev"]
+}
