@@ -10,12 +10,6 @@ import {
 import { formatAssessmentClientContext } from './reviewClientContext.js';
 import { fetchAdminAssessments, type AdminAssessmentsResponse } from './reviewApi.js';
 
-/**
- * Operator view of reviewer assessments + review-sweep controls
- * (docs/game-assessment-plan.md). Deliberately untranslated, like the rest of
- * the operator console.
- */
-
 export function AdminAssessmentsPanel() {
   const [data, setData] = useState<AdminAssessmentsResponse | null>(null);
   const [sweeps, setSweeps] = useState<ReviewSweepsResponse | null>(null);

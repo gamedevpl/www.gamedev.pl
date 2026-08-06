@@ -1,19 +1,10 @@
 import type { ReviewSweep, ReviewSweepStatus } from './store.js';
 
-/** Day length used for the drip schedule (UTC calendar days via floor division). */
 export const REVIEW_SWEEP_DAY_MS = 24 * 60 * 60 * 1000;
 
 export const MAX_SWEEP_GAMES = 500;
 export const MAX_RELEASE_PER_DAY = 200;
 
-/**
- * How many games from the sweep are unlocked for the desk right now.
- *
- * - Manual floor: `releasedCount` (operator "Release more" / initial batch).
- * - Drip: while `active` and `releasePerDay` is set, day 0 unlocks one batch and
- *   each further UTC day unlocks another — `max(releasedCount, releasePerDay * (days+1))`.
- * - Paused / completed / cancelled freeze at the stored floor (no further drip).
- */
 export function effectiveReleasedCount(sweep: ReviewSweep, nowMs: number): number {
   const total = sweep.slugs.length;
   if (total === 0) return 0;
@@ -27,7 +18,6 @@ export function effectiveReleasedCount(sweep: ReviewSweep, nowMs: number): numbe
   return Math.min(total, Math.max(0, n));
 }
 
-/** Ordered slugs currently visible on the review desk. */
 export function releasedSlugs(sweep: ReviewSweep, nowMs: number): string[] {
   const n = effectiveReleasedCount(sweep, nowMs);
   return sweep.slugs.slice(0, n);
@@ -41,7 +31,6 @@ export interface ReviewSweepProgress {
   total: number;
   released: number;
   remainingInPool: number;
-  /** Released slugs that already have at least one assessment from any reviewer. */
   assessedReleased: number;
   status: ReviewSweepStatus;
   releasePerDay: number | null;
@@ -67,7 +56,6 @@ export function summarizeSweepProgress(
   };
 }
 
-/** Mint a short, URL-safe sweep id. */
 export function mintReviewSweepId(nowMs = Date.now()): string {
   return `swp-${nowMs.toString(36)}`;
 }

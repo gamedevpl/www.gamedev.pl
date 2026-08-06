@@ -25,15 +25,6 @@ import type {
   SubmissionRecord,
 } from './store.js';
 
-/**
- * Reviewer assessment desk (docs/game-assessment-plan.md).
- *
- * A trusted colleague walks the catalog (and shared creator drafts), swipes keep/cut,
- * and leaves a short reason — typed or spoken. Role is an env allowlist
- * (`REVIEWER_UIDS`), unioned with `ADMIN_UIDS`. Session-only, 404-to-everyone-else —
- * same posture as the operator console.
- */
-
 const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
 const MAX_NOTE = 2000;
 const MAX_ADMIN_ROWS = 200;
@@ -49,7 +40,6 @@ export interface ReviewCatalogEntry {
   title: string;
   creatorHandle: string | null;
   genre?: string | null;
-  /** Gate-produced stills + MP4 when the catalog knows them. */
   media?: ReviewCatalogMedia | null;
 }
 
@@ -59,26 +49,17 @@ export interface ReviewQueueItem {
   source: AssessmentSource;
   creatorHandle: string | null;
   genre: string | null;
-  /** Present for creator-source items that are still unpublished. */
   issueNumber: number | null;
-  /** Catalog preview media; null for creator drafts that have not published yet. */
   media: ReviewCatalogMedia | null;
 }
 
 export interface ReviewRoutesOptions {
   store: Store;
-  /** Uids in REVIEWER_UIDS. Empty means nobody is a reviewer unless they are admin. */
   reviewerUids?: Set<string>;
-  /** Uids in ADMIN_UIDS — admins are reviewers too. */
   adminUids?: Set<string>;
   contentChecker: ContentChecker;
-  /**
-   * Published catalog. Absent/empty means the catalog queue is empty (local dev
-   * without games-repo wiring answers this way rather than 503-ing the desk).
-   */
   listCatalog?: () => Promise<ReviewCatalogEntry[]>;
   now?: () => number;
-  /** When set, starting / re-notifying a sweep fans out to reviewers. */
   emitDeps?: EmitDeps;
 }
 
@@ -136,7 +117,6 @@ export function isReviewer(
   return reviewerUids !== undefined && reviewerUids.has(uid);
 }
 
-/** Browser session ∩ reviewer allowlist. PATs never count — same rule as operators. */
 export function isReviewerSession(
   request: FastifyRequest,
   reviewerUids: Set<string> | undefined,
@@ -151,7 +131,6 @@ function titleFromSubmission(record: SubmissionRecord): string {
   return record.slug ?? `issue-${record.issueNumber}`;
 }
 
-/** Shared, delivered, not yet published — the creator half of the desk. */
 export function isReviewableCreatorDraft(record: SubmissionRecord): boolean {
   return Boolean(
     record.slug && record.deliveredVersion && record.draftSharedAt && !record.publishedAt && !record.abandonedAt,
@@ -179,7 +158,6 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
     return null;
   }
 
-  /** Build the candidate pool the operator can snapshot into a sweep. */
   async function collectPool(source: ReviewSweepSource): Promise<ReviewQueueItem[]> {
     const items: ReviewQueueItem[] = [];
     if (source === 'catalog' || source === 'all') {
@@ -372,19 +350,12 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
     return { assessment };
   });
 
-  /**
-   * Operator summary — admins only (stricter than reviewer). Lives under /api/admin so
-   * the console's existing auth story covers it; registered here so the aggregate logic
-   * sits next to the write path.
-   */
   app.get('/api/admin/assessments', async (request, reply) => {
     if (!isAdminSession(request, adminUids)) {
       return reply.status(404).send({ error: 'not found' });
     }
 
-    // Aggregate over the full collection — a pre-group limit would silently drop
-    // older verdicts from keep/cut totals once the desk outgrows MAX_ADMIN_ROWS.
-    // The limit only caps the recent-row list the operator console scrolls.
+    // Aggregate all rows; cap only the recent list.
     const rows = await store.listGameAssessments();
     const byGame = new Map<
       string,
@@ -417,7 +388,6 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
   const CreateSweepSchema = z.object({
     source: z.enum(['catalog', 'creator', 'all']).default('catalog'),
     maxGames: z.number().int().min(1).max(MAX_SWEEP_GAMES).default(40),
-    /** null = unlock everything immediately; otherwise first-day batch size + drip. */
     releasePerDay: z.number().int().min(1).max(MAX_RELEASE_PER_DAY).nullable().optional(),
     note: z.string().trim().max(280).nullable().optional(),
     notify: z.boolean().optional(),
@@ -490,7 +460,7 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
     }
 
     const pool = await collectPool(body.data.source);
-    // Prefer games nobody has judged yet so a re-sweep is not all "already done".
+    // Prefer unjudged games when re-sweeping.
     const assessed = new Set((await store.listGameAssessments()).map((row) => row.slug));
     const fresh = pool.filter((item) => !assessed.has(item.slug));
     const chosen = (fresh.length > 0 ? fresh : pool).slice(0, body.data.maxGames);
@@ -561,7 +531,7 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
       patch.releasedCount = Math.min(existing.slugs.length, currentReleased + body.data.releaseMore);
     }
 
-    // Resuming should re-anchor the drip so paused time does not dump a backlog of days.
+    // Re-anchor drip on resume so pause does not backlog.
     if (body.data.status === 'active' && existing.status === 'paused') {
       patch.startedAt = new Date(now()).toISOString();
       patch.releasedCount = patch.releasedCount ?? currentReleased;

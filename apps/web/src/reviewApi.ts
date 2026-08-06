@@ -19,7 +19,6 @@ export interface ReviewQueueItem {
   creatorHandle: string | null;
   genre: string | null;
   issueNumber: number | null;
-  /** Gate-produced catalog media; null for unpublished creator drafts. */
   media: ReviewQueueMedia | null;
 }
 

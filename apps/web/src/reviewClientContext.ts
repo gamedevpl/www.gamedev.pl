@@ -1,11 +1,5 @@
 import type { AssessmentClientContext, AssessmentInputMethod, AssessmentPlatform } from './reviewTypes.js';
 
-/**
- * Snapshot of the reviewer's environment at verdict time
- * (docs/game-assessment-plan.md). Pure helpers so the shape stays unit-testable
- * without a browser.
- */
-
 export function inferAssessmentPlatform(userAgent: string, maxTouchPoints = 0): AssessmentPlatform {
   const ua = userAgent.toLowerCase();
   // iPadOS 13+ reports as Macintosh but still exposes multi-touch.
@@ -41,15 +35,13 @@ function clampDpr(value: number): number {
   return Math.min(4, Math.max(0.5, Math.round(value * 100) / 100));
 }
 
-/** Read the live browser; returns null only if `window` is missing (SSR / tests). */
 export function captureReviewClientContext(
   win: Pick<Window, 'innerWidth' | 'innerHeight' | 'devicePixelRatio' | 'screen' | 'navigator' | 'matchMedia'> = window,
 ): AssessmentClientContext | null {
   if (typeof win === 'undefined' || !win.navigator) return null;
   const ua = typeof win.navigator.userAgent === 'string' ? win.navigator.userAgent : '';
   const maxTouchPoints = typeof win.navigator.maxTouchPoints === 'number' ? win.navigator.maxTouchPoints : 0;
-  // Prefer the media-query truth; fall back to touch-points when matchMedia is missing
-  // (jsdom) or throws.
+  // Prefer pointer media queries; fall back to touch points.
   let coarsePointer = maxTouchPoints > 0;
   let finePointer = maxTouchPoints === 0;
   try {
@@ -72,7 +64,6 @@ export function captureReviewClientContext(
   };
 }
 
-/** Compact operator line, e.g. `390×844 · touch · ios · dpr 3`. */
 export function formatAssessmentClientContext(ctx: AssessmentClientContext | null | undefined): string | null {
   if (!ctx) return null;
   const parts = [

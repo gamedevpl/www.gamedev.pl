@@ -7,16 +7,6 @@ import { captureReviewClientContext } from './reviewClientContext.js';
 import { fetchReviewQueue, submitAssessment, type ReviewQueueItem } from './reviewApi.js';
 import type { AssessmentNoteOrigin, AssessmentVerdict } from './reviewTypes.js';
 
-/**
- * Reviewer swipe desk (docs/game-assessment-plan.md).
- *
- * Unlisted `/review`. Default surface is the catalog MP4 + screenshots — a tiny
- * sandboxed iframe is a poor place to actually play, and editorial judgment is
- * mostly "does this look / feel like shelf material". Optional Try play mounts
- * the live game without writing play telemetry. Verdicts sit in a sticky dock
- * (thumb zone on phones) so Cut/Keep never scroll away under the media.
- */
-
 interface SpeechRecognitionResultItem {
   transcript: string;
 }
@@ -122,7 +112,7 @@ export function ReviewDesk() {
       })
       .catch(() => {
         if (cancelled) return;
-        // 404 from a stale client hint, or a real failure — both look like "no desk".
+        // Treat 404 and fetch errors as denied.
         setState('denied');
       });
     return () => {
@@ -130,10 +120,7 @@ export function ReviewDesk() {
     };
   }, [authLoading, user?.reviewer, source]);
 
-  // Creator drafts (and catalog games with no gate media) open in play mode —
-  // there is nothing else to show. Catalog cards with media stay on the preview.
-  // Keyed on slug only: advancing the queue is what remounts card chrome, not a
-  // fresh object identity for the same game.
+  // Open play mode when preview media is missing.
   useEffect(() => {
     if (!current) return;
     setPlaying(!hasPreviewMedia(current));
@@ -142,7 +129,7 @@ export function ReviewDesk() {
     setDragY(0);
     dragXRef.current = 0;
     dragYRef.current = 0;
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset on game change only
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- slug only
   }, [current?.slug]);
 
   useEffect(() => {

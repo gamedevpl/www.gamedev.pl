@@ -95,7 +95,6 @@ describe('reviewer assessment desk', () => {
       adminUids?: string;
       contentChecker?: ContentChecker;
       catalog?: typeof defaultCatalog;
-      /** When false, leave the desk empty until a sweep is created (operator control). */
       seedSweep?: boolean;
     } = {},
   ) {
@@ -291,7 +290,7 @@ describe('reviewer assessment desk', () => {
   });
 
   it('includes shared creator drafts and exposes an admin aggregate', async () => {
-    // Catalog-only default seed would hide creator drafts — open a creator sweep instead.
+    // Seed a creator sweep; default catalog seed hides drafts.
     const { app, store } = await makeApp({ seedSweep: false });
     await store.upsertUser({ uid: 'g:creator', email: 'c@example.com', name: 'Creator' });
     await store.claimHandle('g:creator', 'pixel', new Date().toISOString());
