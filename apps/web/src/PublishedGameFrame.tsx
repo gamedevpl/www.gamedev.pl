@@ -24,6 +24,13 @@ type PublishedGameFrameProps = {
    */
   active?: boolean;
   /**
+   * Whether opening this frame counts as a player play — telemetry, affinity, and
+   * the device-local recent list. Off for editorial surfaces (review desk) that
+   * mount catalog games without intending to contaminate health scorecards.
+   * Defaults true.
+   */
+  trackPlay?: boolean;
+  /**
    * Whether this surface offers Remix. Off for party mode and embeds, where the
    * frame is not the player's alone to bend.
    */
@@ -54,6 +61,7 @@ export function PublishedGameFrame({
   embed,
   slots,
   active = true,
+  trackPlay = true,
   remixable,
   remixOpenNonce,
   initialRemixRequest,
@@ -103,15 +111,15 @@ export function PublishedGameFrame({
   // Starts only once the document is in hand, so a session means "a game was handed
   // to a player" rather than "a card was clicked". A fetch that never resolves is a
   // catalog problem, and this is not the place that would report it.
-  useGameTelemetry(slug, html !== null, slots, active);
+  useGameTelemetry(slug, trackPlay && html !== null, slots, active);
 
   // Account play affinity (signed-in) + device-local recent list (everyone). Both are
   // best-effort and separate from anonymous play telemetry — see docs/recommendations.md.
   useEffect(() => {
-    if (html === null) return;
+    if (!trackPlay || html === null) return;
     rememberRecentPlay(slug);
     recordGamePlayed(slug);
-  }, [slug, html]);
+  }, [slug, html, trackPlay]);
 
   useEffect(() => {
     let cancelled = false;

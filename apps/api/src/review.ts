@@ -93,6 +93,8 @@ export function isReviewerSession(
 }
 
 function titleFromSubmission(record: SubmissionRecord): string {
+  const titled = record.title.trim();
+  if (titled) return titled;
   return record.slug ?? `issue-${record.issueNumber}`;
 }
 
@@ -259,7 +261,10 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
       return reply.status(404).send({ error: 'not found' });
     }
 
-    const rows = await store.listGameAssessments({ limit: MAX_ADMIN_ROWS });
+    // Aggregate over the full collection — a pre-group limit would silently drop
+    // older verdicts from keep/cut totals once the desk outgrows MAX_ADMIN_ROWS.
+    // The limit only caps the recent-row list the operator console scrolls.
+    const rows = await store.listGameAssessments();
     const byGame = new Map<
       string,
       { slug: string; title: string; keep: number; cut: number; skip: number; notes: number }
@@ -284,7 +289,7 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
     return {
       total: rows.length,
       games,
-      recent: rows.slice(0, 40),
+      recent: rows.slice(0, Math.min(40, MAX_ADMIN_ROWS)),
     };
   });
 }

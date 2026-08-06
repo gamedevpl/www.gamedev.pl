@@ -324,7 +324,7 @@ export function ReviewDesk() {
             </div>
 
             <div className="review-card-stage">
-              <PublishedGameFrame slug={current.slug} title={current.title} embed remixable={false} />
+              <PublishedGameFrame slug={current.slug} title={current.title} embed remixable={false} trackPlay={false} />
               {keepHint ? <div className="review-stamp is-keep">{t('review.keep')}</div> : null}
               {cutHint ? <div className="review-stamp is-cut">{t('review.cut')}</div> : null}
               {skipHint ? <div className="review-stamp is-skip">{t('review.skip')}</div> : null}

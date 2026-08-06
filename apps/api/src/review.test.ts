@@ -173,10 +173,15 @@ describe('reviewer assessment desk', () => {
     });
     expect(creatorQueue.statusCode).toBe(200);
     const creatorBody = JSON.parse(creatorQueue.body) as {
-      items: Array<{ slug: string; source: string; creatorHandle: string | null }>;
+      items: Array<{ slug: string; title: string; source: string; creatorHandle: string | null }>;
     };
     expect(creatorBody.items).toEqual([
-      expect.objectContaining({ slug: 'draft-runner', source: 'creator', creatorHandle: 'pixel' }),
+      expect.objectContaining({
+        slug: 'draft-runner',
+        title: 'Draft Runner',
+        source: 'creator',
+        creatorHandle: 'pixel',
+      }),
     ]);
 
     await app.inject({
@@ -218,5 +223,39 @@ describe('reviewer assessment desk', () => {
         })
       ).statusCode,
     ).toBe(404);
+  });
+
+  it('aggregates every assessment even when the recent list is capped', async () => {
+    const { app, store } = await makeApp({ catalog: [] });
+    for (let i = 0; i < 210; i += 1) {
+      const slug = `game-${String(i).padStart(3, '0')}`;
+      await store.upsertGameAssessment({
+        slug,
+        title: `Game ${i}`,
+        source: 'catalog',
+        creatorHandle: null,
+        reviewerUid: 'dev:reviewer',
+        verdict: i % 2 === 0 ? 'keep' : 'cut',
+        note: null,
+        noteOrigin: 'none',
+      });
+    }
+
+    const boss = await sessionCookie(app, 'boss');
+    const summary = await app.inject({
+      method: 'GET',
+      url: '/api/admin/assessments',
+      headers: { cookie: boss },
+    });
+    expect(summary.statusCode).toBe(200);
+    const body = JSON.parse(summary.body) as {
+      total: number;
+      games: Array<{ slug: string; keep: number; cut: number }>;
+      recent: unknown[];
+    };
+    expect(body.total).toBe(210);
+    expect(body.games).toHaveLength(210);
+    expect(body.games.reduce((sum, g) => sum + g.keep + g.cut, 0)).toBe(210);
+    expect(body.recent.length).toBeLessThanOrEqual(40);
   });
 });
