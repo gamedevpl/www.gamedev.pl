@@ -1173,6 +1173,12 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
    * capped number of deliveries, moving the pointer that decides what publishes, or
    * making creator messages stop appearing all fail that test, so they are marked
    * honestly even though nothing is erased.
+   *
+   * The staging tools joined this set after OpenAI's submission scan: re-staging a path
+   * overwrites it, a patch can remove lines, and clearing deletes. They had spread
+   * `WRITES` with a `destructiveHint: true` override, which produced the right hint while
+   * inheriting a constant whose comment promises the opposite — so the label is the fix,
+   * not just the value.
    */
   const CONSUMES = {
     readOnlyHint: false,
@@ -3191,7 +3197,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     },
 
     stage_source_file: {
-      annotations: { title: 'Stage one source file', ...WRITES },
+      // Overwrites the same path if staged again, so it is not additive.
+      annotations: { title: 'Stage one source file', ...CONSUMES },
       outputSchema: {
         type: 'object',
         properties: {
@@ -3299,7 +3306,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     },
 
     patch_source_file: {
-      annotations: { title: 'Edit one staged source file', ...WRITES },
+      // Replaces existing staged content, and a patch can remove lines outright.
+      annotations: { title: 'Edit one staged source file', ...CONSUMES },
       outputSchema: {
         type: 'object',
         properties: {
@@ -3488,7 +3496,9 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     },
 
     clear_staged_sources: {
-      annotations: { title: 'Clear staged source files', ...WRITES },
+      // Deletes staged files. Undelivered scratch space, so nothing creator-visible is
+      // lost — but the hint describes the operation, not the blast radius.
+      annotations: { title: 'Clear staged source files', ...CONSUMES },
       outputSchema: {
         type: 'object',
         properties: {
