@@ -80,6 +80,16 @@ export interface AdminAssessmentsResponse {
   recent: GameAssessment[];
 }
 
+export class ReviewApiError extends Error {
+  readonly status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = 'ReviewApiError';
+    this.status = status;
+  }
+}
+
 async function readJson<T>(res: Response): Promise<T> {
   if (!res.ok) {
     let detail = '';
@@ -89,7 +99,7 @@ async function readJson<T>(res: Response): Promise<T> {
     } catch {
       // Keep the status-based message below.
     }
-    throw new Error(detail || `request failed (${res.status})`);
+    throw new ReviewApiError(res.status, detail || `request failed (${res.status})`);
   }
   return (await res.json()) as T;
 }

@@ -27,7 +27,7 @@ describe('effectiveReleasedCount', () => {
     expect(releasedSlugs(row, Date.parse('2026-08-05T00:00:00.000Z'))).toEqual(['a', 'b']);
   });
 
-  it('drips releasePerDay per UTC day while active', () => {
+  it('drips releasePerDay per elapsed 24h window while active', () => {
     const started = Date.parse('2026-08-01T00:00:00.000Z');
     const row = sweep({
       slugs: Array.from({ length: 30 }, (_, i) => `g${i}`),

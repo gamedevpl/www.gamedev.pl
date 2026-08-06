@@ -203,6 +203,106 @@ describe('reviewer assessment desk', () => {
     expect(JSON.parse(second.body).items.map((i: { slug: string }) => i.slug)).toEqual(['sky-dodge', 'neon-courier']);
   });
 
+  it('rejects new assessments outside the active released sweep', async () => {
+    const { app } = await makeApp({ seedSweep: false });
+    const boss = await sessionCookie(app, 'boss');
+    const reviewer = await sessionCookie(app, 'reviewer');
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/admin/review-sweeps',
+      headers: { cookie: boss },
+      payload: { source: 'catalog', maxGames: 2, releasePerDay: 1, notify: false },
+    });
+    expect(created.statusCode).toBe(200);
+
+    const blocked = await app.inject({
+      method: 'POST',
+      url: '/api/review/assessments',
+      headers: { cookie: reviewer },
+      payload: {
+        slug: 'neon-courier',
+        source: 'catalog',
+        verdict: 'keep',
+        note: 'Not released yet.',
+        checklist: sampleChecklist,
+      },
+    });
+    expect(blocked.statusCode).toBe(409);
+    expect(JSON.parse(blocked.body).error).toBe('slug_not_in_sweep');
+
+    const ok = await app.inject({
+      method: 'POST',
+      url: '/api/review/assessments',
+      headers: { cookie: reviewer },
+      payload: {
+        slug: 'sky-dodge',
+        source: 'catalog',
+        verdict: 'keep',
+        note: 'Released and fine.',
+        checklist: sampleChecklist,
+      },
+    });
+    expect(ok.statusCode).toBe(200);
+
+    // Re-edit still works even if the sweep later pauses.
+    const pause = await app.inject({
+      method: 'POST',
+      url: `/api/admin/review-sweeps/${JSON.parse(created.body).sweep.id}`,
+      headers: { cookie: boss },
+      payload: { status: 'paused' },
+    });
+    expect(pause.statusCode).toBe(200);
+    const reedit = await app.inject({
+      method: 'POST',
+      url: '/api/review/assessments',
+      headers: { cookie: reviewer },
+      payload: {
+        slug: 'sky-dodge',
+        source: 'catalog',
+        verdict: 'cut',
+        note: 'Changed my mind after pause.',
+        checklist: sampleChecklist,
+      },
+    });
+    expect(reedit.statusCode).toBe(200);
+  });
+
+  it('snapshots drip progress when pausing a sweep', async () => {
+    const { app, store } = await makeApp({ seedSweep: false });
+    const boss = await sessionCookie(app, 'boss');
+    const startedAt = new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString();
+    await store.createReviewSweep({
+      id: 'swp-drip',
+      status: 'active',
+      source: 'catalog',
+      slugs: ['sky-dodge', 'neon-courier'],
+      releasedCount: 1,
+      releasePerDay: 1,
+      startedAt,
+      note: null,
+      createdAt: startedAt,
+      createdBy: 'dev:boss',
+      updatedAt: startedAt,
+      updatedBy: 'dev:boss',
+      notifiedAt: null,
+      notifiedCount: 0,
+    });
+
+    const paused = await app.inject({
+      method: 'POST',
+      url: '/api/admin/review-sweeps/swp-drip',
+      headers: { cookie: boss },
+      payload: { status: 'paused' },
+    });
+    expect(paused.statusCode).toBe(200);
+    const body = JSON.parse(paused.body) as { sweep: { releasedCount: number; progress: { released: number } } };
+    expect(body.sweep.releasedCount).toBe(2);
+    expect(body.sweep.progress.released).toBe(2);
+
+    const stored = await store.getReviewSweep('swp-drip');
+    expect(stored?.releasedCount).toBe(2);
+  });
+
   it('records a keep/cut with a note and drops the game from the queue', async () => {
     const { app } = await makeApp();
     const cookie = await sessionCookie(app, 'reviewer');

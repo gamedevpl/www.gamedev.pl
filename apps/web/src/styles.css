@@ -14923,11 +14923,11 @@ body.remix-entry-open {
   backdrop-filter: blur(10px);
 }
 
-/* Install / update banners pin to the bottom edge too — lift the dock so Cut/Keep
-   stay reachable (same coexistence rule as the studio shell). */
+/* Install / update banners pin to the bottom edge too — lift the dock by the
+   measured overlay height (--review-overlay-lift from ReviewDesk). */
 .app:has(.install-prompt) .review-dock,
 .app:has(.app-update) .review-dock {
-  bottom: 5.5rem;
+  bottom: var(--review-overlay-lift, 5.5rem);
   padding-bottom: 0.75rem;
 }
 

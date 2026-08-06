@@ -351,13 +351,26 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
     const source: AssessmentSource = body.data.source;
     const title = body.data.title?.trim() || body.data.slug;
     const creatorHandle = body.data.creatorHandle === undefined ? null : body.data.creatorHandle;
+    const reviewerUid = request.user!.uid;
+
+    // New rows need an active released slug; re-edits ok.
+    const prior = await store.getGameAssessment(body.data.slug, reviewerUid);
+    if (!prior) {
+      const open = await store.getOpenReviewSweep();
+      if (!open || open.status !== 'active') {
+        return reply.status(409).send({ error: 'no_active_sweep' });
+      }
+      if (!releasedSlugs(open, now()).includes(body.data.slug)) {
+        return reply.status(409).send({ error: 'slug_not_in_sweep' });
+      }
+    }
 
     const assessment: GameAssessment = await store.upsertGameAssessment({
       slug: body.data.slug,
       title,
       source,
       creatorHandle,
-      reviewerUid: request.user!.uid,
+      reviewerUid,
       verdict,
       note: sanitized,
       noteOrigin,
@@ -547,6 +560,11 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
       patch.releasedCount = existing.slugs.length;
     } else if (body.data.releaseMore !== undefined) {
       patch.releasedCount = Math.min(existing.slugs.length, currentReleased + body.data.releaseMore);
+    }
+
+    // Snapshot drip floor so pause keeps unlocked games.
+    if (body.data.status === 'paused' && existing.status === 'active') {
+      patch.releasedCount = patch.releasedCount ?? currentReleased;
     }
 
     // Re-anchor drip on resume so pause does not backlog.

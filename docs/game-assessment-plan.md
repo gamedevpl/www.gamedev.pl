@@ -26,7 +26,7 @@ judgment_ from someone who knows what the shelf should feel like.
 | Client env    | Viewport, screen size, DPR, input method (`touch`/`mouse`/`mixed`), platform, lang, truncated UA — stored on the row at commit time. |
 | Storage       | `gameAssessments/{slug}:{reviewerUid}` — one row per reviewer per game; a second pass overwrites.                                    |
 | Operator read | `/admin/assessments` — **review sweeps** (dispatch / rate / pause / notify) plus keep/cut aggregates and recent notes.               |
-| Sweeps        | Operator opens a bounded pass; desk shows only the released prefix. `releasePerDay` drips more; manual Release more / all.           |
+| Sweeps        | Operator opens a bounded pass; desk shows only the released prefix. `releasePerDay` drips by 24h from `startedAt`; manual Release.   |
 | Notify        | Starting or re-notifying a sweep fans out `operator.review_sweep` to `REVIEWER_UIDS` ∪ admins (in-app + email + push).               |
 
 ## Non-goals (this steel thread)
@@ -90,9 +90,11 @@ Unset / empty means nobody extra is a reviewer. Locally: `REVIEWER_UIDS=dev:loca
 | `POST` | `/api/admin/review-sweeps/:id`                   | admin    | Pause / resume / complete / cancel, release more/all, change rate, notify again                   |
 
 The desk queue is **empty until an operator opens a sweep**. Released games unlock by
-`releasePerDay` (UTC drip) and/or manual Release controls. Every verdict (including
-`skip`) needs a **non-empty note** and a complete checklist (`graphics` / `gameplay` /
-`fun` / `sound` / `controls`, each `ok|weak|bad`). Notes are moderated and sanitized.
+`releasePerDay` (elapsed 24h windows from `startedAt`) and/or manual Release controls.
+Every **new** verdict must target a slug in the active released prefix (re-edits of an
+existing assessment are allowed). Every verdict (including `skip`) needs a **non-empty
+note** and a complete checklist (`graphics` / `gameplay` / `fun` / `sound` / `controls`,
+each `ok|weak|bad`). Notes are moderated and sanitized.
 
 ## Instrumentation
 

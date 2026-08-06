@@ -33,9 +33,7 @@
 #                               pre-views contract)
 #   BETA_ALLOWED_UIDS=...      (comma-separated g:<sub> values)
 #   ADMIN_UIDS=...             (comma-separated g:<sub> values; operator telemetry view)
-#   REVIEWER_UIDS=...          (comma-separated g:<sub> values; /review assessment desk.
-#                               Admins are reviewers automatically — this list is for
-#                               trusted colleagues who are not operators.)
+#   REVIEWER_UIDS=...          (comma-separated g:<sub> values; /review desk; admins count too)
 #   BETA_ALLOWED_EMAILS=...    (comma-separated verified email addresses)
 #   MAIL_FROM=...              (RFC 5322 sender; defaults to noreply@mail.gamedev.pl)
 #   INVITE_URL=...             (where invitees land; defaults to https://www.gamedev.pl)

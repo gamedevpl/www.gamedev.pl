@@ -10,7 +10,7 @@ import {
   isChecklistComplete,
 } from './reviewChecklist.js';
 import { captureReviewClientContext } from './reviewClientContext.js';
-import { fetchReviewQueue, submitAssessment, type ReviewQueueItem } from './reviewApi.js';
+import { fetchReviewQueue, ReviewApiError, submitAssessment, type ReviewQueueItem } from './reviewApi.js';
 import type {
   AssessmentChecklist,
   AssessmentChecklistKey,
@@ -123,15 +123,48 @@ export function ReviewDesk() {
         setEmptyReason(queue.emptyReason ?? (queue.items.length === 0 ? 'queue_clear' : null));
         setState(queue.items.length === 0 ? 'empty' : 'ready');
       })
-      .catch(() => {
+      .catch((err: unknown) => {
         if (cancelled) return;
-        // Treat 404 and fetch errors as denied.
-        setState('denied');
+        const status = err instanceof ReviewApiError ? err.status : 0;
+        setState(status === 404 || status === 401 ? 'denied' : 'error');
       });
     return () => {
       cancelled = true;
     };
   }, [authLoading, user?.reviewer, source]);
+
+  // Measure install/update banners; lift the sticky dock.
+  useEffect(() => {
+    if (typeof ResizeObserver === 'undefined') return;
+    const root = document.documentElement;
+    const measure = () => {
+      const overlay = document.querySelector('.install-prompt, .app-update') as HTMLElement | null;
+      if (!overlay) {
+        root.style.removeProperty('--review-overlay-lift');
+        return;
+      }
+      const top = overlay.getBoundingClientRect().top;
+      const lift = Math.max(0, Math.ceil(window.innerHeight - top + 8));
+      root.style.setProperty('--review-overlay-lift', `${lift}px`);
+    };
+    measure();
+    const resizeObserver = new ResizeObserver(measure);
+    const watchOverlays = () => {
+      resizeObserver.disconnect();
+      document.querySelectorAll('.install-prompt, .app-update').forEach((node) => resizeObserver.observe(node));
+      measure();
+    };
+    watchOverlays();
+    const mutationObserver = new MutationObserver(watchOverlays);
+    mutationObserver.observe(document.body, { childList: true, subtree: true });
+    window.addEventListener('resize', measure);
+    return () => {
+      resizeObserver.disconnect();
+      mutationObserver.disconnect();
+      window.removeEventListener('resize', measure);
+      root.style.removeProperty('--review-overlay-lift');
+    };
+  }, []);
 
   // Open play mode when preview media is missing.
   useEffect(() => {
@@ -154,27 +187,6 @@ export function ReviewDesk() {
       () => undefined,
     );
   }, [videoUrl, playing, current?.slug]);
-
-  useEffect(() => {
-    if (!current || busy) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLInputElement) {
-        return;
-      }
-      if (event.key === 'ArrowRight') {
-        event.preventDefault();
-        void commit('keep');
-      } else if (event.key === 'ArrowLeft') {
-        event.preventDefault();
-        void commit('cut');
-      } else if (event.key === 'ArrowDown') {
-        event.preventDefault();
-        void commit('skip');
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  });
 
   const resetForm = () => {
     setNote('');
@@ -227,6 +239,34 @@ export function ReviewDesk() {
     setChecklist((prev) => ({ ...prev, [key]: mark }));
     setError(null);
   };
+
+  const commitRef = useRef(commit);
+  commitRef.current = commit;
+  const busyRef = useRef(busy);
+  busyRef.current = busy;
+
+  useEffect(() => {
+    if (!current) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (busyRef.current) return;
+      if (event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLInputElement) {
+        return;
+      }
+      if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        void commitRef.current('keep');
+      } else if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        void commitRef.current('cut');
+      } else if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        void commitRef.current('skip');
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- slug gate
+  }, [current?.slug]);
 
   const toggleMic = () => {
     setMicNotice(null);
@@ -326,6 +366,16 @@ export function ReviewDesk() {
       <section className="review-desk">
         <p className="review-desk-status" role="status">
           {t('review.denied')}
+        </p>
+      </section>
+    );
+  }
+
+  if (state === 'error') {
+    return (
+      <section className="review-desk">
+        <p className="review-desk-status" role="alert">
+          {t('review.loadError')}
         </p>
       </section>
     );
