@@ -21,8 +21,7 @@ describe('Create Game menu focus', () => {
     vi.unstubAllGlobals();
   });
 
-  it('focuses the hero prompt when Create Game is chosen from the hamburger', async () => {
-    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  function stubAppFetches() {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = String(input);
       if (url.endsWith('/api/auth/me')) {
@@ -40,6 +39,9 @@ describe('Create Game menu focus', () => {
       if (url.endsWith('/api/quota')) {
         return new Response(JSON.stringify({ submissions: { used: 0, limit: 10 } }));
       }
+      if (url.includes('/api/my/games') || url.includes('/api/studio')) {
+        return new Response(JSON.stringify({ games: [] }));
+      }
       return new Response('{}', { status: 404 });
     });
 
@@ -55,7 +57,36 @@ describe('Create Game menu focus', () => {
       }),
     );
 
-    Element.prototype.scrollIntoView = vi.fn();
+    // jsdom has no scrollIntoView; install a stub first so spyOn can restore it.
+    Object.defineProperty(Element.prototype, 'scrollIntoView', {
+      configurable: true,
+      writable: true,
+      value: () => undefined,
+    });
+    return vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(() => undefined);
+  }
+
+  async function openCreateGame(container: HTMLElement) {
+    const hamburger = container.querySelector<HTMLButtonElement>('.hamburger-btn');
+    expect(hamburger).not.toBeNull();
+    await act(async () => {
+      hamburger?.click();
+      await flushEffects();
+    });
+
+    const createGame = Array.from(container.querySelectorAll<HTMLButtonElement>('.nav-link')).find((btn) =>
+      /Create Game/i.test(btn.textContent ?? ''),
+    );
+    expect(createGame).toBeDefined();
+    await act(async () => {
+      createGame?.click();
+      await flushEffects();
+    });
+  }
+
+  it('focuses the hero prompt when Create Game is chosen from the hamburger', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    const scrollIntoView = stubAppFetches();
 
     await i18n.changeLanguage('en');
     window.history.pushState(null, '', '/');
@@ -76,25 +107,41 @@ describe('Create Game menu focus', () => {
     expect(prompt).not.toBeNull();
     expect(document.activeElement).not.toBe(prompt);
 
-    const hamburger = container.querySelector<HTMLButtonElement>('.hamburger-btn');
-    expect(hamburger).not.toBeNull();
-    await act(async () => {
-      hamburger?.click();
-      await flushEffects();
-    });
-
-    const createGame = Array.from(container.querySelectorAll<HTMLButtonElement>('.nav-link')).find((btn) =>
-      /Create Game/i.test(btn.textContent ?? ''),
-    );
-    expect(createGame).toBeDefined();
-
-    await act(async () => {
-      createGame?.click();
-      await flushEffects();
-    });
+    await openCreateGame(container);
 
     expect(document.activeElement).toBe(prompt);
-    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+    expect(scrollIntoView).toHaveBeenCalled();
+
+    await act(async () => root.unmount());
+  });
+
+  it('focuses the hero prompt after Create Game from Studio (off-home path)', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    stubAppFetches();
+
+    await i18n.changeLanguage('en');
+    window.history.pushState(null, '', '/studio');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(AuthProvider, null, createElement(App)));
+      await flushEffects();
+      await flushEffects();
+      await flushEffects();
+      await flushEffects();
+    });
+
+    expect(container.querySelector('.big-prompt-input')).toBeNull();
+
+    await openCreateGame(container);
+
+    const prompt = container.querySelector<HTMLTextAreaElement>('.big-prompt-input');
+    expect(prompt).not.toBeNull();
+    expect(document.activeElement).toBe(prompt);
+    expect(window.location.pathname).toBe('/');
 
     await act(async () => root.unmount());
   });

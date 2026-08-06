@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { generateGame, type GeneratedGame, type GenerateGameApiError } from './api.js';
 import { fetchCatalog, type CatalogEntry } from './catalog.js';
@@ -13,6 +14,7 @@ import { PixelIcon } from './PixelIcon.js';
 import { CreatorQA, type QAQuestion } from './CreatorQA.js';
 import { deriveTitleFromConcept } from './gameTitle.js';
 import {
+  adminPath,
   canonicalPath,
   creatorPath,
   NAVIGATE_EVENT,
@@ -419,15 +421,27 @@ export function App() {
     input?.focus({ preventScroll: true });
   };
 
-  const handleNavigateSection = (sectionId: string) => {
+  const scrollAndFocusSection = (sectionId: string): boolean => {
     const element = document.getElementById(sectionId);
-    if (element) {
-      element.scrollIntoView?.({ behavior: 'smooth' });
-      if (sectionId === 'hero-prompt') focusHeroPromptInput();
+    if (!element) return false;
+    element.scrollIntoView?.({ behavior: 'smooth' });
+    if (sectionId === 'hero-prompt') focusHeroPromptInput();
+    return true;
+  };
+
+  const handleNavigateSection = (sectionId: string) => {
+    if (scrollAndFocusSection(sectionId)) return;
+
+    // Flush home so #hero-prompt can mount inside this click. Focusing from the
+    // pending-scroll interval alone is often ignored on iOS Safari (no user gesture).
+    flushSync(() => {
+      setPendingScrollTarget(sectionId);
+      navigate('/');
+    });
+    if (scrollAndFocusSection(sectionId)) {
+      setPendingScrollTarget(null);
       return;
     }
-    setPendingScrollTarget(sectionId);
-    navigate('/');
   };
 
   useEffect(() => {
@@ -872,6 +886,7 @@ export function App() {
           onNavigate={handleNavigateSection}
           onHome={() => navigate('/')}
           onStudio={() => navigate(studioPath())}
+          onAdmin={() => navigate(adminPath())}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -892,6 +907,7 @@ export function App() {
           onNavigate={handleNavigateSection}
           onHome={() => navigate('/')}
           onStudio={() => navigate(studioPath())}
+          onAdmin={() => navigate(adminPath())}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -912,6 +928,7 @@ export function App() {
           onNavigate={handleNavigateSection}
           onHome={() => navigate('/')}
           onStudio={() => navigate(studioPath())}
+          onAdmin={() => navigate(adminPath())}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -947,6 +964,7 @@ export function App() {
           onNavigate={handleNavigateSection}
           onHome={() => navigate('/')}
           onStudio={() => navigate(studioPath())}
+          onAdmin={() => navigate(adminPath())}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -981,6 +999,7 @@ export function App() {
           onNavigate={handleNavigateSection}
           onHome={() => navigate('/')}
           onStudio={() => navigate(studioPath())}
+          onAdmin={() => navigate(adminPath())}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -1002,6 +1021,7 @@ export function App() {
           onNavigate={handleNavigateSection}
           onHome={() => navigate('/')}
           onStudio={() => navigate(studioPath())}
+          onAdmin={() => navigate(adminPath())}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -1030,6 +1050,7 @@ export function App() {
         onNavigate={handleNavigateSection}
         onHome={() => navigate('/')}
         onStudio={() => navigate(studioPath())}
+        onAdmin={() => navigate(adminPath())}
         upTarget={headerUp}
         onUp={navigate}
       />
