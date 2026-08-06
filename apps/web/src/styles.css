@@ -5148,6 +5148,18 @@ a.user-name--profile:focus-visible {
   padding: 4px 2px 8px;
 }
 
+/* Claude / Cursor / GPT slack: enough empty runway under the transcript that the
+   last turn can scroll up to the top of the pane. Without this the scroller ends
+   on the last line and you cannot lift it. `100%` is the scrollport when the shell
+   gives the thread a height; `min-height` covers the page-scroll phone band where
+   the scrollport height is indefinite. */
+.studio-thread-scroll-pad {
+  flex: none;
+  height: calc(100% - 4.5rem);
+  min-height: min(42dvh, 22rem);
+  pointer-events: none;
+}
+
 .studio-thread-empty {
   color: var(--muted);
   margin: 0;
