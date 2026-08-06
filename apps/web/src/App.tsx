@@ -769,6 +769,80 @@ export function App() {
     }
   }
 
+  // Full-viewport theater / party overlay. Rendered from every branch that can open
+  // it — including the open-chrome early returns for `/:handle` and `/:handle/:slug`.
+  // Those routes set `stageContent` (and with it `body.player-open` scroll lock) the
+  // same way home and `/play` do; if the overlay only lived in the signed-in main
+  // return, Play/Remix on a game page would lock the page and show nothing.
+  const stageOverlay = (
+    <>
+      {stageContent?.type === 'party' && (
+        <section id="stage" className="panel stage is-playing-full-viewport">
+          <div className="game-theater-bar">
+            <div className="game-theater-meta">
+              <span className="theater-badge">
+                <PixelIcon name="phone" size={13} /> {t('party.badge')}
+              </span>
+              <h2 className="theater-title">{stageContent.game.title}</h2>
+            </div>
+            <div className="game-theater-actions">
+              <button
+                className="secondary-btn exit-btn"
+                onClick={() => setStageContent(null)}
+                aria-label={t('catalog.exitPlayer', { defaultValue: 'Close' })}
+                title={t('catalog.exitPlayer', { defaultValue: 'Close' })}
+              >
+                <PixelIcon name="close" size={14} />
+              </button>
+            </div>
+          </div>
+          <div className="game-viewport-container">
+            <PartyStage
+              key={stageContent.session.code}
+              game={stageContent.game}
+              session={stageContent.session}
+              onExit={() => setStageContent(null)}
+            />
+          </div>
+        </section>
+      )}
+
+      {stageContent?.type === 'catalog' && (
+        <GameTheater
+          key={stageContent.game.slug}
+          title={stageContent.game.title}
+          // AI Act art. 50 needs a disclosure at the point of consumption; keep
+          // it short so the title stays the hero of the bar.
+          badge={{ icon: 'sparkle', label: t('ai.generatedShort') }}
+          source={{ slug: stageContent.game.slug }}
+          onExit={() => setStageContent(null)}
+          orientation={stageContent.game.orientation}
+          reportSlug={stageContent.game.slug}
+          submittedBy={stageContent.game.submittedBy}
+          creatorHandle={stageContent.game.creatorHandle}
+          controls={stageContent.game.controls}
+          touch={stageContent.game.touch}
+          initialRemixOpen={stageContent.initialRemixOpen}
+        />
+      )}
+
+      {stageContent?.type === 'generated' && (
+        <GameTheater
+          key={stageContent.game.html}
+          title={stageContent.game.title}
+          badge={{ icon: 'rocket', label: t('ai.generatedShort') }}
+          source={{ html: stageContent.game.html }}
+          onExit={() => setStageContent(null)}
+          meta={
+            stageContent.prompt ? (
+              <span className="theater-controls">{t('home.generatedFrom', { prompt: stageContent.prompt })}</span>
+            ) : undefined
+          }
+        />
+      )}
+    </>
+  );
+
   // A phone that scanned a lobby QR is anonymous by design: it has no session and
   // never will, so the controller route is checked BEFORE the auth gates. It is
   // useless without a valid room token, which only an allowlisted host can mint.
@@ -848,7 +922,9 @@ export function App() {
             }}
           />
         </main>
-        <SiteFooter />
+        {/* Theater must mount here too: profile Play sets stageContent on this branch. */}
+        {stageOverlay}
+        {!stageContent && <SiteFooter />}
       </div>
     );
   }
@@ -880,7 +956,10 @@ export function App() {
             onGameLoaded={setGameTitle}
           />
         </main>
-        <SiteFooter />
+        {/* Play/Remix on this page set stageContent; without the overlay here the
+            body scroll-locks (`player-open`) and nothing covers the page. */}
+        {stageOverlay}
+        {!stageContent && <SiteFooter />}
       </div>
     );
   }
@@ -1029,70 +1108,7 @@ export function App() {
               </>
             )}
 
-            {stageContent?.type === 'party' && (
-              <section id="stage" className="panel stage is-playing-full-viewport">
-                <div className="game-theater-bar">
-                  <div className="game-theater-meta">
-                    <span className="theater-badge">
-                      <PixelIcon name="phone" size={13} /> {t('party.badge')}
-                    </span>
-                    <h2 className="theater-title">{stageContent.game.title}</h2>
-                  </div>
-                  <div className="game-theater-actions">
-                    <button
-                      className="secondary-btn exit-btn"
-                      onClick={() => setStageContent(null)}
-                      aria-label={t('catalog.exitPlayer', { defaultValue: 'Close' })}
-                      title={t('catalog.exitPlayer', { defaultValue: 'Close' })}
-                    >
-                      <PixelIcon name="close" size={14} />
-                    </button>
-                  </div>
-                </div>
-                <div className="game-viewport-container">
-                  <PartyStage
-                    key={stageContent.session.code}
-                    game={stageContent.game}
-                    session={stageContent.session}
-                    onExit={() => setStageContent(null)}
-                  />
-                </div>
-              </section>
-            )}
-
-            {stageContent?.type === 'catalog' && (
-              <GameTheater
-                key={stageContent.game.slug}
-                title={stageContent.game.title}
-                // AI Act art. 50 needs a disclosure at the point of consumption; keep
-                // it short so the title stays the hero of the bar.
-                badge={{ icon: 'sparkle', label: t('ai.generatedShort') }}
-                source={{ slug: stageContent.game.slug }}
-                onExit={() => setStageContent(null)}
-                orientation={stageContent.game.orientation}
-                reportSlug={stageContent.game.slug}
-                submittedBy={stageContent.game.submittedBy}
-                creatorHandle={stageContent.game.creatorHandle}
-                controls={stageContent.game.controls}
-                touch={stageContent.game.touch}
-                initialRemixOpen={stageContent.initialRemixOpen}
-              />
-            )}
-
-            {stageContent?.type === 'generated' && (
-              <GameTheater
-                key={stageContent.game.html}
-                title={stageContent.game.title}
-                badge={{ icon: 'rocket', label: t('ai.generatedShort') }}
-                source={{ html: stageContent.game.html }}
-                onExit={() => setStageContent(null)}
-                meta={
-                  stageContent.prompt ? (
-                    <span className="theater-controls">{t('home.generatedFrom', { prompt: stageContent.prompt })}</span>
-                  ) : undefined
-                }
-              />
-            )}
+            {stageOverlay}
 
             {partyError && <p className="error party-error">{partyError}</p>}
 
