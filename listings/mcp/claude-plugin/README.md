@@ -12,6 +12,18 @@ root. Install it with:
 or from claude.ai: **Settings → Plugins → Add → Add marketplace**, then
 `gamedevpl/www.gamedev.pl`.
 
+### Installing the plugin does not connect the server — that is deliberate
+
+There is one more step after install: the `gamedevpl` MCP server has to be enabled as a
+connector. It is not automatic and should not be. A plugin comes from a repository rather
+than from you, so Claude puts every MCP server a plugin declares behind **the same
+per-server approval as a project `.mcp.json`** — otherwise installing a third-party plugin
+could silently attach a remote server to your assistant.
+
+So the honest instruction is two steps, not one: **install the plugin, then approve the
+`gamedevpl` connector.** Verified working 2026-08-06 — once approved, the tools load and
+the server's closed-beta notice comes through with them.
+
 ## Why this lives in its own directory
 
 The plugin's `source` deliberately points here rather than at the repository root. Claude
