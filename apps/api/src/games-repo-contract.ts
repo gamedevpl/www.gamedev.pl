@@ -131,8 +131,12 @@ export const MAX_PROJECT_BYTES = GAME_BUDGET_BYTES + GAMEKIT_PLATFORM_BYTES;
  * - `GAME.json` → `audio.musicTracks` is an optional array of *extra* track names a game
  *   switches to at runtime (ambient → combat). Games may not fetch, so every named track
  *   is embedded at build time.
- * - catalog is loaded via `readMusicCatalog()` (games-repo `tools/audio.ts`;
- *   formerly an inline `shared/audio/music.json` read in assemble.ts)
+ * - Names resolve against the shared catalog (`readMusicCatalog()` /
+ *   `shared/audio/music.json`) **or** an optional per-game `music.json` in the delivery
+ *   (same `{ version, tracks }` shape). Self-build / MCP agents cannot edit `shared/`, so
+ *   a custom score has to ship beside the game — inventing a name that is in neither map
+ *   still fails assemble.
+ * - A per-game track must not reuse a shared catalog id (collision is refused).
  * - inject `window.__GAME_AUDIO_MUSIC__ = "<name>"` and a tracks object carrying the
  *   default plus every extra
  */
@@ -144,6 +148,8 @@ export const MUSIC_CONTRACT = {
   manifestTracksFieldType: 'string[]',
   /** Historical path; the catalog file may still live here inside `tools/audio.ts`. */
   catalogPath: 'shared/audio/music.json',
+  /** Optional deliverable beside GAME.json — custom tracker tracks for this game only. */
+  gameMusicPath: 'music.json',
   /** Function assemble.ts calls to load the music catalog (post-refactor lockstep). */
   catalogReader: 'readMusicCatalog',
   catalogTracksKey: 'tracks',
@@ -243,13 +249,17 @@ export const DELIVERY_CONTRACT_VERSION = 1;
  * refusal and instruction text, so a reshuffle is a visible change even when the set is
  * identical, and the CI check reports it separately from an add or a remove.
  *
- * Game-shape only: SPEC / GAME / CAPTURE / ACCEPTANCE / TRACE / PLAYTEST / AGENT / EDITOR,
- * the playable trio, and `sim.ts`. Media bytes are produced by our gate and never
- * uploaded, so `media/` is refused rather than listed here.
+ * Game-shape only: SPEC / GAME / optional music.json / CAPTURE / ACCEPTANCE / TRACE /
+ * PLAYTEST / AGENT / EDITOR, the playable trio, and `sim.ts`. Media bytes are produced
+ * by our gate and never uploaded, so `media/` is refused rather than listed here.
  */
 export const DELIVERY_FIXED_FILES = [
   'SPEC.md',
   'GAME.json',
+  // Optional per-game tracker catalog. Self-build agents cannot edit
+  // `shared/audio/music.json`, so a custom score ships here (same `{ version, tracks }`
+  // shape as the shared catalog). Absent for games that only pick a shared mood track.
+  'music.json',
   'CAPTURE.json',
   'ACCEPTANCE.json',
   // The committed behavioural golden. It is not source in the ordinary sense, but the

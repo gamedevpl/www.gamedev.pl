@@ -9,6 +9,7 @@ import {
   type GameKitModuleName,
 } from './games-repo-contract.js';
 import { isRateLimitResponse } from './github-rate-limit.js';
+import { mergeMusicTrackMaps, parseGameMusicTracks, parseMusicCatalogTracks } from './music-tracks.js';
 
 export type { CatalogGameTouch } from './catalog-touch.js';
 
@@ -204,20 +205,7 @@ function parseGameManifest(source: string): ParsedGameManifest {
  * reads the `tracks` map — each value is the playback descriptor for one BGM id.
  */
 function parseMusicTracks(source: string): Record<string, unknown> {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(source);
-  } catch {
-    throw new Error('shared audio music catalog is not valid JSON');
-  }
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new Error('shared audio music catalog is invalid');
-  }
-  const tracks = (parsed as { tracks?: unknown }).tracks;
-  if (!tracks || typeof tracks !== 'object' || Array.isArray(tracks)) {
-    throw new Error('shared audio music catalog is missing tracks');
-  }
-  return tracks as Record<string, unknown>;
+  return parseMusicCatalogTracks(source);
 }
 
 export interface CatalogMediaScreenshot {
@@ -1371,14 +1359,19 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
         );
       }
 
-      // Music: games-repo assemble reads only `tracks` from music.json, then injects the
-      // autoplay name plus a map of the tracks this game can reach — not the whole catalog.
+      // Music: shared catalog plus optional per-game `music.json`, then inject the
+      // autoplay name plus every track this game can reach — not the whole catalog.
+      // MCP / self-build agents cannot edit `shared/`, so custom scores ship beside
+      // the game (MUSIC_CONTRACT.gameMusicPath) and merge here.
       if (manifest.music !== null) {
         const musicSource = await readRawFile('shared/audio/music.json', ref);
         if (musicSource === null) {
           return null;
         }
-        const tracks = parseMusicTracks(musicSource);
+        const catalogTracks = parseMusicTracks(musicSource);
+        const gameMusicSource = await gameFile('music.json');
+        const gameTracks = gameMusicSource === null ? null : parseGameMusicTracks(gameMusicSource);
+        const tracks = mergeMusicTrackMaps(catalogTracks, gameTracks);
         // `Object.hasOwn`, not `tracks[name] !== undefined`: the catalog comes from
         // JSON.parse and inherits Object.prototype, so `tracks.constructor` is a function
         // rather than undefined and passes a truthiness check. `constructor` also clears
@@ -1389,7 +1382,7 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
         const selected: Record<string, unknown> = Object.create(null);
         for (const name of [manifest.music, ...manifest.musicTracks]) {
           if (!Object.hasOwn(tracks, name)) {
-            throw new Error(`game manifest music track not in catalog: ${name}`);
+            throw new Error(`game manifest music track not found: ${name}`);
           }
           selected[name] = tracks[name];
         }

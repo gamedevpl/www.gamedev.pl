@@ -117,6 +117,11 @@ describe('games-repo-contract (website half)', () => {
     ]);
   });
 
+  it('documents the optional per-game music.json path', () => {
+    expect(MUSIC_CONTRACT.gameMusicPath).toBe('music.json');
+    expect(MUSIC_CONTRACT.catalogPath).toBe('shared/audio/music.json');
+  });
+
   it('documents the music field as a string over the tracks catalog key', () => {
     expect(MUSIC_CONTRACT.manifestFieldType).toBe('string');
     expect(MUSIC_CONTRACT.catalogTracksKey).toBe('tracks');
@@ -134,6 +139,7 @@ describe('delivery contract (website half)', () => {
     expect([...DELIVERY_FIXED_FILES]).toEqual([
       'SPEC.md',
       'GAME.json',
+      'music.json',
       'CAPTURE.json',
       'ACCEPTANCE.json',
       'TRACE.json',

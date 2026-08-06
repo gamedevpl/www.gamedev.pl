@@ -128,6 +128,7 @@ describe('validateSourceUpload — the delivery contract', () => {
   it('accept/reject matrix for the delivery filename allowlist', () => {
     const accept = [
       'GAME.json',
+      'music.json',
       'CAPTURE.json',
       'style.css',
       'game/loop.ts',

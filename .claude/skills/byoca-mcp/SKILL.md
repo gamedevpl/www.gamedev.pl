@@ -135,6 +135,16 @@ composer (`apps/web/src/StudioLivePreview.tsx`); clicking opens the normal theat
 Agents should therefore **stage a runnable tree early and keep staging** — it is the
 cheapest way to show the creator progress, and it costs no turns.
 
+### Custom music (per-game `music.json`)
+
+Self-build agents **cannot** edit `shared/audio/music.json`. Inventing a track name that
+is not in the shared catalog used to fail assemble ("unknown music track") with no
+remedy short of picking a shared mood. Agents may now ship an optional `music.json`
+beside `GAME.json` (same `{ "version": 1, "tracks": { … } }` tracker shape) and name
+those tracks from `audio.music` / `audio.musicTracks`. Assemble merges game tracks onto
+the shared catalog; a name that collides with a shared id is refused. Prefer a shared
+mood when one fits — see games-repo `develop-game-audio`.
+
 ### Preview stills (BY-28a) — frames without a publish
 
 The live staged preview shows the **creator** a playable game; it does nothing for an
