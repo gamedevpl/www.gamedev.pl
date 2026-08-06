@@ -114,11 +114,11 @@ async function renderApp() {
 }
 
 async function submitIdea(container: HTMLElement) {
-  const textarea = container.querySelector<HTMLTextAreaElement>('.big-prompt-input')!;
+  const input = container.querySelector<HTMLInputElement>('.big-prompt-input')!;
   await act(async () => {
-    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
-    setter?.call(textarea, 'A survival game on a desert island with crafting and storms');
-    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+    setter?.call(input, 'A survival game on a desert island with crafting and storms');
+    input.dispatchEvent(new Event('input', { bubbles: true }));
     await flushEffects();
   });
   await act(async () => {
@@ -201,11 +201,11 @@ describe('the QA gate in App', () => {
 
     const { container, root } = await renderApp();
 
-    const textarea = container.querySelector<HTMLTextAreaElement>('.big-prompt-input')!;
+    const input = container.querySelector<HTMLInputElement>('.big-prompt-input')!;
     await act(async () => {
-      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
-      setter?.call(textarea, 'A survival game on a desert island with crafting and storms');
-      textarea.dispatchEvent(new Event('input', { bubbles: true }));
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+      setter?.call(input, 'A survival game on a desert island with crafting and storms');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
       await flushEffects();
     });
 

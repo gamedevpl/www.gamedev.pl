@@ -18,7 +18,7 @@ describe('HeroPromptSection', () => {
     vi.unstubAllGlobals();
   });
 
-  it('renders prompt inputs and voice, upload, sketch buttons', async () => {
+  it('renders prompt inputs and attach, voice, build controls', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
 
@@ -44,14 +44,17 @@ describe('HeroPromptSection', () => {
 
     const textarea = container.querySelector('.big-prompt-input');
     expect(textarea).not.toBeNull();
+    expect(textarea?.tagName).toBe('INPUT');
 
+    const attachBtn = container.querySelector('.attach-btn');
     const micBtn = container.querySelector('.mic-btn');
-    const uploadBtn = container.querySelector('.upload-btn');
-    const sketchBtn = container.querySelector('.sketch-btn');
+    const buildBtn = container.querySelector('.build-btn');
 
+    expect(attachBtn).not.toBeNull();
     expect(micBtn).not.toBeNull();
-    expect(uploadBtn).not.toBeNull();
-    expect(sketchBtn).not.toBeNull();
+    expect(buildBtn).not.toBeNull();
+    expect(container.querySelector('.prompt-composer-bar')).not.toBeNull();
+    expect(container.querySelectorAll('.chip-btn')).toHaveLength(0);
 
     await act(async () => root.unmount());
   });
@@ -133,7 +136,7 @@ describe('HeroPromptSection', () => {
     await act(async () => root.unmount());
   });
 
-  it('opens sketch modal when sketch button is clicked', async () => {
+  it('opens sketch modal from the attach menu', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
 
@@ -170,9 +173,19 @@ describe('HeroPromptSection', () => {
       await flushEffects();
     });
 
-    const sketchBtn = container.querySelector<HTMLButtonElement>('.sketch-btn');
+    const attachBtn = container.querySelector<HTMLButtonElement>('.attach-btn');
     await act(async () => {
-      sketchBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      attachBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushEffects();
+    });
+
+    const sketchItem = Array.from(container.querySelectorAll<HTMLButtonElement>('.prompt-attach-item')).find((btn) =>
+      btn.textContent?.includes('Draw Sketch'),
+    );
+    expect(sketchItem).not.toBeUndefined();
+
+    await act(async () => {
+      sketchItem?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await flushEffects();
     });
 
@@ -271,7 +284,7 @@ describe('HeroPromptSection', () => {
       recognition.onresult?.({ results: [{ 0: { transcript: 'A flying cat game' } }] });
       await flushEffects();
     });
-    expect(container.querySelector<HTMLTextAreaElement>('.big-prompt-input')?.value).toBe('A flying cat game');
+    expect(container.querySelector<HTMLInputElement>('.big-prompt-input')?.value).toBe('A flying cat game');
 
     await act(async () => root.unmount());
     delete (window as unknown as { webkitSpeechRecognition?: unknown }).webkitSpeechRecognition;

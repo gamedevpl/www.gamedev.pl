@@ -6,6 +6,10 @@ import { SketchModal } from './SketchModal.js';
 import { PixelIcon } from './PixelIcon.js';
 import { getQuota } from './submissionApi.js';
 
+/**
+ * Gemini-style composer: one pill bar holds attach / prompt / mic / build.
+ */
+
 type HeroPromptSectionProps = {
   initialPrompt?: string;
   catalogEntries?: CatalogEntry[];
@@ -123,8 +127,10 @@ export function HeroPromptSection({
   const [isDragging, setIsDragging] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [micNotice, setMicNotice] = useState<string | null>(null);
+  const [attachMenuOpen, setAttachMenuOpen] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const attachMenuRef = useRef<HTMLDivElement | null>(null);
 
   // Today's allowance, shown next to the build button. Discovering the limit as a
   // 429 after typing out an idea is the worst possible moment to learn about it.
@@ -150,6 +156,24 @@ export function HeroPromptSection({
   useEffect(() => {
     return () => recognitionRef.current?.stop();
   }, []);
+
+  useEffect(() => {
+    if (!attachMenuOpen) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (attachMenuRef.current && !attachMenuRef.current.contains(event.target as Node)) {
+        setAttachMenuOpen(false);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setAttachMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [attachMenuOpen]);
 
   const toggleSpeechRecognition = () => {
     setMicNotice(null);
@@ -221,8 +245,6 @@ export function HeroPromptSection({
   };
 
   const matchedGame = useMemo(() => findMatchingGame(promptText, catalogEntries), [promptText, catalogEntries]);
-
-  const suggestions = [t('suggestions.dodge'), t('suggestions.collect'), t('suggestions.space')];
 
   const handleFiles = (files: FileList | File[]) => {
     Array.from(files).forEach((file) => {
@@ -324,8 +346,57 @@ export function HeroPromptSection({
         onDrop={handleDrop}
       >
         <form onSubmit={handlePrimarySubmit} className="prompt-box-form">
-          <div className="prompt-textarea-wrapper">
-            <textarea
+          <div className="prompt-composer-bar">
+            <div className="prompt-attach" ref={attachMenuRef}>
+              <button
+                type="button"
+                className={`prompt-icon-btn attach-btn${attachMenuOpen ? ' is-open' : ''}`}
+                onClick={() => setAttachMenuOpen((open) => !open)}
+                title={t('hero.attachMenuAria')}
+                aria-label={t('hero.attachMenuAria')}
+                aria-expanded={attachMenuOpen}
+                aria-haspopup="menu"
+              >
+                <PixelIcon name="plus" size={18} />
+              </button>
+              {attachMenuOpen ? (
+                <div className="prompt-attach-menu" role="menu" aria-label={t('hero.attachMenu')}>
+                  <button
+                    type="button"
+                    className="prompt-attach-item"
+                    role="menuitem"
+                    onClick={() => {
+                      setAttachMenuOpen(false);
+                      fileInputRef.current?.click();
+                    }}
+                  >
+                    <PixelIcon name="image" size={16} /> {t('hero.uploadImage')}
+                  </button>
+                  <button
+                    type="button"
+                    className="prompt-attach-item"
+                    role="menuitem"
+                    onClick={() => {
+                      setAttachMenuOpen(false);
+                      setIsSketchOpen(true);
+                    }}
+                  >
+                    <PixelIcon name="palette" size={16} /> {t('hero.drawSketch')}
+                  </button>
+                </div>
+              ) : null}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden-file-input"
+                onChange={handleFileSelect}
+              />
+            </div>
+
+            <input
+              type="text"
               className="big-prompt-input"
               autoFocus={shouldAutoFocusPrompt}
               value={promptText}
@@ -336,16 +407,11 @@ export function HeroPromptSection({
                 setPromptText(e.target.value);
               }}
               placeholder={t('hero.bigPromptPlaceholder')}
-              rows={2}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                  e.preventDefault();
-                  handlePrimarySubmit(e);
-                }
-              }}
+              enterKeyHint="go"
+              autoComplete="off"
             />
 
-            <div className="prompt-media-actions">
+            <div className="prompt-bar-actions">
               <button
                 type="button"
                 className={`prompt-icon-btn mic-btn ${isListening ? 'listening' : ''}`}
@@ -356,33 +422,45 @@ export function HeroPromptSection({
               >
                 <PixelIcon name="mic" size={18} />
               </button>
-              <button
-                type="button"
-                className="prompt-icon-btn upload-btn"
-                onClick={() => fileInputRef.current?.click()}
-                title={t('hero.uploadImage')}
-                aria-label={t('hero.uploadImage')}
-              >
-                <PixelIcon name="image" size={18} />
-              </button>
-              <button
-                type="button"
-                className="prompt-icon-btn sketch-btn"
-                onClick={() => setIsSketchOpen(true)}
-                title={t('hero.drawSketch')}
-                aria-label={t('hero.drawSketch')}
-              >
-                <PixelIcon name="palette" size={18} />
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                multiple
-                className="hidden-file-input"
-                onChange={handleFileSelect}
-              />
             </div>
+
+            <button
+              type="submit"
+              className="primary-btn build-btn"
+              title={
+                submissionStatus === 'refining'
+                  ? t('qa.analyzing')
+                  : submissionStatus === 'loading' || mockStatus === 'loading'
+                    ? t('submit.submitting')
+                    : t('hero.buildGameButton')
+              }
+              aria-label={
+                submissionStatus === 'refining'
+                  ? t('qa.analyzing')
+                  : submissionStatus === 'loading' || mockStatus === 'loading'
+                    ? t('submit.submitting')
+                    : t('hero.buildGameButton')
+              }
+              disabled={
+                submissionStatus !== 'idle' ||
+                mockStatus === 'loading' ||
+                (!promptText.trim() && attachments.length === 0)
+              }
+            >
+              <PixelIcon name="rocket" size={16} />
+              {/* Three states, not two: the refiner runs for a few seconds before
+                  anything is submitted, and saying "Submitting…" through it was the
+                  creator's first impression of a feature that had just started
+                  working at all. Visually clipped on desktop (circular send);
+                  shown on the phone's full-width row. */}
+              <span className="build-btn-label">
+                {submissionStatus === 'refining'
+                  ? t('qa.analyzing')
+                  : submissionStatus === 'loading' || mockStatus === 'loading'
+                    ? t('submit.submitting')
+                    : t('hero.buildGameButton')}
+              </span>
+            </button>
           </div>
 
           {(micNotice || isListening) && (
@@ -443,43 +521,11 @@ export function HeroPromptSection({
             </div>
           )}
 
-          <div className="prompt-controls-bar">
-            <div className="chip-container">
-              {suggestions.map((suggestion) => (
-                <button key={suggestion} type="button" className="chip-btn" onClick={() => setPromptText(suggestion)}>
-                  + {suggestion}
-                </button>
-              ))}
-            </div>
-
-            <div className="action-buttons">
-              {quota && quota.limit !== null ? (
-                <span className={`quota-note${quota.used >= quota.limit ? ' is-spent' : ''}`}>
-                  {t('hero.quotaLeft', { left: Math.max(0, quota.limit - quota.used), limit: quota.limit })}
-                </span>
-              ) : null}
-              <button
-                type="submit"
-                className="primary-btn build-btn"
-                disabled={
-                  submissionStatus !== 'idle' ||
-                  mockStatus === 'loading' ||
-                  (!promptText.trim() && attachments.length === 0)
-                }
-              >
-                <PixelIcon name="rocket" size={16} />{' '}
-                {/* Three states, not two: the refiner runs for a few seconds before
-                    anything is submitted, and saying "Submitting…" through it was the
-                    creator's first impression of a feature that had just started
-                    working at all. */}
-                {submissionStatus === 'refining'
-                  ? t('qa.analyzing')
-                  : submissionStatus === 'loading' || mockStatus === 'loading'
-                    ? t('submit.submitting')
-                    : t('hero.buildGameButton')}
-              </button>
-            </div>
-          </div>
+          {quota && quota.limit !== null ? (
+            <span className={`quota-note${quota.used >= quota.limit ? ' is-spent' : ''}`}>
+              {t('hero.quotaLeft', { left: Math.max(0, quota.limit - quota.used), limit: quota.limit })}
+            </span>
+          ) : null}
         </form>
 
         {submissionError && <p className="error">{submissionError}</p>}
