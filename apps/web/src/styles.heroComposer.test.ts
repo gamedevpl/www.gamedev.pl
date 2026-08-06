@@ -40,7 +40,8 @@ describe('desktop hero composer pill', () => {
 
     const input = firstRuleBody('.big-prompt-input');
     expect(input).toMatch(/height:\s*36px/);
-    expect(input).toMatch(/line-height:\s*36px/);
+    expect(input).toMatch(/line-height:\s*16px/);
+    expect(input).toMatch(/padding:\s*10px 0/);
     expect(input).toMatch(/font-size:\s*16px/);
     expect(input).not.toMatch(/field-sizing:/);
     expect(input).not.toMatch(/min-height:\s*128px/);

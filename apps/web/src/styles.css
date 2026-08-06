@@ -436,16 +436,18 @@ a {
   min-width: 0;
   height: 36px;
   margin: 0;
-  /* Equal vertical pad optically centers Proxima in Chrome's input; a bare
-     line-height:36px left the glyph sitting high in the field. */
-  padding: 0;
+  /* Don't use line-height:36px — Proxima's glyph box sits high in a tall
+     line box, so the placeholder reads above the icon midline. Equal pad
+     around a 16px line centers the text with the 36px icon buttons. */
+  padding: 10px 0;
   border: none;
   border-radius: 0;
   background: transparent;
   color: #fff;
   font-family: inherit;
   font-size: 16px;
-  line-height: 36px;
+  line-height: 16px;
+  box-sizing: border-box;
   box-shadow: none;
   appearance: none;
   -webkit-appearance: none;
@@ -458,11 +460,8 @@ a {
 
 .big-prompt-input::placeholder {
   color: var(--muted);
-  /* Inherit the field's line-height so the placeholder shares the icon midline
-     instead of using the browser's top-biased placeholder metrics. */
-  line-height: inherit;
+  line-height: 16px;
   opacity: 1;
-  vertical-align: middle;
 }
 
 .hero-prompt-card.drag-over .prompt-composer-bar {
@@ -3177,11 +3176,12 @@ body.player-open {
   .big-prompt-input {
     font-size: 16px;
     height: 44px;
-    line-height: 44px;
+    line-height: 16px;
+    padding: 14px 0;
   }
 
   .big-prompt-input::placeholder {
-    line-height: 44px;
+    line-height: 16px;
   }
 
   .prompt-composer-bar .build-btn {
