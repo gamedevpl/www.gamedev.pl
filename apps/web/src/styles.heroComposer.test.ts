@@ -19,12 +19,11 @@ function lastRuleBody(selector: string): string {
 }
 
 describe('mobile hero composer pill', () => {
-  it('does not force a tall empty textarea inside the pill', () => {
-    // The pre-pill card used 128px so a Polish placeholder fit; that floor turns
-    // the Gemini-style bar into a crushed box on a phone.
+  it('does not force a tall empty field inside the pill', () => {
     const rule = lastRuleBody('.big-prompt-input');
     expect(rule).not.toMatch(/min-height:\s*128px/);
     expect(rule).toMatch(/font-size:\s*16px/);
+    expect(rule).toMatch(/height:\s*44px/);
   });
 
   it('puts Build on its own full-width labeled row under + | field | mic', () => {
@@ -38,6 +37,16 @@ describe('mobile hero composer pill', () => {
 });
 
 describe('desktop hero composer pill', () => {
+  it('keeps a single-line field on the same centerline as the tools', () => {
+    // A wrapping textarea placeholder sat above/below the icon midline (the
+    // red-line bug). <input type="text"> cannot wrap; height matches the icons.
+    const rule = css.slice(css.indexOf('.big-prompt-input {'), css.indexOf('.big-prompt-input:focus'));
+    expect(rule).toMatch(/height:\s*36px/);
+    expect(rule).toMatch(/line-height:\s*36px/);
+    expect(rule).not.toMatch(/min-height:\s*128px/);
+    expect(rule).not.toMatch(/field-sizing:/);
+  });
+
   it('keeps Build as a circular icon send with a clipped label', () => {
     // First (desktop) rule — lastIndex would hit the phone override.
     const marker = '.prompt-composer-bar .build-btn {';

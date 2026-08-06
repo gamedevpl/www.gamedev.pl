@@ -395,7 +395,8 @@ export function HeroPromptSection({
               />
             </div>
 
-            <textarea
+            <input
+              type="text"
               className="big-prompt-input"
               autoFocus={shouldAutoFocusPrompt}
               value={promptText}
@@ -404,21 +405,10 @@ export function HeroPromptSection({
                 // "someone started writing an idea", not "someone loaded the page".
                 if (e.target.value.trim()) recordCreateStep('prompt_started');
                 setPromptText(e.target.value);
-                // Grow with the text on browsers that lack `field-sizing: content`.
-                const el = e.target;
-                el.style.height = '24px';
-                if (el.value) {
-                  el.style.height = `${Math.min(el.scrollHeight, 7.5 * 16)}px`;
-                }
               }}
               placeholder={t('hero.bigPromptPlaceholder')}
-              rows={1}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                  e.preventDefault();
-                  handlePrimarySubmit(e);
-                }
-              }}
+              enterKeyHint="go"
+              autoComplete="off"
             />
 
             <div className="prompt-bar-actions">

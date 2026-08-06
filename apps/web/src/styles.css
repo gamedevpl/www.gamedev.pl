@@ -3134,14 +3134,17 @@ body.player-open {
     min-height: 44px;
   }
 
-  /* Composer tools sit in the pill bar now — no overlay over the textarea.
-     iOS still needs ≥16px to avoid focus-zoom; the old 128px floor was for a
-     tall card textarea and made this pill look like a crushed box. */
+  /* Composer tools sit in the pill bar now — no overlay over the field.
+     iOS still needs ≥16px to avoid focus-zoom. Single-line <input> keeps the
+     placeholder on the same centerline as + / mic / send. */
   .big-prompt-input {
     font-size: 16px;
-    padding: 8px 4px;
-    height: 28px;
-    min-height: 28px;
+    height: 44px;
+    line-height: 44px;
+  }
+
+  .big-prompt-input::placeholder {
+    line-height: 44px;
   }
 
   .prompt-icon-btn {

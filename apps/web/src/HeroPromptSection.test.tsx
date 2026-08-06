@@ -44,6 +44,7 @@ describe('HeroPromptSection', () => {
 
     const textarea = container.querySelector('.big-prompt-input');
     expect(textarea).not.toBeNull();
+    expect(textarea?.tagName).toBe('INPUT');
 
     const attachBtn = container.querySelector('.attach-btn');
     const micBtn = container.querySelector('.mic-btn');
@@ -283,7 +284,7 @@ describe('HeroPromptSection', () => {
       recognition.onresult?.({ results: [{ 0: { transcript: 'A flying cat game' } }] });
       await flushEffects();
     });
-    expect(container.querySelector<HTMLTextAreaElement>('.big-prompt-input')?.value).toBe('A flying cat game');
+    expect(container.querySelector<HTMLInputElement>('.big-prompt-input')?.value).toBe('A flying cat game');
 
     await act(async () => root.unmount());
     delete (window as unknown as { webkitSpeechRecognition?: unknown }).webkitSpeechRecognition;
