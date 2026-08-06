@@ -58,8 +58,17 @@ describe('.claude-plugin marketplace', () => {
     mcpServers?: Record<string, { url?: string; type?: string }>;
   }
 
+  // Both declarations point at the same endpoint, so neither can be updated alone.
+  it('keeps the marketplace entry and the plugin .mcp.json in agreement', () => {
+    const inline = entry.mcpServers as Record<string, { url?: string }>;
+    const file = pluginMcp.mcpServers as Record<string, { url?: string }>;
+    expect(Object.keys(inline)).toEqual(Object.keys(file));
+    expect(inline.gamedevpl.url).toBe(file.gamedevpl.url);
+  });
+
   const entries = marketplace.plugins as MarketplacePlugin[];
   const entry = entries[0];
+  const pluginMcp = readJson('listings/mcp/claude-plugin/.mcp.json');
 
   it('lists exactly the one plugin we intend to publish', () => {
     expect(entries).toHaveLength(1);
@@ -71,15 +80,35 @@ describe('.claude-plugin marketplace', () => {
     expect(plugin.description).toBe(registry.description);
   });
 
+  /**
+   * The first cut declared mcpServers only in the marketplace entry, and the plugin
+   * installed with no tools: the documented locations are `.mcp.json` in the plugin root
+   * or inline in the plugin's own manifest, and the plugin directory had neither. Assert
+   * the file exists and is wired, because "installs cleanly" and "actually exposes the
+   * server" turned out to be different things.
+   */
+  it('ships an .mcp.json in the plugin root, which is where the loader looks', () => {
+    const servers = pluginMcp.mcpServers as Record<string, { url?: string; type?: string }>;
+    const remotes = registry.remotes as Array<{ url: string }>;
+    expect(servers.gamedevpl.url).toBe(remotes[0]?.url);
+    expect(servers.gamedevpl.type).toBe('http');
+    expect(plugin.mcpServers).toBe('./.mcp.json');
+  });
+
   it('advertises the endpoint the registry publishes', () => {
     const remotes = registry.remotes as Array<{ url: string }>;
     expect(entry.mcpServers?.gamedevpl?.url).toBe(remotes[0]?.url);
   });
 
-  it('never ships a credential in the install config', () => {
-    const serialized = JSON.stringify(entry.mcpServers ?? {}).toLowerCase();
-    for (const marker of ['authorization', 'bearer', 'token', 'apikey', 'api_key', 'secret', 'key']) {
-      expect(serialized, `marketplace.json must not carry ${marker}`).not.toContain(marker);
+  it('never ships a credential in either install config', () => {
+    for (const [label, config] of [
+      ['marketplace.json', entry.mcpServers ?? {}],
+      ['.mcp.json', pluginMcp.mcpServers ?? {}],
+    ] as const) {
+      const serialized = JSON.stringify(config).toLowerCase();
+      for (const marker of ['authorization', 'bearer', 'token', 'apikey', 'api_key', 'secret', 'key']) {
+        expect(serialized, `${label} must not carry ${marker}`).not.toContain(marker);
+      }
     }
   });
 
