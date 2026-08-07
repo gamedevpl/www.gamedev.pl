@@ -502,7 +502,7 @@ export function GameTheater({
    * again) should be made against a number.
    */
   const remixControl = (className: string, control: 'bar' | 'more') =>
-    'slug' in source ? (
+    remixable && 'slug' in source ? (
       <button
         type="button"
         className={className}
@@ -525,9 +525,9 @@ export function GameTheater({
   // `opened` is read against. Fires on render, since being shown is the most the
   // client can honestly claim to know.
   useEffect(() => {
-    if (!('slug' in source)) return;
+    if (!remixable || !('slug' in source)) return;
     recordRemixStep('offered');
-  }, [source]);
+  }, [remixable, source]);
 
   // The one thing a player needs before the first key press, and the game's own copy of
   // it is hidden inside the frame by HIDE_CHROME. Reuses `theater-menu-item` in the
@@ -702,7 +702,7 @@ export function GameTheater({
                   {micControl('theater-menu-item mic-menu')}
                   {soundControl('theater-menu-item theater-mobile-chrome')}
                   {fullscreenControl('theater-menu-item theater-mobile-chrome')}
-                  {'slug' in source ? (
+                  {remixable && 'slug' in source ? (
                     <>
                       {remixControl('theater-menu-item theater-mobile-chrome', 'more')}
                       {remixHasPainter ? (

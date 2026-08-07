@@ -653,6 +653,24 @@ describe('GameTheater how-to-play visit telemetry', () => {
     expect(container.querySelector('.remix-btn')).toBeNull();
   });
 
+  it('hides remix chrome and telemetry when remixable is false', async () => {
+    root = createRoot(container);
+    await act(async () => {
+      root!.render(
+        <GameTheater
+          title="Review play"
+          badge={{ icon: 'star', label: 'Try play' }}
+          source={{ slug: 'sky-dodge' }}
+          onExit={() => {}}
+          remixable={false}
+        />,
+      );
+    });
+    session.flush();
+    expect(batches.flatMap((batch) => batch.events).filter((event) => event.type === 'remix_step')).toEqual([]);
+    expect(container.querySelector('.remix-btn')).toBeNull();
+  });
+
   it('does not record how_to_play_opened for a draft theater', async () => {
     // Draft / generated theaters share the card UI but must not enter the open-rate
     // numerator against a denominator that only counts published plays.

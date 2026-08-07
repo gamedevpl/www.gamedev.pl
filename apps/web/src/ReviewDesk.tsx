@@ -185,9 +185,12 @@ export function ReviewDesk() {
   }, [playing]);
 
   useEffect(() => {
-    if (!videoUrl || playing) return;
     const video = videoRef.current;
     if (!video) return;
+    if (playing || !videoUrl) {
+      video.pause();
+      return;
+    }
     void Promise.resolve(video.play()).then(
       () => undefined,
       () => undefined,
@@ -618,6 +621,8 @@ export function ReviewDesk() {
           onExit={() => setPlaying(false)}
           trackPlay={false}
           remixable={false}
+          submittedBy={current.creatorHandle}
+          creatorHandle={current.creatorHandle}
         />
       ) : null}
     </section>

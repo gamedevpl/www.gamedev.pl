@@ -46,7 +46,7 @@ beforeEach(async () => {
         slug: 'sky-dodge',
         title: 'Sky Dodge',
         source: 'catalog',
-        creatorHandle: null,
+        creatorHandle: 'sky-pilot',
         genre: 'arcade',
         issueNumber: null,
         media: {
@@ -184,6 +184,7 @@ describe('ReviewDesk', () => {
   });
 
   it('opens the full-viewport theater when Try play is pressed', async () => {
+    const pauseSpy = vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => undefined);
     root = createRoot(container);
     await act(async () => {
       root!.render(<ReviewDesk />);
@@ -205,6 +206,10 @@ describe('ReviewDesk', () => {
     expect(theater?.getAttribute('role')).toBe('dialog');
     expect(container.querySelector('[data-testid="frame"]')?.textContent).toContain('sky-dodge');
     expect(container.querySelector('video.review-preview-video')).toBeTruthy();
+    expect(pauseSpy).toHaveBeenCalled();
+    expect(theater?.querySelector('a.theater-author-link')?.getAttribute('href')).toBe('/sky-pilot');
+    expect(theater?.textContent).toMatch(/sky-pilot/);
+    expect(theater?.querySelector('.remix-btn')).toBeNull();
     expect(document.body.classList.contains('player-open')).toBe(true);
 
     const exitBtn = theater!.querySelector('button.exit-btn') as HTMLButtonElement | null;
@@ -216,6 +221,7 @@ describe('ReviewDesk', () => {
 
     expect(container.querySelector('.stage.is-playing-full-viewport')).toBeNull();
     expect(document.body.classList.contains('player-open')).toBe(false);
+    pauseSpy.mockRestore();
   });
 
   it('sends cut when the Cut control is pressed', async () => {
