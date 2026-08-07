@@ -19,20 +19,7 @@ function readJson(relative: string): Record<string, unknown> {
   return JSON.parse(readFileSync(join(repoRoot, relative), 'utf8')) as Record<string, unknown>;
 }
 
-/**
- * The shared install-link markers, plus three broader words a manifest has no business
- * containing at all.
- *
- * The canonical list comes first so a credential prefix added there — a new token shape,
- * a new key wire format — is enforced here too. Three hand-written copies of it used to
- * live in this file, and between them they missed `c1.`, `gdpl_oat_`, `gdpl_ort_` and
- * `headers`: the actual credentials, as opposed to the words that describe them. A file
- * whose whole job is catching drift between manifests should not let its own guard rail
- * drift.
- *
- * Lowercased, because every check below lowercases the payload. That only widens what
- * matches — a marker present in any casing still contains its own lowercase form.
- */
+// Canonical list first, so a prefix added there is enforced here.
 const CREDENTIAL_MARKERS = [...MCP_INSTALL_LINK_CREDENTIAL_MARKERS, 'token', 'secret', 'key'].map((marker) =>
   marker.toLowerCase(),
 );
