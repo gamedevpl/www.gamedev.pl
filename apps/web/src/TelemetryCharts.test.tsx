@@ -130,6 +130,8 @@ describe('LineChart', () => {
     expect(host.querySelectorAll('.telem-line-path')).toHaveLength(2);
     expect(visitsBtn?.getAttribute('aria-pressed')).toBe('false');
     expect(visitsBtn?.classList.contains('is-off')).toBe(true);
+    const svgAfterToggle = host.querySelector('svg.telem-line-svg');
+    expect(svgAfterToggle?.getAttribute('aria-label')).toBe('Visits & plays: Plays, Creations');
     act(() => {
       root.unmount();
     });
@@ -143,8 +145,8 @@ describe('LineChart', () => {
         series,
       }),
     );
-    const svg = host.querySelector('svg.telem-line-svg');
-    expect(svg).not.toBeNull();
+    const svg = host.querySelector<SVGSVGElement>('svg.telem-line-svg');
+    if (!svg) throw new Error('expected chart svg');
     // jsdom lacks layout — stub the SVG box for hover math.
     Object.defineProperty(svg, 'getBoundingClientRect', {
       value: () => ({
@@ -161,7 +163,7 @@ describe('LineChart', () => {
     });
     act(() => {
       // hasRight → pad.right 40; plot mid-point maps to the second label.
-      svg?.dispatchEvent(
+      svg.dispatchEvent(
         new MouseEvent('mousemove', {
           bubbles: true,
           clientX: 40 + (640 - 40 - 40) / 2,
@@ -171,10 +173,23 @@ describe('LineChart', () => {
     });
     const tooltip = host.querySelector('.telem-line-tooltip');
     expect(tooltip).not.toBeNull();
+    expect(tooltip?.classList.contains('is-flip')).toBe(false);
     expect(tooltip?.textContent).toContain('08-02');
     expect(tooltip?.textContent).toContain('Visits');
     expect(tooltip?.textContent).toContain('20');
     expect(host.querySelector('.telem-line-crosshair')).not.toBeNull();
+
+    act(() => {
+      // Near the right edge → tooltip flips left of the column.
+      svg.dispatchEvent(
+        new MouseEvent('mousemove', {
+          bubbles: true,
+          clientX: 40 + (640 - 40 - 40) * 0.95,
+          clientY: 100,
+        }),
+      );
+    });
+    expect(host.querySelector('.telem-line-tooltip')?.classList.contains('is-flip')).toBe(true);
     act(() => {
       root.unmount();
     });

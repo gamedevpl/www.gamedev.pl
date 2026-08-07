@@ -8866,6 +8866,11 @@ button.builder-mode-selector:disabled {
   pointer-events: none;
   font-size: 0.75rem;
   color: var(--text);
+  transform: translateX(0.35rem);
+}
+
+.telem-line-tooltip.is-flip {
+  transform: translateX(calc(-100% - 0.35rem));
 }
 
 .telem-line-tooltip-label {

@@ -267,13 +267,15 @@ export function LineChart({
           })
           .filter((row): row is { id: string; label: string; color: string; text: string } => row !== null);
 
-  // Pin tooltip near the column; flip left near the right edge.
+  // Pin tooltip to the hover column; flip left when that column is in the right ~38%.
+  const tooltipFlip = hover !== null && xAt(hover) > pad.left + innerW * 0.62;
   const tooltipStyle =
     hover === null
       ? undefined
       : {
-          left: `${(Math.min(xAt(hover), pad.left + innerW * 0.62) / width) * 100}%`,
+          left: `${(xAt(hover) / width) * 100}%`,
         };
+  const visibleLabels = visible.map((s) => s.label).join(', ') || 'no series visible';
 
   return (
     <figure className="telem-line">
@@ -287,7 +289,7 @@ export function LineChart({
               className="telem-line-svg"
               viewBox={`0 0 ${width} ${height}`}
               role="img"
-              aria-label={`${title}: ${series.map((s) => s.label).join(', ')}`}
+              aria-label={`${title}: ${visibleLabels}`}
               onMouseMove={(event) => {
                 const index = indexFromClientX(event.currentTarget, event.clientX);
                 setHover(index);
@@ -381,7 +383,11 @@ export function LineChart({
               />
             </svg>
             {hover !== null && hoverLabel !== undefined && tooltipRows.length > 0 && (
-              <div className="telem-line-tooltip" style={tooltipStyle} role="status">
+              <div
+                className={tooltipFlip ? 'telem-line-tooltip is-flip' : 'telem-line-tooltip'}
+                style={tooltipStyle}
+                role="status"
+              >
                 <div className="telem-line-tooltip-label">{hoverLabel}</div>
                 <ul>
                   {tooltipRows.map((row) => (
