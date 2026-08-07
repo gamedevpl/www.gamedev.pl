@@ -1,0 +1,14 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "gamedev-pl",
+  "version": "1.0.3",
+  "description": "Build browser games on gamedev.pl from your coding agent.",
+  "author": {
+    "name": "gamedev.pl",
+    "url": "https://www.gamedev.pl"
+  },
+  "homepage": "https://www.gamedev.pl",
+  "repository": "https://github.com/gamedevpl/www.gamedev.pl",
+  "license": "GPL-3.0-only",
+  "keywords": ["games", "game-development", "browser-games", "mcp", "gamedev"]
+}

@@ -4538,17 +4538,13 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             version: '1.0.0',
           },
           instructions:
-            // Closed beta first, because this string is the only thing every client
-            // receives *before* anything fails. Everything below assumes an account.
-            (privateBeta
-              ? 'NOTE: gamedev.pl is in closed beta. These tools need a creator account; if you do not have ' +
-                'one, join the waitlist at https://www.gamedev.pl/ — listing tools here does not mean you can ' +
-                'use them yet. '
-              : '') +
+            // Only string every client gets before anything fails.
+            'NOTE: these tools need an approved gamedev.pl creator account. Without one, calls are refused — ' +
+            'listing tools here does not mean you can use them yet. Accounts start at https://www.gamedev.pl/. ' +
             'Making a NEW game? Call create_game first — start needs a slug, and a new game has none yet. ' +
             'Otherwise call the gamedevpl start tool first. With a creator key configured in Authorization: Bearer, pass only ' +
-            "the game slug — nothing else is needed. A per-game or legacy key from the creator's Studio kickoff " +
-            'prompt goes in the key argument instead. start returns a sessionKey — pass it on every later tool call — ' +
+            "the game slug — nothing else is needed. A legacy round key from the creator's Studio kickoff prompt " +
+            'goes in the key argument instead; durable per-game keys are retired. start returns a sessionKey — pass it on every later tool call — ' +
             'and your workflow (the ordered start→done loop): follow it; honour stop; screenshot early; kit-check ' +
             'before submit; normally call end after delivery and let Studio show the gate. get_gate_verdict is a ' +
             'one-shot check, never a loop: a pending delivery returns stop:true, while deliveryId:null means continue building. Do not poll the inbox on a schedule; ' +
