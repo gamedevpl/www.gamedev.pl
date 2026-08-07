@@ -792,15 +792,15 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ jsonrpc: '2.0', id: 1 });
 
-    // Reachable is not the same as usable. Since the wall lets the handshake through, a
-    // visitor who cannot sign in sees 14 healthy-looking tools; `instructions` is the one
-    // string every client gets before anything fails, so the closed door is named there.
+    // Reachable is not usable: the wall lets the handshake through, so a visitor who
+    // cannot sign in sees 14 healthy-looking tools. `instructions` names the account
+    // requirement — without naming a launch stage, which is a listing-copy decision.
     const instructions = (res.json().result as { instructions?: string }).instructions ?? '';
-    expect(instructions).toMatch(/closed beta/i);
-    expect(instructions).toMatch(/waitlist/i);
+    expect(instructions).toMatch(/creator account/i);
+    expect(instructions).not.toMatch(/beta|waitlist/i);
   });
 
-  it('leaves the closed-beta note out of instructions when the site is open', async () => {
+  it('says the same thing about accounts when the site is open', async () => {
     const store = new InMemoryStore();
     await seedJob(store);
     app = await createApp(store);
@@ -816,7 +816,8 @@ describe('POST /api/mcp (BY-05)', () => {
       },
     });
     const instructions = (res.json().result as { instructions?: string }).instructions ?? '';
-    expect(instructions).not.toMatch(/closed beta/i);
+    expect(instructions).not.toMatch(/beta|waitlist/i);
+    expect(instructions).toMatch(/creator account/i);
     expect(instructions).toMatch(/create_game/);
   });
 

@@ -11,10 +11,10 @@ It also ships a skill, [`building-on-gamedev-pl`](./skills/building-on-gamedev-p
 which explains what a build round is and the few loop rules that cost a whole build when
 missed. The skill is readable at install time, before any connection or account.
 
-> **Creating games is currently in closed beta.** Anyone can install this plugin and
-> inspect its tools, but building needs an approved creator account —
-> [join the waitlist](https://www.gamedev.pl). The server says so when it connects, so you
-> will not discover it only after trying to build something.
+> **Building needs an approved creator account.** Anyone can install this plugin and
+> inspect its tools, but the tools themselves are refused without one. The server says so
+> when it connects, so you will not discover it only after trying to build something —
+> accounts start at [gamedev.pl](https://www.gamedev.pl).
 
 ## Install
 
@@ -71,7 +71,7 @@ and the skill says so: where the two disagree, the server wins.
 
 ## Links
 
-- Site and waitlist: <https://www.gamedev.pl>
+- Site: <https://www.gamedev.pl>
 - Creator Studio: <https://www.gamedev.pl/studio>
 - Source: <https://github.com/gamedevpl/www.gamedev.pl> (GPL-3.0-only)
 - The same server in the official MCP Registry: `pl.gamedev/creator`
