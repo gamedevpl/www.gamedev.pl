@@ -46,7 +46,7 @@ beforeEach(async () => {
         slug: 'sky-dodge',
         title: 'Sky Dodge',
         source: 'catalog',
-        creatorHandle: null,
+        creatorHandle: 'sky-pilot',
         genre: 'arcade',
         issueNumber: null,
         media: {
@@ -183,7 +183,8 @@ describe('ReviewDesk', () => {
     expect(container.textContent).toContain('Neon Courier');
   });
 
-  it('mounts the live frame when Try play is pressed', async () => {
+  it('opens the full-viewport theater when Try play is pressed', async () => {
+    const pauseSpy = vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => undefined);
     root = createRoot(container);
     await act(async () => {
       root!.render(<ReviewDesk />);
@@ -194,18 +195,33 @@ describe('ReviewDesk', () => {
       button.textContent?.includes('Try play'),
     );
     expect(tryPlay).toBeTruthy();
-    // Overlay on the stage — sticky checklist must not bury Try play.
     expect(tryPlay!.className).toContain('is-overlay');
-    expect(container.querySelector('.review-stage-tools')).toBeNull();
     await act(async () => {
       tryPlay!.click();
     });
     await flush();
 
+    const theater = container.querySelector('.stage.is-playing-full-viewport');
+    expect(theater).toBeTruthy();
+    expect(theater?.getAttribute('role')).toBe('dialog');
     expect(container.querySelector('[data-testid="frame"]')?.textContent).toContain('sky-dodge');
-    expect(container.querySelector('video.review-preview-video')).toBeNull();
-    expect(container.textContent).toMatch(/Show preview/);
-    expect(container.querySelector('button.review-play-btn.is-overlay.is-active')).toBeTruthy();
+    expect(container.querySelector('video.review-preview-video')).toBeTruthy();
+    expect(pauseSpy).toHaveBeenCalled();
+    expect(theater?.querySelector('a.theater-author-link')?.getAttribute('href')).toBe('/sky-pilot');
+    expect(theater?.textContent).toMatch(/sky-pilot/);
+    expect(theater?.querySelector('.remix-btn')).toBeNull();
+    expect(document.body.classList.contains('player-open')).toBe(true);
+
+    const exitBtn = theater!.querySelector('button.exit-btn') as HTMLButtonElement | null;
+    expect(exitBtn).toBeTruthy();
+    await act(async () => {
+      exitBtn!.click();
+    });
+    await flush();
+
+    expect(container.querySelector('.stage.is-playing-full-viewport')).toBeNull();
+    expect(document.body.classList.contains('player-open')).toBe(false);
+    pauseSpy.mockRestore();
   });
 
   it('sends cut when the Cut control is pressed', async () => {
