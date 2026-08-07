@@ -359,7 +359,9 @@
       "openBuild": "Otwórz build",
       "playtest": "Zagraj i notatka",
       "abandon": "Porzuć ten build",
-      "abandonConfirm": "Tak, porzuć — odrzuć tę rundę"
+      "abandonConfirm": "Tak, porzuć — odrzuć tę rundę",
+      "abandonConfirmKeepLive": "Tak, porzuć — odrzuć tę rundę (gra na żywo zostaje)",
+      "abandonConfirmRemove": "Tak, porzuć — usuń tę grę ze Studio"
     },
     "rail": {
       "connect": "Podłącz agenta",

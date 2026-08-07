@@ -357,7 +357,9 @@
       "openBuild": "Open build",
       "playtest": "Play & note",
       "abandon": "Abandon this build",
-      "abandonConfirm": "Yes, abandon — discard this round"
+      "abandonConfirm": "Yes, abandon — discard this round",
+      "abandonConfirmKeepLive": "Yes, abandon — discard this round (live game stays)",
+      "abandonConfirmRemove": "Yes, abandon — remove this game from Studio"
     },
     "rail": {
       "connect": "Connect your agent",

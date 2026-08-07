@@ -217,8 +217,8 @@ export function CreatorStudioView({
     requestedGameRef.current = selectedGame;
   }, [selectedGame]);
 
-  // One row per game for picking and counting. Raw `games` still holds every job so
-  // abandoning an improve tip can reveal the published sibling again without a refetch.
+  // One row per game for picking and counting. The API already collapses to the tip;
+  // after abandon we refetch so a published sibling (or older draft) can reappear.
   const shelfGames = useMemo(() => collapseStudioGames(games), [games]);
 
   // Resolve the URL's game segment against the shelf — by slug, or by capability token
@@ -894,10 +894,20 @@ export function CreatorStudioView({
                               ),
                             );
                           }}
-                          onRemoved={(token) => {
-                            setGames((prev) => prev.filter((game) => game.token !== token));
+                          onRemoved={async (token) => {
                             setSelected((current) => (current === token ? null : current));
                             onNavigate(studioPath());
+                            // Optimistic hide, then refetch: the tip may have been covering a
+                            // published (or older) sibling that should stay on the shelf.
+                            setGames((prev) => prev.filter((game) => game.token !== token));
+                            try {
+                              const shelfPage = await fetchStudioGames();
+                              setGames(shelfPage.games);
+                              setShelfTruncated(shelfPage.truncated);
+                              setTotalGames(shelfPage.totalGames);
+                            } catch {
+                              // Keep the optimistic remove — the job is abandoned either way.
+                            }
                           }}
                         />
                       </aside>
@@ -1081,7 +1091,7 @@ function DetailsPanel({
   onOpenPlaytest: () => void;
   onPlay: () => void;
   onDraftSharedChange: (shared: boolean) => void;
-  onRemoved: (token: string) => void;
+  onRemoved: (token: string) => void | Promise<void>;
 }) {
   const { t, i18n } = useTranslation();
   // This *job* is published — composer/playtest routing. Distinct from catalog-live below.
@@ -1179,7 +1189,13 @@ function DetailsPanel({
                     onClick={() => void handleAbandon()}
                     disabled={abandoning}
                   >
-                    {abandonArmed ? t('studioPanel.overview.abandonConfirm') : t('studioPanel.overview.abandon')}
+                    {abandonArmed
+                      ? t(
+                          catalogLive
+                            ? 'studioPanel.overview.abandonConfirmKeepLive'
+                            : 'studioPanel.overview.abandonConfirmRemove',
+                        )
+                      : t('studioPanel.overview.abandon')}
                   </button>
                 ) : null}
               </div>

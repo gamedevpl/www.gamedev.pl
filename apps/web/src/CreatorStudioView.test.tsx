@@ -7,6 +7,7 @@ import { CreatorStudioView } from './CreatorStudioView.js';
 import i18n from './i18n/index.js';
 import type { StudioGame, StudioGamesResponse, StudioScorecard } from './studioApi.js';
 
+const abandonSubmission = vi.fn();
 const fetchStudioGames = vi.fn();
 const fetchStudioHealth = vi.fn();
 const fetchStudioScorecards = vi.fn();
@@ -27,7 +28,7 @@ vi.mock('./submissionApi', async () => {
   return {
     ...actual,
     getSubmissionStatus: vi.fn(async () => ({ media: [] })),
-    abandonSubmission: vi.fn(),
+    abandonSubmission: (...args: unknown[]) => abandonSubmission(...args),
   };
 });
 
@@ -98,6 +99,8 @@ async function renderStudio(props: Partial<Parameters<typeof CreatorStudioView>[
 describe('CreatorStudioView', () => {
   beforeEach(() => {
     authUser = null;
+    abandonSubmission.mockReset();
+    abandonSubmission.mockResolvedValue(undefined);
     fetchStudioGames.mockReset();
     fetchStudioHealth.mockReset();
     fetchStudioHealth.mockResolvedValue({ days: [], truncated: false, games: [] });
@@ -1300,6 +1303,136 @@ describe('CreatorStudioView — what players think', () => {
 
     expect(container.textContent).toContain('What players think');
     expect(container.textContent).toContain('No votes or written notes yet.');
+
+    root.unmount();
+  });
+});
+
+describe('CreatorStudioView abandon', () => {
+  beforeEach(() => {
+    authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
+    abandonSubmission.mockReset();
+    abandonSubmission.mockResolvedValue(undefined);
+    fetchStudioGames.mockReset();
+    fetchStudioHealth.mockReset();
+    fetchStudioHealth.mockResolvedValue({ days: [], truncated: false, games: [] });
+    fetchStudioScorecards.mockReset();
+    fetchStudioScorecards.mockResolvedValue([]);
+    fetchStudioSuggestions.mockReset();
+    fetchStudioSuggestions.mockResolvedValue([]);
+    fetchGameAutonomy.mockReset();
+    fetchGameAutonomy.mockRejectedValue(new Error('not owned'));
+    setDraftShared.mockReset();
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('warns that abandoning a draft removes the game from Studio', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    fetchStudioGames.mockResolvedValue(
+      studioShelf([
+        {
+          token: 'token-draft',
+          title: 'Neon Draft',
+          createdAt: '2026-07-30T09:00:00.000Z',
+          lastKnownStatus: 'building',
+          slug: 'neon-draft',
+        },
+      ]),
+    );
+
+    const { container, root } = await renderStudio({ selectedGame: 'neon-draft', selectedTab: 'details' });
+    const abandon = container.querySelector<HTMLButtonElement>('.status-abandon');
+    expect(abandon?.textContent).toContain('Abandon this build');
+
+    await act(async () => {
+      abandon!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(container.querySelector('.status-abandon')?.textContent).toContain(
+      'Yes, abandon — remove this game from Studio',
+    );
+
+    root.unmount();
+  });
+
+  it('warns that abandoning an improve round keeps the live game', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    fetchStudioGames.mockResolvedValue(
+      studioShelf([
+        {
+          token: 'token-improve',
+          title: 'TV Tycoon',
+          createdAt: '2026-08-01T09:00:00.000Z',
+          lastKnownStatus: 'building',
+          slug: 'tv-tycoon',
+          livePublishedAt: '2026-07-31T09:00:00.000Z',
+        },
+      ]),
+    );
+
+    const { container, root } = await renderStudio({ selectedGame: 'tv-tycoon', selectedTab: 'details' });
+    const abandon = container.querySelector<HTMLButtonElement>('.status-abandon');
+
+    await act(async () => {
+      abandon!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(container.querySelector('.status-abandon')?.textContent).toContain(
+      'Yes, abandon — discard this round (live game stays)',
+    );
+
+    root.unmount();
+  });
+
+  it('refetches the shelf after abandon so a published sibling can reappear', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    const improveTip = {
+      token: 'token-improve',
+      title: 'TV Tycoon',
+      createdAt: '2026-08-01T09:00:00.000Z',
+      lastKnownStatus: 'building' as const,
+      slug: 'tv-tycoon',
+      livePublishedAt: '2026-07-31T09:00:00.000Z',
+    };
+    const publishedSibling = {
+      token: 'token-live',
+      title: 'TV Tycoon',
+      createdAt: '2026-07-30T09:00:00.000Z',
+      lastKnownStatus: 'published' as const,
+      slug: 'tv-tycoon',
+      publishedAt: '2026-07-31T09:00:00.000Z',
+    };
+
+    fetchStudioGames.mockResolvedValueOnce(studioShelf([improveTip]));
+    fetchStudioGames.mockResolvedValueOnce(studioShelf([publishedSibling]));
+
+    const { container, root, onNavigate } = await renderStudio({
+      selectedGame: 'tv-tycoon',
+      selectedTab: 'details',
+    });
+
+    const abandon = container.querySelector<HTMLButtonElement>('.status-abandon');
+    await act(async () => {
+      abandon!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('.status-abandon.is-danger')!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(abandonSubmission).toHaveBeenCalledWith('token-improve');
+    expect(fetchStudioGames).toHaveBeenCalledTimes(2);
+    expect(onNavigate).toHaveBeenCalled();
+    expect(container.textContent).toContain('TV Tycoon');
+    // Live published row no longer offers abandon.
+    expect(container.querySelector('.status-abandon')).toBeNull();
 
     root.unmount();
   });
