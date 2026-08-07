@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { blankItem, itemProblems, setCell } from './editorContentTools.js';
+import { blankItem, defaultCollectionKey, itemProblems, setCell } from './editorContentTools.js';
 import type { EditorCollectionSpec, EditorContentDoc, EditorItemContent, EditorLabel } from './studioApi.js';
 
 /**
@@ -19,25 +19,50 @@ export function RemixPainter(props: {
   content: Record<string, EditorCollectionSpec>;
   doc: EditorContentDoc;
   onChange: (next: EditorContentDoc) => void;
+  selectedCollectionKey?: string | null;
+  onCollectionChange?: (key: string) => void;
 }) {
   const { t, i18n } = useTranslation();
   const name = (label: EditorLabel) => (i18n.language?.startsWith('pl') ? label.pl : label.en);
 
-  // One collection is the vocabulary's reality today; the first is the surface.
-  const collectionKey = Object.keys(props.content)[0] ?? null;
+  const collectionKeys = Object.keys(props.content);
+  const [internalCollectionKey, setInternalCollectionKey] = useState<string | null>(null);
+  const requestedCollectionKey =
+    props.selectedCollectionKey !== undefined ? props.selectedCollectionKey : internalCollectionKey;
+  const collectionKey =
+    requestedCollectionKey && props.content[requestedCollectionKey]
+      ? requestedCollectionKey
+      : defaultCollectionKey(props.content);
   const spec = collectionKey ? props.content[collectionKey] : null;
   const items = collectionKey
     ? (((props.doc[collectionKey] as EditorItemContent[] | undefined) ?? []) as EditorItemContent[])
     : [];
   const [itemIndex, setItemIndex] = useState(0);
-  const [tileKey, setTileKey] = useState<string | null>(spec?.item.tiles[0]?.key ?? null);
+  const [tileKey, setTileKey] = useState<string | null>(
+    spec?.item.tiles.find((tile) => tile.key.length > 0)?.key ?? null,
+  );
+
+  useEffect(() => {
+    setItemIndex(0);
+    setTileKey(spec?.item.tiles.find((tile) => tile.key.length > 0)?.key ?? null);
+  }, [collectionKey, spec]);
+
   const item = items[Math.min(itemIndex, Math.max(0, items.length - 1))] ?? null;
   const activeIndex = Math.min(itemIndex, Math.max(0, items.length - 1));
 
   if (!spec || !collectionKey) return null;
+  const activeCollectionKey = collectionKey;
+
+  function selectCollection(nextKey: string) {
+    if (!props.content[nextKey]) return;
+    if (props.selectedCollectionKey === undefined) setInternalCollectionKey(nextKey);
+    props.onCollectionChange?.(nextKey);
+    setItemIndex(0);
+    setTileKey(props.content[nextKey].item.tiles.find((tile) => tile.key.length > 0)?.key ?? null);
+  }
 
   function updateItems(list: EditorItemContent[]) {
-    props.onChange({ ...props.doc, [collectionKey as string]: list });
+    props.onChange({ ...props.doc, [activeCollectionKey]: list });
   }
 
   function updateItem(next: EditorItemContent) {
@@ -51,6 +76,22 @@ export function RemixPainter(props: {
 
   return (
     <div className="remix-painter">
+      {collectionKeys.length > 1 ? (
+        <label className="editor-collection-selector remix-painter-collection-selector">
+          <span>{t('studioPanel.editor.collection')}</span>
+          <select
+            value={collectionKey}
+            aria-label={t('studioPanel.editor.collection')}
+            onChange={(event) => selectCollection(event.target.value)}
+          >
+            {collectionKeys.map((key) => (
+              <option key={key} value={key}>
+                {name(props.content[key].label)}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
       <div className="remix-painter-items" role="tablist" aria-label={name(spec.label)}>
         {items.map((entry, index) => (
           <button

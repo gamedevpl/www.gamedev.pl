@@ -12077,6 +12077,27 @@ button.builder-mode-selector:disabled {
   color: var(--muted);
 }
 
+.editor-collection-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.editor-collection-selector select {
+  min-width: 0;
+  flex: 1;
+  border: 1px solid var(--panel-border);
+  border-radius: 7px;
+  background: var(--panel-card);
+  color: var(--text);
+  padding: 6px 8px;
+  font: inherit;
+}
+
 .editor-count {
   font-family: ui-monospace, monospace;
   font-size: 0.68rem;

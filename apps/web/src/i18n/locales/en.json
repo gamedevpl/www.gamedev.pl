@@ -324,6 +324,7 @@
       "conflictReload": "Load newest",
       "conflictOverwrite": "Keep mine",
       "boardAria": "{{name}} tile painter",
+      "collection": "Collection",
       "tiles": "Tiles",
       "properties": "Properties",
       "checks": "Checks",
