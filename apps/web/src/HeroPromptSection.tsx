@@ -447,7 +447,7 @@ export function HeroPromptSection({
                 (!promptText.trim() && attachments.length === 0)
               }
             >
-              <PixelIcon name="rocket" size={16} />
+              <PixelIcon name="send" size={16} />
               {/* Three states, not two: the refiner runs for a few seconds before
                   anything is submitted, and saying "Submitting…" through it was the
                   creator's first impression of a feature that had just started
