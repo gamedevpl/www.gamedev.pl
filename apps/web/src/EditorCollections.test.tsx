@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from './i18n/index.js';
 import type {
   EditorCollectionSpec,
+  EditorConstraint,
   EditorDefinition,
   EditorItemContent,
   GameEditorState,
@@ -28,7 +29,13 @@ import { RemixPainter } from './RemixPainter.js';
 const mapItem: EditorItemContent = { properties: { name: 'Map 1' }, rows: ['..', '..'] };
 const routeItem: EditorItemContent = { properties: { name: 'Route 1' }, rows: ['##', '##'] };
 
-function collection(label: string, itemLabel: string, tileChar: string, item: EditorItemContent): EditorCollectionSpec {
+function collection(
+  label: string,
+  itemLabel: string,
+  tileChar: string,
+  item: EditorItemContent,
+  constraints: EditorConstraint[] = [],
+): EditorCollectionSpec {
   return {
     widget: 'collection',
     label: { en: label, pl: `${label} PL` },
@@ -43,7 +50,7 @@ function collection(label: string, itemLabel: string, tileChar: string, item: Ed
         { key: 'wall', char: tileChar === '.' ? '#' : '.', label: { en: 'Wall', pl: 'Ściana' } },
       ],
       properties: { name: { type: 'text', max: 40 } },
-      constraints: [],
+      constraints,
     },
     defaults: [item],
   };
@@ -53,7 +60,7 @@ const definition: EditorDefinition = {
   version: 1,
   content: {
     maps: collection('Maps', 'Map', '.', mapItem),
-    routes: collection('Routes', 'Route', '#', routeItem),
+    routes: collection('Routes', 'Route', '#', routeItem, [{ tile: 'floor', min: 5 }]),
   },
 };
 
@@ -113,6 +120,7 @@ describe('multi-collection editor surfaces', () => {
     expect(selector).not.toBeNull();
     expect(selector.value).toBe('maps');
     expect(container.querySelector('.editor-item-list')?.textContent).toContain('Map 1');
+    expect(container.querySelector<HTMLButtonElement>('.studio-head-action.is-primary')?.disabled).toBe(true);
 
     changeSelect(selector, 'routes');
 

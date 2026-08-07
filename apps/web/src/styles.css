@@ -13291,6 +13291,7 @@ button.builder-mode-selector:disabled {
 
 .remix-editor-stage.is-focus-play .remix-painter-items,
 .remix-editor-stage.is-focus-play .editor-palette,
+.remix-editor-stage.is-focus-play .remix-painter-collection-selector,
 .remix-editor-stage.is-focus-play .remix-painter-checks {
   display: none;
 }

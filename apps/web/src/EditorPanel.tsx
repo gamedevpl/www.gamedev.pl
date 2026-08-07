@@ -361,10 +361,13 @@ export function EditorPanel(props: { game: StudioGame; onOpenPlaytest: () => voi
   }
 
   const problems = item && spec ? itemProblems(spec.item, item, name) : [];
-  const allProblems = spec
-    ? items.flatMap((entry, index) => {
-        const found = itemProblems(spec.item, entry, name);
-        return found.length > 0 ? [`${name(spec.itemLabel)} ${index + 1}`] : [];
+  const allProblems = editor
+    ? collectionKeys.flatMap((key) => {
+        const collection = editor.definition.content[key];
+        return itemsOf(content, key).flatMap((entry, index) => {
+          const found = itemProblems(collection.item, entry, name);
+          return found.length > 0 ? [`${name(collection.itemLabel)} ${index + 1}`] : [];
+        });
       })
     : [];
   const width = item ? (item.rows[0]?.length ?? 0) : 0;
