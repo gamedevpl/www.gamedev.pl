@@ -12,15 +12,25 @@ import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { ROUND_STATUS_RESOURCE_URI, readUiResource } from '../src/mcp-ui.ts';
 
-const outDir = process.argv.includes('--out')
-  ? process.argv[process.argv.indexOf('--out') + 1]
-  : '/opt/cursor/artifacts/mcp-card-states';
+const DEFAULT_OUT = '/opt/cursor/artifacts/mcp-card-states';
+const outFlag = process.argv.indexOf('--out');
+let outDir = DEFAULT_OUT;
+if (outFlag !== -1) {
+  const value = process.argv[outFlag + 1];
+  if (!value || value.startsWith('-')) {
+    console.error('Usage: node --import tsx apps/api/scripts/screenshot-mcp-card.mjs [--out <dir>]');
+    process.exit(1);
+  }
+  outDir = value;
+}
 
 const FALLBACK_PNG =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
 const NOW = '2026-08-07T00:20:00.000Z';
 const NOTE_AT = '2026-08-07T00:17:00.000Z';
+/** Chrome often writes the PNG then hangs in sandboxes — kill after this. */
+const CHROME_TIMEOUT_MS = 20_000;
 
 const chromeBin =
   process.env.CHROME_PATH ||
@@ -41,11 +51,9 @@ mkdirSync(outDir, { recursive: true });
 const work = mkdtempSync(join(tmpdir(), 'mcp-card-'));
 
 function chromeShot(url, outPath, size = '720,1200', scale = '2') {
-  spawnSync(
-    'timeout',
+  const result = spawnSync(
+    chromeBin,
     [
-      '20s',
-      chromeBin,
       '--headless=new',
       '--disable-gpu',
       '--no-sandbox',
@@ -57,9 +65,22 @@ function chromeShot(url, outPath, size = '720,1200', scale = '2') {
       `--screenshot=${outPath}`,
       url,
     ],
-    { encoding: 'utf8' },
+    { encoding: 'utf8', timeout: CHROME_TIMEOUT_MS, killSignal: 'SIGKILL' },
   );
-  return readFileSync(outPath);
+  try {
+    return readFileSync(outPath);
+  } catch {
+    const detail =
+      result.error?.message ||
+      (result.stderr && String(result.stderr).trim()) ||
+      `exit ${result.status}`;
+    throw new Error(`chrome screenshot failed: ${detail}`);
+  }
+}
+
+/** Safe for embedding inside a <script> — escapes `<` so `</script>` cannot close early. */
+function embedJson(value) {
+  return JSON.stringify(value).replace(/</g, '\\u003c');
 }
 
 function bakeFrame(name, fill, label) {
@@ -218,8 +239,8 @@ function pageFor(stateName, openDetails) {
 (function () {
   var api = window.__gamedevRoundCard;
   if (!api) { document.body.textContent = 'Card API missing'; return; }
-  var payload = ${JSON.stringify(payload)};
-  var gallery = ${JSON.stringify(gallery)};
+  var payload = ${embedJson(payload)};
+  var gallery = ${embedJson(gallery)};
   api.render(payload);
   if (gallery) api.renderMedia({ frames: gallery, lane: payload.gate && payload.gate.lane });
   ${openDetails ? "var d = document.getElementById('details'); if (d) d.open = true;" : ''}

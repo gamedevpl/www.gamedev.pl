@@ -430,6 +430,7 @@ describe('ui resources', () => {
     const html = readUiResource(ROUND_STATUS_RESOURCE_URI)?.text ?? '';
     expect(html).toContain('pill-live');
     expect(html).toContain('gd-pulse-sq');
+    expect(html).toContain('prefers-reduced-motion');
     expect(html).toContain('PREVIEW_GATE_STAGES');
     expect(html).toContain('Technical details');
     expect(html).toContain('setDetailsVisible');

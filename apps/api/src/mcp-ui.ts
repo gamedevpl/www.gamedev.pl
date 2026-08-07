@@ -379,6 +379,13 @@ const ROUND_STATUS_HTML = `<!doctype html>
         0%, 100% { opacity: 1; transform: scale(1); }
         50% { opacity: 0.3; transform: scale(0.82); }
       }
+      @media (prefers-reduced-motion: reduce) {
+        .pill-live .pulse-sq,
+        .activity .pulse-sq,
+        .stages li.current .mark {
+          animation: none;
+        }
+      }
       .title { margin: 0 0 8px; font-size: 12.5px; color: var(--gd-muted); }
       .summary { margin: 0; font-size: 14px; line-height: 1.5; }
       .activity {
