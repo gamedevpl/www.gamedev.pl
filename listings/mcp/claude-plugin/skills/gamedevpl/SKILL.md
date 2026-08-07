@@ -46,8 +46,9 @@ round is, and which mistakes cost a whole build.
 Everything else is in the workflow `start` hands you. These are the ones agents get wrong
 often enough to name up front:
 
-1. **Screenshot as soon as the game draws.** `send_screenshot` early, not at the end. It is
-   the creator's only view of what you are making while you make it.
+1. **Screenshot as soon as the game draws.** `screenshot_upload_url` then
+   `curl --upload-file <png> "$url"` early, not at the end. There is no base64
+   screenshot tool — PNG bytes must never enter the model.
 2. **Stage, don't re-upload.** `stage_source_file` for new or fully rewritten paths;
    `patch_source_file` for edits. Then `submit_sources({ fromStaged: true, … })`, which
    overlays onto the latest delivery — so only changed paths need staging. Never re-emit a

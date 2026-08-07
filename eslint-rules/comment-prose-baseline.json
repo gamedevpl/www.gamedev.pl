@@ -32,7 +32,7 @@
     "apps/api/src/agent-build-media.test.ts": 667,
     "apps/api/src/agent-build-reads.test.ts": 14,
     "apps/api/src/agent-channel.test.ts": 1239,
-    "apps/api/src/agent-channel.ts": 5360,
+    "apps/api/src/agent-channel.ts": 5224,
     "apps/api/src/agent-creator-key-resolve.ts": 172,
     "apps/api/src/agent-creator-key.test.ts": 15,
     "apps/api/src/agent-creator-key.ts": 257,

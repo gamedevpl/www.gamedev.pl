@@ -22,7 +22,6 @@ const NO_PULSE = new Set([
   'open_round',
   'continue_draft',
   'report_progress',
-  'send_screenshot',
   // Mint-only; the signed PUT stores the shot.
   'screenshot_upload_url',
   'submit_sources',

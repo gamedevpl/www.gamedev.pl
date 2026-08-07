@@ -363,7 +363,6 @@ describe('POST /api/mcp (BY-05)', () => {
         'list_examples',
         'get_example',
         'report_progress',
-        'send_screenshot',
         'screenshot_upload_url',
         'stage_source_file',
         'patch_source_file',
@@ -376,14 +375,15 @@ describe('POST /api/mcp (BY-05)', () => {
         'ack_inbox',
       ]),
     );
+    expect(names).not.toContain('send_screenshot');
     const tools = listed.json().result.tools as Array<{
       name: string;
       description: string;
       annotations?: { title?: string };
     }>;
     const screenshotUpload = tools.find((t) => t.name === 'screenshot_upload_url');
-    expect(screenshotUpload?.description).toMatch(/curl --upload-file|prefer/i);
-    expect(tools.find((t) => t.name === 'send_screenshot')?.description).toMatch(/screenshot_upload_url|prefer/i);
+    expect(screenshotUpload?.description).toMatch(/curl --upload-file/i);
+    expect(screenshotUpload?.description).toMatch(/no send_screenshot|never enter the model|no base64/i);
     const start = tools.find((t) => t.name === 'start');
     expect(start?.description).toMatch(/screenshot|Honour stop|sessionKey/i);
     // start advertises the returned workflow / inbox policy / refusal guidance.
@@ -558,7 +558,8 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(joined).toMatch(/never scaffold over them/i);
     expect(joined).toMatch(/get_kit/);
     expect(joined).toMatch(/read_kit_files|list_kit_files|read_kit_file/);
-    expect(joined).toMatch(/send_screenshot/);
+    expect(joined).toMatch(/screenshot_upload_url/);
+    expect(joined).not.toMatch(/send_screenshot/);
     expect(joined).toMatch(/stage_source_file|fromStaged/);
     expect(joined).toMatch(/patch_source_file/);
     expect(joined).toMatch(/module_too_large/);
@@ -967,7 +968,7 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(warningCodes).toContain('must_deliver');
   });
 
-  it('rejects oversized screenshots at the MCP layer', async () => {
+  it('refuses the retired send_screenshot base64 tool', async () => {
     const store = new InMemoryStore();
     await seedJob(store);
     app = await createApp(store);
@@ -975,29 +976,14 @@ describe('POST /api/mcp (BY-05)', () => {
     const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
     const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
 
-    // Over the Firestore-safe decoded ceiling, under the MCP bodyLimit.
-    const huge = Buffer.alloc(800 * 1024, 1).toString('base64');
-    const res = await callTool(app, 'send_screenshot', { sessionKey, png: huge }, { 'mcp-session-id': sessionId });
-    expect(res.isError).toBe(true);
-    expect(JSON.stringify(res.structured)).toMatch(/too large/i);
-  });
-
-  it('accepts a small screenshot via send_screenshot', async () => {
-    const store = new InMemoryStore();
-    await seedJob(store);
-    app = await createApp(store);
-    const sessionId = await initialize(app);
-    const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
-    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
-
-    const res = await callTool(
+    const res = await mcpCall(
       app,
-      'send_screenshot',
-      { sessionKey, png: TINY_PNG, caption: 'first frame' },
+      'tools/call',
+      { name: 'send_screenshot', arguments: { sessionKey, png: TINY_PNG } },
       { 'mcp-session-id': sessionId },
     );
-    expect(res.isError).toBe(false);
-    expect(res.structured).toMatchObject({ ok: true, stop: false });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().error?.message).toMatch(/unknown tool: send_screenshot/);
   });
 
   it('screenshot_upload_url + raw PUT delivers without base64 in a tool argument', async () => {
@@ -1885,7 +1871,7 @@ describe('POST /api/mcp (BY-05)', () => {
       'open_round',
       'continue_draft',
       'report_progress',
-      'send_screenshot',
+      'screenshot_upload_url',
       'stage_source_file',
       'patch_source_file',
       'clear_staged_sources',
@@ -2431,12 +2417,19 @@ describe('MCP Apps views (SEP-1865, Phase 0)', () => {
     const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
 
     await callTool(app, 'report_progress', { sessionKey, text: 'wiring the HUD' }, { 'mcp-session-id': sessionId });
-    await callTool(
+    const minted = await callTool(
       app,
-      'send_screenshot',
-      { sessionKey, png: TINY_PNG, label: 'first draw' },
+      'screenshot_upload_url',
+      { sessionKey, label: 'first draw' },
       { 'mcp-session-id': sessionId },
     );
+    const shotUrl = (minted.structured as { url: string }).url.replace(/^https?:\/\/[^/]+/, '');
+    await app.inject({
+      method: 'PUT',
+      url: shotUrl,
+      headers: { 'content-type': 'image/png' },
+      payload: Buffer.from(TINY_PNG, 'base64'),
+    });
 
     const first = await callTool(app, 'get_round_status', { sessionKey }, { 'mcp-session-id': sessionId });
     const status = first.structured as {
