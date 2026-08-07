@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } f
 import { useTranslation } from 'react-i18next';
 import { useAuth } from './AuthContext.js';
 import { catalogMediaUrl } from './catalog.js';
-import { PublishedGameFrame } from './PublishedGameFrame.js';
+import { GameTheater } from './GameTheater.js';
 import {
   ASSESSMENT_CHECKLIST_KEYS,
   ASSESSMENT_CHECKLIST_MARKS,
@@ -166,7 +166,7 @@ export function ReviewDesk() {
     };
   }, []);
 
-  // Open play mode when preview media is missing.
+  // Open theater when preview media is missing.
   useEffect(() => {
     if (!current) return;
     setPlaying(!hasPreviewMedia(current));
@@ -177,6 +177,12 @@ export function ReviewDesk() {
     dragYRef.current = 0;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- slug only
   }, [current?.slug]);
+
+  useEffect(() => {
+    if (!playing) return;
+    document.body.classList.add('player-open');
+    return () => document.body.classList.remove('player-open');
+  }, [playing]);
 
   useEffect(() => {
     if (!videoUrl || playing) return;
@@ -385,7 +391,7 @@ export function ReviewDesk() {
   const keepHint = dragX > 40;
   const cutHint = dragX < -40;
   const skipHint = dragY > 40 && Math.abs(dragY) > Math.abs(dragX);
-  const showMedia = Boolean(current && !playing && hasPreviewMedia(current));
+  const showMedia = Boolean(current && hasPreviewMedia(current));
 
   return (
     <section className="review-desk">
@@ -422,13 +428,9 @@ export function ReviewDesk() {
           <div className="review-scroll">
             <div
               className={`review-card${flash ? ` is-${flash}` : ''}`}
-              style={
-                playing
-                  ? undefined
-                  : {
-                      transform: `translate(${dragX}px, ${Math.max(0, dragY) * 0.4}px) rotate(${tilt}deg)`,
-                    }
-              }
+              style={{
+                transform: `translate(${dragX}px, ${Math.max(0, dragY) * 0.4}px) rotate(${tilt}deg)`,
+              }}
               onPointerDown={onPointerDown}
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}
@@ -443,16 +445,8 @@ export function ReviewDesk() {
                 </p>
               </div>
 
-              <div className={`review-card-stage${playing ? ' is-playing' : ''}`}>
-                {playing ? (
-                  <PublishedGameFrame
-                    slug={current.slug}
-                    title={current.title}
-                    embed
-                    remixable={false}
-                    trackPlay={false}
-                  />
-                ) : showMedia ? (
+              <div className="review-card-stage">
+                {showMedia ? (
                   <>
                     {videoUrl ? (
                       <video
@@ -480,16 +474,9 @@ export function ReviewDesk() {
                     <p>{t('review.noMedia')}</p>
                   </div>
                 )}
-                {hasPreviewMedia(current) || !showMedia ? (
-                  <button
-                    type="button"
-                    className={playing ? 'review-play-btn is-overlay is-active' : 'review-play-btn is-overlay'}
-                    aria-pressed={playing}
-                    onClick={() => setPlaying((prev) => !prev)}
-                  >
-                    {playing ? t('review.showPreview') : t('review.tryPlay')}
-                  </button>
-                ) : null}
+                <button type="button" className="review-play-btn is-overlay" onClick={() => setPlaying(true)}>
+                  {t('review.tryPlay')}
+                </button>
                 {keepHint ? <div className="review-stamp is-keep">{t('review.keep')}</div> : null}
                 {cutHint ? <div className="review-stamp is-cut">{t('review.cut')}</div> : null}
                 {skipHint ? <div className="review-stamp is-skip">{t('review.skip')}</div> : null}
@@ -620,6 +607,18 @@ export function ReviewDesk() {
         <p className="review-error" role="alert">
           {error}
         </p>
+      ) : null}
+
+      {playing && current ? (
+        <GameTheater
+          key={current.slug}
+          title={current.title}
+          badge={{ icon: 'star', label: t('review.tryPlay') }}
+          source={{ slug: current.slug }}
+          onExit={() => setPlaying(false)}
+          trackPlay={false}
+          remixable={false}
+        />
       ) : null}
     </section>
   );

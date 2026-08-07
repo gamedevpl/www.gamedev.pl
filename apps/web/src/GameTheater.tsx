@@ -95,6 +95,8 @@ type GameTheaterProps = {
   initialRemixOpen?: boolean;
   /** A request written before theater entry; RemixPanel starts it once safely ready. */
   initialRemixRequest?: string;
+  trackPlay?: boolean;
+  remixable?: boolean;
 };
 
 // Long enough that the bar never reacts like a hover tooltip, short enough to clear
@@ -146,6 +148,8 @@ export function GameTheater({
   touch = null,
   initialRemixOpen = false,
   initialRemixRequest,
+  trackPlay = true,
+  remixable = true,
 }: GameTheaterProps) {
   const { t } = useTranslation();
   const frameRef = useRef<HTMLIFrameElement | null>(null);
@@ -760,7 +764,8 @@ export function GameTheater({
             title={title}
             frameRef={frameRef}
             embed
-            remixable
+            remixable={remixable}
+            trackPlay={trackPlay}
             remixOpenNonce={remixOpenNonce}
             initialRemixRequest={initialRemixRequest}
             painterNonce={painterNonce}
