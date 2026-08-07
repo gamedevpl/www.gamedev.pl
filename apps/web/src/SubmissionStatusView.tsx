@@ -1499,8 +1499,8 @@ function FeedbackPanel({
         aria-busy={sending || undefined}
         onClick={(event) => {
           // Clicking card chrome focuses the textarea; skip real controls.
-          const target = event.target as HTMLElement | null;
-          if (!target) return;
+          const target = event.target;
+          if (!(target instanceof Element)) return;
           if (target.closest('button, a, textarea, input, select, [role="button"]')) return;
           inputRef.current?.focus();
         }}
@@ -1519,10 +1519,13 @@ function FeedbackPanel({
           }}
           onKeyDown={(event) => {
             // Enter sends; Shift+Enter keeps a newline (same as RemixAsk).
-            if (event.key === 'Enter' && !event.shiftKey) {
-              event.preventDefault();
-              void send();
+            // Skip while IME is composing — Enter confirms a candidate there.
+            const native = event.nativeEvent;
+            if (event.key !== 'Enter' || event.shiftKey || native.isComposing || native.keyCode === 229) {
+              return;
             }
+            event.preventDefault();
+            void send();
           }}
           placeholder={t(composerHintKey)}
           aria-label={t(titleKey)}

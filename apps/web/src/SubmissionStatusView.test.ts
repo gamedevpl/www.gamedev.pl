@@ -1545,6 +1545,61 @@ describe('SubmissionStatusView', () => {
     });
   });
 
+  it('does not send from the compact composer while IME is composing', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'needs_changes',
+      preview: { slug: 'space-runner' },
+      progress: { headSha: 'sha-1', commits: [], checklist: [] },
+    });
+    mockedGetSubmissionPreview.mockResolvedValue({
+      slug: 'space-runner',
+      title: 'Space Runner',
+      html: '<canvas></canvas>',
+    });
+    mockedSubmitFeedback.mockResolvedValue({ ok: true, target: 'pull_request' });
+    await i18n.changeLanguage('en');
+    window.history.pushState(null, '', '/studio/ime-enter/thread');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'ime-enter', embedded: true }));
+      await flushEffects();
+      await flushEffects();
+    });
+
+    const textarea = container.querySelector<HTMLTextAreaElement>('.status-feedback-input');
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+      setter?.call(textarea, 'Please make the jumps shorter.');
+      textarea!.dispatchEvent(new Event('input', { bubbles: true }));
+      await flushEffects();
+    });
+
+    await act(async () => {
+      // Override jsdom getters so composition is visible to the handler.
+      const event = new KeyboardEvent('keydown', {
+        key: 'Enter',
+        bubbles: true,
+        cancelable: true,
+      });
+      Object.defineProperty(event, 'isComposing', { configurable: true, value: true });
+      Object.defineProperty(event, 'keyCode', { configurable: true, value: 229 });
+      textarea!.dispatchEvent(event);
+      expect(event.defaultPrevented).toBe(false);
+      await flushEffects();
+    });
+
+    expect(mockedSubmitFeedback).not.toHaveBeenCalled();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it('keeps build pulse as the last transcript turn without checklist fraction, stop, or Play', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     mockedGetSubmissionStatus.mockResolvedValue({
