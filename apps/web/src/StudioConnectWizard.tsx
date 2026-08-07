@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { PixelIcon } from './PixelIcon.js';
 import { studioPath } from './router.js';
-import { shouldShowConnectCard } from './selfBuildCopy.js';
+import { connectCardMode, shouldShowConnectCard, type SelfBuildCopyInput } from './selfBuildCopy.js';
 import { StudioConnectCard } from './StudioConnectCard.js';
 import { markStudioOnboarded, resolveWelcomeToken } from './studioWelcome.js';
 import { pollDelayMs } from './studioStatusPoll.js';
@@ -19,15 +19,19 @@ type StudioConnectWizardProps = {
   onOpenStudio: (path: string) => void;
 };
 
+function copyInputFromStatus(status: SubmissionStatus | null): SelfBuildCopyInput {
+  return {
+    builder: status?.builder ?? 'self',
+    stall: status?.stall,
+    phase: status?.phase,
+    agentEndedAt: status?.agentEndedAt,
+    failureReason: status?.failure?.reason,
+  };
+}
+
 function stillNeedsConnect(status: SubmissionStatus | null): boolean {
   if (!status) return true;
-  return shouldShowConnectCard({
-    builder: status.builder ?? 'self',
-    stall: status.stall,
-    phase: status.phase,
-    agentEndedAt: status.agentEndedAt,
-    failureReason: status.failure?.reason,
-  });
+  return shouldShowConnectCard(copyInputFromStatus(status));
 }
 
 // Full-screen BYOCA connect after Create Now.
@@ -52,7 +56,7 @@ export function StudioConnectWizard({ game, onOpenStudio }: StudioConnectWizardP
     let cancelled = false;
     void (async () => {
       const resolved = await resolveWelcomeToken(game);
-      if (cancelled || !resolved) return;
+      if (cancelled) return;
       setToken(resolved.token);
       setTitle(resolved.title);
     })();
@@ -145,14 +149,16 @@ export function StudioConnectWizard({ game, onOpenStudio }: StudioConnectWizardP
 
   const goStudio = (deferred: boolean) => {
     markStudioOnboarded();
+    // Deferred still enters Studio; record both funnel steps.
     if (deferred) {
       recordStudioStep('connect_dismissed', 'self');
-    } else {
-      recordCreateStep('handoff_enter_studio', 'self');
     }
+    recordCreateStep('handoff_enter_studio', 'self');
     const address = status?.slug ?? game;
     onOpenStudio(`${studioPath(address)}?from=handoff`);
   };
+
+  const cardMode = connectCardMode(copyInputFromStatus(status)) ?? 'setup';
 
   return createPortal(
     <div
@@ -195,7 +201,7 @@ export function StudioConnectWizard({ game, onOpenStudio }: StudioConnectWizardP
             </div>
           ) : token ? (
             <div className="studio-connect-wizard-card">
-              <StudioConnectCard token={token} collapsible={false} agentConnected={false} mode="setup" />
+              <StudioConnectCard token={token} collapsible={false} agentConnected={false} mode={cardMode} />
             </div>
           ) : (
             <p className="studio-welcome-primer-one">{t('connectWizard.preparing')}</p>

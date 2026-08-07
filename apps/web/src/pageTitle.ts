@@ -76,14 +76,7 @@ export function resolveDocumentTitle(route: AppRoute, ctx: DocumentTitleContext)
     case 'review':
       return brandedPageTitle(ctx.copy.review);
     case 'studio':
-      return ctx.studioTitle?.trim()
-        ? brandedNamedTitle(ctx.copy.studioNamed, ctx.studioTitle)
-        : brandedPageTitle(ctx.copy.studio);
     case 'studioWelcome':
-      // Same named-game template as Studio.
-      return ctx.studioTitle?.trim()
-        ? brandedNamedTitle(ctx.copy.studioNamed, ctx.studioTitle)
-        : brandedPageTitle(ctx.copy.studio);
     case 'studioConnect':
       return ctx.studioTitle?.trim()
         ? brandedNamedTitle(ctx.copy.studioNamed, ctx.studioTitle)

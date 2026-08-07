@@ -4,7 +4,8 @@ import type { SubmissionStatus } from './submissionApi.js';
 export function welcomeProgressMessage(status: SubmissionStatus | null, translate: (key: string) => string): string {
   if (!status) return translate('welcome.loading');
 
-  const latest = status.events?.[0];
+  // Newest-first from API; sort by createdAt if order drifts.
+  const latest = [...(status.events ?? [])].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0];
   if (latest?.text?.trim()) return latest.text.trim();
 
   const note = status.progress?.note?.trim();

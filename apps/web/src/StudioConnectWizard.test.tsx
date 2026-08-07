@@ -127,4 +127,24 @@ describe('StudioConnectWizard', () => {
     });
     expect(onOpenStudio).toHaveBeenCalledWith('/studio/bastion-wave?from=handoff');
   });
+
+  it('uses resume connect mode when a quiet agent resurfaces the card', async () => {
+    getStatus.mockResolvedValue({
+      status: 'building',
+      builder: 'self',
+      stall: 'quiet',
+      slug: 'bastion-wave',
+      lastAgentSignalAt: '2026-08-07T00:01:00Z',
+    });
+
+    await act(async () => {
+      createRoot(container).render(createElement(StudioConnectWizard, { game: 'bastion-wave', onOpenStudio: vi.fn() }));
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const card = document.querySelector('.studio-connect');
+    expect(card?.getAttribute('data-connect-mode')).toBe('resume');
+  });
 });

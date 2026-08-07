@@ -20,7 +20,7 @@ export function markStudioOnboarded(): void {
 }
 
 // Resolve status token from slug or token.
-export async function resolveWelcomeToken(game: string): Promise<{ token: string; title: string } | null> {
+export async function resolveWelcomeToken(game: string): Promise<{ token: string; title: string }> {
   const local = getSavedSpecs().find((spec) => spec.token === game || spec.slug === game);
   if (local) {
     return { token: local.token, title: local.title };

@@ -38,7 +38,7 @@ export function StudioWelcomeView({ game, onOpenStudio }: StudioWelcomeViewProps
     let cancelled = false;
     void (async () => {
       const resolved = await resolveWelcomeToken(game);
-      if (cancelled || !resolved) return;
+      if (cancelled) return;
       setToken(resolved.token);
       setTitle(resolved.title);
     })();
