@@ -21,11 +21,13 @@ import {
 } from './agent-game-key.js';
 import { creatorOwnsSlug, findActiveRoundForSlug, findDraftJobForSlug } from './agent-game-key-resolve.js';
 import {
+  JOINING_ROUND_PRESENCE,
   mcpPresenceKey,
   noteMcpPresencePulse,
   presencePreservesEnded,
   shouldEmitMcpPresencePulse,
   shouldPulseMcpPresence,
+  type McpPresencePulse,
 } from './mcp-presence.js';
 import {
   classifyAgentTokenAccess,
@@ -729,7 +731,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
   const terminatedTransportSessions = new Map<string, number>();
   const invalidStartsByIp = new Map<string, number[]>();
   /** Last synthetic Studio presence pulse per job — coarse MCP activity, not 1:1 tools. */
-  const presencePulseByJob = new Map<number, number>();
+  const presencePulseByJob = new Map<number, McpPresencePulse>();
   const nudgeTracker = createMcpNudgeTracker();
 
   function pruneTransportSessions(currentTime: number): void {
@@ -4727,6 +4729,30 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
               'mcp session started',
             );
           }
+          // Studio used to stay on Final check / ended until get_sources (or similar):
+          // start never pulsed, and creator-key openers have no round Bearer for the
+          // generic presence path. Pulse here so the creator sees the agent join as
+          // soon as the session binds — especially on resume after submit/end.
+          if (store && typeof started.jobId === 'number') {
+            const jobId = started.jobId;
+            const at = now();
+            const presenceKey = JOINING_ROUND_PRESENCE.key;
+            try {
+              const record = await store.getSubmission(jobId);
+              const needsSignal = !record?.lastAgentSignalAt || Boolean(record.agentEndedAt);
+              if (
+                needsSignal ||
+                shouldEmitMcpPresencePulse(presencePulseByJob.get(jobId), at, undefined, presenceKey)
+              ) {
+                noteMcpPresencePulse(presencePulseByJob, jobId, at, presenceKey);
+                await store.touchLastAgentSignalAt(jobId, new Date(at).toISOString(), {
+                  key: presenceKey,
+                });
+              }
+            } catch (pulseError) {
+              request.log.warn({ err: pulseError, jobId, tool: name }, 'mcp start presence pulse failed');
+            }
+          }
         } else if (store && agentTokenSecret && shouldPulseMcpPresence(name)) {
           // Heartbeat + short-lived thought key — never a durable chat row. Kit-browse
           // loops used to spam "Czytanie plików Creator Kit…" between real report_progress.
@@ -4734,8 +4760,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           const presenceKey = mcpPresenceKey(name);
           if (jobId !== null && presenceKey) {
             const at = now();
-            if (shouldEmitMcpPresencePulse(presencePulseByJob.get(jobId), at)) {
-              noteMcpPresencePulse(presencePulseByJob, jobId, at);
+            if (shouldEmitMcpPresencePulse(presencePulseByJob.get(jobId), at, undefined, presenceKey)) {
+              noteMcpPresencePulse(presencePulseByJob, jobId, at, presenceKey);
               try {
                 await store.touchLastAgentSignalAt(
                   jobId,

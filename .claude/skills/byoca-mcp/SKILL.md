@@ -32,6 +32,9 @@ Source of truth: `SESSION_WORKFLOW` + `BEHAVIOURAL_CONTRACT` in
    - `mode=preview` while iterating; `mode=publish` to seal (TRACE + PLAYTEST required)
    - Each successful stage/patch refreshes Studio’s heartbeat (so a long staging loop is not
      mistaken for quiet / offline)
+   - **`start` also pulses Studio** (`joining_round`) — clears `agentEndedAt` on resume and
+     shows the creator the agent has joined before `get_sources` / `report_progress`. Without
+     that, Final check / “agent stopped” lingered while ChatGPT was already working.
    - Each stage may also publish a **live preview** of the buffer — see below
 4. **Prefer `end` after the last successful `submit_sources`** if you will not deliver
    more — Studio shows the gate; do not sit in a `get_gate_verdict` loop
@@ -274,12 +277,14 @@ queued.
 | Area                         | Path                                                                                                                                                                      |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | MCP tools                    | `apps/api/src/mcp-server.ts`                                                                                                                                              |
+| Presence pulses              | `apps/api/src/mcp-presence.ts` (`start` → `joining_round` in the MCP dispatcher)                                                                                          |
 | Account-session invalidation | `apps/api/src/agent-session-revocation.ts`                                                                                                                                |
 | Channel (`POST …/end`, …)    | `apps/api/src/agent-channel.ts`                                                                                                                                           |
 | Stall / `ended`              | `apps/api/src/job-state.ts` (`detectStall`)                                                                                                                               |
 | Handoff gate                 | `apps/api/src/builder.ts` (`allowsSelfToPlatformHandoff`)                                                                                                                 |
 | Live staged preview          | `apps/api/src/staged-preview.ts`                                                                                                                                          |
 | Studio live-preview frame    | `apps/web/src/StudioLivePreview.tsx`                                                                                                                                      |
+| Studio status poll cadence   | `apps/web/src/studioStatusPoll.ts` (tight poll on `ended` / `quiet` / `no_agent_yet` / `dispatched`)                                                                      |
 | Feedback / resume            | `apps/api/src/submissions.ts`                                                                                                                                             |
 | Studio copy / builder choice | `apps/web/src/selfBuildCopy.ts`, `BuilderModeBadge.tsx`, `SubmissionStatusView.tsx` (sticky badge + Change modal at round boundaries; full two-up stays in create wizard) |
 

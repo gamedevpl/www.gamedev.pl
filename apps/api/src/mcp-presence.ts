@@ -11,7 +11,13 @@
 /** Minimum gap between synthetic presence heartbeats for one job. */
 export const MCP_PRESENCE_MIN_GAP_MS = 60_000;
 
-/** Tools that already write real progress / open rounds — never synthesize for these. */
+/**
+ * Tools that already write real progress / open rounds — never synthesize for these.
+ *
+ * `start` is handled separately in the MCP dispatcher: creator-key / OAuth openers have
+ * no round Bearer to resolve a job id from, and a resume after `agentEndedAt` must clear
+ * ended even when a recent gate-poll pulse would rate-limit a normal tool.
+ */
 const NO_PULSE = new Set([
   'start',
   'create_game',
@@ -35,7 +41,16 @@ const NO_PULSE = new Set([
  * Closed vocabulary for Studio thought headlines. Client translates via
  * `statusView.presence.<key>`; English `text` matches historical chat rows so
  * leftover durable steps can still be filtered from the transcript.
+ *
+ * `joining_round` is emitted from MCP `start` (not listed here — start stays in
+ * {@link NO_PULSE} so the generic pulse path does not try to resolve a job id from a
+ * creator-key Bearer).
  */
+export const JOINING_ROUND_PRESENCE = {
+  key: 'joining_round',
+  text: 'Joining the build round…',
+} as const;
+
 const PRESENCE_BY_TOOL: Record<string, { key: string; text: string }> = {
   get_brief: { key: 'reading_brief', text: 'Reading the build brief…' },
   get_seed: { key: 'loading_seed', text: 'Loading the seed draft…' },
@@ -65,7 +80,10 @@ export function presencePreservesEnded(toolName: string): boolean {
   return PRESENCE_PRESERVE_ENDED.has(toolName);
 }
 
-const PRESENCE_EVENT_TEXTS = new Set(Object.values(PRESENCE_BY_TOOL).map((entry) => entry.text));
+const PRESENCE_EVENT_TEXTS = new Set([
+  ...Object.values(PRESENCE_BY_TOOL).map((entry) => entry.text),
+  JOINING_ROUND_PRESENCE.text,
+]);
 
 export function shouldPulseMcpPresence(toolName: string): boolean {
   if (NO_PULSE.has(toolName)) return false;
@@ -91,18 +109,21 @@ export function isMcpPresenceEventText(text: string): boolean {
 /** Cap for the in-process last-pulse map — oldest entries drop first (insertion order). */
 export const MAX_PRESENCE_PULSE_JOBS = 2_000;
 
+export type McpPresencePulse = { atMs: number; key: string };
+
 /**
- * Record a pulse timestamp with a simple LRU cap so long-lived instances cannot grow
- * the map without bound. Pure aside from mutating `pulses`.
+ * Record a pulse timestamp + thought key with a simple LRU cap so long-lived instances
+ * cannot grow the map without bound. Pure aside from mutating `pulses`.
  */
 export function noteMcpPresencePulse(
-  pulses: Map<number, number>,
+  pulses: Map<number, McpPresencePulse>,
   jobId: number,
   atMs: number,
+  key: string,
   maxJobs: number = MAX_PRESENCE_PULSE_JOBS,
 ): void {
   pulses.delete(jobId);
-  pulses.set(jobId, atMs);
+  pulses.set(jobId, { atMs, key });
   while (pulses.size > maxJobs) {
     const oldest = pulses.keys().next().value;
     if (oldest === undefined) break;
@@ -111,14 +132,21 @@ export function noteMcpPresencePulse(
 }
 
 /**
- * Whether enough time has passed since the last pulse for this job.
+ * Whether this job may emit another presence pulse.
+ *
+ * Same thought key is rate-limited (kit-browse spam). A *different* key always
+ * updates — creators should see Joining → Reading brief without waiting a minute.
  * Pure so tests can drive the clock; callers own the last-pulse map.
  */
 export function shouldEmitMcpPresencePulse(
-  lastPulseAtMs: number | undefined,
+  last: McpPresencePulse | number | undefined,
   nowMs: number,
   minGapMs: number = MCP_PRESENCE_MIN_GAP_MS,
+  nextKey?: string,
 ): boolean {
-  if (lastPulseAtMs === undefined) return true;
-  return nowMs - lastPulseAtMs >= minGapMs;
+  if (last === undefined) return true;
+  const lastAt = typeof last === 'number' ? last : last.atMs;
+  const lastKey = typeof last === 'number' ? undefined : last.key;
+  if (nextKey && lastKey && nextKey !== lastKey) return true;
+  return nowMs - lastAt >= minGapMs;
 }

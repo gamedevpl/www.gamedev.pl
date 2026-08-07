@@ -935,6 +935,7 @@ const ROUND_STATUS_HTML = `<!doctype html>
 
         /** Closed presence keys — same vocabulary as mcp-presence.ts. */
         var PRESENCE_COPY = {
+          joining_round: 'Joining the build round…',
           reading_brief: 'Reading the build brief…',
           loading_seed: 'Loading the seed draft…',
           fetching_kit: 'Fetching Creator Kit metadata…',

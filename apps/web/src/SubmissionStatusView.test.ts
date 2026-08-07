@@ -63,6 +63,14 @@ describe('pollDelayMs', () => {
   it('polls gently once gate-green is waiting on a human', () => {
     expect(pollDelayMs('in_review')).toBeGreaterThan(ACTIVE_POLL_MS);
   });
+
+  it('polls tightly while a self agent is ended or quiet so resume shows quickly', () => {
+    // Final check / post-submit with agentEndedAt used idle 10s polling; ChatGPT had
+    // already called start before Studio left "agent stopped".
+    expect(pollDelayMs('in_review', 'ended')).toBe(ACTIVE_POLL_MS);
+    expect(pollDelayMs('building', 'quiet')).toBe(ACTIVE_POLL_MS);
+    expect(pollDelayMs('queued', 'no_agent_yet')).toBe(ACTIVE_POLL_MS);
+  });
 });
 
 describe('SubmissionStatusView', () => {

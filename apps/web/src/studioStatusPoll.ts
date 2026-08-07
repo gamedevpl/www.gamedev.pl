@@ -28,6 +28,9 @@ export function pollDelayMs(
   if (status === 'needs_changes') return IDLE_POLL_MS;
   // Flip the connect card to live progress as soon as the agent signals.
   if (stall === 'no_agent_yet') return ACTIVE_POLL_MS;
+  // Self agent resumed or about to: idle 10s polling left Studio on Final check /
+  // "agent stopped" for a long beat after MCP `start` while ChatGPT was already working.
+  if (stall === 'ended' || stall === 'quiet') return ACTIVE_POLL_MS;
   // Copilot session boot: job is `dispatched` (public status still `queued`) until
   // GitHub reports `in_progress`. Poll tightly on that real phase — not a timer guess.
   if (phase === 'dispatched') return ACTIVE_POLL_MS;
