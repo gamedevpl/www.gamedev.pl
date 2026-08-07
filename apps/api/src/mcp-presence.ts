@@ -22,8 +22,9 @@ const NO_PULSE = new Set([
   'open_round',
   'continue_draft',
   'report_progress',
-  // Mint-only; the signed PUT stores the shot.
+  // Mint-only; the signed PUT stores the shot / staged file.
   'screenshot_upload_url',
+  'stage_upload_url',
   'submit_sources',
   // Channel stage/patch already refresh lastAgentSignalAt (+ staging_sources).
   'stage_source_file',

@@ -364,6 +364,7 @@ describe('POST /api/mcp (BY-05)', () => {
         'get_example',
         'report_progress',
         'screenshot_upload_url',
+        'stage_upload_url',
         'stage_source_file',
         'patch_source_file',
         'list_staged_sources',
@@ -384,6 +385,8 @@ describe('POST /api/mcp (BY-05)', () => {
     const screenshotUpload = tools.find((t) => t.name === 'screenshot_upload_url');
     expect(screenshotUpload?.description).toMatch(/curl --upload-file/i);
     expect(screenshotUpload?.description).toMatch(/no send_screenshot|never enter the model|no base64/i);
+    expect(tools.find((t) => t.name === 'stage_upload_url')?.description).toMatch(/curl --upload-file|prefer/i);
+    expect(tools.find((t) => t.name === 'stage_source_file')?.description).toMatch(/stage_upload_url|prefer/i);
     const start = tools.find((t) => t.name === 'start');
     expect(start?.description).toMatch(/screenshot|Honour stop|sessionKey/i);
     // start advertises the returned workflow / inbox policy / refusal guidance.
@@ -1278,6 +1281,65 @@ describe('POST /api/mcp (BY-05)', () => {
     const secondWarnings = (second.structured as { warnings?: Array<{ code: string }> }).warnings ?? [];
     expect(secondWarnings.some((w) => w.code === 'gate_poll_backoff')).toBe(true);
     expect(secondWarnings.some((w) => w.code === 'call_end')).toBe(true);
+  });
+
+  it('stage_upload_url + raw PUT stages without content in a tool argument', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    const { gamesStore } = stubGamesStore();
+    app = await createApp(store, gamesStore);
+    const sessionId = await initialize(app);
+    const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    const minted = await callTool(
+      app,
+      'stage_upload_url',
+      { sessionKey, path: 'game/extra.ts' },
+      { 'mcp-session-id': sessionId },
+    );
+    expect(minted.isError).toBe(false);
+    const { url, path, maxBytes, upload } = minted.structured as {
+      url: string;
+      path: string;
+      maxBytes: number;
+      upload: string;
+    };
+    expect(path).toBe('game/extra.ts');
+    expect(maxBytes).toBe(1_000_000);
+    expect(upload).toMatch(/^curl --upload-file extra\.ts '/);
+
+    const content = 'export const stagedViaCurl = true;\n';
+    const put = await app.inject({
+      method: 'PUT',
+      url: url.replace(/^https?:\/\/[^/]+/, ''),
+      headers: { 'content-type': 'text/plain; charset=utf-8' },
+      payload: Buffer.from(content, 'utf8'),
+    });
+    expect(put.statusCode).toBe(200);
+    expect(put.json()).toMatchObject({
+      accepted: true,
+      path: 'game/extra.ts',
+      bytes: Buffer.byteLength(content, 'utf8'),
+      control: { stop: false },
+    });
+
+    const listed = await callTool(app, 'list_staged_sources', { sessionKey }, { 'mcp-session-id': sessionId });
+    expect(listed.isError).toBe(false);
+    const files = (listed.structured as { files: Array<{ path: string; bytes: number }> }).files;
+    expect(files).toEqual(
+      expect.arrayContaining([{ path: 'game/extra.ts', bytes: Buffer.byteLength(content, 'utf8') }]),
+    );
+
+    // Path allowlisting still applies at mint time.
+    const bad = await callTool(
+      app,
+      'stage_upload_url',
+      { sessionKey, path: '../evil.ts' },
+      { 'mcp-session-id': sessionId },
+    );
+    expect(bad.isError).toBe(true);
+    expect(JSON.stringify(bad.structured)).toMatch(/illegal path/i);
   });
 
   it('rejects malformed base64 on stage_source_file instead of silently corrupting', async () => {

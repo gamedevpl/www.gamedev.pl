@@ -20,8 +20,10 @@ Source of truth: `SESSION_WORKFLOW` + `BEHAVIOURAL_CONTRACT` in
    `screenshot_upload_url` then `curl --upload-file <png> "$url"`. There is **no**
    base64 `send_screenshot` — PNG bytes must never enter the model. Without shell
    egress, skip mid-build screenshots; the gate still captures on delivery
-3. Prefer `stage_source_file` (new/full rewrite) or `patch_source_file` (unified diff) then
-   `submit_sources({ fromStaged: true, mode, kitEngineRef })`
+3. Prefer staging then `submit_sources({ fromStaged: true, mode, kitEngineRef })`
+   - **New/full rewrite with shell:** `stage_upload_url({ path })` then
+     `curl --upload-file <file> "$url"` — bytes never re-enter the model
+   - **New/full rewrite without shell:** `stage_source_file({ path, content })`
    - **Edits:** prefer `patch_source_file({ path, old, new })` (exact unique substring
      replace — no diff format). Or `patch_source_file({ path, patch })` with a unified
      diff (`---` / `+++` + `@@` hunks; bare `@@` ok). Do not re-emit whole `render.ts` /
@@ -291,8 +293,8 @@ queued.
 
 | Area                         | Path                                                                                                                                                                      |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| MCP tools                    | `apps/api/src/mcp-server.ts` (`screenshot_upload_url` → signed PUT only; no base64 shot tool)                                                                             |
-| Upload tokens                | `apps/api/src/agent-upload-token.ts` + `POST …/shot/upload-url` + `PUT …/shot/upload`                                                                                     |
+| MCP tools                    | `apps/api/src/mcp-server.ts` (`screenshot_upload_url` / `stage_upload_url` → signed PUT; no base64 shot tool)                                                             |
+| Upload tokens                | `apps/api/src/agent-upload-token.ts` + `POST …/shot/upload-url` + `PUT …/shot/upload` + `PUT …/sources/stage/upload`                                                      |
 | Presence pulses              | `apps/api/src/mcp-presence.ts` (`start` → `joining_round` in the MCP dispatcher)                                                                                          |
 | Gate milestones              | `apps/api/src/gate-progress.ts` + `GamesStore.putGateProgress` (GCS; Studio/MCP poll while checks run)                                                                    |
 | Account-session invalidation | `apps/api/src/agent-session-revocation.ts`                                                                                                                                |

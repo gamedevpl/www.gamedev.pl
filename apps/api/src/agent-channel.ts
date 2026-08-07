@@ -1215,6 +1215,95 @@ export async function registerAgentChannelRoutes(
     },
   );
 
+  // Raw-body stage PUT for stage_upload_url (same validation as JSON stage).
+  app.put(
+    '/api/agent/build/sources/stage/upload',
+    {
+      config: { rateLimit: { max: 300, timeWindow: '1 hour' } },
+      bodyLimit: 1_000_000 + 1024,
+    },
+    async (request, reply) => {
+      const resolved = await resolveUploadBuild(request, reply, 'stage');
+      if (!resolved) return reply;
+      const { issueNumber, record, upload } = resolved;
+
+      if (!options.gamesStore) {
+        return reply.status(503).send({ error: 'delivery is not configured on this deployment' });
+      }
+      if (stopReason(record)) {
+        return reply.send({ accepted: false, rejected: 'stopped', ...(await channelState(issueNumber, record)) });
+      }
+
+      const path = upload.path?.trim() ?? '';
+      if (!path) {
+        return reply.status(400).send({ error: 'path is required' });
+      }
+
+      const body = request.body;
+      const bytes = Buffer.isBuffer(body)
+        ? body
+        : typeof body === 'string'
+          ? Buffer.from(body)
+          : body instanceof Uint8Array
+            ? Buffer.from(body)
+            : null;
+      if (!bytes) {
+        return reply.status(400).send({ error: 'file body is required' });
+      }
+      if (bytes.length > 1_000_000) {
+        return reply
+          .status(413)
+          .send({ error: `file too large: ${path} is ${bytes.length} bytes (max 1000000 per file)` });
+      }
+      const content = bytes.toString('utf8');
+
+      const slug = record.slug;
+      if (!slug) {
+        return reply.status(400).send({
+          error: 'slug is required before staging — send the slug from get_brief / start',
+        });
+      }
+
+      const roundGeneration = store
+        ? ((await store.ensureRoundGeneration(issueNumber)) ?? record.roundGeneration ?? 1)
+        : (record.roundGeneration ?? 1);
+
+      try {
+        const staged = await options.gamesStore.putStagedSourceFile({
+          slug,
+          issueNumber,
+          roundGeneration,
+          path,
+          content,
+        });
+        await markBuildingFromChannel(issueNumber, record);
+        await store?.touchLastAgentSignalAt(issueNumber, undefined, { key: 'staging_sources' });
+        options.onEvent?.(issueNumber);
+        options.onSourcesStaged?.({ issueNumber, slug, roundGeneration });
+        const hint = largeSourceFileHint(staged.path, staged.bytes, content);
+        return reply.send({
+          accepted: true,
+          path: staged.path,
+          bytes: staged.bytes,
+          staged: {
+            files: staged.files,
+            totalBytes: staged.totalBytes,
+            maxBytes: staged.maxBytes,
+            maxFiles: staged.maxFiles,
+            updatedAt: staged.updatedAt,
+          },
+          ...(hint ? { hint } : {}),
+          ...(await channelState(issueNumber, (await store!.getSubmission(issueNumber)) ?? record)),
+        });
+      } catch (error) {
+        if (error instanceof InvalidUploadError) {
+          return reply.status(400).send({ error: error.message });
+        }
+        throw error;
+      }
+    },
+  );
+
   /**
    * Unified-diff patch into the staging buffer.
    *
