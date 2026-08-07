@@ -241,6 +241,7 @@ export function HeroPromptSection({
   const matchedGame = useMemo(() => findMatchingGame(promptText, catalogEntries), [promptText, catalogEntries]);
 
   const handleFiles = (files: FileList | File[]) => {
+    if (submissionStatus !== 'idle' || mockStatus === 'loading') return;
     Array.from(files).forEach((file) => {
       if (!file.type.startsWith('image/')) return;
       const reader = new FileReader();
@@ -268,8 +269,26 @@ export function HeroPromptSection({
     }
   };
 
+  // Desktop clips Build label; spinner + status must stay visible.
+  const isBusy = submissionStatus !== 'idle' || mockStatus === 'loading';
+  const busyLabel =
+    submissionStatus === 'refining'
+      ? t('qa.analyzing')
+      : submissionStatus === 'loading' || mockStatus === 'loading'
+        ? t('submit.submitting')
+        : null;
+
+  // Close attach while busy so upload/draw cannot change mid-request.
+  useEffect(() => {
+    if (!isBusy) return;
+    setAttachMenuOpen(false);
+    setIsDragging(false);
+    setIsSketchOpen(false);
+  }, [isBusy]);
+
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
+    if (isBusy) return;
     setIsDragging(true);
   };
 
@@ -281,12 +300,14 @@ export function HeroPromptSection({
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
+    if (isBusy) return;
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       handleFiles(e.dataTransfer.files);
     }
   };
 
   const handleSaveSketch = (dataUrl: string) => {
+    if (isBusy) return;
     setAttachments((prev) => [
       ...prev,
       {
@@ -298,11 +319,13 @@ export function HeroPromptSection({
   };
 
   const removeAttachment = (id: string) => {
+    if (isBusy) return;
     setAttachments((prev) => prev.filter((item) => item.id !== id));
   };
 
   const handlePrimarySubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isBusy) return;
     const trimmed = promptText.trim();
     if (!trimmed && attachments.length === 0) return;
 
@@ -320,15 +343,6 @@ export function HeroPromptSection({
     onSubmitSpec(finalPrompt);
   };
 
-  // Desktop clips Build label; spinner + status must stay visible.
-  const isBusy = submissionStatus !== 'idle' || mockStatus === 'loading';
-  const busyLabel =
-    submissionStatus === 'refining'
-      ? t('qa.analyzing')
-      : submissionStatus === 'loading' || mockStatus === 'loading'
-        ? t('submit.submitting')
-        : null;
-
   return (
     <section className="hero-prompt-section">
       {/* No mascot: header already has him; keep headline above the fold. */}
@@ -337,7 +351,7 @@ export function HeroPromptSection({
       </div>
 
       <div
-        className={`hero-prompt-card ${isDragging ? 'drag-over' : ''}`}
+        className={`hero-prompt-card ${isDragging && !isBusy ? 'drag-over' : ''}`}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
@@ -357,7 +371,7 @@ export function HeroPromptSection({
               >
                 <PixelIcon name="plus" size={18} />
               </button>
-              {attachMenuOpen ? (
+              {attachMenuOpen && !isBusy ? (
                 <div className="prompt-attach-menu" role="menu" aria-label={t('hero.attachMenu')}>
                   <button
                     type="button"

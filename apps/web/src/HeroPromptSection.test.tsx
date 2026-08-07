@@ -187,6 +187,72 @@ describe('HeroPromptSection', () => {
     await act(async () => root.unmount());
   });
 
+  it('closes the attach menu and ignores drops while busy', async () => {
+    // Busy must lock attachments: menu and drag-drop too.
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(HeroPromptSection, {
+          initialPrompt: 'a quiet garden game',
+          catalogEntries: [],
+          submissionStatus: 'idle',
+          submissionError: null,
+          onSubmitSpec: vi.fn(),
+          mockStatus: 'idle',
+          mockError: null,
+          onGenerateMock: vi.fn(),
+        }),
+      );
+      await flushEffects();
+    });
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.attach-btn')?.click();
+      await flushEffects();
+    });
+    expect(container.querySelector('.prompt-attach-menu')).not.toBeNull();
+
+    await act(async () => {
+      root.render(
+        createElement(HeroPromptSection, {
+          initialPrompt: 'a quiet garden game',
+          catalogEntries: [],
+          submissionStatus: 'refining',
+          submissionError: null,
+          onSubmitSpec: vi.fn(),
+          mockStatus: 'idle',
+          mockError: null,
+          onGenerateMock: vi.fn(),
+        }),
+      );
+      await flushEffects();
+    });
+
+    expect(container.querySelector('.prompt-attach-menu')).toBeNull();
+    expect(container.querySelector<HTMLButtonElement>('.attach-btn')?.disabled).toBe(true);
+
+    const card = container.querySelector('.hero-prompt-card')!;
+    const file = new File(['fake'], 'sprite.png', { type: 'image/png' });
+    await act(async () => {
+      const drop = new Event('drop', { bubbles: true, cancelable: true }) as DragEvent;
+      Object.defineProperty(drop, 'dataTransfer', {
+        value: { files: [file] },
+      });
+      card.dispatchEvent(drop);
+      await flushEffects();
+      await flushEffects();
+    });
+    expect(container.querySelector('.attachments-list')).toBeNull();
+
+    await act(async () => root.unmount());
+  });
+
   it('opens sketch modal from the attach menu', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
