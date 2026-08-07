@@ -26,6 +26,7 @@ import {
   type RemixSuggestion,
 } from './remixApi.js';
 import { RemixPainter } from './RemixPainter.js';
+import { defaultCollectionKey } from './editorContentTools.js';
 import { ProposeComposer } from './ProposeComposer.js';
 import { checkContributions } from './proposalsApi.js';
 import type {
@@ -327,6 +328,7 @@ export function RemixPanel(props: {
   const [contentDoc, setContentDoc] = useState<EditorContentDoc>({});
   const contentDocRef = useRef(contentDoc);
   contentDocRef.current = contentDoc;
+  const [selectedCollectionKey, setSelectedCollectionKey] = useState<string | null>(null);
   const [painterOpen, setPainterOpen] = useState(false);
   /** After the stage has opened once, Done leaves a door back on the sheet. */
   const [painterSeen, setPainterSeen] = useState(false);
@@ -506,6 +508,7 @@ export function RemixPanel(props: {
           : {};
         contentDocRef.current = contentDefaults;
         setContentDoc(contentDefaults);
+        setSelectedCollectionKey(started.content ? defaultCollectionKey(started.content) : null);
         onCapabilities?.({ painter: Boolean(started.content) });
         // A shared link's values are live the moment the game is listening.
         if (props.initialParams) window.setTimeout(() => pushToGame(merged), 300);
@@ -530,6 +533,12 @@ export function RemixPanel(props: {
   }, []);
 
   const painterStageActive = Boolean(painterOpen && session?.content && lane !== 'building');
+  const activeCollectionKey =
+    session?.content && selectedCollectionKey && session.content[selectedCollectionKey]
+      ? selectedCollectionKey
+      : session?.content
+        ? defaultCollectionKey(session.content)
+        : null;
 
   // Latest callback in a ref — parents may pass a fresh arrow each render; the
   // stage/focus effects must not re-bind (or flash) when only the identity changes.
@@ -1298,7 +1307,7 @@ export function RemixPanel(props: {
    * moves focus; the painter tree and the game iframe both stay mounted.
    */
   if (painterStageActive && session?.content) {
-    const collectionKey = Object.keys(session.content)[0];
+    const collectionKey = activeCollectionKey;
     const items = collectionKey ? ((contentDoc[collectionKey] as EditorItemContent[] | undefined) ?? []) : [];
     const levelName =
       typeof items[0]?.properties.name === 'string' && items[0].properties.name ? items[0].properties.name : null;
@@ -1365,7 +1374,13 @@ export function RemixPanel(props: {
                 {t('remix.editorPipMap')}
               </span>
             ) : null}
-            <RemixPainter content={session.content} doc={contentDoc} onChange={paintContent} />
+            <RemixPainter
+              content={session.content}
+              doc={contentDoc}
+              onChange={paintContent}
+              selectedCollectionKey={activeCollectionKey}
+              onCollectionChange={setSelectedCollectionKey}
+            />
             {editorFocus === 'play' ? <span className="remix-editor-pip-cta">{t('remix.editorFocusEdit')}</span> : null}
           </div>
 

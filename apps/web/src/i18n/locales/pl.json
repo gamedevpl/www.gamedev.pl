@@ -328,6 +328,7 @@
       "conflictReload": "Wczytaj najnowszy",
       "conflictOverwrite": "Zachowaj mój",
       "boardAria": "Malowanie kafelków: {{name}}",
+      "collection": "Kolekcja",
       "tiles": "Kafelki",
       "properties": "Właściwości",
       "checks": "Kontrole",

@@ -1,5 +1,9 @@
 import type { EditorCollectionSpec, EditorItemContent, EditorLabel } from './studioApi.js';
 
+export function defaultCollectionKey(collections: Record<string, unknown>): string | null {
+  return Object.keys(collections).find((key) => key.length > 0) ?? null;
+}
+
 /**
  * The pure half of the content painter, shared by its two surfaces: the
  * Studio's EditorPanel (creator drafts) and the RemixPanel's painter (player

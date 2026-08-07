@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PixelIcon } from './PixelIcon.js';
-import { blankItem, itemProblems, setCell } from './editorContentTools.js';
+import { blankItem, defaultCollectionKey, itemProblems, setCell } from './editorContentTools.js';
 import { recordAssistStep, recordEditorStep } from './visitTelemetry.js';
 import {
   deleteEditorDraft,
@@ -97,13 +97,15 @@ export function EditorPanel(props: { game: StudioGame; onOpenPlaytest: () => voi
   const [saveState, setSaveState] = useState<SaveState>('clean');
   const [saveProblems, setSaveProblems] = useState<string[]>([]);
   const [publish, setPublish] = useState<PublishState>({ kind: 'idle' });
+  const [selectedCollectionKey, setSelectedCollectionKey] = useState<string | null>(null);
   const [itemIndex, setItemIndex] = useState(0);
   const [tileKey, setTileKey] = useState<string | null>(null);
   const [utterance, setUtterance] = useState('');
   const [assist, setAssist] = useState<AssistState>({ kind: 'idle' });
 
-  // One collection is the pilot vocabulary's reality; the first is the surface.
-  const collectionKey = editor ? (Object.keys(editor.definition.content)[0] ?? null) : null;
+  const collectionKeys = editor ? Object.keys(editor.definition.content) : [];
+  const collectionKey =
+    editor && selectedCollectionKey && editor.definition.content[selectedCollectionKey] ? selectedCollectionKey : null;
   const spec = collectionKey ? editor!.definition.content[collectionKey] : null;
   const items = collectionKey ? ((content[collectionKey] ?? []) as EditorItemContent[]) : [];
   const item = items[itemIndex] ?? null;
@@ -122,8 +124,14 @@ export function EditorPanel(props: { game: StudioGame; onOpenPlaytest: () => voi
         setContent(mergeDraft(loaded));
         setRevision(loaded.draft?.revision ?? 0);
         setSaveState('clean');
-        const firstCollection = Object.keys(loaded.definition.content)[0];
-        setTileKey(loaded.definition.content[firstCollection]?.item.tiles[0]?.key ?? null);
+        const defaultKey = defaultCollectionKey(loaded.definition.content);
+        setSelectedCollectionKey(defaultKey);
+        setItemIndex(0);
+        setTileKey(
+          defaultKey
+            ? (loaded.definition.content[defaultKey]?.item.tiles.find((tile) => tile.key.length > 0)?.key ?? null)
+            : null,
+        );
         setState('ready');
       })
       .catch(() => {
@@ -274,11 +282,26 @@ export function EditorPanel(props: { game: StudioGame; onOpenPlaytest: () => voi
       setEditor(loaded);
       setContent(mergeDraft(loaded));
       setRevision(loaded.draft?.revision ?? 0);
+      const defaultKey = defaultCollectionKey(loaded.definition.content);
+      setSelectedCollectionKey(defaultKey);
       setItemIndex(0);
+      setTileKey(
+        defaultKey
+          ? (loaded.definition.content[defaultKey]?.item.tiles.find((tile) => tile.key.length > 0)?.key ?? null)
+          : null,
+      );
       setSaveState('clean');
     } catch {
       setSaveState('error');
     }
+  }
+
+  function selectCollection(nextKey: string) {
+    const nextSpec = editor?.definition.content[nextKey];
+    if (!nextSpec) return;
+    setSelectedCollectionKey(nextKey);
+    setItemIndex(0);
+    setTileKey(nextSpec.item.tiles.find((tile) => tile.key.length > 0)?.key ?? null);
   }
 
   async function discardDraft() {
@@ -338,10 +361,13 @@ export function EditorPanel(props: { game: StudioGame; onOpenPlaytest: () => voi
   }
 
   const problems = item && spec ? itemProblems(spec.item, item, name) : [];
-  const allProblems = spec
-    ? items.flatMap((entry, index) => {
-        const found = itemProblems(spec.item, entry, name);
-        return found.length > 0 ? [`${name(spec.itemLabel)} ${index + 1}`] : [];
+  const allProblems = editor
+    ? collectionKeys.flatMap((key) => {
+        const collection = editor.definition.content[key];
+        return itemsOf(content, key).flatMap((entry, index) => {
+          const found = itemProblems(collection.item, entry, name);
+          return found.length > 0 ? [`${name(collection.itemLabel)} ${index + 1}`] : [];
+        });
       })
     : [];
   const width = item ? (item.rows[0]?.length ?? 0) : 0;
@@ -602,6 +628,22 @@ export function EditorPanel(props: { game: StudioGame; onOpenPlaytest: () => voi
 
           {spec && collectionKey ? (
             <div className="editor-side-group">
+              {collectionKeys.length > 1 ? (
+                <label className="editor-collection-selector">
+                  <span>{t('studioPanel.editor.collection')}</span>
+                  <select
+                    value={collectionKey}
+                    aria-label={t('studioPanel.editor.collection')}
+                    onChange={(event) => selectCollection(event.target.value)}
+                  >
+                    {collectionKeys.map((key) => (
+                      <option key={key} value={key}>
+                        {name(editor.definition.content[key].label)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
               <h4>
                 {name(spec.label)}{' '}
                 <span className="editor-count">
