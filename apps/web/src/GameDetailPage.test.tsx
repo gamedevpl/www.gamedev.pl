@@ -8,10 +8,15 @@ import i18n from './i18n/index.js';
 
 const { recordRemixStep } = vi.hoisted(() => ({ recordRemixStep: vi.fn() }));
 
+let authUser: { uid: string; handle?: string } | null = null;
+
 vi.mock('./visitTelemetry.js', () => ({ recordRemixStep }));
 vi.mock('./VoteWidget.js', () => ({ VoteWidget: () => <button data-testid="vote">Like 7</button> }));
 vi.mock('./ShareGameButton.js', () => ({
   ShareGameButton: () => <button data-testid="share">Share</button>,
+}));
+vi.mock('./AuthContext.js', () => ({
+  useAuth: () => ({ user: authUser, refreshUser: vi.fn(), logout: vi.fn() }),
 }));
 
 import { GameDetailPage } from './GameDetailPage.js';
@@ -45,6 +50,7 @@ let root: Root | null = null;
 beforeEach(async () => {
   (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   await i18n.changeLanguage('en');
+  authUser = null;
   recordRemixStep.mockReset();
   container = document.createElement('div');
   document.body.appendChild(container);
@@ -120,6 +126,19 @@ describe('GameDetailPage', () => {
     });
     expect(recordRemixStep).toHaveBeenCalledWith('opened', { control: 'page' });
     expect(onRemix).toHaveBeenCalledWith(game);
+  });
+
+  it('hides Open in Studio from visitors', () => {
+    render();
+    expect(container.querySelector('a[href="/studio/bridge-builder"]')).toBeNull();
+  });
+
+  it('offers Open in Studio to the owning creator', () => {
+    authUser = { uid: 'u1', handle: 'gtanczyk' };
+    render();
+    const studio = container.querySelector<HTMLAnchorElement>('a[href="/studio/bridge-builder"]');
+    expect(studio).not.toBeNull();
+    expect(studio?.textContent).toContain('Open in Studio');
   });
 
   it('does not autoplay when the only preview asset is a video', () => {

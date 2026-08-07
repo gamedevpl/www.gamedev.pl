@@ -310,6 +310,27 @@ describe('GamePage', () => {
     expect(container.textContent).toContain('gamedev.pl');
   });
 
+  it('hides Open in Studio from visitors', async () => {
+    await renderPage();
+    expect(container.querySelector('a[href="/studio/neon-courier"]')).toBeNull();
+  });
+
+  it('offers Open in Studio to the owning creator', async () => {
+    authUser = { uid: 'u1', handle: 'nightshift' };
+    await renderPage();
+
+    const studio = container.querySelector<HTMLAnchorElement>('a[href="/studio/neon-courier"]');
+    expect(studio).not.toBeNull();
+    expect(studio?.textContent).toContain('Open in Studio');
+    expect(studio?.classList.contains('secondary-btn')).toBe(true);
+  });
+
+  it('does not treat a different signed-in handle as the owner', async () => {
+    authUser = { uid: 'u2', handle: 'somebody_else' };
+    await renderPage();
+    expect(container.querySelector('a[href="/studio/neon-courier"]')).toBeNull();
+  });
+
   it('reports the loaded title upward for document.title', async () => {
     const onGameLoaded = vi.fn();
     await renderPage({ onGameLoaded });

@@ -1306,6 +1306,7 @@
     "loadError": "Nie udało się wczytać strony gry.",
     "actions": "Akcje gry",
     "play": "Zagraj",
+    "openStudio": "Otwórz w Studio",
     "playPreview": "Zagraj w {{title}} w trybie kinowym",
     "openTheater": "Graj w trybie kinowym",
     "screenshots": "Zrzuty ekranu",

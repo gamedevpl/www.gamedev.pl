@@ -1302,6 +1302,7 @@
     "loadError": "Could not load this game page.",
     "actions": "Game actions",
     "play": "Play",
+    "openStudio": "Open in Studio",
     "playPreview": "Play {{title}} in theater mode",
     "openTheater": "Play in theater",
     "screenshots": "Screenshots",

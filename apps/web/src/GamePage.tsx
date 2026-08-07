@@ -6,7 +6,7 @@ import { catalogMediaUrl, gamePageHandle, type CatalogEntry } from './catalog.js
 import { fetchGamePage, type GamePage as GamePageData } from './gamePageApi.js';
 import { PixelIcon } from './PixelIcon.js';
 import { ShareGameButton } from './ShareGameButton.js';
-import { creatorPath, gamePath, playPath } from './router.js';
+import { creatorPath, gamePath, playPath, studioPath } from './router.js';
 import { recordRemixStep } from './visitTelemetry.js';
 import { VoteWidget } from './VoteWidget.js';
 
@@ -19,13 +19,11 @@ function previewScreenshot(game: CatalogEntry) {
 }
 
 /**
- * The canonical public game page at `/:handle/:slug`.
+ * Canonical public game page at `/:handle/:slug`.
  *
- * This is a landing page, not a player and not an agent workspace. It gives a visitor
- * enough context to decide whether to play, then crosses the explicit Play/Remix
- * boundary into the existing sandboxed theater. Old tab URLs are accepted by the
- * router but intentionally land on this same compact page because those surfaces had
- * no reliable public data behind them.
+ * Landing page, not a player or agent workspace. Visitors get Play/Remix into
+ * the sandboxed theater; the owning creator also gets Open in Studio.
+ * Old tab URLs land here — those surfaces had no reliable public data.
  */
 export function GamePage({
   handle,
@@ -181,6 +179,9 @@ export function GamePage({
     ? t('catalog.platformAuthor')
     : creator?.profileName?.trim() || creator?.handle || t('catalog.platformAuthor');
   const shareHandle = creator?.handle ?? gamePageHandle(entry);
+  const ownerHandle = creator?.handle ?? entry.creatorHandle ?? null;
+  const isOwner = Boolean(user?.handle && ownerHandle && user.handle.toLowerCase() === ownerHandle.toLowerCase());
+  const studioHref = studioPath(slug);
 
   const play = () => {
     if (playGated) {
@@ -230,6 +231,15 @@ export function GamePage({
             <PixelIcon name="play" size={13} /> {t('gamePage.play')}
           </button>
           <VoteWidget slug={slug} />
+          {isOwner ? (
+            <a
+              className="secondary-btn game-page-studio"
+              href={studioHref}
+              onClick={intercept(() => onNavigate(studioHref))}
+            >
+              <PixelIcon name="wrench" size={13} /> {t('gamePage.openStudio')}
+            </a>
+          ) : null}
           <button type="button" className="secondary-btn game-page-remix" onClick={openRemixEntry} ref={remixButtonRef}>
             <PixelIcon name="wrench" size={13} /> {t('gamePage.remix')}
           </button>
