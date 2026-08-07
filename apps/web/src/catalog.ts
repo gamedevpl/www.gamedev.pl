@@ -16,7 +16,7 @@ export interface CatalogMultiplayer {
 }
 
 /** The orientation a game was designed for; 'any' unless its spec says otherwise. */
-export type CatalogOrientation = 'any' | 'portrait' | 'landscape';
+export type CatalogOrientation = 'any' | 'portrait' | 'landscape' | 'adaptive';
 
 /**
  * How a game can be driven by a finger. Unlike everything else on an entry this is

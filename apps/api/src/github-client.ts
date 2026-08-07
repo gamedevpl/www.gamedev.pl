@@ -299,7 +299,7 @@ export interface CatalogGameEntry {
   touch?: CatalogGameTouch;
 }
 
-export type CatalogGameOrientation = 'any' | 'portrait' | 'landscape';
+export type CatalogGameOrientation = 'any' | 'portrait' | 'landscape' | 'adaptive';
 
 export interface CatalogGameMultiplayer {
   mode: 'controllers';
@@ -352,7 +352,7 @@ function parseMultiplayer(frontmatter: Record<string, string>): CatalogGameMulti
   return { mode: 'controllers', minPlayers, maxPlayers };
 }
 
-const GAME_ORIENTATIONS = new Set<CatalogGameOrientation>(['any', 'portrait', 'landscape']);
+const GAME_ORIENTATIONS = new Set<CatalogGameOrientation>(['any', 'portrait', 'landscape', 'adaptive']);
 
 /**
  * Anything unrecognised degrades to 'any' rather than failing the catalog: an
