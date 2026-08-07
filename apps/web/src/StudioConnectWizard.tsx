@@ -63,7 +63,7 @@ function connectChapterOver(status: SubmissionStatus | null): boolean {
   if (!status) return false;
   if (status.phase && PAST_CONNECT_PHASES.has(status.phase)) return true;
   if (PAST_CONNECT_STATUSES.has(status.status)) return true;
-  return Boolean(status.agentEndedAt);
+  return status.stall === 'ended' || Boolean(status.agentEndedAt);
 }
 
 function stillNeedsConnect(status: SubmissionStatus | null): boolean {

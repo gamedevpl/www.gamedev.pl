@@ -255,6 +255,26 @@ describe('StudioConnectWizard', () => {
     expect(onOpenStudio).toHaveBeenCalledWith('/studio/bastion-wave?from=handoff');
   });
 
+  it('leaves the connect step on an ended stall with no agentEndedAt', async () => {
+    const onOpenStudio = vi.fn();
+    getStatus.mockResolvedValue({
+      status: 'building',
+      builder: 'self',
+      slug: 'bastion-wave',
+      stall: 'ended',
+      lastAgentSignalAt: '2026-08-07T00:01:00Z',
+    });
+
+    await act(async () => {
+      createRoot(container).render(createElement(StudioConnectWizard, { game: 'bastion-wave', onOpenStudio }));
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(onOpenStudio).toHaveBeenCalledWith('/studio/bastion-wave?from=handoff');
+  });
+
   it('leaves the connect step when the round has published', async () => {
     const onOpenStudio = vi.fn();
     getStatus.mockResolvedValue({ status: 'published', builder: 'self', slug: 'bastion-wave' });
