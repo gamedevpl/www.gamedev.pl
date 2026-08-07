@@ -226,6 +226,11 @@ a {
 }
 
 .language-switcher {
+  display: flex;
+  gap: 4px;
+}
+
+.language-switcher button {
   background: transparent;
   color: var(--muted);
   border: 1px solid var(--panel-border);
@@ -236,9 +241,15 @@ a {
   cursor: pointer;
 }
 
-.language-switcher:hover {
+.language-switcher button:hover {
   color: var(--text);
   border-color: var(--muted);
+}
+
+.language-switcher button.active {
+  background: var(--turquoise);
+  color: #0b221d;
+  border-color: var(--turquoise);
 }
 
 .user-avatar-btn {
@@ -3158,8 +3169,13 @@ body.player-open {
   }
 
   .menu-extras .language-switcher {
+    gap: 8px;
+    padding: 4px 4px 0;
+  }
+
+  .menu-extras .language-switcher button {
+    flex: 1;
     min-height: 44px;
-    width: 100%;
   }
 
   /* Thumb-sized targets. 44px is the iOS HIG floor; below it, taps miss. */

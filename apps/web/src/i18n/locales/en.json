@@ -95,6 +95,8 @@
     "logoAlt": "Gamedev.pl",
     "githubAria": "GitHub",
     "languageAria": "Language",
+    "languageEn": "English",
+    "languagePl": "Polish",
     "statusOnline": "Agent Network Online",
     "navPrompt": "Create Game",
     "navArcade": "Arcade",
