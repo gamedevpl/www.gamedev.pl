@@ -38,6 +38,34 @@ function copyInputFromStatus(status: SubmissionStatus | null): SelfBuildCopyInpu
   };
 }
 
+// The round left the agent's hands: delivered, gating, or finished.
+const PAST_CONNECT_PHASES: ReadonlySet<string> = new Set([
+  'submitted',
+  'gating',
+  'ready_for_review',
+  'publishing',
+  'published',
+  'needs_changes',
+  'failed',
+  'canceled',
+  'abandoned',
+]);
+
+const PAST_CONNECT_STATUSES: ReadonlySet<SubmissionStatus['status']> = new Set([
+  'in_review',
+  'publishing',
+  'published',
+  'needs_changes',
+  'abandoned',
+]);
+
+function connectChapterOver(status: SubmissionStatus | null): boolean {
+  if (!status) return false;
+  if (status.phase && PAST_CONNECT_PHASES.has(status.phase)) return true;
+  if (PAST_CONNECT_STATUSES.has(status.status)) return true;
+  return Boolean(status.agentEndedAt);
+}
+
 function stillNeedsConnect(status: SubmissionStatus | null): boolean {
   if (!status) return true;
   return shouldShowConnectCard(copyInputFromStatus(status));
@@ -55,7 +83,10 @@ export function StudioConnectWizard({ game, onOpenStudio }: StudioConnectWizardP
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const awaiting = stillNeedsConnect(status);
-  const agentConnected = Boolean(status && !awaiting);
+  const chapterOver = connectChapterOver(status);
+  const roundBuilder = status?.builder ?? 'self';
+  const agentConnected = Boolean(status && !awaiting && !chapterOver);
+  const goStudioRef = useRef<(deferred: boolean, builder?: 'self' | 'platform') => void>(() => {});
 
   useEffect(() => {
     recordCreateStep('handoff_shown', 'self');
@@ -166,6 +197,16 @@ export function StudioConnectWizard({ game, onOpenStudio }: StudioConnectWizardP
     const address = status?.slug ?? game;
     onOpenStudio(`${studioPath(address)}?from=handoff`);
   };
+
+  useEffect(() => {
+    goStudioRef.current = goStudio;
+  });
+
+  // Delivered or finished rounds belong in Studio, not on a connect step.
+  useEffect(() => {
+    if (!chapterOver) return;
+    goStudioRef.current(false, roundBuilder);
+  }, [chapterOver, roundBuilder]);
 
   // Change of mind: hand the round to the Gamedev.pl agent.
   const switchToPlatform = async () => {

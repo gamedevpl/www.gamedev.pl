@@ -234,6 +234,41 @@ describe('StudioConnectWizard', () => {
     expect(document.querySelector('.studio-connect-wizard-feed-empty')?.textContent).toMatch(/Waiting for the first/i);
   });
 
+  it('leaves the connect step for Studio once the agent has ended the round', async () => {
+    const onOpenStudio = vi.fn();
+    getStatus.mockResolvedValue({
+      status: 'building',
+      builder: 'self',
+      slug: 'bastion-wave',
+      phase: 'submitted',
+      lastAgentSignalAt: '2026-08-07T00:01:00Z',
+      agentEndedAt: '2026-08-07T00:09:00Z',
+    });
+
+    await act(async () => {
+      createRoot(container).render(createElement(StudioConnectWizard, { game: 'bastion-wave', onOpenStudio }));
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(onOpenStudio).toHaveBeenCalledWith('/studio/bastion-wave?from=handoff');
+  });
+
+  it('leaves the connect step when the round has published', async () => {
+    const onOpenStudio = vi.fn();
+    getStatus.mockResolvedValue({ status: 'published', builder: 'self', slug: 'bastion-wave' });
+
+    await act(async () => {
+      createRoot(container).render(createElement(StudioConnectWizard, { game: 'bastion-wave', onOpenStudio }));
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(onOpenStudio).toHaveBeenCalledWith('/studio/bastion-wave?from=handoff');
+  });
+
   it('uses resume connect mode when a quiet agent resurfaces the card', async () => {
     getStatus.mockResolvedValue({
       status: 'building',
