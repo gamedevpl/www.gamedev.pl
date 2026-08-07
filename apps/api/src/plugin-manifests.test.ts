@@ -2,6 +2,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { MCP_INSTALL_LINK_CREDENTIAL_MARKERS } from './mcp-install-links.js';
 
 /**
  * Plugin manifests are extra places our listing copy lives, alongside the live discovery
@@ -17,6 +18,24 @@ const repoRoot = resolve(here, '../../..');
 function readJson(relative: string): Record<string, unknown> {
   return JSON.parse(readFileSync(join(repoRoot, relative), 'utf8')) as Record<string, unknown>;
 }
+
+/**
+ * The shared install-link markers, plus three broader words a manifest has no business
+ * containing at all.
+ *
+ * The canonical list comes first so a credential prefix added there — a new token shape,
+ * a new key wire format — is enforced here too. Three hand-written copies of it used to
+ * live in this file, and between them they missed `c1.`, `gdpl_oat_`, `gdpl_ort_` and
+ * `headers`: the actual credentials, as opposed to the words that describe them. A file
+ * whose whole job is catching drift between manifests should not let its own guard rail
+ * drift.
+ *
+ * Lowercased, because every check below lowercases the payload. That only widens what
+ * matches — a marker present in any casing still contains its own lowercase form.
+ */
+const CREDENTIAL_MARKERS = [...MCP_INSTALL_LINK_CREDENTIAL_MARKERS, 'token', 'secret', 'key'].map((marker) =>
+  marker.toLowerCase(),
+);
 
 describe('.cursor-plugin manifest', () => {
   const manifest = readJson('.cursor-plugin/plugin.json');
@@ -35,7 +54,7 @@ describe('.cursor-plugin manifest', () => {
 
   it('never ships a credential in the install config', () => {
     const serialized = JSON.stringify(mcp).toLowerCase();
-    for (const marker of ['authorization', 'bearer', 'token', 'apikey', 'api_key', 'secret', 'key']) {
+    for (const marker of CREDENTIAL_MARKERS) {
       expect(serialized, `mcp.json must not carry ${marker}`).not.toContain(marker);
     }
   });
@@ -111,7 +130,7 @@ describe('.claude-plugin marketplace', () => {
       ['.mcp.json', pluginMcp.mcpServers ?? {}],
     ] as const) {
       const serialized = JSON.stringify(config).toLowerCase();
-      for (const marker of ['authorization', 'bearer', 'token', 'apikey', 'api_key', 'secret', 'key']) {
+      for (const marker of CREDENTIAL_MARKERS) {
         expect(serialized, `${label} must not carry ${marker}`).not.toContain(marker);
       }
     }
@@ -192,7 +211,7 @@ describe('agent-plugins manifest', () => {
     const servers = portableMcp.mcpServers as Record<string, Record<string, unknown>>;
     expect(servers.gamedevpl.headers).toBeUndefined();
     const serialized = JSON.stringify(servers).toLowerCase();
-    for (const marker of ['authorization', 'bearer', 'token', 'apikey', 'api_key', 'secret', 'key']) {
+    for (const marker of CREDENTIAL_MARKERS) {
       expect(serialized, `mcp.json must not carry ${marker}`).not.toContain(marker);
     }
   });
