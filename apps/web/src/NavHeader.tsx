@@ -193,11 +193,12 @@ export function NavHeader({
 
         <LanguageSwitcher />
 
-        <div className="hamburger-container">
+        <div className={`hamburger-container${isMenuOpen ? ' is-open' : ''}`}>
           <button
             type="button"
             className="hamburger-btn"
             aria-expanded={isMenuOpen}
+            aria-haspopup="menu"
             aria-label={
               activeBuildCount > 0
                 ? `Menu — ${t('header.activeBuilds', { count: activeBuildCount })}`
@@ -205,7 +206,9 @@ export function NavHeader({
             }
             onClick={() => setIsMenuOpen((prev) => !prev)}
           >
-            {isMenuOpen ? <PixelIcon name="close" size={16} /> : <PixelIcon name="menu" size={16} />}
+            {/* Stay a hamburger when open — an X reads as "close the page", not
+                "this menu is open". Highlight communicates open state. */}
+            <PixelIcon name="menu" size={16} />
             {activeBuildCount > 0 && !isMenuOpen ? (
               <span className="hamburger-live-badge" aria-hidden="true">
                 {activeBuildCount > 99 ? '99+' : activeBuildCount}

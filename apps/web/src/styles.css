@@ -305,6 +305,13 @@ a {
   color: var(--turquoise);
 }
 
+/* Open state stays a hamburger — highlight instead of morphing into an X. */
+.hamburger-container.is-open .hamburger-btn {
+  color: var(--turquoise);
+  border-color: var(--turquoise);
+  background: rgba(0, 228, 172, 0.12);
+}
+
 .dropdown-menu {
   position: absolute;
   top: calc(100% + 12px);

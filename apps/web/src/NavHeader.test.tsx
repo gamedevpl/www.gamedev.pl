@@ -178,6 +178,20 @@ describe('NavHeader menu', () => {
     await act(async () => root.unmount());
   });
 
+  it('keeps the hamburger icon when open and highlights it instead of turning into an X', async () => {
+    const { container, root } = await renderSignedIn();
+    const hamburger = container.querySelector('.hamburger-btn') as HTMLButtonElement;
+
+    expect(hamburger.getAttribute('aria-expanded')).toBe('true');
+    expect(hamburger.getAttribute('aria-haspopup')).toBe('menu');
+    expect(container.querySelector('.hamburger-container.is-open')).not.toBeNull();
+    expect(container.querySelector('.dropdown-menu')).not.toBeNull();
+    // Menu glyph = three 11×2 bars → 66 rects. Close/X is 35 — so this pins the icon.
+    expect(hamburger.querySelectorAll('svg rect').length).toBe(66);
+
+    await act(async () => root.unmount());
+  });
+
   it('asks to navigate to the hero prompt when Create Game is clicked', async () => {
     const onNavigate = vi.fn();
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
