@@ -217,8 +217,7 @@ export function CreatorStudioView({
     requestedGameRef.current = selectedGame;
   }, [selectedGame]);
 
-  // One row per game for picking and counting. The API already collapses to the tip;
-  // after abandon we refetch so a published sibling (or older draft) can reappear.
+  // One row per game. Refetch after abandon can reveal a sibling.
   const shelfGames = useMemo(() => collapseStudioGames(games), [games]);
 
   // Resolve the URL's game segment against the shelf — by slug, or by capability token
@@ -897,8 +896,7 @@ export function CreatorStudioView({
                           onRemoved={async (token) => {
                             setSelected((current) => (current === token ? null : current));
                             onNavigate(studioPath());
-                            // Optimistic hide, then refetch: the tip may have been covering a
-                            // published (or older) sibling that should stay on the shelf.
+                            // Hide tip first; refetch may restore a sibling.
                             setGames((prev) => prev.filter((game) => game.token !== token));
                             try {
                               const shelfPage = await fetchStudioGames();
@@ -906,7 +904,7 @@ export function CreatorStudioView({
                               setShelfTruncated(shelfPage.truncated);
                               setTotalGames(shelfPage.totalGames);
                             } catch {
-                              // Keep the optimistic remove — the job is abandoned either way.
+                              // Optimistic remove stands if refetch fails.
                             }
                           }}
                         />
