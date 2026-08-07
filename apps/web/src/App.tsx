@@ -26,9 +26,11 @@ import {
   reviewPath,
   studioPath,
   studioWelcomePath,
+  studioConnectPath,
   type AppRoute,
 } from './router.js';
 import { StudioWelcomeView } from './StudioWelcomeView.js';
+import { StudioConnectWizard } from './StudioConnectWizard.js';
 import type { PublicCreatorProfile } from './creatorProfileApi.js';
 import { LegalPage } from './LegalPage.js';
 import { ContactPage } from './ContactPage.js';
@@ -167,7 +169,7 @@ export function App() {
     // Matched on either address the URL can carry: a slug now, a capability token on
     // links minted before games had one.
     const studioTitle =
-      (route.view === 'studio' || route.view === 'studioWelcome') && route.game
+      (route.view === 'studio' || route.view === 'studioWelcome' || route.view === 'studioConnect') && route.game
         ? (savedSpecs.find((spec) => spec.token === route.game || spec.slug === route.game)?.title ?? null)
         : null;
 
@@ -635,9 +637,9 @@ export function App() {
       setQaBuilder('platform');
       clearPendingQa();
 
-      // Platform → welcome handoff; self → Studio for now.
+      // Platform → welcome; self → connect chapter. Never auto-enter Studio.
       const address = response.slug ?? response.token;
-      navigate(builder === 'platform' ? studioWelcomePath(address) : studioPath(address));
+      navigate(builder === 'platform' ? studioWelcomePath(address) : studioConnectPath(address));
     } catch (err) {
       const message = err instanceof Error ? err.message : t('errors.generic');
       const category = err instanceof Error ? (err as SubmissionApiError).category : undefined;
@@ -1129,6 +1131,8 @@ export function App() {
           <ReviewDesk />
         ) : route.view === 'studioWelcome' ? (
           <StudioWelcomeView game={route.game} onOpenStudio={navigate} />
+        ) : route.view === 'studioConnect' ? (
+          <StudioConnectWizard game={route.game} onOpenStudio={navigate} />
         ) : route.view === 'studio' ? (
           <CreatorStudioView
             selectedGame={route.game}

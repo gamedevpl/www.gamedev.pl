@@ -57,6 +57,7 @@ describe('isKnownSpaShellPath', () => {
     '/studio/tok-abc/improve',
     '/studio/tok-abc/edit',
     '/studio/tok-abc/welcome',
+    '/studio/tok-abc/connect',
     '/admin',
     '/admin/queue',
     '/admin/costs',

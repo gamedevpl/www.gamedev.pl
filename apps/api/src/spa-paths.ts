@@ -37,9 +37,9 @@ const GAME_PAGE_PATTERN =
  * path the server calls unknown — that is a 404 served to a crawler for a page a person
  * can see.
  */
-// Also: welcome chapter; edit/editor EditorKit surface.
+// Also: welcome/connect chapters; edit/editor EditorKit surface.
 const STUDIO_PATTERN =
-  /^\/studio(?:\/[^/]+(?:\/(?:thread|details|playtest|overview|build|stats|improve|edit|editor|welcome))?)?$/;
+  /^\/studio(?:\/[^/]+(?:\/(?:thread|details|playtest|overview|build|stats|improve|edit|editor|welcome|connect))?)?$/;
 // The operator console. Its sections are listed rather than matched loosely, so the
 // shell and the client's router agree about what is a real page and what is a typo —
 // the same contract the studio tabs above keep.

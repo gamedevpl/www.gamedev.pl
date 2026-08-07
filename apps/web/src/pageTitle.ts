@@ -84,6 +84,10 @@ export function resolveDocumentTitle(route: AppRoute, ctx: DocumentTitleContext)
       return ctx.studioTitle?.trim()
         ? brandedNamedTitle(ctx.copy.studioNamed, ctx.studioTitle)
         : brandedPageTitle(ctx.copy.studio);
+    case 'studioConnect':
+      return ctx.studioTitle?.trim()
+        ? brandedNamedTitle(ctx.copy.studioNamed, ctx.studioTitle)
+        : brandedPageTitle(ctx.copy.studio);
     case 'legal':
       return brandedPageTitle(route.doc === 'privacy' ? ctx.copy.privacy : ctx.copy.terms);
     case 'contact':

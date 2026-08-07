@@ -13,6 +13,7 @@ import {
   statusPath,
   studioPath,
   studioWelcomePath,
+  studioConnectPath,
 } from './router.js';
 
 describe('parsePathRoute', () => {
@@ -128,6 +129,18 @@ describe('parsePathRoute', () => {
     expect(studioWelcomePath('tv-tycoon')).toBe('/studio/tv-tycoon/welcome');
     expect(canonicalPath('/studio/tv-tycoon/welcome')).toBeNull();
     expect(navUpTarget({ view: 'studioWelcome', game: 'tv-tycoon' })).toEqual({
+      path: '/studio',
+      labelKey: 'upStudio',
+    });
+  });
+
+  it('parses the BYOCA connect chapter', () => {
+    expect(parsePathRoute('/studio/bastion-wave/connect')).toEqual({
+      view: 'studioConnect',
+      game: 'bastion-wave',
+    });
+    expect(studioConnectPath('tv-tycoon')).toBe('/studio/tv-tycoon/connect');
+    expect(navUpTarget({ view: 'studioConnect', game: 'tv-tycoon' })).toEqual({
       path: '/studio',
       labelKey: 'upStudio',
     });

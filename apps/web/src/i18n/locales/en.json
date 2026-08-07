@@ -562,6 +562,20 @@
     "moreBody": "You'll get updates as the agent works. Opening Studio does not stop the build. Daily creation quota is unchanged by watching progress.",
     "openStudio": "Open Studio"
   },
+  "connectWizard": {
+    "dialogLabel": "Connect your coding agent",
+    "stepLabel": "Connect",
+    "eyebrow": "Your agent",
+    "lede": "This round waits for your coding agent. Add gamedev.pl, then paste the build prompt — stay here until it checks in, or open Studio anytime.",
+    "ledeConnected": "Your agent checked in. Open Studio to watch progress and steer the build.",
+    "preparing": "Preparing your connect steps…",
+    "loadError": "We couldn't refresh status just now. Retrying…",
+    "connectedLabel": "Agent connected",
+    "connectedBody": "The build is underway. Studio is where you watch it and say what to change.",
+    "later": "I'll connect later",
+    "openStudio": "Open Studio",
+    "openStudioAnyway": "Open Studio anyway"
+  },
   "transparency": {
     "title": "Agent Stream & Transparency",
     "subtitle": "Every game on gamedev.pl is open-source, maintained by coding agents, and safely isolated.",

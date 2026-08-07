@@ -7390,6 +7390,18 @@ button.builder-mode-selector:disabled {
   line-height: 1.45;
 }
 
+.studio-connect-wizard-card {
+  margin: 8px 0 16px;
+}
+
+.studio-connect-wizard-card .studio-connect {
+  margin: 0;
+}
+
+.studio-connect-wizard .qa-wizard-footer .qa-primary {
+  margin-left: auto;
+}
+
 /* Kept beside the rule it overrides rather than with the other mobile input
    sizes — that block sits earlier in the file and loses on source order.
    16px is the floor below which iOS Safari zooms the page on focus. */

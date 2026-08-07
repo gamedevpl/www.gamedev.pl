@@ -341,6 +341,7 @@ export function routeKind(view: string): VisitRouteKind {
     case 'notFound':
       return view;
     case 'studioWelcome':
+    case 'studioConnect':
       return 'studio';
     // Legacy view name — `/draft/` parses as `play` now. Map here too so any leftover
     // caller still reports `play` (the `draft` VisitRouteKind only remains for reading

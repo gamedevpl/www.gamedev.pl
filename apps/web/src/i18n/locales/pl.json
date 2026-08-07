@@ -566,6 +566,20 @@
     "moreBody": "Dostaniesz aktualizacje, gdy agent pracuje. Otwarcie Studio nie zatrzymuje budowy. Dzienny limit tworzenia nie zmienia się od oglądania postępu.",
     "openStudio": "Otwórz Studio"
   },
+  "connectWizard": {
+    "dialogLabel": "Podłącz swojego agenta",
+    "stepLabel": "Połączenie",
+    "eyebrow": "Twój agent",
+    "lede": "Ta runda czeka na Twojego agenta. Dodaj gamedev.pl, wklej prompt budowy — zostań tu, aż się odezwie, albo otwórz Studio kiedy chcesz.",
+    "ledeConnected": "Twój agent się odezwał. Otwórz Studio, żeby śledzić postęp i sterować budową.",
+    "preparing": "Przygotowuję kroki połączenia…",
+    "loadError": "Nie udało się odświeżyć statusu. Próbuję ponownie…",
+    "connectedLabel": "Agent połączony",
+    "connectedBody": "Budowa trwa. W Studio śledzisz postęp i mówisz, co zmienić.",
+    "later": "Podłączę później",
+    "openStudio": "Otwórz Studio",
+    "openStudioAnyway": "Otwórz Studio mimo to"
+  },
   "transparency": {
     "title": "Strumień Agentów i Przejrzystość",
     "subtitle": "Każda gra na gamedev.pl jest open-source, utrzymywana przez agenty i bezpiecznie odizolowana.",
