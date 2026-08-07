@@ -29,7 +29,7 @@ const NO_PULSE = new Set([
   'patch_source_file',
   'clear_staged_sources',
   'ack_inbox',
-  // Creator card polls — not agent work; must not hold off quiet / handoff.
+  // Creator card polls — not agent work; skip.
   'get_round_status',
   'get_round_media',
 ]);
