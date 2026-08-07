@@ -262,14 +262,24 @@ export async function runGate(
       : options.proposal
         ? 'proposal'
         : 'publish';
-  const reportProgress = async (stage: GateProgressStage) => {
-    if (!deps.onProgress) return;
-    try {
-      await deps.onProgress(gateProgressFor(lane, stage, new Date(now()).toISOString()));
-    } catch {
-      /* advisory */
-    }
+  // Serialize progress; drain before return so verdict writes win.
+  let progressChain: Promise<void> = Promise.resolve();
+  const reportProgress = (stage: GateProgressStage): Promise<void> => {
+    if (!deps.onProgress) return Promise.resolve();
+    const next = progressChain.then(async () => {
+      try {
+        await deps.onProgress!(gateProgressFor(lane, stage, new Date(now()).toISOString()));
+      } catch {
+        /* advisory */
+      }
+    });
+    progressChain = next.then(
+      () => undefined,
+      () => undefined,
+    );
+    return next;
   };
+  const flushProgress = () => progressChain;
   await reportProgress('preparing');
   const harness = await deps.prepareHarness(engineRef);
   // Best effort: an outcome without the sha is poorer, not wrong, and a verdict must
@@ -454,6 +464,7 @@ export async function runGate(
       ...(behaviouralDiff ? { behaviouralDiff: true } : {}),
     };
   } finally {
+    await flushProgress();
     // The harness is disposable and can be large. Leaving it behind is how a long-lived
     // runner fills its disk and starts failing for reasons unrelated to any game.
     await rm(gameDir, { recursive: true, force: true }).catch(() => {});

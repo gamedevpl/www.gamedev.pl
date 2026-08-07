@@ -1024,13 +1024,29 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
 
     async putGateProgress(slug, version, progress) {
       const prefix = versionPrefix(slug, version);
-      const existing = await readObject(`${prefix}/manifest.json`);
-      if (!existing) throw new Error(`no manifest for ${slug}@${version}`);
-      const manifest = JSON.parse(existing.toString('utf8')) as VersionManifest;
-      // Ignore late milestones once a verdict exists.
-      if (manifest.gate || manifest.previewGate || manifest.health) return;
-      manifest.gateProgress = progress;
-      await writeObject(`${prefix}/manifest.json`, Buffer.from(JSON.stringify(manifest, null, 2)), 'application/json');
+      const name = `${prefix}/manifest.json`;
+      // Generation-match retries: never overwrite a concurrent verdict.
+      for (let attempt = 0; attempt < MAX_STAGING_MANIFEST_RETRIES; attempt++) {
+        const got = await readObjectWithGeneration(name);
+        if (!got) throw new Error(`no manifest for ${slug}@${version}`);
+        const manifest = JSON.parse(got.body.toString('utf8')) as VersionManifest;
+        if (manifest.gate || manifest.previewGate || manifest.health) return;
+        manifest.gateProgress = progress;
+        try {
+          await writeObject(name, Buffer.from(JSON.stringify(manifest, null, 2)), 'application/json', {
+            ifGenerationMatch: got.generation,
+          });
+          return;
+        } catch (error) {
+          if (error instanceof StagingGenerationMismatchError) continue;
+          throw error;
+        }
+      }
+      // Retries exhausted — drop advisory progress if still open.
+      const final = await readObject(name);
+      if (!final) throw new Error(`no manifest for ${slug}@${version}`);
+      const finalManifest = JSON.parse(final.toString('utf8')) as VersionManifest;
+      if (finalManifest.gate || finalManifest.previewGate || finalManifest.health) return;
     },
 
     async putPreviewGateResult(slug, version, result) {

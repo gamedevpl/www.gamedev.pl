@@ -482,6 +482,71 @@ describe('GCS games store', () => {
     expect((await store.getManifest('g', version))?.gateProgress).toBeUndefined();
   });
 
+  it('does not let a raced progress write erase a gate verdict', async () => {
+    const objects = new Map<string, Buffer>();
+    const generations = new Map<string, number>();
+    let conditionedWrites = 0;
+    const impl = (async (url: string | URL, init: RequestInit = {}) => {
+      const href = String(url);
+      if (init.method === 'POST') {
+        const parsed = new URL(href);
+        const name = decodeURIComponent(parsed.searchParams.get('name') ?? '');
+        const ifMatch = parsed.searchParams.get('ifGenerationMatch');
+        const current = generations.get(name) ?? 0;
+        // First conditioned write: inject verdict, then 412 the stale put.
+        if (
+          ifMatch !== null &&
+          name.includes('/versions/') &&
+          name.endsWith('/manifest.json') &&
+          ++conditionedWrites === 1
+        ) {
+          const baseManifest = JSON.parse(objects.get(name)!.toString('utf8'));
+          delete baseManifest.gateProgress;
+          baseManifest.gate = { green: true, ranAt: '2026-08-07T12:01:00.000Z', report: 'ok' };
+          objects.set(name, Buffer.from(JSON.stringify(baseManifest)));
+          generations.set(name, current + 1);
+          return new Response('Precondition Failed', { status: 412 });
+        }
+        if (ifMatch !== null && Number(ifMatch) !== current) {
+          return new Response('Precondition Failed', { status: 412 });
+        }
+        objects.set(name, Buffer.from(init.body as Uint8Array));
+        generations.set(name, current + 1);
+        return new Response('{}', { status: 200 });
+      }
+      if (!href.includes('/o/')) {
+        return new Response(JSON.stringify({ prefixes: [] }), { status: 200 });
+      }
+      const name = decodeURIComponent(href.split('/o/')[1].split('?')[0]);
+      const body = objects.get(name);
+      if (!body) return new Response('', { status: 404 });
+      return new Response(new Uint8Array(body), {
+        status: 200,
+        headers: { 'x-goog-generation': String(generations.get(name) ?? 1) },
+      });
+    }) as unknown as typeof fetch;
+
+    const store = createGcsGamesStore({ ...base, fetchImpl: impl });
+    const { version } = await store.putCandidateSources({ slug: 'g', issueNumber: 1, files: MINIMAL });
+    const manifestName = `games/g/versions/${version}/manifest.json`;
+    const genBefore = generations.get(manifestName) ?? 0;
+
+    await store.putGateProgress('g', version, {
+      lane: 'publish',
+      stage: 'validate',
+      index: 5,
+      total: 6,
+      at: '2026-08-07T12:00:30.000Z',
+    });
+
+    const manifest = JSON.parse(objects.get(manifestName)!.toString('utf8'));
+    expect(manifest.gate).toMatchObject({ green: true, report: 'ok' });
+    expect(manifest.gateProgress).toBeUndefined();
+    expect(conditionedWrites).toBe(1);
+    // Only the injected verdict bumped generation.
+    expect(generations.get(manifestName)).toBe(genBefore + 1);
+  });
+
   it('pins the engine the first gate run checked against, and never repins', async () => {
     const { impl } = stubGcs();
     const store = createGcsGamesStore({ ...base, fetchImpl: impl });
