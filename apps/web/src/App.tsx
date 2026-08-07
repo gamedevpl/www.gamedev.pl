@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { generateGame, type GeneratedGame, type GenerateGameApiError } from './api.js';
-import { fetchCatalog, type CatalogEntry } from './catalog.js';
+import { fetchCatalog, gamePageHandle, type CatalogEntry } from './catalog.js';
 import { GameTheater } from './GameTheater.js';
 import { NavHeader } from './NavHeader.js';
 import { HeroPromptSection } from './HeroPromptSection.js';
@@ -18,6 +18,7 @@ import {
   adminPath,
   canonicalPath,
   creatorPath,
+  gamePath,
   NAVIGATE_EVENT,
   navUpTarget,
   parsePathRoute,
@@ -105,8 +106,6 @@ export function App() {
   // Builds actually in flight, from the server — the header badge's source of truth.
   // Paused while a game is on screen because the player covers the header.
   const activeBuildCount = useActiveBuildCount(myGamesRefreshKey, !stageContent);
-  // `/play/<slug>` auto-opens theater; Close keeps the URL and remembers dismiss.
-  const playTheaterDismissedSlugRef = useRef<string | null>(null);
 
   // Greenfield submission state
   // 'refining' is the spec-refiner call that precedes a submission — a few seconds
@@ -237,14 +236,10 @@ export function App() {
     return () => document.body.classList.remove('player-open');
   }, [stageContent]);
 
-  // `/play/<slug>` auto-opens theater once the catalog confirms the game. Close leaves
-  // GameDetailPage on the same URL. Canonical `/:handle/:slug` stays preview-first.
-  // In-place Play from home/profile is not cleared here.
+  // `/play/<slug>` auto-opens theater once the catalog confirms the game.
+  // Close replaces onto the canonical page; in-place Play is untouched.
   useEffect(() => {
-    if (route.view !== 'play') {
-      playTheaterDismissedSlugRef.current = null;
-      return;
-    }
+    if (route.view !== 'play') return;
 
     const entry = catalogEntries.find((game) => game.slug === route.slug);
 
@@ -261,7 +256,6 @@ export function App() {
       return;
     }
 
-    if (playTheaterDismissedSlugRef.current === route.slug) return;
     // Wait so unknown slugs do not flash a 404 theater.
     if (catalogStatus !== 'ready' || !entry) return;
 
@@ -796,8 +790,7 @@ export function App() {
   }, [route, stageContent, unpublishedPlayTheater, t]);
 
   function handlePlayGame(game: CatalogEntry) {
-    // In-place Play; on `/play/<slug>` also re-opens after Close.
-    playTheaterDismissedSlugRef.current = null;
+    // In-place Play from home/profile/game page; `/play/<slug>` auto-opens itself.
     setStageContent({ type: 'catalog', game });
     // Soft refresh so "continue" / genre picks update after the next home visit.
     setRecommendationsRefreshKey((n) => n + 1);
@@ -806,14 +799,16 @@ export function App() {
   function handleRemixGame(game: CatalogEntry, initialRemixRequest?: string) {
     // The game still has to be mounted for Remix to swap and preview its document,
     // but the sheet opens on the first frame — no theater detour and second wrench.
-    playTheaterDismissedSlugRef.current = null;
     setStageContent({ type: 'catalog', game, initialRemixOpen: true, initialRemixRequest });
   }
 
   function handleExitCatalogTheater() {
-    // Keep `/play/<slug>`; mark dismissed so auto-open does not loop.
-    if (route.view === 'play') {
-      playTheaterDismissedSlugRef.current = route.slug;
+    // Deep-linked `/play` → canonical page (replace). Else dismiss overlay only.
+    if (route.view === 'play' && stageContent?.type === 'catalog') {
+      const game = stageContent.game;
+      navigate(gamePath(gamePageHandle(game), game.slug), { replace: true });
+      setStageContent(null);
+      return;
     }
     setStageContent(null);
   }

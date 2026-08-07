@@ -22,12 +22,10 @@ function previewScreenshot(game: CatalogEntry) {
 }
 
 /**
- * `/play/<slug>` after Close, and while catalog loads before auto-open.
+ * Loading/error shell under `/play/<slug>` before theater auto-opens.
  *
- * The permalink auto-opens theater; this surface remains after dismiss. It never
- * mounts the iframe — Play re-opens theater. Canonical pages use {@link GamePage}.
- *
- * Not a SPEC.md rendering: agent source, not player copy. Compact controls only.
+ * Published play redirects Close onto the canonical game page ({@link GamePage}).
+ * This surface never mounts the iframe.
  */
 export function GameDetailPage({ game, state, onPlay, onRemix, onRetry }: GameDetailPageProps) {
   const { t } = useTranslation();

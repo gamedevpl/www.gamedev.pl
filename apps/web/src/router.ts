@@ -470,7 +470,7 @@ export function navUpTarget(route: AppRoute): NavUpTarget | null {
     case 'home':
     case 'join':
       return null;
-    // `/play/:slug` auto-opens; Up shows after Close. Drafts own Close themselves.
+    // `/play/:slug` auto-opens; Close replaces onto the canonical game page.
     case 'play':
       return { path: '/', labelKey: 'upHome' };
     case 'studio':
