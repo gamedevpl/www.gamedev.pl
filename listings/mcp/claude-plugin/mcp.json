@@ -1,0 +1,9 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "gamedevpl": {
+      "type": "streamable-http",
+      "url": "https://www.gamedev.pl/api/mcp"
+    }
+  }
+}

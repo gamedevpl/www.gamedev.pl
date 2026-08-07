@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -151,5 +151,67 @@ describe('.claude-plugin marketplace', () => {
   // plugin whose advertised version disagrees with itself.
   it('versions the plugin identically in its manifest and its marketplace entry', () => {
     expect(plugin.version).toBe(entry.version);
+  });
+});
+
+describe('agent-plugins manifest', () => {
+  const portable = readJson('listings/mcp/claude-plugin/plugin.json');
+  const portableMcp = readJson('listings/mcp/claude-plugin/mcp.json');
+  const plugin = readJson('listings/mcp/claude-plugin/.claude-plugin/plugin.json');
+  const claudeMcp = readJson('listings/mcp/claude-plugin/.mcp.json');
+  const registry = readJson('listings/mcp/official-registry/server.json');
+
+  it('targets the 1.0.0 schemas, which is how the spec version is declared', () => {
+    expect(portable.$schema).toBe('https://agent-plugins.org/schemas/1.0.0/plugin.schema.json');
+    expect(portableMcp.$schema).toBe('https://agent-plugins.org/schemas/1.0.0/mcp.schema.json');
+  });
+
+  it('describes and names the plugin the same way the Claude manifest does', () => {
+    expect(portable.name).toBe(plugin.name);
+    expect(portable.description).toBe(registry.description);
+    expect(portable.license).toBe(plugin.license);
+  });
+
+  // Version drift here ships an artifact that differs from what installs.
+  it('versions in lockstep with the Claude manifest', () => {
+    expect(portable.version).toBe(plugin.version);
+  });
+
+  it('advertises the registry endpoint, with the spec transport name', () => {
+    const remotes = registry.remotes as Array<{ url: string }>;
+    const servers = portableMcp.mcpServers as Record<string, { url?: string; type?: string }>;
+    const claudeServers = claudeMcp.mcpServers as Record<string, { url?: string }>;
+    expect(Object.keys(servers).sort()).toEqual(Object.keys(claudeServers).sort());
+    expect(servers.gamedevpl.url).toBe(remotes[0]?.url);
+    expect(servers.gamedevpl.type).toBe('streamable-http');
+  });
+
+  it('never ships a credential — the spec allows headers, and we send none', () => {
+    const servers = portableMcp.mcpServers as Record<string, Record<string, unknown>>;
+    expect(servers.gamedevpl.headers).toBeUndefined();
+    const serialized = JSON.stringify(servers).toLowerCase();
+    for (const marker of ['authorization', 'bearer', 'token', 'apikey', 'api_key', 'secret', 'key']) {
+      expect(serialized, `mcp.json must not carry ${marker}`).not.toContain(marker);
+    }
+  });
+});
+
+// Both loaders read skills/<name>/SKILL.md, immediate children only.
+describe('plugin skills', () => {
+  const skillsDir = join(repoRoot, 'listings/mcp/claude-plugin/skills');
+
+  it('ships at least one skill, discoverable one level down', () => {
+    const entries = readdirSync(skillsDir, { withFileTypes: true }).filter((entry) => entry.isDirectory());
+    expect(entries.length).toBeGreaterThan(0);
+    for (const entry of entries) {
+      expect(statSync(join(skillsDir, entry.name, 'SKILL.md')).isFile()).toBe(true);
+    }
+  });
+
+  // A skill that restates the loop drifts from mcp-server.ts.
+  it('defers to the server-returned workflow rather than restating it', () => {
+    const skill = readFileSync(join(skillsDir, 'building-on-gamedev-pl/SKILL.md'), 'utf8');
+    expect(skill).toContain('When it disagrees');
+    expect(skill).toContain('closed beta');
   });
 });
