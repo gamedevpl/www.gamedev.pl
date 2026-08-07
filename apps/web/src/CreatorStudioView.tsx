@@ -1181,20 +1181,25 @@ function DetailsPanel({
                   <PixelIcon name="play" size={12} /> {t('studioPanel.overview.playtest')}
                 </button>
                 {!publishedJob && game.lastKnownStatus !== 'abandoned' ? (
-                  <button
-                    type="button"
-                    className={`status-abandon${abandonArmed ? ' is-danger' : ''}`}
-                    onClick={() => void handleAbandon()}
-                    disabled={abandoning}
-                  >
-                    {abandonArmed
-                      ? t(
-                          catalogLive
-                            ? 'studioPanel.overview.abandonConfirmKeepLive'
-                            : 'studioPanel.overview.abandonConfirmRemove',
-                        )
-                      : t('studioPanel.overview.abandon')}
-                  </button>
+                  <div className="studio-abandon-block">
+                    {abandonArmed && !catalogLive ? (
+                      <p className="studio-abandon-hint">{t('studioPanel.overview.abandonHintRemove')}</p>
+                    ) : null}
+                    <button
+                      type="button"
+                      className={`status-abandon${abandonArmed ? ' is-danger' : ''}`}
+                      onClick={() => void handleAbandon()}
+                      disabled={abandoning}
+                    >
+                      {abandonArmed
+                        ? t(
+                            catalogLive
+                              ? 'studioPanel.overview.abandonConfirmKeepLive'
+                              : 'studioPanel.overview.abandonConfirmRemove',
+                          )
+                        : t(catalogLive ? 'studioPanel.overview.abandon' : 'studioPanel.overview.abandonRemove')}
+                    </button>
+                  </div>
                 ) : null}
               </div>
             </section>

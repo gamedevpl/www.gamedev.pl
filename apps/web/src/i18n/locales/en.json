@@ -357,9 +357,11 @@
       "openBuild": "Open build",
       "playtest": "Play & note",
       "abandon": "Abandon this build",
+      "abandonRemove": "Remove this game from Studio",
       "abandonConfirm": "Yes, abandon — discard this round",
       "abandonConfirmKeepLive": "Yes, abandon — discard this round (live game stays)",
-      "abandonConfirmRemove": "Yes, abandon — remove this game from Studio"
+      "abandonConfirmRemove": "Yes, remove it — the game leaves Studio",
+      "abandonHintRemove": "This draft was never published. Removing it stops the build and takes the game off your Studio shelf."
     },
     "rail": {
       "connect": "Connect your agent",

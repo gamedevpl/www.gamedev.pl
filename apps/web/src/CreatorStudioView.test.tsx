@@ -1346,14 +1346,15 @@ describe('CreatorStudioView abandon', () => {
 
     const { container, root } = await renderStudio({ selectedGame: 'neon-draft', selectedTab: 'details' });
     const abandon = container.querySelector<HTMLButtonElement>('.status-abandon');
-    expect(abandon?.textContent).toContain('Abandon this build');
+    expect(abandon?.textContent).toContain('Remove this game from Studio');
 
     await act(async () => {
       abandon!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
+    expect(container.querySelector('.studio-abandon-hint')?.textContent).toContain('This draft was never published');
     expect(container.querySelector('.status-abandon')?.textContent).toContain(
-      'Yes, abandon — remove this game from Studio',
+      'Yes, remove it — the game leaves Studio',
     );
 
     root.unmount();
@@ -1377,11 +1378,13 @@ describe('CreatorStudioView abandon', () => {
 
     const { container, root } = await renderStudio({ selectedGame: 'tv-tycoon', selectedTab: 'details' });
     const abandon = container.querySelector<HTMLButtonElement>('.status-abandon');
+    expect(abandon?.textContent).toContain('Abandon this build');
 
     await act(async () => {
       abandon!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
+    expect(container.querySelector('.studio-abandon-hint')).toBeNull();
     expect(container.querySelector('.status-abandon')?.textContent).toContain(
       'Yes, abandon — discard this round (live game stays)',
     );
