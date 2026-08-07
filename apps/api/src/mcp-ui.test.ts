@@ -436,7 +436,8 @@ describe('ui resources', () => {
     expect(html).toContain('setDetailsVisible');
     expect(html).toContain('report-fail');
     expect(html).toContain('preferFailSurface');
-    expect(html).toContain('Preview check passed — the game runs');
+    expect(html).toContain('Preview check passed. Keep iterating');
+    expect(html).not.toContain('the game runs');
     expect(html).not.toMatch(/GATE_COPY[\s\S]{0,400}?submit_sources/);
   });
 
@@ -447,7 +448,12 @@ describe('ui resources', () => {
     expect(html).toContain('setActivity');
     expect(html).toContain('id="stages"');
     expect(html).toContain("'Typecheck'");
+    // Preview omits Capture (stills are advisory / killable); publish still lists it.
+    expect(html).toContain("var PREVIEW_GATE_STAGES = ['Typecheck', 'Smoke', 'Build']");
     expect(html).toContain("'Capture'");
+    // Quiet/ended stalls must not keep pulsing a stale presence line.
+    expect(html).toContain("status.stall === 'quiet'");
+    expect(html).toContain('agentQuiet');
   });
 
   it('keeps polling after a fixable gate refusal so a resumed agent refreshes the card', () => {

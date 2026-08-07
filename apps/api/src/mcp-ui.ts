@@ -781,11 +781,11 @@ const ROUND_STATUS_HTML = `<!doctype html>
           metaList.appendChild(dd);
         }
 
-        function setPill(headline) {
+        function setPill(headline, isLive) {
           var key = String(headline || 'waiting');
           var label = key === 'green' ? 'published' : key;
           pillLabel.textContent = label.replace(/_/g, ' ');
-          pill.className = 'pill pill-' + key + (LIVE_HEADLINES[key] ? ' pill-live' : '');
+          pill.className = 'pill pill-' + key + (isLive ? ' pill-live' : '');
         }
 
         function looksAgentFacing(text) {
@@ -918,7 +918,8 @@ const ROUND_STATUS_HTML = `<!doctype html>
           pending: 'Checks are still running.',
           green: 'Published — this round is complete.',
           red: 'Publish check failed. See what broke below.',
-          preview_passed: 'Preview check passed — the game runs. Keep iterating, then publish when you are happy with it.',
+          preview_passed:
+            'Preview check passed. Keep iterating, then publish when you are happy with it.',
           preview_failed: 'Preview check failed. See what broke below.',
           kit_outdated: 'The Creator Kit changed mid-round, so this delivery has to be rebuilt against the new one.'
         };
@@ -961,7 +962,8 @@ const ROUND_STATUS_HTML = `<!doctype html>
         };
 
         /** Gate check chain — shown while checks run (no fake step progress). */
-        var PREVIEW_GATE_STAGES = ['Typecheck', 'Smoke', 'Build', 'Capture'];
+        // Preview omits Capture: stills are advisory and killable via GATE_PREVIEW_STILLS=0.
+        var PREVIEW_GATE_STAGES = ['Typecheck', 'Smoke', 'Build'];
         var PUBLISH_GATE_STAGES = ['Typecheck', 'Smoke', 'Build', 'Trace', 'Capture', 'Validate'];
 
         var ACTIONS = {
@@ -1178,7 +1180,8 @@ const ROUND_STATUS_HTML = `<!doctype html>
 
         function renderGateOnly(verdict) {
           var status = typeof verdict.status === 'string' ? verdict.status : 'pending';
-          setPill(status);
+          var gateLive = status === 'pending' && Boolean(verdict.deliveryId);
+          setPill(status, gateLive);
           var gateSummary = typeof verdict.summary === 'string' ? verdict.summary : '';
           summary.textContent =
             (gateSummary && !looksAgentFacing(gateSummary) ? gateSummary : '') ||
@@ -1187,7 +1190,7 @@ const ROUND_STATUS_HTML = `<!doctype html>
             'Gate status: ' + status;
 
           setActivity(null);
-          setStages(verdict.lane, status === 'pending' && verdict.deliveryId);
+          setStages(verdict.lane, gateLive);
 
           metaList.textContent = '';
           addRow('Lane', verdict.lane);
@@ -1233,7 +1236,17 @@ const ROUND_STATUS_HTML = `<!doctype html>
                   ? 'stopped'
                   : status.phase;
 
-          setPill(headline);
+          var showStages =
+            headline === 'gating' ||
+            headline === 'submitted' ||
+            (gateStatus === 'pending' && gate && gate.deliveryId);
+          // Quiet/ended mean the agent is not working — do not pulse a stale presence
+          // line. Gating still pulses: the gate (not the agent) is the live actor.
+          var agentQuiet = status.stall === 'quiet' || status.stall === 'ended';
+          var live =
+            (LIVE_HEADLINES[headline] || showStages) && !(agentQuiet && !showStages);
+
+          setPill(headline, live);
 
           if (status.title) {
             titleEl.textContent = status.slug ? status.title + ' · ' + status.slug : status.title;
@@ -1259,6 +1272,9 @@ const ROUND_STATUS_HTML = `<!doctype html>
             line = 'Delivered — automated checks are running.';
           } else if (status.agentEnded) {
             line = 'The agent has stopped without delivering.';
+          } else if (agentQuiet && STALL_COPY[status.stall]) {
+            // Prefer the stall over "The agent is building…" when the agent went quiet.
+            line = STALL_COPY[status.stall];
           }
           if (!line) line = PHASE_COPY[status.phase];
           if (!line && gateStatus) line = GATE_COPY[gateStatus];
@@ -1269,15 +1285,8 @@ const ROUND_STATUS_HTML = `<!doctype html>
             status.presence && typeof status.presence === 'object' ? status.presence : null;
           var presenceKey = presence && typeof presence.key === 'string' ? presence.key : '';
           var presenceLine = presenceKey && PRESENCE_COPY[presenceKey] ? PRESENCE_COPY[presenceKey] : '';
-          var live =
-            LIVE_HEADLINES[headline] ||
-            (gateStatus === 'pending' && gate && gate.deliveryId);
           var noteText =
             status.note && typeof status.note.text === 'string' ? status.note.text : '';
-          var showStages =
-            headline === 'gating' ||
-            headline === 'submitted' ||
-            (gateStatus === 'pending' && gate && gate.deliveryId);
           if (live && presenceLine && !showStages) {
             setActivity(presenceLine, presence.at);
           } else if (live && noteText && (headline === 'building' || headline === 'dispatched')) {
