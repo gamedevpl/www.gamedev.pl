@@ -206,8 +206,6 @@ export function NavHeader({
             }
             onClick={() => setIsMenuOpen((prev) => !prev)}
           >
-            {/* Stay a hamburger when open — an X reads as "close the page", not
-                "this menu is open". Highlight communicates open state. */}
             <PixelIcon name="menu" size={16} />
             {activeBuildCount > 0 && !isMenuOpen ? (
               <span className="hamburger-live-badge" aria-hidden="true">

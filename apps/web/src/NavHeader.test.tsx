@@ -186,7 +186,7 @@ describe('NavHeader menu', () => {
     expect(hamburger.getAttribute('aria-haspopup')).toBe('menu');
     expect(container.querySelector('.hamburger-container.is-open')).not.toBeNull();
     expect(container.querySelector('.dropdown-menu')).not.toBeNull();
-    // Menu glyph = three 11×2 bars → 66 rects. Close/X is 35 — so this pins the icon.
+    // Menu glyph = 66 rects; close/X is 35.
     expect(hamburger.querySelectorAll('svg rect').length).toBe(66);
 
     await act(async () => root.unmount());
