@@ -212,6 +212,5 @@ describe('plugin skills', () => {
   it('defers to the server-returned workflow rather than restating it', () => {
     const skill = readFileSync(join(skillsDir, 'building-on-gamedev-pl/SKILL.md'), 'utf8');
     expect(skill).toContain('When it disagrees');
-    expect(skill).toContain('closed beta');
   });
 });

@@ -53,7 +53,7 @@ surface is only listed here once a tool call has really run on it.
 ## What the skill covers
 
 The MCP server hands your agent the full session workflow — but only after it connects
-_and_ authenticates. The skill is the part that arrives earlier: the closed-beta gate,
+_and_ authenticates. The skill is the part that arrives earlier: the account check,
 `create_game` vs `start`, holding the `sessionKey`, and the five mistakes agents repeat
 (screenshot late, re-uploading whole modules, mistaking staging for delivering, stopping
 before `end`, polling the gate or inbox).

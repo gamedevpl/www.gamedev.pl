@@ -9,10 +9,10 @@ description: Build and improve browser games on gamedev.pl through the gamedevpl
 Creators connect their own coding agent — you — over the remote MCP server at
 `https://www.gamedev.pl/api/mcp`, which this plugin declares.
 
-> **Creating is closed beta.** The tools load for anyone, but every one of them needs an
-> approved creator account. Without one, calls are refused — that is the gate, not an
-> outage. [Join the waitlist](https://www.gamedev.pl). Say this plainly if a creator hits
-> it, rather than retrying or debugging the connection.
+> **Every tool needs an approved creator account.** Without one, calls are refused — that
+> is the account check, not an outage. Say so plainly if a creator hits it, rather than
+> retrying or debugging the connection. Accounts start at
+> [gamedev.pl](https://www.gamedev.pl).
 
 ## The source of truth is the server, not this file
 
@@ -85,6 +85,6 @@ frames for _you_ — those never reach them.
 
 ## Links
 
-- Site and waitlist: <https://www.gamedev.pl>
+- Site: <https://www.gamedev.pl>
 - Creator Studio: <https://www.gamedev.pl/studio>
 - Source: <https://github.com/gamedevpl/www.gamedev.pl> (GPL-3.0-only)
