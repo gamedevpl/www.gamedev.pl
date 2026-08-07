@@ -12,6 +12,7 @@ import {
   playPath,
   statusPath,
   studioPath,
+  studioWelcomePath,
 } from './router.js';
 
 describe('parsePathRoute', () => {
@@ -116,6 +117,20 @@ describe('parsePathRoute', () => {
     expect(parsePathRoute('/studio/tok/feedback')).toEqual({ view: 'notFound' });
     // Trailing slash is not a studio deep-link.
     expect(parsePathRoute('/studio/')).toEqual({ view: 'notFound' });
+  });
+
+  it('parses the platform create handoff chapter', () => {
+    expect(parsePathRoute('/studio/bastion-wave-defense/welcome')).toEqual({
+      view: 'studioWelcome',
+      game: 'bastion-wave-defense',
+    });
+    expect(parsePathRoute('/studio/tok/welcome')).toEqual({ view: 'studioWelcome', game: 'tok' });
+    expect(studioWelcomePath('tv-tycoon')).toBe('/studio/tv-tycoon/welcome');
+    expect(canonicalPath('/studio/tv-tycoon/welcome')).toBeNull();
+    expect(navUpTarget({ view: 'studioWelcome', game: 'tv-tycoon' })).toEqual({
+      path: '/studio',
+      labelKey: 'upStudio',
+    });
   });
 
   it('maps unknown paths to notFound', () => {

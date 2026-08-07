@@ -533,7 +533,7 @@
     "questionCount": "Question {{current}} of {{total}}",
     "eyebrowIdea": "Your idea",
     "eyebrowBuilder": "Last choice",
-    "builderLede": "Either way you watch progress live in the studio.",
+    "builderLede": "Gamedev.pl can build it for you, or you connect your own coding agent.",
     "back": "Back",
     "continue": "Continue",
     "next": "Next",
@@ -545,6 +545,22 @@
     "reviewSubtitle": "Anything left unset is a creative call we make for you.",
     "aiDecides": "AI decides",
     "edit": "Edit"
+  },
+  "welcome": {
+    "dialogLabel": "Your game is starting",
+    "stepLabel": "Building",
+    "eyebrow": "In progress",
+    "lede": "We're on it. You can open Studio whenever you're ready — nothing waits on that click.",
+    "loading": "Getting the latest update…",
+    "loadError": "We couldn't refresh progress just now. Retrying…",
+    "primerTitle": "How to steer the agent",
+    "primerSteer": "In Studio, type what to change while it builds — the agent picks it up on the next update.",
+    "primerPlay": "When a playable draft is ready, Play appears so you can try it.",
+    "primerLeave": "You can leave and come back anytime from Studio — the build keeps going.",
+    "primerOneLine": "In Studio, say what to change as it builds — Play appears when a draft is ready.",
+    "moreSummary": "What happens next?",
+    "moreBody": "You'll get updates as the agent works. Opening Studio does not stop the build. Daily creation quota is unchanged by watching progress.",
+    "openStudio": "Open Studio"
   },
   "transparency": {
     "title": "Agent Stream & Transparency",

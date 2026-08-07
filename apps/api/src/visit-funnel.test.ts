@@ -124,6 +124,8 @@ describe('summarizeVisitFunnel', () => {
       { step: 'qa_shown', visits: 0 },
       { step: 'title_confirmed', visits: 0 },
       { step: 'submission_created', visits: 0 },
+      { step: 'handoff_shown', visits: 0 },
+      { step: 'handoff_enter_studio', visits: 0 },
     ]);
   });
 

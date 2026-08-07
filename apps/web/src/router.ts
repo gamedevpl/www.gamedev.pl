@@ -105,6 +105,10 @@ export type AppRoute =
   // `/status/:token` is accepted as an alias and resolves here too. Optional `tab`
   // deep-links into a work surface (`/studio/tv-tycoon/build`).
   | { view: 'studio'; game?: string; tab?: StudioTab }
+  // Post–Create Now platform handoff: full-screen wizard chrome before Studio.
+  // Real path so reload / another device resumes the same chapter (not an overlay-only
+  // park). Self/BYOCA connect is a later chapter on its own path.
+  | { view: 'studioWelcome'; game: string }
   // Privacy policy and terms. Reachable without a session — someone deciding whether
   // to sign in has to be able to read what signing in would mean first.
   | { view: 'legal'; doc: LegalDocId }
@@ -298,9 +302,10 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
     return { view: 'proposals' };
   }
 
-  // `/studio/:game` or `/studio/:game/:tab`. A third segment that is not a known
-  // tab is a 404 rather than a silent fallback to the game-only view: it keeps the
-  // client in step with the API's shell allowlist, which serves those paths a real 404.
+  // `/studio/:game` or `/studio/:game/:tab` (or `:chapter` for post-create handoff).
+  // A third segment that is not a known tab/chapter is a 404 rather than a silent
+  // fallback to the game-only view: it keeps the client in step with the API's shell
+  // allowlist, which serves those paths a real 404.
   const studioMatch = normalizedPath.match(/^\/studio\/([^/]+)(?:\/([^/]+))?$/);
   if (studioMatch?.[1]) {
     const game = decodeSegment(studioMatch[1]);
@@ -310,6 +315,11 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
     }
     if (!tabSegment) {
       return { view: 'studio', game };
+    }
+    // Platform create handoff — not a Studio work surface; its own view so App can
+    // mount wizard chrome without the shelf.
+    if (tabSegment === 'welcome') {
+      return { view: 'studioWelcome', game };
     }
     // Resolved, not passed through: the route carries the surface, and an old name for
     // it stops existing the moment it is parsed.
@@ -418,6 +428,8 @@ export function canonicalPath(pathname: string): string | null {
       // token to its slug also happens there, for the same reason: it takes the shelf.
       case 'studio':
         return route.game ? studioPath(route.game, route.tab) : null;
+      case 'studioWelcome':
+        return studioWelcomePath(route.game);
       case 'creator':
         return creatorPath(route.handle);
       case 'game':
@@ -452,6 +464,11 @@ export function studioPath(game?: string, tab?: StudioTab): string {
   return tab ? `${base}/${tab}` : base;
 }
 
+/** Full-screen platform handoff after Create Now — before Studio chrome. */
+export function studioWelcomePath(game: string): string {
+  return `/studio/${encodeURIComponent(game)}/welcome`;
+}
+
 /**
  * Parent path for the NavHeader "Up" chevron — Android-style Up, not browser Back.
  *
@@ -484,6 +501,10 @@ export function navUpTarget(route: AppRoute): NavUpTarget | null {
         return { path: studioPath(), labelKey: 'upStudio' };
       }
       return { path: '/', labelKey: 'upHome' };
+    case 'studioWelcome':
+      // Still in the create flow — Up leaves the handoff for the shelf, same as a
+      // selected-game Studio URL, rather than dumping home mid-build.
+      return { path: studioPath(), labelKey: 'upStudio' };
     case 'game':
       // The page is nested under the creator profile the way a repo nests under its
       // owner, so Up goes to that profile rather than to the homepage.

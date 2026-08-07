@@ -7315,6 +7315,81 @@ button.builder-mode-selector:disabled {
   text-decoration: underline;
 }
 
+/* Platform create handoff — same qa-wizard chrome, a few blocks for progress + primer. */
+.studio-welcome-progress {
+  margin: 8px 0 20px;
+  padding: 16px 18px;
+  background: var(--panel, #171c20);
+  border: 1px solid var(--panel-border, #33383d);
+  border-radius: 12px;
+}
+
+.studio-welcome-progress-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--turquoise, #00e4ac);
+}
+
+.studio-welcome-progress-message {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.45;
+  color: var(--text, #e2e8f0);
+}
+
+.studio-welcome-primer {
+  margin: 0 0 20px;
+}
+
+.studio-welcome-primer-title {
+  margin: 0 0 10px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text, #e2e8f0);
+}
+
+.studio-welcome-primer-list {
+  margin: 0;
+  padding-left: 1.2em;
+  color: var(--muted, #94a3b8);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.studio-welcome-primer-list li + li {
+  margin-top: 6px;
+}
+
+.studio-welcome-primer-one {
+  margin: 0;
+  color: var(--muted, #94a3b8);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.studio-welcome-more {
+  margin: 0 0 8px;
+  color: var(--muted, #94a3b8);
+  font-size: 0.88rem;
+}
+
+.studio-welcome-more summary {
+  cursor: pointer;
+  color: var(--turquoise, #00e4ac);
+  font-weight: 600;
+}
+
+.studio-welcome-more p {
+  margin: 8px 0 0;
+  line-height: 1.45;
+}
+
 /* Kept beside the rule it overrides rather than with the other mobile input
    sizes — that block sits earlier in the file and loses on source order.
    16px is the floor below which iOS Safari zooms the page on focus. */

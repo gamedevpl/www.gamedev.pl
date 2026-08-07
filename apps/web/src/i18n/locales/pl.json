@@ -537,7 +537,7 @@
     "questionCount": "Pytanie {{current}} z {{total}}",
     "eyebrowIdea": "Twój pomysł",
     "eyebrowBuilder": "Ostatni wybór",
-    "builderLede": "Tak czy inaczej postęp śledzisz na żywo w studiu.",
+    "builderLede": "Gamedev.pl może zbudować to za Ciebie, albo podłączysz własnego agenta.",
     "back": "Wstecz",
     "continue": "Dalej",
     "next": "Dalej",
@@ -549,6 +549,22 @@
     "reviewSubtitle": "Wszystko, czego nie ustawisz, jest decyzją twórczą, którą podejmiemy za Ciebie.",
     "aiDecides": "AI zdecyduje",
     "edit": "Zmień"
+  },
+  "welcome": {
+    "dialogLabel": "Twoja gra się zaczyna",
+    "stepLabel": "Budowanie",
+    "eyebrow": "W trakcie",
+    "lede": "Pracujemy nad tym. Studio otworzysz, kiedy będziesz gotów — nic na ten klik nie czeka.",
+    "loading": "Pobieram najnowszy status…",
+    "loadError": "Nie udało się odświeżyć postępu. Próbuję ponownie…",
+    "primerTitle": "Jak sterować agentem",
+    "primerSteer": "W Studio napisz, co zmienić, podczas gdy gra powstaje — agent podejmie to przy następnej aktualizacji.",
+    "primerPlay": "Gdy draft będzie do zagrania, pojawi się Play.",
+    "primerLeave": "Możesz wyjść i wrócić kiedy chcesz ze Studio — budowa trwa dalej.",
+    "primerOneLine": "W Studio napisz, co zmienić podczas budowy — Play pojawi się, gdy draft będzie gotowy.",
+    "moreSummary": "Co dalej?",
+    "moreBody": "Dostaniesz aktualizacje, gdy agent pracuje. Otwarcie Studio nie zatrzymuje budowy. Dzienny limit tworzenia nie zmienia się od oglądania postępu.",
+    "openStudio": "Otwórz Studio"
   },
   "transparency": {
     "title": "Strumień Agentów i Przejrzystość",

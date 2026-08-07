@@ -137,7 +137,9 @@ adjacent flow, close the gap in the same change or flag it explicitly in the PR:
   views cannot drift in how they report truncation.
   - ~~Creator funnel starts too late~~ — **closed 2026-07-26**: `create_step` on the visit
     stream records `prompt_started` → `spec_submitted` → `signin_required` → `qa_shown` →
-    `submission_created`. Steps dedupe per visit (a rung means "this visit got this far"),
+    `title_confirmed` → `submission_created` → `handoff_shown` → `handoff_enter_studio`
+    (the last two measure the platform welcome handoff before Studio). Steps dedupe per
+    visit (a rung means "this visit got this far"),
     and the aggregate dedupes again so a replayed flush cannot inflate one. Adding a rung
     means touching the enum in `visitTelemetry.ts`, the zod enum in `visit-telemetry.ts`,
     and `CREATE_STEPS` in `visit-funnel.ts` — the order in `CREATE_STEPS` _is_ the funnel's

@@ -28,16 +28,18 @@ const ROOT_CREATOR_PATTERN = /^\/([a-z][a-z0-9_]{2,23})$/;
 const GAME_PAGE_PATTERN =
   /^\/([a-z][a-z0-9_]{2,23})\/([a-z0-9]+(?:-[a-z0-9]+)*)(?:\/(?:board|review|releases|sources))?$/;
 /**
- * `/studio`, `/studio/:token`, `/studio/:token/:tab` — keep aligned with
- * `STUDIO_TAB_ALIASES` in apps/web/src/router.ts.
+ * `/studio`, `/studio/:token`, `/studio/:token/:tab|:chapter` — keep aligned with
+ * `STUDIO_TAB_ALIASES` and the `welcome` chapter in apps/web/src/router.ts.
  *
  * Both vocabularies, deliberately. The three surfaces are what the studio has now; the
  * five names beside them are what it had before, and the client still resolves those to a
  * real surface and rewrites the URL. A path the client answers with a page must not be a
  * path the server calls unknown — that is a 404 served to a crawler for a page a person
- * can see.
+ * can see. `welcome` is the post–Create Now platform handoff (wizard chrome, not a tab).
+ * `edit` / `editor` are the EditorKit surface.
  */
-const STUDIO_PATTERN = /^\/studio(?:\/[^/]+(?:\/(?:thread|details|playtest|overview|build|stats|improve))?)?$/;
+const STUDIO_PATTERN =
+  /^\/studio(?:\/[^/]+(?:\/(?:thread|details|playtest|overview|build|stats|improve|edit|editor|welcome))?)?$/;
 // The operator console. Its sections are listed rather than matched loosely, so the
 // shell and the client's router agree about what is a real page and what is a typo —
 // the same contract the studio tabs above keep.
