@@ -19,15 +19,11 @@ function previewScreenshot(game: CatalogEntry) {
 }
 
 /**
- * The canonical public game page at `/:handle/:slug`.
+ * Canonical public game page at `/:handle/:slug`.
  *
- * This is a landing page, not a player and not an agent workspace. It gives a visitor
- * enough context to decide whether to play, then crosses the explicit Play/Remix
- * boundary into the existing sandboxed theater. The owning creator also gets an
- * "Open in Studio" door into `/studio/<slug>` — same owner-only control as the
- * creator profile. Old tab URLs are accepted by the router but intentionally land
- * on this same compact page because those surfaces had no reliable public data
- * behind them.
+ * Landing page, not a player or agent workspace. Visitors get Play/Remix into
+ * the sandboxed theater; the owning creator also gets Open in Studio.
+ * Old tab URLs land here — those surfaces had no reliable public data.
  */
 export function GamePage({
   handle,
