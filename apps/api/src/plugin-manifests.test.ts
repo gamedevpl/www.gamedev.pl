@@ -181,6 +181,8 @@ describe('agent-plugins manifest', () => {
     const remotes = registry.remotes as Array<{ url: string }>;
     const servers = portableMcp.mcpServers as Record<string, { url?: string; type?: string }>;
     const claudeServers = claudeMcp.mcpServers as Record<string, { url?: string }>;
+    // Else a registry that lost its remote passes as undefined === undefined.
+    expect(remotes[0]?.url).toMatch(/^https:\/\//);
     expect(Object.keys(servers).sort()).toEqual(Object.keys(claudeServers).sort());
     expect(servers.gamedevpl.url).toBe(remotes[0]?.url);
     expect(servers.gamedevpl.type).toBe('streamable-http');

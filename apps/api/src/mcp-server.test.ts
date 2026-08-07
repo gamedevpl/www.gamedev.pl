@@ -792,9 +792,7 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ jsonrpc: '2.0', id: 1 });
 
-    // Reachable is not usable: the wall lets the handshake through, so a visitor who
-    // cannot sign in sees 14 healthy-looking tools. `instructions` names the account
-    // requirement — without naming a launch stage, which is a listing-copy decision.
+    // The wall lets the handshake through; name the account requirement.
     const instructions = (res.json().result as { instructions?: string }).instructions ?? '';
     expect(instructions).toMatch(/creator account/i);
     expect(instructions).not.toMatch(/beta|waitlist/i);

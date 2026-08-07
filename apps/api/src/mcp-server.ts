@@ -4523,7 +4523,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             version: '1.0.0',
           },
           instructions:
-            // The account note is the only thing every client gets before anything fails.
+            // Only string every client gets before anything fails.
             'NOTE: these tools need an approved gamedev.pl creator account. Without one, calls are refused — ' +
             'listing tools here does not mean you can use them yet. Accounts start at https://www.gamedev.pl/. ' +
             'Making a NEW game? Call create_game first — start needs a slug, and a new game has none yet. ' +
