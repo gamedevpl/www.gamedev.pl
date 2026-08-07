@@ -355,6 +355,10 @@ const BRIDGE = `(function(){
 // Hide in-game chrome; theater owns title/sound instead.
 // Parent CSS cannot reach opaque-origin frame (iOS loupe).
 // Undo shell's 1400px wrap so desktop theater is full-bleed.
+//
+// Size `#game` with max-width/max-height (not 100%×100% + object-fit). A full-box
+// canvas letterboxes its bitmap *inside* the element, so getBoundingClientRect
+// mapping (fixtures, older games) shifts taps. Contained element box = hit box.
 const HIDE_CHROME =
   `#game-title,#game-desc,.game-controls,.hint{display:none!important}` +
   // Hide buttons-only GameKit chrome on mouse desktops.
@@ -362,21 +366,26 @@ const HIDE_CHROME =
   `.gamekit-touch:not(:has(.gamekit-touch-pad)){display:none!important}` +
   `}` +
   `html,body{width:100%;height:100%;margin:0;background:#000}` +
-  `body{display:block;min-height:100%;overflow:hidden}` +
+  `body{display:flex;align-items:center;justify-content:center;` +
+  `min-height:100%;overflow:hidden}` +
   `.wrap{` +
   `width:100%!important;` +
   `max-width:none!important;` +
   `height:100%!important;` +
   `min-height:100%!important;` +
   `padding:0!important;` +
-  `gap:0!important` +
+  `gap:0!important;` +
+  `display:flex!important;` +
+  `align-items:center!important;` +
+  `justify-content:center!important` +
   `}` +
   `#game{` +
-  `width:100%!important;` +
-  `height:100%!important;` +
+  `width:auto!important;` +
+  `height:auto!important;` +
+  `max-width:100%!important;` +
+  `max-height:100%!important;` +
   `min-height:0!important;` +
-  `box-shadow:none!important;` +
-  `object-fit:contain` +
+  `box-shadow:none!important` +
   `}` +
   `html,body,canvas,img,video{` +
   `-webkit-touch-callout:none;` +

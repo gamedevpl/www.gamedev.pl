@@ -66,8 +66,12 @@ describe('embedGameHtml', () => {
     // Override shell's 1400px wrap inside the opaque frame.
     expect(out).toContain('.wrap{width:100%!important;max-width:none!important');
     expect(out).toContain('padding:0!important');
-    expect(out).toContain('#game{width:100%!important;height:100%!important');
-    expect(out).toContain('object-fit:contain');
+    // Contained element box (not 100%×100% + object-fit) so hit-testing matches paint.
+    expect(out).toContain('#game{width:auto!important;height:auto!important');
+    expect(out).toContain('max-width:100%!important');
+    expect(out).toContain('max-height:100%!important');
+    expect(out).not.toContain('#game{width:100%!important;height:100%!important');
+    expect(out).not.toContain('object-fit:contain');
   });
 });
 
