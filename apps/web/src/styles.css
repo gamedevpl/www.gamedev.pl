@@ -5325,6 +5325,18 @@ a.user-name--profile:focus-visible {
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 4px 2px 8px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Short threads sit above the composer (flex-end), not under the lid. Long threads
+   grow past min-height and scroll normally from the top of the conversation. */
+.studio-thread-scroll-body {
+  flex: 1 0 auto;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
 }
 
 /* Claude / Cursor / GPT slack: enough empty runway under the transcript that the
@@ -5333,6 +5345,9 @@ a.user-name--profile:focus-visible {
    gives the thread a height; `min-height` covers the page-scroll phone band where
    the scrollport height is indefinite. vh first, then dvh — same pairing as
    `.beta-splash` / `.qa-wizard`, so browsers without dvh keep the runway.
+
+   Stick-to-bottom must target the body end, not this pad — scrolling to absolute
+   bottom parks the last turn at the top with an empty void under it.
 
    A percentage of the scrollport cannot create overflow on an empty thread
    (H−4.5rem ≤ H), and that is fine: the runway matters once there is a last
