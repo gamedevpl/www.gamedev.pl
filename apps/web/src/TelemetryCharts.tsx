@@ -7,6 +7,8 @@
  * panels: null / empty evidence renders as absence, never as a confident zero.
  */
 
+import { useState } from 'react';
+
 export type GaugeTone = 'ok' | 'warn' | 'bad' | 'idle';
 
 /** Semicircle rate gauge. `value` is a 0–1 fraction; null means no evidence. */
@@ -174,16 +176,13 @@ export interface LineSeries {
   values: Array<number | null>;
   /** Dashed stroke — used for rolling averages over the raw series. */
   dashed?: boolean;
-  /** Right axis for low-volume series (creations) that would flatline on the left scale. */
+  /** Right axis for low-volume series (e.g. creations). */
   axis?: 'left' | 'right';
 }
 
 /**
- * Multi-series line chart for trend observation.
- *
- * Null values break the path (a gap), so a day with no retention cohort does not
- * invent a zero that looks like a crash. Y-axis is nice-scaled from the data.
- * Optional right axis keeps low-volume series readable beside high-volume ones.
+ * Multi-series line chart. Nulls gap the path; optional right axis for low-volume
+ * series. Hover shows a day tooltip; legend clicks hide/show a series.
  */
 export function LineChart({
   title,
@@ -200,23 +199,28 @@ export function LineChart({
   formatYRight?: (value: number) => string;
   emptyMessage?: string;
 }) {
+  const [hidden, setHidden] = useState<ReadonlySet<string>>(() => new Set());
+  const [hover, setHover] = useState<number | null>(null);
+
   const width = 640;
   const height = 200;
-  const hasRight = series.some((s) => (s.axis ?? 'left') === 'right');
+  const visible = series.filter((s) => !hidden.has(s.id));
+  const hasRight = visible.some((s) => (s.axis ?? 'left') === 'right');
   const pad = { top: 16, right: hasRight ? 40 : 12, bottom: 28, left: 40 };
   const innerW = width - pad.left - pad.right;
   const innerH = height - pad.top - pad.bottom;
 
-  const leftValues = series
+  const leftValues = visible
     .filter((s) => (s.axis ?? 'left') === 'left')
     .flatMap((s) => s.values)
     .filter((value): value is number => value !== null);
-  const rightValues = series
+  const rightValues = visible
     .filter((s) => s.axis === 'right')
     .flatMap((s) => s.values)
     .filter((value): value is number => value !== null);
-  const empty = labels.length === 0 || (leftValues.length === 0 && rightValues.length === 0);
-  const yMaxLeft = empty || leftValues.length === 0 ? 1 : niceCeil(Math.max(...leftValues, 0));
+  const empty = labels.length === 0 || series.every((s) => s.values.every((value) => value === null));
+  const noVisible = !empty && visible.length === 0;
+  const yMaxLeft = leftValues.length === 0 ? 1 : niceCeil(Math.max(...leftValues, 0));
   const yMaxRight = rightValues.length === 0 ? 1 : niceCeil(Math.max(...rightValues, 0));
   const yMin = 0;
   const rightFormat = formatYRight ?? formatY;
@@ -230,6 +234,47 @@ export function LineChart({
   const rightTicks = [0, 0.5, 1].map((fraction) => yMin + (yMaxRight - yMin) * fraction);
   const labelStep = Math.max(1, Math.ceil(labels.length / 7));
 
+  function toggleSeries(id: string) {
+    setHidden((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function indexFromClientX(svg: SVGSVGElement, clientX: number): number | null {
+    if (labels.length === 0) return null;
+    const rect = svg.getBoundingClientRect();
+    if (rect.width <= 0) return null;
+    const localX = ((clientX - rect.left) / rect.width) * width;
+    if (localX < pad.left || localX > pad.left + innerW) return null;
+    if (labels.length === 1) return 0;
+    const ratio = (localX - pad.left) / innerW;
+    return Math.max(0, Math.min(labels.length - 1, Math.round(ratio * (labels.length - 1))));
+  }
+
+  const hoverLabel = hover === null ? null : labels[hover];
+  const tooltipRows =
+    hover === null
+      ? []
+      : visible
+          .map((s) => {
+            const value = s.values[hover];
+            if (value === null || value === undefined) return null;
+            const format = s.axis === 'right' ? rightFormat : formatY;
+            return { id: s.id, label: s.label, color: s.color, text: format(value) };
+          })
+          .filter((row): row is { id: string; label: string; color: string; text: string } => row !== null);
+
+  // Pin tooltip near the column; flip left near the right edge.
+  const tooltipStyle =
+    hover === null
+      ? undefined
+      : {
+          left: `${(Math.min(xAt(hover), pad.left + innerW * 0.62) / width) * 100}%`,
+        };
+
   return (
     <figure className="telem-line">
       <figcaption className="telem-line-title">{title}</figcaption>
@@ -237,75 +282,143 @@ export function LineChart({
         <p className="health-empty">{emptyMessage}</p>
       ) : (
         <>
-          <svg
-            className="telem-line-svg"
-            viewBox={`0 0 ${width} ${height}`}
-            role="img"
-            aria-label={`${title}: ${series.map((s) => s.label).join(', ')}`}
-          >
-            {leftTicks.map((tick) => (
-              <g key={`L${tick}`}>
-                <line
-                  className="telem-line-grid"
-                  x1={pad.left}
-                  x2={pad.left + innerW}
-                  y1={yAtLeft(tick)}
-                  y2={yAtLeft(tick)}
-                />
-                <text className="telem-line-axis" x={pad.left - 6} y={yAtLeft(tick) + 3} textAnchor="end">
-                  {formatY(tick)}
-                </text>
-              </g>
-            ))}
-            {hasRight &&
-              rightTicks.map((tick) => (
-                <text
-                  key={`R${tick}`}
-                  className="telem-line-axis telem-line-axis--right"
-                  x={pad.left + innerW + 6}
-                  y={yAtRight(tick) + 3}
-                  textAnchor="start"
-                >
-                  {rightFormat(tick)}
-                </text>
+          <div className="telem-line-plot">
+            <svg
+              className="telem-line-svg"
+              viewBox={`0 0 ${width} ${height}`}
+              role="img"
+              aria-label={`${title}: ${series.map((s) => s.label).join(', ')}`}
+              onMouseMove={(event) => {
+                const index = indexFromClientX(event.currentTarget, event.clientX);
+                setHover(index);
+              }}
+              onMouseLeave={() => setHover(null)}
+            >
+              {leftTicks.map((tick) => (
+                <g key={`L${tick}`}>
+                  <line
+                    className="telem-line-grid"
+                    x1={pad.left}
+                    x2={pad.left + innerW}
+                    y1={yAtLeft(tick)}
+                    y2={yAtLeft(tick)}
+                  />
+                  <text className="telem-line-axis" x={pad.left - 6} y={yAtLeft(tick) + 3} textAnchor="end">
+                    {formatY(tick)}
+                  </text>
+                </g>
               ))}
-            {series.map((s) => {
-              const yAt = s.axis === 'right' ? yAtRight : yAtLeft;
-              return (
-                <path
-                  key={s.id}
-                  className={s.dashed ? 'telem-line-path is-dashed' : 'telem-line-path'}
-                  d={linePath(s.values, xAt, yAt)}
-                  stroke={s.color}
-                  fill="none"
+              {hasRight &&
+                rightTicks.map((tick) => (
+                  <text
+                    key={`R${tick}`}
+                    className="telem-line-axis telem-line-axis--right"
+                    x={pad.left + innerW + 6}
+                    y={yAtRight(tick) + 3}
+                    textAnchor="start"
+                  >
+                    {rightFormat(tick)}
+                  </text>
+                ))}
+              {visible.map((s) => {
+                const yAt = s.axis === 'right' ? yAtRight : yAtLeft;
+                return (
+                  <path
+                    key={s.id}
+                    className={s.dashed ? 'telem-line-path is-dashed' : 'telem-line-path'}
+                    d={linePath(s.values, xAt, yAt)}
+                    stroke={s.color}
+                    fill="none"
+                  />
+                );
+              })}
+              {hover !== null && (
+                <line
+                  className="telem-line-crosshair"
+                  x1={xAt(hover)}
+                  x2={xAt(hover)}
+                  y1={pad.top}
+                  y2={pad.top + innerH}
                 />
+              )}
+              {hover !== null &&
+                visible.map((s) => {
+                  const value = s.values[hover];
+                  if (value === null || value === undefined) return null;
+                  const yAt = s.axis === 'right' ? yAtRight : yAtLeft;
+                  return (
+                    <circle
+                      key={`dot-${s.id}`}
+                      className="telem-line-dot"
+                      cx={xAt(hover)}
+                      cy={yAt(value)}
+                      r={3.5}
+                      fill={s.color}
+                    />
+                  );
+                })}
+              {labels.map((label, index) =>
+                index % labelStep === 0 || index === labels.length - 1 ? (
+                  <text
+                    key={`${label}-${index}`}
+                    className="telem-line-axis"
+                    x={xAt(index)}
+                    y={height - 8}
+                    textAnchor="middle"
+                  >
+                    {label}
+                  </text>
+                ) : null,
+              )}
+              {/* Transparent hit target over the plot area. */}
+              <rect
+                className="telem-line-hit"
+                x={pad.left}
+                y={pad.top}
+                width={innerW}
+                height={innerH}
+                fill="transparent"
+              />
+            </svg>
+            {hover !== null && hoverLabel !== undefined && tooltipRows.length > 0 && (
+              <div className="telem-line-tooltip" style={tooltipStyle} role="status">
+                <div className="telem-line-tooltip-label">{hoverLabel}</div>
+                <ul>
+                  {tooltipRows.map((row) => (
+                    <li key={row.id}>
+                      <span className="telem-line-tooltip-swatch" style={{ background: row.color }} />
+                      <span className="telem-line-tooltip-name">{row.label}</span>
+                      <span className="telem-line-tooltip-value">{row.text}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {noVisible && (
+              <p className="telem-line-hidden-note">All series hidden — click a legend item to show one.</p>
+            )}
+          </div>
+          <ul className="telem-line-legend">
+            {series.map((s) => {
+              const isHidden = hidden.has(s.id);
+              return (
+                <li key={s.id}>
+                  <button
+                    type="button"
+                    className={isHidden ? 'telem-line-legend-btn is-off' : 'telem-line-legend-btn'}
+                    aria-pressed={!isHidden}
+                    onClick={() => toggleSeries(s.id)}
+                  >
+                    <span
+                      className={s.dashed ? 'telem-line-swatch is-dashed' : 'telem-line-swatch'}
+                      style={{ background: s.color, borderColor: s.color }}
+                    />
+                    {s.label}
+                    {s.axis === 'right' ? <span className="telem-line-axis-tag">right</span> : null}
+                  </button>
+                </li>
               );
             })}
-            {labels.map((label, index) =>
-              index % labelStep === 0 || index === labels.length - 1 ? (
-                <text
-                  key={`${label}-${index}`}
-                  className="telem-line-axis"
-                  x={xAt(index)}
-                  y={height - 8}
-                  textAnchor="middle"
-                >
-                  {label}
-                </text>
-              ) : null,
-            )}
-          </svg>
-          <ul className="telem-line-legend">
-            {series.map((s) => (
-              <li key={s.id}>
-                <span
-                  className={s.dashed ? 'telem-line-swatch is-dashed' : 'telem-line-swatch'}
-                  style={{ background: s.color, borderColor: s.color }}
-                />
-                {s.label}
-                {s.axis === 'right' ? <span className="telem-line-axis-tag">right</span> : null}
-              </li>
-            ))}
           </ul>
         </>
       )}

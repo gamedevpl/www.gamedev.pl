@@ -3,7 +3,7 @@
 import { act, createElement, type ReactElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it } from 'vitest';
-import { Gauge, Histogram, OpenGauge } from './TelemetryCharts.js';
+import { Gauge, Histogram, LineChart, OpenGauge } from './TelemetryCharts.js';
 
 /**
  * Chart primitives must not invent confidence: a null rate is a dash, an empty
@@ -98,6 +98,83 @@ describe('Histogram', () => {
     );
     expect(host.textContent).toContain('No visit reached a game.');
     expect(host.querySelector('.telem-histogram-plot')).toBeNull();
+    act(() => {
+      root.unmount();
+    });
+  });
+});
+
+describe('LineChart', () => {
+  const series = [
+    { id: 'visits', label: 'Visits', color: '#00e4ac', values: [10, 20, 30] },
+    { id: 'plays', label: 'Plays', color: '#38bdf8', values: [4, 8, 12] },
+    { id: 'creations', label: 'Creations', color: '#fbbf24', values: [1, 0, 2], axis: 'right' as const },
+  ];
+
+  it('toggles a series off when its legend button is clicked', () => {
+    const { host, root } = render(
+      createElement(LineChart, {
+        title: 'Visits & plays',
+        labels: ['08-01', '08-02', '08-03'],
+        series,
+      }),
+    );
+    expect(host.querySelectorAll('.telem-line-path')).toHaveLength(3);
+    const visitsBtn = Array.from(host.querySelectorAll('button.telem-line-legend-btn')).find((btn) =>
+      btn.textContent?.includes('Visits'),
+    );
+    expect(visitsBtn).toBeTruthy();
+    act(() => {
+      visitsBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(host.querySelectorAll('.telem-line-path')).toHaveLength(2);
+    expect(visitsBtn?.getAttribute('aria-pressed')).toBe('false');
+    expect(visitsBtn?.classList.contains('is-off')).toBe(true);
+    act(() => {
+      root.unmount();
+    });
+  });
+
+  it('shows a tooltip for the nearest day on hover', () => {
+    const { host, root } = render(
+      createElement(LineChart, {
+        title: 'Visits & plays',
+        labels: ['08-01', '08-02', '08-03'],
+        series,
+      }),
+    );
+    const svg = host.querySelector('svg.telem-line-svg');
+    expect(svg).not.toBeNull();
+    // jsdom lacks layout — stub the SVG box for hover math.
+    Object.defineProperty(svg, 'getBoundingClientRect', {
+      value: () => ({
+        left: 0,
+        top: 0,
+        width: 640,
+        height: 200,
+        right: 640,
+        bottom: 200,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      }),
+    });
+    act(() => {
+      // hasRight → pad.right 40; plot mid-point maps to the second label.
+      svg?.dispatchEvent(
+        new MouseEvent('mousemove', {
+          bubbles: true,
+          clientX: 40 + (640 - 40 - 40) / 2,
+          clientY: 100,
+        }),
+      );
+    });
+    const tooltip = host.querySelector('.telem-line-tooltip');
+    expect(tooltip).not.toBeNull();
+    expect(tooltip?.textContent).toContain('08-02');
+    expect(tooltip?.textContent).toContain('Visits');
+    expect(tooltip?.textContent).toContain('20');
+    expect(host.querySelector('.telem-line-crosshair')).not.toBeNull();
     act(() => {
       root.unmount();
     });
