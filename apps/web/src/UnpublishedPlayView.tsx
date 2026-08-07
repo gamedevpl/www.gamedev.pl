@@ -18,8 +18,8 @@ type UnpublishedPlayViewProps = {
 /**
  * Unpublished half of `/play/<slug>`.
  *
- * Published games auto-open theater over {@link GameDetailPage}. Missing catalog
- * entries load via `GET /api/games/:slug` here — same lifetime permalink.
+ * Published games auto-open theater; Close replaces onto {@link GamePage}.
+ * Missing catalog entries load via `GET /api/games/:slug` here instead.
  *
  * Legacy `/draft/<slug>` links rewrite to `/play/<slug>` in the router.
  */
