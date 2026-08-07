@@ -27,10 +27,16 @@ round is, and which mistakes cost a whole build.
 ## Getting into a round
 
 - **New game:** `create_game` first. `start` needs a slug and a new game has none.
-- **Existing game:** `start` directly.
-- **Auth:** a creator key in `Authorization: Bearer` means you pass only the slug. A
-  per-game or legacy key from the creator's Studio kickoff prompt goes in the `key`
-  argument instead.
+- **Existing game with a round already open:** `start` directly.
+- **Existing game with no open round:** `start` is refused — nothing exists for it to bind
+  to. Open one first: `continue_draft({ feedback })` for an unpublished draft,
+  `open_round({ feedback })` for a published game, then `start`. Quote the creator's own
+  words in that `feedback`, in their language: it lands in their Studio thread as something
+  they said.
+- **Auth:** a creator key in `Authorization: Bearer` means you pass only the slug. A legacy
+  round key from the creator's Studio kickoff prompt goes in the `key` argument instead.
+  Durable per-game keys are retired — if a creator offers one, they reconnect with OAuth or
+  a creator key rather than passing it.
 - `start` returns a `sessionKey`. Pass it on every later call, and **hold it for the whole
   round** — it is valid until `expiresAt`. Re-running `start` to "refresh" it costs a round
   trip and leaves duplicate round cards in the creator's chat.
