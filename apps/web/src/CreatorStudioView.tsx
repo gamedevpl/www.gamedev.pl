@@ -360,6 +360,7 @@ export function CreatorStudioView({
     [shelfGames, shelfFilter, shelfQuery],
   );
   const showShelfTools = shelfGames.length >= STUDIO_SHELF_TOOLS_AT;
+  const shelfSummaryCount = shelfTruncated ? totalGames : shelfGames.length;
   // The URL named a game and the shelf does not have it: a typo, a game since abandoned,
   // or somebody else's slug. Said plainly, because an unexplained shelf looks like the
   // link worked and the game vanished.
@@ -595,7 +596,7 @@ export function CreatorStudioView({
             className={[
               'studio-layout',
               activeGame ? 'is-game-open' : '',
-              // Long shelf on a desktop: collapse to a left-edge rail of dots after pick.
+              // Long shelf on a desktop: collapse to a left-edge summary after pick.
               // Phones ignore this — they always use the drawer once a game is open.
               activeGame && showShelfTools ? 'is-compact-shelf' : '',
               shelfOpen ? 'is-shelf-open' : '',
@@ -648,6 +649,25 @@ export function CreatorStudioView({
                   </button>
                 ) : null}
               </div>
+              {activeGame && showShelfTools ? (
+                <button
+                  type="button"
+                  className="studio-shelf-summary"
+                  onClick={() => setShelfOpen(true)}
+                  aria-expanded={shelfOpen}
+                  aria-label={t('studioPanel.shelf.expandShelf')}
+                  title={
+                    shelfTruncated
+                      ? t('studioPanel.shelf.countTruncated', { shown: shelfGames.length, total: totalGames })
+                      : t('studioPanel.shelf.count', { count: shelfGames.length })
+                  }
+                >
+                  <PixelIcon name="folder" size={16} />
+                  <span className="studio-shelf-summary-badge" aria-hidden="true">
+                    {shelfSummaryCount > 99 ? '99+' : shelfSummaryCount}
+                  </span>
+                </button>
+              ) : null}
               <button type="button" className="studio-shelf-new" onClick={() => onNavigate('/')}>
                 <PixelIcon name="sparkle" size={12} />{' '}
                 <span className="studio-shelf-new-label">{t('studioPanel.shelf.newGame')}</span>
@@ -1014,8 +1034,6 @@ function StudioShelfList({
               aria-current={active ? 'true' : undefined}
               title={game.title}
             >
-              {/* Collapsed rail shows letters, not anonymous bulbs — first letters of the
-                  first two title words. Status still rides on the mark's colour. */}
               <span
                 className={`studio-shelf-mark${building ? ' is-live' : ''}${live ? ' is-published' : ''}`}
                 aria-hidden="true"
