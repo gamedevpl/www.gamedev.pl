@@ -2171,6 +2171,7 @@ export interface Store {
   listGameAssessmentsByReviewer(reviewerUid: string): Promise<GameAssessment[]>;
   // Recent assessments across reviewers; bounded operator page.
   listGameAssessments(opts?: { limit?: number }): Promise<GameAssessment[]>;
+  listGameAssessmentsBySource(source: AssessmentSource): Promise<GameAssessment[]>;
   countGameAssessmentsByUid(uid: string): Promise<number>;
   deleteGameAssessmentsByUid(uid: string): Promise<number>;
   getOpenReviewSweep(): Promise<ReviewSweep | null>;
@@ -3946,6 +3947,13 @@ export class InMemoryStore implements Store {
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.slug.localeCompare(b.slug))
       .map((row) => hydrateGameAssessment(row.id, row));
     return opts?.limit !== undefined ? sorted.slice(0, opts.limit) : sorted;
+  }
+
+  async listGameAssessmentsBySource(source: AssessmentSource): Promise<GameAssessment[]> {
+    return Array.from(this.gameAssessments.values())
+      .filter((row) => row.source === source)
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.slug.localeCompare(b.slug))
+      .map((row) => hydrateGameAssessment(row.id, row));
   }
 
   async countGameAssessmentsByUid(uid: string): Promise<number> {
@@ -6531,6 +6539,14 @@ export class FirestoreStore implements Store {
     const ordered = this.gameAssessmentsCollection().orderBy('updatedAt', 'desc');
     const snap = await (opts?.limit === undefined ? ordered : ordered.limit(opts.limit)).get();
     return snap.docs.map((d) => hydrateGameAssessment(d.id, d.data() as Omit<GameAssessment, 'id'>));
+  }
+
+  async listGameAssessmentsBySource(source: AssessmentSource): Promise<GameAssessment[]> {
+    // Equality only — no orderBy / composite index.
+    const snap = await this.gameAssessmentsCollection().where('source', '==', source).get();
+    return snap.docs
+      .map((d) => hydrateGameAssessment(d.id, d.data() as Omit<GameAssessment, 'id'>))
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.slug.localeCompare(b.slug));
   }
 
   async countGameAssessmentsByUid(uid: string): Promise<number> {

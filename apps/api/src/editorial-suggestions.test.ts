@@ -78,7 +78,8 @@ describe('hasEditorialCutConsensus / routeEditorialAggregate', () => {
   it('routes with aggregate findings and never includes notes', () => {
     const routed = routeEditorialAggregate(base);
     expect(routed?.class).toBe('editorial');
-    expect(routed?.evidence[0].finding).toMatch(/2 of 2 non-skip/);
+    expect(routed?.evidence[0].finding).toMatch(/2 of 2 non-skip editorial reviews cut this game/);
+    expect(routed?.evidence[0].finding).not.toMatch(/draft/i);
     expect(JSON.stringify(routed)).not.toMatch(/SECRET|NOTE|Draft A/i);
     expect(routed?.untrustedContext.errorSamples).toEqual([]);
   });

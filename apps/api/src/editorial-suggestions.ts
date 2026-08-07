@@ -89,7 +89,7 @@ export function routeEditorialAggregate(agg: EditorialAggregate): Suggestion | n
   const judged = agg.keep + agg.cut;
   const evidence: SuggestionEvidence[] = [
     {
-      finding: `${agg.cut} of ${judged} non-skip editorial reviews cut this shared draft (${agg.reviewers} reviewers).`,
+      finding: `${agg.cut} of ${judged} non-skip editorial reviews cut this game (${agg.reviewers} reviewers).`,
       metrics: {
         reviewers: agg.reviewers,
         keep: agg.keep,

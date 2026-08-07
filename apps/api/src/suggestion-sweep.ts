@@ -394,7 +394,7 @@ async function applyEditorialSuggestions(opts: {
   onMuted: () => void;
   onError: (slug: string, error: unknown) => void;
 }): Promise<void> {
-  const rows = await opts.store.listGameAssessments();
+  const rows = await opts.store.listGameAssessmentsBySource('creator');
   const aggregates = aggregateCreatorAssessments(rows);
 
   for (const agg of aggregates) {
@@ -411,7 +411,7 @@ async function applyEditorialSuggestions(opts: {
       const submission = await resolveEditorialOwner(opts.store, agg.slug);
       if (!submission) {
         if (existing?.class === 'editorial') {
-          await opts.closeOpen(existing, 'shared draft is no longer reviewable');
+          await opts.closeOpen(existing, 'game is no longer reviewable');
         }
         opts.onSkippedUnowned();
         continue;

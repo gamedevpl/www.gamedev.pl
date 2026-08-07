@@ -91,7 +91,7 @@ export function buildImprovementBrief(record: SuggestionRecord, untrusted: Score
   const isEditorial = record.class === 'editorial';
   const lines = [
     isEditorial
-      ? `Editorial-desk improvement for shared creator draft \`${record.slug}\`.`
+      ? `Editorial-desk improvement for game \`${record.slug}\`.`
       : `Player-evidence improvement for published game \`${record.slug}\`.`,
     '',
     'Update `SPEC.md` first when behaviour changes, then bring the implementation in line.',
