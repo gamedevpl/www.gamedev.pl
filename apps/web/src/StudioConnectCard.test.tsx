@@ -149,6 +149,79 @@ describe('StudioConnectCard', () => {
     await act(async () => root.unmount());
   });
 
+  it('offers a confirmed switch to the platform agent when the round is idle', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({ ...payload, canSwitchToPlatform: true }),
+      })),
+    );
+    const switchToPlatform = vi.fn().mockResolvedValue(undefined);
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(StudioConnectCard, { token: 'status-tok', onSwitchToPlatform: switchToPlatform }));
+      await flush();
+    });
+
+    expect(container.querySelector('[data-testid="connect-switch-builder"]')).not.toBeNull();
+    expect(container.textContent).toContain('Use Gamedev.pl agent instead');
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.studio-connect-switch-button')?.click();
+      await flush();
+    });
+    expect(container.textContent).toContain('Stop waiting for your agent');
+    expect(switchToPlatform).not.toHaveBeenCalled();
+
+    await act(async () => {
+      const buttons = [...container.querySelectorAll<HTMLButtonElement>('.studio-connect-switch-button')];
+      buttons.at(-1)?.click();
+      await flush();
+    });
+    expect(switchToPlatform).toHaveBeenCalledOnce();
+
+    await act(async () => root.unmount());
+  });
+
+  it('shows a pending stop request without offering a second switch', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({ ...payload, canSwitchToPlatform: true }),
+      })),
+    );
+    const switchToPlatform = vi.fn();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(StudioConnectCard, {
+          token: 'status-tok',
+          onSwitchToPlatform: switchToPlatform,
+          builderHandoffPending: true,
+        }),
+      );
+      await flush();
+    });
+
+    expect(container.textContent).toContain('Waiting for the current agent to acknowledge the stop request');
+    expect(container.querySelector('.studio-connect-switch-button')).toBeNull();
+    expect(switchToPlatform).not.toHaveBeenCalled();
+
+    await act(async () => root.unmount());
+  });
+
   it('Copy config puts the real Authorization header on the clipboard', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');

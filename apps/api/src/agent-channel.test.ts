@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mintAgentToken, mintLegacyAgentToken, STALE_AGENT_TOKEN_REASON } from './agent-token.js';
+import type { AgentChannelOptions } from './agent-channel.js';
 import { buildApp } from './app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './github-client.js';
@@ -46,6 +47,7 @@ async function createApp(
       version: string;
       mode?: 'health' | 'preview';
     }) => void;
+    onBuilderHandoffAcknowledged?: AgentChannelOptions['onBuilderHandoffAcknowledged'];
   },
   extra?: {
     githubClient?: GitHubClient;
@@ -404,6 +406,40 @@ describe('agent build channel', () => {
       control: { stop: true, reason: 'abandoned' },
     });
     expect(await store.listBuildEvents(ISSUE)).toHaveLength(0);
+  });
+
+  it('keeps a builder handoff pending until the agent acknowledges the stop nudge', async () => {
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    await store.requestBuilderHandoff(ISSUE, 'self', new Date().toISOString());
+    app = await createApp(store, {
+      onBuilderHandoffAcknowledged: async ({ issueNumber, acknowledgedAt }) => {
+        const handoff = await store.acknowledgeBuilderHandoff(issueNumber, acknowledgedAt);
+        await store.clearBuilderHandoff(issueNumber);
+        return { started: handoff !== null };
+      },
+    });
+
+    const nudge = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/progress',
+      headers: agentHeaders(),
+      payload: { text: 'I am checking the handoff.' },
+    });
+    expect(nudge.json()).toMatchObject({
+      accepted: false,
+      rejected: 'stopped',
+      control: { stop: true, reason: 'builder_handoff', builderHandoff: { target: 'self' } },
+    });
+
+    const end = await app.inject({ method: 'POST', url: '/api/agent/build/end', headers: agentHeaders() });
+    expect(end.json()).toMatchObject({
+      accepted: true,
+      ended: true,
+      handoffAcknowledged: true,
+      control: { stop: true, reason: 'builder_handoff_acknowledged' },
+    });
+    expect((await store.getSubmission(ISSUE))?.builderHandoff).toBeUndefined();
   });
 
   it('rejects the pre-cancel token after operator cancel bumps the round generation', async () => {

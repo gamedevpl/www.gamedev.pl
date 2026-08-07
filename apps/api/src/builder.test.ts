@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  allowsCreatorBuilderHandoff,
   allowsSelfToPlatformHandoff,
   DEFAULT_SELF_BUILD_CONNECT_DAYS,
   DEFAULT_SELF_BUILD_DELIVERY_CAP,
@@ -17,7 +18,32 @@ describe('builder helpers', () => {
     expect(isBuilderKind('copilot')).toBe(false);
   });
 
-  it('allows ended or quiet self→platform handoffs mid-round', () => {
+  it('requires an explicit creator stop for platform→self handoffs', () => {
+    expect(
+      allowsCreatorBuilderHandoff({
+        currentBuilder: 'platform',
+        requestedBuilder: 'self',
+        stall: null,
+      }),
+    ).toBe(false);
+    expect(
+      allowsCreatorBuilderHandoff({
+        currentBuilder: 'platform',
+        requestedBuilder: 'self',
+        stall: null,
+        creatorRequested: true,
+      }),
+    ).toBe(true);
+    expect(
+      allowsCreatorBuilderHandoff({
+        currentBuilder: 'self',
+        requestedBuilder: 'platform',
+        stall: 'ended',
+      }),
+    ).toBe(true);
+  });
+
+  it('allows idle self→platform handoffs mid-round', () => {
     expect(allowsSelfToPlatformHandoff({ currentBuilder: 'self', requestedBuilder: 'platform', stall: 'ended' })).toBe(
       true,
     );
@@ -34,10 +60,18 @@ describe('builder helpers', () => {
     ).toBe(true);
     expect(
       allowsSelfToPlatformHandoff({ currentBuilder: 'self', requestedBuilder: 'platform', stall: 'no_agent_yet' }),
-    ).toBe(false);
+    ).toBe(true);
     expect(allowsSelfToPlatformHandoff({ currentBuilder: 'self', requestedBuilder: 'platform', stall: null })).toBe(
       false,
     );
+    expect(
+      allowsSelfToPlatformHandoff({
+        currentBuilder: 'self',
+        requestedBuilder: 'platform',
+        stall: null,
+        creatorRequested: true,
+      }),
+    ).toBe(true);
     expect(
       allowsSelfToPlatformHandoff({ currentBuilder: 'self', requestedBuilder: 'platform', stall: 'gate_not_started' }),
     ).toBe(false);

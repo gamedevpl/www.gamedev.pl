@@ -1,10 +1,6 @@
 // Which coding agent builds a round: the platform's (Copilot) or the creator's own.
 //
-// A property of the *round*, not the game. The game keeps a default (= last used) so the
-// next round can offer a sensible choice. Mid-flight switches are refused except a
-// deliberate self→platform handoff when the agent has ended (MCP `end`) or gone quiet
-// (fallback); round generation bump kills the self token so two agents cannot write
-// the same round.
+// A round may switch builders only through an explicit handoff.
 
 import type { JobState, JobStall, JobTransition } from './job-state.js';
 
@@ -31,13 +27,7 @@ export function selfBuildDeliveryCap(): number {
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : DEFAULT_SELF_BUILD_DELIVERY_CAP;
 }
 
-/**
- * Whether the current round is still live — builder must not change until it closes,
- * except {@link allowsSelfToPlatformHandoff}.
- *
- * Includes gate-red / kit_outdated `needs_changes`: those keep the round open so the
- * same session can repair (or refresh the kit) and re-deliver without a new kickoff.
- */
+/** Whether the current round is still live. */
 export function isActiveBuildRound(record: { state?: JobState; transitions?: JobTransition[] }): boolean {
   const state = record.state;
   switch (state) {
@@ -57,34 +47,36 @@ export function isActiveBuildRound(record: { state?: JobState; transitions?: Job
   }
 }
 
-/** Stalls that unlock mid-round self→platform handoff (when `agentEndedAt` is absent). */
-const SELF_TO_PLATFORM_HANDOFF_STALLS: ReadonlySet<JobStall> = new Set(['ended', 'quiet']);
+/** Stalls that unlock self→platform handoff. */
+const SELF_TO_PLATFORM_HANDOFF_STALLS: ReadonlySet<JobStall> = new Set(['ended', 'quiet', 'no_agent_yet']);
 
-/**
- * Self round → platform: the creator's escape hatch when their agent has finished
- * (`agentEndedAt` / stall `ended` via MCP `end`) or stopped talking (`quiet`,
- * time-based fallback). Refuses the reverse and refuses while the agent is still
- * chatty (or has never connected — that is still "waiting to start", not a handoff).
- *
- * Prefer `agentEndedAt`: ChatGPT-class agents usually submit and stop, so waiting
- * 15 minutes of silence is the wrong primary signal. Quiet remains the backstop when
- * `end` is never called. `agentEndedAt` is checked directly so a later
- * `gate_not_started` stall (ops visibility) does not revoke the handoff unlock.
- *
- * Race kill: handoff goes through `resumeBuild`, which bumps `roundGeneration` before
- * minting the platform brief, so the self MCP token dies; late self deliveries land as
- * stale. Candidate sources (if any) seed the platform brief.
- */
+/** Allows self→platform handoff after signal loss or creator confirmation. */
 export function allowsSelfToPlatformHandoff(input: {
   currentBuilder: BuilderKind;
   requestedBuilder: BuilderKind;
   stall?: string | null;
   /** When set, unlocks even if stall was overwritten by `gate_not_started`. */
   agentEndedAt?: string | null;
+  creatorRequested?: boolean;
 }): boolean {
   if (input.requestedBuilder !== 'platform' || input.currentBuilder !== 'self') return false;
+  if (input.creatorRequested) return true;
   if (input.agentEndedAt) return true;
   return typeof input.stall === 'string' && SELF_TO_PLATFORM_HANDOFF_STALLS.has(input.stall as JobStall);
+}
+
+/** Whether the creator may replace the active builder for this round. */
+export function allowsCreatorBuilderHandoff(input: {
+  currentBuilder: BuilderKind;
+  requestedBuilder: BuilderKind;
+  stall?: string | null;
+  agentEndedAt?: string | null;
+  creatorRequested?: boolean;
+}): boolean {
+  if (input.currentBuilder === 'self' && input.requestedBuilder === 'platform') {
+    return allowsSelfToPlatformHandoff(input);
+  }
+  return input.currentBuilder === 'platform' && input.requestedBuilder === 'self' && input.creatorRequested === true;
 }
 
 /**

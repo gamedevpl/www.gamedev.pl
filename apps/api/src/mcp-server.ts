@@ -163,10 +163,6 @@ const ROUND_STATUS_OUTPUT_SCHEMA: Record<string, unknown> = {
       type: ['object', 'null'],
       properties: { text: { type: 'string' }, createdAt: { type: 'string' } },
     },
-    presence: {
-      type: ['object', 'null'],
-      properties: { key: { type: 'string' }, at: { type: 'string' } },
-    },
     shot: {
       type: ['object', 'null'],
       properties: {
@@ -422,6 +418,11 @@ type ChannelControlBody = {
   control?: {
     stop?: boolean;
     reason?: string;
+    builderHandoff?: {
+      target?: 'platform' | 'self';
+      requestedAt?: string;
+      acknowledgedAt?: string;
+    };
     mustFixGate?: string;
     mustDeliver?: string;
   };
@@ -473,11 +474,17 @@ function channelControlFields(
 ): {
   stop: boolean;
   reason?: string;
+  builderHandoff?: {
+    target?: 'platform' | 'self';
+    requestedAt?: string;
+    acknowledgedAt?: string;
+  };
   warnings?: Array<{ code: string; message: string }>;
 } {
   const warnings = [...extraWarnings, ...warningsFromChannel(body)];
   return {
     ...stopFromChannel(body),
+    ...(body.control?.builderHandoff ? { builderHandoff: body.control.builderHandoff } : {}),
     ...(warnings.length > 0 ? { warnings } : {}),
   };
 }
@@ -527,7 +534,7 @@ const BEHAVIOURAL_CONTRACT = [
   'If the last gate was preview_failed / red / kit_outdated (warnings.code=must_fix_gate), fix then submit_sources again — do not stop at stage/patch/show_round. Staging does not re-run the gate; the creator card stays on the refused delivery until you submit.',
   'Run kit checks green (at least check:static) before submit_sources when you have a local kit checkout; otherwise submit and let the gate run checks.',
   'After submit_sources, if you will not deliver more this round, call end (required — warnings.code=call_end; submit already unlocks creator handoff). Prefer end over sitting in a get_gate_verdict loop — Studio shows the gate. Do not stop after submit alone without end. If you are fixing a refused gate, ignore call_end until after the next submit_sources.',
-  'Honour stop immediately — do not continue after stop:true.',
+  'Honour stop immediately — do not continue after stop:true. For reason builder_handoff, call end once to acknowledge the stop request, then exit.',
   'gateStarted true means Cloud Build accepted the gate create; gateStarted false after ok submit means no preview is assembling — honour warnings.code=gate_not_started.',
   'Treat get_gate_verdict as a one-shot check, never a polling loop. Pending with a deliveryId returns stop:true: stop immediately and let Studio show the eventual result. Pending with deliveryId:null means you checked before delivering: stop is false, so continue building and call submit_sources instead of checking again. A later creator-led run may check a delivered gate again. Honour warnings.code=gate_poll_backoff on repeated checks.',
   'When seedAvailable/seedStatus=available (or warnings.code=seed_unread), call get_seed and continue that draft — do not scaffold from scratch. When seedStatus=pending, recheck get_seed before scaffolding.',
@@ -564,6 +571,7 @@ const SESSION_WORKFLOW: readonly string[] = [
   'While iterating: stage_source_file({ path, content }) for new or fully rewritten paths; for edits prefer patch_source_file({ path, old, new }) — exact unique substring replace, no unified-diff arithmetic. Or patch_source_file({ path, patch }) with a unified diff (bare @@ ok). Stage only changed paths — never re-upload the whole tree. Then submit_sources({ fromStaged: true, mode: "preview", kitEngineRef }) — fromStaged overlays onto the latest delivery/seed. TRACE/PLAYTEST not required; Studio gets a playable draft after typecheck→smoke→build. Inline files[] still works for tiny trees.',
   'Staging is already visible: once index.html, game.ts, style.css and GAME.json are present across staging + delivery/seed, the platform assembles a live playable preview — without waiting for submit or the gate. Stage a runnable tree early and keep staging/patching as you work; a buffer that does not compile simply leaves the previous preview up.',
   'After every successful submit_sources: creator handoff is already unlocked; still call end immediately if you will not deliver more (warnings.code=call_end). Prefer end over sitting in a get_gate_verdict loop — Studio shows the gate. submit alone leaves your MCP session open — end sets stop:true. ChatGPT-class agents often stop after submit; end closes the session cleanly.',
+  'If a reply has control.reason=builder_handoff, stop work and call end once. That acknowledges the creator’s handoff request; do not retry other build calls afterward.',
   'Only call get_gate_verdict once when an already-available verdict would change what you deliver. It is not a wait loop. Pending with a deliveryId returns stop:true: stop immediately and let Studio show the eventual result. Pending with deliveryId:null returns stop:false because you checked too early — continue building and call submit_sources; do not check again before a delivery. A later creator-led run may check a delivered gate again. Preview lane: preview_passed / preview_failed — fix and re-preview on the SAME key; preview_passed does NOT end the round.',
   'When ready to seal: record TRACE (`npm run trace -- <slug> --accept` if you have a kit checkout), stage/include PLAYTEST.json + TRACE.json, then submit_sources({ fromStaged: true, mode: "publish", kitEngineRef }) (or inline files[]).',
   'For publish, prefer end after delivery and let Studio show the gate. If you need an already-available verdict before deciding whether to fix, call get_gate_verdict once; a pending delivery returns stop:true and ends this run. When that one check does return a verdict, get_gate_media once (next step) before you end.',
@@ -1227,6 +1235,15 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
   /** Every mutating reply carries these two, so the model can plan around them. */
   const REPLY_CONTROL = {
     stop: { type: 'boolean', description: 'When true, stop immediately.' },
+    builderHandoff: {
+      type: 'object',
+      description: 'A creator-requested builder switch awaiting acknowledgement by the current agent.',
+      properties: {
+        target: { type: 'string', enum: ['platform', 'self'] },
+        requestedAt: { type: 'string' },
+        acknowledgedAt: { type: 'string' },
+      },
+    },
     pendingMessages: {
       type: 'array',
       description: 'Creator notes to read and apply before continuing. Non-empty means call read_inbox.',
@@ -3830,6 +3847,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           accepted?: boolean;
           ended?: boolean;
           rejected?: string;
+          handoffAcknowledged?: boolean;
           control?: { stop?: boolean; reason?: string };
           pending?: Array<{ id: string; text: string; createdAt: string }>;
         };
@@ -3841,9 +3859,9 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           ok: ended,
           ended,
           ...(body.rejected ? { rejected: body.rejected } : {}),
-          // Soft stop: tell the agent to halt; channel still accepts writes if they resume.
+          ...(body.handoffAcknowledged ? { handoffAcknowledged: true } : {}),
           stop: true,
-          reason: 'agent_ended',
+          reason: body.handoffAcknowledged ? 'builder_handoff_acknowledged' : 'agent_ended',
           pendingMessages: pendingMessagesFromChannel(body),
         });
       },
@@ -4051,9 +4069,6 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           round: record.roundGeneration ?? 1,
           deliveriesRemaining: cap === null ? null : Math.max(0, cap - used),
           note: latestEvent ? { text: noteTextFor(latestEvent, args.locale), createdAt: latestEvent.createdAt } : null,
-          presence: record.lastAgentPresence
-            ? { key: record.lastAgentPresence.key, at: record.lastAgentPresence.at }
-            : null,
           shot,
           gate,
           retryAfterSeconds: ROUND_STATUS_RETRY_AFTER_SECONDS,

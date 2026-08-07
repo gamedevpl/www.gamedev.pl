@@ -12,6 +12,8 @@ import {
   getChannelPlayable,
   getSubmissionPreview,
   getSubmissionStatus,
+  handoffToPlatform,
+  handoffToSelf,
   submitFeedback,
 } from './submissionApi.js';
 import { submitImprovement } from './studioApi.js';
@@ -34,6 +36,8 @@ vi.mock('./submissionApi', async () => {
     getSubmissionStatus: vi.fn(),
     getSubmissionPreview: vi.fn(),
     getChannelPlayable: vi.fn(),
+    handoffToPlatform: vi.fn(),
+    handoffToSelf: vi.fn(),
     submitFeedback: vi.fn(),
     abandonSubmission: vi.fn(),
   };
@@ -42,6 +46,8 @@ vi.mock('./submissionApi', async () => {
 const mockedGetSubmissionStatus = vi.mocked(getSubmissionStatus);
 const mockedGetSubmissionPreview = vi.mocked(getSubmissionPreview);
 const mockedGetChannelPlayable = vi.mocked(getChannelPlayable);
+const mockedHandoffToPlatform = vi.mocked(handoffToPlatform);
+const mockedHandoffToSelf = vi.mocked(handoffToSelf);
 const mockedSubmitFeedback = vi.mocked(submitFeedback);
 const mockedAbandonSubmission = vi.mocked(abandonSubmission);
 const mockedSubmitImprovement = vi.mocked(submitImprovement);
@@ -761,6 +767,7 @@ describe('SubmissionStatusView', () => {
         fingerprint: 'play',
         keyGeneration: 1,
         slug: 'await-game',
+        canSwitchToPlatform: true,
         expiresAt: Math.floor(Date.now() / 1000) + 3600,
       }),
     }));
@@ -800,6 +807,9 @@ describe('SubmissionStatusView', () => {
       );
       // Stall copy is replaced by the card — the card *is* the waiting state.
       expect(container.querySelector('.status-warning')).toBeNull();
+      expect(container.querySelector('[data-testid="connect-switch-builder"]')?.textContent).toContain(
+        'Use Gamedev.pl agent instead',
+      );
 
       await act(async () => {
         await vi.advanceTimersByTimeAsync(ACTIVE_POLL_MS);
@@ -934,6 +944,99 @@ describe('SubmissionStatusView', () => {
       // Handoff, not mid-build — no live working turn and no foot "Writing code".
       expect(container.querySelector('.studio-turn.is-working')).toBeNull();
       expect(container.querySelector('.studio-thread-context')).toBeNull();
+    } finally {
+      await act(async () => {
+        root.unmount();
+      });
+    }
+  });
+
+  it('lets a live self round stop and switch to the platform agent', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'building',
+      phase: 'building',
+      builder: 'self',
+      events: [],
+    });
+    mockedHandoffToPlatform.mockResolvedValue({});
+
+    await i18n.changeLanguage('en');
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    try {
+      await act(async () => {
+        root.render(createElement(SubmissionStatusView, { token: 'live-self-token', embedded: true }));
+        await flushEffects();
+        await flushEffects();
+      });
+
+      const control = container.querySelector<HTMLElement>('[data-testid="active-switch-builder"]');
+      expect(control?.textContent).toContain('Switch to Gamedev.pl agent');
+      expect(container.querySelector('.studio-turn.is-working')).not.toBeNull();
+
+      await act(async () => {
+        control?.querySelector('button')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await flushEffects();
+      });
+      expect(control?.textContent).toMatch(/Stop your agent and let Gamedev\.pl continue/i);
+
+      await act(async () => {
+        control
+          ?.querySelector<HTMLButtonElement>('.is-primary')
+          ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await flushEffects();
+      });
+      expect(mockedHandoffToPlatform).toHaveBeenCalledWith('live-self-token', { stopActiveSelfAgent: true });
+    } finally {
+      await act(async () => {
+        root.unmount();
+      });
+    }
+  });
+
+  it('lets a live platform round stop and switch to the creator agent', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'building',
+      phase: 'building',
+      builder: 'platform',
+      events: [],
+    });
+    mockedHandoffToSelf.mockResolvedValue({});
+
+    await i18n.changeLanguage('en');
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    try {
+      await act(async () => {
+        root.render(createElement(SubmissionStatusView, { token: 'live-platform-token', embedded: true }));
+        await flushEffects();
+        await flushEffects();
+      });
+
+      const control = container.querySelector<HTMLElement>('[data-testid="active-switch-builder-self"]');
+      expect(control?.textContent).toContain('Switch to your agent');
+      expect(container.querySelector('.builder-mode-selector')?.textContent).toContain('Gamedev.pl');
+      expect(container.querySelector('.studio-turn.is-working')).not.toBeNull();
+
+      await act(async () => {
+        control?.querySelector('button')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await flushEffects();
+      });
+      expect(control?.textContent).toMatch(/Stop Gamedev\.pl's agent and continue with your agent/i);
+
+      await act(async () => {
+        control
+          ?.querySelector<HTMLButtonElement>('.is-primary')
+          ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await flushEffects();
+      });
+      expect(mockedHandoffToSelf).toHaveBeenCalledWith('live-platform-token');
     } finally {
       await act(async () => {
         root.unmount();

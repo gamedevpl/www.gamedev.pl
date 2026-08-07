@@ -39,6 +39,7 @@ export type ConnectPayload = {
   expiresAt: number;
   keyGeneration: number;
   slug: string;
+  canSwitchToPlatform?: boolean;
 };
 
 export type ConnectApiError = Error & {

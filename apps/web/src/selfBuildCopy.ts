@@ -91,10 +91,7 @@ export function connectCardMode(input: SelfBuildCopyInput): ConnectCardMode | nu
  * Composer routing for a self round, or null when the platform is building / the
  * composer should not be on screen.
  *
- * Pre-first-signal (`no_agent_yet`): returns null — Studio hides the composer; the
- * connect card is the only action. `waiting` is for quiet / ended / gate-green /
- * delivery-cap, where a note can still be left for the next start. `active` means a
- * recent signal so the next check-in will pick the inbox up.
+ * Pre-first-signal hides the composer; later states keep the note composer available.
  *
  * Gate-green (`ready_for_review`) closes the round and retires the session key, so
  * claiming a next check-in would be a lie — route as waiting even with a stale stall.

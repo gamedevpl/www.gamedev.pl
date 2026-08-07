@@ -1183,6 +1183,22 @@
       "title": "Zaloguj się z poziomu agenta",
       "hint": "Albo skopiuj ten URL MCP do innego agenta, a potem zaloguj się, gdy zapyta. Przy starcie podaj slug gry z promptu poniżej. Jeśli Cursor pokazuje Unauthorized bez otwarcia przeglądarki, otwórz URL autoryzacji z Output → MCP (znany bug Cursora) albo użyj Wklej nagłówek."
     },
+    "switchBuilder": {
+      "hint": "Nie chcesz podłączać własnego agenta? Gra pozostanie bezpieczna, a gamedev.pl może zamiast niego kontynuować tę rundę.",
+      "start": "Użyj agenta gamedev.pl",
+      "confirm": "Przestać czekać na Twojego agenta i uruchomić agenta gamedev.pl?",
+      "yes": "Uruchom agenta gamedev.pl",
+      "no": "Czekaj dalej",
+      "sending": "Uruchamiamy agenta gamedev.pl…",
+      "pending": "Czekamy, aż obecny agent potwierdzi żądanie zatrzymania…",
+      "error": "Nie udało się teraz przełączyć agenta. Spróbuj za chwilę.",
+      "activeStart": "Przełącz na agenta gamedev.pl",
+      "activeConfirm": "Zatrzymać Twojego agenta i pozwolić gamedev.pl kontynuować tę grę? Dostarczona praca zostanie zachowana.",
+      "activeYes": "Zatrzymaj i uruchom agenta gamedev.pl",
+      "activeSelfStart": "Przełącz na swojego agenta",
+      "activeSelfConfirm": "Zatrzymać agenta gamedev.pl i kontynuować z Twoim agentem? Dostarczona praca zostanie zachowana.",
+      "activeSelfYes": "Zatrzymaj i uruchom swojego agenta"
+    },
     "clients": {
       "claudeCode": "Claude Code",
       "codex": "Codex",

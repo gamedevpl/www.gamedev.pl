@@ -501,6 +501,22 @@ describe('POST /api/mcp (BY-05)', () => {
     expect((await store.listBuildEvents(ISSUE)).some((e) => e.text.includes('Joining'))).toBe(false);
   });
 
+  it('returns a hard MCP error after a creator handoff invalidates the live session', async () => {
+    const store = new InMemoryStore();
+    await seedActiveSelfJob(store);
+    app = await createApp(store);
+    const sessionId = await initialize(app);
+    const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    // The handoff route bumps this generation before dispatching Gamedev.pl's agent.
+    await store.bumpRoundGeneration(ISSUE);
+
+    const refused = await callTool(app, 'get_brief', { sessionKey }, { 'mcp-session-id': sessionId });
+    expect(refused.isError).toBe(true);
+    expect((refused.structured as { error: string }).error).toBe(STALE_AGENT_TOKEN_REASON);
+  });
+
   it('start returns the session workflow in both structuredContent and the text body', async () => {
     const store = new InMemoryStore();
     await seedJob(store);

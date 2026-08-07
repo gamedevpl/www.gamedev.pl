@@ -248,6 +248,11 @@ export interface SubmissionStatusResponseBase {
   builder?: 'platform' | 'self';
   /** Last builder used on this game — default for the next round-boundary choice. */
   defaultBuilder?: 'platform' | 'self';
+  builderHandoff?: {
+    target: 'platform' | 'self';
+    requestedAt: string;
+    acknowledgedAt?: string;
+  };
   /**
    * Why this build is asking the creator to act, when it is. Set alongside `status`
    * because the public vocabulary projects both `failed` and a gate bounce onto

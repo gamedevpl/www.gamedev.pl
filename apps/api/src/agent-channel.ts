@@ -49,7 +49,7 @@ import { seedPayload } from './seed-status.js';
 import { largeSourceFileHint } from './module-size.js';
 import { applyExactReplace, applySourcePatch, SourcePatchError } from './source-patch.js';
 import { overlayGameSources } from './staged-preview.js';
-import { type CreatorMessage, type Store, type SubmissionRecord } from './store.js';
+import { type BuilderHandoff, type CreatorMessage, type Store, type SubmissionRecord } from './store.js';
 import { BUILD_EVENT_KINDS, BUILD_STEPS, sanitizeCreatorText, type BuildEvent } from './submission-status.js';
 import { normalizeAtIntake, type IntakeText } from './localize-intake.js';
 import { createTranslatorFromEnv, type Translator } from './translate.js';
@@ -346,6 +346,11 @@ export interface AgentChannelOptions {
    * and the creator's next poll shows the update rather than a stale snapshot.
    */
   onEvent?: (issueNumber: number) => void;
+  onBuilderHandoffAcknowledged?: (input: {
+    issueNumber: number;
+    acknowledgedAt: string;
+    log: FastifyRequest['log'];
+  }) => Promise<{ started: boolean; reason?: string }>;
   /**
    * Localizes a progress report that arrived without one. Runs here, on the write, and
    * never on the status read — a translation on the read path costs one model call per
@@ -563,7 +568,7 @@ export async function registerAgentChannelRoutes(
     }
   }
 
-  function stopReason(record: SubmissionRecord): 'abandoned' | 'published' | 'canceled' | null {
+  function stopReason(record: SubmissionRecord): 'abandoned' | 'published' | 'canceled' | 'builder_handoff' | null {
     if (record.abandonedAt) return 'abandoned';
     if (record.publishedAt) return 'published';
     // The operator's cancel. This check is what makes cancellation *mean* something on
@@ -573,6 +578,7 @@ export async function registerAgentChannelRoutes(
     // line, `copilot-backend.cancel` described that behaviour without anything
     // implementing it.
     if (resolveJobState(record) === 'canceled') return 'canceled';
+    if (record.builderHandoff && record.builderHandoff.awaitsAgentAck !== false) return 'builder_handoff';
     return null;
   }
 
@@ -689,6 +695,21 @@ export async function registerAgentChannelRoutes(
       control: {
         stop: reason !== null,
         ...(reason ? { reason } : {}),
+        ...(record.builderHandoff && record.builderHandoff.awaitsAgentAck !== false
+          ? {
+              builderHandoff: {
+                target: record.builderHandoff.to,
+                requestedAt: record.builderHandoff.requestedAt,
+                ...(record.builderHandoff.acknowledgedAt
+                  ? { acknowledgedAt: record.builderHandoff.acknowledgedAt }
+                  : {}),
+              } satisfies {
+                target: BuilderHandoff['to'];
+                requestedAt: string;
+                acknowledgedAt?: string;
+              },
+            }
+          : {}),
         // The creator's language, so the agent can write its next update in it.
         locale: record.locale ?? 'en',
         // Whether the one step that makes any of this real has happened yet.
@@ -1702,6 +1723,35 @@ export async function registerAgentChannelRoutes(
       const resolved = await resolveBuild(request, reply);
       if (!resolved) return reply;
       const { issueNumber, record } = resolved;
+
+      if (
+        record.builderHandoff &&
+        record.builderHandoff.awaitsAgentAck !== false &&
+        options.onBuilderHandoffAcknowledged
+      ) {
+        const outcome = await options.onBuilderHandoffAcknowledged({
+          issueNumber,
+          acknowledgedAt: new Date(now()).toISOString(),
+          log: request.log,
+        });
+        const fresh = (await store!.getSubmission(issueNumber)) ?? record;
+        if (!outcome.started) {
+          options.onEvent?.(issueNumber);
+          return reply.send({
+            accepted: false,
+            rejected: outcome.reason ?? 'handoff_not_started',
+            ...(await channelState(issueNumber, fresh)),
+          });
+        }
+        const state = await channelState(issueNumber, fresh);
+        return reply.send({
+          accepted: true,
+          ended: true,
+          handoffAcknowledged: true,
+          ...state,
+          control: { ...state.control, stop: true, reason: 'builder_handoff_acknowledged' },
+        });
+      }
 
       if (stopReason(record)) {
         return reply.send({ accepted: false, rejected: 'stopped', ...(await channelState(issueNumber, record)) });
