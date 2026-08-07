@@ -13,6 +13,13 @@ function readJson(relative: string): Record<string, unknown> {
   return JSON.parse(readFileSync(join(repoRoot, relative), 'utf8')) as Record<string, unknown>;
 }
 
+// Else a registry that lost its remote passes as undefined === undefined.
+function registryEndpoint(registry: Record<string, unknown>): string | undefined {
+  const url = (registry.remotes as Array<{ url?: string }> | undefined)?.[0]?.url;
+  expect(url).toMatch(/^https:\/\//);
+  return url;
+}
+
 // Canonical list first, so a prefix added there is enforced here.
 const CREDENTIAL_MARKERS = [...MCP_INSTALL_LINK_CREDENTIAL_MARKERS, 'token', 'secret', 'key'].map((marker) =>
   marker.toLowerCase(),
@@ -28,9 +35,8 @@ describe('.cursor-plugin manifest', () => {
   });
 
   it('advertises the endpoint the registry publishes', () => {
-    const remotes = registry.remotes as Array<{ url: string }>;
     const servers = mcp.mcpServers as Record<string, { url: string }>;
-    expect(servers.gamedevpl.url).toBe(remotes[0]?.url);
+    expect(servers.gamedevpl.url).toBe(registryEndpoint(registry));
   });
 
   it('never ships a credential in the install config', () => {
@@ -89,15 +95,13 @@ describe('.claude-plugin marketplace', () => {
   // "Installs cleanly" and "exposes the server" turned out to be different things.
   it('ships an .mcp.json in the plugin root, which is where the loader looks', () => {
     const servers = pluginMcp.mcpServers as Record<string, { url?: string; type?: string }>;
-    const remotes = registry.remotes as Array<{ url: string }>;
-    expect(servers.gamedevpl.url).toBe(remotes[0]?.url);
+    expect(servers.gamedevpl.url).toBe(registryEndpoint(registry));
     expect(servers.gamedevpl.type).toBe('http');
     expect(plugin.mcpServers).toBe('./.mcp.json');
   });
 
   it('advertises the endpoint the registry publishes', () => {
-    const remotes = registry.remotes as Array<{ url: string }>;
-    expect(entry.mcpServers?.gamedevpl?.url).toBe(remotes[0]?.url);
+    expect(entry.mcpServers?.gamedevpl?.url).toBe(registryEndpoint(registry));
   });
 
   it('never ships a credential in either install config', () => {
@@ -169,13 +173,10 @@ describe('agent-plugins manifest', () => {
   });
 
   it('advertises the registry endpoint, with the spec transport name', () => {
-    const remotes = registry.remotes as Array<{ url: string }>;
     const servers = portableMcp.mcpServers as Record<string, { url?: string; type?: string }>;
     const claudeServers = claudeMcp.mcpServers as Record<string, { url?: string }>;
-    // Else a registry that lost its remote passes as undefined === undefined.
-    expect(remotes[0]?.url).toMatch(/^https:\/\//);
     expect(Object.keys(servers).sort()).toEqual(Object.keys(claudeServers).sort());
-    expect(servers.gamedevpl.url).toBe(remotes[0]?.url);
+    expect(servers.gamedevpl.url).toBe(registryEndpoint(registry));
     expect(servers.gamedevpl.type).toBe('streamable-http');
   });
 
