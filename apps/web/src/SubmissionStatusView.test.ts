@@ -1480,7 +1480,12 @@ describe('SubmissionStatusView', () => {
       await flushEffects();
     });
 
-    expect(mockedSubmitFeedback).toHaveBeenCalledWith('enter-send', 'Please make the jumps shorter.');
+    expect(mockedSubmitFeedback).toHaveBeenCalledWith(
+      'enter-send',
+      'Please make the jumps shorter.',
+      undefined,
+      'platform',
+    );
 
     await act(async () => {
       root.unmount();
@@ -1844,9 +1849,9 @@ describe('SubmissionStatusView', () => {
     // round; without a follow-up poll the page kept saying "needs a tweak" forever.
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     vi.useFakeTimers();
-    mockedGetSubmissionStatus
-      .mockResolvedValueOnce({ status: 'needs_changes' })
-      .mockResolvedValue({ status: 'building', progress: { headSha: 'sha-2', commits: [], checklist: [] } });
+    // Prefer a sticky first answer over mockResolvedValueOnce — Strict Mode / extra
+    // effect passes can consume a one-shot before the first assertion paints.
+    mockedGetSubmissionStatus.mockResolvedValue({ status: 'needs_changes' });
     await i18n.changeLanguage('en');
     window.history.pushState(null, '', '/status/needs-poll');
 
@@ -1860,14 +1865,20 @@ describe('SubmissionStatusView', () => {
     });
 
     expect(container.textContent).toContain('Needs a tweak');
-    expect(mockedGetSubmissionStatus).toHaveBeenCalledTimes(1);
+    const callsAfterFirstPaint = mockedGetSubmissionStatus.mock.calls.length;
+    expect(callsAfterFirstPaint).toBeGreaterThanOrEqual(1);
+
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'building',
+      progress: { headSha: 'sha-2', commits: [], checklist: [] },
+    });
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(10_000);
       await flushEffects();
     });
 
-    expect(mockedGetSubmissionStatus).toHaveBeenCalledTimes(2);
+    expect(mockedGetSubmissionStatus.mock.calls.length).toBeGreaterThan(callsAfterFirstPaint);
     expect(container.textContent).toContain('Writing code');
 
     await act(async () => {
