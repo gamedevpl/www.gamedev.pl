@@ -21,7 +21,7 @@ half was always ready; the skill is what makes this a plugin rather than a URL.
 | Long description    | gamedev.pl lets creators open a self-build round and drive a sandboxed browser-game pipeline from an MCP-capable agent. This connector exposes the remote Streamable HTTP MCP endpoint. Authentication uses OAuth (RFC 9728 protected-resource discovery) — never a secret embedded in a share URL. |
 | MCP server URL type | Universal                                                                                                                                                                                                                                                                                           |
 | MCP server URL      | `https://www.gamedev.pl/api/mcp`                                                                                                                                                                                                                                                                    |
-| Skill               | `building-on-gamedev-pl` — [`listings/mcp/claude-plugin/skills/building-on-gamedev-pl/SKILL.md`](../claude-plugin/skills/building-on-gamedev-pl/SKILL.md)                                                                                                                                           |
+| Skill               | `gamedevpl` — [`skills/gamedevpl/SKILL.md`](../../../skills/gamedevpl/SKILL.md), the root copy the installers read (byte-identical to the plugin's)                                                                                                                                                 |
 | Authentication      | OAuth                                                                                                                                                                                                                                                                                               |
 | Website             | https://www.gamedev.pl                                                                                                                                                                                                                                                                              |
 | Support URL         | _(owner supplies)_                                                                                                                                                                                                                                                                                  |
@@ -46,9 +46,10 @@ framing rather than to wrong instructions. Keep that property if the skill is ev
 rewritten for this listing — a skill that restated the session loop would rot into
 contradicting the live server.
 
-Ship the same `SKILL.md` the plugin already ships. A ChatGPT-specific fork would be a
-second copy of the loop to keep in sync, which is the failure `plugin-manifests.test.ts`
-exists to prevent.
+Ship the same `SKILL.md` the repo already ships — the root `skills/gamedevpl/` copy, which
+`plugin-manifests.test.ts` pins byte-identical to the plugin's. A ChatGPT-specific fork
+would be a third copy of the loop to keep in sync, which is the failure that test exists
+to prevent.
 
 ## Domain verification
 
