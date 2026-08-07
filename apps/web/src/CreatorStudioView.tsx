@@ -780,7 +780,7 @@ export function CreatorStudioView({
                           openTab('details');
                         }}
                       >
-                        <PixelIcon name="expand" size={12} />{' '}
+                        <PixelIcon name="panel" size={12} />{' '}
                         <span className="studio-head-action-label">{t('studioPanel.tabs.details')}</span>
                       </button>
                     </div>

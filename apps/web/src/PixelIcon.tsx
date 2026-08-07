@@ -48,6 +48,7 @@ export type PixelIconName =
   | 'mute'
   | 'expand'
   | 'collapse'
+  | 'panel'
   | 'flag'
   | 'thumbUp'
   | 'thumbDown'
@@ -653,6 +654,24 @@ const ICONS: Record<PixelIconName, string[]> = {
     '...............',
     '...............',
   ],
+  // Right-rail panel: frame + solid strip. Details head action — not shelf expand.
+  panel: [
+    '...............',
+    '...............',
+    '..###########..',
+    '..#.......###..',
+    '..#.......###..',
+    '..#.......###..',
+    '..#.......###..',
+    '..#.......###..',
+    '..#.......###..',
+    '..#.......###..',
+    '..#.......###..',
+    '..###########..',
+    '...............',
+    '...............',
+    '...............',
+  ],
   flag: [
     '...............',
     '...##########..',
@@ -788,6 +807,7 @@ export function PixelIcon({ name, size = 16, className, title }: PixelIconProps)
       role={title ? 'img' : 'presentation'}
       aria-hidden={title ? undefined : true}
       aria-label={title}
+      data-icon={name}
       focusable="false"
       style={{ display: 'inline-block', verticalAlign: '-0.15em', flex: 'none' }}
     >
