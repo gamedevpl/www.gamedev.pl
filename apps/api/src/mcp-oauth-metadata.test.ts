@@ -7,7 +7,7 @@ import { mintMcpSessionKey } from './mcp-session-key.js';
 import {
   buildMcpOAuthAuthenticateHeader,
   buildOAuthProtectedResourceDocument,
-  MCP_CLOSED_BETA_HINT,
+  MCP_NO_ACCOUNT_HINT,
   MCP_MISSING_CREDENTIAL_HINT,
   mcpMissingCredentialHint,
   OAUTH_PROTECTED_RESOURCE_PATH,
@@ -223,7 +223,7 @@ describe('MCP OAuth 401 challenge (BY-18a)', () => {
     expect(MCP_MISSING_CREDENTIAL_HINT).toMatch(/sessionKey from start\(\)/);
   });
 
-  it('names the closed beta in the 401 hint, so a visitor is not sent hunting for a key that cannot exist', async () => {
+  it('names the account requirement in the 401 hint, so a visitor is not sent hunting for a key that cannot exist', async () => {
     process.env.CANONICAL_HOST = 'www.gamedev.pl';
     const store = new InMemoryStore();
     await seedJob(store);
@@ -268,15 +268,16 @@ describe('MCP OAuth 401 challenge (BY-18a)', () => {
 
     expect(res.statusCode).toBe(401);
     // The original instruction survives — an account holder who merely dropped sessionKey
-    // still needs it — and the beta sentence is added, not substituted.
+    // still needs it — and the account sentence is added, not substituted.
     expect(res.json().hint).toContain(MCP_MISSING_CREDENTIAL_HINT);
-    expect(res.json().hint).toContain(MCP_CLOSED_BETA_HINT);
-    expect(res.json().hint).toMatch(/waitlist/i);
+    expect(res.json().hint).toContain(MCP_NO_ACCOUNT_HINT);
+    expect(res.json().hint).toMatch(/creator account/i);
+    expect(res.json().hint).not.toMatch(/beta|waitlist/i);
   });
 
-  it('says nothing about beta when the site is open', () => {
+  it('says nothing about accounts when the site is open', () => {
     expect(mcpMissingCredentialHint(false)).toBe(MCP_MISSING_CREDENTIAL_HINT);
-    expect(mcpMissingCredentialHint(false)).not.toMatch(/beta/i);
+    expect(mcpMissingCredentialHint(false)).not.toMatch(/beta|approved creator account/i);
   });
 
   it('returns 401 for unauthenticated GET /api/mcp', async () => {
