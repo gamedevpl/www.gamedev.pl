@@ -792,6 +792,9 @@ at all and feeds the only autonomous-eligible class.
 
 - ✅ **The router** (2026-07-28): [suggestions.ts](../apps/api/src/suggestions.ts) classifies
   each scorecard as defect / friction / design-change / healthy / insufficient-data, with
+  evidence blocks of measurements only. A second pass on the same sweep also routes
+  creator-desk cut consensus as `editorial` (aggregates only — see
+  [game-assessment-plan.md](./game-assessment-plan.md) and `editorial-suggestions.ts`).
   the evidence behind the call, surfaced at `GET /api/admin/suggestions`.
 
   **The decision is rules over numbers, never a model over text** — and the invariant is

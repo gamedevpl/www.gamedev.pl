@@ -18,6 +18,7 @@ const CLASS_COPY: Record<Suggestion['class'], string> = {
   defect: 'defect',
   friction: 'friction',
   'design-change': 'design change',
+  editorial: 'editorial review',
   healthy: 'healthy',
   'insufficient-data': 'not enough data',
 };

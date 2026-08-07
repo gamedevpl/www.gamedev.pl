@@ -1,8 +1,20 @@
 import type { FastifyInstance } from 'fastify';
 import type { BuilderKind } from './builder.js';
 import type { InternalAuthVerifier } from './internal-auth.js';
+import {
+  aggregateCreatorAssessments,
+  playSignalWinsOverEditorial,
+  routeEditorialAggregate,
+} from './editorial-suggestions.js';
+import { isReviewableCreatorDraft } from './review.js';
 import { routeScorecard, type Suggestion, type SuggestionClass } from './suggestions.js';
-import { OPEN_SUGGESTION_STATUSES, type Scorecard, type Store, type SuggestionRecord } from './store.js';
+import {
+  OPEN_SUGGESTION_STATUSES,
+  type Scorecard,
+  type Store,
+  type SubmissionRecord,
+  type SuggestionRecord,
+} from './store.js';
 import { advanceSuggestionOutcomes } from './suggestion-outcomes.js';
 import {
   AUTONOMOUS_ACTOR,
@@ -41,7 +53,7 @@ import { hypothesisMetric, metricFromScorecard } from './suggestion-outcomes.js'
  */
 
 /** Classes worth a card. `healthy` and `insufficient-data` are answers, not work. */
-const ACTIONABLE: readonly SuggestionClass[] = ['defect', 'friction', 'design-change'];
+const ACTIONABLE: readonly SuggestionClass[] = ['defect', 'friction', 'design-change', 'editorial'];
 
 export function isActionable(suggestionClass: SuggestionClass): boolean {
   return ACTIONABLE.includes(suggestionClass);
@@ -98,6 +110,7 @@ export interface SuggestionSweepResult {
   obsoleted: number;
   /** Games with no submission, unpublished, or abandoned — nobody to propose work to. */
   skippedUnowned: number;
+  skippedPlayWins: number;
   failed: number;
 }
 
@@ -166,6 +179,7 @@ export async function runSuggestionSweep(deps: SuggestionSweepDeps): Promise<Sug
   let updated = 0;
   let obsoleted = 0;
   let skippedUnowned = 0;
+  let skippedPlayWins = 0;
   let failed = 0;
   let autoDispatched = 0;
   let autoWithheld = 0;
@@ -311,6 +325,40 @@ export async function runSuggestionSweep(deps: SuggestionSweepDeps): Promise<Sug
     }
   }
 
+  // Refresh open map so editorial sees play winners.
+  openBySlug.clear();
+  for (const record of await store.listSuggestions({ status: [...OPEN_SUGGESTION_STATUSES] })) {
+    if (!openBySlug.has(record.slug)) openBySlug.set(record.slug, record);
+  }
+
+  await applyEditorialSuggestions({
+    store,
+    at,
+    openBySlug,
+    closeOpen: async (record, reason) => {
+      await closeOpen(record, reason);
+    },
+    onCreated: () => {
+      created += 1;
+    },
+    onUpdated: () => {
+      updated += 1;
+    },
+    onSkippedUnowned: () => {
+      skippedUnowned += 1;
+    },
+    onSkippedPlayWins: () => {
+      skippedPlayWins += 1;
+    },
+    onMuted: () => {
+      mutedByCreator += 1;
+    },
+    onError: (slug, error) => {
+      failed += 1;
+      deps.onError?.(slug, error);
+    },
+  });
+
   return {
     scanned: cards.length,
     truncated,
@@ -318,12 +366,100 @@ export async function runSuggestionSweep(deps: SuggestionSweepDeps): Promise<Sug
     updated,
     obsoleted,
     skippedUnowned,
+    skippedPlayWins,
     failed,
     autoDispatched,
     autoWithheld,
     mutedByCreator,
     legacyPurged,
   };
+}
+
+async function resolveEditorialOwner(store: Store, slug: string): Promise<SubmissionRecord | null> {
+  const published = await store.getPublishedSubmissionBySlug(slug);
+  if (published) return published;
+  const jobs = await store.listSubmissionsBySlug(slug);
+  return jobs.find(isReviewableCreatorDraft) ?? null;
+}
+
+async function applyEditorialSuggestions(opts: {
+  store: Store;
+  at: string;
+  openBySlug: Map<string, SuggestionRecord>;
+  closeOpen: (record: SuggestionRecord, reason: string) => Promise<void>;
+  onCreated: () => void;
+  onUpdated: () => void;
+  onSkippedUnowned: () => void;
+  onSkippedPlayWins: () => void;
+  onMuted: () => void;
+  onError: (slug: string, error: unknown) => void;
+}): Promise<void> {
+  const rows = await opts.store.listGameAssessmentsBySource('creator');
+  const aggregates = aggregateCreatorAssessments(rows);
+
+  for (const agg of aggregates) {
+    try {
+      const routed = routeEditorialAggregate(agg);
+      if (!routed) continue;
+
+      const existing = opts.openBySlug.get(agg.slug);
+      if (existing && playSignalWinsOverEditorial(existing.class)) {
+        opts.onSkippedPlayWins();
+        continue;
+      }
+
+      const submission = await resolveEditorialOwner(opts.store, agg.slug);
+      if (!submission) {
+        if (existing?.class === 'editorial') {
+          await opts.closeOpen(existing, 'game is no longer reviewable');
+        }
+        opts.onSkippedUnowned();
+        continue;
+      }
+
+      const mode = ((await opts.store.getGameAutonomy(agg.slug)) ?? DEFAULT_AUTONOMY) as AutonomyMode;
+      if (!wantsSuggestions(mode)) {
+        opts.onMuted();
+        continue;
+      }
+
+      if (existing && existing.class === routed.class) {
+        if (sameEvidence(existing, routed)) continue;
+        await opts.store.putSuggestion({
+          ...existing,
+          priority: routed.priority,
+          evidence: evidenceOf(routed),
+          computedFrom: routed.computedFrom,
+          updatedAt: opts.at,
+        });
+        opts.onUpdated();
+        continue;
+      }
+
+      if (existing) {
+        await opts.closeOpen(existing, `evidence now routes this game as ${routed.class}`);
+      }
+
+      const fresh: SuggestionRecord = {
+        id: suggestionId(agg.slug, routed.class, routed.computedFrom),
+        slug: agg.slug,
+        ownerUid: submission.ownerUid,
+        class: routed.class,
+        priority: routed.priority,
+        evidence: evidenceOf(routed),
+        status: 'proposed',
+        computedFrom: routed.computedFrom,
+        createdAt: opts.at,
+        updatedAt: opts.at,
+      };
+      // Editorial is never autonomous.
+      await opts.store.putSuggestion(fresh);
+      opts.openBySlug.set(agg.slug, fresh);
+      opts.onCreated();
+    } catch (error) {
+      opts.onError(agg.slug, error);
+    }
+  }
 }
 
 export interface SuggestionSweepRoutesOptions {

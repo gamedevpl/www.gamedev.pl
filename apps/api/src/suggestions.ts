@@ -66,6 +66,7 @@ export type SuggestionClass =
   | 'friction'
   /** The spec itself has to change. Always the creator's call. */
   | 'design-change'
+  | 'editorial'
   /** Measured, and nothing stands out. Worth saying so rather than inventing work. */
   | 'healthy'
   /** Not measured enough to say anything. Distinct from healthy, and must stay distinct. */
