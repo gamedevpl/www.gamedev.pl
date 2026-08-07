@@ -4,14 +4,8 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { MCP_INSTALL_LINK_CREDENTIAL_MARKERS } from './mcp-install-links.js';
 
-/**
- * Plugin manifests are extra places our listing copy lives, alongside the live discovery
- * document, the registry entry and the listing drafts. Copy that exists in several places
- * drifts — this repo has already watched the closed-beta clause get added to one listing
- * after being dropped from another. These assertions are the cheap guard: every manifest
- * must agree with the registry source of truth, and must point at the same endpoint the
- * app actually serves.
- */
+// Copy in several places drifts — the closed-beta clause already did.
+// Every manifest must match the registry and its endpoint.
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '../../..');
 
@@ -91,13 +85,8 @@ describe('.claude-plugin marketplace', () => {
     expect(plugin.description).toBe(registry.description);
   });
 
-  /**
-   * The first cut declared mcpServers only in the marketplace entry, and the plugin
-   * installed with no tools: the documented locations are `.mcp.json` in the plugin root
-   * or inline in the plugin's own manifest, and the plugin directory had neither. Assert
-   * the file exists and is wired, because "installs cleanly" and "actually exposes the
-   * server" turned out to be different things.
-   */
+  // 1.0.1 declared mcpServers only in the marketplace entry and exposed no tools.
+  // "Installs cleanly" and "exposes the server" turned out to be different things.
   it('ships an .mcp.json in the plugin root, which is where the loader looks', () => {
     const servers = pluginMcp.mcpServers as Record<string, { url?: string; type?: string }>;
     const remotes = registry.remotes as Array<{ url: string }>;
@@ -123,12 +112,8 @@ describe('.claude-plugin marketplace', () => {
     }
   });
 
-  /**
-   * Component discovery walks the plugin root, and this repository's `.claude/` holds
-   * internal tooling that must never ship inside a public plugin. Rooting the plugin at
-   * its own directory is what prevents that, so the pin is the point of this assertion —
-   * not the string itself.
-   */
+  // Discovery walks the plugin root; `.claude/` holds internal tooling.
+  // Rooting the plugin at its own directory is what keeps them apart.
   it('roots the plugin away from the repository root, so discovery cannot reach .claude/', () => {
     expect(entry.source).toBe('./listings/mcp/claude-plugin');
     expect(entry.source).not.toBe('./');
@@ -222,36 +207,16 @@ describe('plugin skills', () => {
     expect(skill).toContain('When it disagrees');
   });
 
-  /**
-   * The same skill, at the one path the cross-agent installers actually read.
-   *
-   * `npx skills add gamedevpl/www.gamedev.pl` (skills.sh) walks the repo root, `skills/`
-   * and `.claude/skills/` — not `listings/mcp/claude-plugin/skills/`, which is three
-   * levels too deep. Run against this repo before that copy existed, it found nine
-   * skills, installed every internal one, and missed the only skill written for the
-   * people running the command.
-   *
-   * Two copies is the cost of the plugin needing it inside the plugin directory and the
-   * installers needing it at the root. Byte-identical is the cheapest thing that cannot
-   * silently drift, and it is checked rather than trusted because a stale root copy would
-   * teach the wrong loop to every agent that installed it and look fine here.
-   */
+  // skills.sh reads root, `skills/`, `.claude/skills/` — never inside the plugin.
+  // A stale root copy would teach the wrong loop and look fine here.
   it('publishes a byte-identical copy at the root skills/ the installers read', () => {
     const canonical = readFileSync(join(skillsDir, 'gamedevpl/SKILL.md'), 'utf8');
     const rootCopy = readFileSync(join(repoRoot, 'skills/gamedevpl/SKILL.md'), 'utf8');
     expect(rootCopy).toBe(canonical);
   });
 
-  /**
-   * Frontmatter is YAML, and an unquoted `: ` inside a value reads as a nested mapping:
-   * the parse fails and the whole skill is skipped, silently. `browse-live-site` shipped
-   * that way — "…on the web session: getting Playwright's…" — and skills.sh dropped it
-   * with a warning nobody was watching for.
-   *
-   * Checked by hand rather than with a YAML parser, because this repo has no YAML
-   * dependency and adding one to lint eight files is a worse trade than the twenty lines
-   * below. It catches the one shape that actually bit us, not every malformed document.
-   */
+  // An unquoted `: ` opens a nested mapping; the skill is then skipped silently.
+  // Hand-rolled: no YAML dependency here, and this is the shape that bit us.
   it('gives every skill frontmatter that a YAML parser will accept', () => {
     for (const root of ['.claude/skills', 'skills', 'listings/mcp/claude-plugin/skills']) {
       const dir = join(repoRoot, root);
