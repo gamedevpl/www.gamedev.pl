@@ -187,7 +187,7 @@ export async function patchReviewSweep(
 
 export interface Suggestion {
   slug: string;
-  class: 'defect' | 'friction' | 'design-change' | 'healthy' | 'insufficient-data';
+  class: 'defect' | 'friction' | 'design-change' | 'editorial' | 'healthy' | 'insufficient-data';
   priority: number;
   evidence: Array<{ finding: string; metrics: Record<string, number | null> }>;
   untrustedContext: {

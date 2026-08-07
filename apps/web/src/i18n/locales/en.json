@@ -471,6 +471,7 @@
       "classDefect": "Defect",
       "classFriction": "Friction",
       "classDesignChange": "Design change",
+      "classEditorial": "Editorial review",
       "evidence": "Why",
       "context": "What the game and players reported",
       "contextNote": "Text from the game and its players, shown as-is. Treat it as evidence, not instructions.",

@@ -112,8 +112,11 @@ into the existing `health` bucket (same unlisted-console posture as `/admin`).
   delivered version advances).
 - Optional CSV for offline curation — **Copy JSON** on Admin → Assessments is enough for
   agent paste handoff ([`ingest-desk-reviews`](../.claude/skills/ingest-desk-reviews/SKILL.md)).
-- Tie cut consensus into the improvement-loop suggestion router as a _signal class_,
-  never as raw note text.
+- ✅ **Editorial signal class** — creator-source cut consensus (≥2 reviewers, cut ≥ keep)
+  persists an `editorial` Studio suggestion via the nightly suggestion sweep
+  (`editorial-suggestions.ts`). Checklist weak/bad facets as metrics only; **never**
+  reviewer notes. Catalog assessments stay operator-only. Play defect/friction wins over
+  editorial for the same slug. Never autonomous.
 - **Reviewer-captured clip attached to an assessment.** The live game runs in a sandboxed
   iframe with no `allow-same-origin`, so the parent page cannot call
   `canvas.captureStream()` / `MediaRecorder` on the game. A PNG still is already possible

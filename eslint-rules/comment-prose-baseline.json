@@ -56,7 +56,7 @@
     "apps/api/src/auth.test.ts": 144,
     "apps/api/src/auth.ts": 1931,
     "apps/api/src/autonomy.test.ts": 182,
-    "apps/api/src/autonomy.ts": 474,
+    "apps/api/src/autonomy.ts": 425,
     "apps/api/src/bearer.ts": 35,
     "apps/api/src/bounded-map.test.ts": 28,
     "apps/api/src/bounded-map.ts": 208,

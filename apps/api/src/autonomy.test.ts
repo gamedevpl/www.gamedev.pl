@@ -54,6 +54,7 @@ describe('what each mode permits', () => {
     // their game and started replacing it. There is deliberately no setting for it.
     for (const mode of ['suggest', 'auto-fix-defects', 'auto-tune'] as const) {
       expect(mayActAutonomously(mode, 'design-change')).toBe(false);
+      expect(mayActAutonomously(mode, 'editorial')).toBe(false);
     }
   });
 

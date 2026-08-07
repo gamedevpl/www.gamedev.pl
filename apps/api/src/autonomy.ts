@@ -31,10 +31,7 @@ export const DEFAULT_AUTONOMY: AutonomyMode = 'suggest';
 /**
  * Whether a class may be dispatched without asking.
  *
- * `design-change` is absent from every mode on purpose. It means the spec itself has to
- * change, and the spec is the creator's statement of what they wanted — a machine that
- * rewrites it unasked has stopped improving their game and started replacing it. The plan
- * calls this "always suggest", and there is deliberately no setting that overrides it.
+ * `design-change` is never autonomous; neither is `editorial` desk judgment.
  */
 export function mayActAutonomously(mode: AutonomyMode, suggestionClass: string): boolean {
   if (mode === 'auto-fix-defects') return suggestionClass === 'defect';

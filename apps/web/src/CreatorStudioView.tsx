@@ -1762,6 +1762,7 @@ function classLabel(suggestionClass: string, t: (key: string) => string): string
   if (suggestionClass === 'defect') return t('studioPanel.suggestions.classDefect');
   if (suggestionClass === 'friction') return t('studioPanel.suggestions.classFriction');
   if (suggestionClass === 'design-change') return t('studioPanel.suggestions.classDesignChange');
+  if (suggestionClass === 'editorial') return t('studioPanel.suggestions.classEditorial');
   return suggestionClass;
 }
 

@@ -446,3 +446,126 @@ describe('runSuggestionSweep — draining the superseded per-game docs', () => {
     expect(result.legacyPurged).toBe(1);
   });
 });
+
+async function shareDraft(slug: string, ownerUid = 'creator-1'): Promise<void> {
+  const issueNumber = nextIssue++;
+  await store.createSubmission(issueNumber, ownerUid, slug);
+  await store.setSubmissionSlug(issueNumber, slug);
+  await store.setSubmissionDeliveredVersion(issueNumber, 'v1');
+  await store.setDraftShared(issueNumber, '2026-08-01T00:00:00.000Z');
+}
+
+async function deskCut(
+  slug: string,
+  reviewerUid: string,
+  checklist?: Parameters<typeof store.upsertGameAssessment>[0]['checklist'],
+) {
+  await store.upsertGameAssessment({
+    slug,
+    title: slug,
+    source: 'creator',
+    creatorHandle: 'ada',
+    reviewerUid,
+    verdict: 'cut',
+    note: 'RAW NOTE MUST NOT LAND IN SUGGESTION',
+    noteOrigin: 'text',
+    checklist: checklist ?? {
+      graphics: 'ok',
+      gameplay: 'bad',
+      fun: 'ok',
+      sound: 'ok',
+      controls: 'weak',
+    },
+    clientContext: null,
+    createdAt: '2026-08-06T00:00:00.000Z',
+  });
+}
+
+describe('runSuggestionSweep — editorial desk pass', () => {
+  it('opens an editorial card for a shared creator draft with cut consensus', async () => {
+    await shareDraft('drafty');
+    await deskCut('drafty', 'reviewer-1');
+    await deskCut('drafty', 'reviewer-2');
+
+    const result = await sweep();
+
+    expect(result.created).toBe(1);
+    const open = await store.listSuggestions();
+    expect(open).toHaveLength(1);
+    expect(open[0]).toMatchObject({
+      slug: 'drafty',
+      class: 'editorial',
+      status: 'proposed',
+      ownerUid: 'creator-1',
+    });
+    expect(JSON.stringify(open[0].evidence)).not.toMatch(/RAW NOTE/);
+  });
+
+  it('ignores catalog-source assessments', async () => {
+    await shareDraft('catalogued');
+    await store.upsertGameAssessment({
+      slug: 'catalogued',
+      title: 'catalogued',
+      source: 'catalog',
+      creatorHandle: null,
+      reviewerUid: 'reviewer-1',
+      verdict: 'cut',
+      note: 'nope',
+      noteOrigin: 'text',
+      checklist: null,
+      clientContext: null,
+    });
+    await store.upsertGameAssessment({
+      slug: 'catalogued',
+      title: 'catalogued',
+      source: 'catalog',
+      creatorHandle: null,
+      reviewerUid: 'reviewer-2',
+      verdict: 'cut',
+      note: 'nope',
+      noteOrigin: 'text',
+      checklist: null,
+      clientContext: null,
+    });
+
+    const result = await sweep();
+    expect(result.created).toBe(0);
+    expect(await store.listSuggestions()).toHaveLength(0);
+  });
+
+  it('does not replace a play defect card', async () => {
+    await publish('both');
+    await store.putScorecard('both', crashy('both'));
+    await deskCut('both', 'reviewer-1');
+    await deskCut('both', 'reviewer-2');
+
+    const result = await sweep();
+
+    expect(result.skippedPlayWins).toBe(1);
+    const open = await store.listSuggestions();
+    expect(open).toHaveLength(1);
+    expect(open[0].class).toBe('defect');
+  });
+
+  it('never auto-dispatches editorial even on auto-tune', async () => {
+    await shareDraft('handsoff');
+    await deskCut('handsoff', 'reviewer-1');
+    await deskCut('handsoff', 'reviewer-2');
+    await store.setGameAutonomy('handsoff', 'auto-tune');
+
+    let started = 0;
+    const result = await runSuggestionSweep({
+      store,
+      now: () => AT,
+      startImprovementRound: async () => {
+        started += 1;
+        return { route: 'job', jobId: 99 };
+      },
+      buildBrief: () => 'brief',
+    });
+
+    expect(result.autoDispatched).toBe(0);
+    expect(started).toBe(0);
+    expect((await store.listSuggestions())[0].status).toBe('proposed');
+  });
+});

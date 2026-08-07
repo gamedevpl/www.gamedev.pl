@@ -88,15 +88,20 @@ export interface SuggestionInboxRoutesOptions {
  * they are read live so an erased player is not quoted from a stale copy.
  */
 export function buildImprovementBrief(record: SuggestionRecord, untrusted: Scorecard['untrusted'] | null): string {
+  const isEditorial = record.class === 'editorial';
   const lines = [
-    `Player-evidence improvement for published game \`${record.slug}\`.`,
+    isEditorial
+      ? `Editorial-desk improvement for shared creator draft \`${record.slug}\`.`
+      : `Player-evidence improvement for published game \`${record.slug}\`.`,
     '',
     'Update `SPEC.md` first when behaviour changes, then bring the implementation in line.',
     'One game only — do not touch tooling, workflows, or other games.',
     '',
     `## Routed as: ${record.class}`,
     '',
-    '## Evidence (measured by this platform)',
+    isEditorial
+      ? '## Evidence (editorial desk aggregates — no reviewer notes)'
+      : '## Evidence (measured by this platform)',
     ...record.evidence.map((item) => `- ${item.finding}`),
     '',
     '```json',
@@ -107,8 +112,14 @@ export function buildImprovementBrief(record: SuggestionRecord, untrusted: Score
     ),
     '```',
     '',
-    `Measured from the scorecard computed at ${record.computedFrom}.`,
+    isEditorial
+      ? `Aggregated from desk assessments last updated at ${record.computedFrom}.`
+      : `Measured from the scorecard computed at ${record.computedFrom}.`,
   ];
+
+  if (isEditorial) {
+    return lines.join('\n');
+  }
 
   const samples = untrusted?.errorSamples ?? [];
   const themes = untrusted?.feedbackThemes ?? [];
