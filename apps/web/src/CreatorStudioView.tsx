@@ -360,6 +360,7 @@ export function CreatorStudioView({
     [shelfGames, shelfFilter, shelfQuery],
   );
   const showShelfTools = shelfGames.length >= STUDIO_SHELF_TOOLS_AT;
+  const shelfSummaryCount = shelfTruncated ? totalGames : shelfGames.length;
   // The URL named a game and the shelf does not have it: a typo, a game since abandoned,
   // or somebody else's slug. Said plainly, because an unexplained shelf looks like the
   // link worked and the game vanished.
@@ -648,7 +649,6 @@ export function CreatorStudioView({
                   </button>
                 ) : null}
               </div>
-              {/* Collapsed desktop rail: one folder+count instead of tiny title-letter chips. */}
               {activeGame && showShelfTools ? (
                 <button
                   type="button"
@@ -656,11 +656,15 @@ export function CreatorStudioView({
                   onClick={() => setShelfOpen(true)}
                   aria-expanded={shelfOpen}
                   aria-label={t('studioPanel.shelf.expandShelf')}
-                  title={t('studioPanel.shelf.count', { count: shelfGames.length })}
+                  title={
+                    shelfTruncated
+                      ? t('studioPanel.shelf.countTruncated', { shown: shelfGames.length, total: totalGames })
+                      : t('studioPanel.shelf.count', { count: shelfGames.length })
+                  }
                 >
                   <PixelIcon name="folder" size={16} />
                   <span className="studio-shelf-summary-badge" aria-hidden="true">
-                    {shelfGames.length > 99 ? '99+' : shelfGames.length}
+                    {shelfSummaryCount > 99 ? '99+' : shelfSummaryCount}
                   </span>
                 </button>
               ) : null}
@@ -1030,7 +1034,6 @@ function StudioShelfList({
               aria-current={active ? 'true' : undefined}
               title={game.title}
             >
-              {/* Row avatar: first letters of the first two title words. Status colour. */}
               <span
                 className={`studio-shelf-mark${building ? ' is-live' : ''}${live ? ' is-published' : ''}`}
                 aria-hidden="true"

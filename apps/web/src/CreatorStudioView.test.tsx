@@ -353,6 +353,22 @@ describe('CreatorStudioView', () => {
     root.unmount();
   });
 
+  it('badges the collapsed shelf with totalGames when the page is truncated', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
+    fetchStudioGames.mockResolvedValue(studioShelf(manyGames(10), true, 63));
+
+    const { container, root } = await renderStudio();
+
+    const summary = container.querySelector('.studio-shelf-summary');
+    expect(summary?.querySelector('.studio-shelf-summary-badge')?.textContent).toBe('63');
+    expect(summary?.getAttribute('title')).toContain('10');
+    expect(summary?.getAttribute('title')).toContain('63');
+
+    root.unmount();
+  });
+
   it('locks body scroll while the phone shelf drawer is open', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
