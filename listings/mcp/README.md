@@ -34,6 +34,11 @@ directory carries the spec's `plugin.json` + `mcp.json` alongside Claude's own m
 so one directory installs either way. D5 is untouched: those are manifests in this repo,
 not a package we publish or maintain a release pipeline for.
 
+Skill registries are tracked separately in [`listings/skills/`](../skills/README.md).
+The skill ships inside the Claude plugin, which reaches only people who already added our
+marketplace — the directories listed there are the distribution half, and none of them is
+run by Anthropic.
+
 Not pursued: the **Gemini CLI extensions gallery** would be self-serve (public manifest
 repo + `gemini-cli-extension` topic, crawled daily), but listing there requires a
 dedicated repo because the manifest must sit at a repo root — too much standing surface
