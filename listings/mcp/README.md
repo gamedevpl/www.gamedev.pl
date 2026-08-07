@@ -28,6 +28,11 @@ as of 2026-08; we intentionally ship the official registry shape instead.
 | [`claude-connectors-directory/listing.md`](./claude-connectors-directory/listing.md) | Claude Connectors Directory             | Draft — portal at https://claude.ai/admin-settings/directory/submissions/new (**requires Team/Enterprise org**)                                                          |
 | [`chatgpt-apps-connector/listing.md`](./chatgpt-apps-connector/listing.md)           | ChatGPT + Codex Plugin directory        | Draft — https://platform.openai.com/plugins (identity-verified Platform org)                                                                                             |
 
+Skill registries are tracked separately in [`listings/skills/`](../skills/README.md).
+The skill ships inside the Claude plugin, which reaches only people who already added our
+marketplace — the directories listed there are the distribution half, and none of them is
+run by Anthropic.
+
 Not pursued: the **Gemini CLI extensions gallery** would be self-serve (public manifest
 repo + `gemini-cli-extension` topic, crawled daily), but listing there requires a
 dedicated repo because the manifest must sit at a repo root — too much standing surface
