@@ -1849,8 +1849,7 @@ describe('SubmissionStatusView', () => {
     // round; without a follow-up poll the page kept saying "needs a tweak" forever.
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     vi.useFakeTimers();
-    // Prefer a sticky first answer over mockResolvedValueOnce — Strict Mode / extra
-    // effect passes can consume a one-shot before the first assertion paints.
+    // Sticky mock: once-shots can vanish under Strict Mode.
     mockedGetSubmissionStatus.mockResolvedValue({ status: 'needs_changes' });
     await i18n.changeLanguage('en');
     window.history.pushState(null, '', '/status/needs-poll');

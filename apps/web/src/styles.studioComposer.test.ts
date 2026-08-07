@@ -15,8 +15,7 @@ function firstRuleBody(selector: string): string {
 
 describe('studio compact composer empty state', () => {
   it('puts the placeholder and send on one grid row when empty', () => {
-    // Without this, empty composers stack the field over the toolbar and leave a
-    // dead strip between "Say what to change" and the round arrow.
+    // Empty composers must not stack field over send.
     const empty = firstRuleBody('.status-composer.is-compact.is-empty');
     expect(empty).toMatch(/display:\s*grid/);
     expect(empty).toMatch(/grid-template-columns:\s*minmax\(0,\s*1fr\)\s+auto/);

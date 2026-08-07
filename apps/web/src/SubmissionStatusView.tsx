@@ -1488,11 +1488,8 @@ function FeedbackPanel({
       </div>
     ) : null;
 
-  // Compact is the thread's composer in the Claude / Cursor / Copilot shape: a clean
-  // field on top, controls in a bottom toolbar (builder selector left, send right).
-  // The heading and standing hint were page furniture — the placeholder carries them.
-  // Empty (`is-empty`) collapses to one row so the placeholder and send share a line;
-  // once there is text the toolbar drops under the field again so the box can grow.
+  // Compact composer: field above, builder/send toolbar below.
+  // Empty (`is-empty`): placeholder and send share one row.
   if (compact) {
     const sending = state === 'sending';
     const empty = text.length === 0;
@@ -1501,9 +1498,7 @@ function FeedbackPanel({
         className={`status-feedback status-composer is-compact${empty ? ' is-empty' : ''}${sending ? ' is-sending' : ''}`}
         aria-busy={sending || undefined}
         onClick={(event) => {
-          // The card is taller than the textarea (padding, toolbar gap). A click on the
-          // chrome should focus the field — otherwise the empty stretch between
-          // placeholder and send feels dead. Leave real controls alone.
+          // Clicking card chrome focuses the textarea; skip real controls.
           const target = event.target as HTMLElement | null;
           if (!target) return;
           if (target.closest('button, a, textarea, input, select, [role="button"]')) return;
@@ -1523,8 +1518,7 @@ function FeedbackPanel({
             if (state === 'sent') setState('idle');
           }}
           onKeyDown={(event) => {
-            // Enter sends, as in every phone message box; Shift+Enter keeps a newline
-            // for longer revision notes. RemixAsk does the same.
+            // Enter sends; Shift+Enter keeps a newline (same as RemixAsk).
             if (event.key === 'Enter' && !event.shiftKey) {
               event.preventDefault();
               void send();

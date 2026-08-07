@@ -5931,7 +5931,7 @@ a.user-name--profile:focus-visible {
   border: 1px solid var(--panel-border);
   border-radius: 16px;
   background: var(--panel-card);
-  /* The card chrome focuses the textarea on click — see FeedbackPanel. */
+  /* Card chrome click focuses the textarea. */
   cursor: text;
   transition:
     border-color 0.2s,
@@ -5943,10 +5943,7 @@ a.user-name--profile:focus-visible {
   box-shadow: 0 0 0 3px rgba(0, 228, 172, 0.08);
 }
 
-/* Empty: placeholder and send on one line. A column left a dead strip between the
-   hint at the top and the round arrow at the bottom — looks like a tall empty box
-   with nothing to click. Grid puts the field and the toolbar on the same row; once
-   there is text, `is-empty` drops and the stacked shape returns so the box can grow. */
+/* Empty: placeholder and send share one grid row. */
 .status-composer.is-compact.is-empty {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -5965,7 +5962,7 @@ a.user-name--profile:focus-visible {
   grid-column: 1;
   grid-row: auto;
   padding: 2px 0;
-  /* Match the send control so the placeholder sits on its optical center line. */
+  /* Match send height so the placeholder centers. */
   min-height: 34px;
   line-height: 1.35;
 }
@@ -5973,8 +5970,7 @@ a.user-name--profile:focus-visible {
 .status-composer.is-compact.is-empty .status-composer-toolbar {
   grid-column: 2;
   padding-top: 0;
-  /* Do not stretch across the card — that would shove send to the far right of a
-     second implied column and leave the placeholder alone on the left with a gap. */
+  /* Keep toolbar auto-width beside the field. */
   width: auto;
 }
 
