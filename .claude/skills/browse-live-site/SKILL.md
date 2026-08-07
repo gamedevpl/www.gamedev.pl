@@ -1,6 +1,6 @@
 ---
 name: browse-live-site
-description: Drive a real Chromium browser against the live www.gamedev.pl as the bot:e2e agent identity, signed in, to manually explore the site or check a change actually works end-to-end. Use whenever asked to "click around", "walk through", "play a game and see if it works", or otherwise manually exercise the deployed site rather than just curling the API. Covers the one non-obvious step in a Claude Code on the web session: getting Playwright's bundled Chromium through the session's HTTPS egress proxy.
+description: Drive a real Chromium browser against the live www.gamedev.pl as the bot:e2e agent identity, signed in, to manually explore the site or check a change actually works end-to-end. Use whenever asked to "click around", "walk through", "play a game and see if it works", or otherwise manually exercise the deployed site rather than just curling the API. Covers the one non-obvious step in a Claude Code on the web session — getting Playwright's bundled Chromium through the session's HTTPS egress proxy.
 ---
 
 # Browsing the live site as an agent

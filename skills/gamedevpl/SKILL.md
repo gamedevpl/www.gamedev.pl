@@ -1,6 +1,6 @@
 ---
-name: building-on-gamedev-pl
-description: Build and improve browser games on gamedev.pl through the gamedevpl MCP server — what a round is, how to connect, and the handful of loop rules agents get wrong (screenshot early, stage don't re-upload, end after submit, never poll the gate or the inbox). Use when asked to make, publish, or fix a game on gamedev.pl, or when the gamedevpl tools are connected and you are about to call start or create_game.
+name: gamedevpl
+description: Build and improve browser games on gamedev.pl through the gamedevpl MCP server — what a round is, how to connect, and the handful of loop rules agents get wrong (screenshot early, stage don't re-upload, end after submit, never poll the gate or the inbox). Use when asked to make, publish, or fix a game on gamedev.pl, or when the gamedevpl tools are connected and you are about to call start or create_game. Not for game development in general, and not for games hosted anywhere else — this is specific to the gamedev.pl platform.
 ---
 
 # Building on gamedev.pl
