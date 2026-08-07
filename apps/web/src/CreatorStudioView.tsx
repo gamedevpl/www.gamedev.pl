@@ -1116,7 +1116,7 @@ function DetailsPanel({
     setAbandoning(true);
     try {
       await abandonSubmission(game.token);
-      onRemoved(game.token);
+      await onRemoved(game.token);
     } catch {
       setAbandoning(false);
       setAbandonArmed(false);
