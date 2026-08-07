@@ -271,7 +271,7 @@ describe('catalog playback', () => {
     });
   });
 
-  it('keeps the full-page mascot on direct play links until the catalog resolves', async () => {
+  it('keeps the full-page mascot on direct play links until the theater opens', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     let resolveCatalog!: (value: Response) => void;
     const catalogPending = new Promise<Response>((resolve) => {
@@ -292,8 +292,14 @@ describe('catalog playback', () => {
       if (url.includes('/api/recommendations')) {
         return new Response(JSON.stringify({ items: [] }));
       }
+      if (url.endsWith('/api/games/airtime')) {
+        return new Response(JSON.stringify({ slug: 'airtime', title: 'Airtime', html: '<canvas>air</canvas>' }));
+      }
       if (url.endsWith('/api/games/airtime/votes')) {
         return new Response(JSON.stringify({ up: 0, down: 0, mine: null }));
+      }
+      if (/\/api\/games\/[^/]+\/played$/.test(new URL(url, 'http://localhost').pathname)) {
+        return new Response(null, { status: 204 });
       }
       throw new Error(`unexpected fetch: ${url}`);
     });
@@ -315,6 +321,7 @@ describe('catalog playback', () => {
     expect(container.querySelector('.app-loading-screen')).not.toBeNull();
     expect(container.querySelector('.app-header')).toBeNull();
     expect(container.querySelector('.game-page')).toBeNull();
+    expect(container.querySelector('.game-theater-bar')).toBeNull();
     expect(container.textContent).not.toMatch(/Loading the game page/i);
 
     await act(async () => {
@@ -336,11 +343,13 @@ describe('catalog playback', () => {
       await flushEffects();
       await flushEffects();
       await flushEffects();
+      await flushEffects();
     });
 
+    // Catalog ready → auto-open theater (GameDetailPage may sit underneath for Close).
     expect(container.querySelector('.app-loading-screen')).toBeNull();
-    expect(container.querySelector('.game-page h1')?.textContent).toBe('Airtime');
-    expect(container.querySelector('.app-header')).not.toBeNull();
+    expect(container.querySelector('.game-theater-bar')).not.toBeNull();
+    expect(container.querySelector('iframe[title="Airtime"]')).not.toBeNull();
 
     await act(async () => {
       root.unmount();

@@ -1102,6 +1102,17 @@ export function App() {
     return <UnpublishedPlayView slug={route.slug} onExit={exitOverlay} onTitle={setUnpublishedPlayTitle} />;
   }
 
+  // Bridge catalog-ready → auto-open so GameDetailPage does not flash first.
+  if (
+    route.view === 'play' &&
+    catalogStatus === 'ready' &&
+    playCatalogGame &&
+    !stageContent &&
+    playTheaterDismissedSlugRef.current !== route.slug
+  ) {
+    return <AppLoadingScreen />;
+  }
+
   return (
     <div className="app">
       <NavHeader

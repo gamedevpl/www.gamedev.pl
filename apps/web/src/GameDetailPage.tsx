@@ -23,10 +23,9 @@ function previewScreenshot(game: CatalogEntry) {
 }
 
 /**
- * `/play/<slug>` after Close, and while catalog loads before auto-open.
+ * `/play/<slug>` after Close (permalink stays; theater auto-opens on cold visit).
  *
- * The permalink auto-opens theater; this surface remains after dismiss. It never
- * mounts the iframe — Play re-opens theater. Canonical pages use {@link GamePage}.
+ * Never mounts the iframe — Play re-opens theater. Canonical pages use {@link GamePage}.
  *
  * Not a SPEC.md rendering: agent source, not player copy. Compact controls only.
  */
