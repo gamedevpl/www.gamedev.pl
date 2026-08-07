@@ -7,8 +7,17 @@ import { connectCardMode, shouldShowConnectCard, type SelfBuildCopyInput } from 
 import { StudioConnectCard } from './StudioConnectCard.js';
 import { markStudioOnboarded, resolveWelcomeToken } from './studioWelcome.js';
 import { pollDelayMs } from './studioStatusPoll.js';
-import { getSubmissionStatus, type SubmissionStatus } from './submissionApi.js';
+import {
+  buildMediaUrl,
+  getSubmissionStatus,
+  handoffToPlatform,
+  type BuildEvent,
+  type SubmissionStatus,
+} from './submissionApi.js';
 import { recordCreateStep, recordStudioStep } from './visitTelemetry.js';
+
+// Studio owns the full transcript; this step shows only the newest few.
+const FEED_LIMIT = 4;
 
 // Focusable controls in the connect dialog.
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -16,7 +25,7 @@ const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), [tabi
 type StudioConnectWizardProps = {
   // Slug or capability token from the URL.
   game: string;
-  onOpenStudio: (path: string) => void;
+  onOpenStudio: (path: string, options?: { replace?: boolean }) => void;
 };
 
 function copyInputFromStatus(status: SubmissionStatus | null): SelfBuildCopyInput {
@@ -27,6 +36,34 @@ function copyInputFromStatus(status: SubmissionStatus | null): SelfBuildCopyInpu
     agentEndedAt: status?.agentEndedAt,
     failureReason: status?.failure?.reason,
   };
+}
+
+// The round left the agent's hands: delivered, gating, or finished.
+const PAST_CONNECT_PHASES: ReadonlySet<string> = new Set([
+  'submitted',
+  'gating',
+  'ready_for_review',
+  'publishing',
+  'published',
+  'needs_changes',
+  'failed',
+  'canceled',
+  'abandoned',
+]);
+
+const PAST_CONNECT_STATUSES: ReadonlySet<SubmissionStatus['status']> = new Set([
+  'in_review',
+  'publishing',
+  'published',
+  'needs_changes',
+  'abandoned',
+]);
+
+function connectChapterOver(status: SubmissionStatus | null): boolean {
+  if (!status) return false;
+  if (status.phase && PAST_CONNECT_PHASES.has(status.phase)) return true;
+  if (PAST_CONNECT_STATUSES.has(status.status)) return true;
+  return status.stall === 'ended' || Boolean(status.agentEndedAt);
 }
 
 function stillNeedsConnect(status: SubmissionStatus | null): boolean {
@@ -46,7 +83,10 @@ export function StudioConnectWizard({ game, onOpenStudio }: StudioConnectWizardP
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const awaiting = stillNeedsConnect(status);
-  const agentConnected = Boolean(status && !awaiting);
+  const chapterOver = connectChapterOver(status);
+  const roundBuilder = status?.builder ?? 'self';
+  const agentConnected = Boolean(status && !awaiting && !chapterOver);
+  const goStudioRef = useRef<(deferred: boolean, builder?: 'self' | 'platform', replace?: boolean) => void>(() => {});
 
   useEffect(() => {
     recordCreateStep('handoff_shown', 'self');
@@ -147,18 +187,45 @@ export function StudioConnectWizard({ game, onOpenStudio }: StudioConnectWizardP
     }
   };
 
-  const goStudio = (deferred: boolean) => {
+  const goStudio = (deferred: boolean, builder: 'self' | 'platform' = 'self', replace = false) => {
     markStudioOnboarded();
     // Deferred still enters Studio; record both funnel steps.
     if (deferred) {
       recordStudioStep('connect_dismissed', 'self');
     }
-    recordCreateStep('handoff_enter_studio', 'self');
+    recordCreateStep('handoff_enter_studio', builder);
     const address = status?.slug ?? game;
-    onOpenStudio(`${studioPath(address)}?from=handoff`);
+    const path = `${studioPath(address)}?from=handoff`;
+    if (replace) {
+      onOpenStudio(path, { replace: true });
+    } else {
+      onOpenStudio(path);
+    }
+  };
+
+  useEffect(() => {
+    goStudioRef.current = goStudio;
+  });
+
+  // Replace: Back would land on this finished round and bounce forward.
+  useEffect(() => {
+    if (!chapterOver) return;
+    goStudioRef.current(false, roundBuilder, true);
+  }, [chapterOver, roundBuilder]);
+
+  // Change of mind: hand the round to the Gamedev.pl agent.
+  const switchToPlatform = async () => {
+    if (!token) return;
+    const result = await handoffToPlatform(token);
+    if (result.pending) return result;
+    goStudio(false, 'platform');
+    return result;
   };
 
   const cardMode = connectCardMode(copyInputFromStatus(status)) ?? 'setup';
+  const feed: BuildEvent[] = (status?.events ?? []).slice(0, FEED_LIMIT);
+  const reportedProgress = (status?.events ?? []).find((event) => event.progress)?.progress;
+  const latestShot = status?.media?.[0];
 
   return createPortal(
     <div
@@ -198,10 +265,50 @@ export function StudioConnectWizard({ game, onOpenStudio }: StudioConnectWizardP
                 <PixelIcon name="sparkle" size={13} /> {t('connectWizard.connectedLabel')}
               </p>
               <p className="studio-welcome-progress-message">{t('connectWizard.connectedBody')}</p>
+              {reportedProgress && reportedProgress.total > 0 ? (
+                <p className="studio-connect-wizard-count">
+                  {t('statusView.progress.checklistCount', {
+                    done: reportedProgress.done,
+                    total: reportedProgress.total,
+                  })}
+                </p>
+              ) : null}
+              {feed.length > 0 ? (
+                <ul className="studio-connect-wizard-feed" data-testid="connect-wizard-feed">
+                  {feed.map((event) => (
+                    <li key={event.id}>
+                      <span className="studio-connect-wizard-feed-step">
+                        {event.step ? t(`statusView.progress.steps.${event.step}`) : t('statusView.progress.agentSays')}
+                      </span>{' '}
+                      <span className="studio-connect-wizard-feed-text">{event.text}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="studio-connect-wizard-feed-empty">
+                  <span className="studio-connect-pulse" aria-hidden="true" />
+                  {t('connectWizard.awaitingUpdates')}
+                </p>
+              )}
+              {latestShot && token ? (
+                <img
+                  className="studio-connect-wizard-shot"
+                  src={buildMediaUrl(token, latestShot)}
+                  alt={latestShot.label ?? t('connectWizard.shotAlt')}
+                  loading="lazy"
+                />
+              ) : null}
             </div>
           ) : token ? (
             <div className="studio-connect-wizard-card">
-              <StudioConnectCard token={token} collapsible={false} agentConnected={false} mode={cardMode} />
+              <StudioConnectCard
+                token={token}
+                collapsible={false}
+                agentConnected={false}
+                mode={cardMode}
+                onSwitchToPlatform={switchToPlatform}
+                builderHandoffPending={status?.builderHandoff?.target === 'platform'}
+              />
             </div>
           ) : (
             <p className="studio-welcome-primer-one">{t('connectWizard.preparing')}</p>

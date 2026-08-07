@@ -582,6 +582,8 @@
     "loadError": "Nie udało się odświeżyć statusu. Próbuję ponownie…",
     "connectedLabel": "Agent połączony",
     "connectedBody": "Budowa trwa. W Studio śledzisz postęp i mówisz, co zmienić.",
+    "awaitingUpdates": "Czekamy na pierwszą wiadomość od Twojego agenta…",
+    "shotAlt": "Najnowszy obraz budowanej gry",
     "later": "Podłączę później",
     "openStudio": "Otwórz Studio",
     "openStudioAnyway": "Otwórz Studio mimo to"

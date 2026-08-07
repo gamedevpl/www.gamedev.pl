@@ -7246,7 +7246,13 @@ button.builder-mode-selector:disabled {
   font-weight: 600;
 }
 
-.qa-next {
+/* The wizard's primary action. `.btn`/`.btn-primary` carry no rules anywhere in this
+   stylesheet (see the .qa-back note above), so a footer button that only had those
+   rendered as a default UA slab — grey, next to a turquoise-branded screen. Every
+   wizard primary is `.qa-primary`, so the look lives on that class and `.qa-next`
+   (CreatorQA's, which carries both) keeps it. */
+.qa-next,
+.qa-primary {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -7263,6 +7269,17 @@ button.builder-mode-selector:disabled {
   cursor: pointer;
 }
 
+.qa-next:hover:not(:disabled),
+.qa-primary:hover:not(:disabled) {
+  box-shadow: 0 6px 20px rgba(0, 228, 172, 0.45);
+}
+
+.qa-next:disabled,
+.qa-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* An unanswered question is a legitimate outcome, not a failure to proceed: the
    button still moves you on, but it stops competing with the options for the eye. */
 .qa-next--skip {
@@ -7276,6 +7293,8 @@ button.builder-mode-selector:disabled {
 .qa-next--skip:hover:not(:disabled) {
   color: var(--text, #e2e8f0);
   border-color: var(--muted, #94a3b8);
+  /* The quiet variant must not pick up the branded glow from the shared hover above. */
+  box-shadow: none;
 }
 
 /* A text link, not a third button: it must be findable without competing with the
@@ -7558,6 +7577,73 @@ button.builder-mode-selector:disabled {
 .studio-welcome-more p {
   margin: 8px 0 0;
   line-height: 1.45;
+}
+
+/* Live agent updates on the connect step, so a connected build shows movement
+   rather than one paragraph that never changes. Newest first, capped in the
+   component — the full transcript is Studio's job. */
+.studio-connect-wizard-count {
+  margin: 10px 0 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--turquoise, #00e4ac);
+  font-variant-numeric: tabular-nums;
+}
+
+.studio-connect-wizard-feed {
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.studio-connect-wizard-feed li {
+  padding-top: 8px;
+  border-top: 1px solid var(--panel-border, #33383d);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.studio-connect-wizard-feed li:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.studio-connect-wizard-feed-step {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted, #94a3b8);
+}
+
+.studio-connect-wizard-feed-text {
+  color: var(--text, #e2e8f0);
+  overflow-wrap: anywhere;
+}
+
+.studio-connect-wizard-feed-empty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0 0;
+  font-size: 0.9rem;
+  color: var(--muted, #94a3b8);
+}
+
+/* The agent's newest capture. Bounded so a tall portrait shot cannot push the
+   footer actions off a phone screen. */
+.studio-connect-wizard-shot {
+  display: block;
+  width: 100%;
+  max-height: 220px;
+  margin-top: 12px;
+  object-fit: contain;
+  border: 1px solid var(--panel-border, #33383d);
+  border-radius: 10px;
+  background: var(--bg, #0a0e12);
 }
 
 .studio-connect-wizard-card {
