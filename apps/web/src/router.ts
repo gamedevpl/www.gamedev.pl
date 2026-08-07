@@ -105,6 +105,8 @@ export type AppRoute =
   // `/status/:token` is accepted as an alias and resolves here too. Optional `tab`
   // deep-links into a work surface (`/studio/tv-tycoon/build`).
   | { view: 'studio'; game?: string; tab?: StudioTab }
+  | { view: 'studioWelcome'; game: string }
+  | { view: 'studioConnect'; game: string }
   // Privacy policy and terms. Reachable without a session — someone deciding whether
   // to sign in has to be able to read what signing in would mean first.
   | { view: 'legal'; doc: LegalDocId }
@@ -311,6 +313,12 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
     if (!tabSegment) {
       return { view: 'studio', game };
     }
+    if (tabSegment === 'welcome') {
+      return { view: 'studioWelcome', game };
+    }
+    if (tabSegment === 'connect') {
+      return { view: 'studioConnect', game };
+    }
     // Resolved, not passed through: the route carries the surface, and an old name for
     // it stops existing the moment it is parsed.
     const tab = parseStudioTab(tabSegment);
@@ -418,6 +426,10 @@ export function canonicalPath(pathname: string): string | null {
       // token to its slug also happens there, for the same reason: it takes the shelf.
       case 'studio':
         return route.game ? studioPath(route.game, route.tab) : null;
+      case 'studioWelcome':
+        return studioWelcomePath(route.game);
+      case 'studioConnect':
+        return studioConnectPath(route.game);
       case 'creator':
         return creatorPath(route.handle);
       case 'game':
@@ -452,6 +464,16 @@ export function studioPath(game?: string, tab?: StudioTab): string {
   return tab ? `${base}/${tab}` : base;
 }
 
+/** Platform create handoff. */
+export function studioWelcomePath(game: string): string {
+  return `/studio/${encodeURIComponent(game)}/welcome`;
+}
+
+/** BYOCA connect handoff. */
+export function studioConnectPath(game: string): string {
+  return `/studio/${encodeURIComponent(game)}/connect`;
+}
+
 /**
  * Parent path for the NavHeader "Up" chevron — Android-style Up, not browser Back.
  *
@@ -484,6 +506,9 @@ export function navUpTarget(route: AppRoute): NavUpTarget | null {
         return { path: studioPath(), labelKey: 'upStudio' };
       }
       return { path: '/', labelKey: 'upHome' };
+    case 'studioWelcome':
+    case 'studioConnect':
+      return { path: studioPath(), labelKey: 'upStudio' };
     case 'game':
       // The page is nested under the creator profile the way a repo nests under its
       // owner, so Up goes to that profile rather than to the homepage.

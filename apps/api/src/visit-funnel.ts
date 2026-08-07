@@ -167,6 +167,8 @@ export const CREATE_STEPS = [
   'qa_shown',
   'title_confirmed',
   'submission_created',
+  'handoff_shown',
+  'handoff_enter_studio',
 ] as const;
 
 export type CreateStep = (typeof CREATE_STEPS)[number];

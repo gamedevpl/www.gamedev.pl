@@ -25,8 +25,12 @@ import {
   playPath,
   reviewPath,
   studioPath,
+  studioWelcomePath,
+  studioConnectPath,
   type AppRoute,
 } from './router.js';
+import { StudioWelcomeView } from './StudioWelcomeView.js';
+import { StudioConnectWizard } from './StudioConnectWizard.js';
 import type { PublicCreatorProfile } from './creatorProfileApi.js';
 import { LegalPage } from './LegalPage.js';
 import { ContactPage } from './ContactPage.js';
@@ -165,7 +169,7 @@ export function App() {
     // Matched on either address the URL can carry: a slug now, a capability token on
     // links minted before games had one.
     const studioTitle =
-      route.view === 'studio' && route.game
+      (route.view === 'studio' || route.view === 'studioWelcome' || route.view === 'studioConnect') && route.game
         ? (savedSpecs.find((spec) => spec.token === route.game || spec.slug === route.game)?.title ?? null)
         : null;
 
@@ -633,9 +637,9 @@ export function App() {
       setQaBuilder('platform');
       clearPendingQa();
 
-      // Straight to the game's own address. Older API builds answer without a slug, in
-      // which case the token still addresses the studio and gets rewritten there.
-      navigate(studioPath(response.slug ?? response.token));
+      // Platform → welcome; self → connect chapter. Never auto-enter Studio.
+      const address = response.slug ?? response.token;
+      navigate(builder === 'platform' ? studioWelcomePath(address) : studioConnectPath(address));
     } catch (err) {
       const message = err instanceof Error ? err.message : t('errors.generic');
       const category = err instanceof Error ? (err as SubmissionApiError).category : undefined;
@@ -1125,6 +1129,10 @@ export function App() {
           <AdminConsole section={route.section} onNavigate={navigate} />
         ) : route.view === 'review' ? (
           <ReviewDesk />
+        ) : route.view === 'studioWelcome' ? (
+          <StudioWelcomeView game={route.game} onOpenStudio={navigate} />
+        ) : route.view === 'studioConnect' ? (
+          <StudioConnectWizard game={route.game} onOpenStudio={navigate} />
         ) : route.view === 'studio' ? (
           <CreatorStudioView
             selectedGame={route.game}

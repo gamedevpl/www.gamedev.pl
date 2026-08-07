@@ -97,7 +97,9 @@ export type CreateStep =
    */
   | 'title_confirmed'
   /** A submission actually reached the games repo. */
-  | 'submission_created';
+  | 'submission_created'
+  | 'handoff_shown'
+  | 'handoff_enter_studio';
 
 /**
  * The closed-beta waitlist funnel, in the order a visitor meets it.
@@ -338,6 +340,9 @@ export function routeKind(view: string): VisitRouteKind {
     case 'studio':
     case 'notFound':
       return view;
+    case 'studioWelcome':
+    case 'studioConnect':
+      return 'studio';
     // Legacy view name — `/draft/` parses as `play` now. Map here too so any leftover
     // caller still reports `play` (the `draft` VisitRouteKind only remains for reading
     // historical rows, not for new emissions).
