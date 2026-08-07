@@ -17,6 +17,12 @@ import {
   verifyAgentToken,
   type AgentTokenAccess,
 } from './agent-token.js';
+import {
+  assertUploadTokenUnexpired,
+  verifyUploadToken,
+  type UploadKind,
+  type UploadTokenClaims,
+} from './agent-upload-token.js';
 import { selfBuildDeliveryCap } from './builder.js';
 import { DEFAULT_SIGNED_URL_TTL_SECONDS, type GcsObjectStore } from './gcs-sign.js';
 import {
@@ -449,6 +455,36 @@ export async function registerAgentChannelRoutes(
   // Screenshots are far heavier than sentences, so they get their own, tighter caps.
   const maxShotsPerBuild = options.maxShotsPerBuild ?? 24;
   const maxShotsPerWindow = options.maxShotsPerWindow ?? 40;
+
+  // Raw PUT parsers for curl --upload-file (octet-stream / PNG / text).
+  const parseRawBuffer = (
+    _request: FastifyRequest,
+    body: Buffer | string | ArrayBuffer,
+    done: (error: Error | null, result?: Buffer) => void,
+  ): void => {
+    if (Buffer.isBuffer(body)) {
+      done(null, body);
+      return;
+    }
+    if (typeof body === 'string') {
+      done(null, Buffer.from(body));
+      return;
+    }
+    done(null, Buffer.from(body));
+  };
+  for (const type of ['application/octet-stream', 'image/png', 'text/plain', 'text/plain; charset=utf-8'] as const) {
+    try {
+      app.addContentTypeParser(type, { parseAs: 'buffer' }, parseRawBuffer);
+    } catch {
+      // Duplicate parser from a prior register on this app.
+    }
+  }
+  // curl --upload-file may omit Content-Type.
+  try {
+    app.addContentTypeParser('', { parseAs: 'buffer' }, parseRawBuffer);
+  } catch {
+    // already registered
+  }
   // A watcher pushes whatever currently builds, so previews arrive on a cadence rather
   // than on the agent's judgement. Only the newest few are worth keeping — each one
   // obsoletes the last — but the hourly allowance is generous, because a build that
@@ -566,6 +602,67 @@ export async function registerAgentChannelRoutes(
       reply.status(401).send({ error: error.message || 'invalid build token' });
       return null;
     }
+  }
+
+  // Auth via ?token= upload capability (no Authorization header).
+  async function resolveUploadBuild(
+    request: FastifyRequest,
+    reply: FastifyReply,
+    expectedKind: UploadKind,
+  ): Promise<{ issueNumber: number; record: SubmissionRecord; upload: UploadTokenClaims } | null> {
+    if (!store || !agentTokenSecret) {
+      reply.status(503).send({ error: 'the build channel is not configured' });
+      return null;
+    }
+
+    const raw =
+      typeof (request.query as { token?: unknown })?.token === 'string'
+        ? (request.query as { token: string }).token.trim()
+        : '';
+    if (!raw) {
+      reply.status(401).send({ error: 'missing upload token' });
+      return null;
+    }
+
+    let upload: UploadTokenClaims;
+    try {
+      upload = verifyUploadToken(raw, agentTokenSecret);
+      assertUploadTokenUnexpired(upload, now());
+    } catch (error) {
+      if (error instanceof InvalidAgentTokenError) {
+        reply.status(401).send({ error: error.message || 'invalid upload token' });
+        return null;
+      }
+      throw error;
+    }
+
+    if (upload.kind !== expectedKind) {
+      reply.status(403).send({ error: `this upload URL is for ${upload.kind}, not ${expectedKind}` });
+      return null;
+    }
+
+    const issueNumber = upload.jobId;
+    const record = await store.getSubmission(issueNumber);
+    if (!record) {
+      reply.status(404).send({ error: 'unknown build' });
+      return null;
+    }
+
+    try {
+      assertAgentTokenActive(
+        { jobId: upload.jobId, roundGeneration: upload.roundGeneration, exp: upload.exp },
+        record,
+        now(),
+      );
+    } catch (error) {
+      if (error instanceof InvalidAgentTokenError) {
+        reply.status(401).send({ error: error.message || 'invalid upload token' });
+        return null;
+      }
+      throw error;
+    }
+
+    return { issueNumber, record, upload };
   }
 
   function stopReason(record: SubmissionRecord): 'abandoned' | 'published' | 'canceled' | 'builder_handoff' | null {
@@ -914,6 +1011,67 @@ export async function registerAgentChannelRoutes(
         accepted: true,
         shot: { id: stored.id, createdAt: stored.createdAt, ...(label ? { label } : {}) },
         ...(await channelState(issueNumber, record)),
+      });
+    },
+  );
+
+  // Raw PNG PUT for screenshot_upload_url (same caps as POST /shot).
+  app.put(
+    '/api/agent/build/shot/upload',
+    {
+      bodyLimit: maxShotBytes + 1024,
+      config: { rateLimit: { max: 120, timeWindow: '1 hour' } },
+    },
+    async (request, reply) => {
+      const resolved = await resolveUploadBuild(request, reply, 'screenshot');
+      if (!resolved) return reply;
+      const { issueNumber, record, upload } = resolved;
+
+      const reject = async (reason: RejectionReason) =>
+        reply.send({ accepted: false, rejected: reason, ...(await channelState(issueNumber, record)) });
+
+      if (stopReason(record)) {
+        return reject('stopped');
+      }
+      if (isRateLimited(shotsByBuild, issueNumber, now(), maxShotsPerWindow)) {
+        return reject('rate_limited');
+      }
+      if ((await store!.countBuildShots(issueNumber)) >= maxShotsPerBuild) {
+        return reject('too_many_shots');
+      }
+
+      const body = request.body;
+      const bytes = Buffer.isBuffer(body)
+        ? body
+        : typeof body === 'string'
+          ? Buffer.from(body)
+          : body instanceof Uint8Array
+            ? Buffer.from(body)
+            : null;
+      if (!bytes || bytes.length === 0) {
+        return reply.status(400).send({ error: 'png body is required' });
+      }
+      if (bytes.length > maxShotBytes) {
+        return reply.status(413).send({ error: 'screenshot is too large' });
+      }
+      if (!bytes.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)) {
+        return reply.status(400).send({ error: 'not a PNG' });
+      }
+
+      const label = upload.label
+        ? sanitizeCreatorText(upload.label, { singleLine: true }).slice(0, MAX_SHOT_LABEL)
+        : '';
+
+      const stored = await store!.appendBuildShot(issueNumber, {
+        data: bytes.toString('base64'),
+        ...(label ? { label } : {}),
+      });
+      options.onEvent?.(issueNumber);
+
+      return reply.send({
+        accepted: true,
+        shot: { id: stored.id, createdAt: stored.createdAt, ...(label ? { label } : {}) },
+        ...(await channelState(issueNumber, (await store!.getSubmission(issueNumber)) ?? record)),
       });
     },
   );

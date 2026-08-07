@@ -16,7 +16,10 @@ Source of truth: `SESSION_WORKFLOW` + `BEHAVIOURAL_CONTRACT` in
 `apps/api/src/mcp-server.ts` (returned by `start`, appended to every tool description).
 
 1. `start` → `show_round` (once) → `get_brief` / `get_seed` / `get_sources` / `get_kit` as needed
-2. Build; `report_progress`; `send_screenshot` when something draws
+2. Build; `report_progress`; screenshot when something draws — prefer
+   `screenshot_upload_url` then `curl --upload-file <png> "$url"` so the bytes never
+   enter the model; `send_screenshot` (base64) is the no-shell fallback (a max-size PNG
+   cannot fit in model output ceilings)
 3. Prefer `stage_source_file` (new/full rewrite) or `patch_source_file` (unified diff) then
    `submit_sources({ fromStaged: true, mode, kitEngineRef })`
    - **Edits:** prefer `patch_source_file({ path, old, new })` (exact unique substring
@@ -288,7 +291,8 @@ queued.
 
 | Area                         | Path                                                                                                                                                                      |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| MCP tools                    | `apps/api/src/mcp-server.ts`                                                                                                                                              |
+| MCP tools                    | `apps/api/src/mcp-server.ts` (`screenshot_upload_url` → signed PUT; `send_screenshot` base64 fallback)                                                                    |
+| Upload tokens                | `apps/api/src/agent-upload-token.ts` + `PUT /api/agent/build/shot/upload`                                                                                                 |
 | Presence pulses              | `apps/api/src/mcp-presence.ts` (`start` → `joining_round` in the MCP dispatcher)                                                                                          |
 | Gate milestones              | `apps/api/src/gate-progress.ts` + `GamesStore.putGateProgress` (GCS; Studio/MCP poll while checks run)                                                                    |
 | Account-session invalidation | `apps/api/src/agent-session-revocation.ts`                                                                                                                                |

@@ -364,6 +364,7 @@ describe('POST /api/mcp (BY-05)', () => {
         'get_example',
         'report_progress',
         'send_screenshot',
+        'screenshot_upload_url',
         'stage_source_file',
         'patch_source_file',
         'list_staged_sources',
@@ -380,6 +381,9 @@ describe('POST /api/mcp (BY-05)', () => {
       description: string;
       annotations?: { title?: string };
     }>;
+    const screenshotUpload = tools.find((t) => t.name === 'screenshot_upload_url');
+    expect(screenshotUpload?.description).toMatch(/curl --upload-file|prefer/i);
+    expect(tools.find((t) => t.name === 'send_screenshot')?.description).toMatch(/screenshot_upload_url|prefer/i);
     const start = tools.find((t) => t.name === 'start');
     expect(start?.description).toMatch(/screenshot|Honour stop|sessionKey/i);
     // start advertises the returned workflow / inbox policy / refusal guidance.
@@ -994,6 +998,66 @@ describe('POST /api/mcp (BY-05)', () => {
     );
     expect(res.isError).toBe(false);
     expect(res.structured).toMatchObject({ ok: true, stop: false });
+  });
+
+  it('screenshot_upload_url + raw PUT delivers without base64 in a tool argument', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    app = await createApp(store);
+    const sessionId = await initialize(app);
+    const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    const minted = await callTool(
+      app,
+      'screenshot_upload_url',
+      { sessionKey, caption: 'via curl' },
+      { 'mcp-session-id': sessionId },
+    );
+    expect(minted.isError).toBe(false);
+    const { url, upload, maxBytes } = minted.structured as {
+      url: string;
+      upload: string;
+      maxBytes: number;
+      expiresAt: string;
+    };
+    expect(maxBytes).toBe(700 * 1024);
+    expect(upload).toMatch(/^curl --upload-file shot\.png '/);
+    expect(url).toMatch(/\/api\/agent\/build\/shot\/upload\?token=/);
+
+    const pngBytes = Buffer.from(TINY_PNG, 'base64');
+    // ~500 KB of valid PNG prefix + padding would blow the signature check; use a
+    // real-sized buffer that still starts with the PNG magic for the size path, and
+    // the tiny PNG for the happy path.
+    const put = await app.inject({
+      method: 'PUT',
+      url: url.replace(/^https?:\/\/[^/]+/, ''),
+      headers: { 'content-type': 'application/octet-stream' },
+      payload: pngBytes,
+    });
+    expect(put.statusCode).toBe(200);
+    expect(put.json()).toMatchObject({
+      accepted: true,
+      shot: { label: 'via curl' },
+      control: { stop: false },
+    });
+
+    const shots = await store.listBuildShots(ISSUE);
+    expect(shots).toHaveLength(1);
+    expect(shots[0]?.label).toBe('via curl');
+
+    // Oversized raw body still refused at the same 700 KB ceiling.
+    const huge = Buffer.alloc(800 * 1024, 0x41);
+    huge.set(pngBytes.subarray(0, 8), 0);
+    const minted2 = await callTool(app, 'screenshot_upload_url', { sessionKey }, { 'mcp-session-id': sessionId });
+    const url2 = (minted2.structured as { url: string }).url.replace(/^https?:\/\/[^/]+/, '');
+    const tooBig = await app.inject({
+      method: 'PUT',
+      url: url2,
+      headers: { 'content-type': 'image/png' },
+      payload: huge,
+    });
+    expect(tooBig.statusCode).toBe(413);
   });
 
   it('rate-limits unauthenticated / invalid start attempts', async () => {
