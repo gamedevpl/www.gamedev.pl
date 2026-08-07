@@ -25,7 +25,7 @@ const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), [tabi
 type StudioConnectWizardProps = {
   // Slug or capability token from the URL.
   game: string;
-  onOpenStudio: (path: string) => void;
+  onOpenStudio: (path: string, options?: { replace?: boolean }) => void;
 };
 
 function copyInputFromStatus(status: SubmissionStatus | null): SelfBuildCopyInput {
@@ -86,7 +86,7 @@ export function StudioConnectWizard({ game, onOpenStudio }: StudioConnectWizardP
   const chapterOver = connectChapterOver(status);
   const roundBuilder = status?.builder ?? 'self';
   const agentConnected = Boolean(status && !awaiting && !chapterOver);
-  const goStudioRef = useRef<(deferred: boolean, builder?: 'self' | 'platform') => void>(() => {});
+  const goStudioRef = useRef<(deferred: boolean, builder?: 'self' | 'platform', replace?: boolean) => void>(() => {});
 
   useEffect(() => {
     recordCreateStep('handoff_shown', 'self');
@@ -187,7 +187,7 @@ export function StudioConnectWizard({ game, onOpenStudio }: StudioConnectWizardP
     }
   };
 
-  const goStudio = (deferred: boolean, builder: 'self' | 'platform' = 'self') => {
+  const goStudio = (deferred: boolean, builder: 'self' | 'platform' = 'self', replace = false) => {
     markStudioOnboarded();
     // Deferred still enters Studio; record both funnel steps.
     if (deferred) {
@@ -195,7 +195,12 @@ export function StudioConnectWizard({ game, onOpenStudio }: StudioConnectWizardP
     }
     recordCreateStep('handoff_enter_studio', builder);
     const address = status?.slug ?? game;
-    onOpenStudio(`${studioPath(address)}?from=handoff`);
+    const path = `${studioPath(address)}?from=handoff`;
+    if (replace) {
+      onOpenStudio(path, { replace: true });
+    } else {
+      onOpenStudio(path);
+    }
   };
 
   useEffect(() => {
@@ -203,9 +208,10 @@ export function StudioConnectWizard({ game, onOpenStudio }: StudioConnectWizardP
   });
 
   // Delivered or finished rounds belong in Studio, not on a connect step.
+  // Replace, not push: Back would land on connect and bounce here again.
   useEffect(() => {
     if (!chapterOver) return;
-    goStudioRef.current(false, roundBuilder);
+    goStudioRef.current(false, roundBuilder, true);
   }, [chapterOver, roundBuilder]);
 
   // Change of mind: hand the round to the Gamedev.pl agent.

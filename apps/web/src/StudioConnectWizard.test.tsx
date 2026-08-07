@@ -252,7 +252,7 @@ describe('StudioConnectWizard', () => {
       await Promise.resolve();
     });
 
-    expect(onOpenStudio).toHaveBeenCalledWith('/studio/bastion-wave?from=handoff');
+    expect(onOpenStudio).toHaveBeenCalledWith('/studio/bastion-wave?from=handoff', { replace: true });
   });
 
   it('leaves the connect step on an ended stall with no agentEndedAt', async () => {
@@ -272,7 +272,7 @@ describe('StudioConnectWizard', () => {
       await Promise.resolve();
     });
 
-    expect(onOpenStudio).toHaveBeenCalledWith('/studio/bastion-wave?from=handoff');
+    expect(onOpenStudio).toHaveBeenCalledWith('/studio/bastion-wave?from=handoff', { replace: true });
   });
 
   it('leaves the connect step when the round has published', async () => {
@@ -286,7 +286,7 @@ describe('StudioConnectWizard', () => {
       await Promise.resolve();
     });
 
-    expect(onOpenStudio).toHaveBeenCalledWith('/studio/bastion-wave?from=handoff');
+    expect(onOpenStudio).toHaveBeenCalledWith('/studio/bastion-wave?from=handoff', { replace: true });
   });
 
   it('uses resume connect mode when a quiet agent resurfaces the card', async () => {
