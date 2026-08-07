@@ -18,6 +18,7 @@ export type PixelIconName =
   | 'close'
   | 'phone'
   | 'rocket'
+  | 'send'
   | 'mic'
   | 'image'
   | 'palette'
@@ -125,21 +126,42 @@ const ICONS: Record<PixelIconName, string[]> = {
     '...............',
     '...............',
   ],
+  // Solid body + bottom fins/exhaust. Avoid `#.#.#` "portholes" — at 16px those
+  // read as eyes and the glyph looks like a little character, not a rocket.
   rocket: [
     '.......#.......',
     '......###......',
     '......###......',
     '.....#####.....',
-    '.....#.#.#.....',
+    '.....#####.....',
     '.....#####.....',
     '.....#####.....',
     '....#######....',
-    '...##.###.##...',
     '...#..###..#...',
+    '..#...###...#..',
     '......###......',
     '.......#.......',
     '......#.#......',
     '.......#.......',
+    '...............',
+  ],
+  // Composer "send" — unambiguous up-arrow. Prefer this over `rocket` on circular
+  // submit buttons; at 16px a rocket silhouette still reads as a creature.
+  send: [
+    '.......#.......',
+    '......###......',
+    '.....#####.....',
+    '....#######....',
+    '...#########...',
+    '......###......',
+    '......###......',
+    '......###......',
+    '......###......',
+    '......###......',
+    '......###......',
+    '......###......',
+    '...............',
+    '...............',
     '...............',
   ],
   mic: [

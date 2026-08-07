@@ -563,7 +563,7 @@ export function CreatorQA({
             onClick={handleSubmit}
             disabled={submitting || !titleReady}
           >
-            <PixelIcon name="rocket" size={14} /> {submitting ? t('submit.submitting') : t('qa.createNow')}
+            <PixelIcon name="send" size={14} /> {submitting ? t('submit.submitting') : t('qa.createNow')}
           </button>
         ) : (
           <button
