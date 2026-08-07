@@ -132,6 +132,14 @@ export type SubmissionStatus = {
    * thread bar; it is not a transcript row.
    */
   lastAgentPresence?: { key: string; at: string };
+  /** Mid-gate milestone while checks run. */
+  gateProgress?: {
+    lane: 'preview' | 'publish' | 'health' | 'proposal';
+    stage: string;
+    index: number;
+    total: number;
+    at: string;
+  };
   /**
    * Pictures of the build, newest first. `branch` items are captures the agent
    * committed; `channel` items were pushed straight to the API and can appear long

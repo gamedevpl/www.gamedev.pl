@@ -39,6 +39,7 @@ import { spawn } from 'node:child_process';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { gateProgressFor, type GateProgressLane, type GateProgressStage } from '../src/gate-progress.js';
 import { runGate } from '../src/gate-runner.js';
 import { createGcsGamesStore } from '../src/games-store.js';
 
@@ -54,7 +55,12 @@ function arg(name: string): string | undefined {
  * stream is what makes a run that hangs diagnosable in Cloud Logging rather than being a
  * silent forty-minute gap.
  */
-function run(command: string, args: string[], cwd: string): Promise<{ code: number; output: string }> {
+function run(
+  command: string,
+  args: string[],
+  cwd: string,
+  options?: { onChunk?: (text: string) => void },
+): Promise<{ code: number; output: string }> {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { cwd, env: process.env });
     let output = '';
@@ -62,6 +68,7 @@ function run(command: string, args: string[], cwd: string): Promise<{ code: numb
       const text = chunk.toString();
       output += text;
       process.stdout.write(text);
+      options?.onChunk?.(text);
     };
     child.stdout.on('data', capture);
     child.stderr.on('data', capture);
@@ -104,12 +111,22 @@ async function main(): Promise<void> {
     process.exit(2);
   }
 
+  const lane: GateProgressLane = health ? 'health' : preview ? 'preview' : proposal ? 'proposal' : 'publish';
+  const writeProgress = async (stage: GateProgressStage) => {
+    try {
+      await store.putGateProgress(slug, version, gateProgressFor(lane, stage));
+    } catch (error) {
+      console.warn('gate progress write failed', error instanceof Error ? error.message : error);
+    }
+  };
+
   const outcome = await runGate(
     slug,
     version,
     {
       store,
       run,
+      onProgress: (progress) => store.putGateProgress(slug, version, progress).catch(() => {}),
       async prepareHarness(engineRef) {
         // A real clone rather than the tarball reader the bake uses: the gate has to *run*
         // the repo's toolchain, which means node_modules, the browser and ffmpeg — a
@@ -126,6 +143,7 @@ async function main(): Promise<void> {
         // to anything that reads the remote URL (hostile-input invariant, BY-11).
         const scrub = await run('git', ['remote', 'set-url', 'origin', `https://github.com/${repo}.git`], dir);
         if (scrub.code !== 0) throw new Error('could not scrub harness git credentials');
+        await writeProgress('installing');
         const install = await run('npm', ['ci', '--no-audit', '--no-fund'], dir);
         if (install.code !== 0) throw new Error('harness install failed');
         // Same reason for the process env: spawn inherits it, and check:game must not.

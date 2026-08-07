@@ -26,8 +26,11 @@ import {
   DELIVERY_MAX_UPLOAD_BYTES,
   DELIVERY_RESERVED_SEGMENTS,
 } from './games-repo-contract.js';
+import type { GateProgress } from './gate-progress.js';
 import { parseKitSidecar } from './kit-registry.js';
 import { KIT_REGISTRY_OBJECT, parseKitRegistry, type KitRegistry } from './kit-window.js';
+
+export type { GateProgress } from './gate-progress.js';
 
 /**
  * Files an agent is allowed to deliver, and nothing else.
@@ -344,6 +347,8 @@ export interface VersionManifest {
   adopted?: { proposalId: string; byUid: string | null; at: string };
   /** Verdict of our own gate. A version without a green one is never publishable. */
   gate?: GateVerdict;
+  /** Mid-gate milestone; cleared on verdict. */
+  gateProgress?: GateProgress;
   /**
    * Preview-lane check (`check:game --preview`). Separate from {@link gate} so a
    * typecheck/smoke/build pass never looks publishable to reconciliation or the catalog.
@@ -555,6 +560,8 @@ export interface GamesStore {
       behaviouralDiff?: boolean;
     },
   ): Promise<void>;
+  /** Mid-gate milestone overwrite. */
+  putGateProgress(slug: string, version: string, progress: GateProgress): Promise<void>;
   /**
    * Records a preview-lane check. Never touches {@link VersionManifest.gate} — a preview
    * pass must not make the version publishable.
@@ -1008,10 +1015,38 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
         ...(result.screenshot ? { screenshot: result.screenshot } : {}),
         ...(result.behaviouralDiff ? { behaviouralDiff: true } : {}),
       };
+      delete manifest.gateProgress;
       // First writer wins: the ref the *first* gate run checked against is the one the
       // verdict is reproducible against, and a re-run must not quietly repin it.
       if (result.engineRef && !manifest.engineRef) manifest.engineRef = result.engineRef;
       await writeObject(`${prefix}/manifest.json`, Buffer.from(JSON.stringify(manifest, null, 2)), 'application/json');
+    },
+
+    async putGateProgress(slug, version, progress) {
+      const prefix = versionPrefix(slug, version);
+      const name = `${prefix}/manifest.json`;
+      // Generation-match retries: never overwrite a concurrent verdict.
+      for (let attempt = 0; attempt < MAX_STAGING_MANIFEST_RETRIES; attempt++) {
+        const got = await readObjectWithGeneration(name);
+        if (!got) throw new Error(`no manifest for ${slug}@${version}`);
+        const manifest = JSON.parse(got.body.toString('utf8')) as VersionManifest;
+        if (manifest.gate || manifest.previewGate || manifest.health) return;
+        manifest.gateProgress = progress;
+        try {
+          await writeObject(name, Buffer.from(JSON.stringify(manifest, null, 2)), 'application/json', {
+            ifGenerationMatch: got.generation,
+          });
+          return;
+        } catch (error) {
+          if (error instanceof StagingGenerationMismatchError) continue;
+          throw error;
+        }
+      }
+      // Retries exhausted — drop advisory progress if still open.
+      const final = await readObject(name);
+      if (!final) throw new Error(`no manifest for ${slug}@${version}`);
+      const finalManifest = JSON.parse(final.toString('utf8')) as VersionManifest;
+      if (finalManifest.gate || finalManifest.previewGate || finalManifest.health) return;
     },
 
     async putPreviewGateResult(slug, version, result) {
@@ -1026,6 +1061,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
         ...(result.status ? { status: result.status } : {}),
         ...(result.screenshot ? { screenshot: result.screenshot } : {}),
       };
+      delete manifest.gateProgress;
       await writeObject(`${prefix}/manifest.json`, Buffer.from(JSON.stringify(manifest, null, 2)), 'application/json');
     },
 
@@ -1040,6 +1076,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
         ...(result.engineRef ? { engineRef: result.engineRef } : {}),
         ...(result.report ? { report: result.report } : {}),
       };
+      delete manifest.gateProgress;
       await writeObject(`${prefix}/manifest.json`, Buffer.from(JSON.stringify(manifest, null, 2)), 'application/json');
     },
 
