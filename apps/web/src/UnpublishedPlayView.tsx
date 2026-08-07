@@ -18,10 +18,8 @@ type UnpublishedPlayViewProps = {
 /**
  * Unpublished half of `/play/<slug>`.
  *
- * Catalog games render {@link GameDetailPage} on the same URL. When the slug is
- * not in the catalog yet (owner draft, or a draft someone shared), this view
- * loads the playable document via `GET /api/games/:slug` and opens the theater
- * — the lifetime permalink stays `/play/<slug>` before and after publish.
+ * Published games auto-open theater over {@link GameDetailPage}. Missing catalog
+ * entries load via `GET /api/games/:slug` here — same lifetime permalink.
  *
  * Legacy `/draft/<slug>` links rewrite to `/play/<slug>` in the router.
  */

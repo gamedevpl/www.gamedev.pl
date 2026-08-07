@@ -105,6 +105,8 @@ export function App() {
   // Builds actually in flight, from the server — the header badge's source of truth.
   // Paused while a game is on screen because the player covers the header.
   const activeBuildCount = useActiveBuildCount(myGamesRefreshKey, !stageContent);
+  // `/play/<slug>` auto-opens theater; Close keeps the URL and remembers dismiss.
+  const playTheaterDismissedSlugRef = useRef<string | null>(null);
 
   // Greenfield submission state
   // 'refining' is the spec-refiner call that precedes a submission — a few seconds
@@ -235,6 +237,37 @@ export function App() {
     return () => document.body.classList.remove('player-open');
   }, [stageContent]);
 
+  // `/play/<slug>` auto-opens theater once the catalog confirms the game. Close leaves
+  // GameDetailPage on the same URL. Canonical `/:handle/:slug` stays preview-first.
+  // In-place Play from home/profile is not cleared here.
+  useEffect(() => {
+    if (route.view !== 'play') {
+      playTheaterDismissedSlugRef.current = null;
+      return;
+    }
+
+    const entry = catalogEntries.find((game) => game.slug === route.slug);
+
+    if (stageContent?.type === 'catalog' && stageContent.game.slug === route.slug) {
+      if (entry && stageContent.game !== entry) {
+        setStageContent((prev) =>
+          prev?.type === 'catalog' && prev.game.slug === route.slug ? { ...prev, game: entry } : prev,
+        );
+      }
+      // Ready + missing → UnpublishedPlayView.
+      if (catalogStatus === 'ready' && !entry) {
+        setStageContent(null);
+      }
+      return;
+    }
+
+    if (playTheaterDismissedSlugRef.current === route.slug) return;
+    // Wait so unknown slugs do not flash a 404 theater.
+    if (catalogStatus !== 'ready' || !entry) return;
+
+    setStageContent({ type: 'catalog', game: entry });
+  }, [route, catalogEntries, catalogStatus, stageContent]);
+
   // Guard against accidental reload/close while a game is open. The browser shows
   // its native "Leave site?" confirmation; games run in a sandboxed iframe with no
   // access to parent storage, so their internal progress can't be persisted here —
@@ -258,8 +291,7 @@ export function App() {
     // would just 401. Don't fetch (and don't render an error) until signed in.
     // Outside private beta, catalog reads stay public (owner decision).
     if (privateBeta && !user) return;
-    // Home renders the gallery; `/play/<slug>` renders one preview-first game page.
-    // Both need catalog metadata, but only Home mounts the grid itself.
+    // Home needs the gallery; `/play/<slug>` needs catalog to auto-open theater.
     if (route.view !== 'home' && route.view !== 'play') return;
 
     let cancelled = false;
@@ -764,9 +796,8 @@ export function App() {
   }, [route, stageContent, unpublishedPlayTheater, t]);
 
   function handlePlayGame(game: CatalogEntry) {
-    // Explicit Play is the execution boundary. Shared `/play/<slug>` links land on a
-    // static preview first; catalog/profile Play buttons open the sandboxed theater
-    // immediately without making the preview page masquerade as a running game.
+    // In-place Play; on `/play/<slug>` also re-opens after Close.
+    playTheaterDismissedSlugRef.current = null;
     setStageContent({ type: 'catalog', game });
     // Soft refresh so "continue" / genre picks update after the next home visit.
     setRecommendationsRefreshKey((n) => n + 1);
@@ -775,7 +806,16 @@ export function App() {
   function handleRemixGame(game: CatalogEntry, initialRemixRequest?: string) {
     // The game still has to be mounted for Remix to swap and preview its document,
     // but the sheet opens on the first frame — no theater detour and second wrench.
+    playTheaterDismissedSlugRef.current = null;
     setStageContent({ type: 'catalog', game, initialRemixOpen: true, initialRemixRequest });
+  }
+
+  function handleExitCatalogTheater() {
+    // Keep `/play/<slug>`; mark dismissed so auto-open does not loop.
+    if (route.view === 'play') {
+      playTheaterDismissedSlugRef.current = route.slug;
+    }
+    setStageContent(null);
   }
 
   async function handlePlayTogether(game: CatalogEntry) {
@@ -841,7 +881,7 @@ export function App() {
           // it short so the title stays the hero of the bar.
           badge={{ icon: 'sparkle', label: t('ai.generatedShort') }}
           source={{ slug: stageContent.game.slug }}
-          onExit={() => setStageContent(null)}
+          onExit={handleExitCatalogTheater}
           orientation={stageContent.game.orientation}
           reportSlug={stageContent.game.slug}
           submittedBy={stageContent.game.submittedBy}

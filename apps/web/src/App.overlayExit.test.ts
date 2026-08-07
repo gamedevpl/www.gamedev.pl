@@ -10,10 +10,10 @@ import i18n from './i18n/index.js';
 /**
  * Closing a game reveals the page that opened it.
  *
- * Published play is an in-place theater now: catalog/profile buttons open over their
- * current page, while a shared `/play/<slug>` link first renders a static game page.
- * Closing must therefore dismiss the theater without mutating browser history in either
- * case. That keeps catalog position and leaves a shared link shareable after play.
+ * Published play is an in-place theater: catalog/profile buttons open over their
+ * current page, while a shared `/play/<slug>` link auto-opens the theater and Close
+ * reveals the static game page underneath. Closing must dismiss the theater without
+ * mutating browser history in either case.
  */
 
 async function flushEffects() {
@@ -114,13 +114,7 @@ describe('closing a full-viewport game', () => {
 
     const back = vi.spyOn(window.history, 'back').mockImplementation(() => {});
 
-    const play = container.querySelector<HTMLButtonElement>('.game-page-actions .primary-btn');
-    expect(play).not.toBeNull();
-    await act(async () => {
-      play?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      await flushEffects();
-    });
-
+    // Deep link auto-opens the theater; no Play click required.
     const exit = container.querySelector<HTMLButtonElement>('.exit-btn');
     expect(exit).not.toBeNull();
     await act(async () => {
@@ -131,6 +125,7 @@ describe('closing a full-viewport game', () => {
     expect(back).not.toHaveBeenCalled();
     expect(window.location.pathname).toBe('/play/sky-dodge');
     expect(container.querySelector('.game-page h1')?.textContent).toBe('Sky Dodge');
+    expect(container.querySelector('.exit-btn')).toBeNull();
 
     await act(async () => {
       root.unmount();

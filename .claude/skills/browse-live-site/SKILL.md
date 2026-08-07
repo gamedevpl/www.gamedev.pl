@@ -138,10 +138,10 @@ roughly in order of how often they turn up real issues:
 
 - **Home** (`/`) — scroll to the bottom too; lazy-loaded catalog cards fetch media on scroll.
 - **Play a real game** (`/play/<slug>` for a `single-player` catalog entry from
-  `GET /api/catalog`) — the shareable page is **preview-first** (screenshot + Play;
-  no autoplaying iframe). Click Play (or the preview) to open the sandboxed theater,
-  then click into the game's iframe and send keyboard input; a game that never
-  responds to input is the most user-visible failure mode there is.
+  `GET /api/catalog`) — the play permalink **auto-opens** the sandboxed theater.
+  Canonical `/:handle/:slug` pages stay preview-first (screenshot + Play). Click
+  into the game's iframe and send keyboard input; a game that never responds to
+  input is the most user-visible failure mode there is.
 - **Play alias rewrite** (`/ai/<slug>` or `/ay/<slug>`) — should 30x/rewrite to the canonical
   `/play/<slug>` (see `apps/web/src/router.ts`).
 - **Multiplayer lobby** — click "Play together" on a catalog entry with `multiplayer` set;
