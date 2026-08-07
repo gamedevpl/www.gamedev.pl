@@ -15468,6 +15468,22 @@ body.remix-entry-open {
   margin: 0 0 1rem;
 }
 
+.admin-assessments-export {
+  font: inherit;
+  font-size: inherit;
+  color: var(--turquoise);
+  background: transparent;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  padding: 0.15rem 0.5rem;
+  cursor: pointer;
+  margin-left: 0.35rem;
+}
+
+.admin-assessments-export:hover {
+  border-color: var(--turquoise);
+}
+
 .admin-assessments-table {
   width: 100%;
   border-collapse: collapse;

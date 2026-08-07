@@ -17,6 +17,7 @@ export function AdminAssessmentsPanel() {
   const [error, setError] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const [source, setSource] = useState<ReviewSweepSource>('catalog');
   const [maxGames, setMaxGames] = useState('40');
   const [releasePerDay, setReleasePerDay] = useState('10');
@@ -134,7 +135,26 @@ export function AdminAssessmentsPanel() {
         <>
           <p className="admin-assessments-summary">
             {data.total} assessment{data.total === 1 ? '' : 's'} across {data.games.length} game
-            {data.games.length === 1 ? '' : 's'}.
+            {data.games.length === 1 ? '' : 's'}.{' '}
+            <button
+              type="button"
+              className="admin-assessments-export"
+              onClick={() => {
+                void navigator.clipboard.writeText(JSON.stringify(data, null, 2)).then(
+                  () => {
+                    setCopied(true);
+                    window.setTimeout(() => setCopied(false), 2000);
+                  },
+                  () => setMessage('could not copy assessments'),
+                );
+              }}
+            >
+              {copied ? 'Copied' : 'Copy JSON'}
+            </button>
+            <span className="admin-assessments-slug">
+              {' '}
+              → paste into a coding agent (skill <code>ingest-desk-reviews</code>).
+            </span>
           </p>
 
           <table className="admin-assessments-table">
