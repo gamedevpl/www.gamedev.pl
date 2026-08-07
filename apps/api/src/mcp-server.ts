@@ -39,10 +39,11 @@ import {
   type AgentTokenAccess,
   type AgentTokenClaims,
 } from './agent-token.js';
+import { DEFAULT_UPLOAD_URL_TTL_SECONDS, mintUploadToken, uploadCurlCommand } from './agent-upload-token.js';
 import { decodeCanonicalBase64Utf8, InvalidBase64Error } from './canonical-base64.js';
 import { selfBuildDeliveryCap } from './builder.js';
 import type { BuilderKind } from './builder.js';
-import { MAX_UPLOAD_FILES, type GamesStore } from './games-store.js';
+import { assertDeliverableSourcePath, InvalidUploadError, MAX_UPLOAD_FILES, type GamesStore } from './games-store.js';
 import { detectStall, resolveJobState, toSubmissionStatus } from './job-state.js';
 import { largeSourceFileHint, moduleSizeWarnings } from './module-size.js';
 import type { GcsObjectStore } from './gcs-sign.js';
@@ -528,7 +529,7 @@ const BEHAVIOURAL_CONTRACT = [
   // language they did not choose, which is the whole reason the field exists.
   "Write progress in the creator's language: when get_brief.locales[0] is not 'en', send report_progress with textLocalized and locale as well as the English text.",
   'Send a screenshot as soon as the game draws anything playable via screenshot_upload_url + curl --upload-file. There is no base64 screenshot tool — PNG bytes must never enter the model.',
-  'While iterating, deliver with mode=preview (no TRACE required). Prefer stage_source_file for new/rewritten paths and patch_source_file for edits — prefer old+new exact replace; patch=unified diff also works (never re-emit a whole large render.ts/model.ts). Honour warnings.code=module_too_large by splitting before more feature work. Then submit_sources({ fromStaged:true, mode:"preview", kitEngineRef }) — fromStaged overlays onto the latest delivery/seed so only changed paths need staging. Avoid one giant files[] payload. Only mode=publish needs TRACE/PLAYTEST and can go green.',
+  'While iterating, deliver with mode=preview (no TRACE required). Prefer stage_upload_url + curl --upload-file for new/rewritten paths when you have shell; stage_source_file is the no-shell fallback. Prefer patch_source_file for edits — prefer old+new exact replace; patch=unified diff also works (never re-emit a whole large render.ts/model.ts). Honour warnings.code=module_too_large by splitting before more feature work. Then submit_sources({ fromStaged:true, mode:"preview", kitEngineRef }) — fromStaged overlays onto the latest delivery/seed so only changed paths need staging. Avoid one giant files[] payload. Only mode=publish needs TRACE/PLAYTEST and can go green.',
   'If the last gate was preview_failed / red / kit_outdated (warnings.code=must_fix_gate), fix then submit_sources again — do not stop at stage/patch/show_round. Staging does not re-run the gate; the creator card stays on the refused delivery until you submit.',
   'Run kit checks green (at least check:static) before submit_sources when you have a local kit checkout; otherwise submit and let the gate run checks.',
   'After submit_sources, if you will not deliver more this round, call end (required — warnings.code=call_end; submit already unlocks creator handoff). Prefer end over sitting in a get_gate_verdict loop — Studio shows the gate. Do not stop after submit alone without end. If you are fixing a refused gate, ignore call_end until after the next submit_sources.',
@@ -566,7 +567,7 @@ const SESSION_WORKFLOW: readonly string[] = [
   'get_kit — keep engineRef for submit_sources; prefer read_kit_files for several known small paths (else list_kit_files / search_kit_files / read_kit_file / read_kit_file_fragment) when shell unpack is unavailable; otherwise unpack via the returned one-liner and follow SKILL.md locally. Never dump the whole kit into context.',
   'Build the game — continuing the seed or sources you fetched, otherwise from the kit; report_progress before and after long steps. Soft module budget: keep each game/*.ts under ~350 lines / ~12 KiB. When a file approaches that, split cohesive pieces (render→art/ui/hud/rooms; model→tables/layout/types; runtime→systems) before more feature work. Honour warnings.code=module_too_large the same way you honour call_end — act, then continue.',
   'As soon as the game draws anything playable: screenshot_upload_url then curl --upload-file <png> "$url". There is no base64 send path — PNG bytes must never enter the model. Without shell egress, skip mid-build screenshots; the gate still captures on delivery.',
-  'While iterating: stage_source_file({ path, content }) for new or fully rewritten paths; for edits prefer patch_source_file({ path, old, new }) — exact unique substring replace, no unified-diff arithmetic. Or patch_source_file({ path, patch }) with a unified diff (bare @@ ok). Stage only changed paths — never re-upload the whole tree. Then submit_sources({ fromStaged: true, mode: "preview", kitEngineRef }) — fromStaged overlays onto the latest delivery/seed. TRACE/PLAYTEST not required; Studio gets a playable draft after typecheck→smoke→build. Inline files[] still works for tiny trees.',
+  'While iterating: prefer stage_upload_url({ path }) then curl --upload-file <file> "$url" for new/rewritten paths when you have shell egress (bytes never re-enter the model). Fall back to stage_source_file({ path, content }) without shell. For edits prefer patch_source_file({ path, old, new }) — exact unique substring replace, no unified-diff arithmetic. Or patch_source_file({ path, patch }) with a unified diff (bare @@ ok). Stage only changed paths — never re-upload the whole tree. Then submit_sources({ fromStaged: true, mode: "preview", kitEngineRef }) — fromStaged overlays onto the latest delivery/seed. TRACE/PLAYTEST not required; Studio gets a playable draft after typecheck→smoke→build. Inline files[] still works for tiny trees.',
   'Staging is already visible: once index.html, game.ts, style.css and GAME.json are present across staging + delivery/seed, the platform assembles a live playable preview — without waiting for submit or the gate. Stage a runnable tree early and keep staging/patching as you work; a buffer that does not compile simply leaves the previous preview up.',
   'After every successful submit_sources: creator handoff is already unlocked; still call end immediately if you will not deliver more (warnings.code=call_end). Prefer end over sitting in a get_gate_verdict loop — Studio shows the gate. submit alone leaves your MCP session open — end sets stop:true. ChatGPT-class agents often stop after submit; end closes the session cleanly.',
   'If a reply has control.reason=builder_handoff, stop work and call end once. That acknowledges the creator’s handoff request; do not retry other build calls afterward.',
@@ -3233,6 +3234,88 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       },
     },
 
+    stage_upload_url: {
+      outputSchema: {
+        type: 'object',
+        properties: {
+          url: { type: 'string' },
+          expiresAt: { type: 'string' },
+          expiresInSeconds: { type: 'number' },
+          path: { type: 'string' },
+          upload: { type: 'string' },
+          maxBytes: { type: 'number' },
+        },
+        required: ['url', 'expiresAt', 'expiresInSeconds', 'path', 'upload', 'maxBytes'],
+      },
+      // Not READS: each call mints a fresh nonce, so it is neither read-only nor idempotent.
+      annotations: { title: 'Get a stage upload URL', ...WRITES },
+      description:
+        'Preferred way to stage a new or fully rewritten source file when you have curl/shell egress. ' +
+        'Returns a short-lived signed PUT URL bound to `path` — run the returned `upload` one-liner ' +
+        '(curl --upload-file <file> "$url"). The file bytes never enter the model; the PUT applies the same ' +
+        'validation as stage_source_file (path allowlist, size caps, module_too_large hint) and returns the ' +
+        'staging receipt with stop/pendingMessages. Then submit_sources({ fromStaged: true, … }). ' +
+        'Use stage_source_file / patch_source_file when you have no shell. ' +
+        BEHAVIOURAL_CONTRACT,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          sessionKey: SESSION_KEY_PROP,
+          path: {
+            type: 'string',
+            description: 'Game-relative path (e.g. game.ts, game/render.ts). Bound into the URL.',
+          },
+          slug: { type: 'string' },
+        },
+        required: ['path'],
+      },
+      handler: async (args, ctx) => {
+        const auth = await resolveAuth(ctx, args);
+        if (!('channelToken' in auth)) return auth;
+        if (!agentTokenSecret) return toolErr('the MCP build endpoint is not configured');
+        const pathRaw = typeof args.path === 'string' ? args.path.trim() : '';
+        if (!pathRaw) return toolErr('path is required');
+        let path: string;
+        try {
+          path = assertDeliverableSourcePath(pathRaw);
+        } catch (error) {
+          if (error instanceof InvalidUploadError) return toolErr(error.message);
+          throw error;
+        }
+        const slug =
+          typeof args.slug === 'string' && args.slug.trim() ? args.slug.trim() : (auth.record.slug ?? undefined);
+        if (!slug && !auth.record.slug) {
+          return toolErr('slug is required before staging — send the slug from get_brief / start');
+        }
+        if (auth.record.slug && slug && auth.record.slug !== slug) {
+          return toolErr(`this build delivers to ${auth.record.slug}, not ${slug}`);
+        }
+        const generation = auth.record.roundGeneration ?? auth.claims.roundGeneration ?? 1;
+        const ttlSeconds = DEFAULT_UPLOAD_URL_TTL_SECONDS;
+        // One clock read: advertised expiresAt must match the signed exp.
+        const issuedAt = now();
+        const token = mintUploadToken(agentTokenSecret, {
+          jobId: auth.issueNumber,
+          roundGeneration: generation,
+          kind: 'stage',
+          path,
+          now: issuedAt,
+          ttlSeconds,
+        });
+        const expiresAt = new Date(issuedAt + ttlSeconds * 1000).toISOString();
+        const url = `${canonicalAppBaseUrl()}/api/agent/build/sources/stage/upload?token=${encodeURIComponent(token)}`;
+        const localHint = path.includes('/') ? path.split('/').pop()! : path;
+        return toolOk({
+          url,
+          expiresAt,
+          expiresInSeconds: ttlSeconds,
+          path,
+          upload: uploadCurlCommand(url, localHint, 'text/plain; charset=utf-8'),
+          maxBytes: 1_000_000,
+        });
+      },
+    },
+
     stage_source_file: {
       // Overwrites the same path if staged again, so it is not additive.
       annotations: { title: 'Stage one source file', ...CONSUMES },
@@ -3265,7 +3348,9 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         required: ['ok', 'path', 'bytes', 'staged', 'stop', 'pendingMessages'],
       },
       description:
-        'Upload ONE game source file into this round’s staging buffer (full rewrite). Prefer this for new files; ' +
+        'Upload ONE game source file into this round’s staging buffer (full rewrite) via inline content. ' +
+        'Prefer stage_upload_url + curl --upload-file when you have shell egress — re-emitting file contents ' +
+        'as a tool argument burns output tokens. Prefer this for new files without shell; ' +
         'for edits to an existing path prefer patch_source_file so you do not re-emit a whole large file. ' +
         'Prefer over a giant submit_sources files[] when the tree is large (Claude Chat often truncates huge tool JSON). ' +
         'Call once per path, then submit_sources({ fromStaged: true, mode, kitEngineRef }). Overwrites the same path if staged again. ' +
