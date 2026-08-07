@@ -691,7 +691,7 @@ describe('LanguageSwitcher in header', () => {
     vi.restoreAllMocks();
   });
 
-  it('renders one button that toggles to the other language', async () => {
+  it('renders EN and PL with the active language pressed', async () => {
     await i18n.changeLanguage('en');
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = String(input);
@@ -727,17 +727,22 @@ describe('LanguageSwitcher in header', () => {
       await Promise.resolve();
     });
 
-    const switcher = container.querySelector<HTMLButtonElement>('button.language-switcher');
+    const switcher = container.querySelector('.language-switcher');
     // Header + (closed) menu: only the header instance is mounted while the menu is closed.
     expect(switcher).not.toBeNull();
-    expect(switcher?.textContent).toBe('PL');
+    const buttons = [...(switcher?.querySelectorAll('button') ?? [])];
+    expect(buttons.map((b) => b.textContent)).toEqual(['EN', 'PL']);
+    expect(buttons[0]?.getAttribute('aria-pressed')).toBe('true');
+    expect(buttons[1]?.getAttribute('aria-pressed')).toBe('false');
 
     await act(async () => {
-      switcher?.click();
+      buttons[1]?.click();
       await Promise.resolve();
     });
     expect(i18n.language).toMatch(/^pl/);
-    expect(container.querySelector('button.language-switcher')?.textContent).toBe('EN');
+    const after = [...(container.querySelectorAll('.language-switcher button') ?? [])];
+    expect(after[0]?.getAttribute('aria-pressed')).toBe('false');
+    expect(after[1]?.getAttribute('aria-pressed')).toBe('true');
 
     await act(async () => root.unmount());
   });

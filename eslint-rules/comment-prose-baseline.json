@@ -434,7 +434,7 @@
     "apps/web/src/i18n/locales.test.ts": 272,
     "apps/web/src/InstallPrompt.test.tsx": 183,
     "apps/web/src/InstallPrompt.tsx": 201,
-    "apps/web/src/LanguageSwitcher.tsx": 29,
+    "apps/web/src/LanguageSwitcher.tsx": 12,
     "apps/web/src/legal/index.ts": 50,
     "apps/web/src/legal/inline.test.tsx": 33,
     "apps/web/src/legal/inline.tsx": 108,
