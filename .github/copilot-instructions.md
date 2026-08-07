@@ -99,5 +99,9 @@ Despite the Claude-specific directory, it is agent-agnostic: it covers verifying
 isolated checkout, what to scrutinise in a diff (scope creep, invariants, supply chain), and
 why a CI check that never ran is not a pass.
 
+To hand `/review` desk keep/cut outcomes to catalog agents in the games repo, read
+[`.claude/skills/ingest-desk-reviews/SKILL.md`](../.claude/skills/ingest-desk-reviews/SKILL.md)
+(export JSON → sync onto `game-assessment` issues).
+
 If it turns out to be wrong or incomplete, update it as part of your change — that file
 carries a mandatory self-improvement clause.

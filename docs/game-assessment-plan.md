@@ -32,11 +32,14 @@ judgment_ from someone who knows what the shelf should feel like.
 ## Non-goals (this steel thread)
 
 - Auto-unpublishing or auto-filing issues from a cut — the desk records judgment; acting
-  on it stays a human operator decision.
+  on it stays a human operator decision. **Manual** sync into games-repo
+  `game-assessment` issues (label `desk-reviewed`) is the supported handoff — see
+  [`.claude/skills/ingest-desk-reviews/SKILL.md`](../.claude/skills/ingest-desk-reviews/SKILL.md).
 - Star ratings or free-form rubrics beyond the fixed five-axis checklist.
 - Granting reviewers access to _private_ (unshared) creator drafts.
 - Feeding raw assessment notes into agent prompts — same "aggregates leave the building"
-  rule as player feedback until a later IL phase deliberately opts in.
+  rule as player feedback until a later IL phase deliberately opts in. Synced issue
+  evidence is for paraphrased plans only.
 
 ## Auth contract
 
@@ -107,9 +110,12 @@ into the existing `health` bucket (same unlisted-console posture as `/admin`).
 
 - Re-queue a game after a major revision (invalidate assessments when `publishedAt` or
   delivered version advances).
-- Optional export / CSV for offline curation sessions.
+- Optional export / CSV for offline curation sessions — **JSON download** on Admin →
+  Assessments is the first cut; feed it to
+  `www.gamedev.pl-games` `.github/scripts/sync-desk-reviews.ts`.
 - Tie cut consensus into the improvement-loop suggestion router as a _signal class_,
   never as raw note text.
+- Operator-triggered Cloud Run → games-repo sync (still no auto-assign).
 - **Reviewer-captured clip attached to an assessment.** The live game runs in a sandboxed
   iframe with no `allow-same-origin`, so the parent page cannot call
   `canvas.captureStream()` / `MediaRecorder` on the game. A PNG still is already possible

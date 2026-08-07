@@ -134,7 +134,26 @@ export function AdminAssessmentsPanel() {
         <>
           <p className="admin-assessments-summary">
             {data.total} assessment{data.total === 1 ? '' : 's'} across {data.games.length} game
-            {data.games.length === 1 ? '' : 's'}.
+            {data.games.length === 1 ? '' : 's'}.{' '}
+            <button
+              type="button"
+              className="admin-assessments-export"
+              onClick={() => {
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `assessments-${new Date().toISOString().slice(0, 10)}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+            >
+              Download JSON
+            </button>
+            <span className="admin-assessments-slug">
+              {' '}
+              → sync into games-repo <code>game-assessment</code> issues (skill <code>ingest-desk-reviews</code>).
+            </span>
           </p>
 
           <table className="admin-assessments-table">
