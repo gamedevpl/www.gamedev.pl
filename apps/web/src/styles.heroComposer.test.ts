@@ -55,6 +55,17 @@ describe('desktop hero composer pill', () => {
     const labelRule = firstRuleBody('.prompt-composer-bar .build-btn-label');
     expect(labelRule).toMatch(/clip:\s*rect\(0,\s*0,\s*0,\s*0\)/);
   });
+
+  it('keeps a busy send readable: full opacity and a spinner the eye can see', () => {
+    // button:disabled greys the arrow; without these overrides the in-flight state
+    // looks broken rather than working.
+    const busy = firstRuleBody('.prompt-composer-bar .build-btn.is-busy');
+    expect(busy).toMatch(/opacity:\s*1/);
+    expect(busy).toMatch(/cursor:\s*progress/);
+
+    const spinner = firstRuleBody('.build-btn-spinner');
+    expect(spinner).toMatch(/animation:\s*status-spin/);
+  });
 });
 
 describe('mobile hero composer pill', () => {

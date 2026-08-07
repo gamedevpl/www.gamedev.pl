@@ -330,6 +330,16 @@ export function HeroPromptSection({
     onSubmitSpec(finalPrompt);
   };
 
+  // Desktop clips the build label into a 36px circle, so busy text never appears —
+  // same trap the studio composer hit. Spinner + status line are the eye can see.
+  const isBusy = submissionStatus !== 'idle' || mockStatus === 'loading';
+  const busyLabel =
+    submissionStatus === 'refining'
+      ? t('qa.analyzing')
+      : submissionStatus === 'loading' || mockStatus === 'loading'
+        ? t('submit.submitting')
+        : null;
+
   return (
     <section className="hero-prompt-section">
       {/* No mascot here: the header already shows him a few pixels above, and a second
@@ -345,8 +355,8 @@ export function HeroPromptSection({
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
-        <form onSubmit={handlePrimarySubmit} className="prompt-box-form">
-          <div className="prompt-composer-bar">
+        <form onSubmit={handlePrimarySubmit} className="prompt-box-form" aria-busy={isBusy || undefined}>
+          <div className={`prompt-composer-bar${isBusy ? ' is-busy' : ''}`}>
             <div className="prompt-attach" ref={attachMenuRef}>
               <button
                 type="button"
@@ -356,6 +366,7 @@ export function HeroPromptSection({
                 aria-label={t('hero.attachMenuAria')}
                 aria-expanded={attachMenuOpen}
                 aria-haspopup="menu"
+                disabled={isBusy}
               >
                 <PixelIcon name="plus" size={18} />
               </button>
@@ -409,6 +420,8 @@ export function HeroPromptSection({
               placeholder={t('hero.bigPromptPlaceholder')}
               enterKeyHint="go"
               autoComplete="off"
+              disabled={isBusy}
+              readOnly={isBusy}
             />
 
             <div className="prompt-bar-actions">
@@ -419,6 +432,7 @@ export function HeroPromptSection({
                 title={isListening ? t('hero.micListening') : t('hero.micStart')}
                 aria-label={isListening ? t('hero.micListening') : t('hero.micStart')}
                 aria-pressed={isListening}
+                disabled={isBusy}
               >
                 <PixelIcon name="mic" size={18} />
               </button>
@@ -426,44 +440,33 @@ export function HeroPromptSection({
 
             <button
               type="submit"
-              className="primary-btn build-btn"
-              title={
-                submissionStatus === 'refining'
-                  ? t('qa.analyzing')
-                  : submissionStatus === 'loading' || mockStatus === 'loading'
-                    ? t('submit.submitting')
-                    : t('hero.buildGameButton')
-              }
-              aria-label={
-                submissionStatus === 'refining'
-                  ? t('qa.analyzing')
-                  : submissionStatus === 'loading' || mockStatus === 'loading'
-                    ? t('submit.submitting')
-                    : t('hero.buildGameButton')
-              }
-              disabled={
-                submissionStatus !== 'idle' ||
-                mockStatus === 'loading' ||
-                (!promptText.trim() && attachments.length === 0)
-              }
+              className={`primary-btn build-btn${isBusy ? ' is-busy' : ''}`}
+              title={busyLabel ?? t('hero.buildGameButton')}
+              aria-label={busyLabel ?? t('hero.buildGameButton')}
+              disabled={isBusy || (!promptText.trim() && attachments.length === 0)}
             >
-              <PixelIcon name="send" size={16} />
+              {isBusy ? (
+                <span className="build-btn-spinner" aria-hidden="true" />
+              ) : (
+                <PixelIcon name="send" size={16} />
+              )}
               {/* Three states, not two: the refiner runs for a few seconds before
                   anything is submitted, and saying "Submitting…" through it was the
                   creator's first impression of a feature that had just started
                   working at all. Visually clipped on desktop (circular send);
                   shown on the phone's full-width row. */}
-              <span className="build-btn-label">
-                {submissionStatus === 'refining'
-                  ? t('qa.analyzing')
-                  : submissionStatus === 'loading' || mockStatus === 'loading'
-                    ? t('submit.submitting')
-                    : t('hero.buildGameButton')}
-              </span>
+              <span className="build-btn-label">{busyLabel ?? t('hero.buildGameButton')}</span>
             </button>
           </div>
 
-          {(micNotice || isListening) && (
+          {busyLabel ? (
+            <p className="prompt-busy-status" role="status" aria-live="polite">
+              <span className="build-btn-spinner" aria-hidden="true" />
+              {busyLabel}
+            </p>
+          ) : null}
+
+          {(micNotice || isListening) && !isBusy && (
             <p className="mic-notice-text" role="status" aria-live="polite">
               {micNotice ?? t('hero.micListening')}
             </p>
@@ -482,6 +485,7 @@ export function HeroPromptSection({
                       className="remove-attachment-btn"
                       onClick={() => removeAttachment(item.id)}
                       title={t('hero.removeAttachment')}
+                      disabled={isBusy}
                     >
                       <PixelIcon name="close" size={12} />
                     </button>
@@ -503,7 +507,12 @@ export function HeroPromptSection({
                 </p>
               </div>
               <div className="matched-actions">
-                <button type="button" className="primary-btn play-match-btn" onClick={() => onPlayGame?.(matchedGame)}>
+                <button
+                  type="button"
+                  className="primary-btn play-match-btn"
+                  onClick={() => onPlayGame?.(matchedGame)}
+                  disabled={isBusy}
+                >
                   <PixelIcon name="play" size={14} /> {t('hero.smartPlayBtn', { title: matchedGame.title })}
                 </button>
               </div>
@@ -511,12 +520,12 @@ export function HeroPromptSection({
           )}
 
           {!matchedGame && promptText.trim().length >= 3 && (
-            <div className="smart-intent-card creation-card">
+            <div className={`smart-intent-card creation-card${isBusy ? ' is-busy' : ''}`}>
               <div className="creation-info">
                 <span className="smart-badge creation-badge">
                   <PixelIcon name="sparkle" size={14} /> {t('hero.smartNoMatchTitle', { query: promptText.trim() })}
                 </span>
-                <p className="creation-sub">{t('hero.smartNoMatchSub')}</p>
+                <p className="creation-sub">{busyLabel ?? t('hero.smartNoMatchSub')}</p>
               </div>
             </div>
           )}

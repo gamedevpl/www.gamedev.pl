@@ -136,6 +136,59 @@ describe('HeroPromptSection', () => {
     await act(async () => root.unmount());
   });
 
+  it('shows a spinner and status line while the refiner or submit is in flight', async () => {
+    // Desktop clips the build label into a circle. Disabling the send arrow without a
+    // spinner left creators staring at a faded icon with no idea anything was happening.
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    const renderWithStatus = async (submissionStatus: 'idle' | 'refining' | 'loading') => {
+      await act(async () => {
+        root.render(
+          createElement(HeroPromptSection, {
+            initialPrompt: 'Lets create a remake of Beasts and Pumpkins game',
+            catalogEntries: [],
+            submissionStatus,
+            submissionError: null,
+            onSubmitSpec: vi.fn(),
+            mockStatus: 'idle',
+            mockError: null,
+            onGenerateMock: vi.fn(),
+          }),
+        );
+        await flushEffects();
+      });
+    };
+
+    await renderWithStatus('refining');
+    expect(container.querySelector('.prompt-composer-bar.is-busy')).not.toBeNull();
+    expect(container.querySelector('.build-btn.is-busy')).not.toBeNull();
+    expect(container.querySelector('.build-btn-spinner')).not.toBeNull();
+    expect(container.querySelector('.prompt-busy-status')?.textContent).toMatch(/Analyzing your idea/i);
+    expect(container.querySelector('.creation-card.is-busy .creation-sub')?.textContent).toMatch(
+      /Analyzing your idea/i,
+    );
+    expect(container.querySelector<HTMLInputElement>('.big-prompt-input')?.disabled).toBe(true);
+    expect(container.querySelector('.prompt-box-form')?.getAttribute('aria-busy')).toBe('true');
+
+    await renderWithStatus('loading');
+    expect(container.querySelector('.prompt-busy-status')?.textContent).toMatch(/Submitting/i);
+    expect(container.querySelector('.build-btn-spinner')).not.toBeNull();
+
+    await renderWithStatus('idle');
+    expect(container.querySelector('.prompt-composer-bar.is-busy')).toBeNull();
+    expect(container.querySelector('.build-btn-spinner')).toBeNull();
+    expect(container.querySelector('.prompt-busy-status')).toBeNull();
+    expect(container.querySelector('.creation-card.is-busy')).toBeNull();
+    expect(container.querySelector<HTMLInputElement>('.big-prompt-input')?.disabled).toBe(false);
+
+    await act(async () => root.unmount());
+  });
+
   it('opens sketch modal from the attach menu', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
