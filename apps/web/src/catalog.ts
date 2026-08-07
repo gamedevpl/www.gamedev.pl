@@ -169,7 +169,7 @@ function parseCatalogMultiplayer(value: unknown): CatalogMultiplayer | null {
 
 /** An older API (or a spec typo the API let through) simply means "no preference". */
 function parseCatalogOrientation(value: unknown): CatalogOrientation {
-  return value === 'portrait' || value === 'landscape' ? value : 'any';
+  return value === 'portrait' || value === 'landscape' || value === 'adaptive' ? value : 'any';
 }
 
 const CATALOG_TOUCH_VALUES = new Set<string>(['gamekit', 'native', 'controllers', 'none']);
