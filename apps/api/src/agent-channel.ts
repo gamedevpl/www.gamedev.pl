@@ -463,18 +463,13 @@ export async function registerAgentChannelRoutes(
     }
     done(null, Buffer.from(body));
   };
+  // Named types only — a '' parser would buffer every untyped request app-wide.
   for (const type of ['application/octet-stream', 'image/png', 'text/plain', 'text/plain; charset=utf-8'] as const) {
     try {
       app.addContentTypeParser(type, { parseAs: 'buffer' }, parseRawBuffer);
     } catch {
       // Duplicate parser from a prior register on this app.
     }
-  }
-  // curl --upload-file may omit Content-Type.
-  try {
-    app.addContentTypeParser('', { parseAs: 'buffer' }, parseRawBuffer);
-  } catch {
-    // already registered
   }
   // A watcher pushes whatever currently builds, so previews arrive on a cadence rather
   // than on the agent's judgement. Only the newest few are worth keeping — each one
@@ -970,22 +965,24 @@ export async function registerAgentChannelRoutes(
       const label = labelRaw ? sanitizeCreatorText(labelRaw, { singleLine: true }).slice(0, MAX_SHOT_LABEL) : '';
       const generation = record.roundGeneration ?? 1;
       const ttlSeconds = DEFAULT_UPLOAD_URL_TTL_SECONDS;
+      // One clock read: advertised expiresAt must match the signed exp.
+      const issuedAt = now();
       const token = mintUploadToken(agentTokenSecret, {
         jobId: issueNumber,
         roundGeneration: generation,
         kind: 'screenshot',
         ...(label ? { label } : {}),
-        now: now(),
+        now: issuedAt,
         ttlSeconds,
       });
-      const expiresAt = new Date(now() + ttlSeconds * 1000).toISOString();
+      const expiresAt = new Date(issuedAt + ttlSeconds * 1000).toISOString();
       const url = `${canonicalAppBaseUrl()}/api/agent/build/shot/upload?token=${encodeURIComponent(token)}`;
       return reply.send({
         accepted: true,
         url,
         expiresAt,
         expiresInSeconds: ttlSeconds,
-        upload: uploadCurlCommand(url, 'shot.png'),
+        upload: uploadCurlCommand(url, 'shot.png', 'image/png'),
         maxBytes: maxShotBytes,
         ...(await channelState(issueNumber, record)),
       });

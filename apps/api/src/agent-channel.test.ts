@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mintAgentToken, mintLegacyAgentToken, STALE_AGENT_TOKEN_REASON } from './agent-token.js';
+import { verifyUploadToken } from './agent-upload-token.js';
 import type { AgentChannelOptions } from './agent-channel.js';
 import { buildApp } from './app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
@@ -691,6 +692,38 @@ describe('agent build channel', () => {
     expect(image.statusCode).toBe(200);
     expect(image.headers['content-type']).toContain('image/png');
     expect(image.rawPayload.subarray(0, 8)).toEqual(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+  });
+
+  it('mints a curl one-liner that sets Content-Type, because no parser claims a missing one', async () => {
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    app = await createApp(store);
+
+    const minted = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/shot/upload-url',
+      headers: agentHeaders(),
+      payload: {},
+    });
+    expect(minted.statusCode).toBe(200);
+    const { url, upload, expiresAt, expiresInSeconds, maxBytes } = minted.json();
+    expect(upload).toContain("-H 'Content-Type: image/png'");
+    expect(typeof expiresAt).toBe('string');
+    expect(typeof expiresInSeconds).toBe('number');
+    expect(maxBytes).toBe(700 * 1024);
+    // expiresAt must match the signed exp, not a second clock read.
+    const token = new URL(String(url)).searchParams.get('token');
+    const claims = verifyUploadToken(String(token), secret);
+    expect(Math.floor(Date.parse(expiresAt) / 1000)).toBe(claims.exp);
+    expect(expiresInSeconds).toBeGreaterThan(0);
+
+    // Untyped body must not buffer — a '' parser hits everything.
+    const untyped = await app.inject({
+      method: 'PUT',
+      url: String(url).replace(/^https?:\/\/[^/]+/, ''),
+      payload: Buffer.from(TINY_PNG, 'base64'),
+    });
+    expect(untyped.statusCode).not.toBe(200);
   });
 
   it('retires base64 POST /shot and refuses a non-PNG PUT body', async () => {

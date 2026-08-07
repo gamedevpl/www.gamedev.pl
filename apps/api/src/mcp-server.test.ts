@@ -1008,7 +1008,7 @@ describe('POST /api/mcp (BY-05)', () => {
       expiresAt: string;
     };
     expect(maxBytes).toBe(700 * 1024);
-    expect(upload).toMatch(/^curl --upload-file shot\.png '/);
+    expect(upload).toMatch(/^curl -H 'Content-Type: image\/png' --upload-file shot\.png '/);
     expect(url).toMatch(/\/api\/agent\/build\/shot\/upload\?token=/);
 
     const pngBytes = Buffer.from(TINY_PNG, 'base64');

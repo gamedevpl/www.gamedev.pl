@@ -157,8 +157,8 @@ export function assertUploadTokenUnexpired(claims: UploadTokenClaims, nowMs: num
   }
 }
 
-// Copy-paste curl one-liner; URL is already absolute.
-export function uploadCurlCommand(url: string, localPath: string): string {
+// Explicit Content-Type: no parser claims a missing one.
+export function uploadCurlCommand(url: string, localPath: string, contentType: string): string {
   const escaped = url.replace(/'/g, `'\\''`);
-  return `curl --upload-file ${localPath} '${escaped}'`;
+  return `curl -H 'Content-Type: ${contentType}' --upload-file ${localPath} '${escaped}'`;
 }

@@ -120,8 +120,6 @@ const INVALID_START_WINDOW_MS = 60 * 60 * 1000;
 /** Hard body ceiling for MCP POSTs (JSON-RPC framing; screenshots use signed PUT). */
 const MAX_MCP_BODY_BYTES = 2 * 1024 * 1024;
 
-/** Matches channel `maxShotBytes` — Firestore doc limit on decoded PNG. */
-const MAX_SCREENSHOT_BYTES = 700 * 1024;
 const MAX_SUBMIT_FILES = MAX_UPLOAD_FILES;
 
 /** How often the round view should re-read status. Matches the gate's own backoff. */
@@ -3207,15 +3205,28 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         if (res.statusCode !== 200) {
           return toolErr(body.error ?? `screenshot upload URL failed (${res.statusCode})`);
         }
-        if (!body.url || !body.upload) {
-          return toolErr(body.rejected ?? 'screenshot upload URL was not issued');
+        if (body.rejected) {
+          return toolErr(`screenshot upload URL was not issued (${body.rejected})`);
+        }
+        // Never invent an expiry or cap the channel did not state.
+        if (
+          typeof body.url !== 'string' ||
+          !body.url ||
+          typeof body.upload !== 'string' ||
+          !body.upload ||
+          typeof body.expiresAt !== 'string' ||
+          !body.expiresAt ||
+          typeof body.expiresInSeconds !== 'number' ||
+          typeof body.maxBytes !== 'number'
+        ) {
+          return toolErr('screenshot upload URL reply was incomplete — retry');
         }
         return toolOk({
           url: body.url,
-          expiresAt: body.expiresAt ?? '',
-          expiresInSeconds: body.expiresInSeconds ?? 0,
+          expiresAt: body.expiresAt,
+          expiresInSeconds: body.expiresInSeconds,
           upload: body.upload,
-          maxBytes: body.maxBytes ?? MAX_SCREENSHOT_BYTES,
+          maxBytes: body.maxBytes,
           ...channelControlFields(body),
           pendingMessages: pendingMessagesFromChannel(body),
         });

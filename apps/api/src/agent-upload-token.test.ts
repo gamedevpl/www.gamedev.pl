@@ -79,9 +79,9 @@ describe('agent-upload-token', () => {
     ).toThrow(/path/i);
   });
 
-  it('builds a curl --upload-file one-liner', () => {
-    expect(uploadCurlCommand("https://example.com/u?token=a'b", 'shot.png')).toBe(
-      "curl --upload-file shot.png 'https://example.com/u?token=a'\\''b'",
+  it('builds a curl --upload-file one-liner carrying an explicit content type', () => {
+    expect(uploadCurlCommand("https://example.com/u?token=a'b", 'shot.png', 'image/png')).toBe(
+      "curl -H 'Content-Type: image/png' --upload-file shot.png 'https://example.com/u?token=a'\\''b'",
     );
   });
 });
