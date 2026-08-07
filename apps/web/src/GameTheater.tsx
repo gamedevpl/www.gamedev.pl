@@ -62,7 +62,7 @@ type GameTheaterProps = {
   source: GameTheaterSource;
   onExit: () => void;
   /** The orientation the game was designed for; drives the rotate nudge. */
-  orientation?: 'any' | 'portrait' | 'landscape';
+  orientation?: 'any' | 'portrait' | 'landscape' | 'adaptive';
   /** Extra header content shown when the bridge hasn't reported a description yet
    *  (e.g. the prompt a generated game was made from). */
   meta?: ReactNode;
@@ -109,11 +109,17 @@ export const PLAYER_CHROME_IDLE_MS = 3200;
  * Only handhelds are nudged: a desktop window can be any shape and its owner
  * resizes it rather than turning it over, so telling them to rotate is noise.
  */
-function useOrientationMismatch(desired: 'any' | 'portrait' | 'landscape'): boolean {
+function useOrientationMismatch(desired: 'any' | 'portrait' | 'landscape' | 'adaptive'): boolean {
   const [mismatched, setMismatched] = useState(false);
 
   useEffect(() => {
-    if (desired === 'any' || typeof matchMedia !== 'function' || !matchMedia('(pointer: coarse)').matches) {
+    // adaptive / any: the game follows the device — never nag to rotate.
+    if (
+      desired === 'any' ||
+      desired === 'adaptive' ||
+      typeof matchMedia !== 'function' ||
+      !matchMedia('(pointer: coarse)').matches
+    ) {
       setMismatched(false);
       return;
     }
