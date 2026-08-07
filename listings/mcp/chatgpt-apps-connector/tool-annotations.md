@@ -424,24 +424,24 @@ Calls only the gamedev.pl API on our own domain. It performs no web access, cont
 Append-only: it adds a note. Earlier notes are not edited or removed. Two calls produce two notes, which is why it is not marked idempotent.
 ```
 
-## `send_screenshot`
+## `screenshot_upload_url`
 
 **Read Only: False**
 
 ```
-Attaches a screenshot to the round for the creator to see, which writes state.
+Mints a short-lived signed PUT URL so the agent can curl a PNG into the round. The PUT writes state; there is no base64 screenshot tool.
 ```
 
 **Open World: False**
 
 ```
-Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time.
+Calls only the gamedev.pl API on our own domain. It performs no web access, contacts no third-party service, and accepts no URL or hostname as input, so the set of systems a call can reach is fixed by us at deploy time. The returned URL is same-origin.
 ```
 
 **Destructive: False**
 
 ```
-Additive: it adds an image to the round. No previous screenshot, note or source file is replaced or deleted.
+Minting the URL does not delete anything. The subsequent PUT is additive: it adds an image to the round.
 ```
 
 ## `stage_source_file`

@@ -17,7 +17,17 @@ import {
   verifyAgentToken,
   type AgentTokenAccess,
 } from './agent-token.js';
+import {
+  assertUploadTokenUnexpired,
+  DEFAULT_UPLOAD_URL_TTL_SECONDS,
+  mintUploadToken,
+  uploadCurlCommand,
+  verifyUploadToken,
+  type UploadKind,
+  type UploadTokenClaims,
+} from './agent-upload-token.js';
 import { selfBuildDeliveryCap } from './builder.js';
+import { canonicalAppBaseUrl } from './canonical-app-url.js';
 import { DEFAULT_SIGNED_URL_TTL_SECONDS, type GcsObjectStore } from './gcs-sign.js';
 import {
   InvalidUploadError,
@@ -125,36 +135,23 @@ const maxShotBytes = 700 * 1024;
  */
 const MAX_INLINE_FRAMES = 3;
 const MAX_INLINE_FRAME_BYTES = 1_400 * 1024;
-/** Fastify rejects before the handler when the JSON body exceeds this. */
-const shotBodyLimit = Math.ceil((maxShotBytes * 4) / 3) + 4096;
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
-const BuildShotInputSchema = z.object({
-  // Sized in base64 characters, so an oversized payload is rejected before it is
-  // decoded. 4/3 expansion plus padding slack.
-  png: z
-    .string()
-    .trim()
-    .min(1, 'png is required')
-    .max(Math.ceil((maxShotBytes * 4) / 3) + 1024, 'screenshot is too large')
-    .regex(/^[A-Za-z0-9+/\s]*={0,2}$/, 'png must be base64'),
+const ShotUploadUrlInputSchema = z.object({
   label: z
     .string()
     .trim()
     .max(MAX_SHOT_LABEL * 4)
     .optional(),
-  labelLocalized: z
+  caption: z
     .string()
     .trim()
     .max(MAX_SHOT_LABEL * 4)
     .optional(),
-  locale: z
-    .string()
-    .trim()
-    .max(10)
-    .regex(/^[a-z]{2}(-[A-Za-z0-9]{2,8})?$/, 'invalid locale')
-    .optional(),
 });
+
+const RETIRED_BASE64_SHOT_REASON =
+  'base64 screenshot upload is retired — POST /api/agent/build/shot/upload-url, then curl --upload-file <png> "$url"';
 
 const MAX_PREVIEW_LABEL = 120;
 /**
@@ -449,6 +446,31 @@ export async function registerAgentChannelRoutes(
   // Screenshots are far heavier than sentences, so they get their own, tighter caps.
   const maxShotsPerBuild = options.maxShotsPerBuild ?? 24;
   const maxShotsPerWindow = options.maxShotsPerWindow ?? 40;
+
+  // Raw PUT parsers for curl --upload-file (octet-stream / PNG / text).
+  const parseRawBuffer = (
+    _request: FastifyRequest,
+    body: Buffer | string | ArrayBuffer,
+    done: (error: Error | null, result?: Buffer) => void,
+  ): void => {
+    if (Buffer.isBuffer(body)) {
+      done(null, body);
+      return;
+    }
+    if (typeof body === 'string') {
+      done(null, Buffer.from(body));
+      return;
+    }
+    done(null, Buffer.from(body));
+  };
+  // Named types only — a '' parser would buffer every untyped request app-wide.
+  for (const type of ['application/octet-stream', 'image/png', 'text/plain', 'text/plain; charset=utf-8'] as const) {
+    try {
+      app.addContentTypeParser(type, { parseAs: 'buffer' }, parseRawBuffer);
+    } catch {
+      // Duplicate parser from a prior register on this app.
+    }
+  }
   // A watcher pushes whatever currently builds, so previews arrive on a cadence rather
   // than on the agent's judgement. Only the newest few are worth keeping — each one
   // obsoletes the last — but the hourly allowance is generous, because a build that
@@ -566,6 +588,67 @@ export async function registerAgentChannelRoutes(
       reply.status(401).send({ error: error.message || 'invalid build token' });
       return null;
     }
+  }
+
+  // Auth via ?token= upload capability (no Authorization header).
+  async function resolveUploadBuild(
+    request: FastifyRequest,
+    reply: FastifyReply,
+    expectedKind: UploadKind,
+  ): Promise<{ issueNumber: number; record: SubmissionRecord; upload: UploadTokenClaims } | null> {
+    if (!store || !agentTokenSecret) {
+      reply.status(503).send({ error: 'the build channel is not configured' });
+      return null;
+    }
+
+    const raw =
+      typeof (request.query as { token?: unknown })?.token === 'string'
+        ? (request.query as { token: string }).token.trim()
+        : '';
+    if (!raw) {
+      reply.status(401).send({ error: 'missing upload token' });
+      return null;
+    }
+
+    let upload: UploadTokenClaims;
+    try {
+      upload = verifyUploadToken(raw, agentTokenSecret);
+      assertUploadTokenUnexpired(upload, now());
+    } catch (error) {
+      if (error instanceof InvalidAgentTokenError) {
+        reply.status(401).send({ error: error.message || 'invalid upload token' });
+        return null;
+      }
+      throw error;
+    }
+
+    if (upload.kind !== expectedKind) {
+      reply.status(403).send({ error: `this upload URL is for ${upload.kind}, not ${expectedKind}` });
+      return null;
+    }
+
+    const issueNumber = upload.jobId;
+    const record = await store.getSubmission(issueNumber);
+    if (!record) {
+      reply.status(404).send({ error: 'unknown build' });
+      return null;
+    }
+
+    try {
+      assertAgentTokenActive(
+        { jobId: upload.jobId, roundGeneration: upload.roundGeneration, exp: upload.exp },
+        record,
+        now(),
+      );
+    } catch (error) {
+      if (error instanceof InvalidAgentTokenError) {
+        reply.status(401).send({ error: error.message || 'invalid upload token' });
+        return null;
+      }
+      throw error;
+    }
+
+    return { issueNumber, record, upload };
   }
 
   function stopReason(record: SubmissionRecord): 'abandoned' | 'published' | 'canceled' | 'builder_handoff' | null {
@@ -844,31 +927,79 @@ export async function registerAgentChannelRoutes(
     },
   );
 
-  /**
-   * A picture of the game as it stands, pushed before any commit.
-   *
-   * The agent already renders real frames headlessly (`npm run capture`), but those
-   * only reach the creator once they are committed and pushed, which is late. This
-   * takes the same PNG directly. Bytes are checked rather than trusted: the payload
-   * must actually start with a PNG signature, because everything downstream serves it
-   * back to a browser as an image.
-   */
+  // Retired: base64 PNG in JSON burned model output tokens and was unsafe at real sizes.
   app.post(
     '/api/agent/build/shot',
-    {
-      // Match the decoded PNG ceiling (base64-expanded) so the schema's max is reachable.
-      bodyLimit: shotBodyLimit,
-      config: { rateLimit: { max: 120, timeWindow: '1 hour' } },
+    { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
+    async (_request, reply) => {
+      return reply.status(410).send({ error: RETIRED_BASE64_SHOT_REASON });
     },
+  );
+
+  // Mint a short-lived signed PUT URL; agent curls the PNG (no base64 in tool args).
+  app.post(
+    '/api/agent/build/shot/upload-url',
+    { config: { rateLimit: { max: 120, timeWindow: '1 hour' } } },
     async (request, reply) => {
       const resolved = await resolveBuild(request, reply);
       if (!resolved) return reply;
       const { issueNumber, record } = resolved;
+      if (!agentTokenSecret) {
+        return reply.status(503).send({ error: 'the build channel is not configured' });
+      }
 
-      const parsed = BuildShotInputSchema.safeParse(request.body ?? {});
+      const parsed = ShotUploadUrlInputSchema.safeParse(request.body ?? {});
       if (!parsed.success) {
         return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
       }
+
+      if (stopReason(record)) {
+        return reply.send({
+          accepted: false,
+          rejected: 'stopped',
+          ...(await channelState(issueNumber, record)),
+        });
+      }
+
+      const labelRaw = parsed.data.label ?? parsed.data.caption;
+      const label = labelRaw ? sanitizeCreatorText(labelRaw, { singleLine: true }).slice(0, MAX_SHOT_LABEL) : '';
+      const generation = record.roundGeneration ?? 1;
+      const ttlSeconds = DEFAULT_UPLOAD_URL_TTL_SECONDS;
+      // One clock read: advertised expiresAt must match the signed exp.
+      const issuedAt = now();
+      const token = mintUploadToken(agentTokenSecret, {
+        jobId: issueNumber,
+        roundGeneration: generation,
+        kind: 'screenshot',
+        ...(label ? { label } : {}),
+        now: issuedAt,
+        ttlSeconds,
+      });
+      const expiresAt = new Date(issuedAt + ttlSeconds * 1000).toISOString();
+      const url = `${canonicalAppBaseUrl()}/api/agent/build/shot/upload?token=${encodeURIComponent(token)}`;
+      return reply.send({
+        accepted: true,
+        url,
+        expiresAt,
+        expiresInSeconds: ttlSeconds,
+        upload: uploadCurlCommand(url, 'shot.png', 'image/png'),
+        maxBytes: maxShotBytes,
+        ...(await channelState(issueNumber, record)),
+      });
+    },
+  );
+
+  // Raw PNG PUT for screenshot_upload_url (no base64).
+  app.put(
+    '/api/agent/build/shot/upload',
+    {
+      bodyLimit: maxShotBytes + 1024,
+      config: { rateLimit: { max: 120, timeWindow: '1 hour' } },
+    },
+    async (request, reply) => {
+      const resolved = await resolveUploadBuild(request, reply, 'screenshot');
+      if (!resolved) return reply;
+      const { issueNumber, record, upload } = resolved;
 
       const reject = async (reason: RejectionReason) =>
         reply.send({ accepted: false, rejected: reason, ...(await channelState(issueNumber, record)) });
@@ -883,7 +1014,17 @@ export async function registerAgentChannelRoutes(
         return reject('too_many_shots');
       }
 
-      const bytes = Buffer.from(parsed.data.png, 'base64');
+      const body = request.body;
+      const bytes = Buffer.isBuffer(body)
+        ? body
+        : typeof body === 'string'
+          ? Buffer.from(body)
+          : body instanceof Uint8Array
+            ? Buffer.from(body)
+            : null;
+      if (!bytes || bytes.length === 0) {
+        return reply.status(400).send({ error: 'png body is required' });
+      }
       if (bytes.length > maxShotBytes) {
         return reply.status(413).send({ error: 'screenshot is too large' });
       }
@@ -891,29 +1032,20 @@ export async function registerAgentChannelRoutes(
         return reply.status(400).send({ error: 'not a PNG' });
       }
 
-      const label = parsed.data.label
-        ? sanitizeCreatorText(parsed.data.label, { singleLine: true }).slice(0, MAX_SHOT_LABEL)
+      const label = upload.label
+        ? sanitizeCreatorText(upload.label, { singleLine: true }).slice(0, MAX_SHOT_LABEL)
         : '';
-      const labelLocalized = parsed.data.labelLocalized
-        ? sanitizeCreatorText(parsed.data.labelLocalized, { singleLine: true }).slice(0, MAX_SHOT_LABEL)
-        : '';
-      // Same rule as a progress sentence: a caption with no language tag cannot be
-      // matched to a reader, so it is dropped rather than shown to the wrong one.
-      const hasLocalized = Boolean(labelLocalized && parsed.data.locale);
 
-      // Re-encoded from the decoded bytes rather than stored as sent: whatever
-      // whitespace or padding variant arrived, what we keep is canonical base64.
       const stored = await store!.appendBuildShot(issueNumber, {
         data: bytes.toString('base64'),
         ...(label ? { label } : {}),
-        ...(hasLocalized ? { labelLocalized, locale: parsed.data.locale } : {}),
       });
       options.onEvent?.(issueNumber);
 
       return reply.send({
         accepted: true,
         shot: { id: stored.id, createdAt: stored.createdAt, ...(label ? { label } : {}) },
-        ...(await channelState(issueNumber, record)),
+        ...(await channelState(issueNumber, (await store!.getSubmission(issueNumber)) ?? record)),
       });
     },
   );

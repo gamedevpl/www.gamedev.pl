@@ -117,11 +117,9 @@ const SESSION_HEADER = 'mcp-session-id';
 const MAX_INVALID_STARTS_PER_WINDOW = 20;
 const INVALID_START_WINDOW_MS = 60 * 60 * 1000;
 
-/** Hard body ceiling for MCP POSTs (screenshot base64 + JSON-RPC framing). */
+/** Hard body ceiling for MCP POSTs (JSON-RPC framing; screenshots use signed PUT). */
 const MAX_MCP_BODY_BYTES = 2 * 1024 * 1024;
 
-/** Matches channel `maxShotBytes` — Firestore doc limit, not the aspirational 2 MB brief. */
-const MAX_SCREENSHOT_BYTES = 700 * 1024;
 const MAX_SUBMIT_FILES = MAX_UPLOAD_FILES;
 
 /** How often the round view should re-read status. Matches the gate's own backoff. */
@@ -529,7 +527,7 @@ const BEHAVIOURAL_CONTRACT = [
   // Agents that skip the pair leave every non-English creator reading commit-speak in a
   // language they did not choose, which is the whole reason the field exists.
   "Write progress in the creator's language: when get_brief.locales[0] is not 'en', send report_progress with textLocalized and locale as well as the English text.",
-  'Send a screenshot as soon as the game draws anything playable.',
+  'Send a screenshot as soon as the game draws anything playable via screenshot_upload_url + curl --upload-file. There is no base64 screenshot tool — PNG bytes must never enter the model.',
   'While iterating, deliver with mode=preview (no TRACE required). Prefer stage_source_file for new/rewritten paths and patch_source_file for edits — prefer old+new exact replace; patch=unified diff also works (never re-emit a whole large render.ts/model.ts). Honour warnings.code=module_too_large by splitting before more feature work. Then submit_sources({ fromStaged:true, mode:"preview", kitEngineRef }) — fromStaged overlays onto the latest delivery/seed so only changed paths need staging. Avoid one giant files[] payload. Only mode=publish needs TRACE/PLAYTEST and can go green.',
   'If the last gate was preview_failed / red / kit_outdated (warnings.code=must_fix_gate), fix then submit_sources again — do not stop at stage/patch/show_round. Staging does not re-run the gate; the creator card stays on the refused delivery until you submit.',
   'Run kit checks green (at least check:static) before submit_sources when you have a local kit checkout; otherwise submit and let the gate run checks.',
@@ -567,7 +565,7 @@ const SESSION_WORKFLOW: readonly string[] = [
   'get_sources — when it returns available:true this round improves an existing game: continue those files. Never scaffold over them. If warnings.code=module_too_large, split those oversized modules into cohesive game/*.ts pieces BEFORE adding features — do not grow them further.',
   'get_kit — keep engineRef for submit_sources; prefer read_kit_files for several known small paths (else list_kit_files / search_kit_files / read_kit_file / read_kit_file_fragment) when shell unpack is unavailable; otherwise unpack via the returned one-liner and follow SKILL.md locally. Never dump the whole kit into context.',
   'Build the game — continuing the seed or sources you fetched, otherwise from the kit; report_progress before and after long steps. Soft module budget: keep each game/*.ts under ~350 lines / ~12 KiB. When a file approaches that, split cohesive pieces (render→art/ui/hud/rooms; model→tables/layout/types; runtime→systems) before more feature work. Honour warnings.code=module_too_large the same way you honour call_end — act, then continue.',
-  'send_screenshot as soon as the game draws anything playable.',
+  'As soon as the game draws anything playable: screenshot_upload_url then curl --upload-file <png> "$url". There is no base64 send path — PNG bytes must never enter the model. Without shell egress, skip mid-build screenshots; the gate still captures on delivery.',
   'While iterating: stage_source_file({ path, content }) for new or fully rewritten paths; for edits prefer patch_source_file({ path, old, new }) — exact unique substring replace, no unified-diff arithmetic. Or patch_source_file({ path, patch }) with a unified diff (bare @@ ok). Stage only changed paths — never re-upload the whole tree. Then submit_sources({ fromStaged: true, mode: "preview", kitEngineRef }) — fromStaged overlays onto the latest delivery/seed. TRACE/PLAYTEST not required; Studio gets a playable draft after typecheck→smoke→build. Inline files[] still works for tiny trees.',
   'Staging is already visible: once index.html, game.ts, style.css and GAME.json are present across staging + delivery/seed, the platform assembles a live playable preview — without waiting for submit or the gate. Stage a runnable tree early and keep staging/patching as you work; a buffer that does not compile simply leaves the previous preview up.',
   'After every successful submit_sources: creator handoff is already unlocked; still call end immediately if you will not deliver more (warnings.code=call_end). Prefer end over sitting in a get_gate_verdict loop — Studio shows the gate. submit alone leaves your MCP session open — end sets stop:true. ChatGPT-class agents often stop after submit; end closes the session cleanly.',
@@ -3154,22 +3152,30 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       },
     },
 
-    send_screenshot: {
+    screenshot_upload_url: {
       outputSchema: {
         type: 'object',
-        properties: { ok: { type: 'boolean' }, reason: { type: 'string' }, ...REPLY_CONTROL },
-        required: ['ok'],
+        properties: {
+          url: { type: 'string' },
+          expiresAt: { type: 'string' },
+          expiresInSeconds: { type: 'number' },
+          upload: { type: 'string' },
+          maxBytes: { type: 'number' },
+          ...REPLY_CONTROL,
+        },
+        required: ['url', 'expiresAt', 'expiresInSeconds', 'upload', 'maxBytes'],
       },
-      annotations: { title: 'Send a screenshot', ...WRITES },
+      annotations: { title: 'Get a screenshot upload URL', ...WRITES },
       description:
-        'Upload a PNG screenshot (base64, ≤700 KB decoded — Firestore-backed) as soon as the game draws. Reply includes stop and pendingMessages. ' +
+        'The only way to send a mid-build screenshot. Returns a short-lived signed PUT URL — run the returned ' +
+        '`upload` one-liner (curl --upload-file <png> "$url"). PNG bytes must never enter the model as base64; ' +
+        'there is no send_screenshot tool. The PUT validates ≤700 KB decoded PNG and returns stop/pendingMessages. ' +
+        'Without shell egress, skip mid-build screenshots — the gate still captures on delivery. ' +
         BEHAVIOURAL_CONTRACT,
       inputSchema: {
         type: 'object',
         properties: {
           sessionKey: SESSION_KEY_PROP,
-          png: { type: 'string', description: 'Base64-encoded PNG (≤700 KB decoded).' },
-          pngBase64: { type: 'string', description: 'Alias for png.' },
           caption: { type: 'string' },
           label: { type: 'string' },
         },
@@ -3178,41 +3184,49 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       handler: async (args, ctx) => {
         const auth = await resolveAuth(ctx, args);
         if (!('channelToken' in auth)) return auth;
-        const pngRaw =
-          typeof args.png === 'string' ? args.png : typeof args.pngBase64 === 'string' ? args.pngBase64 : '';
-        const png = pngRaw.replace(/^data:image\/png;base64,/i, '').replace(/\s+/g, '');
-        if (!png) return toolErr('png is required');
-        let bytes: Buffer;
-        try {
-          bytes = Buffer.from(png, 'base64');
-        } catch {
-          return toolErr('png must be base64');
-        }
-        if (bytes.length > MAX_SCREENSHOT_BYTES) {
-          return toolErr('screenshot is too large (max 700 KB)');
-        }
-        const label =
+        const labelRaw =
           typeof args.caption === 'string' ? args.caption : typeof args.label === 'string' ? args.label : undefined;
-        const res = await injectChannel(ctx.request, 'POST', '/api/agent/build/shot', auth.channelToken, {
-          png,
+        const label = typeof labelRaw === 'string' && labelRaw.trim() ? labelRaw.trim().slice(0, 120) : undefined;
+        const res = await injectChannel(ctx.request, 'POST', '/api/agent/build/shot/upload-url', auth.channelToken, {
           ...(label ? { label } : {}),
         });
         const body = res.json() as {
           error?: string;
           accepted?: boolean;
           rejected?: string;
+          url?: string;
+          expiresAt?: string;
+          expiresInSeconds?: number;
+          upload?: string;
+          maxBytes?: number;
           control?: { stop?: boolean; reason?: string };
           pending?: Array<{ id: string; text: string; createdAt: string }>;
         };
-        if (res.statusCode === 413) {
-          return toolErr(body.error ?? 'screenshot is too large');
-        }
         if (res.statusCode !== 200) {
-          return toolErr(body.error ?? `screenshot failed (${res.statusCode})`);
+          return toolErr(body.error ?? `screenshot upload URL failed (${res.statusCode})`);
+        }
+        if (body.rejected) {
+          return toolErr(`screenshot upload URL was not issued (${body.rejected})`);
+        }
+        // Never invent an expiry or cap the channel did not state.
+        if (
+          typeof body.url !== 'string' ||
+          !body.url ||
+          typeof body.upload !== 'string' ||
+          !body.upload ||
+          typeof body.expiresAt !== 'string' ||
+          !body.expiresAt ||
+          typeof body.expiresInSeconds !== 'number' ||
+          typeof body.maxBytes !== 'number'
+        ) {
+          return toolErr('screenshot upload URL reply was incomplete — retry');
         }
         return toolOk({
-          ok: body.accepted !== false,
-          ...(body.rejected ? { rejected: body.rejected } : {}),
+          url: body.url,
+          expiresAt: body.expiresAt,
+          expiresInSeconds: body.expiresInSeconds,
+          upload: body.upload,
+          maxBytes: body.maxBytes,
           ...channelControlFields(body),
           pendingMessages: pendingMessagesFromChannel(body),
         });
