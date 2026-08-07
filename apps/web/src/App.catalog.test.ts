@@ -105,8 +105,8 @@ describe('catalog playback', () => {
     expect(previewButton?.textContent).toContain('Pause preview');
     expect(container.querySelectorAll('.catalog-moment')).toHaveLength(2);
 
-    // Explicit Play opens theater in place. `/play/:slug` is the shareable preview
-    // page now, so a catalog click must not navigate through it before starting.
+    // Explicit Play opens theater in place. `/play/:slug` is the shareable play
+    // permalink (auto-opens theater); a catalog click must not navigate through it.
     const navigations: string[] = [];
     const onNavigate = (event: Event) => {
       navigations.push((event as CustomEvent<NavigateEventDetail>).detail.path);
@@ -204,7 +204,7 @@ describe('catalog playback', () => {
     });
   });
 
-  it('renders a static game page for direct play paths without loading the game iframe', async () => {
+  it('auto-opens the theater for a direct /play path once the catalog is ready', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     const fetched: string[] = [];
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
@@ -261,14 +261,10 @@ describe('catalog playback', () => {
       await flushEffects();
     });
 
-    expect(container.querySelector('iframe')).toBeNull();
-    expect(container.querySelector('.game-page h1')?.textContent).toBe('Football 3D Lite');
-    expect(container.querySelector<HTMLImageElement>('.game-page-preview img')?.src).toContain('match.png?w=1280');
-
-    // The page needs catalog metadata, but game code does not load until a deliberate
-    // Play/preview click crosses into theater.
+    expect(container.querySelector('.game-theater-bar')).not.toBeNull();
+    expect(container.querySelector('iframe[title="Football 3D Lite"]')).not.toBeNull();
     expect(fetched.some((url) => url.includes('/api/catalog'))).toBe(true);
-    expect(fetched.some((url) => url.endsWith('/api/games/football-3d-lite'))).toBe(false);
+    expect(fetched.some((url) => url.endsWith('/api/games/football-3d-lite'))).toBe(true);
 
     await act(async () => {
       root.unmount();

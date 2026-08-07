@@ -255,8 +255,7 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
   }
 
   // Legacy `/draft/<slug>` — same game as `/play/<slug>`. Parsed as play so the
-  // canonical rewrite below puts the bar on the lifetime permalink; the app used
-  // to keep a separate theater-only view here after /play became preview-first.
+  // canonical rewrite below puts the bar on the lifetime permalink.
   const draftMatch = normalizedPath.match(/^\/draft\/([^/]+)$/);
   if (draftMatch?.[1]) {
     const slug = decodeSegment(draftMatch[1]);
@@ -471,8 +470,7 @@ export function navUpTarget(route: AppRoute): NavUpTarget | null {
     case 'home':
     case 'join':
       return null;
-    // `/play/:slug` is preview-first for catalog games; unpublished drafts open a
-    // theater that owns Close — Up stays for the static preview page.
+    // `/play/:slug` auto-opens; Up shows after Close. Drafts own Close themselves.
     case 'play':
       return { path: '/', labelKey: 'upHome' };
     case 'studio':

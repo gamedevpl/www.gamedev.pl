@@ -70,8 +70,9 @@ Two concrete instances of that (observed 2026-07-23):
   waits forever while everything already completed. Always `git rev-parse` to full length.
 - **A green unit suite + "I checked it in a browser" can still fail the deploy browser
   gate when the UX flow changed and e2e was not updated.** Observed (#599, 2026-08-05):
-  published `/play/<slug>` became preview-first (screenshot + Play, no autoplaying
-  iframe). Unit tests and claimed manual browser checks were green; deploy's
+  published `/play/<slug>` briefly became preview-first (screenshot + Play, no
+  autoplaying iframe; later restored to auto-open, with `/:handle/:slug` staying
+  preview-first). Unit tests and claimed manual browser checks were green; deploy's
   `npm run e2e` still waited for `iframe` / `.game-theater-bar` on bare navigation and
   blocked promotion. When a PR changes _when_ a frame mounts (or the copy of an error
   state the gate asserts), update `apps/e2e` in the same PR — the unit suite never

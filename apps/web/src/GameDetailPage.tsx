@@ -22,17 +22,12 @@ function previewScreenshot(game: CatalogEntry) {
 }
 
 /**
- * A published game's shareable landing page.
+ * `/play/<slug>` after Close, and while catalog loads before auto-open.
  *
- * This surface deliberately never mounts the game iframe. A shared link should let a
- * visitor understand what they are about to open before untrusted game code starts,
- * and it should stay useful on a phone where an autoplaying game consumes the whole
- * viewport. Play is the explicit boundary that opens the sandboxed theater.
+ * The permalink auto-opens theater; this surface remains after dismiss. It never
+ * mounts the iframe — Play re-opens theater. Canonical pages use {@link GamePage}.
  *
- * The page is intentionally not a rendering of SPEC.md. The spec is an agent-facing
- * source of truth, not player copy; the compact controls line is the only part a player
- * needs here. Releases, source, follow and comparison queues do not appear until the
- * product has real data and behaviour behind them.
+ * Not a SPEC.md rendering: agent source, not player copy. Compact controls only.
  */
 export function GameDetailPage({ game, state, onPlay, onRemix, onRetry }: GameDetailPageProps) {
   const { t } = useTranslation();

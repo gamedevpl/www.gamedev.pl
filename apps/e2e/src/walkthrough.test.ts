@@ -85,7 +85,7 @@ describe.skipIf(!prereq.ok)('signed-in walkthrough', () => {
 
     let frame: Frame | undefined;
     for (const candidate of candidates) {
-      // Preview page → Play → theater. The iframe is not on the shareable page.
+      // /play/<slug> auto-opens the theater; the iframe mounts with GameTheater.
       await openPlayTheater(page, candidate.slug, 6_000);
       // The theater bar mounts before PublishedGameFrame attaches the iframe, so a
       // bare frames() scan right after openPlayTheater can miss a healthy game.
