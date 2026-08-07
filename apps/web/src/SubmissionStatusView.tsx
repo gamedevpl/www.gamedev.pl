@@ -29,6 +29,7 @@ import { StudioLivePreview } from './StudioLivePreview.js';
 import { StudioPriorRounds } from './StudioPriorRounds.js';
 import { submitImprovement } from './studioApi.js';
 import { pollDelayMs } from './studioStatusPoll.js';
+import { studioThreadContentScrollTop, studioThreadNearContentEnd } from './studioThreadScroll.js';
 import { recordStudioStep, type StudioStepDetail } from './visitTelemetry.js';
 
 function copyInputFromStatus(status: SubmissionStatus | null | undefined) {
@@ -1651,15 +1652,15 @@ function ThreadStream({
   const onScroll = () => {
     const pane = scrollRef.current;
     if (!pane) return;
-    // A small slack, because "at the bottom" is never exact once fonts and images have
-    // settled, and a reader one pixel short of it still means to be following along.
-    stickToBottomRef.current = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 48;
+    // Content end, not the runway pad.
+    stickToBottomRef.current = studioThreadNearContentEnd(pane);
   };
 
   useEffect(() => {
     const pane = scrollRef.current;
     if (!pane || !stickToBottomRef.current) return;
-    pane.scrollTop = pane.scrollHeight;
+    // Do not scroll into the Claude/Cursor runway.
+    pane.scrollTop = studioThreadContentScrollTop(pane);
   }, [entries.length, stickNonce, working?.label, working?.thoughtLabel]);
 
   // Presence ages out client-side; one timeout at expiry so the working line falls
@@ -1684,84 +1685,86 @@ function ThreadStream({
 
   return (
     <div className="studio-thread-scroll" ref={scrollRef} onScroll={onScroll}>
-      {priorSlug && priorRounds && priorRounds.length > 0 ? (
-        <StudioPriorRounds slug={priorSlug} rounds={priorRounds} />
-      ) : null}
-      {entries.length === 0 && !working ? <p className="studio-thread-empty">{emptyLabel}</p> : null}
-      <ol className="studio-thread-turns">
-        {entries.map((entry, index) => {
-          const mine = entry.kind === 'revision';
-          const media = entry.media?.filter((item) => !broken.includes(item.ref)) ?? [];
-          return (
-            <li
-              key={`${entry.kind}-${entry.at}-${index}`}
-              className={`studio-turn${mine ? ' is-mine' : ''}${entry.pending ? ' is-pending' : ''}`}
-            >
-              <div className="studio-turn-body">
-                {/* The step is a closed set, so it is our own translated copy rather than
-                    a machine translation of whatever the agent happened to write. */}
-                {!mine && entry.step ? (
-                  <span className="studio-turn-kicker">{t(`statusView.progress.steps.${entry.step}`)}</span>
-                ) : null}
-                {/* A relayed request wears its provenance. Unlabelled, an agent's own
-                    summary of a chat held elsewhere reads as words the creator typed. */}
-                {mine && entry.relayed ? (
-                  <span className="studio-turn-kicker">{t('statusView.progress.relayedRequest')}</span>
-                ) : null}
-                <p className="studio-turn-text">{entry.text}</p>
-                {media.length > 0 ? (
-                  <span className="studio-turn-shots">
-                    {media.map((item) => (
-                      <button
-                        key={item.ref}
-                        type="button"
-                        className="build-activity-shot"
-                        onClick={() => setZoomed(item)}
-                        title={t('statusView.gallery.expand')}
-                      >
-                        <img
-                          src={buildMediaUrl(token, item)}
-                          alt={item.label || t('statusView.gallery.alt')}
-                          loading="lazy"
-                          onError={() => setBroken((refs) => [...refs, item.ref])}
-                        />
-                      </button>
-                    ))}
-                  </span>
-                ) : null}
-              </div>
-              <time className="studio-turn-time" dateTime={new Date(entry.at).toISOString()}>
-                {entry.pending
-                  ? t('statusView.progress.yourRequestSending')
-                  : formatRelativeTime(entry.at, i18n.language)}
-              </time>
-            </li>
-          );
-        })}
-        {working && workingHeadline ? (
-          <li className={`studio-turn is-working${thoughtFresh ? ' is-thought' : ''}`} aria-live="polite">
-            <div
-              className="studio-turn-working"
-              key={
-                thoughtFresh && working.thoughtKey
-                  ? `thought:${working.thoughtKey}:${working.thoughtAt}`
-                  : `phase:${working.label}`
-              }
-            >
-              <span className="studio-turn-working-pulse" aria-hidden="true" />
-              <span className="studio-turn-working-label">{workingHeadline}</span>
-            </div>
-            {working.heartbeatAt !== null ? (
-              <span className="studio-turn-time">
-                <BuildHeartbeat at={working.heartbeatAt} />
-              </span>
-            ) : null}
-          </li>
+      {/* Short threads sit above the composer, not under the lid. */}
+      <div className="studio-thread-scroll-body">
+        {priorSlug && priorRounds && priorRounds.length > 0 ? (
+          <StudioPriorRounds slug={priorSlug} rounds={priorRounds} />
         ) : null}
-      </ol>
-      {after}
-      {/* Empty runway under the turns — Claude/Cursor shape. Lets the reader scroll
-          until the last message sits at the top of the pane, not stuck on the fold. */}
+        {entries.length === 0 && !working ? <p className="studio-thread-empty">{emptyLabel}</p> : null}
+        <ol className="studio-thread-turns">
+          {entries.map((entry, index) => {
+            const mine = entry.kind === 'revision';
+            const media = entry.media?.filter((item) => !broken.includes(item.ref)) ?? [];
+            return (
+              <li
+                key={`${entry.kind}-${entry.at}-${index}`}
+                className={`studio-turn${mine ? ' is-mine' : ''}${entry.pending ? ' is-pending' : ''}`}
+              >
+                <div className="studio-turn-body">
+                  {/* The step is a closed set, so it is our own translated copy rather than
+                      a machine translation of whatever the agent happened to write. */}
+                  {!mine && entry.step ? (
+                    <span className="studio-turn-kicker">{t(`statusView.progress.steps.${entry.step}`)}</span>
+                  ) : null}
+                  {/* A relayed request wears its provenance. Unlabelled, an agent's own
+                      summary of a chat held elsewhere reads as words the creator typed. */}
+                  {mine && entry.relayed ? (
+                    <span className="studio-turn-kicker">{t('statusView.progress.relayedRequest')}</span>
+                  ) : null}
+                  <p className="studio-turn-text">{entry.text}</p>
+                  {media.length > 0 ? (
+                    <span className="studio-turn-shots">
+                      {media.map((item) => (
+                        <button
+                          key={item.ref}
+                          type="button"
+                          className="build-activity-shot"
+                          onClick={() => setZoomed(item)}
+                          title={t('statusView.gallery.expand')}
+                        >
+                          <img
+                            src={buildMediaUrl(token, item)}
+                            alt={item.label || t('statusView.gallery.alt')}
+                            loading="lazy"
+                            onError={() => setBroken((refs) => [...refs, item.ref])}
+                          />
+                        </button>
+                      ))}
+                    </span>
+                  ) : null}
+                </div>
+                <time className="studio-turn-time" dateTime={new Date(entry.at).toISOString()}>
+                  {entry.pending
+                    ? t('statusView.progress.yourRequestSending')
+                    : formatRelativeTime(entry.at, i18n.language)}
+                </time>
+              </li>
+            );
+          })}
+          {working && workingHeadline ? (
+            <li className={`studio-turn is-working${thoughtFresh ? ' is-thought' : ''}`} aria-live="polite">
+              <div
+                className="studio-turn-working"
+                key={
+                  thoughtFresh && working.thoughtKey
+                    ? `thought:${working.thoughtKey}:${working.thoughtAt}`
+                    : `phase:${working.label}`
+                }
+              >
+                <span className="studio-turn-working-pulse" aria-hidden="true" />
+                <span className="studio-turn-working-label">{workingHeadline}</span>
+              </div>
+              {working.heartbeatAt !== null ? (
+                <span className="studio-turn-time">
+                  <BuildHeartbeat at={working.heartbeatAt} />
+                </span>
+              ) : null}
+            </li>
+          ) : null}
+        </ol>
+        {after}
+      </div>
+      {/* Runway under turns — stick targets body end, not this pad. */}
       <div className="studio-thread-scroll-pad" aria-hidden="true" />
       {zoomed ? <ShotLightbox token={token} item={zoomed} onClose={() => setZoomed(null)} /> : null}
     </div>

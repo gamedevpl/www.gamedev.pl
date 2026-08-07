@@ -217,6 +217,7 @@ describe.skipIf(!prereq.ok)('the studio thread as an app screen', () => {
       const shell = await page.evaluate(() => {
         const scroller = document.querySelector('.studio-thread-scroll');
         const pad = document.querySelector('.studio-thread-scroll-pad');
+        const body = document.querySelector('.studio-thread-scroll-body');
         const detail = document.querySelector('.studio-detail');
         const layout = document.querySelector('.studio-layout');
         // The fixture thread is empty/short. A pad sized as a fraction of the
@@ -227,6 +228,9 @@ describe.skipIf(!prereq.ok)('the studio thread as an app screen', () => {
         let padHeight = 0;
         let scrollerClientHeight = 0;
         let slackWithTurn = 0;
+        // Default stick must not land inside the runway.
+        let defaultLastTurnTopRatio = 1;
+        let defaultScrollRemaining = 0;
         if (scroller && pad) {
           padHeight = pad.getBoundingClientRect().height;
           scrollerClientHeight = scroller.clientHeight;
@@ -234,17 +238,33 @@ describe.skipIf(!prereq.ok)('the studio thread as an app screen', () => {
           turn.dataset.e2eInjected = 'true';
           // Taller than the 4.5rem the pad leaves, so max-scroll is non-trivial.
           turn.style.cssText = 'height:200px;flex:none;';
-          pad.before(turn);
+          const mount = body ?? pad.parentElement;
+          if (mount && body) {
+            body.appendChild(turn);
+          } else {
+            pad.before(turn);
+          }
           slackWithTurn = scroller.scrollHeight - scroller.clientHeight;
+          // Content-end stick, not absolute scrollHeight.
+          const contentEnd = Math.max(0, scroller.scrollHeight - scroller.clientHeight - padHeight);
+          scroller.scrollTop = contentEnd;
+          const scrollerRect = scroller.getBoundingClientRect();
+          const turnRect = turn.getBoundingClientRect();
+          defaultLastTurnTopRatio =
+            scrollerClientHeight > 0 ? (turnRect.top - scrollerRect.top) / scrollerClientHeight : 1;
+          defaultScrollRemaining = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
           turn.remove();
         }
         return {
           pageScroll: document.documentElement.scrollHeight - document.documentElement.clientHeight,
           scrollerOverflowY: scroller ? getComputedStyle(scroller).overflowY : null,
           hasScrollPad: Boolean(pad),
+          hasScrollBody: Boolean(body),
           padHeight,
           scrollerClientHeight,
           slackWithTurn,
+          defaultLastTurnTopRatio,
+          defaultScrollRemaining,
           gameOpen: Boolean(document.querySelector('.studio-layout.is-game-open')),
           compactShelf: Boolean(layout?.classList.contains('is-compact-shelf')),
           shelfOpen: Boolean(layout?.classList.contains('is-shelf-open')),
@@ -275,15 +295,24 @@ describe.skipIf(!prereq.ok)('the studio thread as an app screen', () => {
 
       // Claude/Cursor shape: empty runway under the turns so the last message can rise.
       expect(shell.hasScrollPad, 'transcript needs a bottom pad for last-turn scroll').toBe(true);
+      expect(shell.hasScrollBody, 'transcript body anchors short threads above the composer').toBe(true);
       expect(shell.padHeight, 'bottom pad needs real height (not a zero-height spacer)').toBeGreaterThan(80);
       expect(
         shell.padHeight,
         'bottom pad should be roughly one scrollport so the last turn can rise to the top',
       ).toBeGreaterThan(shell.scrollerClientHeight * 0.5);
+      expect(shell.slackWithTurn, 'with a turn above the pad, the transcript must become scrollable').toBeGreaterThan(
+        80,
+      );
+      // Last turn stays low; runway stays below the fold.
       expect(
-        shell.slackWithTurn,
-        'with a turn above the pad, the transcript must become scrollable',
-      ).toBeGreaterThan(80);
+        shell.defaultLastTurnTopRatio,
+        'default stick must keep the last turn in the lower half of the pane',
+      ).toBeGreaterThan(0.4);
+      expect(
+        shell.defaultScrollRemaining,
+        'default stick must leave the runway below the fold (not scrolled into)',
+      ).toBeGreaterThan(shell.padHeight * 0.5);
 
       // Desktop compact rail (~56px) leaves the work surface owning the rest of the window.
       if (viewport.width >= 801) {
