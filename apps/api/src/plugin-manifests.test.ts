@@ -221,4 +221,61 @@ describe('plugin skills', () => {
     const skill = readFileSync(join(skillsDir, 'building-on-gamedev-pl/SKILL.md'), 'utf8');
     expect(skill).toContain('When it disagrees');
   });
+
+  /**
+   * The same skill, at the one path the cross-agent installers actually read.
+   *
+   * `npx skills add gamedevpl/www.gamedev.pl` (skills.sh) walks the repo root, `skills/`
+   * and `.claude/skills/` — not `listings/mcp/claude-plugin/skills/`, which is three
+   * levels too deep. Run against this repo before that copy existed, it found nine
+   * skills, installed every internal one, and missed the only skill written for the
+   * people running the command.
+   *
+   * Two copies is the cost of the plugin needing it inside the plugin directory and the
+   * installers needing it at the root. Byte-identical is the cheapest thing that cannot
+   * silently drift, and it is checked rather than trusted because a stale root copy would
+   * teach the wrong loop to every agent that installed it and look fine here.
+   */
+  it('publishes a byte-identical copy at the root skills/ the installers read', () => {
+    const canonical = readFileSync(join(skillsDir, 'building-on-gamedev-pl/SKILL.md'), 'utf8');
+    const rootCopy = readFileSync(join(repoRoot, 'skills/building-on-gamedev-pl/SKILL.md'), 'utf8');
+    expect(rootCopy).toBe(canonical);
+  });
+
+  /**
+   * Frontmatter is YAML, and an unquoted `: ` inside a value reads as a nested mapping:
+   * the parse fails and the whole skill is skipped, silently. `browse-live-site` shipped
+   * that way — "…on the web session: getting Playwright's…" — and skills.sh dropped it
+   * with a warning nobody was watching for.
+   *
+   * Checked by hand rather than with a YAML parser, because this repo has no YAML
+   * dependency and adding one to lint eight files is a worse trade than the twenty lines
+   * below. It catches the one shape that actually bit us, not every malformed document.
+   */
+  it('gives every skill frontmatter that a YAML parser will accept', () => {
+    for (const root of ['.claude/skills', 'skills', 'listings/mcp/claude-plugin/skills']) {
+      const dir = join(repoRoot, root);
+      for (const entry of readdirSync(dir, { withFileTypes: true }).filter((e) => e.isDirectory())) {
+        const label = `${root}/${entry.name}`;
+        const text = readFileSync(join(dir, entry.name, 'SKILL.md'), 'utf8');
+        expect(text.startsWith('---\n'), `${label} must open with frontmatter`).toBe(true);
+
+        const frontmatter = text.slice(4, text.indexOf('\n---', 4));
+        const keys = new Set<string>();
+        for (const line of frontmatter.split('\n')) {
+          const match = /^([A-Za-z0-9_-]+):[ \t]*(.*)$/.exec(line);
+          if (!match) continue;
+          const [, key, rawValue] = match;
+          keys.add(key);
+          const value = rawValue.trim();
+          const quoted = /^(['"]).*\1$/.test(value);
+          expect(value, `${label}: ${key} contains ": " unquoted, which YAML reads as a nested mapping`).toBe(
+            quoted || !value.includes(': ') ? value : `${key} must be quoted`,
+          );
+        }
+        expect(keys.has('name'), `${label} needs a name`).toBe(true);
+        expect(keys.has('description'), `${label} needs a description`).toBe(true);
+      }
+    }
+  });
 });
