@@ -543,7 +543,7 @@
     "apps/web/src/styles.studioShell.test.ts": 42,
     "apps/web/src/submissionApi.ts": 1262,
     "apps/web/src/SubmissionStatusView.test.ts": 1816,
-    "apps/web/src/SubmissionStatusView.tsx": 4195,
+    "apps/web/src/SubmissionStatusView.tsx": 4157,
     "apps/web/src/SuggestionsPanel.test.tsx": 28,
     "apps/web/src/SuggestionsPanel.tsx": 113,
     "apps/web/src/telemetry.test.ts": 201,

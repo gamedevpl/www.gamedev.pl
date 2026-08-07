@@ -228,9 +228,7 @@ describe.skipIf(!prereq.ok)('the studio thread as an app screen', () => {
         let padHeight = 0;
         let scrollerClientHeight = 0;
         let slackWithTurn = 0;
-        // Default stick must park the last turn near the bottom of the pane, not
-        // inside the runway (last turn at the top + empty void). #616 added the
-        // pad; without this check stick-to-scrollHeight ships that void again.
+        // Default stick must not land inside the runway.
         let defaultLastTurnTopRatio = 1;
         let defaultScrollRemaining = 0;
         if (scroller && pad) {
@@ -247,7 +245,7 @@ describe.skipIf(!prereq.ok)('the studio thread as an app screen', () => {
             pad.before(turn);
           }
           slackWithTurn = scroller.scrollHeight - scroller.clientHeight;
-          // Re-apply the content-end stick the app uses (not absolute bottom).
+          // Content-end stick, not absolute scrollHeight.
           const contentEnd = Math.max(0, scroller.scrollHeight - scroller.clientHeight - padHeight);
           scroller.scrollTop = contentEnd;
           const scrollerRect = scroller.getBoundingClientRect();
@@ -306,8 +304,7 @@ describe.skipIf(!prereq.ok)('the studio thread as an app screen', () => {
       expect(shell.slackWithTurn, 'with a turn above the pad, the transcript must become scrollable').toBeGreaterThan(
         80,
       );
-      // Stick parks the last turn in the lower half — not at the top with the pad filling
-      // the pane (the void from scrolling to absolute bottom into the runway).
+      // Last turn stays low; runway stays below the fold.
       expect(
         shell.defaultLastTurnTopRatio,
         'default stick must keep the last turn in the lower half of the pane',

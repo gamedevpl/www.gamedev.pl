@@ -15,11 +15,11 @@ function fakePane(opts: { scrollHeight: number; clientHeight: number; scrollTop?
 
 describe('studioThreadScroll', () => {
   it('sticks to the content end, not the runway pad', () => {
-    // 400px of turns + 350px pad in a 400px pane — absolute bottom is 350; content end is 0.
+    // 400px turns + 350px pad; content end is 0.
     const pane = fakePane({ scrollHeight: 750, clientHeight: 400, padHeight: 350 });
     expect(studioThreadContentScrollTop(pane)).toBe(0);
     expect(studioThreadNearContentEnd({ ...pane, scrollTop: 0 })).toBe(true);
-    // Absolute bottom (into the pad) is still "following" — last turn can rise.
+    // Absolute bottom still counts as following.
     expect(studioThreadNearContentEnd({ ...pane, scrollTop: 350 })).toBe(true);
   });
 
@@ -30,7 +30,6 @@ describe('studioThreadScroll', () => {
       padHeight: 350,
       scrollTop: 200,
     });
-    // Content end scrollTop = 2000 - 400 - 350 = 1250; 200 is far above that.
     expect(studioThreadContentScrollTop(pane)).toBe(1250);
     expect(studioThreadNearContentEnd(pane)).toBe(false);
   });

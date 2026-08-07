@@ -1604,9 +1604,6 @@ function FeedbackPanel({
  * Scrolls in its own pane so the composer beneath it never moves, and sticks to the
  * bottom as the agent talks — unless the reader has scrolled up, which is them saying
  * they are reading something and would like it to stay put.
- *
- * "Bottom" means the end of the transcript body. A Claude/Cursor runway pad sits under
- * that so the last turn can rise to the top of the pane; stick must not scroll into it.
  */
 type ThreadWorkingState = {
   /** Coarse phase — "Writing code" / "Starting agent". */
@@ -1655,15 +1652,14 @@ function ThreadStream({
   const onScroll = () => {
     const pane = scrollRef.current;
     if (!pane) return;
-    // Content end, not the runway pad — see studioThreadScroll.ts.
+    // Content end, not the runway pad.
     stickToBottomRef.current = studioThreadNearContentEnd(pane);
   };
 
   useEffect(() => {
     const pane = scrollRef.current;
     if (!pane || !stickToBottomRef.current) return;
-    // Park the last turn at the bottom of the pane. Scrolling to scrollHeight would
-    // land inside the Claude/Cursor runway and leave an empty void under the turn.
+    // Do not scroll into the Claude/Cursor runway.
     pane.scrollTop = studioThreadContentScrollTop(pane);
   }, [entries.length, stickNonce, working?.label, working?.thoughtLabel]);
 
@@ -1689,8 +1685,7 @@ function ThreadStream({
 
   return (
     <div className="studio-thread-scroll" ref={scrollRef} onScroll={onScroll}>
-      {/* min-height 100% + flex-end: short threads sit above the composer, not under the
-          lid. The runway pad below is optional slack the reader scrolls into. */}
+      {/* Short threads sit above the composer, not under the lid. */}
       <div className="studio-thread-scroll-body">
         {priorSlug && priorRounds && priorRounds.length > 0 ? (
           <StudioPriorRounds slug={priorSlug} rounds={priorRounds} />
@@ -1769,9 +1764,7 @@ function ThreadStream({
         </ol>
         {after}
       </div>
-      {/* Empty runway under the turns — Claude/Cursor shape. Lets the reader scroll
-          until the last message sits at the top of the pane, not stuck on the fold.
-          Stick-to-bottom targets the body end, not this pad. */}
+      {/* Runway under turns — stick targets body end, not this pad. */}
       <div className="studio-thread-scroll-pad" aria-hidden="true" />
       {zoomed ? <ShotLightbox token={token} item={zoomed} onClose={() => setZoomed(null)} /> : null}
     </div>
