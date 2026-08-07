@@ -1,17 +1,21 @@
 /**
  * Coarse Studio presence pulses from MCP tool activity.
  *
- * ChatGPT Apps (and similar) often browse the kit for many turns with few
- * `report_progress` writes. Studio then looks idle even though the agent is busy.
- * Pulses refresh `lastAgentSignalAt` (stall / heartbeat) and a short-lived
- * `lastAgentPresence` thought key for the thread bar — they must NOT append durable
- * build-event chat rows. Rate-limited so a read-heavy loop cannot hammer Firestore.
+ * Kit-browse loops rarely call `report_progress`, so Studio looked idle while the
+ * agent was busy. Pulses refresh `lastAgentSignalAt` and a short-lived
+ * `lastAgentPresence` key — never durable chat rows. Same-key pulses are
+ * rate-limited so a read-heavy loop cannot hammer Firestore.
  */
 
-/** Minimum gap between synthetic presence heartbeats for one job. */
+/** Minimum gap between same-key synthetic presence heartbeats for one job. */
 export const MCP_PRESENCE_MIN_GAP_MS = 60_000;
 
-/** Tools that already write real progress / open rounds — never synthesize for these. */
+/**
+ * Tools that already write real progress / open rounds — never synthesize.
+ *
+ * `start` pulses in the MCP dispatcher (creator-key openers have no round Bearer;
+ * resume must clear `agentEndedAt` even after a recent gate-poll pulse).
+ */
 const NO_PULSE = new Set([
   'start',
   'create_game',
@@ -20,22 +24,27 @@ const NO_PULSE = new Set([
   'report_progress',
   'send_screenshot',
   'submit_sources',
-  // Channel PUT …/sources/stage (and POST …/stage/patch) refresh lastAgentSignalAt (+ staging_sources presence).
+  // Channel stage/patch already refresh lastAgentSignalAt (+ staging_sources).
   'stage_source_file',
   'patch_source_file',
   'clear_staged_sources',
   'ack_inbox',
-  // The round view polls this while a creator watches. A human with a chat window open
-  // is not an agent working: pulsing here would refresh the heartbeat, hold off the
-  // quiet stall, and keep self→platform handoff locked for as long as the tab is open.
+  // Creator card polls — not agent work; skip.
   'get_round_status',
   'get_round_media',
 ]);
+
 /**
- * Closed vocabulary for Studio thought headlines. Client translates via
- * `statusView.presence.<key>`; English `text` matches historical chat rows so
- * leftover durable steps can still be filtered from the transcript.
+ * Closed vocabulary for Studio thought headlines (`statusView.presence.<key>`).
+ * English `text` matches historic chat rows filtered from the transcript.
+ *
+ * `joining_round` comes from MCP `start` (see dispatcher), not this map.
  */
+export const JOINING_ROUND_PRESENCE = {
+  key: 'joining_round',
+  text: 'Joining the build round…',
+} as const;
+
 const PRESENCE_BY_TOOL: Record<string, { key: string; text: string }> = {
   get_brief: { key: 'reading_brief', text: 'Reading the build brief…' },
   get_seed: { key: 'loading_seed', text: 'Loading the seed draft…' },
@@ -55,9 +64,8 @@ const PRESENCE_BY_TOOL: Record<string, { key: string; text: string }> = {
 };
 
 /**
- * Gate-poll presence must refresh the heartbeat without clearing `agentEndedAt`.
- * Submit auto-ends for handoff; agents are told to poll next — clearing ended on
- * those pulses would relock self→platform until quiet timeout.
+ * Gate-poll presence refreshes the heartbeat without clearing `agentEndedAt`.
+ * Submit auto-ends for handoff; clearing ended on those pulses would relock it.
  */
 export const PRESENCE_PRESERVE_ENDED = new Set(['get_gate_verdict', 'get_gate_media']);
 
@@ -65,7 +73,10 @@ export function presencePreservesEnded(toolName: string): boolean {
   return PRESENCE_PRESERVE_ENDED.has(toolName);
 }
 
-const PRESENCE_EVENT_TEXTS = new Set(Object.values(PRESENCE_BY_TOOL).map((entry) => entry.text));
+const PRESENCE_EVENT_TEXTS = new Set([
+  ...Object.values(PRESENCE_BY_TOOL).map((entry) => entry.text),
+  JOINING_ROUND_PRESENCE.text,
+]);
 
 export function shouldPulseMcpPresence(toolName: string): boolean {
   if (NO_PULSE.has(toolName)) return false;
@@ -83,26 +94,26 @@ export function mcpPresenceText(toolName: string): string | null {
   return Object.hasOwn(PRESENCE_BY_TOOL, toolName) ? PRESENCE_BY_TOOL[toolName]!.text : null;
 }
 
-/** True when a durable step text is a leftover synthetic presence row (filter from chat). */
+/** True when a durable step text is a leftover synthetic presence row. */
 export function isMcpPresenceEventText(text: string): boolean {
   return PRESENCE_EVENT_TEXTS.has(text);
 }
 
-/** Cap for the in-process last-pulse map — oldest entries drop first (insertion order). */
+/** Cap for the in-process last-pulse map — oldest entries drop first. */
 export const MAX_PRESENCE_PULSE_JOBS = 2_000;
 
-/**
- * Record a pulse timestamp with a simple LRU cap so long-lived instances cannot grow
- * the map without bound. Pure aside from mutating `pulses`.
- */
+export type McpPresencePulse = { atMs: number; key: string };
+
+/** Record pulse at+key with LRU cap. Pure aside from mutating `pulses`. */
 export function noteMcpPresencePulse(
-  pulses: Map<number, number>,
+  pulses: Map<number, McpPresencePulse>,
   jobId: number,
   atMs: number,
+  key: string,
   maxJobs: number = MAX_PRESENCE_PULSE_JOBS,
 ): void {
   pulses.delete(jobId);
-  pulses.set(jobId, atMs);
+  pulses.set(jobId, { atMs, key });
   while (pulses.size > maxJobs) {
     const oldest = pulses.keys().next().value;
     if (oldest === undefined) break;
@@ -111,14 +122,18 @@ export function noteMcpPresencePulse(
 }
 
 /**
- * Whether enough time has passed since the last pulse for this job.
- * Pure so tests can drive the clock; callers own the last-pulse map.
+ * Whether this job may emit another presence pulse.
+ * Same key is rate-limited; a different key always updates (Joining → brief).
  */
 export function shouldEmitMcpPresencePulse(
-  lastPulseAtMs: number | undefined,
+  last: McpPresencePulse | number | undefined,
   nowMs: number,
   minGapMs: number = MCP_PRESENCE_MIN_GAP_MS,
+  nextKey?: string,
 ): boolean {
-  if (lastPulseAtMs === undefined) return true;
-  return nowMs - lastPulseAtMs >= minGapMs;
+  if (last === undefined) return true;
+  const lastAt = typeof last === 'number' ? last : last.atMs;
+  const lastKey = typeof last === 'number' ? undefined : last.key;
+  if (nextKey && lastKey && nextKey !== lastKey) return true;
+  return nowMs - lastAt >= minGapMs;
 }

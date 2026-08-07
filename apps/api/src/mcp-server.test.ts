@@ -476,6 +476,31 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(await store.listBuildEvents(ISSUE)).toHaveLength(before);
   });
 
+  it('start pulses joining_round presence and clears agentEndedAt on resume', async () => {
+    const store = new InMemoryStore();
+    await seedActiveSelfJob(store);
+    await store.markAgentEnded(ISSUE, '2026-08-07T08:00:00.000Z');
+    // Gate-poll presence must not block resume (ended bypasses same-key gap).
+    await store.touchLastAgentSignalAt(
+      ISSUE,
+      '2026-08-07T08:00:30.000Z',
+      { key: 'waiting_checks' },
+      { preserveEnded: true },
+    );
+    expect((await store.getSubmission(ISSUE))?.agentEndedAt).toBeTruthy();
+
+    app = await createApp(store);
+    const sessionId = await initialize(app);
+    const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
+    expect(started.isError).toBe(false);
+
+    const record = await store.getSubmission(ISSUE);
+    expect(record?.agentEndedAt).toBeUndefined();
+    expect(record?.lastAgentPresence).toMatchObject({ key: 'joining_round' });
+    expect(record?.lastAgentSignalAt).toBeTruthy();
+    expect((await store.listBuildEvents(ISSUE)).some((e) => e.text.includes('Joining'))).toBe(false);
+  });
+
   it('start returns the session workflow in both structuredContent and the text body', async () => {
     const store = new InMemoryStore();
     await seedJob(store);

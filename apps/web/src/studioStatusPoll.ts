@@ -7,11 +7,11 @@ import type { SubmissionStatus } from './submissionApi.js';
  * (react-refresh) while tests can still assert the real intervals.
  */
 
-// `in_review` is out on purpose: gate-green waits on a human, not the agent.
+// `in_review` omitted: gate-green waits on a human, not the agent.
 // Tight polling + foot spinner made "Final check" look eternally in progress.
 const ACTIVE_BUILD_STATUSES = new Set<SubmissionStatus['status']>(['building']);
 
-/** Exported so tests advance timers by the real cadence instead of a magic number. */
+/** Exported so tests advance timers by the real cadence. */
 export const ACTIVE_POLL_MS = 3000;
 const IDLE_POLL_MS = 10000;
 
@@ -28,6 +28,8 @@ export function pollDelayMs(
   if (status === 'needs_changes') return IDLE_POLL_MS;
   // Flip the connect card to live progress as soon as the agent signals.
   if (stall === 'no_agent_yet') return ACTIVE_POLL_MS;
+  // Resume after end/quiet: pick up MCP start in ~3s, not 10s.
+  if (stall === 'ended' || stall === 'quiet') return ACTIVE_POLL_MS;
   // Copilot session boot: job is `dispatched` (public status still `queued`) until
   // GitHub reports `in_progress`. Poll tightly on that real phase — not a timer guess.
   if (phase === 'dispatched') return ACTIVE_POLL_MS;

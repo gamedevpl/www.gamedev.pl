@@ -63,6 +63,13 @@ describe('pollDelayMs', () => {
   it('polls gently once gate-green is waiting on a human', () => {
     expect(pollDelayMs('in_review')).toBeGreaterThan(ACTIVE_POLL_MS);
   });
+
+  it('polls tightly while a self agent is ended or quiet so resume shows quickly', () => {
+    // Ended/quiet used idle 10s; start already ran before Studio left "stopped".
+    expect(pollDelayMs('in_review', 'ended')).toBe(ACTIVE_POLL_MS);
+    expect(pollDelayMs('building', 'quiet')).toBe(ACTIVE_POLL_MS);
+    expect(pollDelayMs('queued', 'no_agent_yet')).toBe(ACTIVE_POLL_MS);
+  });
 });
 
 describe('SubmissionStatusView', () => {

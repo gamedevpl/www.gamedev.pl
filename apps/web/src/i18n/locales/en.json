@@ -706,6 +706,7 @@
     },
     "updatedAgo": "updated {{time}}",
     "presence": {
+      "joining_round": "Joining the build round…",
       "reading_brief": "Reading the build brief…",
       "loading_seed": "Loading the seed draft…",
       "fetching_kit": "Fetching Creator Kit metadata…",

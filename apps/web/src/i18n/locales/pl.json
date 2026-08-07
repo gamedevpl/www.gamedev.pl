@@ -710,6 +710,7 @@
     },
     "updatedAgo": "aktualizacja {{time}}",
     "presence": {
+      "joining_round": "Dołączanie do rundy…",
       "reading_brief": "Czytanie briefu…",
       "loading_seed": "Ładowanie szkicu startowego…",
       "fetching_kit": "Pobieranie metadanych Creator Kit…",
