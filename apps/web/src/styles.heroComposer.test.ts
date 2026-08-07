@@ -5,8 +5,7 @@ import { describe, expect, it } from 'vitest';
 const css = readFileSync(fileURLToPath(new URL('./styles.css', import.meta.url)), 'utf8');
 
 /**
- * Phone rules for the home composer live under `@media (max-width: 768px)`.
- * Pull the last matching block — those are the mobile overrides.
+ * Phone rules live under `@media (max-width: 768px)` — use last match.
  */
 function lastRuleBody(selector: string): string {
   const marker = `${selector} {`;
@@ -28,8 +27,7 @@ function firstRuleBody(selector: string): string {
 
 describe('desktop hero composer pill', () => {
   it('uses a fixed-height grid so + / field / mic / send share one centerline', () => {
-    // 36px input with equal vertical pad around a 24px line box — same
-    // height as the icon buttons, text not top-aligned in a taller cell.
+    // 36px field aligns with icon buttons on one midline.
     const bar = firstRuleBody('.prompt-composer-bar');
     expect(bar).toMatch(/display:\s*grid/);
     expect(bar).toMatch(/align-items:\s*center/);
@@ -54,6 +52,16 @@ describe('desktop hero composer pill', () => {
 
     const labelRule = firstRuleBody('.prompt-composer-bar .build-btn-label');
     expect(labelRule).toMatch(/clip:\s*rect\(0,\s*0,\s*0,\s*0\)/);
+  });
+
+  it('keeps a busy send readable: full opacity and a spinner the eye can see', () => {
+    // Keep teal opacity so disabled busy does not look broken.
+    const busy = firstRuleBody('.prompt-composer-bar .build-btn.is-busy');
+    expect(busy).toMatch(/opacity:\s*1/);
+    expect(busy).toMatch(/cursor:\s*progress/);
+
+    const spinner = firstRuleBody('.build-btn-spinner');
+    expect(spinner).toMatch(/animation:\s*status-spin/);
   });
 });
 

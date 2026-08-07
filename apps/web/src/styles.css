@@ -618,6 +618,48 @@ a {
   border: 0;
 }
 
+/* Busy: keep teal; spinner replaces the clipped label on desktop. */
+.prompt-composer-bar .build-btn.is-busy {
+  opacity: 1;
+  cursor: progress;
+}
+
+.build-btn-spinner {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  border-radius: 50%;
+  border: 2px solid rgba(8, 36, 29, 0.35);
+  border-top-color: #08241d;
+  animation: status-spin 0.8s linear infinite;
+}
+
+.prompt-busy-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--turquoise);
+}
+
+.prompt-busy-status .build-btn-spinner {
+  border-color: rgba(0, 228, 172, 0.25);
+  border-top-color: var(--turquoise);
+}
+
+.creation-card.is-busy {
+  border-color: rgba(0, 228, 172, 0.35);
+  background: rgba(0, 228, 172, 0.08);
+}
+
+.creation-card.is-busy .creation-sub {
+  color: var(--turquoise);
+  font-weight: 600;
+}
+
 .mic-btn.listening {
   color: #f43f5e;
   animation: pulseMic 1.2s infinite alternate;

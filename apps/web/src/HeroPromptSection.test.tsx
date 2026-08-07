@@ -96,8 +96,7 @@ describe('HeroPromptSection', () => {
   });
 
   it('says it is analyzing while the refiner runs, and submitting only once it is', async () => {
-    // The refiner takes a few seconds before anything is sent; claiming "Submitting…"
-    // through it described a request that had not been made yet.
+    // refining must not claim Submitting before anything is sent
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
 
@@ -128,10 +127,128 @@ describe('HeroPromptSection', () => {
     expect((await renderWithStatus('loading'))?.textContent).toContain('Submitting');
     expect((await renderWithStatus('idle'))?.textContent).toContain('Build My Game');
 
-    // Both busy states must also keep the button from firing a second request.
+    // Busy must disable the button against a second fire.
     expect((await renderWithStatus('refining'))?.disabled).toBe(true);
     expect((await renderWithStatus('loading'))?.disabled).toBe(true);
     expect((await renderWithStatus('idle'))?.disabled).toBe(false);
+
+    await act(async () => root.unmount());
+  });
+
+  it('shows a spinner and status line while the refiner or submit is in flight', async () => {
+    // Icon-only send needs a spinner; faded arrow looked stuck.
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    const renderWithStatus = async (submissionStatus: 'idle' | 'refining' | 'loading') => {
+      await act(async () => {
+        root.render(
+          createElement(HeroPromptSection, {
+            initialPrompt: 'Lets create a remake of Beasts and Pumpkins game',
+            catalogEntries: [],
+            submissionStatus,
+            submissionError: null,
+            onSubmitSpec: vi.fn(),
+            mockStatus: 'idle',
+            mockError: null,
+            onGenerateMock: vi.fn(),
+          }),
+        );
+        await flushEffects();
+      });
+    };
+
+    await renderWithStatus('refining');
+    expect(container.querySelector('.prompt-composer-bar.is-busy')).not.toBeNull();
+    expect(container.querySelector('.build-btn.is-busy')).not.toBeNull();
+    expect(container.querySelector('.build-btn-spinner')).not.toBeNull();
+    expect(container.querySelector('.prompt-busy-status')?.textContent).toMatch(/Analyzing your idea/i);
+    expect(container.querySelector('.creation-card.is-busy .creation-sub')?.textContent).toMatch(
+      /Analyzing your idea/i,
+    );
+    expect(container.querySelector<HTMLInputElement>('.big-prompt-input')?.disabled).toBe(true);
+    expect(container.querySelector('.prompt-box-form')?.getAttribute('aria-busy')).toBe('true');
+
+    await renderWithStatus('loading');
+    expect(container.querySelector('.prompt-busy-status')?.textContent).toMatch(/Submitting/i);
+    expect(container.querySelector('.build-btn-spinner')).not.toBeNull();
+
+    await renderWithStatus('idle');
+    expect(container.querySelector('.prompt-composer-bar.is-busy')).toBeNull();
+    expect(container.querySelector('.build-btn-spinner')).toBeNull();
+    expect(container.querySelector('.prompt-busy-status')).toBeNull();
+    expect(container.querySelector('.creation-card.is-busy')).toBeNull();
+    expect(container.querySelector<HTMLInputElement>('.big-prompt-input')?.disabled).toBe(false);
+
+    await act(async () => root.unmount());
+  });
+
+  it('closes the attach menu and ignores drops while busy', async () => {
+    // Busy must lock attachments: menu and drag-drop too.
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(HeroPromptSection, {
+          initialPrompt: 'a quiet garden game',
+          catalogEntries: [],
+          submissionStatus: 'idle',
+          submissionError: null,
+          onSubmitSpec: vi.fn(),
+          mockStatus: 'idle',
+          mockError: null,
+          onGenerateMock: vi.fn(),
+        }),
+      );
+      await flushEffects();
+    });
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.attach-btn')?.click();
+      await flushEffects();
+    });
+    expect(container.querySelector('.prompt-attach-menu')).not.toBeNull();
+
+    await act(async () => {
+      root.render(
+        createElement(HeroPromptSection, {
+          initialPrompt: 'a quiet garden game',
+          catalogEntries: [],
+          submissionStatus: 'refining',
+          submissionError: null,
+          onSubmitSpec: vi.fn(),
+          mockStatus: 'idle',
+          mockError: null,
+          onGenerateMock: vi.fn(),
+        }),
+      );
+      await flushEffects();
+    });
+
+    expect(container.querySelector('.prompt-attach-menu')).toBeNull();
+    expect(container.querySelector<HTMLButtonElement>('.attach-btn')?.disabled).toBe(true);
+
+    const card = container.querySelector('.hero-prompt-card')!;
+    const file = new File(['fake'], 'sprite.png', { type: 'image/png' });
+    await act(async () => {
+      const drop = new Event('drop', { bubbles: true, cancelable: true }) as DragEvent;
+      Object.defineProperty(drop, 'dataTransfer', {
+        value: { files: [file] },
+      });
+      card.dispatchEvent(drop);
+      await flushEffects();
+      await flushEffects();
+    });
+    expect(container.querySelector('.attachments-list')).toBeNull();
 
     await act(async () => root.unmount());
   });
