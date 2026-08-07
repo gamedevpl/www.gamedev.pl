@@ -96,8 +96,7 @@ describe('HeroPromptSection', () => {
   });
 
   it('says it is analyzing while the refiner runs, and submitting only once it is', async () => {
-    // The refiner takes a few seconds before anything is sent; claiming "Submitting…"
-    // through it described a request that had not been made yet.
+    // refining must not claim Submitting before anything is sent
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
 
@@ -128,7 +127,7 @@ describe('HeroPromptSection', () => {
     expect((await renderWithStatus('loading'))?.textContent).toContain('Submitting');
     expect((await renderWithStatus('idle'))?.textContent).toContain('Build My Game');
 
-    // Both busy states must also keep the button from firing a second request.
+    // Busy must disable the button against a second fire.
     expect((await renderWithStatus('refining'))?.disabled).toBe(true);
     expect((await renderWithStatus('loading'))?.disabled).toBe(true);
     expect((await renderWithStatus('idle'))?.disabled).toBe(false);
@@ -137,8 +136,7 @@ describe('HeroPromptSection', () => {
   });
 
   it('shows a spinner and status line while the refiner or submit is in flight', async () => {
-    // Desktop clips the build label into a circle. Disabling the send arrow without a
-    // spinner left creators staring at a faded icon with no idea anything was happening.
+    // Icon-only send needs a spinner; faded arrow looked stuck.
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
 

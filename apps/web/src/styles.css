@@ -618,9 +618,7 @@ a {
   border: 0;
 }
 
-/* In-flight: keep the teal so "disabled" does not read as "broken", and swap the
-   arrow for a spinner the eye can see without reading the title attribute.
-   Same trap the studio compact composer already fixed. */
+/* Busy: keep teal; spinner replaces the clipped label on desktop. */
 .prompt-composer-bar .build-btn.is-busy {
   opacity: 1;
   cursor: progress;

@@ -7,21 +7,20 @@ import { PixelIcon } from './PixelIcon.js';
 import { getQuota } from './submissionApi.js';
 
 /**
- * Gemini-style composer: one pill bar holds attach / prompt / mic / build.
+ * Gemini-style composer: attach / prompt / mic / build in one pill.
  */
 
 type HeroPromptSectionProps = {
   initialPrompt?: string;
   catalogEntries?: CatalogEntry[];
   onPlayGame?: (entry: CatalogEntry) => void;
-  /** 'refining' is the pre-submission spec-refiner call; nothing has been sent yet. */
+  // refining = pre-submit spec refiner; nothing sent yet
   submissionStatus: 'idle' | 'refining' | 'loading';
   submissionError: string | null;
   onSubmitSpec: (concept: string) => void;
   mockStatus: 'idle' | 'loading' | 'error';
   mockError: string | null;
-  // Kept for the demo generator; the primary Build action no longer auto-fires a
-  // throwaway mock — clarifying questions (the QA gate) run before any generation.
+  // Demo mock only; Build runs QA before any generation
   onGenerateMock?: (prompt: string) => void;
 };
 
@@ -117,9 +116,7 @@ export function HeroPromptSection({
   mockError,
 }: HeroPromptSectionProps) {
   const { t } = useTranslation();
-  // Focusing a text field during mobile page load opens the on-screen keyboard and hides
-  // most of the creation surface. Keep the desktop shortcut, where no virtual keyboard
-  // competes for viewport space.
+  // Skip autofocus on phone — keyboard would hide the composer.
   const shouldAutoFocusPrompt = typeof matchMedia !== 'function' || !matchMedia('(max-width: 768px)').matches;
   const [promptText, setPromptText] = useState(initialPrompt);
   const [attachments, setAttachments] = useState<VisualAttachment[]>([]);
@@ -132,8 +129,7 @@ export function HeroPromptSection({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const attachMenuRef = useRef<HTMLDivElement | null>(null);
 
-  // Today's allowance, shown next to the build button. Discovering the limit as a
-  // 429 after typing out an idea is the worst possible moment to learn about it.
+  // Show quota before a 429 after they finish typing.
   const [quota, setQuota] = useState<{ used: number; limit: number | null } | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -197,8 +193,7 @@ export function HeroPromptSection({
     try {
       const recognition = new SpeechClass();
       recognition.continuous = false;
-      // Safari on iOS can take a while to produce a final result. Showing its interim
-      // transcription makes the control responsive while the person is still speaking.
+      // Interim results keep iOS Safari feeling responsive while speaking.
       recognition.interimResults = true;
       recognition.lang = window.navigator.language || 'en-US';
 
@@ -234,8 +229,7 @@ export function HeroPromptSection({
 
       speechBasePromptRef.current = promptText.trim();
       recognitionRef.current = recognition;
-      // Do not wait for Safari's onstart callback: it may only arrive after the native
-      // permission sheet closes, which otherwise makes the page appear unresponsive.
+      // Mark listening now; Safari onstart can wait on permission.
       setIsListening(true);
       recognition.start();
     } catch (err: unknown) {
@@ -320,18 +314,13 @@ export function HeroPromptSection({
         : `Game idea with attached visuals: ${attachSummary}`;
     }
 
-    // Recorded here rather than in the handler: this is the visitor asking for a game,
-    // which happens whether or not they turn out to be signed in.
+    // Funnel step: they asked for a game, signed-in or not.
     recordCreateStep('spec_submitted');
-    // No title is invented here any more. This used to send the prompt's first 40
-    // characters as the game's name, and that string went on to be the name — in the
-    // studio, in the catalog, in the agent's brief. Naming happens in the confirm step,
-    // where the creator can see it and change it.
+    // Naming happens in confirm; do not invent a title from the prompt.
     onSubmitSpec(finalPrompt);
   };
 
-  // Desktop clips the build label into a 36px circle, so busy text never appears —
-  // same trap the studio composer hit. Spinner + status line are the eye can see.
+  // Desktop clips Build label; spinner + status must stay visible.
   const isBusy = submissionStatus !== 'idle' || mockStatus === 'loading';
   const busyLabel =
     submissionStatus === 'refining'
@@ -342,9 +331,7 @@ export function HeroPromptSection({
 
   return (
     <section className="hero-prompt-section">
-      {/* No mascot here: the header already shows him a few pixels above, and a second
-          copy on its own row pushed the headline — the actual thesis — below the fold
-          on a phone. He still carries the loading, empty, error and 404 moments. */}
+      {/* No mascot: header already has him; keep headline above the fold. */}
       <div className="hero-text-container">
         <h1 className="hero-headline">{t('hero.mainTitle')}</h1>
       </div>
@@ -412,8 +399,7 @@ export function HeroPromptSection({
               autoFocus={shouldAutoFocusPrompt}
               value={promptText}
               onChange={(e) => {
-                // Intent, recorded once per visit: the top of the creation funnel is
-                // "someone started writing an idea", not "someone loaded the page".
+                // Once per visit: first keystroke into the creation funnel.
                 if (e.target.value.trim()) recordCreateStep('prompt_started');
                 setPromptText(e.target.value);
               }}
@@ -421,7 +407,6 @@ export function HeroPromptSection({
               enterKeyHint="go"
               autoComplete="off"
               disabled={isBusy}
-              readOnly={isBusy}
             />
 
             <div className="prompt-bar-actions">
@@ -445,16 +430,8 @@ export function HeroPromptSection({
               aria-label={busyLabel ?? t('hero.buildGameButton')}
               disabled={isBusy || (!promptText.trim() && attachments.length === 0)}
             >
-              {isBusy ? (
-                <span className="build-btn-spinner" aria-hidden="true" />
-              ) : (
-                <PixelIcon name="send" size={16} />
-              )}
-              {/* Three states, not two: the refiner runs for a few seconds before
-                  anything is submitted, and saying "Submitting…" through it was the
-                  creator's first impression of a feature that had just started
-                  working at all. Visually clipped on desktop (circular send);
-                  shown on the phone's full-width row. */}
+              {isBusy ? <span className="build-btn-spinner" aria-hidden="true" /> : <PixelIcon name="send" size={16} />}
+              {/* refining ≠ submitting; phone shows label, desktop clips to icon */}
               <span className="build-btn-label">{busyLabel ?? t('hero.buildGameButton')}</span>
             </button>
           </div>
@@ -540,10 +517,7 @@ export function HeroPromptSection({
         {submissionError && <p className="error">{submissionError}</p>}
         {mockError && <p className="error">{mockError}</p>}
 
-        {/* AI Act art. 50(1): a person interacting with an AI system has to be told so.
-            This is the point of interaction — the box they type their idea into — and
-            it doubles as the notice that what they write goes to AI models, which the
-            privacy policy explains in full. */}
+        {/* AI Act art. 50(1): disclose AI at the prompt interaction point. */}
         <p className="ai-notice">
           <PixelIcon name="sparkle" size={12} /> {t('ai.creatorNotice')} <a href="/privacy">{t('legal.privacy')}</a>
         </p>
