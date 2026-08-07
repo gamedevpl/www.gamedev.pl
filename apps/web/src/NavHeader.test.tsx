@@ -306,6 +306,71 @@ describe('NavHeader menu', () => {
     await act(async () => root.unmount());
   });
 
+  it('badges Review with remaining games when a sweep is active', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith('/api/auth/me')) {
+        return new Response(
+          JSON.stringify({
+            user: { uid: 'g:reviewer', tier: 'free', name: 'Reviewer', reviewer: true },
+          }),
+        );
+      }
+      if (url.endsWith('/api/health')) {
+        return new Response(JSON.stringify({ status: 'ok', provider: 'mock', privateBeta: false }));
+      }
+      if (url.endsWith('/api/review/status')) {
+        return new Response(
+          JSON.stringify({
+            remaining: 5,
+            sweep: { id: 'swp-1', status: 'active', total: 5, released: 5 },
+          }),
+        );
+      }
+      return new Response('{}', { status: 404 });
+    });
+
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        createElement(
+          AuthProvider,
+          null,
+          createElement(NavHeader, {
+            activeBuildCount: 0,
+            onNavigate: vi.fn(),
+            onHome: vi.fn(),
+            onStudio: vi.fn(),
+            onAdmin: vi.fn(),
+            onReview: vi.fn(),
+            upTarget: null,
+          }),
+        ),
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const hamburger = container.querySelector('.hamburger-btn') as HTMLButtonElement;
+    await act(async () => {
+      hamburger.click();
+      await Promise.resolve();
+    });
+
+    const review = Array.from(container.querySelectorAll<HTMLButtonElement>('.nav-link')).find((btn) =>
+      (btn.textContent ?? '').includes('Review'),
+    );
+    expect(review).toBeDefined();
+    expect(review!.querySelector('.specs-count-badge')?.textContent).toBe('5');
+    expect(review!.querySelector('.specs-count-badge')?.getAttribute('aria-label')).toBe('5 games to review');
+
+    await act(async () => root.unmount());
+  });
+
   it('signs out from the menu foot and closes the menu', async () => {
     const logoutSpy = vi.fn().mockResolvedValue(undefined);
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {

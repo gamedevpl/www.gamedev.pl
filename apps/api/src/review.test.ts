@@ -156,6 +156,50 @@ describe('reviewer assessment desk', () => {
     );
   });
 
+  it('exposes remaining count for the Review nav badge', async () => {
+    const { app } = await makeApp({ seedSweep: false });
+    const reviewer = await sessionCookie(app, 'reviewer');
+    const stranger = await sessionCookie(app, 'stranger');
+
+    expect(
+      (await app.inject({ method: 'GET', url: '/api/review/status', headers: { cookie: stranger } })).statusCode,
+    ).toBe(404);
+
+    const idle = await app.inject({ method: 'GET', url: '/api/review/status', headers: { cookie: reviewer } });
+    expect(idle.statusCode).toBe(200);
+    expect(JSON.parse(idle.body)).toEqual({ remaining: 0, sweep: null });
+
+    const boss = await sessionCookie(app, 'boss');
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/admin/review-sweeps',
+      headers: { cookie: boss },
+      payload: { source: 'catalog', maxGames: 2, releasePerDay: null, notify: false },
+    });
+    expect(created.statusCode).toBe(200);
+
+    const open = await app.inject({ method: 'GET', url: '/api/review/status', headers: { cookie: reviewer } });
+    expect(open.statusCode).toBe(200);
+    expect(JSON.parse(open.body).remaining).toBe(2);
+    expect(JSON.parse(open.body).sweep.status).toBe('active');
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/review/assessments',
+      headers: { cookie: reviewer },
+      payload: {
+        slug: 'sky-dodge',
+        source: 'catalog',
+        verdict: 'keep',
+        note: 'One down.',
+        checklist: sampleChecklist,
+      },
+    });
+
+    const after = await app.inject({ method: 'GET', url: '/api/review/status', headers: { cookie: reviewer } });
+    expect(JSON.parse(after.body).remaining).toBe(1);
+  });
+
   it('lets admins review without being listed in REVIEWER_UIDS', async () => {
     const { app } = await makeApp({ reviewerUids: '', adminUids: 'dev:boss' });
     const boss = await sessionCookie(app, 'boss');

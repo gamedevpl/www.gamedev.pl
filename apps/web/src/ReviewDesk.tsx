@@ -478,11 +478,18 @@ export function ReviewDesk() {
                 ) : (
                   <div className="review-preview-empty">
                     <p>{t('review.noMedia')}</p>
-                    <button type="button" className="review-play-btn" onClick={() => setPlaying(true)}>
-                      {t('review.tryPlay')}
-                    </button>
                   </div>
                 )}
+                {hasPreviewMedia(current) || !showMedia ? (
+                  <button
+                    type="button"
+                    className={playing ? 'review-play-btn is-overlay is-active' : 'review-play-btn is-overlay'}
+                    aria-pressed={playing}
+                    onClick={() => setPlaying((prev) => !prev)}
+                  >
+                    {playing ? t('review.showPreview') : t('review.tryPlay')}
+                  </button>
+                ) : null}
                 {keepHint ? <div className="review-stamp is-keep">{t('review.keep')}</div> : null}
                 {cutHint ? <div className="review-stamp is-cut">{t('review.cut')}</div> : null}
                 {skipHint ? <div className="review-stamp is-skip">{t('review.skip')}</div> : null}
@@ -505,19 +512,6 @@ export function ReviewDesk() {
                   ))}
                 </div>
               ) : null}
-
-              <div className="review-stage-tools">
-                {hasPreviewMedia(current) ? (
-                  <button
-                    type="button"
-                    className={playing ? 'review-play-btn is-active' : 'review-play-btn'}
-                    aria-pressed={playing}
-                    onClick={() => setPlaying((prev) => !prev)}
-                  >
-                    {playing ? t('review.showPreview') : t('review.tryPlay')}
-                  </button>
-                ) : null}
-              </div>
             </div>
           </div>
 

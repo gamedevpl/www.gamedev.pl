@@ -194,6 +194,9 @@ describe('ReviewDesk', () => {
       button.textContent?.includes('Try play'),
     );
     expect(tryPlay).toBeTruthy();
+    // Overlay on the stage — sticky checklist must not bury Try play.
+    expect(tryPlay!.className).toContain('is-overlay');
+    expect(container.querySelector('.review-stage-tools')).toBeNull();
     await act(async () => {
       tryPlay!.click();
     });
@@ -202,6 +205,7 @@ describe('ReviewDesk', () => {
     expect(container.querySelector('[data-testid="frame"]')?.textContent).toContain('sky-dodge');
     expect(container.querySelector('video.review-preview-video')).toBeNull();
     expect(container.textContent).toMatch(/Show preview/);
+    expect(container.querySelector('button.review-play-btn.is-overlay.is-active')).toBeTruthy();
   });
 
   it('sends cut when the Cut control is pressed', async () => {
