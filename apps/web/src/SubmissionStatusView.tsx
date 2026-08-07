@@ -1491,12 +1491,24 @@ function FeedbackPanel({
   // Compact is the thread's composer in the Claude / Cursor / Copilot shape: a clean
   // field on top, controls in a bottom toolbar (builder selector left, send right).
   // The heading and standing hint were page furniture — the placeholder carries them.
+  // Empty (`is-empty`) collapses to one row so the placeholder and send share a line;
+  // once there is text the toolbar drops under the field again so the box can grow.
   if (compact) {
     const sending = state === 'sending';
+    const empty = text.length === 0;
     return (
       <div
-        className={`status-feedback status-composer is-compact${sending ? ' is-sending' : ''}`}
+        className={`status-feedback status-composer is-compact${empty ? ' is-empty' : ''}${sending ? ' is-sending' : ''}`}
         aria-busy={sending || undefined}
+        onClick={(event) => {
+          // The card is taller than the textarea (padding, toolbar gap). A click on the
+          // chrome should focus the field — otherwise the empty stretch between
+          // placeholder and send feels dead. Leave real controls alone.
+          const target = event.target as HTMLElement | null;
+          if (!target) return;
+          if (target.closest('button, a, textarea, input, select, [role="button"]')) return;
+          inputRef.current?.focus();
+        }}
       >
         {routeNoteKey && !sending && state !== 'sent' && !error && !notice ? (
           <p className="status-feedback-route">{t(routeNoteKey)}</p>
@@ -1509,6 +1521,14 @@ function FeedbackPanel({
             setText(event.target.value);
             autoGrow();
             if (state === 'sent') setState('idle');
+          }}
+          onKeyDown={(event) => {
+            // Enter sends, as in every phone message box; Shift+Enter keeps a newline
+            // for longer revision notes. RemixAsk does the same.
+            if (event.key === 'Enter' && !event.shiftKey) {
+              event.preventDefault();
+              void send();
+            }
           }}
           placeholder={t(composerHintKey)}
           aria-label={t(titleKey)}
