@@ -107,7 +107,7 @@ export function filterStudioGames(
 }
 
 /**
- * Two-letter mark for the collapsed shelf — first letter of the first two words.
+ * Two-letter mark for shelf rows — first letter of the first two words.
  * One-word titles take the first two letters. Skips empty tokens; prefers letters/digits.
  */
 export function studioGameInitials(title: string): string {

@@ -5294,7 +5294,7 @@ a.user-name--profile:focus-visible {
   box-shadow: 0 0 16px var(--turquoise-glow);
 }
 
-/* Shelf mark: two title letters. Colour carries live/published; letters carry identity. */
+/* Shelf mark: two title letters beside each row. Colour carries live/published. */
 .studio-shelf-mark {
   flex: none;
   display: inline-flex;
@@ -10148,7 +10148,47 @@ button.builder-mode-selector:disabled {
   z-index: 1100;
 }
 
-/* 5+ games on a desktop: collapse to a left-edge rail of title marks after selection.
+/* Collapsed-rail summary (folder + count). Hidden until compact desktop rail is closed. */
+.studio-shelf-summary {
+  display: none;
+  position: relative;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 12px;
+  border: 1px solid var(--panel-border);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.studio-shelf-summary:hover {
+  border-color: rgba(0, 228, 172, 0.45);
+  color: var(--turquoise);
+}
+
+.studio-shelf-summary-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--turquoise);
+  color: #0b221d;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 18px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 0 0 2px var(--panel);
+}
+
+/* 5+ games on a desktop: collapse to a left-edge folder+badge after selection.
    Width matches the header mascot column, so the rail and the logo share one vertical
    band instead of a skinny strip floating left of the face. */
 @media (min-width: 801px) {
@@ -10163,7 +10203,7 @@ button.builder-mode-selector:disabled {
 
   /* Full-bleed studio content starts at x=0 while the header kept 28px — the mascot
      sat indented past the rail. Pull the header in; the wordmark still runs into the
-     main column, and the face sits over the same band as the game marks. */
+     main column, and the face sits over the same band as the summary control. */
   .app:has(.studio-layout.is-game-open.is-compact-shelf:not(.is-shelf-open)) .app-header {
     padding-left: 0;
   }
@@ -10198,7 +10238,7 @@ button.builder-mode-selector:disabled {
   .studio-layout.is-compact-shelf:not(.is-shelf-open) .studio-shelf-count,
   .studio-layout.is-compact-shelf:not(.is-shelf-open) .studio-shelf-tools,
   .studio-layout.is-compact-shelf:not(.is-shelf-open) .studio-shelf-new-label,
-  .studio-layout.is-compact-shelf:not(.is-shelf-open) .studio-shelf-title {
+  .studio-layout.is-compact-shelf:not(.is-shelf-open) .studio-shelf-truncated {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -10210,32 +10250,24 @@ button.builder-mode-selector:disabled {
     border: 0;
   }
 
+  /* Letter chips stay out of the tab order until the list is expanded. */
+  .studio-layout.is-compact-shelf:not(.is-shelf-open) .studio-shelf-list,
+  .studio-layout.is-compact-shelf:not(.is-shelf-open) .studio-shelf-empty {
+    display: none;
+  }
+
+  /* Folder+badge is the expand control; edge chevron only when the list is open. */
   .studio-layout.is-compact-shelf:not(.is-shelf-open) .studio-shelf-edge-toggle {
+    display: none;
+  }
+
+  .studio-layout.is-compact-shelf:not(.is-shelf-open) .studio-shelf-summary {
     display: inline-flex;
-    margin-left: 0;
   }
 
   .studio-layout.is-compact-shelf:not(.is-shelf-open) .studio-shelf-new {
     justify-content: center;
     padding: 8px;
-  }
-
-  .studio-layout.is-compact-shelf:not(.is-shelf-open) .studio-shelf-item {
-    justify-content: center;
-    padding: 8px;
-  }
-
-  .studio-layout.is-compact-shelf:not(.is-shelf-open) .studio-shelf-mark {
-    width: 36px;
-    height: 36px;
-    border-radius: 11px;
-    font-size: 0.72rem;
-  }
-
-  .studio-layout.is-compact-shelf:not(.is-shelf-open) .studio-shelf-item.is-active,
-  .studio-layout.is-compact-shelf:not(.is-shelf-open) .studio-shelf-item.is-active:hover {
-    /* No left inset bar in the icon rail — the active mark is enough. */
-    box-shadow: 0 0 14px rgba(0, 228, 172, 0.12);
   }
 
   .studio-layout.is-compact-shelf.is-shelf-open .studio-shelf-edge-toggle {

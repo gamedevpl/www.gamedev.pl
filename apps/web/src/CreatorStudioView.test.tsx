@@ -327,7 +327,7 @@ describe('CreatorStudioView', () => {
     authUser = null;
   });
 
-  it('collapses a long shelf to a rail after a game is selected', async () => {
+  it('collapses a long shelf to a folder+badge rail after a game is selected', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
     authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
@@ -339,6 +339,16 @@ describe('CreatorStudioView', () => {
     expect(container.querySelector('.studio-layout')?.classList.contains('is-shelf-open')).toBe(false);
     expect(container.querySelector('.studio-shelf')).toBeTruthy();
     expect(container.querySelector('.studio-game-switcher')).toBeNull();
+
+    const summary = container.querySelector('.studio-shelf-summary');
+    expect(summary).toBeTruthy();
+    expect(summary?.querySelector('.studio-shelf-summary-badge')?.textContent).toBe('10');
+
+    await act(async () => {
+      summary!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(container.querySelector('.studio-layout')?.classList.contains('is-shelf-open')).toBe(true);
+    expect(container.querySelectorAll('.studio-shelf-item').length).toBe(10);
 
     root.unmount();
   });
