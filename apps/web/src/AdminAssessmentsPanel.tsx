@@ -17,6 +17,7 @@ export function AdminAssessmentsPanel() {
   const [error, setError] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const [source, setSource] = useState<ReviewSweepSource>('catalog');
   const [maxGames, setMaxGames] = useState('40');
   const [releasePerDay, setReleasePerDay] = useState('10');
@@ -139,20 +140,20 @@ export function AdminAssessmentsPanel() {
               type="button"
               className="admin-assessments-export"
               onClick={() => {
-                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `assessments-${new Date().toISOString().slice(0, 10)}.json`;
-                a.click();
-                URL.revokeObjectURL(url);
+                void navigator.clipboard.writeText(JSON.stringify(data, null, 2)).then(
+                  () => {
+                    setCopied(true);
+                    window.setTimeout(() => setCopied(false), 2000);
+                  },
+                  () => setMessage('could not copy assessments'),
+                );
               }}
             >
-              Download JSON
+              {copied ? 'Copied' : 'Copy JSON'}
             </button>
             <span className="admin-assessments-slug">
               {' '}
-              → sync into games-repo <code>game-assessment</code> issues (skill <code>ingest-desk-reviews</code>).
+              → paste into a coding agent (skill <code>ingest-desk-reviews</code>).
             </span>
           </p>
 
