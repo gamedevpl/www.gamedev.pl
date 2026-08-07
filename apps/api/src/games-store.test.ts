@@ -464,6 +464,24 @@ describe('GCS games store', () => {
     });
   });
 
+  it('records mid-gate progress and clears it when a verdict lands', async () => {
+    const { impl } = stubGcs();
+    const store = createGcsGamesStore({ ...base, fetchImpl: impl });
+    const { version } = await store.putCandidateSources({ slug: 'g', issueNumber: 1, files: MINIMAL });
+
+    await store.putGateProgress('g', version, {
+      lane: 'preview',
+      stage: 'typecheck',
+      index: 2,
+      total: 6,
+      at: '2026-08-07T12:00:00.000Z',
+    });
+    expect((await store.getManifest('g', version))?.gateProgress?.stage).toBe('typecheck');
+
+    await store.putPreviewGateResult('g', version, { green: true, report: 'ok' });
+    expect((await store.getManifest('g', version))?.gateProgress).toBeUndefined();
+  });
+
   it('pins the engine the first gate run checked against, and never repins', async () => {
     const { impl } = stubGcs();
     const store = createGcsGamesStore({ ...base, fetchImpl: impl });

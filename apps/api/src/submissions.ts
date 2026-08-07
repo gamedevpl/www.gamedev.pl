@@ -1747,6 +1747,22 @@ export async function registerSubmissionRoutes(
     if (stall) next.stall = stall;
     else delete next.stall;
 
+    // Gate milestones — refresh outside the 60s cache.
+    const playableVersion = record.previewVersion ?? record.deliveredVersion;
+    const gamesStore = options.agentChannel?.gamesStore;
+    if (record.slug && playableVersion && gamesStore?.getManifest) {
+      try {
+        const manifest = await gamesStore.getManifest(record.slug, playableVersion);
+        if (manifest?.gateProgress && !manifest.gate && !manifest.previewGate) {
+          next.gateProgress = manifest.gateProgress;
+        } else {
+          delete next.gateProgress;
+        }
+      } catch {
+        /* keep cached */
+      }
+    }
+
     // Soft: sibling history must not 500 the live thread poll.
     try {
       const priorRounds = await loadPriorRounds(record, locale);
@@ -2125,6 +2141,20 @@ export async function registerSubmissionRoutes(
       builder: builderOf(record),
     });
     if (stall) status.stall = stall;
+    // Mid-gate milestones from GCS.
+    if (record.slug && playableVersion) {
+      const gamesStore = options.agentChannel?.gamesStore;
+      if (gamesStore?.getManifest) {
+        try {
+          const manifest = await gamesStore.getManifest(record.slug, playableVersion);
+          if (manifest?.gateProgress && !manifest.gate && !manifest.previewGate) {
+            status.gateProgress = manifest.gateProgress;
+          }
+        } catch {
+          /* advisory */
+        }
+      }
+    }
     // Heartbeat + thought flash — presence pulses refresh these without chat rows.
     if (record.lastAgentSignalAt) status.lastAgentSignalAt = record.lastAgentSignalAt;
     if (record.lastAgentPresence) status.lastAgentPresence = record.lastAgentPresence;

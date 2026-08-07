@@ -727,6 +727,20 @@
       "gating": "Automated checks are making sure your game actually runs clean.",
       "ready_for_review": "Your game passed every check. It's waiting for the last look before going live."
     },
+    "gateProgress": {
+      "preparing": "Preparing the check environment…",
+      "installing": "Installing the game harness…",
+      "typecheck": "Typechecking…",
+      "smoke": "Running smoke test…",
+      "build": "Building the game…",
+      "trace": "Checking behaviour trace…",
+      "capture": "Capturing gameplay…",
+      "validate": "Validating packaging…",
+      "accept": "Checking acceptance…",
+      "agent-play": "Running agent play…",
+      "agency": "Checking agency…",
+      "playtest": "Running playtest…"
+    },
     "remix": {
       "label": "Your remix",
       "ready": "Your remix is saved as a private draft. Play it, share the link, or say what to change."

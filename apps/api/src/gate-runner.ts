@@ -24,6 +24,13 @@ import path from 'node:path';
 import type { GameProject } from '@gamedevpl/game-generator';
 import { assembleGameHtml } from './assemble.js';
 import { firstGateScreenshotPath } from './gate-screenshot.js';
+import {
+  createGateStageBannerParser,
+  gateProgressFor,
+  type GateProgress,
+  type GateProgressLane,
+  type GateProgressStage,
+} from './gate-progress.js';
 import type { GamesStore, VersionManifest } from './games-store.js';
 import { isKitEngineRefSupported, kitOutdatedReport, type KitRegistry } from './kit-window.js';
 import { createLocalGamesClient } from './local-games-repo.js';
@@ -87,6 +94,13 @@ export interface GateRunOptions {
   proposal?: boolean;
 }
 
+export type GateRunCommand = (
+  command: string,
+  args: string[],
+  cwd: string,
+  options?: { onChunk?: (text: string) => void },
+) => Promise<{ code: number; output: string }>;
+
 export interface GateRunnerDeps {
   store: GamesStore;
   /**
@@ -95,7 +109,9 @@ export interface GateRunnerDeps {
    */
   prepareHarness(engineRef: string): Promise<string>;
   /** Runs a command in the harness. Returns combined output and the exit code. */
-  run(command: string, args: string[], cwd: string): Promise<{ code: number; output: string }>;
+  run: GateRunCommand;
+  /** Mid-gate milestones (best-effort). */
+  onProgress?: (progress: GateProgress) => void | Promise<void>;
   now?: () => number;
   /** Where to look for artifacts the check produced, relative to the harness root. */
   artifactRoots?: { media: (slug: string) => string };
@@ -239,6 +255,22 @@ export async function runGate(
   // after the engine moves on. Health runs override the pin on purpose: their whole
   // question is whether the game survives the engine having moved.
   const engineRef = options.engineRef ?? manifest.engineRef ?? 'main';
+  const lane: GateProgressLane = previewRun
+    ? 'preview'
+    : healthRun
+      ? 'health'
+      : options.proposal
+        ? 'proposal'
+        : 'publish';
+  const reportProgress = async (stage: GateProgressStage) => {
+    if (!deps.onProgress) return;
+    try {
+      await deps.onProgress(gateProgressFor(lane, stage, new Date(now()).toISOString()));
+    } catch {
+      /* advisory */
+    }
+  };
+  await reportProgress('preparing');
   const harness = await deps.prepareHarness(engineRef);
   // Best effort: an outcome without the sha is poorer, not wrong, and a verdict must
   // not be discarded because a bookkeeping read failed.
@@ -282,12 +314,16 @@ export async function runGate(
 
     // Preview: typecheck→smoke→build only. Publish: full check:game without `--accept`
     // (that flag re-records the behavioural golden instead of checking against it).
+    const feedStage = createGateStageBannerParser((stage) => {
+      void reportProgress(stage);
+    });
     let check = await deps.run(
       'npm',
       previewRun
         ? ['run', 'check:game', '--', slug, '--preview', ...(previewStills ? ['--preview-stills'] : [])]
         : ['run', 'check:game', '--', slug],
       harness,
+      { onChunk: feedStage },
     );
 
     /*
@@ -308,9 +344,15 @@ export async function runGate(
      */
     let behaviouralDiff = false;
     if (!previewRun && options.proposal && check.code !== 0 && failedOnlyOnTrace(check.output)) {
+      await reportProgress('trace');
       const rederived = await deps.run('npm', ['run', 'trace', '--', slug, '--accept'], harness);
       if (rederived.code === 0) {
-        const rerun = await deps.run('npm', ['run', 'check:game', '--', slug], harness);
+        const feedRerun = createGateStageBannerParser((stage) => {
+          void reportProgress(stage);
+        });
+        const rerun = await deps.run('npm', ['run', 'check:game', '--', slug], harness, {
+          onChunk: feedRerun,
+        });
         if (rerun.code === 0) {
           behaviouralDiff = true;
           check = rerun;

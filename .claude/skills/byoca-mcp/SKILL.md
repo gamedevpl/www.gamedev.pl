@@ -185,6 +185,11 @@ if the build id could not be parsed. If `ok` but `gateStarted: false`, honour
 `warnings.code=gate_not_started` (no preview is assembling — safe to retry).
 Do **not** retry solely because `buildId` is missing when `gateStarted` is true.
 
+While the gate runs, the runner writes **`gateProgress`** milestones onto the
+version manifest (preparing → installing → typecheck → …). Studio and the MCP
+round card poll that field — the gate SA has no Firestore, so this is not
+`report_progress`. Agents still must not busy-poll `get_gate_verdict`.
+
 Gate-poll presence (`get_gate_verdict` / `get_gate_media`) refreshes the
 heartbeat without clearing `agentEndedAt`, so submit→poll→stop still leaves
 handoff unlocked.
@@ -278,6 +283,7 @@ queued.
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | MCP tools                    | `apps/api/src/mcp-server.ts`                                                                                                                                              |
 | Presence pulses              | `apps/api/src/mcp-presence.ts` (`start` → `joining_round` in the MCP dispatcher)                                                                                          |
+| Gate milestones              | `apps/api/src/gate-progress.ts` + `GamesStore.putGateProgress` (GCS; Studio/MCP poll while checks run)                                                                    |
 | Account-session invalidation | `apps/api/src/agent-session-revocation.ts`                                                                                                                                |
 | Channel (`POST …/end`, …)    | `apps/api/src/agent-channel.ts`                                                                                                                                           |
 | Stall / `ended`              | `apps/api/src/job-state.ts` (`detectStall`)                                                                                                                               |

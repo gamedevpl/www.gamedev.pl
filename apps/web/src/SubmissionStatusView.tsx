@@ -90,17 +90,16 @@ export const SENT_RECEIPT_MS = 4500;
 /**
  * Whether the thread-foot spinner should run — agent mid-work, not "waiting on us".
  *
- * Gate-green (`in_review` / `ready_for_review`) used to keep spinning forever after the
- * agent finished, with "updated 20 minutes ago" under an active spinner.
- *
- * Self rounds with `stall: ended` / `agentEndedAt` are handoff, not mid-build — spinning
- * "Writing code" next to "finished this round" was the same class of lie.
+ * Gate-green used to spin forever after the agent finished. Self `ended` /
+ * `agentEndedAt` is handoff, not mid-build — except live `gateProgress`, which
+ * means the platform check is still running after submit auto-end.
  */
 function isAgentWorkActive(status: SubmissionStatus | null | undefined): boolean {
   if (!status) return false;
   if (TERMINAL_STATUSES.has(status.status)) return false;
   if (isAwaitingOwnAgent(status)) return false;
   if (status.status === 'in_review' || status.phase === 'ready_for_review') return false;
+  if (status.gateProgress) return true;
   if (status.stall === 'ended' || Boolean(status.agentEndedAt)) return false;
   return true;
 }
@@ -687,14 +686,27 @@ export function SubmissionStatusView({
         )
       : [];
     const agentWorking = Boolean(status && isAgentWorkActive(status));
-    const workingThought = status && agentWorking ? presenceThought(status) : null;
+    const gateThought =
+      status?.gateProgress?.stage && agentWorking
+        ? {
+            key: status.gateProgress.stage,
+            at: Date.parse(status.gateProgress.at) || Date.now(),
+            label: t(`statusView.gateProgress.${status.gateProgress.stage}`, {
+              defaultValue: t('statusView.phases.gating'),
+            }),
+          }
+        : null;
+    const workingThought = gateThought ? null : status && agentWorking ? presenceThought(status) : null;
     const workingThoughtLabel =
-      workingThought != null ? t(`statusView.presence.${workingThought.key}`, { defaultValue: '' }) : '';
+      gateThought?.label ||
+      (workingThought != null ? t(`statusView.presence.${workingThought.key}`, { defaultValue: '' }) : '');
     const workingPhaseLabel =
       status && agentWorking
-        ? status.phase === 'dispatched'
-          ? t('statusView.phaseLabels.dispatched')
-          : t(`statusView.states.${status.status}.label`)
+        ? gateThought
+          ? t('statusView.phases.gating')
+          : status.phase === 'dispatched'
+            ? t('statusView.phaseLabels.dispatched')
+            : t(`statusView.states.${status.status}.label`)
         : '';
     return (
       <>
@@ -731,9 +743,9 @@ export function SubmissionStatusView({
                     ? {
                         label: workingPhaseLabel,
                         thoughtLabel: workingThoughtLabel || null,
-                        thoughtKey: workingThought?.key ?? null,
-                        thoughtAt: workingThought?.at ?? null,
-                        heartbeatAt,
+                        thoughtKey: gateThought?.key ?? workingThought?.key ?? null,
+                        thoughtAt: gateThought?.at ?? workingThought?.at ?? null,
+                        heartbeatAt: gateThought ? Date.parse(status.gateProgress!.at) || heartbeatAt : heartbeatAt,
                       }
                     : null
                 }

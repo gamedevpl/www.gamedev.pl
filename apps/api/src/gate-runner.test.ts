@@ -64,7 +64,44 @@ describe('runGate', () => {
 
     expect(outcome.green).toBe(true);
     expect(sourcesSeenByCheck).toBe('contents of game.ts');
-    expect(run).toHaveBeenCalledWith('npm', ['run', 'check:game', '--', 'comet-courier'], harness);
+    expect(run).toHaveBeenCalledWith(
+      'npm',
+      ['run', 'check:game', '--', 'comet-courier'],
+      harness,
+      expect.objectContaining({ onChunk: expect.any(Function) }),
+    );
+  });
+
+  it('reports preparing and check:game stage banners via onProgress', async () => {
+    const harness = await harnessDir();
+    const { store } = stubStore();
+    const progress: string[] = [];
+    const run = vi.fn(async (_c: string, args: string[], _cwd: string, options?: { onChunk?: (t: string) => void }) => {
+      if (args.includes('check:game')) {
+        options?.onChunk?.('\n=== typecheck (comet-courier) ===\n');
+        options?.onChunk?.('\n=== smoke (comet-courier) ===\n');
+      }
+      return { code: 0, output: 'ok' };
+    });
+
+    await runGate(
+      'comet-courier',
+      'v1',
+      {
+        store,
+        prepareHarness: async () => harness,
+        run,
+        assembleBundle: stubAssemble,
+        onProgress: (p) => {
+          progress.push(p.stage);
+        },
+      },
+      { preview: true },
+    );
+
+    expect(progress[0]).toBe('preparing');
+    expect(progress).toContain('typecheck');
+    expect(progress).toContain('smoke');
   });
 
   it('checks the delivered behavioural golden instead of re-recording it', async () => {
@@ -106,6 +143,7 @@ describe('runGate', () => {
       'npm',
       ['run', 'check:game', '--', 'comet-courier', '--preview', '--preview-stills'],
       harness,
+      expect.objectContaining({ onChunk: expect.any(Function) }),
     );
     // This harness has no media directory, so nothing was captured — and the lane is
     // unchanged by that. The invariant that matters is unmoved: never bundle.html.
@@ -134,7 +172,12 @@ describe('runGate', () => {
         { preview: true },
       );
       expect(outcome.green).toBe(true);
-      expect(run).toHaveBeenCalledWith('npm', ['run', 'check:game', '--', 'comet-courier', '--preview'], harness);
+      expect(run).toHaveBeenCalledWith(
+        'npm',
+        ['run', 'check:game', '--', 'comet-courier', '--preview'],
+        harness,
+        expect.objectContaining({ onChunk: expect.any(Function) }),
+      );
     } finally {
       if (previous === undefined) delete process.env.GATE_PREVIEW_STILLS;
       else process.env.GATE_PREVIEW_STILLS = previous;

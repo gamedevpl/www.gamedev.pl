@@ -731,6 +731,20 @@
       "gating": "Automatyczne testy sprawdzają, czy gra działa bez zarzutu.",
       "ready_for_review": "Twoja gra przeszła wszystkie testy. Czeka na ostatnie spojrzenie przed publikacją."
     },
+    "gateProgress": {
+      "preparing": "Przygotowywanie środowiska testów…",
+      "installing": "Instalowanie harnessu gry…",
+      "typecheck": "Sprawdzanie typów…",
+      "smoke": "Test dymny…",
+      "build": "Budowanie gry…",
+      "trace": "Sprawdzanie śladu zachowania…",
+      "capture": "Nagrywanie rozgrywki…",
+      "validate": "Walidacja pakietu…",
+      "accept": "Sprawdzanie akceptacji…",
+      "agent-play": "Rozgrywka agenta…",
+      "agency": "Sprawdzanie agency…",
+      "playtest": "Playtest…"
+    },
     "remix": {
       "label": "Twój remiks",
       "ready": "Twój remiks jest zapisany jako prywatny szkic. Zagraj, udostępnij link albo powiedz, co zmienić."

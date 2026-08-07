@@ -813,18 +813,20 @@ const ROUND_STATUS_HTML = `<!doctype html>
           activityEl.hidden = false;
         }
 
-        function setStages(lane, active) {
+        function setStages(lane, active, progressIndex) {
           if (!active) {
             stagesEl.hidden = true;
             stagesEl.textContent = '';
             return;
           }
           var labels = lane === 'publish' ? PUBLISH_GATE_STAGES : PREVIEW_GATE_STAGES;
+          var current =
+            typeof progressIndex === 'number' && progressIndex >= 0 ? progressIndex : -1;
           stagesEl.textContent = '';
           for (var i = 0; i < labels.length; i++) {
             var li = document.createElement('li');
-            // Indeterminate: gate does not stream the active step.
-            li.className = 'current';
+            // -1 = indeterminate (all current) until gateProgress arrives.
+            li.className = current < 0 ? 'current' : i < current ? 'done' : i === current ? 'current' : '';
             var mark = document.createElement('span');
             mark.className = 'mark';
             mark.setAttribute('aria-hidden', 'true');
@@ -949,7 +951,24 @@ const ROUND_STATUS_HTML = `<!doctype html>
           checking_inbox: 'Checking creator notes…',
           waiting_checks: 'Waiting on automated checks…',
           reviewing_captures: 'Reviewing gate captures…',
-          staging_sources: 'Staging source files…'
+          staging_sources: 'Staging source files…',
+          preparing: 'Preparing the check environment…',
+          installing: 'Installing the game harness…',
+          typecheck: 'Typechecking…',
+          smoke: 'Running smoke test…',
+          build: 'Building the game…',
+          trace: 'Checking behaviour trace…',
+          capture: 'Capturing gameplay…',
+          validate: 'Validating packaging…',
+          accept: 'Checking acceptance…',
+          'agent-play': 'Running agent play…',
+          agency: 'Checking agency…',
+          playtest: 'Running playtest…'
+        };
+
+        var GATE_CHECKLIST = {
+          preview: ['typecheck', 'smoke', 'build'],
+          publish: ['typecheck', 'smoke', 'build', 'trace', 'capture', 'validate']
         };
 
         var LIVE_HEADLINES = {
@@ -1288,7 +1307,15 @@ const ROUND_STATUS_HTML = `<!doctype html>
           var presenceLine = presenceKey && PRESENCE_COPY[presenceKey] ? PRESENCE_COPY[presenceKey] : '';
           var noteText =
             status.note && typeof status.note.text === 'string' ? status.note.text : '';
-          if (live && presenceLine && !showStages) {
+          var gateProgress =
+            gate && gate.progress && typeof gate.progress === 'object' ? gate.progress : null;
+          var gateStage =
+            gateProgress && typeof gateProgress.stage === 'string' ? gateProgress.stage : '';
+          var gateStageLine = gateStage && PRESENCE_COPY[gateStage] ? PRESENCE_COPY[gateStage] : '';
+
+          if (live && showStages && gateStageLine) {
+            setActivity(gateStageLine, gateProgress.at);
+          } else if (live && presenceLine && !showStages) {
             setActivity(presenceLine, presence.at);
           } else if (live && noteText && (headline === 'building' || headline === 'dispatched')) {
             setActivity(noteText, status.note.createdAt);
@@ -1298,7 +1325,23 @@ const ROUND_STATUS_HTML = `<!doctype html>
             setActivity(null);
           }
 
-          setStages(gate && gate.lane, showStages);
+          var progressIndex = -1;
+          if (showStages && gateStage) {
+            var checklist =
+              GATE_CHECKLIST[gate && gate.lane === 'preview' ? 'preview' : 'publish'] ||
+              GATE_CHECKLIST.publish;
+            var mapped =
+              gateStage === 'accept' ||
+              gateStage === 'agent-play' ||
+              gateStage === 'agency' ||
+              gateStage === 'playtest'
+                ? 'validate'
+                : gateStage;
+            if (mapped !== 'preparing' && mapped !== 'installing') {
+              progressIndex = checklist.indexOf(mapped);
+            }
+          }
+          setStages(gate && gate.lane, showStages, progressIndex);
 
           // Avoid duplicating the note when the activity line already shows it.
           if (noteText && !(live && (headline === 'building' || headline === 'dispatched'))) {

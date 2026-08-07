@@ -202,6 +202,14 @@ export interface SubmissionStatusResponseBase {
    * Not a chat event — UI flashes it as a headline while the agent browses the kit.
    */
   lastAgentPresence?: { key: string; at: string };
+  /** Mid-gate milestone; cleared on verdict. */
+  gateProgress?: {
+    lane: 'preview' | 'publish' | 'health' | 'proposal';
+    stage: string;
+    index: number;
+    total: number;
+    at: string;
+  };
   /**
    * Pictures of the game as it is now, newest first — the build log stops being a
    * wall of text. Same reasoning as `events`: kept outside `progress` so a build

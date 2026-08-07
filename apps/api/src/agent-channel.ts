@@ -2231,6 +2231,21 @@ export async function registerAgentChannelRoutes(
         previewVersion: version,
       });
       if (!gate) {
+        let progress: {
+          lane: string;
+          stage: string;
+          index: number;
+          total: number;
+          at: string;
+        } | null = null;
+        try {
+          const manifest = await options.gamesStore?.getManifest(record.slug, version);
+          if (manifest?.gateProgress && !manifest.gate && !manifest.previewGate) {
+            progress = manifest.gateProgress;
+          }
+        } catch {
+          /* ignore */
+        }
         return reply.send({
           status: 'pending',
           deliveryId: version,
@@ -2238,6 +2253,12 @@ export async function registerAgentChannelRoutes(
             'gate has not reported yet — do not loop on get_gate_verdict; stop this run and let Studio show the eventual result',
           retryAfterSeconds: 30,
           access,
+          ...(progress
+            ? {
+                progress,
+                lane: progress.lane === 'preview' ? 'preview' : 'publish',
+              }
+            : {}),
         });
       }
 
