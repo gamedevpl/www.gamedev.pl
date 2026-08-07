@@ -111,6 +111,18 @@ export async function fetchReviewQueue(source: 'catalog' | 'creator' | 'all' = '
   return readJson(res);
 }
 
+export interface ReviewStatusResponse {
+  remaining: number;
+  sweep: ReviewQueueSweepHint | null;
+}
+
+export async function fetchReviewStatus(): Promise<ReviewStatusResponse | null> {
+  const res = await fetch(`${API_BASE}/api/review/status`, { credentials: 'include' });
+  if (res.status === 404 || res.status === 401) return null;
+  if (!res.ok) throw new ReviewApiError(res.status, `review status failed (${res.status})`);
+  return (await res.json()) as ReviewStatusResponse;
+}
+
 export async function submitAssessment(input: SubmitAssessmentInput): Promise<GameAssessment> {
   const res = await fetch(`${API_BASE}/api/review/assessments`, {
     method: 'POST',

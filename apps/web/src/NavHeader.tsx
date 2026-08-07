@@ -8,6 +8,7 @@ import { Mascot } from './Mascot.js';
 import { NotificationBell } from './NotificationBell.js';
 import { PixelIcon } from './PixelIcon.js';
 import { fetchAdminSummary } from './adminApi.js';
+import { fetchReviewStatus } from './reviewApi.js';
 import { creatorPath } from './router.js';
 import { usePageScrolling } from './usePageScrolling.js';
 
@@ -59,6 +60,7 @@ export function NavHeader({
    * caught it, correctly.
    */
   const [alertCount, setAlertCount] = useState<number | null>(null);
+  const [reviewRemaining, setReviewRemaining] = useState<number | null>(null);
   const isOperator = user?.admin === true;
   const isReviewer = user?.reviewer === true || isOperator;
 
@@ -85,6 +87,28 @@ export function NavHeader({
       clearInterval(timer);
     };
   }, [isOperator]);
+
+  useEffect(() => {
+    if (!isReviewer) {
+      setReviewRemaining(null);
+      return;
+    }
+    let cancelled = false;
+    const read = () =>
+      fetchReviewStatus()
+        .then((status) => {
+          if (!cancelled) setReviewRemaining(status ? status.remaining : 0);
+        })
+        .catch(() => {
+          // Leave the last known badge; a transient miss is not "zero left".
+        });
+    void read();
+    const timer = setInterval(read, 120_000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [isReviewer]);
 
   const handleNavClick = (sectionId: string) => {
     onNavigate(sectionId);
@@ -264,6 +288,11 @@ export function NavHeader({
                   }}
                 >
                   <PixelIcon name="star" size={14} /> Review
+                  {reviewRemaining !== null && reviewRemaining > 0 ? (
+                    <span className="specs-count-badge" aria-label={`${reviewRemaining} games to review`}>
+                      {reviewRemaining}
+                    </span>
+                  ) : null}
                 </button>
               ) : null}
 

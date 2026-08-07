@@ -303,6 +303,40 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
     };
   });
 
+  // Lightweight badge feed for the hamburger Review link.
+  app.get('/api/review/status', async (request, reply) => {
+    const refused = refuseUnlessReviewer(request, reply);
+    if (refused) return refused;
+    const uid = request.user!.uid;
+    const open = await store.getOpenReviewSweep();
+    if (!open || open.status !== 'active') {
+      return {
+        remaining: 0,
+        sweep: open
+          ? {
+              id: open.id,
+              status: open.status,
+              total: open.slugs.length,
+              released: effectiveReleasedCount(open, now()),
+            }
+          : null,
+      };
+    }
+    const mine = await store.listGameAssessmentsByReviewer(uid);
+    const done = new Set(mine.map((row) => row.slug));
+    const unlocked = releasedSlugs(open, now());
+    const remaining = unlocked.reduce((count, slug) => count + (done.has(slug) ? 0 : 1), 0);
+    return {
+      remaining,
+      sweep: {
+        id: open.id,
+        status: open.status,
+        total: open.slugs.length,
+        released: unlocked.length,
+      },
+    };
+  });
+
   app.get('/api/review/assessments/mine', async (request, reply) => {
     const refused = refuseUnlessReviewer(request, reply);
     if (refused) return refused;

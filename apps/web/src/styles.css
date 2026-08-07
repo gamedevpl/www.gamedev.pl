@@ -14847,12 +14847,6 @@ body.remix-entry-open {
   display: block;
 }
 
-.review-stage-tools {
-  display: flex;
-  justify-content: flex-end;
-  padding: 0.45rem 0.75rem 0.7rem;
-}
-
 .review-play-btn {
   border: 1px solid var(--panel-border);
   border-radius: 999px;
@@ -14863,6 +14857,17 @@ body.remix-entry-open {
   font-weight: 600;
   padding: 0.4rem 0.85rem;
   cursor: pointer;
+}
+
+/* Sit on the media so the sticky checklist dock cannot bury Try play. */
+.review-play-btn.is-overlay {
+  position: absolute;
+  right: 0.55rem;
+  bottom: 0.55rem;
+  z-index: 3;
+  background: color-mix(in srgb, var(--panel-card, #1b2229) 88%, transparent);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
 }
 
 .review-play-btn.is-active {
