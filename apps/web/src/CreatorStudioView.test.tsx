@@ -1432,10 +1432,48 @@ describe('CreatorStudioView abandon', () => {
 
     expect(abandonSubmission).toHaveBeenCalledWith('token-improve');
     expect(fetchStudioGames).toHaveBeenCalledTimes(2);
-    expect(onNavigate).toHaveBeenCalled();
+    expect(fetchStudioGames).toHaveBeenLastCalledWith('tv-tycoon');
+    expect(onNavigate).toHaveBeenCalledWith('/studio/tv-tycoon');
     expect(container.textContent).toContain('TV Tycoon');
     // Live published row no longer offers abandon.
     expect(container.querySelector('.status-abandon')).toBeNull();
+
+    root.unmount();
+  });
+
+  it('returns to bare Studio when abandoning the only draft', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    fetchStudioGames.mockResolvedValueOnce(
+      studioShelf([
+        {
+          token: 'token-draft',
+          title: 'Neon Draft',
+          createdAt: '2026-07-30T09:00:00.000Z',
+          lastKnownStatus: 'building',
+          slug: 'neon-draft',
+        },
+      ]),
+    );
+    fetchStudioGames.mockResolvedValueOnce(studioShelf([]));
+
+    const { container, root, onNavigate } = await renderStudio({
+      selectedGame: 'neon-draft',
+      selectedTab: 'details',
+    });
+
+    const abandon = container.querySelector<HTMLButtonElement>('.status-abandon');
+    await act(async () => {
+      abandon!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('.status-abandon.is-danger')!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(abandonSubmission).toHaveBeenCalledWith('token-draft');
+    expect(onNavigate).toHaveBeenCalledWith('/studio');
 
     root.unmount();
   });

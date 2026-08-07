@@ -894,17 +894,25 @@ export function CreatorStudioView({
                             );
                           }}
                           onRemoved={async (token) => {
+                            const abandonedSlug = activeGame.slug;
                             setSelected((current) => (current === token ? null : current));
-                            onNavigate(studioPath());
-                            // Hide tip first; refetch may restore a sibling.
+                            // Hide tip first; refetch may restore a published sibling.
                             setGames((prev) => prev.filter((game) => game.token !== token));
                             try {
-                              const shelfPage = await fetchStudioGames();
+                              // Pass the slug so a live sibling below the shelf ceiling
+                              // is still returned (same deep-link path as Open in Studio).
+                              const shelfPage = await fetchStudioGames(abandonedSlug);
                               setGames(shelfPage.games);
                               setShelfTruncated(shelfPage.truncated);
                               setTotalGames(shelfPage.totalGames);
+                              const sibling =
+                                abandonedSlug &&
+                                shelfPage.games.find((game) => game.slug === abandonedSlug && game.token !== token);
+                              onNavigate(sibling && abandonedSlug ? studioPath(abandonedSlug) : studioPath());
+                              if (sibling) setSelected(sibling.token);
                             } catch {
                               // Optimistic remove stands if refetch fails.
+                              onNavigate(studioPath());
                             }
                           }}
                         />
