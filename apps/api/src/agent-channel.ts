@@ -2060,7 +2060,7 @@ export async function registerAgentChannelRoutes(
       return reply.status(404).send({
         available: false,
         status: 'unavailable',
-        notice: null,
+        notice: seed.seedNotice,
         files: [],
         references: [],
         notes: null,

@@ -18,7 +18,7 @@ export function resolveSeedStatus(record: Pick<SubmissionRecord, 'seed' | 'seedS
   return 'unavailable';
 }
 
-/** Imperative next-step copy for start / brief / get_seed — null when nothing to do. */
+/** Imperative status copy for start / brief / get_seed. */
 export function seedNoticeFor(status: SeedStatus): string | null {
   switch (status) {
     case 'available':
@@ -26,7 +26,7 @@ export function seedNoticeFor(status: SeedStatus): string | null {
     case 'pending':
       return 'Seed draft is still generating. Browse the kit if needed, then call get_seed again before scaffolding from a template.';
     default:
-      return null;
+      return 'No seed draft is available for this round; scaffold from the kit.';
   }
 }
 
