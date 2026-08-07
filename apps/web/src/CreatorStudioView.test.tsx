@@ -431,7 +431,7 @@ describe('CreatorStudioView', () => {
     expect(play?.classList.contains('is-play')).toBe(true);
     expect(details?.classList.contains('is-primary')).toBe(false);
     expect(details?.classList.contains('is-icon-only')).toBe(true);
-    // Details opens a side rail — panel glyph, not the shelf's expand corners.
+    // Details opens a side rail — panel glyph, not shelf expand.
     expect(details?.querySelector('svg')?.getAttribute('data-icon')).toBe('panel');
     expect(container.querySelector('.studio-head-transport')).toBeNull();
     expect(container.querySelector('.studio-preview-rail')).toBeNull();

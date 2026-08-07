@@ -654,8 +654,7 @@ const ICONS: Record<PixelIconName, string[]> = {
     '...............',
     '...............',
   ],
-  // Right-rail panel: outer frame + solid strip on the right. Used for Studio Details
-  // so it does not share the expand corners with the shelf toggle.
+  // Right-rail panel: frame + solid strip. Details head action — not shelf expand.
   panel: [
     '...............',
     '...............',
