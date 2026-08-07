@@ -39,11 +39,7 @@ import {
   type AgentTokenAccess,
   type AgentTokenClaims,
 } from './agent-token.js';
-import {
-  DEFAULT_UPLOAD_URL_TTL_SECONDS,
-  mintUploadToken,
-  uploadCurlCommand,
-} from './agent-upload-token.js';
+import { DEFAULT_UPLOAD_URL_TTL_SECONDS, mintUploadToken, uploadCurlCommand } from './agent-upload-token.js';
 import { decodeCanonicalBase64Utf8, InvalidBase64Error } from './canonical-base64.js';
 import { selfBuildDeliveryCap } from './builder.js';
 import type { BuilderKind } from './builder.js';
@@ -3251,7 +3247,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         },
         required: ['url', 'expiresAt', 'expiresInSeconds', 'path', 'upload', 'maxBytes'],
       },
-      annotations: { title: 'Get a stage upload URL', ...READS },
+      // Not READS: each call mints a fresh nonce, so it is neither read-only nor idempotent.
+      annotations: { title: 'Get a stage upload URL', ...WRITES },
       description:
         'Preferred way to stage a new or fully rewritten source file when you have curl/shell egress. ' +
         'Returns a short-lived signed PUT URL bound to `path` — run the returned `upload` one-liner ' +
@@ -3295,15 +3292,17 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         }
         const generation = auth.record.roundGeneration ?? auth.claims.roundGeneration ?? 1;
         const ttlSeconds = DEFAULT_UPLOAD_URL_TTL_SECONDS;
+        // One clock read: advertised expiresAt must match the signed exp.
+        const issuedAt = now();
         const token = mintUploadToken(agentTokenSecret, {
           jobId: auth.issueNumber,
           roundGeneration: generation,
           kind: 'stage',
           path,
-          now: now(),
+          now: issuedAt,
           ttlSeconds,
         });
-        const expiresAt = new Date(now() + ttlSeconds * 1000).toISOString();
+        const expiresAt = new Date(issuedAt + ttlSeconds * 1000).toISOString();
         const url = `${canonicalAppBaseUrl()}/api/agent/build/sources/stage/upload?token=${encodeURIComponent(token)}`;
         const localHint = path.includes('/') ? path.split('/').pop()! : path;
         return toolOk({
@@ -3311,7 +3310,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           expiresAt,
           expiresInSeconds: ttlSeconds,
           path,
-          upload: uploadCurlCommand(url, localHint),
+          upload: uploadCurlCommand(url, localHint, 'text/plain; charset=utf-8'),
           maxBytes: 1_000_000,
         });
       },

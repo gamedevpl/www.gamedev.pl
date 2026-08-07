@@ -1307,7 +1307,7 @@ describe('POST /api/mcp (BY-05)', () => {
     };
     expect(path).toBe('game/extra.ts');
     expect(maxBytes).toBe(1_000_000);
-    expect(upload).toMatch(/^curl --upload-file extra\.ts '/);
+    expect(upload).toMatch(/^curl -H 'Content-Type: text\/plain; charset=utf-8' --upload-file extra\.ts '/);
 
     const content = 'export const stagedViaCurl = true;\n';
     const put = await app.inject({
@@ -1340,6 +1340,16 @@ describe('POST /api/mcp (BY-05)', () => {
     );
     expect(bad.isError).toBe(true);
     expect(JSON.stringify(bad.structured)).toMatch(/illegal path/i);
+
+    // Minting is not idempotent, so it must not be hinted read-only.
+    const listedTools = await mcpCall(app, 'tools/list', undefined, { 'mcp-session-id': sessionId });
+    const stageTool = (
+      listedTools.json().result as {
+        tools: Array<{ name: string; annotations?: { readOnlyHint?: boolean; idempotentHint?: boolean } }>;
+      }
+    ).tools.find((tool) => tool.name === 'stage_upload_url');
+    expect(stageTool?.annotations?.readOnlyHint).toBe(false);
+    expect(stageTool?.annotations?.idempotentHint).toBe(false);
   });
 
   it('rejects malformed base64 on stage_source_file instead of silently corrupting', async () => {
@@ -1934,6 +1944,7 @@ describe('POST /api/mcp (BY-05)', () => {
       'continue_draft',
       'report_progress',
       'screenshot_upload_url',
+      'stage_upload_url',
       'stage_source_file',
       'patch_source_file',
       'clear_staged_sources',
