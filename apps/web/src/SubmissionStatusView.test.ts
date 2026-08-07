@@ -65,8 +65,7 @@ describe('pollDelayMs', () => {
   });
 
   it('polls tightly while a self agent is ended or quiet so resume shows quickly', () => {
-    // Final check / post-submit with agentEndedAt used idle 10s polling; ChatGPT had
-    // already called start before Studio left "agent stopped".
+    // Ended/quiet used idle 10s; start already ran before Studio left "stopped".
     expect(pollDelayMs('in_review', 'ended')).toBe(ACTIVE_POLL_MS);
     expect(pollDelayMs('building', 'quiet')).toBe(ACTIVE_POLL_MS);
     expect(pollDelayMs('queued', 'no_agent_yet')).toBe(ACTIVE_POLL_MS);

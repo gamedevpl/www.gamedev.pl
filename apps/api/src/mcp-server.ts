@@ -4729,10 +4729,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
               'mcp session started',
             );
           }
-          // Studio used to stay on Final check / ended until get_sources (or similar):
-          // start never pulsed, and creator-key openers have no round Bearer for the
-          // generic presence path. Pulse here so the creator sees the agent join as
-          // soon as the session binds — especially on resume after submit/end.
+          // Pulse joining_round on start (jobId from result; clears agentEndedAt on resume).
           if (store && typeof started.jobId === 'number') {
             const jobId = started.jobId;
             const at = now();

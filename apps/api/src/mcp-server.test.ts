@@ -480,7 +480,7 @@ describe('POST /api/mcp (BY-05)', () => {
     const store = new InMemoryStore();
     await seedActiveSelfJob(store);
     await store.markAgentEnded(ISSUE, '2026-08-07T08:00:00.000Z');
-    // Prior gate-poll presence must not block a resume pulse (rate-limit bypass when ended).
+    // Gate-poll presence must not block resume (ended bypasses same-key gap).
     await store.touchLastAgentSignalAt(
       ISSUE,
       '2026-08-07T08:00:30.000Z',
@@ -498,7 +498,6 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(record?.agentEndedAt).toBeUndefined();
     expect(record?.lastAgentPresence).toMatchObject({ key: 'joining_round' });
     expect(record?.lastAgentSignalAt).toBeTruthy();
-    // Still not a chat row.
     expect((await store.listBuildEvents(ISSUE)).some((e) => e.text.includes('Joining'))).toBe(false);
   });
 
