@@ -105,8 +105,8 @@ describe('catalog playback', () => {
     expect(previewButton?.textContent).toContain('Pause preview');
     expect(container.querySelectorAll('.catalog-moment')).toHaveLength(2);
 
-    // Explicit Play opens theater in place. `/play/:slug` is the shareable preview
-    // page now, so a catalog click must not navigate through it before starting.
+    // Explicit Play opens theater in place. `/play/:slug` is the shareable play
+    // permalink (auto-opens theater); a catalog click must not navigate through it.
     const navigations: string[] = [];
     const onNavigate = (event: Event) => {
       navigations.push((event as CustomEvent<NavigateEventDetail>).detail.path);
@@ -204,7 +204,7 @@ describe('catalog playback', () => {
     });
   });
 
-  it('renders a static game page for direct play paths without loading the game iframe', async () => {
+  it('auto-opens the theater for a direct /play path once the catalog is ready', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     const fetched: string[] = [];
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
@@ -261,14 +261,95 @@ describe('catalog playback', () => {
       await flushEffects();
     });
 
-    expect(container.querySelector('iframe')).toBeNull();
-    expect(container.querySelector('.game-page h1')?.textContent).toBe('Football 3D Lite');
-    expect(container.querySelector<HTMLImageElement>('.game-page-preview img')?.src).toContain('match.png?w=1280');
-
-    // The page needs catalog metadata, but game code does not load until a deliberate
-    // Play/preview click crosses into theater.
+    expect(container.querySelector('.game-theater-bar')).not.toBeNull();
+    expect(container.querySelector('iframe[title="Football 3D Lite"]')).not.toBeNull();
     expect(fetched.some((url) => url.includes('/api/catalog'))).toBe(true);
-    expect(fetched.some((url) => url.endsWith('/api/games/football-3d-lite'))).toBe(false);
+    expect(fetched.some((url) => url.endsWith('/api/games/football-3d-lite'))).toBe(true);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('keeps the full-page mascot on direct play links until the theater opens', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    let resolveCatalog!: (value: Response) => void;
+    const catalogPending = new Promise<Response>((resolve) => {
+      resolveCatalog = resolve;
+    });
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith('/api/auth/me')) {
+        return new Response(JSON.stringify({ user: { uid: 'g:test', tier: 'standard' } }));
+      }
+      if (url.endsWith('/api/health')) {
+        return new Response(JSON.stringify({ status: 'ok', provider: 'mock', privateBeta: false }));
+      }
+      if (url.endsWith('/api/catalog')) {
+        return catalogPending;
+      }
+      if (url.includes('/api/recommendations')) {
+        return new Response(JSON.stringify({ items: [] }));
+      }
+      if (url.endsWith('/api/games/airtime')) {
+        return new Response(JSON.stringify({ slug: 'airtime', title: 'Airtime', html: '<canvas>air</canvas>' }));
+      }
+      if (url.endsWith('/api/games/airtime/votes')) {
+        return new Response(JSON.stringify({ up: 0, down: 0, mine: null }));
+      }
+      if (/\/api\/games\/[^/]+\/played$/.test(new URL(url, 'http://localhost').pathname)) {
+        return new Response(null, { status: 204 });
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+
+    await i18n.changeLanguage('en');
+    window.history.pushState(null, '', '/play/airtime');
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(AuthProvider, null, createElement(App)));
+      await flushEffects();
+      await flushEffects();
+      await flushEffects();
+    });
+
+    // Catalog still pending: mascot only, no header loading stage.
+    expect(container.querySelector('.app-loading-screen')).not.toBeNull();
+    expect(container.querySelector('.app-header')).toBeNull();
+    expect(container.querySelector('.game-page')).toBeNull();
+    expect(container.querySelector('.game-theater-bar')).toBeNull();
+    expect(container.textContent).not.toMatch(/Loading the game page/i);
+
+    await act(async () => {
+      resolveCatalog(
+        new Response(
+          JSON.stringify([
+            {
+              slug: 'airtime',
+              title: 'Airtime',
+              genre: 'arcade',
+              controls: 'Hold to glide',
+              status: 'published',
+              media: { screenshots: [{ name: 'flight', file: 'flight.png' }], video: null },
+              multiplayer: null,
+            },
+          ]),
+        ),
+      );
+      await flushEffects();
+      await flushEffects();
+      await flushEffects();
+      await flushEffects();
+    });
+
+    // Catalog ready → auto-open theater (GameDetailPage may sit underneath for Close).
+    expect(container.querySelector('.app-loading-screen')).toBeNull();
+    expect(container.querySelector('.game-theater-bar')).not.toBeNull();
+    expect(container.querySelector('iframe[title="Airtime"]')).not.toBeNull();
 
     await act(async () => {
       root.unmount();

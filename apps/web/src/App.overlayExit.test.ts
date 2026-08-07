@@ -8,12 +8,11 @@ import { AuthProvider } from './AuthContext.js';
 import i18n from './i18n/index.js';
 
 /**
- * Closing a game reveals the page that opened it.
+ * Closing a game reveals the page that opened it — or, for a `/play/<slug>` deep
+ * link, replaces onto the canonical game page so the URL matches the surface.
  *
- * Published play is an in-place theater now: catalog/profile buttons open over their
- * current page, while a shared `/play/<slug>` link first renders a static game page.
- * Closing must therefore dismiss the theater without mutating browser history in either
- * case. That keeps catalog position and leaves a shared link shareable after play.
+ * Catalog/profile Play opens an in-place theater; Close dismisses without history.
+ * A shared `/play/<slug>` auto-opens, and Close goes to `/:handle/:slug`.
  */
 
 async function flushEffects() {
@@ -40,8 +39,35 @@ function mockApi() {
             controls: 'Arrow keys',
             status: 'published',
             media: null,
+            creatorHandle: 'nightshift',
+            submittedBy: 'Night Shift',
           },
         ]),
+      );
+    }
+    if (url.endsWith('/api/games/sky-dodge/page')) {
+      return new Response(
+        JSON.stringify({
+          entry: {
+            slug: 'sky-dodge',
+            title: 'Sky Dodge',
+            genre: 'Arcade',
+            controls: 'Arrow keys',
+            status: 'published',
+            media: null,
+            creatorHandle: 'nightshift',
+            submittedBy: 'Night Shift',
+          },
+          creator: {
+            handle: 'nightshift',
+            profileName: 'Night Shift',
+            bio: '',
+            avatarUrl: null,
+            profileCreatedAt: '2026-07-01T00:00:00.000Z',
+          },
+          platformAuthored: false,
+          description: 'Dodge the sky.',
+        }),
       );
     }
     if (url.includes('/api/games/')) {
@@ -107,29 +133,25 @@ describe('closing a full-viewport game', () => {
     });
   });
 
-  it('reveals the static game page behind a cold deep-link theater', async () => {
+  it('replaces a cold /play deep link onto the canonical game page on Close', async () => {
     mockApi();
     window.history.pushState(null, '', '/play/sky-dodge');
     const { container, root } = await renderApp();
 
     const back = vi.spyOn(window.history, 'back').mockImplementation(() => {});
 
-    const play = container.querySelector<HTMLButtonElement>('.game-page-actions .primary-btn');
-    expect(play).not.toBeNull();
-    await act(async () => {
-      play?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      await flushEffects();
-    });
-
+    // Deep link auto-opens the theater; no Play click required.
     const exit = container.querySelector<HTMLButtonElement>('.exit-btn');
     expect(exit).not.toBeNull();
     await act(async () => {
       exit?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await flushEffects();
+      await flushEffects();
     });
 
     expect(back).not.toHaveBeenCalled();
-    expect(window.location.pathname).toBe('/play/sky-dodge');
+    expect(window.location.pathname).toBe('/nightshift/sky-dodge');
+    expect(container.querySelector('.exit-btn')).toBeNull();
     expect(container.querySelector('.game-page h1')?.textContent).toBe('Sky Dodge');
 
     await act(async () => {

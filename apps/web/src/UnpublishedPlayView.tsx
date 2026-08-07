@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { AppLoadingScreen } from './AppLoadingScreen.js';
 import { fetchPublishedGame, type GameFetchError } from './catalog.js';
 import { GameTheater } from './GameTheater.js';
 
@@ -17,10 +18,8 @@ type UnpublishedPlayViewProps = {
 /**
  * Unpublished half of `/play/<slug>`.
  *
- * Catalog games render {@link GameDetailPage} on the same URL. When the slug is
- * not in the catalog yet (owner draft, or a draft someone shared), this view
- * loads the playable document via `GET /api/games/:slug` and opens the theater
- * — the lifetime permalink stays `/play/<slug>` before and after publish.
+ * Published games auto-open theater; Close replaces onto {@link GamePage}.
+ * Missing catalog entries load via `GET /api/games/:slug` here instead.
  *
  * Legacy `/draft/<slug>` links rewrite to `/play/<slug>` in the router.
  */
@@ -89,13 +88,8 @@ export function UnpublishedPlayView({ slug, onExit, onTitle }: UnpublishedPlayVi
   }
 
   if (!game) {
-    return (
-      <section className="panel status-panel">
-        <p className="catalog-state">
-          <span className="status-preview-spinner" aria-hidden="true" /> {t('draft.loading')}
-        </p>
-      </section>
-    );
+    // Match /play catalog wait: full-page mascot, not a spinner.
+    return <AppLoadingScreen />;
   }
 
   return (

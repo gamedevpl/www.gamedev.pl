@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { AppLoadingScreen } from './AppLoadingScreen.js';
 import { catalogMediaUrl, isPlatformAuthor, type CatalogEntry } from './catalog.js';
 import { PixelIcon } from './PixelIcon.js';
 import { ShareGameButton } from './ShareGameButton.js';
@@ -22,17 +23,10 @@ function previewScreenshot(game: CatalogEntry) {
 }
 
 /**
- * A published game's shareable landing page.
+ * Loading/error shell under `/play/<slug>` before theater auto-opens.
  *
- * This surface deliberately never mounts the game iframe. A shared link should let a
- * visitor understand what they are about to open before untrusted game code starts,
- * and it should stay useful on a phone where an autoplaying game consumes the whole
- * viewport. Play is the explicit boundary that opens the sandboxed theater.
- *
- * The page is intentionally not a rendering of SPEC.md. The spec is an agent-facing
- * source of truth, not player copy; the compact controls line is the only part a player
- * needs here. Releases, source, follow and comparison queues do not appear until the
- * product has real data and behaviour behind them.
+ * Published play redirects Close onto the canonical game page ({@link GamePage}).
+ * This surface never mounts the iframe.
  */
 export function GameDetailPage({ game, state, onPlay, onRemix, onRetry }: GameDetailPageProps) {
   const { t } = useTranslation();
@@ -44,7 +38,8 @@ export function GameDetailPage({ game, state, onPlay, onRemix, onRetry }: GameDe
   }, [game]);
 
   if (state === 'loading') {
-    return <p className="game-page-state">{t('gamePage.loading')}</p>;
+    // Fallback mascot if mounted while catalog still loads.
+    return <AppLoadingScreen />;
   }
 
   if (state === 'error') {

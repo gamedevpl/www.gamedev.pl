@@ -115,7 +115,7 @@ async function sampleCanvas(frame: Frame): Promise<CanvasSample | null> {
 async function inspectGame(page: Page, slug: string): Promise<GameReport> {
   const report: GameReport = { slug, frameAppeared: false, sandbox: null, litPixels: -1, animated: false };
 
-  // Preview page first, then Play — the iframe does not exist until the theater opens.
+  // /play/<slug> auto-opens the theater; the iframe mounts with GameTheater.
   await openPlayTheater(page, slug);
 
   const iframe = page.locator('iframe').first();
