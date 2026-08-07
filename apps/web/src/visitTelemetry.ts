@@ -98,9 +98,7 @@ export type CreateStep =
   | 'title_confirmed'
   /** A submission actually reached the games repo. */
   | 'submission_created'
-  /** Platform create handoff screen is on screen (after Create Now). */
   | 'handoff_shown'
-  /** Creator chose Open Studio from the handoff (never auto-enter). */
   | 'handoff_enter_studio';
 
 /**
@@ -342,8 +340,6 @@ export function routeKind(view: string): VisitRouteKind {
     case 'studio':
     case 'notFound':
       return view;
-    // Post–Create Now handoff shares the studio bucket — same creator surface family,
-    // no new VisitRouteKind (parameters never travel; view name alone is enough).
     case 'studioWelcome':
       return 'studio';
     // Legacy view name — `/draft/` parses as `play` now. Map here too so any leftover

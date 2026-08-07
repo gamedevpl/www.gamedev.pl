@@ -1,67 +1,24 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { getSavedSpecs } from './mySpecs.js';
 import { PixelIcon } from './PixelIcon.js';
 import { studioPath } from './router.js';
+import { isStudioOnboarded, markStudioOnboarded, resolveWelcomeToken } from './studioWelcome.js';
 import { pollDelayMs } from './studioStatusPoll.js';
-import { getSubmissionStatus, listMySubmissions, type SubmissionStatus } from './submissionApi.js';
+import { getSubmissionStatus, type SubmissionStatus } from './submissionApi.js';
 import { recordCreateStep } from './visitTelemetry.js';
 import { welcomeProgressMessage, welcomeStatusLabel } from './welcomeProgress.js';
 
-const ONBOARDED_KEY = 'gamedev_studio_onboarded';
-
-/** Tab stops the welcome wizard cycles between. */
+// Focusable controls inside the welcome dialog.
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-export function isStudioOnboarded(): boolean {
-  try {
-    return localStorage.getItem(ONBOARDED_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
-
-export function markStudioOnboarded(): void {
-  try {
-    localStorage.setItem(ONBOARDED_KEY, '1');
-  } catch {
-    // Convenience only.
-  }
-}
-
-/**
- * Resolve the status API's capability token from a URL address (slug or token).
- * Local specs win — they are written on Create Now before this screen mounts.
- */
-export async function resolveWelcomeToken(game: string): Promise<{ token: string; title: string } | null> {
-  const local = getSavedSpecs().find((spec) => spec.token === game || spec.slug === game);
-  if (local) {
-    return { token: local.token, title: local.title };
-  }
-  try {
-    const mine = await listMySubmissions();
-    const match = mine.find((row) => row.token === game || row.slug === game);
-    if (match) {
-      return { token: match.token, title: match.title };
-    }
-  } catch {
-    // Fall through — token-shaped addresses still work without the shelf.
-  }
-  return { token: game, title: game };
-}
-
 type StudioWelcomeViewProps = {
-  /** Slug or legacy capability token from the URL. */
+  // Slug or capability token from the URL.
   game: string;
   onOpenStudio: (path: string) => void;
 };
 
-/**
- * Platform create handoff — the wizard continues after Create Now so Studio chrome
- * does not arrive as a teleport. Live progress + a short steer primer; Open Studio
- * is always explicit (never auto-enter).
- */
+// Full-screen platform handoff after Create Now.
 export function StudioWelcomeView({ game, onOpenStudio }: StudioWelcomeViewProps) {
   const { t, i18n } = useTranslation();
   const wizardRef = useRef<HTMLDivElement>(null);

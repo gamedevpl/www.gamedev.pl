@@ -635,10 +635,7 @@ export function App() {
       setQaBuilder('platform');
       clearPendingQa();
 
-      // Platform rounds land on the full-screen welcome handoff so Studio chrome is
-      // not a teleport. Self/BYOCA still goes straight to Studio until the connect
-      // chapter ships (slice 3). Older API builds answer without a slug — the token
-      // still addresses both paths and gets rewritten once the shelf resolves.
+      // Platform → welcome handoff; self → Studio for now.
       const address = response.slug ?? response.token;
       navigate(builder === 'platform' ? studioWelcomePath(address) : studioPath(address));
     } catch (err) {

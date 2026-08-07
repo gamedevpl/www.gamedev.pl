@@ -1,13 +1,7 @@
 import type { SubmissionStatus } from './submissionApi.js';
 
-/**
- * One human line for the platform welcome handoff — prefer live agent words over a
- * canned state label. Pure so the screen can stay thin and tests do not need React.
- */
-export function welcomeProgressMessage(
-  status: SubmissionStatus | null,
-  translate: (key: string) => string,
-): string {
+// Prefer live agent words over canned labels.
+export function welcomeProgressMessage(status: SubmissionStatus | null, translate: (key: string) => string): string {
   if (!status) return translate('welcome.loading');
 
   const latest = status.events?.[0];
@@ -38,10 +32,7 @@ export function welcomeProgressMessage(
   return translate(`statusView.states.${status.status}.description`);
 }
 
-export function welcomeStatusLabel(
-  status: SubmissionStatus | null,
-  translate: (key: string) => string,
-): string {
+export function welcomeStatusLabel(status: SubmissionStatus | null, translate: (key: string) => string): string {
   if (!status) return translate('welcome.loading');
   if (status.phase === 'dispatched') {
     return translate('statusView.phaseLabels.dispatched');

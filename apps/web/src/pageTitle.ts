@@ -80,7 +80,7 @@ export function resolveDocumentTitle(route: AppRoute, ctx: DocumentTitleContext)
         ? brandedNamedTitle(ctx.copy.studioNamed, ctx.studioTitle)
         : brandedPageTitle(ctx.copy.studio);
     case 'studioWelcome':
-      // Same named-game template as Studio — the handoff is still "about this game".
+      // Same named-game template as Studio.
       return ctx.studioTitle?.trim()
         ? brandedNamedTitle(ctx.copy.studioNamed, ctx.studioTitle)
         : brandedPageTitle(ctx.copy.studio);
