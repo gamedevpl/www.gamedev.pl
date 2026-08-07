@@ -578,6 +578,8 @@
     "loadError": "We couldn't refresh status just now. Retrying…",
     "connectedLabel": "Agent connected",
     "connectedBody": "The build is underway. Studio is where you watch it and say what to change.",
+    "awaitingUpdates": "Waiting for the first update from your agent…",
+    "shotAlt": "Latest picture of the build",
     "later": "I'll connect later",
     "openStudio": "Open Studio",
     "openStudioAnyway": "Open Studio anyway"

@@ -7,8 +7,17 @@ import { connectCardMode, shouldShowConnectCard, type SelfBuildCopyInput } from 
 import { StudioConnectCard } from './StudioConnectCard.js';
 import { markStudioOnboarded, resolveWelcomeToken } from './studioWelcome.js';
 import { pollDelayMs } from './studioStatusPoll.js';
-import { getSubmissionStatus, type SubmissionStatus } from './submissionApi.js';
+import {
+  buildMediaUrl,
+  getSubmissionStatus,
+  handoffToPlatform,
+  type BuildEvent,
+  type SubmissionStatus,
+} from './submissionApi.js';
 import { recordCreateStep, recordStudioStep } from './visitTelemetry.js';
+
+// Studio owns the full transcript; this step shows only the newest few.
+const FEED_LIMIT = 4;
 
 // Focusable controls in the connect dialog.
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -147,18 +156,30 @@ export function StudioConnectWizard({ game, onOpenStudio }: StudioConnectWizardP
     }
   };
 
-  const goStudio = (deferred: boolean) => {
+  const goStudio = (deferred: boolean, builder: 'self' | 'platform' = 'self') => {
     markStudioOnboarded();
     // Deferred still enters Studio; record both funnel steps.
     if (deferred) {
       recordStudioStep('connect_dismissed', 'self');
     }
-    recordCreateStep('handoff_enter_studio', 'self');
+    recordCreateStep('handoff_enter_studio', builder);
     const address = status?.slug ?? game;
     onOpenStudio(`${studioPath(address)}?from=handoff`);
   };
 
+  // Change of mind: hand the round to the Gamedev.pl agent.
+  const switchToPlatform = async () => {
+    if (!token) return;
+    const result = await handoffToPlatform(token);
+    if (result.pending) return result;
+    goStudio(false, 'platform');
+    return result;
+  };
+
   const cardMode = connectCardMode(copyInputFromStatus(status)) ?? 'setup';
+  const feed: BuildEvent[] = (status?.events ?? []).slice(0, FEED_LIMIT);
+  const reportedProgress = (status?.events ?? []).find((event) => event.progress)?.progress;
+  const latestShot = status?.media?.[0];
 
   return createPortal(
     <div
@@ -198,10 +219,50 @@ export function StudioConnectWizard({ game, onOpenStudio }: StudioConnectWizardP
                 <PixelIcon name="sparkle" size={13} /> {t('connectWizard.connectedLabel')}
               </p>
               <p className="studio-welcome-progress-message">{t('connectWizard.connectedBody')}</p>
+              {reportedProgress && reportedProgress.total > 0 ? (
+                <p className="studio-connect-wizard-count">
+                  {t('statusView.progress.checklistCount', {
+                    done: reportedProgress.done,
+                    total: reportedProgress.total,
+                  })}
+                </p>
+              ) : null}
+              {feed.length > 0 ? (
+                <ul className="studio-connect-wizard-feed" data-testid="connect-wizard-feed">
+                  {feed.map((event) => (
+                    <li key={event.id}>
+                      <span className="studio-connect-wizard-feed-step">
+                        {event.step ? t(`statusView.progress.steps.${event.step}`) : t('statusView.progress.agentSays')}
+                      </span>{' '}
+                      <span className="studio-connect-wizard-feed-text">{event.text}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="studio-connect-wizard-feed-empty">
+                  <span className="studio-connect-pulse" aria-hidden="true" />
+                  {t('connectWizard.awaitingUpdates')}
+                </p>
+              )}
+              {latestShot && token ? (
+                <img
+                  className="studio-connect-wizard-shot"
+                  src={buildMediaUrl(token, latestShot)}
+                  alt={latestShot.label ?? t('connectWizard.shotAlt')}
+                  loading="lazy"
+                />
+              ) : null}
             </div>
           ) : token ? (
             <div className="studio-connect-wizard-card">
-              <StudioConnectCard token={token} collapsible={false} agentConnected={false} mode={cardMode} />
+              <StudioConnectCard
+                token={token}
+                collapsible={false}
+                agentConnected={false}
+                mode={cardMode}
+                onSwitchToPlatform={switchToPlatform}
+                builderHandoffPending={status?.builderHandoff?.target === 'platform'}
+              />
             </div>
           ) : (
             <p className="studio-welcome-primer-one">{t('connectWizard.preparing')}</p>

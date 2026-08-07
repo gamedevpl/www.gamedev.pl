@@ -14,6 +14,7 @@ vi.mock('./submissionApi.js', async () => {
     ...actual,
     getSubmissionStatus: vi.fn(),
     listMySubmissions: vi.fn(),
+    handoffToPlatform: vi.fn(),
   };
 });
 
@@ -28,6 +29,7 @@ vi.mock('./connectApi.js', async () => {
 const getStatus = vi.mocked(submissionApi.getSubmissionStatus);
 const listMine = vi.mocked(submissionApi.listMySubmissions);
 const getConnect = vi.mocked(connectApi.getConnectPayload);
+const handoff = vi.mocked(submissionApi.handoffToPlatform);
 
 describe('StudioConnectWizard', () => {
   let container: HTMLDivElement;
@@ -69,7 +71,9 @@ describe('StudioConnectWizard', () => {
         cli: 'cli',
       },
       installLinks: { cursor: 'cursor://add', vscode: 'vscode://add' },
+      canSwitchToPlatform: true,
     });
+    handoff.mockResolvedValue({});
   });
 
   afterEach(() => {
@@ -126,6 +130,108 @@ describe('StudioConnectWizard', () => {
       cta.click();
     });
     expect(onOpenStudio).toHaveBeenCalledWith('/studio/bastion-wave?from=handoff');
+  });
+
+  it('hands the round to the Gamedev.pl agent and opens Studio', async () => {
+    const onOpenStudio = vi.fn();
+    await act(async () => {
+      createRoot(container).render(createElement(StudioConnectWizard, { game: 'bastion-wave', onOpenStudio }));
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const control = document.querySelector('[data-testid="connect-switch-builder"]');
+    expect(control).toBeTruthy();
+    const start = control?.querySelector('button') as HTMLButtonElement;
+    expect(start.textContent).toMatch(/Gamedev\.pl agent/i);
+    await act(async () => {
+      start.click();
+    });
+
+    const confirm = control?.querySelector('button') as HTMLButtonElement;
+    await act(async () => {
+      confirm.click();
+      await Promise.resolve();
+    });
+
+    expect(handoff).toHaveBeenCalledWith('tok-connect');
+    expect(onOpenStudio).toHaveBeenCalledWith('/studio/bastion-wave?from=handoff');
+  });
+
+  it('stays on connect while a handoff waits for the agent to acknowledge', async () => {
+    const onOpenStudio = vi.fn();
+    handoff.mockResolvedValue({ pending: true });
+    await act(async () => {
+      createRoot(container).render(createElement(StudioConnectWizard, { game: 'bastion-wave', onOpenStudio }));
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const control = document.querySelector('[data-testid="connect-switch-builder"]');
+    await act(async () => {
+      (control?.querySelector('button') as HTMLButtonElement).click();
+    });
+    await act(async () => {
+      (control?.querySelector('button') as HTMLButtonElement).click();
+      await Promise.resolve();
+    });
+
+    expect(onOpenStudio).not.toHaveBeenCalled();
+    expect(document.querySelector('[data-testid="connect-switch-builder"]')?.textContent).toMatch(/acknowledge/i);
+  });
+
+  it('shows the latest agent updates once it checks in', async () => {
+    getStatus.mockResolvedValue({
+      status: 'building',
+      builder: 'self',
+      slug: 'bastion-wave',
+      lastAgentSignalAt: '2026-08-07T00:01:00Z',
+      events: [
+        {
+          id: 'ev-2',
+          kind: 'step',
+          step: 'art',
+          text: 'Drew the pumpkin sprite sheet',
+          progress: { done: 2, total: 5 },
+          createdAt: '2026-08-07T00:02:00Z',
+        },
+        { id: 'ev-1', kind: 'milestone', text: 'Read the kit', createdAt: '2026-08-07T00:01:00Z' },
+      ],
+    });
+
+    await act(async () => {
+      createRoot(container).render(createElement(StudioConnectWizard, { game: 'bastion-wave', onOpenStudio: vi.fn() }));
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const feed = document.querySelector('[data-testid="connect-wizard-feed"]');
+    expect(feed?.textContent).toContain('Drew the pumpkin sprite sheet');
+    expect(feed?.textContent).toContain('Read the kit');
+    expect(feed?.textContent).toContain('Drawing');
+    expect(document.querySelector('.studio-welcome-progress')?.textContent).toContain('2 of 5 done');
+  });
+
+  it('says it is waiting when a connected agent has posted nothing yet', async () => {
+    getStatus.mockResolvedValue({
+      status: 'building',
+      builder: 'self',
+      slug: 'bastion-wave',
+      lastAgentSignalAt: '2026-08-07T00:01:00Z',
+    });
+
+    await act(async () => {
+      createRoot(container).render(createElement(StudioConnectWizard, { game: 'bastion-wave', onOpenStudio: vi.fn() }));
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(document.querySelector('[data-testid="connect-wizard-feed"]')).toBeNull();
+    expect(document.querySelector('.studio-connect-wizard-feed-empty')?.textContent).toMatch(/Waiting for the first/i);
   });
 
   it('uses resume connect mode when a quiet agent resurfaces the card', async () => {
