@@ -90,8 +90,7 @@ export function UnpublishedPlayView({ slug, onExit, onTitle }: UnpublishedPlayVi
   }
 
   if (!game) {
-    // Same full-page mascot as the catalog wait on `/play/<slug>` — one continuous
-    // loader from cold visit through document fetch, not a spinner under the header.
+    // Match /play catalog wait: full-page mascot, not a spinner.
     return <AppLoadingScreen />;
   }
 

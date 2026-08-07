@@ -45,8 +45,7 @@ export function GameDetailPage({ game, state, onPlay, onRemix, onRetry }: GameDe
   }, [game]);
 
   if (state === 'loading') {
-    // App normally covers `/play` catalog waits with AppLoadingScreen at the root;
-    // keep the same mascot here as a fallback if this surface is mounted mid-fetch.
+    // Fallback mascot if mounted while catalog still loads.
     return <AppLoadingScreen />;
   }
 

@@ -315,8 +315,7 @@ describe('catalog playback', () => {
       await flushEffects();
     });
 
-    // Auth has resolved (catalog fetch is in flight) — still the full-page mascot,
-    // not the header shell with a second "Loading the game page…" stage.
+    // Catalog still pending: mascot only, no header loading stage.
     expect(container.querySelector('.app-loading-screen')).not.toBeNull();
     expect(container.querySelector('.app-header')).toBeNull();
     expect(container.querySelector('.game-page')).toBeNull();
