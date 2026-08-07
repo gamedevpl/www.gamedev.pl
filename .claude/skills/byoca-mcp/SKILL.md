@@ -1,6 +1,6 @@
 ---
 name: byoca-mcp
-description: BYOCA / self-build MCP contract for gamedev.pl — session loop (start → kit → stage/submit → gate → end), soft warnings (call_end, progress_stale, inbox_pending), and creator self→platform handoff. Use when adding or changing MCP tools, the agent channel, Studio connect/status for self rounds, or builder handoff behaviour.
+description: BYOCA / self-build MCP contract for gamedev.pl — session loop (start → kit → stage/submit → gate → end), soft warnings (call_end, progress_stale, inbox_pending), and creator builder handoffs. Use when adding or changing MCP tools, the agent channel, Studio connect/status for self rounds, or builder handoff behaviour.
 ---
 
 # BYOCA MCP (self-build)
@@ -253,20 +253,27 @@ Merged by `applySessionNudges` / submit handler. Act, then continue:
 
 ## Builder handoff (Studio)
 
-Mid-round switch is refused while the self agent is live (`builder_locked`), except:
+Mid-round switch is refused while the current agent is live (`builder_locked`), except:
 
-| Signal                         | Who                                     | Effect                                   |
-| ------------------------------ | --------------------------------------- | ---------------------------------------- |
-| `agentEndedAt` / stall `ended` | MCP submit (auto) or agent called `end` | Primary unlock for self→platform handoff |
-| stall `quiet`                  | ~15m silence                            | Fallback if neither happened             |
+| Signal                                   | Who                                     | Effect                                                       |
+| ---------------------------------------- | --------------------------------------- | ------------------------------------------------------------ |
+| `agentEndedAt` / stall `ended`           | MCP submit (auto) or agent called `end` | Primary unlock for self→platform handoff                     |
+| stall `quiet`                            | ~15m silence                            | Fallback if neither happened                                 |
+| explicit creator stop + platform handoff | Studio creator action                   | Queue a stop nudge; dispatch platform after self calls `end` |
+| explicit creator stop + self handoff     | Studio creator action                   | Queue a stop nudge; dispatch self after platform calls `end` |
 
 `allowsSelfToPlatformHandoff` checks `agentEndedAt` directly so a later
 `gate_not_started` stall (ops visibility after a wedged gate) does not revoke handoff.
 
-Handoff goes through creator feedback with `builder: 'platform'` → `resumeBuild` with
-generation bump + seed from latest delivery. Do not auto-dispatch platform from `end`.
+Handoff goes through the dedicated creator control (not feedback quota) and first persists a
+pending request. The channel then returns `control.stop=true`, `reason=builder_handoff`, and
+the target builder. The current agent must call `end` once to acknowledge the nudge; only
+then does `resumeBuild` bump generation, invalidate the old key, seed the new round, and
+dispatch the replacement. Platform cancellation is cooperative because the Agent Tasks API
+has no cancel endpoint. Do not auto-dispatch platform from an ordinary `end`.
 
-`no_agent_yet` is waiting to connect, not a handoff.
+`no_agent_yet` is a handoff without an agent to acknowledge it, so Studio can dispatch
+the selected replacement immediately.
 
 ### Platform session boot (no heuristics)
 
@@ -287,7 +294,7 @@ queued.
 | Account-session invalidation | `apps/api/src/agent-session-revocation.ts`                                                                                                                                |
 | Channel (`POST …/end`, …)    | `apps/api/src/agent-channel.ts`                                                                                                                                           |
 | Stall / `ended`              | `apps/api/src/job-state.ts` (`detectStall`)                                                                                                                               |
-| Handoff gate                 | `apps/api/src/builder.ts` (`allowsSelfToPlatformHandoff`)                                                                                                                 |
+| Handoff gate                 | `apps/api/src/builder.ts` (`allowsCreatorBuilderHandoff`)                                                                                                                 |
 | Live staged preview          | `apps/api/src/staged-preview.ts`                                                                                                                                          |
 | Studio live-preview frame    | `apps/web/src/StudioLivePreview.tsx`                                                                                                                                      |
 | Studio status poll cadence   | `apps/web/src/studioStatusPoll.ts` (tight poll on `ended` / `quiet` / `no_agent_yet` / `dispatched`)                                                                      |

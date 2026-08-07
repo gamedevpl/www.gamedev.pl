@@ -8,7 +8,7 @@ import type { GameHealth } from './healthApi.js';
 import { PixelIcon, type PixelIconName } from './PixelIcon.js';
 import { formatRelativeTime } from './relativeTime.js';
 import { playPath, studioPath, type StudioTab } from './router.js';
-import { abandonSubmission } from './submissionApi.js';
+import { abandonSubmission, handoffToPlatform } from './submissionApi.js';
 import { StudioPlaytestPanel } from './StudioPlaytestPanel.js';
 import { StudioShotToasts } from './StudioShotToasts.js';
 import { EditorPanel } from './EditorPanel.js';
@@ -905,6 +905,11 @@ export function CreatorStudioView({
                           onClose={() => openTab('thread')}
                           onDaysChange={setDays}
                           onOpenPlaytest={() => openTab('playtest')}
+                          onSwitchToPlatform={async () => {
+                            await handoffToPlatform(activeGame.token);
+                            setDetailsPane('overview');
+                            openTab('thread');
+                          }}
                           onPlay={() => activeGame.slug && onPlay(activeGame.slug)}
                           onDraftSharedChange={(shared) => {
                             setGames((prev) =>
@@ -1096,6 +1101,7 @@ function DetailsPanel({
   onClose,
   onDaysChange,
   onOpenPlaytest,
+  onSwitchToPlatform,
   onPlay,
   onDraftSharedChange,
   onRemoved,
@@ -1113,6 +1119,7 @@ function DetailsPanel({
   onClose: () => void;
   onDaysChange: (days: number) => void;
   onOpenPlaytest: () => void;
+  onSwitchToPlatform: () => Promise<void>;
   onPlay: () => void;
   onDraftSharedChange: (shared: boolean) => void;
   onRemoved: (token: string) => void | Promise<void>;
@@ -1266,6 +1273,7 @@ function DetailsPanel({
               hideIfUnavailable
               unavailableLabel={t('studioPanel.rail.connectEmpty')}
               density="panel"
+              onSwitchToPlatform={onSwitchToPlatform}
             />
           ) : (
             <p className="studio-rail-empty">{t('studioPanel.rail.connectEmpty')}</p>

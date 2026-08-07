@@ -168,6 +168,11 @@ export type SubmissionStatus = {
   builder?: 'platform' | 'self';
   /** Last builder used on this game (default for the next round), when reported. */
   defaultBuilder?: 'platform' | 'self';
+  builderHandoff?: {
+    target: 'platform' | 'self';
+    requestedAt: string;
+    acknowledgedAt?: string;
+  };
   /**
    * Why this build is asking the creator to act. Covers a dead agent round
    * (`task_failed`, …) and a gate bounce (`gate_red`) — both arrive as public
@@ -373,6 +378,40 @@ export async function abandonSubmission(token: string): Promise<void> {
   if (!response.ok) {
     await throwResponseError(response);
   }
+}
+
+export type BuilderHandoffResponse = { pending?: boolean; acknowledgedAt?: string };
+
+export async function handoffToPlatform(
+  token: string,
+  options: { stopActiveSelfAgent?: boolean } = {},
+): Promise<BuilderHandoffResponse> {
+  const response = await fetch(`${API_BASE}/api/submissions/${encodeURIComponent(token)}/handoff`, {
+    method: 'POST',
+    credentials: 'include',
+    ...(options.stopActiveSelfAgent
+      ? { headers: { 'content-type': 'application/json' }, body: JSON.stringify(options) }
+      : {}),
+  });
+
+  if (!response.ok) {
+    await throwResponseError(response);
+  }
+  return (await response.json()) as BuilderHandoffResponse;
+}
+
+export async function handoffToSelf(token: string): Promise<BuilderHandoffResponse> {
+  const response = await fetch(`${API_BASE}/api/submissions/${encodeURIComponent(token)}/handoff`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ builder: 'self', stopActivePlatformAgent: true }),
+  });
+
+  if (!response.ok) {
+    await throwResponseError(response);
+  }
+  return (await response.json()) as BuilderHandoffResponse;
 }
 
 /** Today's submission allowance, so a creator sees it before they hit a 429. */

@@ -9,6 +9,8 @@ import {
   getChannelPlayable,
   getSubmissionPreview,
   getSubmissionStatus,
+  handoffToPlatform,
+  handoffToSelf,
   submitFeedback,
   buildMediaUrl,
   type BuildEvent,
@@ -24,13 +26,15 @@ import {
 import { NAVIGATE_EVENT, statusPath, studioPath } from './router.js';
 import { formatRelativeTime } from './relativeTime.js';
 import { connectCardMode, selfComposerRoute, selfStatusCopy, shouldShowConnectCard } from './selfBuildCopy.js';
-import { StudioConnectCard } from './StudioConnectCard.js';
+import { StudioConnectCard, SwitchToPlatformControl, SwitchToSelfControl } from './StudioConnectCard.js';
 import { StudioLivePreview } from './StudioLivePreview.js';
 import { StudioPriorRounds } from './StudioPriorRounds.js';
 import { submitImprovement } from './studioApi.js';
 import { pollDelayMs } from './studioStatusPoll.js';
 import { studioThreadContentScrollTop, studioThreadNearContentEnd } from './studioThreadScroll.js';
 import { recordStudioStep, type StudioStepDetail } from './visitTelemetry.js';
+
+type BuilderHandoffHandler = () => Promise<void | { pending?: boolean }> | void | { pending?: boolean };
 
 function copyInputFromStatus(status: SubmissionStatus | null | undefined) {
   return {
@@ -102,6 +106,16 @@ function isAgentWorkActive(status: SubmissionStatus | null | undefined): boolean
   if (status.gateProgress) return true;
   if (status.stall === 'ended' || Boolean(status.agentEndedAt)) return false;
   return true;
+}
+
+function canInterruptPlatformAgent(status: SubmissionStatus | null | undefined): boolean {
+  return Boolean(
+    status?.builder === 'platform' &&
+    status.status !== 'publishing' &&
+    isAgentWorkActive(status) &&
+    !canChooseBuilder(status) &&
+    !status.builderHandoff,
+  );
 }
 
 const STATUS_ICONS: Record<SubmissionStatus['status'], PixelIconName> = {
@@ -489,6 +503,7 @@ export function SubmissionStatusView({
   // Emit only on transitions observed during this mount — a reload of an already
   // finished submission must not mint a fresh gate_verdict (visit stream is per-tab).
   const prevStallRef = useRef<SubmissionStatus['stall'] | undefined>(undefined);
+  const prevBuilderRef = useRef<SubmissionStatus['builder'] | undefined>(undefined);
   const prevVerdictRef = useRef<StudioStepDetail | null | undefined>(undefined);
   const prevOpenedByRef = useRef<SubmissionStatus['openedBy'] | undefined>(undefined);
   const hasSeenStatusRef = useRef(false);
@@ -510,7 +525,12 @@ export function SubmissionStatusView({
     }
 
     if (builder) {
-      if (prevStallRef.current === 'no_agent_yet' && status.stall !== 'no_agent_yet') {
+      if (
+        builder === 'self' &&
+        prevBuilderRef.current === builder &&
+        prevStallRef.current === 'no_agent_yet' &&
+        status.stall !== 'no_agent_yet'
+      ) {
         recordStudioStep('agent_signaled', builder);
       }
       if (hasSeenStatusRef.current && verdict && prevVerdictRef.current !== verdict) {
@@ -526,6 +546,7 @@ export function SubmissionStatusView({
     }
 
     prevStallRef.current = status.stall;
+    prevBuilderRef.current = status.builder;
     prevVerdictRef.current = verdict;
     prevOpenedByRef.current = status.openedBy;
     hasSeenStatusRef.current = true;
@@ -667,6 +688,20 @@ export function SubmissionStatusView({
     </>
   );
 
+  const handoffToPlatformFromUi = () =>
+    handoffToPlatform(token, {
+      stopActiveSelfAgent: Boolean(status?.builder === 'self' && isAgentWorkActive(status)),
+    }).then((result) => {
+      requestStatusRefreshRef.current();
+      return result;
+    });
+
+  const handoffToSelfFromUi = () =>
+    handoffToSelf(token).then((result) => {
+      requestStatusRefreshRef.current();
+      return result;
+    });
+
   /**
    * Inside Creator Studio this is a thread, not a page.
    *
@@ -756,6 +791,8 @@ export function SubmissionStatusView({
                       token={token}
                       mode={connectCardMode(copyInputFromStatus(status)) ?? 'setup'}
                       {...(onOpenConnect ? { onOpenInstall: onOpenConnect } : {})}
+                      onSwitchToPlatform={handoffToPlatformFromUi}
+                      builderHandoffPending={status.builderHandoff?.target === 'platform'}
                     />
                   ) : null
                 }
@@ -860,9 +897,6 @@ export function SubmissionStatusView({
                   />
                 ) : null}
 
-                {/* Before the first agent signal there is nobody to receive a note — the
-                    connect card is the only move. Quiet / gate-green still keep the box
-                    so a creator can leave work for the next start. */}
                 {status.status !== 'abandoned' && selfCopy !== 'no_agent_yet' ? (
                   <FeedbackPanel
                     token={token}
@@ -875,6 +909,17 @@ export function SubmissionStatusView({
                     stall={status.stall}
                     failureReason={status.failure?.reason}
                     phase={status.phase}
+                    handoffPending={status.builderHandoff?.target}
+                    onSwitchToPlatform={
+                      status.builder === 'self' && (agentWorking || status.builderHandoff?.target === 'platform')
+                        ? handoffToPlatformFromUi
+                        : undefined
+                    }
+                    onSwitchToSelf={
+                      canInterruptPlatformAgent(status) || status.builderHandoff?.target === 'self'
+                        ? handoffToSelfFromUi
+                        : undefined
+                    }
                     suppressRouteNote={isAwaitingOwnAgent(status) || status.phase === 'ready_for_review'}
                     onSent={(text) => {
                       setPendingRevisions((current) => [...current, { text, at: Date.now() }]);
@@ -986,6 +1031,8 @@ export function SubmissionStatusView({
                 key={`connect-${pendingRevisions.length}`}
                 token={token}
                 mode={connectCardMode(copyInputFromStatus(status)) ?? 'setup'}
+                onSwitchToPlatform={handoffToPlatformFromUi}
+                builderHandoffPending={status.builderHandoff?.target === 'platform'}
               />
             ) : null}
 
@@ -1069,6 +1116,18 @@ export function SubmissionStatusView({
                 stall={status.stall}
                 failureReason={status.failure?.reason}
                 phase={status.phase}
+                handoffPending={status.builderHandoff?.target}
+                onSwitchToPlatform={
+                  status.builder === 'self' &&
+                  (isAgentWorkActive(status) || status.builderHandoff?.target === 'platform')
+                    ? handoffToPlatformFromUi
+                    : undefined
+                }
+                onSwitchToSelf={
+                  canInterruptPlatformAgent(status) || status.builderHandoff?.target === 'self'
+                    ? handoffToSelfFromUi
+                    : undefined
+                }
                 onSent={(text) => {
                   setPendingRevisions((current) => [...current, { text, at: Date.now() }]);
                   requestStatusRefreshRef.current();
@@ -1279,6 +1338,9 @@ function FeedbackPanel({
   failureReason,
   phase,
   suppressRouteNote = false,
+  onSwitchToPlatform,
+  onSwitchToSelf,
+  handoffPending,
   onSent,
   onPublishedImprove,
 }: {
@@ -1297,6 +1359,9 @@ function FeedbackPanel({
   failureReason?: string;
   /** Internal job phase — gate-green drafts need honest "start your agent" routing. */
   phase?: SubmissionStatus['phase'];
+  onSwitchToPlatform?: BuilderHandoffHandler;
+  onSwitchToSelf?: BuilderHandoffHandler;
+  handoffPending?: BuilderKind;
   /**
    * Hide the "saved until you start your agent" line — the connect card above already
    * says we are waiting, so a third copy under the box is noise.
@@ -1467,9 +1532,10 @@ function FeedbackPanel({
 
   // Sticky builder signal in the composer toolbar (Claude/Cursor shape): always when
   // the next send can choose, and while a self round is mid-flight so routing stays
-  // visible. Platform mid-round stays chrome-free — no selector until a boundary.
+  // visible. Platform mid-round stays chrome-free unless its explicit interruption
+  // control is available — no future-round selector until a boundary.
   const effectiveBuilder = chooseBuilder ? builder : (roundBuilder ?? builder);
-  const showBuilderBadge = chooseBuilder || effectiveBuilder === 'self';
+  const showBuilderBadge = chooseBuilder || effectiveBuilder === 'self' || Boolean(onSwitchToSelf);
   const builderSelector = showBuilderBadge ? (
     <BuilderModeBadge
       value={effectiveBuilder}
@@ -1478,6 +1544,26 @@ function FeedbackPanel({
       disabled={state === 'sending'}
     />
   ) : null;
+  const activeSelfHandoff =
+    !chooseBuilder && effectiveBuilder === 'self' && onSwitchToPlatform ? (
+      <SwitchToPlatformControl
+        compact
+        active
+        onSwitchToPlatform={onSwitchToPlatform}
+        pending={handoffPending === 'platform'}
+      />
+    ) : null;
+  const activePlatformHandoff =
+    !chooseBuilder && effectiveBuilder === 'platform' && onSwitchToSelf ? (
+      <SwitchToSelfControl compact active onSwitchToSelf={onSwitchToSelf} pending={handoffPending === 'self'} />
+    ) : null;
+  const builderControls = (
+    <div className="builder-mode-controls">
+      {builderSelector}
+      {activeSelfHandoff}
+      {activePlatformHandoff}
+    </div>
+  );
 
   // Standalone status page still shows a brief receipt next to Send. The studio
   // composer does not: the message is echoed into the thread immediately, so a
@@ -1546,7 +1632,7 @@ function FeedbackPanel({
           disabled={sending}
         />
         <div className="status-composer-toolbar">
-          <div className="status-composer-toolbar-left">{builderSelector}</div>
+          <div className="status-composer-toolbar-left">{builderControls}</div>
           <div className="status-composer-toolbar-right">
             <button
               type="button"
@@ -1589,7 +1675,7 @@ function FeedbackPanel({
     <div className="status-feedback status-composer">
       <h3 className="status-feedback-title">{t(titleKey)}</h3>
       <p className="status-feedback-hint">{t(hintKey)}</p>
-      {builderSelector ? <div className="builder-mode-row">{builderSelector}</div> : null}
+      {builderSelector ? <div className="builder-mode-row">{builderControls}</div> : null}
       {routeNoteKey && state !== 'sent' && !error && !notice ? (
         <p className="status-feedback-route">{t(routeNoteKey)}</p>
       ) : null}

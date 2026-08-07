@@ -111,6 +111,14 @@ export function withActiveDay(existing: string[] | undefined, dateStr: string): 
   return [dateStr, ...days.filter((day) => day !== dateStr)].slice(0, ACTIVE_DAYS_KEPT);
 }
 
+export interface BuilderHandoff {
+  from: BuilderKind;
+  to: BuilderKind;
+  requestedAt: string;
+  awaitsAgentAck: boolean;
+  acknowledgedAt?: string;
+}
+
 export interface SubmissionRecord {
   issueNumber: number;
   ownerUid: string;
@@ -324,6 +332,7 @@ export interface SubmissionRecord {
    * explicit choice at a round boundary rather than a settings dig.
    */
   defaultBuilder?: BuilderKind;
+  builderHandoff?: BuilderHandoff;
   /**
    * Generated round-0 draft stored on the job for a self build.
    *
@@ -1699,6 +1708,14 @@ export interface Store {
    * Starting a new round also resets per-round counters (deliveries, stored seed).
    */
   setRoundBuilder(issueNumber: number, builder: BuilderKind, options?: { resetRoundBudget?: boolean }): Promise<void>;
+  requestBuilderHandoff(
+    issueNumber: number,
+    to: BuilderKind,
+    requestedAt: string,
+    awaitsAgentAck?: boolean,
+  ): Promise<boolean>;
+  acknowledgeBuilderHandoff(issueNumber: number, acknowledgedAt: string): Promise<BuilderHandoff | null>;
+  clearBuilderHandoff(issueNumber: number): Promise<void>;
   /** Stores (or clears) the generated seed draft on a self-build job. */
   setSubmissionSeed(issueNumber: number, seed: SeedFiles | null): Promise<void>;
   /** Marks seed generation pending / unavailable (available is set via {@link setSubmissionSeed}). */
@@ -2893,6 +2910,36 @@ export class InMemoryStore implements Store {
     delete next.agentEndedAt;
     this.submissions.set(issueNumber, next);
     return roundGeneration;
+  }
+
+  async requestBuilderHandoff(
+    issueNumber: number,
+    to: BuilderKind,
+    requestedAt: string,
+    awaitsAgentAck = true,
+  ): Promise<boolean> {
+    const sub = this.submissions.get(issueNumber);
+    if (!sub || sub.builderHandoff) return false;
+    const from = sub.builder ?? sub.defaultBuilder ?? 'platform';
+    if (from === to) return false;
+    this.submissions.set(issueNumber, { ...sub, builderHandoff: { from, to, requestedAt, awaitsAgentAck } });
+    return true;
+  }
+
+  async acknowledgeBuilderHandoff(issueNumber: number, acknowledgedAt: string): Promise<BuilderHandoff | null> {
+    const sub = this.submissions.get(issueNumber);
+    if (!sub?.builderHandoff || sub.builderHandoff.acknowledgedAt) return null;
+    const handoff: BuilderHandoff = { ...sub.builderHandoff, acknowledgedAt };
+    this.submissions.set(issueNumber, { ...sub, builderHandoff: handoff });
+    return handoff;
+  }
+
+  async clearBuilderHandoff(issueNumber: number): Promise<void> {
+    const sub = this.submissions.get(issueNumber);
+    if (!sub?.builderHandoff) return;
+    const next = { ...sub };
+    delete next.builderHandoff;
+    this.submissions.set(issueNumber, next);
   }
 
   async ensureRoundGeneration(issueNumber: number): Promise<number | null> {
@@ -4963,6 +5010,51 @@ export class FirestoreStore implements Store {
       delete next.agentEndedAt;
       tx.set(ref, next);
       return roundGeneration;
+    });
+  }
+
+  async requestBuilderHandoff(
+    issueNumber: number,
+    to: BuilderKind,
+    requestedAt: string,
+    awaitsAgentAck = true,
+  ): Promise<boolean> {
+    const ref = this.db.collection('submissions').doc(String(issueNumber));
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return false;
+      const current = snap.data() as SubmissionRecord;
+      if (current.builderHandoff) return false;
+      const from = current.builder ?? current.defaultBuilder ?? 'platform';
+      if (from === to) return false;
+      tx.set(ref, { builderHandoff: { from, to, requestedAt, awaitsAgentAck } }, { merge: true });
+      return true;
+    });
+  }
+
+  async acknowledgeBuilderHandoff(issueNumber: number, acknowledgedAt: string): Promise<BuilderHandoff | null> {
+    const ref = this.db.collection('submissions').doc(String(issueNumber));
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return null;
+      const current = snap.data() as SubmissionRecord;
+      if (!current.builderHandoff || current.builderHandoff.acknowledgedAt) return null;
+      const handoff: BuilderHandoff = { ...current.builderHandoff, acknowledgedAt };
+      tx.set(ref, { builderHandoff: handoff }, { merge: true });
+      return handoff;
+    });
+  }
+
+  async clearBuilderHandoff(issueNumber: number): Promise<void> {
+    const ref = this.db.collection('submissions').doc(String(issueNumber));
+    await this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return;
+      const current = snap.data() as SubmissionRecord;
+      if (!current.builderHandoff) return;
+      const next = { ...current };
+      delete next.builderHandoff;
+      tx.set(ref, next);
     });
   }
 

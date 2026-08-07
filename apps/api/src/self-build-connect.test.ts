@@ -275,6 +275,7 @@ describe('GET /api/submissions/:id/connect (BY-03 / BY-27b)', () => {
       fingerprint: string;
       mcpUrl: string;
       slug: string;
+      canSwitchToPlatform?: boolean;
     };
 
     expect(Object.keys(body.installSnippets).sort()).toEqual(['claudeCode', 'cli', 'codex', 'cursor', 'kimi'].sort());
@@ -282,6 +283,16 @@ describe('GET /api/submissions/:id/connect (BY-03 / BY-27b)', () => {
     expect(body.mcpUrl).toBe(mcpUrl);
     expect(record.slug).toBeTruthy();
     expect(body.slug).toBe(record.slug);
+    expect(body.canSwitchToPlatform).toBe(true);
+
+    await store.touchLastAgentSignalAt(record.issueNumber, '2026-07-31T12:00:00Z');
+    const activeResponse = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${id}/connect`,
+      headers: authHeaders(),
+    });
+    expect(activeResponse.statusCode).toBe(200);
+    expect((activeResponse.json() as { canSwitchToPlatform?: boolean }).canSwitchToPlatform).toBe(false);
 
     const creatorKey = body.authorizationHeader.replace(/^Authorization: Bearer /, '');
     expect(body.authorizationHeaderMasked).toBe(`Authorization: Bearer ····${body.fingerprint}`);

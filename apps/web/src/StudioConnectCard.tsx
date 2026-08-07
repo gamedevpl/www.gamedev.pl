@@ -89,7 +89,152 @@ type StudioConnectCardProps = {
   density?: 'thread' | 'panel';
   /** Section heading when `density="panel"` — omitted when the card returns null. */
   panelHeading?: string;
+  onSwitchToPlatform?: SwitchHandler;
+  builderHandoffPending?: boolean;
 };
+
+type BuilderHandoffTarget = 'platform' | 'self';
+type SwitchResult = { pending?: boolean };
+type SwitchHandler = () => Promise<void | SwitchResult> | void | SwitchResult;
+
+type SwitchBuilderControlProps = {
+  target: BuilderHandoffTarget;
+  onSwitch: SwitchHandler;
+  compact?: boolean;
+  active?: boolean;
+  pending?: boolean;
+};
+
+function SwitchBuilderControl({
+  target,
+  onSwitch,
+  compact = false,
+  active = false,
+  pending = false,
+}: SwitchBuilderControlProps) {
+  const { t } = useTranslation();
+  const [armed, setArmed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [handoffPending, setHandoffPending] = useState(pending);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (pending) setHandoffPending(true);
+  }, [pending]);
+
+  const confirm = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await onSwitch();
+      recordStudioStep('builder_chosen', target);
+      setBusy(false);
+      setArmed(false);
+      setHandoffPending(typeof result === 'object' && result !== null && result.pending === true);
+    } catch {
+      setBusy(false);
+      setArmed(false);
+      setError(t('connect.switchBuilder.error'));
+    }
+  };
+
+  return (
+    <div
+      className={compact ? 'studio-active-handoff' : 'studio-connect-switch'}
+      data-testid={
+        compact && target === 'self'
+          ? 'active-switch-builder-self'
+          : compact
+            ? 'active-switch-builder'
+            : 'connect-switch-builder'
+      }
+    >
+      {!compact ? <p className="studio-connect-switch-hint">{t('connect.switchBuilder.hint')}</p> : null}
+      {handoffPending ? (
+        <p className={compact ? 'studio-active-handoff-pending' : 'studio-connect-switch-pending'} aria-live="polite">
+          {t('connect.switchBuilder.pending')}
+        </p>
+      ) : !armed ? (
+        <button
+          type="button"
+          className={compact ? 'studio-active-handoff-button' : 'studio-connect-switch-button'}
+          onClick={() => setArmed(true)}
+          disabled={busy}
+        >
+          {active
+            ? t(target === 'platform' ? 'connect.switchBuilder.activeStart' : 'connect.switchBuilder.activeSelfStart')
+            : t('connect.switchBuilder.start')}
+        </button>
+      ) : (
+        <div className={compact ? 'studio-active-handoff-confirm' : 'studio-connect-switch-confirm'}>
+          <span>
+            {active
+              ? t(
+                  target === 'platform'
+                    ? 'connect.switchBuilder.activeConfirm'
+                    : 'connect.switchBuilder.activeSelfConfirm',
+                )
+              : t('connect.switchBuilder.confirm')}
+          </span>
+          <button
+            type="button"
+            className={compact ? 'studio-active-handoff-button is-primary' : 'studio-connect-switch-button is-primary'}
+            onClick={() => void confirm()}
+            disabled={busy}
+          >
+            {busy
+              ? t('connect.switchBuilder.sending')
+              : active
+                ? t(target === 'platform' ? 'connect.switchBuilder.activeYes' : 'connect.switchBuilder.activeSelfYes')
+                : t('connect.switchBuilder.yes')}
+          </button>
+          <button type="button" className="studio-connect-skip" onClick={() => setArmed(false)} disabled={busy}>
+            {t('connect.switchBuilder.no')}
+          </button>
+        </div>
+      )}
+      {error ? <p className="error">{error}</p> : null}
+    </div>
+  );
+}
+
+export function SwitchToPlatformControl({
+  onSwitchToPlatform,
+  compact = false,
+  active = false,
+  pending = false,
+}: {
+  onSwitchToPlatform: SwitchHandler;
+  compact?: boolean;
+  active?: boolean;
+  pending?: boolean;
+}) {
+  return (
+    <SwitchBuilderControl
+      target="platform"
+      onSwitch={onSwitchToPlatform}
+      compact={compact}
+      active={active}
+      pending={pending}
+    />
+  );
+}
+
+export function SwitchToSelfControl({
+  onSwitchToSelf,
+  compact = false,
+  active = false,
+  pending = false,
+}: {
+  onSwitchToSelf: SwitchHandler;
+  compact?: boolean;
+  active?: boolean;
+  pending?: boolean;
+}) {
+  return (
+    <SwitchBuilderControl target="self" onSwitch={onSwitchToSelf} compact={compact} active={active} pending={pending} />
+  );
+}
 
 /**
  * Connect card for a self-build round waiting on the creator's own coding agent (BY-27b / BY-18c).
@@ -109,6 +254,8 @@ export function StudioConnectCard({
   onOpenInstall,
   density = 'thread',
   panelHeading,
+  onSwitchToPlatform,
+  builderHandoffPending = false,
 }: StudioConnectCardProps) {
   const isPanel = density === 'panel';
   const { t, i18n } = useTranslation();
@@ -496,6 +643,10 @@ export function StudioConnectCard({
 
       {loading ? <p className="studio-connect-state">{t('connect.loading')}</p> : null}
       {error ? <p className="error">{error}</p> : null}
+
+      {payload?.canSwitchToPlatform && onSwitchToPlatform ? (
+        <SwitchToPlatformControl onSwitchToPlatform={onSwitchToPlatform} pending={builderHandoffPending} />
+      ) : null}
 
       {payload && !loading ? (
         isPanel ? (

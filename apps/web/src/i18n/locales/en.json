@@ -1179,6 +1179,22 @@
       "title": "Sign in from your agent",
       "hint": "Or copy this MCP URL into any other agent, then sign in when it asks. Pass the game slug from the prompt below when you start. If Cursor shows Unauthorized without opening a browser, open the authorize URL from Output → MCP logs (known Cursor bug), or use Paste header."
     },
+    "switchBuilder": {
+      "hint": "Prefer not to connect your own agent? Your game will stay safe and Gamedev.pl can continue this round instead.",
+      "start": "Use Gamedev.pl agent instead",
+      "confirm": "Stop waiting for your agent and start Gamedev.pl's coding agent?",
+      "yes": "Start Gamedev.pl agent",
+      "no": "Keep waiting",
+      "sending": "Starting Gamedev.pl agent…",
+      "pending": "Waiting for the current agent to acknowledge the stop request…",
+      "error": "We couldn't switch agents right now. Try again in a moment.",
+      "activeStart": "Switch to Gamedev.pl agent",
+      "activeConfirm": "Stop your agent and let Gamedev.pl continue this game? Work already delivered will stay with it.",
+      "activeYes": "Stop and start Gamedev.pl agent",
+      "activeSelfStart": "Switch to your agent",
+      "activeSelfConfirm": "Stop Gamedev.pl's agent and continue with your agent? Work already delivered will stay with this game.",
+      "activeSelfYes": "Stop and start your agent"
+    },
     "clients": {
       "claudeCode": "Claude Code",
       "codex": "Codex",

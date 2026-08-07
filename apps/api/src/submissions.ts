@@ -30,6 +30,7 @@ import { createInternalAuthVerifierFromEnv, type InternalAuthVerifier } from './
 import type { AgentBackend, SeedFiles } from './agent-backend.js';
 import { resolveBuilderBackend, type AgentBackendRegistry } from './agent-backend-env.js';
 import {
+  allowsCreatorBuilderHandoff,
   allowsSelfToPlatformHandoff,
   isActiveBuildRound,
   isBuilderKind,
@@ -713,10 +714,7 @@ export async function registerSubmissionRoutes(
     }
   }
 
-  /**
-   * Latest candidate/published sources as a BuildBrief.seed — used when a self→platform
-   * switch hands Copilot the game the creator's agent already delivered.
-   */
+  /** Seeds replacement builders from the latest delivered sources. */
   async function seedFromLatestDelivery(record: SubmissionRecord): Promise<SeedFiles | undefined> {
     if (!gamesStoreForSeed || !record.slug || !record.deliveredVersion) return undefined;
     try {
@@ -881,6 +879,7 @@ export async function registerSubmissionRoutes(
     if (!selected) return false;
     try {
       await store.setRoundBuilder(input.issueNumber, builder, { resetRoundBudget: false });
+      const roundGeneration = (await store.ensureRoundGeneration(input.issueNumber)) ?? 1;
       // Before the brief is built, so the agent is told about a draft only when one is
       // really there — and so the slug it mints is on the record the brief reads from.
       // A seed is written into `games/<slug>/`, so a job without a slug cannot have one.
@@ -923,10 +922,17 @@ export async function registerSubmissionRoutes(
           await store.setSeedStatus(input.issueNumber, 'unavailable');
         }
       }
-      // Persist generation before minting. New jobs already carry `1` from
-      // createSubmission; a legacy job without the field must be initialized here so
-      // the round-scoped token we hand the agent validates against the record.
-      const roundGeneration = (await store.ensureRoundGeneration(input.issueNumber)) ?? 1;
+      const current = await store.getSubmission(input.issueNumber);
+      if (
+        !current ||
+        !isActiveBuildRound(current) ||
+        builderOf(current) !== builder ||
+        current.roundGeneration !== roundGeneration ||
+        current.builderHandoff
+      ) {
+        input.log.error({ issueNumber: input.issueNumber }, 'discarding dispatch after the round changed');
+        return false;
+      }
       const result = await selected.dispatch({
         issueNumber: input.issueNumber,
         ...(input.slug ? { slug: input.slug } : {}),
@@ -1053,6 +1059,8 @@ export async function registerSubmissionRoutes(
     transition?: { by: JobTransition['by']; reason: string };
     /** Builder for the new round. Ignored on undelivered nudges (same round). */
     builder?: BuilderKind;
+    /** Handoffs keep the per-job delivery budget across builder changes. */
+    preserveRoundBudget?: boolean;
   }): Promise<ResumeOutcome> {
     if (!submissionTokenSecret || !store) return { started: false, reason: 'not_configured' };
     const record = await store.getSubmission(input.issueNumber);
@@ -1070,14 +1078,27 @@ export async function registerSubmissionRoutes(
         ? ((await store.ensureRoundGeneration(input.issueNumber)) ?? 1)
         : ((await store.bumpRoundGeneration(input.issueNumber)) ?? (record?.roundGeneration ?? 0) + 1);
       if (!input.undelivered) {
-        await store.setRoundBuilder(input.issueNumber, builder, { resetRoundBudget: true });
+        await store.setRoundBuilder(input.issueNumber, builder, {
+          resetRoundBudget: !input.preserveRoundBudget,
+        });
       }
-      // self→platform: hand Copilot the latest delivered sources as the brief seed so
-      // the platform round continues the game rather than starting from nothing.
+      if (!input.undelivered && previousBuilder !== builder && previous?.refs.length) {
+        const previousBackend = backendFor(previousBuilder);
+        const previousRef = previous.refs[previous.refs.length - 1];
+        if (previousBackend && previousRef) {
+          try {
+            await previousBackend.cancel(previousRef);
+          } catch (error) {
+            input.log.error(
+              { err: error, issueNumber: input.issueNumber },
+              'previous agent cancel failed during handoff',
+            );
+          }
+        }
+      }
       const switchSeed =
-        !input.undelivered && previousBuilder === 'self' && builder === 'platform' && record
-          ? await seedFromLatestDelivery(record)
-          : undefined;
+        !input.undelivered && previousBuilder !== builder && record ? await seedFromLatestDelivery(record) : undefined;
+      const preservedSeed = !input.undelivered && previousBuilder !== builder && !switchSeed ? record?.seed : undefined;
       // After a round bump the stored seed was cleared; only an undelivered nudge
       // (same round) still has one to reuse. `record` was loaded before the reset.
       const reusedSelfSeed = input.undelivered && builder === 'self' ? record?.seed : undefined;
@@ -1095,7 +1116,7 @@ export async function registerSubmissionRoutes(
         ...(input.undelivered
           ? { undelivered: true, ...(previous?.workspace ? { previousWorkspace: previous.workspace } : {}) }
           : {}),
-        ...(switchSeed ? { seed: switchSeed } : {}),
+        ...(switchSeed ? { seed: switchSeed } : preservedSeed ? { seed: preservedSeed } : {}),
         ...(reusedSelfSeed ? { seed: reusedSelfSeed } : {}),
       };
       // Resume against the *selected* backend. When the builder changes at a round
@@ -2165,6 +2186,13 @@ export async function registerSubmissionRoutes(
     if (roundBuilder) status.builder = roundBuilder;
     const lastBuilder = record.defaultBuilder ?? record.builder;
     if (lastBuilder) status.defaultBuilder = lastBuilder;
+    if (record.builderHandoff && record.builderHandoff.awaitsAgentAck !== false) {
+      status.builderHandoff = {
+        target: record.builderHandoff.to,
+        requestedAt: record.builderHandoff.requestedAt,
+        ...(record.builderHandoff.acknowledgedAt ? { acknowledgedAt: record.builderHandoff.acknowledgedAt } : {}),
+      };
+    }
     // Delivery-cap is refused to the agent over the channel; echo it on status so the
     // Studio can show honest copy without a new endpoint (BY-08). Only when nothing
     // stronger (gate_red, task_failed, …) already explains the stop.
@@ -2741,8 +2769,25 @@ export async function registerSubmissionRoutes(
         pendingMessages,
         now: now(),
       });
+      const stall = detectStall({
+        state: fresh.state ?? 'queued',
+        stateSince: fresh.stateSince ?? fresh.createdAt,
+        lastAgentSignalAt: fresh.lastAgentSignalAt,
+        agentState: fresh.agentState,
+        agentEndedAt: fresh.agentEndedAt,
+        now: now(),
+        builder: freshBuilder,
+      });
       // Payload carries a capability for Copy — never let intermediaries cache it.
-      return reply.header('Cache-Control', 'no-store').send(payload);
+      return reply.header('Cache-Control', 'no-store').send({
+        ...payload,
+        canSwitchToPlatform: allowsSelfToPlatformHandoff({
+          currentBuilder: freshBuilder,
+          requestedBuilder: 'platform',
+          stall,
+          agentEndedAt: fresh.agentEndedAt,
+        }),
+      });
     },
   );
 
@@ -2905,6 +2950,156 @@ export async function registerSubmissionRoutes(
       await store.setSubmissionAbandoned(issueNumber, new Date(now()).toISOString());
       invalidateStatusCache(issueNumber);
 
+      return reply.send({ ok: true });
+    },
+  );
+
+  /** Lets a creator replace the current builder without creating feedback. */
+  app.post(
+    '/api/submissions/:token/handoff',
+    { config: { rateLimit: { max: 20, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      if (!githubClient || !submissionTokenSecret) {
+        return reply.status(503).send({ error: 'submissions are not configured' });
+      }
+      if (!checkUserAccess(request, reply)) return;
+      if (!store) {
+        return reply.status(503).send({ error: 'submissions are not configured' });
+      }
+
+      const token = z.string().parse((request.params as { token?: string }).token);
+      let issueNumber: number;
+      try {
+        issueNumber = verifyToken(token, submissionTokenSecret);
+      } catch (error) {
+        if (error instanceof InvalidTokenError) {
+          return reply.status(400).send({ error: 'invalid submission token' });
+        }
+        throw error;
+      }
+
+      const record = await store.getSubmission(issueNumber);
+      if (!record || record.ownerUid !== request.user!.uid) {
+        return reply.status(403).send({ error: 'only the creator can hand off this build' });
+      }
+
+      const parsedBody = z
+        .object({
+          builder: z.enum(['platform', 'self']).optional(),
+          stopActiveSelfAgent: z.boolean().optional(),
+          stopActivePlatformAgent: z.boolean().optional(),
+        })
+        .safeParse(request.body ?? {});
+      if (!parsedBody.success) {
+        return reply.status(400).send({ error: 'invalid builder handoff request' });
+      }
+      const requestedBuilder: BuilderKind = parsedBody.data.builder ?? 'platform';
+      const creatorRequested =
+        requestedBuilder === 'self'
+          ? parsedBody.data.stopActivePlatformAgent === true
+          : parsedBody.data.stopActiveSelfAgent === true;
+
+      const currentBuilder = builderOf(record);
+      if (record.builderHandoff?.acknowledgedAt && record.builderHandoff.to === requestedBuilder) {
+        const retry = await resumeBuild({
+          issueNumber,
+          feedback: record.spec ?? `Continue building "${record.title}" for gamedev.pl.`,
+          locale: record.locale ?? 'en',
+          log: request.log,
+          builder: requestedBuilder,
+          preserveRoundBudget: true,
+          transition: {
+            by: 'creator',
+            reason: requestedBuilder === 'self' ? 'platform_builder_handoff_retry' : 'self_builder_handoff_retry',
+          },
+        });
+        if (retry.started) await store.clearBuilderHandoff(issueNumber);
+        invalidateStatusCache(issueNumber);
+        if (!retry.started) return reply.status(502).send({ error: retry.reason });
+        return reply.send({ ok: true });
+      }
+      const stall = detectStall({
+        state: record.state ?? 'queued',
+        stateSince: record.stateSince ?? record.createdAt,
+        lastAgentSignalAt: record.lastAgentSignalAt,
+        agentState: record.agentState,
+        agentEndedAt: record.agentEndedAt,
+        now: now(),
+        builder: currentBuilder,
+      });
+      if (
+        record.state === 'publishing' ||
+        !isActiveBuildRound(record) ||
+        !allowsCreatorBuilderHandoff({
+          currentBuilder,
+          requestedBuilder,
+          stall,
+          agentEndedAt: record.agentEndedAt,
+          creatorRequested,
+        })
+      ) {
+        return reply.status(409).send({ error: 'builder_locked', reason: 'active_round', builder: currentBuilder });
+      }
+
+      if (record.builderHandoff) {
+        if (record.builderHandoff.to !== requestedBuilder) {
+          return reply.status(409).send({ error: 'builder_handoff_in_progress', builder: currentBuilder });
+        }
+        if (record.builderHandoff.awaitsAgentAck === false) {
+          return reply.status(409).send({ error: 'builder_handoff_in_progress', builder: currentBuilder });
+        }
+        return reply.status(202).send({
+          ok: true,
+          pending: true,
+          builder: currentBuilder,
+          target: record.builderHandoff.to,
+          requestedAt: record.builderHandoff.requestedAt,
+          ...(record.builderHandoff.acknowledgedAt ? { acknowledgedAt: record.builderHandoff.acknowledgedAt } : {}),
+        });
+      }
+
+      const requestedAt = new Date(now()).toISOString();
+      const accepted = await store.requestBuilderHandoff(issueNumber, requestedBuilder, requestedAt, creatorRequested);
+      if (!accepted) {
+        return reply.status(409).send({ error: 'builder_handoff_in_progress', builder: currentBuilder });
+      }
+      if (creatorRequested) {
+        invalidateStatusCache(issueNumber);
+        return reply.status(202).send({
+          ok: true,
+          pending: true,
+          builder: currentBuilder,
+          target: requestedBuilder,
+          requestedAt,
+        });
+      }
+
+      const outcome = await resumeBuild({
+        issueNumber,
+        feedback: record.spec ?? `Continue building "${record.title}" for gamedev.pl.`,
+        locale: record.locale ?? 'en',
+        log: request.log,
+        builder: requestedBuilder,
+        preserveRoundBudget: true,
+        transition: {
+          by: 'creator',
+          reason: requestedBuilder === 'self' ? 'platform_builder_handoff' : 'self_builder_handoff',
+        },
+      });
+      if (outcome.started) {
+        await store.clearBuilderHandoff(issueNumber);
+      } else {
+        // The quiet/no-agent path has no process to acknowledge the nudge, so it
+        // can start immediately. Keep a failed replacement retryable, though:
+        // the builder transition may already have been persisted by resumeBuild.
+        await store.acknowledgeBuilderHandoff(issueNumber, new Date(now()).toISOString());
+      }
+      invalidateStatusCache(issueNumber);
+
+      if (!outcome.started) {
+        const status = outcome.reason === 'not_configured' ? 503 : 502;
+        return reply.status(status).send({ error: outcome.reason });
+      }
       return reply.send({ ok: true });
     },
   );
@@ -3273,6 +3468,7 @@ export async function registerSubmissionRoutes(
         // that bump is what kills the self agent's token.
         ...(builderChanging ? {} : record?.deliveredVersion ? {} : { undelivered: true }),
         ...(requestedBuilder && isBuilderKind(requestedBuilder) ? { builder: requestedBuilder } : {}),
+        ...(builderChanging ? { preserveRoundBudget: true } : {}),
         // Name the actor so a ready_for_review → dispatched reopen does not look like a
         // GitHub-derived observation in the job history.
         transition: {
@@ -4750,6 +4946,28 @@ export async function registerSubmissionRoutes(
       // Heartbeat / ended / phase move with channel writes; do not keep serving a
       // minute-old stall next to fresh progress (submit auto-end + continue loop).
       invalidateStatusCache(issueNumber);
+    },
+    onBuilderHandoffAcknowledged: async ({ issueNumber, acknowledgedAt, log }) => {
+      const current = await store!.getSubmission(issueNumber);
+      const requested = current?.builderHandoff;
+      if (!requested) return { started: false, reason: 'handoff_not_pending' };
+      const acknowledged = await store!.acknowledgeBuilderHandoff(issueNumber, acknowledgedAt);
+      if (!acknowledged) return { started: false, reason: 'handoff_already_acknowledged' };
+      const outcome = await resumeBuild({
+        issueNumber,
+        feedback: current?.spec ?? `Continue building "${current?.title ?? 'this game'}" for gamedev.pl.`,
+        locale: current?.locale ?? 'en',
+        log,
+        builder: acknowledged.to,
+        preserveRoundBudget: true,
+        transition: {
+          by: 'creator',
+          reason: acknowledged.to === 'self' ? 'platform_builder_handoff' : 'self_builder_handoff',
+        },
+      });
+      if (outcome.started) await store!.clearBuilderHandoff(issueNumber);
+      invalidateStatusCache(issueNumber);
+      return outcome;
     },
     ...(stagedPreviews
       ? { onSourcesStaged: ({ issueNumber }: { issueNumber: number }) => stagedPreviews.schedule(issueNumber) }

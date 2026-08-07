@@ -6545,6 +6545,13 @@ a.user-name--profile:focus-visible {
   min-width: 0;
 }
 
+.builder-mode-controls {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
 /* Model-picker shaped control — left of the send button, not a pill over the field. */
 .builder-mode-selector {
   display: inline-flex;
@@ -6595,6 +6602,59 @@ button.builder-mode-selector:disabled {
   opacity: 0.75;
 }
 
+/* A live self round has a separate, explicit escape hatch beside its static badge.
+   It must not look like the future-round builder picker: this action invalidates the
+   MCP session and starts the platform agent. */
+.studio-active-handoff {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.studio-active-handoff-button {
+  appearance: none;
+  min-height: 28px;
+  max-width: 100%;
+  padding: 4px 8px;
+  border: 1px solid color-mix(in srgb, var(--turquoise, #00e4ac) 42%, var(--panel-border, #33383d));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--turquoise, #00e4ac) 8%, transparent);
+  color: var(--muted, #94a3b8);
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.studio-active-handoff-button:hover:not(:disabled) {
+  border-color: var(--turquoise, #00e4ac);
+  color: var(--text, #e8eef5);
+  background: color-mix(in srgb, var(--turquoise, #00e4ac) 15%, transparent);
+}
+
+.studio-active-handoff-button.is-primary {
+  color: var(--turquoise, #00e4ac);
+}
+
+.studio-active-handoff-confirm {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  color: var(--text, #e2e8f0);
+  font-size: 0.74rem;
+}
+
+.studio-active-handoff-pending {
+  margin: 0;
+  color: var(--muted, #94a3b8);
+  font-size: 0.74rem;
+}
+
+.studio-active-handoff .error {
+  margin: 4px 0 0;
+  font-size: 0.74rem;
+}
 .builder-choice-modal {
   background: var(--panel);
   border: 1px solid var(--panel-border);
@@ -6963,6 +7023,64 @@ button.builder-mode-selector:disabled {
   color: var(--muted, #94a3b8);
 }
 
+.studio-connect-switch {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--panel-border, #33383d);
+}
+
+.studio-connect-switch-hint {
+  max-width: 48rem;
+  margin: 0;
+  color: var(--muted, #94a3b8);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.studio-connect-switch-button {
+  appearance: none;
+  min-height: 34px;
+  padding: 6px 11px;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text, #e2e8f0);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.studio-connect-switch-button:hover {
+  border-color: rgba(0, 228, 172, 0.55);
+  color: var(--turquoise, #00e4ac);
+}
+
+.studio-connect-switch-button.is-primary {
+  border-color: rgba(0, 228, 172, 0.55);
+  background: rgba(0, 228, 172, 0.12);
+  color: var(--turquoise, #00e4ac);
+}
+
+.studio-connect-switch-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 9px;
+  color: var(--text, #e2e8f0);
+  font-size: 0.8rem;
+}
+
+.studio-connect-switch-pending {
+  margin: 0;
+  color: var(--muted, #94a3b8);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
 .studio-connect-pulse {
   width: 8px;
   height: 8px;
