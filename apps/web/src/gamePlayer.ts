@@ -352,17 +352,31 @@ const BRIDGE = `(function(){
   if(document.readyState==='loading')addEventListener('DOMContentLoaded',init);else init();
 })();`;
 
-// Hide the game's own chrome (the app theater shows title/desc/sound instead), and
-// strip iOS long-press chrome inside the opaque-origin frame — parent CSS cannot
-// reach in here. Without this, a hold on iPhone SE pops the selection loupe and
-// the Copy / Translate / Look Up callout over the playfield.
+// Hide in-game chrome; theater owns title/sound instead.
+// Parent CSS cannot reach opaque-origin frame (iOS loupe).
+// Undo shell's 1400px wrap so desktop theater is full-bleed.
 const HIDE_CHROME =
   `#game-title,#game-desc,.game-controls,.hint{display:none!important}` +
-  // Mouse-primary desktops: a buttons-only GameKit cluster (no pad) sits on top of
-  // pointer-native UIs and steals the corner. Phones keep it via any-pointer:coarse;
-  // games that still mount a pad on desktop keep their action cluster too.
+  // Hide buttons-only GameKit chrome on mouse desktops.
   `@media not all and (any-pointer:coarse){` +
   `.gamekit-touch:not(:has(.gamekit-touch-pad)){display:none!important}` +
+  `}` +
+  `html,body{width:100%;height:100%;margin:0;background:#000}` +
+  `body{display:block;min-height:100%;overflow:hidden}` +
+  `.wrap{` +
+  `width:100%!important;` +
+  `max-width:none!important;` +
+  `height:100%!important;` +
+  `min-height:100%!important;` +
+  `padding:0!important;` +
+  `gap:0!important` +
+  `}` +
+  `#game{` +
+  `width:100%!important;` +
+  `height:100%!important;` +
+  `min-height:0!important;` +
+  `box-shadow:none!important;` +
+  `object-fit:contain` +
   `}` +
   `html,body,canvas,img,video{` +
   `-webkit-touch-callout:none;` +

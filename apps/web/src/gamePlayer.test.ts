@@ -57,6 +57,18 @@ describe('embedGameHtml', () => {
     expect(out).toContain("addEventListener('contextmenu'");
     expect(out).toContain("addEventListener('selectstart'");
   });
+
+  it('makes the shell wrap full-bleed so desktop theater has no 1400px gutters', () => {
+    const out = embedGameHtml(
+      '<html><head></head><body><div class="wrap"><canvas id="game"></canvas></div></body></html>',
+    );
+
+    // Override shell's 1400px wrap inside the opaque frame.
+    expect(out).toContain('.wrap{width:100%!important;max-width:none!important');
+    expect(out).toContain('padding:0!important');
+    expect(out).toContain('#game{width:100%!important;height:100%!important');
+    expect(out).toContain('object-fit:contain');
+  });
 });
 
 describe('withGameLocale', () => {
