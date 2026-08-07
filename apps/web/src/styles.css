@@ -7965,6 +7965,22 @@ button.builder-mode-selector:disabled {
   color: var(--muted);
 }
 
+.studio-abandon-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  width: 100%;
+}
+
+.studio-abandon-hint {
+  margin: 0;
+  max-width: 28rem;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
 /* Today's allowance, under the composer. */
 .quota-note {
   display: block;

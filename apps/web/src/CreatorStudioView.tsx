@@ -217,8 +217,7 @@ export function CreatorStudioView({
     requestedGameRef.current = selectedGame;
   }, [selectedGame]);
 
-  // One row per game for picking and counting. Raw `games` still holds every job so
-  // abandoning an improve tip can reveal the published sibling again without a refetch.
+  // One row per game. Refetch after abandon can reveal a sibling.
   const shelfGames = useMemo(() => collapseStudioGames(games), [games]);
 
   // Resolve the URL's game segment against the shelf — by slug, or by capability token
@@ -914,10 +913,27 @@ export function CreatorStudioView({
                               ),
                             );
                           }}
-                          onRemoved={(token) => {
-                            setGames((prev) => prev.filter((game) => game.token !== token));
+                          onRemoved={async (token) => {
+                            const abandonedSlug = activeGame.slug;
                             setSelected((current) => (current === token ? null : current));
-                            onNavigate(studioPath());
+                            // Hide tip first; refetch may restore a published sibling.
+                            setGames((prev) => prev.filter((game) => game.token !== token));
+                            try {
+                              // Pass the slug so a live sibling below the shelf ceiling
+                              // is still returned (same deep-link path as Open in Studio).
+                              const shelfPage = await fetchStudioGames(abandonedSlug);
+                              setGames(shelfPage.games);
+                              setShelfTruncated(shelfPage.truncated);
+                              setTotalGames(shelfPage.totalGames);
+                              const sibling =
+                                abandonedSlug &&
+                                shelfPage.games.find((game) => game.slug === abandonedSlug && game.token !== token);
+                              onNavigate(sibling && abandonedSlug ? studioPath(abandonedSlug) : studioPath());
+                              if (sibling) setSelected(sibling.token);
+                            } catch {
+                              // Optimistic remove stands if refetch fails.
+                              onNavigate(studioPath());
+                            }
                           }}
                         />
                       </aside>
@@ -1099,7 +1115,7 @@ function DetailsPanel({
   onOpenPlaytest: () => void;
   onPlay: () => void;
   onDraftSharedChange: (shared: boolean) => void;
-  onRemoved: (token: string) => void;
+  onRemoved: (token: string) => void | Promise<void>;
 }) {
   const { t, i18n } = useTranslation();
   // This *job* is published — composer/playtest routing. Distinct from catalog-live below.
@@ -1118,7 +1134,7 @@ function DetailsPanel({
     setAbandoning(true);
     try {
       await abandonSubmission(game.token);
-      onRemoved(game.token);
+      await onRemoved(game.token);
     } catch {
       setAbandoning(false);
       setAbandonArmed(false);
@@ -1191,14 +1207,25 @@ function DetailsPanel({
                   <PixelIcon name="play" size={12} /> {t('studioPanel.overview.playtest')}
                 </button>
                 {!publishedJob && game.lastKnownStatus !== 'abandoned' ? (
-                  <button
-                    type="button"
-                    className={`status-abandon${abandonArmed ? ' is-danger' : ''}`}
-                    onClick={() => void handleAbandon()}
-                    disabled={abandoning}
-                  >
-                    {abandonArmed ? t('studioPanel.overview.abandonConfirm') : t('studioPanel.overview.abandon')}
-                  </button>
+                  <div className="studio-abandon-block">
+                    {abandonArmed && !catalogLive ? (
+                      <p className="studio-abandon-hint">{t('studioPanel.overview.abandonHintRemove')}</p>
+                    ) : null}
+                    <button
+                      type="button"
+                      className={`status-abandon${abandonArmed ? ' is-danger' : ''}`}
+                      onClick={() => void handleAbandon()}
+                      disabled={abandoning}
+                    >
+                      {abandonArmed
+                        ? t(
+                            catalogLive
+                              ? 'studioPanel.overview.abandonConfirmKeepLive'
+                              : 'studioPanel.overview.abandonConfirmRemove',
+                          )
+                        : t(catalogLive ? 'studioPanel.overview.abandon' : 'studioPanel.overview.abandonRemove')}
+                    </button>
+                  </div>
                 ) : null}
               </div>
             </section>

@@ -359,7 +359,11 @@
       "openBuild": "Otwórz build",
       "playtest": "Zagraj i notatka",
       "abandon": "Porzuć ten build",
-      "abandonConfirm": "Tak, porzuć — odrzuć tę rundę"
+      "abandonRemove": "Usuń tę grę ze Studio",
+      "abandonConfirm": "Tak, porzuć — odrzuć tę rundę",
+      "abandonConfirmKeepLive": "Tak, porzuć — odrzuć tę rundę (gra na żywo zostaje)",
+      "abandonConfirmRemove": "Tak, usuń — gra zniknie ze Studio",
+      "abandonHintRemove": "Ten szkic nigdy nie był opublikowany. Usunięcie zatrzyma build i zdejmie grę z półki Studio."
     },
     "rail": {
       "connect": "Podłącz agenta",
