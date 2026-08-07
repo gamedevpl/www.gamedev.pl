@@ -1052,6 +1052,21 @@ export function App() {
     return <ClosedBetaSplash />;
   }
 
+  // Direct `/play/<slug>`: keep the full-page mascot through catalog resolve. Otherwise
+  // auth's AppLoadingScreen hands off to a bare "Loading…" under the header — two stages
+  // for one cold visit. Home still shows its own in-page busy state; only play links
+  // need this continuous cover.
+  if (route.view === 'play' && catalogStatus === 'loading') {
+    return <AppLoadingScreen />;
+  }
+
+  // Unpublished half of `/play/<slug>` owns the viewport (theater or its own loader).
+  // No app chrome underneath — same lifetime permalink before publish; legacy `/draft/`
+  // rewrites here. Catalog errors keep GameDetailPage's retry UI in the main shell.
+  if (unpublishedPlayTheater) {
+    return <UnpublishedPlayView slug={route.slug} onExit={exitOverlay} onTitle={setUnpublishedPlayTitle} />;
+  }
+
   return (
     <div className="app">
       <NavHeader
@@ -1088,21 +1103,13 @@ export function App() {
         ) : (
           <>
             {route.view === 'play' ? (
-              unpublishedPlayTheater ? (
-                // Same `/play/<slug>` permalink before publish — API serves the draft to
-                // the owner (or anyone once sharing is on). Legacy `/draft/` rewrites here.
-                // Only when catalog is ready and the slug is absent — catalog errors keep
-                // GameDetailPage's retry UI below.
-                <UnpublishedPlayView slug={route.slug} onExit={exitOverlay} onTitle={setUnpublishedPlayTitle} />
-              ) : (
-                <GameDetailPage
-                  game={playCatalogGame}
-                  state={catalogStatus}
-                  onPlay={handlePlayGame}
-                  onRemix={handleRemixGame}
-                  onRetry={handleRetryCatalog}
-                />
-              )
+              <GameDetailPage
+                game={playCatalogGame}
+                state={catalogStatus}
+                onPlay={handlePlayGame}
+                onRemix={handleRemixGame}
+                onRetry={handleRetryCatalog}
+              />
             ) : (
               <>
                 <div id="hero-prompt">

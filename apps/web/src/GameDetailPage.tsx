@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { AppLoadingScreen } from './AppLoadingScreen.js';
 import { catalogMediaUrl, isPlatformAuthor, type CatalogEntry } from './catalog.js';
 import { PixelIcon } from './PixelIcon.js';
 import { ShareGameButton } from './ShareGameButton.js';
@@ -44,7 +45,9 @@ export function GameDetailPage({ game, state, onPlay, onRemix, onRetry }: GameDe
   }, [game]);
 
   if (state === 'loading') {
-    return <p className="game-page-state">{t('gamePage.loading')}</p>;
+    // App normally covers `/play` catalog waits with AppLoadingScreen at the root;
+    // keep the same mascot here as a fallback if this surface is mounted mid-fetch.
+    return <AppLoadingScreen />;
   }
 
   if (state === 'error') {

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { AppLoadingScreen } from './AppLoadingScreen.js';
 import { fetchPublishedGame, type GameFetchError } from './catalog.js';
 import { GameTheater } from './GameTheater.js';
 
@@ -89,13 +90,9 @@ export function UnpublishedPlayView({ slug, onExit, onTitle }: UnpublishedPlayVi
   }
 
   if (!game) {
-    return (
-      <section className="panel status-panel">
-        <p className="catalog-state">
-          <span className="status-preview-spinner" aria-hidden="true" /> {t('draft.loading')}
-        </p>
-      </section>
-    );
+    // Same full-page mascot as the catalog wait on `/play/<slug>` — one continuous
+    // loader from cold visit through document fetch, not a spinner under the header.
+    return <AppLoadingScreen />;
   }
 
   return (

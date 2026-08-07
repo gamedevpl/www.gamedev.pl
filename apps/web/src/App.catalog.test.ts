@@ -275,6 +275,83 @@ describe('catalog playback', () => {
     });
   });
 
+  it('keeps the full-page mascot on direct play links until the catalog resolves', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    let resolveCatalog!: (value: Response) => void;
+    const catalogPending = new Promise<Response>((resolve) => {
+      resolveCatalog = resolve;
+    });
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith('/api/auth/me')) {
+        return new Response(JSON.stringify({ user: { uid: 'g:test', tier: 'standard' } }));
+      }
+      if (url.endsWith('/api/health')) {
+        return new Response(JSON.stringify({ status: 'ok', provider: 'mock', privateBeta: false }));
+      }
+      if (url.endsWith('/api/catalog')) {
+        return catalogPending;
+      }
+      if (url.includes('/api/recommendations')) {
+        return new Response(JSON.stringify({ items: [] }));
+      }
+      if (url.endsWith('/api/games/airtime/votes')) {
+        return new Response(JSON.stringify({ up: 0, down: 0, mine: null }));
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+
+    await i18n.changeLanguage('en');
+    window.history.pushState(null, '', '/play/airtime');
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(AuthProvider, null, createElement(App)));
+      await flushEffects();
+      await flushEffects();
+      await flushEffects();
+    });
+
+    // Auth has resolved (catalog fetch is in flight) — still the full-page mascot,
+    // not the header shell with a second "Loading the game page…" stage.
+    expect(container.querySelector('.app-loading-screen')).not.toBeNull();
+    expect(container.querySelector('.app-header')).toBeNull();
+    expect(container.querySelector('.game-page')).toBeNull();
+    expect(container.textContent).not.toMatch(/Loading the game page/i);
+
+    await act(async () => {
+      resolveCatalog(
+        new Response(
+          JSON.stringify([
+            {
+              slug: 'airtime',
+              title: 'Airtime',
+              genre: 'arcade',
+              controls: 'Hold to glide',
+              status: 'published',
+              media: { screenshots: [{ name: 'flight', file: 'flight.png' }], video: null },
+              multiplayer: null,
+            },
+          ]),
+        ),
+      );
+      await flushEffects();
+      await flushEffects();
+      await flushEffects();
+    });
+
+    expect(container.querySelector('.app-loading-screen')).toBeNull();
+    expect(container.querySelector('.game-page h1')?.textContent).toBe('Airtime');
+    expect(container.querySelector('.app-header')).not.toBeNull();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it('opens the theater from a canonical game page and auto-starts its carried Remix request', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     const assistBodies: unknown[] = [];
