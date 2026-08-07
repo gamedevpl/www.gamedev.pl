@@ -7,7 +7,7 @@ round, read the brief and starter kit, stage and submit game sources, poll the a
 quality gate, and exchange messages with the creator — without leaving the conversation.
 Games run in the browser and publish to a public catalog.
 
-It also ships a skill, [`building-on-gamedev-pl`](./skills/building-on-gamedev-pl/SKILL.md),
+It also ships a skill, [`gamedevpl`](./skills/gamedevpl/SKILL.md),
 which explains what a build round is and the few loop rules that cost a whole build when
 missed. The skill is readable at install time, before any connection or account.
 

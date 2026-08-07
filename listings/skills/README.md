@@ -1,6 +1,6 @@
 # Skill registry listings
 
-Where the [`building-on-gamedev-pl`](../mcp/claude-plugin/skills/building-on-gamedev-pl/SKILL.md)
+Where the [`gamedevpl`](../mcp/claude-plugin/skills/gamedevpl/SKILL.md)
 skill can be listed, and what to paste when submitting.
 
 The skill ships inside the Claude plugin, which is how it reaches anyone who has already
@@ -21,34 +21,35 @@ official MCP registry entry remains the durable listing.
 | [Claude Skills Club](https://claudeskills.club/submit)                       | Web form; they run a security audit and open a PR                                                  | Draft — owner-gated                   |
 | [claude-skill-registry](https://github.com/majiayu000/claude-skill-registry) | PR to `majiayu000/claude-skill-registry-core` (**not** the generated `claude-skill-registry` repo) | Draft — needs a fork outside this org |
 | [claudemarketplaces.com](https://claudemarketplaces.com/)                    | Curated directory covering skills, plugins and MCP servers                                         | Draft — owner-gated                   |
-| SkillsMP                                                                     | Crawls GitHub automatically; no submission                                                         | **Blocked by a decision — see below** |
+| [skills.sh](https://www.skills.sh/)                                          | No submission — `npx skills add gamedevpl/www.gamedev.pl` clones this repo directly                | ✅ Live, nothing to do — see below    |
+| SkillsMP                                                                     | Crawls GitHub automatically; no submission                                                         | Not indexed — see below               |
 | [cursor.directory](https://cursor.directory/) rules                          | Separate slot from the plugin entry already submitted                                              | Draft — owner-gated                   |
 
-## The SkillsMP problem
+## The installers read the repo, not a listing
 
-SkillsMP indexes any repo with a `SKILL.md` at the root or under `.claude/skills/*/`,
-picked up from the `claude-skill` / `claude-code` / `anthropic` GitHub topics.
+[skills.sh](https://www.skills.sh/) — Vercel's installer, targeting 76 agents including
+Cursor, Codex, Cline and Windsurf — has no submission step at all. `npx skills add
+gamedevpl/www.gamedev.pl` clones this repo and installs what it finds. So the listing is
+the repo, and the only question that matters is which paths get read.
 
-Our skill is at `listings/mcp/claude-plugin/skills/building-on-gamedev-pl/`, which is
-neither path, so it will not be indexed as things stand. Moving it is not obviously right:
+It walks the repo root, `skills/` and `.claude/skills/`, three levels deep. Run before the
+root copy existed, it found nine skills, installed every internal one, and missed the only
+skill written for the person typing the command. That is why `skills/gamedevpl/` exists at
+the root — see the byte-identical guard in `plugin-manifests.test.ts`.
 
-`.claude/skills/` in this repo holds **eight internal skills** — `internal-ops-repo`,
-`managing-beta-participants`, `browse-live-site` and friends. They are tooling for agents
-working _on_ this repo, not for anyone using gamedev.pl. Adding the crawler topics would
-invite an aggregator to list all of them. Nothing there is secret (the directory is already
-public), but `internal-ops-repo` exists to describe a private repo's contents, and
-promoting it into a public skills directory is noise at best. Nine skills listed, one of
-them relevant, also buries the one we want found.
+The consequence worth remembering: **this needs no opt-in.** Anyone can run that command
+today. There is no topic to withhold and no crawler to avoid, so the eight internal skills
+in `.claude/skills/` — `internal-ops-repo`, `managing-beta-participants`,
+`browse-live-site` and friends — are installable alongside ours whether we like it or not.
+Nothing there is secret and the directory is already public; contorting the repo to hide
+tooling is a worse trade than the noise. What matters is that the product skill is now
+found beside them rather than missing.
 
-So the choice is:
-
-- **Manual registries only** (recommended). Submit the one skill by hand to the reviewed
-  directories above. Precise, and the internal skills stay unlisted. Skip the crawler
-  topics.
-- **Add the crawler topics** (`claude-skill`, `claude-code`, `anthropic`) and accept that
-  the internal skills get indexed alongside.
-
-Recommended: the first. Auto-indexing buys reach we do not control and cannot curate.
+SkillsMP is the opposite case: it indexes from the `claude-skill` / `claude-code` /
+`anthropic` GitHub topics, which this repo does not carry, so nothing is indexed there.
+Adding those topics is the one remaining opt-in decision, and the recommendation is to
+skip it — auto-indexing buys reach we cannot curate, and the root `skills/` copy already
+serves the installer that people actually run.
 
 ## Submission text
 
@@ -59,7 +60,7 @@ naming one endpoint is the drift `plugin-manifests.test.ts` already exists to ca
 ### Name
 
 ```
-building-on-gamedev-pl
+gamedevpl
 ```
 
 ### One-line description
@@ -93,8 +94,12 @@ https://github.com/gamedevpl/www.gamedev.pl
 ### Skill path
 
 ```
-listings/mcp/claude-plugin/skills/building-on-gamedev-pl/SKILL.md
+skills/gamedevpl/SKILL.md
 ```
+
+That is the root copy, which is what the installers read. The plugin ships a
+byte-identical copy at `listings/mcp/claude-plugin/skills/gamedevpl/SKILL.md`; a test
+pins the two together.
 
 ### Licence
 

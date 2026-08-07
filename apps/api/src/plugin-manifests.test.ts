@@ -218,7 +218,7 @@ describe('plugin skills', () => {
 
   // A skill that restates the loop drifts from mcp-server.ts.
   it('defers to the server-returned workflow rather than restating it', () => {
-    const skill = readFileSync(join(skillsDir, 'building-on-gamedev-pl/SKILL.md'), 'utf8');
+    const skill = readFileSync(join(skillsDir, 'gamedevpl/SKILL.md'), 'utf8');
     expect(skill).toContain('When it disagrees');
   });
 
@@ -237,8 +237,8 @@ describe('plugin skills', () => {
    * teach the wrong loop to every agent that installed it and look fine here.
    */
   it('publishes a byte-identical copy at the root skills/ the installers read', () => {
-    const canonical = readFileSync(join(skillsDir, 'building-on-gamedev-pl/SKILL.md'), 'utf8');
-    const rootCopy = readFileSync(join(repoRoot, 'skills/building-on-gamedev-pl/SKILL.md'), 'utf8');
+    const canonical = readFileSync(join(skillsDir, 'gamedevpl/SKILL.md'), 'utf8');
+    const rootCopy = readFileSync(join(repoRoot, 'skills/gamedevpl/SKILL.md'), 'utf8');
     expect(rootCopy).toBe(canonical);
   });
 
