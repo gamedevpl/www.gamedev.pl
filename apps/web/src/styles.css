@@ -13415,6 +13415,19 @@ button.builder-mode-selector:disabled {
   min-height: 44px;
 }
 
+.game-page-studio {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 8px;
+  padding: 10px 18px;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: none;
+  box-sizing: border-box;
+  cursor: pointer;
+}
+
 .game-page-actions .vote-widget {
   display: contents;
 }
