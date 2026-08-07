@@ -207,8 +207,7 @@ export function StudioConnectWizard({ game, onOpenStudio }: StudioConnectWizardP
     goStudioRef.current = goStudio;
   });
 
-  // Delivered or finished rounds belong in Studio, not on a connect step.
-  // Replace, not push: Back would land on connect and bounce here again.
+  // Replace: Back would land on this finished round and bounce forward.
   useEffect(() => {
     if (!chapterOver) return;
     goStudioRef.current(false, roundBuilder, true);
