@@ -38,8 +38,7 @@ describe('embedGameHtml', () => {
     const out = embedGameHtml('<html><head></head><body></body></html>');
     expect(out).toContain("CustomEvent('gdpl-pause')");
     expect(out).toContain("CustomEvent('gdpl-resume')");
-    // Bridge freeze is required — GameKit alone keeps draw() running, and older
-    // assembled docs never listen for gdpl-pause.
+    // Bridge freezes rAF; GameKit alone would keep drawing.
     expect(out).toContain('heldRaf');
     expect(out).toContain('flushHeldRaf');
     expect(out).toContain('suspendAudio');
@@ -48,12 +47,12 @@ describe('embedGameHtml', () => {
   it('suppresses the iOS long-press loupe and Copy/Translate callout inside the frame', () => {
     const out = embedGameHtml('<html><head></head><body><canvas id="game"></canvas></body></html>');
 
-    // CSS must land in the opaque-origin document — parent styles cannot reach it.
+    // Opaque-origin frame; parent CSS cannot reach in.
     expect(out).toContain('-webkit-touch-callout:none');
     expect(out).toContain('-webkit-user-select:none');
     expect(out).toContain('user-select:none');
     expect(out).toContain('touch-action:none');
-    // Event backstops for Safari versions that still open the callout under CSS alone.
+    // Event backstops when CSS alone is not enough.
     expect(out).toContain("addEventListener('contextmenu'");
     expect(out).toContain("addEventListener('selectstart'");
   });
@@ -63,10 +62,10 @@ describe('embedGameHtml', () => {
       '<html><head></head><body><div class="wrap"><canvas id="game"></canvas></div></body></html>',
     );
 
-    // Override shell's 1400px wrap inside the opaque frame.
+    // Drop shell's 1400px wrap gutters.
     expect(out).toContain('.wrap{width:100%!important;max-width:none!important');
     expect(out).toContain('padding:0!important');
-    // Contained element box (not 100%×100% + object-fit) so hit-testing matches paint.
+    // Element box matches paint; avoid object-fit letterbox hitbox.
     expect(out).toContain('#game{width:auto!important;height:auto!important');
     expect(out).toContain('max-width:100%!important');
     expect(out).toContain('max-height:100%!important');
