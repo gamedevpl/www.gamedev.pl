@@ -1425,6 +1425,181 @@ describe('SubmissionStatusView', () => {
     });
   });
 
+  it('sends from the compact composer on Enter and focuses the field from card chrome', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'needs_changes',
+      preview: { slug: 'space-runner' },
+      progress: { headSha: 'sha-1', commits: [], checklist: [] },
+    });
+    mockedGetSubmissionPreview.mockResolvedValue({
+      slug: 'space-runner',
+      title: 'Space Runner',
+      html: '<canvas></canvas>',
+    });
+    mockedSubmitFeedback.mockResolvedValue({ ok: true, target: 'pull_request' });
+    await i18n.changeLanguage('en');
+    window.history.pushState(null, '', '/studio/enter-send/thread');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'enter-send', embedded: true }));
+      await flushEffects();
+      await flushEffects();
+    });
+
+    const composer = container.querySelector<HTMLElement>('.status-composer.is-compact');
+    const textarea = container.querySelector<HTMLTextAreaElement>('.status-feedback-input');
+    expect(composer).not.toBeNull();
+    expect(textarea).not.toBeNull();
+    // Empty resting shape: placeholder and send share a row.
+    expect(composer?.classList.contains('is-empty')).toBe(true);
+
+    const focusSpy = vi.spyOn(textarea!, 'focus');
+    await act(async () => {
+      composer?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushEffects();
+    });
+    expect(focusSpy).toHaveBeenCalled();
+    focusSpy.mockRestore();
+
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+      setter?.call(textarea, 'Please make the jumps shorter.');
+      textarea!.dispatchEvent(new Event('input', { bubbles: true }));
+      await flushEffects();
+    });
+    expect(composer?.classList.contains('is-empty')).toBe(false);
+
+    await act(async () => {
+      textarea!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+      await flushEffects();
+      await flushEffects();
+    });
+
+    expect(mockedSubmitFeedback).toHaveBeenCalledWith(
+      'enter-send',
+      'Please make the jumps shorter.',
+      undefined,
+      'platform',
+    );
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('keeps Shift+Enter as a newline in the compact composer', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'needs_changes',
+      preview: { slug: 'space-runner' },
+      progress: { headSha: 'sha-1', commits: [], checklist: [] },
+    });
+    mockedGetSubmissionPreview.mockResolvedValue({
+      slug: 'space-runner',
+      title: 'Space Runner',
+      html: '<canvas></canvas>',
+    });
+    mockedSubmitFeedback.mockResolvedValue({ ok: true, target: 'pull_request' });
+    await i18n.changeLanguage('en');
+    window.history.pushState(null, '', '/studio/shift-enter/thread');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'shift-enter', embedded: true }));
+      await flushEffects();
+      await flushEffects();
+    });
+
+    const textarea = container.querySelector<HTMLTextAreaElement>('.status-feedback-input');
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+      setter?.call(textarea, 'Please make the jumps shorter.');
+      textarea!.dispatchEvent(new Event('input', { bubbles: true }));
+      await flushEffects();
+    });
+
+    await act(async () => {
+      const event = new KeyboardEvent('keydown', {
+        key: 'Enter',
+        shiftKey: true,
+        bubbles: true,
+        cancelable: true,
+      });
+      textarea!.dispatchEvent(event);
+      expect(event.defaultPrevented).toBe(false);
+      await flushEffects();
+    });
+
+    expect(mockedSubmitFeedback).not.toHaveBeenCalled();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('does not send from the compact composer while IME is composing', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'needs_changes',
+      preview: { slug: 'space-runner' },
+      progress: { headSha: 'sha-1', commits: [], checklist: [] },
+    });
+    mockedGetSubmissionPreview.mockResolvedValue({
+      slug: 'space-runner',
+      title: 'Space Runner',
+      html: '<canvas></canvas>',
+    });
+    mockedSubmitFeedback.mockResolvedValue({ ok: true, target: 'pull_request' });
+    await i18n.changeLanguage('en');
+    window.history.pushState(null, '', '/studio/ime-enter/thread');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'ime-enter', embedded: true }));
+      await flushEffects();
+      await flushEffects();
+    });
+
+    const textarea = container.querySelector<HTMLTextAreaElement>('.status-feedback-input');
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+      setter?.call(textarea, 'Please make the jumps shorter.');
+      textarea!.dispatchEvent(new Event('input', { bubbles: true }));
+      await flushEffects();
+    });
+
+    await act(async () => {
+      // Override jsdom getters so composition is visible to the handler.
+      const event = new KeyboardEvent('keydown', {
+        key: 'Enter',
+        bubbles: true,
+        cancelable: true,
+      });
+      Object.defineProperty(event, 'isComposing', { configurable: true, value: true });
+      Object.defineProperty(event, 'keyCode', { configurable: true, value: 229 });
+      textarea!.dispatchEvent(event);
+      expect(event.defaultPrevented).toBe(false);
+      await flushEffects();
+    });
+
+    expect(mockedSubmitFeedback).not.toHaveBeenCalled();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it('keeps build pulse as the last transcript turn without checklist fraction, stop, or Play', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     mockedGetSubmissionStatus.mockResolvedValue({
@@ -1729,9 +1904,8 @@ describe('SubmissionStatusView', () => {
     // round; without a follow-up poll the page kept saying "needs a tweak" forever.
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     vi.useFakeTimers();
-    mockedGetSubmissionStatus
-      .mockResolvedValueOnce({ status: 'needs_changes' })
-      .mockResolvedValue({ status: 'building', progress: { headSha: 'sha-2', commits: [], checklist: [] } });
+    // Sticky mock: once-shots can vanish under Strict Mode.
+    mockedGetSubmissionStatus.mockResolvedValue({ status: 'needs_changes' });
     await i18n.changeLanguage('en');
     window.history.pushState(null, '', '/status/needs-poll');
 
@@ -1745,14 +1919,20 @@ describe('SubmissionStatusView', () => {
     });
 
     expect(container.textContent).toContain('Needs a tweak');
-    expect(mockedGetSubmissionStatus).toHaveBeenCalledTimes(1);
+    const callsAfterFirstPaint = mockedGetSubmissionStatus.mock.calls.length;
+    expect(callsAfterFirstPaint).toBeGreaterThanOrEqual(1);
+
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'building',
+      progress: { headSha: 'sha-2', commits: [], checklist: [] },
+    });
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(10_000);
       await flushEffects();
     });
 
-    expect(mockedGetSubmissionStatus).toHaveBeenCalledTimes(2);
+    expect(mockedGetSubmissionStatus.mock.calls.length).toBeGreaterThan(callsAfterFirstPaint);
     expect(container.textContent).toContain('Writing code');
 
     await act(async () => {

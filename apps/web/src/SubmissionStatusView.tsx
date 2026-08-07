@@ -1488,15 +1488,22 @@ function FeedbackPanel({
       </div>
     ) : null;
 
-  // Compact is the thread's composer in the Claude / Cursor / Copilot shape: a clean
-  // field on top, controls in a bottom toolbar (builder selector left, send right).
-  // The heading and standing hint were page furniture — the placeholder carries them.
+  // Compact composer: field above, builder/send toolbar below.
+  // Empty (`is-empty`): placeholder and send share one row.
   if (compact) {
     const sending = state === 'sending';
+    const empty = text.length === 0;
     return (
       <div
-        className={`status-feedback status-composer is-compact${sending ? ' is-sending' : ''}`}
+        className={`status-feedback status-composer is-compact${empty ? ' is-empty' : ''}${sending ? ' is-sending' : ''}`}
         aria-busy={sending || undefined}
+        onClick={(event) => {
+          // Clicking card chrome focuses the textarea; skip real controls.
+          const target = event.target;
+          if (!(target instanceof Element)) return;
+          if (target.closest('button, a, textarea, input, select, [role="button"]')) return;
+          inputRef.current?.focus();
+        }}
       >
         {routeNoteKey && !sending && state !== 'sent' && !error && !notice ? (
           <p className="status-feedback-route">{t(routeNoteKey)}</p>
@@ -1509,6 +1516,16 @@ function FeedbackPanel({
             setText(event.target.value);
             autoGrow();
             if (state === 'sent') setState('idle');
+          }}
+          onKeyDown={(event) => {
+            // Enter sends; Shift+Enter keeps a newline (same as RemixAsk).
+            // Skip while IME is composing — Enter confirms a candidate there.
+            const native = event.nativeEvent;
+            if (event.key !== 'Enter' || event.shiftKey || native.isComposing || native.keyCode === 229) {
+              return;
+            }
+            event.preventDefault();
+            void send();
           }}
           placeholder={t(composerHintKey)}
           aria-label={t(titleKey)}
