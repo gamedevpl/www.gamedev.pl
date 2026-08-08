@@ -81,8 +81,10 @@ export function createManagedPlatformBackendFromEnv(deps?: ManagedBackendDeps, l
     );
     return undefined;
   }
-  if (!deps?.deliver) {
-    log?.warn({ vendor }, 'managed agent vendor is set but no delivery sink was supplied');
+  // An MCP agent submits for itself, so it needs no sink.
+  const mcpUrl = process.env.MANAGED_AGENT_MCP_URL?.trim();
+  if (!deps?.deliver && !mcpUrl) {
+    log?.warn({ vendor }, 'managed agent vendor is set but neither a delivery sink nor MANAGED_AGENT_MCP_URL exists');
     return undefined;
   }
 
@@ -111,8 +113,9 @@ export function createManagedPlatformBackendFromEnv(deps?: ManagedBackendDeps, l
 
   return createManagedBackend({
     provider,
-    deliver: deps.deliver,
-    ...(deps.systemPrompt ? { systemPrompt: deps.systemPrompt } : {}),
+    ...(deps?.deliver ? { deliver: deps.deliver } : {}),
+    ...(mcpUrl ? { tools: { mcpEndpoints: [{ url: mcpUrl, name: 'gamedevpl' }] } } : {}),
+    ...(deps?.systemPrompt ? { systemPrompt: deps.systemPrompt } : {}),
     ...(effort ? { effort } : {}),
     ...(Number.isFinite(maxDurationSeconds) && maxDurationSeconds > 0 ? { maxDurationSeconds } : {}),
     deliveryMode,

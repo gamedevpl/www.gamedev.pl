@@ -126,6 +126,7 @@ const provider = vendor
         : {}),
       ...(Number.isInteger(maxListCostCents) && maxListCostCents > 0 ? { maxListCostCents } : {}),
       ...(vaultIds?.length ? { vaultIds } : {}),
+      ...(flag('override-tools') ? { overrideTools: true } : {}),
       ...(value('base-url') ? { baseUrl: value('base-url')! } : {}),
     })
   : stubProvider();
@@ -195,7 +196,51 @@ if (delivered.length === 0) {
   }
 }
 
+// A deleted session takes the only record of what the agent tried.
+if (vendor === 'anthropic') {
+  rule('session transcript');
+  try {
+    const response = await fetch(`https://api.anthropic.com/v1/sessions/${dispatch.ref}/events`, {
+      headers: {
+        'x-api-key': apiKey!,
+        'anthropic-version': '2023-06-01',
+        'anthropic-beta': 'managed-agents-2026-04-01',
+      },
+    });
+    const body = (await response.json()) as { data?: unknown[] };
+    const events = (Array.isArray(body) ? body : (body.data ?? [])) as Record<string, unknown>[];
+    const started = events.length ? Date.parse(String(events[0].processed_at)) : 0;
+    for (const event of events) {
+      const type = String(event.type);
+      if (!['agent.tool_use', 'agent.mcp_tool_use', 'agent.mcp_tool_result', 'agent.message'].includes(type)) continue;
+      const at = ((Date.parse(String(event.processed_at)) - started) / 1000).toFixed(1);
+      const detail =
+        type === 'agent.mcp_tool_use'
+          ? `mcp:${String(event.name)}`
+          : type === 'agent.mcp_tool_result'
+            ? event.is_error
+              ? `ERROR ${String((event.content as { text?: string }[] | undefined)?.[0]?.text ?? '').slice(0, 120)}`
+              : 'ok'
+            : String(
+                (event.input as { command?: string } | undefined)?.command ??
+                  (event.content as { text?: string }[] | undefined)?.[0]?.text ??
+                  '',
+              )
+                .slice(0, 100)
+                .replace(/\n/g, ' ');
+      console.log(`${at.padStart(6)}s  ${type}  ${detail}`);
+    }
+    if (events.length === 0) console.log('(no events returned)');
+  } catch (error) {
+    console.warn('could not read the transcript:', error);
+  }
+}
+
 rule('cancel + cleanup');
 console.log(await backend.cancel(dispatch.ref));
-await backend.cleanup?.(dispatch);
+if (flag('keep')) {
+  console.log(`kept ${dispatch.ref} — inspect it in the console, then delete it yourself`);
+} else {
+  await backend.cleanup?.(dispatch);
+}
 console.log('cleanup done');

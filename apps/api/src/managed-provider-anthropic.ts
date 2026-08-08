@@ -74,6 +74,7 @@ export function createAnthropicManagedProvider(config: ManagedProviderConfig): M
   const environmentId = config.environmentId?.trim();
   const maxListCostCents = config.maxListCostCents;
   const vaultIds = config.vaultIds?.filter(Boolean);
+  const overrideTools = config.overrideTools === true;
 
   async function call(path: string, init: RequestInit = {}): Promise<unknown> {
     const response = await fetchImpl(`${baseUrl}${path}`, {
@@ -132,11 +133,14 @@ export function createAnthropicManagedProvider(config: ManagedProviderConfig): M
       if (request.tools?.allowedHosts?.length || request.tools?.credentialNames?.length) {
         throw new ManagedAgentError('anthropic managed agents does not map host or credential names from this seam');
       }
-      const mcpServers = request.tools?.mcpEndpoints?.map((endpoint, index) => ({
-        type: 'url',
-        name: endpoint.name ?? `managed-mcp-${index}`,
-        url: endpoint.url,
-      }));
+      // Replacing a configured agent's toolset leaves it nothing to call.
+      const mcpServers = overrideTools
+        ? request.tools?.mcpEndpoints?.map((endpoint, index) => ({
+            type: 'url',
+            name: endpoint.name ?? `managed-mcp-${index}`,
+            url: endpoint.url,
+          }))
+        : undefined;
       const body = {
         agent: {
           type: 'agent_with_overrides',

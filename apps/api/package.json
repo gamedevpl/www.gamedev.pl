@@ -14,6 +14,7 @@
     "gate:run": "tsx scripts/run-gate.ts",
     "remix:probe": "tsx scripts/remix-lane-probe.ts",
     "managed:probe": "tsx scripts/managed-probe.ts",
+    "managed:agent:apply": "tsx scripts/managed-agent-apply.ts",
     "beta:approve": "tsx scripts/beta-approve.ts",
     "beta:invite": "tsx scripts/beta-invite.ts",
     "token:mint": "tsx scripts/access-token.ts mint",

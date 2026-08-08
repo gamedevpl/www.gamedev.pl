@@ -12,6 +12,7 @@ export type DeliveryContract =
 // Untrusted spec, fenced; delivery stated exactly once.
 export function buildPrompt(brief: BuildBrief, delivery: DeliveryContract = { kind: 'channel' }): string {
   const channel = delivery.kind === 'channel';
+  const fastLane = delivery.kind === 'channel' && delivery.fast === true;
   const slug = brief.slug ?? '(the slug named in your first progress report)';
   const lines = [
     brief.seed
@@ -94,9 +95,12 @@ export function buildPrompt(brief: BuildBrief, delivery: DeliveryContract = { ki
     '  Read them, copy patterns from them, never modify them. Changes outside your game',
     '  directory cannot be delivered — delivery drops them — so editing them only',
     '  wastes your session.',
-    '- Follow `.github/copilot-instructions.md` and the repository skills for everything else.',
+    // Measured: 15s of a two-minute round spent finding nothing.
+    ...(fastLane
+      ? ['- There is no repository checkout here. The kit you unpack is the only copy of any of it.']
+      : ['- Follow `.github/copilot-instructions.md` and the repository skills for everything else.']),
     '',
-    ...(channel ? channelDelivery(brief, delivery.fast === true) : outputsDelivery(slug, delivery.path)),
+    ...(channel ? channelDelivery(brief, fastLane) : outputsDelivery(slug, delivery.path)),
   ];
 
   if (brief.locale && brief.locale !== 'en' && channel) {
@@ -114,22 +118,19 @@ export function buildPrompt(brief: BuildBrief, delivery: DeliveryContract = { ki
 function channelDelivery(brief: BuildBrief, fast: boolean): string[] {
   if (fast) {
     return [
-      '## Two-minute MCP delivery lane',
+      '## This round is on a clock',
       '',
-      'Do not reply with a plan. Execute tools immediately.',
-      `Call \`start\` now with exactly \`{ "slug": "${brief.slug ?? '(slug)'}" }\`.`,
-      'Pass the returned sessionKey on every following call.',
-      'Then follow this exact sequence: start → get_brief → get_kit → build → stage → submit_sources → end.',
-      'Use only the `gamedevpl` MCP tools for this round.',
-      'Do not search the filesystem, GitHub or the web. Do not install packages.',
-      'Use the `get_kit` unpack command and work from the kit locally.',
-      'Build the smallest playable version: one screen, one loop, basic visuals.',
-      'Skip audio, polish, optional features and broad repository exploration.',
-      'Stage only the required source files as soon as the game draws.',
-      'Call `submit_sources` with `fromStaged:true`, `mode:"preview"` and `kitEngineRef`.',
-      'Do not stop after narration or a failed tool call; retry once and continue.',
-      'Do not call `end` until `submit_sources` returns successfully.',
-      'Call `end` immediately after submitting. Do not wait for the gate verdict.',
+      'You have roughly two minutes of wall clock. The session is cancelled when it runs out,',
+      'and a round that has not called `submit_sources` by then delivers nothing at all.',
+      '',
+      'Spend it accordingly:',
+      '',
+      '- Skip anything optional. One screen, one loop, readable visuals, no audio, no polish pass.',
+      '- Read only what you need from the unpacked kit — the template and one exemplar, not a survey.',
+      '- Stage and `submit_sources({ fromStaged: true, mode: "preview", kitEngineRef })` as soon as the',
+      '  game is playable, even if you can see things you would rather improve. A delivered rough',
+      '  draft beats a better one that never arrived.',
+      '- `end` straight after the submit returns. Do not wait on the gate.',
     ];
   }
   return [

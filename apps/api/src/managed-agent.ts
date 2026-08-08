@@ -256,6 +256,8 @@ export interface ManagedProviderConfig {
   environmentId?: string;
   maxListCostCents?: number;
   vaultIds?: string[];
+  // Replace the agent's own tools and servers; off, its config wins.
+  overrideTools?: boolean;
   baseUrl?: string;
   fetchImpl?: typeof fetch;
   timeoutMs?: number;

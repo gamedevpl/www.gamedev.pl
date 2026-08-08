@@ -69,7 +69,8 @@ describe('anthropic managed provider', () => {
     });
   });
 
-  it('overrides the configured agent for a system prompt and MCP server', async () => {
+  it('leaves the configured agent its own tools and servers', async () => {
+    // Measured twice: an agent with nothing to call just goes idle.
     const fetchImpl = vi.fn(async () => jsonResponse({ id: 'sess_1', status: 'running' }));
     const provider = createAnthropicManagedProvider({
       apiKey: 'k',
@@ -89,11 +90,32 @@ describe('anthropic managed provider', () => {
     });
 
     const body = JSON.parse(String((fetchImpl.mock.calls[0][1] as RequestInit).body));
-    expect(body.agent).toMatchObject({
-      type: 'agent_with_overrides',
-      system: 'Follow the game contract.',
-      mcp_servers: [{ type: 'url', name: 'gamedevpl', url: 'https://example.test/mcp' }],
+    expect(body.agent).toMatchObject({ type: 'agent_with_overrides', system: 'Follow the game contract.' });
+    expect(body.agent.tools).toBeUndefined();
+    expect(body.agent.mcp_servers).toBeUndefined();
+  });
+
+  it('replaces them only when the caller asks for it', async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse({ id: 'sess_1', status: 'running' }));
+    const provider = createAnthropicManagedProvider({
+      apiKey: 'k',
+      model: 'test-model',
+      agentId: 'agent_test',
+      environmentId: 'env_test',
+      overrideTools: true,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
     });
+
+    await provider.startSession({
+      correlationId: '42',
+      prompt: 'build it',
+      model: 'test-model',
+      outputPath: 'outputs',
+      tools: { mcpEndpoints: [{ name: 'gamedevpl', url: 'https://example.test/mcp' }] },
+    });
+
+    const body = JSON.parse(String((fetchImpl.mock.calls[0][1] as RequestInit).body));
+    expect(body.agent.mcp_servers).toEqual([{ type: 'url', name: 'gamedevpl', url: 'https://example.test/mcp' }]);
     expect(body.agent.tools).toEqual([
       { type: 'agent_toolset_20260401' },
       { type: 'mcp_toolset', mcp_server_name: 'gamedevpl' },

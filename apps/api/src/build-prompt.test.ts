@@ -17,15 +17,20 @@ describe('buildPrompt delivery contract', () => {
     expect(buildPrompt(BRIEF)).toBe(buildPrompt(BRIEF, { kind: 'channel' }));
   });
 
-  it('gives MCP rounds a decisive two-minute workflow', () => {
+  it('tells a clocked round what to give up, and to submit before it runs out', () => {
     const prompt = buildPrompt(BRIEF, { kind: 'channel', fast: true });
-    expect(prompt).toContain('Two-minute MCP delivery lane');
-    expect(prompt).toContain('get_brief');
-    expect(prompt).toContain('get_kit');
+    expect(prompt).toContain('This round is on a clock');
     expect(prompt).toContain('submit_sources');
-    expect(prompt).toContain('Call `end` immediately after submitting');
+    expect(prompt).toContain('delivered rough');
     expect(prompt).not.toContain('npm run submit');
     expect(prompt).not.toContain('GAMEDEVPL_BUILD_TOKEN');
+  });
+
+  it('does not send a sandboxed round looking for a checkout it does not have', () => {
+    // Measured: 15 seconds of a two-minute round spent on `find / -iname ...`.
+    const prompt = buildPrompt(BRIEF, { kind: 'channel', fast: true });
+    expect(prompt).toContain('no repository checkout here');
+    expect(prompt).not.toContain('.github/copilot-instructions.md');
   });
 
   it('names the directory a pulled round is actually read from', () => {
