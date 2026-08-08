@@ -78,6 +78,20 @@ describe('harvest path mapping', () => {
       { path: 'notes.md', content: 'd' },
     ]);
   });
+
+  it('rejects traversal, absolute, Windows, and NUL-containing paths before stripping prefixes', () => {
+    for (const path of [
+      'games/comet-courier/../other/game.ts',
+      '/tmp/game.ts',
+      'C:/workspace/game.ts',
+      'games/comet-courier/game\\runtime.ts',
+      'games/comet-courier/game\0.ts',
+    ]) {
+      expect(() => toGameRelativeOutputs([{ path, content: 'x' }], 'comet-courier')).toThrow(
+        ManagedOutputRejectedError,
+      );
+    }
+  });
 });
 
 describe('provider registry', () => {

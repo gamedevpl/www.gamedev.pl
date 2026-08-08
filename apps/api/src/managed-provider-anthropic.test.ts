@@ -13,6 +13,18 @@ describe('anthropic managed provider', () => {
     expect(provider.model).toBe('test-model');
   });
 
+  it('keeps a zero-token usage object so reconciliation can settle the session', async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse({ id: 'sess_0', status: 'completed', usage: {} }));
+    const provider = createAnthropicManagedProvider({
+      apiKey: 'k',
+      model: 'm',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    expect(await provider.getSession('sess_0')).toMatchObject({
+      usage: { inputTokens: 0, outputTokens: 0 },
+    });
+  });
+
   it('sends the credential and both betas, and never puts the key in a URL', async () => {
     const fetchImpl = vi.fn(async () => jsonResponse({ id: 'sess_1', status: 'queued' }));
     const provider = createAnthropicManagedProvider({

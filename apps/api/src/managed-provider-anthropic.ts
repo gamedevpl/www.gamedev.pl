@@ -56,7 +56,7 @@ function toSession(parsed: z.infer<typeof SessionSchema>): ManagedSession {
   const inputTokens =
     (usage?.input_tokens ?? 0) + (usage?.cache_read_input_tokens ?? 0) + (usage?.cache_creation_input_tokens ?? 0);
   const outputTokens = usage?.output_tokens ?? 0;
-  const hasUsage = Boolean(usage && (inputTokens > 0 || outputTokens > 0));
+  const hasUsage = usage !== undefined;
   return {
     id: parsed.id,
     state: normalizeManagedState(parsed.status),

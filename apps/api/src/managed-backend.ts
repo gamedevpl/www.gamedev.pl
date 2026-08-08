@@ -82,15 +82,16 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
   async function harvest(sessionRef: string, issueNumber: number, slug: string): Promise<boolean> {
     if (harvested.has(sessionRef)) return false;
     const raw = await options.provider.listOutputs(sessionRef);
-    const files = toGameRelativeOutputs(raw, slug);
-    if (files.length === 0) return false;
+    let files: ManagedOutputFile[];
     try {
+      files = toGameRelativeOutputs(raw, slug);
+      if (files.length === 0) return false;
       assertWithinManagedOutputCaps(files, options.outputCaps);
     } catch (error) {
       if (!(error instanceof ManagedOutputRejectedError)) throw error;
       // Not retried: the same sandbox repeats the bytes.
       harvested.add(sessionRef);
-      options.log?.warn({ err: error, issueNumber, slug, sessionRef }, 'managed output refused by caps');
+      options.log?.warn({ err: error, issueNumber, slug, sessionRef }, 'managed output refused');
       return false;
     }
     await options.deliver({ issueNumber, slug, files, sessionRef, mode: deliveryMode });

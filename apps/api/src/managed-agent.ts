@@ -169,14 +169,25 @@ export function toGameRelativeOutputs(files: ManagedOutputFile[], slug: string):
   const inside: ManagedOutputFile[] = [];
   for (const file of files) {
     const path = file.path.replace(/^\.\//, '');
+    if (
+      !path ||
+      path.includes('\0') ||
+      path.includes('\\') ||
+      path.startsWith('/') ||
+      /^[A-Za-z]:\//.test(path) ||
+      path.split('/').includes('..')
+    ) {
+      throw new ManagedOutputRejectedError(`unsafe output path: ${file.path}`);
+    }
     if (path.startsWith(prefix)) {
-      inside.push({ path: path.slice(prefix.length), content: file.content });
+      const relative = path.slice(prefix.length);
+      if (relative) inside.push({ path: relative, content: file.content });
       continue;
     }
     // Another game's directory is never this round's deliverable.
     if (!path.startsWith('games/')) inside.push({ path, content: file.content });
   }
-  return inside.filter((file) => file.path.length > 0);
+  return inside;
 }
 
 export interface ManagedProviderConfig {
