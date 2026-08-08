@@ -47,15 +47,16 @@ interface AuthContextType {
    */
   appleSignIn: boolean;
   waitlistStatus: WaitlistStatus;
-  signInWithGoogleToken: (idToken: string) => Promise<void>;
+  signInWithGoogleToken: (idToken: string, inviteCode?: string) => Promise<void>;
   /**
    * `name` is Apple's first-authorization gift: it arrives once, outside the token, and
    * never again. Passing it through on that one sign-in is the only chance to record it.
    */
-  signInWithAppleToken: (idToken: string, name?: string) => Promise<void>;
+  signInWithAppleToken: (idToken: string, name?: string, inviteCode?: string) => Promise<void>;
   // Closed-beta waitlist: works without a session (the caller is by definition
   // not on the allowlist). Re-verifies the same ID token server-side.
   joinWaitlist: (idToken: string, locale?: string, provider?: 'google' | 'apple') => Promise<void>;
+  acceptBetaInvite: (code: string) => Promise<void>;
   logout: () => Promise<void>;
   deleteAccount: () => Promise<{ deleteAfter: string }>;
   refreshUser: () => Promise<void>;
@@ -71,6 +72,7 @@ const AuthContext = createContext<AuthContextType>({
   signInWithGoogleToken: async () => {},
   signInWithAppleToken: async () => {},
   joinWaitlist: async () => {},
+  acceptBetaInvite: async () => {},
   logout: async () => {},
   deleteAccount: async () => ({ deleteAfter: '' }),
   refreshUser: async () => {},
@@ -123,12 +125,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     refreshUser();
   }, []);
 
-  const signInWithGoogleToken = async (idToken: string) => {
+  const signInWithGoogleToken = async (idToken: string, inviteCode?: string) => {
     const res = await fetch('/api/auth/google', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ idToken }),
+      body: JSON.stringify({ idToken, ...(inviteCode ? { inviteCode } : {}) }),
     });
 
     if (!res.ok) {
@@ -143,12 +145,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(data.user);
   };
 
-  const signInWithAppleToken = async (idToken: string, name?: string) => {
+  const signInWithAppleToken = async (idToken: string, name?: string, inviteCode?: string) => {
     const res = await fetch('/api/auth/apple', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ idToken, name }),
+      body: JSON.stringify({ idToken, name, ...(inviteCode ? { inviteCode } : {}) }),
     });
 
     if (!res.ok) {
@@ -180,6 +182,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setWaitlistStatus(data.waitlistStatus as WaitlistStatus);
     } else {
       setWaitlistStatus('pending');
+    }
+  };
+
+  const acceptBetaInvite = async (code: string) => {
+    const res = await fetch('/api/beta-invites/claim', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ code }),
+    });
+    if (!res.ok) {
+      const err = (await res.json().catch(() => null)) as { error?: string } | null;
+      throw new Error(err?.error ?? 'Could not accept beta invite');
     }
   };
 
@@ -218,6 +233,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         signInWithGoogleToken,
         signInWithAppleToken,
         joinWaitlist,
+        acceptBetaInvite,
         logout,
         deleteAccount,
         refreshUser,

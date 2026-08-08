@@ -23,6 +23,7 @@ declare global {
 
 interface GoogleSignInButtonProps {
   onSuccess?: () => void;
+  inviteCode?: string;
   // idToken is passed alongside a sign-in error (e.g. private-beta 403) so a
   // caller can offer a follow-up action — like joining the waitlist — that
   // re-verifies the same token server-side without asking the user to sign in twice.
@@ -58,7 +59,7 @@ function GoogleMark() {
   );
 }
 
-export function GoogleSignInButton({ onSuccess, onError }: GoogleSignInButtonProps) {
+export function GoogleSignInButton({ onSuccess, onError, inviteCode }: GoogleSignInButtonProps) {
   const { t, i18n } = useTranslation();
   const { signInWithGoogleToken } = useAuth();
   const buttonRef = useRef<HTMLDivElement>(null);
@@ -73,9 +74,11 @@ export function GoogleSignInButton({ onSuccess, onError }: GoogleSignInButtonPro
   const onSuccessRef = useRef(onSuccess);
   const onErrorRef = useRef(onError);
   const signInRef = useRef(signInWithGoogleToken);
+  const inviteCodeRef = useRef(inviteCode);
   onSuccessRef.current = onSuccess;
   onErrorRef.current = onError;
   signInRef.current = signInWithGoogleToken;
+  inviteCodeRef.current = inviteCode;
 
   useEffect(() => {
     if (window.google?.accounts?.id) {
@@ -107,7 +110,7 @@ export function GoogleSignInButton({ onSuccess, onError }: GoogleSignInButtonPro
       auto_select: true,
       callback: async (response) => {
         try {
-          await signInRef.current(response.credential);
+          await signInRef.current(response.credential, inviteCodeRef.current);
           onSuccessRef.current?.();
         } catch (err) {
           window.google?.accounts?.id?.disableAutoSelect?.();

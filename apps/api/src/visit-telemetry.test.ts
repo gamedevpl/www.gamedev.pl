@@ -239,6 +239,26 @@ describe('POST /api/telemetry/visit', () => {
     expect(bad.statusCode).toBe(400);
   });
 
+  it('records invite steps and rejects an unknown invite outcome', async () => {
+    const ok = await post(app, {
+      visitId,
+      flushMsSinceStart: 0,
+      events: [{ type: 'invite_step', step: 'opened', msSinceStart: 0 }],
+    });
+    expect(ok.statusCode).toBe(202);
+    expect((await store.listVisitEvents(today()))[0]).toMatchObject({
+      type: 'invite_step',
+      step: 'opened',
+    });
+
+    const bad = await post(app, {
+      visitId,
+      flushMsSinceStart: 0,
+      events: [{ type: 'invite_step', step: 'claimed_twice', msSinceStart: 0 }],
+    });
+    expect(bad.statusCode).toBe(400);
+  });
+
   it('carries which control opened a remix, and refuses a control it does not know', async () => {
     const ok = await post(app, {
       visitId,

@@ -211,6 +211,23 @@ describe('summarizeVisitFunnel', () => {
     expect(funnel.waitlist[0]).toEqual({ step: 'cta_clicked', visits: 1 });
   });
 
+  it('reports the invite funnel separately from the waitlist', () => {
+    const funnel = summarizeVisitFunnel([
+      started('a'),
+      { visitId: 'a', type: 'invite_step', at: '2026-07-26T10:00:00.000Z', msSinceStart: 0, step: 'opened' },
+      { visitId: 'a', type: 'invite_step', at: '2026-07-26T10:00:00.000Z', msSinceStart: 1, step: 'accepted' },
+      started('b'),
+      { visitId: 'b', type: 'invite_step', at: '2026-07-26T10:00:00.000Z', msSinceStart: 0, step: 'opened' },
+    ]);
+
+    expect(funnel.invites).toEqual([
+      { step: 'opened', visits: 2 },
+      { step: 'accepted', visits: 1 },
+      { step: 'unavailable', visits: 0 },
+    ]);
+    expect(funnel.waitlist[0]).toEqual({ step: 'cta_clicked', visits: 0 });
+  });
+
   it('counts painting visits and splits them by the door that led to the brush', () => {
     const remix = (visitId: string, step: string, via?: string): VisitEvent =>
       ({

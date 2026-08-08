@@ -315,6 +315,24 @@ describe('FirestoreStore.upsertWaitlistEntry', () => {
   });
 });
 
+describe('FirestoreStore beta invites', () => {
+  it('stores only a hash and claims the code through a transaction', async () => {
+    const { db, docs, key } = fakeFirestore();
+    const store = new FirestoreStore(db);
+    const created = await store.createBetaInvite('g:operator');
+
+    const stored = docs.get(key('betaInvites', created.invite.id))!;
+    expect(stored.codeHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(stored).not.toHaveProperty('code');
+
+    expect(await store.claimBetaInvite(created.code, 'g:first')).toMatchObject({
+      ok: true,
+      invite: { status: 'claimed', claimedUid: 'g:first' },
+    });
+    expect(await store.claimBetaInvite(created.code, 'g:second')).toEqual({ ok: false, reason: 'claimed' });
+  });
+});
+
 describe('FirestoreStore game saves', () => {
   it('stores a save whose contents Firestore could never hold as fields', async () => {
     const { db } = fakeFirestore();

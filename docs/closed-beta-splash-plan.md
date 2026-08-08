@@ -95,12 +95,27 @@ their anonymous play telemetry bypass the beta wall without opening the catalog.
 - `POST /api/waitlist` with no body → 400 (proves the route exists and
   validates; no auth header needed for the probe).
 
-## Explicitly not in v1
+## One-time invite links
 
-- Email-form waitlist (unverified input, bots, moderation surface — no).
-- Invite emails from the console (CLI `beta:invite` remains); counts on the splash page.
+Operators can create a one-time invitation from **`/admin/waitlist`**. The panel returns the
+link once, with a copy button, and keeps only its status afterward:
 
-## Later addition
+- The link contains a high-entropy bearer code.
+- The first account to accept it through Google or Apple gets beta access.
+- The code is hashed in Firestore and claimed in a transaction, so concurrent clicks cannot
+  spend it twice.
+- The invitation is bound to the account used during sign-in, not to an email address.
+- Operators can revoke an unused link and create another if it is lost or shared too widely.
+- The invitation page explains that the first account to accept owns the link; forwarding is
+  therefore intentional access delegation, not proof of a particular person's identity.
+
+The link route records only invite funnel steps (`opened`, `accepted`, `unavailable`) in the
+anonymous visit stream. It never records the code or the signed-in account there.
+
+Email-form waitlist remains out of scope: it would accept unverified identity data and create
+a separate moderation surface.
+
+## Existing operator surface
 
 - Admin UI for the waitlist shipped as the operator console **Waitlist** tab
   (`/admin/waitlist`) — list, approve/reject/reset, pre-approve by email.

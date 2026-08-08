@@ -79,6 +79,71 @@ describe('ClosedBetaSplash', () => {
     await act(async () => root.unmount());
   });
 
+  it('sends the invite code through sign-in and records acceptance', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    let capturedCallback: ((res: { credential: string }) => void) | null = null;
+    const sent: unknown[] = [];
+    const session = new VisitSession('33333333-3333-4333-8333-333333333333', 0, (body) => sent.push(body));
+    setVisitSessionForTesting(session);
+
+    (globalThis as unknown as { google: unknown }).google = {
+      accounts: {
+        id: {
+          initialize: (config: { callback: (res: { credential: string }) => void }) => {
+            capturedCallback = config.callback;
+          },
+          renderButton: () => {},
+          prompt: () => {},
+        },
+      },
+    };
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.endsWith('/api/auth/me')) return new Response(JSON.stringify({}), { status: 401 });
+      if (url.endsWith('/api/health')) {
+        return new Response(JSON.stringify({ status: 'ok', privateBeta: true }));
+      }
+      if (url.endsWith('/api/auth/google')) {
+        expect(JSON.parse(String(init?.body))).toMatchObject({
+          idToken: 'invite-credential',
+          inviteCode: 'Abc123_-'.repeat(4),
+        });
+        return new Response(JSON.stringify({ user: { uid: 'g:invitee', tier: 'standard' } }), { status: 200 });
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(AuthProvider, null, createElement(ClosedBetaSplash, { inviteCode: 'Abc123_-'.repeat(4) })),
+      );
+      await flushEffects();
+    });
+
+    expect(container.querySelector('#btn-accept-beta-invite')).not.toBeNull();
+    await act(async () => {
+      capturedCallback!({ credential: 'invite-credential' });
+      await flushEffects();
+      await flushEffects();
+    });
+
+    session.flush();
+    const steps = sent.flatMap((body) => (body as { events: Array<{ type: string; step?: string }> }).events);
+    expect(steps).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'invite_step', step: 'opened' }),
+        expect.objectContaining({ type: 'invite_step', step: 'accepted' }),
+      ]),
+    );
+
+    await act(async () => root.unmount());
+  });
+
   it('Join without a token asks for sign-in and does not POST yet', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     const sent: unknown[] = [];
@@ -172,9 +237,9 @@ describe('ClosedBetaSplash', () => {
     });
 
     await act(async () => {
-      container.querySelector<HTMLButtonElement>('#btn-join-waitlist')?.dispatchEvent(
-        new MouseEvent('click', { bubbles: true }),
-      );
+      container
+        .querySelector<HTMLButtonElement>('#btn-join-waitlist')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await flushEffects();
     });
 

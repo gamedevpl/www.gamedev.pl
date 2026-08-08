@@ -11,6 +11,7 @@ import {
 const copy: DocumentTitleCopy = {
   home: 'Gamedev.pl — Describe a game, play it',
   join: 'Join the game',
+  invite: 'Beta invitation',
   health: 'Telemetry',
   review: 'Game review',
   studio: 'Creator Studio',
@@ -95,6 +96,9 @@ describe('resolveDocumentTitle', () => {
     );
     expect(resolveDocumentTitle({ view: 'join', code: 'K7M3QP', token: 't' }, { copy })).toBe(
       'Join the game — Gamedev.pl',
+    );
+    expect(resolveDocumentTitle({ view: 'invite', code: 'A'.repeat(32) }, { copy })).toBe(
+      'Beta invitation — Gamedev.pl',
     );
     expect(resolveDocumentTitle({ view: 'admin', section: 'queue' }, { copy })).toBe('Telemetry — Gamedev.pl');
     expect(resolveDocumentTitle({ view: 'legal', doc: 'privacy' }, { copy })).toBe('Privacy Policy — Gamedev.pl');

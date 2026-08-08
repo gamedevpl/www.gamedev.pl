@@ -388,6 +388,21 @@ describe('InMemoryStore', () => {
     expect(entry).toMatchObject({ uid: 'g:789', email: 'test@example.com', status: 'pending' });
   });
 
+  it('creates, atomically claims, and revokes one-time beta invites', async () => {
+    const store = new InMemoryStore();
+    const created = await store.createBetaInvite('g:operator');
+
+    expect(created.code).toMatch(/^[A-Za-z0-9_-]{32}$/);
+    expect(created.invite).not.toHaveProperty('code');
+    expect((await store.claimBetaInvite(created.code, 'g:first')).ok).toBe(true);
+    expect(await store.claimBetaInvite(created.code, 'g:first')).toMatchObject({ ok: true });
+    expect(await store.claimBetaInvite(created.code, 'g:second')).toEqual({ ok: false, reason: 'claimed' });
+
+    const other = await store.createBetaInvite('g:operator');
+    expect(await store.revokeBetaInvite(other.invite.id, 'g:operator')).toMatchObject({ status: 'revoked' });
+    expect(await store.claimBetaInvite(other.code, 'g:second')).toEqual({ ok: false, reason: 'revoked' });
+  });
+
   it('isWaitlistApproved returns true when entry status is approved (by uid or email)', async () => {
     const store = new InMemoryStore();
     await store.upsertWaitlistEntry({ uid: 'g:789', email: 'approved@example.com' });

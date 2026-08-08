@@ -842,6 +842,20 @@
     "waitlistError": "Nie udało się dołączyć do listy. Spróbuj ponownie.",
     "footer": "W trakcie zamkniętej bety dostęp jest tylko na zaproszenie."
   },
+  "betaInvite": {
+    "headline": "Otrzymujesz zaproszenie do zamkniętej bety.",
+    "sub": "Ten link jest dla jednej osoby. Zaloguj się na konto, którego chcesz używać.",
+    "accept": "Przyjmij zaproszenie",
+    "signInHint": "Zaloguj się przez Google lub Apple poniżej, aby je przyjąć.",
+    "unavailableSub": "To zaproszenie zostało już użyte, anulowane albo jest nieprawidłowe. Poproś nadawcę o nowy link.",
+    "claiming": "Sprawdzanie zaproszenia…",
+    "claimingSub": "Link zostanie przypisany do Twojego konta.",
+    "accepted": "Zaproszenie przyjęte.",
+    "acceptedSub": "Twoje konto ma teraz dostęp do zamkniętej bety.",
+    "continue": "Wejdź do bety",
+    "unavailable": "To zaproszenie nie jest już dostępne.",
+    "backHome": "Wróć na stronę główną"
+  },
   "errors": {
     "generic": "Coś poszło nie tak",
     "creationPaused": "Tworzenie nowych gier jest na chwilę wstrzymane — sprawdzamy coś u nas. Twój dzienny limit pozostaje nietknięty, spróbuj ponownie za moment.",
@@ -986,6 +1000,7 @@
     "home": "Gamedev.pl — Opisz grę, zagraj w nią",
     "status": "Twoja gra jest w trakcie tworzenia",
     "join": "Dołącz do gry",
+    "invite": "Zaproszenie do bety",
     "health": "Telemetria",
     "review": "Ocena gier",
     "studio": "Studio Twórcy",
