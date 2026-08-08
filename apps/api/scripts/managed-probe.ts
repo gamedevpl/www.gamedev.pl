@@ -93,14 +93,19 @@ function stubProvider(): ManagedAgentProvider {
 }
 
 const vendor = value('vendor');
-if (vendor && !process.env.MANAGED_AGENT_API_KEY) {
-  console.error(`--vendor ${vendor} needs MANAGED_AGENT_API_KEY (and MANAGED_AGENT_MODEL)`);
+const apiKey =
+  process.env.MANAGED_AGENT_API_KEY?.trim() ??
+  (vendor === 'anthropic' ? process.env.ANTHROPIC_API_KEY?.trim() : undefined);
+const model =
+  value('model') ?? process.env.MANAGED_AGENT_MODEL?.trim() ?? (vendor === 'anthropic' ? 'claude-sonnet-5' : undefined);
+if (vendor && (!apiKey || !model)) {
+  console.error(`--vendor ${vendor} needs an API key and model`);
   process.exit(1);
 }
 const provider = vendor
   ? createManagedProvider(vendor, {
-      apiKey: process.env.MANAGED_AGENT_API_KEY!,
-      model: process.env.MANAGED_AGENT_MODEL ?? 'claude-sonnet-5',
+      apiKey: apiKey!,
+      model: model!,
       ...(value('base-url') ? { baseUrl: value('base-url')! } : {}),
     })
   : stubProvider();

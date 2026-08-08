@@ -222,9 +222,11 @@ that measured two real rounds drove them from the Console rather than this API. 
 first thing to do with a real key is a shape check, not a game:
 
 ```bash
-MANAGED_AGENT_API_KEY=... MANAGED_AGENT_MODEL=claude-sonnet-5 \
-  npm run managed:probe -w @gamedevpl/api -- --vendor anthropic
+ANTHROPIC_API_KEY=... npm run managed:probe -w @gamedevpl/api -- --vendor anthropic
 ```
+
+The probe uses `ANTHROPIC_API_KEY` for this vendor and defaults to
+`claude-sonnet-5`; `MANAGED_AGENT_API_KEY` or `--model` overrides either value.
 
 Expect that to fail on request shape before it fails on anything interesting, and fix the
 adapter — that is the point of the exercise. `--base-url` aims the same adapter at a local
