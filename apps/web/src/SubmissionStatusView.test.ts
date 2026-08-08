@@ -58,6 +58,11 @@ async function flushEffects() {
   await Promise.resolve();
 }
 
+// How many times a sentence is on screen.
+function countText(container: HTMLElement, needle: string): number {
+  return (container.textContent ?? '').split(needle).length - 1;
+}
+
 describe('pollDelayMs', () => {
   it('polls tightly while the platform agent session is still starting', () => {
     // Public status stays `queued` for phase `dispatched`; idle polling would hide
@@ -810,6 +815,11 @@ describe('SubmissionStatusView', () => {
       expect(container.querySelector('[data-testid="connect-switch-builder"]')?.textContent).toContain(
         'Use Gamedev.pl agent instead',
       );
+      // Foot bar owns it — the card must not repeat.
+      expect(countText(container, 'Waiting for your agent to check in')).toBe(1);
+      expect(container.querySelector('.studio-thread-foot .studio-context-phase')?.textContent).toMatch(
+        /Waiting for your agent to check in/i,
+      );
 
       await act(async () => {
         await vi.advanceTimersByTimeAsync(ACTIVE_POLL_MS);
@@ -828,6 +838,84 @@ describe('SubmissionStatusView', () => {
       });
       vi.useRealTimers();
       vi.unstubAllGlobals();
+    }
+  });
+
+  it('keeps one waiting sentence and a way out when the connect card is hidden', async () => {
+    // Dismissed card: strip repeated the foot bar, offering only expand.
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    localStorage.clear();
+    localStorage.setItem('gamedev_connect_collapsed:hidden-token', '1');
+    const connectFetch = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        installSnippets: {
+          claudeCode: 'claude mcp add gamedevpl https://example.test/api/mcp',
+          codex: 'url = "https://example.test/api/mcp"',
+          cursor: '{"mcpServers":{}}',
+          kimi: 'npx mcp-remote https://example.test/api/mcp',
+          cli: 'curl https://example.test/api/mcp',
+        },
+        installLinks: { cursor: 'cursor://add', vscode: 'vscode://add' },
+        kickoffPrompt: 'Build "Hidden Game" for gamedev.pl.\nStart with the gamedevpl tool, slug: hidden-game',
+        mcpUrl: 'https://example.test/api/mcp',
+        authorizationHeader: 'Authorization: Bearer test-key-not-for-display',
+        authorizationHeaderMasked: 'Authorization: Bearer ····play',
+        fingerprint: 'play',
+        keyGeneration: 1,
+        slug: 'hidden-game',
+        canSwitchToPlatform: true,
+        expiresAt: Math.floor(Date.now() / 1000) + 3600,
+      }),
+    }));
+    vi.stubGlobal('fetch', connectFetch);
+    mockedGetSubmissionStatus.mockResolvedValue({ status: 'queued', stall: 'no_agent_yet', builder: 'self' });
+
+    await i18n.changeLanguage('en');
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    try {
+      await act(async () => {
+        root.render(createElement(SubmissionStatusView, { token: 'hidden-token', embedded: true }));
+        await flushEffects();
+        await flushEffects();
+      });
+
+      expect(container.querySelector('[data-testid="connect-collapsed"]')).not.toBeNull();
+      expect(container.querySelector('.status-composer')).toBeNull();
+      expect(countText(container, 'Waiting for your agent to check in')).toBe(1);
+      expect(container.querySelector('.studio-thread-foot .studio-context-phase')?.textContent).toMatch(
+        /Waiting for your agent to check in/i,
+      );
+      expect(container.querySelector('[data-testid="connect-collapsed"] .studio-connect-waiting')).toBeNull();
+      // The one control that can advance a round nobody joined.
+      const handoff = container.querySelector<HTMLButtonElement>(
+        '[data-testid="connect-collapsed"] [data-testid="active-switch-builder"] button',
+      );
+      expect(handoff?.textContent).toContain('Use Gamedev.pl agent instead');
+
+      mockedHandoffToPlatform.mockResolvedValue({});
+      await act(async () => {
+        handoff!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await flushEffects();
+      });
+      const confirm = [
+        ...container.querySelectorAll<HTMLButtonElement>('[data-testid="connect-collapsed"] button'),
+      ].find((button) => button.textContent?.includes('Start Gamedev.pl agent'));
+      expect(confirm).toBeDefined();
+      await act(async () => {
+        confirm!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await flushEffects();
+      });
+      expect(mockedHandoffToPlatform).toHaveBeenCalledWith('hidden-token', { stopActiveSelfAgent: false });
+    } finally {
+      await act(async () => {
+        root.unmount();
+      });
+      vi.unstubAllGlobals();
+      localStorage.clear();
     }
   });
 

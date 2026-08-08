@@ -87,6 +87,8 @@ type StudioConnectCardProps = {
    * a disclosure so install stays scannable. `thread` (default) keeps the full card.
    */
   density?: 'thread' | 'panel';
+  // Foot bar already says "waiting for your agent" — do not repeat.
+  waitingCaptionElsewhere?: boolean;
   /** Section heading when `density="panel"` — omitted when the card returns null. */
   panelHeading?: string;
   onSwitchToPlatform?: SwitchHandler;
@@ -256,6 +258,7 @@ export function StudioConnectCard({
   panelHeading,
   onSwitchToPlatform,
   builderHandoffPending = false,
+  waitingCaptionElsewhere = false,
 }: StudioConnectCardProps) {
   const isPanel = density === 'panel';
   const { t, i18n } = useTranslation();
@@ -343,14 +346,19 @@ export function StudioConnectCard({
         data-connect-mode={mode}
         data-testid="connect-collapsed"
       >
-        <p className="studio-connect-waiting" aria-live="polite">
-          <span className="studio-connect-pulse" aria-hidden="true" />
-          {isResume ? t('connect.resume.waiting') : t('connect.waiting')}
-        </p>
+        {waitingCaptionElsewhere ? null : (
+          <p className="studio-connect-waiting" aria-live="polite">
+            <span className="studio-connect-pulse" aria-hidden="true" />
+            {isResume ? t('connect.resume.waiting') : t('connect.waiting')}
+          </p>
+        )}
         <div className="studio-connect-collapsed-actions">
           <button type="button" className="studio-connect-show" onClick={showCard} data-testid="connect-show">
             <PixelIcon name="expand" size={12} /> {t('connect.show')}
           </button>
+          {payload?.canSwitchToPlatform && onSwitchToPlatform ? (
+            <SwitchToPlatformControl compact onSwitchToPlatform={onSwitchToPlatform} pending={builderHandoffPending} />
+          ) : null}
           <span className="studio-connect-collapsed-hint">{t('connect.collapsed.hint')}</span>
         </div>
       </aside>
@@ -657,8 +665,6 @@ export function StudioConnectCard({
         ) : isResume ? (
           <>
             {kickoffPanel}
-            {/* Studio foot owns the single waiting caption — a second pulse here
-                ("Czekamy…") next to "Powstaje kod" was the same fact twice. */}
             {onOpenInstall ? (
               <button
                 type="button"
@@ -670,10 +676,12 @@ export function StudioConnectCard({
               </button>
             ) : (
               <>
-                <p className="studio-connect-waiting" aria-live="polite">
-                  <span className="studio-connect-pulse" aria-hidden="true" />
-                  {t('connect.resume.waiting')}
-                </p>
+                {waitingCaptionElsewhere ? null : (
+                  <p className="studio-connect-waiting" aria-live="polite">
+                    <span className="studio-connect-pulse" aria-hidden="true" />
+                    {t('connect.resume.waiting')}
+                  </p>
+                )}
                 <details className="studio-connect-setup-details" data-testid="connect-setup-details">
                   <summary>{t('connect.resume.setupDetails')}</summary>
                   <div className="studio-connect-setup-body">{installPanel}</div>
@@ -697,10 +705,12 @@ export function StudioConnectCard({
           <>
             {installPanel}
             {kickoffPanel}
-            <p className="studio-connect-waiting" aria-live="polite">
-              <span className="studio-connect-pulse" aria-hidden="true" />
-              {t('connect.waiting')}
-            </p>
+            {waitingCaptionElsewhere ? null : (
+              <p className="studio-connect-waiting" aria-live="polite">
+                <span className="studio-connect-pulse" aria-hidden="true" />
+                {t('connect.waiting')}
+              </p>
+            )}
           </>
         )
       ) : null}

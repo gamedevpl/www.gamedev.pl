@@ -743,6 +743,8 @@ export function SubmissionStatusView({
             ? t('statusView.phaseLabels.dispatched')
             : t(`statusView.states.${status.status}.label`)
         : '';
+    // Foot bar owns the waiting caption — the card drops it.
+    const footBarShowing = Boolean(status && !agentWorking && status.stall !== 'ended' && !status.agentEndedAt);
     return (
       <>
         <div className="studio-thread">
@@ -791,6 +793,7 @@ export function SubmissionStatusView({
                       token={token}
                       mode={connectCardMode(copyInputFromStatus(status)) ?? 'setup'}
                       {...(onOpenConnect ? { onOpenInstall: onOpenConnect } : {})}
+                      waitingCaptionElsewhere={footBarShowing}
                       onSwitchToPlatform={handoffToPlatformFromUi}
                       builderHandoffPending={status.builderHandoff?.target === 'platform'}
                     />
@@ -871,7 +874,7 @@ export function SubmissionStatusView({
                 {/* Active "Writing code" lives as the last transcript turn (Claude-shaped).
                     The foot bar is only for waiting / review captions — and never when the
                     agent already called end (stall chip covers that; "Writing code" would lie). */}
-                {!isAgentWorkActive(status) && status.stall !== 'ended' && !status.agentEndedAt ? (
+                {footBarShowing ? (
                   <ThreadContextBar
                     phase={
                       isAwaitingOwnAgent(status)

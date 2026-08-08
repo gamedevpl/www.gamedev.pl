@@ -186,6 +186,16 @@ async function main() {
       },
     ]);
     console.info('[dev] seeded Creator Studio demo user g:studio-demo');
+
+    // `no_agent_yet` — Studio with no composer and no badge. Owned by `dev:local`.
+    const selfUid = 'dev:local';
+    await store.upsertUser({ uid: selfUid, name: 'Local local', email: 'local@localhost' });
+    await store.createSubmission(120, selfUid, 'Beasts and pumpkins: scarecrow hero defends an endless pumpkin patch');
+    await store.setSubmissionSlug(120, 'beasts-and-pumpkins');
+    await store.setSubmissionLastStatus(120, 'queued');
+    await store.recordJobTransition(120, { to: 'queued', at: new Date().toISOString(), by: 'system' });
+    await store.setRoundBuilder(120, 'self');
+    console.info('[dev] seeded self-build round awaiting connect: /studio/beasts-and-pumpkins (dev:local)');
   }
 
   const app = await buildApp({ logger: true, store });
