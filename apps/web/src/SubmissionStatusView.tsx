@@ -1091,7 +1091,7 @@ export function SubmissionStatusView({
                 onPlay={openChannel}
                 {...(onPlaytest ? { secondary: { label: t('statusView.playtestCta'), onClick: onPlaytest } } : {})}
               />
-            ) : previewGateFailure && !preview && !channelHtml ? (
+            ) : previewGateFailure && !channelHtml ? (
               <div className="status-preview-error">
                 <p className="error">{t('statusView.previewGateFailed')}</p>
                 {previewGateFailure.report ? (
