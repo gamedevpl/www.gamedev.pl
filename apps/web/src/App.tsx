@@ -1002,10 +1002,8 @@ export function App() {
     );
   }
 
-  // Public game page — the "repo page" nested under the creator profile. Same
-  // open-chrome posture as the profile: the page renders for anonymous visitors,
-  // and the frame pane inside it is what stays gated during closed beta.
-  if (route.view === 'game') {
+  // Game pages require beta access; the play permalink is the promotional exception.
+  if (route.view === 'game' && !authLoading && (!privateBeta || user)) {
     return (
       <div className="app app--game">
         <NavHeader
