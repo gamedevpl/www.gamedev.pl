@@ -44,6 +44,7 @@ export const GAME_KIT_MODULES = [
   'world',
   'ai',
   'gameplay',
+  'rng',
   // Top-down arcade vehicle paint/lights — pairs with gameplay.driveArcadeVehicle.
   'vehicles',
   // Genre vertical: deterministic street topology and routing for 2D urban games.

@@ -95,6 +95,7 @@ describe('games-repo-contract (website half)', () => {
       'world',
       'ai',
       'gameplay',
+      'rng',
       'vehicles',
       'urban',
       'drawing',
