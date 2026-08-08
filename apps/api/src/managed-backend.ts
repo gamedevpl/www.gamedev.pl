@@ -3,14 +3,17 @@ import type { AgentBackend, BuildBrief, DispatchResult } from './agent-backend.j
 import { buildPrompt } from './copilot-backend.js';
 import type { AgentObservation } from './job-state.js';
 import {
-  assertWithinManagedOutputCaps,
+  assertWithinManagedOutputPlan,
+  ManagedAgentError,
+  createManagedOutputBudget,
   isManagedSessionHarvestable,
   ManagedOutputRejectedError,
-  toGameRelativeOutputs,
+  planManagedOutputs,
   type ManagedAgentEffort,
   type ManagedAgentProvider,
   type ManagedOutputCaps,
   type ManagedOutputFile,
+  type ManagedOutputPlan,
   type ManagedToolAccess,
 } from './managed-agent.js';
 
@@ -27,12 +30,27 @@ export interface ManagedDeliveryResult {
   version: string;
 }
 
-// Injected: no store or gate access here.
+// Injected, and idempotent per issueNumber and sessionRef.
 export type ManagedDeliverySink = (input: ManagedDeliveryInput) => Promise<ManagedDeliveryResult>;
+
+export interface ManagedDeliveryClaim {
+  issueNumber: number;
+  slug: string;
+  sessionRef: string;
+}
+
+// Durable at-most-once across instances; see the design doc.
+export interface ManagedDeliveryLock {
+  acquire(claim: ManagedDeliveryClaim): Promise<boolean>;
+  // Failed attempt, so a later poll can retry.
+  release(claim: ManagedDeliveryClaim): Promise<void>;
+}
 
 export interface ManagedBackendOptions {
   provider: ManagedAgentProvider;
-  deliver: ManagedDeliverySink;
+  // Omit only when an MCP-connected agent submits for itself.
+  deliver?: ManagedDeliverySink;
+  lock?: ManagedDeliveryLock;
   // Cacheable prefix, typically the published Creator Kit digest.
   systemPrompt?: () => Promise<string | undefined>;
   outputPath?: string;
@@ -51,6 +69,12 @@ export interface ManagedBackendOptions {
 export const DEFAULT_MANAGED_OUTPUT_PATH = 'outputs';
 
 export function createManagedBackend(options: ManagedBackendOptions): AgentBackend {
+  const deliver = options.deliver;
+  if (!deliver && !options.tools?.mcpEndpoints?.length) {
+    throw new ManagedAgentError(
+      'a managed backend needs either a delivery sink or an MCP endpoint the agent can submit through',
+    );
+  }
   const outputPath = options.outputPath ?? DEFAULT_MANAGED_OUTPUT_PATH;
   const deliveryMode = options.deliveryMode ?? 'preview';
   // At-most-once per session; a re-poll cannot duplicate.
@@ -79,28 +103,58 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
     return { ref: session.id };
   }
 
-  async function harvest(sessionRef: string, issueNumber: number, slug: string): Promise<boolean> {
-    if (harvested.has(sessionRef)) return false;
-    const raw = await options.provider.listOutputs(sessionRef);
-    let files: ManagedOutputFile[];
+  // `pending` means ask again, so the round is not spent.
+  type HarvestOutcome = 'delivered' | 'empty' | 'refused' | 'pending';
+
+  async function download(sessionRef: string, plan: ManagedOutputPlan[]): Promise<ManagedOutputFile[]> {
+    const budget = createManagedOutputBudget(options.outputCaps);
+    const files: ManagedOutputFile[] = [];
+    for (const entry of plan) {
+      const content = await options.provider.readOutput(sessionRef, entry.ref);
+      files.push(budget.admit(entry.path, content));
+    }
+    return files;
+  }
+
+  async function harvest(sessionRef: string, issueNumber: number, slug: string): Promise<HarvestOutcome> {
+    if (!deliver || harvested.has(sessionRef)) return 'empty';
+    const claim = { issueNumber, slug, sessionRef };
+    const listed = await options.provider.listOutputs(sessionRef);
+    let plan: ManagedOutputPlan[];
     try {
-      files = toGameRelativeOutputs(raw, slug);
-      if (files.length === 0) return false;
-      assertWithinManagedOutputCaps(files, options.outputCaps);
+      plan = assertWithinManagedOutputPlan(planManagedOutputs(listed, slug), options.outputCaps);
     } catch (error) {
       if (!(error instanceof ManagedOutputRejectedError)) throw error;
       // Not retried: the same sandbox repeats the bytes.
       harvested.add(sessionRef);
-      options.log?.warn({ err: error, issueNumber, slug, sessionRef }, 'managed output refused');
-      return false;
+      options.log?.warn({ err: error, ...claim }, 'managed output refused');
+      return 'refused';
     }
-    await options.deliver({ issueNumber, slug, files, sessionRef, mode: deliveryMode });
-    harvested.add(sessionRef);
-    options.log?.info?.(
-      { issueNumber, slug, sessionRef, files: files.length, vendor: options.provider.vendor },
-      'delivered managed agent output',
-    );
-    return true;
+    if (plan.length === 0) return 'empty';
+
+    // The lock holder delivers; the loser waits for the candidate.
+    if (options.lock && !(await options.lock.acquire(claim))) {
+      options.log?.info?.(claim, 'managed delivery already claimed elsewhere');
+      return 'pending';
+    }
+    try {
+      const files = await download(sessionRef, plan);
+      await deliver({ issueNumber, slug, files, sessionRef, mode: deliveryMode });
+      harvested.add(sessionRef);
+      options.log?.info?.(
+        { ...claim, files: files.length, vendor: options.provider.vendor },
+        'delivered managed agent output',
+      );
+      return 'delivered';
+    } catch (error) {
+      if (error instanceof ManagedOutputRejectedError) {
+        harvested.add(sessionRef);
+        options.log?.warn({ err: error, ...claim }, 'managed output refused');
+        return 'refused';
+      }
+      await options.lock?.release(claim).catch(() => undefined);
+      throw error;
+    }
   }
 
   return {
@@ -120,22 +174,29 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
       if (!session) return null;
 
       let hasCandidate = observeOptions.hasCandidate;
+      let outcome: HarvestOutcome = 'empty';
       const canHarvest =
+        Boolean(deliver) &&
         !hasCandidate &&
         isManagedSessionHarvestable(session.state) &&
         observeOptions.issueNumber !== undefined &&
         Boolean(observeOptions.slug);
       if (canHarvest) {
         try {
-          hasCandidate = await harvest(ref, observeOptions.issueNumber!, observeOptions.slug!);
+          outcome = await harvest(ref, observeOptions.issueNumber!, observeOptions.slug!);
+          hasCandidate = outcome === 'delivered';
         } catch (error) {
           // A failed pull retries on the next poll.
+          outcome = 'pending';
           options.log?.warn({ err: error, ref }, 'could not harvest managed agent output');
         }
       }
 
+      // A settled session with no candidate fails the round.
+      const state = outcome === 'pending' ? 'in_progress' : session.state;
+
       return {
-        state: session.state,
+        state,
         hasCandidate,
         ...(session.usage
           ? { sessionTokens: { input: session.usage.inputTokens, output: session.usage.outputTokens } }

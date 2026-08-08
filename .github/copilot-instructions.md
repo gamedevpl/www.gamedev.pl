@@ -79,8 +79,10 @@ DSL — the `GameProject` model is authoritative.
 
 Production games will live in a **dedicated games repo maintained by coding agents**; this app is becoming a
 catalog, player, and spec-submission surface. Self-hosted agent execution was **removed for
-legal reasons** and is not a future phase. Read [`games-repo.md`](../docs/games-repo.md) before
-making architectural assumptions.
+legal reasons** and is not a future phase — that finding is about compute we operate on a
+seated human subscription, not about hosted builders as a category, so the metered-API
+backend in [`managed-agent-backend.md`](../docs/managed-agent-backend.md) does not reopen
+it. Read [`games-repo.md`](../docs/games-repo.md) before making architectural assumptions.
 
 ## Deployment status (2026-07-22)
 

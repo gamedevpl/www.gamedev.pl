@@ -14,6 +14,14 @@ export interface ManagedOutputFile {
   content: string;
 }
 
+// Listed before anything is downloaded, so caps can refuse first.
+export interface ManagedOutputRef {
+  path: string;
+  sizeBytes?: number;
+  // Opaque vendor handle; nothing outside the provider reads it.
+  handle?: string;
+}
+
 // Tokens: the only unit every vendor reports.
 export interface ManagedTokenUsage {
   inputTokens: number;
@@ -58,7 +66,9 @@ export interface ManagedAgentProvider {
   startSession(request: ManagedSessionRequest): Promise<ManagedSession>;
   getSession(sessionId: string): Promise<ManagedSession | null>;
   // Paths are relative to the request's outputPath.
-  listOutputs(sessionId: string): Promise<ManagedOutputFile[]>;
+  listOutputs(sessionId: string): Promise<ManagedOutputRef[]>;
+  // One at a time; the caller decides how many.
+  readOutput(sessionId: string, ref: ManagedOutputRef): Promise<string>;
   cancelSession(sessionId: string): Promise<{ enforced: boolean }>;
   deleteSession?(sessionId: string): Promise<void>;
 }
@@ -141,6 +151,29 @@ export const DEFAULT_MANAGED_OUTPUT_CAPS: ManagedOutputCaps = {
   maxFileBytes: 1_000_000,
 };
 
+// Spends the byte budget per file, so a download loop stops early.
+export function createManagedOutputBudget(caps: ManagedOutputCaps = DEFAULT_MANAGED_OUTPUT_CAPS) {
+  let total = 0;
+  let count = 0;
+  return {
+    admit(path: string, content: string): ManagedOutputFile {
+      count += 1;
+      if (count > caps.maxFiles) {
+        throw new ManagedOutputRejectedError(`too many output files: ${count} > ${caps.maxFiles}`);
+      }
+      const bytes = Buffer.byteLength(content, 'utf8');
+      if (bytes > caps.maxFileBytes) {
+        throw new ManagedOutputRejectedError(`output file too large: ${path} is ${bytes} bytes`);
+      }
+      total += bytes;
+      if (total > caps.maxTotalBytes) {
+        throw new ManagedOutputRejectedError(`output too large: over ${caps.maxTotalBytes} bytes`);
+      }
+      return { path, content };
+    },
+  };
+}
+
 // A pull has no ceiling; this is it.
 export function assertWithinManagedOutputCaps(
   files: ManagedOutputFile[],
@@ -149,26 +182,46 @@ export function assertWithinManagedOutputCaps(
   if (files.length > caps.maxFiles) {
     throw new ManagedOutputRejectedError(`too many output files: ${files.length} > ${caps.maxFiles}`);
   }
-  let total = 0;
-  for (const file of files) {
-    const bytes = Buffer.byteLength(file.content, 'utf8');
-    if (bytes > caps.maxFileBytes) {
-      throw new ManagedOutputRejectedError(`output file too large: ${file.path} is ${bytes} bytes`);
-    }
-    total += bytes;
-    if (total > caps.maxTotalBytes) {
-      throw new ManagedOutputRejectedError(`output too large: over ${caps.maxTotalBytes} bytes`);
-    }
-  }
+  const budget = createManagedOutputBudget(caps);
+  for (const file of files) budget.admit(file.path, file.content);
   return files;
 }
 
+// What to download, and where it lands in the game.
+export interface ManagedOutputPlan {
+  ref: ManagedOutputRef;
+  path: string;
+}
+
+// Refused on the listing, before a byte is fetched.
+export function assertWithinManagedOutputPlan(
+  plan: ManagedOutputPlan[],
+  caps: ManagedOutputCaps = DEFAULT_MANAGED_OUTPUT_CAPS,
+): ManagedOutputPlan[] {
+  if (plan.length > caps.maxFiles) {
+    throw new ManagedOutputRejectedError(`too many output files: ${plan.length} > ${caps.maxFiles}`);
+  }
+  let known = 0;
+  for (const entry of plan) {
+    const bytes = entry.ref.sizeBytes;
+    if (bytes === undefined) continue;
+    if (bytes > caps.maxFileBytes) {
+      throw new ManagedOutputRejectedError(`output file too large: ${entry.path} is ${bytes} bytes`);
+    }
+    known += bytes;
+    if (known > caps.maxTotalBytes) {
+      throw new ManagedOutputRejectedError(`output too large: over ${caps.maxTotalBytes} bytes`);
+    }
+  }
+  return plan;
+}
+
 // Strips games/<slug>/ so harvests match delivery paths.
-export function toGameRelativeOutputs(files: ManagedOutputFile[], slug: string): ManagedOutputFile[] {
+export function planManagedOutputs(refs: readonly ManagedOutputRef[], slug: string): ManagedOutputPlan[] {
   const prefix = `games/${slug}/`;
-  const inside: ManagedOutputFile[] = [];
-  for (const file of files) {
-    const path = file.path.replace(/^\.\//, '');
+  const inside: ManagedOutputPlan[] = [];
+  for (const ref of refs) {
+    const path = ref.path.replace(/^\.\//, '');
     if (
       !path ||
       path.includes('\0') ||
@@ -177,15 +230,15 @@ export function toGameRelativeOutputs(files: ManagedOutputFile[], slug: string):
       /^[A-Za-z]:\//.test(path) ||
       path.split('/').includes('..')
     ) {
-      throw new ManagedOutputRejectedError(`unsafe output path: ${file.path}`);
+      throw new ManagedOutputRejectedError(`unsafe output path: ${ref.path}`);
     }
     if (path.startsWith(prefix)) {
       const relative = path.slice(prefix.length);
-      if (relative) inside.push({ path: relative, content: file.content });
+      if (relative) inside.push({ ref, path: relative });
       continue;
     }
     // Another game's directory is never this round's deliverable.
-    if (!path.startsWith('games/')) inside.push({ path, content: file.content });
+    if (!path.startsWith('games/')) inside.push({ ref, path });
   }
   return inside;
 }

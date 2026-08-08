@@ -40,7 +40,7 @@ survives only in this repo's early history.
 | Generator seam  | `packages/game-generator` — deterministic **mock only**, a development preview route                                                                                                                                                                                |
 | Local dev       | ✅ Whole product runs with no keys — bundled fixture games and a dev sign-in (`local-development.md`)                                                                                                                                                               |
 | Legal           | ✅ Terms, privacy policy, AI disclosure, and a DSA notice-and-action route are published                                                                                                                                                                            |
-| Orchestration   | 🗃️ Removed — self-hosted agent execution was abandoned for legal reasons (see `games-repo.md`)                                                                                                                                                                      |
+| Orchestration   | 🗃️ Self-hosted agent execution abandoned for legal reasons (see `games-repo.md`); 🚧 a hosted builder on a metered API key is a different posture and is in progress (`managed-agent-backend.md`)                                                                   |
 | Deployment      | ✅ GitHub Actions → Cloud Run via Workload Identity Federation; no IaC (`infra/` is scripts)                                                                                                                                                                        |
 | After publish   | 🚧 Visits and per-game health are measured and readable by the operator; acting on the signal is still design (`improvement-loop-plan.md`)                                                                                                                          |
 
@@ -56,6 +56,7 @@ survives only in this repo's early history.
 | [`games-snapshot.md`](./games-snapshot.md)                         | Published games are baked to Cloud Storage on merge, so playing no longer rebuilds them from GitHub     |
 | [`security-model.md`](./security-model.md)                         | Threat model. The credential-exfiltration finding is **dissolved** by the games-repo pivot              |
 | [`agent-adapters.md`](./agent-adapters.md)                         | Common repository contract for Claude Code / Codex / agy / Copilot                                      |
+| [`managed-agent-backend.md`](./managed-agent-backend.md)           | Vendor-neutral seam for running the platform builder on a hosted agent platform                         |
 | [`deployment.md`](./deployment.md)                                 | Minimal delivery shape for the app, games origin, and submission API                                    |
 | [`container-orchestration.md`](./container-orchestration.md)       | **Archived** design for the removed self-hosted generation direction                                    |
 | [`remix-to-pr.md`](./remix-to-pr.md)                               | Spec for the player-remix → pull-request feature                                                        |

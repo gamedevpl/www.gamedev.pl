@@ -441,6 +441,25 @@ export interface JobCostEntry {
  */
 export const MAX_JOB_COSTS = 200;
 
+// Both stores share this; `null` means do not write.
+export function applyMeasuredTokens(
+  costs: readonly JobCostEntry[],
+  ref: string,
+  tokens: { input: number; output: number },
+): JobCostEntry[] | null {
+  let changed = false;
+  const next = costs.map((entry) => {
+    if (entry.kind !== 'agent_session' || entry.ref !== ref) return entry;
+    const sameTokens = entry.tokens?.input === tokens.input && entry.tokens?.output === tokens.output;
+    const placeholder = entry.credits !== undefined && !entry.creditsMeasured;
+    if (sameTokens && !placeholder) return entry;
+    changed = true;
+    const { credits: _dropped, ...withoutCredits } = entry;
+    return placeholder ? { ...withoutCredits, tokens } : { ...entry, tokens };
+  });
+  return changed ? next : null;
+}
+
 /**
  * How many transitions a submission keeps. Oldest are dropped first; the tail is what
  * anyone debugging a live build actually looks at.
@@ -1754,7 +1773,7 @@ export interface Store {
    * Best-effort like {@link recordJobCost}: must never fail the poll that discovered it.
    */
   setJobCostCredits(issueNumber: number, ref: string, credits: number): Promise<void>;
-  // Token-billed twin of setJobCostCredits; same best-effort contract.
+  // Token-billed twin of setJobCostCredits; drops the credit placeholder.
   setJobCostTokens(issueNumber: number, ref: string, tokens: { input: number; output: number }): Promise<void>;
   /**
    * Records where a dispatched job's work actually lives, once the backend can say.
@@ -3078,14 +3097,8 @@ export class InMemoryStore implements Store {
   async setJobCostTokens(issueNumber: number, ref: string, tokens: { input: number; output: number }): Promise<void> {
     const sub = this.submissions.get(issueNumber);
     if (!sub?.costs?.length) return;
-    let changed = false;
-    const costs = sub.costs.map((entry) => {
-      if (entry.kind !== 'agent_session' || entry.ref !== ref) return entry;
-      if (entry.tokens && entry.tokens.input === tokens.input && entry.tokens.output === tokens.output) return entry;
-      changed = true;
-      return { ...entry, tokens };
-    });
-    if (!changed) return;
+    const costs = applyMeasuredTokens(sub.costs, ref, tokens);
+    if (!costs) return;
     this.submissions.set(issueNumber, { ...sub, costs });
   }
 
@@ -5258,14 +5271,8 @@ export class FirestoreStore implements Store {
       const snap = await tx.get(docRef);
       if (!snap.exists) return;
       const existing = (snap.data() as SubmissionRecord).costs ?? [];
-      let changed = false;
-      const costs = existing.map((entry) => {
-        if (entry.kind !== 'agent_session' || entry.ref !== ref) return entry;
-        if (entry.tokens && entry.tokens.input === tokens.input && entry.tokens.output === tokens.output) return entry;
-        changed = true;
-        return { ...entry, tokens };
-      });
-      if (!changed) return;
+      const costs = applyMeasuredTokens(existing, ref, tokens);
+      if (!costs) return;
       tx.set(docRef, { costs }, { merge: true });
     });
   }

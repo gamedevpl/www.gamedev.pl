@@ -5,7 +5,7 @@ import {
   normalizeManagedState,
   registerManagedProvider,
   type ManagedAgentProvider,
-  type ManagedOutputFile,
+  type ManagedOutputRef,
   type ManagedProviderConfig,
   type ManagedSession,
   type ManagedSessionRequest,
@@ -155,17 +155,24 @@ export function createAnthropicManagedProvider(config: ManagedProviderConfig): M
       return toSession(parsed.data);
     },
 
-    async listOutputs(sessionId: string): Promise<ManagedOutputFile[]> {
+    async listOutputs(sessionId: string): Promise<ManagedOutputRef[]> {
       const raw = await call(`/v1/files?scope_id=${encodeURIComponent(sessionId)}`);
       if (raw === null) return [];
       const parsed = FileListSchema.safeParse(raw);
       if (!parsed.success) throw new ManagedAgentError('anthropic files API returned an unreadable listing');
-      const named = parsed.data.data.filter((file) => Boolean(file.filename));
-      const files: ManagedOutputFile[] = [];
-      for (const file of named) {
-        files.push({ path: file.filename!, content: await download(file.id) });
-      }
-      return files;
+      return parsed.data.data
+        .filter((file) => Boolean(file.filename))
+        .map((file) => ({
+          path: file.filename!,
+          handle: file.id,
+          ...(file.size_bytes === undefined ? {} : { sizeBytes: file.size_bytes }),
+        }));
+    },
+
+    // Files are addressed by id, so the session is not needed here.
+    async readOutput(_sessionId: string, ref: ManagedOutputRef): Promise<string> {
+      if (!ref.handle) throw new ManagedAgentError(`anthropic output ${ref.path} has no file id`);
+      return download(ref.handle);
     },
 
     async cancelSession(sessionId: string): Promise<{ enforced: boolean }> {

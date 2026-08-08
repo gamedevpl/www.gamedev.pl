@@ -24,8 +24,10 @@ function brief(overrides: Partial<BuildBrief> = {}): BuildBrief {
 
 function fakeProvider(overrides: Partial<ManagedAgentProvider> = {}) {
   const started: ManagedSessionRequest[] = [];
+  const read: string[] = [];
   let state: string = 'queued';
   let outputs: ManagedOutputFile[] = [];
+  let listedSizes = false;
   const provider: ManagedAgentProvider = {
     vendor: 'fake',
     model: 'fake-model',
@@ -39,7 +41,18 @@ function fakeProvider(overrides: Partial<ManagedAgentProvider> = {}) {
       state: normalizeManagedState(state),
       usage: { inputTokens: 1_000, outputTokens: 250 },
     }),
-    listOutputs: async () => outputs,
+    listOutputs: async () =>
+      outputs.map((file) => ({
+        path: file.path,
+        handle: file.path,
+        ...(listedSizes ? { sizeBytes: Buffer.byteLength(file.content, 'utf8') } : {}),
+      })),
+    readOutput: async (_sessionId, ref) => {
+      read.push(ref.path);
+      const match = outputs.find((file) => file.path === ref.handle);
+      if (!match) throw new Error(`no such output: ${ref.path}`);
+      return match.content;
+    },
     cancelSession: async () => ({ enforced: true }),
     deleteSession: async () => undefined,
     ...overrides,
@@ -47,11 +60,13 @@ function fakeProvider(overrides: Partial<ManagedAgentProvider> = {}) {
   return {
     provider,
     started,
+    read,
     setState: (next: string) => {
       state = next;
     },
-    setOutputs: (next: ManagedOutputFile[]) => {
+    setOutputs: (next: ManagedOutputFile[], options: { withSizes?: boolean } = {}) => {
       outputs = next;
+      listedSizes = options.withSizes ?? false;
     },
   };
 }
@@ -61,6 +76,27 @@ describe('managed backend', () => {
     const { provider } = fakeProvider();
     const backend = createManagedBackend({ provider, deliver: async () => ({ version: 'v1' }) });
     expect(backend.name).toBe('managed:fake');
+  });
+
+  it('refuses a configuration that can neither pull nor be submitted to', () => {
+    const { provider } = fakeProvider();
+    expect(() => createManagedBackend({ provider })).toThrow(/delivery sink or an MCP endpoint/);
+  });
+
+  it('accepts an MCP-only configuration, where the agent submits for itself', async () => {
+    const { provider, setState, setOutputs, read } = fakeProvider();
+    const backend = createManagedBackend({
+      provider,
+      tools: { mcpEndpoints: [{ url: 'https://www.gamedev.pl/api/mcp', name: 'gamedevpl' }] },
+    });
+    setOutputs([{ path: `games/${SLUG}/game.ts`, content: 'export {};' }]);
+    setState('completed');
+
+    const observation = await backend.observe('session-1', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
+
+    // Nothing is pulled: `submit_sources` is the delivery.
+    expect(read).toEqual([]);
+    expect(observation).toMatchObject({ state: 'completed', hasCandidate: false });
   });
 
   it('sends the seed as workspace files and the digest as a cacheable prefix', async () => {
@@ -140,7 +176,7 @@ describe('managed backend', () => {
   });
 
   it('refuses an oversized harvest instead of forwarding it, and does not retry', async () => {
-    const { provider, setState, setOutputs } = fakeProvider();
+    const { provider, setState, setOutputs, read } = fakeProvider();
     const deliver = vi.fn(async () => ({ version: 'v1' }));
     const warn = vi.fn();
     const backend = createManagedBackend({ provider, deliver, log: { warn } });
@@ -151,12 +187,41 @@ describe('managed backend', () => {
     const second = await backend.observe('session-1', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
 
     expect(deliver).not.toHaveBeenCalled();
+    // The point of refusing on the listing: no bytes were ever pulled.
+    expect(read).toEqual([]);
     expect(first).toMatchObject({ hasCandidate: false });
     expect(second).toMatchObject({ hasCandidate: false });
     expect(warn).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps observing when a pull fails, so the next poll can retry', async () => {
+  it('refuses a file the listing already says is too big, before downloading it', async () => {
+    const { provider, setState, setOutputs, read } = fakeProvider();
+    const deliver = vi.fn(async () => ({ version: 'v1' }));
+    const backend = createManagedBackend({ provider, deliver, log: { warn: vi.fn() } });
+    setOutputs([{ path: `games/${SLUG}/game.ts`, content: 'x'.repeat(1_000_001) }], { withSizes: true });
+    setState('completed');
+
+    await backend.observe('session-1', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
+
+    expect(read).toEqual([]);
+    expect(deliver).not.toHaveBeenCalled();
+  });
+
+  it('refuses a file whose real bytes exceed what the listing claimed', async () => {
+    const { provider, setState, setOutputs } = fakeProvider();
+    const deliver = vi.fn(async () => ({ version: 'v1' }));
+    const backend = createManagedBackend({ provider, deliver, log: { warn: vi.fn() } });
+    // No listed size, so only the bytes can be capped.
+    setOutputs([{ path: `games/${SLUG}/game.ts`, content: 'x'.repeat(1_000_001) }]);
+    setState('completed');
+
+    const observation = await backend.observe('session-1', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
+
+    expect(deliver).not.toHaveBeenCalled();
+    expect(observation).toMatchObject({ state: 'completed', hasCandidate: false });
+  });
+
+  it('does not report a settled session when it was the pull that failed', async () => {
     const { provider, setState } = fakeProvider({
       listOutputs: async () => {
         throw new Error('files API down');
@@ -168,8 +233,47 @@ describe('managed backend', () => {
 
     const observation = await backend.observe('session-1', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
 
-    expect(observation).toMatchObject({ state: 'completed', hasCandidate: false });
+    // `completed` with no candidate fails the job; our outage must not.
+    expect(observation).toMatchObject({ state: 'in_progress', hasCandidate: false });
     expect(warn).toHaveBeenCalled();
+  });
+
+  it('waits rather than duplicating when another instance holds the delivery lock', async () => {
+    const { provider, setState, setOutputs, read } = fakeProvider();
+    const deliver = vi.fn(async () => ({ version: 'v1' }));
+    const backend = createManagedBackend({
+      provider,
+      deliver,
+      lock: { acquire: async () => false, release: async () => undefined },
+    });
+    setOutputs([{ path: `games/${SLUG}/game.ts`, content: 'export {};' }]);
+    setState('completed');
+
+    const observation = await backend.observe('session-1', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
+
+    expect(deliver).not.toHaveBeenCalled();
+    expect(read).toEqual([]);
+    expect(observation).toMatchObject({ state: 'in_progress', hasCandidate: false });
+  });
+
+  it('releases the lock when delivery fails, so the retry is not locked out', async () => {
+    const { provider, setState, setOutputs } = fakeProvider();
+    const release = vi.fn(async () => undefined);
+    const backend = createManagedBackend({
+      provider,
+      deliver: async () => {
+        throw new Error('gate unavailable');
+      },
+      lock: { acquire: async () => true, release },
+      log: { warn: vi.fn() },
+    });
+    setOutputs([{ path: `games/${SLUG}/game.ts`, content: 'export {};' }]);
+    setState('completed');
+
+    const observation = await backend.observe('session-1', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
+
+    expect(release).toHaveBeenCalledWith({ issueNumber: ISSUE, slug: SLUG, sessionRef: 'session-1' });
+    expect(observation).toMatchObject({ state: 'in_progress', hasCandidate: false });
   });
 
   it('never harvests over a candidate that already exists', async () => {
