@@ -38,6 +38,25 @@ function computeStartTime(status: SubmissionStatus | null, mountedAt: number): n
   return mountedAt;
 }
 
+function computeEndTime(status: SubmissionStatus | null): number | null {
+  if (!status) return null;
+  if (status.agentEndedAt) {
+    const t = Date.parse(status.agentEndedAt);
+    if (!isNaN(t) && t > 0) return t;
+  }
+  if (status.events && status.events.length > 0) {
+    const times = status.events.map((e) => Date.parse(e.createdAt)).filter((t) => !isNaN(t) && t > 0);
+    if (times.length > 0) {
+      return Math.max(...times);
+    }
+  }
+  if (status.lastAgentSignalAt) {
+    const t = Date.parse(status.lastAgentSignalAt);
+    if (!isNaN(t) && t > 0) return t;
+  }
+  return null;
+}
+
 function formatElapsed(elapsedMs: number): string {
   const totalSecs = Math.max(0, Math.floor(elapsedMs / 1000));
   const mins = Math.floor(totalSecs / 60);
@@ -220,7 +239,8 @@ export function StudioWelcomeView({ game, onOpenStudio }: StudioWelcomeViewProps
   const progress = welcomeProgressMessage(status, t);
   const label = welcomeStatusLabel(status, t);
   const startTime = computeStartTime(status, mountedAtRef.current);
-  const elapsedMs = Math.max(0, now - startTime);
+  const endTime = isRunning ? null : computeEndTime(status);
+  const elapsedMs = Math.max(0, (endTime ?? now) - startTime);
   const elapsedText = formatElapsed(elapsedMs);
   const mascotEmotion = getMascotEmotion(status);
 
@@ -285,11 +305,7 @@ export function StudioWelcomeView({ game, onOpenStudio }: StudioWelcomeViewProps
 
           <p className="qa-stage-lede">{isReady ? t('welcome.ledeReady') : t('welcome.lede')}</p>
 
-          <div
-            className={`studio-welcome-progress${isReady ? ' is-ready' : isRunning ? ' is-running' : ''}`}
-            role="status"
-            aria-live="polite"
-          >
+          <div className={`studio-welcome-progress${isReady ? ' is-ready' : isRunning ? ' is-running' : ''}`}>
             <div className="studio-welcome-progress-header">
               <p className="studio-welcome-progress-label">
                 <span className="studio-welcome-live-badge" aria-hidden="true">
@@ -307,6 +323,7 @@ export function StudioWelcomeView({ game, onOpenStudio }: StudioWelcomeViewProps
               {elapsedText ? (
                 <span
                   className="studio-welcome-timer"
+                  aria-hidden="true"
                   title={t(isReady ? 'welcome.completedIn' : 'welcome.runningFor', { time: elapsedText })}
                 >
                   <PixelIcon name="clock" size={12} />
@@ -314,7 +331,9 @@ export function StudioWelcomeView({ game, onOpenStudio }: StudioWelcomeViewProps
                 </span>
               ) : null}
             </div>
-            <p className="studio-welcome-progress-message">{progress}</p>
+            <p className="studio-welcome-progress-message" role="status" aria-live="polite">
+              {progress}
+            </p>
             {isReady ? (
               <div className="studio-welcome-ready-callout">
                 <p className="studio-welcome-ready-title">
