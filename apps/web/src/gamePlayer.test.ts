@@ -65,10 +65,14 @@ describe('embedGameHtml', () => {
     // Drop shell's 1400px wrap gutters.
     expect(out).toContain('.wrap{width:100%!important;max-width:none!important');
     expect(out).toContain('padding:0!important');
-    // Element box matches paint; avoid object-fit letterbox hitbox.
-    expect(out).toContain('#game{width:auto!important;height:auto!important');
+    // Fit the box to the logical bitmap without object-fit hitbox offsets.
+    expect(out).toContain(
+      '#game{--gdpl-canvas-ratio:1.6;flex:0 1 auto!important;width:min(100%,calc(100dvh * var(--gdpl-canvas-ratio)))!important;',
+    );
+    expect(out).toContain('aspect-ratio:var(--gdpl-canvas-ratio)!important');
     expect(out).toContain('max-width:100%!important');
     expect(out).toContain('max-height:100%!important');
+    expect(out).not.toContain('#game{width:auto!important;height:auto!important');
     expect(out).not.toContain('#game{width:100%!important;height:100%!important');
     expect(out).not.toContain('object-fit:contain');
   });

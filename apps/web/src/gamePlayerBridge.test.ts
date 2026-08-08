@@ -268,3 +268,13 @@ describe('the bridge pad fallback', () => {
     expect(controlsFrom(await runBridge('<canvas id="game"></canvas>'))?.kit).toEqual([]);
   });
 });
+
+describe('embedded canvas sizing', () => {
+  it('fits the logical canvas to the iframe without stretching its hit box', () => {
+    const html = embedGameHtml('<html><head></head><body><canvas id="game"></canvas></body></html>');
+
+    expect(html).toContain('flex:0 1 auto!important');
+    expect(html).toContain('width:min(100%,calc(100dvh * var(--gdpl-canvas-ratio)))!important');
+    expect(html).toContain('aspect-ratio:var(--gdpl-canvas-ratio)!important');
+  });
+});
