@@ -253,6 +253,18 @@ The provider sends the cost cap to Anthropic as the session budget, and the back
 interrupts the session when the wall-clock cap expires. Omitting either value makes the
 probe refuse to start rather than run unbounded.
 
+The probe can inject a digest file while exercising this path:
+
+```bash
+npm run managed:probe -w @gamedevpl/api -- --vendor anthropic --mcp --wait \
+  --wait-seconds 120 --cost-cents 100 --digest-file /path/to/engine.digest.md
+```
+
+The production registry will use `createGcsKitDigestLoader`: it reads `kits/current.json`,
+follows that engine ref to `kits/<engineRef>.digest.md`, caches the result, and appends it
+to the configured Agent system prompt. The digest is therefore pinned to the same engine
+ref the round receives, rather than copied into this repository.
+
 ## Configuration
 
 | Variable                            | Meaning                                                         |

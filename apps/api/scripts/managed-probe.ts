@@ -1,7 +1,8 @@
 // One managed round, stub vendor. Usage: docs/managed-agent-backend.md.
 
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { BuildBrief } from '../src/agent-backend.js';
 import { buildPrompt } from '../src/build-prompt.js';
 import {
@@ -12,6 +13,7 @@ import {
 } from '../src/managed-agent.js';
 import '../src/managed-provider-anthropic.js';
 import { createManagedBackend, type ManagedDeliveryInput } from '../src/managed-backend.js';
+import { createFileKitDigestLoader } from '../src/kit-digest.js';
 
 const args = process.argv.slice(2);
 const flag = (name: string) => args.includes(`--${name}`);
@@ -20,6 +22,7 @@ const value = (name: string) => (args.includes(`--${name}`) ? args[args.indexOf(
 const SLUG = value('slug') ?? 'comet-courier';
 const ISSUE = Number(value('issue') ?? 4242);
 const outDir = value('out');
+const digestPath = value('digest-file');
 const apiBaseUrl = (value('base-url') ?? 'https://api.anthropic.com').replace(/\/$/, '');
 const wait = flag('wait');
 const waitSeconds = Number(value('wait-seconds') ?? process.env.MANAGED_AGENT_MAX_SECONDS ?? '');
@@ -38,6 +41,10 @@ const brief: BuildBrief = {
   apiBaseUrl: 'http://127.0.0.1:3001',
   ...(flag('feedback') ? { feedback: 'make the comets bigger' } : {}),
 };
+const manifestPath = fileURLToPath(new URL('../../../infra/managed-agent.json', import.meta.url));
+const manifest = digestPath
+  ? (JSON.parse(readFileSync(manifestPath, 'utf8')) as { agent?: { system?: string } })
+  : undefined;
 
 if (flag('prompt')) {
   rule('brief — channel contract');
@@ -150,6 +157,8 @@ const backend = createManagedBackend({
     warn: (context, message) => console.warn('WARN ', message, context),
     info: (context, message) => console.log('INFO ', message, context),
   },
+  ...(manifest?.agent?.system ? { systemPrompt: async () => manifest.agent!.system } : {}),
+  ...(digestPath ? { kitDigest: createFileKitDigestLoader(digestPath) } : {}),
   ...(wait ? { maxDurationSeconds: waitSeconds } : {}),
 });
 

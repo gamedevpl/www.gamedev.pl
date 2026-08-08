@@ -3,6 +3,7 @@ import type { AgentBackend, BuildBrief, DispatchResult } from './agent-backend.j
 import { buildPrompt } from './build-prompt.js';
 import { forbiddenDeliveryPathReason } from './games-store.js';
 import type { AgentObservation } from './job-state.js';
+import { appendKitDigest, type KitDigestLoader } from './kit-digest.js';
 import {
   assertWithinManagedOutputPlan,
   ManagedAgentError,
@@ -54,6 +55,7 @@ export interface ManagedBackendOptions {
   lock?: ManagedDeliveryLock;
   // Cacheable prefix, typically the published Creator Kit digest.
   systemPrompt?: () => Promise<string | undefined>;
+  kitDigest?: KitDigestLoader;
   outputPath?: string;
   effort?: ManagedAgentEffort;
   maxDurationSeconds?: number;
@@ -83,7 +85,10 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
   const startedAt = new Map<string, number>();
 
   async function start(brief: BuildBrief): Promise<DispatchResult> {
-    const systemPrompt = options.systemPrompt ? await options.systemPrompt() : undefined;
+    const systemPrompt = appendKitDigest(
+      options.systemPrompt ? await options.systemPrompt() : undefined,
+      options.kitDigest ? await options.kitDigest.load() : undefined,
+    );
     const session = await options.provider.startSession({
       correlationId: String(brief.issueNumber),
       ...(systemPrompt ? { systemPrompt } : {}),

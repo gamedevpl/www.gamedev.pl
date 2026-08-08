@@ -105,6 +105,7 @@ describe('managed backend', () => {
       provider,
       deliver: async () => ({ version: 'v1' }),
       systemPrompt: async () => 'KIT DIGEST',
+      kitDigest: { load: async () => 'API EXAMPLES' },
     });
 
     await backend.dispatch(
@@ -112,7 +113,7 @@ describe('managed backend', () => {
     );
 
     expect(started).toHaveLength(1);
-    expect(started[0].systemPrompt).toBe('KIT DIGEST');
+    expect(started[0].systemPrompt).toBe('KIT DIGEST\n\n## Creator Kit digest\n\nAPI EXAMPLES');
     expect(started[0].model).toBe('fake-model');
     expect(started[0].correlationId).toBe(String(ISSUE));
     expect(started[0].workspaceFiles).toEqual([{ path: `games/${SLUG}/game.ts`, content: 'export {};' }]);
