@@ -34,6 +34,7 @@ describe('anthropic managed provider', () => {
       model: 'test-model',
       agentId: 'agent_test',
       environmentId: 'env_test',
+      maxListCostCents: 125,
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
 
@@ -57,6 +58,10 @@ describe('anthropic managed provider', () => {
         model: { id: 'test-model' },
       },
       environment_id: 'env_test',
+      budget: {
+        type: 'limit',
+        max_list_cost: { amount: '125', currency: 'USD' },
+      },
       metadata: { correlation_id: '42' },
       initial_events: [{ type: 'user.message', content: [{ type: 'text', text: 'build it' }] }],
     });

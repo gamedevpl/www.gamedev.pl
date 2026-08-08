@@ -287,6 +287,30 @@ describe('managed backend', () => {
     expect(observation).toMatchObject({ state: 'in_progress', hasCandidate: false });
   });
 
+  it('cancels a session when the backend wall-clock limit expires', async () => {
+    vi.useFakeTimers();
+    try {
+      const cancel = vi.fn(async () => ({ enforced: true }));
+      const { provider, setState } = fakeProvider({ cancelSession: cancel });
+      const backend = createManagedBackend({
+        provider,
+        deliver: async () => ({ version: 'v1' }),
+        maxDurationSeconds: 1,
+      });
+
+      await backend.dispatch(brief());
+      setState('in_progress');
+      vi.advanceTimersByTime(1_001);
+
+      const observation = await backend.observe('session-1', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
+
+      expect(cancel).toHaveBeenCalledWith('session-1');
+      expect(observation).toMatchObject({ state: 'timed_out', hasCandidate: false });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('releases the lock when delivery fails, so the retry is not locked out', async () => {
     const { provider, setState, setOutputs } = fakeProvider();
     const release = vi.fn(async () => undefined);

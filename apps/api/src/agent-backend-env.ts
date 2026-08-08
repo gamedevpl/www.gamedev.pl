@@ -58,8 +58,23 @@ export function createManagedPlatformBackendFromEnv(deps?: ManagedBackendDeps, l
   }
   const agentId = process.env.MANAGED_AGENT_ID?.trim();
   const environmentId = process.env.MANAGED_AGENT_ENVIRONMENT_ID?.trim();
+  const maxDurationSeconds = Number(process.env.MANAGED_AGENT_MAX_SECONDS ?? '');
+  const maxListCostCents = Number(process.env.MANAGED_AGENT_MAX_LIST_COST_CENTS ?? '');
   if (vendor === 'anthropic' && (!agentId || !environmentId)) {
     log?.warn({ vendor }, 'anthropic managed agent requires MANAGED_AGENT_ID / MANAGED_AGENT_ENVIRONMENT_ID');
+    return undefined;
+  }
+  if (
+    vendor === 'anthropic' &&
+    (!Number.isInteger(maxDurationSeconds) ||
+      maxDurationSeconds <= 0 ||
+      !Number.isInteger(maxListCostCents) ||
+      maxListCostCents <= 0)
+  ) {
+    log?.warn(
+      { vendor },
+      'anthropic managed agent requires positive MANAGED_AGENT_MAX_SECONDS / MANAGED_AGENT_MAX_LIST_COST_CENTS',
+    );
     return undefined;
   }
   if (!deps?.deliver) {
@@ -68,7 +83,6 @@ export function createManagedPlatformBackendFromEnv(deps?: ManagedBackendDeps, l
   }
 
   const effort = process.env.MANAGED_AGENT_EFFORT?.trim() as ManagedAgentEffort | undefined;
-  const maxDurationSeconds = Number(process.env.MANAGED_AGENT_MAX_SECONDS ?? '');
   const deliveryMode = process.env.MANAGED_AGENT_DELIVERY_MODE?.trim() === 'publish' ? 'publish' : 'preview';
 
   let provider;
@@ -80,6 +94,7 @@ export function createManagedPlatformBackendFromEnv(deps?: ManagedBackendDeps, l
       ...(process.env.MANAGED_AGENT_ENVIRONMENT_ID?.trim()
         ? { environmentId: process.env.MANAGED_AGENT_ENVIRONMENT_ID.trim() }
         : {}),
+      ...(Number.isInteger(maxListCostCents) && maxListCostCents > 0 ? { maxListCostCents } : {}),
       ...(process.env.MANAGED_AGENT_BASE_URL?.trim() ? { baseUrl: process.env.MANAGED_AGENT_BASE_URL.trim() } : {}),
     });
   } catch (error) {

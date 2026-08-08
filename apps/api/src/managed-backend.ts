@@ -80,6 +80,7 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
   const deliveryMode = options.deliveryMode ?? 'preview';
   // At-most-once per session; a re-poll cannot duplicate.
   const harvested = new Set<string>();
+  const startedAt = new Map<string, number>();
 
   async function start(brief: BuildBrief): Promise<DispatchResult> {
     const systemPrompt = options.systemPrompt ? await options.systemPrompt() : undefined;
@@ -102,6 +103,7 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
       ...(options.maxDurationSeconds ? { maxDurationSeconds: options.maxDurationSeconds } : {}),
       ...(options.tools ? { tools: options.tools } : {}),
     });
+    startedAt.set(session.id, Date.now());
     return { ref: session.id };
   }
 
@@ -186,6 +188,23 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
       const session = await options.provider.getSession(ref);
       if (!session) return null;
 
+      const started = startedAt.get(ref) ?? (session.startedAt ? Date.parse(session.startedAt) : NaN);
+      const expired =
+        options.maxDurationSeconds !== undefined &&
+        Number.isFinite(started) &&
+        Date.now() - started >= options.maxDurationSeconds * 1000 &&
+        !['completed', 'failed', 'timed_out', 'cancelled'].includes(session.state);
+      if (expired) {
+        await options.provider.cancelSession(ref);
+        return {
+          state: 'timed_out',
+          hasCandidate: observeOptions.hasCandidate,
+          ...(session.usage
+            ? { sessionTokens: { input: session.usage.inputTokens, output: session.usage.outputTokens } }
+            : {}),
+        };
+      }
+
       let hasCandidate = observeOptions.hasCandidate;
       let outcome: HarvestOutcome = 'empty';
       const canHarvest =
@@ -222,6 +241,7 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
     },
 
     async cleanup(previous: DispatchResult): Promise<void> {
+      startedAt.delete(previous.ref);
       harvested.delete(previous.ref);
       await options.provider.deleteSession?.(previous.ref);
     },

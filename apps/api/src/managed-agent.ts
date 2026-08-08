@@ -254,6 +254,7 @@ export interface ManagedProviderConfig {
   model: string;
   agentId?: string;
   environmentId?: string;
+  maxListCostCents?: number;
   baseUrl?: string;
   fetchImpl?: typeof fetch;
   timeoutMs?: number;

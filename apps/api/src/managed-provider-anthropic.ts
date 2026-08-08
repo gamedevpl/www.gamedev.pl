@@ -72,6 +72,7 @@ export function createAnthropicManagedProvider(config: ManagedProviderConfig): M
   const timeoutMs = config.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const agentId = config.agentId?.trim();
   const environmentId = config.environmentId?.trim();
+  const maxListCostCents = config.maxListCostCents;
 
   async function call(path: string, init: RequestInit = {}): Promise<unknown> {
     const response = await fetchImpl(`${baseUrl}${path}`, {
@@ -124,8 +125,8 @@ export function createAnthropicManagedProvider(config: ManagedProviderConfig): M
           'anthropic managed agents uses the configured environment, not inline workspace files',
         );
       }
-      if (request.effort || request.maxDurationSeconds) {
-        throw new ManagedAgentError('anthropic managed agents configures effort and duration on the Agent resource');
+      if (request.effort) {
+        throw new ManagedAgentError('anthropic managed agents configures effort on the Agent resource');
       }
       if (request.tools?.allowedHosts?.length || request.tools?.credentialNames?.length) {
         throw new ManagedAgentError('anthropic managed agents does not map host or credential names from this seam');
@@ -159,6 +160,14 @@ export function createAnthropicManagedProvider(config: ManagedProviderConfig): M
             content: [{ type: 'text', text: request.prompt }],
           },
         ],
+        ...(maxListCostCents === undefined
+          ? {}
+          : {
+              budget: {
+                type: 'limit',
+                max_list_cost: { amount: String(maxListCostCents), currency: 'USD' },
+              },
+            }),
       };
       const parsed = SessionSchema.safeParse(
         await call('/v1/sessions', { method: 'POST', body: JSON.stringify(body) }),

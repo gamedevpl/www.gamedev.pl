@@ -240,19 +240,31 @@ or prove that the configured Agent writes the expected files. `--base-url` aims 
 adapter at a local HTTP stub. A full creator-visible round still needs the sink, registry
 wiring and a configured MCP connection or pull workspace.
 
+For a bounded live run, `--wait` requires both caps explicitly:
+
+```bash
+npm run managed:probe -w @gamedevpl/api -- --vendor anthropic --wait \
+  --wait-seconds 120 --cost-cents 100
+```
+
+The provider sends the cost cap to Anthropic as the session budget, and the backend
+interrupts the session when the wall-clock cap expires. Omitting either value makes the
+probe refuse to start rather than run unbounded.
+
 ## Configuration
 
-| Variable                       | Meaning                                                         |
-| ------------------------------ | --------------------------------------------------------------- |
-| `MANAGED_AGENT_VENDOR`         | Registered adapter id. Absent → Copilot keeps the platform slot |
-| `MANAGED_AGENT_API_KEY`        | Vendor credential. Never logged, never persisted                |
-| `MANAGED_AGENT_MODEL`          | Provider model label; Anthropic's actual model is on its Agent  |
-| `MANAGED_AGENT_ID`             | Anthropic Managed Agent resource id                             |
-| `MANAGED_AGENT_ENVIRONMENT_ID` | Anthropic Managed Environment resource id                       |
-| `MANAGED_AGENT_EFFORT`         | `low` / `medium` / `high`                                       |
-| `MANAGED_AGENT_MAX_SECONDS`    | Hard ceiling on one session's wall clock                        |
-| `MANAGED_AGENT_DELIVERY_MODE`  | `preview` (default) or `publish`                                |
-| `MANAGED_AGENT_BASE_URL`       | Override the API origin — gateways, tests                       |
+| Variable                            | Meaning                                                         |
+| ----------------------------------- | --------------------------------------------------------------- |
+| `MANAGED_AGENT_VENDOR`              | Registered adapter id. Absent → Copilot keeps the platform slot |
+| `MANAGED_AGENT_API_KEY`             | Vendor credential. Never logged, never persisted                |
+| `MANAGED_AGENT_MODEL`               | Provider model label; Anthropic's actual model is on its Agent  |
+| `MANAGED_AGENT_ID`                  | Anthropic Managed Agent resource id                             |
+| `MANAGED_AGENT_ENVIRONMENT_ID`      | Anthropic Managed Environment resource id                       |
+| `MANAGED_AGENT_EFFORT`              | `low` / `medium` / `high`                                       |
+| `MANAGED_AGENT_MAX_SECONDS`         | Hard ceiling on one session's wall clock                        |
+| `MANAGED_AGENT_MAX_LIST_COST_CENTS` | Anthropic session budget, in whole cents                        |
+| `MANAGED_AGENT_DELIVERY_MODE`       | `preview` (default) or `publish`                                |
+| `MANAGED_AGENT_BASE_URL`            | Override the API origin — gateways, tests                       |
 
 Selection replaces the _platform_ backend. Builder routing, the job state machine, the
 gate, Studio and self builds are untouched: a managed round is a platform round whose

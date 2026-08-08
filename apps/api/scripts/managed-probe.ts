@@ -20,6 +20,9 @@ const value = (name: string) => (args.includes(`--${name}`) ? args[args.indexOf(
 const SLUG = value('slug') ?? 'comet-courier';
 const ISSUE = Number(value('issue') ?? 4242);
 const outDir = value('out');
+const wait = flag('wait');
+const waitSeconds = Number(value('wait-seconds') ?? process.env.MANAGED_AGENT_MAX_SECONDS ?? '');
+const maxListCostCents = Number(value('cost-cents') ?? process.env.MANAGED_AGENT_MAX_LIST_COST_CENTS ?? '');
 const rule = (title: string) => console.log(`\n${'─'.repeat(72)}\n${title}\n${'─'.repeat(72)}`);
 
 const brief: BuildBrief = {
@@ -102,6 +105,13 @@ if (vendor && (!apiKey || !model)) {
   console.error(`--vendor ${vendor} needs an API key and model`);
   process.exit(1);
 }
+if (
+  wait &&
+  (!Number.isInteger(waitSeconds) || waitSeconds <= 0 || !Number.isInteger(maxListCostCents) || maxListCostCents <= 0)
+) {
+  console.error('--wait requires positive --wait-seconds and --cost-cents values');
+  process.exit(1);
+}
 const provider = vendor
   ? createManagedProvider(vendor, {
       apiKey: apiKey!,
@@ -110,6 +120,7 @@ const provider = vendor
       ...(process.env.MANAGED_AGENT_ENVIRONMENT_ID
         ? { environmentId: process.env.MANAGED_AGENT_ENVIRONMENT_ID.trim() }
         : {}),
+      ...(Number.isInteger(maxListCostCents) && maxListCostCents > 0 ? { maxListCostCents } : {}),
       ...(value('base-url') ? { baseUrl: value('base-url')! } : {}),
     })
   : stubProvider();
@@ -132,6 +143,7 @@ const backend = createManagedBackend({
     warn: (context, message) => console.warn('WARN ', message, context),
     info: (context, message) => console.log('INFO ', message, context),
   },
+  ...(wait ? { maxDurationSeconds: waitSeconds } : {}),
 });
 
 rule(`probe — backend ${backend.name}${mcpOnly ? ' (MCP shape)' : ' (pull shape)'}`);
@@ -139,8 +151,9 @@ rule(`probe — backend ${backend.name}${mcpOnly ? ' (MCP shape)' : ' (pull shap
 const dispatch = await backend.dispatch(brief);
 console.log(`\nref              ${dispatch.ref}`);
 
-// Two polls, because a working session must not be harvested.
-for (const attempt of [1, 2]) {
+const pollCount = wait ? Math.ceil((waitSeconds * 1000) / 5000) + 1 : 2;
+for (let attempt = 1; attempt <= pollCount; attempt += 1) {
+  if (attempt > 1) await new Promise((resolve) => setTimeout(resolve, 5000));
   rule(`observe #${attempt}`);
   const observation = await backend.observe(dispatch.ref, {
     hasCandidate: delivered.length > 0,
@@ -148,6 +161,8 @@ for (const attempt of [1, 2]) {
     slug: SLUG,
   });
   console.log(observation ?? '(vendor has forgotten this session)');
+  if (observation && (observation.hasCandidate || ['failed', 'timed_out', 'cancelled'].includes(observation.state)))
+    break;
 }
 
 rule('what the platform would store');
