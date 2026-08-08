@@ -7,12 +7,6 @@ const args = process.argv.slice(2);
 const flag = (name: string) => args.includes(`--${name}`);
 const value = (name: string) => (args.includes(`--${name}`) ? args[args.indexOf(`--${name}`) + 1] : undefined);
 
-const apiKey = process.env.MANAGED_AGENT_API_KEY?.trim() ?? process.env.ANTHROPIC_API_KEY?.trim();
-if (!apiKey) {
-  console.error('needs ANTHROPIC_API_KEY (or MANAGED_AGENT_API_KEY)');
-  process.exit(1);
-}
-
 const manifestPath = value('manifest') ?? fileURLToPath(new URL('../../../infra/managed-agent.json', import.meta.url));
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as { agent: Record<string, unknown> };
 const existing = value('agent-id') ?? process.env.MANAGED_AGENT_ID?.trim();
@@ -21,6 +15,12 @@ if (flag('dry-run')) {
   console.log(existing ? `POST /v1/agents/${existing}` : 'POST /v1/agents');
   console.log(JSON.stringify(manifest.agent, null, 2));
   process.exit(0);
+}
+
+const apiKey = process.env.MANAGED_AGENT_API_KEY?.trim() ?? process.env.ANTHROPIC_API_KEY?.trim();
+if (!apiKey) {
+  console.error('needs ANTHROPIC_API_KEY (or MANAGED_AGENT_API_KEY)');
+  process.exit(1);
 }
 
 const response = await fetch(`https://api.anthropic.com/v1/agents${existing ? `/${existing}` : ''}`, {

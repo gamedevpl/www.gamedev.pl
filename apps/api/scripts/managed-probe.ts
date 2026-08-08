@@ -20,6 +20,7 @@ const value = (name: string) => (args.includes(`--${name}`) ? args[args.indexOf(
 const SLUG = value('slug') ?? 'comet-courier';
 const ISSUE = Number(value('issue') ?? 4242);
 const outDir = value('out');
+const apiBaseUrl = (value('base-url') ?? 'https://api.anthropic.com').replace(/\/$/, '');
 const wait = flag('wait');
 const waitSeconds = Number(value('wait-seconds') ?? process.env.MANAGED_AGENT_MAX_SECONDS ?? '');
 const maxListCostCents = Number(value('cost-cents') ?? process.env.MANAGED_AGENT_MAX_LIST_COST_CENTS ?? '');
@@ -127,7 +128,7 @@ const provider = vendor
       ...(Number.isInteger(maxListCostCents) && maxListCostCents > 0 ? { maxListCostCents } : {}),
       ...(vaultIds?.length ? { vaultIds } : {}),
       ...(flag('override-tools') ? { overrideTools: true } : {}),
-      ...(value('base-url') ? { baseUrl: value('base-url')! } : {}),
+      baseUrl: apiBaseUrl,
     })
   : stubProvider();
 
@@ -200,7 +201,7 @@ if (delivered.length === 0) {
 if (vendor === 'anthropic') {
   rule('session transcript');
   try {
-    const response = await fetch(`https://api.anthropic.com/v1/sessions/${dispatch.ref}/events`, {
+    const response = await fetch(`${apiBaseUrl}/v1/sessions/${dispatch.ref}/events`, {
       headers: {
         'x-api-key': apiKey!,
         'anthropic-version': '2023-06-01',
