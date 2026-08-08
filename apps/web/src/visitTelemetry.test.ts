@@ -9,6 +9,7 @@ import { parsePathRoute } from './router.js';
 vi.stubGlobal('crypto', webcrypto);
 import {
   readVisitIdentity,
+  recordBetaInviteStep,
   recordCreateStep,
   recordStudioStep,
   recordVisitEvent,
@@ -327,6 +328,25 @@ describe('recordWaitlistStep', () => {
   it('is a silent no-op when tracking was never started', () => {
     setVisitSessionForTesting(null);
     expect(() => recordWaitlistStep('cta_clicked')).not.toThrow();
+  });
+});
+
+describe('recordBetaInviteStep', () => {
+  it('records invite outcomes once per visit', () => {
+    const { batches, send } = capture();
+    const session = new VisitSession('v1', 0, send, () => 0);
+    setVisitSessionForTesting(session);
+
+    recordBetaInviteStep('opened');
+    recordBetaInviteStep('opened');
+    recordBetaInviteStep('accepted');
+    session.flush();
+    setVisitSessionForTesting(null);
+
+    expect(batches[0].events).toEqual([
+      expect.objectContaining({ type: 'invite_step', step: 'opened' }),
+      expect.objectContaining({ type: 'invite_step', step: 'accepted' }),
+    ]);
   });
 });
 

@@ -2,12 +2,15 @@
 
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WaitlistPanel } from './WaitlistPanel.js';
 import type { WaitlistEntry } from './adminApi.js';
 
 const mocked = vi.hoisted(() => ({
+  createBetaInvite: vi.fn(),
+  fetchBetaInvites: vi.fn(),
   fetchWaitlist: vi.fn(),
+  revokeBetaInvite: vi.fn(),
   setWaitlistStatus: vi.fn(),
   setWaitlistStatusByEmail: vi.fn(),
 }));
@@ -50,6 +53,10 @@ async function type(input: HTMLInputElement, value: string) {
 afterEach(() => {
   document.body.innerHTML = '';
   vi.clearAllMocks();
+});
+
+beforeEach(() => {
+  mocked.fetchBetaInvites.mockResolvedValue([]);
 });
 
 describe('WaitlistPanel', () => {

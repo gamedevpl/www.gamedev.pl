@@ -66,6 +66,7 @@ describe('Auth API Routes', () => {
   const setupTestServer = async (
     mockUsers: Record<string, { sub: string; email?: string; name?: string; picture?: string }> = {},
     adminUids?: Set<string>,
+    privateBeta = false,
   ) => {
     const store = new InMemoryStore();
     const verifier = new MockGoogleVerifier(mockUsers);
@@ -76,6 +77,9 @@ describe('Auth API Routes', () => {
       sessionSecret: 'test-secret-key',
       googleAuthVerifier: verifier,
       ...(adminUids ? { adminUids } : {}),
+      ...(privateBeta
+        ? { privateBeta: true, betaAllowedUids: new Set<string>(), betaAllowedEmails: new Set<string>() }
+        : {}),
     });
 
     return { app, store };
@@ -165,6 +169,37 @@ describe('Auth API Routes', () => {
 
     expect(res.statusCode).toBe(401);
     expect(JSON.parse(res.body)).toEqual({ error: 'invalid google authentication' });
+  });
+
+  it('accepts a beta invite once and binds it to the first account', async () => {
+    const { app, store } = await setupTestServer(
+      {
+        'first-token': { sub: '10011', email: 'first@example.com', emailVerified: true },
+        'second-token': { sub: '10012', email: 'second@example.com', emailVerified: true },
+      },
+      undefined,
+      true,
+    );
+    const created = await store.createBetaInvite('g:operator');
+
+    const first = await app.inject({
+      method: 'POST',
+      url: '/api/auth/google',
+      payload: { idToken: 'first-token', inviteCode: created.code },
+    });
+    expect(first.statusCode).toBe(200);
+
+    const second = await app.inject({
+      method: 'POST',
+      url: '/api/auth/google',
+      payload: { idToken: 'second-token', inviteCode: created.code },
+    });
+    expect(second.statusCode).toBe(403);
+    expect(JSON.parse(second.body).error).toBe('beta invite is invalid or already used');
+
+    const invites = await store.listBetaInvites();
+    expect(invites[0]).toMatchObject({ status: 'claimed', claimedUid: 'g:10011' });
+    expect(invites[0]).not.toHaveProperty('code');
   });
 
   it('POST /api/auth/google rejects blocked user', async () => {

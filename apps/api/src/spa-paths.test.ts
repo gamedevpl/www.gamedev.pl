@@ -67,6 +67,7 @@ describe('isKnownSpaShellPath', () => {
     '/admin/assessments',
     '/review',
     '/join/K7M3QP',
+    `/invite/${'Abc123_-'.repeat(4)}`,
     '/nightshift/neon-courier',
     // The platform's namespace is reserved against claiming but is a real address:
     // it is where every game with no creator to name lives.
@@ -97,6 +98,8 @@ describe('isKnownSpaShellPath', () => {
     '/join/lower1',
     '/join/TOOLONG9',
     '/join/K7M3QP/extra',
+    '/invite/too-short',
+    `/invite/${'a'.repeat(33)}`,
     // Game page: reserved first segments, bad slugs, and unknown tabs stay 404.
     '/studio/neon-courier/releases/extra',
     '/play/neon-courier/board',

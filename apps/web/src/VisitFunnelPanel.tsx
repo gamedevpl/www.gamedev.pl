@@ -34,6 +34,12 @@ const WAITLIST_LABELS: Record<string, string> = {
   joined: 'joined waitlist',
 };
 
+const INVITE_LABELS: Record<string, string> = {
+  opened: 'opened an invite',
+  accepted: 'accepted an invite',
+  unavailable: 'hit an unavailable invite',
+};
+
 const EDITOR_LABELS: Record<string, string> = {
   opened: 'opened the editor',
   draft_saved: 'saved a draft',
@@ -206,6 +212,36 @@ export function VisitFunnelPanel({ data }: { data: VisitsResponse }) {
                     <td>{WAITLIST_LABELS[row.step] ?? row.step}</td>
                     <td className="num">{row.visits}</td>
                     <td className="num">{percent(row.visits, funnel.waitlist[0]?.visits ?? 0)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <div className="funnel-block">
+          <h3>Invites</h3>
+          {(funnel.invites ?? []).every((row) => row.visits === 0) ? (
+            <p className="health-empty">Nobody opened an invite in this window.</p>
+          ) : (
+            <table className="health-table">
+              <thead>
+                <tr>
+                  <th scope="col">Step</th>
+                  <th scope="col" className="num">
+                    Visits
+                  </th>
+                  <th scope="col" className="num">
+                    Of opens
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {(funnel.invites ?? []).map((row) => (
+                  <tr key={row.step}>
+                    <td>{INVITE_LABELS[row.step] ?? row.step}</td>
+                    <td className="num">{row.visits}</td>
+                    <td className="num">{percent(row.visits, funnel.invites?.[0]?.visits ?? 0)}</td>
                   </tr>
                 ))}
               </tbody>

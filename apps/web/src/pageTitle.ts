@@ -27,6 +27,7 @@ export type DocumentTitleCopy = {
   /** Full home title, e.g. "Gamedev.pl — Describe a game, play it". */
   home: string;
   join: string;
+  invite: string;
   health: string;
   review: string;
   studio: string;
@@ -71,6 +72,8 @@ export function resolveDocumentTitle(route: AppRoute, ctx: DocumentTitleContext)
       return brandedNamedTitle(ctx.copy.playNamed, ctx.playTitle?.trim() || humanizeSlug(route.slug));
     case 'join':
       return brandedPageTitle(ctx.copy.join);
+    case 'invite':
+      return brandedPageTitle(ctx.copy.invite);
     case 'admin':
       return brandedPageTitle(ctx.copy.health);
     case 'review':

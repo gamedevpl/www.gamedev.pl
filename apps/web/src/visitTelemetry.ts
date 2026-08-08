@@ -28,7 +28,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 /** Where a visit is, coarsely. Route parameters (tokens, slugs) never travel. */
 export type VisitRouteKind =
   // `draft` is historical only — new visits on `/draft/<slug>` emit `play`.
-  'home' | 'play' | 'draft' | 'status' | 'join' | 'legal' | 'health' | 'studio' | 'game' | 'notFound';
+  'home' | 'play' | 'draft' | 'status' | 'join' | 'invite' | 'legal' | 'health' | 'studio' | 'game' | 'notFound';
 
 export type VisitEvent =
   | {
@@ -62,6 +62,7 @@ export type VisitEvent =
   | { type: 'create_step'; step: CreateStep; builder?: BuilderDimension }
   /** A step of the closed-beta waitlist funnel. Carries no identity, ever. */
   | { type: 'waitlist_step'; step: WaitlistStep }
+  | { type: 'invite_step'; step: InviteStep }
   /**
    * Studio / self-build funnel facts on the same visit stream as `create_step`.
    * Always carries `builder` so BYOCA reach-to-publish is measurable without a
@@ -114,6 +115,8 @@ export type WaitlistStep =
   | 'cta_clicked'
   /** `POST /api/waitlist` succeeded for this visit. */
   | 'joined';
+
+export type InviteStep = 'opened' | 'accepted' | 'unavailable';
 
 /**
  * Which chrome surface opened the How to play card.
@@ -336,6 +339,7 @@ export function routeKind(view: string): VisitRouteKind {
   switch (view) {
     case 'play':
     case 'join':
+    case 'invite':
     case 'legal':
     case 'studio':
     case 'notFound':
@@ -520,6 +524,14 @@ export function recordWaitlistStep(step: WaitlistStep): void {
   currentSession.record({ type: 'waitlist_step', step });
 }
 
+let recordedBetaInviteSteps = new Set<InviteStep>();
+
+export function recordBetaInviteStep(step: InviteStep): void {
+  if (!currentSession || recordedBetaInviteSteps.has(step)) return;
+  recordedBetaInviteSteps.add(step);
+  currentSession.record({ type: 'invite_step', step });
+}
+
 /**
  * Studio steps already recorded for the live visit.
  *
@@ -599,6 +611,7 @@ export function setVisitSessionForTesting(session: VisitSession | null): void {
   // Otherwise one test's steps would silence the next test's identical steps.
   recordedSteps = new Set();
   recordedWaitlistSteps = new Set();
+  recordedBetaInviteSteps = new Set();
   recordedStudioSteps = new Set();
   recordedEditorSteps = new Set();
   recordedAssistSteps = new Set();

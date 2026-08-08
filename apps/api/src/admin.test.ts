@@ -763,6 +763,42 @@ describe('/api/admin/waitlist', () => {
   });
 });
 
+describe('/api/admin/beta-invites', () => {
+  it('creates a one-time link, lists its state, and revokes it', async () => {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:boss' });
+    const app = await appWith(store);
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/admin/beta-invites',
+      headers: authHeaders('g:boss'),
+    });
+
+    expect(created.statusCode).toBe(201);
+    const body = created.json() as { invite: { id: string; status: string }; code: string };
+    expect(body.code).toMatch(/^[A-Za-z0-9_-]{32}$/);
+    expect(body.invite).toMatchObject({ status: 'available' });
+    expect(body.invite).not.toHaveProperty('codeHash');
+
+    const listed = await app.inject({
+      method: 'GET',
+      url: '/api/admin/beta-invites',
+      headers: authHeaders('g:boss'),
+    });
+    expect(listed.json()).toEqual({ invites: [expect.objectContaining({ id: body.invite.id, status: 'available' })] });
+
+    const revoked = await app.inject({
+      method: 'POST',
+      url: `/api/admin/beta-invites/${body.invite.id}/revoke`,
+      headers: authHeaders('g:boss'),
+    });
+    expect(revoked.statusCode).toBe(200);
+    expect(revoked.json()).toMatchObject({ id: body.invite.id, status: 'revoked' });
+    await app.close();
+  });
+});
+
 describe('GET /api/admin/costs', () => {
   it('answers 404 to a signed-in non-admin', async () => {
     const store = new InMemoryStore();

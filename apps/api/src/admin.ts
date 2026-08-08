@@ -31,6 +31,8 @@ import {
 import { DEFAULT_CREATION_LIMITS_TTL_MS, resolveDefaultGlobalDailyCap } from './creation-limits.js';
 import {
   BOT_UID_PREFIX,
+  type BetaInvite,
+  type BetaInviteStatus,
   type CreationLimits,
   type PublicPlayConfig,
   type Scorecard,
@@ -239,8 +241,25 @@ export interface WaitlistListResponse {
   entries: WaitlistEntry[];
 }
 
+export interface BetaInviteResponse {
+  id: string;
+  createdAt: string;
+  createdByUid: string;
+  status: BetaInviteStatus;
+  claimedAt?: string;
+  claimedUid?: string;
+  revokedAt?: string;
+  revokedByUid?: string;
+}
+
+export interface CreatedBetaInviteResponse {
+  invite: BetaInviteResponse;
+  code: string;
+}
+
 /** How many waitlist rows one console read may return. Matches the store default. */
 const MAX_WAITLIST_ENTRIES = 200;
+const MAX_BETA_INVITES = 200;
 
 const WaitlistStatusSchema = z.enum(['pending', 'approved', 'rejected']);
 
@@ -256,6 +275,23 @@ const WaitlistPreapproveSchema = z.object({
   email: z.string().trim().email('invalid email').max(254),
   status: WaitlistStatusSchema.default('approved'),
 });
+
+const BetaInviteIdSchema = z.object({
+  id: z.string().uuid('invalid invite id'),
+});
+
+function betaInviteResponse(invite: BetaInvite): BetaInviteResponse {
+  return {
+    id: invite.id,
+    createdAt: invite.createdAt,
+    createdByUid: invite.createdByUid,
+    status: invite.status,
+    ...(invite.claimedAt ? { claimedAt: invite.claimedAt } : {}),
+    ...(invite.claimedUid ? { claimedUid: invite.claimedUid } : {}),
+    ...(invite.revokedAt ? { revokedAt: invite.revokedAt } : {}),
+    ...(invite.revokedByUid ? { revokedByUid: invite.revokedByUid } : {}),
+  };
+}
 
 const WaitlistUidParamsSchema = z.object({
   // Same shape the auth layer mints (`g:` / `a:`) plus the `email:` pre-approve prefix
@@ -452,6 +488,43 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
       'waitlist status set by email by operator',
     );
     return reply.status(200).send(entry);
+  });
+
+  app.get('/api/admin/beta-invites', async (request, reply) => {
+    if (!isAdminSession(request, adminUids)) {
+      return reply.status(404).send({ error: 'not found' });
+    }
+    const invites = await store.listBetaInvites({ limit: MAX_BETA_INVITES });
+    return reply.status(200).send({ invites: invites.map(betaInviteResponse) });
+  });
+
+  app.post('/api/admin/beta-invites', async (request, reply) => {
+    if (!isAdminSession(request, adminUids)) {
+      return reply.status(404).send({ error: 'not found' });
+    }
+    const created = await store.createBetaInvite(request.user!.uid);
+    app.log.info({ inviteId: created.invite.id, by: request.user!.uid }, 'beta invite created');
+    const response: CreatedBetaInviteResponse = {
+      invite: betaInviteResponse(created.invite),
+      code: created.code,
+    };
+    return reply.status(201).send(response);
+  });
+
+  app.post<{ Params: { id: string } }>('/api/admin/beta-invites/:id/revoke', async (request, reply) => {
+    if (!isAdminSession(request, adminUids)) {
+      return reply.status(404).send({ error: 'not found' });
+    }
+    const params = BetaInviteIdSchema.safeParse(request.params ?? {});
+    if (!params.success) {
+      return reply.status(400).send({ error: params.error.issues[0]?.message ?? 'invalid invite id' });
+    }
+    const invite = await store.revokeBetaInvite(params.data.id, request.user!.uid);
+    if (!invite) {
+      return reply.status(409).send({ error: 'invite is unavailable' });
+    }
+    app.log.info({ inviteId: invite.id, by: request.user!.uid }, 'beta invite revoked');
+    return reply.status(200).send(betaInviteResponse(invite));
   });
 
   /**

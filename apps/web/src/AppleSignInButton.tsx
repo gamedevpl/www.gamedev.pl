@@ -45,12 +45,13 @@ const APPLE_SDK_SRC = 'https://appleid.cdn-apple.com/appleauth/static/jsapi/appl
 
 interface AppleSignInButtonProps {
   onSuccess?: () => void;
+  inviteCode?: string;
   // Mirrors GoogleSignInButton: the token travels with the error so a caller can offer
   // the waitlist without making a rejected user authenticate a second time.
   onError?: (err: string, idToken?: string) => void;
 }
 
-export function AppleSignInButton({ onSuccess, onError }: AppleSignInButtonProps) {
+export function AppleSignInButton({ onSuccess, onError, inviteCode }: AppleSignInButtonProps) {
   const { t } = useTranslation();
   const { signInWithAppleToken, appleSignIn } = useAuth();
   const [ready, setReady] = useState(false);
@@ -115,7 +116,7 @@ export function AppleSignInButton({ onSuccess, onError }: AppleSignInButtonProps
       const name = `${first} ${last}`.trim();
 
       try {
-        await signInWithAppleToken(idToken, name || undefined);
+        await signInWithAppleToken(idToken, name || undefined, inviteCode);
         onSuccess?.();
       } catch (err) {
         onError?.(err instanceof Error ? err.message : 'Sign in failed', idToken);
@@ -130,7 +131,7 @@ export function AppleSignInButton({ onSuccess, onError }: AppleSignInButtonProps
     } finally {
       setBusy(false);
     }
-  }, [busy, onError, onSuccess, signInWithAppleToken]);
+  }, [busy, inviteCode, onError, onSuccess, signInWithAppleToken]);
 
   if (!enabled) return null;
 

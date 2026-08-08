@@ -45,6 +45,7 @@ const RouteKindSchema = z.enum([
   'draft',
   'status',
   'join',
+  'invite',
   'legal',
   'health',
   'studio',
@@ -71,6 +72,7 @@ const CreateStepSchema = z.enum([
  * reaches a grouping key on an open endpoint.
  */
 const WaitlistStepSchema = z.enum(['cta_clicked', 'joined']);
+const InviteStepSchema = z.enum(['opened', 'accepted', 'unavailable']);
 /**
  * Studio / self-build funnel (BY-08). Sibling to create steps — not ordered with them.
  * Reaches a grouping key; closed enum on an open endpoint.
@@ -191,6 +193,7 @@ const EventSchema = z.discriminatedUnion('type', [
     ...offsetField,
   }),
   z.object({ type: z.literal('waitlist_step'), step: WaitlistStepSchema, ...offsetField }),
+  z.object({ type: z.literal('invite_step'), step: InviteStepSchema, ...offsetField }),
   z.object({
     type: z.literal('studio_step'),
     step: StudioStepSchema,
@@ -304,6 +307,8 @@ export async function registerVisitTelemetryRoutes(
             ...(event.builder === undefined ? {} : { builder: event.builder }),
           };
         case 'waitlist_step':
+          return { ...base, type: event.type, step: event.step };
+        case 'invite_step':
           return { ...base, type: event.type, step: event.step };
         case 'studio_step':
           return {

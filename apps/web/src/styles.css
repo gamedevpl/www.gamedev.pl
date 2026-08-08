@@ -4318,7 +4318,8 @@ a.user-name--profile:focus-visible {
 }
 
 /* CLOSED BETA SPLASH */
-.beta-splash {
+.beta-splash,
+.beta-invite {
   min-height: 100vh;
   /* iOS resolves 100vh to the LARGE viewport — the one you get with the toolbars
      retracted — so a screen centred in it sits partly behind Safari's bottom bar
@@ -4328,6 +4329,10 @@ a.user-name--profile:focus-visible {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.beta-splash,
+.beta-invite {
   padding: 24px;
 }
 
@@ -4343,6 +4348,29 @@ a.user-name--profile:focus-visible {
   /* Pull-ups climb onto the rim — don't clip him. */
   position: relative;
   overflow: visible;
+}
+
+.beta-invite__card {
+  width: 100%;
+  max-width: 460px;
+  padding: 48px 40px;
+  text-align: center;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 16px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+}
+
+.beta-invite__card h1 {
+  margin: 0 0 12px;
+  font-size: 1.6rem;
+  line-height: 1.3;
+}
+
+.beta-invite__card p {
+  margin: 0 0 24px;
+  color: var(--muted);
+  line-height: 1.5;
 }
 
 .beta-splash__logo {
@@ -4492,18 +4520,14 @@ a.user-name--profile:focus-visible {
  * catches a phone held in landscape, where a width query would not fire.
  */
 @media (max-height: 720px) {
-  .beta-splash {
-    padding: 12px;
-    /* Centring a flex item that overflows pushes its top edge past the container's,
-       where it cannot be scrolled back to — the head gets cut off as well as the feet.
-       `align-items: safe center` says exactly that, but older Safari drops the whole
-       declaration as invalid and silently falls back to plain `center`, which is the
-       bug. Auto margins do the same job with no support story: they centre while there
-       is free space and collapse to zero when there is not. */
+  .beta-splash,
+  .beta-invite {
     align-items: flex-start;
+    padding: 12px;
   }
 
-  .beta-splash__card {
+  .beta-splash__card,
+  .beta-invite__card {
     margin-top: auto;
     margin-bottom: auto;
     padding: 24px 20px;
@@ -12293,6 +12317,35 @@ button.builder-mode-selector:disabled {
   align-items: center;
 }
 
+.admin-beta-invites {
+  margin: 1.25rem 0 1.5rem;
+  padding: 1rem;
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  border-radius: 6px;
+}
+
+.admin-beta-invites h3 {
+  margin: 0 0 0.35rem;
+}
+
+.admin-beta-invites .health-summary {
+  margin-bottom: 0.75rem;
+}
+
+.admin-beta-invite-created {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.admin-beta-invite-created input {
+  min-width: min(100%, 24rem);
+  flex: 1;
+  font: inherit;
+  padding: 0.3rem 0.4rem;
+}
+
 .admin-waitlist-actions {
   margin: 0;
   gap: 0.35rem;
@@ -12301,6 +12354,7 @@ button.builder-mode-selector:disabled {
 .admin-limits-controls button,
 .admin-tokens-form button,
 .admin-tokens button,
+.admin-beta-invites button,
 .admin-waitlist-filters button,
 .admin-waitlist-actions button {
   cursor: pointer;

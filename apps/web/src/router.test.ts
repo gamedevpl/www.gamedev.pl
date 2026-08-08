@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   canonicalPath,
   canonicalPlayPath,
+  betaInvitePath,
   creatorPath,
   gamePath,
   joinPath,
@@ -63,6 +64,13 @@ describe('parsePathRoute', () => {
       code: 'K7M3QP',
       token: 'abc-DEF_123',
     });
+  });
+
+  it('parses one-time beta invite links and rejects malformed codes', () => {
+    const code = 'Abc123_-'.repeat(4);
+    expect(parsePathRoute(betaInvitePath(code))).toEqual({ view: 'invite', code });
+    expect(parsePathRoute('/invite/too-short')).toEqual({ view: 'notFound' });
+    expect(parsePathRoute(`/invite/${'a'.repeat(33)}`)).toEqual({ view: 'notFound' });
   });
 
   it('maps malformed join links to notFound', () => {
