@@ -158,13 +158,13 @@ describe('game page routes', () => {
     expect((await app.inject({ method: 'GET', url: '/api/games/Not%20A%20Slug/page' })).statusCode).toBe(400);
   });
 
-  it('stays reachable through the private-beta wall while play stays behind it', async () => {
+  it('keeps both the game page and play behind the private-beta wall', async () => {
     const store = new InMemoryStore();
     await publishStoreGame(store);
     const app = await appWith(store, storeGamesStore(), { betaAllowedUids: 'g:creator' });
 
     const page = await app.inject({ method: 'GET', url: '/api/games/neon-courier/page' });
-    expect(page.statusCode).toBe(200);
+    expect(page.statusCode).toBe(401);
 
     const play = await app.inject({ method: 'GET', url: '/api/games/neon-courier' });
     expect(play.statusCode).toBe(401);
