@@ -339,6 +339,8 @@ export interface AgentObservation {
    * gated on job state the way lifecycle reconciliation is.
    */
   sessionCredits?: number;
+  // Tokens, for token-billed backends; not convertible to credits.
+  sessionTokens?: { input: number; output: number };
 }
 
 export interface ReconcileResult {

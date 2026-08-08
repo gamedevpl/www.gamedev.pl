@@ -1754,6 +1754,8 @@ export interface Store {
    * Best-effort like {@link recordJobCost}: must never fail the poll that discovered it.
    */
   setJobCostCredits(issueNumber: number, ref: string, credits: number): Promise<void>;
+  // Token-billed twin of setJobCostCredits; same best-effort contract.
+  setJobCostTokens(issueNumber: number, ref: string, tokens: { input: number; output: number }): Promise<void>;
   /**
    * Records where a dispatched job's work actually lives, once the backend can say.
    *
@@ -3068,6 +3070,20 @@ export class InMemoryStore implements Store {
       if (entry.kind !== 'agent_session' || entry.ref !== ref || entry.creditsMeasured) return entry;
       changed = true;
       return { ...entry, credits, creditsMeasured: true };
+    });
+    if (!changed) return;
+    this.submissions.set(issueNumber, { ...sub, costs });
+  }
+
+  async setJobCostTokens(issueNumber: number, ref: string, tokens: { input: number; output: number }): Promise<void> {
+    const sub = this.submissions.get(issueNumber);
+    if (!sub?.costs?.length) return;
+    let changed = false;
+    const costs = sub.costs.map((entry) => {
+      if (entry.kind !== 'agent_session' || entry.ref !== ref) return entry;
+      if (entry.tokens && entry.tokens.input === tokens.input && entry.tokens.output === tokens.output) return entry;
+      changed = true;
+      return { ...entry, tokens };
     });
     if (!changed) return;
     this.submissions.set(issueNumber, { ...sub, costs });
@@ -5230,6 +5246,24 @@ export class FirestoreStore implements Store {
         if (entry.kind !== 'agent_session' || entry.ref !== ref || entry.creditsMeasured) return entry;
         changed = true;
         return { ...entry, credits, creditsMeasured: true };
+      });
+      if (!changed) return;
+      tx.set(docRef, { costs }, { merge: true });
+    });
+  }
+
+  async setJobCostTokens(issueNumber: number, ref: string, tokens: { input: number; output: number }): Promise<void> {
+    const docRef = this.db.collection('submissions').doc(String(issueNumber));
+    await this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(docRef);
+      if (!snap.exists) return;
+      const existing = (snap.data() as SubmissionRecord).costs ?? [];
+      let changed = false;
+      const costs = existing.map((entry) => {
+        if (entry.kind !== 'agent_session' || entry.ref !== ref) return entry;
+        if (entry.tokens && entry.tokens.input === tokens.input && entry.tokens.output === tokens.output) return entry;
+        changed = true;
+        return { ...entry, tokens };
       });
       if (!changed) return;
       tx.set(docRef, { costs }, { merge: true });

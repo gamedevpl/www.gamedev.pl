@@ -2250,8 +2250,9 @@ export async function registerSubmissionRoutes(
     // Cost reconciliation is independent of job state: usage is only final once the
     // session completes, which can be after delivery has already moved the job past
     // the agent. A placeholder of 1 credit stays until observation overwrites it.
+    // Tokens settle the entry too; credits never arrive token-billed.
     const costPending = (record.costs ?? []).some(
-      (entry) => entry.kind === 'agent_session' && entry.ref === lastRef && !entry.creditsMeasured,
+      (entry) => entry.kind === 'agent_session' && entry.ref === lastRef && !entry.creditsMeasured && !entry.tokens,
     );
     // Lifecycle observation only while the agent's own lifecycle is the open question.
     // Once the job is past the agent (delivered, gated, terminal), sessions stop being
@@ -2290,8 +2291,18 @@ export async function registerSubmissionRoutes(
       // superseded by a resume and their fate stopped mattering when it started.
       const observation = await selected.observe(lastRef, {
         hasCandidate: Boolean(record.deliveredVersion),
+        // Pull-delivery backends harvest inside observe.
+        issueNumber: record.issueNumber,
+        ...(record.slug ? { slug: record.slug } : {}),
       });
       if (!observation) return null;
+      if (observation.sessionTokens) {
+        try {
+          await store.setJobCostTokens(record.issueNumber, lastRef, observation.sessionTokens);
+        } catch (error) {
+          app.log.error({ err: error, issueNumber: record.issueNumber }, 'could not reconcile agent session tokens');
+        }
+      }
       if (observation.sessionCredits !== undefined) {
         try {
           await store.setJobCostCredits(record.issueNumber, lastRef, observation.sessionCredits);
