@@ -58,7 +58,8 @@ describe('PublicPlayPanel', () => {
     const input = container.querySelector<HTMLInputElement>('input');
     if (!input) throw new Error('missing slug input');
     await act(async () => {
-      input.value = ' Airtime, another-game, airtime ';
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+      setter?.call(input, ' Airtime, another-game, airtime ');
       input.dispatchEvent(new Event('input', { bubbles: true }));
       container.querySelector<HTMLButtonElement>('button')?.click();
     });

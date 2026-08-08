@@ -29,7 +29,9 @@ function mockApi(publicPlaySlugs: string[] = []) {
       return new Response(JSON.stringify({ status: 'ok', provider: 'mock', privateBeta: true, publicPlaySlugs }));
     }
     if (url.endsWith('/api/games/airtime')) {
-      return new Response(JSON.stringify({ slug: 'airtime', title: 'Airtime', html: '<!doctype html><canvas></canvas>' }));
+      return new Response(
+        JSON.stringify({ slug: 'airtime', title: 'Airtime', html: '<!doctype html><canvas></canvas>' }),
+      );
     }
     if (url.endsWith('/api/catalog')) {
       return new Response(
@@ -100,7 +102,7 @@ describe('anonymous visitors during closed beta', () => {
     const container = await renderApp();
 
     expect(container.querySelector('.beta-splash')).toBeNull();
-    expect(container.querySelector('.game-theater')).not.toBeNull();
+    expect(container.querySelector('.stage')).not.toBeNull();
     expect(vi.mocked(globalThis.fetch).mock.calls.some((call) => String(call[0]).endsWith('/api/games/airtime'))).toBe(
       true,
     );
