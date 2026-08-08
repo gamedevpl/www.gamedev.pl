@@ -116,16 +116,18 @@ function channelDelivery(brief: BuildBrief, fast: boolean): string[] {
     return [
       '## Two-minute MCP delivery lane',
       '',
+      `Your first action must be \`start({ slug: "${brief.slug ?? '(slug)'}" })\`.`,
+      'Then follow this exact sequence: start → get_brief → get_kit → build → stage → submit_sources → end.',
       'Use only the `gamedevpl` MCP tools for this round.',
       'Do not search the filesystem, GitHub or the web. Do not install packages.',
-      'Call `start` once, then immediately call `get_brief` and `get_kit`.',
       'Use the `get_kit` unpack command and work from the kit locally.',
       'Build the smallest playable version: one screen, one loop, basic visuals.',
       'Skip audio, polish, optional features and broad repository exploration.',
       'Stage only the required source files as soon as the game draws.',
       'Call `submit_sources` with `fromStaged:true`, `mode:"preview"` and `kitEngineRef`.',
+      'Do not stop after narration or a failed tool call; retry once and continue.',
+      'Do not call `end` until `submit_sources` returns successfully.',
       'Call `end` immediately after submitting. Do not wait for the gate verdict.',
-      'If a tool fails, retry it once, then deliver the smallest valid source tree.',
     ];
   }
   return [
