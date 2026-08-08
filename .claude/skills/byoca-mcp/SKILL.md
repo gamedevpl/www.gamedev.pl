@@ -55,12 +55,12 @@ Source of truth: `SESSION_WORKFLOW` + `BEHAVIOURAL_CONTRACT` in
    what you deliver — and when that check _does_ return a publish verdict, call
    `get_gate_media` once before `end`
 
-### Build tool profile
+### MCP tool surface
 
-Focused build clients can connect to `/api/mcp?profile=build`. This keeps round, seed,
-brief, kit identity, progress, staging, submission, gate-media and inbox tools, while
-omitting proposals, examples, and kit browse/read tools. The full `/api/mcp` surface
-remains unchanged for clients needing those capabilities.
+`/api/mcp` advertises the focused build surface: creation/round control, brief/seed,
+progress, staging/submission, gate media, and inbox. Proposal, example, and kit
+browse/read tools remain callable for compatibility but are not advertised to models.
+The digest and `get_kit` replace routine kit browsing.
 
 ### `get_gate_media` must stay reachable from the loop
 

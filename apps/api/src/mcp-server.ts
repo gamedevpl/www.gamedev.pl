@@ -114,8 +114,11 @@ const FINISHED_REASON = STALE_AGENT_TOKEN_REASON;
 
 const SESSION_HEADER = 'mcp-session-id';
 
-const BUILD_PROFILE_TOOLS = new Set([
+const MCP_VISIBLE_TOOLS = new Set([
+  'create_game',
   'start',
+  'open_round',
+  'continue_draft',
   'get_brief',
   'get_seed',
   'get_sources',
@@ -134,16 +137,11 @@ const BUILD_PROFILE_TOOLS = new Set([
   'get_round_status',
   'get_gate_verdict',
   'get_gate_media',
+  'get_round_status',
+  'get_round_media',
   'read_inbox',
   'ack_inbox',
-  'open_round',
-  'continue_draft',
 ]);
-
-function mcpProfile(request: FastifyRequest): 'full' | 'build' {
-  const query = request.query as { profile?: unknown };
-  return query && query.profile === 'build' ? 'build' : 'full';
-}
 
 /** Aggressive ceiling on unauthenticated / invalid `start` attempts per IP. */
 const MAX_INVALID_STARTS_PER_WINDOW = 20;
@@ -4745,7 +4743,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       return reply.send(
         jsonRpcResult(message.id, {
           tools: Object.entries(tools)
-            .filter(([name]) => mcpProfile(request) === 'full' || BUILD_PROFILE_TOOLS.has(name))
+            .filter(([name]) => MCP_VISIBLE_TOOLS.has(name))
             // An app-only tool exists for the view. A client with no views would offer it
             // to its model, which is exactly what visibility:["app"] forbids.
             .filter(([name]) => withUi || !MCP_UI_APP_ONLY_TOOLS.has(name))
@@ -4813,9 +4811,6 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       const name = typeof params.name === 'string' ? params.name : '';
       const tool = tools[name];
       if (!tool) {
-        return reply.send(jsonRpcError(message.id, -32601, `unknown tool: ${name}`));
-      }
-      if (mcpProfile(request) === 'build' && !BUILD_PROFILE_TOOLS.has(name)) {
         return reply.send(jsonRpcError(message.id, -32601, `unknown tool: ${name}`));
       }
       // visibility:["app"] is a contract, so enforce it rather than relying on the tool

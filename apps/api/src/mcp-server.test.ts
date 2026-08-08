@@ -351,18 +351,14 @@ describe('POST /api/mcp (BY-05)', () => {
     const names = (listed.json().result.tools as Array<{ name: string }>).map((t) => t.name);
     expect(names).toEqual(
       expect.arrayContaining([
+        'create_game',
         'start',
+        'open_round',
+        'continue_draft',
         'get_brief',
         'get_seed',
         'get_kit',
-        'list_kit_files',
-        'search_kit_files',
-        'read_kit_file',
-        'read_kit_files',
-        'read_kit_file_fragment',
         'get_sources',
-        'list_examples',
-        'get_example',
         'report_progress',
         'screenshot_upload_url',
         'stage_upload_url',
@@ -375,6 +371,17 @@ describe('POST /api/mcp (BY-05)', () => {
         'get_gate_verdict',
         'read_inbox',
         'ack_inbox',
+      ]),
+    );
+    expect(names).not.toEqual(
+      expect.arrayContaining([
+        'list_kit_files',
+        'search_kit_files',
+        'read_kit_file',
+        'read_kit_files',
+        'read_kit_file_fragment',
+        'list_examples',
+        'get_example',
       ]),
     );
     expect(names).not.toContain('send_screenshot');
@@ -409,11 +416,11 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(getKit?.description).toMatch(/entry=gamedevpl-creator-kit\/SKILL\.md/);
     expect(getKit?.description).toMatch(/do not assume a `cd` persists/i);
     expect(getKit?.description).toMatch(/read_kit_files|list_kit_files|read_kit_file/);
-    expect(tools.find((t) => t.name === 'list_kit_files')?.description).toMatch(/prefix|glob/i);
-    expect(tools.find((t) => t.name === 'search_kit_files')?.description).toMatch(/substring/i);
-    expect(tools.find((t) => t.name === 'read_kit_file')?.description).toMatch(/48 KiB|fragment|read_kit_files/i);
-    expect(tools.find((t) => t.name === 'read_kit_files')?.description).toMatch(/12|128 KiB|batch|several/i);
-    expect(tools.find((t) => t.name === 'read_kit_file_fragment')?.description).toMatch(/lines|bytes/i);
+    expect(tools.find((t) => t.name === 'list_kit_files')).toBeUndefined();
+    expect(tools.find((t) => t.name === 'search_kit_files')).toBeUndefined();
+    expect(tools.find((t) => t.name === 'read_kit_file')).toBeUndefined();
+    expect(tools.find((t) => t.name === 'read_kit_files')).toBeUndefined();
+    expect(tools.find((t) => t.name === 'read_kit_file_fragment')).toBeUndefined();
 
     const gateVerdict = tools.find((t) => t.name === 'get_gate_verdict');
     expect(gateVerdict?.annotations?.title).toBe('Check the gate once');
@@ -428,13 +435,13 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(gateVerdict?.description).toMatch(/terminal receipt/i);
   });
 
-  it('offers a build profile without proposals, examples, or kit browsing tools', async () => {
+  it('advertises one focused build surface', async () => {
     const store = new InMemoryStore();
     await seedJob(store);
     app = await createApp(store);
 
     const sessionId = await initialize(app);
-    const listed = await mcpCall(app, 'tools/list', {}, { 'mcp-session-id': sessionId }, 1, '/api/mcp?profile=build');
+    const listed = await mcpCall(app, 'tools/list', {}, { 'mcp-session-id': sessionId });
     const names = (listed.json().result.tools as Array<{ name: string }>).map((tool) => tool.name);
 
     expect(names).toEqual(
@@ -1946,25 +1953,11 @@ describe('POST /api/mcp (BY-05)', () => {
     ]) {
       expect(tools.find((tool) => tool.name === name)?.annotations?.destructiveHint, name).toBe(true);
     }
-    for (const name of ['get_brief', 'list_examples', 'start', 'open_round', 'continue_draft', 'report_progress']) {
+    for (const name of ['get_brief', 'start', 'open_round', 'continue_draft', 'report_progress']) {
       expect(tools.find((tool) => tool.name === name)?.annotations?.destructiveHint, name).toBe(false);
     }
 
-    const readers = [
-      'get_brief',
-      'get_seed',
-      'get_kit',
-      'list_kit_files',
-      'search_kit_files',
-      'read_kit_file',
-      'read_kit_files',
-      'read_kit_file_fragment',
-      'get_sources',
-      'list_examples',
-      'get_example',
-      'list_staged_sources',
-      'read_inbox',
-    ];
+    const readers = ['get_brief', 'get_seed', 'get_kit', 'get_sources', 'list_staged_sources', 'read_inbox'];
     for (const name of readers) {
       expect(tools.find((tool) => tool.name === name)?.annotations?.readOnlyHint, name).toBe(true);
     }
