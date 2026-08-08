@@ -13,7 +13,7 @@ describe('seed-status', () => {
   it('returns actionable notices only when the agent should act', () => {
     expect(seedNoticeFor('available')).toMatch(/get_seed/);
     expect(seedNoticeFor('pending')).toMatch(/get_seed again|still generating/i);
-    expect(seedNoticeFor('unavailable')).toBeNull();
+    expect(seedNoticeFor('unavailable')).toMatch(/no seed draft is available/i);
     expect(seedPayload({ seedStatus: 'pending' })).toMatchObject({
       seedAvailable: false,
       seedStatus: 'pending',

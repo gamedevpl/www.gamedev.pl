@@ -179,7 +179,7 @@ describe('agent build reads (BY-04)', () => {
     expect(empty.json()).toEqual({
       available: false,
       status: 'unavailable',
-      notice: null,
+      notice: expect.stringMatching(/no seed draft is available/i),
       files: [],
       references: [],
       notes: null,

@@ -536,7 +536,7 @@ const BEHAVIOURAL_CONTRACT = [
   'Honour stop immediately — do not continue after stop:true. For reason builder_handoff, call end once to acknowledge the stop request, then exit.',
   'gateStarted true means Cloud Build accepted the gate create; gateStarted false after ok submit means no preview is assembling — honour warnings.code=gate_not_started.',
   'Treat get_gate_verdict as a one-shot check, never a polling loop. Pending with a deliveryId returns stop:true: stop immediately and let Studio show the eventual result. Pending with deliveryId:null means you checked before delivering: stop is false, so continue building and call submit_sources instead of checking again. A later creator-led run may check a delivered gate again. Honour warnings.code=gate_poll_backoff on repeated checks.',
-  'When seedAvailable/seedStatus=available (or warnings.code=seed_unread), call get_seed and continue that draft — do not scaffold from scratch. When seedStatus=pending, recheck get_seed before scaffolding.',
+  'When seedAvailable/seedStatus=available (or warnings.code=seed_unread), call get_seed and revise that seed as the opening move — do not scaffold from scratch. When seedStatus=pending, recheck get_seed before scaffolding. When seedStatus=unavailable, get_seed has confirmed that no seed exists for this round; scaffold from the kit.',
   'Every write reply carries pendingMessages — when that array is non-empty, read_inbox and apply before continuing.',
   'Do not schedule background or recurring inbox polls; drain pendingMessages from write replies (and kit/browse replies that piggyback them) as you go. Honour warnings.code=inbox_pending.',
   'A green *publish* gate verdict ends the round — END immediately; preview_passed does not end the round. The key retires on green and new work arrives as a fresh kickoff.',
@@ -557,7 +557,7 @@ const SESSION_WORKFLOW: readonly string[] = [
   'Hold the sessionKey start gave you for the whole round and pass it on every call. Do not re-run start to refresh it — it is valid until expiresAt. Re-run start only if a call is refused as unauthenticated.',
   "show_round — once, right after start. In a client that renders MCP Apps views this puts a live status card in the creator's chat that follows the build and the gate on its own, so they can watch without you polling. Calling it again renders a second card.",
   'show_media — whenever the creator asks to see the game. get_gate_media attaches frames for YOU to look at; those attachments do not reach the creator, so describing them is all you can do with it. show_media is what actually puts the pictures in front of them.',
-  'get_brief — read the brief; if seedAvailable or seedStatus=available, get_seed and continue that draft. If seedStatus=pending, browse the kit lightly then recheck get_seed before scaffolding.',
+  'get_brief — read the brief; if seedAvailable or seedStatus=available, call get_seed and revise that seed as the opening move. If seedStatus=pending, browse the kit lightly then recheck get_seed before scaffolding. If seedStatus=unavailable, the response says no seed exists for this round; scaffold from the kit.',
   // An improvement round has no seed (seeds are a new-game facility) and its brief is
   // the change request alone, so nothing above this told the agent a game already
   // existed. Following the loop literally, it scaffolded a fresh game over a published
@@ -2350,8 +2350,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       },
       description:
         'Fetch the platform-generated compiling seed draft for this round when present. ' +
-        'Continue the seed when available/status=available. When status=pending, wait and call again before scaffolding. ' +
-        'Only scaffold from a kit template when status=unavailable. ' +
+        'When available/status=available, revise this seed as the opening move. When status=pending, wait and call again before scaffolding. ' +
+        'Only scaffold from a kit template when status=unavailable; that response explicitly says no seed exists for this round. ' +
         'Honour warnings.code=module_too_large by splitting oversized modules before growing them. ' +
         BEHAVIOURAL_CONTRACT,
       inputSchema: {
