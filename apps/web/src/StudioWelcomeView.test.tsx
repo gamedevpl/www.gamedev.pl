@@ -30,7 +30,9 @@ describe('StudioWelcomeView', () => {
     getStatus.mockResolvedValue({
       status: 'queued',
       slug: 'bastion-wave',
-      events: [{ id: 'e1', kind: 'milestone', text: 'Queued for the platform agent', createdAt: '2026-08-07T00:00:00Z' }],
+      events: [
+        { id: 'e1', kind: 'milestone', text: 'Queued for the platform agent', createdAt: '2026-08-07T00:00:00Z' },
+      ],
     });
     listMine.mockResolvedValue([
       {
@@ -62,6 +64,9 @@ describe('StudioWelcomeView', () => {
     expect(dialog?.textContent).toContain('Bastion Wave Defense');
     expect(dialog?.textContent).toContain('Queued for the platform agent');
     expect(dialog?.textContent).toContain('How to steer the agent');
+    expect(dialog?.querySelector('.studio-welcome-mascot')).toBeTruthy();
+    expect(dialog?.querySelector('.studio-welcome-pulse-dot')).toBeTruthy();
+    expect(dialog?.querySelector('.studio-welcome-timer')).toBeTruthy();
     expect(onOpenStudio).not.toHaveBeenCalled();
 
     const cta = dialog?.querySelector('button.qa-primary') as HTMLButtonElement;
@@ -71,5 +76,44 @@ describe('StudioWelcomeView', () => {
     });
     expect(onOpenStudio).toHaveBeenCalledWith('/studio/bastion-wave?from=handoff');
     expect(localStorage.getItem('gamedev_studio_onboarded')).toBe('1');
+  });
+
+  it('clearly displays draft ready state and Play CTA when build finishes', async () => {
+    getStatus.mockResolvedValue({
+      status: 'in_review',
+      phase: 'ready_for_review',
+      slug: 'bastion-wave',
+      events: [
+        {
+          id: 'e1',
+          kind: 'done',
+          text: 'Full gate checks complete: typecheck, smoke, validate',
+          createdAt: '2026-08-07T00:00:00Z',
+        },
+      ],
+    });
+
+    const onOpenStudio = vi.fn();
+    await act(async () => {
+      createRoot(container).render(createElement(StudioWelcomeView, { game: 'bastion-wave', onOpenStudio }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const dialog = document.querySelector('.studio-welcome');
+    expect(dialog).toBeTruthy();
+    expect(dialog?.textContent).toContain('Draft ready!');
+    expect(dialog?.textContent).toContain('Ready to Play');
+    expect(dialog?.textContent).toContain('Full gate checks complete');
+    expect(dialog?.querySelector('.studio-welcome-ready-callout')).toBeTruthy();
+
+    const cta = dialog?.querySelector('button.qa-primary') as HTMLButtonElement;
+    expect(cta?.classList.contains('is-ready-cta')).toBe(true);
+    expect(cta?.textContent).toMatch(/Play Draft in Studio/);
+
+    await act(async () => {
+      cta.click();
+    });
+    expect(onOpenStudio).toHaveBeenCalledWith('/studio/bastion-wave?from=handoff');
   });
 });
