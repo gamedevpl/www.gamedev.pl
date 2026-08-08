@@ -189,6 +189,46 @@ describe('StudioConnectCard', () => {
     await act(async () => root.unmount());
   });
 
+  it('drops its own waiting caption when the surrounding surface already carries one', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    localStorage.setItem('gamedev_connect_collapsed:status-tok', '1');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: true, json: async () => ({ ...payload, canSwitchToPlatform: true }) })),
+    );
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(StudioConnectCard, {
+          token: 'status-tok',
+          waitingCaptionElsewhere: true,
+          onSwitchToPlatform: vi.fn(),
+        }),
+      );
+      await flush();
+    });
+    await act(async () => {
+      await flush();
+    });
+
+    expect(container.querySelector('[data-testid="connect-collapsed"]')).not.toBeNull();
+    expect(container.querySelector('.studio-connect-waiting')).toBeNull();
+    expect(container.textContent).not.toContain('Waiting for your agent to check in');
+    // Still named for screen readers, and still offers the way out.
+    expect(container.querySelector('.studio-connect')?.getAttribute('aria-label')).toContain(
+      'Waiting for your coding agent',
+    );
+    expect(container.querySelector('[data-testid="active-switch-builder"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="connect-show"]')).not.toBeNull();
+
+    await act(async () => root.unmount());
+  });
+
   it('shows a pending stop request without offering a second switch', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
