@@ -95,6 +95,18 @@ describe('anonymous visitors during closed beta', () => {
     expect(calls.some((url) => url.endsWith('/api/catalog'))).toBe(false);
   });
 
+  it('keeps the canonical game page behind the beta wall', async () => {
+    mockApi();
+    window.history.pushState(null, '', '/gtanczyk/airtime');
+
+    const container = await renderApp();
+
+    expect(container.querySelector('.beta-splash')).not.toBeNull();
+    expect(
+      vi.mocked(globalThis.fetch).mock.calls.some((call) => String(call[0]).endsWith('/api/games/airtime/page')),
+    ).toBe(false);
+  });
+
   it('opens an allowlisted promotional game without a session', async () => {
     mockApi(['airtime']);
     window.history.pushState(null, '', '/play/airtime');

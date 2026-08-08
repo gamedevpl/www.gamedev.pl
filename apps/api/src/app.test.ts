@@ -320,6 +320,13 @@ describe('private beta gate', () => {
     await app.close();
   });
 
+  it('the public game landing page remains walled during private beta', async () => {
+    const app = await buildApp({ betaAllowedUids: ownerUid, publicPlaySlugs: 'promo-game' });
+    const res = await app.inject({ method: 'GET', url: '/api/games/promo-game/page' });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+
   it('uses the operator-managed promotional list without a redeploy', async () => {
     const store = new InMemoryStore();
     await store.upsertUser({ uid: ownerUid });

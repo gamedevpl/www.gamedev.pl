@@ -828,9 +828,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     getRepoPublishedCatalogEntry: submissionSeams.getRepoPublishedCatalogEntry,
   });
 
-  // The public game page at `/:handle/:slug` — one aggregate read per game. Same
-  // open posture as the creator profile above (exempted from the beta wall below):
-  // the page is a landing page; playing is what stays gated during closed beta.
+  // The game page at `/:handle/:slug` — one aggregate read per game.
   await registerGamePageRoutes(app, {
     store,
     gamesStore,
@@ -942,10 +940,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // Public creator profiles — same posture as contact/legal. Availability checks
     // stay authed (they are under /api/creators/:handle/availability and need a session).
     if (/^\/api\/creators\/[^/]+\/?(\?|$)/.test(request.url)) return;
-    // The public landing page and its declared preview media must load without a
-    // session. Follow counts remain public; changing the subscription still requires
-    // a session in that handler. The playable document and other game routes stay walled.
-    if (/^\/api\/games\/[^/]+\/(page|follow|media)(\/[^?]*)?(\?|$)/.test(request.url)) return;
+    // Preview media and follow counts remain public; game pages stay behind beta access.
+    if (/^\/api\/games\/[^/]+\/(follow|media)(\/[^?]*)?(\?|$)/.test(request.url)) return;
     // Internal endpoints (the Cloud Scheduler notification sweep) authenticate via
     // an OIDC token in the handler, not a session — the wall would 401 them first.
     if (request.url.startsWith('/api/internal/')) return;

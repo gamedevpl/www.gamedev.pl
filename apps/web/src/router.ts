@@ -122,8 +122,8 @@ export type AppRoute =
   // an alias for links minted before profiles moved to the root namespace. Handle shape
   // matches the API (`^[a-z][a-z0-9_]{2,23}$`).
   | { view: 'creator'; handle: string }
-  // Public game landing page nested under the creator profile (`/:handle/:slug`).
-  // Reachable without a session; only playing is gated during closed beta.
+  // Game landing page nested under the creator profile (`/:handle/:slug`).
+  // The route is beta-gated; `/play/:slug` is the anonymous promotional permalink.
   | { view: 'game'; handle: string; slug: string }
   // Unknown / invalid path. Kept as its own view so a typo or stale bookmark shows a
   // real 404 instead of silently dumping the visitor on the home catalog.
