@@ -84,8 +84,11 @@ export function WaitlistPanel() {
   useEffect(() => {
     setState('loading');
     void load(filter);
+  }, [filter, load]);
+
+  useEffect(() => {
     void loadInvites();
-  }, [filter, load, loadInvites]);
+  }, [loadInvites]);
 
   const changeStatus = useCallback(
     async (uid: string, status: WaitlistStatus) => {

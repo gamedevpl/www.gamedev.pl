@@ -649,6 +649,7 @@ export function startVisitTracking(options: StartVisitTrackingOptions = {}): () 
   // stop deduping across it if these were not cleared with the session that owns them.
   recordedSteps = new Set();
   recordedWaitlistSteps = new Set();
+  recordedBetaInviteSteps = new Set();
   recordedStudioSteps = new Set();
 
   if (identity.isNew) {

@@ -12,6 +12,7 @@ export function BetaInvitePage({ code, onContinue }: { code: string; onContinue:
 
   useEffect(() => {
     let cancelled = false;
+    recordBetaInviteStep('opened');
     void acceptBetaInvite(code)
       .then(() => {
         if (cancelled) return;
