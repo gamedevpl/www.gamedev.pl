@@ -23,6 +23,10 @@ const outDir = value('out');
 const wait = flag('wait');
 const waitSeconds = Number(value('wait-seconds') ?? process.env.MANAGED_AGENT_MAX_SECONDS ?? '');
 const maxListCostCents = Number(value('cost-cents') ?? process.env.MANAGED_AGENT_MAX_LIST_COST_CENTS ?? '');
+const vaultIds = (process.env.MANAGED_AGENT_VAULT_IDS ?? process.env.MANAGED_AGENT_VAULT_ID)
+  ?.split(',')
+  .map((id) => id.trim())
+  .filter(Boolean);
 const rule = (title: string) => console.log(`\n${'─'.repeat(72)}\n${title}\n${'─'.repeat(72)}`);
 
 const brief: BuildBrief = {
@@ -121,6 +125,7 @@ const provider = vendor
         ? { environmentId: process.env.MANAGED_AGENT_ENVIRONMENT_ID.trim() }
         : {}),
       ...(Number.isInteger(maxListCostCents) && maxListCostCents > 0 ? { maxListCostCents } : {}),
+      ...(vaultIds?.length ? { vaultIds } : {}),
       ...(value('base-url') ? { baseUrl: value('base-url')! } : {}),
     })
   : stubProvider();

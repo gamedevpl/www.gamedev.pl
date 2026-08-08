@@ -232,7 +232,9 @@ npm run managed:probe -w @gamedevpl/api -- --vendor anthropic
 The probe uses `ANTHROPIC_API_KEY` for this vendor and defaults to
 `claude-sonnet-5`; `MANAGED_AGENT_API_KEY` or `--model` overrides either value.
 `MANAGED_AGENT_ID` and `MANAGED_AGENT_ENVIRONMENT_ID` identify the preconfigured
-Anthropic resources.
+Anthropic resources. `MANAGED_AGENT_VAULT_ID` attaches one session vault; use
+`MANAGED_AGENT_VAULT_IDS` for comma-separated vault IDs. The selected vault must contain
+the credential for the exact MCP server URL.
 
 It creates an initial event, polls twice, interrupts and deletes the session. The current
 probe verifies session lifecycle and costs a real run; it does not wait for a game to finish
@@ -260,6 +262,7 @@ probe refuse to start rather than run unbounded.
 | `MANAGED_AGENT_MODEL`               | Provider model label; Anthropic's actual model is on its Agent  |
 | `MANAGED_AGENT_ID`                  | Anthropic Managed Agent resource id                             |
 | `MANAGED_AGENT_ENVIRONMENT_ID`      | Anthropic Managed Environment resource id                       |
+| `MANAGED_AGENT_VAULT_IDS`           | Comma-separated session vault ids for MCP credentials           |
 | `MANAGED_AGENT_EFFORT`              | `low` / `medium` / `high`                                       |
 | `MANAGED_AGENT_MAX_SECONDS`         | Hard ceiling on one session's wall clock                        |
 | `MANAGED_AGENT_MAX_LIST_COST_CENTS` | Anthropic session budget, in whole cents                        |

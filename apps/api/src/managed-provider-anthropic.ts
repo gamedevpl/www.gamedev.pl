@@ -73,6 +73,7 @@ export function createAnthropicManagedProvider(config: ManagedProviderConfig): M
   const agentId = config.agentId?.trim();
   const environmentId = config.environmentId?.trim();
   const maxListCostCents = config.maxListCostCents;
+  const vaultIds = config.vaultIds?.filter(Boolean);
 
   async function call(path: string, init: RequestInit = {}): Promise<unknown> {
     const response = await fetchImpl(`${baseUrl}${path}`, {
@@ -153,6 +154,7 @@ export function createAnthropicManagedProvider(config: ManagedProviderConfig): M
             : {}),
         },
         environment_id: environmentId,
+        ...(vaultIds?.length ? { vault_ids: vaultIds } : {}),
         metadata: { correlation_id: request.correlationId },
         initial_events: [
           {

@@ -35,6 +35,7 @@ describe('anthropic managed provider', () => {
       agentId: 'agent_test',
       environmentId: 'env_test',
       maxListCostCents: 125,
+      vaultIds: ['vlt_test'],
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
 
@@ -58,6 +59,7 @@ describe('anthropic managed provider', () => {
         model: { id: 'test-model' },
       },
       environment_id: 'env_test',
+      vault_ids: ['vlt_test'],
       budget: {
         type: 'limit',
         max_list_cost: { amount: '125', currency: 'USD' },
