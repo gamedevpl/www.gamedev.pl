@@ -1381,7 +1381,11 @@ describe('submission routes', () => {
     // Fresh dispatch: observe immediately so `in_progress` advances us to building.
     const early = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
     expect(early.statusCode).toBe(200);
-    expect(observe).toHaveBeenCalledWith('task-1', { hasCandidate: false });
+    expect(observe).toHaveBeenCalledWith('task-1', {
+      hasCandidate: false,
+      issueNumber: job.issueNumber,
+      slug: 'a-game',
+    });
     expect((await store.getSubmission(job.issueNumber))?.state).toBe('building');
     expect(early.json().phase).toBe('building');
 

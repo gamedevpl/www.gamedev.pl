@@ -15,30 +15,13 @@
 //   2. `head_ref` is silently ignored without an open PR      (see AgentTaskInput.headRef)
 //   3. `model` echoes back namespaced, not as sent            (see normalizeModel)
 
+import { isAgentTaskState, type AgentTaskState } from './agent-state.js';
 import { isRateLimitResponse } from './github-rate-limit.js';
 
 const AGENT_TASKS_API_VERSION = '2026-03-10';
 
-/**
- * The task lifecycle as GitHub reports it.
- *
- * `failed`, `timed_out` and `waiting_for_user` are the three that matter most here: they
- * are the difference between "stuck" and "slow", which is precisely what the creator
- * status page cannot say today and has to paper over with "the agent has been quiet".
- */
-export const AGENT_TASK_STATES = [
-  'queued',
-  'in_progress',
-  'completed',
-  'failed',
-  'idle',
-  'waiting_for_user',
-  'timed_out',
-  'cancelled',
-] as const;
-export type AgentTaskState = (typeof AGENT_TASK_STATES)[number];
-
-const AGENT_TASK_STATE_SET: ReadonlySet<string> = new Set(AGENT_TASK_STATES);
+// Every backend shares this vocabulary, so it lives in agent-state.ts.
+export { AGENT_TASK_STATES, type AgentTaskState } from './agent-state.js';
 
 /**
  * Models accepted by the API. GitHub notes the list "may change over time and depend on
@@ -219,7 +202,7 @@ export function normalizeModel(model: string | undefined): string | undefined {
 }
 
 function asState(value: unknown): AgentTaskState {
-  return typeof value === 'string' && AGENT_TASK_STATE_SET.has(value) ? (value as AgentTaskState) : 'queued';
+  return isAgentTaskState(value) ? value : 'queued';
 }
 
 function asString(value: unknown): string | undefined {

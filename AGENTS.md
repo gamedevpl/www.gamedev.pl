@@ -103,7 +103,10 @@ each band the CSS assembles differently — see `apps/e2e/src/studio-shell.test.
 Production games will live in a **dedicated games repo maintained by coding agents**; this app
 is becoming a catalog, player, and spec-submission surface. Self-hosted agent execution (the
 agent-runner container, auth proxy, job tokens, and orchestrator) was **removed for legal
-reasons** and is not a future phase. Read
+reasons** and is not a future phase. That finding is about compute **we** operate on a
+seated human subscription — a builder on a hosted platform paid by metered API key is a
+different thing and is being built (see
+[`managed-agent-backend.md`](docs/managed-agent-backend.md)). Read
 [`games-repo.md`](docs/games-repo.md) before making architectural assumptions.
 
 ## Deployment status (2026-07-30)

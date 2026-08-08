@@ -10,6 +10,9 @@ import { createAgentTasksClient, type AgentTaskModel } from './agent-tasks.js';
 import { createCopilotBackend } from './copilot-backend.js';
 import { VertexGameSeeder, type GameSeeder } from './game-seed.js';
 import { createGitHubClient } from './github-client.js';
+import { createManagedProvider, type ManagedAgentEffort } from './managed-agent.js';
+import './managed-provider-anthropic.js';
+import { createManagedBackend, type ManagedDeliverySink } from './managed-backend.js';
 import { createArchiveSeedContextSource } from './seed-context.js';
 import { createSelfBuildBackend, type SelfBuildBackendOptions } from './self-build-backend.js';
 
@@ -36,6 +39,87 @@ export function resolveBuilderBackend(registry: AgentBackendRegistry, builder: B
  * credential, and an environment can run the whole product without one — self builds
  * still work, and submissions that ask for the platform builder wait in `queued`.
  */
+// What the managed backend needs that the environment cannot supply.
+export interface ManagedBackendDeps {
+  deliver: ManagedDeliverySink;
+  systemPrompt?: () => Promise<string | undefined>;
+}
+
+// Vendor is a variable; a delivery sink is required.
+export function createManagedPlatformBackendFromEnv(deps?: ManagedBackendDeps, log?: Logger): AgentBackend | undefined {
+  const vendor = process.env.MANAGED_AGENT_VENDOR?.trim();
+  if (!vendor) return undefined;
+
+  const apiKey = process.env.MANAGED_AGENT_API_KEY?.trim();
+  const model = process.env.MANAGED_AGENT_MODEL?.trim();
+  if (!apiKey || !model) {
+    log?.warn({ vendor }, 'managed agent vendor is set but MANAGED_AGENT_API_KEY / MANAGED_AGENT_MODEL are missing');
+    return undefined;
+  }
+  const agentId = process.env.MANAGED_AGENT_ID?.trim();
+  const environmentId = process.env.MANAGED_AGENT_ENVIRONMENT_ID?.trim();
+  const maxDurationSeconds = Number(process.env.MANAGED_AGENT_MAX_SECONDS ?? '');
+  const maxListCostCents = Number(process.env.MANAGED_AGENT_MAX_LIST_COST_CENTS ?? '');
+  const vaultIds = (process.env.MANAGED_AGENT_VAULT_IDS ?? process.env.MANAGED_AGENT_VAULT_ID)
+    ?.split(',')
+    .map((id) => id.trim())
+    .filter(Boolean);
+  if (vendor === 'anthropic' && (!agentId || !environmentId)) {
+    log?.warn({ vendor }, 'anthropic managed agent requires MANAGED_AGENT_ID / MANAGED_AGENT_ENVIRONMENT_ID');
+    return undefined;
+  }
+  if (
+    vendor === 'anthropic' &&
+    (!Number.isInteger(maxDurationSeconds) ||
+      maxDurationSeconds <= 0 ||
+      !Number.isInteger(maxListCostCents) ||
+      maxListCostCents <= 0)
+  ) {
+    log?.warn(
+      { vendor },
+      'anthropic managed agent requires positive MANAGED_AGENT_MAX_SECONDS / MANAGED_AGENT_MAX_LIST_COST_CENTS',
+    );
+    return undefined;
+  }
+  if (!deps?.deliver) {
+    log?.warn({ vendor }, 'managed agent vendor is set but no delivery sink was supplied');
+    return undefined;
+  }
+
+  const effort = process.env.MANAGED_AGENT_EFFORT?.trim() as ManagedAgentEffort | undefined;
+  const deliveryMode = process.env.MANAGED_AGENT_DELIVERY_MODE?.trim() === 'publish' ? 'publish' : 'preview';
+
+  let provider;
+  try {
+    provider = createManagedProvider(vendor, {
+      apiKey,
+      model,
+      ...(process.env.MANAGED_AGENT_ID?.trim() ? { agentId: process.env.MANAGED_AGENT_ID.trim() } : {}),
+      ...(process.env.MANAGED_AGENT_ENVIRONMENT_ID?.trim()
+        ? { environmentId: process.env.MANAGED_AGENT_ENVIRONMENT_ID.trim() }
+        : {}),
+      ...(Number.isInteger(maxListCostCents) && maxListCostCents > 0 ? { maxListCostCents } : {}),
+      ...(vaultIds?.length ? { vaultIds } : {}),
+      ...(process.env.MANAGED_AGENT_BASE_URL?.trim() ? { baseUrl: process.env.MANAGED_AGENT_BASE_URL.trim() } : {}),
+    });
+  } catch (error) {
+    log?.warn({ err: error, vendor }, 'could not build the managed agent provider; platform dispatch stays off');
+    return undefined;
+  }
+
+  log?.info({ vendor, model, deliveryMode, backend: `managed:${vendor}` }, 'managed agent dispatch enabled');
+
+  return createManagedBackend({
+    provider,
+    deliver: deps.deliver,
+    ...(deps.systemPrompt ? { systemPrompt: deps.systemPrompt } : {}),
+    ...(effort ? { effort } : {}),
+    ...(Number.isFinite(maxDurationSeconds) && maxDurationSeconds > 0 ? { maxDurationSeconds } : {}),
+    deliveryMode,
+    ...(log ? { log } : {}),
+  });
+}
+
 export function createPlatformBackendFromEnv(log?: Logger): AgentBackend | undefined {
   // Deliberately its own credential rather than reusing GITHUB_TOKEN. The agent tasks
   // API needs a user-to-server token (installation tokens are unsupported), and keeping
@@ -72,8 +156,10 @@ export function createPlatformBackendFromEnv(log?: Logger): AgentBackend | undef
 export function createAgentBackendRegistryFromEnv(
   log?: Logger,
   selfOptions?: SelfBuildBackendOptions,
+  managedDeps?: ManagedBackendDeps,
 ): AgentBackendRegistry {
-  const platform = createPlatformBackendFromEnv(log);
+  // A configured managed vendor takes the platform slot; routing above is unchanged.
+  const platform = createManagedPlatformBackendFromEnv(managedDeps, log) ?? createPlatformBackendFromEnv(log);
   const self = createSelfBuildBackend(selfOptions);
   if (!platform) {
     log?.info({ backend: 'self' }, 'self-build backend enabled (no platform dispatch credential)');

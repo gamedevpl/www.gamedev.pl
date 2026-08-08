@@ -27,6 +27,43 @@ describe('InMemoryStore', () => {
     expect(fetched).toEqual(created);
   });
 
+  it('replaces the dispatch credit placeholder when a session bills in tokens', async () => {
+    const store = new InMemoryStore();
+    await store.createSubmission(1, 'g:123', 'A game');
+    await store.recordJobCost(1, {
+      kind: 'agent_session',
+      at: '2026-08-08T10:00:00Z',
+      by: 'managed:anthropic',
+      ref: 's1',
+      credits: 1,
+    });
+
+    await store.setJobCostTokens(1, 's1', { input: 120_000, output: 8_000 });
+
+    const [entry] = (await store.getSubmission(1))?.costs ?? [];
+    expect(entry.tokens).toEqual({ input: 120_000, output: 8_000 });
+    expect(entry.credits).toBeUndefined();
+  });
+
+  it('keeps a measured credit figure, which is real', async () => {
+    const store = new InMemoryStore();
+    await store.createSubmission(1, 'g:123', 'A game');
+    await store.recordJobCost(1, {
+      kind: 'agent_session',
+      at: '2026-08-08T10:00:00Z',
+      by: 'copilot',
+      ref: 's1',
+      credits: 1,
+    });
+    await store.setJobCostCredits(1, 's1', 212);
+
+    await store.setJobCostTokens(1, 's1', { input: 10, output: 2 });
+
+    const [entry] = (await store.getSubmission(1))?.costs ?? [];
+    expect(entry.credits).toBe(212);
+    expect(entry.tokens).toEqual({ input: 10, output: 2 });
+  });
+
   it('records job transitions as a history, newest state on the record', async () => {
     const store = new InMemoryStore();
     await store.createSubmission(1, 'g:123', 'A game');

@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AgentTask, AgentTaskInput, AgentTasksClient } from './agent-tasks.js';
 import type { BuildBrief } from './agent-backend.js';
-import { buildPrompt, createCopilotBackend } from './copilot-backend.js';
+import { buildPrompt } from './build-prompt.js';
+import { createCopilotBackend } from './copilot-backend.js';
 
 const BRIEF: BuildBrief = {
   issueNumber: 42,

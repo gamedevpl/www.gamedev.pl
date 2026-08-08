@@ -85,6 +85,23 @@ Removed in this pivot (recoverable from git history): `containers/agent-runner`,
 container ran a real agent through an auth proxy with per-job tokens — but they solved a
 problem this design no longer has.
 
+### What was removed was compute we operate, not every hosted builder
+
+Worth stating precisely, because "we removed hosted agent execution for legal reasons" is
+easy to read as a ban on anything that runs an agent. The two findings were specific:
+
+- **B0** existed because a container _of ours_ ran untrusted prompts next to a credential.
+- **B1/B2** existed because that agent ran on a **subscription licensed to a human**, whose
+  terms do not cover a service reselling it to third parties.
+
+A backend on a hosted agent platform paid through a **metered first-party API key** meets
+neither condition: we operate no sandbox, and an API key is sold for programmatic use
+rather than seated to a person. That is why
+[`managed-agent-backend.md`](./managed-agent-backend.md) can exist without reopening the
+pivot. It does not make it a good idea — the cost case is a separate argument, and the
+default platform builder is still Copilot dispatch — but the blocker is a property of
+_who runs the compute and on whose licence_, not of hosted builders as a category.
+
 ## The product consequence: creation is asynchronous
 
 This is the significant trade and it should be designed for, not discovered:

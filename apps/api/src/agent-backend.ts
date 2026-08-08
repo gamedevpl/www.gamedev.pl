@@ -110,7 +110,11 @@ export interface AgentBackend {
    */
   resume(brief: BuildBrief, previous: DispatchResult): Promise<DispatchResult>;
   /** Reads current progress, normalized into the vendor-neutral shape. */
-  observe(ref: string, options: { hasCandidate: boolean }): Promise<AgentObservation | null>;
+  // Job identity is for pull-delivery backends; push backends ignore it.
+  observe(
+    ref: string,
+    options: { hasCandidate: boolean; issueNumber?: number; slug?: string },
+  ): Promise<AgentObservation | null>;
   /**
    * Stops work, as far as the backend allows.
    *
