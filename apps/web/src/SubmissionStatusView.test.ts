@@ -58,7 +58,7 @@ async function flushEffects() {
   await Promise.resolve();
 }
 
-/** How many times a sentence is on screen. */
+// How many times a sentence is on screen.
 function countText(container: HTMLElement, needle: string): number {
   return (container.textContent ?? '').split(needle).length - 1;
 }
@@ -815,7 +815,7 @@ describe('SubmissionStatusView', () => {
       expect(container.querySelector('[data-testid="connect-switch-builder"]')?.textContent).toContain(
         'Use Gamedev.pl agent instead',
       );
-      // The foot bar owns the waiting sentence; the card must not print it again.
+      // Foot bar owns it — the card must not repeat.
       expect(countText(container, 'Waiting for your agent to check in')).toBe(1);
       expect(container.querySelector('.studio-thread-foot .studio-context-phase')?.textContent).toMatch(
         /Waiting for your agent to check in/i,
@@ -842,7 +842,7 @@ describe('SubmissionStatusView', () => {
   });
 
   it('keeps one waiting sentence and a way out when the connect card is hidden', async () => {
-    // Dismissed card: the strip repeated the foot bar and offered only an expand button.
+    // Dismissed card: strip repeated the foot bar, offering only expand.
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     localStorage.clear();
     localStorage.setItem('gamedev_connect_collapsed:hidden-token', '1');
@@ -901,14 +901,12 @@ describe('SubmissionStatusView', () => {
         handoff!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
         await flushEffects();
       });
+      const confirm = [
+        ...container.querySelectorAll<HTMLButtonElement>('[data-testid="connect-collapsed"] button'),
+      ].find((button) => button.textContent?.includes('Start Gamedev.pl agent'));
+      expect(confirm).toBeDefined();
       await act(async () => {
-        container
-          .querySelectorAll<HTMLButtonElement>('[data-testid="connect-collapsed"] button')
-          .forEach((button) => {
-            if (button.textContent?.includes('Start Gamedev.pl agent')) {
-              button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-            }
-          });
+        confirm!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
         await flushEffects();
       });
       expect(mockedHandoffToPlatform).toHaveBeenCalledWith('hidden-token', { stopActiveSelfAgent: false });

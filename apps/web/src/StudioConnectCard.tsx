@@ -87,10 +87,7 @@ type StudioConnectCardProps = {
    * a disclosure so install stays scannable. `thread` (default) keeps the full card.
    */
   density?: 'thread' | 'panel';
-  /**
-   * The surface around us already says "waiting for your agent" — Studio's foot bar
-   * does — so drop our copy rather than say it twice. Standalone `/status` leaves it unset.
-   */
+  // Foot bar already says "waiting for your agent" — do not repeat.
   waitingCaptionElsewhere?: boolean;
   /** Section heading when `density="panel"` — omitted when the card returns null. */
   panelHeading?: string;
@@ -359,7 +356,6 @@ export function StudioConnectCard({
           <button type="button" className="studio-connect-show" onClick={showCard} data-testid="connect-show">
             <PixelIcon name="expand" size={12} /> {t('connect.show')}
           </button>
-          {/* Before the first check-in this strip is the whole control surface. */}
           {payload?.canSwitchToPlatform && onSwitchToPlatform ? (
             <SwitchToPlatformControl compact onSwitchToPlatform={onSwitchToPlatform} pending={builderHandoffPending} />
           ) : null}

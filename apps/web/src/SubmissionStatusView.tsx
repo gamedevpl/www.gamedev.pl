@@ -743,7 +743,7 @@ export function SubmissionStatusView({
             ? t('statusView.phaseLabels.dispatched')
             : t(`statusView.states.${status.status}.label`)
         : '';
-    // One waiting sentence per screen: the foot owns it, so the connect card drops it.
+    // Foot bar owns the waiting caption — the card drops it.
     const footBarShowing = Boolean(status && !agentWorking && status.stall !== 'ended' && !status.agentEndedAt);
     return (
       <>

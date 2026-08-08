@@ -285,6 +285,28 @@ has no cancel endpoint. Do not auto-dispatch platform from an ordinary `end`.
 `no_agent_yet` is a handoff without an agent to acknowledge it, so Studio can dispatch
 the selected replacement immediately.
 
+### `no_agent_yet` has no composer — so the connect card carries the exits
+
+This is the one Studio state with **no composer**: `selfComposerRoute` returns null before
+the first check-in, and the composer is what holds the builder badge and its handoff
+control. Everything a creator can still do therefore has to be reachable from the connect
+card — **including when it is collapsed**, which is a click away and sticky per game in
+`localStorage`. The collapsed strip long offered only "show connect steps", so a round that
+no agent ever joined — and that nothing on the platform can advance — showed a creator an
+expand button and a wait. It now carries the compact platform handoff whenever
+`canSwitchToPlatform` is set (true for `no_agent_yet`, `quiet` and `ended`).
+
+The other half of that screen is the waiting caption, and **the thread foot owns it**: the
+card takes `waitingCaptionElsewhere` and drops its own copy. Both surfaces used to print
+`connect.waiting`, so a phone with the card collapsed said "waiting for your agent" twice
+with nothing else on screen to tell the two apart. Studio computes `footBarShowing` once and
+feeds both the foot bar and that prop, so they cannot drift; standalone `/status` has no
+foot bar and keeps the card's caption. When adding copy to either surface, check the other.
+
+To put this state on a screen locally, run the dev server with `DEV_SEED_STUDIO=1` and open
+`/studio/beasts-and-pumpkins` after `POST /api/auth/dev`. Opening a real round needs
+`POST /api/submissions`, which is 503 without a GitHub token, so the seed is the only way in.
+
 ### Platform session boot (no heuristics)
 
 After a platform dispatch (including self→platform handoff), the job stays
