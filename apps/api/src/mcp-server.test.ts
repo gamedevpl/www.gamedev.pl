@@ -553,15 +553,12 @@ describe('POST /api/mcp (BY-05)', () => {
     const joined = workflow.join('\n');
     expect(joined).toMatch(/get_brief/);
     expect(joined).toMatch(/get_seed/);
-<<<<<<< HEAD
     expect(joined).toMatch(/revise that seed as the opening move/i);
     expect(joined).toMatch(/seedStatus=unavailable.*no seed exists/i);
-=======
     expect(joined).toMatch(/typecheck -- <slug>/);
     expect(joined).toMatch(/no browser.*npm ci.*capture.*playtest.*agency/i);
     expect(joined).toMatch(/server verifies.*preview/i);
     expect(joined).toMatch(/full gate only immediately before.*publish/i);
->>>>>>> 6b9f5197 (docs(mcp): make preview verification ladder explicit)
     // CP-2: an improvement round has no seed and a brief that is only the change
     // request, so without this step the loop reads as "scaffold from the kit" and an
     // agent following it overwrites the published game it was asked to improve.
