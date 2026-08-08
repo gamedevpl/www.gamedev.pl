@@ -17,6 +17,17 @@ describe('buildPrompt delivery contract', () => {
     expect(buildPrompt(BRIEF)).toBe(buildPrompt(BRIEF, { kind: 'channel' }));
   });
 
+  it('gives MCP rounds a decisive two-minute workflow', () => {
+    const prompt = buildPrompt(BRIEF, { kind: 'channel', fast: true });
+    expect(prompt).toContain('Two-minute MCP delivery lane');
+    expect(prompt).toContain('get_brief');
+    expect(prompt).toContain('get_kit');
+    expect(prompt).toContain('submit_sources');
+    expect(prompt).toContain('Call `end` immediately after submitting');
+    expect(prompt).not.toContain('npm run submit');
+    expect(prompt).not.toContain('GAMEDEVPL_BUILD_TOKEN');
+  });
+
   it('names the directory a pulled round is actually read from', () => {
     const prompt = buildPrompt(BRIEF, OUTPUTS);
     expect(prompt).toContain('outputs/games/comet-courier/');

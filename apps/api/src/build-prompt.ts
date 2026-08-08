@@ -5,7 +5,7 @@ import type { BuildBrief } from './agent-backend.js';
 // A prompt that disagrees with its backend burns the round.
 export type DeliveryContract =
   // Copilot, and any agent given our MCP endpoint.
-  | { kind: 'channel' }
+  | { kind: 'channel'; fast?: boolean }
   // Pulled back from the session's output directory.
   | { kind: 'outputs'; path: string };
 
@@ -96,7 +96,7 @@ export function buildPrompt(brief: BuildBrief, delivery: DeliveryContract = { ki
     '  wastes your session.',
     '- Follow `.github/copilot-instructions.md` and the repository skills for everything else.',
     '',
-    ...(channel ? channelDelivery(brief) : outputsDelivery(slug, delivery.path)),
+    ...(channel ? channelDelivery(brief, delivery.fast === true) : outputsDelivery(slug, delivery.path)),
   ];
 
   if (brief.locale && brief.locale !== 'en' && channel) {
@@ -111,7 +111,23 @@ export function buildPrompt(brief: BuildBrief, delivery: DeliveryContract = { ki
 }
 
 // The push contract: the agent reports and uploads over the build channel.
-function channelDelivery(brief: BuildBrief): string[] {
+function channelDelivery(brief: BuildBrief, fast: boolean): string[] {
+  if (fast) {
+    return [
+      '## Two-minute MCP delivery lane',
+      '',
+      'Use only the `gamedevpl` MCP tools for this round.',
+      'Do not search the filesystem, GitHub or the web. Do not install packages.',
+      'Call `start` once, then immediately call `get_brief` and `get_kit`.',
+      'Use the `get_kit` unpack command and work from the kit locally.',
+      'Build the smallest playable version: one screen, one loop, basic visuals.',
+      'Skip audio, polish, optional features and broad repository exploration.',
+      'Stage only the required source files as soon as the game draws.',
+      'Call `submit_sources` with `fromStaged:true`, `mode:"preview"` and `kitEngineRef`.',
+      'Call `end` immediately after submitting. Do not wait for the gate verdict.',
+      'If a tool fails, retry it once, then deliver the smallest valid source tree.',
+    ];
+  }
   return [
     '## Delivering your work',
     '',

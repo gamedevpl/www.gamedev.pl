@@ -88,7 +88,7 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
       correlationId: String(brief.issueNumber),
       ...(systemPrompt ? { systemPrompt } : {}),
       // The prompt has to describe the delivery this backend will actually read.
-      prompt: buildPrompt(brief, deliver ? { kind: 'outputs', path: outputPath } : { kind: 'channel' }),
+      prompt: buildPrompt(brief, deliver ? { kind: 'outputs', path: outputPath } : { kind: 'channel', fast: true }),
       model: options.provider.model,
       ...(options.effort ? { effort: options.effort } : {}),
       ...(brief.seed
