@@ -166,7 +166,10 @@ for (let attempt = 1; attempt <= pollCount; attempt += 1) {
     slug: SLUG,
   });
   console.log(observation ?? '(vendor has forgotten this session)');
-  if (observation && (observation.hasCandidate || ['failed', 'timed_out', 'cancelled'].includes(observation.state)))
+  if (
+    observation &&
+    (observation.hasCandidate || ['idle', 'failed', 'timed_out', 'cancelled'].includes(observation.state))
+  )
     break;
 }
 

@@ -116,7 +116,9 @@ function channelDelivery(brief: BuildBrief, fast: boolean): string[] {
     return [
       '## Two-minute MCP delivery lane',
       '',
-      `Your first action must be \`start({ slug: "${brief.slug ?? '(slug)'}" })\`.`,
+      'Do not reply with a plan. Execute tools immediately.',
+      `Call \`start\` now with exactly \`{ "slug": "${brief.slug ?? '(slug)'}" }\`.`,
+      'Pass the returned sessionKey on every following call.',
       'Then follow this exact sequence: start → get_brief → get_kit → build → stage → submit_sources → end.',
       'Use only the `gamedevpl` MCP tools for this round.',
       'Do not search the filesystem, GitHub or the web. Do not install packages.',
