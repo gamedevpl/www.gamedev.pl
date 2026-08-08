@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
+import { InteractiveMascot, type MascotEmotion } from './Mascot.js';
 import { PixelIcon } from './PixelIcon.js';
 import { studioPath } from './router.js';
 import { isStudioOnboarded, markStudioOnboarded, resolveWelcomeToken } from './studioWelcome.js';
@@ -11,6 +12,80 @@ import { welcomeProgressMessage, welcomeStatusLabel } from './welcomeProgress.js
 
 // Focusable controls inside the welcome dialog.
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+function computeStartTime(status: SubmissionStatus | null, mountedAt: number): number {
+  if (!status) return mountedAt;
+
+  if (status.events && status.events.length > 0) {
+    const times = status.events.map((e) => Date.parse(e.createdAt)).filter((t) => !isNaN(t) && t > 0);
+    if (times.length > 0) {
+      return Math.min(...times);
+    }
+  }
+
+  if (status.progress?.commits && status.progress.commits.length > 0) {
+    const times = status.progress.commits.map((c) => Date.parse(c.committedDate)).filter((t) => !isNaN(t) && t > 0);
+    if (times.length > 0) {
+      return Math.min(...times);
+    }
+  }
+
+  if (status.lastAgentSignalAt) {
+    const t = Date.parse(status.lastAgentSignalAt);
+    if (!isNaN(t) && t > 0 && t < mountedAt) return t;
+  }
+
+  return mountedAt;
+}
+
+function computeEndTime(status: SubmissionStatus | null): number | null {
+  if (!status) return null;
+  if (status.agentEndedAt) {
+    const t = Date.parse(status.agentEndedAt);
+    if (!isNaN(t) && t > 0) return t;
+  }
+  if (status.events && status.events.length > 0) {
+    const times = status.events.map((e) => Date.parse(e.createdAt)).filter((t) => !isNaN(t) && t > 0);
+    if (times.length > 0) {
+      return Math.max(...times);
+    }
+  }
+  if (status.lastAgentSignalAt) {
+    const t = Date.parse(status.lastAgentSignalAt);
+    if (!isNaN(t) && t > 0) return t;
+  }
+  return null;
+}
+
+function formatElapsed(elapsedMs: number): string {
+  const totalSecs = Math.max(0, Math.floor(elapsedMs / 1000));
+  const mins = Math.floor(totalSecs / 60);
+  const secs = totalSecs % 60;
+  if (mins > 0) {
+    return `${mins}m ${secs.toString().padStart(2, '0')}s`;
+  }
+  return `${secs}s`;
+}
+
+function getMascotEmotion(status: SubmissionStatus | null): MascotEmotion {
+  if (!status) return 'busy';
+  switch (status.status) {
+    case 'published':
+      return 'excited';
+    case 'needs_changes':
+      return 'confused';
+    case 'in_review':
+    case 'publishing':
+      return 'proud';
+    case 'abandoned':
+      return 'sad';
+    case 'queued':
+      return 'curious';
+    case 'building':
+    default:
+      return 'busy';
+  }
+}
 
 type StudioWelcomeViewProps = {
   // Slug or capability token from the URL.
@@ -23,16 +98,40 @@ export function StudioWelcomeView({ game, onOpenStudio }: StudioWelcomeViewProps
   const { t, i18n } = useTranslation();
   const wizardRef = useRef<HTMLDivElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const mountedAtRef = useRef<number>(Date.now());
   const [tracksViewport, setTracksViewport] = useState(false);
   const [title, setTitle] = useState(game);
   const [token, setToken] = useState<string | null>(null);
   const [status, setStatus] = useState<SubmissionStatus | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [primerExpanded] = useState(() => !isStudioOnboarded());
+  const [now, setNow] = useState<number>(() => Date.now());
+
+  const isReady =
+    status != null &&
+    (status.status === 'in_review' ||
+      status.status === 'published' ||
+      status.phase === 'ready_for_review' ||
+      status.phase === 'published' ||
+      (status.playable != null && status.playable.length > 0) ||
+      status.preview != null);
+
+  const isNeedsChanges =
+    status != null && (status.status === 'needs_changes' || status.phase === 'needs_changes' || status.failure != null);
+
+  const isRunning = !status || (!isReady && !isNeedsChanges && status.status !== 'abandoned');
 
   useEffect(() => {
     recordCreateStep('handoff_shown', 'platform');
   }, []);
+
+  useEffect(() => {
+    if (!isRunning) return;
+    const timer = setInterval(() => {
+      setNow(Date.now());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [isRunning]);
 
   useEffect(() => {
     let cancelled = false;
@@ -138,6 +237,11 @@ export function StudioWelcomeView({ game, onOpenStudio }: StudioWelcomeViewProps
 
   const progress = welcomeProgressMessage(status, t);
   const label = welcomeStatusLabel(status, t);
+  const startTime = computeStartTime(status, mountedAtRef.current);
+  const endTime = isRunning ? null : computeEndTime(status);
+  const elapsedMs = Math.max(0, (endTime ?? now) - startTime);
+  const elapsedText = formatElapsed(elapsedMs);
+  const mascotEmotion = getMascotEmotion(status);
 
   return createPortal(
     <div
@@ -151,29 +255,91 @@ export function StudioWelcomeView({ game, onOpenStudio }: StudioWelcomeViewProps
     >
       <header className="qa-wizard-header">
         <p className="qa-wizard-step" aria-live="polite">
-          {t('welcome.stepLabel')}
+          {isReady
+            ? t('welcome.stepLabelReady')
+            : isNeedsChanges
+              ? t('welcome.stepLabelAttention')
+              : t('welcome.stepLabel')}
         </p>
       </header>
 
       <div className="qa-wizard-progress" aria-hidden="true">
         <span className="is-done" />
         <span className="is-done" />
-        <span className="is-now" />
+        <span className={isReady ? 'is-done' : 'is-now'} />
       </div>
 
       <div className="qa-wizard-scroller">
         <div className="qa-stage">
-          <p className="qa-stage-eyebrow">{t('welcome.eyebrow')}</p>
-          <h2 className="qa-title" ref={headingRef} tabIndex={-1}>
-            {title}
-          </h2>
-          <p className="qa-stage-lede">{t('welcome.lede')}</p>
+          <div className="studio-welcome-hero">
+            <div className="studio-welcome-hero-text">
+              <p className="qa-stage-eyebrow">
+                <span
+                  className={`studio-welcome-pulse-dot${isReady ? ' is-ready' : isRunning ? ' is-pulsing' : ''}`}
+                  aria-hidden="true"
+                />
+                {isReady
+                  ? t('welcome.eyebrowReady')
+                  : isNeedsChanges
+                    ? t('welcome.eyebrowAttention')
+                    : t('welcome.eyebrow')}
+              </p>
+              <h2 className="qa-title" ref={headingRef} tabIndex={-1}>
+                {title}
+              </h2>
+            </div>
+            <div className="studio-welcome-mascot-wrap">
+              <InteractiveMascot
+                size={72}
+                className="studio-welcome-mascot"
+                idleEmotion={mascotEmotion}
+                pokeLabel={t('welcome.mascotPoke')}
+              />
+              <div
+                className={`studio-welcome-mascot-glow${isReady ? ' is-ready' : isRunning ? ' is-glowing' : ''}`}
+                aria-hidden="true"
+              />
+            </div>
+          </div>
 
-          <div className="studio-welcome-progress" role="status" aria-live="polite">
-            <p className="studio-welcome-progress-label">
-              <PixelIcon name="sparkle" size={13} /> {label}
+          <p className="qa-stage-lede">{isReady ? t('welcome.ledeReady') : t('welcome.lede')}</p>
+
+          <div className={`studio-welcome-progress${isReady ? ' is-ready' : isRunning ? ' is-running' : ''}`}>
+            <div className="studio-welcome-progress-header">
+              <p className="studio-welcome-progress-label">
+                <span className="studio-welcome-live-badge" aria-hidden="true">
+                  {isReady ? (
+                    <PixelIcon name="check" size={13} />
+                  ) : (
+                    <>
+                      <span className={`studio-welcome-pulse-ring${isRunning ? ' is-pulsing' : ''}`} />
+                      <PixelIcon name="sparkle" size={13} />
+                    </>
+                  )}
+                </span>
+                {isReady ? t('welcome.statusReadyLabel') : label}
+              </p>
+              {elapsedText ? (
+                <span
+                  className="studio-welcome-timer"
+                  aria-hidden="true"
+                  title={t(isReady ? 'welcome.completedIn' : 'welcome.runningFor', { time: elapsedText })}
+                >
+                  <PixelIcon name="clock" size={12} />
+                  <span>{isReady ? t('welcome.completedIn', { time: elapsedText }) : elapsedText}</span>
+                </span>
+              ) : null}
+            </div>
+            <p className="studio-welcome-progress-message" role="status" aria-live="polite">
+              {progress}
             </p>
-            <p className="studio-welcome-progress-message">{progress}</p>
+            {isReady ? (
+              <div className="studio-welcome-ready-callout">
+                <p className="studio-welcome-ready-title">
+                  <PixelIcon name="play" size={14} /> {t('welcome.readyBanner')}
+                </p>
+              </div>
+            ) : null}
             {loadError ? <p className="error qa-error">{loadError}</p> : null}
           </div>
 
@@ -198,8 +364,13 @@ export function StudioWelcomeView({ game, onOpenStudio }: StudioWelcomeViewProps
       </div>
 
       <footer className="qa-wizard-footer">
-        <button type="button" className="btn btn-primary qa-primary" onClick={openStudio}>
-          <PixelIcon name="wrench" size={14} /> {t('welcome.openStudio')}
+        <button
+          type="button"
+          className={`btn btn-primary qa-primary${isReady ? ' is-ready-cta' : ''}`}
+          onClick={openStudio}
+        >
+          <PixelIcon name={isReady ? 'play' : 'wrench'} size={14} />{' '}
+          {isReady ? t('welcome.playDraft') : t('welcome.openStudio')}
         </button>
       </footer>
     </div>,
