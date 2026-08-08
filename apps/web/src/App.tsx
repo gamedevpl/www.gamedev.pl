@@ -39,6 +39,7 @@ import { CreatorProfilePage } from './CreatorProfilePage.js';
 import { GamePage } from './GamePage.js';
 import { GameDetailPage } from './GameDetailPage.js';
 import { NotFoundPage } from './NotFoundPage.js';
+import { PublicPlayView } from './PublicPlayView.js';
 import { AppUpdateBanner } from './AppUpdateBanner.js';
 import { InstallPrompt } from './InstallPrompt.js';
 import { PullToRefresh } from './PullToRefresh.js';
@@ -81,9 +82,10 @@ type StageContent =
 
 export function App() {
   const { t, i18n } = useTranslation();
-  const { user, loading: authLoading, privateBeta } = useAuth();
+  const { user, loading: authLoading, privateBeta, publicPlaySlugs } = useAuth();
   const [route, setRoute] = useState(() => readLocationRoute());
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const publicPlayAllowed = route.view === 'play' && publicPlaySlugs.includes(route.slug);
 
   // Catalog state
   const [catalogStatus, setCatalogStatus] = useState<'loading' | 'ready' | 'error'>('loading');
@@ -285,6 +287,8 @@ export function App() {
     // defaults to false, so fetching before that would 401-spam (and log noise) for
     // every anonymous visitor during closed beta.
     if (authLoading) return;
+    // Promotional deep links load the game directly, without opening the catalog.
+    if (publicPlayAllowed) return;
     // In private-beta mode /api/catalog requires a session — an anonymous fetch
     // would just 401. Don't fetch (and don't render an error) until signed in.
     // Outside private beta, catalog reads stay public (owner decision).
@@ -323,7 +327,7 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [user, privateBeta, authLoading, route.view, catalogReloadKey]);
+  }, [user, privateBeta, authLoading, publicPlayAllowed, route.view, catalogReloadKey]);
 
   const handleRetryCatalog = useCallback(() => {
     setCatalogReloadKey((n) => n + 1);
@@ -1087,6 +1091,10 @@ export function App() {
 
   // Closed beta: no session → branded splash (sign-in + waitlist). The shell still loads so
   // the Google button can appear; every data route is walled on the API side.
+  if (publicPlayAllowed && route.view === 'play') {
+    return <PublicPlayView slug={route.slug} onExit={exitOverlay} />;
+  }
+
   if (privateBeta && !user) {
     return <ClosedBetaSplash />;
   }

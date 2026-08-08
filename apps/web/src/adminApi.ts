@@ -89,6 +89,31 @@ export async function setCreationLimits(patch: {
   return { error: body.error ?? `request failed (${res.status})` };
 }
 
+export interface PublicPlay {
+  stored: { slugs: string[]; updatedAt?: string; updatedBy?: string } | null;
+  effective: { slugs: string[] };
+  propagationMs: number;
+}
+
+export async function fetchPublicPlay(): Promise<PublicPlay | null> {
+  const res = await fetch(`${API_BASE}/api/admin/public-play`, { credentials: 'include' });
+  if (res.status === 404 || res.status === 401) return null;
+  if (!res.ok) throw new Error(`public play failed (${res.status})`);
+  return (await res.json()) as PublicPlay;
+}
+
+export async function setPublicPlaySlugs(slugs: string[]): Promise<PublicPlay | { error: string }> {
+  const res = await fetch(`${API_BASE}/api/admin/public-play`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ slugs }),
+  });
+  if (res.ok) return (await res.json()) as PublicPlay;
+  const body = (await res.json().catch(() => ({}))) as { error?: string };
+  return { error: body.error ?? `request failed (${res.status})` };
+}
+
 export type ReviewSweepStatus = 'active' | 'paused' | 'completed' | 'cancelled';
 export type ReviewSweepSource = 'catalog' | 'creator' | 'all';
 

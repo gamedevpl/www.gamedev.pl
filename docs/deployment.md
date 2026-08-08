@@ -11,7 +11,8 @@
 > repo's early history.
 >
 > **Access is gated by `PRIVATE_BETA=true`**, not by HTTP Basic Auth: anonymous visitors get
-> the splash, and data routes require a session on the beta allowlist. Browse, play, and
+> the splash, and data routes require a session on the beta allowlist. Published games named
+> by `PUBLIC_PLAY_SLUGS` are the deliberate promotional exception. Browse, play, and
 > **submissions are all live** — the `github-token` secret exists, so submission routes no
 > longer 503.
 
@@ -119,6 +120,15 @@ it means the snapshot did not refresh.
 
 **Opening the site to everyone** is a config change, not a code change: set `PRIVATE_BETA=false`
 on the service (and clear the allowlists if you want). Nothing needs redeploying from source.
+
+### Promotional game links during closed beta
+
+Open the operator console at `/admin/limits` and edit **Promotional game links**. Enter a
+comma-separated list such as `airtime,another-game`, then save. The change is stored in
+Firestore and reaches instances within the displayed propagation window; no redeploy is
+needed. `PUBLIC_PLAY_SLUGS` remains an optional deploy-time fallback for bootstrapping an
+empty config. The API still requires each game to be published, and all other catalog,
+draft, and creation routes remain gated.
 
 ## Outbound email (Resend)
 

@@ -284,9 +284,9 @@ describe('private beta gate', () => {
   });
 
   it('health reports privateBeta so the web client can decide whether to show the splash', async () => {
-    const closedApp = await buildApp({ betaAllowedUids: ownerUid });
+    const closedApp = await buildApp({ betaAllowedUids: ownerUid, publicPlaySlugs: 'airtime,not-a-valid-slug!' });
     const closedRes = await closedApp.inject({ method: 'GET', url: '/api/health' });
-    expect(closedRes.json()).toMatchObject({ privateBeta: true });
+    expect(closedRes.json()).toMatchObject({ privateBeta: true, publicPlaySlugs: ['airtime'] });
     await closedApp.close();
 
     const openApp = await buildApp({ store: new InMemoryStore() });
@@ -312,6 +312,41 @@ describe('private beta gate', () => {
     await app.close();
   });
 
+  it('an allowlisted promotional game reaches the game handler without a session', async () => {
+    const app = await buildApp({ betaAllowedUids: ownerUid, publicPlaySlugs: 'promo-game' });
+    const res = await app.inject({ method: 'GET', url: '/api/games/promo-game' });
+    // No GitHub client: 503 proves the handler ran, unlike a wall 401.
+    expect(res.statusCode).toBe(503);
+    await app.close();
+  });
+
+  it('uses the operator-managed promotional list without a redeploy', async () => {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: ownerUid });
+    const app = await buildApp({
+      store,
+      sessionSecret,
+      betaAllowedUids: ownerUid,
+      adminUids: ownerUid,
+      publicPlayTtlMs: 0,
+      publicPlaySlugs: 'fallback-game',
+    });
+
+    const saved = await app.inject({
+      method: 'POST',
+      url: '/api/admin/public-play',
+      headers: cookieFor(ownerUid),
+      payload: { slugs: ['promo-game'] },
+    });
+    expect(saved.statusCode).toBe(200);
+
+    const health = await app.inject({ method: 'GET', url: '/api/health' });
+    expect(health.json()).toMatchObject({ publicPlaySlugs: ['promo-game'] });
+    const publicGame = await app.inject({ method: 'GET', url: '/api/games/promo-game' });
+    expect(publicGame.statusCode).toBe(503);
+    await app.close();
+  });
+
   it('published game preview media is reachable without a session in private-beta mode', async () => {
     const app = await buildApp({ betaAllowedUids: ownerUid });
     const res = await app.inject({ method: 'GET', url: '/api/games/some-slug/media/opening.png?w=1280' });
@@ -325,6 +360,21 @@ describe('private beta gate', () => {
     const app = await buildApp({ betaAllowedUids: ownerUid });
     const res = await app.inject({ method: 'POST', url: '/api/telemetry', payload: {} });
     expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it('play telemetry for an allowlisted promotional game accepts anonymous input', async () => {
+    const app = await buildApp({ betaAllowedUids: ownerUid, publicPlaySlugs: 'promo-game' });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/telemetry',
+      payload: {
+        slug: 'promo-game',
+        sessionId: '00000000-0000-4000-8000-000000000001',
+        events: [{ type: 'game_opened' }],
+      },
+    });
+    expect(res.statusCode).toBe(202);
     await app.close();
   });
 

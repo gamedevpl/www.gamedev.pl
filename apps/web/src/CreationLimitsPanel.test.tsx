@@ -10,6 +10,8 @@ const mocked = vi.hoisted(() => ({
   fetchAdminSummary: vi.fn(),
   fetchCreationLimits: vi.fn(),
   setCreationLimits: vi.fn(),
+  fetchPublicPlay: vi.fn(),
+  setPublicPlaySlugs: vi.fn(),
   fetchSuggestions: vi.fn(),
   fetchAccessTokens: vi.fn(),
   mintAccessToken: vi.fn(),
@@ -30,6 +32,11 @@ function limits(overrides: Partial<CreationLimits> = {}): CreationLimits {
 
 async function render() {
   (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  mocked.fetchPublicPlay.mockResolvedValue({
+    stored: null,
+    effective: { slugs: [] },
+    propagationMs: 60_000,
+  });
   const container = document.createElement('div');
   document.body.appendChild(container);
   const root = createRoot(container);

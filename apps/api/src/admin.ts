@@ -32,6 +32,7 @@ import { DEFAULT_CREATION_LIMITS_TTL_MS, resolveDefaultGlobalDailyCap } from './
 import {
   BOT_UID_PREFIX,
   type CreationLimits,
+  type PublicPlayConfig,
   type Scorecard,
   type Store,
   type SubmissionRecord,
@@ -98,6 +99,8 @@ export interface AdminRoutesOptions {
   globalDailySubmissionCap?: number;
   /** How long submission routes cache the breaker config — reported as the flip delay. */
   creationLimitsTtlMs?: number;
+  publicPlayFallbackSlugs?: string[];
+  publicPlayTtlMs?: number;
 }
 
 /**
@@ -115,6 +118,12 @@ export interface CreationLimitsResponse {
   effective: { paused: boolean; globalDailySubmissionCap: number };
   today: { dateStr: string; submissions: number };
   /** Upper bound, in ms, on how long a change takes to reach every instance. */
+  propagationMs: number;
+}
+
+export interface PublicPlayResponse {
+  stored: PublicPlayConfig | null;
+  effective: { slugs: string[] };
   propagationMs: number;
 }
 
@@ -136,6 +145,18 @@ const CreationLimitsPatchSchema = z
       patch.globalDailyEditCap !== undefined,
     'nothing to change: send paused, globalDailySubmissionCap, editingPaused and/or globalDailyEditCap',
   );
+
+const PublicPlayPatchSchema = z.object({
+  slugs: z
+    .array(
+      z
+        .string()
+        .trim()
+        .toLowerCase()
+        .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'invalid game slug'),
+    )
+    .max(100),
+});
 
 export interface HealthResponse {
   /**
@@ -275,6 +296,8 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
   const now = options.now ?? Date.now;
   const defaultGlobalCap = resolveDefaultGlobalDailyCap(options.globalDailySubmissionCap);
   const creationLimitsTtlMs = options.creationLimitsTtlMs ?? DEFAULT_CREATION_LIMITS_TTL_MS;
+  const publicPlayFallbackSlugs = options.publicPlayFallbackSlugs ?? [];
+  const publicPlayTtlMs = options.publicPlayTtlMs ?? DEFAULT_CREATION_LIMITS_TTL_MS;
 
   /** Reads the stored breaker plus today's spend, uncached — an operator wants truth. */
   async function readCreationLimits(): Promise<CreationLimitsResponse> {
@@ -291,6 +314,15 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
       },
       today: { dateStr, submissions },
       propagationMs: creationLimitsTtlMs,
+    };
+  }
+
+  async function readPublicPlay(): Promise<PublicPlayResponse> {
+    const stored = await store.getPublicPlayConfig();
+    return {
+      stored,
+      effective: { slugs: stored?.slugs ?? publicPlayFallbackSlugs },
+      propagationMs: publicPlayTtlMs,
     };
   }
 
@@ -482,6 +514,29 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
     // who set it and when is what makes that legible later.
     app.log.warn({ patch: parsed.data, by: request.user!.uid }, 'creation limits changed by operator');
     return reply.status(200).send(await readCreationLimits());
+  });
+
+  app.get('/api/admin/public-play', async (request, reply) => {
+    if (!isAdminSession(request, adminUids)) {
+      return reply.status(404).send({ error: 'not found' });
+    }
+    return reply.status(200).send(await readPublicPlay());
+  });
+
+  app.post('/api/admin/public-play', async (request, reply) => {
+    if (!isAdminSession(request, adminUids)) {
+      return reply.status(404).send({ error: 'not found' });
+    }
+
+    const parsed = PublicPlayPatchSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
+    }
+
+    const slugs = [...new Set(parsed.data.slugs)];
+    await store.setPublicPlaySlugs(slugs, request.user!.uid);
+    app.log.info({ slugs, by: request.user!.uid }, 'promotional play allowlist changed by operator');
+    return reply.status(200).send(await readPublicPlay());
   });
 
   app.get('/api/admin/telemetry/health', async (request, reply) => {

@@ -27,6 +27,7 @@
 #                               store app exists. Empty = /api/auth/apple returns 503)
 #   WEB_ORIGIN=...             (CORS allowed origins)
 #   PRIVATE_BETA=true          (gate all data reads behind a session + allowlist)
+#   PUBLIC_PLAY_SLUGS=...      (comma-separated published slugs playable from external links)
 #   MCP_UI=...                 ("true" or "1", case-insensitive, opens MCP Apps views on
 #                               /api/mcp — SEP-1865. Inert for any client that does not
 #                               negotiate the extension; any other value keeps the
@@ -107,6 +108,7 @@ WEB_ORIGIN="${WEB_ORIGIN:-https://gamedev-app-334141807880.europe-west1.run.app,
 # Apex → www 301 canonicalization (app-side; Cloud Run mappings can't redirect).
 CANONICAL_HOST="${CANONICAL_HOST:-www.gamedev.pl}"
 PRIVATE_BETA="${PRIVATE_BETA:-true}"
+PUBLIC_PLAY_SLUGS="${PUBLIC_PLAY_SLUGS:-}"
 BETA_ALLOWED_UIDS="${BETA_ALLOWED_UIDS:-}"
 BETA_ALLOWED_EMAILS="${BETA_ALLOWED_EMAILS:-}"
 MAIL_FROM="${MAIL_FROM:-}"
@@ -206,7 +208,7 @@ fi
 
 # ^|^ switches gcloud's env-var separator to | (pipe) so values may contain
 # commas (WEB_ORIGIN list) and @ signs (BETA_ALLOWED_EMAILS).
-ENV_VARS="^|^GAMES_REPO=${GAMES_REPO}|WEB_ORIGIN=${WEB_ORIGIN}|PRIVATE_BETA=${PRIVATE_BETA}"
+ENV_VARS="^|^GAMES_REPO=${GAMES_REPO}|WEB_ORIGIN=${WEB_ORIGIN}|PRIVATE_BETA=${PRIVATE_BETA}|PUBLIC_PLAY_SLUGS=${PUBLIC_PLAY_SLUGS}"
 if [ -n "${GAMES_SNAPSHOT_BUCKET:-}" ]; then
   ENV_VARS="${ENV_VARS}|GAMES_SNAPSHOT_BUCKET=${GAMES_SNAPSHOT_BUCKET}"
 fi

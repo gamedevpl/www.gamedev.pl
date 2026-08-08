@@ -38,6 +38,8 @@ interface AuthContextType {
   // decide whether an anonymous visitor sees the closed-beta splash or the
   // normal public-reads app. Defaults to false (open) until known.
   privateBeta: boolean;
+  // Published slugs that remain playable from external links during closed beta.
+  publicPlaySlugs: string[];
   /**
    * Whether the API can verify an Apple ID token. Learned from /api/health rather than
    * assumed, so a build carrying a Services ID never shows the button in front of a
@@ -63,6 +65,7 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
   privateBeta: false,
+  publicPlaySlugs: [],
   appleSignIn: false,
   waitlistStatus: 'unknown',
   signInWithGoogleToken: async () => {},
@@ -76,6 +79,7 @@ const AuthContext = createContext<AuthContextType>({
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [privateBeta, setPrivateBeta] = useState(false);
+  const [publicPlaySlugs, setPublicPlaySlugs] = useState<string[]>([]);
   const [appleSignIn, setAppleSignIn] = useState(false);
   const [loading, setLoading] = useState(true);
   const [waitlistStatus, setWaitlistStatus] = useState<WaitlistStatus>('unknown');
@@ -95,9 +99,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (healthRes.ok) {
-        const health = (await healthRes.json()) as { privateBeta?: boolean; appleSignIn?: boolean };
+        const health = (await healthRes.json()) as {
+          privateBeta?: boolean;
+          appleSignIn?: boolean;
+          publicPlaySlugs?: unknown;
+        };
         setPrivateBeta(health.privateBeta === true);
         setAppleSignIn(health.appleSignIn === true);
+        setPublicPlaySlugs(
+          Array.isArray(health.publicPlaySlugs)
+            ? health.publicPlaySlugs.filter((slug): slug is string => typeof slug === 'string')
+            : [],
+        );
       }
     } catch {
       setUser(null);
@@ -199,6 +212,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         user,
         loading,
         privateBeta,
+        publicPlaySlugs,
         appleSignIn,
         waitlistStatus,
         signInWithGoogleToken,

@@ -19,6 +19,21 @@ import type { BuildEvent, SubmissionStatus } from './submission-status.js';
  */
 export const BOT_UID_PREFIX = 'bot:';
 
+const PUBLIC_PLAY_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+function normalizePublicPlaySlugs(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return [
+    ...new Set(
+      value.flatMap((entry) => {
+        if (typeof entry !== 'string') return [];
+        const slug = entry.trim().toLowerCase();
+        return PUBLIC_PLAY_SLUG_PATTERN.test(slug) ? [slug] : [];
+      }),
+    ),
+  ];
+}
+
 export interface User {
   uid: string;
   email?: string;
@@ -602,6 +617,12 @@ export interface CreationLimits {
    */
   globalDailyEditCap: number | null;
   /** Who last changed this and when, so a leftover pause is legible as a leftover. */
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
+export interface PublicPlayConfig {
+  slugs: string[];
   updatedAt?: string;
   updatedBy?: string;
 }
@@ -2011,6 +2032,8 @@ export interface Store {
   getCreationLimits(): Promise<CreationLimits | null>;
   /** Merges a change into the stored breaker and returns the result. */
   setCreationLimits(patch: Partial<Omit<CreationLimits, 'updatedAt'>>, updatedBy: string): Promise<CreationLimits>;
+  getPublicPlayConfig(): Promise<PublicPlayConfig | null>;
+  setPublicPlaySlugs(slugs: string[], updatedBy: string): Promise<PublicPlayConfig>;
   /** How many submissions everyone together has made on `dateStr`. */
   getGlobalSubmissionCount(dateStr: string): Promise<number>;
   /**
@@ -2530,6 +2553,7 @@ export class InMemoryStore implements Store {
   private globalSubmissions = new Map<string, number>();
   private globalEdits = new Map<string, number>();
   private creationLimits: CreationLimits | null = null;
+  private publicPlayConfig: PublicPlayConfig | null = null;
   private waitlist = new Map<string, WaitlistEntry>();
   // yyyymmdd -> events recorded that day
   private telemetry = new Map<string, TelemetryEvent[]>();
@@ -3507,6 +3531,20 @@ export class InMemoryStore implements Store {
     };
     this.creationLimits = merged;
     return { ...merged };
+  }
+
+  async getPublicPlayConfig(): Promise<PublicPlayConfig | null> {
+    return this.publicPlayConfig ? { ...this.publicPlayConfig, slugs: [...this.publicPlayConfig.slugs] } : null;
+  }
+
+  async setPublicPlaySlugs(slugs: string[], updatedBy: string): Promise<PublicPlayConfig> {
+    const config: PublicPlayConfig = {
+      slugs: [...slugs],
+      updatedAt: new Date().toISOString(),
+      updatedBy,
+    };
+    this.publicPlayConfig = config;
+    return { ...config, slugs: [...config.slugs] };
   }
 
   async getGlobalSubmissionCount(dateStr: string): Promise<number> {
@@ -5788,6 +5826,10 @@ export class FirestoreStore implements Store {
     return this.db.collection('opsConfig').doc('creationLimits');
   }
 
+  private publicPlayConfigRef() {
+    return this.db.collection('opsConfig').doc('publicPlay');
+  }
+
   /** The day's shared allowance. One document per UTC day, so history is free. */
   private globalUsageRef(dateStr: string) {
     return this.db.collection('globalUsage').doc(dateStr);
@@ -5832,6 +5874,28 @@ export class FirestoreStore implements Store {
       transaction.set(ref, merged);
       return merged;
     });
+  }
+
+  async getPublicPlayConfig(): Promise<PublicPlayConfig | null> {
+    const snap = await this.publicPlayConfigRef().get();
+    if (!snap.exists) return null;
+    const data = snap.data() as Partial<PublicPlayConfig> | undefined;
+    const slugs = normalizePublicPlaySlugs(data?.slugs);
+    return {
+      slugs,
+      ...(data?.updatedAt ? { updatedAt: data.updatedAt } : {}),
+      ...(data?.updatedBy ? { updatedBy: data.updatedBy } : {}),
+    };
+  }
+
+  async setPublicPlaySlugs(slugs: string[], updatedBy: string): Promise<PublicPlayConfig> {
+    const config: PublicPlayConfig = {
+      slugs: [...slugs],
+      updatedAt: new Date().toISOString(),
+      updatedBy,
+    };
+    await this.publicPlayConfigRef().set(config);
+    return { ...config, slugs: [...config.slugs] };
   }
 
   async getGlobalSubmissionCount(dateStr: string): Promise<number> {
