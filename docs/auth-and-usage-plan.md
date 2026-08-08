@@ -2,8 +2,8 @@
 
 > Status: ✅ **Live in production** (verified 2026-07-26). Google sign-in, sessions, the
 > closed-beta allowlist and per-user daily quotas all run on the deployed service. Goal, as
-> achieved: no anonymous interaction with the system; every submission attributable to a
-> signed-in user; per-user usage accounting and quotas.
+> achieved: no anonymous creation or account-owned interaction; operator-selected promotional
+> games may still be played anonymously; every submission attributable to a signed-in user.
 >
 > The HTTP Basic Auth outer wall this plan assumed is **gone** — access is gated by
 > `PRIVATE_BETA` and the allowlist instead (see [`deployment.md`](./deployment.md)). Locally,

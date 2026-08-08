@@ -2,7 +2,8 @@
 
 > Status: ✅ **Shipped** (verified 2026-07-26). An anonymous visitor to www.gamedev.pl gets
 > the splash and can join the waitlist; the beta wall gates `/api/` paths while the static
-> shell still loads. See [`apps/web/src/ClosedBetaSplash.tsx`](../apps/web/src/ClosedBetaSplash.tsx)
+> shell still loads, except for operator-selected promotional games. See
+> [`apps/web/src/ClosedBetaSplash.tsx`](../apps/web/src/ClosedBetaSplash.tsx)
 > and the waitlist routes in [`apps/api/src/auth.ts`](../apps/api/src/auth.ts).
 >
 > Originally planned 2026-07-23 (owner approved), depending on the P0 shell fix.
@@ -69,6 +70,10 @@ Primary: operator console **`/admin/waitlist`** — approve / reject / pre-appro
 by email (Firestore `status: 'approved'`, no redeploy). Fallback: `npm run
 beta:approve` or the env allowlists (`BETA_ALLOWED_EMAILS` /
 `BETA_ALLOWED_UIDS`) when a script or agent needs to act without a browser.
+
+Promotional play links are managed separately in **`/admin/limits`**. The operator enters
+published slugs in the **Promotional game links** panel; those `/play/<slug>` routes and
+their anonymous play telemetry bypass the beta wall without opening the catalog.
 
 ## Tests
 

@@ -123,10 +123,12 @@ on the service (and clear the allowlists if you want). Nothing needs redeploying
 
 ### Promotional game links during closed beta
 
-Set the repository variable `PUBLIC_PLAY_SLUGS` to a comma-separated list such as
-`airtime,another-game`, then deploy. The API publishes that list through `/api/health`;
-the web app uses it only to admit matching `/play/<slug>` deep links. The API still requires
-the game to be published, and all other catalog, draft, and creation routes remain gated.
+Open the operator console at `/admin/limits` and edit **Promotional game links**. Enter a
+comma-separated list such as `airtime,another-game`, then save. The change is stored in
+Firestore and reaches instances within the displayed propagation window; no redeploy is
+needed. `PUBLIC_PLAY_SLUGS` remains an optional deploy-time fallback for bootstrapping an
+empty config. The API still requires each game to be published, and all other catalog,
+draft, and creation routes remain gated.
 
 ## Outbound email (Resend)
 

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { fetchCreationLimits, setCreationLimits, type CreationLimits } from './adminApi.js';
+import { PublicPlayPanel } from './PublicPlayPanel.js';
 
 /**
  * The creation circuit-breaker, as something an operator can actually pull.
@@ -80,60 +81,65 @@ export function CreationLimitsPanel({ onChanged }: { onChanged?: () => void }) {
   const capValid = Number.isInteger(parsedCap) && parsedCap >= 0;
 
   return (
-    <section className="admin-limits">
-      <h2 className="health-section-title">Creation limits</h2>
-      <p className="health-summary">
-        {effective.paused ? 'Creation is paused.' : 'Creation is open.'} {today.submissions} of{' '}
-        {effective.globalDailySubmissionCap} used today ({today.dateStr}).
-      </p>
+    <>
+      <section className="admin-limits">
+        <h2 className="health-section-title">Creation limits</h2>
+        <p className="health-summary">
+          {effective.paused ? 'Creation is paused.' : 'Creation is open.'} {today.submissions} of{' '}
+          {effective.globalDailySubmissionCap} used today ({today.dateStr}).
+        </p>
 
-      <div className="admin-limits-controls">
-        <button
-          type="button"
-          className={effective.paused ? 'admin-limits-resume' : 'admin-limits-pause'}
-          disabled={busy}
-          onClick={() => void apply({ paused: !effective.paused })}
-        >
-          {effective.paused ? 'Resume creation' : 'Pause creation'}
-        </button>
-
-        <label className="admin-limits-cap">
-          Daily cap
-          <input
-            type="number"
-            min={0}
-            value={capDraft}
+        <div className="admin-limits-controls">
+          <button
+            type="button"
+            className={effective.paused ? 'admin-limits-resume' : 'admin-limits-pause'}
             disabled={busy}
-            onChange={(event) => setCapDraft(event.target.value)}
-          />
-        </label>
-        <button
-          type="button"
-          disabled={busy || !capValid || parsedCap === effective.globalDailySubmissionCap}
-          onClick={() => void apply({ globalDailySubmissionCap: parsedCap })}
-        >
-          Set cap
-        </button>
-        {/* Clearing is a different intent from setting a number: it hands the decision
+            onClick={() => void apply({ paused: !effective.paused })}
+          >
+            {effective.paused ? 'Resume creation' : 'Pause creation'}
+          </button>
+
+          <label className="admin-limits-cap">
+            Daily cap
+            <input
+              type="number"
+              min={0}
+              value={capDraft}
+              disabled={busy}
+              onChange={(event) => setCapDraft(event.target.value)}
+            />
+          </label>
+          <button
+            type="button"
+            disabled={busy || !capValid || parsedCap === effective.globalDailySubmissionCap}
+            onClick={() => void apply({ globalDailySubmissionCap: parsedCap })}
+          >
+            Set cap
+          </button>
+          {/* Clearing is a different intent from setting a number: it hands the decision
             back to whatever the deployment's default is, rather than freezing today's
             number into the config document forever. */}
-        <button
-          type="button"
-          disabled={busy || stored?.globalDailySubmissionCap === undefined || stored?.globalDailySubmissionCap === null}
-          onClick={() => void apply({ globalDailySubmissionCap: null })}
-        >
-          Use the deployed default
-        </button>
-      </div>
+          <button
+            type="button"
+            disabled={
+              busy || stored?.globalDailySubmissionCap === undefined || stored?.globalDailySubmissionCap === null
+            }
+            onClick={() => void apply({ globalDailySubmissionCap: null })}
+          >
+            Use the deployed default
+          </button>
+        </div>
 
-      {message && <p className="admin-limits-message">{message}</p>}
+        {message && <p className="admin-limits-message">{message}</p>}
 
-      <p className="health-note">
-        {stored
-          ? `Stored by ${stored.updatedBy ?? 'unknown'}${stored.updatedAt ? ` at ${stored.updatedAt}` : ''}.`
-          : 'Nothing stored — the deployed defaults are what is in force.'}{' '}
-        A change needs no redeploy and reaches every instance within {relative(limits.propagationMs)}.
-      </p>
-    </section>
+        <p className="health-note">
+          {stored
+            ? `Stored by ${stored.updatedBy ?? 'unknown'}${stored.updatedAt ? ` at ${stored.updatedAt}` : ''}.`
+            : 'Nothing stored — the deployed defaults are what is in force.'}{' '}
+          A change needs no redeploy and reaches every instance within {relative(limits.propagationMs)}.
+        </p>
+      </section>
+      <PublicPlayPanel onChanged={onChanged} />
+    </>
   );
 }

@@ -320,6 +320,33 @@ describe('private beta gate', () => {
     await app.close();
   });
 
+  it('uses the operator-managed promotional list without a redeploy', async () => {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: ownerUid });
+    const app = await buildApp({
+      store,
+      sessionSecret,
+      betaAllowedUids: ownerUid,
+      adminUids: ownerUid,
+      publicPlayTtlMs: 0,
+      publicPlaySlugs: 'fallback-game',
+    });
+
+    const saved = await app.inject({
+      method: 'POST',
+      url: '/api/admin/public-play',
+      headers: cookieFor(ownerUid),
+      payload: { slugs: ['promo-game'] },
+    });
+    expect(saved.statusCode).toBe(200);
+
+    const health = await app.inject({ method: 'GET', url: '/api/health' });
+    expect(health.json()).toMatchObject({ publicPlaySlugs: ['promo-game'] });
+    const publicGame = await app.inject({ method: 'GET', url: '/api/games/promo-game' });
+    expect(publicGame.statusCode).toBe(503);
+    await app.close();
+  });
+
   it('published game preview media is reachable without a session in private-beta mode', async () => {
     const app = await buildApp({ betaAllowedUids: ownerUid });
     const res = await app.inject({ method: 'GET', url: '/api/games/some-slug/media/opening.png?w=1280' });

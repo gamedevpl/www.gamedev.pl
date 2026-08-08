@@ -6,6 +6,7 @@ import type {
   AdminSummaryResponse,
   CreationLimitsResponse,
   HealthResponse,
+  PublicPlayResponse,
   ScorecardsResponse,
   VisitsResponse,
 } from './admin.js';
@@ -539,6 +540,76 @@ describe('/api/admin/creation-limits', () => {
     }
     // The refusals are refusals, not silent no-ops.
     expect(await store.getCreationLimits()).toBeNull();
+    await app.close();
+  });
+});
+
+describe('/api/admin/public-play', () => {
+  let store: InMemoryStore;
+
+  beforeEach(async () => {
+    store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:boss' });
+    await store.upsertUser({ uid: 'g:player' });
+  });
+
+  it('reports the deployed fallback before an operator saves a list', async () => {
+    const app = await buildApp({ store, sessionSecret, adminUids: 'g:boss', publicPlaySlugs: 'airtime' });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/admin/public-play',
+      headers: authHeaders('g:boss'),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as PublicPlayResponse;
+    expect(body.stored).toBeNull();
+    expect(body.effective.slugs).toEqual(['airtime']);
+    expect(body.propagationMs).toBeGreaterThan(0);
+    await app.close();
+  });
+
+  it('replaces the list, deduplicates slugs, and records the operator', async () => {
+    const app = await appWith(store);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/admin/public-play',
+      headers: authHeaders('g:boss'),
+      payload: { slugs: ['airtime', 'Airtime', 'another-game'] },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as PublicPlayResponse;
+    expect(body.effective.slugs).toEqual(['airtime', 'another-game']);
+    expect(body.stored).toMatchObject({ slugs: ['airtime', 'another-game'], updatedBy: 'g:boss' });
+    await app.close();
+  });
+
+  it('rejects invalid slugs and hides the surface from non-operators', async () => {
+    const app = await appWith(store);
+
+    const invalid = await app.inject({
+      method: 'POST',
+      url: '/api/admin/public-play',
+      headers: authHeaders('g:boss'),
+      payload: { slugs: ['not valid'] },
+    });
+    expect(invalid.statusCode).toBe(400);
+
+    for (const headers of [authHeaders('g:player'), {}]) {
+      const read = await app.inject({ method: 'GET', url: '/api/admin/public-play', headers });
+      expect(read.statusCode).toBe(404);
+      const write = await app.inject({
+        method: 'POST',
+        url: '/api/admin/public-play',
+        headers,
+        payload: { slugs: ['airtime'] },
+      });
+      expect(write.statusCode).toBe(404);
+    }
+    expect(await store.getPublicPlayConfig()).toBeNull();
     await app.close();
   });
 });

@@ -183,6 +183,8 @@ export interface BuildAppOptions {
   betaAllowedEmails?: string;
   // Promotional published game slugs that remain playable without a session
   publicPlaySlugs?: string;
+  /** Cache lifetime for the operator-managed promotional allowlist. */
+  publicPlayTtlMs?: number;
   // Uids (comma-separated) allowed to read the operator telemetry view
   adminUids?: string;
   reviewerUids?: string;
@@ -252,7 +254,23 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       .map((s) => s.trim().toLowerCase())
       .filter(Boolean),
   );
-  const publicPlaySlugs = new Set(parsePublicPlaySlugs(options.publicPlaySlugs ?? process.env.PUBLIC_PLAY_SLUGS));
+  const publicPlayFallbackSlugs = new Set(
+    parsePublicPlaySlugs(options.publicPlaySlugs ?? process.env.PUBLIC_PLAY_SLUGS),
+  );
+  const publicPlayTtlMs = options.publicPlayTtlMs ?? 60_000;
+  let publicPlayCache: { slugs: Set<string>; expiresAt: number } | null = null;
+  const getPublicPlaySlugs = async (): Promise<Set<string>> => {
+    const now = Date.now();
+    if (publicPlayCache && publicPlayCache.expiresAt > now) return publicPlayCache.slugs;
+    try {
+      const stored = await store.getPublicPlayConfig();
+      const slugs = new Set(stored?.slugs ?? publicPlayFallbackSlugs);
+      publicPlayCache = { slugs, expiresAt: now + publicPlayTtlMs };
+      return slugs;
+    } catch {
+      return publicPlayCache?.slugs ?? publicPlayFallbackSlugs;
+    }
+  };
 
   const adminUids = new Set(
     (options.adminUids ?? process.env.ADMIN_UIDS ?? '')
@@ -534,6 +552,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     adminUids,
     globalDailySubmissionCap: options.submissionRoutes?.globalDailySubmissionCap,
     creationLimitsTtlMs: options.submissionRoutes?.creationLimitsTtlMs,
+    publicPlayFallbackSlugs: [...publicPlayFallbackSlugs],
+    publicPlayTtlMs,
   });
 
   // Review catalog matches /api/catalog; snapshot first in prod.
@@ -843,7 +863,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     provider: generator.name,
     privateBeta,
     appleSignIn: Boolean(options.appleAuthVerifier) || parseAppleClientIds(process.env.APPLE_CLIENT_IDS).length > 0,
-    publicPlaySlugs: [...publicPlaySlugs],
+    publicPlaySlugs: [...(await getPublicPlaySlugs())],
   }));
 
   app.get('/api/version', async () => ({ name: 'gamedev-pl', version: '0.0.0' }));
@@ -944,7 +964,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // one funnel this stream exists to capture. It never reads request.user and
     // records no identifying data, so admitting it from the open internet is free.
     if (request.url.startsWith('/api/telemetry/visit')) return;
-    if (isPublicPlayRequest(request, publicPlaySlugs)) return;
+    if (isPublicPlayRequest(request, await getPublicPlaySlugs())) return;
     if (!request.user) {
       return reply.status(401).send({ error: 'authentication required' });
     }
