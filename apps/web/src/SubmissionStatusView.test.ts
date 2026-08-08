@@ -1317,6 +1317,36 @@ describe('SubmissionStatusView', () => {
     });
   });
 
+  it('shows a failed preview gate instead of spinning forever', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'building',
+      preview: { slug: 'space-runner' },
+      previewGate: { green: false, ranAt: '2026-08-08T20:17:15Z', report: 'audio.sounds is required' },
+      progress: { headSha: 'failed-preview', commits: [], checklist: [] },
+    });
+    mockedGetSubmissionPreview.mockRejectedValue(Object.assign(new Error('not ready'), { status: 409 }));
+    await i18n.changeLanguage('en');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'failed-preview-token' }));
+      await flushEffects();
+      await flushEffects();
+    });
+
+    expect(container.textContent).toContain('The preview checks failed');
+    expect(container.textContent).toContain('audio.sounds is required');
+    expect(container.querySelector('.status-preview-spinner')).toBeNull();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it('refreshes the live preview only when the agent pushes a new commit (headSha changes)', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     vi.useFakeTimers();

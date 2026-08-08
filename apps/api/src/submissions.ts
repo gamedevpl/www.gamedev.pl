@@ -2168,6 +2168,14 @@ export async function registerSubmissionRoutes(
       if (gamesStore?.getManifest) {
         try {
           const manifest = await gamesStore.getManifest(record.slug, playableVersion);
+          if (manifest?.previewGate) {
+            status.previewGate = {
+              green: manifest.previewGate.green,
+              ranAt: manifest.previewGate.ranAt,
+              ...(manifest.previewGate.report ? { report: manifest.previewGate.report } : {}),
+              ...(manifest.previewGate.status ? { status: manifest.previewGate.status } : {}),
+            };
+          }
           if (manifest?.gateProgress && !manifest.gate && !manifest.previewGate) {
             status.gateProgress = manifest.gateProgress;
           }

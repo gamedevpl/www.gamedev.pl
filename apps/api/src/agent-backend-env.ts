@@ -13,6 +13,7 @@ import { createGitHubClient } from './github-client.js';
 import { createManagedProvider, type ManagedAgentEffort } from './managed-agent.js';
 import './managed-provider-anthropic.js';
 import { createManagedBackend, type ManagedDeliverySink } from './managed-backend.js';
+import type { KitDigestLoader } from './kit-digest.js';
 import { createArchiveSeedContextSource } from './seed-context.js';
 import { createSelfBuildBackend, type SelfBuildBackendOptions } from './self-build-backend.js';
 
@@ -41,8 +42,9 @@ export function resolveBuilderBackend(registry: AgentBackendRegistry, builder: B
  */
 // What the managed backend needs that the environment cannot supply.
 export interface ManagedBackendDeps {
-  deliver: ManagedDeliverySink;
+  deliver?: ManagedDeliverySink;
   systemPrompt?: () => Promise<string | undefined>;
+  kitDigest?: KitDigestLoader;
 }
 
 // Vendor is a variable; a delivery sink is required.
@@ -116,6 +118,7 @@ export function createManagedPlatformBackendFromEnv(deps?: ManagedBackendDeps, l
     ...(deps?.deliver ? { deliver: deps.deliver } : {}),
     ...(mcpUrl ? { tools: { mcpEndpoints: [{ url: mcpUrl, name: 'gamedevpl' }] } } : {}),
     ...(deps?.systemPrompt ? { systemPrompt: deps.systemPrompt } : {}),
+    ...(deps?.kitDigest ? { kitDigest: deps.kitDigest } : {}),
     ...(effort ? { effort } : {}),
     ...(Number.isFinite(maxDurationSeconds) && maxDurationSeconds > 0 ? { maxDurationSeconds } : {}),
     deliveryMode,

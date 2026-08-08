@@ -105,6 +105,7 @@ describe('managed backend', () => {
       provider,
       deliver: async () => ({ version: 'v1' }),
       systemPrompt: async () => 'KIT DIGEST',
+      kitDigest: { load: async () => 'API EXAMPLES' },
     });
 
     await backend.dispatch(
@@ -112,7 +113,7 @@ describe('managed backend', () => {
     );
 
     expect(started).toHaveLength(1);
-    expect(started[0].systemPrompt).toBe('KIT DIGEST');
+    expect(started[0].systemPrompt).toBe('KIT DIGEST\n\n## Creator Kit digest\n\nAPI EXAMPLES');
     expect(started[0].model).toBe('fake-model');
     expect(started[0].correlationId).toBe(String(ISSUE));
     expect(started[0].workspaceFiles).toEqual([{ path: `games/${SLUG}/game.ts`, content: 'export {};' }]);
@@ -309,6 +310,22 @@ describe('managed backend', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('nudges an idle session once instead of spending the round', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const { provider, setState } = fakeProvider({ sendMessage });
+    const backend = createManagedBackend({ provider, deliver: async () => ({ version: 'v1' }) });
+
+    await backend.dispatch(brief());
+    setState('idle');
+
+    const first = await backend.observe('session-1', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
+    const second = await backend.observe('session-1', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
+
+    expect(first).toMatchObject({ state: 'in_progress', hasCandidate: false });
+    expect(second).toMatchObject({ state: 'idle', hasCandidate: false });
+    expect(sendMessage).toHaveBeenCalledTimes(1);
   });
 
   it('releases the lock when delivery fails, so the retry is not locked out', async () => {

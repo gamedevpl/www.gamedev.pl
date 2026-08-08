@@ -114,6 +114,35 @@ const FINISHED_REASON = STALE_AGENT_TOKEN_REASON;
 
 const SESSION_HEADER = 'mcp-session-id';
 
+const MCP_VISIBLE_TOOLS = new Set([
+  'create_game',
+  'start',
+  'open_round',
+  'continue_draft',
+  'get_brief',
+  'get_seed',
+  'get_sources',
+  'get_kit',
+  'report_progress',
+  'screenshot_upload_url',
+  'stage_upload_url',
+  'stage_source_file',
+  'patch_source_file',
+  'list_staged_sources',
+  'clear_staged_sources',
+  'submit_sources',
+  'end',
+  'show_round',
+  'show_media',
+  'get_round_status',
+  'get_gate_verdict',
+  'get_gate_media',
+  'get_round_status',
+  'get_round_media',
+  'read_inbox',
+  'ack_inbox',
+]);
+
 /** Aggressive ceiling on unauthenticated / invalid `start` attempts per IP. */
 const MAX_INVALID_STARTS_PER_WINDOW = 20;
 const INVALID_START_WINDOW_MS = 60 * 60 * 1000;
@@ -4714,6 +4743,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       return reply.send(
         jsonRpcResult(message.id, {
           tools: Object.entries(tools)
+            .filter(([name]) => MCP_VISIBLE_TOOLS.has(name))
             // An app-only tool exists for the view. A client with no views would offer it
             // to its model, which is exactly what visibility:["app"] forbids.
             .filter(([name]) => withUi || !MCP_UI_APP_ONLY_TOOLS.has(name))

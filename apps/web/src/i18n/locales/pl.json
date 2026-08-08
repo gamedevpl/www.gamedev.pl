@@ -636,6 +636,8 @@
     "draftHint": "Wersja w trakcie tworzenia. Otwórz ją ponownie w dowolnej chwili, aby zobaczyć najnowsze zmiany agenta.",
     "previewNotReady": "Nie ma jeszcze grywalnej wersji. Agent wciąż pisze kod — ta strona odświeży się sama, gdy będzie w co zagrać.",
     "previewError": "Nie udało się teraz wczytać podglądu. Spróbuj ponownie za chwilę.",
+    "previewGateFailed": "Podgląd nie przeszedł automatycznych testów, więc tej wersji nie można jeszcze uruchomić. Wyślij uwagi, aby rozpocząć poprawki.",
+    "previewGateDetails": "Pokaż raport testów",
     "gallery": {
       "alt": "Tak gra wygląda w tej chwili",
       "caption": "Tak wygląda teraz Twoja gra",
