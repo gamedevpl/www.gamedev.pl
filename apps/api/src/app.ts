@@ -4,7 +4,7 @@ import fastifyWebsocket from '@fastify/websocket';
 import type { GameGenerator } from '@gamedevpl/game-generator';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify';
+import Fastify, { type FastifyInstance, type FastifyRequest, type FastifyServerOptions } from 'fastify';
 import { z } from 'zod';
 import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './assemble.js';
 import { registerAccessTokenRoutes } from './access-token-routes.js';
@@ -85,6 +85,47 @@ const GenerateRequestSchema = z.object({
   prompt: z.string().trim().min(1, 'prompt is required').max(500, 'prompt is too long'),
 });
 
+const GAME_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+function parsePublicPlaySlugs(value: string | undefined): string[] {
+  return [
+    ...new Set(
+      (value ?? '')
+        .split(',')
+        .map((slug) => slug.trim().toLowerCase())
+        .filter((slug) => GAME_SLUG_PATTERN.test(slug)),
+    ),
+  ];
+}
+
+function isPublicPlayRequest(request: FastifyRequest, publicPlaySlugs: Set<string>): boolean {
+  const path = request.url.split('?')[0] ?? request.url;
+
+  if (request.method === 'POST' && path === '/api/telemetry') {
+    const body = request.body;
+    return (
+      typeof body === 'object' &&
+      body !== null &&
+      'slug' in body &&
+      typeof (body as { slug?: unknown }).slug === 'string' &&
+      publicPlaySlugs.has((body as { slug: string }).slug)
+    );
+  }
+
+  if (request.method !== 'GET') return false;
+  const match = path.match(/^\/api\/games\/([^/]+)(?:\/(votes|world|presence))?\/?$/);
+  if (!match?.[1]) return false;
+
+  let slug: string;
+  try {
+    slug = decodeURIComponent(match[1]);
+  } catch {
+    return false;
+  }
+
+  return publicPlaySlugs.has(slug);
+}
+
 export interface BuildAppOptions {
   generator?: GameGenerator;
   /** `false` in tests by default; pass a Pino destination to assert on log lines. */
@@ -140,6 +181,8 @@ export interface BuildAppOptions {
   betaAllowedUids?: string;
   // Private beta allowlist — Google-verified emails (comma-separated, case-insensitive)
   betaAllowedEmails?: string;
+  // Promotional published game slugs that remain playable without a session
+  publicPlaySlugs?: string;
   // Uids (comma-separated) allowed to read the operator telemetry view
   adminUids?: string;
   reviewerUids?: string;
@@ -209,6 +252,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       .map((s) => s.trim().toLowerCase())
       .filter(Boolean),
   );
+  const publicPlaySlugs = new Set(parsePublicPlaySlugs(options.publicPlaySlugs ?? process.env.PUBLIC_PLAY_SLUGS));
 
   const adminUids = new Set(
     (options.adminUids ?? process.env.ADMIN_UIDS ?? '')
@@ -799,6 +843,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     provider: generator.name,
     privateBeta,
     appleSignIn: Boolean(options.appleAuthVerifier) || parseAppleClientIds(process.env.APPLE_CLIENT_IDS).length > 0,
+    publicPlaySlugs: [...publicPlaySlugs],
   }));
 
   app.get('/api/version', async () => ({ name: 'gamedev-pl', version: '0.0.0' }));
@@ -858,7 +903,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   // must load freely so the visitor can reach the sign-in button (chicken-and-egg otherwise).
   // /api/health, /api/auth/*, and /api/waitlist stay public within the API (probes, login
   // flow, and the waitlist — which by definition serves people who just failed sign-in).
-  app.addHook('onRequest', async (request, reply) => {
+  app.addHook('preHandler', async (request, reply) => {
     if (!privateBeta) return;
     // No entry here for the OAuth protected-resource document: it is served outside
     // `/api/`, so the next line already passes it through. An exemption that never fires
@@ -898,8 +943,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // closed beta happens *before* sign-in — walling it would silently zero out the
     // one funnel this stream exists to capture. It never reads request.user and
     // records no identifying data, so admitting it from the open internet is free.
-    // Play telemetry stays behind the wall (see registerTelemetryRoutes above).
     if (request.url.startsWith('/api/telemetry/visit')) return;
+    if (isPublicPlayRequest(request, publicPlaySlugs)) return;
     if (!request.user) {
       return reply.status(401).send({ error: 'authentication required' });
     }

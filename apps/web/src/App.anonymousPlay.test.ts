@@ -19,14 +19,17 @@ async function flushEffects() {
   await Promise.resolve();
 }
 
-function mockApi() {
+function mockApi(publicPlaySlugs: string[] = []) {
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
     const url = String(input);
     if (url.endsWith('/api/auth/me')) {
       return new Response(JSON.stringify({ error: 'unauthenticated' }), { status: 401 });
     }
     if (url.endsWith('/api/health')) {
-      return new Response(JSON.stringify({ status: 'ok', provider: 'mock', privateBeta: true }));
+      return new Response(JSON.stringify({ status: 'ok', provider: 'mock', privateBeta: true, publicPlaySlugs }));
+    }
+    if (url.endsWith('/api/games/airtime')) {
+      return new Response(JSON.stringify({ slug: 'airtime', title: 'Airtime', html: '<!doctype html><canvas></canvas>' }));
     }
     if (url.endsWith('/api/catalog')) {
       return new Response(
@@ -88,5 +91,19 @@ describe('anonymous visitors during closed beta', () => {
 
     const calls = vi.mocked(globalThis.fetch).mock.calls.map((call) => String(call[0]));
     expect(calls.some((url) => url.endsWith('/api/catalog'))).toBe(false);
+  });
+
+  it('opens an allowlisted promotional game without a session', async () => {
+    mockApi(['airtime']);
+    window.history.pushState(null, '', '/play/airtime');
+
+    const container = await renderApp();
+
+    expect(container.querySelector('.beta-splash')).toBeNull();
+    expect(container.querySelector('.game-theater')).not.toBeNull();
+    expect(vi.mocked(globalThis.fetch).mock.calls.some((call) => String(call[0]).endsWith('/api/games/airtime'))).toBe(
+      true,
+    );
+    expect(vi.mocked(globalThis.fetch).mock.calls.some((call) => String(call[0]).endsWith('/api/catalog'))).toBe(false);
   });
 });
