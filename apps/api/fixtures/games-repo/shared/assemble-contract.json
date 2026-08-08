@@ -5,6 +5,7 @@
     "input",
     "collision",
     "world",
+    "path",
     "ai",
     "gameplay",
     "rng",
