@@ -8,7 +8,7 @@ import {
   createManagedOutputBudget,
   isManagedSessionHarvestable,
   ManagedOutputRejectedError,
-  planManagedOutputs,
+  selectManagedOutputs,
   type ManagedAgentEffort,
   type ManagedAgentProvider,
   type ManagedOutputCaps,
@@ -123,7 +123,11 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
     const listed = await options.provider.listOutputs(sessionRef);
     let plan: ManagedOutputPlan[];
     try {
-      plan = assertWithinManagedOutputPlan(planManagedOutputs(listed, slug), options.outputCaps);
+      const selected = selectManagedOutputs(listed, slug);
+      if (selected.ignored.length > 0) {
+        options.log?.info?.({ ...claim, ignored: selected.ignored }, 'ignored managed outputs outside the game');
+      }
+      plan = assertWithinManagedOutputPlan(selected.plan, options.outputCaps);
     } catch (error) {
       if (!(error instanceof ManagedOutputRejectedError)) throw error;
       // Not retried: the same sandbox repeats the bytes.

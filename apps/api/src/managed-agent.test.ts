@@ -10,7 +10,7 @@ import {
   ManagedAgentError,
   ManagedOutputRejectedError,
   normalizeManagedState,
-  planManagedOutputs,
+  selectManagedOutputs,
   registerManagedProvider,
   type ManagedAgentProvider,
 } from './managed-agent.js';
@@ -91,20 +91,23 @@ describe('managed output caps', () => {
   });
 });
 
-describe('harvest path mapping', () => {
-  it('strips the game prefix and drops another game entirely', () => {
-    const plan = planManagedOutputs(
+describe('harvest path selection', () => {
+  it('takes only the game directory, and says what it left behind', () => {
+    const { plan, ignored } = selectManagedOutputs(
       [
         { path: 'games/comet-courier/game.ts' },
         { path: './games/comet-courier/game/render.ts' },
         { path: 'games/other-game/game.ts' },
-        { path: 'notes.md' },
+        { path: 'scratch/notes.md' },
+        { path: 'game.ts' },
       ],
       'comet-courier',
     );
-    expect(plan.map((entry) => entry.path)).toEqual(['game.ts', 'game/render.ts', 'notes.md']);
+    expect(plan.map((entry) => entry.path)).toEqual(['game.ts', 'game/render.ts']);
     // The vendor's own path survives; a read needs it.
     expect(plan[0].ref.path).toBe('games/comet-courier/game.ts');
+    // Otherwise scratch notes land in the game's source tree.
+    expect(ignored).toEqual(['games/other-game/game.ts', 'scratch/notes.md', 'game.ts']);
   });
 
   it('rejects traversal, absolute, Windows, and NUL-containing paths before stripping prefixes', () => {
@@ -115,7 +118,7 @@ describe('harvest path mapping', () => {
       'games/comet-courier/game\\runtime.ts',
       'games/comet-courier/game\0.ts',
     ]) {
-      expect(() => planManagedOutputs([{ path }], 'comet-courier')).toThrow(ManagedOutputRejectedError);
+      expect(() => selectManagedOutputs([{ path }], 'comet-courier')).toThrow(ManagedOutputRejectedError);
     }
   });
 });

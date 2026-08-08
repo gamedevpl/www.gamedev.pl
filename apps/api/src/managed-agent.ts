@@ -216,10 +216,17 @@ export function assertWithinManagedOutputPlan(
   return plan;
 }
 
-// Strips games/<slug>/ so harvests match delivery paths.
-export function planManagedOutputs(refs: readonly ManagedOutputRef[], slug: string): ManagedOutputPlan[] {
+// What the harvest ignored, so an empty round can explain itself.
+export interface ManagedOutputSelection {
+  plan: ManagedOutputPlan[];
+  ignored: string[];
+}
+
+// Only games/<slug>/ is a delivery; see docs/build-brief.md.
+export function selectManagedOutputs(refs: readonly ManagedOutputRef[], slug: string): ManagedOutputSelection {
   const prefix = `games/${slug}/`;
-  const inside: ManagedOutputPlan[] = [];
+  const plan: ManagedOutputPlan[] = [];
+  const ignored: string[] = [];
   for (const ref of refs) {
     const path = ref.path.replace(/^\.\//, '');
     if (
@@ -232,15 +239,12 @@ export function planManagedOutputs(refs: readonly ManagedOutputRef[], slug: stri
     ) {
       throw new ManagedOutputRejectedError(`unsafe output path: ${ref.path}`);
     }
-    if (path.startsWith(prefix)) {
-      const relative = path.slice(prefix.length);
-      if (relative) inside.push({ ref, path: relative });
-      continue;
-    }
-    // Another game's directory is never this round's deliverable.
-    if (!path.startsWith('games/')) inside.push({ ref, path });
+    // The brief names one directory; the rest is the sandbox's business.
+    const relative = path.startsWith(prefix) ? path.slice(prefix.length) : '';
+    if (relative) plan.push({ ref, path: relative });
+    else ignored.push(path);
   }
-  return inside;
+  return { plan, ignored };
 }
 
 export interface ManagedProviderConfig {

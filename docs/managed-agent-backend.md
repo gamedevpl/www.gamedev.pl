@@ -127,10 +127,15 @@ pull is bounded by nothing, so the caps are explicit and enforced **before** the
 fetched, using the sizes in the listing, and again on arrival for vendors that omit them:
 
 - at most 60 files, 2 MB in total, 1 MB per file (`DEFAULT_MANAGED_OUTPUT_CAPS`)
-- paths mapped through `planManagedOutputs`, which rejects traversal, absolute and Windows
-  paths outright, strips `games/<slug>/`, and **drops any other game's directory** — a
-  sandbox that wandered cannot deliver over a neighbour
+- `selectManagedOutputs` rejects traversal, absolute and Windows paths outright, and then
+  takes **only `games/<slug>/`** — the one directory the brief names. Everything else is
+  the sandbox's own business, and what was ignored is logged so a round that delivered
+  nothing can say why
 - a refused harvest is not retried: the same sandbox would produce the same bytes
+
+That selection rule was permissive until the probe below showed what that meant: a
+`scratch/notes.md` left in the output directory was delivered into the game's source tree,
+because anything that was not another game's directory was treated as game-relative.
 
 Harvest happens inside `observe`, at most once per session, and only when the job has no
 candidate yet. That is why `observe` receives `issueNumber` and `slug`: a pull-delivery
@@ -166,6 +171,52 @@ The honest next step is to **extract that into one function and pass it in**, so
 harvest and an agent upload cannot drift into two different definitions of "delivered".
 Until it lands, the MCP shape is the one that can run, because it reuses that route rather
 than duplicating it.
+
+## How to exercise it
+
+The backend is **not reachable from the running app**: `app.ts` builds the platform slot
+from `createPlatformBackendFromEnv` (Copilot), so `MANAGED_AGENT_VENDOR` on a deployed
+service does nothing. Wiring `createAgentBackendRegistryFromEnv` in — which needs the
+delivery sink — is the same change as extracting `submit_sources`.
+
+So there are three levels of test, and only the first two exist today.
+
+**1. The suites.** Fake provider, no network:
+
+```bash
+npx vitest run apps/api/src/managed-agent.test.ts apps/api/src/managed-backend.test.ts \
+  apps/api/src/managed-provider-anthropic.test.ts apps/api/src/build-prompt.test.ts
+```
+
+**2. The probe.** One whole round through the real backend, real caps and real path
+selection, with a stub vendor and a printing sink:
+
+```bash
+npm run managed:probe -w @gamedevpl/api                 # pull shape, stub vendor
+npm run managed:probe -w @gamedevpl/api -- --mcp        # MCP shape: nothing is pulled
+npm run managed:probe -w @gamedevpl/api -- --prompt     # the brief each contract produces
+npm run managed:probe -w @gamedevpl/api -- --out /tmp/harvest
+```
+
+It polls twice on purpose, because the first poll is a live session and the second is a
+parked one — the difference between "no harvest yet" and "harvest now" is the thing most
+worth watching.
+
+**3. The vendor's wire format, which is still a guess.** `managed-provider-anthropic.ts`
+was written from a description of the Managed Agents API, not against it: the session
+paths, the beta header pair and `GET /v1/files?scope_id=` are all inferred, and the spike
+that measured two real rounds drove them from the Console rather than this API. So the
+first thing to do with a real key is a shape check, not a game:
+
+```bash
+MANAGED_AGENT_API_KEY=... MANAGED_AGENT_MODEL=claude-sonnet-5 \
+  npm run managed:probe -w @gamedevpl/api -- --vendor anthropic
+```
+
+Expect that to fail on request shape before it fails on anything interesting, and fix the
+adapter — that is the point of the exercise. `--base-url` aims the same adapter at a local
+HTTP stub if you would rather pin the contract you expect first. A full creator-visible
+round needs the sink, the registry wiring, and the MCP endpoint reachable from the sandbox.
 
 ## Configuration
 
