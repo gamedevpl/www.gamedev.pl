@@ -106,6 +106,10 @@ const provider = vendor
   ? createManagedProvider(vendor, {
       apiKey: apiKey!,
       model: model!,
+      ...(process.env.MANAGED_AGENT_ID ? { agentId: process.env.MANAGED_AGENT_ID.trim() } : {}),
+      ...(process.env.MANAGED_AGENT_ENVIRONMENT_ID
+        ? { environmentId: process.env.MANAGED_AGENT_ENVIRONMENT_ID.trim() }
+        : {}),
       ...(value('base-url') ? { baseUrl: value('base-url')! } : {}),
     })
   : stubProvider();
