@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { FieldValue, Firestore, type DocumentData } from '@google-cloud/firestore';
 import type { AgentTaskState } from './agent-state.js';
 import type { SeedFiles } from './agent-backend.js';
@@ -20,6 +20,11 @@ import type { BuildEvent, SubmissionStatus } from './submission-status.js';
 export const BOT_UID_PREFIX = 'bot:';
 
 const PUBLIC_PLAY_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const BETA_INVITE_CODE_BYTES = 24;
+
+function hashBetaInviteCode(code: string): string {
+  return createHash('sha256').update(code).digest('hex');
+}
 
 function normalizePublicPlaySlugs(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
@@ -755,6 +760,7 @@ export interface VisitEvent {
     | 'how_to_play_opened'
     | 'create_step'
     | 'waitlist_step'
+    | 'invite_step'
     | 'studio_step'
     | 'editor_step'
     | 'assist_step'
@@ -1533,6 +1539,28 @@ export interface WaitlistEntry {
   status: WaitlistStatus;
 }
 
+export type BetaInviteStatus = 'available' | 'claimed' | 'revoked';
+
+export interface BetaInvite {
+  id: string;
+  codeHash: string;
+  createdAt: string;
+  createdByUid: string;
+  status: BetaInviteStatus;
+  claimedAt?: string;
+  claimedUid?: string;
+  revokedAt?: string;
+  revokedByUid?: string;
+}
+
+export interface CreatedBetaInvite {
+  invite: BetaInvite;
+  code: string;
+}
+
+export type ClaimBetaInviteResult =
+  { ok: true; invite: BetaInvite } | { ok: false; reason: 'not_found' | 'claimed' | 'revoked' };
+
 /**
  * A personal access token issued to a user account (docs/agent-access-tokens.md).
  *
@@ -2086,6 +2114,10 @@ export interface Store {
    * creates `waitlist/email:<lower>` with the requested status.
    */
   setWaitlistStatusByEmail(email: string, status: WaitlistStatus): Promise<WaitlistEntry>;
+  createBetaInvite(createdByUid: string): Promise<CreatedBetaInvite>;
+  listBetaInvites(opts?: { limit?: number }): Promise<BetaInvite[]>;
+  claimBetaInvite(code: string, uid: string): Promise<ClaimBetaInviteResult>;
+  revokeBetaInvite(id: string, revokedByUid: string): Promise<BetaInvite | null>;
   /**
    * Idempotent by notification id: a second emit for the same id is a no-op and
    * returns `created: false` (a crashed/re-run sweep can safely re-emit).
@@ -2576,6 +2608,7 @@ export class InMemoryStore implements Store {
   private creationLimits: CreationLimits | null = null;
   private publicPlayConfig: PublicPlayConfig | null = null;
   private waitlist = new Map<string, WaitlistEntry>();
+  private betaInvites = new Map<string, BetaInvite>();
   // yyyymmdd -> events recorded that day
   private telemetry = new Map<string, TelemetryEvent[]>();
   // yyyymmdd -> visit events recorded that day
@@ -2765,6 +2798,9 @@ export class InMemoryStore implements Store {
       for (const [key, entry] of [...this.waitlist]) {
         if (entry.email?.toLowerCase() === email) this.waitlist.delete(key);
       }
+    }
+    for (const [id, invite] of [...this.betaInvites]) {
+      if (invite.createdByUid === uid || invite.claimedUid === uid) this.betaInvites.delete(id);
     }
     this.notifications.delete(uid);
     this.pushSubs.delete(uid);
@@ -3689,6 +3725,59 @@ export class InMemoryStore implements Store {
     };
     this.waitlist.set(created.uid, created);
     return { ...created };
+  }
+
+  async createBetaInvite(createdByUid: string): Promise<CreatedBetaInvite> {
+    const code = randomBytes(BETA_INVITE_CODE_BYTES).toString('base64url');
+    const invite: BetaInvite = {
+      id: randomUUID(),
+      codeHash: hashBetaInviteCode(code),
+      createdAt: new Date().toISOString(),
+      createdByUid,
+      status: 'available',
+    };
+    this.betaInvites.set(invite.id, invite);
+    return { invite: { ...invite }, code };
+  }
+
+  async listBetaInvites(opts?: { limit?: number }): Promise<BetaInvite[]> {
+    const limit = opts?.limit ?? 200;
+    return [...this.betaInvites.values()]
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, limit)
+      .map((invite) => ({ ...invite }));
+  }
+
+  async claimBetaInvite(code: string, uid: string): Promise<ClaimBetaInviteResult> {
+    const codeHash = hashBetaInviteCode(code);
+    const invite = [...this.betaInvites.values()].find((candidate) => candidate.codeHash === codeHash);
+    if (!invite) return { ok: false, reason: 'not_found' };
+    if (invite.status === 'revoked') return { ok: false, reason: 'revoked' };
+    if (invite.status === 'claimed') {
+      return invite.claimedUid === uid ? { ok: true, invite: { ...invite } } : { ok: false, reason: 'claimed' };
+    }
+
+    const claimed: BetaInvite = {
+      ...invite,
+      status: 'claimed',
+      claimedAt: new Date().toISOString(),
+      claimedUid: uid,
+    };
+    this.betaInvites.set(invite.id, claimed);
+    return { ok: true, invite: { ...claimed } };
+  }
+
+  async revokeBetaInvite(id: string, revokedByUid: string): Promise<BetaInvite | null> {
+    const invite = this.betaInvites.get(id);
+    if (!invite || invite.status !== 'available') return null;
+    const revoked: BetaInvite = {
+      ...invite,
+      status: 'revoked',
+      revokedAt: new Date().toISOString(),
+      revokedByUid,
+    };
+    this.betaInvites.set(id, revoked);
+    return { ...revoked };
   }
 
   async createNotification(
@@ -4774,6 +4863,8 @@ export class FirestoreStore implements Store {
       affinity,
       usageCounters,
       waitlistByEmail,
+      betaInvitesCreated,
+      betaInvitesClaimed,
     ] = await Promise.all([
       this.db.collection('accessTokens').where('uid', '==', uid).get(),
       this.db.collection('gameAgentKeys').where('ownerUid', '==', uid).get(),
@@ -4792,6 +4883,8 @@ export class FirestoreStore implements Store {
       this.db.collection('users').doc(uid).collection('playAffinity').get(),
       this.db.collection('usage').doc(uid).collection('counters').get(),
       email ? this.db.collection('waitlist').where('email', '==', email).get() : Promise.resolve(null),
+      this.db.collection('betaInvites').where('createdByUid', '==', uid).get(),
+      this.db.collection('betaInvites').where('claimedUid', '==', uid).get(),
     ]);
 
     // Refresh-token index rows historically carry only grantId, so ownerUid is absent.
@@ -4827,6 +4920,8 @@ export class FirestoreStore implements Store {
       addDeletes(snap.docs);
     }
     if (waitlistByEmail) addDeletes(waitlistByEmail.docs);
+    addDeletes(betaInvitesCreated.docs);
+    addDeletes(betaInvitesClaimed.docs);
     deleteRefs.set(`waitlist/${uid}`, this.db.collection('waitlist').doc(uid));
     deleteRefs.set(`creatorAgentKeys/${uid}`, this.db.collection('creatorAgentKeys').doc(uid));
     deleteRefs.set(`usage/${uid}`, this.db.collection('usage').doc(uid));
@@ -6089,6 +6184,73 @@ export class FirestoreStore implements Store {
     };
     await this.db.collection('waitlist').doc(created.uid).set(stripUndefined(created));
     return created;
+  }
+
+  async createBetaInvite(createdByUid: string): Promise<CreatedBetaInvite> {
+    const code = randomBytes(BETA_INVITE_CODE_BYTES).toString('base64url');
+    const invite: BetaInvite = {
+      id: randomUUID(),
+      codeHash: hashBetaInviteCode(code),
+      createdAt: new Date().toISOString(),
+      createdByUid,
+      status: 'available',
+    };
+    await this.db.collection('betaInvites').doc(invite.id).set(stripUndefined(invite));
+    return { invite, code };
+  }
+
+  async listBetaInvites(opts?: { limit?: number }): Promise<BetaInvite[]> {
+    const limit = opts?.limit ?? 200;
+    const snap = await this.db.collection('betaInvites').get();
+    return snap.docs
+      .map((doc) => doc.data() as BetaInvite)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, limit);
+  }
+
+  async claimBetaInvite(code: string, uid: string): Promise<ClaimBetaInviteResult> {
+    const codeHash = hashBetaInviteCode(code);
+    const querySnap = await this.db.collection('betaInvites').where('codeHash', '==', codeHash).limit(1).get();
+    if (querySnap.empty) return { ok: false, reason: 'not_found' };
+
+    const docRef = querySnap.docs[0]!.ref;
+    return await this.db.runTransaction(async (transaction) => {
+      const snap = await transaction.get(docRef);
+      if (!snap.exists) return { ok: false, reason: 'not_found' };
+      const invite = snap.data() as BetaInvite;
+      if (invite.status === 'revoked') return { ok: false, reason: 'revoked' };
+      if (invite.status === 'claimed') {
+        return invite.claimedUid === uid ? { ok: true, invite } : { ok: false, reason: 'claimed' };
+      }
+
+      const claimed: BetaInvite = {
+        ...invite,
+        status: 'claimed',
+        claimedAt: new Date().toISOString(),
+        claimedUid: uid,
+      };
+      transaction.set(docRef, stripUndefined(claimed), { merge: true });
+      return { ok: true, invite: claimed };
+    });
+  }
+
+  async revokeBetaInvite(id: string, revokedByUid: string): Promise<BetaInvite | null> {
+    const docRef = this.db.collection('betaInvites').doc(id);
+    return await this.db.runTransaction(async (transaction) => {
+      const snap = await transaction.get(docRef);
+      if (!snap.exists) return null;
+      const invite = snap.data() as BetaInvite;
+      if (invite.status !== 'available') return null;
+
+      const revoked: BetaInvite = {
+        ...invite,
+        status: 'revoked',
+        revokedAt: new Date().toISOString(),
+        revokedByUid,
+      };
+      transaction.set(docRef, stripUndefined(revoked), { merge: true });
+      return revoked;
+    });
   }
 
   private notificationRef(uid: string, id: string) {

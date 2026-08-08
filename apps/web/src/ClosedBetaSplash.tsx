@@ -1,14 +1,14 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AppleSignInButton } from './AppleSignInButton.js';
 import { useAuth } from './AuthContext.js';
 import { GoogleSignInButton } from './GoogleSignInButton.js';
 import { InteractiveMascot } from './Mascot.js';
-import { recordWaitlistStep } from './visitTelemetry.js';
+import { recordBetaInviteStep, recordWaitlistStep } from './visitTelemetry.js';
 
 type WaitlistState = 'idle' | 'joining' | 'joined' | 'error';
 
-export function ClosedBetaSplash() {
+export function ClosedBetaSplash({ inviteCode }: { inviteCode?: string }) {
   const { t, i18n } = useTranslation();
   const { joinWaitlist, waitlistStatus } = useAuth();
   const [error, setError] = useState<string | null>(null);
@@ -18,11 +18,16 @@ export function ClosedBetaSplash() {
   // verifier would reject the very person the waitlist exists to catch.
   const [idTokenProvider, setIdTokenProvider] = useState<'google' | 'apple'>('google');
   const [waitlistState, setWaitlistState] = useState<WaitlistState>('idle');
+  const isInvite = inviteCode !== undefined;
   // Clicked Join before signing in — after a rejected sign-in we auto-join with that token
   // so the visitor is not asked to press Join a second time.
   const [awaitingSignIn, setAwaitingSignIn] = useState(false);
   const joinIntentRef = useRef(false);
   const isBlocked = error != null;
+
+  useEffect(() => {
+    if (isInvite) recordBetaInviteStep('opened');
+  }, [isInvite]);
 
   const doJoin = async (token: string, provider: 'google' | 'apple') => {
     if (waitlistState === 'joining' || waitlistState === 'joined') return;
@@ -40,6 +45,10 @@ export function ClosedBetaSplash() {
 
   const handleJoinWaitlist = () => {
     if (waitlistState === 'joining' || waitlistState === 'joined') return;
+    if (isInvite) {
+      setAwaitingSignIn(true);
+      return;
+    }
     recordWaitlistStep('cta_clicked');
     if (!idToken) {
       // Still requires login: the CTA is visible up front, but the write only happens
@@ -55,14 +64,18 @@ export function ClosedBetaSplash() {
     setError(msg);
     setIdToken(token ?? null);
     setIdTokenProvider(provider);
-    if (token && joinIntentRef.current) {
+    if (!isInvite && token && joinIntentRef.current) {
       void doJoin(token, provider);
     }
   };
 
+  const handleInviteSignIn = () => {
+    recordBetaInviteStep('accepted');
+  };
+
   // Determine if we should show a known waitlist status (from the API 403 or a previous join)
   const hasKnownStatus = waitlistStatus === 'pending' || waitlistStatus === 'approved' || waitlistStatus === 'rejected';
-  const showStatus = waitlistState === 'joined' || (hasKnownStatus && waitlistState !== 'error');
+  const showStatus = !isInvite && (waitlistState === 'joined' || (hasKnownStatus && waitlistState !== 'error'));
 
   return (
     <div className="beta-splash">
@@ -80,8 +93,8 @@ export function ClosedBetaSplash() {
           <span className="beta-splash__logo-tld">.pl</span>
         </div>
 
-        <h1 className="beta-splash__headline">{t('betaSplash.headline')}</h1>
-        <p className="beta-splash__sub">{t('betaSplash.sub')}</p>
+        <h1 className="beta-splash__headline">{isInvite ? t('betaInvite.headline') : t('betaSplash.headline')}</h1>
+        <p className="beta-splash__sub">{isInvite ? t('betaInvite.sub') : t('betaSplash.sub')}</p>
 
         <div className="beta-splash__badge">{t('betaSplash.badge')}</div>
 
@@ -100,32 +113,48 @@ export function ClosedBetaSplash() {
             </div>
           ) : (
             <>
-              {isBlocked && <p className="beta-splash__blocked-msg">{t('betaSplash.blockedMsg')}</p>}
+              {isBlocked && (
+                <p className="beta-splash__blocked-msg">
+                  {isInvite ? t('betaInvite.unavailableSub') : t('betaSplash.blockedMsg')}
+                </p>
+              )}
               <button
-                id="btn-join-waitlist"
+                id={isInvite ? 'btn-accept-beta-invite' : 'btn-join-waitlist'}
                 className="beta-splash__waitlist-btn"
                 onClick={handleJoinWaitlist}
                 disabled={waitlistState === 'joining'}
               >
-                {waitlistState === 'joining' ? t('betaSplash.joiningWaitlist') : t('betaSplash.joinWaitlist')}
+                {isInvite
+                  ? t('betaInvite.accept')
+                  : waitlistState === 'joining'
+                    ? t('betaSplash.joiningWaitlist')
+                    : t('betaSplash.joinWaitlist')}
               </button>
               {awaitingSignIn && !idToken && (
-                <p className="beta-splash__signin-hint">{t('betaSplash.signInToJoin')}</p>
+                <p className="beta-splash__signin-hint">
+                  {isInvite ? t('betaInvite.signInHint') : t('betaSplash.signInToJoin')}
+                </p>
               )}
             </>
           )}
           {waitlistState === 'error' && (
-            <p className="beta-splash__waitlist-error">{t('betaSplash.waitlistError')}</p>
+            <p className="beta-splash__waitlist-error">
+              {isInvite ? t('betaInvite.unavailableSub') : t('betaSplash.waitlistError')}
+            </p>
           )}
         </div>
 
         <div className="beta-splash__signin">
           <GoogleSignInButton
+            inviteCode={inviteCode}
+            onSuccess={isInvite ? handleInviteSignIn : undefined}
             onError={(msg, token) => {
               handleSignInError(msg, token, 'google');
             }}
           />
           <AppleSignInButton
+            inviteCode={inviteCode}
+            onSuccess={isInvite ? handleInviteSignIn : undefined}
             onError={(msg, token) => {
               handleSignInError(msg, token, 'apple');
             }}

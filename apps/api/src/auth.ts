@@ -37,6 +37,7 @@ function localeFromRequest(request: FastifyRequest): string | undefined {
 export const SESSION_COOKIE_NAME = 'gamedev_session';
 export const DEFAULT_SESSION_DURATION_SECONDS = 12 * 60 * 60; // 12 hours
 export const HALF_LIFE_SECONDS = 6 * 60 * 60; // 6 hours (sliding renewal threshold)
+export const BETA_INVITE_CODE_PATTERN = /^[A-Za-z0-9_-]{32}$/;
 
 export interface SessionPayload {
   uid: string;
@@ -240,10 +241,12 @@ export interface AuthPluginOptions {
 
 const GoogleAuthSchema = z.object({
   idToken: z.string().trim().min(1, 'idToken is required'),
+  inviteCode: z.string().regex(BETA_INVITE_CODE_PATTERN, 'invalid invite code').optional(),
 });
 
 const AppleAuthSchema = z.object({
   idToken: z.string().trim().min(1, 'idToken is required'),
+  inviteCode: z.string().regex(BETA_INVITE_CODE_PATTERN, 'invalid invite code').optional(),
   /**
    * Apple's ID token carries no name claim, ever. The display name arrives exactly once —
    * in the body of the *first* authorization, alongside the token — and Apple never sends
@@ -262,6 +265,10 @@ const WaitlistSchema = z.object({
   // Which provider minted `idToken`. Defaults to Google because every waitlist entry
   // predating Sign in with Apple came from there.
   provider: z.enum(['google', 'apple']).optional(),
+});
+
+const BetaInviteClaimSchema = z.object({
+  code: z.string().regex(BETA_INVITE_CODE_PATTERN, 'invalid invite code'),
 });
 
 function isRateLimited(
@@ -447,15 +454,27 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
         // an unverified email claim must never satisfy an access-control allowlist.
         if (options.privateBeta) {
           const emailLower = googleUser.emailVerified && googleUser.email ? googleUser.email.toLowerCase() : '';
-          const allowed =
+          const existingUser = await store.getUser(uid);
+          if (existingUser?.tier === 'blocked') {
+            return reply.status(403).send({ error: 'account is blocked' });
+          }
+          const allowlisted =
             (options.betaAllowedUids?.has(uid) ?? false) ||
             (emailLower !== '' && (options.betaAllowedEmails?.has(emailLower) ?? false)) ||
             (await store.isWaitlistApproved(uid, emailLower));
+          const inviteClaim =
+            parseResult.data.inviteCode === undefined
+              ? null
+              : await store.claimBetaInvite(parseResult.data.inviteCode, uid);
+          const allowed = allowlisted || inviteClaim?.ok === true;
           if (!allowed) {
             // Look up existing waitlist status so the client can show it
             const waitlistEntry = await store.getWaitlistEntry(uid);
             return reply.status(403).send({
-              error: 'private beta — sign-ups are closed',
+              error:
+                parseResult.data.inviteCode === undefined
+                  ? 'private beta — sign-ups are closed'
+                  : 'beta invite is invalid or already used',
               waitlistStatus: waitlistEntry?.status ?? null,
             });
           }
@@ -540,14 +559,26 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
         // arriving through a different button.
         if (options.privateBeta) {
           const emailLower = resolution.email?.toLowerCase() ?? '';
-          const allowed =
+          const existingUser = await store.getUser(uid);
+          if (existingUser?.tier === 'blocked') {
+            return reply.status(403).send({ error: 'account is blocked' });
+          }
+          const allowlisted =
             (options.betaAllowedUids?.has(uid) ?? false) ||
             (emailLower !== '' && (options.betaAllowedEmails?.has(emailLower) ?? false)) ||
             (await store.isWaitlistApproved(uid, emailLower));
+          const inviteClaim =
+            parseResult.data.inviteCode === undefined
+              ? null
+              : await store.claimBetaInvite(parseResult.data.inviteCode, uid);
+          const allowed = allowlisted || inviteClaim?.ok === true;
           if (!allowed) {
             const waitlistEntry = await store.getWaitlistEntry(uid);
             return reply.status(403).send({
-              error: 'private beta — sign-ups are closed',
+              error:
+                parseResult.data.inviteCode === undefined
+                  ? 'private beta — sign-ups are closed'
+                  : 'beta invite is invalid or already used',
               waitlistStatus: waitlistEntry?.status ?? null,
             });
           }
@@ -680,6 +711,26 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
         const message = err instanceof Error ? err.message : 'token verification failed';
         return reply.status(401).send({ error: message });
       }
+    },
+  );
+
+  app.post(
+    '/api/beta-invites/claim',
+    { config: { rateLimit: { max: maxAuthRequestsPerWindow, timeWindow: authRateLimitWindowMs } } },
+    async (request, reply) => {
+      if (request.authMethod !== 'session' || !request.user) {
+        return reply.status(401).send({ error: 'authentication required' });
+      }
+      const parsed = BetaInviteClaimSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
+      }
+
+      const result = await store.claimBetaInvite(parsed.data.code, request.user.uid);
+      if (!result.ok) {
+        return reply.status(409).send({ error: 'beta invite is invalid or already used' });
+      }
+      return { status: 'claimed' };
     },
   );
 

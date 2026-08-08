@@ -1,11 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  createBetaInvite,
+  fetchBetaInvites,
   fetchWaitlist,
+  revokeBetaInvite,
+  type BetaInvite,
   setWaitlistStatus,
   setWaitlistStatusByEmail,
   type WaitlistEntry,
   type WaitlistStatus,
 } from './adminApi.js';
+import { betaInvitePath } from './router.js';
 
 /**
  * Closed-beta waitlist membership — list, approve, reject, pre-approve by email.
@@ -43,6 +48,9 @@ export function WaitlistPanel() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [email, setEmail] = useState('');
+  const [invites, setInvites] = useState<BetaInvite[] | null>(null);
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [inviteBusy, setInviteBusy] = useState(false);
   // Monotonic id so a slow Pending fetch cannot overwrite an Approved list the
   // operator already switched to (Copilot + Codex both flagged this race).
   const loadGeneration = useRef(0);
@@ -64,10 +72,23 @@ export function WaitlistPanel() {
     }
   }, []);
 
+  const loadInvites = useCallback(async () => {
+    try {
+      const result = await fetchBetaInvites();
+      if (result !== null) setInvites(result);
+    } catch {
+      setInvites([]);
+    }
+  }, []);
+
   useEffect(() => {
     setState('loading');
     void load(filter);
   }, [filter, load]);
+
+  useEffect(() => {
+    void loadInvites();
+  }, [loadInvites]);
 
   const changeStatus = useCallback(
     async (uid: string, status: WaitlistStatus) => {
@@ -114,6 +135,56 @@ export function WaitlistPanel() {
     }
   }, [email, filter, load]);
 
+  const makeInvite = useCallback(async () => {
+    setInviteBusy(true);
+    setMessage(null);
+    try {
+      const result = await createBetaInvite();
+      if ('error' in result) {
+        setMessage(result.error);
+        return;
+      }
+      setInviteLink(new URL(betaInvitePath(result.code), window.location.origin).toString());
+      setMessage('Invite link created. It can be used once.');
+      await loadInvites();
+    } catch {
+      setMessage('could not reach the API');
+    } finally {
+      setInviteBusy(false);
+    }
+  }, [loadInvites]);
+
+  const copyInvite = useCallback(async () => {
+    if (!inviteLink || !navigator.clipboard) return;
+    try {
+      await navigator.clipboard.writeText(inviteLink);
+      setMessage('Invite link copied.');
+    } catch {
+      setMessage('Copy failed — select the link manually.');
+    }
+  }, [inviteLink]);
+
+  const revokeInvite = useCallback(
+    async (id: string) => {
+      setInviteBusy(true);
+      setMessage(null);
+      try {
+        const result = await revokeBetaInvite(id);
+        if ('error' in result) {
+          setMessage(result.error);
+          return;
+        }
+        setMessage('Invite link revoked.');
+        await loadInvites();
+      } catch {
+        setMessage('could not reach the API');
+      } finally {
+        setInviteBusy(false);
+      }
+    },
+    [loadInvites],
+  );
+
   // Filters stay mounted during the first load so a slow Pending fetch cannot
   // trap the operator — they can switch to Approved while it is still in flight,
   // which is also the race the generation guard below exists for.
@@ -128,6 +199,60 @@ export function WaitlistPanel() {
         Closed-beta membership. Approving grants sign-in without a redeploy; rejecting or resetting updates the same
         Firestore row the CLI writes.
       </p>
+
+      <section className="admin-beta-invites">
+        <h3>One-time invite links</h3>
+        <p className="health-summary">
+          Create a link for someone whose email you do not know. The first account to accept it gets access; the link
+          cannot be reused.
+        </p>
+        <button type="button" disabled={inviteBusy} onClick={() => void makeInvite()}>
+          Create invite link
+        </button>
+        {inviteLink && (
+          <div className="admin-beta-invite-created">
+            <input
+              aria-label="New beta invite link"
+              readOnly
+              value={inviteLink}
+              onFocus={(event) => event.currentTarget.select()}
+            />
+            <button type="button" disabled={inviteBusy} onClick={() => void copyInvite()}>
+              Copy link
+            </button>
+          </div>
+        )}
+        {invites && invites.length > 0 && (
+          <div className="health-table-scroll">
+            <table className="health-table">
+              <thead>
+                <tr>
+                  <th>Status</th>
+                  <th>Created</th>
+                  <th>Claimed by</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {invites.map((invite) => (
+                  <tr key={invite.id}>
+                    <td>{invite.status}</td>
+                    <td title={invite.createdAt}>{since(invite.createdAt, now)}</td>
+                    <td>{invite.claimedUid ?? '—'}</td>
+                    <td>
+                      {invite.status === 'available' && (
+                        <button type="button" disabled={inviteBusy} onClick={() => void revokeInvite(invite.id)}>
+                          Revoke
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
 
       <div className="admin-waitlist-filters" role="group" aria-label="Filter by status">
         {FILTERS.map((candidate) => (

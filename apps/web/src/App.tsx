@@ -69,6 +69,7 @@ import { useAuth } from './AuthContext.js';
 import { AuthModal } from './AuthModal.js';
 import { recordCreateStep, recordStudioStep } from './visitTelemetry.js';
 import { ClosedBetaSplash } from './ClosedBetaSplash.js';
+import { BetaInvitePage } from './BetaInvitePage.js';
 import { AppLoadingScreen } from './AppLoadingScreen.js';
 import { ControllerView } from './mp/ControllerView.js';
 import { PartyStage } from './mp/PartyStage.js';
@@ -179,6 +180,7 @@ export function App() {
       copy: {
         home: t('pageTitle.home'),
         join: t('pageTitle.join'),
+        invite: t('pageTitle.invite'),
         health: t('pageTitle.health'),
         review: t('pageTitle.review'),
         studio: t('pageTitle.studio'),
@@ -1085,6 +1087,14 @@ export function App() {
 
   if (authLoading) {
     return <AppLoadingScreen />;
+  }
+
+  if (route.view === 'invite') {
+    return user ? (
+      <BetaInvitePage code={route.code} onContinue={() => navigate('/')} />
+    ) : (
+      <ClosedBetaSplash inviteCode={route.code} />
+    );
   }
 
   // Closed beta: no session → branded splash (sign-in + waitlist). The shell still loads so

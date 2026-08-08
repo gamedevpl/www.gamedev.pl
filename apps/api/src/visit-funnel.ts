@@ -67,6 +67,7 @@ export interface VisitFunnel {
    * present — including zeroes. Same posture as `creating`.
    */
   waitlist: Array<{ step: WaitlistStep; visits: number }>;
+  invites: Array<{ step: InviteStep; visits: number }>;
   /**
    * EditorKit's revision funnel — opened → saved a draft → played it → published.
    * Same posture as `creating`: every step, in order, zeroes included.
@@ -177,6 +178,10 @@ export const WAITLIST_STEPS = ['cta_clicked', 'joined'] as const;
 
 export type WaitlistStep = (typeof WAITLIST_STEPS)[number];
 
+export const INVITE_STEPS = ['opened', 'accepted', 'unavailable'] as const;
+
+export type InviteStep = (typeof INVITE_STEPS)[number];
+
 export const EDITOR_STEPS = ['opened', 'draft_saved', 'previewed', 'published'] as const;
 
 export type EditorStep = (typeof EDITOR_STEPS)[number];
@@ -258,6 +263,7 @@ interface VisitRollup {
   steps: Set<string>;
   /** Waitlist steps this visit reached. Separate from create so the two funnels cannot collide. */
   waitlistSteps: Set<string>;
+  inviteSteps: Set<string>;
   /** Editor steps this visit reached. Separate again, for the same reason. */
   editorSteps: Set<string>;
   /** The door on this visit's `painted`, first one wins (the client dedupes). */
@@ -307,6 +313,7 @@ export function summarizeVisitFunnel(events: VisitEvent[]): VisitFunnel {
       plays: 0,
       steps: new Set<string>(),
       waitlistSteps: new Set<string>(),
+      inviteSteps: new Set<string>(),
       editorSteps: new Set<string>(),
       assistSteps: new Set<string>(),
       remixSteps: new Set<string>(),
@@ -328,6 +335,8 @@ export function summarizeVisitFunnel(events: VisitEvent[]): VisitFunnel {
       if (event.step) rollup.steps.add(event.step);
     } else if (event.type === 'waitlist_step') {
       if (event.step) rollup.waitlistSteps.add(event.step);
+    } else if (event.type === 'invite_step') {
+      if (event.step) rollup.inviteSteps.add(event.step);
     } else if (event.type === 'editor_step') {
       if (event.step) rollup.editorSteps.add(event.step);
     } else if (event.type === 'assist_step') {
@@ -499,6 +508,10 @@ export function summarizeVisitFunnel(events: VisitEvent[]): VisitFunnel {
     waitlist: WAITLIST_STEPS.map((step) => ({
       step,
       visits: rollups.filter((rollup) => rollup.waitlistSteps.has(step)).length,
+    })),
+    invites: INVITE_STEPS.map((step) => ({
+      step,
+      visits: rollups.filter((rollup) => rollup.inviteSteps.has(step)).length,
     })),
     editing: EDITOR_STEPS.map((step) => ({
       step,

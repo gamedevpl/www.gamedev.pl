@@ -46,6 +46,7 @@ export const RESERVED_HANDLES: ReadonlySet<string> = new Set([
   'gamedevpl',
   'health',
   'help',
+  'invite',
   'join',
   'me',
   'null',

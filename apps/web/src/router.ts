@@ -88,6 +88,7 @@ export type AppRoute =
   // to everyone else. `/health` still resolves here (telemetry) — it was the whole
   // surface before there was a console, and links to it are in people's bookmarks.
   | { view: 'admin'; section: AdminSection }
+  | { view: 'invite'; code: string }
   // Reviewer desk; unlisted like /admin.
   | { view: 'review' }
   // Creator control panel: own games, draft build (ex-status), playtest, improve.
@@ -132,6 +133,7 @@ export type AppRoute =
 // Game slugs are lowercase kebab-case (matches the games-repo catalog); keep the
 // route pattern strict so arbitrary path segments can't masquerade as a play route.
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const BETA_INVITE_CODE_PATTERN = /^[A-Za-z0-9_-]{32}$/;
 
 /** Creator handles — keep aligned with apps/api/src/creator-profile.ts HANDLE_PATTERN. */
 const CREATOR_HANDLE_PATTERN = /^[a-z][a-z0-9_]{2,23}$/;
@@ -163,6 +165,7 @@ const RESERVED_HANDLE_SEGMENTS = new Set([
   'gamedevpl',
   'health',
   'help',
+  'invite',
   'join',
   'me',
   'null',
@@ -229,6 +232,15 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
 
   if (normalizedPath === '/contact') {
     return { view: 'contact' };
+  }
+
+  const inviteMatch = normalizedPath.match(/^\/invite\/([^/]+)$/);
+  if (inviteMatch?.[1]) {
+    const code = decodeSegment(inviteMatch[1]);
+    if (code && BETA_INVITE_CODE_PATTERN.test(code)) {
+      return { view: 'invite', code };
+    }
+    return { view: 'notFound' };
   }
 
   const creatorMatch = normalizedPath.match(/^\/creators\/([^/]+)$/);
@@ -491,6 +503,7 @@ export function navUpTarget(route: AppRoute): NavUpTarget | null {
   switch (route.view) {
     case 'home':
     case 'join':
+    case 'invite':
       return null;
     // `/play/:slug` auto-opens; Close replaces onto the canonical game page.
     case 'play':
@@ -537,6 +550,10 @@ export function reviewPath(): string {
 /** QR / share URL path+fragment for a multiplayer lobby guest. */
 export function joinPath(code: string, token: string): string {
   return `/join/${code}#${token}`;
+}
+
+export function betaInvitePath(code: string): string {
+  return `/invite/${encodeURIComponent(code)}`;
 }
 
 /**

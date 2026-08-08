@@ -836,6 +836,20 @@
     "waitlistError": "Couldn't join the waitlist right now. Please try again.",
     "footer": "Access is invite-only during the closed beta."
   },
+  "betaInvite": {
+    "headline": "You've been invited to the closed beta.",
+    "sub": "This link is for one person. Sign in with the account you want to use.",
+    "accept": "Accept invitation",
+    "signInHint": "Sign in with Google or Apple below to accept it.",
+    "unavailableSub": "This invitation was already used, revoked, or is not valid. Ask the sender for a new link.",
+    "claiming": "Checking your invitation…",
+    "claimingSub": "This link will be attached to your account.",
+    "accepted": "Invitation accepted.",
+    "acceptedSub": "Your account now has access to the closed beta.",
+    "continue": "Enter the beta",
+    "unavailable": "This invitation is no longer available.",
+    "backHome": "Back to the home page"
+  },
   "errors": {
     "generic": "Something went wrong",
     "creationPaused": "New games are paused for a moment while we look at something on our side. Your daily allowance hasn't been touched — please try again shortly.",
@@ -980,6 +994,7 @@
     "home": "Gamedev.pl — Describe a game, play it",
     "status": "Your game is in the works",
     "join": "Join the game",
+    "invite": "Beta invitation",
     "health": "Telemetry",
     "review": "Game review",
     "studio": "Creator Studio",

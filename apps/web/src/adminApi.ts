@@ -40,6 +40,19 @@ export interface WaitlistEntry {
   status: WaitlistStatus;
 }
 
+export type BetaInviteStatus = 'available' | 'claimed' | 'revoked';
+
+export interface BetaInvite {
+  id: string;
+  createdAt: string;
+  createdByUid: string;
+  status: BetaInviteStatus;
+  claimedAt?: string;
+  claimedUid?: string;
+  revokedAt?: string;
+  revokedByUid?: string;
+}
+
 /**
  * The console's admission test as well as its header.
  *
@@ -363,6 +376,33 @@ export async function setWaitlistStatusByEmail(
     body: JSON.stringify({ email, status }),
   });
   if (res.ok) return (await res.json()) as WaitlistEntry;
+  const body = (await res.json().catch(() => ({}))) as { error?: string };
+  return { error: body.error ?? `request failed (${res.status})` };
+}
+
+export async function fetchBetaInvites(): Promise<BetaInvite[] | null> {
+  const res = await fetch(`${API_BASE}/api/admin/beta-invites`, { credentials: 'include' });
+  if (res.status === 404 || res.status === 401) return null;
+  if (!res.ok) throw new Error(`beta invites failed (${res.status})`);
+  return ((await res.json()) as { invites: BetaInvite[] }).invites;
+}
+
+export async function createBetaInvite(): Promise<{ invite: BetaInvite; code: string } | { error: string }> {
+  const res = await fetch(`${API_BASE}/api/admin/beta-invites`, {
+    method: 'POST',
+    credentials: 'include',
+  });
+  if (res.ok) return (await res.json()) as { invite: BetaInvite; code: string };
+  const body = (await res.json().catch(() => ({}))) as { error?: string };
+  return { error: body.error ?? `request failed (${res.status})` };
+}
+
+export async function revokeBetaInvite(id: string): Promise<BetaInvite | { error: string }> {
+  const res = await fetch(`${API_BASE}/api/admin/beta-invites/${encodeURIComponent(id)}/revoke`, {
+    method: 'POST',
+    credentials: 'include',
+  });
+  if (res.ok) return (await res.json()) as BetaInvite;
   const body = (await res.json().catch(() => ({}))) as { error?: string };
   return { error: body.error ?? `request failed (${res.status})` };
 }

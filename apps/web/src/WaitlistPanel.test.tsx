@@ -2,12 +2,15 @@
 
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WaitlistPanel } from './WaitlistPanel.js';
 import type { WaitlistEntry } from './adminApi.js';
 
 const mocked = vi.hoisted(() => ({
+  createBetaInvite: vi.fn(),
+  fetchBetaInvites: vi.fn(),
   fetchWaitlist: vi.fn(),
+  revokeBetaInvite: vi.fn(),
   setWaitlistStatus: vi.fn(),
   setWaitlistStatusByEmail: vi.fn(),
 }));
@@ -50,6 +53,10 @@ async function type(input: HTMLInputElement, value: string) {
 afterEach(() => {
   document.body.innerHTML = '';
   vi.clearAllMocks();
+});
+
+beforeEach(() => {
+  mocked.fetchBetaInvites.mockResolvedValue([]);
 });
 
 describe('WaitlistPanel', () => {
@@ -96,6 +103,50 @@ describe('WaitlistPanel', () => {
     });
 
     expect(mocked.setWaitlistStatusByEmail).toHaveBeenCalledWith('friend@example.com', 'approved');
+
+    await act(async () => root.unmount());
+  });
+
+  it('creates and copies a one-time invite link', async () => {
+    mocked.fetchWaitlist.mockResolvedValue([]);
+    mocked.createBetaInvite.mockResolvedValue({
+      invite: {
+        id: '11111111-1111-4111-8111-111111111111',
+        createdAt: new Date().toISOString(),
+        createdByUid: 'g:boss',
+        status: 'available',
+      },
+      code: 'Abc123_-'.repeat(4),
+    });
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+
+    const { container, root } = await render();
+    const create = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Create invite link',
+    ) as HTMLButtonElement;
+
+    await act(async () => {
+      create.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const link = container.querySelector<HTMLInputElement>('input[aria-label="New beta invite link"]');
+    expect(link?.value).toBe(`${window.location.origin}/invite/${'Abc123_-'.repeat(4)}`);
+    expect(mocked.createBetaInvite).toHaveBeenCalledOnce();
+
+    const copy = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Copy link',
+    ) as HTMLButtonElement;
+    await act(async () => {
+      copy.click();
+      await Promise.resolve();
+    });
+    expect(writeText).toHaveBeenCalledWith(link?.value);
 
     await act(async () => root.unmount());
   });

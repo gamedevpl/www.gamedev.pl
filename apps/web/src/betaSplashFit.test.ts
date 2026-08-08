@@ -11,7 +11,7 @@ const css = readFileSync(fileURLToPath(new URL('./styles.css', import.meta.url))
 
 describe('the beta splash fits a small phone', () => {
   it('measures the viewport as the part you can see', () => {
-    const rule = css.slice(css.indexOf('.beta-splash {'), css.indexOf('.beta-splash__card {'));
+    const rule = css.slice(css.indexOf('.beta-splash,\n.beta-invite {'), css.indexOf('.beta-splash__card {'));
     // Both, in this order. iOS resolves 100vh to the large viewport, so dvh has to
     // come second and win; the vh line stays as the fallback for browsers without dvh.
     expect(rule).toMatch(/min-height: 100vh;[\s\S]*min-height: 100dvh;/);
@@ -29,9 +29,8 @@ describe('the beta splash fits a small phone', () => {
   it('centres the card without making an overflowing one unreachable', () => {
     const query = css.slice(css.indexOf('@media (max-height: 720px)'));
     // Comments here explain what NOT to use, so strip them before asserting absence.
-    const splash = query
-      .slice(query.indexOf('.beta-splash {'), query.indexOf('.beta-splash__card {'))
-      .replace(/\/\*[\s\S]*?\*\//g, '');
+    const splashStart = query.indexOf('.beta-splash,\n  .beta-invite {');
+    const splash = query.slice(splashStart, query.indexOf('}', splashStart) + 1).replace(/\/\*[\s\S]*?\*\//g, '');
     // Centring a flex item that overflows puts its top edge where it cannot be
     // scrolled to. `safe center` expresses the intent but older Safari drops it and
     // falls back to plain `center` — the bug it was meant to avoid. Auto margins on
@@ -39,7 +38,7 @@ describe('the beta splash fits a small phone', () => {
     expect(splash).toContain('align-items: flex-start');
     expect(splash).not.toContain('align-items: center');
     expect(splash).not.toContain('safe center');
-    const card = query.slice(query.indexOf('.beta-splash__card {'));
+    const card = query.slice(query.indexOf('.beta-splash__card,\n  .beta-invite__card {'));
     expect(card.slice(0, 200)).toMatch(/margin-top: auto;\s*margin-bottom: auto;/);
   });
 
