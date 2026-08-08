@@ -339,7 +339,14 @@ const BRIDGE = `(function(){
   // remaining native handlers. Games have no selectable document chrome in the player.
   addEventListener('contextmenu',function(e){e.preventDefault();});
   addEventListener('selectstart',function(e){e.preventDefault();});
+  function fitGameCanvas(){
+    var canvas=el('game');
+    if(!canvas||!canvas.width||!canvas.height)return;
+    canvas.style.setProperty('--gdpl-canvas-ratio',String(canvas.width/canvas.height));
+  }
+  addEventListener('resize',fitGameCanvas);
   function init(){
+    fitGameCanvas();
     sendMeta();
     var s=el('sound-toggle');
     if(s&&'MutationObserver'in window){new MutationObserver(sendSound).observe(s,{attributes:true,attributeFilter:['aria-pressed']});}
@@ -352,13 +359,11 @@ const BRIDGE = `(function(){
   if(document.readyState==='loading')addEventListener('DOMContentLoaded',init);else init();
 })();`;
 
-// Hide in-game chrome; theater owns title/sound instead.
-// Parent CSS cannot reach opaque-origin frame (iOS loupe).
-// Undo shell's 1400px wrap so desktop theater is full-bleed.
+// Hide in-game chrome; theater owns title and sound.
+// Opaque-origin frames keep this CSS inside the game.
+// Fill desktop theater while keeping canvas bounds proportional.
 //
-// Size `#game` with max-width/max-height (not 100%×100% + object-fit). A full-box
-// canvas letterboxes its bitmap *inside* the element, so getBoundingClientRect
-// mapping (fixtures, older games) shifts taps. Contained element box = hit box.
+// Fit the logical canvas to the iframe without distorting pointer coordinates.
 const HIDE_CHROME =
   `#game-title,#game-desc,.game-controls,.hint{display:none!important}` +
   // Hide buttons-only GameKit chrome on mouse desktops.
@@ -380,8 +385,11 @@ const HIDE_CHROME =
   `justify-content:center!important` +
   `}` +
   `#game{` +
-  `width:auto!important;` +
+  `--gdpl-canvas-ratio:1.6;` +
+  `flex:0 1 auto!important;` +
+  `width:min(100%,calc(100dvh * var(--gdpl-canvas-ratio)))!important;` +
   `height:auto!important;` +
+  `aspect-ratio:var(--gdpl-canvas-ratio)!important;` +
   `max-width:100%!important;` +
   `max-height:100%!important;` +
   `min-height:0!important;` +
