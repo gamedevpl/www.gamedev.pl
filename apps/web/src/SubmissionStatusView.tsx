@@ -563,8 +563,10 @@ export function SubmissionStatusView({
   useEffect(() => {
     const previewSlug = status?.preview?.slug;
     const headSha = status?.progress?.headSha;
+    const gateRun = status?.previewGate?.ranAt ?? '';
+    const previewKey = `${headSha ?? 'unknown'}:${gateRun}`;
     if (!previewSlug || previewInFlightRef.current) return;
-    if (headSha && headSha === loadedPreviewShaRef.current) return;
+    if (headSha && previewKey === loadedPreviewShaRef.current) return;
     // Without a headSha we can't tell if there's anything new — only load once.
     if (!headSha && loadedPreviewShaRef.current !== null) return;
 
@@ -580,7 +582,7 @@ export function SubmissionStatusView({
     getSubmissionPreview(token)
       .then((result) => {
         setPreview(result);
-        loadedPreviewShaRef.current = headSha ?? 'unknown';
+        loadedPreviewShaRef.current = previewKey;
       })
       .catch((err: unknown) => {
         const apiError = err as SubmissionApiError;
@@ -588,6 +590,7 @@ export function SubmissionStatusView({
         if (!isRefresh) {
           setPreview(null);
         }
+        loadedPreviewShaRef.current = previewKey;
         setPreviewError(apiError.status === 409 ? t('statusView.previewNotReady') : t('statusView.previewError'));
       })
       .finally(() => {
@@ -595,7 +598,7 @@ export function SubmissionStatusView({
         setPreviewLoading(false);
         setPreviewRefreshing(false);
       });
-  }, [status?.preview?.slug, status?.progress?.headSha, t, token]);
+  }, [status?.preview?.slug, status?.progress?.headSha, status?.previewGate?.ranAt, t, token]);
 
   // Prefetch the latest channel build when there is no PR preview yet — same PlayCard
   // → theater path, so Escape / sound / chrome-hide need the player bridge, which
@@ -635,6 +638,7 @@ export function SubmissionStatusView({
   }, [preview, status?.playable, t, token]);
 
   const previewTitle = preview?.title ?? submittedTitle ?? status?.preview?.slug ?? t('statusView.previewGameTitle');
+  const previewGateFailure = status?.previewGate && !status.previewGate.green ? status.previewGate : null;
 
   // Lock page scroll while the theater overlay is open (matches the home player).
   useEffect(() => {
@@ -860,7 +864,9 @@ export function SubmissionStatusView({
                   </ThreadStatusChip>
                 ) : null}
 
-                {previewError && !preview && !channelHtml ? <p className="error">{previewError}</p> : null}
+                {previewError && !preview && !channelHtml && !previewGateFailure ? (
+                  <p className="error">{previewError}</p>
+                ) : null}
 
                 {TERMINAL_STATUSES.has(status.status) &&
                 status.status !== 'published' &&
@@ -1085,6 +1091,16 @@ export function SubmissionStatusView({
                 onPlay={openChannel}
                 {...(onPlaytest ? { secondary: { label: t('statusView.playtestCta'), onClick: onPlaytest } } : {})}
               />
+            ) : previewGateFailure && !preview && !channelHtml ? (
+              <div className="status-preview-error">
+                <p className="error">{t('statusView.previewGateFailed')}</p>
+                {previewGateFailure.report ? (
+                  <details>
+                    <summary>{t('statusView.previewGateDetails')}</summary>
+                    <pre>{previewGateFailure.report}</pre>
+                  </details>
+                ) : null}
+              </div>
             ) : previewLoading || channelLoading ? (
               <p className="status-preview-pending">
                 <span className="status-preview-spinner" aria-hidden="true" /> {t('statusView.previewLoading')}
@@ -1142,7 +1158,9 @@ export function SubmissionStatusView({
             {/* Only alarm when nothing is playable. A channel draft can succeed while
                 the PR-branch assemble 502s (GitHub rate limits); showing both a Play
                 card and this error was the Studio bug creators hit mid-build. */}
-            {previewError && !preview && !channelHtml ? <p className="error">{previewError}</p> : null}
+            {previewError && !preview && !channelHtml && !previewGateFailure ? (
+              <p className="error">{previewError}</p>
+            ) : null}
 
             <div className="status-footer-actions">
               <a className="inline-link" href="/">

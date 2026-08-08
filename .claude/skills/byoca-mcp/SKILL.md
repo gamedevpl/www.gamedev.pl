@@ -55,6 +55,13 @@ Source of truth: `SESSION_WORKFLOW` + `BEHAVIOURAL_CONTRACT` in
    what you deliver — and when that check _does_ return a publish verdict, call
    `get_gate_media` once before `end`
 
+### Build tool profile
+
+Focused build clients can connect to `/api/mcp?profile=build`. This keeps round, seed,
+brief, kit identity, progress, staging, submission, gate-media and inbox tools, while
+omitting proposals, examples, and kit browse/read tools. The full `/api/mcp` surface
+remains unchanged for clients needing those capabilities.
+
 ### `get_gate_media` must stay reachable from the loop
 
 The step originally read "once a publish verdict lands", immediately after three steps

@@ -116,6 +116,7 @@ export type SubmissionStatus = {
   preview?: { slug: string };
   /** Present while an unmerged PR is open: live build signals mined from the PR. */
   progress?: BuildProgress;
+  previewGate?: { green: boolean; ranAt: string; report?: string; status?: 'kit_outdated' };
   /**
    * Agent updates from the build channel, newest first. Deliberately independent of
    * `progress`: these start arriving before a PR exists, which is precisely the

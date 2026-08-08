@@ -202,10 +202,11 @@ async function mcpCall(
   params?: unknown,
   headers: Record<string, string> = {},
   id: string | number = 1,
+  url = '/api/mcp',
 ) {
   return app.inject({
     method: 'POST',
-    url: '/api/mcp',
+    url,
     headers: {
       'content-type': 'application/json',
       accept: 'application/json, text/event-stream',
@@ -425,6 +426,29 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(gateVerdict?.description).toMatch(/re-run get_kit/);
     expect(gateVerdict?.description).toMatch(/fromLatestDelivery/);
     expect(gateVerdict?.description).toMatch(/terminal receipt/i);
+  });
+
+  it('offers a build profile without proposals, examples, or kit browsing tools', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    app = await createApp(store);
+
+    const sessionId = await initialize(app);
+    const listed = await mcpCall(app, 'tools/list', {}, { 'mcp-session-id': sessionId }, 1, '/api/mcp?profile=build');
+    const names = (listed.json().result.tools as Array<{ name: string }>).map((tool) => tool.name);
+
+    expect(names).toEqual(
+      expect.arrayContaining([
+        'start',
+        'get_brief',
+        'get_seed',
+        'get_kit',
+        'stage_source_file',
+        'submit_sources',
+        'end',
+      ]),
+    );
+    expect(names).not.toEqual(expect.arrayContaining(['create_game', 'search_kit_files', 'submit_proposal']));
   });
 
   it('start issues a sessionKey; subsequent tools work with it', async () => {

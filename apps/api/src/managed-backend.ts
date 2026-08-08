@@ -61,6 +61,7 @@ export interface ManagedBackendOptions {
   maxDurationSeconds?: number;
   outputCaps?: ManagedOutputCaps;
   tools?: ManagedToolAccess;
+  nudgeIdle?: boolean;
   // Preview keeps the first delivery cheap; publish seals.
   deliveryMode?: 'preview' | 'publish';
   log?: {
@@ -83,6 +84,7 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
   // At-most-once per session; a re-poll cannot duplicate.
   const harvested = new Set<string>();
   const startedAt = new Map<string, number>();
+  const idleNudged = new Set<string>();
 
   async function start(brief: BuildBrief): Promise<DispatchResult> {
     const systemPrompt = appendKitDigest(
@@ -229,8 +231,30 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
         }
       }
 
+      let nudged = false;
+      if (
+        session.state === 'idle' &&
+        !hasCandidate &&
+        options.nudgeIdle !== false &&
+        session.stopReason !== 'budget_reached' &&
+        options.provider.sendMessage &&
+        !idleNudged.has(ref)
+      ) {
+        try {
+          await options.provider.sendMessage(
+            ref,
+            'Continue this round now. You have not delivered a candidate. Act through the existing tools, submit the playable source tree, and end only after submit_sources succeeds. Do not explain or wait.',
+          );
+          idleNudged.add(ref);
+          nudged = true;
+          options.log?.info?.({ ref }, 'nudged idle managed session to continue');
+        } catch (error) {
+          options.log?.warn({ err: error, ref }, 'could not nudge idle managed session');
+        }
+      }
+
       // A settled session with no candidate fails the round.
-      const state = outcome === 'pending' ? 'in_progress' : session.state;
+      const state = outcome === 'pending' || nudged ? 'in_progress' : session.state;
 
       return {
         state,
@@ -247,6 +271,7 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
 
     async cleanup(previous: DispatchResult): Promise<void> {
       startedAt.delete(previous.ref);
+      idleNudged.delete(previous.ref);
       harvested.delete(previous.ref);
       await options.provider.deleteSession?.(previous.ref);
     },

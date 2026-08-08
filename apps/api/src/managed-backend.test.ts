@@ -312,6 +312,22 @@ describe('managed backend', () => {
     }
   });
 
+  it('nudges an idle session once instead of spending the round', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const { provider, setState } = fakeProvider({ sendMessage });
+    const backend = createManagedBackend({ provider, deliver: async () => ({ version: 'v1' }) });
+
+    await backend.dispatch(brief());
+    setState('idle');
+
+    const first = await backend.observe('session-1', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
+    const second = await backend.observe('session-1', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
+
+    expect(first).toMatchObject({ state: 'in_progress', hasCandidate: false });
+    expect(second).toMatchObject({ state: 'idle', hasCandidate: false });
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+  });
+
   it('releases the lock when delivery fails, so the retry is not locked out', async () => {
     const { provider, setState, setOutputs } = fakeProvider();
     const release = vi.fn(async () => undefined);

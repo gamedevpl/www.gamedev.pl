@@ -71,6 +71,15 @@ describe('validateSourceUpload — the delivery contract', () => {
     ).toThrow(/SPEC.md is required/);
   });
 
+  it('catches an enabled audio module without selected sounds before the gate', () => {
+    expect(() =>
+      validateSourceUpload(
+        [...MINIMAL, { path: 'GAME.json', content: JSON.stringify({ engine: { modules: ['audio'] }, audio: {} }) }],
+        'preview',
+      ),
+    ).toThrow(/audio\.sounds/);
+  });
+
   it('accepts and requires the behavioural golden the gate checks against', () => {
     // Both halves, because they failed apart. The games repo's submit tool sends
     // TRACE.json; this list did not include it, so the server answered 400 and named

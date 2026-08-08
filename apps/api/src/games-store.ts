@@ -247,6 +247,24 @@ export function validateSourceUpload(files: SourceFile[], mode: DeliveryMode = '
   if (!seen.has('index.html') || !seen.has('game.ts')) {
     throw new InvalidUploadError('index.html and game.ts are required — a game must be playable');
   }
+  const gameJson = files.find((file) => file.path.trim() === 'GAME.json');
+  if (mode === 'preview' && gameJson) {
+    try {
+      const manifest = JSON.parse(gameJson.content) as {
+        engine?: { modules?: unknown };
+        audio?: { sounds?: unknown };
+      };
+      const modules = Array.isArray(manifest.engine?.modules) ? manifest.engine.modules : [];
+      const sounds = Array.isArray(manifest.audio?.sounds) ? manifest.audio.sounds : [];
+      if (modules.includes('audio') && sounds.length === 0) {
+        throw new InvalidUploadError(
+          'GAME.json enables audio but does not select audio.sounds — add sound ids or remove the audio module',
+        );
+      }
+    } catch (error) {
+      if (error instanceof InvalidUploadError) throw error;
+    }
+  }
   if (mode === 'publish') {
     // Refused here rather than stored and failed later. Without the golden the gate cannot
     // reach a verdict at all — it stops at the trace stage having proved nothing — so

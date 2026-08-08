@@ -632,6 +632,8 @@
     "draftHint": "A work-in-progress build. Reopen it any time to pick up the agent's latest changes.",
     "previewNotReady": "No playable build yet. The agent is still laying down code — this page updates itself the moment there is something to play.",
     "previewError": "We couldn't load the preview right now. Please try again in a moment.",
+    "previewGateFailed": "The preview checks failed, so this version cannot be played yet. Send feedback to start a fix round.",
+    "previewGateDetails": "Show the check report",
     "gallery": {
       "alt": "The game as it looks right now",
       "caption": "How your game looks right now",

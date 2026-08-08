@@ -178,6 +178,7 @@ export interface SubmissionStatusResponseBase {
    * just written or the store is catching up. Absent before the first storable draft.
    */
   preview?: { slug: string };
+  previewGate?: { green: boolean; ranAt: string; report?: string; status?: 'kit_outdated' };
   /**
    * Present while an unmerged PR is open: live signals mined from the PR (commits,
    * task checklist) so the UI can show the build taking shape. All fields are

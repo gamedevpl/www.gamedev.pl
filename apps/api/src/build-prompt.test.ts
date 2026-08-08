@@ -22,6 +22,7 @@ describe('buildPrompt delivery contract', () => {
     expect(prompt).toContain('This round is on a clock');
     expect(prompt).toContain('do not download or browse the kit');
     expect(prompt).toContain('Stage source content directly');
+    expect(prompt).toContain('audio.sounds');
     expect(prompt).toContain('submit_sources');
     expect(prompt).toContain('delivered rough');
     expect(prompt).not.toContain('npm run submit');

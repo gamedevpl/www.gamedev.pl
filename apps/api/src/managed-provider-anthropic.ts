@@ -34,6 +34,7 @@ const SessionSchema = z.object({
   model: z.string().optional(),
   created_at: z.string().optional(),
   ended_at: z.string().optional(),
+  stop_reason: z.object({ type: z.string().optional() }).optional(),
   usage: UsageSchema.optional(),
 });
 
@@ -63,6 +64,7 @@ function toSession(parsed: z.infer<typeof SessionSchema>): ManagedSession {
     ...(hasUsage ? { usage: { inputTokens, outputTokens, ...(parsed.model ? { model: parsed.model } : {}) } } : {}),
     ...(parsed.created_at ? { startedAt: parsed.created_at } : {}),
     ...(parsed.ended_at ? { endedAt: parsed.ended_at } : {}),
+    ...(parsed.stop_reason?.type ? { stopReason: parsed.stop_reason.type } : {}),
   };
 }
 
@@ -208,6 +210,15 @@ export function createAnthropicManagedProvider(config: ManagedProviderConfig): M
     async readOutput(_sessionId: string, ref: ManagedOutputRef): Promise<string> {
       if (!ref.handle) throw new ManagedAgentError(`anthropic output ${ref.path} has no file id`);
       return download(ref.handle);
+    },
+
+    async sendMessage(sessionId: string, message: string): Promise<void> {
+      await call(`/v1/sessions/${encodeURIComponent(sessionId)}/events`, {
+        method: 'POST',
+        body: JSON.stringify({
+          events: [{ type: 'user.message', content: [{ type: 'text', text: message }] }],
+        }),
+      });
     },
 
     async cancelSession(sessionId: string): Promise<{ enforced: boolean }> {

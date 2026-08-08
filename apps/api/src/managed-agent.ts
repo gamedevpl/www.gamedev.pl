@@ -37,6 +37,7 @@ export interface ManagedSession {
   usage?: ManagedTokenUsage;
   startedAt?: string;
   endedAt?: string;
+  stopReason?: string;
 }
 
 export interface ManagedToolAccess {
@@ -69,6 +70,7 @@ export interface ManagedAgentProvider {
   listOutputs(sessionId: string): Promise<ManagedOutputRef[]>;
   // One at a time; the caller decides how many.
   readOutput(sessionId: string, ref: ManagedOutputRef): Promise<string>;
+  sendMessage?(sessionId: string, message: string): Promise<void>;
   cancelSession(sessionId: string): Promise<{ enforced: boolean }>;
   deleteSession?(sessionId: string): Promise<void>;
 }
