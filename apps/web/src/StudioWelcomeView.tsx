@@ -114,8 +114,7 @@ export function StudioWelcomeView({ game, onOpenStudio }: StudioWelcomeViewProps
       status.phase === 'ready_for_review' ||
       status.phase === 'published' ||
       (status.playable != null && status.playable.length > 0) ||
-      status.preview != null ||
-      status.stall === 'ended');
+      status.preview != null);
 
   const isNeedsChanges =
     status != null && (status.status === 'needs_changes' || status.phase === 'needs_changes' || status.failure != null);

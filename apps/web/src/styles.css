@@ -7787,6 +7787,11 @@ button.builder-mode-selector:disabled {
   }
 }
 
+.studio-welcome-mascot-glow.is-ready {
+  background: radial-gradient(circle, rgba(0, 228, 172, 0.35) 0%, rgba(0, 228, 172, 0) 75%);
+  opacity: 0.9;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .studio-welcome-pulse-dot.is-pulsing,
   .studio-welcome-pulse-dot.is-ready,
@@ -7794,6 +7799,16 @@ button.builder-mode-selector:disabled {
   .studio-welcome-pulse-ring.is-pulsing,
   .qa-primary.is-ready-cta {
     animation: none;
+  }
+
+  .studio-welcome-mascot,
+  .qa-primary.is-ready-cta {
+    transition: none;
+  }
+
+  .studio-welcome-mascot:hover,
+  .qa-primary.is-ready-cta:hover {
+    transform: none;
   }
 }
 
