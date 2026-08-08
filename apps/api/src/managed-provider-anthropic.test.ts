@@ -18,6 +18,8 @@ describe('anthropic managed provider', () => {
     const provider = createAnthropicManagedProvider({
       apiKey: 'k',
       model: 'm',
+      agentId: 'agent_test',
+      environmentId: 'env_test',
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
     expect(await provider.getSession('sess_0')).toMatchObject({
@@ -30,6 +32,8 @@ describe('anthropic managed provider', () => {
     const provider = createAnthropicManagedProvider({
       apiKey: 'secret-key',
       model: 'test-model',
+      agentId: 'agent_test',
+      environmentId: 'env_test',
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
 
@@ -42,10 +46,51 @@ describe('anthropic managed provider', () => {
 
     const [url, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
     expect(url).not.toContain('secret-key');
+    expect(url).toBe('https://api.anthropic.com/v1/sessions');
     const headers = init.headers as Record<string, string>;
     expect(headers['x-api-key']).toBe('secret-key');
-    expect(headers['anthropic-beta']).toContain('managed-agents');
-    expect(headers['anthropic-beta']).toContain('files-api');
+    expect(headers['anthropic-beta']).toBe('managed-agents-2026-04-01');
+    expect(JSON.parse(String(init.body))).toEqual({
+      agent: {
+        type: 'agent_with_overrides',
+        id: 'agent_test',
+        model: { id: 'test-model' },
+      },
+      environment_id: 'env_test',
+      metadata: { correlation_id: '42' },
+      initial_events: [{ type: 'user.message', content: [{ type: 'text', text: 'build it' }] }],
+    });
+  });
+
+  it('overrides the configured agent for a system prompt and MCP server', async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse({ id: 'sess_1', status: 'running' }));
+    const provider = createAnthropicManagedProvider({
+      apiKey: 'k',
+      model: 'test-model',
+      agentId: 'agent_test',
+      environmentId: 'env_test',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+
+    await provider.startSession({
+      correlationId: '42',
+      prompt: 'build it',
+      model: 'test-model',
+      outputPath: 'outputs',
+      systemPrompt: 'Follow the game contract.',
+      tools: { mcpEndpoints: [{ name: 'gamedevpl', url: 'https://example.test/mcp' }] },
+    });
+
+    const body = JSON.parse(String((fetchImpl.mock.calls[0][1] as RequestInit).body));
+    expect(body.agent).toMatchObject({
+      type: 'agent_with_overrides',
+      system: 'Follow the game contract.',
+      mcp_servers: [{ type: 'url', name: 'gamedevpl', url: 'https://example.test/mcp' }],
+    });
+    expect(body.agent.tools).toEqual([
+      { type: 'agent_toolset_20260401' },
+      { type: 'mcp_toolset', mcp_server_name: 'gamedevpl' },
+    ]);
   });
 
   it('sums cache reads into input tokens rather than under-reporting them', async () => {
@@ -77,6 +122,8 @@ describe('anthropic managed provider', () => {
     const provider = createAnthropicManagedProvider({
       apiKey: 'k',
       model: 'm',
+      agentId: 'agent_test',
+      environmentId: 'env_test',
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
     expect(await provider.getSession('gone')).toBeNull();
@@ -130,6 +177,8 @@ describe('anthropic managed provider', () => {
     const provider = createAnthropicManagedProvider({
       apiKey: 'k',
       model: 'm',
+      agentId: 'agent_test',
+      environmentId: 'env_test',
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
 

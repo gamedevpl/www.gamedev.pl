@@ -17,8 +17,7 @@ const DEFAULT_BASE_URL = 'https://api.anthropic.com';
 const DEFAULT_TIMEOUT_MS = 30_000;
 const API_VERSION = '2023-06-01';
 
-// Both betas required: sessions plus their output files.
-const BETA_HEADER = 'managed-agents-2026-01-01,files-api-2025-04-14';
+const BETA_HEADER = 'managed-agents-2026-04-01';
 
 const UsageSchema = z
   .object({
@@ -71,6 +70,8 @@ export function createAnthropicManagedProvider(config: ManagedProviderConfig): M
   const baseUrl = (config.baseUrl ?? DEFAULT_BASE_URL).replace(/\/$/, '');
   const fetchImpl = config.fetchImpl ?? fetch;
   const timeoutMs = config.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const agentId = config.agentId?.trim();
+  const environmentId = config.environmentId?.trim();
 
   async function call(path: string, init: RequestInit = {}): Promise<unknown> {
     const response = await fetchImpl(`${baseUrl}${path}`, {
@@ -115,40 +116,59 @@ export function createAnthropicManagedProvider(config: ManagedProviderConfig): M
     model: config.model,
 
     async startSession(request: ManagedSessionRequest): Promise<ManagedSession> {
+      if (!agentId || !environmentId) {
+        throw new ManagedAgentError('anthropic managed agents requires agentId and environmentId');
+      }
+      if (request.workspaceFiles?.length) {
+        throw new ManagedAgentError(
+          'anthropic managed agents uses the configured environment, not inline workspace files',
+        );
+      }
+      if (request.effort || request.maxDurationSeconds) {
+        throw new ManagedAgentError('anthropic managed agents configures effort and duration on the Agent resource');
+      }
+      if (request.tools?.allowedHosts?.length || request.tools?.credentialNames?.length) {
+        throw new ManagedAgentError('anthropic managed agents does not map host or credential names from this seam');
+      }
+      const mcpServers = request.tools?.mcpEndpoints?.map((endpoint, index) => ({
+        type: 'url',
+        name: endpoint.name ?? `managed-mcp-${index}`,
+        url: endpoint.url,
+      }));
       const body = {
-        model: request.model,
+        agent: {
+          type: 'agent_with_overrides',
+          id: agentId,
+          model: { id: request.model },
+          ...(request.systemPrompt ? { system: request.systemPrompt } : {}),
+          ...(mcpServers?.length
+            ? {
+                mcp_servers: mcpServers,
+                tools: [
+                  { type: 'agent_toolset_20260401' },
+                  ...mcpServers.map((server) => ({ type: 'mcp_toolset', mcp_server_name: server.name })),
+                ],
+              }
+            : {}),
+        },
+        environment_id: environmentId,
         metadata: { correlation_id: request.correlationId },
-        ...(request.systemPrompt ? { system: request.systemPrompt } : {}),
-        prompt: request.prompt,
-        ...(request.effort ? { effort: request.effort } : {}),
-        output_path: request.outputPath,
-        ...(request.maxDurationSeconds ? { max_duration_seconds: request.maxDurationSeconds } : {}),
-        ...(request.workspaceFiles?.length
-          ? { workspace: { files: request.workspaceFiles.map((file) => ({ path: file.path, content: file.content })) } }
-          : {}),
-        ...(request.tools
-          ? {
-              tools: {
-                ...(request.tools.mcpEndpoints?.length
-                  ? { mcp_servers: request.tools.mcpEndpoints.map((e) => ({ url: e.url, name: e.name })) }
-                  : {}),
-                ...(request.tools.allowedHosts?.length ? { allowed_hosts: request.tools.allowedHosts } : {}),
-                ...(request.tools.credentialNames?.length
-                  ? { environment_variables: request.tools.credentialNames }
-                  : {}),
-              },
-            }
-          : {}),
+        initial_events: [
+          {
+            type: 'user.message',
+            content: [{ type: 'text', text: request.prompt }],
+          },
+        ],
       };
       const parsed = SessionSchema.safeParse(
-        await call('/v1/agents/sessions', { method: 'POST', body: JSON.stringify(body) }),
+        await call('/v1/sessions', { method: 'POST', body: JSON.stringify(body) }),
       );
       if (!parsed.success) throw new ManagedAgentError('anthropic managed agents returned an unreadable session');
       return toSession(parsed.data);
     },
 
     async getSession(sessionId: string): Promise<ManagedSession | null> {
-      const raw = await call(`/v1/agents/sessions/${encodeURIComponent(sessionId)}`);
+      const raw = await call(`/v1/sessions/${encodeURIComponent(sessionId)}`);
       if (raw === null) return null;
       const parsed = SessionSchema.safeParse(raw);
       if (!parsed.success) throw new ManagedAgentError('anthropic managed agents returned an unreadable session');
@@ -176,13 +196,15 @@ export function createAnthropicManagedProvider(config: ManagedProviderConfig): M
     },
 
     async cancelSession(sessionId: string): Promise<{ enforced: boolean }> {
-      await call(`/v1/agents/sessions/${encodeURIComponent(sessionId)}/cancel`, { method: 'POST' });
-      // A hosted runtime really stops the sandbox.
+      await call(`/v1/sessions/${encodeURIComponent(sessionId)}/events`, {
+        method: 'POST',
+        body: JSON.stringify({ events: [{ type: 'user.interrupt' }] }),
+      });
       return { enforced: true };
     },
 
     async deleteSession(sessionId: string): Promise<void> {
-      await call(`/v1/agents/sessions/${encodeURIComponent(sessionId)}`, { method: 'DELETE' }).catch(() => undefined);
+      await call(`/v1/sessions/${encodeURIComponent(sessionId)}`, { method: 'DELETE' }).catch(() => undefined);
     },
   };
 }

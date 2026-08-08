@@ -56,6 +56,12 @@ export function createManagedPlatformBackendFromEnv(deps?: ManagedBackendDeps, l
     log?.warn({ vendor }, 'managed agent vendor is set but MANAGED_AGENT_API_KEY / MANAGED_AGENT_MODEL are missing');
     return undefined;
   }
+  const agentId = process.env.MANAGED_AGENT_ID?.trim();
+  const environmentId = process.env.MANAGED_AGENT_ENVIRONMENT_ID?.trim();
+  if (vendor === 'anthropic' && (!agentId || !environmentId)) {
+    log?.warn({ vendor }, 'anthropic managed agent requires MANAGED_AGENT_ID / MANAGED_AGENT_ENVIRONMENT_ID');
+    return undefined;
+  }
   if (!deps?.deliver) {
     log?.warn({ vendor }, 'managed agent vendor is set but no delivery sink was supplied');
     return undefined;
@@ -70,6 +76,10 @@ export function createManagedPlatformBackendFromEnv(deps?: ManagedBackendDeps, l
     provider = createManagedProvider(vendor, {
       apiKey,
       model,
+      ...(process.env.MANAGED_AGENT_ID?.trim() ? { agentId: process.env.MANAGED_AGENT_ID.trim() } : {}),
+      ...(process.env.MANAGED_AGENT_ENVIRONMENT_ID?.trim()
+        ? { environmentId: process.env.MANAGED_AGENT_ENVIRONMENT_ID.trim() }
+        : {}),
       ...(process.env.MANAGED_AGENT_BASE_URL?.trim() ? { baseUrl: process.env.MANAGED_AGENT_BASE_URL.trim() } : {}),
     });
   } catch (error) {

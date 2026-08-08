@@ -121,6 +121,8 @@ const STATE_ALIASES: Record<string, AgentTaskState> = {
   waiting_for_user: 'waiting_for_user',
   needs_input: 'waiting_for_user',
   awaiting_input: 'waiting_for_user',
+  rescheduling: 'in_progress',
+  terminated: 'failed',
 };
 
 // Unknown words read as in_progress, never failed.
@@ -250,6 +252,8 @@ export function selectManagedOutputs(refs: readonly ManagedOutputRef[], slug: st
 export interface ManagedProviderConfig {
   apiKey: string;
   model: string;
+  agentId?: string;
+  environmentId?: string;
   baseUrl?: string;
   fetchImpl?: typeof fetch;
   timeoutMs?: number;

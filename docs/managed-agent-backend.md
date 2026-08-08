@@ -215,35 +215,44 @@ It polls twice on purpose, because the first poll is a live session and the seco
 parked one — the difference between "no harvest yet" and "harvest now" is the thing most
 worth watching.
 
-**3. The vendor's wire format, which is still a guess.** `managed-provider-anthropic.ts`
-was written from a description of the Managed Agents API, not against it: the session
-paths, the beta header pair and `GET /v1/files?scope_id=` are all inferred, and the spike
-that measured two real rounds drove them from the Console rather than this API. So the
-first thing to do with a real key is a shape check, not a game:
+**3. The vendor's wire format.** The first implementation was a guess. The real-key
+probe then verified the current contract: `POST /v1/sessions`, the
+`managed-agents-2026-04-01` beta header, initial `user.message` events, session polling,
+the Files API and deletion all work against the live API. The session uses the
+preconfigured Agent and Environment; Sonnet 5 belongs on the Agent resource, not in the
+session body:
 
 ```bash
-ANTHROPIC_API_KEY=... npm run managed:probe -w @gamedevpl/api -- --vendor anthropic
+ANTHROPIC_API_KEY=... \
+MANAGED_AGENT_ID=agent_... \
+MANAGED_AGENT_ENVIRONMENT_ID=env_... \
+npm run managed:probe -w @gamedevpl/api -- --vendor anthropic
 ```
 
 The probe uses `ANTHROPIC_API_KEY` for this vendor and defaults to
 `claude-sonnet-5`; `MANAGED_AGENT_API_KEY` or `--model` overrides either value.
+`MANAGED_AGENT_ID` and `MANAGED_AGENT_ENVIRONMENT_ID` identify the preconfigured
+Anthropic resources.
 
-Expect that to fail on request shape before it fails on anything interesting, and fix the
-adapter — that is the point of the exercise. `--base-url` aims the same adapter at a local
-HTTP stub if you would rather pin the contract you expect first. A full creator-visible
-round needs the sink, the registry wiring, and the MCP endpoint reachable from the sandbox.
+It creates an initial event, polls twice, interrupts and deletes the session. The current
+probe verifies session lifecycle and costs a real run; it does not wait for a game to finish
+or prove that the configured Agent writes the expected files. `--base-url` aims the same
+adapter at a local HTTP stub. A full creator-visible round still needs the sink, registry
+wiring and a configured MCP connection or pull workspace.
 
 ## Configuration
 
-| Variable                      | Meaning                                                         |
-| ----------------------------- | --------------------------------------------------------------- |
-| `MANAGED_AGENT_VENDOR`        | Registered adapter id. Absent → Copilot keeps the platform slot |
-| `MANAGED_AGENT_API_KEY`       | Vendor credential. Never logged, never persisted                |
-| `MANAGED_AGENT_MODEL`         | Pinned per deploy; auto-selection makes runs unattributable     |
-| `MANAGED_AGENT_EFFORT`        | `low` / `medium` / `high`                                       |
-| `MANAGED_AGENT_MAX_SECONDS`   | Hard ceiling on one session's wall clock                        |
-| `MANAGED_AGENT_DELIVERY_MODE` | `preview` (default) or `publish`                                |
-| `MANAGED_AGENT_BASE_URL`      | Override the API origin — gateways, tests                       |
+| Variable                       | Meaning                                                         |
+| ------------------------------ | --------------------------------------------------------------- |
+| `MANAGED_AGENT_VENDOR`         | Registered adapter id. Absent → Copilot keeps the platform slot |
+| `MANAGED_AGENT_API_KEY`        | Vendor credential. Never logged, never persisted                |
+| `MANAGED_AGENT_MODEL`          | Provider model label; Anthropic's actual model is on its Agent  |
+| `MANAGED_AGENT_ID`             | Anthropic Managed Agent resource id                             |
+| `MANAGED_AGENT_ENVIRONMENT_ID` | Anthropic Managed Environment resource id                       |
+| `MANAGED_AGENT_EFFORT`         | `low` / `medium` / `high`                                       |
+| `MANAGED_AGENT_MAX_SECONDS`    | Hard ceiling on one session's wall clock                        |
+| `MANAGED_AGENT_DELIVERY_MODE`  | `preview` (default) or `publish`                                |
+| `MANAGED_AGENT_BASE_URL`       | Override the API origin — gateways, tests                       |
 
 Selection replaces the _platform_ backend. Builder routing, the job state machine, the
 gate, Studio and self builds are untouched: a managed round is a platform round whose
