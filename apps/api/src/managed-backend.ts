@@ -1,6 +1,7 @@
 // AgentBackend over any ManagedAgentProvider; delivery is pulled.
 import type { AgentBackend, BuildBrief, DispatchResult } from './agent-backend.js';
 import { buildPrompt } from './build-prompt.js';
+import { forbiddenDeliveryPathReason } from './games-store.js';
 import type { AgentObservation } from './job-state.js';
 import {
   assertWithinManagedOutputPlan,
@@ -124,10 +125,17 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
     let plan: ManagedOutputPlan[];
     try {
       const selected = selectManagedOutputs(listed, slug);
-      if (selected.ignored.length > 0) {
-        options.log?.info?.({ ...claim, ignored: selected.ignored }, 'ignored managed outputs outside the game');
+      // submit_sources' own rules, dropping not refusing: docs/managed-agent-backend.md.
+      const deliverable: ManagedOutputPlan[] = [];
+      const ignored = [...selected.ignored];
+      for (const entry of selected.plan) {
+        if (forbiddenDeliveryPathReason(entry.path)) ignored.push(entry.ref.path);
+        else deliverable.push(entry);
       }
-      plan = assertWithinManagedOutputPlan(selected.plan, options.outputCaps);
+      if (ignored.length > 0) {
+        options.log?.info?.({ ...claim, ignored }, 'ignored managed outputs that are not deliverable sources');
+      }
+      plan = assertWithinManagedOutputPlan(deliverable, options.outputCaps);
     } catch (error) {
       if (!(error instanceof ManagedOutputRejectedError)) throw error;
       // Not retried: the same sandbox repeats the bytes.

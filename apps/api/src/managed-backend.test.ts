@@ -194,6 +194,37 @@ describe('managed backend', () => {
     expect(warn).toHaveBeenCalledTimes(1);
   });
 
+  it('drops what submit_sources would refuse, and still delivers the game', async () => {
+    const { provider, setState, setOutputs, read } = fakeProvider();
+    const delivered: ManagedDeliveryInput[] = [];
+    const info = vi.fn();
+    const backend = createManagedBackend({
+      provider,
+      deliver: async (input) => {
+        delivered.push(input);
+        return { version: 'v1' };
+      },
+      log: { warn: vi.fn(), info },
+    });
+    setOutputs([
+      { path: `games/${SLUG}/game.ts`, content: 'export {};' },
+      // Refused on upload, so not stored — but not worth failing.
+      { path: `games/${SLUG}/media/cover.png`, content: 'not-a-png' },
+      { path: `games/${SLUG}/.env`, content: 'SECRET=1' },
+    ]);
+    setState('completed');
+
+    const observation = await backend.observe('session-1', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
+
+    expect(observation).toMatchObject({ hasCandidate: true });
+    expect(delivered[0].files.map((file) => file.path)).toEqual(['game.ts']);
+    expect(read).toEqual([`games/${SLUG}/game.ts`]);
+    expect(info).toHaveBeenCalledWith(
+      expect.objectContaining({ ignored: [`games/${SLUG}/media/cover.png`, `games/${SLUG}/.env`] }),
+      expect.stringContaining('not deliverable'),
+    );
+  });
+
   it('refuses a file the listing already says is too big, before downloading it', async () => {
     const { provider, setState, setOutputs, read } = fakeProvider();
     const deliver = vi.fn(async () => ({ version: 'v1' }));

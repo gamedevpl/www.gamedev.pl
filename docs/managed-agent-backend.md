@@ -133,9 +133,22 @@ fetched, using the sizes in the listing, and again on arrival for vendors that o
   nothing can say why
 - a refused harvest is not retried: the same sandbox would produce the same bytes
 
-That selection rule was permissive until the probe below showed what that meant: a
-`scratch/notes.md` left in the output directory was delivered into the game's source tree,
-because anything that was not another game's directory was treated as game-relative.
+The harvest then applies `forbiddenDeliveryPathReason` — the same rule `submit_sources`
+enforces, so a pull cannot store what an upload would refuse: no `media/` (our gate
+produces those bytes), no dotfiles, no config or build files.
+
+**It drops those files instead of refusing the delivery, and that is not a weakened
+check.** An upload can reject the request and let the agent fix the path and try again; a
+pull happens after the session is gone, so failing the round over a stray screenshot would
+lose a game the gate would have accepted. The invariant — non-source files never reach the
+store — holds either way, and what was dropped is logged. The brief also tells a pulled
+round that media and dotfiles are not delivered, so the drop is the backstop rather than
+the first line of defence.
+
+Both of those rules exist because the probe below was run: the harvest first delivered a
+`scratch/notes.md` into the game's source tree, then a `media/cover.png` that the real sink
+would have refused. Neither was visible to any unit test, because the fake providers only
+ever returned tidy paths.
 
 Harvest happens inside `observe`, at most once per session, and only when the job has no
 candidate yet. That is why `observe` receives `issueNumber` and `slug`: a pull-delivery
