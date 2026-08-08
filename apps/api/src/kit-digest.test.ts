@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { appendKitDigest, createGcsKitDigestLoader } from './kit-digest.js';
+import { appendKitDigest, compactKitDigestForPrompt, createGcsKitDigestLoader } from './kit-digest.js';
 
 describe('Creator Kit digest loader', () => {
   it('reads the digest matching the current engine ref and caches it', async () => {
@@ -30,5 +30,29 @@ describe('Creator Kit digest loader', () => {
     expect(appendKitDigest('base', 'rules')).toBe('base\n\n## Creator Kit digest\n\nrules');
     expect(appendKitDigest(undefined, 'rules')).toBe('## Creator Kit digest\n\nrules');
     expect(appendKitDigest('base', undefined)).toBe('base');
+  });
+
+  it('compacts the full artifact into core API and template guidance', () => {
+    const full = [
+      '## GameKit API surface',
+      '~~~typescript',
+      'interface GameKitInput { down(...keys: string[]): boolean; }',
+      'interface Unrelated { huge(): void; }',
+      '~~~',
+      '## Exemplar game',
+      '### games/dodge-the-falling-rocks/game/runtime.ts',
+      'GameKit.defineGame().input({ steer: "origin" }).start();',
+      '### games/dodge-the-falling-rocks/game/other.ts',
+      'other',
+      '## File-shape rules',
+      '- Keep files small.',
+    ].join('\n');
+
+    const compact = compactKitDigestForPrompt(full);
+
+    expect(compact).toContain('GameKitInput');
+    expect(compact).toContain('game/runtime.ts');
+    expect(compact).toContain('Keep files small.');
+    expect(compact).not.toContain('interface Unrelated');
   });
 });
