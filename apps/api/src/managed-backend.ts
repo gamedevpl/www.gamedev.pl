@@ -1,6 +1,6 @@
 // AgentBackend over any ManagedAgentProvider; delivery is pulled.
 import type { AgentBackend, BuildBrief, DispatchResult } from './agent-backend.js';
-import { buildPrompt } from './copilot-backend.js';
+import { buildPrompt } from './build-prompt.js';
 import type { AgentObservation } from './job-state.js';
 import {
   assertWithinManagedOutputPlan,
@@ -85,7 +85,8 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
     const session = await options.provider.startSession({
       correlationId: String(brief.issueNumber),
       ...(systemPrompt ? { systemPrompt } : {}),
-      prompt: buildPrompt(brief),
+      // The prompt has to describe the delivery this backend will actually read.
+      prompt: buildPrompt(brief, deliver ? { kind: 'outputs', path: outputPath } : { kind: 'channel' }),
       model: options.provider.model,
       ...(options.effort ? { effort: options.effort } : {}),
       ...(brief.seed

@@ -48,7 +48,7 @@ do for you.
 intervals, credential handling, per-vendor state words, file-layout assumptions. Anything
 a second vendor would spell differently belongs in its adapter.
 
-### The three things that make it swappable
+### The four things that make it swappable
 
 1. **State vocabulary is ours, not theirs.** `normalizeManagedState` maps every vendor
    spelling we have seen — `running`, `status_idle`, `succeeded`, `expired`, `canceled` —
@@ -59,9 +59,41 @@ a second vendor would spell differently belongs in its adapter.
    another's at any published rate, so `sessionTokens` is its own field beside
    `sessionCredits` rather than a reinterpretation of it. A cost report stays honest
    because each backend reports the only unit it actually knows.
-3. **The vendor is a variable.** `MANAGED_AGENT_VENDOR` selects a registered adapter.
+3. **The shared parts are shared, and live in neutral files.** The state vocabulary is
+   `agent-state.ts`, not GitHub's client; the brief is `build-prompt.ts`, not Copilot's
+   backend. Both used to sit inside the first backend that needed them, which made a second
+   backend look like it depended on the first.
+4. **The vendor is a variable.** `MANAGED_AGENT_VENDOR` selects a registered adapter.
    Adding one is a `registerManagedProvider` line and a file; replacing one is an
    environment change and a deploy.
+
+## Why Copilot does not move under this seam
+
+The obvious tidying — make architecture A a `ManagedAgentProvider` too, so there is one
+abstraction instead of two — makes both worse, and it is worth writing down why before
+someone tries it.
+
+`AgentBackend` is already the shared abstraction, and it is the one carrying its weight:
+Copilot, self and managed all implement it, and the job machine, gate, store, review and
+publication cannot tell them apart. `ManagedAgentProvider` is a deliberately narrower seam
+one level down, for vendors that share the hosted-session shape. Copilot does not share it:
+
+| Seam capability          | Copilot's answer                                                                     |
+| ------------------------ | ------------------------------------------------------------------------------------ |
+| `startSession` workspace | A **branch**, staged with git writes — not a list of files                           |
+| `getSession` usage       | **Credits**, never tokens. The seam's "tokens are universal" claim is not true of it |
+| `listOutputs`            | Nothing to list. Delivery is a push over the build channel                           |
+| `cancelSession`          | Fits — cooperative, `enforced: false`                                                |
+
+One of four fits. Bending the rest means either a lowest-common-denominator seam where
+every capability is optional — which stops constraining anything and stops being an
+abstraction — or a fat one carrying branches, credits and output directories so that each
+implementation ignores two thirds of it.
+
+What is genuinely shared was shared instead: the state vocabulary (`agent-state.ts`), the
+brief (`build-prompt.ts`), the observation shape, and — once the sink is extracted — one
+definition of "delivered". That is convergence where the two architectures actually agree,
+rather than a common interface over two things that differ.
 
 ## Two delivery shapes, and the one guard that covers both
 
@@ -76,6 +108,19 @@ A managed round can deliver the way every other round does, or by being read out
 
 `createManagedBackend` refuses a configuration with neither an MCP endpoint nor a delivery
 sink, because that combination can only run agents whose work is discarded.
+
+**The prompt has to agree with the backend.** `buildPrompt` takes a `DeliveryContract`, so
+a pulled round is told to write into the output directory and a channel round is told to
+run `npm run submit`. Getting this wrong is not a cosmetic mismatch: an agent in a sandbox
+with no route to our API would spend the whole round discovering that the upload it was
+instructed to perform cannot work.
+
+What the pull shape gives up is worth stating, because it is the reason the MCP shape goes
+first. There is no progress channel, so the creator watches a blank status page for the
+length of the build; no inbox, so mid-round steering has nowhere to land; and no gate
+verdict the agent can still act on, since the gate runs after the session has ended.
+Revisions are weaker too: a channel round runs `npm run restore` to fetch the exact version
+the creator played, while a pulled round can only revise what was placed in its workspace.
 
 A pull has no ceiling of its own. A push was bounded by what fits in a tool argument; a
 pull is bounded by nothing, so the caps are explicit and enforced **before** the bytes are

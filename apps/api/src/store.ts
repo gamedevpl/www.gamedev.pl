@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { FieldValue, Firestore, type DocumentData } from '@google-cloud/firestore';
-import type { AgentTaskState } from './agent-tasks.js';
+import type { AgentTaskState } from './agent-state.js';
 import type { SeedFiles } from './agent-backend.js';
 import type { BuilderKind } from './builder.js';
 import type { PublicationHealthCheck, PublicationRecord } from './games-store.js';

@@ -11,7 +11,7 @@
 // own — so the rules can be tested directly and reused by the status route, the
 // reconciler sweep, and the operator surface alike.
 
-import type { AgentTaskState } from './agent-tasks.js';
+import type { AgentTaskState } from './agent-state.js';
 import type { SubmissionStatus } from './submission-status.js';
 
 /**
