@@ -99,9 +99,7 @@ export interface AdminRoutesOptions {
   globalDailySubmissionCap?: number;
   /** How long submission routes cache the breaker config — reported as the flip delay. */
   creationLimitsTtlMs?: number;
-  /** Bootstrap allowlist used until an operator saves a Firestore config. */
   publicPlayFallbackSlugs?: string[];
-  /** How long play allowlist changes may take to reach every instance. */
   publicPlayTtlMs?: number;
 }
 

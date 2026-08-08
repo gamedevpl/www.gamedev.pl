@@ -2017,9 +2017,7 @@ export interface Store {
   getCreationLimits(): Promise<CreationLimits | null>;
   /** Merges a change into the stored breaker and returns the result. */
   setCreationLimits(patch: Partial<Omit<CreationLimits, 'updatedAt'>>, updatedBy: string): Promise<CreationLimits>;
-  /** The stored promotional play allowlist, or null when nobody has set one. */
   getPublicPlayConfig(): Promise<PublicPlayConfig | null>;
-  /** Replaces the promotional play allowlist and records the operator. */
   setPublicPlaySlugs(slugs: string[], updatedBy: string): Promise<PublicPlayConfig>;
   /** How many submissions everyone together has made on `dateStr`. */
   getGlobalSubmissionCount(dateStr: string): Promise<number>;
