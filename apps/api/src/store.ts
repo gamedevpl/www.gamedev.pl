@@ -19,6 +19,21 @@ import type { BuildEvent, SubmissionStatus } from './submission-status.js';
  */
 export const BOT_UID_PREFIX = 'bot:';
 
+const PUBLIC_PLAY_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+function normalizePublicPlaySlugs(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return [
+    ...new Set(
+      value.flatMap((entry) => {
+        if (typeof entry !== 'string') return [];
+        const slug = entry.trim().toLowerCase();
+        return PUBLIC_PLAY_SLUG_PATTERN.test(slug) ? [slug] : [];
+      }),
+    ),
+  ];
+}
+
 export interface User {
   uid: string;
   email?: string;
@@ -5865,9 +5880,7 @@ export class FirestoreStore implements Store {
     const snap = await this.publicPlayConfigRef().get();
     if (!snap.exists) return null;
     const data = snap.data() as Partial<PublicPlayConfig> | undefined;
-    const slugs = Array.isArray(data?.slugs)
-      ? data.slugs.filter((slug): slug is string => typeof slug === 'string')
-      : [];
+    const slugs = normalizePublicPlaySlugs(data?.slugs);
     return {
       slugs,
       ...(data?.updatedAt ? { updatedAt: data.updatedAt } : {}),

@@ -268,7 +268,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       publicPlayCache = { slugs, expiresAt: now + publicPlayTtlMs };
       return slugs;
     } catch {
-      return publicPlayCache?.slugs ?? publicPlayFallbackSlugs;
+      const fallback = publicPlayCache?.slugs ?? publicPlayFallbackSlugs;
+      publicPlayCache = { slugs: fallback, expiresAt: now + publicPlayTtlMs };
+      return fallback;
     }
   };
 
