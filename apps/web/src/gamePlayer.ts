@@ -344,7 +344,11 @@ const BRIDGE = `(function(){
     if(!canvas||!canvas.width||!canvas.height)return;
     canvas.style.setProperty('--gdpl-canvas-ratio',String(canvas.width/canvas.height));
   }
-  addEventListener('resize',fitGameCanvas);
+  function scheduleGameCanvasFit(){
+    fitGameCanvas();
+    setTimeout(fitGameCanvas,0);
+  }
+  addEventListener('resize',scheduleGameCanvasFit);
   function init(){
     fitGameCanvas();
     sendMeta();
