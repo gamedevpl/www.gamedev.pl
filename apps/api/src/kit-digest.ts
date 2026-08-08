@@ -17,23 +17,32 @@ export function createGcsKitDigestLoader(options: {
   log?: (context: object, message: string) => void;
 }): KitDigestLoader {
   let cached: string | undefined;
-  let loaded = false;
+  let resolved = false;
   return {
     async load(): Promise<string | undefined> {
-      if (loaded) return cached;
-      loaded = true;
+      if (resolved) return cached;
       try {
         const registryBody = await options.objectStore.readObject(KIT_REGISTRY_OBJECT);
-        if (!registryBody) return undefined;
+        if (!registryBody) {
+          resolved = true;
+          return undefined;
+        }
         const registry = JSON.parse(registryBody.toString('utf8')) as { engineRef?: unknown };
-        if (typeof registry.engineRef !== 'string' || !registry.engineRef) return undefined;
+        if (typeof registry.engineRef !== 'string' || !registry.engineRef) {
+          resolved = true;
+          return undefined;
+        }
         const digestBody = await options.objectStore.readObject(`kits/${registry.engineRef}.digest.md`);
-        if (!digestBody) return undefined;
+        if (!digestBody) {
+          resolved = true;
+          return undefined;
+        }
         const maxBytes = options.maxBytes ?? DEFAULT_KIT_DIGEST_MAX_BYTES;
         if (digestBody.byteLength > maxBytes) {
           throw new Error(`Creator Kit digest exceeds ${maxBytes} bytes`);
         }
         cached = digestBody.toString('utf8');
+        resolved = true;
         return cached;
       } catch (error) {
         options.log?.({ err: error }, 'could not load the Creator Kit digest');

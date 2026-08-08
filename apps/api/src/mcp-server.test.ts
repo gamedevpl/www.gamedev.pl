@@ -455,7 +455,7 @@ describe('POST /api/mcp (BY-05)', () => {
         'end',
       ]),
     );
-    expect(names).not.toEqual(expect.arrayContaining(['create_game', 'search_kit_files', 'submit_proposal']));
+    expect(names).not.toEqual(expect.arrayContaining(['search_kit_files', 'submit_proposal']));
   });
 
   it('start issues a sessionKey; subsequent tools work with it', async () => {

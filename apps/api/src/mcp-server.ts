@@ -137,7 +137,6 @@ const MCP_VISIBLE_TOOLS = new Set([
   'get_round_status',
   'get_gate_verdict',
   'get_gate_media',
-  'get_round_status',
   'get_round_media',
   'read_inbox',
   'ack_inbox',

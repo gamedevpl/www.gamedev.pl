@@ -26,6 +26,18 @@ describe('Creator Kit digest loader', () => {
     expect(log).toHaveBeenCalled();
   });
 
+  it('retries after a transient read failure', async () => {
+    const readObject = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('temporary'))
+      .mockResolvedValueOnce(Buffer.from(JSON.stringify({ engineRef: 'abc123' })))
+      .mockResolvedValueOnce(Buffer.from('# digest'));
+    const loader = createGcsKitDigestLoader({ objectStore: { readObject } });
+
+    expect(await loader.load()).toBeUndefined();
+    expect(await loader.load()).toBe('# digest');
+  });
+
   it('keeps the base prompt and appends the digest', () => {
     expect(appendKitDigest('base', 'rules')).toBe('base\n\n## Creator Kit digest\n\nrules');
     expect(appendKitDigest(undefined, 'rules')).toBe('## Creator Kit digest\n\nrules');
