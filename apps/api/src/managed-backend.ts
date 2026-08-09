@@ -242,25 +242,24 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
         }
       }
 
-      // The provider cannot see a channel submit or end.
+      // Everything a nudge needs except what only the channel knows.
+      const nudgeCandidate =
+        session.state === 'idle' &&
+        !hasCandidate &&
+        options.nudgeIdle !== false &&
+        session.stopReason !== 'budget_reached' &&
+        Boolean(options.provider.sendMessage) &&
+        !idleNudged.has(ref);
+      // Provider cannot see a channel submit or end; read once.
       const signals =
-        options.readSignals && observeOptions.issueNumber !== undefined && session.state === 'idle'
+        nudgeCandidate && options.readSignals && observeOptions.issueNumber !== undefined
           ? await options.readSignals(observeOptions.issueNumber)
           : null;
-      const roundDelivered = Boolean(signals?.deliveredVersion ?? signals?.previewVersion);
+      const roundDelivered = Boolean(signals?.deliveredVersion || signals?.previewVersion);
       const agentEnded = Boolean(signals?.agentEndedAt);
 
       let nudged = false;
-      if (
-        session.state === 'idle' &&
-        !hasCandidate &&
-        !roundDelivered &&
-        !agentEnded &&
-        options.nudgeIdle !== false &&
-        session.stopReason !== 'budget_reached' &&
-        options.provider.sendMessage &&
-        !idleNudged.has(ref)
-      ) {
+      if (nudgeCandidate && !roundDelivered && !agentEnded && options.provider.sendMessage) {
         try {
           await options.provider.sendMessage(
             ref,
