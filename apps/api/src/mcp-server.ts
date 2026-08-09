@@ -2448,8 +2448,9 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         'Fetch Creator Kit metadata: engineRef (required for submit_sources), sha256, entry, ' +
         'and optional kitUrl/unpack for agents with shell egress. ' +
         'engineRef is pinned for the round: repeat calls return the same engine even if the ' +
-        'registry moves. kitEngineChanged:true means the pin was replaced after a kit_outdated ' +
-        'verdict — rebuild against the engine in this reply. ' +
+        'registry moves. kitEngineChanged:true means the pin was replaced — after a kit_outdated ' +
+        'verdict, or because the pinned kit is no longer retained — so rebuild against the ' +
+        'engine in this reply. ' +
         'browse is present only when this surface advertises kit browse tools; when it is absent, ' +
         'the injected digest is the API reference and there is no browse path — ' +
         'do not pull the whole kit into context. ' +

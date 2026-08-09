@@ -165,7 +165,7 @@ export interface SubmissionRecord {
    */
   previewVersion?: string;
   // The kit engine this round builds against, fixed by its first get_kit.
-  // Dropped when the round closes; replaced only on a kit_outdated verdict.
+  // Dropped when the round closes; replaced on kit_outdated or lost retention.
   roundKitEngineRef?: string;
   /**
    * How many times this job has been sent back for finishing without delivering.
@@ -1767,7 +1767,7 @@ export interface Store {
    */
   ensureRoundGeneration(issueNumber: number): Promise<number | null>;
   // Fixes the round's kit engine and returns it; first caller wins.
-  // `replace` overrides the pin, for a kit_outdated recovery.
+  // `replace` overrides the pin: kit_outdated recovery, or a kit gone.
   pinRoundKitEngineRef(issueNumber: number, engineRef: string, replace?: boolean): Promise<string | null>;
   /** Records the agent backend's last reported state, for stall detection. */
   setSubmissionAgentState(issueNumber: number, agentState: AgentTaskState): Promise<void>;

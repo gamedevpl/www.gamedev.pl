@@ -2139,7 +2139,7 @@ export async function registerAgentChannelRoutes(
           sha256: sidecar.sha256,
           unpack: kitUnpackCommand(kitUrl),
           entry: KIT_ENTRY,
-          // Only ever true after a kit_outdated verdict: rebuild against this engine.
+          // The round's engine moved: rebuild against the one in this reply.
           ...(kitEngineChanged ? { kitEngineChanged: true } : {}),
           // Shell-less clients browse via these tools instead of unpacking.
           browse: {

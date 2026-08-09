@@ -157,10 +157,12 @@ happened to re-read. One that had cached the first ref would have submitted agai
 superseded engine, and the disagreement between the engine it read the API from and the
 engine it was validated against would have been silent.
 
-The pin is dropped when the round closes, and replaced in exactly one case: after a
-`kit_outdated` verdict, where a newer engine is the whole fix. That call returns
-`kitEngineChanged: true` — an explicit signal, rather than an idempotent-looking read
-quietly answering differently. Follow the `kit_outdated` recipe above when you see it.
+The pin is dropped when the round closes, and replaced in two cases: after a `kit_outdated`
+verdict, where a newer engine is the whole fix, and when the pinned kit has fallen out of
+retention, where serving it would wedge the round on a tarball that no longer exists. Either
+way the call returns `kitEngineChanged: true` — an explicit signal, rather than an
+idempotent-looking read quietly answering differently. Treat it as the `kit_outdated` recipe
+above: take the new `engineRef` and submit against that.
 
 ### Staging is creator-visible (live staged preview)
 
