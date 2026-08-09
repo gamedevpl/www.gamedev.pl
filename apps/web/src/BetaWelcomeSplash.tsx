@@ -1,23 +1,55 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { Mascot } from './Mascot.js';
 import { PixelIcon } from './PixelIcon.js';
 import { recordBetaWelcomeStep } from './visitTelemetry.js';
 
+const FOCUSABLE =
+  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
 export function BetaWelcomeSplash({ onContinue }: { onContinue: () => void }) {
   const { t } = useTranslation();
+  const cardRef = useRef<HTMLDivElement>(null);
+  const onContinueRef = useRef(onContinue);
+  onContinueRef.current = onContinue;
 
   useEffect(() => {
     recordBetaWelcomeStep('shown');
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      recordBetaWelcomeStep('dismissed');
-      onContinue();
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        recordBetaWelcomeStep('dismissed');
+        onContinueRef.current();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const root = cardRef.current;
+      if (!root) return;
+      const focusable = Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
+        (element) => !element.hasAttribute('disabled') && element.getClientRects().length > 0,
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0]!;
+      const last = focusable[focusable.length - 1]!;
+      if (event.shiftKey) {
+        if (document.activeElement === first || !root.contains(document.activeElement)) {
+          event.preventDefault();
+          last.focus();
+        }
+      } else if (document.activeElement === last || !root.contains(document.activeElement)) {
+        event.preventDefault();
+        first.focus();
+      }
     };
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, [onContinue]);
+    cardRef.current?.querySelector<HTMLElement>(FOCUSABLE)?.focus();
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      previouslyFocused?.focus?.();
+    };
+  }, []);
 
   const continueToBeta = () => {
     recordBetaWelcomeStep('continued');
@@ -28,6 +60,7 @@ export function BetaWelcomeSplash({ onContinue }: { onContinue: () => void }) {
     <div className="beta-welcome-backdrop" role="presentation">
       <div
         className="beta-welcome-card"
+        ref={cardRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="beta-welcome-title"
