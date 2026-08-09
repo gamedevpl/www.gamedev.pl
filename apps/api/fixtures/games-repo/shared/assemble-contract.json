@@ -5,6 +5,7 @@
     "input",
     "collision",
     "world",
+    "grid",
     "path",
     "ai",
     "gameplay",

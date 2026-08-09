@@ -42,6 +42,8 @@ export const GAME_KIT_MODULES = [
   'input',
   'collision',
   'world',
+  // Tile/cell grid helpers (games-repo tip). Genre-agnostic, like path/collision.
+  'grid',
   'path',
   'ai',
   'gameplay',

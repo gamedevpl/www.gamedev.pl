@@ -93,6 +93,7 @@ describe('games-repo-contract (website half)', () => {
       'input',
       'collision',
       'world',
+      'grid',
       'path',
       'ai',
       'gameplay',
@@ -227,7 +228,7 @@ describe('games-repo source extractors', () => {
     const source = `
       // Canonical order
       export const GAME_KIT_MODULES = [
-        'input', 'collision', 'world', 'path', 'ai', 'gameplay', 'rng', 'vehicles', 'urban',
+        'input', 'collision', 'world', 'grid', 'path', 'ai', 'gameplay', 'rng', 'vehicles', 'urban',
         'drawing', 'actors', 'gfx', 'gfx3d', 'racing', 'football', 'effects', 'audio', 'party', 'save', 'commons', 'presence', 'mascot', 'zone',
         'sensing', 'voice', 'editor',
       ] as const;
