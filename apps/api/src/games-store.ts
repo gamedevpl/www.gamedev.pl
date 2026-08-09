@@ -27,6 +27,7 @@ import {
   DELIVERY_RESERVED_SEGMENTS,
 } from './games-repo-contract.js';
 import type { GateProgress } from './gate-progress.js';
+import { hasPlayableHowToPlay } from './index-html-generator.js';
 import { parseKitSidecar } from './kit-registry.js';
 import { KIT_REGISTRY_OBJECT, parseKitRegistry, type KitRegistry } from './kit-window.js';
 
@@ -244,10 +245,30 @@ export function validateSourceUpload(files: SourceFile[], mode: DeliveryMode = '
   }
 
   if (!seen.has('SPEC.md')) throw new InvalidUploadError('SPEC.md is required — it is the spec of record for the game');
-  if (!seen.has('index.html') || !seen.has('game.ts')) {
-    throw new InvalidUploadError('index.html and game.ts are required — a game must be playable');
+  if (!seen.has('game.ts')) {
+    throw new InvalidUploadError('game.ts is required — a game must be playable');
   }
   const gameJson = files.find((file) => file.path.trim() === 'GAME.json');
+
+  // A blank index.html is absent, same as getGameSources treats it.
+  const indexHtml = files.find((file) => file.path.trim() === 'index.html');
+  const hasIndexHtml = !!indexHtml?.content.trim();
+
+  let hasHowToPlay = false;
+  if (gameJson) {
+    try {
+      const manifest = JSON.parse(gameJson.content) as { howToPlay?: unknown };
+      hasHowToPlay = hasPlayableHowToPlay(manifest.howToPlay);
+    } catch {
+      // Unparseable GAME.json is reported elsewhere; it cannot supply markup.
+    }
+  }
+
+  if (!hasIndexHtml && !hasHowToPlay) {
+    throw new InvalidUploadError(
+      'index.html or GAME.json.howToPlay is required — a game must be playable. Either upload index.html or define howToPlay with goal and hint in GAME.json.',
+    );
+  }
   if (mode === 'preview' && gameJson) {
     try {
       const manifest = JSON.parse(gameJson.content) as {

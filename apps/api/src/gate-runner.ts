@@ -160,6 +160,7 @@ async function assembleFromHarness(harness: string, slug: string): Promise<strin
   const client = createLocalGamesClient({ rootDir: harness });
   const sources = await client.getGameSources('main', slug);
   if (!sources) return null;
+
   const project: GameProject = {
     title: sources.title ?? slug,
     description: '',

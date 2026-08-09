@@ -1,0 +1,35 @@
+{
+  "//": "Shared cross-repo fixture. Mirrored byte-for-byte at website apps/api/src/__tests__/fixtures/index-html-contract.json. Exercises every branch of the generator: monolingual and bilingual keys, all three reserved rows, a bilingual title that overrides SPEC.md's spec.title, a non-default canvas with a custom aria-label, a bilingual description, a reworded sound row, a suppressed playAgain row, a suppressed touch row, and characters that must be escaped.",
+  "spec": {
+    "title": "Cavern Runner (SPEC fallback, should not appear)"
+  },
+  "manifest": {
+    "engine": { "modules": ["input", "drawing"] },
+    "title": { "en": "Cavern <Runner> & Co", "pl": "Jaskiniowy <Biegacz> i Ska" },
+    "description": {
+      "en": "Dig, dodge & escape the \"deep\"",
+      "pl": "Kop, unikaj i uciekaj z \"głębin\""
+    },
+    "canvas": {
+      "width": 800,
+      "height": 600,
+      "ariaLabel": { "en": "Cavern dig site", "pl": "Miejsce wykopalisk" }
+    },
+    "howToPlay": {
+      "controls": [
+        { "keys": "WASD", "action": { "en": "Move", "pl": "Ruch" } },
+        {
+          "keys": { "en": "Space", "pl": "Spacja" },
+          "action": { "en": "Dig <down>", "pl": "Kop <w dół>" }
+        }
+      ],
+      "goal": { "en": "Reach the surface", "pl": "Dotrzyj na powierzchnię" },
+      "scoring": { "en": "10 per gem", "pl": "10 za klejnot" },
+      "mode": { "en": "Timed (90s)", "pl": "Na czas (90s)" },
+      "hint": { "en": "Tunnels collapse & refill", "pl": "Tunele zapadają się i wypełniają" },
+      "sound": { "en": "Toggle the rumble", "pl": "Przełącz dudnienie" },
+      "playAgain": false,
+      "touch": false
+    }
+  }
+}

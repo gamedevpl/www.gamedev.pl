@@ -10,6 +10,11 @@ import {
   type GameKitModuleName,
 } from './games-repo-contract.js';
 import { isRateLimitResponse } from './github-rate-limit.js';
+import {
+  generateIndexHtml,
+  hasPlayableHowToPlay,
+  type GameManifest as IndexHtmlManifest,
+} from './index-html-generator.js';
 import { mergeMusicTrackMaps, parseGameMusicTracks, parseMusicCatalogTracks } from './music-tracks.js';
 
 export type { CatalogGameTouch } from './catalog-touch.js';
@@ -68,11 +73,26 @@ export interface LinkedPullRequest {
 
 /** A game's sources, assembled with its selected shared engine modules. */
 export interface GameSources {
+  // Shipped index.html, or generated from GAME.json howToPlay
   indexHtml: string;
   gameJs: string;
   styleCss: string;
   /** SPEC.md frontmatter title, when present. */
   title: string | null;
+}
+
+// Generation lives here so every assembly path gets it for free.
+
+// Null when the manifest cannot stand in: unparseable, or no goal/hint.
+function generateIndexHtmlFromManifest(manifestSource: string, title: string): string | null {
+  let manifest: IndexHtmlManifest;
+  try {
+    manifest = JSON.parse(manifestSource) as IndexHtmlManifest;
+  } catch {
+    return null;
+  }
+  if (!hasPlayableHowToPlay(manifest.howToPlay)) return null;
+  return generateIndexHtml(manifest, { title });
 }
 
 // GAME_KIT_MODULES lives in games-repo-contract.ts — CI re-checks the live
@@ -1322,14 +1342,17 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
         readRawFile('shared/modules/core.ts', ref),
       ]);
 
-      if (
-        indexHtml === null ||
-        gameTs === null ||
-        styleCss === null ||
-        manifestSource === null ||
-        gameShellCss === null ||
-        coreTs === null
-      ) {
+      if (gameTs === null || styleCss === null || manifestSource === null || gameShellCss === null || coreTs === null) {
+        return null;
+      }
+
+      const title = specMd ? parseSpecTitle(specMd) : null;
+
+      // Empty counts as absent: staging writes the path before the content.
+      const resolvedIndexHtml = indexHtml?.trim()
+        ? indexHtml
+        : generateIndexHtmlFromManifest(manifestSource, title ?? slug);
+      if (resolvedIndexHtml === null) {
         return null;
       }
 
@@ -1406,10 +1429,10 @@ ${gameJs}`;
       const bundledCss = `${gameShellCss}\n${styleCss}`;
 
       return {
-        indexHtml,
+        indexHtml: resolvedIndexHtml,
         gameJs: bundledJs,
         styleCss: bundledCss,
-        title: specMd ? parseSpecTitle(specMd) : null,
+        title,
       };
     },
 

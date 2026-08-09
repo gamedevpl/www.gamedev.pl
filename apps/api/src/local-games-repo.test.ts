@@ -48,6 +48,82 @@ describe('local games repo', () => {
     expect(await client.getGameSources('main', 'no-such-game')).toBeNull();
   });
 
+  // Generated markup: see docs/how-to-play-plan.md
+  describe('index.html generated from GAME.json howToPlay', () => {
+    const manifestWithHowToPlay = JSON.stringify({
+      engine: { modules: [] },
+      audio: { sounds: [] },
+      description: { en: 'Dodge the pixels', pl: 'Unikaj pikseli' },
+      howToPlay: {
+        controls: [{ keys: 'WASD', action: { en: 'Move', pl: 'Ruch' } }],
+        goal: { en: 'Survive', pl: 'Przetrwaj' },
+        hint: { en: 'Keep moving', pl: 'Nie zatrzymuj się' },
+      },
+    });
+
+    it('generates the body when the game ships no index.html', async () => {
+      const sources = await client.getGameSources('main', 'pixel-dodge', {
+        'index.html': '',
+        'GAME.json': manifestWithHowToPlay,
+      });
+
+      expect(sources).not.toBeNull();
+      // The DOM contract the hand-authored files established, reproduced from schema.
+      expect(sources?.indexHtml).toContain('id="game"');
+      expect(sources?.indexHtml).toContain('id="game-status"');
+      expect(sources?.indexHtml).toContain('<dt>WASD</dt>');
+      expect(sources?.indexHtml).toContain('data-i18n-pl="Przetrwaj"');
+      // Engine half untouched by the markup change
+      expect(sources?.gameJs).toContain('requestAnimationFrame');
+    });
+
+    it('prefers a shipped index.html over the schema', async () => {
+      const sources = await client.getGameSources('main', 'pixel-dodge', {
+        'index.html': '<div id="authored"></div>',
+        'GAME.json': manifestWithHowToPlay,
+      });
+
+      expect(sources?.indexHtml).toBe('<div id="authored"></div>');
+    });
+
+    it('returns null when there is neither markup nor a howToPlay to derive it from', async () => {
+      // Unreadable, not empty — no caller serves a blank document
+      const sources = await client.getGameSources('main', 'pixel-dodge', {
+        'index.html': '',
+        'GAME.json': JSON.stringify({ engine: { modules: [] }, audio: { sounds: [] } }),
+      });
+
+      expect(sources).toBeNull();
+    });
+
+    it('returns null when howToPlay is missing the hint the generator needs', async () => {
+      const sources = await client.getGameSources('main', 'pixel-dodge', {
+        'index.html': '',
+        'GAME.json': JSON.stringify({
+          engine: { modules: [] },
+          audio: { sounds: [] },
+          howToPlay: { goal: { en: 'Survive', pl: 'Przetrwaj' } },
+        }),
+      });
+
+      expect(sources).toBeNull();
+    });
+
+    it('returns null rather than throwing when goal/hint are truthy but not {en, pl} strings', async () => {
+      // `goal: true` used to crash inside generateIndexHtml instead of returning null
+      const sources = await client.getGameSources('main', 'pixel-dodge', {
+        'index.html': '',
+        'GAME.json': JSON.stringify({
+          engine: { modules: [] },
+          audio: { sounds: [] },
+          howToPlay: { goal: true, hint: { en: 'Keep moving', pl: 'Nie zatrzymuj się' } },
+        }),
+      });
+
+      expect(sources).toBeNull();
+    });
+  });
+
   it('refuses to read outside the games directory', async () => {
     // The slug guard rejects traversal before it reaches the filesystem, and the reader
     // resolves paths inside the root as a second line of defence.
