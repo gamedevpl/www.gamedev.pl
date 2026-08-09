@@ -10775,6 +10775,67 @@ button.builder-mode-selector:disabled {
   color: var(--muted);
 }
 
+/* Same docked-card look as .app-update, but static in the panel flow — this bar
+   only ever appears already inside Studio, so it never needs to float over it. */
+.studio-abandon-notice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 1.5rem;
+  padding: 12px 14px;
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  background: rgba(22, 28, 34, 0.96);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  animation: install-prompt-in 220ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-abandon-notice {
+    animation: none;
+  }
+}
+
+.studio-abandon-notice__icon {
+  flex-shrink: 0;
+  color: var(--turquoise);
+}
+
+.studio-abandon-notice__text {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.studio-abandon-notice__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.studio-abandon-notice__close:hover {
+  color: var(--text);
+  border-color: var(--panel-border);
+}
+
+@media (pointer: coarse), (max-width: 768px) {
+  .studio-abandon-notice__close {
+    width: 44px;
+    height: 44px;
+  }
+}
+
 .studio-home-link {
   display: inline-flex;
   align-items: center;

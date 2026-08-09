@@ -1505,4 +1505,202 @@ describe('CreatorStudioView abandon', () => {
 
     root.unmount();
   });
+
+  it('selects a remaining game after abandoning one, instead of showing a blank detail pane', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    fetchStudioGames.mockResolvedValueOnce(
+      studioShelf([
+        {
+          token: 'token-draft',
+          title: 'Neon Draft',
+          createdAt: '2026-07-30T09:00:00.000Z',
+          lastKnownStatus: 'building',
+          slug: 'neon-draft',
+        },
+        {
+          token: 'token-other',
+          title: 'Other Game',
+          createdAt: '2026-07-29T09:00:00.000Z',
+          lastKnownStatus: 'building',
+          slug: 'other-game',
+        },
+      ]),
+    );
+    fetchStudioGames.mockResolvedValueOnce(
+      studioShelf([
+        {
+          token: 'token-other',
+          title: 'Other Game',
+          createdAt: '2026-07-29T09:00:00.000Z',
+          lastKnownStatus: 'building',
+          slug: 'other-game',
+        },
+      ]),
+    );
+
+    const { container, root, onNavigate } = await renderStudio({
+      selectedGame: 'neon-draft',
+      selectedTab: 'details',
+    });
+
+    const abandon = container.querySelector<HTMLButtonElement>('.status-abandon');
+    await act(async () => {
+      abandon!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('.status-abandon.is-danger')!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(abandonSubmission).toHaveBeenCalledWith('token-draft');
+    expect(onNavigate).toHaveBeenCalledWith('/studio');
+    // Detail pane must render, not a blank main area.
+    expect(container.querySelector('.studio-detail')).not.toBeNull();
+    expect(container.querySelector('.studio-detail-title-block h2')?.textContent).toContain('Other Game');
+    expect(container.querySelector('.studio-abandon-notice')?.textContent).toContain('Neon Draft');
+
+    const dismiss = container.querySelector<HTMLButtonElement>('.studio-abandon-notice__close');
+    await act(async () => {
+      dismiss!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(container.querySelector('.studio-abandon-notice')).toBeNull();
+
+    root.unmount();
+  });
+
+  it('shows the removal notice and a fallback game even if the post-abandon refetch fails', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    fetchStudioGames.mockResolvedValueOnce(
+      studioShelf([
+        {
+          token: 'token-draft',
+          title: 'Neon Draft',
+          createdAt: '2026-07-30T09:00:00.000Z',
+          lastKnownStatus: 'building',
+          slug: 'neon-draft',
+        },
+        {
+          token: 'token-other',
+          title: 'Other Game',
+          createdAt: '2026-07-29T09:00:00.000Z',
+          lastKnownStatus: 'building',
+          slug: 'other-game',
+        },
+      ]),
+    );
+    fetchStudioGames.mockRejectedValueOnce(new Error('network down'));
+
+    const { container, root, onNavigate } = await renderStudio({
+      selectedGame: 'neon-draft',
+      selectedTab: 'details',
+    });
+
+    const abandon = container.querySelector<HTMLButtonElement>('.status-abandon');
+    await act(async () => {
+      abandon!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('.status-abandon.is-danger')!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(onNavigate).toHaveBeenCalledWith('/studio');
+    expect(container.querySelector('.studio-abandon-notice')?.textContent).toContain('Neon Draft');
+    expect(container.querySelector('.studio-detail-title-block h2')?.textContent).toContain('Other Game');
+
+    root.unmount();
+  });
+
+  it('keeps a selection made while the post-abandon refetch is still pending', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    fetchStudioGames.mockResolvedValueOnce(
+      studioShelf([
+        {
+          token: 'token-draft',
+          title: 'Neon Draft',
+          createdAt: '2026-07-30T09:00:00.000Z',
+          lastKnownStatus: 'building',
+          slug: 'neon-draft',
+        },
+        {
+          token: 'token-other',
+          title: 'Other Game',
+          createdAt: '2026-07-29T09:00:00.000Z',
+          lastKnownStatus: 'building',
+          slug: 'other-game',
+        },
+        {
+          token: 'token-third',
+          title: 'Third Game',
+          createdAt: '2026-07-28T09:00:00.000Z',
+          lastKnownStatus: 'building',
+          slug: 'third-game',
+        },
+      ]),
+    );
+    let resolveRefetch!: (value: StudioGamesResponse) => void;
+    fetchStudioGames.mockImplementationOnce(
+      () =>
+        new Promise<StudioGamesResponse>((resolve) => {
+          resolveRefetch = resolve;
+        }),
+    );
+
+    const { container, root, onNavigate } = await renderStudio({
+      selectedGame: 'neon-draft',
+      selectedTab: 'details',
+    });
+
+    const abandon = container.querySelector<HTMLButtonElement>('.status-abandon');
+    await act(async () => {
+      abandon!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('.status-abandon.is-danger')!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    // Pick a game before the pending refetch's fallback selection lands.
+    const third = Array.from(container.querySelectorAll('.studio-shelf-item')).find((item) =>
+      item.textContent?.includes('Third Game'),
+    );
+    expect(third).toBeTruthy();
+    await act(async () => {
+      third!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(onNavigate).toHaveBeenLastCalledWith('/studio/third-game/details', { replace: true });
+
+    await act(async () => {
+      resolveRefetch(
+        studioShelf([
+          {
+            token: 'token-other',
+            title: 'Other Game',
+            createdAt: '2026-07-29T09:00:00.000Z',
+            lastKnownStatus: 'building',
+            slug: 'other-game',
+          },
+          {
+            token: 'token-third',
+            title: 'Third Game',
+            createdAt: '2026-07-28T09:00:00.000Z',
+            lastKnownStatus: 'building',
+            slug: 'third-game',
+          },
+        ]),
+      );
+    });
+
+    expect(onNavigate).not.toHaveBeenCalledWith('/studio');
+    expect(onNavigate).toHaveBeenLastCalledWith('/studio/third-game/details', { replace: true });
+    expect(container.querySelector('.studio-detail-title-block h2')?.textContent).toContain('Third Game');
+
+    root.unmount();
+  });
 });

@@ -186,9 +186,15 @@ export function CreatorStudioView({
   const [days, setDays] = useState(7);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [abandonNotice, setAbandonNotice] = useState<string | null>(null);
   // Internally a game is its token — that is what every API call on this screen takes.
   // The URL says slug; the shelf is what translates between them.
   const [selected, setSelected] = useState<string | null>(null);
+  // Synchronous mirror of `selected` for in-flight async checks.
+  const selectedRef = useRef(selected);
+  useEffect(() => {
+    selectedRef.current = selected;
+  }, [selected]);
   const [tab, setTab] = useState<StudioTab>(selectedTab ?? 'thread');
   const [shelfQuery, setShelfQuery] = useState('');
   const [shelfFilter, setShelfFilter] = useState<StudioShelfFilter>('all');
@@ -570,6 +576,24 @@ export function CreatorStudioView({
         {/* Profile edit lives on /creators/:handle. Studio only claims at publish need. */}
         <ClaimHandleModal isOpen={claimOpen} onClose={() => setClaimOpen(false)} />
 
+        {abandonNotice ? (
+          <aside className="studio-abandon-notice" role="status" aria-live="polite">
+            <PixelIcon name="trash" size={16} className="studio-abandon-notice__icon" />
+            <p className="studio-abandon-notice__text">
+              {t('studioPanel.overview.abandonNotice', { title: abandonNotice })}
+            </p>
+            <button
+              type="button"
+              className="studio-abandon-notice__close"
+              onClick={() => setAbandonNotice(null)}
+              aria-label={t('studioPanel.overview.abandonNoticeDismiss')}
+              title={t('studioPanel.overview.abandonNoticeDismiss')}
+            >
+              <PixelIcon name="close" size={12} />
+            </button>
+          </aside>
+        ) : null}
+
         {loading ? (
           <>
             {/* Claims the app shell for the length of the shelf fetch so the marketing
@@ -920,9 +944,13 @@ export function CreatorStudioView({
                           }}
                           onRemoved={async (token) => {
                             const abandonedSlug = activeGame.slug;
+                            const abandonedTitle = activeGame.title;
+                            if (selectedRef.current === token) selectedRef.current = null;
                             setSelected((current) => (current === token ? null : current));
                             // Hide tip first; refetch may restore a published sibling.
                             setGames((prev) => prev.filter((game) => game.token !== token));
+                            const fallbackToken = (list: readonly StudioGame[]) =>
+                              sortStudioGames(collapseStudioGames(list))[0]?.token ?? null;
                             try {
                               // Pass the slug so a live sibling below the shelf ceiling
                               // is still returned (same deep-link path as Open in Studio).
@@ -930,14 +958,24 @@ export function CreatorStudioView({
                               setGames(shelfPage.games);
                               setShelfTruncated(shelfPage.truncated);
                               setTotalGames(shelfPage.totalGames);
+                              // The creator may have picked another game while this awaited.
+                              if (selectedRef.current !== null) return;
                               const sibling =
                                 abandonedSlug &&
                                 shelfPage.games.find((game) => game.slug === abandonedSlug && game.token !== token);
                               onNavigate(sibling && abandonedSlug ? studioPath(abandonedSlug) : studioPath());
-                              if (sibling) setSelected(sibling.token);
+                              if (sibling) {
+                                setSelected(sibling.token);
+                              } else {
+                                setAbandonNotice(abandonedTitle);
+                                setSelected(fallbackToken(shelfPage.games));
+                              }
                             } catch {
                               // Optimistic remove stands if refetch fails.
+                              if (selectedRef.current !== null) return;
                               onNavigate(studioPath());
+                              setAbandonNotice(abandonedTitle);
+                              setSelected(fallbackToken(games.filter((game) => game.token !== token)));
                             }
                           }}
                         />

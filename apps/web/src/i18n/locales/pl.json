@@ -364,7 +364,9 @@
       "abandonConfirm": "Tak, porzuć — odrzuć tę rundę",
       "abandonConfirmKeepLive": "Tak, porzuć — odrzuć tę rundę (gra na żywo zostaje)",
       "abandonConfirmRemove": "Tak, usuń — gra zniknie ze Studio",
-      "abandonHintRemove": "Ten szkic nigdy nie był opublikowany. Usunięcie zatrzyma build i zdejmie grę z półki Studio."
+      "abandonHintRemove": "Ten szkic nigdy nie był opublikowany. Usunięcie zatrzyma build i zdejmie grę z półki Studio.",
+      "abandonNotice": "„{{title}}” usunięto ze Studio.",
+      "abandonNoticeDismiss": "Zamknij"
     },
     "rail": {
       "connect": "Podłącz agenta",
