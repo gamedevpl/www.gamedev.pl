@@ -2130,20 +2130,7 @@ export async function registerAgentChannelRoutes(
     },
   );
 
-  /**
-   * The Creator Kit's prompt-ready API reference over MCP.
-   *
-   * A BYOCA agent has no system prompt carrying the kit the way the platform lane does
-   * (`appendKitDigest` in managed-backend.ts) — before this route, `get_kit` returned only
-   * tarball metadata and the API content lived nowhere an MCP client could read it without
-   * shell egress. That left "what can this platform build" answerable only by unpacking the
-   * tarball or browsing file-by-file, and observably sent at least one agent to the public
-   * web looking for gamedev.pl documentation that was never published there.
-   *
-   * Same engineRef convention as the kit browse routes below: optional, defaults to the
-   * registry's current entry when omitted. Pass the engineRef `get_kit` returned so a
-   * mid-round registry bump cannot mix kit revisions within one round.
-   */
+  // Prompt-ready API reference for MCP get_kit_api — see byoca-mcp SKILL.md.
   app.get(
     '/api/agent/build/kit/api',
     { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },

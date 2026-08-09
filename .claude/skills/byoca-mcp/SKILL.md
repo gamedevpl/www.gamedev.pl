@@ -108,14 +108,45 @@ declaration file into whole top-level blocks (`splitDeclarationBlocks`), gives e
 module family a block before any family gets a second one (`selectApiBlocks`), and abridges
 a block too large to fit whole (`GameKitApi`, ~44% of the entire surface — this is where
 `createParty` / `createZone` / `createCommons` / `createPresence` all live) member-wise
-rather than dropping it, ranking module factories first. Whatever a budget still can't fit
-is named in an `// Omitted for length (...)` note instead of vanishing. The digest also
-gained a `## Engine modules` catalog (`digestEngineModules` in the games repo's
-`tools/lib/pack-kit.ts`), generated from each `shared/modules/*.ts` file's own header
-comment — so a module is listed the moment it exists and the catalog cannot drift.
+rather than dropping it, ranking module factories first (`elideDeclaration`). Whatever a
+budget still can't fit is named in an `// Omitted for length (...)` note instead of
+vanishing. The digest also gained a `## Engine modules` catalog (`digestEngineModules` in
+the games repo's `tools/lib/pack-kit.ts`), generated from `GAME_KIT_MODULES` +
+`gameKitModuleEntryPath` (`tools/lib/assemble.ts`) — the same canonical registry
+`GAME.json`'s `engine.modules` validates against, not a `shared/modules/*.ts` directory
+listing, which would have both included `core` (not selectable) and omitted `vehicles` /
+`urban` / `racing` / `football` (they live under `shared/verticals/*/index.ts`). Each
+module's summary is its own header comment's first paragraph, so a module is listed the
+moment it exists and a summary can't drift out of sync with code.
+
+**Two correctness bugs surfaced in review, both confirmed against the real 122 KB
+declaration file before fixing.** `elideDeclaration`'s member splitter used indentation
+alone (1–2 spaces) to find a member's boundary — but a member's own closing line can land
+back at that same indent (`createZone<S>(config: { … }): GameKitZone<S>;` closes with
+`}): GameKitZone<S>;` at 2 spaces, identical to any other member's opener), so that closing
+line was misread as a new member and could be dropped once the budget ran out, emitting
+`createZone` opened but never closed. `splitMembers` now tracks bracket depth instead — a
+line only starts a new member when depth is 0 — safe because the input is always
+comment-stripped (`compactGameKitApi` in the games repo strips comments before the digest
+is ever written), so no brace inside prose can desync the count. Separately, the API
+section's budget was a flat 72% of the total, guessed rather than measured: at the real
+~15 KiB fixed shell (module catalog + audio catalog + exemplar + rules — none proportional
+to the API's size), the platform lane's real 20 KiB default silently truncated
+mid-exemplar-file, dropping `## File-shape rules` entirely, and `get_kit_api`'s old 90 KiB
+budget capped the API at 64.8 KiB despite the ~79 KiB current surface — contradicting its
+own "whole reference in one call" promise. Both lanes now measure the non-API shell first
+and give the API section whatever's actually left (`apiBudget = maxBytes - shellBytes`).
+That in turn exposed a second-order bug: the omission note listing what got cut is itself
+unbounded (up to ~2 KiB for 100 omitted names) with nothing reserving room for it, so it
+could overflow the same way the flat-percentage guess did. `formatOmittedNote` is now
+self-bounded (`OMITTED_NOTE_RESERVE_BYTES`), truncating the name list with "… and N more"
+rather than growing past its reserve.
+
 `DEFAULT_KIT_DIGEST_MAX_BYTES` (the raw-stored-digest sanity ceiling, not a prompt budget)
-moved from 100,000 to 150,000 bytes for this: the stored digest was already at 99,552 bytes
-before the catalog addition, one small API growth from failing regardless.
+moved from 100,000 to 150,000 bytes: the stored digest was already at 99,552 bytes before
+the catalog addition, one small API growth from failing regardless.
+`DEFAULT_MCP_DIGEST_MAX_BYTES` moved from 90,000 to 100,000 so `get_kit_api` comfortably
+covers shell + full current API + the note reserve.
 
 ### `get_gate_media` must stay reachable from the loop
 

@@ -375,9 +375,7 @@ describe('POST /api/mcp (BY-05)', () => {
         'ack_inbox',
       ]),
     );
-    // Kit browse tools are advertised: get_kit_api is the orientation path (whole digest,
-    // one call), these are the depth path (specific files) once an agent knows what it
-    // wants. Example/proposal browse tools stay off the model-visible surface.
+    // Kit browse tools are advertised now; example/proposal ones stay hidden.
     expect(names).toEqual(
       expect.arrayContaining([
         'get_kit_api',
@@ -420,9 +418,7 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(getKit?.description).toMatch(/gamedevpl-creator-kit/);
     expect(getKit?.description).toMatch(/entry=gamedevpl-creator-kit\/SKILL\.md/);
     expect(getKit?.description).toMatch(/do not assume a `cd` persists/i);
-    // The platform and kit are not on the public web — an agent with an unanswered
-    // capability question (multiplayer? persistent worlds?) has an in-band answer now,
-    // so it never has to guess by searching for docs that were never published.
+    // Capability questions now have an in-band answer, not a web search.
     expect(getKit?.description).toMatch(/not on the public web/i);
     expect(getKit?.description).toMatch(/get_kit_api/);
     expect(tools.find((t) => t.name === 'get_kit_api')).toBeDefined();
@@ -470,8 +466,7 @@ describe('POST /api/mcp (BY-05)', () => {
         'end',
       ]),
     );
-    // Kit browse/orientation tools are the focused build surface now; example and
-    // proposal tooling stay off it.
+    // Example/proposal tooling stays off the focused build surface.
     expect(names).not.toEqual(expect.arrayContaining(['list_examples', 'submit_proposal']));
   });
 
@@ -518,8 +513,7 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(kit.isError).toBe(false);
     const structured = kit.structured as { engineRef?: string; browse?: Record<string, string> };
     expect(structured.engineRef).toBe(engine);
-    // Browse tools are advertised now, so withAdvertisedBrowseTools keeps the whole block
-    // rather than stripping it — this was the reverse assertion when they were hidden.
+    // Advertised now, so the whole block survives (reverse of the old assertion).
     expect(structured.browse).toEqual({
       list: 'list_kit_files',
       search: 'search_kit_files',
@@ -722,8 +716,7 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(joined).toMatch(/never scaffold over them/i);
     expect(joined).toMatch(/get_kit/);
     expect(joined).toMatch(/get_kit_api/);
-    // The platform and kit are not on the public web — an agent following the loop should
-    // never end up guessing via a web search for gamedev.pl documentation.
+    // The loop must never send an agent to a web search instead.
     expect(joined).toMatch(/not on the public web|never a web search|never.*web search/i);
     expect(joined).toMatch(/screenshot_upload_url/);
     expect(joined).not.toMatch(/send_screenshot/);

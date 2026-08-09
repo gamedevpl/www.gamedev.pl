@@ -125,12 +125,7 @@ const MCP_VISIBLE_TOOLS = new Set([
   'get_seed',
   'get_sources',
   'get_kit',
-  // get_kit returns tarball metadata only — no MCP client has a system prompt carrying
-  // the kit the way the platform lane does. get_kit_api is the orientation path (the
-  // digest, in one call); the browse tools below are the depth path once an agent knows
-  // what it's looking for. Advertising both was the fix for an agent that, having no
-  // in-band way to answer "what can this platform build", went to the public web looking
-  // for gamedev.pl documentation that was never published there.
+  // get_kit_api is the orientation path; browse tools are the depth path.
   'get_kit_api',
   'list_kit_files',
   'search_kit_files',

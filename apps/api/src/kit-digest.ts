@@ -4,35 +4,13 @@ import type { GcsObjectStore } from './gcs-sign.js';
 import { readFile } from 'node:fs/promises';
 
 export const KIT_REGISTRY_OBJECT = 'kits/current.json';
-/**
- * Sanity ceiling on the raw stored digest (comment-stripped API + exemplar + rules; not
- * the prompt-compacted size), not a token budget — `compactKitDigestForPrompt` /
- * `compactKitDigestForApi` own that. Raised from 100_000: the games repo's own digest
- * was already at 99,552 bytes — 99.5% of that cap — before it grew a `## Engine modules`
- * catalog, so the ceiling was one small API addition from failing regardless of this
- * change. 150_000 restores real headroom.
- */
+// Sanity ceiling on raw digest bytes, not a prompt budget.
 export const DEFAULT_KIT_DIGEST_MAX_BYTES = 150_000;
 export const DEFAULT_PROMPT_DIGEST_MAX_BYTES = 20_000;
-/**
- * `get_kit_api` is opt-in and paid once per round by an agent that has decided it needs
- * the API, so it can afford far more than a system prompt injected into every platform
- * run. Sized to carry the whole declaration surface of a current kit (~79 KiB stripped)
- * with headroom, so the MCP lane rarely has to omit anything at all.
- *
- * 90_000 undershot this in practice: the fixed shell (module catalog, audio catalog,
- * exemplar, rules — none of them proportional to the API's size) already costs ~15 KiB, so
- * a 90 KiB budget left only ~75 KiB for a ~79 KiB API — `get_kit_api` omitted real content
- * despite its own description promising the whole reference in one call. 100_000 covers
- * shell + full current API + the omission-note reserve with room to spare.
- */
+// Per-round budget for get_kit_api: shell plus the full API.
 export const DEFAULT_MCP_DIGEST_MAX_BYTES = 100_000;
 
-/**
- * Engine module families for kits published before the digest carried its own
- * `## Engine modules` catalog. Only a fallback: `moduleFamiliesOf` prefers the catalog,
- * which is generated from `shared/modules/*.ts` in the games repo and cannot go stale.
- */
+// Fallback only — moduleFamiliesOf prefers the digest's own catalog.
 const FALLBACK_MODULE_FAMILIES: readonly string[] = Object.freeze([
   'actors',
   'ai',
@@ -59,11 +37,7 @@ const FALLBACK_MODULE_FAMILIES: readonly string[] = Object.freeze([
   'zone',
 ]);
 
-/**
- * Declarations that describe the lifecycle every game uses regardless of module choice.
- * These are kept before any module block, because a digest that dropped them would not
- * describe a buildable game at all.
- */
+// Lifecycle declarations every game needs; kept before any module block.
 const CORE_DECLARATIONS: readonly string[] = Object.freeze([
   'GameKitApi',
   'GameKitGameBuilder',
@@ -90,14 +64,7 @@ interface DeclarationBlock {
   bytes: number;
 }
 
-/**
- * Split a `.d.ts` body into top-level declaration blocks.
- *
- * The kit's declaration file puts every top-level declaration at column 0 and indents
- * everything nested, so a block runs from one column-0 declaration to the next. That is
- * why this does not count braces: it costs nothing in accuracy here and cannot desync on
- * a brace inside a string literal or a template type.
- */
+// Top-level declarations start at column 0, ending at the next.
 export function splitDeclarationBlocks(api: string): DeclarationBlock[] {
   const lines = api.split('\n');
   const starts: number[] = [];
@@ -119,12 +86,7 @@ export function splitDeclarationBlocks(api: string): DeclarationBlock[] {
   });
 }
 
-// A member's own closing brace can land back at the interface's 1-2-space indent — e.g.
-// `createZone<S>(config: { … }): GameKitZone<S>;` — so an indent-only split misreads that
-// closing line as a new member, emitting the opener with no matching close. Track bracket
-// depth instead: a line starts a new member only when depth is 0 at its first character.
-// Safe here because the input is always the comment-stripped API text (compactGameKitApi
-// removes every comment before this ever runs), so no brace in prose can desync the count.
+// Tracks bracket depth, not indentation (see SKILL.md for the bug fixed).
 function splitMembers(body: string): Array<{ text: string; bytes: number }> {
   const lines = body.split('\n');
   const starts: number[] = [];
@@ -145,18 +107,7 @@ function splitMembers(body: string): Array<{ text: string; bytes: number }> {
   });
 }
 
-/**
- * Shrink one oversized declaration to fit, by dropping members rather than the whole
- * declaration.
- *
- * `GameKitApi` is 34 KiB — 44% of the entire declaration surface in a single interface —
- * and `createParty`, `createZone`, `createCommons` and `createPresence` are members of it,
- * near its end. Whole-block selection alone therefore had a sharp edge: below a ~40 KiB API
- * budget `GameKitApi` did not fit at all and every module factory vanished with it, and any
- * naive truncation would have cut precisely the tail those four live in. Factories are kept
- * first for that reason, and what is dropped is counted in place, inside the braces, so the
- * result reads as an abridged interface rather than a complete one.
- */
+// Abridge an oversized declaration member-wise (factories first) instead of dropping it.
 function elideDeclaration(
   block: DeclarationBlock,
   maxBytes: number,
@@ -171,11 +122,7 @@ function elideDeclaration(
   if (!members.length) return undefined;
 
   const overhead = Buffer.byteLength(`${header}\n${closer}\n`, 'utf8');
-  // Rank module factories above other factories, not just factories above everything.
-  // `GameKitApi` carries dozens of `create*` members — the gfx3d geometry/material/mesh
-  // family alone is most of them — and `createParty` / `createZone` / `createCommons` /
-  // `createPresence` are declared last. Ranking factories only by source order therefore
-  // still spent the whole reserve before reaching them.
+  // Module-family factories outrank other factories — see byoca-mcp SKILL.md.
   const rankOf = (text: string): number => {
     const factory = /^\s*(?:readonly\s+)?create([A-Z]\w*)/.exec(text);
     if (!factory) return 2;
@@ -201,21 +148,10 @@ function elideDeclaration(
   return { name: block.name, text, bytes: Buffer.byteLength(`${text}\n`, 'utf8') };
 }
 
-/** Reserved headroom for the omission note (see `formatOmittedNote`) inside the API budget. */
+// Reserved headroom for the omission note (formatOmittedNote) inside the API budget.
 const OMITTED_NOTE_RESERVE_BYTES = 600;
 
-/**
- * Render the "what got cut" note, self-bounded to `maxBytes`.
- *
- * At a tight budget, most of a 114-declaration API can end up in `omitted` — the full
- * name list has run past 2 KiB on its own, none of which any caller reserved room for.
- * An unbounded note is exactly the silent-overflow failure this whole omission-note
- * mechanism exists to prevent, just moved one level up: instead of a declaration
- * vanishing without a trace, the *notice* that declarations were cut could itself get
- * chopped mid-name by the final blunt truncation, or — worse, as measured — crowd out
- * File-shape rules and the exemplar entirely. List as many full names as fit, then say
- * how many more there were rather than trailing off mid-word.
- */
+// Self-bounded omission note; see SKILL.md for why it matters.
 export function formatOmittedNote(omitted: readonly string[], maxBytes: number): string {
   if (!omitted.length) return '';
   const prefix = `\n// Omitted for length (${omitted.length}); read shared/game-kit.d.ts for these: `;
@@ -236,7 +172,7 @@ export function formatOmittedNote(omitted: readonly string[], maxBytes: number):
   return text;
 }
 
-/** Module families named by the digest's own catalog, falling back for older kits. */
+// Module families from the digest's own catalog, or a fallback list.
 function moduleFamiliesOf(digest: string): readonly string[] {
   const catalog = sectionOf(digest, '## Engine modules');
   if (!catalog) return FALLBACK_MODULE_FAMILIES;
@@ -249,7 +185,7 @@ function moduleFamiliesOf(digest: string): readonly string[] {
   return found.size ? [...found].sort((a, b) => b.length - a.length) : FALLBACK_MODULE_FAMILIES;
 }
 
-/** The module family a declaration belongs to, by longest name match. */
+// The module family a declaration belongs to, by longest name match.
 function familyOf(name: string, families: readonly string[]): string | undefined {
   const lower = name.toLowerCase();
   let best: string | undefined;
@@ -259,23 +195,7 @@ function familyOf(name: string, families: readonly string[]): string | undefined
   return best;
 }
 
-/**
- * Choose which declaration blocks survive a byte budget.
- *
- * Selection is tiered rather than filtered, and the tiers exist for one reason: an earlier
- * implementation kept only lines matching a hardcoded regex allowlist, every pattern of
- * which described single-player core API. `GameKitParty`, `GameKitZone`, `GameKitCommons`
- * and `GameKitPresence` matched nothing, so party games, real-time shared zones and
- * persistent worlds — three of the platform's most differentiated capabilities — were
- * invisible to the platform agent reading this digest, with no signal that anything had
- * been removed. The only survivor was an accident: `down(` was meant for input and pulled
- * in party's `down(slot, ...actions)` as an orphan line with its interface name filtered
- * away, which is worse than omitting it.
- *
- * So: whole blocks only (never an orphan member line), every module family represented
- * before any family gets a second block, and whatever the budget forces out is named in
- * the output instead of vanishing.
- */
+// Whole blocks, every family represented first (see SKILL.md for the bug).
 export function selectApiBlocks(
   blocks: readonly DeclarationBlock[],
   families: readonly string[],
@@ -291,23 +211,14 @@ export function selectApiBlocks(
     return true;
   };
 
-  // Reserve a share up front for core declarations too large to fit whole, instead of
-  // letting them have only what earlier passes leave behind. `GameKitApi` is the only such
-  // block today, and it is where every module factory lives, so "whatever is left over"
-  // meant the factories were funded last from an empty purse: at a 14 KiB API budget the
-  // earlier passes spent everything and `createParty` / `createZone` / `createCommons` /
-  // `createPresence` never appeared at all.
+  // Reserve a share up front for oversized core declarations like GameKitApi.
   const oversized = CORE_DECLARATIONS.map((name) => blocks.find((block) => block.name === name)).filter(
     (block): block is DeclarationBlock => Boolean(block) && block!.bytes > Math.floor(maxBytes * 0.45),
   );
   const reserve = oversized.length ? Math.floor(maxBytes * 0.45) : 0;
   const earlyLimit = maxBytes - reserve;
 
-  // Families first, and deliberately ahead of core. Every family primary together costs a
-  // few KiB, while one core declaration (`GameKitApi`) costs 34 KiB; letting the big block
-  // bid first is what made party, zone, commons and presence disappear below a ~40 KiB
-  // budget. The block chosen per family is its primary declaration — `GameKitParty`, not
-  // whichever of `PartyAction` / `PartySlotConfig` / `PartySlot` comes first in the file.
+  // Families first, ahead of core, so one block cannot starve them.
   const claimed = new Set<string>();
   for (const family of families) {
     if (claimed.has(family)) continue;
@@ -319,14 +230,12 @@ export function selectApiBlocks(
       candidates.reduce((shortest, block) => (block.name.length < shortest.name.length ? block : shortest));
     if (take(primary, earlyLimit)) claimed.add(family);
   }
-  // Then core that fits whole, in CORE_DECLARATIONS order rather than source order: that
-  // list is written most-important first.
+  // Core that fits whole, in CORE_DECLARATIONS order (most-important first).
   for (const name of CORE_DECLARATIONS) {
     const block = blocks.find((candidate) => candidate.name === name);
     if (block && !oversized.includes(block)) take(block, earlyLimit);
   }
-  // Now spend the reserve: abridge the oversized core declarations member-wise rather than
-  // dropping them, so `GameKitApi` still contributes its factory signatures.
+  // Spend the reserve: abridge oversized core declarations instead of dropping them.
   for (const block of oversized) {
     if (kept.has(block.name)) continue;
     if (take(block)) continue;
@@ -336,8 +245,7 @@ export function selectApiBlocks(
   for (const block of blocks) take(block);
 
   const omitted = blocks.filter((block) => !kept.has(block.name)).map((block) => block.name);
-  // Emit in source order, taking the stored copy rather than the original: a block that
-  // was abridged must reach the output abridged, not restored to full size.
+  // Source order, using the stored (possibly abridged) copy, not the original.
   return { kept: blocks.filter((block) => kept.has(block.name)).map((block) => kept.get(block.name)!), omitted };
 }
 
@@ -434,14 +342,7 @@ export function compactKitDigestForPrompt(digest: string, maxBytes = DEFAULT_PRO
   const engineModules = sectionOf(digest, '## Engine modules');
   const audioCatalog = sectionOf(digest, '## Audio catalog');
 
-  // Every non-API piece — the module catalog, audio catalog, exemplar, rules, and the
-  // fixed prose/markdown around them — is measured before any of it is assembled, and the
-  // API gets whatever's actually left. A flat percentage guessed this instead of measuring
-  // it: at the real default 20 KiB budget the exemplar alone is ~13.6 KiB, so the guessed
-  // 28% reserve (~5.6 KiB) was already short before the API contributed a single byte, and
-  // the blunt final truncation below silently cut the rules section off entirely rather
-  // than the guess ever being caught. Measuring first means the API section — not File-
-  // shape rules or the exemplar — is what a tight budget trims.
+  // Measure the fixed shell first — a guessed percentage silently truncated rules.
   const shellBytes = Buffer.byteLength(
     [
       '# Creator Kit prompt digest',
@@ -459,13 +360,11 @@ export function compactKitDigestForPrompt(digest: string, maxBytes = DEFAULT_PRO
     ].join('\n'),
     'utf8',
   );
-  // Reserve room for the omission note up front — it is rendered after selection but must
-  // not be free to grow past what selection actually left behind.
+  // Reserve room for the omission note before selection spends the rest.
   const apiBudget = Math.max(0, maxBytes - shellBytes - OMITTED_NOTE_RESERVE_BYTES);
   const { kept, omitted } = selectApiBlocks(splitDeclarationBlocks(api), moduleFamiliesOf(digest), apiBudget);
   const apiLines = kept.map((block) => block.text);
-  // Name what the budget removed. A digest that silently drops declarations reads as a
-  // complete API reference, and an agent cannot ask for what it cannot see is missing.
+  // Name what got cut instead of dropping it silently.
   const omittedNote = formatOmittedNote(omitted, OMITTED_NOTE_RESERVE_BYTES);
   if (omittedNote) apiLines.push(omittedNote);
 
@@ -473,8 +372,7 @@ export function compactKitDigestForPrompt(digest: string, maxBytes = DEFAULT_PRO
     '# Creator Kit prompt digest',
     'Use these signatures and the template shape; unpack the full kit only when needed.',
     '',
-    // First, and ahead of the API: this is the only place that answers "what can this
-    // platform build at all" — the question that used to send agents to a web search.
+    // Ahead of the API: what this platform can build.
     engineModules,
     '## Core API',
     '~~~typescript',
@@ -487,21 +385,13 @@ export function compactKitDigestForPrompt(digest: string, maxBytes = DEFAULT_PRO
     '',
     rules,
   ].join('\n');
-  // Still a floor, not the mechanism: apiBudget already sized the API section to leave
-  // room for everything else, so this only fires if the shell itself exceeds maxBytes
-  // (a budget too small to hold even zero API lines) — same shape of failure either way,
-  // just at the very end instead of mid-line.
+  // Floor only — fires when the shell alone exceeds maxBytes (zero API lines).
   return Buffer.byteLength(compact, 'utf8') <= maxBytes
     ? compact
     : Buffer.from(compact, 'utf8').subarray(0, maxBytes).toString('utf8');
 }
 
-/**
- * The same digest for `get_kit_api` over MCP, where the budget is per-round and opt-in
- * rather than per-prompt. Distinct from the platform lane only in size: an MCP agent has
- * no system prompt carrying the kit, so this is the whole reference it gets before it
- * falls back to the browse tools.
- */
+// get_kit_api's digest: same shape, a per-round budget.
 export function compactKitDigestForApi(digest: string, maxBytes = DEFAULT_MCP_DIGEST_MAX_BYTES): string {
   return compactKitDigestForPrompt(digest, maxBytes);
 }

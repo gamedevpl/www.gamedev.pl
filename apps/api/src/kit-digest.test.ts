@@ -71,21 +71,16 @@ describe('Creator Kit digest loader', () => {
     const compact = compactKitDigestForPrompt(full);
 
     expect(compact).toContain('GameKitInput');
-    // A module family the old line-pattern allowlist could not name (party games were
-    // invisible to platform agents until this was fixed) survives whole, not as an
-    // unlabeled orphan line.
+    // party used to be an unnamed orphan line; now it survives whole.
     expect(compact).toContain('interface GameKitParty { down(slot: number): boolean; }');
     expect(compact).toContain('game/runtime.ts');
     expect(compact).toContain('Keep files small.');
-    // Nothing here is dropped — the fixture is well under the default budget, and whole-
-    // block selection only omits when the budget genuinely forces it (see below).
+    // Fixture is under budget, so nothing is dropped here (see below).
     expect(compact).toContain('interface Unrelated');
   });
 
   it('names what a tight budget omits instead of silently dropping it', () => {
-    // Interfaces sized like the real declaration file's, so a budget can be tight enough
-    // to force an omission without the unrelated final byte-cap safety net (sized off the
-    // whole document, header included) doing the truncating instead.
+    // Sized like the real declaration file, to force a genuine omission.
     const pad = 'x'.repeat(150);
     const full = [
       '## GameKit API surface',
@@ -103,9 +98,7 @@ describe('Creator Kit digest loader', () => {
 
     const compact = compactKitDigestForPrompt(full, 1400);
 
-    // Party and zone survive whole — the failure this guards against dropped them (or
-    // orphaned their members) below any generous-looking budget. What didn't fit (here,
-    // GameKitApi) is named in an omission note rather than vanishing without a trace.
+    // Party/zone survive whole; what didn't fit is named, not vanished.
     expect(compact).toContain('interface GameKitParty');
     expect(compact).toContain('interface GameKitZone');
     expect(compact).toContain('Omitted for length');
@@ -121,17 +114,14 @@ describe('Creator Kit digest loader', () => {
   });
 
   it('formatOmittedNote truncates a long name list instead of overflowing its reserve', () => {
-    // A realistic tight-budget scenario: most of a 114-declaration API omitted, and the
-    // note listing them all unbounded ran to 2+ KiB with nothing reserving room for it —
-    // the actual bug behind the digest silently dropping the File-shape rules section.
+    // An unbounded note list once ran past 2 KiB, unreserved.
     const names = Array.from({ length: 100 }, (_, i) => `GameKitDeclarationNumber${i}`);
     const note = formatOmittedNote(names, 250);
     expect(Buffer.byteLength(note, 'utf8')).toBeLessThanOrEqual(250);
     expect(note).toMatch(/… and \d+ more/);
     expect(note).not.toContain('GameKitDeclarationNumber99');
 
-    // Too tight even for the "… and N more" suffix: still bounded, just without it — a
-    // truncated list beats an overflowing note either way.
+    // Too tight even for the suffix — still bounded, just without it.
     const tighter = formatOmittedNote(names, 200);
     expect(Buffer.byteLength(tighter, 'utf8')).toBeLessThanOrEqual(200);
   });
@@ -141,10 +131,7 @@ describe('Creator Kit digest loader', () => {
   });
 
   it('never truncates the exemplar or File-shape rules to make room for the API, at realistic sizes', () => {
-    // A large exemplar (bigger than a flat percentage of a small budget would allow) used
-    // to get cut off mid-file by the final blunt byte-cap safety net, because nothing
-    // measured the shell's real size before guessing how much room the API could have.
-    // Reproduces that at the platform lane's real default budget.
+    // A big exemplar used to get truncated by an unmeasured budget.
     const bigFile = 'x'.repeat(6000);
     const full = [
       '## GameKit API surface',
@@ -165,11 +152,7 @@ describe('Creator Kit digest loader', () => {
   });
 
   it('elideDeclaration keeps a multiline member whole even when its closing brace lands at the interface indent', () => {
-    // Shaped after the real GameKitApi.createZone: a member whose own closing
-    // `}): ReturnType;` sits at the interface's 2-space indent, same as any other member's
-    // opening line. An indentation-only member split misread that closing line as a new
-    // member and could drop it once the tight budget ran out, emitting createZone opened
-    // but never closed — malformed output for exactly the factory this exists to preserve.
+    // Shaped after createZone: its closing brace shares the opener's indent.
     const pad = 'x'.repeat(400);
     const api = [
       'interface GameKitApi {',
@@ -182,14 +165,13 @@ describe('Creator Kit digest loader', () => {
     ].join('\n');
 
     const blocks = splitDeclarationBlocks(api);
-    // Budget too small for the whole interface (the padded `other` member alone forces
-    // that), forcing elideDeclaration's member-wise path.
+    // Too small for the whole interface, forcing elideDeclaration's path.
     const { kept } = selectApiBlocks(blocks, ['zone'], 250);
     const text = kept.map((block) => block.text).join('\n');
 
     expect(text).toContain('createZone<S>(config: {');
     expect(text).toContain('}): GameKitZone<S>;');
-    // Brace/paren/bracket depth must return to zero — an unclosed opener is the bug.
+    // Depth must return to zero — an unclosed opener is the bug.
     let depth = 0;
     for (const ch of text) {
       if (ch === '{' || ch === '(' || ch === '[') depth++;
@@ -222,9 +204,7 @@ describe('Creator Kit digest loader', () => {
       ].join('\n'),
     );
 
-    // A budget that fits exactly one of the three blocks still yields party over its own
-    // second block being crowded out — zone would be starved entirely if the pass took
-    // party's two blocks before zone's one, which is the head-of-file-bias bug this guards.
+    // Guards against source order starving zone of its one block.
     const { kept, omitted } = selectApiBlocks(blocks, ['party', 'zone'], blocks[0].bytes + blocks[2].bytes);
 
     expect(kept.map((block) => block.name).sort()).toEqual(['GameKitParty', 'GameKitZone']);
