@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BuilderModeBadge } from './BuilderModeBadge.js';
+import type { BuilderUnavailableReason } from './BuilderChoice.js';
 import { defaultBuilderFor, isBuilderKind, saveLastBuilder, type BuilderKind } from './builderKind.js';
 import { GameTheater } from './GameTheater.js';
 import { PixelIcon, type PixelIconName } from './PixelIcon.js';
@@ -800,6 +801,9 @@ export function SubmissionStatusView({
                       waitingCaptionElsewhere={footBarShowing}
                       onSwitchToPlatform={handoffToPlatformFromUi}
                       builderHandoffPending={status.builderHandoff?.target === 'platform'}
+                      platformUnavailable={
+                        status.platformBuilder?.available === false ? status.platformBuilder.reason : undefined
+                      }
                     />
                   ) : null
                 }
@@ -929,6 +933,9 @@ export function SubmissionStatusView({
                         ? handoffToSelfFromUi
                         : undefined
                     }
+                    platformUnavailable={
+                      status.platformBuilder?.available === false ? status.platformBuilder.reason : undefined
+                    }
                     suppressRouteNote={isAwaitingOwnAgent(status) || status.phase === 'ready_for_review'}
                     onSent={(text) => {
                       setPendingRevisions((current) => [...current, { text, at: Date.now() }]);
@@ -1042,6 +1049,9 @@ export function SubmissionStatusView({
                 mode={connectCardMode(copyInputFromStatus(status)) ?? 'setup'}
                 onSwitchToPlatform={handoffToPlatformFromUi}
                 builderHandoffPending={status.builderHandoff?.target === 'platform'}
+                platformUnavailable={
+                  status.platformBuilder?.available === false ? status.platformBuilder.reason : undefined
+                }
               />
             ) : null}
 
@@ -1146,6 +1156,9 @@ export function SubmissionStatusView({
                   canInterruptPlatformAgent(status) || status.builderHandoff?.target === 'self'
                     ? handoffToSelfFromUi
                     : undefined
+                }
+                platformUnavailable={
+                  status.platformBuilder?.available === false ? status.platformBuilder.reason : undefined
                 }
                 onSent={(text) => {
                   setPendingRevisions((current) => [...current, { text, at: Date.now() }]);
@@ -1362,6 +1375,7 @@ function FeedbackPanel({
   onSwitchToPlatform,
   onSwitchToSelf,
   handoffPending,
+  platformUnavailable,
   onSent,
   onPublishedImprove,
 }: {
@@ -1383,6 +1397,8 @@ function FeedbackPanel({
   onSwitchToPlatform?: BuilderHandoffHandler;
   onSwitchToSelf?: BuilderHandoffHandler;
   handoffPending?: BuilderKind;
+  /** Why `platform` cannot be picked or handed off to right now. See BuilderChoice. */
+  platformUnavailable?: BuilderUnavailableReason;
   /**
    * Hide the "saved until you start your agent" line — the connect card above already
    * says we are waiting, so a third copy under the box is noise.
@@ -1563,6 +1579,7 @@ function FeedbackPanel({
       onChange={handleBuilderChange}
       canChange={chooseBuilder}
       disabled={state === 'sending'}
+      platformUnavailable={platformUnavailable}
     />
   ) : null;
   const activeSelfHandoff =
@@ -1572,6 +1589,7 @@ function FeedbackPanel({
         active
         onSwitchToPlatform={onSwitchToPlatform}
         pending={handoffPending === 'platform'}
+        unavailable={platformUnavailable}
       />
     ) : null;
   const activePlatformHandoff =

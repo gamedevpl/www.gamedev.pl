@@ -103,6 +103,8 @@ export interface AdminRoutesOptions {
   creationLimitsTtlMs?: number;
   publicPlayFallbackSlugs?: string[];
   publicPlayTtlMs?: number;
+  /** Whether this environment has a platform backend configured at all. See managed-availability.ts. */
+  hasPlatformBackend?: boolean;
 }
 
 /**
@@ -117,8 +119,17 @@ export interface AdminRoutesOptions {
 export interface CreationLimitsResponse {
   /** Null when nothing has ever been written — the defaults below are what is in force. */
   stored: CreationLimits | null;
-  effective: { paused: boolean; globalDailySubmissionCap: number };
-  today: { dateStr: string; submissions: number };
+  effective: {
+    paused: boolean;
+    globalDailySubmissionCap: number;
+    /** `auto` defers to whether a platform backend is configured — see `hasPlatformBackend`. */
+    managedBuilderMode: 'auto' | 'off' | 'coming_soon';
+    managedDailyCap: number | null;
+    managedDailyUserCap: number | null;
+    /** Whether the environment itself has a platform backend wired, independent of the mode above. */
+    hasPlatformBackend: boolean;
+  };
+  today: { dateStr: string; submissions: number; managedBuilds: number };
   /** Upper bound, in ms, on how long a change takes to reach every instance. */
   propagationMs: number;
 }
@@ -138,14 +149,22 @@ const CreationLimitsPatchSchema = z
     // The editing lanes' breaker rides the same document — one place to look.
     editingPaused: z.boolean().optional(),
     globalDailyEditCap: z.number().int().min(0).max(100_000).nullable().optional(),
+    // Same document, one more switch: whether the `platform` builder is offered at all.
+    // See managed-availability.ts.
+    managedBuilderMode: z.enum(['auto', 'off', 'coming_soon']).optional(),
+    managedDailyCap: z.number().int().min(0).max(100_000).nullable().optional(),
+    managedDailyUserCap: z.number().int().min(0).max(100_000).nullable().optional(),
   })
   .refine(
     (patch) =>
       patch.paused !== undefined ||
       patch.globalDailySubmissionCap !== undefined ||
       patch.editingPaused !== undefined ||
-      patch.globalDailyEditCap !== undefined,
-    'nothing to change: send paused, globalDailySubmissionCap, editingPaused and/or globalDailyEditCap',
+      patch.globalDailyEditCap !== undefined ||
+      patch.managedBuilderMode !== undefined ||
+      patch.managedDailyCap !== undefined ||
+      patch.managedDailyUserCap !== undefined,
+    'nothing to change: send paused, globalDailySubmissionCap, editingPaused, globalDailyEditCap, managedBuilderMode, managedDailyCap and/or managedDailyUserCap',
   );
 
 const PublicPlayPatchSchema = z.object({
@@ -338,17 +357,22 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
   /** Reads the stored breaker plus today's spend, uncached — an operator wants truth. */
   async function readCreationLimits(): Promise<CreationLimitsResponse> {
     const dateStr = new Date(now()).toISOString().slice(0, 10);
-    const [stored, submissions] = await Promise.all([
+    const [stored, submissions, managedBuilds] = await Promise.all([
       store.getCreationLimits(),
       store.getGlobalSubmissionCount(dateStr),
+      store.getGlobalManagedBuildCount(dateStr),
     ]);
     return {
       stored,
       effective: {
         paused: stored?.paused === true,
         globalDailySubmissionCap: stored?.globalDailySubmissionCap ?? defaultGlobalCap,
+        managedBuilderMode: stored?.managedBuilderMode ?? 'auto',
+        managedDailyCap: stored?.managedDailyCap ?? null,
+        managedDailyUserCap: stored?.managedDailyUserCap ?? null,
+        hasPlatformBackend: options.hasPlatformBackend === true,
       },
-      today: { dateStr, submissions },
+      today: { dateStr, submissions, managedBuilds },
       propagationMs: creationLimitsTtlMs,
     };
   }

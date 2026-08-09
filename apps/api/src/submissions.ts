@@ -8,6 +8,12 @@ import { mintAgentToken } from './agent-token.js';
 import { registerMcpServerRoutes } from './mcp-server.js';
 import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './assemble.js';
 import { createCreationGate, CREATION_REFUSAL_CODES, type CreationGate } from './creation-limits.js';
+import {
+  createManagedAvailabilityGate,
+  MANAGED_UNAVAILABLE_ERROR,
+  type ManagedAvailabilityGate,
+  type ManagedUnavailableReason,
+} from './managed-availability.js';
 import { postGateScreenshotToThread } from './gate-screenshot.js';
 import { profileBylineName, toPublicCreatorProfile } from './creator-profile.js';
 import {
@@ -125,9 +131,10 @@ export { CREATOR_FEEDBACK_MARKER };
  * ("something went wrong"), and so an operator reading the queue knows to go and look at
  * billing rather than at the build.
  */
-export type ResumeFailureReason = 'not_configured' | 'no_capacity' | 'dispatch_failed';
+export type ResumeFailureReason = 'not_configured' | 'no_capacity' | 'dispatch_failed' | 'platform_unavailable';
 
-export type ResumeOutcome = { started: true } | { started: false; reason: ResumeFailureReason };
+export type ResumeOutcome =
+  { started: true } | { started: false; reason: ResumeFailureReason; unavailableReason?: ManagedUnavailableReason };
 
 /**
  * Reads a dispatch failure for the one distinction a caller can act on.
@@ -282,6 +289,12 @@ export interface SubmissionRoutesOptions {
    * pre-breaker behaviour pass.
    */
   creationGate?: CreationGate | null;
+  /**
+   * Whether the `platform` builder can be offered right now. Built from the store and
+   * the resolved agent-backend registry by default; an explicit value (including null,
+   * meaning "always available") is what tests that predate this switch pass.
+   */
+  managedAvailabilityGate?: ManagedAvailabilityGate | null;
   /** Global ceiling used when the Firestore config doc sets none. See creation-limits.ts. */
   globalDailySubmissionCap?: number;
   /** How long the breaker's config is cached — the delay on a flip taking effect. */
@@ -596,6 +609,17 @@ export async function registerSubmissionRoutes(
   }
 
   const agentBackends = buildAgentRegistry();
+
+  const managedAvailabilityGate =
+    options.managedAvailabilityGate === undefined
+      ? createManagedAvailabilityGate({
+          store,
+          now,
+          ttlMs: options.creationLimitsTtlMs,
+          hasPlatformBackend: Boolean(agentBackends.platform),
+          logWarn: (payload, message) => app.log.warn(payload, message),
+        })
+      : options.managedAvailabilityGate;
 
   function backendFor(builder: BuilderKind | undefined): AgentBackend | undefined {
     return resolveBuilderBackend(agentBackends, builder ?? 'platform');
@@ -1069,6 +1093,13 @@ export async function registerSubmissionRoutes(
     const builder = input.undelivered ? previousBuilder : (input.builder ?? record?.defaultBuilder ?? previousBuilder);
     const selected = backendFor(builder);
     if (!selected) return { started: false, reason: 'not_configured' };
+    if (builder === 'platform' && managedAvailabilityGate && record?.ownerUid) {
+      const dateStr = new Date(now()).toISOString().slice(0, 10);
+      const availability = await managedAvailabilityGate.checkAndSpend(record.ownerUid, dateStr);
+      if (!availability.available) {
+        return { started: false, reason: 'platform_unavailable', unavailableReason: availability.reason };
+      }
+    }
     try {
       // A new round closes the previous one's token. Bump *before* minting so the brief
       // carries the generation that is now active. An undelivered nudge is the same
@@ -1259,6 +1290,13 @@ export async function registerSubmissionRoutes(
     // Resolve against the *source* game before the new job exists. `dispatchBuild`
     // would otherwise ask `builderOf` on a blank record and always pick `platform`.
     const builder = input.builder ?? builderOf(source);
+
+    if (builder === 'platform' && managedAvailabilityGate) {
+      const ownerUid = input.ownerUid ?? source.ownerUid;
+      const dateStr = new Date(now()).toISOString().slice(0, 10);
+      const availability = await managedAvailabilityGate.checkAndSpend(ownerUid, dateStr);
+      if (!availability.available) return null;
+    }
 
     const jobId = await store.allocateJobId();
     await store.createSubmission(jobId, input.ownerUid ?? source.ownerUid, source.title);
@@ -1755,6 +1793,12 @@ export async function registerSubmissionRoutes(
     else delete next.lastAgentPresence;
     if (record.agentEndedAt) next.agentEndedAt = record.agentEndedAt;
     else delete next.agentEndedAt;
+    if (managedAvailabilityGate) {
+      next.platformBuilder = await managedAvailabilityGate.peek(
+        record.ownerUid,
+        new Date(now()).toISOString().slice(0, 10),
+      );
+    }
 
     const stall = detectStall({
       state: record.state ?? 'queued',
@@ -2194,6 +2238,12 @@ export async function registerSubmissionRoutes(
     if (roundBuilder) status.builder = roundBuilder;
     const lastBuilder = record.defaultBuilder ?? record.builder;
     if (lastBuilder) status.defaultBuilder = lastBuilder;
+    if (managedAvailabilityGate) {
+      status.platformBuilder = await managedAvailabilityGate.peek(
+        record.ownerUid,
+        new Date(now()).toISOString().slice(0, 10),
+      );
+    }
     if (record.builderHandoff && record.builderHandoff.awaitsAgentAck !== false) {
       status.builderHandoff = {
         target: record.builderHandoff.to,
@@ -2507,7 +2557,8 @@ export async function registerSubmissionRoutes(
     openedBy?: 'creator' | 'agent';
     log: { error: (context: object, message: string) => void; info?: (context: object, message: string) => void };
   }): Promise<
-    { ok: true; jobId: number; slug: string } | { ok: false; status: number; error: string; category?: string }
+    | { ok: true; jobId: number; slug: string }
+    | { ok: false; status: number; error: string; category?: string; reason?: ManagedUnavailableReason }
   > {
     if (!githubClient || !submissionTokenSecret) {
       return { ok: false, status: 503, error: 'submissions are not configured' };
@@ -2556,6 +2607,18 @@ export async function registerSubmissionRoutes(
       const gate = await creationGate.checkAndSpend(input.uid, dateStr);
       if (!gate.allowed) {
         return { ok: false, status: 429, error: CREATION_REFUSAL_CODES[gate.reason] };
+      }
+    }
+
+    // 5.5. Whether the `platform` builder can be offered right now — off, not yet
+    // launched here, or over a daily ceiling. `self` (BYOCA) needs no backend and is
+    // never gated. Ahead of the per-user quota, same reasoning as the breaker above: a
+    // request this route is going to refuse anyway must not spend a creator's quota.
+    const requestedBuilder: BuilderKind = parsed.data.builder ?? 'platform';
+    if (requestedBuilder === 'platform' && managedAvailabilityGate) {
+      const availability = await managedAvailabilityGate.checkAndSpend(input.uid, dateStr);
+      if (!availability.available) {
+        return { ok: false, status: 409, error: MANAGED_UNAVAILABLE_ERROR, reason: availability.reason };
       }
     }
 
@@ -2638,7 +2701,7 @@ export async function registerSubmissionRoutes(
       });
 
       const dispatchLog = input.log;
-      const builder: BuilderKind = parsed.data.builder ?? 'platform';
+      const builder: BuilderKind = requestedBuilder;
       // Persist before returning: Connect and Studio read `record.builder` immediately.
       await store.setRoundBuilder(jobId, builder, { resetRoundBudget: false });
       void dispatchBuild({
@@ -2689,6 +2752,9 @@ export async function registerSubmissionRoutes(
       if (created.error === 'content_rejected') {
         return reply.status(created.status).send({ error: created.error, category: created.category ?? 'other' });
       }
+      if (created.error === MANAGED_UNAVAILABLE_ERROR) {
+        return reply.status(created.status).send({ error: created.error, reason: created.reason });
+      }
       return reply.status(created.status).send({ error: created.error });
     }
 
@@ -2704,14 +2770,20 @@ export async function registerSubmissionRoutes(
     if (!checkUserAccess(request, reply)) {
       return;
     }
+    const dateStr = new Date(now()).toISOString().slice(0, 10);
     if (!store) {
-      return reply.send({ submissions: { used: 0, limit: dailySubmissionQuota } });
+      return reply.send({
+        submissions: { used: 0, limit: dailySubmissionQuota },
+        ...(managedAvailabilityGate
+          ? { platformBuilder: await managedAvailabilityGate.peek(request.user!.uid, dateStr) }
+          : {}),
+      });
     }
 
-    const dateStr = new Date(now()).toISOString().slice(0, 10);
-    const [usage, user] = await Promise.all([
+    const [usage, user, platformBuilder] = await Promise.all([
       store.getUsage(request.user!.uid, dateStr),
       store.getUser(request.user!.uid),
+      managedAvailabilityGate ? managedAvailabilityGate.peek(request.user!.uid, dateStr) : undefined,
     ]);
     return reply.send({
       submissions: {
@@ -2720,6 +2792,7 @@ export async function registerSubmissionRoutes(
         // than a number that will never be enforced.
         limit: user?.tier === 'trusted' ? null : dailySubmissionQuota,
       },
+      ...(platformBuilder ? { platformBuilder } : {}),
     });
   });
 
@@ -3046,6 +3119,15 @@ export async function registerSubmissionRoutes(
           : parsedBody.data.stopActiveSelfAgent === true;
 
       const currentBuilder = builderOf(record);
+      if (requestedBuilder === 'platform' && managedAvailabilityGate) {
+        const availability = await managedAvailabilityGate.peek(
+          record.ownerUid,
+          new Date(now()).toISOString().slice(0, 10),
+        );
+        if (!availability.available) {
+          return reply.status(409).send({ error: MANAGED_UNAVAILABLE_ERROR, reason: availability.reason });
+        }
+      }
       if (record.builderHandoff?.acknowledgedAt && record.builderHandoff.to === requestedBuilder) {
         const retry = await resumeBuild({
           issueNumber,
@@ -3061,7 +3143,12 @@ export async function registerSubmissionRoutes(
         });
         if (retry.started) await store.clearBuilderHandoff(issueNumber);
         invalidateStatusCache(issueNumber);
-        if (!retry.started) return reply.status(502).send({ error: retry.reason });
+        if (!retry.started) {
+          if (retry.reason === 'platform_unavailable') {
+            return reply.status(409).send({ error: MANAGED_UNAVAILABLE_ERROR, reason: retry.unavailableReason });
+          }
+          return reply.status(502).send({ error: retry.reason });
+        }
         return reply.send({ ok: true });
       }
       const stall = detectStall({
@@ -3143,6 +3230,9 @@ export async function registerSubmissionRoutes(
       invalidateStatusCache(issueNumber);
 
       if (!outcome.started) {
+        if (outcome.reason === 'platform_unavailable') {
+          return reply.status(409).send({ error: MANAGED_UNAVAILABLE_ERROR, reason: outcome.unavailableReason });
+        }
         const status = outcome.reason === 'not_configured' ? 503 : 502;
         return reply.status(status).send({ error: outcome.reason });
       }

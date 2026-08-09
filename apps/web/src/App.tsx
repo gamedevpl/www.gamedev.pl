@@ -60,7 +60,7 @@ function readLocationRoute(): AppRoute {
   }
   return parsePathRoute(window.location.pathname, window.location.hash);
 }
-import { submitSpec, refineSpec, type SubmissionApiError } from './submissionApi.js';
+import { submitSpec, refineSpec, type SubmissionApiError, type PlatformBuilderAvailability } from './submissionApi.js';
 import { useActiveBuildCount } from './activeBuilds.js';
 import { getSavedSpecs, saveSpec, type SavedSpec } from './mySpecs.js';
 import { saveLastBuilder, type BuilderKind } from './builderKind.js';
@@ -141,6 +141,9 @@ export function App() {
   const [qaBuilder, setQaBuilder] = useState<BuilderKind>(restoredQa.current?.builder ?? 'platform');
   const qaBuilderRef = useRef(qaBuilder);
   qaBuilderRef.current = qaBuilder;
+  // Whether the Gamedev.pl (platform) builder can be picked right now — reported by the
+  // hero's own quota poll, which already fetches this alongside the daily allowance.
+  const [platformBuilderAvailability, setPlatformBuilderAvailability] = useState<PlatformBuilderAvailability>();
   // Bumped when questions are rewritten for a new language so CreatorQA remounts
   // with empty answers — English chip labels must not survive as "selected" under
   // Polish options that no longer match.
@@ -1187,6 +1190,7 @@ export function App() {
                     mockStatus={mockStatus}
                     mockError={mockError}
                     onGenerateMock={(prompt) => void handleGenerateMock(prompt)}
+                    onPlatformBuilderAvailability={setPlatformBuilderAvailability}
                   />
                 </div>
 
@@ -1208,6 +1212,9 @@ export function App() {
                     onAnswersChange={handleQaAnswersChange}
                     initialBuilder={qaBuilder}
                     onBuilderChange={handleQaBuilderChange}
+                    platformUnavailable={
+                      platformBuilderAvailability?.available === false ? platformBuilderAvailability.reason : undefined
+                    }
                   />
                 )}
               </>

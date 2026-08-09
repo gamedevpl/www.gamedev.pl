@@ -23,8 +23,15 @@ vi.mock('./adminApi.js', () => mocked);
 function limits(overrides: Partial<CreationLimits> = {}): CreationLimits {
   return {
     stored: null,
-    effective: { paused: false, globalDailySubmissionCap: 50 },
-    today: { dateStr: '2026-07-30', submissions: 12 },
+    effective: {
+      paused: false,
+      globalDailySubmissionCap: 50,
+      managedBuilderMode: 'auto',
+      managedDailyCap: null,
+      managedDailyUserCap: null,
+      hasPlatformBackend: true,
+    },
+    today: { dateStr: '2026-07-30', submissions: 12, managedBuilds: 3 },
     propagationMs: 60_000,
     ...overrides,
   };
@@ -76,7 +83,17 @@ describe('CreationLimitsPanel', () => {
   it('pauses creation and reports when the change is everywhere', async () => {
     mocked.fetchCreationLimits.mockResolvedValue(limits());
     mocked.setCreationLimits.mockResolvedValue(
-      limits({ stored: { paused: true }, effective: { paused: true, globalDailySubmissionCap: 50 } }),
+      limits({
+        stored: { paused: true },
+        effective: {
+          paused: true,
+          globalDailySubmissionCap: 50,
+          managedBuilderMode: 'auto',
+          managedDailyCap: null,
+          managedDailyUserCap: null,
+          hasPlatformBackend: true,
+        },
+      }),
     );
 
     const { container, root } = await render();

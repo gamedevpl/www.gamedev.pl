@@ -1,6 +1,9 @@
+import { useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { BuilderKind } from './builderKind.js';
 import { recordStudioStep } from './visitTelemetry.js';
+
+export type BuilderUnavailableReason = 'coming_soon' | 'outage' | 'global_limit' | 'user_limit';
 
 type BuilderChoiceProps = {
   value: BuilderKind;
@@ -14,6 +17,15 @@ type BuilderChoiceProps = {
    * tree, because a fieldset without a legend is a group a screen reader can't name.
    */
   hideLegend?: boolean;
+  /**
+   * Why the `platform` option cannot be picked right now, when it can't. The option
+   * stays visible and in the tab order — never `disabled` — because a disabled button
+   * shows no tooltip in Chrome or Safari and drops out of focus order, which would hide
+   * the reason from exactly the people who need it read aloud. Selecting it is a no-op
+   * instead: the reason renders as a badge plus a short visible note (`aria-describedby`)
+   * and a fuller sentence in `title` for a mouse hover.
+   */
+  platformUnavailable?: BuilderUnavailableReason;
 };
 
 /**
@@ -29,10 +41,13 @@ export function BuilderChoice({
   disabled = false,
   compact = false,
   hideLegend = false,
+  platformUnavailable,
 }: BuilderChoiceProps) {
   const { t } = useTranslation();
+  const noteId = useId();
 
   const select = (next: BuilderKind) => {
+    if (next === 'platform' && platformUnavailable) return;
     onChange(next);
     recordStudioStep('builder_chosen', next);
   };
@@ -47,12 +62,30 @@ export function BuilderChoice({
           type="button"
           role="radio"
           aria-checked={value === 'platform'}
-          className={`builder-choice-option${value === 'platform' ? ' is-selected' : ''}`}
+          aria-disabled={platformUnavailable ? true : undefined}
+          aria-describedby={platformUnavailable ? noteId : undefined}
+          className={`builder-choice-option${value === 'platform' ? ' is-selected' : ''}${
+            platformUnavailable ? ' is-unavailable' : ''
+          }`}
           disabled={disabled}
+          title={platformUnavailable ? t(`builder.platform.unavailable.detail.${platformUnavailable}`) : undefined}
           onClick={() => select('platform')}
         >
-          <span className="builder-choice-option-title">{t('builder.platform.title')}</span>
-          <span className="builder-choice-option-detail">{t('builder.platform.detail')}</span>
+          <span className="builder-choice-option-title">
+            {t('builder.platform.title')}
+            {platformUnavailable && (
+              <span className="builder-choice-option-badge">
+                {t(`builder.platform.unavailable.badge.${platformUnavailable}`)}
+              </span>
+            )}
+          </span>
+          <span className="builder-choice-option-detail">
+            {platformUnavailable ? (
+              <span id={noteId}>{t(`builder.platform.unavailable.note.${platformUnavailable}`)}</span>
+            ) : (
+              t('builder.platform.detail')
+            )}
+          </span>
         </button>
         <button
           type="button"

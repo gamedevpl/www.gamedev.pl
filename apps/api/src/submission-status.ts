@@ -255,6 +255,14 @@ export interface SubmissionStatusResponseBase {
     acknowledgedAt?: string;
   };
   /**
+   * Whether the `platform` builder can be picked or handed off to right now — off, not
+   * yet launched here, or over a daily ceiling. Absent means "no opinion" (no gate
+   * wired), which older/test callers should read as available, matching behaviour
+   * before this field existed. `self` (BYOCA) is never gated and carries no such field.
+   */
+  platformBuilder?:
+    { available: true } | { available: false; reason: 'coming_soon' | 'outage' | 'global_limit' | 'user_limit' };
+  /**
    * Why this build is asking the creator to act, when it is. Set alongside `status`
    * because the public vocabulary projects both `failed` and a gate bounce onto
    * `needs_changes` — without this the page only shows the label, and a creator who

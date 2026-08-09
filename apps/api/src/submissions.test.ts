@@ -12,6 +12,7 @@ import { canTransition } from './job-state.js';
 import type { AgentBackend, BuildBrief } from './agent-backend.js';
 import type { GamesStore } from './games-store.js';
 import { JOB_ID_FLOOR } from './store.js';
+import { createManagedAvailabilityGate, type ManagedAvailabilityGate } from './managed-availability.js';
 
 const secret = 'submission-secret';
 const repo = 'gamedevpl/www.gamedev.pl-games';
@@ -131,6 +132,12 @@ async function createApp(params: {
   };
   adminUids?: string;
   gameSeeder?: GameSeeder;
+  /**
+   * Whether the `platform` builder is offered. Defaults to `null` (always available) so
+   * every test predating this switch keeps behaving as if it were never built — tests
+   * that exercise the switch itself pass an explicit gate. See managed-availability.ts.
+   */
+  managedAvailabilityGate?: ManagedAvailabilityGate | null;
 }): Promise<{ app: FastifyInstance; store: Store; authHeaders: Record<string, string> }> {
   const store = params.store ?? new InMemoryStore();
   await store.upsertUser({ uid: 'g:test-user' });
@@ -153,6 +160,7 @@ async function createApp(params: {
       creationLimitsTtlMs: params.creationLimitsTtlMs,
       maxCachedDraftPreviews: params.maxCachedDraftPreviews,
       ...(params.agentChannel ? { agentChannel: params.agentChannel } : {}),
+      managedAvailabilityGate: params.managedAvailabilityGate === undefined ? null : params.managedAvailabilityGate,
     },
   });
   return { app, store, authHeaders: getAuthHeaders('g:test-user') };
@@ -3254,6 +3262,122 @@ describe('GET /api/me/quota', () => {
     expect(res.json()).toEqual({ submissions: { used: 0, limit: null } });
 
     await app.close();
+  });
+});
+
+describe('managed (platform) builder availability', () => {
+  it('exposes platformBuilder on /api/me/quota when a gate is wired', async () => {
+    const { githubClient } = createGithubClientStub({});
+    const { app, authHeaders } = await createApp({
+      githubClient,
+      submissionTokenSecret: secret,
+      managedAvailabilityGate: createManagedAvailabilityGate({ hasPlatformBackend: false }),
+    });
+
+    const res = await app.inject({ method: 'GET', url: '/api/me/quota', headers: authHeaders });
+    expect(res.json()).toMatchObject({ platformBuilder: { available: false, reason: 'coming_soon' } });
+
+    await app.close();
+  });
+
+  it('refuses a new platform-builder submission with a clear reason, spending no quota', async () => {
+    const { githubClient } = createGithubClientStub({});
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      submissionTokenSecret: secret,
+      managedAvailabilityGate: createManagedAvailabilityGate({ hasPlatformBackend: false }),
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'Game idea', concept: 'A concept long enough to pass validation rules.', builder: 'platform' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toEqual({ error: 'platform_builder_unavailable', reason: 'coming_soon' });
+    expect(await store.listSubmissionsByOwner('g:test-user')).toHaveLength(0);
+    const quota = await app.inject({ method: 'GET', url: '/api/me/quota', headers: authHeaders });
+    expect((quota.json() as { submissions: { used: number } }).submissions.used).toBe(0);
+
+    await app.close();
+  });
+
+  it('still creates a self (BYOCA) round when the platform builder is unavailable', async () => {
+    const { githubClient } = createGithubClientStub({});
+    const { app, authHeaders } = await createApp({
+      githubClient,
+      submissionTokenSecret: secret,
+      managedAvailabilityGate: createManagedAvailabilityGate({ hasPlatformBackend: false }),
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'Game idea', concept: 'A concept long enough to pass validation rules.', builder: 'self' },
+    });
+
+    expect(res.statusCode).toBe(200);
+
+    await app.close();
+  });
+
+  it('refuses a quiet self round’s handoff to the platform builder, with a clear reason', async () => {
+    const { githubClient } = createGithubClientStub({});
+    const { backend } = createBackendStub();
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      submissionTokenSecret: secret,
+      agentBackend: backend,
+      // The vendor is configured (a backend exists), but an operator has switched it off
+      // — the scenario an incident pull actually produces.
+      managedAvailabilityGate: createManagedAvailabilityGate({ store: undefined, hasPlatformBackend: true }),
+    });
+
+    const submit = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: {
+        title: 'Quiet Self Round',
+        concept: 'A concept long enough to pass validation rules.',
+        builder: 'self',
+      },
+    });
+    expect(submit.statusCode).toBe(200);
+    const { token } = submit.json() as { token: string };
+    let issueNumber = 0;
+    await vi.waitFor(async () => {
+      issueNumber = (await store.listSubmissionsByOwner('g:test-user'))[0]!.issueNumber;
+      expect((await store.getSubmission(issueNumber))?.state).toBe('dispatched');
+    });
+
+    // Rebuild the app with the switch actually off — the daily-cap/mode config lives on
+    // the store, and a build with no store never sees it, so this exercises the mode path.
+    await store.setCreationLimits({ managedBuilderMode: 'off' }, 'g:boss');
+    const { app: appWithGate, authHeaders: freshHeaders } = await createApp({
+      githubClient,
+      submissionTokenSecret: secret,
+      store,
+      agentBackend: backend,
+      managedAvailabilityGate: createManagedAvailabilityGate({ store, hasPlatformBackend: true, ttlMs: 0 }),
+    });
+
+    // No agent signal yet — the quiet self round is eligible for a handoff, which
+    // defaults to `platform` when the request body omits `builder`.
+    const handoff = await appWithGate.inject({
+      method: 'POST',
+      url: `/api/submissions/${token}/handoff`,
+      headers: freshHeaders,
+    });
+
+    expect(handoff.statusCode).toBe(409);
+    expect(handoff.json()).toEqual({ error: 'platform_builder_unavailable', reason: 'outage' });
+    expect((await store.getSubmission(issueNumber))?.builder).toBe('self');
+
+    await appWithGate.close();
   });
 });
 

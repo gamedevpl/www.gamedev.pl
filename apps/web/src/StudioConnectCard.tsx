@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PixelIcon } from './PixelIcon.js';
+import type { BuilderUnavailableReason } from './BuilderChoice.js';
 import {
   CONNECT_CLIENTS,
   getConnectPayload,
@@ -93,6 +94,8 @@ type StudioConnectCardProps = {
   panelHeading?: string;
   onSwitchToPlatform?: SwitchHandler;
   builderHandoffPending?: boolean;
+  /** Why switching to `platform` cannot be offered right now, when it can't. */
+  platformUnavailable?: BuilderUnavailableReason;
 };
 
 type BuilderHandoffTarget = 'platform' | 'self';
@@ -105,6 +108,8 @@ type SwitchBuilderControlProps = {
   compact?: boolean;
   active?: boolean;
   pending?: boolean;
+  /** Why `platform` cannot be switched to right now. Meaningless for `target: 'self'`. */
+  unavailable?: BuilderUnavailableReason;
 };
 
 function SwitchBuilderControl({
@@ -113,6 +118,7 @@ function SwitchBuilderControl({
   compact = false,
   active = false,
   pending = false,
+  unavailable,
 }: SwitchBuilderControlProps) {
   const { t } = useTranslation();
   const [armed, setArmed] = useState(false);
@@ -152,7 +158,20 @@ function SwitchBuilderControl({
       }
     >
       {!compact ? <p className="studio-connect-switch-hint">{t('connect.switchBuilder.hint')}</p> : null}
-      {handoffPending ? (
+      {target === 'platform' && unavailable ? (
+        // Not `disabled`: a disabled button shows no title tooltip in Chrome/Safari and
+        // drops out of the tab order, hiding the reason from keyboard/screen-reader
+        // creators. aria-disabled plus a visible note keeps it focusable and legible.
+        <button
+          type="button"
+          className={`${compact ? 'studio-active-handoff-button' : 'studio-connect-switch-button'} is-unavailable`}
+          aria-disabled="true"
+          title={t(`builder.platform.unavailable.detail.${unavailable}`)}
+          onClick={(event) => event.preventDefault()}
+        >
+          {t(`builder.platform.unavailable.badge.${unavailable}`)}
+        </button>
+      ) : handoffPending ? (
         <p className={compact ? 'studio-active-handoff-pending' : 'studio-connect-switch-pending'} aria-live="polite">
           {t('connect.switchBuilder.pending')}
         </p>
@@ -205,11 +224,13 @@ export function SwitchToPlatformControl({
   compact = false,
   active = false,
   pending = false,
+  unavailable,
 }: {
   onSwitchToPlatform: SwitchHandler;
   compact?: boolean;
   active?: boolean;
   pending?: boolean;
+  unavailable?: BuilderUnavailableReason;
 }) {
   return (
     <SwitchBuilderControl
@@ -218,6 +239,7 @@ export function SwitchToPlatformControl({
       compact={compact}
       active={active}
       pending={pending}
+      unavailable={unavailable}
     />
   );
 }
@@ -259,6 +281,7 @@ export function StudioConnectCard({
   onSwitchToPlatform,
   builderHandoffPending = false,
   waitingCaptionElsewhere = false,
+  platformUnavailable,
 }: StudioConnectCardProps) {
   const isPanel = density === 'panel';
   const { t, i18n } = useTranslation();
@@ -357,7 +380,12 @@ export function StudioConnectCard({
             <PixelIcon name="expand" size={12} /> {t('connect.show')}
           </button>
           {payload?.canSwitchToPlatform && onSwitchToPlatform ? (
-            <SwitchToPlatformControl compact onSwitchToPlatform={onSwitchToPlatform} pending={builderHandoffPending} />
+            <SwitchToPlatformControl
+              compact
+              onSwitchToPlatform={onSwitchToPlatform}
+              pending={builderHandoffPending}
+              unavailable={platformUnavailable}
+            />
           ) : null}
           <span className="studio-connect-collapsed-hint">{t('connect.collapsed.hint')}</span>
         </div>
@@ -653,7 +681,11 @@ export function StudioConnectCard({
       {error ? <p className="error">{error}</p> : null}
 
       {payload?.canSwitchToPlatform && onSwitchToPlatform ? (
-        <SwitchToPlatformControl onSwitchToPlatform={onSwitchToPlatform} pending={builderHandoffPending} />
+        <SwitchToPlatformControl
+          onSwitchToPlatform={onSwitchToPlatform}
+          pending={builderHandoffPending}
+          unavailable={platformUnavailable}
+        />
       ) : null}
 
       {payload && !loading ? (

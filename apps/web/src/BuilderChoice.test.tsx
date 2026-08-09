@@ -60,6 +60,46 @@ describe('BuilderChoice', () => {
     await act(async () => root.unmount());
   });
 
+  it('keeps the unavailable platform option visible, focusable, and non-selectable', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+
+    let value: BuilderKind = 'platform';
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(BuilderChoice, {
+          value,
+          onChange: (next: BuilderKind) => {
+            value = next;
+          },
+          platformUnavailable: 'coming_soon',
+        }),
+      );
+      await flush();
+    });
+
+    const platformOption = container.querySelectorAll<HTMLButtonElement>('.builder-choice-option')[0];
+    // Never `disabled`: a disabled button drops out of the tab order and shows no
+    // tooltip in Chrome/Safari, hiding the reason from keyboard/screen-reader creators.
+    expect(platformOption.disabled).toBe(false);
+    expect(platformOption.getAttribute('aria-disabled')).toBe('true');
+    expect(platformOption.title).toContain('hasn');
+    expect(platformOption.textContent).toContain('Coming soon');
+
+    await act(async () => {
+      platformOption.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flush();
+    });
+    // A click on the unavailable option is a no-op — it never fires onChange.
+    expect(value).toBe('platform');
+
+    await act(async () => root.unmount());
+  });
+
   it('renders Polish labels without the word token', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('pl');

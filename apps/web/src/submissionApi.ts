@@ -174,6 +174,8 @@ export type SubmissionStatus = {
     requestedAt: string;
     acknowledgedAt?: string;
   };
+  /** Whether the `platform` builder can be picked or handed off to right now. */
+  platformBuilder?: PlatformBuilderAvailability;
   /**
    * Why this build is asking the creator to act. Covers a dead agent round
    * (`task_failed`, …) and a gate bounce (`gate_red`) — both arrive as public
@@ -415,15 +417,24 @@ export async function handoffToSelf(token: string): Promise<BuilderHandoffRespon
   return (await response.json()) as BuilderHandoffResponse;
 }
 
+export type PlatformBuilderAvailability =
+  { available: true } | { available: false; reason: 'coming_soon' | 'outage' | 'global_limit' | 'user_limit' };
+
 /** Today's submission allowance, so a creator sees it before they hit a 429. */
-export async function getQuota(): Promise<{ submissions: { used: number; limit: number | null } }> {
+export async function getQuota(): Promise<{
+  submissions: { used: number; limit: number | null };
+  platformBuilder?: PlatformBuilderAvailability;
+}> {
   const response = await fetch(`${API_BASE}/api/me/quota`, { credentials: 'include' });
 
   if (!response.ok) {
     await throwResponseError(response);
   }
 
-  return (await response.json()) as { submissions: { used: number; limit: number | null } };
+  return (await response.json()) as {
+    submissions: { used: number; limit: number | null };
+    platformBuilder?: PlatformBuilderAvailability;
+  };
 }
 
 /**
