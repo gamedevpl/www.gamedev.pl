@@ -42,6 +42,7 @@ export const GAME_KIT_MODULES = [
   'input',
   'collision',
   'world',
+  'grid',
   'path',
   'ai',
   'gameplay',
