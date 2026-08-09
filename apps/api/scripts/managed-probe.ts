@@ -162,7 +162,7 @@ if (wait && (!Number.isInteger(waitSeconds) || waitSeconds <= 0 || !Number.isFin
   console.error('--wait requires positive --wait-seconds and --budget-usd values');
   process.exit(1);
 }
-// Match production: MCP endpoint → override the Agent's tool list for this session.
+// MCP rounds override the Agent tool list, like production.
 const overrideTools = mcpOnly || flag('override-tools');
 const provider = vendor
   ? createManagedProvider(vendor, {
@@ -189,7 +189,7 @@ const backend = createManagedBackend({
   ...(mcpOnly
     ? {
         tools: { mcpEndpoints: [{ url: mcpUrl, name: 'gamedevpl' }] },
-        // Same shape as createManagedPlatformBackendFromEnv — vault holds the opener.
+        // Per-round vault holds the opener, as in production.
         mcpBearerCredential: (input) =>
           input.mcpOpenerToken ? { url: mcpUrl, token: input.mcpOpenerToken } : undefined,
       }
