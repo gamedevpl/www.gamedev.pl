@@ -2,8 +2,14 @@ import { selfBuildDeliveryCap } from './builder.js';
 import { InvalidUploadError, type GamesStore, type SourceFile } from './games-store.js';
 import { parseSpecTitle } from './github-client.js';
 import { canTransition, resolveJobState, TERMINAL_JOB_STATES, type JobState } from './job-state.js';
+import type { KitFileStore } from './kit-files.js';
 import { sanitizeCreatorText } from './submission-status.js';
 import type { Store, SubmissionRecord } from './store.js';
+import {
+  runTypecheckPreflight,
+  sharedSourcesFromKitTree,
+  TYPECHECK_PREFLIGHT_MAX_REFUSALS,
+} from './typecheck-preflight.js';
 
 export interface SourceDeliveryAuthority {
   // Backend identity recorded at dispatch time.
@@ -78,6 +84,8 @@ export interface SourceDeliveryService {
 export interface SourceDeliveryServiceOptions {
   store: Store;
   gamesStore: GamesStore;
+  // Optional: typecheck against the round's pinned kit.
+  kitFileStore?: KitFileStore | null;
   now?: () => number;
   maxSubmitsPerWindow?: number;
   onSourcesDelivered?: (input: {
@@ -89,6 +97,7 @@ export interface SourceDeliveryServiceOptions {
   onEvent?: (issueNumber: number) => void;
   log?: {
     error: (context: object, message: string) => void;
+    warn?: (context: object, message: string) => void;
   };
 }
 
@@ -224,6 +233,58 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
           `This round is pinned to Creator Kit engine ${pinnedEngineRef}, not ${input.kitEngineRef}. ` +
             'Call get_kit and submit with the engineRef it returns.',
         );
+      }
+
+      // Typecheck preflight uses the pinned kit; skip if unavailable.
+      const engineRefForCheck = pinnedEngineRef ?? input.kitEngineRef;
+      if (options.kitFileStore && engineRefForCheck) {
+        try {
+          const tree = await options.kitFileStore.loadTree(engineRefForCheck);
+          const kitShared = sharedSourcesFromKitTree(tree);
+          const sources: Record<string, string> = {};
+          for (const file of input.files) {
+            sources[file.path.trim()] = file.content;
+          }
+          const check = await runTypecheckPreflight({
+            slug: input.slug,
+            sources,
+            kitShared,
+          });
+          if (!check.ok) {
+            const prior = record.roundTypecheckPreflightRefusals ?? 0;
+            if (prior < TYPECHECK_PREFLIGHT_MAX_REFUSALS) {
+              await options.store.incrementRoundTypecheckPreflightRefusals(input.issueNumber);
+              throw new InvalidUploadError(check.message);
+            }
+            // Third submit accepts; attach diagnostics on the round.
+            await options.store.setRoundTypecheckPreflightBypassErrors(input.issueNumber, check.message);
+            options.log?.warn?.(
+              {
+                issueNumber: input.issueNumber,
+                slug: input.slug,
+                engineRef: engineRefForCheck,
+                durationMs: check.durationMs,
+              },
+              'typecheck preflight bypassed after refusal cap',
+            );
+          } else {
+            if (record.roundTypecheckPreflightBypassErrors) {
+              await options.store.setRoundTypecheckPreflightBypassErrors(input.issueNumber, null);
+            }
+            if (check.skipped === 'timeout') {
+              options.log?.warn?.(
+                { issueNumber: input.issueNumber, slug: input.slug, durationMs: check.durationMs },
+                'typecheck preflight skipped: budget exceeded',
+              );
+            }
+          }
+        } catch (error) {
+          if (error instanceof InvalidUploadError) throw error;
+          options.log?.warn?.(
+            { err: error, issueNumber: input.issueNumber, engineRef: engineRefForCheck },
+            'typecheck preflight skipped: kit load failed',
+          );
+        }
       }
 
       if (record.slug && record.slug !== input.slug) {
