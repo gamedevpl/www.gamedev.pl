@@ -903,6 +903,67 @@ describe('getGameSources', () => {
     expect(() => new Function(sources?.gameJs ?? '')).not.toThrow();
   });
 
+  it('generates style.css from GAME.json theme when the games repo ships none', async () => {
+    // Mirrors how index.html already falls back to howToPlay.
+    const files = new Map<string, string | Uint8Array>([
+      ['games/gilded-run/index.html', '<canvas id="game"></canvas>'],
+      ['games/gilded-run/game.ts', 'GameKit.mount({ ok: true });'],
+      ['games/gilded-run/SPEC.md', specMd({ title: 'Gilded Run' })],
+      [
+        'games/gilded-run/GAME.json',
+        JSON.stringify({
+          engine: { modules: ['input'] },
+          theme: { accent: '#ffd56a', canvasBackground: '#101018', canvasBorderColor: '#3a2f10', pixelArt: true },
+        }),
+      ],
+      ['shared/game-shell.css', '.shell { display: grid; }'],
+      ['shared/modules/core.ts', 'window.GameKit = { mount() {} };'],
+      ['shared/modules/input.ts', 'GameKit.createInput = function (): void {};'],
+    ]);
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const pathname = new URL(String(input)).pathname;
+      const marker = '/contents/';
+      const path = decodeURIComponent(pathname.slice(pathname.indexOf(marker) + marker.length));
+      const value = files.get(path);
+      return value === undefined ? new Response('not found', { status: 404 }) : new Response(value, { status: 200 });
+    }) as unknown as typeof fetch;
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+
+    const sources = await client.getGameSources('main', 'gilded-run');
+
+    expect(sources?.styleCss).toContain('.shell { display: grid; }');
+    expect(sources?.styleCss).toContain('color: #ffd56a');
+    expect(sources?.styleCss).toContain('background: #101018');
+    expect(sources?.styleCss).toContain('border: 2px solid #3a2f10');
+    expect(sources?.styleCss).toContain('image-rendering: pixelated');
+  });
+
+  it('falls back to the default canvas frame when a game ships neither style.css nor a theme', async () => {
+    const files = new Map<string, string | Uint8Array>([
+      ['games/plain-run/index.html', '<canvas id="game"></canvas>'],
+      ['games/plain-run/game.ts', 'GameKit.mount({ ok: true });'],
+      ['games/plain-run/SPEC.md', specMd({ title: 'Plain Run' })],
+      ['games/plain-run/GAME.json', JSON.stringify({ engine: { modules: ['input'] } })],
+      ['shared/game-shell.css', '.shell { display: grid; }'],
+      ['shared/modules/core.ts', 'window.GameKit = { mount() {} };'],
+      ['shared/modules/input.ts', 'GameKit.createInput = function (): void {};'],
+    ]);
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const pathname = new URL(String(input)).pathname;
+      const marker = '/contents/';
+      const path = decodeURIComponent(pathname.slice(pathname.indexOf(marker) + marker.length));
+      const value = files.get(path);
+      return value === undefined ? new Response('not found', { status: 404 }) : new Response(value, { status: 200 });
+    }) as unknown as typeof fetch;
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+
+    const sources = await client.getGameSources('main', 'plain-run');
+
+    expect(sources?.styleCss).toContain('background: #090d16');
+    expect(sources?.styleCss).toContain('border: 2px solid #1e2942');
+    expect(sources?.styleCss).not.toContain('.wrap h1');
+  });
+
   it('accepts the post-draw-surface module order including gfx and actors', async () => {
     const files = new Map<string, string | Uint8Array>([
       ['games/squad/index.html', '<canvas id="game"></canvas>'],

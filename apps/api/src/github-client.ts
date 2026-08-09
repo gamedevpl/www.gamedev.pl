@@ -16,6 +16,7 @@ import {
   type GameManifest as IndexHtmlManifest,
 } from './index-html-generator.js';
 import { mergeMusicTrackMaps, parseGameMusicTracks, parseMusicCatalogTracks } from './music-tracks.js';
+import { generateStyleCss, type Theme } from './theme-css-generator.js';
 
 export type { CatalogGameTouch } from './catalog-touch.js';
 
@@ -93,6 +94,17 @@ function generateIndexHtmlFromManifest(manifestSource: string, title: string): s
   }
   if (!hasPlayableHowToPlay(manifest.howToPlay)) return null;
   return generateIndexHtml(manifest, { title });
+}
+
+// Null only when the manifest itself is unparseable.
+function generateStyleCssFromManifest(manifestSource: string): string | null {
+  let manifest: { theme?: Theme };
+  try {
+    manifest = JSON.parse(manifestSource) as { theme?: Theme };
+  } catch {
+    return null;
+  }
+  return generateStyleCss(manifest.theme);
 }
 
 // GAME_KIT_MODULES lives in games-repo-contract.ts — CI re-checks the live
@@ -1342,7 +1354,7 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
         readRawFile('shared/modules/core.ts', ref),
       ]);
 
-      if (gameTs === null || styleCss === null || manifestSource === null || gameShellCss === null || coreTs === null) {
+      if (gameTs === null || manifestSource === null || gameShellCss === null || coreTs === null) {
         return null;
       }
 
@@ -1353,6 +1365,11 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
         ? indexHtml
         : generateIndexHtmlFromManifest(manifestSource, title ?? slug);
       if (resolvedIndexHtml === null) {
+        return null;
+      }
+
+      const resolvedStyleCss = styleCss?.trim() ? styleCss : generateStyleCssFromManifest(manifestSource);
+      if (resolvedStyleCss === null) {
         return null;
       }
 
@@ -1426,7 +1443,7 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
       const bundledJs = `${assetsJs}${transpiledSources.join('\n')}
 Object.freeze(window.GameKit);
 ${gameJs}`;
-      const bundledCss = `${gameShellCss}\n${styleCss}`;
+      const bundledCss = `${gameShellCss}\n${resolvedStyleCss}`;
 
       return {
         indexHtml: resolvedIndexHtml,
