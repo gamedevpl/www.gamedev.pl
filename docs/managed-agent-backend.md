@@ -274,18 +274,19 @@ For a bounded live run, `--wait` requires both caps explicitly:
 
 ```bash
 npm run managed:probe -w @gamedevpl/api -- --vendor anthropic --wait \
-  --wait-seconds 120 --cost-cents 100
+  --wait-seconds 120 --budget-usd 1
 ```
 
-The provider sends the cost cap to Anthropic as the session budget, and the backend
-interrupts the session when the wall-clock cap expires. Omitting either value makes the
-probe refuse to start rather than run unbounded.
+`--budget-usd` is converted to whole US cents for Anthropic's session budget. The environment
+variable keeps its explicit cents name for server configuration. The backend interrupts the
+session when the wall-clock cap expires. Omitting either value makes the probe refuse to start
+rather than run unbounded.
 
 The probe can inject a digest file while exercising this path:
 
 ```bash
 npm run managed:probe -w @gamedevpl/api -- --vendor anthropic --mcp --wait \
-  --wait-seconds 120 --cost-cents 100 --digest-file /path/to/engine.digest.md
+  --wait-seconds 120 --budget-usd 1 --digest-file /path/to/engine.digest.md
 ```
 
 The production registry will use `createGcsKitDigestLoader`: it reads `kits/current.json`,

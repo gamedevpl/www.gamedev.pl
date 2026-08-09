@@ -31,7 +31,7 @@ const digestPath = value('digest-file');
 const apiBaseUrl = (value('base-url') ?? 'https://api.anthropic.com').replace(/\/$/, '');
 const wait = flag('wait');
 const waitSeconds = Number(value('wait-seconds') ?? process.env.MANAGED_AGENT_MAX_SECONDS ?? '');
-const maxListCostCents = Number(value('cost-cents') ?? process.env.MANAGED_AGENT_MAX_LIST_COST_CENTS ?? '');
+const budgetUsd = Number(value('budget-usd') ?? process.env.MANAGED_AGENT_MAX_LIST_BUDGET_USD ?? '');
 const vaultIds = (process.env.MANAGED_AGENT_VAULT_IDS ?? process.env.MANAGED_AGENT_VAULT_ID)
   ?.split(',')
   .map((id) => id.trim())
@@ -123,11 +123,8 @@ if (vendor && (!apiKey || !model)) {
   console.error(`--vendor ${vendor} needs an API key and model`);
   process.exit(1);
 }
-if (
-  wait &&
-  (!Number.isInteger(waitSeconds) || waitSeconds <= 0 || !Number.isInteger(maxListCostCents) || maxListCostCents <= 0)
-) {
-  console.error('--wait requires positive --wait-seconds and --cost-cents values');
+if (wait && (!Number.isInteger(waitSeconds) || waitSeconds <= 0 || !Number.isFinite(budgetUsd) || budgetUsd <= 0)) {
+  console.error('--wait requires positive --wait-seconds and --budget-usd values');
   process.exit(1);
 }
 const provider = vendor
@@ -138,7 +135,9 @@ const provider = vendor
       ...(process.env.MANAGED_AGENT_ENVIRONMENT_ID
         ? { environmentId: process.env.MANAGED_AGENT_ENVIRONMENT_ID.trim() }
         : {}),
-      ...(Number.isInteger(maxListCostCents) && maxListCostCents > 0 ? { maxListCostCents } : {}),
+      ...(Number.isFinite(budgetUsd) && budgetUsd > 0
+        ? { maxListCostCents: Math.max(1, Math.round(budgetUsd * 100)) }
+        : {}),
       ...(vaultIds?.length ? { vaultIds } : {}),
       ...(flag('override-tools') ? { overrideTools: true } : {}),
       baseUrl: apiBaseUrl,
