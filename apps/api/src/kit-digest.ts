@@ -19,8 +19,14 @@ export const DEFAULT_PROMPT_DIGEST_MAX_BYTES = 20_000;
  * the API, so it can afford far more than a system prompt injected into every platform
  * run. Sized to carry the whole declaration surface of a current kit (~79 KiB stripped)
  * with headroom, so the MCP lane rarely has to omit anything at all.
+ *
+ * 90_000 undershot this in practice: the fixed shell (module catalog, audio catalog,
+ * exemplar, rules — none of them proportional to the API's size) already costs ~15 KiB, so
+ * a 90 KiB budget left only ~75 KiB for a ~79 KiB API — `get_kit_api` omitted real content
+ * despite its own description promising the whole reference in one call. 100_000 covers
+ * shell + full current API + the omission-note reserve with room to spare.
  */
-export const DEFAULT_MCP_DIGEST_MAX_BYTES = 90_000;
+export const DEFAULT_MCP_DIGEST_MAX_BYTES = 100_000;
 
 /**
  * Engine module families for kits published before the digest carried its own
@@ -113,18 +119,23 @@ export function splitDeclarationBlocks(api: string): DeclarationBlock[] {
   });
 }
 
-/**
- * Split the body of a declaration into its members.
- *
- * Same column trick as `splitDeclarationBlocks`, one level in: a member starts at the
- * first indent and runs to the next one, so a multi-line member (`createZone<S>(config: {
- * … })`) stays whole instead of being cut mid-signature.
- */
+// A member's own closing brace can land back at the interface's 1-2-space indent — e.g.
+// `createZone<S>(config: { … }): GameKitZone<S>;` — so an indent-only split misreads that
+// closing line as a new member, emitting the opener with no matching close. Track bracket
+// depth instead: a line starts a new member only when depth is 0 at its first character.
+// Safe here because the input is always the comment-stripped API text (compactGameKitApi
+// removes every comment before this ever runs), so no brace in prose can desync the count.
 function splitMembers(body: string): Array<{ text: string; bytes: number }> {
   const lines = body.split('\n');
   const starts: number[] = [];
+  let depth = 0;
   for (let i = 0; i < lines.length; i++) {
-    if (/^\s+\S/.test(lines[i]) && /^ {1,2}\S/.test(lines[i])) starts.push(i);
+    const line = lines[i];
+    if (depth === 0 && /\S/.test(line)) starts.push(i);
+    for (const ch of line) {
+      if (ch === '{' || ch === '(' || ch === '[') depth++;
+      else if (ch === '}' || ch === ')' || ch === ']') depth = Math.max(0, depth - 1);
+    }
   }
   if (!starts.length) return [];
   return starts.map((start, index) => {
@@ -188,6 +199,41 @@ function elideDeclaration(
   if (dropped) body.push(`  // … ${dropped} more members omitted; read shared/game-kit.d.ts for the rest`);
   const text = [header, ...body, closer].join('\n');
   return { name: block.name, text, bytes: Buffer.byteLength(`${text}\n`, 'utf8') };
+}
+
+/** Reserved headroom for the omission note (see `formatOmittedNote`) inside the API budget. */
+const OMITTED_NOTE_RESERVE_BYTES = 600;
+
+/**
+ * Render the "what got cut" note, self-bounded to `maxBytes`.
+ *
+ * At a tight budget, most of a 114-declaration API can end up in `omitted` — the full
+ * name list has run past 2 KiB on its own, none of which any caller reserved room for.
+ * An unbounded note is exactly the silent-overflow failure this whole omission-note
+ * mechanism exists to prevent, just moved one level up: instead of a declaration
+ * vanishing without a trace, the *notice* that declarations were cut could itself get
+ * chopped mid-name by the final blunt truncation, or — worse, as measured — crowd out
+ * File-shape rules and the exemplar entirely. List as many full names as fit, then say
+ * how many more there were rather than trailing off mid-word.
+ */
+export function formatOmittedNote(omitted: readonly string[], maxBytes: number): string {
+  if (!omitted.length) return '';
+  const prefix = `\n// Omitted for length (${omitted.length}); read shared/game-kit.d.ts for these: `;
+  if (Buffer.byteLength(prefix, 'utf8') > maxBytes) return '';
+  let text = prefix;
+  let shown = 0;
+  for (const name of omitted) {
+    const candidate = `${text}${shown ? ', ' : ''}${name}`;
+    if (Buffer.byteLength(candidate, 'utf8') > maxBytes) break;
+    text = candidate;
+    shown++;
+  }
+  const remaining = omitted.length - shown;
+  if (remaining > 0) {
+    const suffix = ` … and ${remaining} more`;
+    text = Buffer.byteLength(`${text}${suffix}`, 'utf8') <= maxBytes ? `${text}${suffix}` : text;
+  }
+  return text;
 }
 
 /** Module families named by the digest's own catalog, falling back for older kits. */
@@ -370,18 +416,6 @@ export function compactKitDigestForPrompt(digest: string, maxBytes = DEFAULT_PRO
   const apiStart = digest.indexOf('~~~typescript');
   const apiEnd = apiStart < 0 ? -1 : digest.indexOf('~~~', apiStart + 13);
   const api = apiStart >= 0 && apiEnd >= 0 ? digest.slice(apiStart + 13, apiEnd) : '';
-  // The API section gets the lion's share; the catalog, exemplar and rules are small and
-  // fixed, so reserving a slice for them keeps the tail from being what a cap truncates.
-  const apiBudget = Math.max(0, Math.floor(maxBytes * 0.72));
-  const { kept, omitted } = selectApiBlocks(splitDeclarationBlocks(api), moduleFamiliesOf(digest), apiBudget);
-  const apiLines = kept.map((block) => block.text);
-  // Name what the budget removed. A digest that silently drops declarations reads as a
-  // complete API reference, and an agent cannot ask for what it cannot see is missing.
-  if (omitted.length) {
-    apiLines.push(
-      `\n// Omitted for length (${omitted.length}); read shared/game-kit.d.ts for these: ${omitted.join(', ')}`,
-    );
-  }
 
   const exemplarStart = digest.indexOf('## Exemplar game');
   const rulesStart = digest.indexOf('## File-shape rules');
@@ -397,24 +431,66 @@ export function compactKitDigestForPrompt(digest: string, maxBytes = DEFAULT_PRO
     })
     .filter(Boolean);
   const rules = rulesStart >= 0 ? digest.slice(rulesStart) : '';
+  const engineModules = sectionOf(digest, '## Engine modules');
+  const audioCatalog = sectionOf(digest, '## Audio catalog');
+
+  // Every non-API piece — the module catalog, audio catalog, exemplar, rules, and the
+  // fixed prose/markdown around them — is measured before any of it is assembled, and the
+  // API gets whatever's actually left. A flat percentage guessed this instead of measuring
+  // it: at the real default 20 KiB budget the exemplar alone is ~13.6 KiB, so the guessed
+  // 28% reserve (~5.6 KiB) was already short before the API contributed a single byte, and
+  // the blunt final truncation below silently cut the rules section off entirely rather
+  // than the guess ever being caught. Measuring first means the API section — not File-
+  // shape rules or the exemplar — is what a tight budget trims.
+  const shellBytes = Buffer.byteLength(
+    [
+      '# Creator Kit prompt digest',
+      'Use these signatures and the template shape; unpack the full kit only when needed.',
+      '',
+      engineModules,
+      '## Core API',
+      '~~~typescript',
+      '~~~',
+      '',
+      audioCatalog,
+      exemplarSections.join('\n\n'),
+      '',
+      rules,
+    ].join('\n'),
+    'utf8',
+  );
+  // Reserve room for the omission note up front — it is rendered after selection but must
+  // not be free to grow past what selection actually left behind.
+  const apiBudget = Math.max(0, maxBytes - shellBytes - OMITTED_NOTE_RESERVE_BYTES);
+  const { kept, omitted } = selectApiBlocks(splitDeclarationBlocks(api), moduleFamiliesOf(digest), apiBudget);
+  const apiLines = kept.map((block) => block.text);
+  // Name what the budget removed. A digest that silently drops declarations reads as a
+  // complete API reference, and an agent cannot ask for what it cannot see is missing.
+  const omittedNote = formatOmittedNote(omitted, OMITTED_NOTE_RESERVE_BYTES);
+  if (omittedNote) apiLines.push(omittedNote);
+
   const compact = [
     '# Creator Kit prompt digest',
     'Use these signatures and the template shape; unpack the full kit only when needed.',
     '',
     // First, and ahead of the API: this is the only place that answers "what can this
     // platform build at all" — the question that used to send agents to a web search.
-    sectionOf(digest, '## Engine modules'),
+    engineModules,
     '## Core API',
     '~~~typescript',
     apiLines.join('\n'),
     '~~~',
     '',
     // Before the exemplar: the tail is what a byte cap cuts.
-    sectionOf(digest, '## Audio catalog'),
+    audioCatalog,
     exemplarSections.join('\n\n'),
     '',
     rules,
   ].join('\n');
+  // Still a floor, not the mechanism: apiBudget already sized the API section to leave
+  // room for everything else, so this only fires if the shell itself exceeds maxBytes
+  // (a budget too small to hold even zero API lines) — same shape of failure either way,
+  // just at the very end instead of mid-line.
   return Buffer.byteLength(compact, 'utf8') <= maxBytes
     ? compact
     : Buffer.from(compact, 'utf8').subarray(0, maxBytes).toString('utf8');

@@ -3,6 +3,7 @@ import {
   appendKitDigest,
   compactKitDigestForPrompt,
   createGcsKitDigestLoader,
+  formatOmittedNote,
   selectApiBlocks,
   splitDeclarationBlocks,
 } from './kit-digest.js';
@@ -100,7 +101,7 @@ describe('Creator Kit digest loader', () => {
       '- Keep files small.',
     ].join('\n');
 
-    const compact = compactKitDigestForPrompt(full, 800);
+    const compact = compactKitDigestForPrompt(full, 1400);
 
     // Party and zone survive whole — the failure this guards against dropped them (or
     // orphaned their members) below any generous-looking budget. What didn't fit (here,
@@ -110,6 +111,91 @@ describe('Creator Kit digest loader', () => {
     expect(compact).toContain('Omitted for length');
     expect(compact).toContain('GameKitApi');
     expect(compact.trim().endsWith('- Keep files small.')).toBe(true);
+  });
+
+  it('formatOmittedNote lists every name when it fits, and never exceeds its byte budget', () => {
+    const note = formatOmittedNote(['GameKitParty', 'GameKitZone'], 600);
+    expect(note).toContain('GameKitParty');
+    expect(note).toContain('GameKitZone');
+    expect(Buffer.byteLength(note, 'utf8')).toBeLessThanOrEqual(600);
+  });
+
+  it('formatOmittedNote truncates a long name list instead of overflowing its reserve', () => {
+    // A realistic tight-budget scenario: most of a 114-declaration API omitted, and the
+    // note listing them all unbounded ran to 2+ KiB with nothing reserving room for it —
+    // the actual bug behind the digest silently dropping the File-shape rules section.
+    const names = Array.from({ length: 100 }, (_, i) => `GameKitDeclarationNumber${i}`);
+    const note = formatOmittedNote(names, 250);
+    expect(Buffer.byteLength(note, 'utf8')).toBeLessThanOrEqual(250);
+    expect(note).toMatch(/… and \d+ more/);
+    expect(note).not.toContain('GameKitDeclarationNumber99');
+
+    // Too tight even for the "… and N more" suffix: still bounded, just without it — a
+    // truncated list beats an overflowing note either way.
+    const tighter = formatOmittedNote(names, 200);
+    expect(Buffer.byteLength(tighter, 'utf8')).toBeLessThanOrEqual(200);
+  });
+
+  it('formatOmittedNote returns empty for nothing omitted', () => {
+    expect(formatOmittedNote([], 600)).toBe('');
+  });
+
+  it('never truncates the exemplar or File-shape rules to make room for the API, at realistic sizes', () => {
+    // A large exemplar (bigger than a flat percentage of a small budget would allow) used
+    // to get cut off mid-file by the final blunt byte-cap safety net, because nothing
+    // measured the shell's real size before guessing how much room the API could have.
+    // Reproduces that at the platform lane's real default budget.
+    const bigFile = 'x'.repeat(6000);
+    const full = [
+      '## GameKit API surface',
+      '~~~typescript',
+      `interface GameKitApi { locale: string; ${'y'.repeat(30000)} }`,
+      '~~~',
+      '## Exemplar game',
+      `### games/dodge-the-falling-rocks/GAME.json\n\n~~~text\n${bigFile}\n~~~`,
+      `### games/dodge-the-falling-rocks/index.html\n\n~~~text\n${bigFile}\n~~~`,
+      '## File-shape rules',
+      '- Keep files small.',
+    ].join('\n');
+
+    const compact = compactKitDigestForPrompt(full); // default 20 KiB budget
+
+    expect(compact.trim().endsWith('- Keep files small.')).toBe(true);
+    expect(compact).toContain('### games/dodge-the-falling-rocks/index.html');
+  });
+
+  it('elideDeclaration keeps a multiline member whole even when its closing brace lands at the interface indent', () => {
+    // Shaped after the real GameKitApi.createZone: a member whose own closing
+    // `}): ReturnType;` sits at the interface's 2-space indent, same as any other member's
+    // opening line. An indentation-only member split misread that closing line as a new
+    // member and could drop it once the tight budget ran out, emitting createZone opened
+    // but never closed — malformed output for exactly the factory this exists to preserve.
+    const pad = 'x'.repeat(400);
+    const api = [
+      'interface GameKitApi {',
+      '  createZone<S>(config: {',
+      '    sim: GameKitZoneSim<S>;',
+      '    onStatus?(status: string, info: { slot: number }): void;',
+      '  }): GameKitZone<S>;',
+      `  other(): ${pad};`,
+      '}',
+    ].join('\n');
+
+    const blocks = splitDeclarationBlocks(api);
+    // Budget too small for the whole interface (the padded `other` member alone forces
+    // that), forcing elideDeclaration's member-wise path.
+    const { kept } = selectApiBlocks(blocks, ['zone'], 250);
+    const text = kept.map((block) => block.text).join('\n');
+
+    expect(text).toContain('createZone<S>(config: {');
+    expect(text).toContain('}): GameKitZone<S>;');
+    // Brace/paren/bracket depth must return to zero — an unclosed opener is the bug.
+    let depth = 0;
+    for (const ch of text) {
+      if (ch === '{' || ch === '(' || ch === '[') depth++;
+      else if (ch === '}' || ch === ')' || ch === ']') depth--;
+    }
+    expect(depth).toBe(0);
   });
 
   it('splits a declaration file into whole top-level blocks by name', () => {
