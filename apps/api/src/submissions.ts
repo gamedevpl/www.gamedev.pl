@@ -673,7 +673,7 @@ export async function registerSubmissionRoutes(
           }
         : undefined;
     const environmentRegistry = createAgentBackendRegistryFromEnv(app.log, selfOptions, managedDeps);
-    // Explicit backends win over the environment registry.
+    // Explicit backends win; do not pre-wire Copilot over managed.
     const self = options.agentBackends?.self ?? environmentRegistry.self;
     const platform = options.agentBackend ?? options.agentBackends?.platform ?? environmentRegistry.platform;
     return { ...(platform ? { platform } : {}), self };

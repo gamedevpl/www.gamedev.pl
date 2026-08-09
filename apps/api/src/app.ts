@@ -9,7 +9,7 @@ import { z } from 'zod';
 import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './assemble.js';
 import { registerAccessTokenRoutes } from './access-token-routes.js';
 import { registerJobAdminRoutes } from './job-admin-routes.js';
-import { createGameSeederFromEnv, createPlatformBackendFromEnv } from './agent-backend-env.js';
+import { createGameSeederFromEnv } from './agent-backend-env.js';
 import { createManagedDeliveryLock } from './managed-backend.js';
 import { createGcsGamesStore } from './games-store.js';
 import { createGcsObjectStore } from './gcs-sign.js';
@@ -368,12 +368,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     }
   };
 
-  // Computed once and reused below (admin routes report whether a platform backend is
-  // configured at all) — calling createPlatformBackendFromEnv a second time would both
-  // waste the lookup and double the "agent dispatch enabled" log line.
-  const resolvedAgentBackends =
-    options.submissionRoutes?.agentBackends ??
-    (options.submissionRoutes?.agentBackend ? undefined : { platform: createPlatformBackendFromEnv(app.log) });
+  // Do not default Copilot here — injected platform wins over the env registry.
+  const resolvedAgentBackends = options.submissionRoutes?.agentBackends;
 
   const submissionSeams = await registerSubmissionRoutes(app, {
     ...options.submissionRoutes,
@@ -389,8 +385,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // drift here is an alert nobody receives.
     adminUids,
     agentBackend: options.submissionRoutes?.agentBackend,
-    // Platform only here — `self` is wired inside registerSubmissionRoutes with store
-    // callbacks for seed persistence. Passing a pre-built self would skip those.
+    // Self needs store callbacks inside registerSubmissionRoutes; do not pre-build it.
     agentBackends: resolvedAgentBackends,
     managedBackendDeps:
       options.submissionRoutes?.managedBackendDeps ??
@@ -584,7 +579,12 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     creationLimitsTtlMs: options.submissionRoutes?.creationLimitsTtlMs,
     publicPlayFallbackSlugs: [...publicPlayFallbackSlugs],
     publicPlayTtlMs,
-    hasPlatformBackend: Boolean(options.submissionRoutes?.agentBackend ?? resolvedAgentBackends?.platform),
+    // Admin UI only; the submission gate uses the real registry.
+    hasPlatformBackend: Boolean(
+      options.submissionRoutes?.agentBackend ??
+      resolvedAgentBackends?.platform ??
+      (process.env.MANAGED_AGENT_VENDOR?.trim() || process.env.AGENT_TASKS_TOKEN?.trim() || undefined),
+    ),
   });
 
   // Review catalog matches /api/catalog; snapshot first in prod.
