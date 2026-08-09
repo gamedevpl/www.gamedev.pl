@@ -10775,20 +10775,31 @@ button.builder-mode-selector:disabled {
   color: var(--muted);
 }
 
-/* Same docked-card look as .app-update, but static in the panel flow — this bar
-   only ever appears already inside Studio, so it never needs to float over it. */
+/* Match the app-update toast instead of pushing Studio down below the top bar. */
 .studio-abandon-notice {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  z-index: 900;
   display: flex;
   align-items: center;
   gap: 12px;
-  margin: 0 0 1.5rem;
+  width: auto;
+  max-width: 560px;
+  margin: 0 auto;
   padding: 12px 14px;
   border: 1px solid var(--panel-border);
   border-radius: 14px;
   background: rgba(22, 28, 34, 0.96);
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
   animation: install-prompt-in 220ms ease-out;
+}
+
+.app:has(:is(.install-prompt, .app-update)) .studio-abandon-notice {
+  bottom: max(88px, calc(76px + env(safe-area-inset-bottom)));
 }
 
 @media (prefers-reduced-motion: reduce) {
