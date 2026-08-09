@@ -311,6 +311,7 @@ export const DELIVERY_FIXED_FILES = [
   // Optional: generated from GAME.json howToPlay when a game ships none.
   'index.html',
   'game.ts',
+  // Optional: generated from GAME.json theme when a game ships none.
   'style.css',
   'sim.ts',
 ] as const;
