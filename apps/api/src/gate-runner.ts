@@ -415,8 +415,21 @@ export async function runGate(
       // typecheck/smoke/build all pass without a pixel ever existing, so prose was the
       // only evidence it had. `storeCaptureMedia` is best-effort and the harness stage
       // is advisory, so a run with no browser simply stores the document as before.
+      let previewArtifacts: string[];
+      try {
+        previewArtifacts = await storePreviewStrict(deps, slug, version, harness);
+      } catch (error) {
+        // Same rule as collectArtifacts below: nothing servable is not a pass.
+        return {
+          green: false,
+          report: error instanceof Error ? error.message : String(error),
+          artifacts: [],
+          durationMs: now() - startedAt,
+          ...(engineCommit ? { engineCommit } : {}),
+        };
+      }
       const artifacts = [
-        ...(await storePreview(deps, slug, version, harness)),
+        ...previewArtifacts,
         ...(previewStills ? await storeCaptureMedia(deps, slug, version, harness, roots) : []),
       ];
       const screenshot = firstGateScreenshotPath(artifacts);
@@ -526,19 +539,30 @@ async function materializeCandidate(store: GamesStore, manifest: VersionManifest
  */
 async function storePreview(deps: GateRunnerDeps, slug: string, version: string, harness: string): Promise<string[]> {
   try {
-    const preview = await (deps.assembleBundle ?? assembleFromHarness)(harness, slug);
-    if (preview === null) return [];
-    await deps.store.putDerivedArtifact(
-      slug,
-      version,
-      'preview.html',
-      Buffer.from(preview, 'utf8'),
-      'text/html; charset=utf-8',
-    );
-    return ['preview.html'];
+    return await storePreviewStrict(deps, slug, version, harness);
   } catch {
     return [];
   }
+}
+
+async function storePreviewStrict(
+  deps: GateRunnerDeps,
+  slug: string,
+  version: string,
+  harness: string,
+): Promise<string[]> {
+  const preview = await (deps.assembleBundle ?? assembleFromHarness)(harness, slug);
+  if (preview === null) {
+    throw new Error(`check:game --preview passed for ${slug} but its sources could not be assembled`);
+  }
+  await deps.store.putDerivedArtifact(
+    slug,
+    version,
+    'preview.html',
+    Buffer.from(preview, 'utf8'),
+    'text/html; charset=utf-8',
+  );
+  return ['preview.html'];
 }
 
 /** Stores capture media the check left under the game directory, when any. */

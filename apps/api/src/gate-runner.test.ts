@@ -152,6 +152,35 @@ describe('runGate', () => {
     expect(outcome.artifacts).not.toContain('bundle.html');
   });
 
+  it('fails the preview lane rather than reporting green with nothing servable', async () => {
+    // arena-brawlers, 2026-08-09: preview check passed, assembler threw.
+    const { store, derived } = stubStore();
+    const run = vi.fn(async (command: string, args: string[]) =>
+      command === 'npm' && args.includes('check:game')
+        ? { code: 0, output: 'preview ok' }
+        : { code: 0, output: 'deadbeef' },
+    );
+
+    const outcome = await runGate(
+      'comet-courier',
+      'v1',
+      {
+        store,
+        prepareHarness: harnessDir,
+        run,
+        assembleBundle: async () => {
+          throw new Error('game manifest engine modules are duplicated or out of order');
+        },
+      },
+      { preview: true },
+    );
+
+    expect(outcome.green).toBe(false);
+    expect(outcome.report).toContain('duplicated or out of order');
+    expect(outcome.artifacts).toEqual([]);
+    expect(derived).toEqual([]);
+  });
+
   it('drops preview stills when GATE_PREVIEW_STILLS=0, without touching the lane', async () => {
     // A kill switch that needs no deploy: if the spend or the wall clock ever looks
     // wrong, this stops the capture and still leaves a working preview verdict.
