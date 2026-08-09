@@ -112,7 +112,7 @@ describe('managed backend', () => {
     await backend.dispatch(brief());
     const observation = await backend.observe('session-1', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
 
-    expect(started[0].prompt).toContain('call `start`');
+    expect(started[0].prompt).toContain('Call `start`');
     expect(read).toEqual([]);
     expect(observation).toMatchObject({ state: 'completed', hasCandidate: false });
   });
