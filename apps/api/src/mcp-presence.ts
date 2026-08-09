@@ -51,6 +51,7 @@ const PRESENCE_BY_TOOL: Record<string, { key: string; text: string }> = {
   get_brief: { key: 'reading_brief', text: 'Reading the build brief…' },
   get_seed: { key: 'loading_seed', text: 'Loading the seed draft…' },
   get_kit: { key: 'fetching_kit', text: 'Fetching Creator Kit metadata…' },
+  get_kit_api: { key: 'reading_kit_api', text: 'Reading the Creator Kit API reference…' },
   list_kit_files: { key: 'browsing_kit', text: 'Browsing the Creator Kit…' },
   search_kit_files: { key: 'searching_kit', text: 'Searching the Creator Kit…' },
   read_kit_file: { key: 'reading_kit', text: 'Reading Creator Kit files…' },

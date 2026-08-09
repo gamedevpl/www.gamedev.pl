@@ -87,6 +87,7 @@ export const PROGRESS_NUDGE_EXEMPT = new Set([
  */
 export const INBOX_PIGGYBACK_TOOLS = new Set([
   'get_kit',
+  'get_kit_api',
   'list_kit_files',
   'search_kit_files',
   'read_kit_file',
@@ -101,6 +102,7 @@ export const INBOX_PIGGYBACK_TOOLS = new Set([
 /** Kit browse without get_seed while a draft is ready → seed_unread. */
 export const SEED_NUDGE_TOOLS = new Set([
   'get_kit',
+  'get_kit_api',
   'list_kit_files',
   'search_kit_files',
   'read_kit_file',

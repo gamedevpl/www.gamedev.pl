@@ -375,17 +375,20 @@ describe('POST /api/mcp (BY-05)', () => {
         'ack_inbox',
       ]),
     );
-    expect(names).not.toEqual(
+    // Kit browse tools are advertised: get_kit_api is the orientation path (whole digest,
+    // one call), these are the depth path (specific files) once an agent knows what it
+    // wants. Example/proposal browse tools stay off the model-visible surface.
+    expect(names).toEqual(
       expect.arrayContaining([
+        'get_kit_api',
         'list_kit_files',
         'search_kit_files',
         'read_kit_file',
         'read_kit_files',
         'read_kit_file_fragment',
-        'list_examples',
-        'get_example',
       ]),
     );
+    expect(names).not.toEqual(expect.arrayContaining(['list_examples', 'get_example']));
     expect(names).not.toContain('send_screenshot');
     const tools = listed.json().result.tools as Array<{
       name: string;
@@ -417,12 +420,21 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(getKit?.description).toMatch(/gamedevpl-creator-kit/);
     expect(getKit?.description).toMatch(/entry=gamedevpl-creator-kit\/SKILL\.md/);
     expect(getKit?.description).toMatch(/do not assume a `cd` persists/i);
-    expect(getKit?.description).not.toMatch(/list_kit_files|search_kit_files|read_kit_file/);
-    expect(tools.find((t) => t.name === 'list_kit_files')).toBeUndefined();
-    expect(tools.find((t) => t.name === 'search_kit_files')).toBeUndefined();
-    expect(tools.find((t) => t.name === 'read_kit_file')).toBeUndefined();
-    expect(tools.find((t) => t.name === 'read_kit_files')).toBeUndefined();
-    expect(tools.find((t) => t.name === 'read_kit_file_fragment')).toBeUndefined();
+    // The platform and kit are not on the public web — an agent with an unanswered
+    // capability question (multiplayer? persistent worlds?) has an in-band answer now,
+    // so it never has to guess by searching for docs that were never published.
+    expect(getKit?.description).toMatch(/not on the public web/i);
+    expect(getKit?.description).toMatch(/get_kit_api/);
+    expect(tools.find((t) => t.name === 'get_kit_api')).toBeDefined();
+    expect(tools.find((t) => t.name === 'list_kit_files')).toBeDefined();
+    expect(tools.find((t) => t.name === 'search_kit_files')).toBeDefined();
+    expect(tools.find((t) => t.name === 'read_kit_file')).toBeDefined();
+    expect(tools.find((t) => t.name === 'read_kit_files')).toBeDefined();
+    expect(tools.find((t) => t.name === 'read_kit_file_fragment')).toBeDefined();
+
+    const getKitApi = tools.find((t) => t.name === 'get_kit_api');
+    expect(getKitApi?.description).toMatch(/party|zone|commons|presence/i);
+    expect(getKitApi?.description).toMatch(/engineRef/);
 
     const gateVerdict = tools.find((t) => t.name === 'get_gate_verdict');
     expect(gateVerdict?.annotations?.title).toBe('Check the gate once');
@@ -452,12 +464,15 @@ describe('POST /api/mcp (BY-05)', () => {
         'get_brief',
         'get_seed',
         'get_kit',
+        'get_kit_api',
         'stage_source_file',
         'submit_sources',
         'end',
       ]),
     );
-    expect(names).not.toEqual(expect.arrayContaining(['search_kit_files', 'submit_proposal']));
+    // Kit browse/orientation tools are the focused build surface now; example and
+    // proposal tooling stay off it.
+    expect(names).not.toEqual(expect.arrayContaining(['list_examples', 'submit_proposal']));
   });
 
   it('never names an unadvertised tool in anything the model reads', async () => {
@@ -480,7 +495,7 @@ describe('POST /api/mcp (BY-05)', () => {
     }
   });
 
-  it('get_kit does not name kit browse tools this surface never advertised', async () => {
+  it('get_kit names the kit browse tools this surface advertises', async () => {
     const store = new InMemoryStore();
     await seedJob(store);
     const engine = 'c21f5132cedb5133aa87f75654549391f4a5c633';
@@ -503,7 +518,68 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(kit.isError).toBe(false);
     const structured = kit.structured as { engineRef?: string; browse?: Record<string, string> };
     expect(structured.engineRef).toBe(engine);
-    expect(JSON.stringify(structured)).not.toMatch(/list_kit_files|search_kit_files|read_kit_file/);
+    // Browse tools are advertised now, so withAdvertisedBrowseTools keeps the whole block
+    // rather than stripping it — this was the reverse assertion when they were hidden.
+    expect(structured.browse).toEqual({
+      list: 'list_kit_files',
+      search: 'search_kit_files',
+      read: 'read_kit_file',
+      readMany: 'read_kit_files',
+      fragment: 'read_kit_file_fragment',
+    });
+  });
+
+  it('get_kit_api returns the compacted digest for the pinned engineRef', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    const engine = 'c21f5132cedb5133aa87f75654549391f4a5c633';
+    const digest = [
+      '# gamedev.pl Creator Kit digest',
+      '',
+      '## Engine modules',
+      '',
+      '- `party` — multiple players on one shared screen.',
+      '- `zone` — a world the server arbitrates, shared with strangers in real time.',
+      '',
+      '## GameKit API surface',
+      '',
+      '~~~typescript',
+      'interface GameKitApi { locale: string; }',
+      '~~~',
+      '',
+      '## Exemplar game',
+      '',
+      '### games/dodge-the-falling-rocks/game.ts',
+      '',
+      '~~~text',
+      'export {};',
+      '~~~',
+      '',
+      '## File-shape rules',
+      '- Keep files small.',
+    ].join('\n');
+    const objectStore: GcsObjectStore = {
+      readObject: async (name: string) =>
+        name === 'kits/current.json'
+          ? Buffer.from(JSON.stringify({ current: engine, previous: null, updatedAt: '2026-08-09T00:00:00.000Z' }))
+          : name === `kits/${engine}.digest.md`
+            ? Buffer.from(digest)
+            : null,
+      objectExists: async () => true,
+      signReadUrl: async (name: string) => `https://signed.example/${name}?sig=1`,
+    };
+    app = await createApp(store, undefined, objectStore);
+    const sessionId = await initialize(app);
+    const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    const kitApi = await callTool(app, 'get_kit_api', { sessionKey }, { 'mcp-session-id': sessionId });
+    expect(kitApi.isError).toBe(false);
+    const structured = kitApi.structured as { engineRef?: string; digest?: string };
+    expect(structured.engineRef).toBe(engine);
+    expect(structured.digest).toMatch(/GameKitApi/);
+    expect(structured.digest).toMatch(/`party`/);
+    expect(structured.digest).toMatch(/`zone`/);
   });
 
   it('start issues a sessionKey; subsequent tools work with it', async () => {
@@ -645,7 +721,10 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(joined).toMatch(/available:true/);
     expect(joined).toMatch(/never scaffold over them/i);
     expect(joined).toMatch(/get_kit/);
-    expect(joined).not.toMatch(/list_kit_files|search_kit_files|read_kit_file/);
+    expect(joined).toMatch(/get_kit_api/);
+    // The platform and kit are not on the public web — an agent following the loop should
+    // never end up guessing via a web search for gamedev.pl documentation.
+    expect(joined).toMatch(/not on the public web|never a web search|never.*web search/i);
     expect(joined).toMatch(/screenshot_upload_url/);
     expect(joined).not.toMatch(/send_screenshot/);
     expect(joined).toMatch(/stage_source_file|fromStaged/);

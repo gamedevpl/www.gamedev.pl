@@ -30,6 +30,7 @@ import { selfBuildDeliveryCap } from './builder.js';
 import { canonicalAppBaseUrl } from './canonical-app-url.js';
 import { deriveGateStatusString, readGateVerdict } from './gate-verdict.js';
 import { DEFAULT_SIGNED_URL_TTL_SECONDS, type GcsObjectStore } from './gcs-sign.js';
+import { DEFAULT_MCP_DIGEST_MAX_BYTES, compactKitDigestForApi } from './kit-digest.js';
 import {
   InvalidUploadError,
   MAX_UPLOAD_BYTES,
@@ -2119,6 +2120,62 @@ export async function registerAgentChannelRoutes(
             readMany: 'read_kit_files',
             fragment: 'read_kit_file_fragment',
           },
+        });
+      } catch (error) {
+        if (error instanceof KitRegistryError) {
+          return reply.status(404).send({ error: error.code, message: error.message });
+        }
+        throw error;
+      }
+    },
+  );
+
+  /**
+   * The Creator Kit's prompt-ready API reference over MCP.
+   *
+   * A BYOCA agent has no system prompt carrying the kit the way the platform lane does
+   * (`appendKitDigest` in managed-backend.ts) — before this route, `get_kit` returned only
+   * tarball metadata and the API content lived nowhere an MCP client could read it without
+   * shell egress. That left "what can this platform build" answerable only by unpacking the
+   * tarball or browsing file-by-file, and observably sent at least one agent to the public
+   * web looking for gamedev.pl documentation that was never published there.
+   *
+   * Same engineRef convention as the kit browse routes below: optional, defaults to the
+   * registry's current entry when omitted. Pass the engineRef `get_kit` returned so a
+   * mid-round registry bump cannot mix kit revisions within one round.
+   */
+  app.get(
+    '/api/agent/build/kit/api',
+    { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      const resolved = await resolveBuild(request, reply);
+      if (!resolved) return reply;
+      if (!options.objectStore) {
+        return reply.status(503).send({ error: 'kit_store_unavailable', message: 'the kit store is not configured' });
+      }
+      try {
+        const query = request.query as { engineRef?: string };
+        let engineRef = query.engineRef?.trim();
+        if (!engineRef) {
+          const registryBody = await options.objectStore.readObject('kits/current.json');
+          if (!registryBody) {
+            return reply.status(404).send({
+              error: 'kit_registry_missing',
+              message: 'kits/current.json is not published yet — the games-repo kit publisher has not run',
+            });
+          }
+          engineRef = parseKitRegistry(registryBody.toString('utf8')).current;
+        }
+        const digestBody = await options.objectStore.readObject(`kits/${engineRef}.digest.md`);
+        if (!digestBody) {
+          return reply.status(404).send({
+            error: 'kit_artifact_missing',
+            message: `kits/${engineRef}.digest.md is missing for engineRef ${engineRef}`,
+          });
+        }
+        return reply.send({
+          engineRef,
+          digest: compactKitDigestForApi(digestBody.toString('utf8'), DEFAULT_MCP_DIGEST_MAX_BYTES),
         });
       } catch (error) {
         if (error instanceof KitRegistryError) {

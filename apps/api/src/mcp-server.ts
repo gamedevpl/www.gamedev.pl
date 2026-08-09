@@ -125,6 +125,18 @@ const MCP_VISIBLE_TOOLS = new Set([
   'get_seed',
   'get_sources',
   'get_kit',
+  // get_kit returns tarball metadata only — no MCP client has a system prompt carrying
+  // the kit the way the platform lane does. get_kit_api is the orientation path (the
+  // digest, in one call); the browse tools below are the depth path once an agent knows
+  // what it's looking for. Advertising both was the fix for an agent that, having no
+  // in-band way to answer "what can this platform build", went to the public web looking
+  // for gamedev.pl documentation that was never published there.
+  'get_kit_api',
+  'list_kit_files',
+  'search_kit_files',
+  'read_kit_file',
+  'read_kit_files',
+  'read_kit_file_fragment',
   'report_progress',
   'screenshot_upload_url',
   'stage_upload_url',
@@ -149,11 +161,6 @@ export const MCP_UNADVERTISED_TOOLS: readonly string[] = Object.freeze([
   'open_proposal_round',
   'submit_proposal',
   'get_proposal_status',
-  'list_kit_files',
-  'search_kit_files',
-  'read_kit_file',
-  'read_kit_files',
-  'read_kit_file_fragment',
   'list_examples',
   'get_example',
   'list_example_files',
@@ -637,7 +644,7 @@ const SESSION_WORKFLOW: readonly string[] = [
   // one. get_sources is cheap and answers available:false on a new game, so it is
   // unconditional rather than gated on a round type the agent cannot see.
   'get_sources — when it returns available:true this round improves an existing game: continue those files. Never scaffold over them. If warnings.code=module_too_large, split those oversized modules into cohesive game/*.ts pieces BEFORE adding features — do not grow them further.',
-  'get_kit — keep engineRef for submit_sources; the reply names any kit browse tools this surface offers, and offers none when the digest already covers the API. With shell egress, unpack via the returned one-liner and follow SKILL.md locally. Never dump the whole kit into context, and never call a tool this session did not advertise.',
+  "get_kit — keep engineRef for submit_sources and for get_kit_api. This platform and its Creator Kit are not on the public web: for what the kit can build (module names — party, zone, commons, presence, and the rest — or the API itself), call get_kit_api or the kit browse tools, never a web search; the digest and browse tools are the complete, authoritative reference, and a web search for gamedev.pl documentation will not find anything, or worse, finds an unrelated platform's docs that do not describe this kit. With shell egress, unpack via the returned one-liner and follow SKILL.md locally instead of either. Never dump the whole kit into context, and never call a tool this session did not advertise.",
   'Build the game — continuing the seed or sources you fetched, otherwise from the kit; report_progress before and after long steps. Soft module budget: keep each game/*.ts under ~350 lines / ~12 KiB. When a file approaches that, split cohesive pieces (render→art/ui/hud/rooms; model→tables/layout/types; runtime→systems) before more feature work. Honour warnings.code=module_too_large the same way you honour call_end — act, then continue.',
   'As soon as the game draws anything playable: screenshot_upload_url then curl --upload-file <png> "$url". There is no base64 send path — PNG bytes must never enter the model. Without shell egress, skip mid-build screenshots; the gate still captures on delivery.',
   'While iterating: run only npm run typecheck -- <slug> locally, then prefer stage_upload_url({ path }) and curl --upload-file <file> "$url" for new/rewritten paths when you have shell egress (bytes never re-enter the model). Fall back to stage_source_file({ path, content }) without shell. For edits prefer patch_source_file({ path, old, new }) — exact unique substring replace, no unified-diff arithmetic. Or patch_source_file({ path, patch }) with a unified diff (bare @@ ok). Stage only changed paths — never re-upload the whole tree. Then submit_sources({ fromStaged: true, mode: "preview", kitEngineRef }) — fromStaged overlays onto the latest delivery/seed and the server verifies it; no browser, npm ci, capture, playtest, or agency is required for this preview. If a browser is available near delivery, optionally run npm run check:game -- <slug> --preview. Run the full gate only immediately before a mode:"publish" seal. Inline files[] still works for tiny trees.',
@@ -2504,9 +2511,13 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         'registry moves. kitEngineChanged:true means the pin was replaced — after a kit_outdated ' +
         'verdict, or because the pinned kit is no longer retained — so rebuild against the ' +
         'engine in this reply. ' +
-        'browse is present only when this surface advertises kit browse tools; when it is absent, ' +
-        'the injected digest is the API reference and there is no browse path — ' +
-        'do not pull the whole kit into context. ' +
+        'This platform and its Creator Kit are not on the public web — an unanswered question ' +
+        'about what it can build (multiplayer, persistent worlds, party games, …) is answered by ' +
+        'get_kit_api or browse, never by web search. ' +
+        'For the API itself: get_kit_api (with this engineRef) for the whole prompt-ready reference ' +
+        "in one call, or the browse tools named in this reply's browse block (list/search/read) to " +
+        'read specific kit files instead — do not pull the whole kit into context. ' +
+        'With shell egress, unpack via kitUrl/unpack and follow SKILL.md locally instead of either. ' +
         'entry=gamedevpl-creator-kit/SKILL.md (tarball roots at gamedevpl-creator-kit/; ' +
         'do not assume a `cd` persists across tool calls). ' +
         BEHAVIOURAL_CONTRACT,
@@ -2524,6 +2535,57 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           return toolErr(body.message ?? body.error ?? `kit failed (${res.statusCode})`, body);
         }
         return toolOk(withAdvertisedBrowseTools(body));
+      },
+    },
+
+    get_kit_api: {
+      annotations: { title: "Fetch the Creator Kit's API reference", ...READS },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          engineRef: { type: 'string' },
+          digest: { type: 'string' },
+        },
+        required: ['engineRef', 'digest'],
+      },
+      description:
+        "The Creator Kit's prompt-ready orientation in one call: what engine modules exist " +
+        '(party for same-screen multiplayer, zone for a real-time server-arbitrated world, ' +
+        'commons and presence for persistent/shared state, and the rest — this is the answer ' +
+        'to "can this platform build X", not a web search), the core API ' +
+        'signatures, the audio catalog, and a complete small exemplar game. Call this once near ' +
+        'the start of a round, before scaffolding, rather than repeatedly — its content only ' +
+        'changes when engineRef does. Pass engineRef from get_kit so a mid-round registry bump ' +
+        "cannot mix kit revisions. Falls back to the registry's current engine when engineRef is " +
+        'omitted, but that risks reading a different kit than the round is pinned to. ' +
+        'Prefer this over unpacking the whole kit into context; use the browse tools ' +
+        '(list_kit_files / search_kit_files / read_kit_file) instead when what you need is a ' +
+        'specific file this digest omitted or summarized. ' +
+        BEHAVIOURAL_CONTRACT,
+      inputSchema: {
+        type: 'object',
+        properties: { sessionKey: SESSION_KEY_PROP, engineRef: KIT_ENGINE_REF_PROP },
+        required: [],
+      },
+      handler: async (args, ctx) => {
+        const auth = await resolveAuth(ctx, args);
+        if (!('channelToken' in auth)) return auth;
+        const params = new URLSearchParams();
+        if (typeof args.engineRef === 'string' && args.engineRef.trim()) {
+          params.set('engineRef', args.engineRef.trim());
+        }
+        const qs = params.toString();
+        const res = await injectChannel(
+          ctx.request,
+          'GET',
+          `/api/agent/build/kit/api${qs ? `?${qs}` : ''}`,
+          auth.channelToken,
+        );
+        const body = res.json() as { error?: string; message?: string };
+        if (res.statusCode !== 200) {
+          return toolErr(body.message ?? body.error ?? `get_kit_api failed (${res.statusCode})`, body);
+        }
+        return toolOk(body);
       },
     },
 
