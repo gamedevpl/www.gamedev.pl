@@ -93,12 +93,13 @@ describe('shared source delivery', () => {
       expect.objectContaining({ issueNumber: ISSUE, slug: SLUG, backend: BACKEND, mode: 'preview' }),
     );
     expect(gate).toHaveBeenCalledWith({ issueNumber: ISSUE, slug: SLUG, version: 'v-managed-1', mode: 'preview' });
-    expect((await store.getSubmission(ISSUE)) ?? {}).toMatchObject({
+    const record = await store.getSubmission(ISSUE);
+    expect(record).toMatchObject({
       slug: SLUG,
       previewVersion: 'v-managed-1',
-      deliveredVersion: undefined,
       title: 'Managed Comet',
     });
+    expect(record?.deliveredVersion).toBeUndefined();
   });
 
   it('uses the same service for publish side effects and transition', async () => {
