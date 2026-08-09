@@ -342,8 +342,7 @@ const BRIDGE = `(function(){
   function fitGameCanvas(){
     var canvas=el('game');
     if(!canvas||!canvas.width||!canvas.height)return;
-    var wrap=canvas.closest('.wrap')||document.body;
-    var bounds=wrap.getBoundingClientRect();
+    var bounds=document.body.getBoundingClientRect();
     canvas.style.setProperty('--gdpl-canvas-ratio',String(canvas.width/canvas.height));
     canvas.style.setProperty('--gdpl-embed-width',String(bounds.width)+'px');
     canvas.style.setProperty('--gdpl-embed-height',String(bounds.height)+'px');
@@ -400,7 +399,7 @@ const HIDE_CHROME =
   `width:min(var(--gdpl-embed-width),calc(var(--gdpl-embed-height) * var(--gdpl-canvas-ratio)))!important;` +
   `height:auto!important;` +
   `aspect-ratio:var(--gdpl-canvas-ratio)!important;` +
-  `max-width:100%!important;` +
+  `max-width:var(--gdpl-embed-width)!important;` +
   `max-height:100%!important;` +
   `min-height:0!important;` +
   `box-shadow:none!important` +
