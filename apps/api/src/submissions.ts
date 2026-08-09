@@ -34,7 +34,12 @@ import { startHealthCheck } from './game-health.js';
 import { createStagedPreviewPublisher, type StagedPreviewOptions } from './staged-preview.js';
 import { createInternalAuthVerifierFromEnv, type InternalAuthVerifier } from './internal-auth.js';
 import type { AgentBackend, SeedFiles } from './agent-backend.js';
-import { resolveBuilderBackend, type AgentBackendRegistry } from './agent-backend-env.js';
+import {
+  createAgentBackendRegistryFromEnv,
+  resolveBuilderBackend,
+  type AgentBackendRegistry,
+  type ManagedBackendDeps,
+} from './agent-backend-env.js';
 import {
   allowsCreatorBuilderHandoff,
   allowsSelfToPlatformHandoff,
@@ -60,7 +65,6 @@ import {
 } from './job-state.js';
 import { isMcpPresenceEventText } from './mcp-presence.js';
 import { logSeedStagingFailure } from './seed-metrics.js';
-import { createSelfBuildBackend } from './self-build-backend.js';
 import { mintConnectPayload } from './self-build-connect.js';
 import { createLocalGamesClient, resolveLocalGamesDir } from './local-games-repo.js';
 import { createMailerFromEnv, type Mailer } from './mailer.js';
@@ -318,6 +322,8 @@ export interface SubmissionRoutesOptions {
    * filled in (a default self backend) if the caller omits it.
    */
   agentBackends?: Partial<AgentBackendRegistry> & { platform?: AgentBackend };
+  /** Dependencies for the environment-selected managed platform backend. */
+  managedBackendDeps?: ManagedBackendDeps;
   /**
    * Writes the first draft a new build starts from. Absent means every build starts from
    * an empty directory, which is what they all did before seeding existed.
@@ -593,14 +599,16 @@ export async function registerSubmissionRoutes(
             return {
               lastAgentSignalAt: record.lastAgentSignalAt,
               deliveredVersion: record.deliveredVersion,
+              previewVersion: record.previewVersion,
+              agentEndedAt: record.agentEndedAt,
             };
           },
         }
       : undefined;
-    // An explicit `agentBackend` (tests, one-off wiring) wins over the env registry's
-    // platform entry — same precedence the single-backend option had before the registry.
-    const self = options.agentBackends?.self ?? createSelfBuildBackend(selfOptions);
-    const platform = options.agentBackend ?? options.agentBackends?.platform;
+    const environmentRegistry = createAgentBackendRegistryFromEnv(app.log, selfOptions, options.managedBackendDeps);
+    // Explicit backends win over the environment registry.
+    const self = options.agentBackends?.self ?? environmentRegistry.self;
+    const platform = options.agentBackend ?? options.agentBackends?.platform ?? environmentRegistry.platform;
     return { ...(platform ? { platform } : {}), self };
   }
 
