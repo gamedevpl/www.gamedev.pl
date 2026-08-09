@@ -4,7 +4,15 @@ import type { GcsObjectStore } from './gcs-sign.js';
 import { readFile } from 'node:fs/promises';
 
 export const KIT_REGISTRY_OBJECT = 'kits/current.json';
-export const DEFAULT_KIT_DIGEST_MAX_BYTES = 100_000;
+/**
+ * Sanity ceiling on the raw stored digest (comment-stripped API + exemplar + rules; not
+ * the prompt-compacted size), not a token budget — `compactKitDigestForPrompt` /
+ * `compactKitDigestForApi` own that. Raised from 100_000: the games repo's own digest
+ * was already at 99,552 bytes — 99.5% of that cap — before it grew a `## Engine modules`
+ * catalog, so the ceiling was one small API addition from failing regardless of this
+ * change. 150_000 restores real headroom.
+ */
+export const DEFAULT_KIT_DIGEST_MAX_BYTES = 150_000;
 export const DEFAULT_PROMPT_DIGEST_MAX_BYTES = 20_000;
 /**
  * `get_kit_api` is opt-in and paid once per round by an agent that has decided it needs
