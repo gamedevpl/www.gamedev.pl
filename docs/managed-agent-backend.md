@@ -234,7 +234,7 @@ selection, with a stub vendor and a printing sink:
 
 ```bash
 npm run managed:probe -w @gamedevpl/api                 # pull shape, stub vendor
-npm run managed:probe -w @gamedevpl/api -- --mcp        # MCP shape: nothing is pulled
+npm run managed:probe -w @gamedevpl/api -- --mcp        # MCP shape + vault credential (stub)
 npm run managed:probe -w @gamedevpl/api -- --prompt     # the brief each contract produces
 npm run managed:probe -w @gamedevpl/api -- --out /tmp/harvest
 ```
@@ -265,11 +265,32 @@ round-scoped vault containing the build capability for that exact URL; the agent
 capability and the vault is archived when the round ends. `MANAGED_AGENT_VAULT_ID` and
 `MANAGED_AGENT_VAULT_IDS` remain available only for probe-only static integrations.
 
-It creates an initial event, polls twice, interrupts and deletes the session. The current
-probe verifies session lifecycle and costs a real run; it does not wait for a game to finish
-or prove that the configured Agent writes the expected files. `--base-url` aims the same
-adapter at a local HTTP stub. A full creator-visible round still needs the sink, registry
-wiring and a configured MCP connection or pull workspace.
+`--mcp` now follows that production path: it mints a managed MCP opener
+(`mintManagedMcpOpener`), puts it on the brief as `mcpOpenerToken`, passes
+`mcpBearerCredential` into the backend, and sets `overrideTools` so the session's tool list
+is the MCP endpoint. After dispatch the probe prints `credentialRef` (the vault id) and
+archives it on cancel/cleanup. The MCP URL comes from `--mcp-url` or `MANAGED_AGENT_MCP_URL`
+(default `https://www.gamedev.pl/api/mcp`).
+
+```bash
+ANTHROPIC_API_KEY=... \
+MANAGED_AGENT_ID=agent_... \
+MANAGED_AGENT_ENVIRONMENT_ID=env_... \
+npm run managed:probe -w @gamedevpl/api -- --vendor anthropic --mcp --wait \
+  --wait-seconds 120 --budget-usd 1
+```
+
+That proves Anthropic accepted the per-round vault. Authenticating `mcp:start` against the
+live platform MCP still needs a real Firestore job and an opener signed with the same
+`SUBMISSION_TOKEN_SECRET` the API uses — export that secret into the probe environment when
+you have both. Without it the probe uses a local opener secret so vault creation still works
+and the transcript's `mcp:start` line will show an auth error rather than "no credential
+stored for this server URL".
+
+It creates an initial event, polls twice, interrupts and deletes the session. The bare
+(non-`--mcp`) probe verifies session lifecycle and costs a real run; it does not wait for a
+game to finish or prove that the configured Agent writes the expected files. `--base-url`
+aims the same adapter at a local HTTP stub.
 
 For a bounded live run, `--wait` requires both caps explicitly:
 
@@ -304,6 +325,7 @@ ref the round receives, rather than copied into this repository.
 | `MANAGED_AGENT_MODEL`               | Provider model label; Anthropic's actual model is on its Agent  |
 | `MANAGED_AGENT_ID`                  | Anthropic Managed Agent resource id                             |
 | `MANAGED_AGENT_ENVIRONMENT_ID`      | Anthropic Managed Environment resource id                       |
+| `MANAGED_AGENT_MCP_URL`             | MCP endpoint; triggers per-round vault + `overrideTools`        |
 | `MANAGED_AGENT_VAULT_IDS`           | Optional static vault ids for probe-only MCP integrations       |
 | `MANAGED_AGENT_EFFORT`              | `low` / `medium` / `high`                                       |
 | `MANAGED_AGENT_MAX_SECONDS`         | Hard ceiling on one session's wall clock                        |
