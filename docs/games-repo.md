@@ -15,13 +15,11 @@ games/
     SPEC.md          ← source of truth, including catalog frontmatter
     GAME.json        ← shared-engine module selection
     CAPTURE.json     ← deterministic play, assertion, and capture scenario
-    index.html
     game.ts          ← lean composition root
     game/
       model.ts
       runtime.ts
       render.ts      ← optional, for games with substantial rendering logic
-    style.css
     media/
       opening.png
       <named-moment>.png
