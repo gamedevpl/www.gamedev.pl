@@ -416,28 +416,4 @@ describe('VertexSpecRefiner over a genaicode client', () => {
     expect(result).toEqual({ questions: [] });
     expect(seen?.prompt[0]?.text).not.toContain('Real-world context');
   });
-
-  it('skips grounding entirely when disabled via env', async () => {
-    const previous = process.env.REFINE_GROUNDING_ENABLED;
-    process.env.REFINE_GROUNDING_ENABLED = 'false';
-    try {
-      let groundingCalled = false;
-      const refiner = new VertexSpecRefiner({
-        client: stubClient(JSON.stringify({ questions: [] })),
-        groundingClient: genaicode({
-          name: 'should-not-be-called',
-          async generate() {
-            groundingCalled = true;
-            return { parts: [{ type: 'text' as const, text: 'irrelevant' }] };
-          },
-        }),
-      });
-
-      await refiner.refine({ concept: 'A Brawl Stars clone with brawlers and gems' });
-
-      expect(groundingCalled).toBe(false);
-    } finally {
-      process.env.REFINE_GROUNDING_ENABLED = previous;
-    }
-  });
 });

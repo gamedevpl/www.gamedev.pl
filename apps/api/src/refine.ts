@@ -91,11 +91,6 @@ export const DEFAULT_REFINE_TIMEOUT_MS = 20_000;
  */
 export const DEFAULT_GROUNDING_TIMEOUT_MS = 6_000;
 
-/** Opt-out, not opt-in — grounding failures are already fail-open and cost is one small call. */
-function groundingEnabled(): boolean {
-  return process.env.REFINE_GROUNDING_ENABLED !== 'false';
-}
-
 /**
  * How long an answered spec stays free to re-ask, and how many are held. Short
  * enough that an edited concept is never served a stale answer for long; the cap
@@ -225,7 +220,6 @@ export class VertexSpecRefiner implements SpecRefiner {
    * would otherwise only know by name.
    */
   private async groundConcept(concept: string, languageName: string): Promise<string> {
-    if (!groundingEnabled()) return '';
     try {
       const groundingPrompt = `You are a fact-lookup tool, not a game designer. The idea below may reference a specific real, already-existing game or franchise by name — directly, or as "a clone of X", "like X", "X but Y", or similar. It may also be a wholly original idea in the creator's own words with no such reference.
 
