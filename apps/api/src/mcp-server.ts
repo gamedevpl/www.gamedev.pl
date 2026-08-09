@@ -2546,9 +2546,9 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         'This platform and its Creator Kit are not on the public web — an unanswered question ' +
         'about what it can build (multiplayer, persistent worlds, party games, …) is answered by ' +
         'get_kit_api or browse, never by web search. ' +
-        'For the API itself: get_kit_api (with this engineRef) for the whole prompt-ready reference ' +
-        "in one call, or the browse tools named in this reply's browse block (list/search/read) to " +
-        'read specific kit files instead — do not pull the whole kit into context. ' +
+        'For the API itself: get_kit_api (with this engineRef) for a prompt-ready orientation in ' +
+        "one call — it names anything it had to cut, use the browse tools named in this reply's " +
+        'browse block (list/search/read) for those or any other specific kit file. ' +
         'With shell egress, unpack via kitUrl/unpack and follow SKILL.md locally instead of either. ' +
         'entry=gamedevpl-creator-kit/SKILL.md (tarball roots at gamedevpl-creator-kit/; ' +
         'do not assume a `cd` persists across tool calls). ' +
@@ -2584,15 +2584,18 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         "The Creator Kit's prompt-ready orientation in one call: what engine modules exist " +
         '(party for same-screen multiplayer, zone for a real-time server-arbitrated world, ' +
         'commons and presence for persistent/shared state, and the rest — this is the answer ' +
-        'to "can this platform build X", not a web search), the core API ' +
-        'signatures, the audio catalog, and a complete small exemplar game. Call this once near ' +
+        'to "can this platform build X", not a web search), plus as much of the core API ' +
+        'signatures, audio catalog, and exemplar game as fit in one tool result. ' +
+        'The response is sized to a safe single-call limit, not to the whole API — for a real ' +
+        'kit this routinely omits some declarations, named in an "Omitted for length" note in ' +
+        'the digest text; treat that as normal, not an error. Call this once near ' +
         'the start of a round, before scaffolding, rather than repeatedly — its content only ' +
         'changes when engineRef does. Pass engineRef from get_kit so a mid-round registry bump ' +
         "cannot mix kit revisions. Falls back to the registry's current engine when engineRef is " +
         'omitted, but that risks reading a different kit than the round is pinned to. ' +
         'Prefer this over unpacking the whole kit into context; use the browse tools ' +
-        '(list_kit_files / search_kit_files / read_kit_file) instead when what you need is a ' +
-        'specific file this digest omitted or summarized. ' +
+        '(list_kit_files / search_kit_files / read_kit_file) for anything this digest omitted, ' +
+        'summarized, or named in its omission note. ' +
         BEHAVIOURAL_CONTRACT,
       inputSchema: {
         type: 'object',
