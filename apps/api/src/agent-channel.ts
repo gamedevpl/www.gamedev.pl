@@ -1585,6 +1585,17 @@ export async function registerAgentChannelRoutes(
         }
       }
 
+      // One round, one engine: a mismatch means unvalidated sources.
+      const pinnedEngineRef = record.roundKitEngineRef;
+      if (pinnedEngineRef && parsed.data.kitEngineRef && parsed.data.kitEngineRef !== pinnedEngineRef) {
+        return reply.status(400).send({
+          error:
+            `This round is pinned to Creator Kit engine ${pinnedEngineRef}, not ${parsed.data.kitEngineRef}. ` +
+            'Call get_kit and submit with the engineRef it returns.',
+          reason: 'kit_engine_ref_mismatch',
+        });
+      }
+
       // The job's own slug wins whenever it has one. A build that has already been
       // associated with a game cannot deliver into a different one, whatever it sends.
       //
@@ -2094,7 +2105,17 @@ export async function registerAgentChannelRoutes(
           });
         }
         const registry = parseKitRegistry(registryBody.toString('utf8'));
-        const engineRef = registry.current;
+        // The pointer can advance mid-round; the round builds against one engine.
+        const previousPin = resolved.record.roundKitEngineRef;
+        const outdated = (await gateVerdict(resolved.record))?.status === 'kit_outdated';
+        let engineRef =
+          (await store!.pinRoundKitEngineRef(resolved.issueNumber, registry.current, outdated)) ?? registry.current;
+        // Re-pin when the pinned kit has aged out of retention.
+        if (engineRef !== registry.current && !(await options.objectStore.objectExists(`kits/${engineRef}.tgz`))) {
+          engineRef =
+            (await store!.pinRoundKitEngineRef(resolved.issueNumber, registry.current, true)) ?? registry.current;
+        }
+        const kitEngineChanged = Boolean(previousPin) && previousPin !== engineRef;
         const sidecarBody = await options.objectStore.readObject(`kits/${engineRef}.json`);
         if (!sidecarBody) {
           return reply.status(404).send({
@@ -2118,9 +2139,9 @@ export async function registerAgentChannelRoutes(
           sha256: sidecar.sha256,
           unpack: kitUnpackCommand(kitUrl),
           entry: KIT_ENTRY,
-          // Shell-less MCP clients (ChatGPT Apps code_execution often cannot curl
-          // storage.googleapis.com) should browse via the kit file tools instead of
-          // unpacking — keep kitUrl/unpack for agents with a writable checkout.
+          // Only ever true after a kit_outdated verdict: rebuild against this engine.
+          ...(kitEngineChanged ? { kitEngineChanged: true } : {}),
+          // Shell-less clients browse via these tools instead of unpacking.
           browse: {
             list: 'list_kit_files',
             search: 'search_kit_files',
