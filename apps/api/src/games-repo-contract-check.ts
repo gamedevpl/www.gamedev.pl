@@ -301,6 +301,7 @@ export async function runGamesRepoContractCheck(options: ContractCheckOptions): 
     ['football', Date.parse('2026-08-10T00:00:00.000Z')],
     ['vehicles', Date.parse('2026-09-01T00:00:00.000Z')],
     ['urban', Date.parse('2026-08-11T00:00:00.000Z')],
+    ['cards', Date.parse('2026-08-15T00:00:00.000Z')],
   ]);
   const websiteExtras = localModules.filter((m) => !remoteModules.includes(m));
   const now = options.now?.() ?? Date.now();
