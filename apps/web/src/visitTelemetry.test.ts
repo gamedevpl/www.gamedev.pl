@@ -10,6 +10,7 @@ vi.stubGlobal('crypto', webcrypto);
 import {
   readVisitIdentity,
   recordBetaInviteStep,
+  recordBetaWelcomeStep,
   recordCreateStep,
   recordStudioStep,
   recordVisitEvent,
@@ -346,6 +347,25 @@ describe('recordBetaInviteStep', () => {
     expect(batches[0].events).toEqual([
       expect.objectContaining({ type: 'invite_step', step: 'opened' }),
       expect.objectContaining({ type: 'invite_step', step: 'accepted' }),
+    ]);
+  });
+});
+
+describe('recordBetaWelcomeStep', () => {
+  it('records first-login welcome steps once per visit', () => {
+    const { batches, send } = capture();
+    const session = new VisitSession('v1', 0, send, () => 0);
+    setVisitSessionForTesting(session);
+
+    recordBetaWelcomeStep('shown');
+    recordBetaWelcomeStep('shown');
+    recordBetaWelcomeStep('continued');
+    session.flush();
+    setVisitSessionForTesting(null);
+
+    expect(batches[0].events).toEqual([
+      expect.objectContaining({ type: 'beta_welcome_step', step: 'shown' }),
+      expect.objectContaining({ type: 'beta_welcome_step', step: 'continued' }),
     ]);
   });
 });

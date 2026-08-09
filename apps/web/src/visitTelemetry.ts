@@ -63,6 +63,7 @@ export type VisitEvent =
   /** A step of the closed-beta waitlist funnel. Carries no identity, ever. */
   | { type: 'waitlist_step'; step: WaitlistStep }
   | { type: 'invite_step'; step: InviteStep }
+  | { type: 'beta_welcome_step'; step: BetaWelcomeStep }
   /**
    * Studio / self-build funnel facts on the same visit stream as `create_step`.
    * Always carries `builder` so BYOCA reach-to-publish is measurable without a
@@ -117,6 +118,8 @@ export type WaitlistStep =
   | 'joined';
 
 export type InviteStep = 'opened' | 'accepted' | 'unavailable';
+
+export type BetaWelcomeStep = 'shown' | 'continued' | 'dismissed';
 
 /**
  * Which chrome surface opened the How to play card.
@@ -532,6 +535,14 @@ export function recordBetaInviteStep(step: InviteStep): void {
   currentSession.record({ type: 'invite_step', step });
 }
 
+let recordedBetaWelcomeSteps = new Set<BetaWelcomeStep>();
+
+export function recordBetaWelcomeStep(step: BetaWelcomeStep): void {
+  if (!currentSession || recordedBetaWelcomeSteps.has(step)) return;
+  recordedBetaWelcomeSteps.add(step);
+  currentSession.record({ type: 'beta_welcome_step', step });
+}
+
 /**
  * Studio steps already recorded for the live visit.
  *
@@ -612,6 +623,7 @@ export function setVisitSessionForTesting(session: VisitSession | null): void {
   recordedSteps = new Set();
   recordedWaitlistSteps = new Set();
   recordedBetaInviteSteps = new Set();
+  recordedBetaWelcomeSteps = new Set();
   recordedStudioSteps = new Set();
   recordedEditorSteps = new Set();
   recordedAssistSteps = new Set();
@@ -650,6 +662,7 @@ export function startVisitTracking(options: StartVisitTrackingOptions = {}): () 
   recordedSteps = new Set();
   recordedWaitlistSteps = new Set();
   recordedBetaInviteSteps = new Set();
+  recordedBetaWelcomeSteps = new Set();
   recordedStudioSteps = new Set();
 
   if (identity.isNew) {

@@ -863,6 +863,20 @@
     "unavailable": "This invitation is no longer available.",
     "backHome": "Back to the home page"
   },
+  "betaWelcome": {
+    "kicker": "Closed beta",
+    "title": "Welcome to gamedev.pl!",
+    "subtitle": "You’re in. Explore the arcade, build something, and help shape what comes next.",
+    "playTitle": "Play first",
+    "playBody": "Try a few games and find one worth sharing.",
+    "buildTitle": "Make your own",
+    "buildBody": "Describe an idea and let an agent turn it into a game.",
+    "feedbackTitle": "Tell us what breaks",
+    "feedbackBody": "Your rough edges and surprises are exactly what this beta needs.",
+    "note": "This is a real beta. Things may change, and your feedback helps decide how.",
+    "cta": "Start exploring",
+    "dismiss": "Skip welcome"
+  },
   "errors": {
     "generic": "Something went wrong",
     "creationPaused": "New games are paused for a moment while we look at something on our side. Your daily allowance hasn't been touched — please try again shortly.",

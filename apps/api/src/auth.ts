@@ -447,6 +447,7 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
       try {
         const googleUser = await verifier.verifyIdToken(parseResult.data.idToken);
         const uid = `g:${googleUser.sub}`;
+        const existingUser = await store.getUser(uid);
 
         // Private-beta allowlist check — before creating/upserting the user doc so
         // rejected sign-ins leave no trace in Firestore. Allow if uid OR verified email matches.
@@ -454,7 +455,6 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
         // an unverified email claim must never satisfy an access-control allowlist.
         if (options.privateBeta) {
           const emailLower = googleUser.emailVerified && googleUser.email ? googleUser.email.toLowerCase() : '';
-          const existingUser = await store.getUser(uid);
           if (existingUser?.tier === 'blocked') {
             return reply.status(403).send({ error: 'account is blocked' });
           }
@@ -507,6 +507,7 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
         return sessionPayload(user, {
           admin: isAdmin(user.uid, adminUids),
           reviewer: isReviewer(user.uid, reviewerUids, adminUids),
+          betaWelcome: existingUser === null,
         });
       } catch (err) {
         const message = err instanceof Error ? err.message : 'google token verification failed';
@@ -553,13 +554,13 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
         // the allowlist below has had its say.
         const resolution = await resolveAppleAccount(store, applePayload);
         const uid = resolution.uid;
+        const existingUser = await store.getUser(uid);
 
         // Identical rule to the Google path, run against the *resolved* uid: a creator
         // already on the allowlist by their Google uid must not be turned away for
         // arriving through a different button.
         if (options.privateBeta) {
           const emailLower = resolution.email?.toLowerCase() ?? '';
-          const existingUser = await store.getUser(uid);
           if (existingUser?.tier === 'blocked') {
             return reply.status(403).send({ error: 'account is blocked' });
           }
@@ -620,6 +621,7 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
         return sessionPayload(user, {
           admin: isAdmin(user.uid, adminUids),
           reviewer: isReviewer(user.uid, reviewerUids, adminUids),
+          betaWelcome: existingUser === null,
         });
       } catch (err) {
         const message = err instanceof Error ? err.message : 'apple token verification failed';
@@ -832,6 +834,7 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
     const uid = `dev:${handle}`;
 
     await store.cancelAccountDeletion(uid);
+    const existingUser = await store.getUser(uid);
     const user = await store.upsertUser({
       uid,
       email: `${handle}@localhost`,
@@ -853,6 +856,7 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
     return sessionPayload(user, {
       admin: isAdmin(user.uid, adminUids),
       reviewer: isReviewer(user.uid, reviewerUids, adminUids),
+      betaWelcome: existingUser === null,
     });
   });
 
@@ -886,12 +890,12 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
  */
 function sessionPayload(
   user: User,
-  flags: { admin?: boolean; reviewer?: boolean },
-): { user: User & { admin?: true; reviewer?: true } } {
+  flags: { admin?: boolean; reviewer?: boolean; betaWelcome?: boolean },
+): { user: User & { admin?: true; reviewer?: true }; betaWelcome?: true } {
   const next: User & { admin?: true; reviewer?: true } = { ...user };
   if (flags.admin) next.admin = true;
   if (flags.reviewer) next.reviewer = true;
-  return { user: next };
+  return { user: next, ...(flags.betaWelcome ? { betaWelcome: true as const } : {}) };
 }
 
 export function checkUserAccess(request: FastifyRequest, reply: FastifyReply): boolean {
