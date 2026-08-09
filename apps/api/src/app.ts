@@ -9,7 +9,7 @@ import { z } from 'zod';
 import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './assemble.js';
 import { registerAccessTokenRoutes } from './access-token-routes.js';
 import { registerJobAdminRoutes } from './job-admin-routes.js';
-import { createGameSeederFromEnv } from './agent-backend-env.js';
+import { createGameSeederFromEnv, createPlatformBackendFromEnv } from './agent-backend-env.js';
 import { createManagedDeliveryLock } from './managed-backend.js';
 import { createGcsGamesStore } from './games-store.js';
 import { createGcsObjectStore } from './gcs-sign.js';
