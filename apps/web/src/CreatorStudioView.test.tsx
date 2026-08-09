@@ -1505,4 +1505,61 @@ describe('CreatorStudioView abandon', () => {
 
     root.unmount();
   });
+
+  it('selects a remaining game after abandoning one, instead of showing a blank detail pane', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    fetchStudioGames.mockResolvedValueOnce(
+      studioShelf([
+        {
+          token: 'token-draft',
+          title: 'Neon Draft',
+          createdAt: '2026-07-30T09:00:00.000Z',
+          lastKnownStatus: 'building',
+          slug: 'neon-draft',
+        },
+        {
+          token: 'token-other',
+          title: 'Other Game',
+          createdAt: '2026-07-29T09:00:00.000Z',
+          lastKnownStatus: 'building',
+          slug: 'other-game',
+        },
+      ]),
+    );
+    fetchStudioGames.mockResolvedValueOnce(
+      studioShelf([
+        {
+          token: 'token-other',
+          title: 'Other Game',
+          createdAt: '2026-07-29T09:00:00.000Z',
+          lastKnownStatus: 'building',
+          slug: 'other-game',
+        },
+      ]),
+    );
+
+    const { container, root, onNavigate } = await renderStudio({
+      selectedGame: 'neon-draft',
+      selectedTab: 'details',
+    });
+
+    const abandon = container.querySelector<HTMLButtonElement>('.status-abandon');
+    await act(async () => {
+      abandon!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('.status-abandon.is-danger')!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(abandonSubmission).toHaveBeenCalledWith('token-draft');
+    expect(onNavigate).toHaveBeenCalledWith('/studio');
+    // The remaining game's detail pane must render — not a blank main area.
+    expect(container.querySelector('.studio-detail')).not.toBeNull();
+    expect(container.querySelector('.studio-detail-title-block h2')?.textContent).toContain('Other Game');
+
+    root.unmount();
+  });
 });

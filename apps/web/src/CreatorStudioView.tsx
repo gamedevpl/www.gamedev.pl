@@ -934,7 +934,16 @@ export function CreatorStudioView({
                                 abandonedSlug &&
                                 shelfPage.games.find((game) => game.slug === abandonedSlug && game.token !== token);
                               onNavigate(sibling && abandonedSlug ? studioPath(abandonedSlug) : studioPath());
-                              if (sibling) setSelected(sibling.token);
+                              if (sibling) {
+                                setSelected(sibling.token);
+                              } else {
+                                // Bare `/studio` names no game, so nothing else will pick
+                                // one for this view: fall back to the shelf's own default,
+                                // same order the initial load uses, or the detail pane and
+                                // its "not found" fallback both stay empty.
+                                const collapsed = collapseStudioGames(shelfPage.games);
+                                setSelected(sortStudioGames(collapsed)[0]?.token ?? null);
+                              }
                             } catch {
                               // Optimistic remove stands if refetch fails.
                               onNavigate(studioPath());
