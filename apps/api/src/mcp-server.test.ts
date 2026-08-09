@@ -1054,6 +1054,13 @@ describe('POST /api/mcp (BY-05)', () => {
     );
     expect(warningCodes).toContain('inbox_pending');
     expect(warningCodes).toContain('must_deliver');
+    // must_deliver must not tell an MCP session (no shell) to run a CLI command —
+    // it should point at the submit_sources tool instead (review, confusing-npm-submit).
+    const mustDeliverMessage = (
+      (examples.structured as { warnings?: Array<{ code: string; message: string }> }).warnings ?? []
+    ).find((w) => w.code === 'must_deliver')?.message;
+    expect(mustDeliverMessage).not.toMatch(/npm run submit/);
+    expect(mustDeliverMessage).toMatch(/submit_sources/);
   });
 
   it('refuses the retired send_screenshot base64 tool', async () => {

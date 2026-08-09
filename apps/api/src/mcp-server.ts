@@ -512,7 +512,19 @@ function warningsFromChannel(body: ChannelControlBody): Array<{ code: string; me
   }
   const deliver = typeof body.control?.mustDeliver === 'string' ? body.control.mustDeliver.trim() : '';
   if (deliver) {
-    warnings.push({ code: 'must_deliver', message: deliver });
+    // The channel's raw copy tells a shell-sandbox agent (Copilot's build prompt) to
+    // run `npm run submit -- <slug>`. An MCP tool session has no shell — its deliver
+    // step is submit_sources — so that text is never right here. must_fix_gate above
+    // gets channel-authored copy because its remedy varies by gate status; must_deliver
+    // has one fixed remedy for every MCP session, so it's authored here instead of
+    // patched out of the channel's string.
+    warnings.push({
+      code: 'must_deliver',
+      message:
+        'Nothing has been delivered for this build yet. Staging or pushing a branch is not delivering — ' +
+        'stage your sources, then call submit_sources({ fromStaged: true, mode, kitEngineRef }) before you ' +
+        'finish, or this session produces nothing.',
+    });
   }
   return warnings;
 }
