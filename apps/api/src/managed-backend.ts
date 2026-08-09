@@ -367,9 +367,12 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
 
     async cancel(ref, credentialRef): Promise<{ enforced: boolean }> {
       if (credentialRef) credentialRefs.set(ref, credentialRef);
-      const result = await options.provider.cancelSession(ref);
-      await releaseCredential(ref);
-      return result;
+      try {
+        return await options.provider.cancelSession(ref);
+      } finally {
+        // Archive even when interrupt fails; job is already terminal.
+        await releaseCredential(ref);
+      }
     },
 
     async cleanup(previous: DispatchResult): Promise<void> {

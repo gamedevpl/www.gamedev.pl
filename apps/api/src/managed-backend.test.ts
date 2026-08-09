@@ -500,6 +500,20 @@ describe('managed backend', () => {
     expect(await backend.cancel('session-1')).toEqual({ enforced: true });
   });
 
+  it('archives round credentials even when interrupt fails', async () => {
+    const releaseCredential = vi.fn(async () => undefined);
+    const { provider } = fakeProvider({
+      cancelSession: async () => {
+        throw new Error('interrupt unavailable');
+      },
+      releaseCredential,
+    });
+    const backend = createManagedBackend({ provider, deliver: async () => ({ version: 'v1' }) });
+
+    await expect(backend.cancel('session-1', 'vault-1')).rejects.toThrow(/interrupt unavailable/);
+    expect(releaseCredential).toHaveBeenCalledWith('vault-1');
+  });
+
   it('answers null for a session the vendor has forgotten', async () => {
     const { provider } = fakeProvider({ getSession: async () => null });
     const backend = createManagedBackend({ provider, deliver: async () => ({ version: 'v1' }) });
