@@ -150,6 +150,40 @@ describe('hasPlayableOverlay', () => {
     const empty = Object.fromEntries(PLAYABLE_TREE.map((f) => [f.path, f.path === 'GAME.json' ? '' : f.content]));
     expect(hasPlayableOverlay(empty)).toBe(false);
   });
+
+  it('accepts a tree with no index.html when GAME.json declares howToPlay', () => {
+    // Markup may come from schema instead of a file
+    const overlay = Object.fromEntries(
+      PLAYABLE_TREE.filter((f) => f.path !== 'index.html').map((f) => [
+        f.path,
+        f.path === 'GAME.json'
+          ? JSON.stringify({ howToPlay: { goal: { en: 'Win', pl: 'Wygraj' }, hint: { en: 'Go', pl: 'Idź' } } })
+          : f.content,
+      ]),
+    );
+
+    expect(hasPlayableOverlay(overlay)).toBe(true);
+  });
+
+  it('refuses a tree with neither index.html nor a howToPlay to generate it from', () => {
+    const overlay = Object.fromEntries(
+      PLAYABLE_TREE.filter((f) => f.path !== 'index.html').map((f) => [f.path, f.content]),
+    );
+
+    expect(hasPlayableOverlay(overlay)).toBe(false);
+  });
+
+  it('treats a half-written GAME.json as not staged yet rather than throwing', () => {
+    // Manifests arrive a byte at a time
+    const overlay = Object.fromEntries(
+      PLAYABLE_TREE.filter((f) => f.path !== 'index.html').map((f) => [
+        f.path,
+        f.path === 'GAME.json' ? '{"howToPlay": {"goal"' : f.content,
+      ]),
+    );
+
+    expect(hasPlayableOverlay(overlay)).toBe(false);
+  });
 });
 
 describe('createStagedPreviewPublisher', () => {

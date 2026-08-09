@@ -31,7 +31,6 @@
 
 import { createHash } from 'node:crypto';
 import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './assemble.js';
-import { generateIndexHtml, type GameManifest, type GameSpec } from './index-html-generator.js';
 import { MAX_BUILD_PREVIEW_BYTES } from './agent-channel.js';
 import type { GamesStore, SourceFile } from './games-store.js';
 import type { GitHubClient } from './github-client.js';
@@ -111,7 +110,7 @@ export const MAX_STAGED_PREVIEW_JOBS = 2_000;
  * self-build game usually lives in no ref at all — so a tree missing any of these is not
  * an error, it is a game that has not been staged far enough to run yet.
  */
-export const PLAYABLE_OVERLAY_FILES = ['index.html', 'game.ts', 'style.css', 'GAME.json'] as const;
+export const PLAYABLE_OVERLAY_FILES = ['game.ts', 'style.css', 'GAME.json'] as const;
 
 /**
  * What one attempt did. Every value except `published` leaves the previous preview alone;
@@ -162,7 +161,22 @@ export function overlayGameSources(layers: OverlayLayers): Record<string, string
 
 /** True when the overlay carries everything an assembly needs from the game's own tree. */
 export function hasPlayableOverlay(overlay: Record<string, string>): boolean {
-  return PLAYABLE_OVERLAY_FILES.every((path) => typeof overlay[path] === 'string' && overlay[path].length > 0);
+  const staged = (path: string): boolean => typeof overlay[path] === 'string' && overlay[path].length > 0;
+  if (!PLAYABLE_OVERLAY_FILES.every(staged)) return false;
+  // Neither means half-staged: a quiet no.
+  if (staged('index.html')) return true;
+  return manifestDeclaresHowToPlay(overlay['GAME.json']);
+}
+
+function manifestDeclaresHowToPlay(source: string | undefined): boolean {
+  if (typeof source !== 'string') return false;
+  try {
+    const manifest = JSON.parse(source) as { howToPlay?: { goal?: unknown; hint?: unknown } };
+    return Boolean(manifest.howToPlay?.goal && manifest.howToPlay.hint);
+  } catch {
+    // Mid-write manifests are invalid JSON
+    return false;
+  }
 }
 
 /** Same shape `mcp-presence.ts` uses: callers own the map, this keeps it bounded. */
@@ -304,25 +318,11 @@ export function createStagedPreviewPublisher(options: StagedPreviewOptions): Sta
     const sources = await options.githubClient.getGameSources(options.engineRef, slug, overlay);
     if (!sources) return 'incomplete';
 
-    let indexHtml = sources.indexHtml;
-    // Generate index.html from GAME.json.howToPlay if not uploaded
-    if (!indexHtml.trim()) {
-      try {
-        const manifest: GameManifest = JSON.parse(sources.gameJson);
-        if (manifest.howToPlay) {
-          const spec: GameSpec = { title: sources.title ?? slug };
-          indexHtml = generateIndexHtml(manifest, spec);
-        }
-      } catch {
-        // If howToPlay is missing or GAME.json is invalid, fall through to empty
-      }
-    }
-
     const html = assembleGameHtml(
       {
         title: sources.title ?? slug,
         description: '',
-        html: indexHtml,
+        html: sources.indexHtml,
         js: sources.gameJs,
         css: sources.styleCss,
       },

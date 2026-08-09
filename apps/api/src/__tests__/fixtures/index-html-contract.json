@@ -1,0 +1,27 @@
+{
+  "//": "Shared cross-repo fixture. Mirrored byte-for-byte at games-repo tools/lib/__fixtures__/index-html-contract.json. Exercises every branch of the generator: monolingual and bilingual keys, all three reserved rows, a non-default canvas, a bilingual description, and characters that must be escaped.",
+  "spec": {
+    "title": "Cavern <Runner> & Co"
+  },
+  "manifest": {
+    "engine": { "modules": ["input", "drawing"] },
+    "description": {
+      "en": "Dig, dodge & escape the \"deep\"",
+      "pl": "Kop, unikaj i uciekaj z \"głębin\""
+    },
+    "canvas": { "width": 800, "height": 600 },
+    "howToPlay": {
+      "controls": [
+        { "keys": "WASD", "action": { "en": "Move", "pl": "Ruch" } },
+        {
+          "keys": { "en": "Space", "pl": "Spacja" },
+          "action": { "en": "Dig <down>", "pl": "Kop <w dół>" }
+        }
+      ],
+      "goal": { "en": "Reach the surface", "pl": "Dotrzyj na powierzchnię" },
+      "scoring": { "en": "10 per gem", "pl": "10 za klejnot" },
+      "mode": { "en": "Timed (90s)", "pl": "Na czas (90s)" },
+      "hint": { "en": "Tunnels collapse & refill", "pl": "Tunele zapadają się i wypełniają" }
+    }
+  }
+}

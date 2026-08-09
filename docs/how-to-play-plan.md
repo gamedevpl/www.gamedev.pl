@@ -42,6 +42,48 @@ as fake keys. No slug on `how_to_play_opened`; streams stay unjoinable.
 | **4 — Hard seal**    | Check 32 requires `.legend-keys` (and thus Goal) on every published game                                                             | ✅ companion games PR |
 | **5 — Creator path** | Templates + pack-kit + `game-builder` / §12a emit and require the same markup                                                        | ✅ companion games PR |
 
+## Generated `index.html` (schema, not markup)
+
+`index.html` is a build artifact derived from GAME.json `howToPlay`, not an authored file.
+Games declare the schema; the body fragment is generated.
+
+**Two implementations, one output.** Neither repo can import the other, so the generator
+exists twice:
+
+| Repo    | File                                   |
+| ------- | -------------------------------------- |
+| website | `apps/api/src/index-html-generator.ts` |
+| games   | `tools/lib/index-html.ts`              |
+
+Divergence is silent and worse than a contract mismatch: the games repo would write one
+body and the website generate a different one at serve time, so the game a creator
+approved is not the game players get. Both repos therefore commit the **same fixture and
+golden** (`index-html-contract.json` / `.expected.html`) and assert their own generator
+reproduces it byte-for-byte. Whichever copy drifts fails in its own repo, on its own PR.
+Changing output means regenerating the golden in both repos in the same change.
+
+**DOM contract the generated fragment preserves** (established by the hand-authored files):
+
+- ids `game-title`, `game-desc`, `sound-toggle`, `game`, `game-status`
+- classes `wrap`, `game-controls`, `sound-toggle`, `legend`, `legend-card`, `legend-title`,
+  `legend-keys`, `legend-close`, `hint`, `sr-only`
+- `data-i18n-en/pl` and `data-i18n-aria-label-en/pl` attributes
+- canvas: `id="game"`, width/height (default 640×400), `tabindex="0"`, `role="img"`
+- `#game-status` is `class="sr-only" aria-live="polite"`; `#sound-toggle` is
+  `aria-pressed="false"` with a bilingual "Sound: On" label
+
+A monolingual key renders bare (`<dt>M</dt>`) — there is nothing to translate. Only keys
+that differ between languages carry `data-i18n-*`, matching all 103 hand-authored games.
+
+Row order is fixed: custom controls, Goal, Scoring, Mode, then the M / Enter‑R / Touch
+rows unless a custom control already covers them.
+
+**Delivery.** A game satisfies the markup requirement with `index.html` _or_ a `howToPlay`
+carrying both `goal` and `hint`. Generation happens inside `getGameSources`, the single
+point every assembly path converges on (gate, staged preview, remix, seed preview,
+published serve, snapshot bake), so no caller knows the difference. A shipped
+`index.html` always wins. Stored snapshots keep working untouched — no backfill.
+
 ## Out of scope
 
 - Nested SPEC frontmatter for goal/scoring

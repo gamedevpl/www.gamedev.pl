@@ -37,9 +37,9 @@ describe('index-html-generator', () => {
     expect(html).toContain('data-i18n-en="A test game"');
     expect(html).toContain('data-i18n-pl="Gra testowa"');
 
-    // Check for legend
+    // Plain-string keys carry no i18n attributes
     expect(html).toContain('class="legend-keys"');
-    expect(html).toContain('data-i18n-en="WASD"');
+    expect(html).toContain('<dt>WASD</dt>');
     expect(html).toContain('data-i18n-en="Move"');
     expect(html).toContain('data-i18n-en="Goal"');
     expect(html).toContain('data-i18n-pl="Cel"');
@@ -132,11 +132,11 @@ describe('index-html-generator', () => {
 
     const html = generateIndexHtml(manifest, spec);
 
-    // Should include custom control and fixed rows
-    expect(html).toContain('data-i18n-en="Up"');
-    expect(html).toContain('data-i18n-en="M"'); // Sound toggle (fixed)
-    expect(html).toContain('Enter / R'); // Play again (fixed)
-    expect(html).toContain('Dotyk'); // Touch (fixed, Polish)
+    // Monolingual keys stay bare; only Touch differs across languages
+    expect(html).toContain('<dt>Up</dt>');
+    expect(html).toContain('<dt>M</dt>'); // Sound toggle (fixed)
+    expect(html).toContain('<dt>Enter / R</dt>'); // Play again (fixed)
+    expect(html).toContain('data-i18n-pl="Dotyk"'); // Touch (fixed, bilingual)
   });
 
   it('handles bilingual control keys', () => {

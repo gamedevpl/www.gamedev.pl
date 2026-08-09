@@ -1,19 +1,6 @@
-/**
- * Generate game index.html body fragment from GAME.json howToPlay schema.
- *
- * Mirror of games-repo tools/lib/index-html.ts. Both implementations must produce
- * identical output for shared fixtures (contract test in
- * apps/api/src/__tests__/index-html-generator.test.ts).
- *
- * Invariants preserved (de-facto DOM contract):
- * - ids: game-title, game-desc, sound-toggle, game, game-status
- * - classes: wrap, game-controls, sound-toggle, legend, legend-card,
- *   legend-title, legend-keys, legend-close, hint, sr-only
- * - data-i18n-en/pl and data-i18n-aria-label-en/pl attributes
- * - canvas: id="game", width/height, tabindex="0", role="img", aria-label
- * - #game-status: class="sr-only", aria-live="polite"
- * - #sound-toggle: aria-pressed="false", bilingual "Sound: On" label
- */
+// Lockstep twin: games-repo index-html.ts
+
+// Contract and goldens: docs/how-to-play-plan.md
 
 export interface HowToPlay {
   controls?: Array<{
@@ -31,17 +18,25 @@ export interface Canvas {
   height?: number;
 }
 
+// Index signature carries engine/audio, so a parsed manifest passes straight in.
 export interface GameManifest {
   title?: string;
   description?: { en: string; pl: string } | string;
   howToPlay?: HowToPlay;
   canvas?: Canvas;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface GameSpec {
   title: string;
-  [key: string]: any;
+  [key: string]: unknown;
+}
+
+interface LegendRow {
+  type: 'control' | 'reserved';
+  keys: string | { en: string; pl: string };
+  action: { en: string; pl: string };
+  reserved?: 'goal' | 'scoring' | 'mode';
 }
 
 function escapeHtml(value: string): string {
@@ -50,19 +45,12 @@ function escapeHtml(value: string): string {
   );
 }
 
-function buildLegendRows(howToPlay: HowToPlay | undefined): Array<{
-  type: 'control' | 'reserved';
-  keys: string | { en: string; pl: string };
-  action: { en: string; pl: string };
-  reserved?: 'goal' | 'scoring' | 'mode';
-}> {
-  const rows: any[] = [];
-  const fixedKeys = ['M', 'Enter / R', 'Touch'];
+function buildLegendRows(howToPlay: HowToPlay | undefined): LegendRow[] {
+  const rows: LegendRow[] = [];
   const coveredFixedKeys = new Set<string>();
 
   if (!howToPlay) return [];
 
-  // Custom controls
   if (howToPlay.controls) {
     for (const control of howToPlay.controls) {
       rows.push({
@@ -71,7 +59,6 @@ function buildLegendRows(howToPlay: HowToPlay | undefined): Array<{
         action: control.action,
       });
 
-      // Track which fixed rows are covered by custom controls
       const keyStr = typeof control.keys === 'string' ? control.keys : '';
       if (keyStr) {
         if (keyStr.includes('M')) coveredFixedKeys.add('M');
@@ -83,7 +70,6 @@ function buildLegendRows(howToPlay: HowToPlay | undefined): Array<{
     }
   }
 
-  // Goal (required)
   if (howToPlay.goal) {
     rows.push({
       type: 'reserved',
@@ -93,7 +79,6 @@ function buildLegendRows(howToPlay: HowToPlay | undefined): Array<{
     });
   }
 
-  // Scoring (optional)
   if (howToPlay.scoring) {
     rows.push({
       type: 'reserved',
@@ -103,7 +88,6 @@ function buildLegendRows(howToPlay: HowToPlay | undefined): Array<{
     });
   }
 
-  // Mode (optional)
   if (howToPlay.mode) {
     rows.push({
       type: 'reserved',
@@ -113,7 +97,6 @@ function buildLegendRows(howToPlay: HowToPlay | undefined): Array<{
     });
   }
 
-  // Fixed rows (if not already covered)
   if (!coveredFixedKeys.has('M')) {
     rows.push({
       type: 'control',
@@ -144,10 +127,7 @@ function buildLegendRows(howToPlay: HowToPlay | undefined): Array<{
   return rows;
 }
 
-function formatKey(
-  keys: string | { en: string; pl: string },
-  locale: 'en' | 'pl',
-): string {
+function formatKey(keys: string | { en: string; pl: string }, locale: 'en' | 'pl'): string {
   if (typeof keys === 'string') {
     return keys;
   }
@@ -165,7 +145,7 @@ function generateKeysAttrs(keys: string | { en: string; pl: string }): string {
   return ` data-i18n-en="${escapeHtml(keys.en)}" data-i18n-pl="${escapeHtml(keys.pl)}"`;
 }
 
-function generateLegend(howToPlay: HowToPlay | undefined, spec: GameSpec): string {
+function generateLegend(howToPlay: HowToPlay | undefined): string {
   if (!howToPlay) return '';
 
   const rows = buildLegendRows(howToPlay);
@@ -196,24 +176,22 @@ function generateLegend(howToPlay: HowToPlay | undefined, spec: GameSpec): strin
   return legendHtml;
 }
 
-/**
- * Generate index.html body fragment from game manifest and spec.
- *
- * The fragment is deterministic and stable for diffing. Output uses:
- * - 2-space indentation
- * - Fixed attribute order
- * - Normalized whitespace
- * - HTML-escaped values
- */
+// Deterministic and diff-stable: fixed indentation, attribute order, escaping.
 export function generateIndexHtml(manifest: GameManifest, spec: GameSpec): string {
   const title = spec.title || manifest.title || '';
   const descriptionObj = manifest.description;
-  const descEn = descriptionObj && typeof descriptionObj === 'object'
-    ? (descriptionObj.en || '')
-    : (typeof descriptionObj === 'string' ? descriptionObj : '');
-  const descPl = descriptionObj && typeof descriptionObj === 'object'
-    ? (descriptionObj.pl || '')
-    : (typeof descriptionObj === 'string' ? descriptionObj : '');
+  const descEn =
+    descriptionObj && typeof descriptionObj === 'object'
+      ? descriptionObj.en || ''
+      : typeof descriptionObj === 'string'
+        ? descriptionObj
+        : '';
+  const descPl =
+    descriptionObj && typeof descriptionObj === 'object'
+      ? descriptionObj.pl || ''
+      : typeof descriptionObj === 'string'
+        ? descriptionObj
+        : '';
   const howToPlay = manifest.howToPlay;
   const canvas = manifest.canvas || {};
   const canvasWidth = canvas.width ?? 640;
@@ -226,11 +204,11 @@ export function generateIndexHtml(manifest: GameManifest, spec: GameSpec): strin
   html += `  <h1 id="game-title" data-i18n-en="${escapeHtml(title)}" data-i18n-pl="${escapeHtml(title)}">${escapeHtml(title)}</h1>\n`;
   html += `  <p id="game-desc" data-i18n-en="${escapeHtml(descEn)}" data-i18n-pl="${escapeHtml(descPl)}">${escapeHtml(descEn)}</p>\n`;
   html += '  <div class="game-controls">\n';
-  html += '    <button id="sound-toggle" class="sound-toggle" type="button" aria-pressed="false" data-i18n-en="Sound: On" data-i18n-pl="Dźwięk: Wł.">Sound: On</button>\n';
+  html +=
+    '    <button id="sound-toggle" class="sound-toggle" type="button" aria-pressed="false" data-i18n-en="Sound: On" data-i18n-pl="Dźwięk: Wł.">Sound: On</button>\n';
 
-  // Add legend if howToPlay is present
   if (howToPlay) {
-    html += generateLegend(howToPlay, spec);
+    html += generateLegend(howToPlay);
   }
 
   html += '  </div>\n';

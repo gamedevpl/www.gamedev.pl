@@ -71,6 +71,55 @@ describe('validateSourceUpload — the delivery contract', () => {
     ).toThrow(/SPEC.md is required/);
   });
 
+  describe('index.html or GAME.json howToPlay', () => {
+    const withoutIndexHtml = MINIMAL.filter((file) => file.path !== 'index.html');
+    const howToPlay = {
+      goal: { en: 'Survive', pl: 'Przetrwaj' },
+      hint: { en: 'Keep moving', pl: 'Nie zatrzymuj się' },
+    };
+
+    it('accepts a delivery that declares howToPlay instead of shipping index.html', () => {
+      const files = [
+        ...withoutIndexHtml,
+        { path: 'GAME.json', content: JSON.stringify({ engine: { modules: [] }, howToPlay }) },
+      ];
+
+      expect(validateSourceUpload(files).map((file) => file.path)).not.toContain('index.html');
+    });
+
+    it('still accepts a delivery that ships index.html and no howToPlay', () => {
+      expect(validateSourceUpload(MINIMAL).map((file) => file.path)).toContain('index.html');
+    });
+
+    it('refuses a delivery with neither', () => {
+      expect(() =>
+        validateSourceUpload([
+          ...withoutIndexHtml,
+          { path: 'GAME.json', content: JSON.stringify({ engine: { modules: [] } }) },
+        ]),
+      ).toThrow(/index\.html or GAME\.json\.howToPlay is required/);
+    });
+
+    it('refuses a howToPlay missing the pair the generator needs', () => {
+      // goal without hint cannot produce a body
+      expect(() =>
+        validateSourceUpload([
+          ...withoutIndexHtml,
+          {
+            path: 'GAME.json',
+            content: JSON.stringify({ engine: { modules: [] }, howToPlay: { goal: howToPlay.goal } }),
+          },
+        ]),
+      ).toThrow(/index\.html or GAME\.json\.howToPlay is required/);
+    });
+
+    it('refuses a schema-only delivery whose GAME.json does not parse', () => {
+      expect(() =>
+        validateSourceUpload([...withoutIndexHtml, { path: 'GAME.json', content: '{"howToPlay": {' }]),
+      ).toThrow(/index\.html or GAME\.json\.howToPlay is required/);
+    });
+  });
+
   it('catches an enabled audio module without selected sounds before the gate', () => {
     expect(() =>
       validateSourceUpload(

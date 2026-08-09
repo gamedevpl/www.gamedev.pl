@@ -249,8 +249,7 @@ export function validateSourceUpload(files: SourceFile[], mode: DeliveryMode = '
   }
   const gameJson = files.find((file) => file.path.trim() === 'GAME.json');
 
-  // index.html is required OR GAME.json.howToPlay (for generated index.html).
-  // Both present is fine; the uploaded index.html takes precedence.
+  // Markup ships as index.html or as GAME.json howToPlay; either satisfies.
   let hasHowToPlay = false;
   if (gameJson) {
     try {
@@ -260,7 +259,7 @@ export function validateSourceUpload(files: SourceFile[], mode: DeliveryMode = '
       const howToPlay = manifest.howToPlay;
       hasHowToPlay = !!(howToPlay && typeof howToPlay === 'object' && 'goal' in howToPlay && 'hint' in howToPlay);
     } catch {
-      // Parse error in GAME.json will be caught elsewhere; just can't use howToPlay here
+      // Unparseable GAME.json is reported elsewhere; it cannot supply markup.
     }
   }
 

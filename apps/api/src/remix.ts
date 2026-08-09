@@ -13,7 +13,6 @@ import type { Store } from './store.js';
 import type { ContentChecker } from './moderation.js';
 import { logModerationRejection } from './moderation-metrics.js';
 import { assembleGameHtml } from './assemble.js';
-import { generateIndexHtml, type GameManifest, type GameSpec } from './index-html-generator.js';
 import type { GitHubClient } from './github-client.js';
 import { type EditingGate, type CreationGate } from './creation-limits.js';
 import {
@@ -488,23 +487,8 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
       ...overrides,
     });
     if (!sources) return null;
-
-    let indexHtml = sources.indexHtml;
-    // Generate index.html from GAME.json.howToPlay if not uploaded
-    if (!indexHtml.trim()) {
-      try {
-        const manifest: GameManifest = JSON.parse(sources.gameJson);
-        if (manifest.howToPlay) {
-          const spec: GameSpec = { title: session.title };
-          indexHtml = generateIndexHtml(manifest, spec);
-        }
-      } catch {
-        // If howToPlay is missing or GAME.json is invalid, fall through to empty
-      }
-    }
-
     return assembleGameHtml(
-      { title: session.title, description: '', html: indexHtml, js: sources.gameJs, css: sources.styleCss },
+      { title: session.title, description: '', html: sources.indexHtml, js: sources.gameJs, css: sources.styleCss },
       { restrictNetwork: true },
     );
   }

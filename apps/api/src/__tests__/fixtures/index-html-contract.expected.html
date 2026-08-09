@@ -1,0 +1,35 @@
+<div class="wrap">
+  <h1 id="game-title" data-i18n-en="Cavern &lt;Runner&gt; &amp; Co" data-i18n-pl="Cavern &lt;Runner&gt; &amp; Co">Cavern &lt;Runner&gt; &amp; Co</h1>
+  <p id="game-desc" data-i18n-en="Dig, dodge &amp; escape the &quot;deep&quot;" data-i18n-pl="Kop, unikaj i uciekaj z &quot;głębin&quot;">Dig, dodge &amp; escape the &quot;deep&quot;</p>
+  <div class="game-controls">
+    <button id="sound-toggle" class="sound-toggle" type="button" aria-pressed="false" data-i18n-en="Sound: On" data-i18n-pl="Dźwięk: Wł.">Sound: On</button>
+        <details class="legend">
+      <summary data-i18n-en="Controls" data-i18n-pl="Sterowanie">Controls</summary>
+      <div class="legend-card">
+        <p class="legend-title" data-i18n-en="How to play" data-i18n-pl="Jak grać">How to play</p>
+        <dl class="legend-keys">
+          <dt>WASD</dt>
+          <dd data-i18n-en="Move" data-i18n-pl="Ruch">Move</dd>
+          <dt data-i18n-en="Space" data-i18n-pl="Spacja">Space</dt>
+          <dd data-i18n-en="Dig &lt;down&gt;" data-i18n-pl="Kop &lt;w dół&gt;">Dig &lt;down&gt;</dd>
+          <dt data-i18n-en="Goal" data-i18n-pl="Cel">Goal</dt>
+          <dd data-i18n-en="Reach the surface" data-i18n-pl="Dotrzyj na powierzchnię">Reach the surface</dd>
+          <dt data-i18n-en="Scoring" data-i18n-pl="Punkty">Scoring</dt>
+          <dd data-i18n-en="10 per gem" data-i18n-pl="10 za klejnot">10 per gem</dd>
+          <dt data-i18n-en="Mode:" data-i18n-pl="Tryb:">Mode:</dt>
+          <dd data-i18n-en="Timed (90s)" data-i18n-pl="Na czas (90s)">Timed (90s)</dd>
+          <dt>M</dt>
+          <dd data-i18n-en="Sound on/off" data-i18n-pl="Dźwięk wł./wył.">Sound on/off</dd>
+          <dt>Enter / R</dt>
+          <dd data-i18n-en="Play again" data-i18n-pl="Zagraj ponownie">Play again</dd>
+          <dt data-i18n-en="Touch" data-i18n-pl="Dotyk">Touch</dt>
+          <dd data-i18n-en="On-screen pad with Dig and Flag buttons; long-press a tile to flag it" data-i18n-pl="Pad ekranowy z przyciskami Dig i Flag; przytrzymaj pole, aby postawić flagę">On-screen pad with Dig and Flag buttons; long-press a tile to flag it</dd>
+        </dl>
+        <p class="legend-close" data-i18n-en="Click or tap anywhere outside to close" data-i18n-pl="Kliknij lub dotknij obok, aby zamknąć">Click or tap anywhere outside to close</p>
+      </div>
+    </details>
+  </div>
+  <canvas id="game" width="800" height="600" tabindex="0" role="img" aria-label="Cavern &lt;Runner&gt; &amp; Co playfield" data-i18n-aria-label-en="Cavern &lt;Runner&gt; &amp; Co playfield" data-i18n-aria-label-pl="Cavern &lt;Runner&gt; &amp; Co — pole gry"></canvas>
+  <p class="hint" data-i18n-en="Tunnels collapse &amp; refill" data-i18n-pl="Tunele zapadają się i wypełniają">Tunnels collapse &amp; refill</p>
+  <p id="game-status" class="sr-only" aria-live="polite"></p>
+</div>
