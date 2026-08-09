@@ -553,6 +553,40 @@ describe('GCS games store', () => {
     expect((await store.listStagedSources({ slug: 'g', issueNumber: 7, roundGeneration: 1 })).files).toEqual([]);
   });
 
+  it('tombstones a staged path instead of delivering it as an empty file', async () => {
+    const { impl, objects } = stubGcs();
+    const store = createGcsGamesStore({ ...base, fetchImpl: impl });
+
+    await store.putStagedSourceFile({
+      slug: 'g',
+      issueNumber: 7,
+      roundGeneration: 1,
+      path: 'game/old-module.ts',
+      content: 'export const dead = 1;',
+    });
+    expect(objects.has('games/g/staging/7/g1/source/game/old-module.ts')).toBe(true);
+
+    const deleted = await store.deleteStagedSourceFile({
+      slug: 'g',
+      issueNumber: 7,
+      roundGeneration: 1,
+      path: 'game/old-module.ts',
+    });
+    expect(deleted.path).toBe('game/old-module.ts');
+    // Never re-read as content.
+    expect(objects.has('games/g/staging/7/g1/source/game/old-module.ts')).toBe(false);
+
+    const listed = await store.listStagedSources({ slug: 'g', issueNumber: 7, roundGeneration: 1 });
+    expect(listed.files).toEqual([{ path: 'game/old-module.ts', bytes: 0, deleted: true }]);
+
+    const assembled = await store.getStagedSourceFiles({ slug: 'g', issueNumber: 7, roundGeneration: 1 });
+    expect(assembled).toEqual([{ path: 'game/old-module.ts', content: '', deleted: true }]);
+
+    expect(
+      await store.getStagedSourceFile({ slug: 'g', issueNumber: 7, roundGeneration: 1, path: 'game/old-module.ts' }),
+    ).toBeNull();
+  });
+
   it('retries staging manifest writes when a concurrent update wins the generation race', async () => {
     const objects = new Map<string, Buffer>();
     const generations = new Map<string, number>();

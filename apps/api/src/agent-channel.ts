@@ -255,6 +255,10 @@ const StageSourceInputSchema = z.object({
     .optional(),
 });
 
+const DeleteSourceInputSchema = z.object({
+  path: z.string().trim().min(1).max(120),
+});
+
 const StageSourcePatchInputSchema = z
   .object({
     path: z.string().trim().min(1).max(120),
@@ -1477,6 +1481,73 @@ export async function registerAgentChannelRoutes(
           ...(paths?.length ? { paths } : {}),
         });
         return reply.send({ accepted: true, cleared });
+      } catch (error) {
+        if (error instanceof InvalidUploadError) {
+          return reply.status(400).send({ error: error.message });
+        }
+        throw error;
+      }
+    },
+  );
+
+  /**
+   * Stages a tombstone for one path — the explicit alternative to overwriting a file
+   * with empty content, which delivers a live empty file rather than removing it.
+   * `submit_sources({ fromStaged: true })` drops the path from the delivered set
+   * instead of carrying forward whatever the last delivery had there.
+   */
+  app.post(
+    '/api/agent/build/sources/stage/delete',
+    { config: { rateLimit: { max: 300, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      const resolved = await resolveBuild(request, reply);
+      if (!resolved) return reply;
+      const { issueNumber, record } = resolved;
+
+      if (!options.gamesStore) {
+        return reply.status(503).send({ error: 'delivery is not configured on this deployment' });
+      }
+      if (stopReason(record)) {
+        return reply.send({ accepted: false, rejected: 'stopped', ...(await channelState(issueNumber, record)) });
+      }
+      if (!record.slug) {
+        return reply
+          .status(400)
+          .send({ error: 'slug is required before staging — send the slug from get_brief / start' });
+      }
+
+      const parsed = DeleteSourceInputSchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
+      }
+
+      const roundGeneration = store
+        ? ((await store.ensureRoundGeneration(issueNumber)) ?? record.roundGeneration ?? 1)
+        : (record.roundGeneration ?? 1);
+
+      try {
+        const staged = await options.gamesStore.deleteStagedSourceFile({
+          slug: record.slug,
+          issueNumber,
+          roundGeneration,
+          path: parsed.data.path,
+        });
+        await markBuildingFromChannel(issueNumber, record);
+        await store?.touchLastAgentSignalAt(issueNumber, undefined, { key: 'staging_sources' });
+        options.onEvent?.(issueNumber);
+        options.onSourcesStaged?.({ issueNumber, slug: record.slug, roundGeneration });
+        return reply.send({
+          accepted: true,
+          path: staged.path,
+          staged: {
+            files: staged.files,
+            totalBytes: staged.totalBytes,
+            maxBytes: staged.maxBytes,
+            maxFiles: staged.maxFiles,
+            updatedAt: staged.updatedAt,
+          },
+          ...(await channelState(issueNumber, (await store!.getSubmission(issueNumber)) ?? record)),
+        });
       } catch (error) {
         if (error instanceof InvalidUploadError) {
           return reply.status(400).send({ error: error.message });

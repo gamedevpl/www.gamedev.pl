@@ -497,7 +497,7 @@ export interface PublicationRecord {
 }
 
 /** One path in a job's pre-delivery staging buffer (file-by-file MCP uploads). */
-export type StagedSourceEntry = { path: string; bytes: number };
+export type StagedSourceEntry = { path: string; bytes: number; deleted?: true };
 
 /** Summary of a job's staging buffer — paths only, no contents. */
 export type StagedSourcesSummary = {
@@ -565,6 +565,12 @@ export interface GamesStore {
     path: string;
     content: string;
   }): Promise<StagedSourcesSummary & { path: string; bytes: number }>;
+  deleteStagedSourceFile(input: {
+    slug: string;
+    issueNumber: number;
+    roundGeneration: number;
+    path: string;
+  }): Promise<StagedSourcesSummary & { path: string }>;
   /** Lists staged paths + byte totals (no contents). */
   listStagedSources(input: {
     slug: string;
@@ -572,7 +578,11 @@ export interface GamesStore {
     roundGeneration: number;
   }): Promise<StagedSourcesSummary>;
   /** Reads staged contents for finalize. */
-  getStagedSourceFiles(input: { slug: string; issueNumber: number; roundGeneration: number }): Promise<SourceFile[]>;
+  getStagedSourceFiles(input: {
+    slug: string;
+    issueNumber: number;
+    roundGeneration: number;
+  }): Promise<Array<SourceFile & { deleted?: true }>>;
   /** Reads one staged path (null when not in the buffer). Used by patch_source_file. */
   getStagedSourceFile(input: {
     slug: string;
@@ -907,6 +917,54 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
       );
     },
 
+    async deleteStagedSourceFile(input) {
+      assertSlug(input.slug);
+      const path = assertDeliverableSourcePath(input.path);
+      const prefix = stagingPrefix(input.slug, input.issueNumber, input.roundGeneration);
+      await deleteObject(`${prefix}/source/${path}`).catch(() => undefined);
+
+      for (let attempt = 0; attempt < MAX_STAGING_MANIFEST_RETRIES; attempt++) {
+        const existing = await readStagingManifest(input.slug, input.issueNumber, input.roundGeneration);
+        const base = existing?.manifest ?? {
+          slug: input.slug,
+          issueNumber: input.issueNumber,
+          roundGeneration: input.roundGeneration,
+          updatedAt: new Date(now()).toISOString(),
+          files: [],
+          totalBytes: 0,
+        };
+        const generation = existing?.generation ?? 0;
+
+        const previous = base.files.find((file) => file.path === path);
+        const entry: StagedSourceEntry = { path, bytes: 0, deleted: true };
+        const nextFiles = previous
+          ? base.files.map((file) => (file.path === path ? entry : file))
+          : [...base.files, entry];
+
+        const manifest: StagingManifest = {
+          slug: input.slug,
+          issueNumber: input.issueNumber,
+          roundGeneration: input.roundGeneration,
+          updatedAt: new Date(now()).toISOString(),
+          files: nextFiles,
+          totalBytes: base.totalBytes - (previous?.bytes ?? 0),
+        };
+        try {
+          await writeObject(
+            `${prefix}/manifest.json`,
+            Buffer.from(JSON.stringify(manifest, null, 2)),
+            'application/json',
+            { ifGenerationMatch: generation },
+          );
+          return { path, ...summaryFromManifest(manifest) };
+        } catch (error) {
+          if (error instanceof StagingGenerationMismatchError) continue;
+          throw error;
+        }
+      }
+      throw new InvalidUploadError('could not update staging manifest — too many concurrent staging calls; retry');
+    },
+
     async listStagedSources(input) {
       assertSlug(input.slug);
       const existing = await readStagingManifest(input.slug, input.issueNumber, input.roundGeneration);
@@ -921,6 +979,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
       const prefix = stagingPrefix(input.slug, input.issueNumber, input.roundGeneration);
       const files = await Promise.all(
         manifest.files.map(async (entry) => {
+          if (entry.deleted) return { path: entry.path, content: '', deleted: true as const };
           const body = await readObject(`${prefix}/source/${entry.path}`);
           if (!body) {
             throw new InvalidUploadError(

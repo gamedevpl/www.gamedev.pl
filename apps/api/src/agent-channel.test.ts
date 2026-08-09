@@ -963,6 +963,11 @@ describe('agent build channel', () => {
         mode?: string;
       }> = [];
       const staged = new Map<string, string>();
+      const deletedPaths = new Set<string>();
+      const stagedEntries = () => [
+        ...[...staged.entries()].map(([path, content]) => ({ path, bytes: Buffer.byteLength(content, 'utf8') })),
+        ...[...deletedPaths].map((path) => ({ path, bytes: 0, deleted: true as const })),
+      ];
       const gamesStore = {
         putCandidateSources: async (input: {
           slug: string;
@@ -977,11 +982,9 @@ describe('agent build channel', () => {
           return { version: 'v1', manifest: {} as never };
         },
         putStagedSourceFile: async (input: { path: string; content: string }) => {
+          deletedPaths.delete(input.path);
           staged.set(input.path, input.content);
-          const files = [...staged.entries()].map(([path, content]) => ({
-            path,
-            bytes: Buffer.byteLength(content, 'utf8'),
-          }));
+          const files = stagedEntries();
           return {
             path: input.path,
             bytes: Buffer.byteLength(input.content, 'utf8'),
@@ -992,11 +995,21 @@ describe('agent build channel', () => {
             updatedAt: '2026-08-03T23:00:00.000Z',
           };
         },
+        deleteStagedSourceFile: async (input: { path: string }) => {
+          staged.delete(input.path);
+          deletedPaths.add(input.path);
+          const files = stagedEntries();
+          return {
+            path: input.path,
+            files,
+            totalBytes: files.reduce((sum, file) => sum + file.bytes, 0),
+            maxBytes: 2 * 1024 * 1024,
+            maxFiles: 200,
+            updatedAt: '2026-08-03T23:00:00.000Z',
+          };
+        },
         listStagedSources: async () => {
-          const files = [...staged.entries()].map(([path, content]) => ({
-            path,
-            bytes: Buffer.byteLength(content, 'utf8'),
-          }));
+          const files = stagedEntries();
           return {
             files,
             totalBytes: files.reduce((sum, file) => sum + file.bytes, 0),
@@ -1005,17 +1018,23 @@ describe('agent build channel', () => {
             updatedAt: files.length ? '2026-08-03T23:00:00.000Z' : null,
           };
         },
-        getStagedSourceFiles: async () => [...staged.entries()].map(([path, content]) => ({ path, content })),
-        getStagedSourceFile: async (input: { path: string }) => staged.get(input.path) ?? null,
+        getStagedSourceFiles: async () => [
+          ...[...staged.entries()].map(([path, content]) => ({ path, content })),
+          ...[...deletedPaths].map((path) => ({ path, content: '', deleted: true as const })),
+        ],
+        getStagedSourceFile: async (input: { path: string }) =>
+          deletedPaths.has(input.path) ? null : (staged.get(input.path) ?? null),
         clearStagedSources: async (input?: { paths?: string[] }) => {
           if (!input?.paths?.length) {
-            const cleared = staged.size;
+            const cleared = staged.size + deletedPaths.size;
             staged.clear();
+            deletedPaths.clear();
             return { cleared };
           }
           let cleared = 0;
           for (const path of input.paths) {
             if (staged.delete(path)) cleared += 1;
+            if (deletedPaths.delete(path)) cleared += 1;
           }
           return { cleared };
         },
@@ -1629,6 +1648,51 @@ describe('agent build channel', () => {
       expect(files.find((f) => f.path === 'game/render.ts')?.content).toContain('drawHud()');
       expect(files.find((f) => f.path === 'game.ts')?.content).toBe(delivered['game.ts']);
       expect(staged.size).toBe(0);
+    });
+
+    it('delete_source_file drops a path from the next fromStaged delivery entirely', async () => {
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      await store.setSubmissionSlug(ISSUE, 'comet-courier');
+      await store.setSubmissionPreviewVersion(ISSUE, 'v1');
+      const { gamesStore, stored } = stubGamesStore();
+      const delivered: Record<string, string> = Object.fromEntries(
+        MINIMAL.filter((f) => f.path !== 'TRACE.json' && f.path !== 'PLAYTEST.json').map((f) => [f.path, f.content]),
+      );
+      delivered['game/old-module.ts'] = 'export const dead = 1;';
+      app = await createApp(store, {
+        gamesStore: {
+          ...gamesStore,
+          getManifest: async () => ({ sourceFiles: Object.keys(delivered) }),
+          getSourceFile: async (_slug: string, _version: string, path: string) => delivered[path] ?? null,
+        } as unknown as GamesStore,
+      });
+
+      const deleted = await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/sources/stage/delete',
+        headers: agentHeaders(),
+        payload: { path: 'game/old-module.ts' },
+      });
+      expect(deleted.statusCode).toBe(200);
+      expect(deleted.json()).toMatchObject({ accepted: true, path: 'game/old-module.ts' });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/sources',
+        headers: agentHeaders(),
+        payload: {
+          slug: 'comet-courier',
+          fromStaged: true,
+          kitEngineRef: 'abcdef1234567890',
+          mode: 'preview',
+        },
+      });
+      expect(response.statusCode).toBe(200);
+      const files = stored[0]?.files as Array<{ path: string; content: string }>;
+      // Dropped entirely — not delivered as a live empty file.
+      expect(files.find((f) => f.path === 'game/old-module.ts')).toBeUndefined();
+      expect(files.find((f) => f.path === 'game.ts')?.content).toBe(delivered['game.ts']);
     });
 
     it('accepts old+new exact replace without a unified diff', async () => {

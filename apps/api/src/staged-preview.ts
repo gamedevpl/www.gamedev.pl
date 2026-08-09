@@ -136,7 +136,7 @@ export type StagedPreviewOutcome =
 /** One layer of the overlay, newest-wins. Absent layers are simply not passed. */
 export type OverlayLayers = {
   /** The round's staging buffer — what the agent is writing right now. */
-  staged?: SourceFile[];
+  staged?: Array<SourceFile & { deleted?: true }>;
   /** The last version this game delivered, so a one-file tweak still renders a whole game. */
   delivered?: SourceFile[];
   /** The generated round-0 draft, when the agent has not replaced it yet. */
@@ -154,8 +154,12 @@ export type OverlayLayers = {
  */
 export function overlayGameSources(layers: OverlayLayers): Record<string, string> {
   const overlay: Record<string, string> = Object.create(null) as Record<string, string>;
-  for (const layer of [layers.seed, layers.delivered, layers.staged]) {
+  for (const layer of [layers.seed, layers.delivered]) {
     for (const file of layer ?? []) overlay[file.path] = file.content;
+  }
+  for (const file of layers.staged ?? []) {
+    if (file.deleted) delete overlay[file.path];
+    else overlay[file.path] = file.content;
   }
   return overlay;
 }

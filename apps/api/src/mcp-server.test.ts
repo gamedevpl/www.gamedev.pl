@@ -117,6 +117,18 @@ function stubGamesStore(gate?: {
     },
     getStagedSourceFiles: async () => [...staged.values()].map((f) => ({ path: f.path, content: f.content })),
     getStagedSourceFile: async (input: { path: string }) => staged.get(input.path)?.content ?? null,
+    deleteStagedSourceFile: async (input: { path: string }) => {
+      staged.delete(input.path);
+      const files = [...staged.values()].map((f) => ({ path: f.path, bytes: f.bytes }));
+      return {
+        path: input.path,
+        files,
+        totalBytes: files.reduce((sum, f) => sum + f.bytes, 0),
+        maxBytes: 1_500_000,
+        maxFiles: 64,
+        updatedAt: new Date().toISOString(),
+      };
+    },
     listStagedSources: async () => ({
       files: [...staged.values()].map((f) => ({ path: f.path, bytes: f.bytes })),
       totalBytes: [...staged.values()].reduce((sum, f) => sum + f.bytes, 0),
@@ -1539,6 +1551,36 @@ describe('POST /api/mcp (BY-05)', () => {
     ).tools.find((tool) => tool.name === 'stage_upload_url');
     expect(stageTool?.annotations?.readOnlyHint).toBe(false);
     expect(stageTool?.annotations?.idempotentHint).toBe(false);
+  });
+
+  it('delete_source_file removes a staged path, distinct from staging it empty', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    const { gamesStore } = stubGamesStore();
+    app = await createApp(store, gamesStore);
+    const sessionId = await initialize(app);
+    const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    await callTool(
+      app,
+      'stage_source_file',
+      { sessionKey, path: 'game/old-module.ts', content: 'export const dead = 1;' },
+      { 'mcp-session-id': sessionId },
+    );
+
+    const deleted = await callTool(
+      app,
+      'delete_source_file',
+      { sessionKey, path: 'game/old-module.ts' },
+      { 'mcp-session-id': sessionId },
+    );
+    expect(deleted.isError).toBe(false);
+    expect(deleted.structured).toMatchObject({ ok: true, path: 'game/old-module.ts' });
+
+    const listed = await callTool(app, 'list_staged_sources', { sessionKey }, { 'mcp-session-id': sessionId });
+    const files = (listed.structured as { files: Array<{ path: string }> }).files;
+    expect(files.find((f) => f.path === 'game/old-module.ts')).toBeUndefined();
   });
 
   it('rejects malformed base64 on stage_source_file instead of silently corrupting', async () => {

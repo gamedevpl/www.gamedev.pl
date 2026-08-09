@@ -125,6 +125,15 @@ describe('overlayGameSources', () => {
     expect(overlay['style.css']).toBe('delivered css');
   });
 
+  it('drops a path a staged tombstone marks deleted, instead of overwriting it', () => {
+    const overlay = overlayGameSources({
+      delivered: [{ path: 'index.html', content: 'stale hand-authored html' }],
+      staged: [{ path: 'index.html', content: '', deleted: true }],
+    });
+
+    expect('index.html' in overlay).toBe(false);
+  });
+
   it('cannot be poisoned by a path named after an Object prototype member', () => {
     // Overlay keys are an agent's own path strings. A null-prototype map is what stops
     // `constructor` resolving to a function that would later read as file content.

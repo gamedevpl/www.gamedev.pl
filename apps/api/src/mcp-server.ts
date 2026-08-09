@@ -141,6 +141,7 @@ const MCP_VISIBLE_TOOLS = new Set([
   'patch_source_file',
   'list_staged_sources',
   'clear_staged_sources',
+  'delete_source_file',
   'submit_sources',
   'end',
   'show_round',
@@ -606,7 +607,7 @@ const BEHAVIOURAL_CONTRACT = [
   // language they did not choose, which is the whole reason the field exists.
   "Write progress in the creator's language: when get_brief.locales[0] is not 'en', send report_progress with textLocalized and locale as well as the English text.",
   'Send a screenshot as soon as the game draws anything playable via screenshot_upload_url + curl --upload-file. There is no base64 screenshot tool — PNG bytes must never enter the model.',
-  'While iterating, deliver with mode=preview (no TRACE required). Prefer stage_upload_url + curl --upload-file for new/rewritten paths when you have shell; stage_source_file is the no-shell fallback. Prefer patch_source_file for edits — prefer old+new exact replace; patch=unified diff also works (never re-emit a whole large render.ts/model.ts). Honour warnings.code=module_too_large by splitting before more feature work. Then submit_sources({ fromStaged:true, mode:"preview", kitEngineRef }) — fromStaged overlays onto the latest delivery/seed so only changed paths need staging. Avoid one giant files[] payload. Only mode=publish needs TRACE/PLAYTEST and can go green.',
+  'While iterating, deliver with mode=preview (no TRACE required). Prefer stage_upload_url + curl --upload-file for new/rewritten paths when you have shell; stage_source_file is the no-shell fallback. Prefer patch_source_file for edits — prefer old+new exact replace; patch=unified diff also works (never re-emit a whole large render.ts/model.ts). To retire a path (an old game/*.ts module, or a hand-authored index.html/GAME.json field), call delete_source_file — staging empty content still delivers a live empty file, not a removal. Honour warnings.code=module_too_large by splitting before more feature work. Then submit_sources({ fromStaged:true, mode:"preview", kitEngineRef }) — fromStaged overlays onto the latest delivery/seed so only changed paths need staging. Avoid one giant files[] payload. Only mode=publish needs TRACE/PLAYTEST and can go green.',
   'If the last gate was preview_failed / red / kit_outdated (warnings.code=must_fix_gate), fix then submit_sources again — do not stop at stage/patch/show_round. Staging does not re-run the gate; the creator card stays on the refused delivery until you submit.',
   'While iterating, run only npm run typecheck -- <slug> (no browser, npm ci, capture, playtest, or agency), then stage and submit_sources({ fromStaged: true, mode: "preview", kitEngineRef }); the server verifies the preview. If a browser is available and the draft is approaching delivery, optionally run npm run check:game -- <slug> --preview (typecheck → smoke → build). Run the full gate only immediately before a mode:"publish" seal.',
   'After submit_sources, if you will not deliver more this round, call end (required — warnings.code=call_end; submit already unlocks creator handoff). Prefer end over sitting in a get_gate_verdict loop — Studio shows the gate. Do not stop after submit alone without end. If you are fixing a refused gate, ignore call_end until after the next submit_sources.',
@@ -3875,6 +3876,89 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         return toolOk({
           ok: body.accepted !== false,
           cleared: body.cleared ?? 0,
+          ...channelControlFields(body),
+          pendingMessages: pendingMessagesFromChannel(body),
+        });
+      },
+    },
+
+    delete_source_file: {
+      annotations: { title: 'Delete one staged source file', ...CONSUMES },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          ok: { type: 'boolean' },
+          path: { type: 'string' },
+          staged: {
+            type: 'object',
+            properties: {
+              files: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: { path: { type: 'string' }, bytes: { type: 'number' } },
+                  required: ['path', 'bytes'],
+                },
+              },
+              totalBytes: { type: 'number' },
+              maxBytes: { type: 'number' },
+              maxFiles: { type: 'number' },
+            },
+            required: ['files', 'totalBytes', 'maxBytes', 'maxFiles'],
+          },
+          ...REPLY_CONTROL,
+        },
+        required: ['ok', 'path', 'staged', 'stop', 'pendingMessages'],
+      },
+      description:
+        'Explicitly remove path from the delivered game — the opposite of stage_source_file. ' +
+        'stage_source_file({ content: "" }) still delivers a live empty file at that path; this instead drops ' +
+        'the path from the next submit_sources({ fromStaged: true }) delivery entirely, same as if it had ' +
+        'never existed. Use to retire an old game/*.ts module no longer imported anywhere, or to clear a ' +
+        'hand-authored index.html/GAME.json field back to the platform default. ' +
+        BEHAVIOURAL_CONTRACT,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          sessionKey: SESSION_KEY_PROP,
+          path: { type: 'string', description: 'Game-relative path to remove (e.g. game/old-module.ts).' },
+        },
+        required: ['path'],
+      },
+      handler: async (args, ctx) => {
+        const auth = await resolveAuth(ctx, args);
+        if (!('channelToken' in auth)) return auth;
+        const path = typeof args.path === 'string' ? args.path.trim() : '';
+        if (!path) return toolErr('path is required');
+        const res = await injectChannel(
+          ctx.request,
+          'POST',
+          '/api/agent/build/sources/stage/delete',
+          auth.channelToken,
+          { path },
+        );
+        const body = res.json() as {
+          error?: string;
+          accepted?: boolean;
+          rejected?: string;
+          path?: string;
+          staged?: {
+            files: Array<{ path: string; bytes: number }>;
+            totalBytes: number;
+            maxBytes: number;
+            maxFiles: number;
+          };
+          control?: { stop?: boolean; reason?: string };
+          pending?: Array<{ id: string; text: string; createdAt: string }>;
+        };
+        if (res.statusCode !== 200) {
+          return toolErr(body.error ?? `delete failed (${res.statusCode})`, body);
+        }
+        return toolOk({
+          ok: body.accepted !== false,
+          ...(body.rejected ? { rejected: body.rejected } : {}),
+          path: body.path ?? path,
+          staged: body.staged ?? { files: [], totalBytes: 0, maxBytes: 0, maxFiles: 0 },
           ...channelControlFields(body),
           pendingMessages: pendingMessagesFromChannel(body),
         });
