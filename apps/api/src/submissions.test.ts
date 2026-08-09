@@ -1504,6 +1504,116 @@ describe('submission routes', () => {
     await app.close();
   });
 
+  // mode=preview writes manifest.previewGate, not manifest.gate (arena-brawlers).
+  it('acts on a red preview-only gate verdict for a job still sitting in submitted', async () => {
+    const { githubClient } = createGithubClientStub({ issueNumber: 197 });
+    const { backend } = createBackendStub();
+    const gamesStore = {
+      getManifest: async () => ({
+        slug: 'arena-brawlers',
+        version: 'v3',
+        createdAt: '2026-08-09T14:20:00.000Z',
+        issueNumber: 197,
+        sourceFiles: [],
+        previewGate: {
+          green: false,
+          ranAt: '2026-08-09T14:22:00.000Z',
+          report: "FAIL smoke arena-brawlers\n  - Cannot read properties of undefined (reading 'modules')",
+        },
+      }),
+    } as unknown as GamesStore;
+
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      agentChannel: { gamesStore },
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about a top-down arena brawler.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+
+    await store.setSubmissionSlug(job.issueNumber, 'arena-brawlers');
+    await store.setSubmissionDeliveredVersion(job.issueNumber, 'v3');
+    await store.recordJobTransition(job.issueNumber, {
+      to: 'submitted',
+      at: '2026-08-09T14:20:00.000Z',
+      by: 'agent',
+      reason: 'sources_delivered',
+    });
+
+    const status = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(job.issueNumber, secret)}`,
+      headers: authHeaders,
+    });
+
+    expect(status.statusCode).toBe(200);
+    // Never `ready_for_review` — a preview pass is not publish readiness.
+    expect(status.json().phase).toBe('needs_changes');
+    expect(status.json().failure).toEqual({ reason: 'gate_red' });
+
+    await app.close();
+  });
+
+  // Mirror case: a green preview must never promote the round.
+  it('does not promote a job on a green preview-only gate verdict', async () => {
+    const { githubClient } = createGithubClientStub({ issueNumber: 198 });
+    const { backend } = createBackendStub();
+    const gamesStore = {
+      getManifest: async () => ({
+        slug: 'arena-brawlers',
+        version: 'v4',
+        createdAt: '2026-08-09T14:20:00.000Z',
+        issueNumber: 198,
+        sourceFiles: [],
+        previewGate: { green: true, ranAt: '2026-08-09T14:22:00.000Z' },
+      }),
+    } as unknown as GamesStore;
+
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      agentChannel: { gamesStore },
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about a top-down arena brawler.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+
+    await store.setSubmissionSlug(job.issueNumber, 'arena-brawlers');
+    await store.setSubmissionDeliveredVersion(job.issueNumber, 'v4');
+    await store.recordJobTransition(job.issueNumber, {
+      to: 'submitted',
+      at: '2026-08-09T14:20:00.000Z',
+      by: 'agent',
+      reason: 'sources_delivered',
+    });
+
+    const status = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(job.issueNumber, secret)}`,
+      headers: authHeaders,
+    });
+
+    expect(status.statusCode).toBe(200);
+    // `phase` is the raw job state; `status` is the public projection.
+    expect(status.json().phase).toBe('submitted');
+    expect(status.json().status).toBe('building');
+
+    await app.close();
+  });
+
   it('posts the gate capture screenshot into the build thread on reconcile', async () => {
     const { githubClient } = createGithubClientStub({ issueNumber: 197 });
     const { backend } = createBackendStub();

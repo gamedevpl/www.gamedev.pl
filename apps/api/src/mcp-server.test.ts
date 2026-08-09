@@ -1510,6 +1510,48 @@ describe('POST /api/mcp (BY-05)', () => {
     expect((shown.structured as { gate?: { status?: string } }).gate?.status).toBe('preview_failed');
   });
 
+  // arena-brawlers gap (2026-08-09): start() alone used to say nothing.
+  it('surfaces must_fix_gate on start itself when reconnecting after a red gate', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    await store.setSubmissionDeliveredVersion(ISSUE, 'v1');
+    await store.incrementRoundDeliveryCount(ISSUE);
+    const { gamesStore } = stubGamesStore({
+      green: false,
+      lane: 'preview',
+      status: 'preview_failed',
+      report: "FAIL smoke arena-brawlers\n  - Cannot read properties of undefined (reading 'modules')",
+      ranAt: '2026-08-09T14:32:00.000Z',
+    });
+    app = await createApp(store, gamesStore);
+    const sessionId = await initialize(app);
+
+    // The very first call of the new session — no show_round / get_gate_verdict yet.
+    const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
+    expect(started.isError).toBe(false);
+    const structured = started.structured as {
+      gate?: { status?: string; deliveryId?: string };
+      warnings?: Array<{ code: string; message: string }>;
+    };
+    expect(structured.gate?.status).toBe('preview_failed');
+    expect(structured.gate?.deliveryId).toBe('v1');
+    expect(structured.warnings?.some((w) => w.code === 'must_fix_gate')).toBe(true);
+  });
+
+  // A passing round's start response must not gain a gate field.
+  it('start omits gate when there is nothing outstanding to fix', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    const { gamesStore } = stubGamesStore();
+    app = await createApp(store, gamesStore);
+    const sessionId = await initialize(app);
+
+    const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
+    expect(started.isError).toBe(false);
+    const structured = started.structured as { gate?: unknown };
+    expect(structured.gate).toBeUndefined();
+  });
+
   describe('terminal receipt (generation one behind) on all three transports', () => {
     async function closeRoundGreen(store: InMemoryStore, gamesStore: GamesStore) {
       await store.setSubmissionDeliveredVersion(ISSUE, 'v1');
