@@ -661,9 +661,7 @@ export async function registerSubmissionRoutes(
         ? {
             ...configuredManagedDeps,
             ...(managedDeliver ? { deliver: managedDeliver } : {}),
-<<<<<<< HEAD
             ...(managedLock ? { lock: managedLock } : {}),
-=======
             ...(store
               ? {
                   readCredentialRef: async (issueNumber: number, sessionRef: string) => {
@@ -672,7 +670,6 @@ export async function registerSubmissionRoutes(
                   },
                 }
               : {}),
->>>>>>> cd677c15 (feat(api): scope managed MCP vaults to rounds)
           }
         : undefined;
     const environmentRegistry = createAgentBackendRegistryFromEnv(app.log, selfOptions, managedDeps);
