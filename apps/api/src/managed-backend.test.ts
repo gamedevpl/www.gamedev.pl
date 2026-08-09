@@ -119,6 +119,7 @@ describe('managed backend', () => {
 
   it('mints a vault-only MCP credential and revokes it after agent end', async () => {
     const released: string[] = [];
+    const info = vi.fn();
     const { provider, started, setState } = fakeProvider({
       startSession: async (request) => {
         started.push(request);
@@ -133,6 +134,7 @@ describe('managed backend', () => {
       tools: { mcpEndpoints: [{ url: 'https://www.gamedev.pl/api/mcp', name: 'gamedevpl' }] },
       mcpBearerCredential: (input) => ({ url: 'https://www.gamedev.pl/api/mcp', token: input.channelToken }),
       readSignals: async () => ({ agentEndedAt: '2026-08-09T18:00:00.000Z' }),
+      log: { warn: vi.fn(), info },
     });
 
     const result = await backend.dispatch(brief({ channelToken: 'round-token' }));
@@ -142,6 +144,20 @@ describe('managed backend', () => {
     expect(started[0].mcpBearerCredential).toEqual({ url: 'https://www.gamedev.pl/api/mcp', token: 'round-token' });
     expect(result.credentialRef).toBe('lease-1');
     expect(released).toEqual(['lease-1']);
+    expect(info).toHaveBeenCalledWith(
+      {
+        issueNumber: ISSUE,
+        slug: SLUG,
+        ref: 'session-1',
+        credentialRef: 'lease-1',
+        mcpUrl: 'https://www.gamedev.pl/api/mcp',
+      },
+      'managed round credential minted',
+    );
+    expect(info).toHaveBeenCalledWith(
+      { issueNumber: ISSUE, slug: SLUG, ref: 'session-1', credentialRef: 'lease-1' },
+      'managed round credential revoked',
+    );
   });
 
   it('sends the seed as workspace files and the digest as a cacheable prefix', async () => {
@@ -502,16 +518,28 @@ describe('managed backend', () => {
 
   it('archives round credentials even when interrupt fails', async () => {
     const releaseCredential = vi.fn(async () => undefined);
+    const info = vi.fn();
     const { provider } = fakeProvider({
+      startSession: async () => ({ id: 'session-1', state: 'queued', credentialRef: 'vault-1' }),
       cancelSession: async () => {
         throw new Error('interrupt unavailable');
       },
       releaseCredential,
     });
-    const backend = createManagedBackend({ provider, deliver: async () => ({ version: 'v1' }) });
+    const backend = createManagedBackend({
+      provider,
+      deliver: async () => ({ version: 'v1' }),
+      log: { warn: vi.fn(), info },
+    });
 
-    await expect(backend.cancel('session-1', 'vault-1')).rejects.toThrow(/interrupt unavailable/);
+    await backend.dispatch(brief());
+    await expect(backend.cancel('session-1')).rejects.toThrow(/interrupt unavailable/);
     expect(releaseCredential).toHaveBeenCalledWith('vault-1');
+    // Cancel has no issueNumber arg; sessionJobs still correlates the revoke log.
+    expect(info).toHaveBeenCalledWith(
+      { issueNumber: ISSUE, slug: SLUG, ref: 'session-1', credentialRef: 'vault-1' },
+      'managed round credential revoked',
+    );
   });
 
   it('answers null for a session the vendor has forgotten', async () => {
