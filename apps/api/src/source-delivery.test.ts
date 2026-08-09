@@ -327,5 +327,28 @@ export function tick(round: Round) {
       expect(result.accepted).toBe(true);
       expect(putCandidateSources).toHaveBeenCalledOnce();
     });
+
+    it('clears bypass diagnostics after a later clean delivery', async () => {
+      const kitFileStore = fakeKitStore({ [PINNED]: treeFor(PINNED, KIT_DTS) });
+      const { store, service, authority } = await setup({ kitFileStore });
+      await store.pinRoundKitEngineRef(ISSUE, PINNED);
+      await store.setRoundTypecheckPreflightBypassErrors(ISSUE, 'stale diagnostics');
+
+      const clean: SourceFile[] = [
+        { path: 'SPEC.md', content: '---\ntitle: Clean\n---\n' },
+        { path: 'index.html', content: '<!doctype html>' },
+        { path: 'game.ts', content: 'export const n = 1;\n' },
+      ];
+      const result = await service.deliver({
+        issueNumber: ISSUE,
+        slug: SLUG,
+        files: clean,
+        mode: 'preview',
+        backend: BACKEND,
+        authority,
+      });
+      expect(result.accepted).toBe(true);
+      expect((await store.getSubmission(ISSUE))?.roundTypecheckPreflightBypassErrors).toBeUndefined();
+    });
   });
 });

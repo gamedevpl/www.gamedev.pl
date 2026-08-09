@@ -267,11 +267,16 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
               },
               'typecheck preflight bypassed after refusal cap',
             );
-          } else if (check.skipped === 'timeout') {
-            options.log?.warn?.(
-              { issueNumber: input.issueNumber, slug: input.slug, durationMs: check.durationMs },
-              'typecheck preflight skipped: budget exceeded',
-            );
+          } else {
+            if (record.roundTypecheckPreflightBypassErrors) {
+              await options.store.setRoundTypecheckPreflightBypassErrors(input.issueNumber, null);
+            }
+            if (check.skipped === 'timeout') {
+              options.log?.warn?.(
+                { issueNumber: input.issueNumber, slug: input.slug, durationMs: check.durationMs },
+                'typecheck preflight skipped: budget exceeded',
+              );
+            }
           }
         } catch (error) {
           if (error instanceof InvalidUploadError) throw error;

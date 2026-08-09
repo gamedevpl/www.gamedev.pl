@@ -5463,14 +5463,7 @@ export class FirestoreStore implements Store {
   async setRoundTypecheckPreflightBypassErrors(issueNumber: number, message: string | null): Promise<void> {
     const ref = this.db.collection('submissions').doc(String(issueNumber));
     if (message == null) {
-      await this.db.runTransaction(async (tx) => {
-        const snap = await tx.get(ref);
-        if (!snap.exists) return;
-        const current = snap.data() as SubmissionRecord;
-        const next = { ...current };
-        delete next.roundTypecheckPreflightBypassErrors;
-        tx.set(ref, next);
-      });
+      await ref.set({ roundTypecheckPreflightBypassErrors: FieldValue.delete() }, { merge: true });
       return;
     }
     await ref.set({ roundTypecheckPreflightBypassErrors: message }, { merge: true });

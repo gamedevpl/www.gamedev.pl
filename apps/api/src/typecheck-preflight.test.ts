@@ -89,6 +89,38 @@ export function start(): Round { return { score: 0 }; }
     expect(result).toMatchObject({ ok: true, skipped: 'no_kit' });
   });
 
+  it('pluralizes a single missing property correctly', () => {
+    const result = typecheckDeliverySources({
+      slug: 'one',
+      kitShared: { 'shared/game-kit.d.ts': KIT_DTS },
+      sources: {
+        'game/model.ts': 'export type Round = { score: number };\n',
+        'game.ts': `
+import type { Round } from './game/model.ts';
+export function tick(round: Round) { return round.lane; }
+`,
+      },
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.message).toMatch(/has no property `lane`/);
+    expect(result.message).not.toMatch(/has no properties/);
+  });
+
+  it('does not read arbitrary host filesystem paths from delivery imports', () => {
+    const result = typecheckDeliverySources({
+      slug: 'escape',
+      kitShared: { 'shared/game-kit.d.ts': KIT_DTS },
+      sources: {
+        'game.ts': `import secret from '/etc/passwd';\nexport const s = secret;\n`,
+      },
+    });
+    // Must not surface file contents; missing-module / resolve failure is fine.
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.message).not.toMatch(/root:|daemon:|nobody:/);
+  });
+
   it('uses kit shared modules for resolution, not only ambient dts', () => {
     const result = typecheckDeliverySources({
       slug: 'mod-game',

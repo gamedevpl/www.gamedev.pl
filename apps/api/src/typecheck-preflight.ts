@@ -1,5 +1,6 @@
 // In-process tsc preflight for submit_sources.
 
+import path from 'node:path';
 import ts from 'typescript';
 import type { KitTree } from './kit-files.js';
 import { KIT_ROOT_DIR } from './kit-registry.js';
@@ -27,6 +28,12 @@ export const TYPECHECK_PREFLIGHT_BUDGET_MS = 10_000;
 export const TYPECHECK_PREFLIGHT_MAX_REFUSALS = 2;
 
 const libCache = new Map<string, ts.SourceFile | undefined>();
+const TS_LIB_DIR = path.dirname(ts.getDefaultLibFilePath(COMPILER_OPTIONS));
+
+function isAllowedDiskPath(name: string): boolean {
+  const resolved = path.resolve(name);
+  return resolved === TS_LIB_DIR || resolved.startsWith(`${TS_LIB_DIR}${path.sep}`);
+}
 
 export type TypecheckPreflightResult =
   | { ok: true; skipped?: 'no_kit' | 'timeout' | 'checker_failed'; durationMs: number }
@@ -35,9 +42,9 @@ export type TypecheckPreflightResult =
 export function sharedSourcesFromKitTree(tree: KitTree): Record<string, string> {
   const out: Record<string, string> = {};
   const prefix = `${KIT_ROOT_DIR}/`;
-  for (const [path, buf] of tree.files) {
-    if (!path.startsWith(prefix)) continue;
-    const rel = path.slice(prefix.length);
+  for (const [filePath, buf] of tree.files) {
+    if (!filePath.startsWith(prefix)) continue;
+    const rel = filePath.slice(prefix.length);
     const isKitDts = rel === 'shared/game-kit.d.ts';
     const isModule = rel.startsWith('shared/modules/') && rel.endsWith('.ts');
     const isVertical = rel.startsWith('shared/verticals/') && rel.endsWith('.ts');
@@ -117,10 +124,10 @@ function formatFindings(findings: RawFinding[]): string {
   const lines: string[] = [];
   for (const g of groups.values()) {
     if (g.kind === 'props') {
-      const props = g.props.map((p) => `\`${p}\``).join(', ');
+      const listed = g.props.map((p) => `\`${p}\``).join(', ');
+      const noun = g.props.length === 1 ? 'property' : 'properties';
       lines.push(
-        `${g.file}: type \`${g.typeName}\` has no ${props.length === 1 ? 'property' : 'properties'} ${props}. ` +
-          'Add them to the type or stop reading them.',
+        `${g.file}: type \`${g.typeName}\` has no ${noun} ${listed}. ` + 'Add them to the type or stop reading them.',
       );
     } else {
       lines.push(g.line);
@@ -167,13 +174,23 @@ export function typecheckDeliverySources(input: {
   }
   const roots = [...files.keys()];
 
+  // Disk reads: TypeScript lib only (delivery is untrusted).
   const host: ts.CompilerHost = {
-    fileExists: (name) => files.has(name) || ts.sys.fileExists(name),
-    readFile: (name) => files.get(name) ?? ts.sys.readFile(name),
+    fileExists: (name) => files.has(name) || (isAllowedDiskPath(name) && ts.sys.fileExists(name)),
+    readFile: (name) => {
+      const own = files.get(name);
+      if (own !== undefined) return own;
+      if (!isAllowedDiskPath(name)) return undefined;
+      return ts.sys.readFile(name);
+    },
     getSourceFile: (name, languageVersion) => {
       const own = files.get(name);
       if (own !== undefined) return ts.createSourceFile(name, own, languageVersion, true);
       if (libCache.has(name)) return libCache.get(name);
+      if (!isAllowedDiskPath(name)) {
+        libCache.set(name, undefined);
+        return undefined;
+      }
       const text = ts.sys.readFile(name);
       const parsed = text === undefined ? undefined : ts.createSourceFile(name, text, languageVersion, true);
       libCache.set(name, parsed);
@@ -185,8 +202,8 @@ export function typecheckDeliverySources(input: {
     getCanonicalFileName: (name) => name,
     useCaseSensitiveFileNames: () => true,
     getNewLine: () => '\n',
-    directoryExists: (dir) => dir.startsWith(ROOT) || ts.sys.directoryExists(dir),
-    getDirectories: (dir) => (dir.startsWith(ROOT) ? [] : ts.sys.getDirectories(dir)),
+    directoryExists: (dir) => dir.startsWith(ROOT) || (isAllowedDiskPath(dir) && ts.sys.directoryExists(dir)),
+    getDirectories: (dir) => (isAllowedDiskPath(dir) ? ts.sys.getDirectories(dir) : []),
   };
 
   let program: ts.Program;
@@ -203,6 +220,7 @@ export function typecheckDeliverySources(input: {
   return { ok: false, message: formatFindings(findings), durationMs };
 }
 
+// Post-check budget: sync tsc cannot be preempted mid-run.
 export async function runTypecheckPreflight(input: {
   slug: string;
   sources: Record<string, string>;
@@ -211,27 +229,13 @@ export async function runTypecheckPreflight(input: {
 }): Promise<TypecheckPreflightResult> {
   const budgetMs = input.budgetMs ?? TYPECHECK_PREFLIGHT_BUDGET_MS;
   const started = Date.now();
-  return await new Promise((resolve) => {
-    let settled = false;
-    const timer = setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      resolve({ ok: true, skipped: 'timeout', durationMs: Date.now() - started });
-    }, budgetMs);
-    setImmediate(() => {
-      if (settled) return;
-      try {
-        const result = typecheckDeliverySources(input);
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        resolve(result);
-      } catch {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        resolve({ ok: true, skipped: 'checker_failed', durationMs: Date.now() - started });
-      }
-    });
-  });
+  try {
+    const result = typecheckDeliverySources(input);
+    if (Date.now() - started > budgetMs) {
+      return { ok: true, skipped: 'timeout', durationMs: Date.now() - started };
+    }
+    return result;
+  } catch {
+    return { ok: true, skipped: 'checker_failed', durationMs: Date.now() - started };
+  }
 }
