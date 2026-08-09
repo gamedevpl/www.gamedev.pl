@@ -115,6 +115,7 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
   }
   const outputPath = options.outputPath ?? DEFAULT_MANAGED_OUTPUT_PATH;
   const deliveryMode = options.deliveryMode ?? 'preview';
+  const channelMode = Boolean(options.tools?.mcpEndpoints?.length);
   const backendName = `managed:${options.provider.vendor}`;
   // At-most-once per session; a re-poll cannot duplicate.
   const harvested = new Set<string>();
@@ -147,7 +148,14 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
       correlationId: String(brief.issueNumber),
       ...(systemPrompt ? { systemPrompt } : {}),
       // The prompt has to describe the delivery this backend will actually read.
-      prompt: buildPrompt(brief, deliver ? { kind: 'outputs', path: outputPath } : { kind: 'channel', fast: true }),
+      prompt: buildPrompt(
+        brief,
+        channelMode
+          ? { kind: 'channel', fast: true }
+          : deliver
+            ? { kind: 'outputs', path: outputPath }
+            : { kind: 'channel', fast: true },
+      ),
       model: options.provider.model,
       ...(options.effort ? { effort: options.effort } : {}),
       ...(brief.seed
@@ -287,6 +295,7 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
       let outcome: HarvestOutcome = 'empty';
       const canHarvest =
         Boolean(deliver) &&
+        !channelMode &&
         !hasCandidate &&
         isManagedSessionHarvestable(session.state) &&
         observeOptions.issueNumber !== undefined &&

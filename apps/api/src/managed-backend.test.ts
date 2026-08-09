@@ -99,6 +99,24 @@ describe('managed backend', () => {
     expect(observation).toMatchObject({ state: 'completed', hasCandidate: false });
   });
 
+  it('prefers the MCP delivery contract when both delivery paths are configured', async () => {
+    const { provider, started, setState, setOutputs, read } = fakeProvider();
+    const backend = createManagedBackend({
+      provider,
+      deliver: async () => ({ version: 'v1' }),
+      tools: { mcpEndpoints: [{ url: 'https://www.gamedev.pl/api/mcp', name: 'gamedevpl' }] },
+    });
+    setOutputs([{ path: `games/${SLUG}/game.ts`, content: 'export {};' }]);
+    setState('completed');
+
+    await backend.dispatch(brief());
+    const observation = await backend.observe('session-1', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
+
+    expect(started[0].prompt).toContain('call `start`');
+    expect(read).toEqual([]);
+    expect(observation).toMatchObject({ state: 'completed', hasCandidate: false });
+  });
+
   it('mints a vault-only MCP credential and revokes it after agent end', async () => {
     const released: string[] = [];
     const { provider, started, setState } = fakeProvider({
