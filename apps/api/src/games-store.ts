@@ -263,7 +263,8 @@ export function validateSourceUpload(files: SourceFile[], mode: DeliveryMode = '
           `GAME.json enables audio but ${sounds.length === 0 ? 'selects no audio.sounds' : 'names no audio.music'}. ` +
             'Every legal id is listed in the Audio catalog section of the Creator Kit digest — ' +
             'reuse them as they are; the exemplar GAME.json selects ui-toggle, win and lose. ' +
-            'The audio module is mandatory, so dropping it is not the fix.',
+            'Dropping the audio module only defers the failure: the publish gate requires it, ' +
+            'with at least three sounds including ui-toggle and a music track.',
         );
       }
     } catch (error) {
