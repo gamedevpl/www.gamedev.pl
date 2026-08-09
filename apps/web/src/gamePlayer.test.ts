@@ -70,7 +70,7 @@ describe('embedGameHtml', () => {
       '#game{--gdpl-canvas-ratio:1.6;--gdpl-embed-width:100%;--gdpl-embed-height:100dvh;flex:0 1 auto!important;width:min(var(--gdpl-embed-width),calc(var(--gdpl-embed-height) * var(--gdpl-canvas-ratio)))!important;',
     );
     expect(out).toContain('aspect-ratio:var(--gdpl-canvas-ratio)!important');
-    expect(out).toContain('max-width:100%!important');
+    expect(out).toContain('max-width:var(--gdpl-embed-width)!important');
     expect(out).toContain('max-height:100%!important');
     expect(out).not.toContain('#game{width:auto!important;height:auto!important');
     expect(out).not.toContain('#game{width:100%!important;height:100%!important');
