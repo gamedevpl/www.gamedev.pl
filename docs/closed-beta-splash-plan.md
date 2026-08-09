@@ -115,6 +115,20 @@ anonymous visit stream. It never records the code or the signed-in account there
 Email-form waitlist remains out of scope: it would accept unverified identity data and create
 a separate moderation surface.
 
+## First-login welcome
+
+The first successful sign-in for a new account returns a one-time welcome state. The
+signed-in shell shows a short, dismissible orientation card:
+
+- play a few games first;
+- describe an idea to build a game;
+- report rough edges and surprises.
+
+The welcome is shown from the client-side sign-in response, not inferred from a browser
+cookie. That keeps it tied to the account's first successful authentication while avoiding
+another persistent personal-data field. Anonymous visit telemetry records `shown`,
+`continued`, or `dismissed` without a uid.
+
 ## Existing operator surface
 
 - Admin UI for the waitlist shipped as the operator console **Waitlist** tab

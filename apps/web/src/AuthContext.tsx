@@ -47,6 +47,7 @@ interface AuthContextType {
    */
   appleSignIn: boolean;
   waitlistStatus: WaitlistStatus;
+  showBetaWelcome: boolean;
   signInWithGoogleToken: (idToken: string, inviteCode?: string) => Promise<void>;
   /**
    * `name` is Apple's first-authorization gift: it arrives once, outside the token, and
@@ -57,6 +58,7 @@ interface AuthContextType {
   // not on the allowlist). Re-verifies the same ID token server-side.
   joinWaitlist: (idToken: string, locale?: string, provider?: 'google' | 'apple') => Promise<void>;
   acceptBetaInvite: (code: string) => Promise<void>;
+  dismissBetaWelcome: () => void;
   logout: () => Promise<void>;
   deleteAccount: () => Promise<{ deleteAfter: string }>;
   refreshUser: () => Promise<void>;
@@ -69,10 +71,12 @@ const AuthContext = createContext<AuthContextType>({
   publicPlaySlugs: [],
   appleSignIn: false,
   waitlistStatus: 'unknown',
+  showBetaWelcome: false,
   signInWithGoogleToken: async () => {},
   signInWithAppleToken: async () => {},
   joinWaitlist: async () => {},
   acceptBetaInvite: async () => {},
+  dismissBetaWelcome: () => {},
   logout: async () => {},
   deleteAccount: async () => ({ deleteAfter: '' }),
   refreshUser: async () => {},
@@ -85,6 +89,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [appleSignIn, setAppleSignIn] = useState(false);
   const [loading, setLoading] = useState(true);
   const [waitlistStatus, setWaitlistStatus] = useState<WaitlistStatus>('unknown');
+  const [showBetaWelcome, setShowBetaWelcome] = useState(false);
 
   const refreshUser = async () => {
     try {
@@ -141,8 +146,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       throw new Error(err?.error ?? 'Sign in failed');
     }
 
-    const data = await res.json();
+    const data = (await res.json()) as { user: User; betaWelcome?: boolean };
     setUser(data.user);
+    setShowBetaWelcome(data.betaWelcome === true);
   };
 
   const signInWithAppleToken = async (idToken: string, name?: string, inviteCode?: string) => {
@@ -161,8 +167,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       throw new Error(err?.error ?? 'Sign in failed');
     }
 
-    const data = await res.json();
+    const data = (await res.json()) as { user: User; betaWelcome?: boolean };
     setUser(data.user);
+    setShowBetaWelcome(data.betaWelcome === true);
   };
 
   const joinWaitlist = async (idToken: string, locale?: string, provider?: 'google' | 'apple') => {
@@ -198,10 +205,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const dismissBetaWelcome = () => {
+    setShowBetaWelcome(false);
+  };
+
   const logout = async () => {
     await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
     clearCachedCatalogSortPayload();
     setUser(null);
+    setShowBetaWelcome(false);
   };
 
   const deleteAccount = async () => {
@@ -218,6 +230,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const result = (await res.json()) as { deleteAfter: string };
     clearCachedCatalogSortPayload();
     setUser(null);
+    setShowBetaWelcome(false);
     return result;
   };
 
@@ -230,10 +243,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         publicPlaySlugs,
         appleSignIn,
         waitlistStatus,
+        showBetaWelcome,
         signInWithGoogleToken,
         signInWithAppleToken,
         joinWaitlist,
         acceptBetaInvite,
+        dismissBetaWelcome,
         logout,
         deleteAccount,
         refreshUser,

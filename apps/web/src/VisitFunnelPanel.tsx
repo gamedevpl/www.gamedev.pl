@@ -40,6 +40,12 @@ const INVITE_LABELS: Record<string, string> = {
   unavailable: 'hit an unavailable invite',
 };
 
+const BETA_WELCOME_LABELS: Record<string, string> = {
+  shown: 'saw the welcome',
+  continued: 'entered the beta',
+  dismissed: 'dismissed the welcome',
+};
+
 const EDITOR_LABELS: Record<string, string> = {
   opened: 'opened the editor',
   draft_saved: 'saved a draft',
@@ -242,6 +248,36 @@ export function VisitFunnelPanel({ data }: { data: VisitsResponse }) {
                     <td>{INVITE_LABELS[row.step] ?? row.step}</td>
                     <td className="num">{row.visits}</td>
                     <td className="num">{percent(row.visits, funnel.invites?.[0]?.visits ?? 0)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <div className="funnel-block">
+          <h3>Beta welcome</h3>
+          {(funnel.betaWelcome ?? []).every((row) => row.visits === 0) ? (
+            <p className="health-empty">No first-login welcomes in this window.</p>
+          ) : (
+            <table className="health-table">
+              <thead>
+                <tr>
+                  <th scope="col">Step</th>
+                  <th scope="col" className="num">
+                    Visits
+                  </th>
+                  <th scope="col" className="num">
+                    Of welcomes
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {(funnel.betaWelcome ?? []).map((row) => (
+                  <tr key={row.step}>
+                    <td>{BETA_WELCOME_LABELS[row.step] ?? row.step}</td>
+                    <td className="num">{row.visits}</td>
+                    <td className="num">{percent(row.visits, funnel.betaWelcome?.[0]?.visits ?? 0)}</td>
                   </tr>
                 ))}
               </tbody>

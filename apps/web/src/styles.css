@@ -4373,6 +4373,253 @@ a.user-name--profile:focus-visible {
   line-height: 1.5;
 }
 
+.beta-welcome-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 950;
+  display: grid;
+  place-items: center;
+  overflow: auto;
+  padding: 24px;
+  background: rgba(7, 11, 15, 0.84);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+.beta-welcome-card {
+  position: relative;
+  width: min(680px, 100%);
+  overflow: hidden;
+  padding: 42px clamp(20px, 5vw, 52px) 34px;
+  text-align: center;
+  background: radial-gradient(circle at 50% -15%, rgba(0, 228, 172, 0.2), transparent 42%), var(--panel);
+  border: 1px solid rgba(0, 228, 172, 0.38);
+  border-radius: 22px;
+  box-shadow:
+    0 30px 90px rgba(0, 0, 0, 0.58),
+    0 0 48px rgba(0, 228, 172, 0.12);
+}
+
+.beta-welcome-card::before,
+.beta-welcome-card::after {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  content: '';
+  background: var(--turquoise);
+  box-shadow:
+    56px 24px 0 var(--accent-blue),
+    -44px 88px 0 rgba(0, 228, 172, 0.45),
+    90px 116px 0 rgba(56, 189, 248, 0.45);
+  opacity: 0.7;
+}
+
+.beta-welcome-card::before {
+  top: 50px;
+  left: 8%;
+}
+
+.beta-welcome-card::after {
+  right: 8%;
+  bottom: 90px;
+  transform: rotate(45deg);
+}
+
+.beta-welcome-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.beta-welcome-close:hover,
+.beta-welcome-close:focus-visible {
+  color: var(--text);
+  border-color: var(--panel-border);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.beta-welcome-mascot {
+  position: relative;
+  z-index: 1;
+  width: fit-content;
+  margin: 0 auto 8px;
+  color: var(--turquoise);
+  filter: drop-shadow(0 0 18px var(--turquoise-glow));
+}
+
+.beta-welcome-mascot__mark {
+  display: block;
+  width: 82px;
+  height: auto;
+}
+
+.beta-welcome-kicker {
+  position: relative;
+  z-index: 1;
+  color: var(--turquoise);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.beta-welcome-card h1 {
+  position: relative;
+  z-index: 1;
+  margin: 8px 0 10px;
+  font-size: clamp(1.65rem, 5vw, 2.35rem);
+  line-height: 1.1;
+}
+
+.beta-welcome-subtitle {
+  position: relative;
+  z-index: 1;
+  max-width: 48ch;
+  margin: 0 auto 26px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.beta-welcome-path {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  text-align: left;
+}
+
+.beta-welcome-path article {
+  min-width: 0;
+  padding: 16px 14px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+}
+
+.beta-welcome-path article > svg {
+  color: var(--turquoise);
+}
+
+.beta-welcome-path h2 {
+  min-width: 0;
+  margin: 10px 0 5px;
+  font-size: 0.95rem;
+}
+
+.beta-welcome-path p {
+  min-width: 0;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.beta-welcome-path a {
+  display: inline-block;
+  margin-top: 9px;
+  color: var(--turquoise);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.beta-welcome-path a:hover,
+.beta-welcome-path a:focus-visible {
+  text-decoration: underline;
+}
+
+.beta-welcome-note {
+  position: relative;
+  z-index: 1;
+  max-width: 52ch;
+  margin: 22px auto;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.beta-welcome-cta {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 22px;
+  color: #08241d;
+  font: inherit;
+  font-weight: 700;
+  background: var(--turquoise);
+  border: 0;
+  border-radius: 8px;
+  box-shadow: 0 0 22px rgba(0, 228, 172, 0.22);
+  cursor: pointer;
+}
+
+.beta-welcome-cta:hover,
+.beta-welcome-cta:focus-visible {
+  filter: brightness(1.08);
+  box-shadow: 0 0 30px rgba(0, 228, 172, 0.38);
+}
+
+@media (max-width: 640px) {
+  .beta-welcome-backdrop {
+    align-items: start;
+    padding: 12px;
+  }
+
+  .beta-welcome-card {
+    margin: auto 0;
+    padding: 34px 18px 24px;
+    border-radius: 16px;
+  }
+
+  .beta-welcome-path {
+    grid-template-columns: 1fr;
+  }
+
+  .beta-welcome-path article {
+    display: grid;
+    grid-template-columns: 24px 1fr;
+    grid-template-areas:
+      'icon title'
+      'icon body'
+      'icon link';
+    column-gap: 8px;
+    padding: 12px;
+  }
+
+  .beta-welcome-path article > svg {
+    grid-area: icon;
+    margin-top: 2px;
+  }
+
+  .beta-welcome-path h2 {
+    grid-area: title;
+    margin: 0 0 3px;
+  }
+
+  .beta-welcome-path p {
+    grid-area: body;
+  }
+
+  .beta-welcome-path a {
+    grid-area: link;
+  }
+}
+
 .beta-splash__logo {
   font-weight: 700;
   font-size: 1.6rem;

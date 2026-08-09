@@ -259,6 +259,26 @@ describe('POST /api/telemetry/visit', () => {
     expect(bad.statusCode).toBe(400);
   });
 
+  it('records beta welcome steps and rejects an unknown outcome', async () => {
+    const ok = await post(app, {
+      visitId,
+      flushMsSinceStart: 0,
+      events: [{ type: 'beta_welcome_step', step: 'shown', msSinceStart: 0 }],
+    });
+    expect(ok.statusCode).toBe(202);
+    expect((await store.listVisitEvents(today()))[0]).toMatchObject({
+      type: 'beta_welcome_step',
+      step: 'shown',
+    });
+
+    const bad = await post(app, {
+      visitId,
+      flushMsSinceStart: 0,
+      events: [{ type: 'beta_welcome_step', step: 'opened', msSinceStart: 0 }],
+    });
+    expect(bad.statusCode).toBe(400);
+  });
+
   it('carries which control opened a remix, and refuses a control it does not know', async () => {
     const ok = await post(app, {
       visitId,

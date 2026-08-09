@@ -70,6 +70,7 @@ import { AuthModal } from './AuthModal.js';
 import { recordCreateStep, recordStudioStep } from './visitTelemetry.js';
 import { ClosedBetaSplash } from './ClosedBetaSplash.js';
 import { BetaInvitePage } from './BetaInvitePage.js';
+import { BetaWelcomeSplash } from './BetaWelcomeSplash.js';
 import { AppLoadingScreen } from './AppLoadingScreen.js';
 import { ControllerView } from './mp/ControllerView.js';
 import { PartyStage } from './mp/PartyStage.js';
@@ -83,7 +84,7 @@ type StageContent =
 
 export function App() {
   const { t, i18n } = useTranslation();
-  const { user, loading: authLoading, privateBeta, publicPlaySlugs } = useAuth();
+  const { user, loading: authLoading, privateBeta, publicPlaySlugs, showBetaWelcome, dismissBetaWelcome } = useAuth();
   const [route, setRoute] = useState(() => readLocationRoute());
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const publicPlayAllowed = route.view === 'play' && publicPlaySlugs.includes(route.slug);
@@ -912,6 +913,7 @@ export function App() {
           }
         />
       )}
+      {showBetaWelcome && user && <BetaWelcomeSplash onContinue={dismissBetaWelcome} />}
     </>
   );
 

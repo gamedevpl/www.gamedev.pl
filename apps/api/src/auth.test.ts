@@ -117,6 +117,26 @@ describe('Auth API Routes', () => {
     expect(stored?.name).toBe('Alice');
   });
 
+  it('marks only a newly created account for the beta welcome', async () => {
+    const { app } = await setupTestServer({
+      'new-user-token': { sub: '10006', email: 'new@example.com' },
+    });
+
+    const first = await app.inject({
+      method: 'POST',
+      url: '/api/auth/google',
+      payload: { idToken: 'new-user-token' },
+    });
+    expect(JSON.parse(first.body).betaWelcome).toBe(true);
+
+    const second = await app.inject({
+      method: 'POST',
+      url: '/api/auth/google',
+      payload: { idToken: 'new-user-token' },
+    });
+    expect(JSON.parse(second.body).betaWelcome).toBeUndefined();
+  });
+
   it('records the browser language on sign-in, so agent-created games can inherit it', async () => {
     // The only place this preference survives leaving the browser. A game created over
     // MCP has no accept-language — Claude chat is not a browser — so without this
@@ -602,9 +622,13 @@ describe('Local development sign-in', () => {
 
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body).user.uid).toBe('dev:local');
+    expect(JSON.parse(res.body).betaWelcome).toBe(true);
     expect(res.headers['set-cookie']).toBeDefined();
     // The uid namespace keeps a local account from ever colliding with a Google identity.
     expect(await store.getUser('dev:local')).not.toBeNull();
+
+    const second = await app.inject({ method: 'POST', url: '/api/auth/dev', payload: {} });
+    expect(JSON.parse(second.body).betaWelcome).toBeUndefined();
 
     await app.close();
   });

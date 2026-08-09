@@ -758,6 +758,7 @@ export interface VisitEvent {
     | 'create_step'
     | 'waitlist_step'
     | 'invite_step'
+    | 'beta_welcome_step'
     | 'studio_step'
     | 'editor_step'
     | 'assist_step'

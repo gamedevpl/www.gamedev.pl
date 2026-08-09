@@ -867,6 +867,21 @@
     "unavailable": "To zaproszenie nie jest już dostępne.",
     "backHome": "Wróć na stronę główną"
   },
+  "betaWelcome": {
+    "kicker": "Zamknięta beta",
+    "title": "Witaj na gamedev.pl!",
+    "subtitle": "Jesteś w środku. Zagraj, coś stwórz i pomóż zdecydować, co będzie dalej.",
+    "playTitle": "Najpierw zagraj",
+    "playBody": "Wypróbuj kilka gier i znajdź taką, którą warto się podzielić.",
+    "buildTitle": "Stwórz własną",
+    "buildBody": "Opisz pomysł i pozwól agentowi zamienić go w grę.",
+    "feedbackTitle": "Powiedz, co nie działa",
+    "feedbackBody": "Niedoróbki i zaskoczenia są dokładnie tym, czego potrzebuje ta beta.",
+    "feedbackCta": "Skontaktuj się z nami",
+    "note": "To prawdziwa beta. Rzeczy mogą się zmieniać, a Twoje uwagi pomagają o tym decydować.",
+    "cta": "Zacznij odkrywać",
+    "dismiss": "Pomiń powitanie"
+  },
   "errors": {
     "generic": "Coś poszło nie tak",
     "creationPaused": "Tworzenie nowych gier jest na chwilę wstrzymane — sprawdzamy coś u nas. Twój dzienny limit pozostaje nietknięty, spróbuj ponownie za moment.",
