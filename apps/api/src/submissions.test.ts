@@ -1504,13 +1504,7 @@ describe('submission routes', () => {
     await app.close();
   });
 
-  // A preview-only delivery (mode=preview, never published) never writes manifest.gate —
-  // only manifest.previewGate. Before this, reconcileGateVerdict read manifest.gate alone,
-  // so a preview delivery that came back red never transitioned at all: the job sat in
-  // `submitted` forever, indistinguishable from a gate that was still running. This bit a
-  // real round (arena-brawlers, 2026-08-09) where the delivering session had already called
-  // `end` — the documented "submit then end" workflow — before Cloud Build finished, so
-  // nothing was left watching to notice the red preview and nothing else ever would.
+  // mode=preview writes manifest.previewGate, not manifest.gate (arena-brawlers).
   it('acts on a red preview-only gate verdict for a job still sitting in submitted', async () => {
     const { githubClient } = createGithubClientStub({ issueNumber: 197 });
     const { backend } = createBackendStub();
@@ -1560,18 +1554,14 @@ describe('submission routes', () => {
     });
 
     expect(status.statusCode).toBe(200);
-    // Never `ready_for_review` — a preview pass proves typecheck/smoke/build only, never
-    // publish readiness, and this delivery did not even pass that. It must still stop
-    // reading as "still assembling", which is what `needs_changes` buys the creator.
+    // Never `ready_for_review` — a preview pass is not publish readiness.
     expect(status.json().phase).toBe('needs_changes');
     expect(status.json().failure).toEqual({ reason: 'gate_red' });
 
     await app.close();
   });
 
-  // The mirror case: a green preview must never promote the round on its own — that would
-  // let an unpublished, unreviewed draft skip moderation the moment typecheck/smoke/build
-  // pass. It should simply leave the job where a live agent session left it.
+  // Mirror case: a green preview must never promote the round.
   it('does not promote a job on a green preview-only gate verdict', async () => {
     const { githubClient } = createGithubClientStub({ issueNumber: 198 });
     const { backend } = createBackendStub();
@@ -1617,9 +1607,7 @@ describe('submission routes', () => {
     });
 
     expect(status.statusCode).toBe(200);
-    // `phase` is the raw job state, not the public projection — `submitted` (unlike
-    // `ready_for_review` / `needs_changes` above) is where this one differs from
-    // `toSubmissionStatus`, which would read this back as `building`.
+    // `phase` is the raw job state; `status` is the public projection.
     expect(status.json().phase).toBe('submitted');
     expect(status.json().status).toBe('building');
 

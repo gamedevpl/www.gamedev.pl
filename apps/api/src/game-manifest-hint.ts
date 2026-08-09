@@ -1,20 +1,4 @@
-/**
- * Soft, best-effort shape check for a staged `GAME.json` — catches the crash classes the
- * shared kit's assemble step throws on *before* build/typecheck even starts, so the agent
- * hears about them at stage time instead of ~2-3 minutes later off a Cloud Build report
- * (or, if the delivering session already ended, only via the next reconnect).
- *
- * Deliberately shallow: this repo does not carry the games repo's module catalog, so it
- * cannot validate module names, canonical order, or duplicates (that is `validate.ts` in
- * www.gamedev.pl-games, which still runs as the source of truth in the gate). It only
- * catches the two shapes that crash `readSharedSources` outright — `engine.modules`
- * missing/empty, and `audio` selected without `audio.sounds` / `audio.music` — because
- * those are silent `undefined` reads, not a validation error, so nothing points at the
- * real cause until a human reads a smoke-test stack trace (arena-brawlers, 2026-08-09:
- * two straight preview deliveries died on `Cannot read properties of undefined (reading
- * 'modules')` because GAME.json never had an `engine` block, and the agent that fixed an
- * unrelated typecheck error in game.ts never looked at GAME.json again).
- */
+// Shallow shape check — catches assemble.ts crashes before the gate does.
 export function gameManifestHint(path: string, content: string): string | null {
   const normalized = path.trim().replaceAll('\\', '/');
   if (normalized !== 'GAME.json') return null;

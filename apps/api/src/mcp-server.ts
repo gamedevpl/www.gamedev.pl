@@ -546,17 +546,7 @@ function gateNeedsResubmit(status: unknown): boolean {
   return status === 'preview_failed' || status === 'red' || status === 'kit_outdated';
 }
 
-/**
- * `start`'s reconnect-visibility field: the last delivery's gate status, when it still
- * needs a fix. Absent (not `null`) when nothing is amiss, so a passing round's response
- * shape is unchanged.
- *
- * Without this, a session that reconnects after the delivering session already called
- * `end` — e.g. because the gate was still running Cloud Build when `end` was called, per
- * the documented "submit then end" workflow — got no signal at all: `must_fix_gate` was
- * only ever attached to `show_round` / `get_gate_verdict` / `report_progress` replies, and
- * a fresh `start()` call has no reason to make any of those next (arena-brawlers, 2026-08-09).
- */
+// Gives `start` the same reconnect-visibility show_round/get_gate_verdict already had.
 async function gateFieldForStart(
   gamesStore: GamesStore | undefined,
   record: Pick<SubmissionRecord, 'slug' | 'previewVersion' | 'deliveredVersion'>,

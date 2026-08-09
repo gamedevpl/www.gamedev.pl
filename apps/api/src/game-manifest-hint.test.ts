@@ -16,10 +16,6 @@ describe('gameManifestHint', () => {
     expect(gameManifestHint('GAME.json', '"hi"')).toMatch(/must be a JSON object/);
   });
 
-  // This exact shape crashed two straight arena-brawlers preview deliveries with
-  // "Cannot read properties of undefined (reading 'modules')" — assemble.ts reads
-  // manifest.engine.modules unconditionally, and nothing upstream of the gate ever
-  // validated GAME.json's shape before this.
   it('flags a manifest with no engine block at all', () => {
     const content = JSON.stringify({
       title: 'Arena Brawlers',

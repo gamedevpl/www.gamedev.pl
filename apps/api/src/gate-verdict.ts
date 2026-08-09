@@ -1,22 +1,13 @@
 import { type GamesStore } from './games-store.js';
 
-/**
- * Read a delivered version's own-gate verdict off its manifest.
- *
- * Shared between the `/api/agent/build/gate` channel route (agent-channel.ts) and the
- * MCP `start` tool (mcp-server.ts) — both need the same publish/preview distinction, and
- * duplicating it let `start` drift out of sync with what `show_round` / `get_gate_verdict`
- * already report (see the `start` doesn't surface a red gate on reconnect gap, #arena-brawlers).
- */
+// Shared by the channel's gate route and MCP `start`.
 export interface GateVerdictSummary {
-  /** Named so a caller can tell a verdict about *this* delivery from a stale prior one. */
   version: string;
   lane: 'publish' | 'preview';
   green: boolean;
   ranAt: string;
   report?: string;
   previewPassed?: boolean;
-  /** `kit_outdated` is a distinct refusal: refresh the kit, do not chase check:game. */
   status?: 'kit_outdated' | 'preview_passed' | 'preview_failed';
 }
 
@@ -26,19 +17,14 @@ export interface GateVerdictRecordLike {
   deliveredVersion?: string | null;
 }
 
-/**
- * Best effort: absent/failed reads as "no verdict yet", same as a genuinely pending gate —
- * callers must not let this take down a hot path like session start or an inbox poll.
- */
+// Best effort: a read failure reads as "no verdict yet".
 export async function readGateVerdict(
   gamesStore: GamesStore | undefined,
   record: GateVerdictRecordLike,
   onError?: (error: unknown) => void,
 ): Promise<GateVerdictSummary | null> {
   const { slug } = record;
-  // Prefer previewVersion: publish writes both pointers to the same id, while a later
-  // mode=preview only advances previewVersion. delivered-first would keep reporting the
-  // stale publish red after the agent already fixed and re-previewed.
+  // previewVersion first: a later mode=preview only advances that pointer.
   const version = record.previewVersion ?? record.deliveredVersion;
   if (!gamesStore || !slug || !version) return null;
   try {
@@ -53,7 +39,7 @@ export async function readGateVerdict(
         ...(manifest.gate.status === 'kit_outdated' ? { status: 'kit_outdated' as const } : {}),
       };
     }
-    // Preview-lane check: never report as publishable green (that would end the MCP round).
+    // Preview lane: never green — that would end the MCP round.
     if (manifest?.previewGate) {
       const kitOutdated = manifest.previewGate.status === 'kit_outdated';
       return {
@@ -77,7 +63,7 @@ export async function readGateVerdict(
   }
 }
 
-/** Same green/kit_outdated/preview_passed/preview_failed/red vocabulary the gate route replies with. */
+// Same vocabulary the gate route replies with.
 export function deriveGateStatusString(
   gate: Pick<GateVerdictSummary, 'green' | 'status'>,
 ): 'green' | 'kit_outdated' | 'preview_passed' | 'preview_failed' | 'red' {

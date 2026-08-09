@@ -2445,15 +2445,7 @@ export async function registerSubmissionRoutes(
         }
         return transition;
       }
-      // No publish gate ran — this delivery was mode=preview. A green preview proves
-      // nothing about publish readiness (typecheck/smoke/build only, BY-28a) and must
-      // never promote to review; but a RED preview still has to unstick the round the same
-      // way a red publish gate does. Without this, a session that submits and then calls
-      // `end` right after (the documented workflow) races the async Cloud Build gate: if
-      // the gate turns red after the session is already gone, nothing was ever watching to
-      // repair it in-session, and nothing else transitions the job — it sat in `submitted`
-      // indefinitely with Studio polling a "still assembling" state that never resolved
-      // (arena-brawlers, 2026-08-09).
+      // mode=preview never writes manifest.gate — red still needs a transition too.
       const preview = manifest?.previewGate;
       if (!preview || preview.green) return null;
       const to = 'needs_changes' as const;
