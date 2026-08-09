@@ -38,6 +38,10 @@ const SessionSchema = z.object({
   usage: UsageSchema.optional(),
 });
 
+const VaultSchema = z.object({
+  id: z.string().min(1),
+});
+
 const FileListSchema = z.object({
   data: z
     .array(
@@ -116,6 +120,32 @@ export function createAnthropicManagedProvider(config: ManagedProviderConfig): M
     return response.text();
   }
 
+  async function createMcpCredentialVault(url: string, token: string, correlationId: string): Promise<string> {
+    const vault = VaultSchema.safeParse(
+      await call('/v1/vaults', {
+        method: 'POST',
+        body: JSON.stringify({
+          display_name: `gamedev.pl round ${correlationId}`,
+          metadata: { correlation_id: correlationId },
+        }),
+      }),
+    );
+    if (!vault.success) throw new ManagedAgentError('anthropic vault creation returned an unreadable vault');
+    try {
+      await call(`/v1/vaults/${encodeURIComponent(vault.data.id)}/credentials`, {
+        method: 'POST',
+        body: JSON.stringify({
+          display_name: `gamedev.pl round ${correlationId}`,
+          auth: { type: 'static_bearer', mcp_server_url: url, token },
+        }),
+      });
+    } catch (error) {
+      await call(`/v1/vaults/${encodeURIComponent(vault.data.id)}/archive`, { method: 'POST' }).catch(() => undefined);
+      throw error;
+    }
+    return vault.data.id;
+  }
+
   return {
     vendor: ANTHROPIC_VENDOR,
     model: config.model,
@@ -135,6 +165,14 @@ export function createAnthropicManagedProvider(config: ManagedProviderConfig): M
       if (request.tools?.allowedHosts?.length || request.tools?.credentialNames?.length) {
         throw new ManagedAgentError('anthropic managed agents does not map host or credential names from this seam');
       }
+      const credentialRef = request.mcpBearerCredential
+        ? await createMcpCredentialVault(
+            request.mcpBearerCredential.url,
+            request.mcpBearerCredential.token,
+            request.correlationId,
+          )
+        : undefined;
+      const sessionVaultIds = credentialRef ? [credentialRef] : vaultIds;
       // Replacing a configured agent's toolset leaves it nothing to call.
       const mcpServers = overrideTools
         ? request.tools?.mcpEndpoints?.map((endpoint, index) => ({
@@ -160,8 +198,7 @@ export function createAnthropicManagedProvider(config: ManagedProviderConfig): M
             : {}),
         },
         environment_id: environmentId,
-        ...(vaultIds?.length ? { vault_ids: vaultIds } : {}),
-        metadata: { correlation_id: request.correlationId },
+        ...(sessionVaultIds?.length ? { vault_ids: sessionVaultIds } : {}),
         initial_events: [
           {
             type: 'user.message',
@@ -177,11 +214,20 @@ export function createAnthropicManagedProvider(config: ManagedProviderConfig): M
               },
             }),
       };
-      const parsed = SessionSchema.safeParse(
-        await call('/v1/sessions', { method: 'POST', body: JSON.stringify(body) }),
-      );
-      if (!parsed.success) throw new ManagedAgentError('anthropic managed agents returned an unreadable session');
-      return toSession(parsed.data);
+      try {
+        const parsed = SessionSchema.safeParse(
+          await call('/v1/sessions', { method: 'POST', body: JSON.stringify(body) }),
+        );
+        if (!parsed.success) throw new ManagedAgentError('anthropic managed agents returned an unreadable session');
+        return { ...toSession(parsed.data), ...(credentialRef ? { credentialRef } : {}) };
+      } catch (error) {
+        if (credentialRef) {
+          await call(`/v1/vaults/${encodeURIComponent(credentialRef)}/archive`, { method: 'POST' }).catch(
+            () => undefined,
+          );
+        }
+        throw error;
+      }
     },
 
     async getSession(sessionId: string): Promise<ManagedSession | null> {
@@ -231,6 +277,10 @@ export function createAnthropicManagedProvider(config: ManagedProviderConfig): M
 
     async deleteSession(sessionId: string): Promise<void> {
       await call(`/v1/sessions/${encodeURIComponent(sessionId)}`, { method: 'DELETE' }).catch(() => undefined);
+    },
+
+    async releaseCredential(credentialRef: string): Promise<void> {
+      await call(`/v1/vaults/${encodeURIComponent(credentialRef)}/archive`, { method: 'POST' });
     },
   };
 }

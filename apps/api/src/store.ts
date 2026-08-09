@@ -295,6 +295,7 @@ export interface SubmissionRecord {
   dispatch?: {
     backend: string;
     refs: string[];
+    credentialRefs?: Record<string, string>;
     workspace?: string;
     /**
      * The disposable branch a seeded build started from, when it was seeded at all.
@@ -1802,7 +1803,7 @@ export interface Store {
   /** Appends a dispatch ref, recording which backend is building this job and where. */
   recordDispatch(
     issueNumber: number,
-    dispatch: { backend: string; ref: string; workspace?: string; seedWorkspace?: string },
+    dispatch: { backend: string; ref: string; workspace?: string; seedWorkspace?: string; credentialRef?: string },
   ): Promise<void>;
   /**
    * Appends one billed thing to a job's ledger. Best-effort by contract: a cost that
@@ -3129,7 +3130,7 @@ export class InMemoryStore implements Store {
 
   async recordDispatch(
     issueNumber: number,
-    dispatch: { backend: string; ref: string; workspace?: string; seedWorkspace?: string },
+    dispatch: { backend: string; ref: string; workspace?: string; seedWorkspace?: string; credentialRef?: string },
   ): Promise<void> {
     const sub = this.submissions.get(issueNumber);
     if (!sub) return;
@@ -3139,6 +3140,9 @@ export class InMemoryStore implements Store {
       dispatch: {
         backend: dispatch.backend,
         refs: [...(existing?.refs ?? []), dispatch.ref],
+        ...(dispatch.credentialRef
+          ? { credentialRefs: { ...existing?.credentialRefs, [dispatch.ref]: dispatch.credentialRef } }
+          : {}),
         workspace: dispatch.workspace ?? existing?.workspace,
         seedWorkspace: dispatch.seedWorkspace ?? existing?.seedWorkspace,
       },
@@ -5404,7 +5408,7 @@ export class FirestoreStore implements Store {
 
   async recordDispatch(
     issueNumber: number,
-    dispatch: { backend: string; ref: string; workspace?: string; seedWorkspace?: string },
+    dispatch: { backend: string; ref: string; workspace?: string; seedWorkspace?: string; credentialRef?: string },
   ): Promise<void> {
     const ref = this.db.collection('submissions').doc(String(issueNumber));
     // Transactional for the same reason transitions are: a dispatch and a reconciler
@@ -5420,6 +5424,9 @@ export class FirestoreStore implements Store {
           dispatch: {
             backend: dispatch.backend,
             refs: [...(existing?.refs ?? []), dispatch.ref],
+            ...(dispatch.credentialRef
+              ? { credentialRefs: { ...existing?.credentialRefs, [dispatch.ref]: dispatch.credentialRef } }
+              : {}),
             ...((dispatch.workspace ?? existing?.workspace)
               ? { workspace: dispatch.workspace ?? existing?.workspace }
               : {}),

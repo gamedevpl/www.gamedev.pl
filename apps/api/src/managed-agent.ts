@@ -32,6 +32,7 @@ export interface ManagedTokenUsage {
 export interface ManagedSession {
   id: string;
   state: AgentTaskState;
+  credentialRef?: string;
   // The vendor's own word, kept for operator views.
   vendorState?: string;
   usage?: ManagedTokenUsage;
@@ -47,6 +48,11 @@ export interface ManagedToolAccess {
   credentialNames?: string[];
 }
 
+export interface ManagedMcpBearerCredential {
+  url: string;
+  token: string;
+}
+
 export interface ManagedSessionRequest {
   correlationId: string;
   // Cacheable prefix shared across sessions of one agent version.
@@ -59,6 +65,7 @@ export interface ManagedSessionRequest {
   outputPath: string;
   maxDurationSeconds?: number;
   tools?: ManagedToolAccess;
+  mcpBearerCredential?: ManagedMcpBearerCredential;
 }
 
 export interface ManagedAgentProvider {
@@ -73,6 +80,7 @@ export interface ManagedAgentProvider {
   sendMessage?(sessionId: string, message: string): Promise<void>;
   cancelSession(sessionId: string): Promise<{ enforced: boolean }>;
   deleteSession?(sessionId: string): Promise<void>;
+  releaseCredential?(credentialRef: string): Promise<void>;
 }
 
 export class ManagedAgentError extends Error {

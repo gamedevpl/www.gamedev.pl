@@ -53,6 +53,7 @@ export interface ManagedBackendDeps {
   kitDigest?: KitDigestLoader;
   // Channel-side round state; without it a finished round looks stalled.
   readSignals?: (issueNumber: number) => Promise<ManagedRoundSignals | null>;
+  readCredentialRef?: (issueNumber: number, sessionRef: string) => Promise<string | undefined>;
 }
 
 // Vendor is a variable; a delivery sink is required.
@@ -112,6 +113,7 @@ export function createManagedPlatformBackendFromEnv(deps?: ManagedBackendDeps, l
         : {}),
       ...(Number.isInteger(maxListCostCents) && maxListCostCents > 0 ? { maxListCostCents } : {}),
       ...(vaultIds?.length ? { vaultIds } : {}),
+      ...(mcpUrl ? { overrideTools: true } : {}),
       ...(process.env.MANAGED_AGENT_BASE_URL?.trim() ? { baseUrl: process.env.MANAGED_AGENT_BASE_URL.trim() } : {}),
     });
   } catch (error) {
@@ -124,9 +126,16 @@ export function createManagedPlatformBackendFromEnv(deps?: ManagedBackendDeps, l
   return createManagedBackend({
     provider,
     ...(deps?.readSignals ? { readSignals: deps.readSignals } : {}),
+    ...(deps?.readCredentialRef ? { readCredentialRef: deps.readCredentialRef } : {}),
     ...(deps?.deliver ? { deliver: deps.deliver } : {}),
     ...(deps?.lock ? { lock: deps.lock } : {}),
     ...(mcpUrl ? { tools: { mcpEndpoints: [{ url: mcpUrl, name: 'gamedevpl' }] } } : {}),
+    ...(mcpUrl
+      ? {
+          mcpBearerCredential: (brief) =>
+            brief.mcpOpenerToken ? { url: mcpUrl, token: brief.mcpOpenerToken } : undefined,
+        }
+      : {}),
     ...(deps?.systemPrompt ? { systemPrompt: deps.systemPrompt } : {}),
     ...(deps?.kitDigest ? { kitDigest: deps.kitDigest } : {}),
     ...(effort ? { effort } : {}),

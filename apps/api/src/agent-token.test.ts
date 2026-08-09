@@ -5,9 +5,11 @@ import {
   InvalidAgentTokenError,
   mintAgentToken,
   mintLegacyAgentToken,
+  mintManagedMcpOpener,
   selfBuildKeyTtlDays,
   STALE_AGENT_TOKEN_REASON,
   verifyAgentToken,
+  verifyManagedMcpOpener,
 } from './agent-token.js';
 
 describe('agent build-channel token', () => {
@@ -26,6 +28,15 @@ describe('agent build-channel token', () => {
       roundGeneration: 1,
       exp: Math.floor(now / 1000) + 14 * 24 * 60 * 60,
     });
+  });
+
+  it('keeps a managed MCP opener separate from the build-channel capability', () => {
+    const opener = mintManagedMcpOpener(42, secret, { roundGeneration: 1, now, ttlDays: 14 });
+    const channel = mintAgentToken(42, secret, { roundGeneration: 1, now, ttlDays: 14 });
+
+    expect(verifyManagedMcpOpener(opener, secret)).toMatchObject({ jobId: 42, roundGeneration: 1 });
+    expect(() => verifyAgentToken(opener, secret)).toThrow(InvalidAgentTokenError);
+    expect(() => verifyManagedMcpOpener(channel, secret)).toThrow(InvalidAgentTokenError);
   });
 
   it('accepts an active generation before expiry', () => {
