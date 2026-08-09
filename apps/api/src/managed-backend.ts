@@ -124,17 +124,31 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
   const sessionGenerations = new Map<string, number>();
   const credentialRefs = new Map<string, string>();
   const releasedCredentials = new Set<string>();
+  // So cancel/cleanup can still log issueNumber/slug without a caller hint.
+  const sessionJobs = new Map<string, { issueNumber: number; slug?: string }>();
+
+  function jobContext(ref: string, issueNumber?: number): { issueNumber?: number; slug?: string } {
+    const job = sessionJobs.get(ref);
+    const resolvedIssue = issueNumber ?? job?.issueNumber;
+    return {
+      ...(resolvedIssue !== undefined ? { issueNumber: resolvedIssue } : {}),
+      ...(job?.slug ? { slug: job.slug } : {}),
+    };
+  }
 
   async function releaseCredential(ref: string, issueNumber?: number): Promise<void> {
+    const context = jobContext(ref, issueNumber);
     const credentialRef =
-      credentialRefs.get(ref) ?? (issueNumber ? await options.readCredentialRef?.(issueNumber, ref) : undefined);
+      credentialRefs.get(ref) ??
+      (context.issueNumber !== undefined ? await options.readCredentialRef?.(context.issueNumber, ref) : undefined);
     if (!credentialRef || releasedCredentials.has(credentialRef) || !options.provider.releaseCredential) return;
     releasedCredentials.add(credentialRef);
     try {
       await options.provider.releaseCredential(credentialRef);
+      options.log?.info?.({ ...context, ref, credentialRef }, 'managed round credential revoked');
     } catch (error) {
       releasedCredentials.delete(credentialRef);
-      options.log?.warn({ err: error, ref }, 'could not revoke managed round credential');
+      options.log?.warn({ err: error, ...context, ref, credentialRef }, 'could not revoke managed round credential');
     }
   }
 
@@ -173,7 +187,23 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
     });
     startedAt.set(session.id, Date.now());
     sessionGenerations.set(session.id, brief.roundGeneration ?? 1);
-    if (session.credentialRef) credentialRefs.set(session.id, session.credentialRef);
+    sessionJobs.set(session.id, {
+      issueNumber: brief.issueNumber,
+      ...(brief.slug ? { slug: brief.slug } : {}),
+    });
+    if (session.credentialRef) {
+      credentialRefs.set(session.id, session.credentialRef);
+      options.log?.info?.(
+        {
+          issueNumber: brief.issueNumber,
+          ...(brief.slug ? { slug: brief.slug } : {}),
+          ref: session.id,
+          credentialRef: session.credentialRef,
+          ...(mcpBearerCredential ? { mcpUrl: mcpBearerCredential.url } : {}),
+        },
+        'managed round credential minted',
+      );
+    }
     return { ref: session.id, ...(session.credentialRef ? { credentialRef: session.credentialRef } : {}) };
   }
 
@@ -383,6 +413,7 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
       if (previous.credentialRef) credentialRefs.set(previous.ref, previous.credentialRef);
       await releaseCredential(previous.ref);
       credentialRefs.delete(previous.ref);
+      sessionJobs.delete(previous.ref);
       await options.provider.deleteSession?.(previous.ref);
     },
   };
