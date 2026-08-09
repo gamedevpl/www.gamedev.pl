@@ -64,9 +64,14 @@ export interface VertexSpecRefinerOptions {
   region?: string;
   model?: string;
   timeoutMs?: number;
+  groundingTimeoutMs?: number;
   refinerFetcher?: (params: RefineParams) => Promise<RefineResponse>;
   // Lower-level seam than `refinerFetcher` — see VertexCheckerOptions.client.
   client?: GenAIClient;
+  // Separate from `client`: the grounding call needs its own client (it carries the
+  // googleSearch tool, which cannot share a client with the structured-JSON one), so
+  // tests need their own seam for it too rather than reusing `client`.
+  groundingClient?: GenAIClient;
 }
 
 // Moderation's 5s is right for a one-token verdict; refinement has to author up to
@@ -75,6 +80,21 @@ export interface VertexSpecRefinerOptions {
 // attempts after the model fix aborting on the old 5s budget, so the panel has
 // never rendered a question. Env-tunable so the ceiling can move without a deploy.
 export const DEFAULT_REFINE_TIMEOUT_MS = 20_000;
+
+/**
+ * The refiner used to read only the words the creator typed — it had no way to know
+ * that "Brawl Stars Clone" names a real game with a specific genre and mechanics, so
+ * it asked generic questions (or none) instead of ones grounded in what that game
+ * actually is. This is its own short, separate budget: it runs before the main call
+ * and adds to total latency, so it stays small and — like the main call — fails open
+ * to no context rather than delaying or blocking refinement.
+ */
+export const DEFAULT_GROUNDING_TIMEOUT_MS = 6_000;
+
+/** Opt-out, not opt-in — grounding failures are already fail-open and cost is one small call. */
+function groundingEnabled(): boolean {
+  return process.env.REFINE_GROUNDING_ENABLED !== 'false';
+}
 
 /**
  * How long an answered spec stays free to re-ask, and how many are held. Short
@@ -129,13 +149,20 @@ const RefineResultSchema = z.object({
 export class VertexSpecRefiner implements SpecRefiner {
   private options: VertexSpecRefinerOptions;
   private timeoutMs: number;
+  private groundingTimeoutMs: number;
   private refinerFetcher?: (params: RefineParams) => Promise<RefineResponse>;
   // Lazy for the same reason as VertexChecker: building one must not touch GCP.
   private client?: GenAIClient;
+  // Separate from `client`: it carries the googleSearch tool, which the Vertex API does
+  // not accept alongside the structured-JSON response mode the main call relies on —
+  // two clients, not one config toggled per call.
+  private groundingClient?: GenAIClient;
 
   constructor(options: VertexSpecRefinerOptions = {}) {
     this.options = options;
     this.timeoutMs = options.timeoutMs ?? Number(process.env.REFINE_TIMEOUT_MS ?? DEFAULT_REFINE_TIMEOUT_MS);
+    this.groundingTimeoutMs =
+      options.groundingTimeoutMs ?? Number(process.env.REFINE_GROUNDING_TIMEOUT_MS ?? DEFAULT_GROUNDING_TIMEOUT_MS);
     this.refinerFetcher = options.refinerFetcher;
   }
 
@@ -164,6 +191,56 @@ export class VertexSpecRefiner implements SpecRefiner {
     return this.client;
   }
 
+  private getGroundingClient(): GenAIClient {
+    this.groundingClient ??=
+      this.options.groundingClient ??
+      createVertexClient({
+        projectId: this.options.projectId,
+        region: this.options.region,
+        defaultRegion: 'global',
+        model: this.options.model,
+        defaultModel: 'gemini-3.6-flash',
+        generationConfig: {
+          // Plain text, not JSON: Vertex rejects googleSearch combined with a JSON
+          // response mode, which is why this is a separate call and client from the
+          // structured-output one below rather than one client with tools toggled on.
+          thinkingConfig: { thinkingBudget: 0 },
+          tools: [{ googleSearch: {} }],
+        } as VertexGenerationConfig,
+      });
+    return this.groundingClient;
+  }
+
+  /**
+   * A short factual note on the real game the concept names, or '' when it does not
+   * clearly name one (or the lookup fails/times out — fail-open, same as `refine`
+   * itself). Best-effort grounding, not a fact-check: the model still writes its own
+   * questions, this just stops it guessing at genre conventions for a franchise it
+   * would otherwise only know by name.
+   */
+  private async groundConcept(concept: string, languageName: string): Promise<string> {
+    if (!groundingEnabled()) return '';
+    try {
+      const groundingPrompt = `A creator on a game-building site typed the idea below. If it clearly names a real, existing game or franchise, use web search to state in one or two sentences — in ${languageName} — what that game's genre and core mechanics actually are, so a design assistant can ask about it accurately instead of guessing from the name alone. If it does not clearly name a real existing game, reply with exactly: NONE
+
+Idea:
+"""
+${concept}
+"""`;
+      const text = await this.getGroundingClient()(groundingPrompt)
+        .temperature(0.2)
+        .signal(AbortSignal.timeout(this.groundingTimeoutMs))
+        .text();
+      const trimmed = text.trim();
+      return trimmed && trimmed.toUpperCase() !== 'NONE' ? trimmed : '';
+    } catch (err) {
+      if (process.env.NODE_ENV !== 'test') {
+        console.warn(`Vertex AI concept grounding failed/timed out (budget ${this.groundingTimeoutMs}ms):`, err);
+      }
+      return '';
+    }
+  }
+
   async refine(params: RefineParams): Promise<RefineResponse> {
     if (this.refinerFetcher) {
       return this.refinerFetcher(params);
@@ -175,6 +252,7 @@ export class VertexSpecRefiner implements SpecRefiner {
       // when the creator typed their idea in another language.
       const locale = normalizeLocale(params.locale);
       const languageName = LANGUAGE_NAMES[locale] ?? 'English';
+      const groundingNote = await this.groundConcept(params.concept, languageName);
 
       const promptText = `You are a helpful game design assistant for gamedev.pl.
 Analyze the following game concept specification.
@@ -204,7 +282,7 @@ Respond STRICTLY with a JSON object following this schema:
 Set "multiple": true only when the options genuinely combine rather than compete — "which mechanics should be in?" can take several, "which visual style?" cannot. Default to false.
 
 If the concept is already fully specified, return an empty "questions" array — but always propose a title.
-${params.title ? `\nThe creator's working title, to improve on or keep: "${params.title}"\n` : ''}
+${groundingNote ? `\nReal-world context on a game this concept appears to name (from a web search — use it to ask sharper, genre-accurate questions; do not quote it back to the creator verbatim):\n${groundingNote}\n` : ''}${params.title ? `\nThe creator's working title, to improve on or keep: "${params.title}"\n` : ''}
 Game Concept:
 """
 ${params.concept}
