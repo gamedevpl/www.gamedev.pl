@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { GamesStore, SourceFile, VersionManifest } from './games-store.js';
+import { InvalidUploadError } from './games-store.js';
+import type { KitFileStore, KitTree } from './kit-files.js';
+import { KIT_ROOT_DIR } from './kit-registry.js';
 import { InMemoryStore } from './store.js';
 import {
   createSourceDeliveryService,
@@ -34,7 +37,33 @@ function manifest(files: SourceFile[], version: string): VersionManifest {
   };
 }
 
-async function setup() {
+const KIT_DTS = `
+interface GameKitGameContext { width: number; height: number; }
+declare const GameKit: { defineGame(): unknown };
+`;
+
+function fakeKitStore(trees: Record<string, KitTree>): KitFileStore {
+  return {
+    loadRegistry: async () => ({ engineRef: Object.keys(trees)[0]!, previous: null, sha256: 'a'.repeat(64) }),
+    loadTree: async (engineRef?: string) => {
+      const ref = engineRef ?? Object.keys(trees)[0]!;
+      const tree = trees[ref];
+      if (!tree) throw new Error(`missing kit ${ref}`);
+      return tree;
+    },
+    loadCurrentTree: async () => trees[Object.keys(trees)[0]!]!,
+  };
+}
+
+function treeFor(engineRef: string, kitDts: string): KitTree {
+  return {
+    engineRef,
+    sha256: 'a'.repeat(64),
+    files: new Map([[`${KIT_ROOT_DIR}/shared/game-kit.d.ts`, Buffer.from(kitDts, 'utf8')]]),
+  };
+}
+
+async function setup(opts?: { kitFileStore?: KitFileStore | null }) {
   const store = new InMemoryStore();
   await store.createSubmission(ISSUE, 'owner', 'Original title');
   await store.setSubmissionSlug(ISSUE, SLUG);
@@ -57,6 +86,7 @@ async function setup() {
   const service = createSourceDeliveryService({
     store,
     gamesStore,
+    kitFileStore: opts?.kitFileStore,
     onSourcesDelivered: gate,
     onEvent: vi.fn(),
   });
@@ -179,5 +209,123 @@ describe('shared source delivery', () => {
       }),
     ).rejects.toMatchObject({ reason: 'round_closed' });
     expect(putCandidateSources).not.toHaveBeenCalled();
+  });
+
+  describe('typecheck preflight', () => {
+    const PINNED = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+    const CURRENT = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+    const brokenFiles: SourceFile[] = [
+      { path: 'SPEC.md', content: '---\ntitle: Broken\n---\n' },
+      { path: 'index.html', content: '<!doctype html>' },
+      {
+        path: 'game/model.ts',
+        content: 'export type Round = { score: number };\n',
+      },
+      {
+        path: 'game.ts',
+        content: `
+import type { Round } from './game/model.ts';
+export function tick(round: Round) {
+  return round.lane + round.speed;
+}
+`,
+      },
+    ];
+
+    it('refuses a typed Round-field failure before storing', async () => {
+      const kitFileStore = fakeKitStore({ [PINNED]: treeFor(PINNED, KIT_DTS) });
+      const { store, putCandidateSources, service, authority } = await setup({ kitFileStore });
+      await store.pinRoundKitEngineRef(ISSUE, PINNED);
+
+      await expect(
+        service.deliver({
+          issueNumber: ISSUE,
+          slug: SLUG,
+          files: brokenFiles,
+          mode: 'preview',
+          backend: BACKEND,
+          authority,
+        }),
+      ).rejects.toBeInstanceOf(InvalidUploadError);
+      expect(putCandidateSources).not.toHaveBeenCalled();
+      expect((await store.getSubmission(ISSUE))?.roundTypecheckPreflightRefusals).toBe(1);
+    });
+
+    it('loads the pinned kit even after the registry pointer moves', async () => {
+      let loaded: string | undefined;
+      const kitFileStore: KitFileStore = {
+        loadRegistry: async () => ({ engineRef: CURRENT, previous: PINNED, sha256: 'a'.repeat(64) }),
+        loadTree: async (engineRef?: string) => {
+          loaded = engineRef ?? CURRENT;
+          // Empty current kit would skip if pin ignored.
+          if (loaded === PINNED) return treeFor(PINNED, KIT_DTS);
+          return treeFor(CURRENT, '');
+        },
+        loadCurrentTree: async () => treeFor(CURRENT, ''),
+      };
+      const { store, putCandidateSources, service, authority } = await setup({ kitFileStore });
+      await store.pinRoundKitEngineRef(ISSUE, PINNED);
+
+      await expect(
+        service.deliver({
+          issueNumber: ISSUE,
+          slug: SLUG,
+          files: brokenFiles,
+          mode: 'preview',
+          backend: BACKEND,
+          authority,
+        }),
+      ).rejects.toThrow(/Typecheck preflight failed/);
+      expect(loaded).toBe(PINNED);
+      expect(putCandidateSources).not.toHaveBeenCalled();
+    });
+
+    it('accepts on the third submit and attaches diagnostics to the round', async () => {
+      const kitFileStore = fakeKitStore({ [PINNED]: treeFor(PINNED, KIT_DTS) });
+      const { store, putCandidateSources, service, authority } = await setup({ kitFileStore });
+      await store.pinRoundKitEngineRef(ISSUE, PINNED);
+
+      for (let i = 0; i < 2; i += 1) {
+        await expect(
+          service.deliver({
+            issueNumber: ISSUE,
+            slug: SLUG,
+            files: brokenFiles,
+            mode: 'preview',
+            backend: BACKEND,
+            authority,
+          }),
+        ).rejects.toBeInstanceOf(InvalidUploadError);
+      }
+      expect(putCandidateSources).not.toHaveBeenCalled();
+
+      const result = await service.deliver({
+        issueNumber: ISSUE,
+        slug: SLUG,
+        files: brokenFiles,
+        mode: 'preview',
+        backend: BACKEND,
+        authority,
+      });
+      expect(result.accepted).toBe(true);
+      expect(putCandidateSources).toHaveBeenCalledOnce();
+      const record = await store.getSubmission(ISSUE);
+      expect(record?.roundTypecheckPreflightRefusals).toBe(2);
+      expect(record?.roundTypecheckPreflightBypassErrors).toMatch(/Typecheck preflight failed/);
+    });
+
+    it('does not refuse when no kit store is configured', async () => {
+      const { putCandidateSources, service, authority } = await setup({ kitFileStore: null });
+      const result = await service.deliver({
+        issueNumber: ISSUE,
+        slug: SLUG,
+        files: brokenFiles,
+        mode: 'preview',
+        backend: BACKEND,
+        authority,
+      });
+      expect(result.accepted).toBe(true);
+      expect(putCandidateSources).toHaveBeenCalledOnce();
+    });
   });
 });

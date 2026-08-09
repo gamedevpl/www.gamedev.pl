@@ -54,6 +54,7 @@ import type { GameSeeder, SeedDraft } from './game-seed.js';
 import { ManagedOutputRejectedError } from './managed-agent.js';
 import { createManagedDeliveryLock } from './managed-backend.js';
 import { createSourceDeliveryService, SourceDeliveryAuthorityError } from './source-delivery.js';
+import { createKitFileStore } from './kit-files.js';
 import { InvalidUploadError } from './games-store.js';
 import {
   canTransition,
@@ -590,11 +591,15 @@ export async function registerSubmissionRoutes(
     eventsCache.delete(issueNumber);
     invalidateStatusCache(issueNumber);
   }
+  const kitFileStoreForDelivery = options.agentChannel?.objectStore
+    ? createKitFileStore(options.agentChannel.objectStore)
+    : null;
   const sourceDelivery =
     store && gamesStoreForSeed
       ? createSourceDeliveryService({
           store,
           gamesStore: gamesStoreForSeed,
+          kitFileStore: kitFileStoreForDelivery,
           now,
           maxSubmitsPerWindow: options.agentChannel?.maxSubmitsPerWindow,
           onSourcesDelivered: options.agentChannel?.onSourcesDelivered,

@@ -369,6 +369,10 @@ export interface SubmissionRecord {
    * (`SELF_BUILD_DELIVERY_CAP`); resets when a new round opens.
    */
   roundDeliveryCount?: number;
+  // Typecheck preflight refusals this round (cap 2).
+  roundTypecheckPreflightRefusals?: number;
+  // Grouped diagnostics when accepting past that cap.
+  roundTypecheckPreflightBypassErrors?: string;
   /**
    * Creator concept text (sanitized), without the QA clarifications block.
    *
@@ -1800,6 +1804,10 @@ export interface Store {
   setSeedStatus(issueNumber: number, status: 'pending' | 'unavailable'): Promise<void>;
   /** Increments and returns the per-round sources-delivery count. */
   incrementRoundDeliveryCount(issueNumber: number): Promise<number>;
+  // Bump typecheck-preflight refusal count for this round.
+  incrementRoundTypecheckPreflightRefusals(issueNumber: number): Promise<number>;
+  // Store or clear bypass diagnostics after the refusal cap.
+  setRoundTypecheckPreflightBypassErrors(issueNumber: number, message: string | null): Promise<void>;
   /** Appends a dispatch ref, recording which backend is building this job and where. */
   recordDispatch(
     issueNumber: number,
@@ -2989,7 +2997,13 @@ export class InMemoryStore implements Store {
       state: transition.to,
       stateSince: transition.at,
       transitions: [...(sub.transitions ?? []), transition].slice(-MAX_JOB_TRANSITIONS),
-      ...(closes ? { roundGeneration: nextRoundGeneration(sub.roundGeneration), roundDeliveryCount: 0 } : {}),
+      ...(closes
+        ? {
+            roundGeneration: nextRoundGeneration(sub.roundGeneration),
+            roundDeliveryCount: 0,
+            roundTypecheckPreflightRefusals: 0,
+          }
+        : {}),
     };
     if (closes) {
       delete next.seed;
@@ -3000,6 +3014,7 @@ export class InMemoryStore implements Store {
       delete next.lastAgentPresence;
       delete next.agentEndedAt;
       delete next.roundKitEngineRef;
+      delete next.roundTypecheckPreflightBypassErrors;
     }
     this.submissions.set(issueNumber, next);
     return true;
@@ -3009,13 +3024,19 @@ export class InMemoryStore implements Store {
     const sub = this.submissions.get(issueNumber);
     if (!sub) return null;
     const roundGeneration = nextRoundGeneration(sub.roundGeneration);
-    const next: SubmissionRecord = { ...sub, roundGeneration, roundDeliveryCount: 0 };
+    const next: SubmissionRecord = {
+      ...sub,
+      roundGeneration,
+      roundDeliveryCount: 0,
+      roundTypecheckPreflightRefusals: 0,
+    };
     delete next.seed;
     delete next.seedStatus;
     delete next.lastAgentSignalAt;
     delete next.lastAgentPresence;
     delete next.agentEndedAt;
     delete next.roundKitEngineRef;
+    delete next.roundTypecheckPreflightBypassErrors;
     this.submissions.set(issueNumber, next);
     return roundGeneration;
   }
@@ -3088,6 +3109,8 @@ export class InMemoryStore implements Store {
       delete next.seed;
       delete next.seedStatus;
       next.roundDeliveryCount = 0;
+      next.roundTypecheckPreflightRefusals = 0;
+      delete next.roundTypecheckPreflightBypassErrors;
     }
     this.submissions.set(issueNumber, next);
   }
@@ -3121,6 +3144,26 @@ export class InMemoryStore implements Store {
     const roundDeliveryCount = (sub.roundDeliveryCount ?? 0) + 1;
     this.submissions.set(issueNumber, { ...sub, roundDeliveryCount });
     return roundDeliveryCount;
+  }
+
+  async incrementRoundTypecheckPreflightRefusals(issueNumber: number): Promise<number> {
+    const sub = this.submissions.get(issueNumber);
+    if (!sub) return 0;
+    const roundTypecheckPreflightRefusals = (sub.roundTypecheckPreflightRefusals ?? 0) + 1;
+    this.submissions.set(issueNumber, { ...sub, roundTypecheckPreflightRefusals });
+    return roundTypecheckPreflightRefusals;
+  }
+
+  async setRoundTypecheckPreflightBypassErrors(issueNumber: number, message: string | null): Promise<void> {
+    const sub = this.submissions.get(issueNumber);
+    if (!sub) return;
+    if (message == null) {
+      const next = { ...sub };
+      delete next.roundTypecheckPreflightBypassErrors;
+      this.submissions.set(issueNumber, next);
+      return;
+    }
+    this.submissions.set(issueNumber, { ...sub, roundTypecheckPreflightBypassErrors: message });
   }
 
   async allocateJobId(): Promise<number> {
@@ -5210,6 +5253,7 @@ export class FirestoreStore implements Store {
           transitions: [...(current.transitions ?? []), transition].slice(-MAX_JOB_TRANSITIONS),
           roundGeneration: nextRoundGeneration(current.roundGeneration),
           roundDeliveryCount: 0,
+          roundTypecheckPreflightRefusals: 0,
         };
         delete next.seed;
         delete next.seedStatus;
@@ -5217,6 +5261,7 @@ export class FirestoreStore implements Store {
         delete next.lastAgentPresence;
         delete next.agentEndedAt;
         delete next.roundKitEngineRef;
+        delete next.roundTypecheckPreflightBypassErrors;
         tx.set(ref, next);
       } else {
         tx.set(
@@ -5240,13 +5285,19 @@ export class FirestoreStore implements Store {
       if (!snap.exists) return null;
       const current = snap.data() as SubmissionRecord;
       const roundGeneration = nextRoundGeneration(current.roundGeneration);
-      const next: SubmissionRecord = { ...current, roundGeneration, roundDeliveryCount: 0 };
+      const next: SubmissionRecord = {
+        ...current,
+        roundGeneration,
+        roundDeliveryCount: 0,
+        roundTypecheckPreflightRefusals: 0,
+      };
       delete next.seed;
       delete next.seedStatus;
       delete next.lastAgentSignalAt;
       delete next.lastAgentPresence;
       delete next.agentEndedAt;
       delete next.roundKitEngineRef;
+      delete next.roundTypecheckPreflightBypassErrors;
       tx.set(ref, next);
       return roundGeneration;
     });
@@ -5346,9 +5397,11 @@ export class FirestoreStore implements Store {
         builder,
         defaultBuilder: builder,
         roundDeliveryCount: 0,
+        roundTypecheckPreflightRefusals: 0,
       };
       delete next.seed;
       delete next.seedStatus;
+      delete next.roundTypecheckPreflightBypassErrors;
       tx.set(ref, next);
     });
   }
@@ -5393,6 +5446,34 @@ export class FirestoreStore implements Store {
       tx.set(ref, { roundDeliveryCount }, { merge: true });
       return roundDeliveryCount;
     });
+  }
+
+  async incrementRoundTypecheckPreflightRefusals(issueNumber: number): Promise<number> {
+    const ref = this.db.collection('submissions').doc(String(issueNumber));
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return 0;
+      const current = snap.data() as SubmissionRecord;
+      const roundTypecheckPreflightRefusals = (current.roundTypecheckPreflightRefusals ?? 0) + 1;
+      tx.set(ref, { roundTypecheckPreflightRefusals }, { merge: true });
+      return roundTypecheckPreflightRefusals;
+    });
+  }
+
+  async setRoundTypecheckPreflightBypassErrors(issueNumber: number, message: string | null): Promise<void> {
+    const ref = this.db.collection('submissions').doc(String(issueNumber));
+    if (message == null) {
+      await this.db.runTransaction(async (tx) => {
+        const snap = await tx.get(ref);
+        if (!snap.exists) return;
+        const current = snap.data() as SubmissionRecord;
+        const next = { ...current };
+        delete next.roundTypecheckPreflightBypassErrors;
+        tx.set(ref, next);
+      });
+      return;
+    }
+    await ref.set({ roundTypecheckPreflightBypassErrors: message }, { merge: true });
   }
 
   async allocateJobId(): Promise<number> {
