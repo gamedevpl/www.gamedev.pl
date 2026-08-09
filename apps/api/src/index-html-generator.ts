@@ -11,16 +11,20 @@ export interface HowToPlay {
   scoring?: { en: string; pl: string };
   mode?: { en: string; pl: string };
   hint: { en: string; pl: string };
+  sound?: { en: string; pl: string } | false;
+  playAgain?: { en: string; pl: string } | false;
+  touch?: { en: string; pl: string } | false;
 }
 
 export interface Canvas {
   width?: number;
   height?: number;
+  ariaLabel?: { en: string; pl: string };
 }
 
 // Index signature carries engine/audio, so a parsed manifest passes straight in.
 export interface GameManifest {
-  title?: string;
+  title?: { en: string; pl: string } | string;
   description?: { en: string; pl: string } | string;
   howToPlay?: HowToPlay;
   canvas?: Canvas;
@@ -45,9 +49,9 @@ function escapeHtml(value: string): string {
   );
 }
 
+// Fixed rows: sound/playAgain/touch fields decide, not a control's keys.
 function buildLegendRows(howToPlay: HowToPlay | undefined): LegendRow[] {
   const rows: LegendRow[] = [];
-  const coveredFixedKeys = new Set<string>();
 
   if (!howToPlay) return [];
 
@@ -58,15 +62,6 @@ function buildLegendRows(howToPlay: HowToPlay | undefined): LegendRow[] {
         keys: control.keys,
         action: control.action,
       });
-
-      const keyStr = typeof control.keys === 'string' ? control.keys : '';
-      if (keyStr) {
-        if (keyStr.includes('M')) coveredFixedKeys.add('M');
-        if (keyStr.includes('Enter') || keyStr.includes('R')) {
-          coveredFixedKeys.add('Enter / R');
-        }
-        if (keyStr.includes('Touch')) coveredFixedKeys.add('Touch');
-      }
     }
   }
 
@@ -97,29 +92,29 @@ function buildLegendRows(howToPlay: HowToPlay | undefined): LegendRow[] {
     });
   }
 
-  if (!coveredFixedKeys.has('M')) {
+  if (howToPlay.sound !== false) {
     rows.push({
       type: 'control',
       keys: 'M',
-      action: { en: 'Sound on/off', pl: 'Dźwięk wł./wył.' },
+      action: howToPlay.sound || { en: 'Sound on/off', pl: 'Dźwięk wł./wył.' },
     });
   }
 
-  if (!coveredFixedKeys.has('Enter / R')) {
+  if (howToPlay.playAgain !== false) {
     rows.push({
       type: 'control',
       keys: 'Enter / R',
-      action: { en: 'Play again', pl: 'Zagraj ponownie' },
+      action: howToPlay.playAgain || { en: 'Play again', pl: 'Zagraj ponownie' },
     });
   }
 
-  if (!coveredFixedKeys.has('Touch')) {
+  if (howToPlay.touch !== false) {
     rows.push({
       type: 'control',
       keys: { en: 'Touch', pl: 'Dotyk' },
-      action: {
-        en: 'On-screen pad with Dig and Flag buttons; long-press a tile to flag it',
-        pl: 'Pad ekranowy z przyciskami Dig i Flag; przytrzymaj pole, aby postawić flagę',
+      action: howToPlay.touch || {
+        en: 'On-screen pad on touch screens',
+        pl: 'Pad ekranowy na ekranach dotykowych',
       },
     });
   }
@@ -178,7 +173,10 @@ function generateLegend(howToPlay: HowToPlay | undefined): string {
 
 // Deterministic and diff-stable: fixed indentation, attribute order, escaping.
 export function generateIndexHtml(manifest: GameManifest, spec: GameSpec): string {
-  const title = spec.title || manifest.title || '';
+  const titleObj = manifest.title;
+  const titleEn = (titleObj && typeof titleObj === 'object' ? titleObj.en : titleObj) || spec.title || '';
+  const titlePl = (titleObj && typeof titleObj === 'object' ? titleObj.pl : undefined) || titleEn;
+  const title = titleEn;
   const descriptionObj = manifest.description;
   const descEn =
     descriptionObj && typeof descriptionObj === 'object'
@@ -197,11 +195,11 @@ export function generateIndexHtml(manifest: GameManifest, spec: GameSpec): strin
   const canvasWidth = canvas.width ?? 640;
   const canvasHeight = canvas.height ?? 400;
   const hint = howToPlay?.hint || { en: '', pl: '' };
-  const ariaLabelEn = `${title} playfield`;
-  const ariaLabelPl = `${title} — pole gry`;
+  const ariaLabelEn = canvas.ariaLabel?.en ?? `${title} playfield`;
+  const ariaLabelPl = canvas.ariaLabel?.pl ?? `${title} — pole gry`;
 
   let html = '<div class="wrap">\n';
-  html += `  <h1 id="game-title" data-i18n-en="${escapeHtml(title)}" data-i18n-pl="${escapeHtml(title)}">${escapeHtml(title)}</h1>\n`;
+  html += `  <h1 id="game-title" data-i18n-en="${escapeHtml(titleEn)}" data-i18n-pl="${escapeHtml(titlePl)}">${escapeHtml(titleEn)}</h1>\n`;
   html += `  <p id="game-desc" data-i18n-en="${escapeHtml(descEn)}" data-i18n-pl="${escapeHtml(descPl)}">${escapeHtml(descEn)}</p>\n`;
   html += '  <div class="game-controls">\n';
   html +=

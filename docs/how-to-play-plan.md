@@ -75,8 +75,21 @@ Changing output means regenerating the golden in both repos in the same change.
 A monolingual key renders bare (`<dt>M</dt>`) — there is nothing to translate. Only keys
 that differ between languages carry `data-i18n-*`, matching all 103 hand-authored games.
 
-Row order is fixed: custom controls, Goal, Scoring, Mode, then the M / Enter‑R / Touch
-rows unless a custom control already covers them.
+Row order is fixed: custom controls, Goal, Scoring, Mode, then M, Enter‑R, Touch.
+
+The M / Enter‑R / Touch rows always render with their default wording unless the schema
+says otherwise — never inferred from a custom control's own key text ("R" or "M" appearing
+in some other row's keys is not evidence it plays that role; games#247 class of bug). To
+change or drop one: `howToPlay.sound` / `.playAgain` / `.touch`, each `{en, pl} | false`.
+`false` omits the row entirely (a game with no on-screen pad sets `touch: false`); an
+`{en, pl}` object rewords it (a game whose Enter/R does something other than "play again").
+
+`howToPlay` and `title` may each be a plain string (same text in both languages) or an
+`{en, pl}` object. A bilingual `title` overrides `SPEC.md`'s `title:` field for display —
+that field stays the single canonical English name used elsewhere (catalog, prompts); the
+schema's `title` is what actually renders in the page when it differs, matching what some
+games' hand-authored `index.html` already did. `canvas.ariaLabel` overrides the default
+`"{title} playfield"` / `"{title} — pole gry"` pair when a game wants a more specific label.
 
 **Delivery.** A game satisfies the markup requirement with `index.html` _or_ a `howToPlay`
 carrying both `goal` and `hint`. Generation happens inside `getGameSources`, the single
