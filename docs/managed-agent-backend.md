@@ -175,6 +175,34 @@ failed attempt releases the lock so the retry is not locked out. Without a lock 
 the guards are the job's own candidate flag plus a sink that must be idempotent per
 `sessionRef` — which the type says out loud.
 
+### An idle session is not necessarily a stalled one
+
+The backend nudges a session that has gone idle without delivering, because a model that
+stops mid-round otherwise burns the whole wall clock doing nothing. The trap is that the
+provider cannot see the build channel at all. In the MCP shape the agent submits and calls
+`end` through the channel, so by the time the vendor reports `idle` the round may already be
+finished — and a preview submit sets `previewVersion`, not `deliveredVersion`, so the job's
+own `hasCandidate` flag is still false. A nudge at that moment opens a second round on a job
+that is already gating, and the agent has to be interrupted by hand.
+
+So the guard reads the round, not just the session, through an injected `readSignals`. That
+is the same seam the self backend takes — a reader handed in by the reconciler rather than a
+store dependency inside the backend — but not the same payload: `ManagedRoundSignals` also
+carries `previewVersion` and `agentEndedAt`, neither of which the self backend consults. Two
+conditions independently suppress the nudge: a delivery of either lane exists, or the agent
+called `end`. The second one is the important one. An agent that ended has made a decision,
+and re-entering it is the damage; a round with no delivery at all still must not be restarted
+behind the agent's back.
+
+The read is taken only when a nudge is otherwise about to fire. Every cheap condition — idle,
+no candidate, nudging enabled, not budget-stopped, not already nudged — is evaluated first,
+so a healthy polling loop does not pay a store round trip per observation.
+
+The message matters too. It used to assert "You have not delivered a candidate", which was
+simply false in the case above. It now says what the host can actually see — that no
+delivery is recorded — so a nudge that does fire cannot mislead the agent about its own
+round.
+
 ## What is not wired yet
 
 `ManagedDeliverySink` is injected, not implemented here. The channel's `submit_sources`

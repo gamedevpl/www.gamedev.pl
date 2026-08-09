@@ -328,6 +328,57 @@ describe('managed backend', () => {
     expect(sendMessage).toHaveBeenCalledTimes(1);
   });
 
+  it('does not nudge a round that delivered a preview but has no sealed version yet', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const { provider, setState } = fakeProvider({ sendMessage });
+    const backend = createManagedBackend({
+      provider,
+      tools: { mcpEndpoints: [{ url: 'https://example.test/api/mcp', name: 'gamedevpl' }] },
+      readSignals: async () => ({ previewVersion: 'v20260809T071502153Z-9fbd2f' }),
+    });
+
+    await backend.dispatch(brief());
+    setState('idle');
+    await backend.observe('session-1', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
+
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('does not re-enter a session the agent deliberately ended', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const { provider, setState } = fakeProvider({ sendMessage });
+    const backend = createManagedBackend({
+      provider,
+      tools: { mcpEndpoints: [{ url: 'https://example.test/api/mcp', name: 'gamedevpl' }] },
+      readSignals: async () => ({ agentEndedAt: '2026-08-09T07:15:08.000Z' }),
+    });
+
+    await backend.dispatch(brief());
+    setState('idle');
+    const observation = await backend.observe('session-1', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
+
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(observation).toMatchObject({ state: 'idle' });
+  });
+
+  it('still nudges a session that went idle without delivering or ending', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const { provider, setState } = fakeProvider({ sendMessage });
+    const backend = createManagedBackend({
+      provider,
+      tools: { mcpEndpoints: [{ url: 'https://example.test/api/mcp', name: 'gamedevpl' }] },
+      readSignals: async () => ({}),
+    });
+
+    await backend.dispatch(brief());
+    setState('idle');
+    await backend.observe('session-1', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
+    await backend.observe('session-1', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
+
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+    expect(sendMessage.mock.calls[0]?.[1]).toContain('No delivery is recorded for this round');
+  });
+
   it('releases the lock when delivery fails, so the retry is not locked out', async () => {
     const { provider, setState, setOutputs } = fakeProvider();
     const release = vi.fn(async () => undefined);

@@ -48,8 +48,19 @@ export interface ManagedDeliveryLock {
   release(claim: ManagedDeliveryClaim): Promise<void>;
 }
 
+// Round state from the build channel, which the vendor session cannot see.
+export interface ManagedRoundSignals {
+  // A sealed publish delivery.
+  deliveredVersion?: string;
+  // A preview delivery: gates without sealing.
+  previewVersion?: string;
+  // The MCP `end` tool; the agent stopped deliberately.
+  agentEndedAt?: string;
+}
+
 export interface ManagedBackendOptions {
   provider: ManagedAgentProvider;
+  readSignals?: (issueNumber: number) => Promise<ManagedRoundSignals | null>;
   // Omit only when an MCP-connected agent submits for itself.
   deliver?: ManagedDeliverySink;
   lock?: ManagedDeliveryLock;
@@ -231,19 +242,28 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
         }
       }
 
-      let nudged = false;
-      if (
+      // Everything a nudge needs except what only the channel knows.
+      const nudgeCandidate =
         session.state === 'idle' &&
         !hasCandidate &&
         options.nudgeIdle !== false &&
         session.stopReason !== 'budget_reached' &&
-        options.provider.sendMessage &&
-        !idleNudged.has(ref)
-      ) {
+        Boolean(options.provider.sendMessage) &&
+        !idleNudged.has(ref);
+      // Provider cannot see a channel submit or end; read once.
+      const signals =
+        nudgeCandidate && options.readSignals && observeOptions.issueNumber !== undefined
+          ? await options.readSignals(observeOptions.issueNumber)
+          : null;
+      const roundDelivered = Boolean(signals?.deliveredVersion || signals?.previewVersion);
+      const agentEnded = Boolean(signals?.agentEndedAt);
+
+      let nudged = false;
+      if (nudgeCandidate && !roundDelivered && !agentEnded && options.provider.sendMessage) {
         try {
           await options.provider.sendMessage(
             ref,
-            'Continue this round now. You have not delivered a candidate. Act through the existing tools, submit the playable source tree, and end only after submit_sources succeeds. Do not explain or wait.',
+            'Continue this round now. No delivery is recorded for this round. Act through the existing tools, submit the playable source tree, and end only after submit_sources succeeds. Do not explain or wait.',
           );
           idleNudged.add(ref);
           nudged = true;
