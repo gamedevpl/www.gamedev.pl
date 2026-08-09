@@ -544,6 +544,7 @@
     "eyebrowIdea": "Twój pomysł",
     "eyebrowBuilder": "Ostatni wybór",
     "builderLede": "Gamedev.pl może zbudować to za Ciebie, albo podłączysz własnego agenta.",
+    "builderBlocked": "Agent kodujący Gamedev.pl jest teraz niedostępny — wybierz własnego agenta, aby kontynuować.",
     "back": "Wstecz",
     "continue": "Dalej",
     "next": "Dalej",
@@ -1167,7 +1168,27 @@
     "legend": "Kto buduje tę rundę?",
     "platform": {
       "title": "Agent Gamedev.pl",
-      "detail": "Przypisujemy agenta i postęp widać tutaj."
+      "detail": "Przypisujemy agenta i postęp widać tutaj.",
+      "unavailable": {
+        "badge": {
+          "coming_soon": "Już wkrótce",
+          "outage": "Chwilowo niedostępny",
+          "global_limit": "Dzienny limit osiągnięty",
+          "user_limit": "Twój dzienny limit osiągnięty"
+        },
+        "note": {
+          "coming_soon": "Jeszcze tu nie wystartował.",
+          "outage": "Chwilowo nie działa — spróbuj za chwilę.",
+          "global_limit": "Dzisiejsza wspólna pula budów się skończyła.",
+          "user_limit": "Wykorzystałeś dzisiejszą pulę budów."
+        },
+        "detail": {
+          "coming_soon": "Agent kodujący Gamedev.pl nie wystartował jeszcze w tym środowisku. Użyj własnego agenta kodującego.",
+          "outage": "Agent kodujący Gamedev.pl jest chwilowo niedostępny. Użyj własnego agenta kodującego albo spróbuj ponownie za chwilę.",
+          "global_limit": "Agent kodujący Gamedev.pl osiągnął dzisiejszy wspólny limit budów. Użyj własnego agenta kodującego albo spróbuj jutro.",
+          "user_limit": "Osiągnąłeś dzisiejszy limit agenta kodującego Gamedev.pl. Użyj własnego agenta kodującego albo spróbuj jutro."
+        }
+      }
     },
     "self": {
       "title": "Mój własny agent",

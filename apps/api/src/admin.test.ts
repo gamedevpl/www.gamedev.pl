@@ -483,7 +483,14 @@ describe('/api/admin/creation-limits', () => {
 
     expect(res.statusCode).toBe(200);
     const body = res.json() as CreationLimitsResponse;
-    expect(body.effective).toEqual({ paused: true, globalDailySubmissionCap: 25 });
+    expect(body.effective).toEqual({
+      paused: true,
+      globalDailySubmissionCap: 25,
+      managedBuilderMode: 'auto',
+      managedDailyCap: null,
+      managedDailyUserCap: null,
+      hasPlatformBackend: false,
+    });
     // A pause left on by accident is this feature's own failure mode, so the record of
     // who set it is part of the deliverable.
     expect(body.stored).toMatchObject({ paused: true, updatedBy: 'g:boss' });
@@ -506,6 +513,10 @@ describe('/api/admin/creation-limits', () => {
     expect((res.json() as CreationLimitsResponse).effective).toEqual({
       paused: false,
       globalDailySubmissionCap: 25,
+      managedBuilderMode: 'auto',
+      managedDailyCap: null,
+      managedDailyUserCap: null,
+      hasPlatformBackend: false,
     });
     await app.close();
   });

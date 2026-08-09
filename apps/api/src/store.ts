@@ -637,6 +637,12 @@ export interface CreationLimits {
    * flag goes on. Same null semantics as the submission cap.
    */
   globalDailyEditCap: number | null;
+  // Switches the `platform` option; `auto` defers to whether a backend exists.
+  managedBuilderMode?: 'auto' | 'off' | 'coming_soon';
+  // Shared daily ceiling on platform rounds started. `null` = no cap.
+  managedDailyCap: number | null;
+  // Same ceiling, per creator per UTC day.
+  managedDailyUserCap: number | null;
   /** Who last changed this and when, so a leftover pause is legible as a leftover. */
   updatedAt?: string;
   updatedBy?: string;
@@ -659,6 +665,8 @@ export interface UsageCounters {
   improvements: number;
   /** Natural-language tuning requests in the editor (one Vertex call each). */
   assists: number;
+  // Platform rounds this creator started today.
+  managedBuilds: number;
 }
 
 /**
@@ -2094,6 +2102,10 @@ export interface Store {
   checkAndIncrementGlobalSubmissions(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }>;
   /** Same shape for the editing lanes' shared daily allowance of model calls. */
   checkAndIncrementGlobalEdits(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }>;
+  // Platform rounds everyone together has started on `dateStr`.
+  getGlobalManagedBuildCount(dateStr: string): Promise<number>;
+  // Same shape, for the shared daily ceiling.
+  checkAndIncrementGlobalManagedBuilds(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }>;
   upsertWaitlistEntry(entry: { uid: string; email?: string; name?: string; locale?: string }): Promise<WaitlistEntry>;
   getWaitlistEntry(uid: string): Promise<WaitlistEntry | null>;
   isWaitlistApproved(uid: string, email?: string): Promise<boolean>;
@@ -2585,6 +2597,7 @@ function emptyUsageCounters(): UsageCounters {
     playerFeedback: 0,
     improvements: 0,
     assists: 0,
+    managedBuilds: 0,
   };
 }
 
@@ -2606,6 +2619,7 @@ export class InMemoryStore implements Store {
   // yyyy-mm-dd -> submissions accepted that day across every account
   private globalSubmissions = new Map<string, number>();
   private globalEdits = new Map<string, number>();
+  private globalManagedBuilds = new Map<string, number>();
   private creationLimits: CreationLimits | null = null;
   private publicPlayConfig: PublicPlayConfig | null = null;
   private waitlist = new Map<string, WaitlistEntry>();
@@ -3602,6 +3616,13 @@ export class InMemoryStore implements Store {
         patch.globalDailyEditCap !== undefined
           ? patch.globalDailyEditCap
           : (this.creationLimits?.globalDailyEditCap ?? null),
+      managedBuilderMode: patch.managedBuilderMode ?? this.creationLimits?.managedBuilderMode ?? 'auto',
+      managedDailyCap:
+        patch.managedDailyCap !== undefined ? patch.managedDailyCap : (this.creationLimits?.managedDailyCap ?? null),
+      managedDailyUserCap:
+        patch.managedDailyUserCap !== undefined
+          ? patch.managedDailyUserCap
+          : (this.creationLimits?.managedDailyUserCap ?? null),
       updatedAt: new Date().toISOString(),
       updatedBy,
     };
@@ -3645,6 +3666,22 @@ export class InMemoryStore implements Store {
       return { allowed: false, current };
     }
     this.globalEdits.set(dateStr, current + 1);
+    return { allowed: true, current: current + 1 };
+  }
+
+  async getGlobalManagedBuildCount(dateStr: string): Promise<number> {
+    return this.globalManagedBuilds.get(dateStr) ?? 0;
+  }
+
+  async checkAndIncrementGlobalManagedBuilds(
+    dateStr: string,
+    limit: number,
+  ): Promise<{ allowed: boolean; current: number }> {
+    const current = this.globalManagedBuilds.get(dateStr) ?? 0;
+    if (current >= limit) {
+      return { allowed: false, current };
+    }
+    this.globalManagedBuilds.set(dateStr, current + 1);
     return { allowed: true, current: current + 1 };
   }
 
@@ -6007,6 +6044,12 @@ export class FirestoreStore implements Store {
       editingPaused: data?.editingPaused === true,
       remixTracePaused: data?.remixTracePaused === true,
       globalDailyEditCap: typeof data?.globalDailyEditCap === 'number' ? data.globalDailyEditCap : null,
+      managedBuilderMode:
+        data?.managedBuilderMode === 'off' || data?.managedBuilderMode === 'coming_soon'
+          ? data.managedBuilderMode
+          : 'auto',
+      managedDailyCap: typeof data?.managedDailyCap === 'number' ? data.managedDailyCap : null,
+      managedDailyUserCap: typeof data?.managedDailyUserCap === 'number' ? data.managedDailyUserCap : null,
       ...(data?.updatedAt ? { updatedAt: data.updatedAt } : {}),
       ...(data?.updatedBy ? { updatedBy: data.updatedBy } : {}),
     };
@@ -6029,6 +6072,11 @@ export class FirestoreStore implements Store {
         editingPaused: patch.editingPaused ?? existing.editingPaused ?? false,
         globalDailyEditCap:
           patch.globalDailyEditCap !== undefined ? patch.globalDailyEditCap : (existing.globalDailyEditCap ?? null),
+        managedBuilderMode: patch.managedBuilderMode ?? existing.managedBuilderMode ?? 'auto',
+        managedDailyCap:
+          patch.managedDailyCap !== undefined ? patch.managedDailyCap : (existing.managedDailyCap ?? null),
+        managedDailyUserCap:
+          patch.managedDailyUserCap !== undefined ? patch.managedDailyUserCap : (existing.managedDailyUserCap ?? null),
         updatedAt: new Date().toISOString(),
         updatedBy,
       };
@@ -6098,6 +6146,32 @@ export class FirestoreStore implements Store {
 
       const nextVal = current + 1;
       transaction.set(ref, { edits: nextVal }, { merge: true });
+      return { allowed: true, current: nextVal };
+    });
+  }
+
+  async getGlobalManagedBuildCount(dateStr: string): Promise<number> {
+    const snap = await this.globalUsageRef(dateStr).get();
+    const value = snap.data()?.managedBuilds;
+    return typeof value === 'number' ? value : 0;
+  }
+
+  async checkAndIncrementGlobalManagedBuilds(
+    dateStr: string,
+    limit: number,
+  ): Promise<{ allowed: boolean; current: number }> {
+    const ref = this.globalUsageRef(dateStr);
+    return await this.db.runTransaction(async (transaction) => {
+      const snap = await transaction.get(ref);
+      const value = snap.data()?.managedBuilds;
+      const current = typeof value === 'number' ? value : 0;
+
+      if (current >= limit) {
+        return { allowed: false, current };
+      }
+
+      const nextVal = current + 1;
+      transaction.set(ref, { managedBuilds: nextVal }, { merge: true });
       return { allowed: true, current: nextVal };
     });
   }

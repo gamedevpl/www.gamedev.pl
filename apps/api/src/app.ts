@@ -367,6 +367,13 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     }
   };
 
+  // Computed once and reused below (admin routes report whether a platform backend is
+  // configured at all) — calling createPlatformBackendFromEnv a second time would both
+  // waste the lookup and double the "agent dispatch enabled" log line.
+  const resolvedAgentBackends =
+    options.submissionRoutes?.agentBackends ??
+    (options.submissionRoutes?.agentBackend ? undefined : { platform: createPlatformBackendFromEnv(app.log) });
+
   const submissionSeams = await registerSubmissionRoutes(app, {
     ...options.submissionRoutes,
     resolveProposalBase: resolveBaseForProposal,
@@ -383,9 +390,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     agentBackend: options.submissionRoutes?.agentBackend,
     // Platform only here — `self` is wired inside registerSubmissionRoutes with store
     // callbacks for seed persistence. Passing a pre-built self would skip those.
-    agentBackends:
-      options.submissionRoutes?.agentBackends ??
-      (options.submissionRoutes?.agentBackend ? undefined : { platform: createPlatformBackendFromEnv(app.log) }),
+    agentBackends: resolvedAgentBackends,
     gameSeeder: options.submissionRoutes?.gameSeeder ?? createGameSeederFromEnv(app.log),
     agentChannel: {
       ...options.submissionRoutes?.agentChannel,
@@ -556,6 +561,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     creationLimitsTtlMs: options.submissionRoutes?.creationLimitsTtlMs,
     publicPlayFallbackSlugs: [...publicPlayFallbackSlugs],
     publicPlayTtlMs,
+    hasPlatformBackend: Boolean(options.submissionRoutes?.agentBackend ?? resolvedAgentBackends?.platform),
   });
 
   // Review catalog matches /api/catalog; snapshot first in prod.

@@ -540,6 +540,7 @@
     "eyebrowIdea": "Your idea",
     "eyebrowBuilder": "Last choice",
     "builderLede": "Gamedev.pl can build it for you, or you connect your own coding agent.",
+    "builderBlocked": "The Gamedev.pl coding agent isn't available right now — choose your own coding agent to continue.",
     "back": "Back",
     "continue": "Continue",
     "next": "Next",
@@ -1163,7 +1164,27 @@
     "legend": "Who builds this round?",
     "platform": {
       "title": "Gamedev.pl coding agent",
-      "detail": "We assign a coding agent and you watch progress here."
+      "detail": "We assign a coding agent and you watch progress here.",
+      "unavailable": {
+        "badge": {
+          "coming_soon": "Coming soon",
+          "outage": "Temporarily unavailable",
+          "global_limit": "Daily limit reached",
+          "user_limit": "Your daily limit reached"
+        },
+        "note": {
+          "coming_soon": "Not launched here yet.",
+          "outage": "Down for a bit — try again shortly.",
+          "global_limit": "Everyone's used up today's builds.",
+          "user_limit": "You've used today's builds."
+        },
+        "detail": {
+          "coming_soon": "The Gamedev.pl coding agent hasn't launched in this environment yet. Use your own coding agent instead.",
+          "outage": "The Gamedev.pl coding agent is temporarily unavailable. Use your own coding agent, or try again shortly.",
+          "global_limit": "The Gamedev.pl coding agent has reached today's shared build limit. Use your own coding agent, or try again tomorrow.",
+          "user_limit": "You've reached your daily limit for the Gamedev.pl coding agent. Use your own coding agent, or try again tomorrow."
+        }
+      }
     },
     "self": {
       "title": "My own coding agent",

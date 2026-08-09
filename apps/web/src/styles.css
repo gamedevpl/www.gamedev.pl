@@ -5038,6 +5038,13 @@ a.user-name--profile:focus-visible {
   max-width: 46ch;
 }
 
+.qa-builder-blocked {
+  margin: -4px 0 0;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: var(--warning, #f5a623);
+}
+
 .qa-idea-quote {
   margin: 0;
   border-left: 3px solid var(--turquoise, #00e4ac);
@@ -7079,6 +7086,31 @@ button.builder-mode-selector:disabled {
   line-height: 1.35;
 }
 
+/* Deliberately not `disabled` — see BuilderChoice.tsx. Styled to read as inactive while
+   staying focusable and its tooltip reachable on hover and via aria-describedby. */
+.builder-choice-option.is-unavailable {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.builder-choice-option.is-unavailable:hover {
+  border-color: var(--panel-border, #33383d);
+}
+
+.builder-choice-option-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--muted, #94a3b8);
+  background: color-mix(in srgb, var(--muted, #94a3b8) 16%, transparent);
+  vertical-align: middle;
+}
+
 .builder-choice.is-compact .builder-choice-option {
   padding: 10px 12px;
 }
@@ -7377,6 +7409,18 @@ button.builder-mode-selector:disabled {
   border-color: rgba(0, 228, 172, 0.55);
   background: rgba(0, 228, 172, 0.12);
   color: var(--turquoise, #00e4ac);
+}
+
+/* Deliberately not `disabled` — see StudioConnectCard.tsx's SwitchBuilderControl. */
+.studio-connect-switch-button.is-unavailable,
+.studio-active-handoff-button.is-unavailable {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.studio-connect-switch-button.is-unavailable:hover {
+  border-color: rgba(148, 163, 184, 0.4);
+  color: var(--text, #e2e8f0);
 }
 
 .studio-connect-switch-confirm {

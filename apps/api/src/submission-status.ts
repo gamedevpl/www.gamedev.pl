@@ -254,6 +254,9 @@ export interface SubmissionStatusResponseBase {
     requestedAt: string;
     acknowledgedAt?: string;
   };
+  // Whether platform can be picked right now; absent means no opinion.
+  platformBuilder?:
+    { available: true } | { available: false; reason: 'coming_soon' | 'outage' | 'global_limit' | 'user_limit' };
   /**
    * Why this build is asking the creator to act, when it is. Set alongside `status`
    * because the public vocabulary projects both `failed` and a gate bounce onto

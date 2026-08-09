@@ -66,10 +66,27 @@ export async function fetchAdminSummary(): Promise<AdminSummary | null> {
   return (await res.json()) as AdminSummary;
 }
 
+export type ManagedBuilderMode = 'auto' | 'off' | 'coming_soon';
+
 export interface CreationLimits {
-  stored: { paused?: boolean; globalDailySubmissionCap?: number | null; updatedAt?: string; updatedBy?: string } | null;
-  effective: { paused: boolean; globalDailySubmissionCap: number };
-  today: { dateStr: string; submissions: number };
+  stored: {
+    paused?: boolean;
+    globalDailySubmissionCap?: number | null;
+    managedBuilderMode?: ManagedBuilderMode;
+    managedDailyCap?: number | null;
+    managedDailyUserCap?: number | null;
+    updatedAt?: string;
+    updatedBy?: string;
+  } | null;
+  effective: {
+    paused: boolean;
+    globalDailySubmissionCap: number;
+    managedBuilderMode: ManagedBuilderMode;
+    managedDailyCap: number | null;
+    managedDailyUserCap: number | null;
+    hasPlatformBackend: boolean;
+  };
+  today: { dateStr: string; submissions: number; managedBuilds: number };
   propagationMs: number;
 }
 
@@ -90,6 +107,9 @@ export async function fetchCreationLimits(): Promise<CreationLimits | null> {
 export async function setCreationLimits(patch: {
   paused?: boolean;
   globalDailySubmissionCap?: number | null;
+  managedBuilderMode?: ManagedBuilderMode;
+  managedDailyCap?: number | null;
+  managedDailyUserCap?: number | null;
 }): Promise<CreationLimits | { error: string }> {
   const res = await fetch(`${API_BASE}/api/admin/creation-limits`, {
     method: 'POST',

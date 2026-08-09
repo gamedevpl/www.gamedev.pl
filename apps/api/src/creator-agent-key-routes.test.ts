@@ -53,6 +53,8 @@ async function createApp(store: InMemoryStore) {
       githubClient: stubGitHub(),
       githubToken: 'gh',
       submissionTokenSecret: secret,
+      // Not under test here — see managed-availability.ts.
+      managedAvailabilityGate: null,
     },
   });
 }

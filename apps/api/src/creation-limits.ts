@@ -138,6 +138,8 @@ export function createCreationGate(options: CreationGateOptions): CreationGate {
     globalDailySubmissionCap: null,
     editingPaused: false,
     globalDailyEditCap: null,
+    managedDailyCap: null,
+    managedDailyUserCap: null,
   };
   let cache: { value: CreationLimits; expiresAt: number } | null = null;
 
@@ -246,6 +248,8 @@ export function createEditingGate(options: CreationGateOptions): EditingGate {
     editingPaused: false,
     globalDailyEditCap: null,
     remixTracePaused: false,
+    managedDailyCap: null,
+    managedDailyUserCap: null,
   };
   let cache: { value: CreationLimits; expiresAt: number } | null = null;
 

@@ -62,6 +62,8 @@ async function createApp(options: { now?: () => number } = {}) {
       submissionTokenSecret: secret,
       notifyAppBaseUrl: APP_BASE,
       now: options.now,
+      // Not under test here — see managed-availability.ts.
+      managedAvailabilityGate: null,
     },
   });
   return { app, store };

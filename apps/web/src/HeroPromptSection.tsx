@@ -4,7 +4,7 @@ import { recordCreateStep } from './visitTelemetry.js';
 import type { CatalogEntry } from './catalog.js';
 import { SketchModal } from './SketchModal.js';
 import { PixelIcon } from './PixelIcon.js';
-import { getQuota } from './submissionApi.js';
+import { getQuota, type PlatformBuilderAvailability } from './submissionApi.js';
 
 /**
  * Gemini-style composer: attach / prompt / mic / build in one pill.
@@ -22,6 +22,8 @@ type HeroPromptSectionProps = {
   mockError: string | null;
   // Demo mock only; Build runs QA before any generation
   onGenerateMock?: (prompt: string) => void;
+  // Fires once the quota poll resolves.
+  onPlatformBuilderAvailability?: (availability: PlatformBuilderAvailability | undefined) => void;
 };
 
 export type VisualAttachment = {
@@ -114,6 +116,7 @@ export function HeroPromptSection({
   onSubmitSpec,
   mockStatus,
   mockError,
+  onPlatformBuilderAvailability,
 }: HeroPromptSectionProps) {
   const { t } = useTranslation();
   // Skip autofocus on phone — keyboard would hide the composer.
@@ -135,7 +138,9 @@ export function HeroPromptSection({
     let cancelled = false;
     getQuota()
       .then((result) => {
-        if (!cancelled) setQuota(result.submissions);
+        if (cancelled) return;
+        setQuota(result.submissions);
+        onPlatformBuilderAvailability?.(result.platformBuilder);
       })
       .catch(() => {
         // Signed out or unreachable — the line simply doesn't render.
@@ -143,6 +148,7 @@ export function HeroPromptSection({
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Web Speech Recognition

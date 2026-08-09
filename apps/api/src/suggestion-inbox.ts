@@ -237,13 +237,15 @@ export async function registerSuggestionInboxRoutes(
         statusReason: 'work cannot be dispatched from this deployment',
       };
     } else {
-      const started = await startImprovementRound({
+      const outcome = await startImprovementRound({
         issueNumber: submission.issueNumber,
         text: brief,
         title: `Improve ${record.slug}: ${record.class}`,
         locale: submission.locale ?? 'en',
         log: request.log,
       });
+      // No per-reason copy here — folded into the ordinary "no implementer" case.
+      const started = outcome?.route === 'job' ? outcome : null;
       next = started
         ? {
             ...record,

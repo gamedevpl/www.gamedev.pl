@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { fetchCreationLimits, setCreationLimits, type CreationLimits } from './adminApi.js';
+import { fetchCreationLimits, setCreationLimits, type CreationLimits, type ManagedBuilderMode } from './adminApi.js';
 import { PublicPlayPanel } from './PublicPlayPanel.js';
 
 /**
@@ -27,6 +27,8 @@ export function CreationLimitsPanel({ onChanged }: { onChanged?: () => void }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [capDraft, setCapDraft] = useState('');
+  const [managedCapDraft, setManagedCapDraft] = useState('');
+  const [managedUserCapDraft, setManagedUserCapDraft] = useState('');
 
   const load = useCallback(async () => {
     try {
@@ -37,6 +39,10 @@ export function CreationLimitsPanel({ onChanged }: { onChanged?: () => void }) {
       }
       setLimits(response);
       setCapDraft(String(response.effective.globalDailySubmissionCap));
+      setManagedCapDraft(response.effective.managedDailyCap === null ? '' : String(response.effective.managedDailyCap));
+      setManagedUserCapDraft(
+        response.effective.managedDailyUserCap === null ? '' : String(response.effective.managedDailyUserCap),
+      );
       setState('ready');
     } catch {
       setState('error');
@@ -48,7 +54,13 @@ export function CreationLimitsPanel({ onChanged }: { onChanged?: () => void }) {
   }, [load]);
 
   const apply = useCallback(
-    async (patch: { paused?: boolean; globalDailySubmissionCap?: number | null }) => {
+    async (patch: {
+      paused?: boolean;
+      globalDailySubmissionCap?: number | null;
+      managedBuilderMode?: ManagedBuilderMode;
+      managedDailyCap?: number | null;
+      managedDailyUserCap?: number | null;
+    }) => {
       setBusy(true);
       setMessage(null);
       try {
@@ -59,6 +71,10 @@ export function CreationLimitsPanel({ onChanged }: { onChanged?: () => void }) {
         }
         setLimits(result);
         setCapDraft(String(result.effective.globalDailySubmissionCap));
+        setManagedCapDraft(result.effective.managedDailyCap === null ? '' : String(result.effective.managedDailyCap));
+        setManagedUserCapDraft(
+          result.effective.managedDailyUserCap === null ? '' : String(result.effective.managedDailyUserCap),
+        );
         // The change lands in Firestore, and instances read it through a cache — so say
         // when it will be everywhere rather than implying it already is.
         setMessage(`in force everywhere within ${relative(result.propagationMs)}`);
@@ -79,6 +95,20 @@ export function CreationLimitsPanel({ onChanged }: { onChanged?: () => void }) {
   const { effective, stored, today } = limits;
   const parsedCap = Number(capDraft);
   const capValid = Number.isInteger(parsedCap) && parsedCap >= 0;
+
+  const parsedManagedCap = managedCapDraft.trim() === '' ? null : Number(managedCapDraft);
+  const managedCapValid = parsedManagedCap === null || (Number.isInteger(parsedManagedCap) && parsedManagedCap >= 0);
+  const parsedManagedUserCap = managedUserCapDraft.trim() === '' ? null : Number(managedUserCapDraft);
+  const managedUserCapValid =
+    parsedManagedUserCap === null || (Number.isInteger(parsedManagedUserCap) && parsedManagedUserCap >= 0);
+
+  const managedStatusLine = !effective.hasPlatformBackend
+    ? 'Not configured in this environment (reads as "coming soon" regardless of the switch below).'
+    : effective.managedBuilderMode === 'off'
+      ? 'Off — the platform option shows as temporarily unavailable.'
+      : effective.managedBuilderMode === 'coming_soon'
+        ? 'Marked coming soon — the platform option shows as not yet launched.'
+        : 'Auto — offered normally.';
 
   return (
     <>
@@ -137,6 +167,74 @@ export function CreationLimitsPanel({ onChanged }: { onChanged?: () => void }) {
             ? `Stored by ${stored.updatedBy ?? 'unknown'}${stored.updatedAt ? ` at ${stored.updatedAt}` : ''}.`
             : 'Nothing stored — the deployed defaults are what is in force.'}{' '}
           A change needs no redeploy and reaches every instance within {relative(limits.propagationMs)}.
+        </p>
+      </section>
+
+      <section className="admin-limits">
+        <h2 className="health-section-title">Managed (Gamedev.pl) builder</h2>
+        <p className="health-summary">
+          {managedStatusLine} {today.managedBuilds} platform round{today.managedBuilds === 1 ? '' : 's'} started today (
+          {today.dateStr}).
+        </p>
+
+        <div className="admin-limits-controls">
+          <label className="admin-limits-cap">
+            Mode
+            <select
+              value={effective.managedBuilderMode}
+              disabled={busy}
+              onChange={(event) => void apply({ managedBuilderMode: event.target.value as ManagedBuilderMode })}
+            >
+              <option value="auto">Auto (offer when configured)</option>
+              <option value="coming_soon">Coming soon</option>
+              <option value="off">Off (incident)</option>
+            </select>
+          </label>
+
+          <label className="admin-limits-cap">
+            Daily cap (shared)
+            <input
+              type="number"
+              min={0}
+              placeholder="no cap"
+              value={managedCapDraft}
+              disabled={busy}
+              onChange={(event) => setManagedCapDraft(event.target.value)}
+            />
+          </label>
+          <button
+            type="button"
+            disabled={!managedCapValid || busy || parsedManagedCap === effective.managedDailyCap}
+            onClick={() => void apply({ managedDailyCap: parsedManagedCap })}
+          >
+            Set shared cap
+          </button>
+
+          <label className="admin-limits-cap">
+            Daily cap (per creator)
+            <input
+              type="number"
+              min={0}
+              placeholder="no cap"
+              value={managedUserCapDraft}
+              disabled={busy}
+              onChange={(event) => setManagedUserCapDraft(event.target.value)}
+            />
+          </label>
+          <button
+            type="button"
+            disabled={!managedUserCapValid || busy || parsedManagedUserCap === effective.managedDailyUserCap}
+            onClick={() => void apply({ managedDailyUserCap: parsedManagedUserCap })}
+          >
+            Set per-creator cap
+          </button>
+        </div>
+
+        {message && <p className="admin-limits-message">{message}</p>}
+
+        <p className="health-note">
+          An in-flight platform round keeps running when this changes — the switch only gates new dispatches. Reaches
+          every instance within {relative(limits.propagationMs)}.
         </p>
       </section>
       <PublicPlayPanel onChanged={onChanged} />

@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { BuilderKind } from './builder.js';
+import type { ManagedUnavailableReason } from './managed-availability.js';
 import type { InternalAuthVerifier } from './internal-auth.js';
 import {
   aggregateCreatorAssessments,
@@ -132,7 +133,7 @@ export interface SuggestionSweepDeps {
     locale: string;
     log: { error: (context: object, message: string) => void };
     builder?: BuilderKind;
-  }) => Promise<{ route: 'job'; jobId: number } | null>;
+  }) => Promise<{ route: 'job'; jobId: number } | { route: 'unavailable'; reason: ManagedUnavailableReason } | null>;
   /** Builds the brief an autonomously dispatched agent receives. */
   buildBrief?: (record: SuggestionRecord, untrusted: Scorecard['untrusted'] | null) => string;
   log?: { error: (context: object, message: string) => void };
@@ -287,13 +288,15 @@ export async function runSuggestionSweep(deps: SuggestionSweepDeps): Promise<Sug
       }
 
       const metric = hypothesisMetric(routed.class);
-      const started = await deps.startImprovementRound({
+      const outcome = await deps.startImprovementRound({
         issueNumber: submission.issueNumber,
         text: deps.buildBrief(fresh, card.untrusted),
         title: `Improve ${card.slug}: ${routed.class}`,
         locale: submission.locale ?? 'en',
         log: deps.log ?? { error: () => {} },
       });
+      // No creator waiting on the reason — treated like any other failed start.
+      const started = outcome?.route === 'job' ? outcome : null;
 
       await store.putSuggestion({
         ...fresh,

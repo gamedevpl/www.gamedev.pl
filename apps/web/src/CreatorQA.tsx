@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { BuilderChoice } from './BuilderChoice.js';
+import { BuilderChoice, type BuilderUnavailableReason } from './BuilderChoice.js';
 import { isBuilderKind, type BuilderKind } from './builderKind.js';
 import { isSubmittableTitle, MAX_TITLE_LENGTH } from './gameTitle.js';
 import { PixelIcon } from './PixelIcon.js';
@@ -45,6 +45,8 @@ interface CreatorQAProps {
   initialBuilder?: BuilderKind;
   /** Fires when the builder choice changes so a reload keeps the selection. */
   onBuilderChange?: (builder: BuilderKind) => void;
+  // Blocks advancing past builder/review until the creator picks self.
+  platformUnavailable?: BuilderUnavailableReason;
 }
 
 /**
@@ -83,6 +85,7 @@ export function CreatorQA({
   onAnswersChange,
   initialBuilder = 'platform',
   onBuilderChange,
+  platformUnavailable,
 }: CreatorQAProps) {
   const { t } = useTranslation();
   const [title, setTitle] = useState(initialTitle);
@@ -91,6 +94,8 @@ export function CreatorQA({
   const [builder, setBuilder] = useState<BuilderKind>(isBuilderKind(initialBuilder) ? initialBuilder : 'platform');
   const [step, setStep] = useState(0);
   const titleReady = isSubmittableTitle(title);
+  // Never switched over automatically — the creator must pick self.
+  const builderBlocked = builder === 'platform' && Boolean(platformUnavailable);
 
   const stages = useMemo<Stage[]>(
     () => [
@@ -457,7 +462,14 @@ export function CreatorQA({
                 {t('builder.legend')}
               </h2>
               <p className="qa-stage-lede">{t('qa.builderLede')}</p>
-              <BuilderChoice value={builder} onChange={handleBuilderChange} disabled={submitting} hideLegend />
+              <BuilderChoice
+                value={builder}
+                onChange={handleBuilderChange}
+                disabled={submitting}
+                hideLegend
+                platformUnavailable={platformUnavailable}
+              />
+              {builderBlocked && <p className="qa-builder-blocked">{t('qa.builderBlocked')}</p>}
             </>
           )}
 
@@ -550,7 +562,7 @@ export function CreatorQA({
             type="button"
             className="qa-shortcut"
             onClick={() => goTo(reviewIndex)}
-            disabled={submitting || !titleReady}
+            disabled={submitting || !titleReady || builderBlocked}
           >
             {t('qa.skipToReview')}
           </button>
@@ -561,7 +573,7 @@ export function CreatorQA({
             type="button"
             className="btn btn-primary qa-primary btn-create-now"
             onClick={handleSubmit}
-            disabled={submitting || !titleReady}
+            disabled={submitting || !titleReady || builderBlocked}
           >
             <PixelIcon name="send" size={14} /> {submitting ? t('submit.submitting') : t('qa.createNow')}
           </button>
@@ -572,7 +584,9 @@ export function CreatorQA({
               stage.kind === 'question' && !currentAnswer ? ' qa-next--skip' : ''
             }`}
             onClick={() => goTo(stepIndex + 1)}
-            disabled={submitting || (stage.kind === 'name' && !titleReady)}
+            disabled={
+              submitting || (stage.kind === 'name' && !titleReady) || (stage.kind === 'builder' && builderBlocked)
+            }
           >
             {nextLabel()} <PixelIcon name="arrowRight" size={12} />
           </button>

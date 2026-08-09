@@ -1,7 +1,7 @@
 import { useEffect, useId, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { BuilderChoice } from './BuilderChoice.js';
+import { BuilderChoice, type BuilderUnavailableReason } from './BuilderChoice.js';
 import type { BuilderKind } from './builderKind.js';
 import { PixelIcon } from './PixelIcon.js';
 
@@ -14,6 +14,8 @@ type BuilderModeBadgeProps = {
    */
   canChange: boolean;
   disabled?: boolean;
+  // Why platform is unavailable, if it is. See BuilderChoice.
+  platformUnavailable?: BuilderUnavailableReason;
 };
 
 /**
@@ -23,7 +25,13 @@ type BuilderModeBadgeProps = {
  * not as a floating badge over the textarea. Changeable only while generation is
  * silent; opens the same two-up choice the create wizard uses.
  */
-export function BuilderModeBadge({ value, onChange, canChange, disabled = false }: BuilderModeBadgeProps) {
+export function BuilderModeBadge({
+  value,
+  onChange,
+  canChange,
+  disabled = false,
+  platformUnavailable,
+}: BuilderModeBadgeProps) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const titleId = useId();
@@ -83,7 +91,13 @@ export function BuilderModeBadge({ value, onChange, canChange, disabled = false 
                   {t('builder.legend')}
                 </h2>
                 <p className="builder-choice-modal-lede">{t('builder.badge.modalLede')}</p>
-                <BuilderChoice value={value} onChange={onChange} disabled={disabled} hideLegend />
+                <BuilderChoice
+                  value={value}
+                  onChange={onChange}
+                  disabled={disabled}
+                  hideLegend
+                  platformUnavailable={platformUnavailable}
+                />
                 <button type="button" className="primary-btn builder-choice-modal-done" onClick={() => setOpen(false)}>
                   {t('builder.badge.modalDone')}
                 </button>
