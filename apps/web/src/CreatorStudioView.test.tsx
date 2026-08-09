@@ -1556,7 +1556,7 @@ describe('CreatorStudioView abandon', () => {
 
     expect(abandonSubmission).toHaveBeenCalledWith('token-draft');
     expect(onNavigate).toHaveBeenCalledWith('/studio');
-    // The remaining game's detail pane must render — not a blank main area.
+    // Detail pane must render, not a blank main area.
     expect(container.querySelector('.studio-detail')).not.toBeNull();
     expect(container.querySelector('.studio-detail-title-block h2')?.textContent).toContain('Other Game');
 

@@ -937,10 +937,7 @@ export function CreatorStudioView({
                               if (sibling) {
                                 setSelected(sibling.token);
                               } else {
-                                // Bare `/studio` names no game, so nothing else will pick
-                                // one for this view: fall back to the shelf's own default,
-                                // same order the initial load uses, or the detail pane and
-                                // its "not found" fallback both stay empty.
+                                // Bare `/studio`: pick a default, same order as initial load.
                                 const collapsed = collapseStudioGames(shelfPage.games);
                                 setSelected(sortStudioGames(collapsed)[0]?.token ?? null);
                               }
