@@ -1117,6 +1117,9 @@ export async function registerAgentChannelRoutes(
         return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
       }
 
+      if (record.slug && record.slug !== parsed.data.slug) {
+        return reply.status(409).send({ error: `this build delivers to ${record.slug}, not ${parsed.data.slug}` });
+      }
       const slug = record.slug ?? parsed.data.slug;
       if (!slug) {
         return reply.status(400).send({
