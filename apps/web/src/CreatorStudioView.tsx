@@ -186,6 +186,8 @@ export function CreatorStudioView({
   const [days, setDays] = useState(7);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  /** Title of the game just removed — for the docked notice below. */
+  const [abandonNotice, setAbandonNotice] = useState<string | null>(null);
   // Internally a game is its token — that is what every API call on this screen takes.
   // The URL says slug; the shelf is what translates between them.
   const [selected, setSelected] = useState<string | null>(null);
@@ -570,6 +572,25 @@ export function CreatorStudioView({
         {/* Profile edit lives on /creators/:handle. Studio only claims at publish need. */}
         <ClaimHandleModal isOpen={claimOpen} onClose={() => setClaimOpen(false)} />
 
+        {/* Same docked-banner pattern as AppUpdateBanner. */}
+        {abandonNotice ? (
+          <aside className="studio-abandon-notice" role="status" aria-live="polite">
+            <PixelIcon name="trash" size={16} className="studio-abandon-notice__icon" />
+            <p className="studio-abandon-notice__text">
+              {t('studioPanel.overview.abandonNotice', { title: abandonNotice })}
+            </p>
+            <button
+              type="button"
+              className="studio-abandon-notice__close"
+              onClick={() => setAbandonNotice(null)}
+              aria-label={t('studioPanel.overview.abandonNoticeDismiss')}
+              title={t('studioPanel.overview.abandonNoticeDismiss')}
+            >
+              <PixelIcon name="close" size={12} />
+            </button>
+          </aside>
+        ) : null}
+
         {loading ? (
           <>
             {/* Claims the app shell for the length of the shelf fetch so the marketing
@@ -920,9 +941,13 @@ export function CreatorStudioView({
                           }}
                           onRemoved={async (token) => {
                             const abandonedSlug = activeGame.slug;
+                            const abandonedTitle = activeGame.title;
                             setSelected((current) => (current === token ? null : current));
                             // Hide tip first; refetch may restore a published sibling.
                             setGames((prev) => prev.filter((game) => game.token !== token));
+                            // Same default order the initial load falls back to.
+                            const fallbackToken = (list: readonly StudioGame[]) =>
+                              sortStudioGames(collapseStudioGames(list))[0]?.token ?? null;
                             try {
                               // Pass the slug so a live sibling below the shelf ceiling
                               // is still returned (same deep-link path as Open in Studio).
@@ -937,14 +962,16 @@ export function CreatorStudioView({
                               if (sibling) {
                                 setSelected(sibling.token);
                               } else {
-                                // Bare `/studio`: default unless the creator already picked another.
-                                const collapsed = collapseStudioGames(shelfPage.games);
-                                const fallback = sortStudioGames(collapsed)[0]?.token ?? null;
+                                setAbandonNotice(abandonedTitle);
+                                const fallback = fallbackToken(shelfPage.games);
                                 setSelected((current) => (current === null ? fallback : current));
                               }
                             } catch {
                               // Optimistic remove stands if refetch fails.
                               onNavigate(studioPath());
+                              setAbandonNotice(abandonedTitle);
+                              const fallback = fallbackToken(games.filter((game) => game.token !== token));
+                              setSelected((current) => (current === null ? fallback : current));
                             }
                           }}
                         />

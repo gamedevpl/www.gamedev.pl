@@ -362,7 +362,9 @@
       "abandonConfirm": "Yes, abandon — discard this round",
       "abandonConfirmKeepLive": "Yes, abandon — discard this round (live game stays)",
       "abandonConfirmRemove": "Yes, remove it — the game leaves Studio",
-      "abandonHintRemove": "This draft was never published. Removing it stops the build and takes the game off your Studio shelf."
+      "abandonHintRemove": "This draft was never published. Removing it stops the build and takes the game off your Studio shelf.",
+      "abandonNotice": "\"{{title}}\" removed from Studio.",
+      "abandonNoticeDismiss": "Dismiss"
     },
     "rail": {
       "connect": "Connect your agent",

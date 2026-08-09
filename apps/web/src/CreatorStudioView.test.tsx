@@ -1559,6 +1559,60 @@ describe('CreatorStudioView abandon', () => {
     // Detail pane must render, not a blank main area.
     expect(container.querySelector('.studio-detail')).not.toBeNull();
     expect(container.querySelector('.studio-detail-title-block h2')?.textContent).toContain('Other Game');
+    // The redirect to a different game is called out, not silent.
+    expect(container.querySelector('.studio-abandon-notice')?.textContent).toContain('Neon Draft');
+
+    const dismiss = container.querySelector<HTMLButtonElement>('.studio-abandon-notice__close');
+    await act(async () => {
+      dismiss!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(container.querySelector('.studio-abandon-notice')).toBeNull();
+
+    root.unmount();
+  });
+
+  it('shows the removal notice and a fallback game even if the post-abandon refetch fails', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    fetchStudioGames.mockResolvedValueOnce(
+      studioShelf([
+        {
+          token: 'token-draft',
+          title: 'Neon Draft',
+          createdAt: '2026-07-30T09:00:00.000Z',
+          lastKnownStatus: 'building',
+          slug: 'neon-draft',
+        },
+        {
+          token: 'token-other',
+          title: 'Other Game',
+          createdAt: '2026-07-29T09:00:00.000Z',
+          lastKnownStatus: 'building',
+          slug: 'other-game',
+        },
+      ]),
+    );
+    fetchStudioGames.mockRejectedValueOnce(new Error('network down'));
+
+    const { container, root, onNavigate } = await renderStudio({
+      selectedGame: 'neon-draft',
+      selectedTab: 'details',
+    });
+
+    const abandon = container.querySelector<HTMLButtonElement>('.status-abandon');
+    await act(async () => {
+      abandon!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('.status-abandon.is-danger')!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(onNavigate).toHaveBeenCalledWith('/studio');
+    expect(container.querySelector('.studio-abandon-notice')?.textContent).toContain('Neon Draft');
+    // The optimistic remove stands, so the other game already on the shelf still shows.
+    expect(container.querySelector('.studio-detail-title-block h2')?.textContent).toContain('Other Game');
 
     root.unmount();
   });
