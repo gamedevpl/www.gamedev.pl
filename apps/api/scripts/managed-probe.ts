@@ -160,6 +160,8 @@ const backend = createManagedBackend({
   ...(manifest?.agent?.system ? { systemPrompt: async () => manifest.agent!.system } : {}),
   ...(digestPath ? { kitDigest: createFileKitDigestLoader(digestPath) } : {}),
   ...(wait ? { maxDurationSeconds: waitSeconds } : {}),
+  // The probe cannot see MCP deliveries, so nudging would mislead.
+  ...(mcpOnly && !flag('nudge') ? { nudgeIdle: false } : {}),
 });
 
 rule(`probe — backend ${backend.name}${mcpOnly ? ' (MCP shape)' : ' (pull shape)'}`);
