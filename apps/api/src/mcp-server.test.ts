@@ -1054,8 +1054,7 @@ describe('POST /api/mcp (BY-05)', () => {
     );
     expect(warningCodes).toContain('inbox_pending');
     expect(warningCodes).toContain('must_deliver');
-    // must_deliver must not tell an MCP session (no shell) to run a CLI command —
-    // it should point at the submit_sources tool instead (review, confusing-npm-submit).
+    // must_deliver must point MCP (no shell) at submit_sources, not a CLI command.
     const mustDeliverMessage = (
       (examples.structured as { warnings?: Array<{ code: string; message: string }> }).warnings ?? []
     ).find((w) => w.code === 'must_deliver')?.message;
