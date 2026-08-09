@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
 import { classifyAgentTokenAccess, mintAgentToken, STALE_AGENT_TOKEN_REASON } from './agent-token.js';
@@ -7,6 +8,7 @@ import type { GamesStore } from './games-store.js';
 import type { GcsObjectStore } from './gcs-sign.js';
 import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './github-client.js';
 import { mintMcpSessionKey, verifyMcpSessionKey } from './mcp-session-key.js';
+import { MCP_UNADVERTISED_TOOLS } from './mcp-server.js';
 import { InMemoryStore } from './store.js';
 
 const secret = 'test-secret';
@@ -456,6 +458,26 @@ describe('POST /api/mcp (BY-05)', () => {
       ]),
     );
     expect(names).not.toEqual(expect.arrayContaining(['search_kit_files', 'submit_proposal']));
+  });
+
+  it('never names an unadvertised tool in anything the model reads', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    app = await createApp(store);
+    const sessionId = await initialize(app);
+    const listed = await mcpCall(app, 'tools/list', {}, { 'mcp-session-id': sessionId });
+    const tools = listed.json().result.tools as Array<{ name: string; description?: string }>;
+    const advertised = new Set(tools.map((tool) => tool.name));
+    const manifest = await readFile(new URL('../../../infra/managed-agent.json', import.meta.url), 'utf8');
+    const managedSystemPrompt = (JSON.parse(manifest) as { agent: { system: string } }).agent.system;
+
+    for (const hidden of MCP_UNADVERTISED_TOOLS) {
+      expect(advertised.has(hidden)).toBe(false);
+      for (const tool of tools) {
+        expect(`${tool.name} ${tool.description ?? ''}`).not.toContain(hidden);
+      }
+      expect(managedSystemPrompt).not.toContain(hidden);
+    }
   });
 
   it('get_kit does not name kit browse tools this surface never advertised', async () => {
