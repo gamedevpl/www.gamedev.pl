@@ -129,10 +129,16 @@ export function isPublishableMode(mode: DeliveryMode | undefined): boolean {
   return mode !== 'preview' && mode !== 'proposal';
 }
 
+// Preflight kinds counted by delivery metrics.
+export type PreflightRefusalKind = 'audio' | 'symbols' | 'typecheck';
+
 export class InvalidUploadError extends Error {
-  constructor(message: string) {
+  readonly kind?: PreflightRefusalKind;
+
+  constructor(message: string, kind?: PreflightRefusalKind) {
     super(message);
     this.name = 'InvalidUploadError';
+    this.kind = kind;
   }
 }
 
@@ -292,6 +298,7 @@ export function validateSourceUpload(files: SourceFile[], mode: DeliveryMode = '
             'reuse them as they are; the exemplar GAME.json selects ui-toggle, win and lose. ' +
             'Dropping the audio module only defers the failure: the publish gate requires it, ' +
             'with at least three sounds including ui-toggle and a music track.',
+          'audio',
         );
       }
     } catch (error) {
@@ -332,7 +339,7 @@ export function validateSourceUpload(files: SourceFile[], mode: DeliveryMode = '
   const normalized = files.map((file) => ({ path: file.path.trim(), content: file.content }));
   const linkFindings = findUnresolvedSourceLinks(sourceFilesToMap(normalized));
   if (linkFindings.length > 0) {
-    throw new InvalidUploadError(formatSourceLinkError(linkFindings));
+    throw new InvalidUploadError(formatSourceLinkError(linkFindings), 'symbols');
   }
 
   // AGENT.json is allowed above but deliberately not required here yet — see the

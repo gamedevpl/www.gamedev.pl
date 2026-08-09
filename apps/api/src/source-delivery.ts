@@ -1,4 +1,5 @@
 import { selfBuildDeliveryCap } from './builder.js';
+import { builderLabelFromRecord, logDeliveryAccepted, logDeliveryPreflightRefused } from './delivery-metrics.js';
 import { InvalidUploadError, type GamesStore, type SourceFile } from './games-store.js';
 import { parseSpecTitle } from './github-client.js';
 import { canTransition, resolveJobState, TERMINAL_JOB_STATES, type JobState } from './job-state.js';
@@ -96,6 +97,7 @@ export interface SourceDeliveryServiceOptions {
   }) => Promise<{ buildId?: string; accepted?: boolean } | void> | void;
   onEvent?: (issueNumber: number) => void;
   log?: {
+    info?: (context: object, message: string) => void;
     error: (context: object, message: string) => void;
     warn?: (context: object, message: string) => void;
   };
@@ -235,8 +237,32 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
         );
       }
 
+      const attempt = await options.store.incrementRoundSubmitAttempts(input.issueNumber);
+      const builderLabel = builderLabelFromRecord(record.builder, record.dispatch?.backend ?? input.backend);
+      const roundGeneration = record.roundGeneration ?? 1;
+
+      const emitRefusal = async (kind: 'audio' | 'symbols' | 'typecheck') => {
+        if (kind === 'audio' || kind === 'symbols') {
+          await options.store.incrementRoundPreflightRefusal(input.issueNumber, kind);
+        }
+        if (options.log?.info) {
+          logDeliveryPreflightRefused(
+            { info: options.log.info },
+            {
+              issueNumber: input.issueNumber,
+              roundGeneration,
+              builder: builderLabel,
+              mode: input.mode,
+              kind,
+              attempt,
+            },
+          );
+        }
+      };
+
       // Typecheck preflight uses the pinned kit; skip if unavailable.
       const engineRefForCheck = pinnedEngineRef ?? input.kitEngineRef;
+      let typecheckBypass = Boolean(record.roundTypecheckPreflightBypassErrors);
       if (options.kitFileStore && engineRefForCheck) {
         try {
           const tree = await options.kitFileStore.loadTree(engineRefForCheck);
@@ -254,9 +280,12 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
             const prior = record.roundTypecheckPreflightRefusals ?? 0;
             if (prior < TYPECHECK_PREFLIGHT_MAX_REFUSALS) {
               await options.store.incrementRoundTypecheckPreflightRefusals(input.issueNumber);
-              throw new InvalidUploadError(check.message);
+              await emitRefusal('typecheck');
+              throw new InvalidUploadError(check.message, 'typecheck');
             }
-            // Third submit accepts; attach diagnostics on the round.
+            // Soft bypass: still count as a refusal for MR-07, then accept.
+            await emitRefusal('typecheck');
+            typecheckBypass = true;
             await options.store.setRoundTypecheckPreflightBypassErrors(input.issueNumber, check.message);
             options.log?.warn?.(
               {
@@ -269,6 +298,7 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
             );
           } else {
             if (record.roundTypecheckPreflightBypassErrors) {
+              typecheckBypass = false;
               await options.store.setRoundTypecheckPreflightBypassErrors(input.issueNumber, null);
             }
             if (check.skipped === 'timeout') {
@@ -308,14 +338,22 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
       }
 
       const stateAfterSignal = await markBuilding(input.issueNumber, record);
-      const { version } = await options.gamesStore.putCandidateSources({
-        slug: input.slug,
-        issueNumber: input.issueNumber,
-        files: input.files,
-        backend: input.backend ?? record.dispatch?.backend ?? record.builder,
-        mode: input.mode,
-        ...(input.kitEngineRef ? { kitEngineRef: input.kitEngineRef } : {}),
-      });
+      let version: string;
+      try {
+        ({ version } = await options.gamesStore.putCandidateSources({
+          slug: input.slug,
+          issueNumber: input.issueNumber,
+          files: input.files,
+          backend: input.backend ?? record.dispatch?.backend ?? record.builder,
+          mode: input.mode,
+          ...(input.kitEngineRef ? { kitEngineRef: input.kitEngineRef } : {}),
+        }));
+      } catch (error) {
+        if (error instanceof InvalidUploadError && (error.kind === 'audio' || error.kind === 'symbols')) {
+          await emitRefusal(error.kind);
+        }
+        throw error;
+      }
 
       if (input.mode === 'preview') {
         await options.store.setSubmissionPreviewVersion(input.issueNumber, version);
@@ -324,6 +362,28 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
       }
       if (record.builder === 'self') {
         await options.store.incrementRoundDeliveryCount(input.issueNumber);
+      }
+
+      if (options.log?.info) {
+        const latest = (await options.store.getSubmission(input.issueNumber)) ?? record;
+        const startedMs = latest.roundStartedAt ? Date.parse(latest.roundStartedAt) : NaN;
+        logDeliveryAccepted(
+          { info: options.log.info },
+          {
+            issueNumber: input.issueNumber,
+            roundGeneration,
+            builder: builderLabel,
+            mode: input.mode,
+            submitAttempts: latest.roundSubmitAttempts ?? attempt,
+            refusals: {
+              audio: latest.roundPreflightRefusalsAudio ?? 0,
+              symbols: latest.roundPreflightRefusalsSymbols ?? 0,
+              typecheck: latest.roundTypecheckPreflightRefusals ?? 0,
+            },
+            msFromRoundStart: Number.isFinite(startedMs) ? Math.max(0, now() - startedMs) : null,
+            typecheckBypass,
+          },
+        );
       }
 
       const spec = input.files.find((file) => file.path === 'SPEC.md')?.content;

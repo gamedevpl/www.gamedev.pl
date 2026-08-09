@@ -4,6 +4,7 @@ import { InvalidUploadError } from './games-store.js';
 import type { KitFileStore, KitTree } from './kit-files.js';
 import { KIT_ROOT_DIR } from './kit-registry.js';
 import { InMemoryStore } from './store.js';
+import { DELIVERY_ACCEPTED_MSG, DELIVERY_PREFLIGHT_REFUSED_MSG } from './delivery-metrics.js';
 import {
   createSourceDeliveryService,
   SourceDeliveryAuthorityError,
@@ -83,19 +84,21 @@ async function setup(opts?: { kitFileStore?: KitFileStore | null }) {
   });
   const gamesStore = { putCandidateSources } as unknown as GamesStore;
   const gate = vi.fn(async () => ({ buildId: 'build-managed-1' }));
+  const log = { info: vi.fn(), error: vi.fn(), warn: vi.fn() };
   const service = createSourceDeliveryService({
     store,
     gamesStore,
     kitFileStore: opts?.kitFileStore,
     onSourcesDelivered: gate,
     onEvent: vi.fn(),
+    log,
   });
   const authority: SourceDeliveryAuthority = {
     backend: BACKEND,
     sessionRef: SESSION,
     roundGeneration: 1,
   };
-  return { store, putCandidateSources, gate, service, authority };
+  return { store, putCandidateSources, gate, service, authority, log };
 }
 
 describe('shared source delivery', () => {
@@ -234,7 +237,7 @@ export function tick(round: Round) {
 
     it('refuses a typed Round-field failure before storing', async () => {
       const kitFileStore = fakeKitStore({ [PINNED]: treeFor(PINNED, KIT_DTS) });
-      const { store, putCandidateSources, service, authority } = await setup({ kitFileStore });
+      const { store, putCandidateSources, service, authority, log } = await setup({ kitFileStore });
       await store.pinRoundKitEngineRef(ISSUE, PINNED);
 
       await expect(
@@ -249,6 +252,34 @@ export function tick(round: Round) {
       ).rejects.toBeInstanceOf(InvalidUploadError);
       expect(putCandidateSources).not.toHaveBeenCalled();
       expect((await store.getSubmission(ISSUE))?.roundTypecheckPreflightRefusals).toBe(1);
+      expect(log.info).toHaveBeenCalledWith(
+        expect.objectContaining({
+          delivery: expect.objectContaining({ kind: 'typecheck', attempt: 1 }),
+        }),
+        DELIVERY_PREFLIGHT_REFUSED_MSG,
+      );
+    });
+
+    it('logs an accepted delivery with submitAttempts and refusals', async () => {
+      const { store, service, authority, log } = await setup();
+      await service.deliver({
+        issueNumber: ISSUE,
+        slug: SLUG,
+        files: PREVIEW_FILES,
+        mode: 'preview',
+        backend: BACKEND,
+        authority,
+      });
+      expect(log.info).toHaveBeenCalledWith(
+        expect.objectContaining({
+          delivery: expect.objectContaining({
+            submitAttempts: 1,
+            refusals: { audio: 0, symbols: 0, typecheck: 0 },
+          }),
+        }),
+        DELIVERY_ACCEPTED_MSG,
+      );
+      expect((await store.getSubmission(ISSUE))?.roundSubmitAttempts).toBe(1);
     });
 
     it('loads the pinned kit even after the registry pointer moves', async () => {
