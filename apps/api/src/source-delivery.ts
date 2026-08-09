@@ -1,5 +1,5 @@
 import { selfBuildDeliveryCap } from './builder.js';
-import { InvalidUploadError, type DeliveryMode, type GamesStore, type SourceFile } from './games-store.js';
+import { InvalidUploadError, type GamesStore, type SourceFile } from './games-store.js';
 import { parseSpecTitle } from './github-client.js';
 import { canTransition, resolveJobState, TERMINAL_JOB_STATES, type JobState } from './job-state.js';
 import { sanitizeCreatorText } from './submission-status.js';
@@ -135,7 +135,8 @@ function managedAuthorityError(
       'managed delivery arrived after builder handoff was requested',
     );
   }
-  if (TERMINAL_JOB_STATES.has(resolveJobState(record))) {
+  const resolvedState = resolveJobState(record);
+  if (resolvedState && TERMINAL_JOB_STATES.has(resolvedState)) {
     return new SourceDeliveryAuthorityError('round_closed', 'managed delivery arrived after the build round closed');
   }
   return null;

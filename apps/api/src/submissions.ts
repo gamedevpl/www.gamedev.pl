@@ -633,7 +633,6 @@ export async function registerSubmissionRoutes(
                 issueNumber: input.issueNumber,
                 slug: input.slug,
                 files: input.files,
-                sessionRef: input.sessionRef,
                 backend: input.backend,
                 mode: input.mode,
                 authority: {
