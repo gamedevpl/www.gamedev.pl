@@ -1308,6 +1308,19 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
       for (const entry of fixedEntries) {
         if (entry) sources[entry[0]] = entry[1];
       }
+      // Every game relies on this — neither file is ever committed anymore.
+      const manifestSource = sources['GAME.json'];
+      if (manifestSource) {
+        if (!sources['index.html']?.trim()) {
+          const title = sources['SPEC.md'] ? parseSpecTitle(sources['SPEC.md']) : null;
+          const generated = generateIndexHtmlFromManifest(manifestSource, title ?? slug);
+          if (generated !== null) sources['index.html'] = generated;
+        }
+        if (!sources['style.css']?.trim()) {
+          const generated = generateStyleCssFromManifest(manifestSource);
+          if (generated !== null) sources['style.css'] = generated;
+        }
+      }
       return sources;
     },
 
