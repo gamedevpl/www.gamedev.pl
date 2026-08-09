@@ -4,6 +4,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { BuildBrief } from '../src/agent-backend.js';
+import { mintManagedMcpOpener } from '../src/agent-token.js';
 import { buildPrompt } from '../src/build-prompt.js';
 import {
   createManagedProvider,
@@ -36,14 +37,38 @@ const vaultIds = (process.env.MANAGED_AGENT_VAULT_IDS ?? process.env.MANAGED_AGE
   ?.split(',')
   .map((id) => id.trim())
   .filter(Boolean);
+const mcpOnly = flag('mcp');
+const mcpUrl = (value('mcp-url') ?? process.env.MANAGED_AGENT_MCP_URL ?? 'https://www.gamedev.pl/api/mcp').replace(
+  /\/$/,
+  '',
+);
+const roundGeneration = Number(value('round-generation') ?? 1);
+const openerSecret =
+  process.env.SUBMISSION_TOKEN_SECRET?.trim() ||
+  process.env.MANAGED_PROBE_OPENER_SECRET?.trim() ||
+  'probe-mcp-opener-secret';
+const usingProdOpenerSecret = Boolean(process.env.SUBMISSION_TOKEN_SECRET?.trim());
 const rule = (title: string) => console.log(`\n${'─'.repeat(72)}\n${title}\n${'─'.repeat(72)}`);
+
+if (mcpOnly && (!Number.isSafeInteger(ISSUE) || ISSUE <= 0)) {
+  console.error('--mcp needs a positive --issue (job id) for the opener token');
+  process.exit(1);
+}
+if (mcpOnly && (!Number.isSafeInteger(roundGeneration) || roundGeneration < 1)) {
+  console.error('--round-generation must be a positive integer');
+  process.exit(1);
+}
+
+const mcpOpenerToken = mcpOnly ? mintManagedMcpOpener(ISSUE, openerSecret, { roundGeneration }) : undefined;
 
 const brief: BuildBrief = {
   issueNumber: ISSUE,
+  roundGeneration,
   ...(SLUG ? { slug: SLUG } : {}),
   ...(creation ? { createGame: { title: CREATE_TITLE, concept: CREATE_CONCEPT } } : {}),
   spec: value('spec') ?? CREATE_CONCEPT,
   channelToken: 'tok_probe',
+  ...(mcpOpenerToken ? { mcpOpenerToken } : {}),
   apiBaseUrl: 'http://127.0.0.1:3001',
   ...(flag('feedback') ? { feedback: 'make the comets bigger' } : {}),
 };
@@ -80,8 +105,15 @@ function stubProvider(): ManagedAgentProvider {
       console.log(`systemPrompt     ${request.systemPrompt ? `${request.systemPrompt.length} chars` : '(none)'}`);
       console.log(`workspaceFiles   ${request.workspaceFiles?.length ?? 0}`);
       console.log(`mcpEndpoints     ${request.tools?.mcpEndpoints?.map((e) => e.url).join(', ') || '(none)'}`);
+      console.log(
+        `mcpBearer        ${request.mcpBearerCredential ? `url=${request.mcpBearerCredential.url} token=${request.mcpBearerCredential.token.length} chars` : '(none)'}`,
+      );
       console.log(`prompt           ${request.prompt.length} chars — run with --prompt to read it`);
-      return { id: 'stub-session-1', state: 'queued' };
+      return {
+        id: 'stub-session-1',
+        state: 'queued',
+        ...(request.mcpBearerCredential ? { credentialRef: 'stub-vault-1' } : {}),
+      };
     },
     async getSession(): Promise<ManagedSession> {
       polls += 1;
@@ -109,6 +141,9 @@ function stubProvider(): ManagedAgentProvider {
     async cancelSession() {
       return { enforced: true };
     },
+    async releaseCredential(credentialRef) {
+      console.log(`released credential ${credentialRef}`);
+    },
     async deleteSession() {},
   };
 }
@@ -127,6 +162,8 @@ if (wait && (!Number.isInteger(waitSeconds) || waitSeconds <= 0 || !Number.isFin
   console.error('--wait requires positive --wait-seconds and --budget-usd values');
   process.exit(1);
 }
+// MCP rounds override the Agent tool list, like production.
+const overrideTools = mcpOnly || flag('override-tools');
 const provider = vendor
   ? createManagedProvider(vendor, {
       apiKey: apiKey!,
@@ -139,19 +176,23 @@ const provider = vendor
         ? { maxListCostCents: Math.max(1, Math.round(budgetUsd * 100)) }
         : {}),
       ...(vaultIds?.length ? { vaultIds } : {}),
-      ...(flag('override-tools') ? { overrideTools: true } : {}),
+      ...(overrideTools ? { overrideTools: true } : {}),
       baseUrl: apiBaseUrl,
     })
   : stubProvider();
 
 const delivered: ManagedDeliveryInput[] = [];
-const mcpOnly = flag('mcp');
 
 const backend = createManagedBackend({
   provider,
   // Stands in for the submit_sources route, still to be extracted.
   ...(mcpOnly
-    ? { tools: { mcpEndpoints: [{ url: 'https://www.gamedev.pl/api/mcp', name: 'gamedevpl' }] } }
+    ? {
+        tools: { mcpEndpoints: [{ url: mcpUrl, name: 'gamedevpl' }] },
+        // Per-round vault holds the opener, as in production.
+        mcpBearerCredential: (input) =>
+          input.mcpOpenerToken ? { url: mcpUrl, token: input.mcpOpenerToken } : undefined,
+      }
     : {
         deliver: async (input) => {
           delivered.push(input);
@@ -170,9 +211,25 @@ const backend = createManagedBackend({
 });
 
 rule(`probe — backend ${backend.name}${mcpOnly ? ' (MCP shape)' : ' (pull shape)'}`);
+if (mcpOnly) {
+  console.log(`mcpUrl           ${mcpUrl}`);
+  console.log(`issue            ${ISSUE}  roundGeneration ${roundGeneration}`);
+  console.log(
+    `opener           ${usingProdOpenerSecret ? 'SUBMISSION_TOKEN_SECRET (may auth live MCP)' : 'probe-local secret (Anthropic vault proof only)'}`,
+  );
+  if (!usingProdOpenerSecret) {
+    console.log(
+      'note             Live MCP start against prod still needs SUBMISSION_TOKEN_SECRET + a real Firestore job.',
+    );
+  }
+}
 
 const dispatch = await backend.dispatch(brief);
 console.log(`\nref              ${dispatch.ref}`);
+console.log(`credentialRef    ${dispatch.credentialRef ?? '(none)'}`);
+if (mcpOnly && vendor === 'anthropic' && !dispatch.credentialRef) {
+  console.warn('WARN  expected a per-round vault credentialRef when --mcp is set for Anthropic');
+}
 
 const pollCount = wait ? Math.ceil((waitSeconds * 1000) / 5000) + 1 : 2;
 for (let attempt = 1; attempt <= pollCount; attempt += 1) {
@@ -182,6 +239,7 @@ for (let attempt = 1; attempt <= pollCount; attempt += 1) {
     hasCandidate: delivered.length > 0,
     issueNumber: ISSUE,
     slug: SLUG,
+    roundGeneration,
   });
   console.log(observation ?? '(vendor has forgotten this session)');
   if (
@@ -216,6 +274,8 @@ if (delivered.length === 0) {
 // A deleted session takes the only record of what the agent tried.
 if (vendor === 'anthropic') {
   rule('session transcript');
+  let mcpStartOk = 0;
+  let mcpStartErr = 0;
   try {
     const response = await fetch(`${apiBaseUrl}/v1/sessions/${dispatch.ref}/events`, {
       headers: {
@@ -231,9 +291,10 @@ if (vendor === 'anthropic') {
       const type = String(event.type);
       if (!['agent.tool_use', 'agent.mcp_tool_use', 'agent.mcp_tool_result', 'agent.message'].includes(type)) continue;
       const at = ((Date.parse(String(event.processed_at)) - started) / 1000).toFixed(1);
+      const toolName = String(event.name ?? '');
       const detail =
         type === 'agent.mcp_tool_use'
-          ? `mcp:${String(event.name)}`
+          ? `mcp:${toolName}`
           : type === 'agent.mcp_tool_result'
             ? event.is_error
               ? `ERROR ${String((event.content as { text?: string }[] | undefined)?.[0]?.text ?? '').slice(0, 120)}`
@@ -245,16 +306,27 @@ if (vendor === 'anthropic') {
               )
                 .slice(0, 100)
                 .replace(/\n/g, ' ');
+      if (type === 'agent.mcp_tool_result' && (toolName === 'start' || toolName.endsWith(':start'))) {
+        if (event.is_error) mcpStartErr += 1;
+        else mcpStartOk += 1;
+      }
       console.log(`${at.padStart(6)}s  ${type}  ${detail}`);
     }
     if (events.length === 0) console.log('(no events returned)');
+    if (mcpOnly) {
+      console.log(
+        `\nmcp:start summary  ok=${mcpStartOk} error=${mcpStartErr}${
+          mcpStartOk + mcpStartErr === 0 ? ' (no start call in transcript yet)' : ''
+        }`,
+      );
+    }
   } catch (error) {
     console.warn('could not read the transcript:', error);
   }
 }
 
 rule('cancel + cleanup');
-console.log(await backend.cancel(dispatch.ref));
+console.log(await backend.cancel(dispatch.ref, dispatch.credentialRef));
 if (flag('keep')) {
   console.log(`kept ${dispatch.ref} — inspect it in the console, then delete it yourself`);
 } else {
