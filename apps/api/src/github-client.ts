@@ -1367,9 +1367,7 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
 
       const title = specMd ? parseSpecTitle(specMd) : null;
 
-      // Empty counts as absent: staging writes the path before the content. A
-      // non-compliant shipped index.html (see isCompliantIndexHtml) is treated the
-      // same way — the generated markup is always assembly-safe.
+      // Empty counts as absent: staging writes the path before the content.
       const resolvedIndexHtml =
         indexHtml?.trim() && isCompliantIndexHtml(indexHtml)
           ? indexHtml
