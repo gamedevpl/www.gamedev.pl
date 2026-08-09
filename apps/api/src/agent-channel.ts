@@ -29,6 +29,7 @@ import {
 import { canonicalAppBaseUrl } from './canonical-app-url.js';
 import { deriveGateStatusString, readGateVerdict } from './gate-verdict.js';
 import { DEFAULT_SIGNED_URL_TTL_SECONDS, type GcsObjectStore } from './gcs-sign.js';
+import { DEFAULT_MCP_DIGEST_MAX_BYTES, compactKitDigestForApi } from './kit-digest.js';
 import {
   InvalidUploadError,
   MAX_UPLOAD_BYTES,
@@ -2003,6 +2004,49 @@ export async function registerAgentChannelRoutes(
             readMany: 'read_kit_files',
             fragment: 'read_kit_file_fragment',
           },
+        });
+      } catch (error) {
+        if (error instanceof KitRegistryError) {
+          return reply.status(404).send({ error: error.code, message: error.message });
+        }
+        throw error;
+      }
+    },
+  );
+
+  // Prompt-ready API reference for MCP get_kit_api — see byoca-mcp SKILL.md.
+  app.get(
+    '/api/agent/build/kit/api',
+    { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      const resolved = await resolveBuild(request, reply);
+      if (!resolved) return reply;
+      if (!options.objectStore) {
+        return reply.status(503).send({ error: 'kit_store_unavailable', message: 'the kit store is not configured' });
+      }
+      try {
+        const query = request.query as { engineRef?: string };
+        let engineRef = query.engineRef?.trim();
+        if (!engineRef) {
+          const registryBody = await options.objectStore.readObject('kits/current.json');
+          if (!registryBody) {
+            return reply.status(404).send({
+              error: 'kit_registry_missing',
+              message: 'kits/current.json is not published yet — the games-repo kit publisher has not run',
+            });
+          }
+          engineRef = parseKitRegistry(registryBody.toString('utf8')).current;
+        }
+        const digestBody = await options.objectStore.readObject(`kits/${engineRef}.digest.md`);
+        if (!digestBody) {
+          return reply.status(404).send({
+            error: 'kit_artifact_missing',
+            message: `kits/${engineRef}.digest.md is missing for engineRef ${engineRef}`,
+          });
+        }
+        return reply.send({
+          engineRef,
+          digest: compactKitDigestForApi(digestBody.toString('utf8'), DEFAULT_MCP_DIGEST_MAX_BYTES),
         });
       } catch (error) {
         if (error instanceof KitRegistryError) {

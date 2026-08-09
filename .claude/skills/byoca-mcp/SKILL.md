@@ -58,9 +58,11 @@ Source of truth: `SESSION_WORKFLOW` + `BEHAVIOURAL_CONTRACT` in
 ### MCP tool surface
 
 `/api/mcp` advertises the focused build surface: creation/round control, brief/seed,
-progress, staging/submission, gate media, and inbox. Proposal, example, and kit
-browse/read tools remain callable for compatibility but are not advertised to models.
-The digest and `get_kit` replace routine kit browsing.
+progress, staging/submission, gate media, inbox — and, since 2026-08-09, the kit
+itself. Proposal and example browse/read tools remain callable for compatibility but
+are not advertised to models; kit browse/read tools (`list_kit_files`,
+`search_kit_files`, `read_kit_file`, `read_kit_files`, `read_kit_file_fragment`) now
+are, alongside a new `get_kit_api`.
 
 **Trimming the surface is only half the job — the prose has to follow.** The channel names
 the kit browse tools in every `get_kit` reply, because a REST agent can call them by URL.
@@ -68,10 +70,83 @@ A model can only call what `tools/list` carried, so an unadvertised name that su
 description, in the workflow list, or in the `browse` block of a reply is an invitation the
 host answers with a permission denial. A managed round on 2026-08-09 spent three round trips
 that way and then shipped a game with the audio module stripped out, because the sound-id
-lookup it had been pointed at did not exist for it. The MCP layer now filters `browse` down
-to advertised tools and drops it when none remain; `apps/api/src/mcp-server.test.ts` fails if
-an unadvertised name reappears in the descriptions, the workflow, or a `get_kit` reply. When
-you remove a tool from `MCP_VISIBLE_TOOLS`, grep the prose for its name in the same change.
+lookup it had been pointed at did not exist for it. The MCP layer still filters `browse` down
+to advertised tools (now the whole list, so the block survives intact) and drops it when none
+remain; `apps/api/src/mcp-server.test.ts` fails if an unadvertised name reappears in the
+descriptions, the workflow, or a `get_kit` reply. When you remove a tool from
+`MCP_VISIBLE_TOOLS`, grep the prose for its name in the same change.
+
+**`get_kit_api` — the orientation path that did not exist before 2026-08-09.** `get_kit`
+returns tarball metadata only (engineRef, sha256, unpack one-liner) — it was never the API
+reference its own description claimed to be pointing at, because nothing injected a digest
+into the MCP surface. `appendKitDigest` (`apps/api/src/kit-digest.ts`) had exactly one
+caller, the platform Copilot system prompt (`managed-backend.ts`); a BYOCA agent with no
+shell egress and no system prompt carrying the kit had no in-band way to answer "what can
+this platform build" at all. Observed consequence: an agent asked for a party/multiplayer
+game had nowhere to look and went to the public web for gamedev.pl documentation that was
+never published there — turns wasted on nothing, with third-party multiplayer docs (a
+different engine's networking model entirely) as the real risk if it had read them as
+authoritative.
+
+`get_kit_api` (`GET /api/agent/build/kit/api`, `apps/api/src/agent-channel.ts`) serves the
+same digest object the platform lane compacts, through `compactKitDigestForApi` — a larger
+budget (`DEFAULT_MCP_DIGEST_MAX_BYTES`, 90 KiB vs the platform's 20 KiB) since it is paid
+once per round by an agent that chose to call it, not injected into every turn. Same
+`engineRef` convention as the browse routes: optional, defaults to the registry's current
+entry when omitted, but pass the `engineRef` `get_kit` returned so a mid-round registry
+bump cannot mix kit revisions. `get_kit` and `get_kit_api` both carry
+`BEHAVIOURAL_CONTRACT`'s line that the platform and kit are not on the public web — an
+unanswered capability question is answered by `get_kit_api` / browse, never a web search.
+
+**The digest itself had a silent-drop bug the surface fix didn't touch.**
+`compactKitDigestForPrompt` (`apps/api/src/kit-digest.ts`) used to keep only API lines
+matching a hardcoded regex allowlist, every pattern of which described single-player core
+API — `GameKitParty`, `GameKitZone`, `GameKitCommons`, `GameKitPresence` matched nothing, so
+same-screen multiplayer, real-time shared zones and persistent worlds were invisible to any
+digest reader, platform or MCP, with no signal anything had been cut. It now splits the
+declaration file into whole top-level blocks (`splitDeclarationBlocks`), gives every engine
+module family a block before any family gets a second one (`selectApiBlocks`), and abridges
+a block too large to fit whole (`GameKitApi`, ~44% of the entire surface — this is where
+`createParty` / `createZone` / `createCommons` / `createPresence` all live) member-wise
+rather than dropping it, ranking module factories first (`elideDeclaration`). Whatever a
+budget still can't fit is named in an `// Omitted for length (...)` note instead of
+vanishing. The digest also gained a `## Engine modules` catalog (`digestEngineModules` in
+the games repo's `tools/lib/pack-kit.ts`), generated from `GAME_KIT_MODULES` +
+`gameKitModuleEntryPath` (`tools/lib/assemble.ts`) — the same canonical registry
+`GAME.json`'s `engine.modules` validates against, not a `shared/modules/*.ts` directory
+listing, which would have both included `core` (not selectable) and omitted `vehicles` /
+`urban` / `racing` / `football` (they live under `shared/verticals/*/index.ts`). Each
+module's summary is its own header comment's first paragraph, so a module is listed the
+moment it exists and a summary can't drift out of sync with code.
+
+**Two correctness bugs surfaced in review, both confirmed against the real 122 KB
+declaration file before fixing.** `elideDeclaration`'s member splitter used indentation
+alone (1–2 spaces) to find a member's boundary — but a member's own closing line can land
+back at that same indent (`createZone<S>(config: { … }): GameKitZone<S>;` closes with
+`}): GameKitZone<S>;` at 2 spaces, identical to any other member's opener), so that closing
+line was misread as a new member and could be dropped once the budget ran out, emitting
+`createZone` opened but never closed. `splitMembers` now tracks bracket depth instead — a
+line only starts a new member when depth is 0 — safe because the input is always
+comment-stripped (`compactGameKitApi` in the games repo strips comments before the digest
+is ever written), so no brace inside prose can desync the count. Separately, the API
+section's budget was a flat 72% of the total, guessed rather than measured: at the real
+~15 KiB fixed shell (module catalog + audio catalog + exemplar + rules — none proportional
+to the API's size), the platform lane's real 20 KiB default silently truncated
+mid-exemplar-file, dropping `## File-shape rules` entirely, and `get_kit_api`'s old 90 KiB
+budget capped the API at 64.8 KiB despite the ~79 KiB current surface — contradicting its
+own "whole reference in one call" promise. Both lanes now measure the non-API shell first
+and give the API section whatever's actually left (`apiBudget = maxBytes - shellBytes`).
+That in turn exposed a second-order bug: the omission note listing what got cut is itself
+unbounded (up to ~2 KiB for 100 omitted names) with nothing reserving room for it, so it
+could overflow the same way the flat-percentage guess did. `formatOmittedNote` is now
+self-bounded (`OMITTED_NOTE_RESERVE_BYTES`), truncating the name list with "… and N more"
+rather than growing past its reserve.
+
+`DEFAULT_KIT_DIGEST_MAX_BYTES` (the raw-stored-digest sanity ceiling, not a prompt budget)
+moved from 100,000 to 150,000 bytes: the stored digest was already at 99,552 bytes before
+the catalog addition, one small API growth from failing regardless.
+`DEFAULT_MCP_DIGEST_MAX_BYTES` moved from 90,000 to 100,000 so `get_kit_api` comfortably
+covers shell + full current API + the note reserve.
 
 ### `get_gate_media` must stay reachable from the loop
 
@@ -408,6 +483,8 @@ queued.
 | Area                          | Path                                                                                                                                                                      |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | MCP tools                     | `apps/api/src/mcp-server.ts` (`screenshot_upload_url` / `stage_upload_url` → signed PUT; no base64 shot tool)                                                             |
+| Kit API digest (get_kit_api)  | `apps/api/src/kit-digest.ts` (`compactKitDigestForApi`, `splitDeclarationBlocks`, `selectApiBlocks`) + `GET /api/agent/build/kit/api` in `agent-channel.ts`               |
+| Engine modules catalog        | games repo `tools/lib/pack-kit.ts` (`digestEngineModules`) — generated from `shared/modules/*.ts` header comments, not hand-maintained                                    |
 | Upload tokens                 | `apps/api/src/agent-upload-token.ts` + `POST …/shot/upload-url` + `PUT …/shot/upload` + `PUT …/sources/stage/upload`                                                      |
 | Presence pulses               | `apps/api/src/mcp-presence.ts` (`start` → `joining_round` in the MCP dispatcher)                                                                                          |
 | Gate milestones               | `apps/api/src/gate-progress.ts` + `GamesStore.putGateProgress` (GCS; Studio/MCP poll while checks run)                                                                    |

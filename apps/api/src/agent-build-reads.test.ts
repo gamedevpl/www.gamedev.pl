@@ -100,6 +100,7 @@ describe('agent build reads (BY-04)', () => {
     '/api/agent/build/brief',
     '/api/agent/build/seed',
     '/api/agent/build/kit',
+    '/api/agent/build/kit/api',
     '/api/agent/build/kit/files',
     '/api/agent/build/kit/search?q=GameKit',
     '/api/agent/build/kit/file?path=SKILL.md',
@@ -260,6 +261,82 @@ describe('agent build reads (BY-04)', () => {
       fragment: 'read_kit_file_fragment',
     });
     expect(signReadUrl).toHaveBeenCalledWith(`kits/${ENGINE}.tgz`, expect.any(Number));
+  });
+
+  it('serves the compacted kit API digest, defaulting to the registry current engine', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    const digest = [
+      '# gamedev.pl Creator Kit digest',
+      '',
+      '## Engine modules',
+      '',
+      '- `party` — multiple players on one shared screen.',
+      '- `zone` — a world the server arbitrates, shared with strangers in real time.',
+      '',
+      '## GameKit API surface',
+      '',
+      '~~~typescript',
+      'interface GameKitApi { locale: string; }',
+      '~~~',
+      '',
+      '## Exemplar game',
+      '',
+      '### games/dodge-the-falling-rocks/game.ts',
+      '',
+      '~~~text',
+      'export {};',
+      '~~~',
+      '',
+      '## File-shape rules',
+      '- Keep files small.',
+    ].join('\n');
+    const objects = new Map<string, Buffer>([
+      [
+        'kits/current.json',
+        Buffer.from(JSON.stringify({ current: ENGINE, previous: null, updatedAt: '2026-08-09T00:00:00.000Z' })),
+      ],
+      [`kits/${ENGINE}.digest.md`, Buffer.from(digest)],
+    ]);
+    app = await createApp(store, mockObjectStore(objects));
+
+    // No engineRef: falls back to the registry current entry.
+    const noRef = await app.inject({ method: 'GET', url: '/api/agent/build/kit/api', headers: agentHeaders() });
+    expect(noRef.statusCode).toBe(200);
+    expect(noRef.json().engineRef).toBe(ENGINE);
+    expect(noRef.json().digest).toMatch(/GameKitApi/);
+    expect(noRef.json().digest).toMatch(/`party`/);
+    expect(noRef.json().digest).toMatch(/`zone`/);
+
+    // Explicit engineRef: reads that engine's digest object directly.
+    const withRef = await app.inject({
+      method: 'GET',
+      url: `/api/agent/build/kit/api?engineRef=${ENGINE}`,
+      headers: agentHeaders(),
+    });
+    expect(withRef.statusCode).toBe(200);
+    expect(withRef.json().engineRef).toBe(ENGINE);
+  });
+
+  it('404s a missing digest object distinctly from a missing registry', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    app = await createApp(store, mockObjectStore(new Map()));
+
+    const noRegistry = await app.inject({ method: 'GET', url: '/api/agent/build/kit/api', headers: agentHeaders() });
+    expect(noRegistry.statusCode).toBe(404);
+    expect(noRegistry.json().error).toBe('kit_registry_missing');
+
+    const objects = new Map<string, Buffer>([
+      [
+        'kits/current.json',
+        Buffer.from(JSON.stringify({ current: ENGINE, previous: null, updatedAt: '2026-08-09T00:00:00.000Z' })),
+      ],
+    ]);
+    app = await createApp(store, mockObjectStore(objects));
+    const noDigest = await app.inject({ method: 'GET', url: '/api/agent/build/kit/api', headers: agentHeaders() });
+    expect(noDigest.statusCode).toBe(404);
+    expect(noDigest.json().error).toBe('kit_artifact_missing');
   });
 
   it('pins the round to one engine even when the registry pointer advances', async () => {
