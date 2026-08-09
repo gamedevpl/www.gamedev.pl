@@ -142,7 +142,22 @@ const MCP_VISIBLE_TOOLS = new Set([
   'ack_inbox',
 ]);
 
-// A model can only call advertised tools; naming others invites denials.
+// Callable for REST clients, never advertised, never named to a model.
+export const MCP_UNADVERTISED_TOOLS: readonly string[] = Object.freeze([
+  'open_proposal_round',
+  'submit_proposal',
+  'get_proposal_status',
+  'list_kit_files',
+  'search_kit_files',
+  'read_kit_file',
+  'read_kit_files',
+  'read_kit_file_fragment',
+  'list_examples',
+  'get_example',
+  'list_example_files',
+  'read_example_file',
+]);
+
 function withAdvertisedBrowseTools<T extends { browse?: Record<string, string> }>(body: T): T {
   if (!body.browse) return body;
   const advertised = Object.entries(body.browse).filter(([, tool]) => MCP_VISIBLE_TOOLS.has(tool));
