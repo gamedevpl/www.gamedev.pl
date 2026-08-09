@@ -204,7 +204,13 @@ export class VertexSpecRefiner implements SpecRefiner {
           // Plain text, not JSON: Vertex rejects googleSearch combined with a JSON
           // response mode, which is why this is a separate call and client from the
           // structured-output one below rather than one client with tools toggled on.
-          thinkingConfig: { thinkingBudget: 0 },
+          //
+          // Thinking is disabled via the request-level `.thinking(false)` call below,
+          // not here: a raw `thinkingConfig: { thinkingBudget: 0 }` default (no request
+          // going through `.responseFormat('json')`, which is the only path that
+          // overrides it) reaches Gemini 3 verbatim and it 400s on that exact literal —
+          // confirmed against the real API while building this. `.thinking(false)`
+          // converts to the supported `thinkingLevel: MINIMAL` instead.
           tools: [{ googleSearch: {} }],
         } as VertexGenerationConfig,
       });
@@ -221,7 +227,12 @@ export class VertexSpecRefiner implements SpecRefiner {
   private async groundConcept(concept: string, languageName: string): Promise<string> {
     if (!groundingEnabled()) return '';
     try {
-      const groundingPrompt = `A creator on a game-building site typed the idea below. If it clearly names a real, existing game or franchise, use web search to state in one or two sentences — in ${languageName} — what that game's genre and core mechanics actually are, so a design assistant can ask about it accurately instead of guessing from the name alone. If it does not clearly name a real existing game, reply with exactly: NONE
+      const groundingPrompt = `You are a fact-lookup tool, not a game designer. The idea below may reference a specific real, already-existing game or franchise by name — directly, or as "a clone of X", "like X", "X but Y", or similar. It may also be a wholly original idea in the creator's own words with no such reference.
+
+If it references a specific real existing game by name in any of those ways, use web search and reply with one or two sentences, in ${languageName}, stating that real game's actual genre and core mechanics — so a design assistant can ask about it accurately instead of guessing from the name alone. Report only researched facts; do not invent, brainstorm, or design anything, and do not describe the creator's own idea back to them.
+
+If it does not reference any specific real existing game by name, reply with exactly and only the single word: NONE
+Do not explain your reasoning. Do not add anything else when replying NONE.
 
 Idea:
 """
@@ -229,6 +240,7 @@ ${concept}
 """`;
       const text = await this.getGroundingClient()(groundingPrompt)
         .temperature(0.2)
+        .thinking(false)
         .signal(AbortSignal.timeout(this.groundingTimeoutMs))
         .text();
       const trimmed = text.trim();
