@@ -143,7 +143,7 @@ const MCP_VISIBLE_TOOLS = new Set([
 ]);
 
 // Callable for REST clients, never advertised, never named to a model.
-export const MCP_UNADVERTISED_TOOLS: readonly string[] = [
+export const MCP_UNADVERTISED_TOOLS: readonly string[] = Object.freeze([
   'open_proposal_round',
   'submit_proposal',
   'get_proposal_status',
@@ -156,7 +156,7 @@ export const MCP_UNADVERTISED_TOOLS: readonly string[] = [
   'get_example',
   'list_example_files',
   'read_example_file',
-];
+]);
 
 function withAdvertisedBrowseTools<T extends { browse?: Record<string, string> }>(body: T): T {
   if (!body.browse) return body;
