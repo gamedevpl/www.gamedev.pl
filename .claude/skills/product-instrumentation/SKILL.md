@@ -166,6 +166,11 @@ adjacent flow, close the gap in the same change or flag it explicitly in the PR:
     series (`selfChosen` / `connected` / `signaled` / `gateVerdicts`) on
     `GET /api/admin/telemetry/trends`, rendered on the Trends strip of the operator
     telemetry tab beside visits/plays/creations.
+  - ~~Managed delivery preflight / gate effectiveness unmeasured~~ — **closed (MR-07)**:
+    server log metrics in `delivery-metrics.ts` (`delivery preflight refused`,
+    `delivery accepted`, `delivery gate verdict`) answer whether audio/symbols/typecheck
+    preflights catch bad submits, how many attempts a caught round needs, and whether
+    async gate failure rates fall. No visit-stream join; no source/prompt/uid in payloads.
 - ~~How-to-play opens recorded but unreadable~~ — **closed 2026-07-31** for the read
   path that [#395](https://github.com/gamedevpl/www.gamedev.pl/issues/395) needs:
   `how_to_play_opened` carries `via: 'bar' | 'more'` and optional `reopen: true` (same

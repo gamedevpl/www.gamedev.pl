@@ -373,6 +373,15 @@ export interface SubmissionRecord {
   roundTypecheckPreflightRefusals?: number;
   // Grouped diagnostics when accepting past that cap.
   roundTypecheckPreflightBypassErrors?: string;
+  // When this round opened (ISO); used for ms-to-first-accept.
+  roundStartedAt?: string;
+  // Submit attempts this round (refusals + accepts).
+  roundSubmitAttempts?: number;
+  // Audio / symbol preflight refusals this round.
+  roundPreflightRefusalsAudio?: number;
+  roundPreflightRefusalsSymbols?: number;
+  // Last `${version}:${status}` already logged for gate metrics.
+  roundLastGateMetricKey?: string;
   /**
    * Creator concept text (sanitized), without the QA clarifications block.
    *
@@ -1808,6 +1817,12 @@ export interface Store {
   incrementRoundTypecheckPreflightRefusals(issueNumber: number): Promise<number>;
   // Store or clear bypass diagnostics after the refusal cap.
   setRoundTypecheckPreflightBypassErrors(issueNumber: number, message: string | null): Promise<void>;
+  // Bump submit attempts (every deliver call that reaches preflight).
+  incrementRoundSubmitAttempts(issueNumber: number): Promise<number>;
+  // Bump audio or symbols preflight refusal count.
+  incrementRoundPreflightRefusal(issueNumber: number, kind: 'audio' | 'symbols'): Promise<number>;
+  // Record that a gate metric was logged for this version/status key.
+  setRoundLastGateMetricKey(issueNumber: number, key: string): Promise<void>;
   /** Appends a dispatch ref, recording which backend is building this job and where. */
   recordDispatch(
     issueNumber: number,
@@ -2950,14 +2965,16 @@ export class InMemoryStore implements Store {
   }
 
   async createSubmission(issueNumber: number, ownerUid: string, title: string): Promise<SubmissionRecord> {
+    const createdAt = new Date().toISOString();
     const record: SubmissionRecord = {
       issueNumber,
       ownerUid,
-      createdAt: new Date().toISOString(),
+      createdAt,
       title,
       // New jobs are generation-scoped from the first mint; legacy records created
       // before this field existed stay unset until their current round closes.
       roundGeneration: 1,
+      roundStartedAt: createdAt,
     };
     this.submissions.set(issueNumber, record);
     return { ...record };
@@ -3002,6 +3019,10 @@ export class InMemoryStore implements Store {
             roundGeneration: nextRoundGeneration(sub.roundGeneration),
             roundDeliveryCount: 0,
             roundTypecheckPreflightRefusals: 0,
+            roundSubmitAttempts: 0,
+            roundPreflightRefusalsAudio: 0,
+            roundPreflightRefusalsSymbols: 0,
+            roundStartedAt: transition.at,
           }
         : {}),
     };
@@ -3015,6 +3036,7 @@ export class InMemoryStore implements Store {
       delete next.agentEndedAt;
       delete next.roundKitEngineRef;
       delete next.roundTypecheckPreflightBypassErrors;
+      delete next.roundLastGateMetricKey;
     }
     this.submissions.set(issueNumber, next);
     return true;
@@ -3029,6 +3051,10 @@ export class InMemoryStore implements Store {
       roundGeneration,
       roundDeliveryCount: 0,
       roundTypecheckPreflightRefusals: 0,
+      roundSubmitAttempts: 0,
+      roundPreflightRefusalsAudio: 0,
+      roundPreflightRefusalsSymbols: 0,
+      roundStartedAt: new Date().toISOString(),
     };
     delete next.seed;
     delete next.seedStatus;
@@ -3037,6 +3063,7 @@ export class InMemoryStore implements Store {
     delete next.agentEndedAt;
     delete next.roundKitEngineRef;
     delete next.roundTypecheckPreflightBypassErrors;
+    delete next.roundLastGateMetricKey;
     this.submissions.set(issueNumber, next);
     return roundGeneration;
   }
@@ -3110,7 +3137,12 @@ export class InMemoryStore implements Store {
       delete next.seedStatus;
       next.roundDeliveryCount = 0;
       next.roundTypecheckPreflightRefusals = 0;
+      next.roundSubmitAttempts = 0;
+      next.roundPreflightRefusalsAudio = 0;
+      next.roundPreflightRefusalsSymbols = 0;
+      next.roundStartedAt = new Date().toISOString();
       delete next.roundTypecheckPreflightBypassErrors;
+      delete next.roundLastGateMetricKey;
     }
     this.submissions.set(issueNumber, next);
   }
@@ -3164,6 +3196,33 @@ export class InMemoryStore implements Store {
       return;
     }
     this.submissions.set(issueNumber, { ...sub, roundTypecheckPreflightBypassErrors: message });
+  }
+
+  async incrementRoundSubmitAttempts(issueNumber: number): Promise<number> {
+    const sub = this.submissions.get(issueNumber);
+    if (!sub) return 0;
+    const roundSubmitAttempts = (sub.roundSubmitAttempts ?? 0) + 1;
+    this.submissions.set(issueNumber, { ...sub, roundSubmitAttempts });
+    return roundSubmitAttempts;
+  }
+
+  async incrementRoundPreflightRefusal(issueNumber: number, kind: 'audio' | 'symbols'): Promise<number> {
+    const sub = this.submissions.get(issueNumber);
+    if (!sub) return 0;
+    if (kind === 'audio') {
+      const roundPreflightRefusalsAudio = (sub.roundPreflightRefusalsAudio ?? 0) + 1;
+      this.submissions.set(issueNumber, { ...sub, roundPreflightRefusalsAudio });
+      return roundPreflightRefusalsAudio;
+    }
+    const roundPreflightRefusalsSymbols = (sub.roundPreflightRefusalsSymbols ?? 0) + 1;
+    this.submissions.set(issueNumber, { ...sub, roundPreflightRefusalsSymbols });
+    return roundPreflightRefusalsSymbols;
+  }
+
+  async setRoundLastGateMetricKey(issueNumber: number, key: string): Promise<void> {
+    const sub = this.submissions.get(issueNumber);
+    if (!sub) return;
+    this.submissions.set(issueNumber, { ...sub, roundLastGateMetricKey: key });
   }
 
   async allocateJobId(): Promise<number> {
@@ -5195,14 +5254,16 @@ export class FirestoreStore implements Store {
   }
 
   async createSubmission(issueNumber: number, ownerUid: string, title: string): Promise<SubmissionRecord> {
+    const createdAt = new Date().toISOString();
     const record: SubmissionRecord = {
       issueNumber,
       ownerUid,
-      createdAt: new Date().toISOString(),
+      createdAt,
       title,
       // New jobs are generation-scoped from the first mint; legacy records created
       // before this field existed stay unset until their current round closes.
       roundGeneration: 1,
+      roundStartedAt: createdAt,
     };
     await this.db.collection('submissions').doc(String(issueNumber)).set(record);
     return record;
@@ -5254,6 +5315,10 @@ export class FirestoreStore implements Store {
           roundGeneration: nextRoundGeneration(current.roundGeneration),
           roundDeliveryCount: 0,
           roundTypecheckPreflightRefusals: 0,
+          roundSubmitAttempts: 0,
+          roundPreflightRefusalsAudio: 0,
+          roundPreflightRefusalsSymbols: 0,
+          roundStartedAt: transition.at,
         };
         delete next.seed;
         delete next.seedStatus;
@@ -5262,6 +5327,7 @@ export class FirestoreStore implements Store {
         delete next.agentEndedAt;
         delete next.roundKitEngineRef;
         delete next.roundTypecheckPreflightBypassErrors;
+        delete next.roundLastGateMetricKey;
         tx.set(ref, next);
       } else {
         tx.set(
@@ -5290,6 +5356,10 @@ export class FirestoreStore implements Store {
         roundGeneration,
         roundDeliveryCount: 0,
         roundTypecheckPreflightRefusals: 0,
+        roundSubmitAttempts: 0,
+        roundPreflightRefusalsAudio: 0,
+        roundPreflightRefusalsSymbols: 0,
+        roundStartedAt: new Date().toISOString(),
       };
       delete next.seed;
       delete next.seedStatus;
@@ -5298,6 +5368,7 @@ export class FirestoreStore implements Store {
       delete next.agentEndedAt;
       delete next.roundKitEngineRef;
       delete next.roundTypecheckPreflightBypassErrors;
+      delete next.roundLastGateMetricKey;
       tx.set(ref, next);
       return roundGeneration;
     });
@@ -5398,10 +5469,15 @@ export class FirestoreStore implements Store {
         defaultBuilder: builder,
         roundDeliveryCount: 0,
         roundTypecheckPreflightRefusals: 0,
+        roundSubmitAttempts: 0,
+        roundPreflightRefusalsAudio: 0,
+        roundPreflightRefusalsSymbols: 0,
+        roundStartedAt: new Date().toISOString(),
       };
       delete next.seed;
       delete next.seedStatus;
       delete next.roundTypecheckPreflightBypassErrors;
+      delete next.roundLastGateMetricKey;
       tx.set(ref, next);
     });
   }
@@ -5467,6 +5543,42 @@ export class FirestoreStore implements Store {
       return;
     }
     await ref.set({ roundTypecheckPreflightBypassErrors: message }, { merge: true });
+  }
+
+  async incrementRoundSubmitAttempts(issueNumber: number): Promise<number> {
+    const ref = this.db.collection('submissions').doc(String(issueNumber));
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return 0;
+      const current = snap.data() as SubmissionRecord;
+      const roundSubmitAttempts = (current.roundSubmitAttempts ?? 0) + 1;
+      tx.set(ref, { roundSubmitAttempts }, { merge: true });
+      return roundSubmitAttempts;
+    });
+  }
+
+  async incrementRoundPreflightRefusal(issueNumber: number, kind: 'audio' | 'symbols'): Promise<number> {
+    const ref = this.db.collection('submissions').doc(String(issueNumber));
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return 0;
+      const current = snap.data() as SubmissionRecord;
+      if (kind === 'audio') {
+        const roundPreflightRefusalsAudio = (current.roundPreflightRefusalsAudio ?? 0) + 1;
+        tx.set(ref, { roundPreflightRefusalsAudio }, { merge: true });
+        return roundPreflightRefusalsAudio;
+      }
+      const roundPreflightRefusalsSymbols = (current.roundPreflightRefusalsSymbols ?? 0) + 1;
+      tx.set(ref, { roundPreflightRefusalsSymbols }, { merge: true });
+      return roundPreflightRefusalsSymbols;
+    });
+  }
+
+  async setRoundLastGateMetricKey(issueNumber: number, key: string): Promise<void> {
+    await this.db
+      .collection('submissions')
+      .doc(String(issueNumber))
+      .set({ roundLastGateMetricKey: key }, { merge: true });
   }
 
   async allocateJobId(): Promise<number> {

@@ -70,6 +70,12 @@ import {
 } from './job-state.js';
 import { isMcpPresenceEventText } from './mcp-presence.js';
 import { logSeedStagingFailure } from './seed-metrics.js';
+import {
+  builderLabelFromRecord,
+  failedStageFromProgress,
+  logDeliveryGateVerdict,
+  type DeliveryGateStatus,
+} from './delivery-metrics.js';
 import { mintConnectPayload } from './self-build-connect.js';
 import { createLocalGamesClient, resolveLocalGamesDir } from './local-games-repo.js';
 import { createMailerFromEnv, type Mailer } from './mailer.js';
@@ -2558,13 +2564,46 @@ export async function registerSubmissionRoutes(
    */
   async function reconcileGateVerdict(record: SubmissionRecord): Promise<JobTransition | null> {
     const gamesStore = options.agentChannel?.gamesStore;
-    if (!gamesStore || !store || !record.deliveredVersion || !record.slug) return null;
+    const version = record.deliveredVersion ?? record.previewVersion;
+    if (!gamesStore || !store || !version || !record.slug) return null;
     const state = record.state ?? 'queued';
-    if (state !== 'submitted' && state !== 'gating') return null;
+    if (state !== 'building' && state !== 'submitted' && state !== 'gating') return null;
     try {
-      const manifest = await gamesStore.getManifest(record.slug, record.deliveredVersion);
+      const manifest = await gamesStore.getManifest(record.slug, version);
+      const emitGateMetric = async (input: {
+        mode: 'preview' | 'publish';
+        outcome: 'passed' | 'failed';
+        status: DeliveryGateStatus;
+        failedStage?: ReturnType<typeof failedStageFromProgress>;
+      }) => {
+        const key = `${version}:${input.status}`;
+        if (record.roundLastGateMetricKey === key) return;
+        await store.setRoundLastGateMetricKey(record.issueNumber, key);
+        record.roundLastGateMetricKey = key;
+        logDeliveryGateVerdict(app.log, {
+          issueNumber: record.issueNumber,
+          roundGeneration: record.roundGeneration ?? 1,
+          builder: builderLabelFromRecord(record.builder, record.dispatch?.backend),
+          mode: input.mode,
+          outcome: input.outcome,
+          status: input.status,
+          ...(input.failedStage ? { failedStage: input.failedStage } : {}),
+        });
+      };
+
       const verdict = manifest?.gate;
-      if (verdict) {
+      if (verdict && record.deliveredVersion) {
+        const status: DeliveryGateStatus = verdict.green
+          ? 'green'
+          : verdict.status === 'kit_outdated'
+            ? 'kit_outdated'
+            : 'red';
+        await emitGateMetric({
+          mode: 'publish',
+          outcome: verdict.green ? 'passed' : 'failed',
+          status,
+          ...(verdict.green ? {} : { failedStage: failedStageFromProgress(manifest?.gateProgress?.stage) }),
+        });
         // Green means publishable, never published: the human review this waits for is the
         // moderation boundary, and a gate that promoted past it would quietly delete it.
         const to = verdict.green ? 'ready_for_review' : 'needs_changes';
@@ -2593,9 +2632,18 @@ export async function registerSubmissionRoutes(
         }
         return transition;
       }
-      // mode=preview never writes manifest.gate — red still needs a transition too.
+      // mode=preview never writes manifest.gate — still emit metrics for green/red.
       const preview = manifest?.previewGate;
-      if (!preview || preview.green) return null;
+      if (!preview) return null;
+      const previewStatus: DeliveryGateStatus =
+        preview.status === 'kit_outdated' ? 'kit_outdated' : preview.green ? 'preview_passed' : 'preview_failed';
+      await emitGateMetric({
+        mode: 'preview',
+        outcome: preview.green ? 'passed' : 'failed',
+        status: previewStatus,
+        ...(preview.green ? {} : { failedStage: failedStageFromProgress(manifest?.gateProgress?.stage) }),
+      });
+      if (preview.green) return null;
       const to = 'needs_changes' as const;
       if (!canTransition(state, to)) return null;
       const transition: JobTransition = {
@@ -2612,7 +2660,7 @@ export async function registerSubmissionRoutes(
           gamesStore,
           issueNumber: record.issueNumber,
           slug: record.slug,
-          version: record.deliveredVersion,
+          version,
           screenshotPath: preview.screenshot,
         }).catch((error) => {
           app.log.warn({ err: error, issueNumber: record.issueNumber }, 'could not post gate screenshot');

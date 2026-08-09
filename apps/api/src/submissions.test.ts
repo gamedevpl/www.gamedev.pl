@@ -11,6 +11,7 @@ import { mintToken, verifyToken } from './submission-token.js';
 import { canTransition } from './job-state.js';
 import type { AgentBackend, BuildBrief } from './agent-backend.js';
 import type { GamesStore } from './games-store.js';
+import { DELIVERY_GATE_VERDICT_MSG } from './delivery-metrics.js';
 import { JOB_ID_FLOOR } from './store.js';
 import { createManagedAvailabilityGate, type ManagedAvailabilityGate } from './managed-availability.js';
 
@@ -1615,6 +1616,85 @@ describe('submission routes', () => {
     // `phase` is the raw job state; `status` is the public projection.
     expect(status.json().phase).toBe('submitted');
     expect(status.json().status).toBe('building');
+
+    await app.close();
+  });
+
+  it('emits a stable delivery gate verdict once per version/status', async () => {
+    // Green preview stays submitted so dedupe can re-poll.
+    const { githubClient } = createGithubClientStub({ issueNumber: 727 });
+    const { backend } = createBackendStub();
+    const gamesStore = {
+      getManifest: async () => ({
+        slug: 'space-parcels',
+        version: 'v3',
+        createdAt: '2026-08-09T22:00:00.000Z',
+        issueNumber: 727,
+        sourceFiles: [],
+        previewGate: { green: true, ranAt: '2026-08-09T22:30:00.000Z' },
+      }),
+    } as unknown as GamesStore;
+    const clock = { t: Date.UTC(2026, 7, 9, 22, 0, 0) };
+
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      agentChannel: { gamesStore },
+      now: () => clock.t,
+    });
+    const infoSpy = vi.spyOn(app.log, 'info');
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    await store.setSubmissionSlug(job.issueNumber, 'space-parcels');
+    await store.setSubmissionPreviewVersion(job.issueNumber, 'v3');
+    await store.recordDispatch(job.issueNumber, { backend: 'managed:anthropic', ref: 'sess-1' });
+    await store.recordJobTransition(job.issueNumber, {
+      to: 'submitted',
+      at: '2026-08-09T22:00:00.000Z',
+      by: 'agent',
+      reason: 'sources_delivered',
+    });
+
+    const token = mintToken(job.issueNumber, secret);
+    const first = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${token}`,
+      headers: authHeaders,
+    });
+    expect(first.statusCode).toBe(200);
+    expect(first.json().phase).toBe('submitted');
+
+    const gateCalls = infoSpy.mock.calls.filter((call) => call[1] === DELIVERY_GATE_VERDICT_MSG);
+    expect(gateCalls).toHaveLength(1);
+    expect(gateCalls[0]![0]).toEqual({
+      delivery: {
+        issueNumber: job.issueNumber,
+        roundGeneration: 1,
+        builder: 'managed',
+        mode: 'preview',
+        outcome: 'passed',
+        status: 'preview_passed',
+      },
+    });
+    expect(JSON.stringify(gateCalls[0]![0])).not.toMatch(/slug|prompt|uid|game\.ts|SPEC/);
+
+    // Past the 60s status cache so reconcile runs again.
+    clock.t += 61_000;
+    const second = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${token}`,
+      headers: authHeaders,
+    });
+    expect(second.statusCode).toBe(200);
+    expect(infoSpy.mock.calls.filter((call) => call[1] === DELIVERY_GATE_VERDICT_MSG)).toHaveLength(1);
+    expect((await store.getSubmission(job.issueNumber))?.roundLastGateMetricKey).toBe('v3:preview_passed');
 
     await app.close();
   });
