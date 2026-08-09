@@ -51,6 +51,9 @@ import {
   type BuilderKind,
 } from './builder.js';
 import type { GameSeeder, SeedDraft } from './game-seed.js';
+import { ManagedOutputRejectedError } from './managed-agent.js';
+import { createSourceDeliveryService, SourceDeliveryAuthorityError } from './source-delivery.js';
+import { InvalidUploadError } from './games-store.js';
 import {
   canTransition,
   detectStall,
@@ -582,6 +585,22 @@ export async function registerSubmissionRoutes(
   const internalAuthVerifier = options.internalAuthVerifier ?? createInternalAuthVerifierFromEnv();
   const gameSeeder = options.gameSeeder;
   const gamesStoreForSeed = options.agentChannel?.gamesStore;
+  function invalidateDeliveryCaches(issueNumber: number): void {
+    eventsCache.delete(issueNumber);
+    invalidateStatusCache(issueNumber);
+  }
+  const sourceDelivery =
+    store && gamesStoreForSeed
+      ? createSourceDeliveryService({
+          store,
+          gamesStore: gamesStoreForSeed,
+          now,
+          maxSubmitsPerWindow: options.agentChannel?.maxSubmitsPerWindow,
+          onSourcesDelivered: options.agentChannel?.onSourcesDelivered,
+          onEvent: invalidateDeliveryCaches,
+          log: app.log,
+        })
+      : undefined;
 
   function buildAgentRegistry(): AgentBackendRegistry {
     const selfOptions = store
@@ -605,7 +624,44 @@ export async function registerSubmissionRoutes(
           },
         }
       : undefined;
-    const environmentRegistry = createAgentBackendRegistryFromEnv(app.log, selfOptions, options.managedBackendDeps);
+    const configuredManagedDeps = options.managedBackendDeps;
+    const managedDeliver =
+      sourceDelivery && !configuredManagedDeps?.deliver
+        ? async (input: Parameters<NonNullable<ManagedBackendDeps['deliver']>>[0]) => {
+            try {
+              const outcome = await sourceDelivery.deliver({
+                issueNumber: input.issueNumber,
+                slug: input.slug,
+                files: input.files,
+                sessionRef: input.sessionRef,
+                backend: input.backend,
+                mode: input.mode,
+                authority: {
+                  backend: input.backend,
+                  sessionRef: input.sessionRef,
+                  roundGeneration: input.roundGeneration,
+                },
+              });
+              if (!outcome.accepted) {
+                throw new ManagedOutputRejectedError(`source delivery rejected: ${outcome.rejected}`);
+              }
+              return { version: outcome.version };
+            } catch (error) {
+              if (error instanceof SourceDeliveryAuthorityError || error instanceof InvalidUploadError) {
+                throw new ManagedOutputRejectedError(error.message);
+              }
+              throw error;
+            }
+          }
+        : undefined;
+    const managedDeps =
+      managedDeliver || configuredManagedDeps
+        ? {
+            ...configuredManagedDeps,
+            ...(managedDeliver ? { deliver: managedDeliver } : {}),
+          }
+        : undefined;
+    const environmentRegistry = createAgentBackendRegistryFromEnv(app.log, selfOptions, managedDeps);
     // Explicit backends win over the environment registry.
     const self = options.agentBackends?.self ?? environmentRegistry.self;
     const platform = options.agentBackend ?? options.agentBackends?.platform ?? environmentRegistry.platform;
@@ -963,6 +1019,7 @@ export async function registerSubmissionRoutes(
       }
       const result = await selected.dispatch({
         issueNumber: input.issueNumber,
+        roundGeneration,
         ...(input.slug ? { slug: input.slug } : {}),
         spec: input.spec,
         locale: input.locale,
@@ -1140,6 +1197,7 @@ export async function registerSubmissionRoutes(
       const reusedSelfSeed = input.undelivered && builder === 'self' ? record?.seed : undefined;
       const brief = {
         issueNumber: input.issueNumber,
+        roundGeneration,
         slug: record?.slug,
         spec: input.feedback,
         feedback: input.feedback,
@@ -5092,6 +5150,7 @@ export async function registerSubmissionRoutes(
   // the store, the token secret, and the caches it has to invalidate.
   await registerAgentChannelRoutes(app, {
     ...options.agentChannel,
+    ...(sourceDelivery ? { sourceDelivery } : {}),
     store,
     agentTokenSecret: submissionTokenSecret,
     now,

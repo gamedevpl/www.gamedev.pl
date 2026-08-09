@@ -25,6 +25,9 @@ export interface ManagedDeliveryInput {
   files: ManagedOutputFile[];
   // The vendor session the files were harvested from.
   sessionRef: string;
+  // Authority captured at dispatch and checked again immediately before storage.
+  backend: string;
+  roundGeneration: number;
   mode: 'preview' | 'publish';
 }
 
@@ -92,10 +95,12 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
   }
   const outputPath = options.outputPath ?? DEFAULT_MANAGED_OUTPUT_PATH;
   const deliveryMode = options.deliveryMode ?? 'preview';
+  const backendName = `managed:${options.provider.vendor}`;
   // At-most-once per session; a re-poll cannot duplicate.
   const harvested = new Set<string>();
   const startedAt = new Map<string, number>();
   const idleNudged = new Set<string>();
+  const sessionGenerations = new Map<string, number>();
 
   async function start(brief: BuildBrief): Promise<DispatchResult> {
     const systemPrompt = appendKitDigest(
@@ -122,6 +127,7 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
       ...(options.tools ? { tools: options.tools } : {}),
     });
     startedAt.set(session.id, Date.now());
+    sessionGenerations.set(session.id, brief.roundGeneration ?? 1);
     return { ref: session.id };
   }
 
@@ -172,7 +178,15 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
     }
     try {
       const files = await download(sessionRef, plan);
-      await deliver({ issueNumber, slug, files, sessionRef, mode: deliveryMode });
+      await deliver({
+        issueNumber,
+        slug,
+        files,
+        sessionRef,
+        backend: backendName,
+        roundGeneration: sessionGenerations.get(sessionRef) ?? 1,
+        mode: deliveryMode,
+      });
       harvested.add(sessionRef);
       options.log?.info?.(
         { ...claim, files: files.length, vendor: options.provider.vendor },
@@ -191,7 +205,7 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
   }
 
   return {
-    name: `managed:${options.provider.vendor}`,
+    name: backendName,
 
     async dispatch(brief: BuildBrief): Promise<DispatchResult> {
       return start(brief);
@@ -293,6 +307,7 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
       startedAt.delete(previous.ref);
       idleNudged.delete(previous.ref);
       harvested.delete(previous.ref);
+      sessionGenerations.delete(previous.ref);
       await options.provider.deleteSession?.(previous.ref);
     },
   };

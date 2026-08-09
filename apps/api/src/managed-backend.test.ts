@@ -145,6 +145,8 @@ describe('managed backend', () => {
         issueNumber: ISSUE,
         slug: SLUG,
         sessionRef: 'session-1',
+        backend: 'managed:fake',
+        roundGeneration: 1,
         mode: 'preview',
         files: [{ path: 'game.ts', content: 'export {};' }],
       },

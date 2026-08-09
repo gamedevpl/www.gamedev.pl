@@ -18,6 +18,8 @@ import type { AgentObservation } from './job-state.js';
 export interface BuildBrief {
   /** Our job identity, for correlating an agent's reports back to the job. */
   issueNumber: number;
+  /** The round generation this dispatch belongs to, when the backend harvests output. */
+  roundGeneration?: number;
   /** The game directory the agent may touch, and nothing else. */
   slug?: string;
   createGame?: { title: string; concept: string; locale?: string };
