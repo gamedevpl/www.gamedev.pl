@@ -1,8 +1,10 @@
 # Managed agent backend — running the builder ourselves, on a swappable vendor
 
-> Status: 🚧 **Seam landed, delivery sink pending.** The provider abstraction, the
-> `AgentBackend` over it, one vendor adapter and the environment selection are in. The
-> delivery sink is injected by the caller and is the next piece to wire — see
+> Status: ✅ **MCP shape live in production.** With `MANAGED_AGENT_VENDOR` set,
+> `createAgentBackendRegistryFromEnv` puts the managed Anthropic adapter in the platform
+> builder slot. A round mints a per-round vault for `MANAGED_AGENT_MCP_URL`, the agent
+> delivers through `submit_sources`, and preview mode lands at `ready_for_review`. The
+> remaining gap is the **pull-shape** delivery sink — see
 > [What is not wired yet](#what-is-not-wired-yet).
 >
 > **Why this is not the execution model that was removed for legal reasons.** The thing
@@ -205,22 +207,22 @@ round.
 
 ## What is not wired yet
 
-`ManagedDeliverySink` is injected, not implemented here. The channel's `submit_sources`
-route already does the whole job — validate, `putCandidateSources`, set the preview or
-delivered version, count the round's deliveries, trigger the gate — inline in its handler.
-The honest next step is to **extract that into one function and pass it in**, so a managed
-harvest and an agent upload cannot drift into two different definitions of "delivered".
-Until it lands, the MCP shape is the one that can run, because it reuses that route rather
-than duplicating it.
+The **MCP shape is wired and proven** — production platform rounds use it. What remains is
+the **pull shape**: `ManagedDeliverySink` is still injected, not shared with the channel.
+The channel's `submit_sources` route already does the whole job — validate,
+`putCandidateSources`, set the preview or delivered version, count the round's deliveries,
+trigger the gate — inline in its handler. The honest cleanup is to **extract that into one
+function and pass it in**, so a managed harvest and an agent upload cannot drift into two
+different definitions of "delivered". Until that lands, prefer MCP; the pull path stays for
+agents that finish without submitting, and for the probe's printing sink.
 
 ## How to exercise it
 
-The backend is **not reachable from the running app**: `app.ts` builds the platform slot
-from `createPlatformBackendFromEnv` (Copilot), so `MANAGED_AGENT_VENDOR` on a deployed
-service does nothing. Wiring `createAgentBackendRegistryFromEnv` in — which needs the
-delivery sink — is the same change as extracting `submit_sources`.
+Production picks the managed adapter when `MANAGED_AGENT_VENDOR` is set:
+`registerSubmissionRoutes` builds the registry via `createAgentBackendRegistryFromEnv`.
+Absent that variable, Copilot keeps the platform slot.
 
-So there are three levels of test, and only the first two exist today.
+There are four levels of test:
 
 **1. The suites.** Fake provider, no network:
 
@@ -311,10 +313,27 @@ npm run managed:probe -w @gamedevpl/api -- --vendor anthropic --mcp --wait \
   --wait-seconds 120 --budget-usd 1 --digest-file /path/to/engine.digest.md
 ```
 
-The production registry will use `createGcsKitDigestLoader`: it reads `kits/current.json`,
-follows that engine ref to `kits/<engineRef>.digest.md`, caches the result, and appends it
-to the configured Agent system prompt. The digest is therefore pinned to the same engine
-ref the round receives, rather than copied into this repository.
+The live registry does not yet pass a kit digest loader into the managed backend. When it
+does, use `createGcsKitDigestLoader`: it reads `kits/current.json`, follows that engine ref
+to `kits/<engineRef>.digest.md`, caches the result, and appends it to the configured Agent
+system prompt — pinned to the same engine ref the round receives, rather than copied into
+this repository.
+
+**4. A live platform round.** Create a game with `builder: "platform"` (the default) while
+managed env is set. Cloud Run should log, correlated by `issueNumber` / `slug`:
+
+- `managed agent dispatch enabled` (once per process, at registry build)
+- `managed round credential minted` — includes `credentialRef` and `mcpUrl`
+- `managed round credential revoked` — on harvest/end/cancel/cleanup
+
+```bash
+node infra/gcp-read.mjs logs \
+  'jsonPayload.msg="managed round credential minted" OR jsonPayload.msg="managed round credential revoked"' \
+  --since 1h --limit 20
+```
+
+With `MANAGED_AGENT_DELIVERY_MODE=preview` (the default), a successful delivery ends at
+`ready_for_review`, not auto-publish.
 
 ## Configuration
 
