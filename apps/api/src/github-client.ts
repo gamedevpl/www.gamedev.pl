@@ -107,6 +107,13 @@ function generateStyleCssFromManifest(manifestSource: string): string | null {
   return generateStyleCss(manifest.theme);
 }
 
+// External script/link tags never survive the assembler's inline-only CSP.
+function isCompliantIndexHtml(html: string): boolean {
+  if (/<script[^>]*\bsrc=/i.test(html)) return false;
+  if (/<link[^>]*\bhref=/i.test(html)) return false;
+  return true;
+}
+
 // GAME_KIT_MODULES lives in games-repo-contract.ts — CI re-checks the live
 // games repo copy when GAMES_REPO_TOKEN is set (issue #247).
 const MAX_SOURCE_GRAPH_MODULES = 64;
@@ -1360,10 +1367,13 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
 
       const title = specMd ? parseSpecTitle(specMd) : null;
 
-      // Empty counts as absent: staging writes the path before the content.
-      const resolvedIndexHtml = indexHtml?.trim()
-        ? indexHtml
-        : generateIndexHtmlFromManifest(manifestSource, title ?? slug);
+      // Empty counts as absent: staging writes the path before the content. A
+      // non-compliant shipped index.html (see isCompliantIndexHtml) is treated the
+      // same way — the generated markup is always assembly-safe.
+      const resolvedIndexHtml =
+        indexHtml?.trim() && isCompliantIndexHtml(indexHtml)
+          ? indexHtml
+          : generateIndexHtmlFromManifest(manifestSource, title ?? slug);
       if (resolvedIndexHtml === null) {
         return null;
       }

@@ -964,6 +964,46 @@ describe('getGameSources', () => {
     expect(sources?.styleCss).not.toContain('.wrap h1');
   });
 
+  it('falls back to generated markup when a shipped index.html references external game.ts/style.css', async () => {
+    // Regression: this scaffold's script/link tags never survive assembly's CSP.
+    const files = new Map<string, string | Uint8Array>([
+      [
+        'games/arena-brawlers/index.html',
+        '<div id="app"></div><link rel="stylesheet" href="./style.css">' +
+          '<script type="module" src="./game.ts"></script>',
+      ],
+      ['games/arena-brawlers/game.ts', 'GameKit.mount({ update() {} });'],
+      ['games/arena-brawlers/style.css', '.game { color: red; }'],
+      ['games/arena-brawlers/SPEC.md', specMd({ title: 'Arena Brawlers' })],
+      [
+        'games/arena-brawlers/GAME.json',
+        JSON.stringify({
+          engine: { modules: [] },
+          howToPlay: {
+            goal: { en: 'Defeat opponents', pl: 'Pokonaj przeciwników' },
+            hint: { en: 'Use WASD', pl: 'Użyj WASD' },
+          },
+        }),
+      ],
+      ['shared/game-shell.css', '.shell {}'],
+      ['shared/modules/core.ts', 'window.GameKit = { mount() {} };'],
+    ]);
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const pathname = new URL(String(input)).pathname;
+      const marker = '/contents/';
+      const path = decodeURIComponent(pathname.slice(pathname.indexOf(marker) + marker.length));
+      const value = files.get(path);
+      return value === undefined ? new Response('not found', { status: 404 }) : new Response(value, { status: 200 });
+    }) as unknown as typeof fetch;
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+
+    const sources = await client.getGameSources('main', 'arena-brawlers');
+
+    expect(sources?.indexHtml).toContain('id="game"');
+    expect(sources?.indexHtml).not.toContain('<script');
+    expect(sources?.indexHtml).not.toContain('<link');
+  });
+
   it('accepts the post-draw-surface module order including gfx and actors', async () => {
     const files = new Map<string, string | Uint8Array>([
       ['games/squad/index.html', '<canvas id="game"></canvas>'],
