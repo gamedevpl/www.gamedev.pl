@@ -28,6 +28,7 @@ export interface BuildBrief {
   locale?: string;
   /** Per-job build-channel credential. Scoped to this job and this slug. */
   channelToken: string;
+  mcpOpenerToken?: string;
   /** Where the agent reports progress and delivers its work. */
   apiBaseUrl: string;
   /** Set for a revision round: what the creator asked to change. Untrusted text. */
@@ -96,6 +97,7 @@ export interface DispatchResult {
    * games repo faster than the builds themselves do.
    */
   seedWorkspace?: string;
+  credentialRef?: string;
 }
 
 export interface AgentBackend {
@@ -125,7 +127,7 @@ export interface AgentBackend {
    * (the build channel tells a running agent to stop) and the real guarantee is that we
    * discard whatever arrives afterwards. A runtime we operate can answer true.
    */
-  cancel(ref: string): Promise<{ enforced: boolean }>;
+  cancel(ref: string, credentialRef?: string): Promise<{ enforced: boolean }>;
   /** Releases workspace state once a job is finished. Best effort. */
   cleanup?(previous: DispatchResult): Promise<void>;
 }

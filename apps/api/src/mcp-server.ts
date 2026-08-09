@@ -36,6 +36,7 @@ import {
   readBearerToken,
   STALE_AGENT_TOKEN_REASON,
   verifyAgentToken,
+  verifyManagedMcpOpener,
   type AgentTokenAccess,
   type AgentTokenClaims,
 } from './agent-token.js';
@@ -1508,6 +1509,41 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           }
 
           return await bindActiveRound(active);
+        }
+
+        if (!key && bearer) {
+          let claims: AgentTokenClaims | null = null;
+          try {
+            claims = verifyManagedMcpOpener(bearer, agentTokenSecret);
+          } catch (error) {
+            if (!(error instanceof InvalidAgentTokenError)) throw error;
+          }
+          if (claims) {
+            const active = await store.getSubmission(claims.jobId);
+            if (!active) {
+              noteInvalidStart(ctx.request);
+              return toolErr('unknown build — ask the creator for the current prompt in their Studio thread');
+            }
+            try {
+              if (classifyAgentTokenAccess(claims, active, now()) !== 'active') {
+                noteInvalidStart(ctx.request);
+                return toolErr(FINISHED_REASON);
+              }
+            } catch (error) {
+              noteInvalidStart(ctx.request);
+              if (error instanceof InvalidAgentTokenError) return toolErr(error.message || FINISHED_REASON);
+              throw error;
+            }
+            if ((active.builder ?? 'platform') !== 'platform') {
+              noteInvalidStart(ctx.request);
+              return toolErr('this round capability belongs to a self-build round');
+            }
+            if (!slugArg || slugArg !== active.slug) {
+              noteInvalidStart(ctx.request);
+              return toolErr('slug is required and must match this platform round');
+            }
+            return await bindActiveRound(active);
+          }
         }
 
         if (key && looksLikeAsAccessToken(key)) {

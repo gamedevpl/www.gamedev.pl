@@ -64,9 +64,58 @@ describe('anthropic managed provider', () => {
         type: 'limit',
         max_list_cost: { amount: '125', currency: 'USD' },
       },
-      metadata: { correlation_id: '42' },
       initial_events: [{ type: 'user.message', content: [{ type: 'text', text: 'build it' }] }],
     });
+  });
+
+  it('creates a per-round vault and returns its opaque lease', async () => {
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.endsWith('/v1/vaults')) return jsonResponse({ id: 'vlt_round' });
+      if (url.endsWith('/credentials')) return jsonResponse({ id: 'cred_round' });
+      if (url.endsWith('/v1/sessions')) return jsonResponse({ id: 'sess_round', status: 'queued' });
+      throw new Error(`unexpected request ${url}`);
+    });
+    const provider = createAnthropicManagedProvider({
+      apiKey: 'secret-key',
+      model: 'test-model',
+      agentId: 'agent_test',
+      environmentId: 'env_test',
+      vaultIds: ['vlt_probe_only'],
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+
+    const session = await provider.startSession({
+      correlationId: '42',
+      prompt: 'build it',
+      model: 'test-model',
+      outputPath: 'outputs',
+      mcpBearerCredential: { url: 'https://www.gamedev.pl/api/mcp', token: 'round-secret' },
+    });
+
+    expect(session.credentialRef).toBe('vlt_round');
+    expect(JSON.parse(String((fetchImpl.mock.calls[1][1] as RequestInit).body))).toEqual({
+      display_name: 'gamedev.pl round 42',
+      auth: {
+        type: 'static_bearer',
+        mcp_server_url: 'https://www.gamedev.pl/api/mcp',
+        token: 'round-secret',
+      },
+    });
+    expect(JSON.parse(String((fetchImpl.mock.calls[2][1] as RequestInit).body)).vault_ids).toEqual(['vlt_round']);
+  });
+
+  it('archives a round vault when the managed backend releases it', async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse({ id: 'vlt_round' }));
+    const provider = createAnthropicManagedProvider({
+      apiKey: 'secret-key',
+      model: 'test-model',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+
+    await provider.releaseCredential?.('vlt_round');
+
+    expect(fetchImpl.mock.calls[0][0]).toBe('https://api.anthropic.com/v1/vaults/vlt_round/archive');
+    expect((fetchImpl.mock.calls[0][1] as RequestInit).method).toBe('POST');
   });
 
   it('leaves the configured agent its own tools and servers', async () => {

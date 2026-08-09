@@ -4,7 +4,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { splitConceptBrief } from './agent-build-brief.js';
 import { registerAgentChannelRoutes, type AgentChannelOptions } from './agent-channel.js';
-import { mintAgentToken } from './agent-token.js';
+import { mintAgentToken, mintManagedMcpOpener } from './agent-token.js';
 import { registerMcpServerRoutes } from './mcp-server.js';
 import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './assemble.js';
 import { createCreationGate, CREATION_REFUSAL_CODES, type CreationGate } from './creation-limits.js';
@@ -662,6 +662,14 @@ export async function registerSubmissionRoutes(
             ...configuredManagedDeps,
             ...(managedDeliver ? { deliver: managedDeliver } : {}),
             ...(managedLock ? { lock: managedLock } : {}),
+            ...(store
+              ? {
+                  readCredentialRef: async (issueNumber: number, sessionRef: string) => {
+                    const record = await store.getSubmission(issueNumber);
+                    return record?.dispatch?.credentialRefs?.[sessionRef];
+                  },
+                }
+              : {}),
           }
         : undefined;
     const environmentRegistry = createAgentBackendRegistryFromEnv(app.log, selfOptions, managedDeps);
@@ -1030,6 +1038,10 @@ export async function registerSubmissionRoutes(
           roundGeneration,
           now: now(),
         }),
+        mcpOpenerToken: mintManagedMcpOpener(input.issueNumber, submissionTokenSecret, {
+          roundGeneration,
+          now: now(),
+        }),
         apiBaseUrl: notifyAppBaseUrl,
         ...(input.slug ? { slug: input.slug } : {}),
         ...(input.feedback ? { feedback: input.feedback } : {}),
@@ -1073,6 +1085,7 @@ export async function registerSubmissionRoutes(
         ref: result.ref,
         workspace: result.workspace,
         seedWorkspace: result.seedWorkspace,
+        credentialRef: result.credentialRef,
       });
       // The round-0 preview: the creator sees a playable rough draft minutes after
       // submitting instead of waiting out the agent's first push. Off the response path
@@ -1178,16 +1191,16 @@ export async function registerSubmissionRoutes(
           resetRoundBudget: !input.preserveRoundBudget,
         });
       }
-      if (!input.undelivered && previousBuilder !== builder && previous?.refs.length) {
-        const previousBackend = backendFor(previousBuilder);
+      const previousBackend = backendFor(previousBuilder);
+      if (previous?.refs.length && (!input.undelivered || previousBackend?.name.startsWith('managed:'))) {
         const previousRef = previous.refs[previous.refs.length - 1];
         if (previousBackend && previousRef) {
           try {
-            await previousBackend.cancel(previousRef);
+            await previousBackend.cancel(previousRef, previous?.credentialRefs?.[previousRef]);
           } catch (error) {
             input.log.error(
               { err: error, issueNumber: input.issueNumber },
-              'previous agent cancel failed during handoff',
+              'previous agent cancel failed before a replacement round',
             );
           }
         }
@@ -1206,6 +1219,10 @@ export async function registerSubmissionRoutes(
         feedback: input.feedback,
         locale: input.locale,
         channelToken: mintAgentToken(input.issueNumber, submissionTokenSecret, {
+          roundGeneration,
+          now: now(),
+        }),
+        mcpOpenerToken: mintManagedMcpOpener(input.issueNumber, submissionTokenSecret, {
           roundGeneration,
           now: now(),
         }),
@@ -1229,6 +1246,7 @@ export async function registerSubmissionRoutes(
         backend: selected.name,
         ref: result.ref,
         workspace: result.workspace,
+        credentialRef: result.credentialRef,
       });
       await recordSessionCost(input.issueNumber, result.ref, selected, input.log);
       // The previous workspace is spent the moment a new round has one of its own: the
@@ -3107,7 +3125,7 @@ export async function registerSubmissionRoutes(
       const cancelBackend = backendFor(builderOf(record));
       if (cancelBackend && ref) {
         try {
-          await cancelBackend.cancel(ref);
+          await cancelBackend.cancel(ref, record.dispatch?.credentialRefs?.[ref]);
         } catch (cancelError) {
           request.log.error({ err: cancelError, issueNumber }, 'agent cancel failed');
         }
@@ -3892,7 +3910,8 @@ export async function registerSubmissionRoutes(
     const cancelBackend = backendFor(builderOf(record));
     if (cancelBackend && refs?.length) {
       try {
-        stopEnforced = (await cancelBackend.cancel(refs[refs.length - 1])).enforced;
+        const ref = refs[refs.length - 1];
+        stopEnforced = (await cancelBackend.cancel(ref, record.dispatch?.credentialRefs?.[ref])).enforced;
       } catch (cancelError) {
         request.log.error({ err: cancelError, issueNumber }, 'agent cancel failed; job is canceled regardless');
       }
@@ -4212,7 +4231,7 @@ export async function registerSubmissionRoutes(
             const ref = record.dispatch?.refs.at(-1);
             if (cancelBackend && ref) {
               try {
-                await cancelBackend.cancel(ref);
+                await cancelBackend.cancel(ref, record.dispatch?.credentialRefs?.[ref]);
               } catch (cancelError) {
                 request.log.error(
                   { err: cancelError, issueNumber: record.issueNumber },

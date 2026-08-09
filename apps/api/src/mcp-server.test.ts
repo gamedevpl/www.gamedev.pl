@@ -1,7 +1,12 @@
 import { readFile } from 'node:fs/promises';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
-import { classifyAgentTokenAccess, mintAgentToken, STALE_AGENT_TOKEN_REASON } from './agent-token.js';
+import {
+  classifyAgentTokenAccess,
+  mintAgentToken,
+  mintManagedMcpOpener,
+  STALE_AGENT_TOKEN_REASON,
+} from './agent-token.js';
 import { mintGameAgentKey } from './agent-game-key.js';
 import { buildApp } from './app.js';
 import type { GamesStore } from './games-store.js';
@@ -682,6 +687,27 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(body).toMatch(/END the session/i);
     expect(body).toMatch(/Inbox:/);
     expect(body).toMatch(/If a call is refused:/i);
+  });
+
+  it('opens a platform round from its vault-injected round capability', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    await store.setRoundBuilder(ISSUE, 'platform');
+    app = await createApp(store);
+    const sessionId = await initialize(app);
+
+    const started = await callTool(
+      app,
+      'start',
+      { slug: 'comet-courier' },
+      {
+        'mcp-session-id': sessionId,
+        authorization: `Bearer ${mintManagedMcpOpener(ISSUE, secret, { roundGeneration: 1 })}`,
+      },
+    );
+
+    expect(started.isError).toBe(false);
+    expect(started.structured).toMatchObject({ slug: 'comet-courier', round: 1 });
   });
 
   it('retired-key etiquette in start matches the error agents relay on a refused call', async () => {

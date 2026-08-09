@@ -99,6 +99,51 @@ describe('managed backend', () => {
     expect(observation).toMatchObject({ state: 'completed', hasCandidate: false });
   });
 
+  it('prefers the MCP delivery contract when both delivery paths are configured', async () => {
+    const { provider, started, setState, setOutputs, read } = fakeProvider();
+    const backend = createManagedBackend({
+      provider,
+      deliver: async () => ({ version: 'v1' }),
+      tools: { mcpEndpoints: [{ url: 'https://www.gamedev.pl/api/mcp', name: 'gamedevpl' }] },
+    });
+    setOutputs([{ path: `games/${SLUG}/game.ts`, content: 'export {};' }]);
+    setState('completed');
+
+    await backend.dispatch(brief());
+    const observation = await backend.observe('session-1', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
+
+    expect(started[0].prompt).toContain('Call `start`');
+    expect(read).toEqual([]);
+    expect(observation).toMatchObject({ state: 'completed', hasCandidate: false });
+  });
+
+  it('mints a vault-only MCP credential and revokes it after agent end', async () => {
+    const released: string[] = [];
+    const { provider, started, setState } = fakeProvider({
+      startSession: async (request) => {
+        started.push(request);
+        return { id: 'session-1', state: 'queued', credentialRef: 'lease-1' };
+      },
+      releaseCredential: async (ref) => {
+        released.push(ref);
+      },
+    });
+    const backend = createManagedBackend({
+      provider,
+      tools: { mcpEndpoints: [{ url: 'https://www.gamedev.pl/api/mcp', name: 'gamedevpl' }] },
+      mcpBearerCredential: (input) => ({ url: 'https://www.gamedev.pl/api/mcp', token: input.channelToken }),
+      readSignals: async () => ({ agentEndedAt: '2026-08-09T18:00:00.000Z' }),
+    });
+
+    const result = await backend.dispatch(brief({ channelToken: 'round-token' }));
+    setState('idle');
+    await backend.observe(result.ref, { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
+
+    expect(started[0].mcpBearerCredential).toEqual({ url: 'https://www.gamedev.pl/api/mcp', token: 'round-token' });
+    expect(result.credentialRef).toBe('lease-1');
+    expect(released).toEqual(['lease-1']);
+  });
+
   it('sends the seed as workspace files and the digest as a cacheable prefix', async () => {
     const { provider, started } = fakeProvider();
     const backend = createManagedBackend({
@@ -453,6 +498,20 @@ describe('managed backend', () => {
     const { provider } = fakeProvider();
     const backend = createManagedBackend({ provider, deliver: async () => ({ version: 'v1' }) });
     expect(await backend.cancel('session-1')).toEqual({ enforced: true });
+  });
+
+  it('archives round credentials even when interrupt fails', async () => {
+    const releaseCredential = vi.fn(async () => undefined);
+    const { provider } = fakeProvider({
+      cancelSession: async () => {
+        throw new Error('interrupt unavailable');
+      },
+      releaseCredential,
+    });
+    const backend = createManagedBackend({ provider, deliver: async () => ({ version: 'v1' }) });
+
+    await expect(backend.cancel('session-1', 'vault-1')).rejects.toThrow(/interrupt unavailable/);
+    expect(releaseCredential).toHaveBeenCalledWith('vault-1');
   });
 
   it('answers null for a session the vendor has forgotten', async () => {

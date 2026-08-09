@@ -409,6 +409,10 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
                   }
                 : null;
             },
+            readCredentialRef: async (issueNumber, sessionRef) => {
+              const record = await store.getSubmission(issueNumber);
+              return record?.dispatch?.credentialRefs?.[sessionRef];
+            },
           }),
     gameSeeder: options.submissionRoutes?.gameSeeder ?? createGameSeederFromEnv(app.log),
     agentChannel: {

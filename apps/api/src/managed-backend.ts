@@ -16,6 +16,7 @@ import {
   type ManagedOutputCaps,
   type ManagedOutputFile,
   type ManagedOutputPlan,
+  type ManagedMcpBearerCredential,
   type ManagedToolAccess,
 } from './managed-agent.js';
 
@@ -92,6 +93,8 @@ export interface ManagedBackendOptions {
   maxDurationSeconds?: number;
   outputCaps?: ManagedOutputCaps;
   tools?: ManagedToolAccess;
+  mcpBearerCredential?: (brief: BuildBrief) => ManagedMcpBearerCredential | undefined;
+  readCredentialRef?: (issueNumber: number, sessionRef: string) => Promise<string | undefined>;
   nudgeIdle?: boolean;
   // Preview keeps the first delivery cheap; publish seals.
   deliveryMode?: 'preview' | 'publish';
@@ -112,23 +115,47 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
   }
   const outputPath = options.outputPath ?? DEFAULT_MANAGED_OUTPUT_PATH;
   const deliveryMode = options.deliveryMode ?? 'preview';
+  const channelMode = Boolean(options.tools?.mcpEndpoints?.length);
   const backendName = `managed:${options.provider.vendor}`;
   // At-most-once per session; a re-poll cannot duplicate.
   const harvested = new Set<string>();
   const startedAt = new Map<string, number>();
   const idleNudged = new Set<string>();
   const sessionGenerations = new Map<string, number>();
+  const credentialRefs = new Map<string, string>();
+  const releasedCredentials = new Set<string>();
+
+  async function releaseCredential(ref: string, issueNumber?: number): Promise<void> {
+    const credentialRef =
+      credentialRefs.get(ref) ?? (issueNumber ? await options.readCredentialRef?.(issueNumber, ref) : undefined);
+    if (!credentialRef || releasedCredentials.has(credentialRef) || !options.provider.releaseCredential) return;
+    releasedCredentials.add(credentialRef);
+    try {
+      await options.provider.releaseCredential(credentialRef);
+    } catch (error) {
+      releasedCredentials.delete(credentialRef);
+      options.log?.warn({ err: error, ref }, 'could not revoke managed round credential');
+    }
+  }
 
   async function start(brief: BuildBrief): Promise<DispatchResult> {
     const systemPrompt = appendKitDigest(
       options.systemPrompt ? await options.systemPrompt() : undefined,
       options.kitDigest ? await options.kitDigest.load() : undefined,
     );
+    const mcpBearerCredential = options.mcpBearerCredential?.(brief);
     const session = await options.provider.startSession({
       correlationId: String(brief.issueNumber),
       ...(systemPrompt ? { systemPrompt } : {}),
       // The prompt has to describe the delivery this backend will actually read.
-      prompt: buildPrompt(brief, deliver ? { kind: 'outputs', path: outputPath } : { kind: 'channel', fast: true }),
+      prompt: buildPrompt(
+        brief,
+        channelMode
+          ? { kind: 'channel', fast: true }
+          : deliver
+            ? { kind: 'outputs', path: outputPath }
+            : { kind: 'channel', fast: true },
+      ),
       model: options.provider.model,
       ...(options.effort ? { effort: options.effort } : {}),
       ...(brief.seed
@@ -142,10 +169,12 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
       outputPath,
       ...(options.maxDurationSeconds ? { maxDurationSeconds: options.maxDurationSeconds } : {}),
       ...(options.tools ? { tools: options.tools } : {}),
+      ...(mcpBearerCredential ? { mcpBearerCredential } : {}),
     });
     startedAt.set(session.id, Date.now());
     sessionGenerations.set(session.id, brief.roundGeneration ?? 1);
-    return { ref: session.id };
+    if (session.credentialRef) credentialRefs.set(session.id, session.credentialRef);
+    return { ref: session.id, ...(session.credentialRef ? { credentialRef: session.credentialRef } : {}) };
   }
 
   // `pending` means ask again, so the round is not spent.
@@ -252,6 +281,7 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
         !['completed', 'failed', 'timed_out', 'cancelled'].includes(session.state);
       if (expired) {
         await options.provider.cancelSession(ref);
+        await releaseCredential(ref, observeOptions.issueNumber);
         return {
           state: 'timed_out',
           hasCandidate: observeOptions.hasCandidate,
@@ -265,6 +295,7 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
       let outcome: HarvestOutcome = 'empty';
       const canHarvest =
         Boolean(deliver) &&
+        !channelMode &&
         !hasCandidate &&
         isManagedSessionHarvestable(session.state) &&
         observeOptions.issueNumber !== undefined &&
@@ -294,8 +325,10 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
         Boolean(options.provider.sendMessage) &&
         !idleNudged.has(ref);
       // Provider cannot see a channel submit or end; read once.
+      const needsSignals =
+        nudgeCandidate || credentialRefs.has(ref) || Boolean(options.readCredentialRef && session.state === 'idle');
       const signals =
-        nudgeCandidate && options.readSignals && observeOptions.issueNumber !== undefined
+        needsSignals && options.readSignals && observeOptions.issueNumber !== undefined
           ? await options.readSignals(observeOptions.issueNumber)
           : null;
       const roundDelivered = Boolean(signals?.deliveredVersion || signals?.previewVersion);
@@ -316,6 +349,10 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
         }
       }
 
+      if (isManagedSessionHarvestable(session.state) && (session.state !== 'idle' || agentEnded)) {
+        await releaseCredential(ref, observeOptions.issueNumber);
+      }
+
       // A settled session with no candidate fails the round.
       const state = outcome === 'pending' || nudged ? 'in_progress' : session.state;
 
@@ -328,8 +365,14 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
       };
     },
 
-    async cancel(ref): Promise<{ enforced: boolean }> {
-      return options.provider.cancelSession(ref);
+    async cancel(ref, credentialRef): Promise<{ enforced: boolean }> {
+      if (credentialRef) credentialRefs.set(ref, credentialRef);
+      try {
+        return await options.provider.cancelSession(ref);
+      } finally {
+        // Archive even when interrupt fails; job is already terminal.
+        await releaseCredential(ref);
+      }
     },
 
     async cleanup(previous: DispatchResult): Promise<void> {
@@ -337,6 +380,9 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
       idleNudged.delete(previous.ref);
       harvested.delete(previous.ref);
       sessionGenerations.delete(previous.ref);
+      if (previous.credentialRef) credentialRefs.set(previous.ref, previous.credentialRef);
+      await releaseCredential(previous.ref);
+      credentialRefs.delete(previous.ref);
       await options.provider.deleteSession?.(previous.ref);
     },
   };
