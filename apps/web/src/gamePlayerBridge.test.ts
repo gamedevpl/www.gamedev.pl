@@ -274,7 +274,9 @@ describe('embedded canvas sizing', () => {
     const html = embedGameHtml('<html><head></head><body><canvas id="game"></canvas></body></html>');
 
     expect(html).toContain('flex:0 1 auto!important');
-    expect(html).toContain('width:min(100%,calc(100dvh * var(--gdpl-canvas-ratio)))!important');
+    expect(html).toContain(
+      'width:min(var(--gdpl-embed-width),calc(var(--gdpl-embed-height) * var(--gdpl-canvas-ratio)))!important',
+    );
     expect(html).toContain('aspect-ratio:var(--gdpl-canvas-ratio)!important');
   });
 });

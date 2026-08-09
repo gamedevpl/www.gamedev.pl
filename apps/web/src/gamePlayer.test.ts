@@ -67,7 +67,7 @@ describe('embedGameHtml', () => {
     expect(out).toContain('padding:0!important');
     // Fit the box to the logical bitmap without object-fit hitbox offsets.
     expect(out).toContain(
-      '#game{--gdpl-canvas-ratio:1.6;flex:0 1 auto!important;width:min(100%,calc(100dvh * var(--gdpl-canvas-ratio)))!important;',
+      '#game{--gdpl-canvas-ratio:1.6;--gdpl-embed-width:100%;--gdpl-embed-height:100dvh;flex:0 1 auto!important;width:min(var(--gdpl-embed-width),calc(var(--gdpl-embed-height) * var(--gdpl-canvas-ratio)))!important;',
     );
     expect(out).toContain('aspect-ratio:var(--gdpl-canvas-ratio)!important');
     expect(out).toContain('max-width:100%!important');

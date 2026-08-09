@@ -342,7 +342,11 @@ const BRIDGE = `(function(){
   function fitGameCanvas(){
     var canvas=el('game');
     if(!canvas||!canvas.width||!canvas.height)return;
+    var wrap=canvas.closest('.wrap')||document.body;
+    var bounds=wrap.getBoundingClientRect();
     canvas.style.setProperty('--gdpl-canvas-ratio',String(canvas.width/canvas.height));
+    canvas.style.setProperty('--gdpl-embed-width',String(bounds.width)+'px');
+    canvas.style.setProperty('--gdpl-embed-height',String(bounds.height)+'px');
   }
   function scheduleGameCanvasFit(){
     fitGameCanvas();
@@ -350,7 +354,7 @@ const BRIDGE = `(function(){
   }
   addEventListener('resize',scheduleGameCanvasFit);
   function init(){
-    fitGameCanvas();
+    scheduleGameCanvasFit();
     sendMeta();
     var s=el('sound-toggle');
     if(s&&'MutationObserver'in window){new MutationObserver(sendSound).observe(s,{attributes:true,attributeFilter:['aria-pressed']});}
@@ -390,8 +394,10 @@ const HIDE_CHROME =
   `}` +
   `#game{` +
   `--gdpl-canvas-ratio:1.6;` +
+  `--gdpl-embed-width:100%;` +
+  `--gdpl-embed-height:100dvh;` +
   `flex:0 1 auto!important;` +
-  `width:min(100%,calc(100dvh * var(--gdpl-canvas-ratio)))!important;` +
+  `width:min(var(--gdpl-embed-width),calc(var(--gdpl-embed-height) * var(--gdpl-canvas-ratio)))!important;` +
   `height:auto!important;` +
   `aspect-ratio:var(--gdpl-canvas-ratio)!important;` +
   `max-width:100%!important;` +
