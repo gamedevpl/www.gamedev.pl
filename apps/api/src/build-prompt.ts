@@ -14,14 +14,17 @@ export function buildPrompt(brief: BuildBrief, delivery: DeliveryContract = { ki
   const channel = delivery.kind === 'channel';
   const fastLane = delivery.kind === 'channel' && delivery.fast === true;
   const slug = brief.slug ?? '(the slug named in your first progress report)';
+  const creating = Boolean(brief.createGame);
   const lines = [
-    brief.seed
-      ? `Build a new browser game in \`games/${slug}/\`. **A first draft of it is already in your checkout** — see below.`
-      : brief.undelivered
-        ? `Your previous session on \`${slug}\` ended without delivering it. The work may well be finished — that is not the problem. Nothing downstream reads the branch, so a game that was not uploaded does not exist as far as the site or the creator can tell. Check what is there, then deliver it.`
-        : brief.feedback
-          ? `The creator played the draft of \`${slug}\` and asked for changes. Continue that game — revise it, do not rebuild it.`
-          : `Build a new browser game in \`games/${slug}/\`.`,
+    creating
+      ? 'Create a new browser game through gamedev.pl; the game slug does not exist yet.'
+      : brief.seed
+        ? `Build a new browser game in \`games/${slug}/\`. **A first draft of it is already in your checkout** — see below.`
+        : brief.undelivered
+          ? `Your previous session on \`${slug}\` ended without delivering it. The work may well be finished — that is not the problem. Nothing downstream reads the branch, so a game that was not uploaded does not exist as far as the site or the creator can tell. Check what is there, then deliver it.`
+          : brief.feedback
+            ? `The creator played the draft of \`${slug}\` and asked for changes. Continue that game — revise it, do not rebuild it.`
+            : `Build a new browser game in \`games/${slug}/\`.`,
     '',
     // The one round where the branch is the only copy.
     ...(brief.undelivered && brief.previousWorkspace
@@ -90,7 +93,9 @@ export function buildPrompt(brief: BuildBrief, delivery: DeliveryContract = { ki
       : []),
     '## Scope — this is enforced, not advisory',
     '',
-    `- You may create and edit files under \`games/${slug}/\` only.`,
+    creating
+      ? '- After create_game returns the slug, you may create and edit files under that games/<slug>/ directory only.'
+      : `- You may create and edit files under \`games/${slug}/\` only.`,
     '- GameKit (`shared/`), the tooling (`tools/`) and every other game are **read-only context**.',
     '  Read them, copy patterns from them, never modify them. Changes outside your game',
     '  directory cannot be delivered — delivery drops them — so editing them only',
@@ -100,7 +105,7 @@ export function buildPrompt(brief: BuildBrief, delivery: DeliveryContract = { ki
       ? ['- There is no repository checkout here. The kit you unpack is the only copy of any of it.']
       : ['- Follow `.github/copilot-instructions.md` and the repository skills for everything else.']),
     '',
-    ...(channel ? channelDelivery(brief, fastLane) : outputsDelivery(slug, delivery.path)),
+    ...(channel ? channelDelivery(brief, fastLane, creating) : outputsDelivery(slug, delivery.path)),
   ];
 
   if (brief.locale && brief.locale !== 'en' && channel) {
@@ -115,7 +120,7 @@ export function buildPrompt(brief: BuildBrief, delivery: DeliveryContract = { ki
 }
 
 // The push contract: the agent reports and uploads over the build channel.
-function channelDelivery(brief: BuildBrief, fast: boolean): string[] {
+function channelDelivery(brief: BuildBrief, fast: boolean, creating: boolean): string[] {
   if (fast) {
     return [
       '## This round is on a clock',
@@ -124,7 +129,18 @@ function channelDelivery(brief: BuildBrief, fast: boolean): string[] {
       'and a round that has not called `submit_sources` by then delivers nothing at all.',
       '',
       'Do not reply with a plan. Execute tools immediately.',
-      `Call \`start\` with exactly \`{ "slug": "${brief.slug ?? '(slug)'}" }\`, then call \`get_brief\`, \`get_seed\` and \`get_kit\`.`,
+      ...(creating
+        ? [
+            `Call \`create_game\` first with ${JSON.stringify({
+              title: brief.createGame!.title,
+              concept: brief.createGame!.concept,
+              ...(brief.createGame!.locale ? { locale: brief.createGame!.locale } : {}),
+            })}. Do not invent a title or concept.`,
+            'Use the returned slug and jobId; then call `start({ slug })` for that new game.',
+          ]
+        : [
+            `Call \`start\` with exactly \`{ "slug": "${brief.slug ?? '(slug)'}" }\`, then call \`get_brief\`, \`get_seed\` and \`get_kit\`.`,
+          ]),
       'Copy the exact sessionKey from `start` into every later MCP call.',
       'If get_seed returns available, revise those files instead of scaffolding.',
       'If get_seed returns pending, do not browse or wait; build the smallest preview now.',

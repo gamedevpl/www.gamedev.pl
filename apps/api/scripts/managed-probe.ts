@@ -19,8 +19,13 @@ const args = process.argv.slice(2);
 const flag = (name: string) => args.includes(`--${name}`);
 const value = (name: string) => (args.includes(`--${name}`) ? args[args.indexOf(`--${name}`) + 1] : undefined);
 
-const SLUG = value('slug') ?? 'comet-courier';
+const creation = flag('create');
+const SLUG = creation ? undefined : (value('slug') ?? 'comet-courier');
 const ISSUE = Number(value('issue') ?? 4242);
+const CREATE_TITLE = value('title') ?? 'Managed Probe Courier';
+const CREATE_CONCEPT =
+  value('concept') ??
+  'Guide a small courier ship across a bright sky, collect parcels, and dodge drifting clouds before reaching the beacon.';
 const outDir = value('out');
 const digestPath = value('digest-file');
 const apiBaseUrl = (value('base-url') ?? 'https://api.anthropic.com').replace(/\/$/, '');
@@ -35,8 +40,9 @@ const rule = (title: string) => console.log(`\n${'─'.repeat(72)}\n${title}\n${
 
 const brief: BuildBrief = {
   issueNumber: ISSUE,
-  slug: SLUG,
-  spec: value('spec') ?? 'Deliver parcels between comets while dodging debris. Two buttons, one screen.',
+  ...(SLUG ? { slug: SLUG } : {}),
+  ...(creation ? { createGame: { title: CREATE_TITLE, concept: CREATE_CONCEPT } } : {}),
+  spec: value('spec') ?? CREATE_CONCEPT,
   channelToken: 'tok_probe',
   apiBaseUrl: 'http://127.0.0.1:3001',
   ...(flag('feedback') ? { feedback: 'make the comets bigger' } : {}),

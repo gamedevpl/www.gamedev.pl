@@ -20,6 +20,7 @@ export interface BuildBrief {
   issueNumber: number;
   /** The game directory the agent may touch, and nothing else. */
   slug?: string;
+  createGame?: { title: string; concept: string; locale?: string };
   /** The creator's spec, already moderated. Untrusted text: data, never instructions. */
   spec: string;
   /** Creator's language, so progress is reported in it rather than translated after. */
