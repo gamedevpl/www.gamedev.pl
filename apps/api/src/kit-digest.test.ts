@@ -67,4 +67,28 @@ describe('Creator Kit digest loader', () => {
     expect(compact).toContain('Keep files small.');
     expect(compact).not.toContain('interface Unrelated');
   });
+
+  it('keeps the audio catalog, and keeps it ahead of what a byte cap truncates', () => {
+    const full = [
+      '## GameKit API surface',
+      '~~~typescript',
+      'interface GameKitInput { down(...keys: string[]): boolean; }',
+      '~~~',
+      '## Audio catalog',
+      'Sounds (3): ui-toggle, win, lose',
+      '',
+      'Music (1): bright-chase',
+      '## Exemplar game',
+      '### games/dodge-the-falling-rocks/GAME.json',
+      '{"audio":{"sounds":["ui-toggle"]}}',
+      '## File-shape rules',
+      '- Keep files small.',
+    ].join('\n');
+
+    const compact = compactKitDigestForPrompt(full);
+
+    expect(compact).toContain('Sounds (3): ui-toggle, win, lose');
+    expect(compact).toContain('Music (1): bright-chase');
+    expect(compact.indexOf('Audio catalog')).toBeLessThan(compact.indexOf('dodge-the-falling-rocks/GAME.json'));
+  });
 });

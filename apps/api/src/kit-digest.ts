@@ -68,6 +68,13 @@ export function createFileKitDigestLoader(path: string): KitDigestLoader {
   };
 }
 
+function sectionOf(digest: string, heading: string): string {
+  const start = digest.indexOf(heading);
+  if (start < 0) return '';
+  const next = digest.indexOf('\n## ', start + heading.length);
+  return `${digest.slice(start, next >= 0 ? next : digest.length).trim()}\n`;
+}
+
 export function compactKitDigestForPrompt(digest: string, maxBytes = DEFAULT_PROMPT_DIGEST_MAX_BYTES): string {
   if (!digest.includes('## GameKit API surface') && !digest.includes('## Exemplar game')) {
     return digest.trim();
@@ -111,6 +118,8 @@ export function compactKitDigestForPrompt(digest: string, maxBytes = DEFAULT_PRO
     apiLines.join('\n'),
     '~~~',
     '',
+    // Before the exemplar: the tail is what a byte cap cuts.
+    sectionOf(digest, '## Audio catalog'),
     exemplarSections.join('\n\n'),
     '',
     rules,

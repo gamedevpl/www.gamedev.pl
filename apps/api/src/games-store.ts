@@ -252,13 +252,18 @@ export function validateSourceUpload(files: SourceFile[], mode: DeliveryMode = '
     try {
       const manifest = JSON.parse(gameJson.content) as {
         engine?: { modules?: unknown };
-        audio?: { sounds?: unknown };
+        audio?: { sounds?: unknown; music?: unknown };
       };
       const modules = Array.isArray(manifest.engine?.modules) ? manifest.engine.modules : [];
       const sounds = Array.isArray(manifest.audio?.sounds) ? manifest.audio.sounds : [];
-      if (modules.includes('audio') && sounds.length === 0) {
+      const music = typeof manifest.audio?.music === 'string' ? manifest.audio.music.trim() : '';
+      // Same two rules the assembler enforces, one round trip earlier.
+      if (modules.includes('audio') && (sounds.length === 0 || !music)) {
         throw new InvalidUploadError(
-          'GAME.json enables audio but does not select audio.sounds — add sound ids or remove the audio module',
+          `GAME.json enables audio but ${sounds.length === 0 ? 'selects no audio.sounds' : 'names no audio.music'}. ` +
+            'Every legal id is listed in the Audio catalog section of the Creator Kit digest — ' +
+            'reuse them as they are; the exemplar GAME.json selects ui-toggle, win and lose. ' +
+            'The audio module is mandatory, so dropping it is not the fix.',
         );
       }
     } catch (error) {

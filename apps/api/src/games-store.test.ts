@@ -80,6 +80,53 @@ describe('validateSourceUpload — the delivery contract', () => {
     ).toThrow(/audio\.sounds/);
   });
 
+  it('catches an audio module with sounds but no music, as the assembler would', () => {
+    expect(() =>
+      validateSourceUpload(
+        [
+          ...MINIMAL,
+          {
+            path: 'GAME.json',
+            content: JSON.stringify({ engine: { modules: ['audio'] }, audio: { sounds: ['win'] } }),
+          },
+        ],
+        'preview',
+      ),
+    ).toThrow(/audio\.music/);
+    expect(
+      validateSourceUpload(
+        [
+          ...MINIMAL,
+          {
+            path: 'GAME.json',
+            content: JSON.stringify({
+              engine: { modules: ['audio'] },
+              audio: { sounds: ['win'], music: 'bright-chase' },
+            }),
+          },
+        ],
+        'preview',
+      ).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it('points the audio refusal at the catalog instead of offering to drop the module', () => {
+    expect(() =>
+      validateSourceUpload(
+        [...MINIMAL, { path: 'GAME.json', content: JSON.stringify({ engine: { modules: ['audio'] }, audio: {} }) }],
+        'preview',
+      ),
+    ).toThrow(/Audio catalog/);
+    try {
+      validateSourceUpload(
+        [...MINIMAL, { path: 'GAME.json', content: JSON.stringify({ engine: { modules: ['audio'] }, audio: {} }) }],
+        'preview',
+      );
+    } catch (error) {
+      expect((error as Error).message).not.toMatch(/or remove the audio module/);
+    }
+  });
+
   it('accepts and requires the behavioural golden the gate checks against', () => {
     // Both halves, because they failed apart. The games repo's submit tool sends
     // TRACE.json; this list did not include it, so the server answered 400 and named
