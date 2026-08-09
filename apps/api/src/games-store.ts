@@ -275,7 +275,12 @@ export function validateSourceUpload(files: SourceFile[], mode: DeliveryMode = '
         engine?: { modules?: unknown };
         audio?: { sounds?: unknown; music?: unknown };
       };
-      const modules = Array.isArray(manifest.engine?.modules) ? manifest.engine.modules : [];
+      if (!Array.isArray(manifest.engine?.modules)) {
+        throw new InvalidUploadError(
+          'GAME.json must include engine.modules as an array — copy the module selection from the Creator Kit template before preview.',
+        );
+      }
+      const modules = manifest.engine.modules;
       const sounds = Array.isArray(manifest.audio?.sounds) ? manifest.audio.sounds : [];
       const music = typeof manifest.audio?.music === 'string' ? manifest.audio.music.trim() : '';
       // Same two rules the assembler enforces, one round trip earlier.

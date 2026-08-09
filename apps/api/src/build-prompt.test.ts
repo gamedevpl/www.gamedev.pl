@@ -23,6 +23,8 @@ describe('buildPrompt delivery contract', () => {
     expect(prompt).toContain('do not download or browse the kit');
     expect(prompt).toContain('Stage source content directly');
     expect(prompt).toContain('audio.sounds');
+    expect(prompt).toContain('engine.modules array');
+    expect(prompt).toContain('audio.music must be one music id string');
     expect(prompt).toContain('submit_sources');
     expect(prompt).toContain('delivered rough');
     expect(prompt).not.toContain('npm run submit');

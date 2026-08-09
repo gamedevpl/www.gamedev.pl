@@ -152,6 +152,12 @@ describe('validateSourceUpload — the delivery contract', () => {
     ).toThrow(/audio\.sounds/);
   });
 
+  it('rejects a preview manifest without engine.modules before smoke runs', () => {
+    expect(() =>
+      validateSourceUpload([...MINIMAL, { path: 'GAME.json', content: JSON.stringify({ howToPlay: {} }) }], 'preview'),
+    ).toThrow(/engine\.modules as an array/);
+  });
+
   it('catches an audio module with sounds but no music, as the assembler would', () => {
     expect(() =>
       validateSourceUpload(

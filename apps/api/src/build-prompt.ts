@@ -156,6 +156,8 @@ function channelDelivery(brief: BuildBrief, fast: boolean, creating: boolean): s
       '- Skip optional polish. One screen, one loop, readable visuals.',
       '- Always call `.audio()` in GameKit.defineGame; set audio.sounds and audio.music in GAME.json.',
       "- Audio ids are a fixed catalog: copy from the digest's Audio catalog and never invent one.",
+      '- GAME.json must include an engine.modules array copied from the kit template; never omit it.',
+      '- audio.sounds must be an array of catalog ids; audio.music must be one music id string.',
       '- The publish gate requires the audio module, so removing it only defers the failure.',
       '- Stage and `submit_sources({ fromStaged: true, mode: "preview", kitEngineRef })` as soon as the',
       '  game is playable, even if you can see things you would rather improve. A delivered rough',
