@@ -484,6 +484,8 @@ function sendMedia(
 export interface SubmissionRoutesHandle {
   /** The resolved games-repo client, or null when this deployment cannot reach one. */
   githubClient: GitHubClient | null;
+  /** Whether the resolved registry has a platform backend. */
+  hasPlatformBackend: boolean;
   /**
    * Finds a published entry in the repo-backed catalog only.
    *
@@ -673,7 +675,7 @@ export async function registerSubmissionRoutes(
           }
         : undefined;
     const environmentRegistry = createAgentBackendRegistryFromEnv(app.log, selfOptions, managedDeps);
-    // Explicit backends win over the environment registry.
+    // Explicit backends win; do not pre-wire Copilot over managed.
     const self = options.agentBackends?.self ?? environmentRegistry.self;
     const platform = options.agentBackend ?? options.agentBackends?.platform ?? environmentRegistry.platform;
     return { ...(platform ? { platform } : {}), self };
@@ -5242,6 +5244,7 @@ export async function registerSubmissionRoutes(
 
   return {
     githubClient,
+    hasPlatformBackend: Boolean(agentBackends.platform),
     getRepoPublishedCatalogEntry: (slug) =>
       githubClient ? getPublishedCatalogEntry(githubClient, slug) : Promise.resolve(null),
     startImprovementRound,

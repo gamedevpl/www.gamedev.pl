@@ -60,4 +60,20 @@ describe('createAgentBackendRegistryFromEnv', () => {
     const registry = createAgentBackendRegistryFromEnv({ info: vi.fn(), warn: vi.fn() });
     expect(registry.platform?.name).toBe('copilot');
   });
+
+  it('selects the managed vendor over Copilot when the managed config is valid', () => {
+    setEnv({
+      MANAGED_AGENT_VENDOR: 'anthropic',
+      MANAGED_AGENT_API_KEY: 'sk-test',
+      MANAGED_AGENT_MODEL: 'claude-sonnet-5',
+      MANAGED_AGENT_ID: 'agent_test',
+      MANAGED_AGENT_ENVIRONMENT_ID: 'env_test',
+      MANAGED_AGENT_MAX_SECONDS: '120',
+      MANAGED_AGENT_MAX_LIST_COST_CENTS: '100',
+      MANAGED_AGENT_MCP_URL: 'https://www.gamedev.pl/api/mcp',
+      AGENT_TASKS_TOKEN: 'ghp_must_not_win_when_managed_is_valid',
+    });
+    const registry = createAgentBackendRegistryFromEnv({ info: vi.fn(), warn: vi.fn() });
+    expect(registry.platform?.name).toBe('managed:anthropic');
+  });
 });
