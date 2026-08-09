@@ -256,7 +256,7 @@ export interface ManagedProviderConfig {
   model: string;
   agentId?: string;
   environmentId?: string;
-  maxListCostCents?: number;
+  maxListBudgetUsd?: number;
   vaultIds?: string[];
   // Replace the agent's own tools and servers; off, its config wins.
   overrideTools?: boolean;

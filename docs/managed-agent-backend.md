@@ -264,17 +264,17 @@ Anthropic resources. `MANAGED_AGENT_VAULT_ID` attaches one session vault; use
 `MANAGED_AGENT_VAULT_IDS` for comma-separated vault IDs. The selected vault must contain
 the credential for the exact MCP server URL.
 
-It creates an initial event, polls twice, interrupts and deletes the session. The current
-probe verifies session lifecycle and costs a real run; it does not wait for a game to finish
-or prove that the configured Agent writes the expected files. `--base-url` aims the same
-adapter at a local HTTP stub. A full creator-visible round still needs the sink, registry
-wiring and a configured MCP connection or pull workspace.
+It creates an initial event, polls twice, interrupts, and deletes the session unless
+`--keep` is supplied. The current probe verifies session lifecycle and costs a real run; it
+does not wait for a game to finish or prove that the configured Agent writes the expected
+files. `--base-url` aims the same adapter at a local HTTP stub. A full creator-visible round
+still needs the sink, registry wiring and a configured MCP connection or pull workspace.
 
 For a bounded live run, `--wait` requires both caps explicitly:
 
 ```bash
 npm run managed:probe -w @gamedevpl/api -- --vendor anthropic --wait \
-  --wait-seconds 120 --cost-cents 100
+  --wait-seconds 120 --budget-usd 1
 ```
 
 The provider sends the cost cap to Anthropic as the session budget, and the backend
@@ -285,7 +285,7 @@ The probe can inject a digest file while exercising this path:
 
 ```bash
 npm run managed:probe -w @gamedevpl/api -- --vendor anthropic --mcp --wait \
-  --wait-seconds 120 --cost-cents 100 --digest-file /path/to/engine.digest.md
+  --wait-seconds 120 --budget-usd 1 --digest-file /path/to/engine.digest.md
 ```
 
 The production registry will use `createGcsKitDigestLoader`: it reads `kits/current.json`,
@@ -305,7 +305,7 @@ ref the round receives, rather than copied into this repository.
 | `MANAGED_AGENT_VAULT_IDS`           | Comma-separated session vault ids for MCP credentials           |
 | `MANAGED_AGENT_EFFORT`              | `low` / `medium` / `high`                                       |
 | `MANAGED_AGENT_MAX_SECONDS`         | Hard ceiling on one session's wall clock                        |
-| `MANAGED_AGENT_MAX_LIST_COST_CENTS` | Anthropic session budget, in whole cents                        |
+| `MANAGED_AGENT_MAX_LIST_BUDGET_USD` | Anthropic session budget, in USD                                |
 | `MANAGED_AGENT_DELIVERY_MODE`       | `preview` (default) or `publish`                                |
 | `MANAGED_AGENT_BASE_URL`            | Override the API origin — gateways, tests                       |
 

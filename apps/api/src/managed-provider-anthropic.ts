@@ -74,7 +74,7 @@ export function createAnthropicManagedProvider(config: ManagedProviderConfig): M
   const timeoutMs = config.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const agentId = config.agentId?.trim();
   const environmentId = config.environmentId?.trim();
-  const maxListCostCents = config.maxListCostCents;
+  const maxListBudgetUsd = config.maxListBudgetUsd;
   const vaultIds = config.vaultIds?.filter(Boolean);
   const overrideTools = config.overrideTools === true;
 
@@ -168,12 +168,12 @@ export function createAnthropicManagedProvider(config: ManagedProviderConfig): M
             content: [{ type: 'text', text: request.prompt }],
           },
         ],
-        ...(maxListCostCents === undefined
+        ...(maxListBudgetUsd === undefined
           ? {}
           : {
               budget: {
                 type: 'limit',
-                max_list_cost: { amount: String(maxListCostCents), currency: 'USD' },
+                max_list_cost: { amount: String(maxListBudgetUsd), currency: 'USD' },
               },
             }),
       };

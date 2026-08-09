@@ -34,7 +34,7 @@ describe('anthropic managed provider', () => {
       model: 'test-model',
       agentId: 'agent_test',
       environmentId: 'env_test',
-      maxListCostCents: 125,
+      maxListBudgetUsd: 125,
       vaultIds: ['vlt_test'],
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });

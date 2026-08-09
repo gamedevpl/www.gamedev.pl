@@ -63,7 +63,7 @@ export function createManagedPlatformBackendFromEnv(deps?: ManagedBackendDeps, l
   const agentId = process.env.MANAGED_AGENT_ID?.trim();
   const environmentId = process.env.MANAGED_AGENT_ENVIRONMENT_ID?.trim();
   const maxDurationSeconds = Number(process.env.MANAGED_AGENT_MAX_SECONDS ?? '');
-  const maxListCostCents = Number(process.env.MANAGED_AGENT_MAX_LIST_COST_CENTS ?? '');
+  const maxListBudgetUsd = Number(process.env.MANAGED_AGENT_MAX_LIST_BUDGET_USD ?? '');
   const vaultIds = (process.env.MANAGED_AGENT_VAULT_IDS ?? process.env.MANAGED_AGENT_VAULT_ID)
     ?.split(',')
     .map((id) => id.trim())
@@ -76,12 +76,12 @@ export function createManagedPlatformBackendFromEnv(deps?: ManagedBackendDeps, l
     vendor === 'anthropic' &&
     (!Number.isInteger(maxDurationSeconds) ||
       maxDurationSeconds <= 0 ||
-      !Number.isInteger(maxListCostCents) ||
-      maxListCostCents <= 0)
+      !Number.isFinite(maxListBudgetUsd) ||
+      maxListBudgetUsd <= 0)
   ) {
     log?.warn(
       { vendor },
-      'anthropic managed agent requires positive MANAGED_AGENT_MAX_SECONDS / MANAGED_AGENT_MAX_LIST_COST_CENTS',
+      'anthropic managed agent requires positive MANAGED_AGENT_MAX_SECONDS / MANAGED_AGENT_MAX_LIST_BUDGET_USD',
     );
     return undefined;
   }
@@ -104,7 +104,7 @@ export function createManagedPlatformBackendFromEnv(deps?: ManagedBackendDeps, l
       ...(process.env.MANAGED_AGENT_ENVIRONMENT_ID?.trim()
         ? { environmentId: process.env.MANAGED_AGENT_ENVIRONMENT_ID.trim() }
         : {}),
-      ...(Number.isInteger(maxListCostCents) && maxListCostCents > 0 ? { maxListCostCents } : {}),
+      ...(Number.isFinite(maxListBudgetUsd) && maxListBudgetUsd > 0 ? { maxListBudgetUsd } : {}),
       ...(vaultIds?.length ? { vaultIds } : {}),
       ...(process.env.MANAGED_AGENT_BASE_URL?.trim() ? { baseUrl: process.env.MANAGED_AGENT_BASE_URL.trim() } : {}),
     });
