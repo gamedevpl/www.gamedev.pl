@@ -60,7 +60,7 @@ import { largeSourceFileHint } from './module-size.js';
 import { gameManifestHint } from './game-manifest-hint.js';
 import { applyExactReplace, applySourcePatch, SourcePatchError } from './source-patch.js';
 import { overlayGameSources } from './staged-preview.js';
-import type { SourceDeliveryService } from './source-delivery.js';
+import { SourceDeliveryValidationError, type SourceDeliveryService } from './source-delivery.js';
 import { type BuilderHandoff, type CreatorMessage, type Store, type SubmissionRecord } from './store.js';
 import { BUILD_EVENT_KINDS, BUILD_STEPS, sanitizeCreatorText, type BuildEvent } from './submission-status.js';
 import { normalizeAtIntake, type IntakeText } from './localize-intake.js';
@@ -1664,6 +1664,9 @@ export async function registerAgentChannelRoutes(
           ...(await channelState(issueNumber, fresh)),
         });
       } catch (error) {
+        if (error instanceof SourceDeliveryValidationError) {
+          return reply.status(400).send({ error: error.message, reason: error.reason });
+        }
         // A rejected upload is the agent's to fix, so the reason goes back in full. This
         // is the one place a 400 body is worth writing carefully: the alternative is an
         // agent burning a session guessing which file was refused.

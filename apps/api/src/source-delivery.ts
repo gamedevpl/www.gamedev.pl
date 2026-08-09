@@ -61,6 +61,16 @@ export class SourceDeliveryAuthorityError extends Error {
   }
 }
 
+export class SourceDeliveryValidationError extends InvalidUploadError {
+  readonly reason: 'kit_engine_ref_required' | 'kit_engine_ref_mismatch';
+
+  constructor(reason: SourceDeliveryValidationError['reason'], message: string) {
+    super(message);
+    this.name = 'SourceDeliveryValidationError';
+    this.reason = reason;
+  }
+}
+
 export interface SourceDeliveryService {
   deliver(input: SourceDeliveryInput): Promise<SourceDeliveryOutcome>;
 }
@@ -200,7 +210,8 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
           };
         }
         if (!input.kitEngineRef) {
-          throw new InvalidUploadError(
+          throw new SourceDeliveryValidationError(
+            'kit_engine_ref_required',
             'kitEngineRef is required for self-build deliveries — send the engineRef from the Creator Kit you built against (kit.json / get_kit).',
           );
         }
@@ -208,7 +219,8 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
 
       const pinnedEngineRef = record.roundKitEngineRef;
       if (pinnedEngineRef && input.kitEngineRef && input.kitEngineRef !== pinnedEngineRef) {
-        throw new InvalidUploadError(
+        throw new SourceDeliveryValidationError(
+          'kit_engine_ref_mismatch',
           `This round is pinned to Creator Kit engine ${pinnedEngineRef}, not ${input.kitEngineRef}. ` +
             'Call get_kit and submit with the engineRef it returns.',
         );
