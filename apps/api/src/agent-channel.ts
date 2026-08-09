@@ -835,8 +835,8 @@ export async function registerAgentChannelRoutes(
           : {
               mustDeliver:
                 'Nothing has been delivered for this build yet. Pushing a branch is not delivering — ' +
-                'submit_sources (or `npm run submit -- <slug>` in a shell sandbox) before you finish, ' +
-                'or this session produces nothing.',
+                'call submit_sources with mode=preview at least once (mode=publish to seal, or ' +
+                '`npm run submit -- <slug>` in a shell sandbox) before you finish, or this session produces nothing.',
             }),
       },
     };

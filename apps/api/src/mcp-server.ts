@@ -517,8 +517,9 @@ function warningsFromChannel(body: ChannelControlBody): Array<{ code: string; me
       code: 'must_deliver',
       message:
         'Nothing has been delivered for this build yet. Staging or pushing a branch is not delivering — ' +
-        'stage your sources, then call submit_sources({ fromStaged: true, mode, kitEngineRef }) before you ' +
-        'finish, or this session produces nothing.',
+        'stage your sources, then call submit_sources({ fromStaged: true, mode: "preview", kitEngineRef }) ' +
+        '(mode: "publish" to seal instead, but that needs TRACE.json + PLAYTEST.json) before you finish, ' +
+        'or this session produces nothing.',
     });
   }
   return warnings;
