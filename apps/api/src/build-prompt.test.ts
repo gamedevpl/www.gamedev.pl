@@ -29,6 +29,26 @@ describe('buildPrompt delivery contract', () => {
     expect(prompt).not.toContain('GAMEDEVPL_BUILD_TOKEN');
   });
 
+  it('opens a creation round through create_game before start', () => {
+    const prompt = buildPrompt(
+      {
+        ...BRIEF,
+        slug: undefined,
+        createGame: {
+          title: 'Star Parcel Run',
+          concept: 'Guide a courier ship across a bright sky and dodge drifting clouds.',
+        },
+      },
+      { kind: 'channel', fast: true },
+    );
+
+    expect(prompt).toContain('game slug does not exist yet');
+    expect(prompt).toContain('Call `create_game` first');
+    expect(prompt).toContain('"title":"Star Parcel Run"');
+    expect(prompt).toContain('Use the returned slug and jobId');
+    expect(prompt).not.toContain('Call `start` with exactly `{ "slug": "(slug)" }`');
+  });
+
   it('does not send a sandboxed round looking for a checkout it does not have', () => {
     // Measured: 15 seconds of a two-minute round spent on `find / -iname ...`.
     const prompt = buildPrompt(BRIEF, { kind: 'channel', fast: true });
