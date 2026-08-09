@@ -42,6 +42,10 @@ const VaultSchema = z.object({
   id: z.string().min(1),
 });
 
+const VaultCredentialSchema = z.object({
+  id: z.string().min(1),
+});
+
 const FileListSchema = z.object({
   data: z
     .array(
@@ -132,13 +136,16 @@ export function createAnthropicManagedProvider(config: ManagedProviderConfig): M
     );
     if (!vault.success) throw new ManagedAgentError('anthropic vault creation returned an unreadable vault');
     try {
-      await call(`/v1/vaults/${encodeURIComponent(vault.data.id)}/credentials`, {
-        method: 'POST',
-        body: JSON.stringify({
-          display_name: `gamedev.pl round ${correlationId}`,
-          auth: { type: 'static_bearer', mcp_server_url: url, token },
+      const credential = VaultCredentialSchema.safeParse(
+        await call(`/v1/vaults/${encodeURIComponent(vault.data.id)}/credentials`, {
+          method: 'POST',
+          body: JSON.stringify({
+            display_name: `gamedev.pl round ${correlationId}`,
+            auth: { type: 'static_bearer', mcp_server_url: url, token },
+          }),
         }),
-      });
+      );
+      if (!credential.success) throw new ManagedAgentError('anthropic vault credential creation returned no credential');
     } catch (error) {
       await call(`/v1/vaults/${encodeURIComponent(vault.data.id)}/archive`, { method: 'POST' }).catch(() => undefined);
       throw error;
