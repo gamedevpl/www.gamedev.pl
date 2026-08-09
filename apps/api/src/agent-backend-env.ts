@@ -12,7 +12,12 @@ import { VertexGameSeeder, type GameSeeder } from './game-seed.js';
 import { createGitHubClient } from './github-client.js';
 import { createManagedProvider, type ManagedAgentEffort } from './managed-agent.js';
 import './managed-provider-anthropic.js';
-import { createManagedBackend, type ManagedDeliverySink, type ManagedRoundSignals } from './managed-backend.js';
+import {
+  createManagedBackend,
+  type ManagedDeliveryLock,
+  type ManagedDeliverySink,
+  type ManagedRoundSignals,
+} from './managed-backend.js';
 import type { KitDigestLoader } from './kit-digest.js';
 import { createArchiveSeedContextSource } from './seed-context.js';
 import { createSelfBuildBackend, type SelfBuildBackendOptions } from './self-build-backend.js';
@@ -43,6 +48,7 @@ export function resolveBuilderBackend(registry: AgentBackendRegistry, builder: B
 // What the managed backend needs that the environment cannot supply.
 export interface ManagedBackendDeps {
   deliver?: ManagedDeliverySink;
+  lock?: ManagedDeliveryLock;
   systemPrompt?: () => Promise<string | undefined>;
   kitDigest?: KitDigestLoader;
   // Channel-side round state; without it a finished round looks stalled.
@@ -119,6 +125,7 @@ export function createManagedPlatformBackendFromEnv(deps?: ManagedBackendDeps, l
     provider,
     ...(deps?.readSignals ? { readSignals: deps.readSignals } : {}),
     ...(deps?.deliver ? { deliver: deps.deliver } : {}),
+    ...(deps?.lock ? { lock: deps.lock } : {}),
     ...(mcpUrl ? { tools: { mcpEndpoints: [{ url: mcpUrl, name: 'gamedevpl' }] } } : {}),
     ...(deps?.systemPrompt ? { systemPrompt: deps.systemPrompt } : {}),
     ...(deps?.kitDigest ? { kitDigest: deps.kitDigest } : {}),
