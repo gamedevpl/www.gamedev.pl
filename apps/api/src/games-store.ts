@@ -30,6 +30,7 @@ import type { GateProgress } from './gate-progress.js';
 import { hasPlayableHowToPlay } from './index-html-generator.js';
 import { parseKitSidecar } from './kit-registry.js';
 import { KIT_REGISTRY_OBJECT, parseKitRegistry, type KitRegistry } from './kit-window.js';
+import { findUnresolvedSourceLinks, formatSourceLinkError, sourceFilesToMap } from './source-link-check.js';
 
 export type { GateProgress } from './gate-progress.js';
 
@@ -326,10 +327,18 @@ export function validateSourceUpload(files: SourceFile[], mode: DeliveryMode = '
       );
     }
   }
+
+  // Refuse missing cross-file symbols before the async gate.
+  const normalized = files.map((file) => ({ path: file.path.trim(), content: file.content }));
+  const linkFindings = findUnresolvedSourceLinks(sourceFilesToMap(normalized));
+  if (linkFindings.length > 0) {
+    throw new InvalidUploadError(formatSourceLinkError(linkFindings));
+  }
+
   // AGENT.json is allowed above but deliberately not required here yet — see the
   // ALLOWED_SOURCE_FILES note. Missing file → Check 28 on the gate, not a 400 at upload.
 
-  return files.map((file) => ({ path: file.path.trim(), content: file.content }));
+  return normalized;
 }
 
 /** Provenance for one stored version. Answers "where did this come from?" years later. */

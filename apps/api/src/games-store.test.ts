@@ -143,6 +143,54 @@ describe('validateSourceUpload — the delivery contract', () => {
     });
   });
 
+  describe('cross-file symbol link check', () => {
+    const brokenPair: SourceFile[] = [
+      {
+        path: 'game/runtime.ts',
+        content: `import { WIN_SCORE, spawnDebris } from './model.js';\nexport function tick() {\n  return WIN_SCORE + spawnDebris();\n}\n`,
+      },
+      {
+        path: 'game/model.ts',
+        content: `export type Round = { score: number };\nexport const START = 0;\n`,
+      },
+    ];
+
+    it('refuses the WIN_SCORE/spawnDebris delivery on preview and publish', () => {
+      for (const mode of ['preview', 'publish'] as const) {
+        expect(() => validateSourceUpload([...MINIMAL, ...brokenPair], mode)).toThrow(
+          /game\/model\.ts does not export `WIN_SCORE`, `spawnDebris`/,
+        );
+      }
+    });
+
+    it('still accepts a valid multi-file delivery', () => {
+      const delivery = [
+        ...MINIMAL.filter((f) => f.path !== 'game.ts'),
+        {
+          path: 'game.ts',
+          content: `import { publicName, Helper } from './lib.js';\nexport { publicName, Helper };\n`,
+        },
+        {
+          path: 'lib.ts',
+          content: `const localName = 1;\nexport { localName as publicName };\nexport class Helper {}\n`,
+        },
+      ];
+      expect(validateSourceUpload(delivery)).toHaveLength(delivery.length);
+      expect(validateSourceUpload(delivery, 'preview')).toHaveLength(delivery.length);
+    });
+
+    it('does not refuse bare engine imports', () => {
+      const delivery = [
+        ...MINIMAL.filter((f) => f.path !== 'game.ts'),
+        {
+          path: 'game.ts',
+          content: `import { createGame } from '@gamedevpl/game-kit';\nexport const g = createGame;\n`,
+        },
+      ];
+      expect(validateSourceUpload(delivery)).toHaveLength(delivery.length);
+    });
+  });
+
   it('catches an enabled audio module without selected sounds before the gate', () => {
     expect(() =>
       validateSourceUpload(
