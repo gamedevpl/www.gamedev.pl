@@ -9,10 +9,11 @@
 
 ![Six games from the catalog, each built by an AI agent from a written description](./docs/media/demo.gif)
 
-You write a few sentences about a game you want. An agent asks what it needs to know, then
-builds it — actual code, not a template with the numbers changed. When it is ready it appears
-in the arcade, where anyone can play it in a browser: no install, no account. Bring friends —
-some games turn phones into controllers around one shared screen.
+You write a few sentences about a game you want. The app asks what it needs to know, then you
+can hand the brief to the platform builder or connect your own coding agent over MCP. The
+agent builds actual code, not a template with the numbers changed. After review, the game
+appears in the arcade and runs in a browser. Bring friends — some games turn phones into
+controllers around one shared screen.
 
 _Every game above was built this way._
 
@@ -26,11 +27,14 @@ about:
 
 - A creator's description becomes a spec, and a **QA gate** asks real clarifying questions
   before any code is written.
-- An agent implements the game in a separate games repository and reports progress over a
-  live build channel while it works.
-- After playing, a creator can ask for changes — the feedback goes back to the agent as a
-  pull-request comment, and the agent iterates.
-- Every game must pass CI before it can be published.
+- A creator chooses the hosted platform builder or connects their own Cursor, VS Code,
+  Claude Code, Codex, or other MCP-capable agent.
+- The agent reports progress, screenshots, and playable drafts to Creator Studio while it
+  works; creator notes return over the same live channel.
+- Revisions start a new task from the exact stored version the creator played, rather than
+  relying on a stale branch or pull request.
+- Every game passes the validation gate and human review before publication to the separate,
+  agent-maintained games repository.
 
 **One guarantee that CI enforces:** every game in the catalog is playable with a thumb. Touch
 support is _derived from each game's source_, not declared in its spec, so a game cannot claim
@@ -46,17 +50,20 @@ npm install
 npm run dev
 ```
 
-Open **http://localhost:5173**. You get a browsable arcade, a playable game, a working
-sign-in, and a creation flow — with **no API keys, no GitHub token, and no cloud project**.
-Game content comes from a local games checkout if you have one, and from bundled fixture games
-if you don't.
+This project requires **Node.js 20.19 or newer**. Open **http://localhost:5173** (not
+`127.0.0.1`). You get a browsable arcade, playable games, a development sign-in, and an
+in-memory submission flow — with **no API keys, no GitHub token, and no cloud project**.
+Game content comes from a sibling games checkout or `GAMES_LOCAL_DIR` if available, and from
+bundled fixture games otherwise. Local submissions remain queued because no coding agent is
+watching the in-memory store.
 
 Full detail, including what is deliberately faked locally and what will surprise you, is in
 [`docs/local-development.md`](./docs/local-development.md).
 
-> **Note:** this is not a self-hostable game generator. Running the stack locally is for
-> people who want to work on the platform; game creation on the live site runs through
-> infrastructure that is not part of this repository.
+> **Note:** running this stack locally is for developing the platform, not for recreating the
+> hosted builder. The orchestration code is here, but the live coding-agent runtime is an
+> external hosted service. You can still exercise the creator handoff with your own agent and
+> the live site's MCP connection.
 
 ## Safety model
 
@@ -72,12 +79,15 @@ it, please report it privately — see [`SECURITY.md`](./SECURITY.md).
 
 ```
 apps/
-  web/               Vite + React + TypeScript — arcade, sandboxed player, creation flow
-  api/               Fastify + TypeScript — catalog, submissions, auth, multiplayer relay
-  api/fixtures/      A games-repo-shaped directory so the app runs with no credentials
+  web/               Vite + React + TypeScript — arcade, player, Creator Studio
+  api/               Fastify + TypeScript — catalog, jobs, auth, agent channel, multiplayer
+  api/fixtures/      Games-repo-shaped content so the app runs with no credentials
+  e2e/               Playwright checks for critical browser and production flows
+  world/             Persistent-world service, deployed separately from the main API
 packages/
   game-generator/    The generator seam: GameGenerator interface and GameProject type
-infra/               Cloud Run deployment scripts (imperative gcloud, not Terraform)
+  zone-core/         Shared protocol and simulation primitives for persistent worlds
+infra/               Cloud Run deployment and read-only production-inspection scripts
 docs/                The plan of record — read this before making assumptions
 ```
 
@@ -95,7 +105,8 @@ running in minutes.
 - **Have an idea?** [Open a feature request](https://github.com/gamedevpl/www.gamedev.pl/issues/new?template=feature_request.yml),
   or start a [discussion](https://github.com/gamedevpl/www.gamedev.pl/discussions).
 - **Found a security problem?** Do not open an issue — see [`SECURITY.md`](./SECURITY.md).
-- **Writing code?** Run `npm run lint && npm run type-check && npm run test` before you finish.
+- **Writing code?** Run `npm install`, then
+  `npm run type-check && npm run lint && npm run test && npm run build` before you finish.
   Coding agents should read [`docs/contributing-for-agents.md`](./docs/contributing-for-agents.md).
 
 Translations are a good first contribution: the interface lives in
