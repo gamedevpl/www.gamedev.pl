@@ -155,14 +155,8 @@ export interface SubmissionRecord {
    * not a state to design around.
    */
   slug?: string;
-  /**
-   * The most recent candidate version this job delivered to the games store.
-   *
-   * Kept on the record rather than discovered by listing the bucket, because the
-   * preview needs it on every poll and a list-per-poll would be the same mistake the
-   * GitHub-derived status was. It is also what makes the preview possible at all now
-   * that a build has no pull request to read from.
-   */
+  // Latest candidate version delivered to the games store.
+  // Kept here so the preview never lists the bucket per poll.
   deliveredVersion?: string;
   /**
    * Latest Studio-playable delivery (preview or publish). Preview-only rounds update
@@ -170,6 +164,9 @@ export interface SubmissionRecord {
    * reconciliation still wait for a sealed publish delivery.
    */
   previewVersion?: string;
+  // The kit engine this round builds against, fixed by its first get_kit.
+  // Dropped when the round closes; replaced on kit_outdated or lost retention.
+  roundKitEngineRef?: string;
   /**
    * How many times this job has been sent back for finishing without delivering.
    *
@@ -1769,6 +1766,9 @@ export interface Store {
    * validation rejects the brand-new key (`active === undefined`).
    */
   ensureRoundGeneration(issueNumber: number): Promise<number | null>;
+  // Fixes the round's kit engine and returns it; first caller wins.
+  // `replace` overrides the pin: kit_outdated recovery, or a kit gone.
+  pinRoundKitEngineRef(issueNumber: number, engineRef: string, replace?: boolean): Promise<string | null>;
   /** Records the agent backend's last reported state, for stall detection. */
   setSubmissionAgentState(issueNumber: number, agentState: AgentTaskState): Promise<void>;
   /**
@@ -2974,6 +2974,7 @@ export class InMemoryStore implements Store {
       delete next.lastAgentSignalAt;
       delete next.lastAgentPresence;
       delete next.agentEndedAt;
+      delete next.roundKitEngineRef;
     }
     this.submissions.set(issueNumber, next);
     return true;
@@ -2989,8 +2990,17 @@ export class InMemoryStore implements Store {
     delete next.lastAgentSignalAt;
     delete next.lastAgentPresence;
     delete next.agentEndedAt;
+    delete next.roundKitEngineRef;
     this.submissions.set(issueNumber, next);
     return roundGeneration;
+  }
+
+  async pinRoundKitEngineRef(issueNumber: number, engineRef: string, replace = false): Promise<string | null> {
+    const sub = this.submissions.get(issueNumber);
+    if (!sub) return null;
+    if (sub.roundKitEngineRef && !replace) return sub.roundKitEngineRef;
+    this.submissions.set(issueNumber, { ...sub, roundKitEngineRef: engineRef });
+    return engineRef;
   }
 
   async requestBuilderHandoff(
@@ -5141,6 +5151,7 @@ export class FirestoreStore implements Store {
         delete next.lastAgentSignalAt;
         delete next.lastAgentPresence;
         delete next.agentEndedAt;
+        delete next.roundKitEngineRef;
         tx.set(ref, next);
       } else {
         tx.set(
@@ -5170,8 +5181,21 @@ export class FirestoreStore implements Store {
       delete next.lastAgentSignalAt;
       delete next.lastAgentPresence;
       delete next.agentEndedAt;
+      delete next.roundKitEngineRef;
       tx.set(ref, next);
       return roundGeneration;
+    });
+  }
+
+  async pinRoundKitEngineRef(issueNumber: number, engineRef: string, replace = false): Promise<string | null> {
+    const ref = this.db.collection('submissions').doc(String(issueNumber));
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return null;
+      const current = snap.data() as SubmissionRecord;
+      if (current.roundKitEngineRef && !replace) return current.roundKitEngineRef;
+      tx.set(ref, { roundKitEngineRef: engineRef }, { merge: true });
+      return engineRef;
     });
   }
 

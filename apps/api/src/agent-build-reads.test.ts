@@ -262,6 +262,60 @@ describe('agent build reads (BY-04)', () => {
     expect(signReadUrl).toHaveBeenCalledWith(`kits/${ENGINE}.tgz`, expect.any(Number));
   });
 
+  it('pins the round to one engine even when the registry pointer advances', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    const moved = 'f'.repeat(40);
+    const registry = { current: ENGINE, previous: null, updatedAt: '2026-08-09T00:00:00.000Z' };
+    const objects = new Map<string, Buffer>([
+      ['kits/current.json', Buffer.from(JSON.stringify(registry))],
+      [`kits/${ENGINE}.json`, Buffer.from(JSON.stringify({ sha256: SHA, packedAt: '2026-08-09T00:00:00.000Z' }))],
+      [`kits/${ENGINE}.tgz`, Buffer.from('fake-tarball')],
+      [`kits/${moved}.json`, Buffer.from(JSON.stringify({ sha256: SHA, packedAt: '2026-08-09T00:01:00.000Z' }))],
+      [`kits/${moved}.tgz`, Buffer.from('fake-tarball-2')],
+    ]);
+    app = await createApp(store, {
+      ...mockObjectStore(objects),
+      signReadUrl: async (name: string) => `https://signed.example/${name}?sig=1`,
+    });
+
+    const first = await app.inject({ method: 'GET', url: '/api/agent/build/kit', headers: agentHeaders() });
+    expect(first.json().engineRef).toBe(ENGINE);
+
+    objects.set('kits/current.json', Buffer.from(JSON.stringify({ ...registry, current: moved })));
+    const second = await app.inject({ method: 'GET', url: '/api/agent/build/kit', headers: agentHeaders() });
+
+    expect(second.json().engineRef).toBe(ENGINE);
+    expect(second.json().kitEngineChanged).toBeUndefined();
+    expect(second.json().kitUrl).toContain(ENGINE);
+  });
+
+  it('replaces a pin whose kit has aged out, and says the engine moved', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    const gone = 'c'.repeat(40);
+    await store.pinRoundKitEngineRef(ISSUE, gone);
+    const objects = new Map<string, Buffer>([
+      [
+        'kits/current.json',
+        Buffer.from(JSON.stringify({ current: ENGINE, previous: null, updatedAt: '2026-08-09T00:00:00.000Z' })),
+      ],
+      [`kits/${ENGINE}.json`, Buffer.from(JSON.stringify({ sha256: SHA, packedAt: '2026-08-09T00:00:00.000Z' }))],
+      [`kits/${ENGINE}.tgz`, Buffer.from('fake-tarball')],
+    ]);
+    app = await createApp(store, {
+      ...mockObjectStore(objects),
+      objectExists: async (name: string) => objects.has(name),
+      signReadUrl: async (name: string) => `https://signed.example/${name}?sig=1`,
+    });
+
+    const res = await app.inject({ method: 'GET', url: '/api/agent/build/kit', headers: agentHeaders() });
+
+    expect(res.json().engineRef).toBe(ENGINE);
+    expect(res.json().kitEngineChanged).toBe(true);
+    expect((await store.getSubmission(ISSUE))?.roundKitEngineRef).toBe(ENGINE);
+  });
+
   it('lists, searches, and reads kit files from the packed tarball over the channel', async () => {
     const store = new InMemoryStore();
     await seedJob(store);

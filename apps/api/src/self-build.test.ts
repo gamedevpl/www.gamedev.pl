@@ -457,6 +457,45 @@ describe('self builder (BY-02)', () => {
     expect(refused.json().error).toMatch(/kitEngineRef/i);
   });
 
+  it('rejects a delivery built against an engine this round is not pinned to', async () => {
+    const { gamesStore } = stubGamesStore();
+    const created = await createApp({ gamesStore });
+    app = created.app;
+    const { store } = created;
+
+    const submit = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders(),
+      payload: { title: 'Pinned Kit', concept: CONCEPT, builder: 'self' },
+    });
+    const slug = submit.json().slug as string;
+    let issueNumber = 0;
+    await vi.waitFor(async () => {
+      issueNumber = (await store.listSubmissionsByOwner('g:creator'))[0]!.issueNumber;
+    });
+    const pinned = 'a'.repeat(40);
+    await store.pinRoundKitEngineRef(issueNumber, pinned);
+
+    const refused = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/sources',
+      headers: agentHeaders(issueNumber),
+      payload: { slug, files: MINIMAL_FILES, kitEngineRef: 'b'.repeat(40) },
+    });
+    expect(refused.statusCode).toBe(400);
+    expect(refused.json()).toMatchObject({ reason: 'kit_engine_ref_mismatch' });
+    expect(refused.json().error).toContain(pinned);
+
+    const accepted = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/sources',
+      headers: agentHeaders(issueNumber),
+      payload: { slug, files: MINIMAL_FILES, kitEngineRef: pinned },
+    });
+    expect(accepted.statusCode).toBe(200);
+  });
+
   it('enforces SELF_BUILD_DELIVERY_CAP with a machine-readable refusal', async () => {
     process.env.SELF_BUILD_DELIVERY_CAP = '2';
     const { gamesStore } = stubGamesStore();

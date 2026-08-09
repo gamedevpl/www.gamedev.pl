@@ -144,6 +144,26 @@ It used to mean the latter, and often did: on 2026-08-05 seven kits published in
 one over a commit that added an internal probe script. `apps/api/src/kit-window.ts` is the rule;
 the games repo's `docs/kit-versioning.md` is when to bump.
 
+### One round builds against one engine
+
+`get_kit` is pinned. The first call of a round fixes the `engineRef` on the job, and every
+later call in that round returns the same one even if the registry pointer has moved on.
+`submit_sources` refuses a `kitEngineRef` that is not the pinned one, with
+`reason: "kit_engine_ref_mismatch"`.
+
+That is a response to a real round: two `get_kit` calls 76 seconds apart returned different
+engines because the games repo published in between, and the agent only noticed because it
+happened to re-read. One that had cached the first ref would have submitted against a
+superseded engine, and the disagreement between the engine it read the API from and the
+engine it was validated against would have been silent.
+
+The pin is dropped when the round closes, and replaced in two cases: after a `kit_outdated`
+verdict, where a newer engine is the whole fix, and when the pinned kit has fallen out of
+retention, where serving it would wedge the round on a tarball that no longer exists. Either
+way the call returns `kitEngineChanged: true` — an explicit signal, rather than an
+idempotent-looking read quietly answering differently. Treat it as the `kit_outdated` recipe
+above: take the new `engineRef` and submit against that.
+
 ### Staging is creator-visible (live staged preview)
 
 `apps/api/src/staged-preview.ts` assembles the **staging buffer itself** and stores it as
