@@ -2547,8 +2547,10 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         'about what it can build (multiplayer, persistent worlds, party games, …) is answered by ' +
         'get_kit_api or browse, never by web search. ' +
         'For the API itself: get_kit_api (with this engineRef) for a prompt-ready orientation in ' +
-        "one call — it names anything it had to cut, use the browse tools named in this reply's " +
-        'browse block (list/search/read) for those or any other specific kit file. ' +
+        'one call — it flags what it had to cut (by name when a whole declaration is dropped, by ' +
+        'count when a kept one is trimmed member-wise), so a missing signature is never silent; ' +
+        "use the browse tools named in this reply's browse block (list/search/read) for those or " +
+        'any other specific kit file. ' +
         'With shell egress, unpack via kitUrl/unpack and follow SKILL.md locally instead of either. ' +
         'entry=gamedevpl-creator-kit/SKILL.md (tarball roots at gamedevpl-creator-kit/; ' +
         'do not assume a `cd` persists across tool calls). ' +
@@ -2587,8 +2589,10 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         'to "can this platform build X", not a web search), plus as much of the core API ' +
         'signatures, audio catalog, and exemplar game as fit in one tool result. ' +
         'The response is sized to a safe single-call limit, not to the whole API — for a real ' +
-        'kit this routinely omits some declarations, named in an "Omitted for length" note in ' +
-        'the digest text; treat that as normal, not an error. Call this once near ' +
+        'kit this routinely omits content: whole declarations dropped are named in an "Omitted ' +
+        'for length" note, and a declaration too large to fit whole is trimmed member-wise with ' +
+        'only a count of what was cut, not names. Treat both as normal, not an error. ' +
+        'Call this once near ' +
         'the start of a round, before scaffolding, rather than repeatedly — its content only ' +
         'changes when engineRef does. Pass engineRef from get_kit so a mid-round registry bump ' +
         "cannot mix kit revisions. Falls back to the registry's current engine when engineRef is " +
