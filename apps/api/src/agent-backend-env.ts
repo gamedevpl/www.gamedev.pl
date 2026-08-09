@@ -12,7 +12,12 @@ import { VertexGameSeeder, type GameSeeder } from './game-seed.js';
 import { createGitHubClient } from './github-client.js';
 import { createManagedProvider, type ManagedAgentEffort } from './managed-agent.js';
 import './managed-provider-anthropic.js';
-import { createManagedBackend, type ManagedDeliverySink, type ManagedRoundSignals } from './managed-backend.js';
+import {
+  createManagedBackend,
+  type ManagedDeliveryLock,
+  type ManagedDeliverySink,
+  type ManagedRoundSignals,
+} from './managed-backend.js';
 import type { KitDigestLoader } from './kit-digest.js';
 import { createArchiveSeedContextSource } from './seed-context.js';
 import { createSelfBuildBackend, type SelfBuildBackendOptions } from './self-build-backend.js';
@@ -43,6 +48,7 @@ export function resolveBuilderBackend(registry: AgentBackendRegistry, builder: B
 // What the managed backend needs that the environment cannot supply.
 export interface ManagedBackendDeps {
   deliver?: ManagedDeliverySink;
+  lock?: ManagedDeliveryLock;
   systemPrompt?: () => Promise<string | undefined>;
   kitDigest?: KitDigestLoader;
   // Channel-side round state; without it a finished round looks stalled.
@@ -119,6 +125,7 @@ export function createManagedPlatformBackendFromEnv(deps?: ManagedBackendDeps, l
     provider,
     ...(deps?.readSignals ? { readSignals: deps.readSignals } : {}),
     ...(deps?.deliver ? { deliver: deps.deliver } : {}),
+    ...(deps?.lock ? { lock: deps.lock } : {}),
     ...(mcpUrl ? { tools: { mcpEndpoints: [{ url: mcpUrl, name: 'gamedevpl' }] } } : {}),
     ...(deps?.systemPrompt ? { systemPrompt: deps.systemPrompt } : {}),
     ...(deps?.kitDigest ? { kitDigest: deps.kitDigest } : {}),
@@ -167,10 +174,14 @@ export function createAgentBackendRegistryFromEnv(
   selfOptions?: SelfBuildBackendOptions,
   managedDeps?: ManagedBackendDeps,
 ): AgentBackendRegistry {
-  // A configured managed vendor takes the platform slot; routing above is unchanged.
-  const platform = createManagedPlatformBackendFromEnv(managedDeps, log) ?? createPlatformBackendFromEnv(log);
+  const selectedVendor = process.env.MANAGED_AGENT_VENDOR?.trim();
+  const managed = createManagedPlatformBackendFromEnv(managedDeps, log);
+  // Explicit vendor must not silently fall back to Copilot.
+  const platform = selectedVendor ? managed : (managed ?? createPlatformBackendFromEnv(log));
   const self = createSelfBuildBackend(selfOptions);
-  if (!platform) {
+  if (selectedVendor && !managed) {
+    log?.warn({ vendor: selectedVendor }, 'managed agent vendor is set but invalid; platform dispatch stays off');
+  } else if (!platform) {
     log?.info({ backend: 'self' }, 'self-build backend enabled (no platform dispatch credential)');
   }
   return { ...(platform ? { platform } : {}), self };

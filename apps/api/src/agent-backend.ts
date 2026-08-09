@@ -18,6 +18,7 @@ import type { AgentObservation } from './job-state.js';
 export interface BuildBrief {
   /** Our job identity, for correlating an agent's reports back to the job. */
   issueNumber: number;
+  roundGeneration?: number;
   /** The game directory the agent may touch, and nothing else. */
   slug?: string;
   createGame?: { title: string; concept: string; locale?: string };
@@ -114,7 +115,7 @@ export interface AgentBackend {
   // Job identity is for pull-delivery backends; push backends ignore it.
   observe(
     ref: string,
-    options: { hasCandidate: boolean; issueNumber?: number; slug?: string },
+    options: { hasCandidate: boolean; issueNumber?: number; slug?: string; roundGeneration?: number },
   ): Promise<AgentObservation | null>;
   /**
    * Stops work, as far as the backend allows.

@@ -1389,6 +1389,7 @@ describe('submission routes', () => {
       hasCandidate: false,
       issueNumber: job.issueNumber,
       slug: 'a-game',
+      roundGeneration: 1,
     });
     expect((await store.getSubmission(job.issueNumber))?.state).toBe('building');
     expect(early.json().phase).toBe('building');

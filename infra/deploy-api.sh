@@ -180,6 +180,11 @@ else
   echo "==> agent-tasks-token not found; submissions will queue without being dispatched."
 fi
 
+if gcloud secrets describe anthropic-api-key --project "$PROJECT_ID" >/dev/null 2>&1; then
+  SECRET_MAPPINGS+=("MANAGED_AGENT_API_KEY=anthropic-api-key:latest")
+  echo "==> anthropic-api-key found; managed agent API access enabled."
+fi
+
 if gcloud secrets describe session-secret --project "$PROJECT_ID" >/dev/null 2>&1; then
   SECRET_MAPPINGS+=("SESSION_SECRET=session-secret:latest")
   echo "==> session-secret found; session authentication enabled."
@@ -263,6 +268,21 @@ for FLAG_VAR in SEED_DISPATCH CODE_LANE EDITOR_ASSIST MCP_AUTHORIZATION_SERVERS 
   eval "FLAG_VAL=\${${FLAG_VAR}:-}"
   if [ -n "${FLAG_VAL}" ]; then
     ENV_VARS="${ENV_VARS}|${FLAG_VAR}=${FLAG_VAL}"
+  fi
+done
+for MANAGED_VAR in \
+  MANAGED_AGENT_VENDOR \
+  MANAGED_AGENT_MODEL \
+  MANAGED_AGENT_ID \
+  MANAGED_AGENT_ENVIRONMENT_ID \
+  MANAGED_AGENT_MAX_SECONDS \
+  MANAGED_AGENT_MAX_LIST_COST_CENTS \
+  MANAGED_AGENT_VAULT_IDS \
+  MANAGED_AGENT_MCP_URL \
+  MANAGED_AGENT_DELIVERY_MODE; do
+  eval "MANAGED_VAL=\${${MANAGED_VAR}:-}"
+  if [ -n "${MANAGED_VAL}" ]; then
+    ENV_VARS="${ENV_VARS}|${MANAGED_VAR}=${MANAGED_VAL}"
   fi
 done
 if [ -n "$GOOGLE_OAUTH_CLIENT_ID" ]; then

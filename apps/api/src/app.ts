@@ -10,6 +10,7 @@ import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLar
 import { registerAccessTokenRoutes } from './access-token-routes.js';
 import { registerJobAdminRoutes } from './job-admin-routes.js';
 import { createGameSeederFromEnv, createPlatformBackendFromEnv } from './agent-backend-env.js';
+import { createManagedDeliveryLock } from './managed-backend.js';
 import { createGcsGamesStore } from './games-store.js';
 import { createGcsObjectStore } from './gcs-sign.js';
 import { createCloudBuildGateTrigger, gateTriggerOptionsFromEnv } from './gate-trigger.js';
@@ -391,6 +392,24 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // Platform only here — `self` is wired inside registerSubmissionRoutes with store
     // callbacks for seed persistence. Passing a pre-built self would skip those.
     agentBackends: resolvedAgentBackends,
+    managedBackendDeps:
+      options.submissionRoutes?.managedBackendDeps ??
+      (options.submissionRoutes?.agentBackend
+        ? undefined
+        : {
+            // Multi-instance at-most-once harvest; see ManagedDeliveryLock.
+            lock: createManagedDeliveryLock(store),
+            readSignals: async (issueNumber) => {
+              const record = await store.getSubmission(issueNumber);
+              return record
+                ? {
+                    deliveredVersion: record.deliveredVersion,
+                    previewVersion: record.previewVersion,
+                    agentEndedAt: record.agentEndedAt,
+                  }
+                : null;
+            },
+          }),
     gameSeeder: options.submissionRoutes?.gameSeeder ?? createGameSeederFromEnv(app.log),
     agentChannel: {
       ...options.submissionRoutes?.agentChannel,

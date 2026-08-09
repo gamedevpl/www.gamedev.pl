@@ -34,7 +34,12 @@ import { startHealthCheck } from './game-health.js';
 import { createStagedPreviewPublisher, type StagedPreviewOptions } from './staged-preview.js';
 import { createInternalAuthVerifierFromEnv, type InternalAuthVerifier } from './internal-auth.js';
 import type { AgentBackend, SeedFiles } from './agent-backend.js';
-import { resolveBuilderBackend, type AgentBackendRegistry } from './agent-backend-env.js';
+import {
+  createAgentBackendRegistryFromEnv,
+  resolveBuilderBackend,
+  type AgentBackendRegistry,
+  type ManagedBackendDeps,
+} from './agent-backend-env.js';
 import {
   allowsCreatorBuilderHandoff,
   allowsSelfToPlatformHandoff,
@@ -46,6 +51,10 @@ import {
   type BuilderKind,
 } from './builder.js';
 import type { GameSeeder, SeedDraft } from './game-seed.js';
+import { ManagedOutputRejectedError } from './managed-agent.js';
+import { createManagedDeliveryLock } from './managed-backend.js';
+import { createSourceDeliveryService, SourceDeliveryAuthorityError } from './source-delivery.js';
+import { InvalidUploadError } from './games-store.js';
 import {
   canTransition,
   detectStall,
@@ -60,7 +69,6 @@ import {
 } from './job-state.js';
 import { isMcpPresenceEventText } from './mcp-presence.js';
 import { logSeedStagingFailure } from './seed-metrics.js';
-import { createSelfBuildBackend } from './self-build-backend.js';
 import { mintConnectPayload } from './self-build-connect.js';
 import { createLocalGamesClient, resolveLocalGamesDir } from './local-games-repo.js';
 import { createMailerFromEnv, type Mailer } from './mailer.js';
@@ -318,6 +326,8 @@ export interface SubmissionRoutesOptions {
    * filled in (a default self backend) if the caller omits it.
    */
   agentBackends?: Partial<AgentBackendRegistry> & { platform?: AgentBackend };
+  /** Dependencies for the environment-selected managed platform backend. */
+  managedBackendDeps?: ManagedBackendDeps;
   /**
    * Writes the first draft a new build starts from. Absent means every build starts from
    * an empty directory, which is what they all did before seeding existed.
@@ -576,6 +586,22 @@ export async function registerSubmissionRoutes(
   const internalAuthVerifier = options.internalAuthVerifier ?? createInternalAuthVerifierFromEnv();
   const gameSeeder = options.gameSeeder;
   const gamesStoreForSeed = options.agentChannel?.gamesStore;
+  function invalidateDeliveryCaches(issueNumber: number): void {
+    eventsCache.delete(issueNumber);
+    invalidateStatusCache(issueNumber);
+  }
+  const sourceDelivery =
+    store && gamesStoreForSeed
+      ? createSourceDeliveryService({
+          store,
+          gamesStore: gamesStoreForSeed,
+          now,
+          maxSubmitsPerWindow: options.agentChannel?.maxSubmitsPerWindow,
+          onSourcesDelivered: options.agentChannel?.onSourcesDelivered,
+          onEvent: invalidateDeliveryCaches,
+          log: app.log,
+        })
+      : undefined;
 
   function buildAgentRegistry(): AgentBackendRegistry {
     const selfOptions = store
@@ -593,14 +619,55 @@ export async function registerSubmissionRoutes(
             return {
               lastAgentSignalAt: record.lastAgentSignalAt,
               deliveredVersion: record.deliveredVersion,
+              previewVersion: record.previewVersion,
+              agentEndedAt: record.agentEndedAt,
             };
           },
         }
       : undefined;
-    // An explicit `agentBackend` (tests, one-off wiring) wins over the env registry's
-    // platform entry — same precedence the single-backend option had before the registry.
-    const self = options.agentBackends?.self ?? createSelfBuildBackend(selfOptions);
-    const platform = options.agentBackend ?? options.agentBackends?.platform;
+    const configuredManagedDeps = options.managedBackendDeps;
+    const managedDeliver =
+      sourceDelivery && !configuredManagedDeps?.deliver
+        ? async (input: Parameters<NonNullable<ManagedBackendDeps['deliver']>>[0]) => {
+            try {
+              const outcome = await sourceDelivery.deliver({
+                issueNumber: input.issueNumber,
+                slug: input.slug,
+                files: input.files,
+                backend: input.backend,
+                mode: input.mode,
+                authority: {
+                  backend: input.backend,
+                  sessionRef: input.sessionRef,
+                  roundGeneration: input.roundGeneration,
+                },
+              });
+              if (!outcome.accepted) {
+                throw new ManagedOutputRejectedError(`source delivery rejected: ${outcome.rejected}`);
+              }
+              return { version: outcome.version };
+            } catch (error) {
+              if (error instanceof SourceDeliveryAuthorityError || error instanceof InvalidUploadError) {
+                throw new ManagedOutputRejectedError(error.message);
+              }
+              throw error;
+            }
+          }
+        : undefined;
+    // Durable across Cloud Run instances; process-local harvested is not enough.
+    const managedLock = configuredManagedDeps?.lock ?? (store ? createManagedDeliveryLock(store) : undefined);
+    const managedDeps =
+      managedDeliver || configuredManagedDeps || managedLock
+        ? {
+            ...configuredManagedDeps,
+            ...(managedDeliver ? { deliver: managedDeliver } : {}),
+            ...(managedLock ? { lock: managedLock } : {}),
+          }
+        : undefined;
+    const environmentRegistry = createAgentBackendRegistryFromEnv(app.log, selfOptions, managedDeps);
+    // Explicit backends win over the environment registry.
+    const self = options.agentBackends?.self ?? environmentRegistry.self;
+    const platform = options.agentBackend ?? options.agentBackends?.platform ?? environmentRegistry.platform;
     return { ...(platform ? { platform } : {}), self };
   }
 
@@ -955,6 +1022,7 @@ export async function registerSubmissionRoutes(
       }
       const result = await selected.dispatch({
         issueNumber: input.issueNumber,
+        roundGeneration,
         ...(input.slug ? { slug: input.slug } : {}),
         spec: input.spec,
         locale: input.locale,
@@ -1132,6 +1200,7 @@ export async function registerSubmissionRoutes(
       const reusedSelfSeed = input.undelivered && builder === 'self' ? record?.seed : undefined;
       const brief = {
         issueNumber: input.issueNumber,
+        roundGeneration,
         slug: record?.slug,
         spec: input.feedback,
         feedback: input.feedback,
@@ -2349,6 +2418,8 @@ export async function registerSubmissionRoutes(
         // Pull-delivery backends harvest inside observe.
         issueNumber: record.issueNumber,
         ...(record.slug ? { slug: record.slug } : {}),
+        // Durable generation — process memory is empty after restart.
+        roundGeneration: record.roundGeneration ?? 1,
       });
       if (!observation) return null;
       if (observation.sessionTokens) {
@@ -2375,9 +2446,14 @@ export async function registerSubmissionRoutes(
           app.log.error({ err: error, issueNumber: record.issueNumber }, 'could not store agent task state');
         }
       }
+      // Re-read after harvest; do not skip the gate.
+      const fresh = await store.getSubmission(record.issueNumber);
+      const stateAfterObserve = (fresh?.state ?? state) as JobState;
+      const stillAgentActive =
+        stateAfterObserve === 'queued' || stateAfterObserve === 'dispatched' || stateAfterObserve === 'building';
       // A cost-only poll on a job past the agent: write the credits and stop. State
       // transitions from a late observation would snatch a delivered candidate back.
-      if (!agentActive) return null;
+      if (!stillAgentActive) return null;
       if (observation.workspace && observation.workspace !== record.dispatch?.workspace) {
         await store.setDispatchWorkspace(record.issueNumber, observation.workspace);
         // Learning the agent's own branch is proof it has forked, which is the exact
@@ -2390,7 +2466,7 @@ export async function registerSubmissionRoutes(
           await store.clearDispatchSeedWorkspace(record.issueNumber);
         }
       }
-      const result = reconcileAgentObservation(state, observation);
+      const result = reconcileAgentObservation(stateAfterObserve, observation);
       if (!result) return null;
 
       // A session that ran to completion and uploaded nothing is the one failure worth
@@ -5084,6 +5160,7 @@ export async function registerSubmissionRoutes(
   // the store, the token secret, and the caches it has to invalidate.
   await registerAgentChannelRoutes(app, {
     ...options.agentChannel,
+    ...(sourceDelivery ? { sourceDelivery } : {}),
     store,
     agentTokenSecret: submissionTokenSecret,
     now,

@@ -96,6 +96,28 @@ a single `--set-secrets` list.
 | `vapid-private-key`                    | Web push signing → `VAPID_PRIVATE_KEY`                                                                                                                                                                                                                         | ✅ set                                                                                              |
 | `site-basic-auth`                      | Former "not public yet" lock → `SITE_BASIC_AUTH`                                                                                                                                                                                                               | ⚠️ exists but **unused**                                                                            |
 
+### Managed agent configuration
+
+The managed backend is selected by these Cloud Run variables; the deploy scripts carry them
+on every revision because `--set-env-vars` replaces the whole map:
+
+| Variable                            | Meaning                                           |
+| ----------------------------------- | ------------------------------------------------- |
+| `MANAGED_AGENT_VENDOR`              | Provider adapter, currently `anthropic`           |
+| `MANAGED_AGENT_MODEL`               | Provider model label                              |
+| `MANAGED_AGENT_ID`                  | Managed Agent resource                            |
+| `MANAGED_AGENT_ENVIRONMENT_ID`      | Managed Environment resource                      |
+| `MANAGED_AGENT_MAX_SECONDS`         | Per-session wall-clock limit                      |
+| `MANAGED_AGENT_MAX_LIST_COST_CENTS` | Anthropic budget in whole US cents                |
+| `MANAGED_AGENT_VAULT_IDS`           | Comma-separated vaults containing MCP credentials |
+| `MANAGED_AGENT_MCP_URL`             | The MCP endpoint the agent calls                  |
+| `MANAGED_AGENT_DELIVERY_MODE`       | `preview` or `publish`                            |
+
+`MANAGED_AGENT_API_KEY` is wired from the `anthropic-api-key` Secret Manager secret and never
+belongs in variables, the repository, or a workflow body. If the managed vendor variables or
+secret are absent, the platform slot remains unset and platform jobs stay queued; self builds
+continue to work.
+
 `site-basic-auth` is a leftover: the running revision does not wire it, and the site answers
 without an auth challenge. Access is controlled by `PRIVATE_BETA` and the beta allowlist
 instead. Delete the secret when you are sure nothing references it.

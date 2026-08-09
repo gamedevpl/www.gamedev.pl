@@ -26,7 +26,6 @@ import {
   type UploadKind,
   type UploadTokenClaims,
 } from './agent-upload-token.js';
-import { selfBuildDeliveryCap } from './builder.js';
 import { canonicalAppBaseUrl } from './canonical-app-url.js';
 import { deriveGateStatusString, readGateVerdict } from './gate-verdict.js';
 import { DEFAULT_SIGNED_URL_TTL_SECONDS, type GcsObjectStore } from './gcs-sign.js';
@@ -37,7 +36,7 @@ import {
   type DeliveryMode,
   type GamesStore,
 } from './games-store.js';
-import { parseGameMedia, parseSpecTitle } from './github-client.js';
+import { parseGameMedia } from './github-client.js';
 import { canTransition, resolveJobState, type JobState } from './job-state.js';
 import {
   KitFilesError,
@@ -61,6 +60,7 @@ import { largeSourceFileHint } from './module-size.js';
 import { gameManifestHint } from './game-manifest-hint.js';
 import { applyExactReplace, applySourcePatch, SourcePatchError } from './source-patch.js';
 import { overlayGameSources } from './staged-preview.js';
+import { SourceDeliveryValidationError, type SourceDeliveryService } from './source-delivery.js';
 import { type BuilderHandoff, type CreatorMessage, type Store, type SubmissionRecord } from './store.js';
 import { BUILD_EVENT_KINDS, BUILD_STEPS, sanitizeCreatorText, type BuildEvent } from './submission-status.js';
 import { normalizeAtIntake, type IntakeText } from './localize-intake.js';
@@ -166,10 +166,6 @@ const MAX_PREVIEW_LABEL = 120;
  * copies of one number is how the first two came to disagree.
  */
 export const MAX_BUILD_PREVIEW_BYTES = 320 * 1024;
-// Deliveries are rare by nature — a build delivers once, a revision round once more — so
-// this bounds a looping agent rather than shaping normal use.
-const DEFAULT_MAX_SUBMITS_PER_WINDOW = 20;
-
 /**
  * A delivery: the game's own source files, and nothing else.
  *
@@ -383,6 +379,8 @@ export interface AgentChannelOptions {
   objectStore?: GcsObjectStore;
   /** Deliveries one build may make per hour. */
   maxSubmitsPerWindow?: number;
+  /** Shared source-delivery core used by HTTP/MCP and managed harvest. */
+  sourceDelivery?: SourceDeliveryService;
   /** Called when a candidate version lands, so the job can move on to the gate. */
   /**
    * Starts whatever verifies a delivery. May answer with what the run cost — the gate
@@ -479,12 +477,10 @@ export async function registerAgentChannelRoutes(
   // recompiles every thirty seconds for half an hour is working exactly as intended.
   const keepPreviews = options.keepPreviews ?? 4;
   const maxPreviewsPerWindow = options.maxPreviewsPerWindow ?? 90;
-  const maxSubmitsPerWindow = options.maxSubmitsPerWindow ?? DEFAULT_MAX_SUBMITS_PER_WINDOW;
   const eventsByBuild = new Map<number, number[]>();
   const inboxChecksByBuild = new Map<number, number[]>();
   const shotsByBuild = new Map<number, number[]>();
   const previewsByBuild = new Map<number, number[]>();
-  const submitsByBuild = new Map<number, number[]>();
   const kitFileStore = options.objectStore ? createKitFileStore(options.objectStore) : null;
   const exampleFileStore = options.objectStore ? createExampleFileStore(options.objectStore) : null;
 
@@ -1522,80 +1518,12 @@ export async function registerAgentChannelRoutes(
         return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
       }
 
-      if (stopReason(record)) {
-        return reply.send({ accepted: false, rejected: 'stopped', ...(await channelState(issueNumber, record)) });
-      }
-      if (isRateLimited(submitsByBuild, issueNumber, now(), maxSubmitsPerWindow)) {
-        return reply.send({ accepted: false, rejected: 'rate_limited', ...(await channelState(issueNumber, record)) });
-      }
-      // Self rounds bound gate spend per round. The budget resets when a new round
-      // opens, so exhausting it never bricks the game's next attempt.
-      if (record.builder === 'self') {
-        const cap = selfBuildDeliveryCap();
-        const used = record.roundDeliveryCount ?? 0;
-        if (used >= cap) {
-          return reply.send({
-            accepted: false,
-            rejected: 'delivery_cap',
-            reason: 'self_build_delivery_cap',
-            deliveryCap: cap,
-            deliveriesUsed: used,
-            ...(await channelState(issueNumber, record)),
-          });
-        }
-        // Self-build deliveries must name the kit they built against — without it the
-        // gate cannot apply the N/N−1 window and would burn a delivery slot guessing.
-        if (!parsed.data.kitEngineRef) {
-          return reply.status(400).send({
-            error:
-              'kitEngineRef is required for self-build deliveries — send the engineRef from ' +
-              'the Creator Kit you built against (kit.json / get_kit).',
-            reason: 'kit_engine_ref_required',
-          });
-        }
-      }
-
-      // One round, one engine: a mismatch means unvalidated sources.
-      const pinnedEngineRef = record.roundKitEngineRef;
-      if (pinnedEngineRef && parsed.data.kitEngineRef && parsed.data.kitEngineRef !== pinnedEngineRef) {
-        return reply.status(400).send({
-          error:
-            `This round is pinned to Creator Kit engine ${pinnedEngineRef}, not ${parsed.data.kitEngineRef}. ` +
-            'Call get_kit and submit with the engineRef it returns.',
-          reason: 'kit_engine_ref_mismatch',
-        });
-      }
-
-      // The job's own slug wins whenever it has one. A build that has already been
-      // associated with a game cannot deliver into a different one, whatever it sends.
-      //
-      // A job now carries its slug from the moment it is created — minted from the
-      // creator's confirmed title and named in the agent's brief — so this check bites
-      // on the *first* delivery rather than only on later ones. That is deliberate and
-      // it is not a tightening for its own sake: the creator has been given
-      // `/studio/<slug>` since they pressed create, and may already have shared a link
-      // to the game, so a delivery that renamed it would break an address that was
-      // handed out in good faith. The error names the slug the agent was briefed with,
-      // which is the one piece of information it needs to deliver again correctly.
-      const slug = record.slug ?? parsed.data.slug;
       if (record.slug && record.slug !== parsed.data.slug) {
         return reply.status(409).send({ error: `this build delivers to ${record.slug}, not ${parsed.data.slug}` });
       }
-      // Bind the job to this slug on the first delivery, and do it *before* storing
-      // anything. Without this the check above never fires for a job that arrived
-      // without a slug: every delivery would find `record.slug` unset and be free to
-      // name a different game. Writing it first rather than after the upload means a
-      // second delivery racing the first still finds the binding in place.
-      if (!record.slug && store) {
-        await store.setSubmissionSlug(issueNumber, slug);
-      }
+      const slug = record.slug ?? parsed.data.slug;
 
       try {
-        // Fresh walk state — not `record.state`. Delivery often races the background
-        // dispatch that flips `queued`→`dispatched`; the local snapshot stays `queued`,
-        // and `canTransition('queued','submitted')` is false, so the protective
-        // transition was skipped and the job stayed `building` (CP-1 double-close).
-        const stateAfterSignal = await markBuildingFromChannel(issueNumber, record);
         // Explicit mode wins. Omitting mode defaults to publish — except
         // fromLatestDelivery, which reuses the previous candidate's lane so a
         // kit_outdated preview recovery does not suddenly demand TRACE/PLAYTEST.
@@ -1688,87 +1616,40 @@ export async function registerAgentChannelRoutes(
         }
         mode ??= 'publish';
 
-        const { version } = await options.gamesStore.putCandidateSources({
-          slug,
+        if (!options.sourceDelivery) {
+          return reply.status(503).send({ error: 'delivery is not configured on this deployment' });
+        }
+        const delivery = await options.sourceDelivery.deliver({
           issueNumber,
+          slug,
           files,
-          // Provenance: which backend built this version. Backend name on the dispatch
-          // ('copilot' / 'self') is the durable record; builder is the round selector.
-          backend: record.dispatch?.backend ?? record.builder,
           mode,
+          bindSlug: true,
           ...(parsed.data.kitEngineRef ? { kitEngineRef: parsed.data.kitEngineRef } : {}),
+          ...(record.dispatch?.backend || record.builder
+            ? { backend: record.dispatch?.backend ?? record.builder }
+            : {}),
         });
+        if (!delivery.accepted) {
+          return reply.send({
+            accepted: false,
+            rejected: delivery.rejected,
+            ...(delivery.rejected === 'delivery_cap'
+              ? {
+                  reason: 'self_build_delivery_cap',
+                  deliveryCap: delivery.deliveryCap,
+                  deliveriesUsed: delivery.deliveriesUsed,
+                }
+              : {}),
+            ...(await channelState(issueNumber, (await store!.getSubmission(issueNumber)) ?? record)),
+          });
+        }
+        const { version, buildId, gateStarted } = delivery;
         // Staging is spent once the candidate is written — clear so the next iterate
         // starts clean and a half-edited buffer cannot leak into a later round.
         if (parsed.data.fromStaged) {
           await options.gamesStore.clearStagedSources({ slug, issueNumber, roundGeneration }).catch(() => {});
         }
-        // Preview updates Studio's playable pointer without marking a sealed delivery —
-        // control.delivered / publication reconciliation still wait for mode=publish.
-        // Publish sets both (setSubmissionDeliveredVersion also refreshes previewVersion).
-        if (mode === 'preview') {
-          await store?.setSubmissionPreviewVersion(issueNumber, version);
-        } else {
-          await store?.setSubmissionDeliveredVersion(issueNumber, version);
-        }
-        if (store && record.builder === 'self') {
-          await store.incrementRoundDeliveryCount(issueNumber);
-        }
-        // The shelf, studio, and notifications all show `record.title`. Games that
-        // predated the naming step still carry the truncated prompt there, even after
-        // the agent wrote a real name into SPEC.md — and publish already prefers the
-        // SPEC title for the catalog, so the two surfaces disagreed. Adopting it here
-        // keeps them aligned for every delivery from now on.
-        if (store) {
-          const spec = files.find((file) => file.path === 'SPEC.md')?.content;
-          const deliveredTitle = spec ? parseSpecTitle(spec) : null;
-          if (deliveredTitle) {
-            const sanitized = sanitizeCreatorText(deliveredTitle, { singleLine: true }).slice(0, 80);
-            if (sanitized.length >= 3 && sanitized !== record.title) {
-              await store.setSubmissionTitle(issueNumber, sanitized);
-            }
-          }
-        }
-        // Publish only: without this the job stays `building`, and the agent's own
-        // session then reports `completed` with a candidate present — which the
-        // reconciler reads as "done, ready for review". Preview stays in building so a
-        // vibe-coding loop never looks like a sealed candidate.
-        if (store && mode === 'publish') {
-          if (canTransition(stateAfterSignal, 'submitted')) {
-            await store.recordJobTransition(issueNumber, {
-              to: 'submitted',
-              at: new Date().toISOString(),
-              by: 'agent',
-              reason: 'sources_delivered',
-            });
-          }
-        }
-        const gate = await options.onSourcesDelivered?.({
-          issueNumber,
-          slug,
-          version,
-          ...(mode === 'preview' ? { mode: 'preview' as const } : {}),
-        });
-        // Booked here rather than inside the trigger because this is where the job is
-        // known: the trigger takes a slug and a version and has no idea whose ledger to
-        // write to. Best-effort like every other write in this handler — the delivery has
-        // already been accepted, and refusing it now would make the agent upload again.
-        const buildId = gate && typeof gate === 'object' && typeof gate.buildId === 'string' ? gate.buildId : undefined;
-        const gateAccepted = Boolean(buildId || (gate && typeof gate === 'object' && gate.accepted === true));
-        if (store && buildId) {
-          await store
-            .recordJobCost(issueNumber, {
-              kind: 'gate_run',
-              at: new Date().toISOString(),
-              by: 'cloud-build',
-              ref: buildId,
-            })
-            .catch(() => {});
-        }
-        options.onEvent?.(issueNumber);
-
-        // Delivery is channel activity — refresh the quiet clock and revoke a prior MCP `end`.
-        await store?.touchLastAgentSignalAt(issueNumber);
 
         const fresh = store ? ((await store.getSubmission(issueNumber)) ?? record) : record;
         return reply.send({
@@ -1778,11 +1659,14 @@ export async function registerAgentChannelRoutes(
           // True when Cloud Build accepted the create (build id and/or accepted:true).
           // False only when the trigger was missing or failed — not when the id was
           // unparseable from an otherwise successful create.
-          gateStarted: gateAccepted,
+          gateStarted,
           ...(buildId ? { buildId } : {}),
           ...(await channelState(issueNumber, fresh)),
         });
       } catch (error) {
+        if (error instanceof SourceDeliveryValidationError) {
+          return reply.status(400).send({ error: error.message, reason: error.reason });
+        }
         // A rejected upload is the agent's to fix, so the reason goes back in full. This
         // is the one place a 400 body is worth writing carefully: the alternative is an
         // agent burning a session guessing which file was refused.

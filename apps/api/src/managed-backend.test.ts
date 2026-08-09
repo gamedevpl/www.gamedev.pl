@@ -145,10 +145,35 @@ describe('managed backend', () => {
         issueNumber: ISSUE,
         slug: SLUG,
         sessionRef: 'session-1',
+        backend: 'managed:fake',
+        roundGeneration: 1,
         mode: 'preview',
         files: [{ path: 'game.ts', content: 'export {};' }],
       },
     ]);
+  });
+
+  it('uses the durable round generation from observe, not process memory', async () => {
+    const { provider, setState, setOutputs } = fakeProvider();
+    const delivered: ManagedDeliveryInput[] = [];
+    const backend = createManagedBackend({
+      provider,
+      deliver: async (input) => {
+        delivered.push(input);
+        return { version: 'v1' };
+      },
+    });
+    setOutputs([{ path: `games/${SLUG}/game.ts`, content: 'export {};' }]);
+    setState('completed');
+
+    await backend.observe('session-1', {
+      hasCandidate: false,
+      issueNumber: ISSUE,
+      slug: SLUG,
+      roundGeneration: 3,
+    });
+
+    expect(delivered[0]?.roundGeneration).toBe(3);
   });
 
   it('harvests at most once, however often the reconciler polls', async () => {

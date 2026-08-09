@@ -25,6 +25,9 @@ export interface ManagedDeliveryInput {
   files: ManagedOutputFile[];
   // The vendor session the files were harvested from.
   sessionRef: string;
+  // Authority captured at dispatch and checked again immediately before storage.
+  backend: string;
+  roundGeneration: number;
   mode: 'preview' | 'publish';
 }
 
@@ -46,6 +49,23 @@ export interface ManagedDeliveryLock {
   acquire(claim: ManagedDeliveryClaim): Promise<boolean>;
   // Failed attempt, so a later poll can retry.
   release(claim: ManagedDeliveryClaim): Promise<void>;
+}
+
+// Store-backed lock for multi-instance harvest.
+export function createManagedDeliveryLock(
+  store: {
+    claimManagedDelivery(
+      claim: { issueNumber: number; sessionRef: string; slug: string },
+      at: string,
+    ): Promise<boolean>;
+    releaseManagedDelivery(claim: { issueNumber: number; sessionRef: string }): Promise<void>;
+  },
+  now: () => string = () => new Date().toISOString(),
+): ManagedDeliveryLock {
+  return {
+    acquire: (claim) => store.claimManagedDelivery(claim, now()),
+    release: (claim) => store.releaseManagedDelivery(claim),
+  };
 }
 
 // Round state from the build channel, which the vendor session cannot see.
@@ -92,10 +112,12 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
   }
   const outputPath = options.outputPath ?? DEFAULT_MANAGED_OUTPUT_PATH;
   const deliveryMode = options.deliveryMode ?? 'preview';
+  const backendName = `managed:${options.provider.vendor}`;
   // At-most-once per session; a re-poll cannot duplicate.
   const harvested = new Set<string>();
   const startedAt = new Map<string, number>();
   const idleNudged = new Set<string>();
+  const sessionGenerations = new Map<string, number>();
 
   async function start(brief: BuildBrief): Promise<DispatchResult> {
     const systemPrompt = appendKitDigest(
@@ -122,6 +144,7 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
       ...(options.tools ? { tools: options.tools } : {}),
     });
     startedAt.set(session.id, Date.now());
+    sessionGenerations.set(session.id, brief.roundGeneration ?? 1);
     return { ref: session.id };
   }
 
@@ -138,7 +161,12 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
     return files;
   }
 
-  async function harvest(sessionRef: string, issueNumber: number, slug: string): Promise<HarvestOutcome> {
+  async function harvest(
+    sessionRef: string,
+    issueNumber: number,
+    slug: string,
+    roundGeneration?: number,
+  ): Promise<HarvestOutcome> {
     if (!deliver || harvested.has(sessionRef)) return 'empty';
     const claim = { issueNumber, slug, sessionRef };
     const listed = await options.provider.listOutputs(sessionRef);
@@ -172,7 +200,17 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
     }
     try {
       const files = await download(sessionRef, plan);
-      await deliver({ issueNumber, slug, files, sessionRef, mode: deliveryMode });
+      // Prefer the durable job generation over process memory.
+      const generation = roundGeneration ?? sessionGenerations.get(sessionRef) ?? 1;
+      await deliver({
+        issueNumber,
+        slug,
+        files,
+        sessionRef,
+        backend: backendName,
+        roundGeneration: generation,
+        mode: deliveryMode,
+      });
       harvested.add(sessionRef);
       options.log?.info?.(
         { ...claim, files: files.length, vendor: options.provider.vendor },
@@ -191,7 +229,7 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
   }
 
   return {
-    name: `managed:${options.provider.vendor}`,
+    name: backendName,
 
     async dispatch(brief: BuildBrief): Promise<DispatchResult> {
       return start(brief);
@@ -233,7 +271,12 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
         Boolean(observeOptions.slug);
       if (canHarvest) {
         try {
-          outcome = await harvest(ref, observeOptions.issueNumber!, observeOptions.slug!);
+          outcome = await harvest(
+            ref,
+            observeOptions.issueNumber!,
+            observeOptions.slug!,
+            observeOptions.roundGeneration,
+          );
           hasCandidate = outcome === 'delivered';
         } catch (error) {
           // A failed pull retries on the next poll.
@@ -293,6 +336,7 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
       startedAt.delete(previous.ref);
       idleNudged.delete(previous.ref);
       harvested.delete(previous.ref);
+      sessionGenerations.delete(previous.ref);
       await options.provider.deleteSession?.(previous.ref);
     },
   };
