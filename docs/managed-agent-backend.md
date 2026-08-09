@@ -1,8 +1,10 @@
 # Managed agent backend — running the builder ourselves, on a swappable vendor
 
-> Status: 🚧 **Seam landed, delivery sink pending.** The provider abstraction, the
-> `AgentBackend` over it, one vendor adapter and the environment selection are in. The
-> delivery sink is injected by the caller and is the next piece to wire — see
+> Status: 🚧 **MCP shape implemented; production selection pending.** A valid managed
+> configuration can put the Anthropic adapter in the platform builder slot, but the
+> running app currently overrides the environment registry with Copilot. The per-round
+> vault, `submit_sources` delivery, and `ready_for_review` preview path are implemented;
+> production selection still needs the app wiring change — see
 > [What is not wired yet](#what-is-not-wired-yet).
 >
 > **Why this is not the execution model that was removed for legal reasons.** The thing
@@ -205,22 +207,26 @@ round.
 
 ## What is not wired yet
 
-`ManagedDeliverySink` is injected, not implemented here. The channel's `submit_sources`
-route already does the whole job — validate, `putCandidateSources`, set the preview or
-delivered version, count the round's deliveries, trigger the gate — inline in its handler.
-The honest next step is to **extract that into one function and pass it in**, so a managed
-harvest and an agent upload cannot drift into two different definitions of "delivered".
-Until it lands, the MCP shape is the one that can run, because it reuses that route rather
-than duplicating it.
+The **MCP shape is wired and proven** in the probe, but production platform rounds do not
+use it while the running app overrides the environment registry with Copilot. What remains
+is the **pull shape**: `ManagedDeliverySink` is still injected, not shared with the channel.
+The channel's `submit_sources` route already does the whole job — validate,
+`putCandidateSources`, set the preview or delivered version, count the round's deliveries,
+trigger the gate — inline in its handler. The honest cleanup is to **extract that into one
+function and pass it in**, so a managed harvest and an agent upload cannot drift into two
+different definitions of "delivered". Until that lands, prefer MCP; the pull path stays for
+agents that finish without submitting, and for the probe's printing sink.
 
 ## How to exercise it
 
-The backend is **not reachable from the running app**: `app.ts` builds the platform slot
-from `createPlatformBackendFromEnv` (Copilot), so `MANAGED_AGENT_VENDOR` on a deployed
-service does nothing. Wiring `createAgentBackendRegistryFromEnv` in — which needs the
-delivery sink — is the same change as extracting `submit_sources`.
+The environment registry selects the managed adapter only when `MANAGED_AGENT_VENDOR` and
+its required configuration are valid. The current app still pre-wires Copilot into
+`agentBackends.platform`, and explicit platform overrides win, so the managed vendor does
+not change production selection yet. Without a managed vendor, Copilot fills the platform
+slot only when `AGENT_TASKS_TOKEN` is configured; without either, platform dispatch is
+unavailable.
 
-So there are three levels of test, and only the first two exist today.
+There are four levels of test:
 
 **1. The suites.** Fake provider, no network:
 
@@ -311,27 +317,45 @@ npm run managed:probe -w @gamedevpl/api -- --vendor anthropic --mcp --wait \
   --wait-seconds 120 --budget-usd 1 --digest-file /path/to/engine.digest.md
 ```
 
-The production registry will use `createGcsKitDigestLoader`: it reads `kits/current.json`,
-follows that engine ref to `kits/<engineRef>.digest.md`, caches the result, and appends it
-to the configured Agent system prompt. The digest is therefore pinned to the same engine
-ref the round receives, rather than copied into this repository.
+The live registry does not yet pass a kit digest loader into the managed backend. When it
+does, use `createGcsKitDigestLoader`: it reads `kits/current.json`, follows that engine ref
+to `kits/<engineRef>.digest.md`, caches the result, and appends it to the configured Agent
+system prompt — pinned to the same engine ref the round receives, rather than copied into
+this repository.
+
+**4. A live platform round (after app selection wiring).** Once valid managed configuration
+is deployed and the app uses the environment registry, create a game with
+`builder: "platform"` (the default). Cloud Run should log, correlated by `issueNumber` / `slug`:
+
+- `managed agent dispatch enabled` (once per process, at registry build)
+- `managed round credential minted` — includes `credentialRef` and `mcpUrl`
+- `managed round credential revoked` — on harvest/end/cancel/cleanup
+
+```bash
+node infra/gcp-read.mjs logs \
+  'jsonPayload.msg="managed round credential minted" OR jsonPayload.msg="managed round credential revoked"' \
+  --since 1h --limit 20
+```
+
+With `MANAGED_AGENT_DELIVERY_MODE=preview` (the default), a successful delivery ends at
+`ready_for_review`, not auto-publish.
 
 ## Configuration
 
-| Variable                            | Meaning                                                         |
-| ----------------------------------- | --------------------------------------------------------------- |
-| `MANAGED_AGENT_VENDOR`              | Registered adapter id. Absent → Copilot keeps the platform slot |
-| `MANAGED_AGENT_API_KEY`             | Vendor credential. Never logged, never persisted                |
-| `MANAGED_AGENT_MODEL`               | Provider model label; Anthropic's actual model is on its Agent  |
-| `MANAGED_AGENT_ID`                  | Anthropic Managed Agent resource id                             |
-| `MANAGED_AGENT_ENVIRONMENT_ID`      | Anthropic Managed Environment resource id                       |
-| `MANAGED_AGENT_MCP_URL`             | MCP endpoint; triggers per-round vault + `overrideTools`        |
-| `MANAGED_AGENT_VAULT_IDS`           | Optional static vault ids for probe-only MCP integrations       |
-| `MANAGED_AGENT_EFFORT`              | `low` / `medium` / `high`                                       |
-| `MANAGED_AGENT_MAX_SECONDS`         | Hard ceiling on one session's wall clock                        |
-| `MANAGED_AGENT_MAX_LIST_COST_CENTS` | Anthropic session budget, in whole cents                        |
-| `MANAGED_AGENT_DELIVERY_MODE`       | `preview` (default) or `publish`                                |
-| `MANAGED_AGENT_BASE_URL`            | Override the API origin — gateways, tests                       |
+| Variable                            | Meaning                                                          |
+| ----------------------------------- | ---------------------------------------------------------------- |
+| `MANAGED_AGENT_VENDOR`              | Registered adapter id; required configuration must also be valid |
+| `MANAGED_AGENT_API_KEY`             | Vendor credential. Never logged, never persisted                 |
+| `MANAGED_AGENT_MODEL`               | Provider model label; Anthropic's actual model is on its Agent   |
+| `MANAGED_AGENT_ID`                  | Anthropic Managed Agent resource id                              |
+| `MANAGED_AGENT_ENVIRONMENT_ID`      | Anthropic Managed Environment resource id                        |
+| `MANAGED_AGENT_MCP_URL`             | MCP endpoint; triggers per-round vault + `overrideTools`         |
+| `MANAGED_AGENT_VAULT_IDS`           | Optional static vault ids for probe-only MCP integrations        |
+| `MANAGED_AGENT_EFFORT`              | `low` / `medium` / `high`                                        |
+| `MANAGED_AGENT_MAX_SECONDS`         | Hard ceiling on one session's wall clock                         |
+| `MANAGED_AGENT_MAX_LIST_COST_CENTS` | Anthropic session budget, in whole cents                         |
+| `MANAGED_AGENT_DELIVERY_MODE`       | `preview` (default) or `publish`                                 |
+| `MANAGED_AGENT_BASE_URL`            | Override the API origin — gateways, tests                        |
 
 Selection replaces the _platform_ backend. Builder routing, the job state machine, the
 gate, Studio and self builds are untouched: a managed round is a platform round whose
