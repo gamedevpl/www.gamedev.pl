@@ -368,7 +368,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     }
   };
 
-  // Do not default Copilot here — injected platform wins over the env registry.
+  // Env registry selects managed; explicit platform backends still win.
   const resolvedAgentBackends = options.submissionRoutes?.agentBackends;
 
   const submissionSeams = await registerSubmissionRoutes(app, {
@@ -579,12 +579,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     creationLimitsTtlMs: options.submissionRoutes?.creationLimitsTtlMs,
     publicPlayFallbackSlugs: [...publicPlayFallbackSlugs],
     publicPlayTtlMs,
-    // Admin UI only; the submission gate uses the real registry.
-    hasPlatformBackend: Boolean(
-      options.submissionRoutes?.agentBackend ??
-      resolvedAgentBackends?.platform ??
-      (process.env.MANAGED_AGENT_VENDOR?.trim() || process.env.AGENT_TASKS_TOKEN?.trim() || undefined),
-    ),
+    hasPlatformBackend: submissionSeams.hasPlatformBackend,
   });
 
   // Review catalog matches /api/catalog; snapshot first in prod.

@@ -471,6 +471,42 @@ describe('/api/admin/creation-limits', () => {
     await app.close();
   });
 
+  it('does not report an invalid managed configuration as available', async () => {
+    const keys = [
+      'MANAGED_AGENT_VENDOR',
+      'MANAGED_AGENT_API_KEY',
+      'MANAGED_AGENT_MODEL',
+      'MANAGED_AGENT_ID',
+      'MANAGED_AGENT_ENVIRONMENT_ID',
+      'MANAGED_AGENT_MAX_SECONDS',
+      'MANAGED_AGENT_MAX_LIST_COST_CENTS',
+      'MANAGED_AGENT_MCP_URL',
+      'AGENT_TASKS_TOKEN',
+    ] as const;
+    const previous = new Map(keys.map((key) => [key, process.env[key]]));
+    for (const key of keys) delete process.env[key];
+    process.env.MANAGED_AGENT_VENDOR = 'anthropic';
+    process.env.AGENT_TASKS_TOKEN = 'test-token';
+
+    try {
+      const app = await appWith(store);
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/admin/creation-limits',
+        headers: authHeaders('g:boss'),
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect((res.json() as CreationLimitsResponse).effective.hasPlatformBackend).toBe(false);
+      await app.close();
+    } finally {
+      for (const [key, value] of previous) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
+  });
+
   it('pauses creation and records who did it', async () => {
     const app = await appWith(store);
 

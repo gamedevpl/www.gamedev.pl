@@ -484,6 +484,8 @@ function sendMedia(
 export interface SubmissionRoutesHandle {
   /** The resolved games-repo client, or null when this deployment cannot reach one. */
   githubClient: GitHubClient | null;
+  /** Whether the resolved registry has a platform backend. */
+  hasPlatformBackend: boolean;
   /**
    * Finds a published entry in the repo-backed catalog only.
    *
@@ -5242,6 +5244,7 @@ export async function registerSubmissionRoutes(
 
   return {
     githubClient,
+    hasPlatformBackend: Boolean(agentBackends.platform),
     getRepoPublishedCatalogEntry: (slug) =>
       githubClient ? getPublishedCatalogEntry(githubClient, slug) : Promise.resolve(null),
     startImprovementRound,
