@@ -90,8 +90,10 @@ authoritative.
 
 `get_kit_api` (`GET /api/agent/build/kit/api`, `apps/api/src/agent-channel.ts`) serves the
 same digest object the platform lane compacts, through `compactKitDigestForApi` — a larger
-budget (`DEFAULT_MCP_DIGEST_MAX_BYTES`, 90 KiB vs the platform's 20 KiB) since it is paid
-once per round by an agent that chose to call it, not injected into every turn. Same
+budget (`DEFAULT_MCP_DIGEST_MAX_BYTES`, 50 KiB vs the platform's 20 KiB) since it is paid
+once per round by an agent that chose to call it, not injected into every turn. That budget
+is sized to a safe _MCP single-tool-result_ limit, not to the API's own size — see
+"A digest-sized tool result is not free" below before touching this constant again. Same
 `engineRef` convention as the browse routes: optional, defaults to the registry's current
 entry when omitted, but pass the `engineRef` `get_kit` returned so a mid-round registry
 bump cannot mix kit revisions. `get_kit` and `get_kit_api` both carry
@@ -134,8 +136,9 @@ section's budget was a flat 72% of the total, guessed rather than measured: at t
 to the API's size), the platform lane's real 20 KiB default silently truncated
 mid-exemplar-file, dropping `## File-shape rules` entirely, and `get_kit_api`'s old 90 KiB
 budget capped the API at 64.8 KiB despite the ~79 KiB current surface — contradicting its
-own "whole reference in one call" promise. Both lanes now measure the non-API shell first
-and give the API section whatever's actually left (`apiBudget = maxBytes - shellBytes`).
+then-description's "whole reference in one call" claim (since corrected — see below). Both
+lanes now measure the non-API shell first and give the API section whatever's actually left
+(`apiBudget = maxBytes - shellBytes`).
 That in turn exposed a second-order bug: the omission note listing what got cut is itself
 unbounded (up to ~2 KiB for 100 omitted names) with nothing reserving room for it, so it
 could overflow the same way the flat-percentage guess did. `formatOmittedNote` is now
@@ -145,8 +148,42 @@ rather than growing past its reserve.
 `DEFAULT_KIT_DIGEST_MAX_BYTES` (the raw-stored-digest sanity ceiling, not a prompt budget)
 moved from 100,000 to 150,000 bytes: the stored digest was already at 99,552 bytes before
 the catalog addition, one small API growth from failing regardless.
-`DEFAULT_MCP_DIGEST_MAX_BYTES` moved from 90,000 to 100,000 so `get_kit_api` comfortably
-covers shell + full current API + the note reserve.
+
+### A digest-sized tool result is not free — get_kit_api broke in production at 100 KiB
+
+The PR that shipped `get_kit_api` set `DEFAULT_MCP_DIGEST_MAX_BYTES` to 100,000 reasoning
+purely from the API's own size ("100_000 covers shell + full current API + the note
+reserve") — a real constraint, but the wrong one. The constraint that actually matters is
+the calling _MCP client's_ ceiling on a single tool result, which the server has no way to
+query and no say over. Deployed against the real kit (`engineRef` `fb0cd30df1…`), the
+default digest ran ~98,730 characters / ~27,600 tokens (measured with `tiktoken`
+`cl100k_base` as a proxy) and a live client refused the tool result outright as exceeding
+its token ceiling — `get_kit_api` was unusable, a worse failure than the truncation bug it
+replaced (that one degraded gracefully with an omission note; this one returned nothing at
+all). Caught only because a human pasted the raw client error back into the session; no
+test in either repo calls the real endpoint against real kit content and checks the
+result's actual size, so a large-but-plausible-looking default sailed through review and
+merge on both repos with no unit test contradicting it.
+
+Fixed by choosing a budget from the tool-result constraint instead of the content: 50,000
+raw digest bytes measures ~15,800 `cl100k_base` tokens against the real kit — comfortably
+under a ~25,000-token single-result ceiling with real margin for tokenizer variance and
+other MCP hosts' stricter limits, while still keeping ~30 KiB of live API content (the full
+exemplar/audio/module-catalog shell survives untouched at any budget — only the API section
+shrinks). `get_kit_api`'s description was corrected to match: it no longer claims "the
+whole reference in one call" — omission is now the expected common case for a real kit, not
+an edge case, and the description says so, pointing at the browse tools for what's cut.
+
+**When you touch `DEFAULT_MCP_DIGEST_MAX_BYTES` again:** do not size it from
+`shared/game-kit.d.ts`'s byte count. Generate the real digest for the current kit, run it
+through `compactKitDigestForApi`, JSON-encode it the way the MCP response actually ships,
+and measure real tokens (a tokenizer proxy is fine; character-count guessing is what broke
+this). `apps/api/src/kit-digest.test.ts` ("caps get_kit_api output well under a single MCP
+tool-result limit") now guards this — a synthetic ~120-declaration API at the real kit's
+byte scale, run through the default budget, asserted under a byte proxy for the ~25k-token
+ceiling — but it is a proxy fixture, not the real kit content or a real tokenizer; re-verify
+against the actual digest (as above) whenever the constant, `elideDeclaration`'s ranking, or
+the shell sections' typical size change meaningfully.
 
 ### `get_gate_media` must stay reachable from the loop
 

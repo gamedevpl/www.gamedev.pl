@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  DEFAULT_MCP_DIGEST_MAX_BYTES,
   appendKitDigest,
+  compactKitDigestForApi,
   compactKitDigestForPrompt,
   createGcsKitDigestLoader,
   formatOmittedNote,
@@ -149,6 +151,45 @@ describe('Creator Kit digest loader', () => {
 
     expect(compact.trim().endsWith('- Keep files small.')).toBe(true);
     expect(compact).toContain('### games/dodge-the-falling-rocks/index.html');
+  });
+
+  it('caps get_kit_api output well under a single MCP tool-result limit at realistic kit scale', () => {
+    // Real production incident — see SKILL.md "not free".
+    const declarations = Array.from({ length: 120 }, (_, i) => {
+      const pad = 'x'.repeat(600);
+      return `interface GameKitDeclaration${i} {\n  method${i}(arg: string): void; // ${pad}\n}`;
+    });
+    const api = declarations.join('\n');
+    const full = [
+      '## GameKit API surface',
+      '~~~typescript',
+      api,
+      '~~~',
+      '## Audio catalog',
+      '',
+      'Sounds (2): win, lose',
+      '',
+      'Music (1): bright-chase',
+      '## Exemplar game',
+      '### games/dodge-the-falling-rocks/game.ts',
+      'export {};',
+      '## File-shape rules',
+      '- Keep files small.',
+    ].join('\n');
+    expect(Buffer.byteLength(api, 'utf8')).toBeGreaterThan(70_000); // realistic scale
+
+    const digest = compactKitDigestForApi(full); // DEFAULT_MCP_DIGEST_MAX_BYTES
+    const mcpResponseShape = JSON.stringify({
+      engineRef: 'a'.repeat(40),
+      digest,
+      pendingMessages: [],
+      stop: false,
+      warnings: [],
+    });
+
+    // Byte proxy for a ~25k token ceiling; see SKILL.md.
+    expect(Buffer.byteLength(mcpResponseShape, 'utf8')).toBeLessThan(65_000);
+    expect(DEFAULT_MCP_DIGEST_MAX_BYTES).toBeLessThanOrEqual(60_000);
   });
 
   it('elideDeclaration keeps a multiline member whole even when its closing brace lands at the interface indent', () => {
