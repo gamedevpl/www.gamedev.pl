@@ -17,12 +17,18 @@ interface Logger {
 }
 
 export function builderLabelFromRecord(builder: string | undefined, backend?: string): DeliveryBuilderLabel {
+  // Managed keeps builder=platform; prefer managed:* backend.
   if (builder === 'self') return 'self';
+  if (backend?.startsWith('managed:')) return 'managed';
   if (builder === 'platform') return 'platform';
-  if (backend?.startsWith('managed:')) return 'managed';
   if (builder) return 'other';
-  if (backend?.startsWith('managed:')) return 'managed';
   return 'other';
+}
+
+// Bind info so Pino keeps its receiver.
+export function asDeliveryLogger(log: { info?: (context: object, message: string) => void }): Logger | null {
+  if (typeof log.info !== 'function') return null;
+  return { info: log.info.bind(log) };
 }
 
 export function logDeliveryPreflightRefused(

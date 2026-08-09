@@ -1,5 +1,10 @@
 import { selfBuildDeliveryCap } from './builder.js';
-import { builderLabelFromRecord, logDeliveryAccepted, logDeliveryPreflightRefused } from './delivery-metrics.js';
+import {
+  asDeliveryLogger,
+  builderLabelFromRecord,
+  logDeliveryAccepted,
+  logDeliveryPreflightRefused,
+} from './delivery-metrics.js';
 import { InvalidUploadError, type GamesStore, type SourceFile } from './games-store.js';
 import { parseSpecTitle } from './github-client.js';
 import { canTransition, resolveJobState, TERMINAL_JOB_STATES, type JobState } from './job-state.js';
@@ -240,23 +245,21 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
       const attempt = await options.store.incrementRoundSubmitAttempts(input.issueNumber);
       const builderLabel = builderLabelFromRecord(record.builder, record.dispatch?.backend ?? input.backend);
       const roundGeneration = record.roundGeneration ?? 1;
+      const deliveryLog = options.log ? asDeliveryLogger(options.log) : null;
 
       const emitRefusal = async (kind: 'audio' | 'symbols' | 'typecheck') => {
         if (kind === 'audio' || kind === 'symbols') {
           await options.store.incrementRoundPreflightRefusal(input.issueNumber, kind);
         }
-        if (options.log?.info) {
-          logDeliveryPreflightRefused(
-            { info: options.log.info },
-            {
-              issueNumber: input.issueNumber,
-              roundGeneration,
-              builder: builderLabel,
-              mode: input.mode,
-              kind,
-              attempt,
-            },
-          );
+        if (deliveryLog) {
+          logDeliveryPreflightRefused(deliveryLog, {
+            issueNumber: input.issueNumber,
+            roundGeneration,
+            builder: builderLabel,
+            mode: input.mode,
+            kind,
+            attempt,
+          });
         }
       };
 
@@ -364,26 +367,23 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
         await options.store.incrementRoundDeliveryCount(input.issueNumber);
       }
 
-      if (options.log?.info) {
+      if (deliveryLog) {
         const latest = (await options.store.getSubmission(input.issueNumber)) ?? record;
         const startedMs = latest.roundStartedAt ? Date.parse(latest.roundStartedAt) : NaN;
-        logDeliveryAccepted(
-          { info: options.log.info },
-          {
-            issueNumber: input.issueNumber,
-            roundGeneration,
-            builder: builderLabel,
-            mode: input.mode,
-            submitAttempts: latest.roundSubmitAttempts ?? attempt,
-            refusals: {
-              audio: latest.roundPreflightRefusalsAudio ?? 0,
-              symbols: latest.roundPreflightRefusalsSymbols ?? 0,
-              typecheck: latest.roundTypecheckPreflightRefusals ?? 0,
-            },
-            msFromRoundStart: Number.isFinite(startedMs) ? Math.max(0, now() - startedMs) : null,
-            typecheckBypass,
+        logDeliveryAccepted(deliveryLog, {
+          issueNumber: input.issueNumber,
+          roundGeneration,
+          builder: builderLabel,
+          mode: input.mode,
+          submitAttempts: latest.roundSubmitAttempts ?? attempt,
+          refusals: {
+            audio: latest.roundPreflightRefusalsAudio ?? 0,
+            symbols: latest.roundPreflightRefusalsSymbols ?? 0,
+            typecheck: latest.roundTypecheckPreflightRefusals ?? 0,
           },
-        );
+          msFromRoundStart: Number.isFinite(startedMs) ? Math.max(0, now() - startedMs) : null,
+          typecheckBypass,
+        });
       }
 
       const spec = input.files.find((file) => file.path === 'SPEC.md')?.content;

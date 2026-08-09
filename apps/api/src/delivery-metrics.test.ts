@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  asDeliveryLogger,
   builderLabelFromRecord,
   DELIVERY_ACCEPTED_MSG,
   DELIVERY_GATE_VERDICT_MSG,
@@ -68,9 +69,49 @@ describe('delivery metrics', () => {
   it('maps builders and failed stages to closed sets', () => {
     expect(builderLabelFromRecord('self')).toBe('self');
     expect(builderLabelFromRecord('platform')).toBe('platform');
+    // Managed keeps builder=platform; backend wins.
+    expect(builderLabelFromRecord('platform', 'managed:anthropic')).toBe('managed');
     expect(builderLabelFromRecord(undefined, 'managed:anthropic')).toBe('managed');
+    // Self wins over a managed backend string.
+    expect(builderLabelFromRecord('self', 'managed:anthropic')).toBe('self');
     expect(failedStageFromProgress('smoke')).toBe('smoke');
     expect(failedStageFromProgress('preparing')).toBe('other');
     expect(failedStageFromProgress(undefined)).toBeUndefined();
+  });
+
+  it('binds info to the logger receiver', () => {
+    const calls: unknown[] = [];
+    const log = {
+      tag: 'pino-like',
+      info(this: { tag: string }, context: object, message: string) {
+        calls.push({ thisTag: this.tag, context, message });
+      },
+    };
+    const bound = asDeliveryLogger(log);
+    expect(bound).not.toBeNull();
+    logDeliveryPreflightRefused(bound!, {
+      issueNumber: 1,
+      roundGeneration: 1,
+      builder: 'platform',
+      mode: 'publish',
+      kind: 'audio',
+      attempt: 1,
+    });
+    expect(calls).toEqual([
+      {
+        thisTag: 'pino-like',
+        context: {
+          delivery: {
+            issueNumber: 1,
+            roundGeneration: 1,
+            builder: 'platform',
+            mode: 'publish',
+            kind: 'audio',
+            attempt: 1,
+          },
+        },
+        message: DELIVERY_PREFLIGHT_REFUSED_MSG,
+      },
+    ]);
   });
 });
