@@ -937,9 +937,10 @@ export function CreatorStudioView({
                               if (sibling) {
                                 setSelected(sibling.token);
                               } else {
-                                // Bare `/studio`: pick a default, same order as initial load.
+                                // Bare `/studio`: default unless the creator already picked another.
                                 const collapsed = collapseStudioGames(shelfPage.games);
-                                setSelected(sortStudioGames(collapsed)[0]?.token ?? null);
+                                const fallback = sortStudioGames(collapsed)[0]?.token ?? null;
+                                setSelected((current) => (current === null ? fallback : current));
                               }
                             } catch {
                               // Optimistic remove stands if refetch fails.
