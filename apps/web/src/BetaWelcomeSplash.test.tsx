@@ -32,7 +32,9 @@ describe('BetaWelcomeSplash', () => {
     });
 
     expect(document.querySelector('[role="dialog"] h1')?.textContent).toContain('Welcome');
+    expect(document.querySelector('.beta-welcome-mascot .mascot')).not.toBeNull();
     expect(document.querySelectorAll('.beta-welcome-path article')).toHaveLength(3);
+    expect(document.querySelector('.beta-welcome-path a[href="/contact"]')?.textContent).toBe('Contact us');
 
     await act(async () => {
       document.querySelector<HTMLButtonElement>('.beta-welcome-cta')?.click();

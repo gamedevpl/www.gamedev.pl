@@ -873,6 +873,7 @@
     "buildBody": "Describe an idea and let an agent turn it into a game.",
     "feedbackTitle": "Tell us what breaks",
     "feedbackBody": "Your rough edges and surprises are exactly what this beta needs.",
+    "feedbackCta": "Contact us",
     "note": "This is a real beta. Things may change, and your feedback helps decide how.",
     "cta": "Start exploring",
     "dismiss": "Skip welcome"

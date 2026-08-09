@@ -46,7 +46,7 @@ export function BetaWelcomeSplash({ onContinue }: { onContinue: () => void }) {
         </button>
 
         <div className="beta-welcome-mascot" aria-hidden="true">
-          <Mascot emotion="proud" size={82} />
+          <Mascot className="beta-welcome-mascot__mark" emotion="proud" size={82} staticPose />
         </div>
         <div className="beta-welcome-kicker">{t('betaWelcome.kicker')}</div>
         <h1 id="beta-welcome-title">{t('betaWelcome.title')}</h1>
@@ -69,6 +69,15 @@ export function BetaWelcomeSplash({ onContinue }: { onContinue: () => void }) {
             <PixelIcon name="send" size={18} />
             <h2>{t('betaWelcome.feedbackTitle')}</h2>
             <p>{t('betaWelcome.feedbackBody')}</p>
+            <a
+              href="/contact"
+              onClick={() => {
+                recordBetaWelcomeStep('continued');
+                onContinue();
+              }}
+            >
+              {t('betaWelcome.feedbackCta')}
+            </a>
           </article>
         </div>
 

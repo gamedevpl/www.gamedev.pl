@@ -4452,7 +4452,14 @@ a.user-name--profile:focus-visible {
   z-index: 1;
   width: fit-content;
   margin: 0 auto 8px;
+  color: var(--turquoise);
   filter: drop-shadow(0 0 18px var(--turquoise-glow));
+}
+
+.beta-welcome-mascot__mark {
+  display: block;
+  width: 82px;
+  height: auto;
 }
 
 .beta-welcome-kicker {
@@ -4504,15 +4511,32 @@ a.user-name--profile:focus-visible {
 }
 
 .beta-welcome-path h2 {
+  min-width: 0;
   margin: 10px 0 5px;
   font-size: 0.95rem;
 }
 
 .beta-welcome-path p {
+  min-width: 0;
   margin: 0;
   color: var(--muted);
   font-size: 0.82rem;
   line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.beta-welcome-path a {
+  display: inline-block;
+  margin-top: 9px;
+  color: var(--turquoise);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.beta-welcome-path a:hover,
+.beta-welcome-path a:focus-visible {
+  text-decoration: underline;
 }
 
 .beta-welcome-note {
@@ -4569,17 +4593,30 @@ a.user-name--profile:focus-visible {
   .beta-welcome-path article {
     display: grid;
     grid-template-columns: 24px 1fr;
+    grid-template-areas:
+      'icon title'
+      'icon body'
+      'icon link';
     column-gap: 8px;
     padding: 12px;
   }
 
   .beta-welcome-path article > svg {
-    grid-row: span 2;
+    grid-area: icon;
     margin-top: 2px;
   }
 
   .beta-welcome-path h2 {
+    grid-area: title;
     margin: 0 0 3px;
+  }
+
+  .beta-welcome-path p {
+    grid-area: body;
+  }
+
+  .beta-welcome-path a {
+    grid-area: link;
   }
 }
 
