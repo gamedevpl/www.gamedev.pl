@@ -51,6 +51,23 @@ export interface ManagedDeliveryLock {
   release(claim: ManagedDeliveryClaim): Promise<void>;
 }
 
+/** Store-backed lock for multi-instance managed harvest. */
+export function createManagedDeliveryLock(
+  store: {
+    claimManagedDelivery(
+      claim: { issueNumber: number; sessionRef: string; slug: string },
+      at: string,
+    ): Promise<boolean>;
+    releaseManagedDelivery(claim: { issueNumber: number; sessionRef: string }): Promise<void>;
+  },
+  now: () => string = () => new Date().toISOString(),
+): ManagedDeliveryLock {
+  return {
+    acquire: (claim) => store.claimManagedDelivery(claim, now()),
+    release: (claim) => store.releaseManagedDelivery(claim),
+  };
+}
+
 // Round state from the build channel, which the vendor session cannot see.
 export interface ManagedRoundSignals {
   // A sealed publish delivery.
@@ -144,7 +161,12 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
     return files;
   }
 
-  async function harvest(sessionRef: string, issueNumber: number, slug: string): Promise<HarvestOutcome> {
+  async function harvest(
+    sessionRef: string,
+    issueNumber: number,
+    slug: string,
+    roundGeneration?: number,
+  ): Promise<HarvestOutcome> {
     if (!deliver || harvested.has(sessionRef)) return 'empty';
     const claim = { issueNumber, slug, sessionRef };
     const listed = await options.provider.listOutputs(sessionRef);
@@ -178,13 +200,15 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
     }
     try {
       const files = await download(sessionRef, plan);
+      // Prefer the durable job generation over process memory.
+      const generation = roundGeneration ?? sessionGenerations.get(sessionRef) ?? 1;
       await deliver({
         issueNumber,
         slug,
         files,
         sessionRef,
         backend: backendName,
-        roundGeneration: sessionGenerations.get(sessionRef) ?? 1,
+        roundGeneration: generation,
         mode: deliveryMode,
       });
       harvested.add(sessionRef);
@@ -247,7 +271,12 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
         Boolean(observeOptions.slug);
       if (canHarvest) {
         try {
-          outcome = await harvest(ref, observeOptions.issueNumber!, observeOptions.slug!);
+          outcome = await harvest(
+            ref,
+            observeOptions.issueNumber!,
+            observeOptions.slug!,
+            observeOptions.roundGeneration,
+          );
           hasCandidate = outcome === 'delivered';
         } catch (error) {
           // A failed pull retries on the next poll.

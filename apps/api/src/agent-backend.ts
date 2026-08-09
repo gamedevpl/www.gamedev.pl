@@ -115,7 +115,7 @@ export interface AgentBackend {
   // Job identity is for pull-delivery backends; push backends ignore it.
   observe(
     ref: string,
-    options: { hasCandidate: boolean; issueNumber?: number; slug?: string },
+    options: { hasCandidate: boolean; issueNumber?: number; slug?: string; roundGeneration?: number },
   ): Promise<AgentObservation | null>;
   /**
    * Stops work, as far as the backend allows.

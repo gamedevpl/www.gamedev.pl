@@ -52,6 +52,7 @@ import {
 } from './builder.js';
 import type { GameSeeder, SeedDraft } from './game-seed.js';
 import { ManagedOutputRejectedError } from './managed-agent.js';
+import { createManagedDeliveryLock } from './managed-backend.js';
 import { createSourceDeliveryService, SourceDeliveryAuthorityError } from './source-delivery.js';
 import { InvalidUploadError } from './games-store.js';
 import {
@@ -653,11 +654,14 @@ export async function registerSubmissionRoutes(
             }
           }
         : undefined;
+    // Durable across Cloud Run instances; process-local harvested is not enough.
+    const managedLock = configuredManagedDeps?.lock ?? (store ? createManagedDeliveryLock(store) : undefined);
     const managedDeps =
-      managedDeliver || configuredManagedDeps
+      managedDeliver || configuredManagedDeps || managedLock
         ? {
             ...configuredManagedDeps,
             ...(managedDeliver ? { deliver: managedDeliver } : {}),
+            ...(managedLock ? { lock: managedLock } : {}),
           }
         : undefined;
     const environmentRegistry = createAgentBackendRegistryFromEnv(app.log, selfOptions, managedDeps);
@@ -2414,6 +2418,8 @@ export async function registerSubmissionRoutes(
         // Pull-delivery backends harvest inside observe.
         issueNumber: record.issueNumber,
         ...(record.slug ? { slug: record.slug } : {}),
+        // Durable generation — process memory is empty after restart.
+        roundGeneration: record.roundGeneration ?? 1,
       });
       if (!observation) return null;
       if (observation.sessionTokens) {
@@ -2440,9 +2446,14 @@ export async function registerSubmissionRoutes(
           app.log.error({ err: error, issueNumber: record.issueNumber }, 'could not store agent task state');
         }
       }
+      // Re-read after harvest; do not skip the gate.
+      const fresh = await store.getSubmission(record.issueNumber);
+      const stateAfterObserve = (fresh?.state ?? state) as JobState;
+      const stillAgentActive =
+        stateAfterObserve === 'queued' || stateAfterObserve === 'dispatched' || stateAfterObserve === 'building';
       // A cost-only poll on a job past the agent: write the credits and stop. State
       // transitions from a late observation would snatch a delivered candidate back.
-      if (!agentActive) return null;
+      if (!stillAgentActive) return null;
       if (observation.workspace && observation.workspace !== record.dispatch?.workspace) {
         await store.setDispatchWorkspace(record.issueNumber, observation.workspace);
         // Learning the agent's own branch is proof it has forked, which is the exact
@@ -2455,7 +2466,7 @@ export async function registerSubmissionRoutes(
           await store.clearDispatchSeedWorkspace(record.issueNumber);
         }
       }
-      const result = reconcileAgentObservation(state, observation);
+      const result = reconcileAgentObservation(stateAfterObserve, observation);
       if (!result) return null;
 
       // A session that ran to completion and uploaded nothing is the one failure worth

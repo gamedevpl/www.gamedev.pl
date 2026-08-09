@@ -174,10 +174,14 @@ export function createAgentBackendRegistryFromEnv(
   selfOptions?: SelfBuildBackendOptions,
   managedDeps?: ManagedBackendDeps,
 ): AgentBackendRegistry {
-  // A configured managed vendor takes the platform slot; routing above is unchanged.
-  const platform = createManagedPlatformBackendFromEnv(managedDeps, log) ?? createPlatformBackendFromEnv(log);
+  const selectedVendor = process.env.MANAGED_AGENT_VENDOR?.trim();
+  const managed = createManagedPlatformBackendFromEnv(managedDeps, log);
+  // Explicit vendor must not silently fall back to Copilot.
+  const platform = selectedVendor ? managed : (managed ?? createPlatformBackendFromEnv(log));
   const self = createSelfBuildBackend(selfOptions);
-  if (!platform) {
+  if (selectedVendor && !managed) {
+    log?.warn({ vendor: selectedVendor }, 'managed agent vendor is set but invalid; platform dispatch stays off');
+  } else if (!platform) {
     log?.info({ backend: 'self' }, 'self-build backend enabled (no platform dispatch credential)');
   }
   return { ...(platform ? { platform } : {}), self };
