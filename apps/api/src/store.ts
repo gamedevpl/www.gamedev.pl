@@ -2443,12 +2443,9 @@ export interface Store {
   beginAgentOpenRound(slug: string, at: string): Promise<boolean>;
   /** BY-24: release the admission lock after `open_round` completes or aborts. */
   finishAgentOpenRound(slug: string, at: string): Promise<void>;
-  /**
-   * Claims at-most-once managed harvest for a vendor session. Returns false when another
-   * instance already holds the claim for this `(issueNumber, sessionRef)`.
-   */
+  // At-most-once managed harvest claim across instances.
   claimManagedDelivery(claim: { issueNumber: number; sessionRef: string; slug: string }, at: string): Promise<boolean>;
-  /** Releases a failed managed harvest claim so a later poll can retry. */
+  // Release a failed harvest claim for retry.
   releaseManagedDelivery(claim: { issueNumber: number; sessionRef: string }): Promise<void>;
   /** Creator-wide opener record, or null when the creator has never minted one. */
   getCreatorAgentKey(ownerUid: string): Promise<CreatorAgentKeyRecord | null>;

@@ -51,7 +51,7 @@ export interface ManagedDeliveryLock {
   release(claim: ManagedDeliveryClaim): Promise<void>;
 }
 
-/** Store-backed lock for multi-instance managed harvest. */
+// Store-backed lock for multi-instance harvest.
 export function createManagedDeliveryLock(
   store: {
     claimManagedDelivery(
