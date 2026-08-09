@@ -17,14 +17,7 @@ type BuilderChoiceProps = {
    * tree, because a fieldset without a legend is a group a screen reader can't name.
    */
   hideLegend?: boolean;
-  /**
-   * Why the `platform` option cannot be picked right now, when it can't. The option
-   * stays visible and in the tab order — never `disabled` — because a disabled button
-   * shows no tooltip in Chrome or Safari and drops out of focus order, which would hide
-   * the reason from exactly the people who need it read aloud. Selecting it is a no-op
-   * instead: the reason renders as a badge plus a short visible note (`aria-describedby`)
-   * and a fuller sentence in `title` for a mouse hover.
-   */
+  // Why platform is unavailable. Never disabled; see the aria attribute below.
   platformUnavailable?: BuilderUnavailableReason;
 };
 

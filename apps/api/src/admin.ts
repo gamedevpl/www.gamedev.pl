@@ -103,7 +103,7 @@ export interface AdminRoutesOptions {
   creationLimitsTtlMs?: number;
   publicPlayFallbackSlugs?: string[];
   publicPlayTtlMs?: number;
-  /** Whether this environment has a platform backend configured at all. See managed-availability.ts. */
+  // Whether a platform backend is configured. See managed-availability.ts.
   hasPlatformBackend?: boolean;
 }
 
@@ -122,11 +122,11 @@ export interface CreationLimitsResponse {
   effective: {
     paused: boolean;
     globalDailySubmissionCap: number;
-    /** `auto` defers to whether a platform backend is configured — see `hasPlatformBackend`. */
+    // `auto` defers to `hasPlatformBackend` below.
     managedBuilderMode: 'auto' | 'off' | 'coming_soon';
     managedDailyCap: number | null;
     managedDailyUserCap: number | null;
-    /** Whether the environment itself has a platform backend wired, independent of the mode above. */
+    // Independent of managedBuilderMode above.
     hasPlatformBackend: boolean;
   };
   today: { dateStr: string; submissions: number; managedBuilds: number };
@@ -149,8 +149,7 @@ const CreationLimitsPatchSchema = z
     // The editing lanes' breaker rides the same document — one place to look.
     editingPaused: z.boolean().optional(),
     globalDailyEditCap: z.number().int().min(0).max(100_000).nullable().optional(),
-    // Same document, one more switch: whether the `platform` builder is offered at all.
-    // See managed-availability.ts.
+    // Same document: whether the platform builder is offered. See managed-availability.ts.
     managedBuilderMode: z.enum(['auto', 'off', 'coming_soon']).optional(),
     managedDailyCap: z.number().int().min(0).max(100_000).nullable().optional(),
     managedDailyUserCap: z.number().int().min(0).max(100_000).nullable().optional(),

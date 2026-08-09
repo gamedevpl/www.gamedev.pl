@@ -43,6 +43,7 @@ import { DEFAULT_UPLOAD_URL_TTL_SECONDS, mintUploadToken, uploadCurlCommand } fr
 import { decodeCanonicalBase64Utf8, InvalidBase64Error } from './canonical-base64.js';
 import { selfBuildDeliveryCap } from './builder.js';
 import type { BuilderKind } from './builder.js';
+import type { ManagedUnavailableReason } from './managed-availability.js';
 import { assertDeliverableSourcePath, InvalidUploadError, MAX_UPLOAD_FILES, type GamesStore } from './games-store.js';
 import { deriveGateStatusString, readGateVerdict } from './gate-verdict.js';
 import { gameManifestHint } from './game-manifest-hint.js';
@@ -322,7 +323,7 @@ export interface McpServerOptions {
     requestedBy?: 'creator' | 'agent';
     /** When set, the new job is owned by this uid (slug-transfer safe). */
     ownerUid?: string;
-  }) => Promise<{ route: 'job'; jobId: number } | null>;
+  }) => Promise<{ route: 'job'; jobId: number } | { route: 'unavailable'; reason: ManagedUnavailableReason } | null>;
   /**
    * Reopens an unpublished draft after a closed round (gate-green ready_for_review, etc.).
    * Injected from submissions so MCP and Studio feedback share the same resume path.
@@ -2168,7 +2169,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             // Authorized creator wins over the published record's owner after a transfer.
             ownerUid: resolved.creatorUid,
           });
-          if (!started) {
+          if (!started || started.route === 'unavailable') {
             return toolErr('could not open an improvement round for this game');
           }
 

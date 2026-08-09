@@ -53,8 +53,7 @@ async function createApp(store: InMemoryStore) {
       githubClient: stubGitHub(),
       githubToken: 'gh',
       submissionTokenSecret: secret,
-      // Predates the platform-builder availability switch; these tests are about
-      // creator-key routing, not managed availability. See managed-availability.ts.
+      // Not under test here — see managed-availability.ts.
       managedAvailabilityGate: null,
     },
   });

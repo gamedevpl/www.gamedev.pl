@@ -289,11 +289,7 @@ export interface SubmissionRoutesOptions {
    * pre-breaker behaviour pass.
    */
   creationGate?: CreationGate | null;
-  /**
-   * Whether the `platform` builder can be offered right now. Built from the store and
-   * the resolved agent-backend registry by default; an explicit value (including null,
-   * meaning "always available") is what tests that predate this switch pass.
-   */
+  // Whether `platform` can be offered right now; null means always available.
   managedAvailabilityGate?: ManagedAvailabilityGate | null;
   /** Global ceiling used when the Firestore config doc sets none. See creation-limits.ts. */
   globalDailySubmissionCap?: number;
@@ -521,7 +517,7 @@ export interface SubmissionRoutesHandle {
     requestedBy?: CreatorMessageOrigin;
     /** When set, the new job is owned by this uid (slug-transfer safe). */
     ownerUid?: string;
-  }) => Promise<{ route: 'job'; jobId: number } | null>;
+  }) => Promise<{ route: 'job'; jobId: number } | { route: 'unavailable'; reason: ManagedUnavailableReason } | null>;
 }
 
 /**
@@ -1093,7 +1089,8 @@ export async function registerSubmissionRoutes(
     const builder = input.undelivered ? previousBuilder : (input.builder ?? record?.defaultBuilder ?? previousBuilder);
     const selected = backendFor(builder);
     if (!selected) return { started: false, reason: 'not_configured' };
-    if (builder === 'platform' && managedAvailabilityGate && record?.ownerUid) {
+    // Skip for undelivered continuations — not a fresh dispatch.
+    if (builder === 'platform' && !input.undelivered && managedAvailabilityGate && record?.ownerUid) {
       const dateStr = new Date(now()).toISOString().slice(0, 10);
       const availability = await managedAvailabilityGate.checkAndSpend(record.ownerUid, dateStr);
       if (!availability.available) {
@@ -1280,7 +1277,7 @@ export async function registerSubmissionRoutes(
      * authorized creator after a slug transfer so quota and Studio stay aligned.
      */
     ownerUid?: string;
-  }): Promise<{ route: 'job'; jobId: number } | null> {
+  }): Promise<{ route: 'job'; jobId: number } | { route: 'unavailable'; reason: ManagedUnavailableReason } | null> {
     if (!store) return null;
     const source = await store.getSubmission(input.issueNumber);
     // Without a slug there is no game to improve, and dispatching would quietly
@@ -1295,7 +1292,7 @@ export async function registerSubmissionRoutes(
       const ownerUid = input.ownerUid ?? source.ownerUid;
       const dateStr = new Date(now()).toISOString().slice(0, 10);
       const availability = await managedAvailabilityGate.checkAndSpend(ownerUid, dateStr);
-      if (!availability.available) return null;
+      if (!availability.available) return { route: 'unavailable', reason: availability.reason };
     }
 
     const jobId = await store.allocateJobId();
@@ -2610,10 +2607,7 @@ export async function registerSubmissionRoutes(
       }
     }
 
-    // 5.5. Whether the `platform` builder can be offered right now — off, not yet
-    // launched here, or over a daily ceiling. `self` (BYOCA) needs no backend and is
-    // never gated. Ahead of the per-user quota, same reasoning as the breaker above: a
-    // request this route is going to refuse anyway must not spend a creator's quota.
+    // Ahead of quota, same as the breaker above; self is never gated.
     const requestedBuilder: BuilderKind = parsed.data.builder ?? 'platform';
     if (requestedBuilder === 'platform' && managedAvailabilityGate) {
       const availability = await managedAvailabilityGate.checkAndSpend(input.uid, dateStr);
@@ -3707,6 +3701,19 @@ export async function registerSubmissionRoutes(
 
       const currentTime = now();
       const dateStr = new Date(currentTime).toISOString().slice(0, 10);
+      const requestedBuilderForCheck = parsed.data.builder;
+      const effectiveBuilder =
+        requestedBuilderForCheck && isBuilderKind(requestedBuilderForCheck)
+          ? requestedBuilderForCheck
+          : builderOf(record);
+      // Ahead of quota spend — a refused request must not cost a slot.
+      if (effectiveBuilder === 'platform' && managedAvailabilityGate) {
+        const availability = await managedAvailabilityGate.peek(request.user!.uid, dateStr);
+        if (!availability.available) {
+          return reply.status(409).send({ error: MANAGED_UNAVAILABLE_ERROR, reason: availability.reason });
+        }
+      }
+
       const quota = await store.checkAndIncrementQuota(
         request.user!.uid,
         dateStr,
@@ -3749,6 +3756,9 @@ export async function registerSubmissionRoutes(
       });
       if (!started) {
         return reply.status(502).send({ error: 'failed to submit improvement request' });
+      }
+      if (started.route === 'unavailable') {
+        return reply.status(409).send({ error: MANAGED_UNAVAILABLE_ERROR, reason: started.reason });
       }
       // Publishing is terminal, so this is a *new* job with its own capability. The
       // creator's thread has to move onto it — the old (published) token cannot address

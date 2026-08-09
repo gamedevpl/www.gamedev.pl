@@ -62,8 +62,7 @@ async function createApp(options: { now?: () => number } = {}) {
       submissionTokenSecret: secret,
       notifyAppBaseUrl: APP_BASE,
       now: options.now,
-      // Predates the platform-builder availability switch; these tests are about the
-      // connect route's own gating, not managed availability. See managed-availability.ts.
+      // Not under test here — see managed-availability.ts.
       managedAvailabilityGate: null,
     },
   });

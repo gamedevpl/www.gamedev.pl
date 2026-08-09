@@ -94,7 +94,7 @@ type StudioConnectCardProps = {
   panelHeading?: string;
   onSwitchToPlatform?: SwitchHandler;
   builderHandoffPending?: boolean;
-  /** Why switching to `platform` cannot be offered right now, when it can't. */
+  // Why switching to platform is unavailable, if it is.
   platformUnavailable?: BuilderUnavailableReason;
 };
 
@@ -108,7 +108,7 @@ type SwitchBuilderControlProps = {
   compact?: boolean;
   active?: boolean;
   pending?: boolean;
-  /** Why `platform` cannot be switched to right now. Meaningless for `target: 'self'`. */
+  // Meaningless for target: 'self'.
   unavailable?: BuilderUnavailableReason;
 };
 
@@ -159,9 +159,7 @@ function SwitchBuilderControl({
     >
       {!compact ? <p className="studio-connect-switch-hint">{t('connect.switchBuilder.hint')}</p> : null}
       {target === 'platform' && unavailable ? (
-        // Not `disabled`: a disabled button shows no title tooltip in Chrome/Safari and
-        // drops out of the tab order, hiding the reason from keyboard/screen-reader
-        // creators. aria-disabled plus a visible note keeps it focusable and legible.
+        // Never disabled — that would drop it from the tab order.
         <button
           type="button"
           className={`${compact ? 'studio-active-handoff-button' : 'studio-connect-switch-button'} is-unavailable`}

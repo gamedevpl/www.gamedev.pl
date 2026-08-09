@@ -1,10 +1,6 @@
-// Whether the `platform` builder (the Gamedev.pl-run coding agent) can be offered right
-// now — as opposed to `self` (BYOCA), which needs no backend and is always available.
-//
-// Reuses the creation-limits chassis: the switch lives on the same `opsConfig/creationLimits`
-// document, read with the same short TTL, so an operator pulling it during an incident and
-// an operator pulling the creation breaker are looking at the same console panel. See
-// creation-limits.ts for why a document rather than an env var.
+// Whether the platform builder is available right now (self is always available).
+
+// Reuses the creation-limits document and TTL cache; see creation-limits.ts.
 
 import { BOT_UID_PREFIX, type CreationLimits, type Store } from './store.js';
 
@@ -12,34 +8,25 @@ export type ManagedUnavailableReason = 'coming_soon' | 'outage' | 'global_limit'
 
 export type ManagedAvailability = { available: true } | { available: false; reason: ManagedUnavailableReason };
 
-/** Wire error code for a request that named `builder: 'platform'` while it is unavailable. */
+// Wire error code for a refused `builder: 'platform'` request.
 export const MANAGED_UNAVAILABLE_ERROR = 'platform_builder_unavailable';
 
 export const DEFAULT_MANAGED_AVAILABILITY_TTL_MS = 60_000;
 
 export interface ManagedAvailabilityOptions {
-  /** Absent only in tests with no backing store; caps and the ops-doc mode are skipped. */
+  // Absent only in tests with no store; caps and mode are skipped.
   store?: Store;
   now?: () => number;
   ttlMs?: number;
-  /**
-   * Whether this environment actually has a platform backend wired (the registry's
-   * `platform` entry). A missing backend reads as `coming_soon`, not `outage` — an
-   * unconfigured environment is a feature that has not launched here, not an incident.
-   */
+  // Whether the registry's `platform` backend is actually wired.
   hasPlatformBackend: boolean;
   logWarn?: (payload: Record<string, unknown>, message: string) => void;
 }
 
 export interface ManagedAvailabilityGate {
-  /** Read-only — never spends a slot. For quota/status display and pre-flight UI checks. */
+  // Read-only — never spends a slot. For display and pre-flight checks.
   peek(uid: string, dateStr: string): Promise<ManagedAvailability>;
-  /**
-   * Same checks as {@link peek}, but spends the global and per-creator daily slot on
-   * success. Call this once, right before a fresh platform dispatch — never for a round
-   * that is only continuing (an in-flight platform round keeps running when the switch
-   * flips; this gates new dispatches, not existing ones).
-   */
+  // Spends the daily slot on success. Call right before a fresh dispatch.
   checkAndSpend(uid: string, dateStr: string): Promise<ManagedAvailability>;
 }
 
@@ -72,7 +59,6 @@ export function createManagedAvailabilityGate(options: ManagedAvailabilityOption
     }
   }
 
-  /** The switch and configuration state, ahead of any per-day counting. */
   async function baseAvailability(): Promise<ManagedAvailability> {
     const stored = await config();
     const mode = stored?.managedBuilderMode ?? 'auto';
@@ -90,21 +76,7 @@ export function createManagedAvailabilityGate(options: ManagedAvailabilityOption
     const globalCap = stored?.managedDailyCap ?? null;
     const userCap = stored?.managedDailyUserCap ?? null;
 
-    if (globalCap !== null) {
-      let allowed: boolean;
-      try {
-        if (spend) {
-          allowed = (await store.checkAndIncrementGlobalManagedBuilds(dateStr, globalCap)).allowed;
-        } else {
-          allowed = (await store.getGlobalManagedBuildCount(dateStr)) < globalCap;
-        }
-      } catch (error) {
-        logWarn({ err: error, dateStr }, 'global managed build counter unreachable; admitting the request');
-        allowed = true;
-      }
-      if (!allowed) return { available: false, reason: 'global_limit' };
-    }
-
+    // Checked first: an exhausted creator must never spend the shared slot.
     if (userCap !== null) {
       let allowed: boolean;
       try {
@@ -119,6 +91,21 @@ export function createManagedAvailabilityGate(options: ManagedAvailabilityOption
       }
       if (!allowed) return { available: false, reason: 'user_limit' };
     }
+
+    // Counted even uncapped, for an accurate admin count; enforced only when capped.
+    const globalLimit = globalCap ?? Infinity;
+    let globalAllowed: boolean;
+    try {
+      if (spend) {
+        globalAllowed = (await store.checkAndIncrementGlobalManagedBuilds(dateStr, globalLimit)).allowed;
+      } else {
+        globalAllowed = (await store.getGlobalManagedBuildCount(dateStr)) < globalLimit;
+      }
+    } catch (error) {
+      logWarn({ err: error, dateStr }, 'global managed build counter unreachable; admitting the request');
+      globalAllowed = true;
+    }
+    if (!globalAllowed) return { available: false, reason: 'global_limit' };
 
     return { available: true };
   }

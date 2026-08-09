@@ -83,8 +83,7 @@ describe('BuilderChoice', () => {
     });
 
     const platformOption = container.querySelectorAll<HTMLButtonElement>('.builder-choice-option')[0];
-    // Never `disabled`: a disabled button drops out of the tab order and shows no
-    // tooltip in Chrome/Safari, hiding the reason from keyboard/screen-reader creators.
+    // Never disabled — that would drop it from the tab order.
     expect(platformOption.disabled).toBe(false);
     expect(platformOption.getAttribute('aria-disabled')).toBe('true');
     expect(platformOption.title).toContain('hasn');
@@ -94,7 +93,7 @@ describe('BuilderChoice', () => {
       platformOption.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await flush();
     });
-    // A click on the unavailable option is a no-op — it never fires onChange.
+    // A click on it is a no-op.
     expect(value).toBe('platform');
 
     await act(async () => root.unmount());

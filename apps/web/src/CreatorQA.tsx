@@ -45,12 +45,7 @@ interface CreatorQAProps {
   initialBuilder?: BuilderKind;
   /** Fires when the builder choice changes so a reload keeps the selection. */
   onBuilderChange?: (builder: BuilderKind) => void;
-  /**
-   * Why the `platform` option cannot be picked right now, when it can't. The wizard
-   * keeps `platform` selectable-looking but blocks advancing past the builder stage (and
-   * submitting from review) while it is both selected and unavailable — the creator must
-   * explicitly choose `self` to continue, rather than being switched over for them.
-   */
+  // Blocks advancing past builder/review until the creator picks self.
   platformUnavailable?: BuilderUnavailableReason;
 }
 
@@ -99,7 +94,7 @@ export function CreatorQA({
   const [builder, setBuilder] = useState<BuilderKind>(isBuilderKind(initialBuilder) ? initialBuilder : 'platform');
   const [step, setStep] = useState(0);
   const titleReady = isSubmittableTitle(title);
-  // The creator must explicitly pick `self` to continue — never switched over for them.
+  // Never switched over automatically — the creator must pick self.
   const builderBlocked = builder === 'platform' && Boolean(platformUnavailable);
 
   const stages = useMemo<Stage[]>(

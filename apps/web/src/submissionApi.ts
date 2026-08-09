@@ -174,7 +174,7 @@ export type SubmissionStatus = {
     requestedAt: string;
     acknowledgedAt?: string;
   };
-  /** Whether the `platform` builder can be picked or handed off to right now. */
+  // Whether platform can be picked or handed off to right now.
   platformBuilder?: PlatformBuilderAvailability;
   /**
    * Why this build is asking the creator to act. Covers a dead agent round

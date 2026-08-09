@@ -637,21 +637,11 @@ export interface CreationLimits {
    * flag goes on. Same null semantics as the submission cap.
    */
   globalDailyEditCap: number | null;
-  /**
-   * Switches the `platform` builder option: whether the Gamedev.pl coding agent is
-   * offered at all, independent of BYOCA (`self`).
-   *
-   * `auto` (or absent) defers to whether a platform backend is actually configured for
-   * this environment. `off` and `coming_soon` both refuse regardless of configuration —
-   * the copy differs (an incident vs. a feature not yet launched here) but the effect on
-   * dispatch is the same. Never hides the option: the UI keeps it visible and disabled,
-   * with the reason in a tooltip, so BYOCA does not look like the only thing that ever
-   * existed.
-   */
+  // Switches the `platform` option; `auto` defers to whether a backend exists.
   managedBuilderMode?: 'auto' | 'off' | 'coming_soon';
-  /** Ceiling on managed (platform) rounds started per UTC day, everyone together. `null` = no cap. */
+  // Shared daily ceiling on platform rounds started. `null` = no cap.
   managedDailyCap: number | null;
-  /** Same ceiling, per creator per UTC day. `null` = no cap. */
+  // Same ceiling, per creator per UTC day.
   managedDailyUserCap: number | null;
   /** Who last changed this and when, so a leftover pause is legible as a leftover. */
   updatedAt?: string;
@@ -675,7 +665,7 @@ export interface UsageCounters {
   improvements: number;
   /** Natural-language tuning requests in the editor (one Vertex call each). */
   assists: number;
-  /** Rounds this creator started (or resumed) on the platform builder today. */
+  // Platform rounds this creator started today.
   managedBuilds: number;
 }
 
@@ -2112,9 +2102,9 @@ export interface Store {
   checkAndIncrementGlobalSubmissions(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }>;
   /** Same shape for the editing lanes' shared daily allowance of model calls. */
   checkAndIncrementGlobalEdits(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }>;
-  /** How many platform-builder rounds everyone together has started on `dateStr`. */
+  // Platform rounds everyone together has started on `dateStr`.
   getGlobalManagedBuildCount(dateStr: string): Promise<number>;
-  /** Same shape, for the shared daily ceiling on platform-builder rounds. */
+  // Same shape, for the shared daily ceiling.
   checkAndIncrementGlobalManagedBuilds(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }>;
   upsertWaitlistEntry(entry: { uid: string; email?: string; name?: string; locale?: string }): Promise<WaitlistEntry>;
   getWaitlistEntry(uid: string): Promise<WaitlistEntry | null>;

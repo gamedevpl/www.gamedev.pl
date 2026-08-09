@@ -1397,7 +1397,7 @@ function FeedbackPanel({
   onSwitchToPlatform?: BuilderHandoffHandler;
   onSwitchToSelf?: BuilderHandoffHandler;
   handoffPending?: BuilderKind;
-  /** Why `platform` cannot be picked or handed off to right now. See BuilderChoice. */
+  // Why platform is unavailable, if it is. See BuilderChoice.
   platformUnavailable?: BuilderUnavailableReason;
   /**
    * Hide the "saved until you start your agent" line — the connect card above already

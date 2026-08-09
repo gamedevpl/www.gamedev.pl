@@ -14,7 +14,7 @@ type BuilderModeBadgeProps = {
    */
   canChange: boolean;
   disabled?: boolean;
-  /** Why `platform` cannot be picked right now, when it can't. See BuilderChoice. */
+  // Why platform is unavailable, if it is. See BuilderChoice.
   platformUnavailable?: BuilderUnavailableReason;
 };
 

@@ -254,12 +254,7 @@ export interface SubmissionStatusResponseBase {
     requestedAt: string;
     acknowledgedAt?: string;
   };
-  /**
-   * Whether the `platform` builder can be picked or handed off to right now — off, not
-   * yet launched here, or over a daily ceiling. Absent means "no opinion" (no gate
-   * wired), which older/test callers should read as available, matching behaviour
-   * before this field existed. `self` (BYOCA) is never gated and carries no such field.
-   */
+  // Whether platform can be picked right now; absent means no opinion.
   platformBuilder?:
     { available: true } | { available: false; reason: 'coming_soon' | 'outage' | 'global_limit' | 'user_limit' };
   /**

@@ -132,11 +132,7 @@ async function createApp(params: {
   };
   adminUids?: string;
   gameSeeder?: GameSeeder;
-  /**
-   * Whether the `platform` builder is offered. Defaults to `null` (always available) so
-   * every test predating this switch keeps behaving as if it were never built — tests
-   * that exercise the switch itself pass an explicit gate. See managed-availability.ts.
-   */
+  // Defaults to always-available; tests of the switch pass an explicit gate.
   managedAvailabilityGate?: ManagedAvailabilityGate | null;
 }): Promise<{ app: FastifyInstance; store: Store; authHeaders: Record<string, string> }> {
   const store = params.store ?? new InMemoryStore();
@@ -3331,8 +3327,7 @@ describe('managed (platform) builder availability', () => {
       githubClient,
       submissionTokenSecret: secret,
       agentBackend: backend,
-      // The vendor is configured (a backend exists), but an operator has switched it off
-      // — the scenario an incident pull actually produces.
+      // A backend exists; an operator has switched it off.
       managedAvailabilityGate: createManagedAvailabilityGate({ store: undefined, hasPlatformBackend: true }),
     });
 
@@ -3354,8 +3349,7 @@ describe('managed (platform) builder availability', () => {
       expect((await store.getSubmission(issueNumber))?.state).toBe('dispatched');
     });
 
-    // Rebuild the app with the switch actually off — the daily-cap/mode config lives on
-    // the store, and a build with no store never sees it, so this exercises the mode path.
+    // Rebuild with the switch off — config lives on the store.
     await store.setCreationLimits({ managedBuilderMode: 'off' }, 'g:boss');
     const { app: appWithGate, authHeaders: freshHeaders } = await createApp({
       githubClient,
@@ -3365,8 +3359,7 @@ describe('managed (platform) builder availability', () => {
       managedAvailabilityGate: createManagedAvailabilityGate({ store, hasPlatformBackend: true, ttlMs: 0 }),
     });
 
-    // No agent signal yet — the quiet self round is eligible for a handoff, which
-    // defaults to `platform` when the request body omits `builder`.
+    // No agent signal yet; omitting `builder` defaults the handoff to platform.
     const handoff = await appWithGate.inject({
       method: 'POST',
       url: `/api/submissions/${token}/handoff`,

@@ -22,7 +22,7 @@ type HeroPromptSectionProps = {
   mockError: string | null;
   // Demo mock only; Build runs QA before any generation
   onGenerateMock?: (prompt: string) => void;
-  /** Fires once the quota poll resolves, so the create wizard can gate the builder step. */
+  // Fires once the quota poll resolves.
   onPlatformBuilderAvailability?: (availability: PlatformBuilderAvailability | undefined) => void;
 };
 
