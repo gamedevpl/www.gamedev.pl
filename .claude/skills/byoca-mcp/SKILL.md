@@ -62,6 +62,17 @@ progress, staging/submission, gate media, and inbox. Proposal, example, and kit
 browse/read tools remain callable for compatibility but are not advertised to models.
 The digest and `get_kit` replace routine kit browsing.
 
+**Trimming the surface is only half the job — the prose has to follow.** The channel names
+the kit browse tools in every `get_kit` reply, because a REST agent can call them by URL.
+A model can only call what `tools/list` carried, so an unadvertised name that survives in a
+description, in the workflow list, or in the `browse` block of a reply is an invitation the
+host answers with a permission denial. A managed round on 2026-08-09 spent three round trips
+that way and then shipped a game with the audio module stripped out, because the sound-id
+lookup it had been pointed at did not exist for it. The MCP layer now filters `browse` down
+to advertised tools and drops it when none remain; `apps/api/src/mcp-server.test.ts` fails if
+an unadvertised name reappears in the descriptions, the workflow, or a `get_kit` reply. When
+you remove a tool from `MCP_VISIBLE_TOOLS`, grep the prose for its name in the same change.
+
 ### `get_gate_media` must stay reachable from the loop
 
 The step originally read "once a publish verdict lands", immediately after three steps

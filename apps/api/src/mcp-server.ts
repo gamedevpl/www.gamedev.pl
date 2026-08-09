@@ -142,6 +142,14 @@ const MCP_VISIBLE_TOOLS = new Set([
   'ack_inbox',
 ]);
 
+// A model can only call advertised tools; naming others invites denials.
+function withAdvertisedBrowseTools<T extends { browse?: Record<string, string> }>(body: T): T {
+  if (!body.browse) return body;
+  const advertised = Object.entries(body.browse).filter(([, tool]) => MCP_VISIBLE_TOOLS.has(tool));
+  const { browse: _browse, ...rest } = body;
+  return (advertised.length ? { ...rest, browse: Object.fromEntries(advertised) } : rest) as T;
+}
+
 /** Aggressive ceiling on unauthenticated / invalid `start` attempts per IP. */
 const MAX_INVALID_STARTS_PER_WINDOW = 20;
 const INVALID_START_WINDOW_MS = 60 * 60 * 1000;
@@ -592,7 +600,7 @@ const SESSION_WORKFLOW: readonly string[] = [
   // one. get_sources is cheap and answers available:false on a new game, so it is
   // unconditional rather than gated on a round type the agent cannot see.
   'get_sources — when it returns available:true this round improves an existing game: continue those files. Never scaffold over them. If warnings.code=module_too_large, split those oversized modules into cohesive game/*.ts pieces BEFORE adding features — do not grow them further.',
-  'get_kit — keep engineRef for submit_sources; prefer read_kit_files for several known small paths (else list_kit_files / search_kit_files / read_kit_file / read_kit_file_fragment) when shell unpack is unavailable; otherwise unpack via the returned one-liner and follow SKILL.md locally. Never dump the whole kit into context.',
+  'get_kit — keep engineRef for submit_sources; the reply names any kit browse tools this surface offers, and offers none when the digest already covers the API. With shell egress, unpack via the returned one-liner and follow SKILL.md locally. Never dump the whole kit into context, and never call a tool this session did not advertise.',
   'Build the game — continuing the seed or sources you fetched, otherwise from the kit; report_progress before and after long steps. Soft module budget: keep each game/*.ts under ~350 lines / ~12 KiB. When a file approaches that, split cohesive pieces (render→art/ui/hud/rooms; model→tables/layout/types; runtime→systems) before more feature work. Honour warnings.code=module_too_large the same way you honour call_end — act, then continue.',
   'As soon as the game draws anything playable: screenshot_upload_url then curl --upload-file <png> "$url". There is no base64 send path — PNG bytes must never enter the model. Without shell egress, skip mid-build screenshots; the gate still captures on delivery.',
   'While iterating: run only npm run typecheck -- <slug> locally, then prefer stage_upload_url({ path }) and curl --upload-file <file> "$url" for new/rewritten paths when you have shell egress (bytes never re-enter the model). Fall back to stage_source_file({ path, content }) without shell. For edits prefer patch_source_file({ path, old, new }) — exact unique substring replace, no unified-diff arithmetic. Or patch_source_file({ path, patch }) with a unified diff (bare @@ ok). Stage only changed paths — never re-upload the whole tree. Then submit_sources({ fromStaged: true, mode: "preview", kitEngineRef }) — fromStaged overlays onto the latest delivery/seed and the server verifies it; no browser, npm ci, capture, playtest, or agency is required for this preview. If a browser is available near delivery, optionally run npm run check:game -- <slug> --preview. Run the full gate only immediately before a mode:"publish" seal. Inline files[] still works for tiny trees.',
@@ -2431,16 +2439,15 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
               readMany: { type: 'string' },
               fragment: { type: 'string' },
             },
-            required: ['list', 'search', 'read', 'readMany', 'fragment'],
           },
         },
-        required: ['engineRef', 'kitUrl', 'sha256', 'unpack', 'entry', 'browse'],
+        required: ['engineRef', 'kitUrl', 'sha256', 'unpack', 'entry'],
       },
       description:
         'Fetch Creator Kit metadata: engineRef (required for submit_sources), sha256, entry, ' +
-        'optional kitUrl/unpack for agents with shell egress, and browse tool names. ' +
-        'Prefer read_kit_files for several known small paths (else list_kit_files / search_kit_files / ' +
-        'read_kit_file / read_kit_file_fragment) over downloading the tarball when curl/unpack is unavailable — ' +
+        'and optional kitUrl/unpack for agents with shell egress. ' +
+        'browse is present only when this surface advertises kit browse tools; when it is absent, ' +
+        'the injected digest is the API reference and there is no browse path — ' +
         'do not pull the whole kit into context. ' +
         'entry=gamedevpl-creator-kit/SKILL.md (tarball roots at gamedevpl-creator-kit/; ' +
         'do not assume a `cd` persists across tool calls). ' +
@@ -2454,11 +2461,11 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         const auth = await resolveAuth(ctx, args);
         if (!('channelToken' in auth)) return auth;
         const res = await injectChannel(ctx.request, 'GET', '/api/agent/build/kit', auth.channelToken);
-        const body = res.json() as { error?: string; message?: string };
+        const body = res.json() as { error?: string; message?: string; browse?: Record<string, string> };
         if (res.statusCode !== 200) {
           return toolErr(body.message ?? body.error ?? `kit failed (${res.statusCode})`, body);
         }
-        return toolOk(body);
+        return toolOk(withAdvertisedBrowseTools(body));
       },
     },
 

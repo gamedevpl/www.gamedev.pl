@@ -415,7 +415,7 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(getKit?.description).toMatch(/gamedevpl-creator-kit/);
     expect(getKit?.description).toMatch(/entry=gamedevpl-creator-kit\/SKILL\.md/);
     expect(getKit?.description).toMatch(/do not assume a `cd` persists/i);
-    expect(getKit?.description).toMatch(/read_kit_files|list_kit_files|read_kit_file/);
+    expect(getKit?.description).not.toMatch(/list_kit_files|search_kit_files|read_kit_file/);
     expect(tools.find((t) => t.name === 'list_kit_files')).toBeUndefined();
     expect(tools.find((t) => t.name === 'search_kit_files')).toBeUndefined();
     expect(tools.find((t) => t.name === 'read_kit_file')).toBeUndefined();
@@ -456,6 +456,32 @@ describe('POST /api/mcp (BY-05)', () => {
       ]),
     );
     expect(names).not.toEqual(expect.arrayContaining(['search_kit_files', 'submit_proposal']));
+  });
+
+  it('get_kit does not name kit browse tools this surface never advertised', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    const engine = 'c21f5132cedb5133aa87f75654549391f4a5c633';
+    const objectStore: GcsObjectStore = {
+      readObject: async (name: string) =>
+        name === 'kits/current.json'
+          ? Buffer.from(JSON.stringify({ current: engine, previous: null, updatedAt: '2026-08-09T00:00:00.000Z' }))
+          : name === `kits/${engine}.json`
+            ? Buffer.from(JSON.stringify({ sha256: 'a'.repeat(64), packedAt: '2026-08-09T00:00:00.000Z' }))
+            : null,
+      objectExists: async () => true,
+      signReadUrl: async (name: string) => `https://signed.example/${name}?sig=1`,
+    };
+    app = await createApp(store, undefined, objectStore);
+    const sessionId = await initialize(app);
+    const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    const kit = await callTool(app, 'get_kit', { sessionKey }, { 'mcp-session-id': sessionId });
+    expect(kit.isError).toBe(false);
+    const structured = kit.structured as { engineRef?: string; browse?: Record<string, string> };
+    expect(structured.engineRef).toBe(engine);
+    expect(JSON.stringify(structured)).not.toMatch(/list_kit_files|search_kit_files|read_kit_file/);
   });
 
   it('start issues a sessionKey; subsequent tools work with it', async () => {
@@ -597,7 +623,7 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(joined).toMatch(/available:true/);
     expect(joined).toMatch(/never scaffold over them/i);
     expect(joined).toMatch(/get_kit/);
-    expect(joined).toMatch(/read_kit_files|list_kit_files|read_kit_file/);
+    expect(joined).not.toMatch(/list_kit_files|search_kit_files|read_kit_file/);
     expect(joined).toMatch(/screenshot_upload_url/);
     expect(joined).not.toMatch(/send_screenshot/);
     expect(joined).toMatch(/stage_source_file|fromStaged/);
