@@ -306,6 +306,9 @@ export const DELIVERY_FIXED_FILES = [
   // born-editable delivery at upload. The generated `game/editor-content.ts` needs no
   // entry, it matches {@link DELIVERY_EXTRA_MODULE_PATTERN}.
   'EDITOR.json',
+  // The game's UI layout, generated from GAME.json howToPlay schema if not uploaded
+  // (see Phase B2 — index-html-generator integration). Stored snapshots containing
+  // index.html must keep working forever; generated fragments never replace an uploaded file.
   'index.html',
   'game.ts',
   'style.css',

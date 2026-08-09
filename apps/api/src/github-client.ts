@@ -73,6 +73,8 @@ export interface GameSources {
   styleCss: string;
   /** SPEC.md frontmatter title, when present. */
   title: string | null;
+  /** Parsed GAME.json manifest, for generating index.html if not uploaded. */
+  gameJson: string;
 }
 
 // GAME_KIT_MODULES lives in games-repo-contract.ts — CI re-checks the live
@@ -1410,6 +1412,7 @@ ${gameJs}`;
         gameJs: bundledJs,
         styleCss: bundledCss,
         title: specMd ? parseSpecTitle(specMd) : null,
+        gameJson: manifestSource,
       };
     },
 

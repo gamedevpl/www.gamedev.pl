@@ -1,5 +1,6 @@
 import type { GameProject } from '@gamedevpl/game-generator';
 import { assembleGameHtml } from './assemble.js';
+import { generateIndexHtml, type GameManifest, type GameSpec } from './index-html-generator.js';
 import {
   generateSnapshotId,
   mediaContentType,
@@ -133,10 +134,24 @@ async function bakeGame(args: {
     throw new Error('game sources not found on ref');
   }
 
+  let indexHtml = sources.indexHtml;
+  // Generate index.html from GAME.json.howToPlay if not uploaded
+  if (!indexHtml.trim()) {
+    try {
+      const manifest: GameManifest = JSON.parse(sources.gameJson);
+      if (manifest.howToPlay) {
+        const spec: GameSpec = { title: sources.title ?? entry.title ?? entry.slug };
+        indexHtml = generateIndexHtml(manifest, spec);
+      }
+    } catch {
+      // If howToPlay is missing or GAME.json is invalid, fall through to empty
+    }
+  }
+
   const project: GameProject = {
     title: sources.title ?? entry.title ?? entry.slug,
     description: '',
-    html: sources.indexHtml,
+    html: indexHtml,
     js: sources.gameJs,
     css: sources.styleCss,
   };

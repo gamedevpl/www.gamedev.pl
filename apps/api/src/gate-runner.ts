@@ -23,6 +23,7 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { GameProject } from '@gamedevpl/game-generator';
 import { assembleGameHtml } from './assemble.js';
+import { generateIndexHtml, type GameManifest, type GameSpec } from './index-html-generator.js';
 import { firstGateScreenshotPath } from './gate-screenshot.js';
 import {
   createGateStageBannerParser,
@@ -160,10 +161,25 @@ async function assembleFromHarness(harness: string, slug: string): Promise<strin
   const client = createLocalGamesClient({ rootDir: harness });
   const sources = await client.getGameSources('main', slug);
   if (!sources) return null;
+
+  let html = sources.indexHtml;
+  // Generate index.html from GAME.json.howToPlay if not uploaded
+  if (!html.trim()) {
+    try {
+      const manifest: GameManifest = JSON.parse(sources.gameJson);
+      if (manifest.howToPlay) {
+        const spec: GameSpec = { title: sources.title ?? slug };
+        html = generateIndexHtml(manifest, spec);
+      }
+    } catch {
+      // If howToPlay is missing or GAME.json is invalid, fall through to empty
+    }
+  }
+
   const project: GameProject = {
     title: sources.title ?? slug,
     description: '',
-    html: sources.indexHtml,
+    html,
     js: sources.gameJs,
     css: sources.styleCss,
   };

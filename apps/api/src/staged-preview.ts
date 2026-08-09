@@ -31,6 +31,7 @@
 
 import { createHash } from 'node:crypto';
 import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './assemble.js';
+import { generateIndexHtml, type GameManifest, type GameSpec } from './index-html-generator.js';
 import { MAX_BUILD_PREVIEW_BYTES } from './agent-channel.js';
 import type { GamesStore, SourceFile } from './games-store.js';
 import type { GitHubClient } from './github-client.js';
@@ -303,11 +304,25 @@ export function createStagedPreviewPublisher(options: StagedPreviewOptions): Sta
     const sources = await options.githubClient.getGameSources(options.engineRef, slug, overlay);
     if (!sources) return 'incomplete';
 
+    let indexHtml = sources.indexHtml;
+    // Generate index.html from GAME.json.howToPlay if not uploaded
+    if (!indexHtml.trim()) {
+      try {
+        const manifest: GameManifest = JSON.parse(sources.gameJson);
+        if (manifest.howToPlay) {
+          const spec: GameSpec = { title: sources.title ?? slug };
+          indexHtml = generateIndexHtml(manifest, spec);
+        }
+      } catch {
+        // If howToPlay is missing or GAME.json is invalid, fall through to empty
+      }
+    }
+
     const html = assembleGameHtml(
       {
         title: sources.title ?? slug,
         description: '',
-        html: sources.indexHtml,
+        html: indexHtml,
         js: sources.gameJs,
         css: sources.styleCss,
       },

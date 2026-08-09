@@ -7,6 +7,7 @@ import { registerAgentChannelRoutes, type AgentChannelOptions } from './agent-ch
 import { mintAgentToken } from './agent-token.js';
 import { registerMcpServerRoutes } from './mcp-server.js';
 import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './assemble.js';
+import { generateIndexHtml, type GameManifest, type GameSpec } from './index-html-generator.js';
 import { createCreationGate, CREATION_REFUSAL_CODES, type CreationGate } from './creation-limits.js';
 import { postGateScreenshotToThread } from './gate-screenshot.js';
 import { profileBylineName, toPublicCreatorProfile } from './creator-profile.js';
@@ -832,11 +833,26 @@ export async function registerSubmissionRoutes(
     if (!store || !githubClient) return;
     const sources = await githubClient.getGameSources(input.seedRef, input.slug);
     if (!sources) return;
+
+    let indexHtml = sources.indexHtml;
+    // Generate index.html from GAME.json.howToPlay if not uploaded
+    if (!indexHtml.trim()) {
+      try {
+        const manifest: GameManifest = JSON.parse(sources.gameJson);
+        if (manifest.howToPlay) {
+          const spec: GameSpec = { title: sources.title ?? input.slug };
+          indexHtml = generateIndexHtml(manifest, spec);
+        }
+      } catch {
+        // If howToPlay is missing or GAME.json is invalid, fall through to empty
+      }
+    }
+
     const html = assembleGameHtml(
       {
         title: sources.title ?? input.slug,
         description: '',
-        html: sources.indexHtml,
+        html: indexHtml,
         js: sources.gameJs,
         css: sources.styleCss,
       },
@@ -4887,10 +4903,24 @@ export async function registerSubmissionRoutes(
         return reply.status(404).send({ error: 'game not found' });
       }
 
+      let indexHtml = sources.indexHtml;
+      // Generate index.html from GAME.json.howToPlay if not uploaded
+      if (!indexHtml.trim()) {
+        try {
+          const manifest: GameManifest = JSON.parse(sources.gameJson);
+          if (manifest.howToPlay) {
+            const spec: GameSpec = { title: sources.title ?? slug };
+            indexHtml = generateIndexHtml(manifest, spec);
+          }
+        } catch {
+          // If howToPlay is missing or GAME.json is invalid, fall through to empty
+        }
+      }
+
       const project: GameProject = {
         title: sources.title ?? slug,
         description: '',
-        html: sources.indexHtml,
+        html: indexHtml,
         js: sources.gameJs,
         css: sources.styleCss,
       };

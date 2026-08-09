@@ -244,10 +244,31 @@ export function validateSourceUpload(files: SourceFile[], mode: DeliveryMode = '
   }
 
   if (!seen.has('SPEC.md')) throw new InvalidUploadError('SPEC.md is required — it is the spec of record for the game');
-  if (!seen.has('index.html') || !seen.has('game.ts')) {
-    throw new InvalidUploadError('index.html and game.ts are required — a game must be playable');
+  if (!seen.has('game.ts')) {
+    throw new InvalidUploadError('game.ts is required — a game must be playable');
   }
   const gameJson = files.find((file) => file.path.trim() === 'GAME.json');
+
+  // index.html is required OR GAME.json.howToPlay (for generated index.html).
+  // Both present is fine; the uploaded index.html takes precedence.
+  let hasHowToPlay = false;
+  if (gameJson) {
+    try {
+      const manifest = JSON.parse(gameJson.content) as {
+        howToPlay?: { goal?: unknown; hint?: unknown };
+      };
+      const howToPlay = manifest.howToPlay;
+      hasHowToPlay = !!(howToPlay && typeof howToPlay === 'object' && 'goal' in howToPlay && 'hint' in howToPlay);
+    } catch {
+      // Parse error in GAME.json will be caught elsewhere; just can't use howToPlay here
+    }
+  }
+
+  if (!seen.has('index.html') && !hasHowToPlay) {
+    throw new InvalidUploadError(
+      'index.html or GAME.json.howToPlay is required — a game must be playable. Either upload index.html or define howToPlay with goal and hint in GAME.json.',
+    );
+  }
   if (mode === 'preview' && gameJson) {
     try {
       const manifest = JSON.parse(gameJson.content) as {
