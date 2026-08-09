@@ -6,11 +6,11 @@ import { sanitizeCreatorText } from './submission-status.js';
 import type { Store, SubmissionRecord } from './store.js';
 
 export interface SourceDeliveryAuthority {
-  /** The backend identity recorded at dispatch time. */
+  // Backend identity recorded at dispatch time.
   backend: string;
-  /** The vendor session that produced these files. */
+  // Vendor session that produced these files.
   sessionRef: string;
-  /** The round generation captured when that session was started. */
+  // Round generation captured when that session started.
   roundGeneration: number;
 }
 
@@ -21,10 +21,7 @@ export interface SourceDeliveryInput {
   mode: 'preview' | 'publish';
   backend?: string;
   kitEngineRef?: string;
-  /**
-   * Channel deliveries may bind a legacy job's missing slug before writing. Managed
-   * harvests never may: their authority must match a slug already on the job.
-   */
+  // Channel may bind a legacy slug; managed harvest may not.
   bindSlug?: boolean;
   authority?: SourceDeliveryAuthority;
 }
