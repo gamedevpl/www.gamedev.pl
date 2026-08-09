@@ -826,8 +826,8 @@ export async function registerAgentChannelRoutes(
                     : `The gate ran against your delivery and refused it (${gate.version}). You are not ` +
                       'done: nothing can be published until it passes. Read `gate.report` below — it ends ' +
                       'with the check that stopped the chain — fix the cause in your game, and deliver ' +
-                      'again with `npm run submit -- <slug>` (or submit_sources mode=publish). Re-delivering ' +
-                      'without a fix just stores another version that fails the same way.',
+                      'again with submit_sources mode=publish (or `npm run submit -- <slug>` in a shell ' +
+                      'sandbox). Re-delivering without a fix just stores another version that fails the same way.',
             }
           : {}),
         ...(record.deliveredVersion
@@ -835,7 +835,8 @@ export async function registerAgentChannelRoutes(
           : {
               mustDeliver:
                 'Nothing has been delivered for this build yet. Pushing a branch is not delivering — ' +
-                'run `npm run submit -- <slug>` before you finish, or this session produces nothing.',
+                'call submit_sources with mode=preview at least once (mode=publish to seal, or ' +
+                '`npm run submit -- <slug>` in a shell sandbox) before you finish, or this session produces nothing.',
             }),
       },
     };

@@ -512,7 +512,15 @@ function warningsFromChannel(body: ChannelControlBody): Array<{ code: string; me
   }
   const deliver = typeof body.control?.mustDeliver === 'string' ? body.control.mustDeliver.trim() : '';
   if (deliver) {
-    warnings.push({ code: 'must_deliver', message: deliver });
+    // No-shell remedy, authored here rather than forwarded.
+    warnings.push({
+      code: 'must_deliver',
+      message:
+        'Nothing has been delivered for this build yet. Staging or pushing a branch is not delivering — ' +
+        'stage your sources, then call submit_sources({ fromStaged: true, mode: "preview", kitEngineRef }) ' +
+        '(mode: "publish" to seal instead, but that needs TRACE.json + PLAYTEST.json) before you finish, ' +
+        'or this session produces nothing.',
+    });
   }
   return warnings;
 }
