@@ -1,3 +1,5 @@
+import { GAME_KIT_MODULES } from './games-repo-contract.js';
+
 // Shallow shape check — catches assemble.ts crashes before the gate does.
 export function gameManifestHint(path: string, content: string): string | null {
   const normalized = path.trim().replaceAll('\\', '/');
@@ -29,6 +31,23 @@ export function gameManifestHint(path: string, content: string): string | null {
   }
   if (!modules.every((m) => typeof m === 'string')) {
     return 'GAME.json engine.modules must contain only strings.';
+  }
+
+  // Mirrors parseGameManifest in github-client.ts.
+  const unknown = modules.find((m) => !(GAME_KIT_MODULES as readonly string[]).includes(m as string));
+  if (unknown) {
+    return `GAME.json engine.modules lists "${unknown}", which is not a GameKit module. Remove it or fix the name.`;
+  }
+  if (new Set(modules).size !== modules.length) {
+    return 'GAME.json engine.modules has a duplicate entry — list each module once.';
+  }
+  const expectedOrder = GAME_KIT_MODULES.filter((m) => modules.includes(m));
+  if (modules.join(',') !== expectedOrder.join(',')) {
+    return (
+      `GAME.json engine.modules is out of order — the gate's assembler requires the canonical GAME_KIT_MODULES ` +
+      `order (games-repo-contract.ts), or it throws before typecheck even runs. Reorder to: ` +
+      `${JSON.stringify(expectedOrder)}.`
+    );
   }
 
   if (modules.includes('audio')) {

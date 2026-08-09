@@ -40,6 +40,23 @@ describe('gameManifestHint', () => {
     );
   });
 
+  it('flags an engine module name the kit does not recognize', () => {
+    const content = JSON.stringify({ engine: { modules: ['gfx', 'not-a-real-module'] } });
+    expect(gameManifestHint('GAME.json', content)).toMatch(/not-a-real-module.*not a GameKit module/);
+  });
+
+  it('flags a duplicate engine module', () => {
+    const content = JSON.stringify({ engine: { modules: ['gfx', 'gfx'] } });
+    expect(gameManifestHint('GAME.json', content)).toMatch(/duplicate entry/);
+  });
+
+  it('flags engine.modules out of canonical order (arena-brawlers, 2026-08-09)', () => {
+    const content = JSON.stringify({ engine: { modules: ['party', 'input', 'drawing', 'effects', 'gfx', 'audio'] } });
+    const hint = gameManifestHint('GAME.json', content);
+    expect(hint).toMatch(/out of order/);
+    expect(hint).toContain('["input","drawing","gfx","effects","audio","party"]');
+  });
+
   it('flags the audio module selected without audio.sounds / audio.music', () => {
     const noAudioBlock = JSON.stringify({ engine: { modules: ['gfx', 'audio'] } });
     expect(gameManifestHint('GAME.json', noAudioBlock)).toMatch(/audio\.sounds/);
