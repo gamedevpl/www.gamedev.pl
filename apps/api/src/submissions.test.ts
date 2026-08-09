@@ -1504,6 +1504,128 @@ describe('submission routes', () => {
     await app.close();
   });
 
+  // A preview-only delivery (mode=preview, never published) never writes manifest.gate —
+  // only manifest.previewGate. Before this, reconcileGateVerdict read manifest.gate alone,
+  // so a preview delivery that came back red never transitioned at all: the job sat in
+  // `submitted` forever, indistinguishable from a gate that was still running. This bit a
+  // real round (arena-brawlers, 2026-08-09) where the delivering session had already called
+  // `end` — the documented "submit then end" workflow — before Cloud Build finished, so
+  // nothing was left watching to notice the red preview and nothing else ever would.
+  it('acts on a red preview-only gate verdict for a job still sitting in submitted', async () => {
+    const { githubClient } = createGithubClientStub({ issueNumber: 197 });
+    const { backend } = createBackendStub();
+    const gamesStore = {
+      getManifest: async () => ({
+        slug: 'arena-brawlers',
+        version: 'v3',
+        createdAt: '2026-08-09T14:20:00.000Z',
+        issueNumber: 197,
+        sourceFiles: [],
+        previewGate: {
+          green: false,
+          ranAt: '2026-08-09T14:22:00.000Z',
+          report: "FAIL smoke arena-brawlers\n  - Cannot read properties of undefined (reading 'modules')",
+        },
+      }),
+    } as unknown as GamesStore;
+
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      agentChannel: { gamesStore },
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about a top-down arena brawler.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+
+    await store.setSubmissionSlug(job.issueNumber, 'arena-brawlers');
+    await store.setSubmissionDeliveredVersion(job.issueNumber, 'v3');
+    await store.recordJobTransition(job.issueNumber, {
+      to: 'submitted',
+      at: '2026-08-09T14:20:00.000Z',
+      by: 'agent',
+      reason: 'sources_delivered',
+    });
+
+    const status = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(job.issueNumber, secret)}`,
+      headers: authHeaders,
+    });
+
+    expect(status.statusCode).toBe(200);
+    // Never `ready_for_review` — a preview pass proves typecheck/smoke/build only, never
+    // publish readiness, and this delivery did not even pass that. It must still stop
+    // reading as "still assembling", which is what `needs_changes` buys the creator.
+    expect(status.json().phase).toBe('needs_changes');
+    expect(status.json().failure).toEqual({ reason: 'gate_red' });
+
+    await app.close();
+  });
+
+  // The mirror case: a green preview must never promote the round on its own — that would
+  // let an unpublished, unreviewed draft skip moderation the moment typecheck/smoke/build
+  // pass. It should simply leave the job where a live agent session left it.
+  it('does not promote a job on a green preview-only gate verdict', async () => {
+    const { githubClient } = createGithubClientStub({ issueNumber: 198 });
+    const { backend } = createBackendStub();
+    const gamesStore = {
+      getManifest: async () => ({
+        slug: 'arena-brawlers',
+        version: 'v4',
+        createdAt: '2026-08-09T14:20:00.000Z',
+        issueNumber: 198,
+        sourceFiles: [],
+        previewGate: { green: true, ranAt: '2026-08-09T14:22:00.000Z' },
+      }),
+    } as unknown as GamesStore;
+
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      agentChannel: { gamesStore },
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about a top-down arena brawler.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+
+    await store.setSubmissionSlug(job.issueNumber, 'arena-brawlers');
+    await store.setSubmissionDeliveredVersion(job.issueNumber, 'v4');
+    await store.recordJobTransition(job.issueNumber, {
+      to: 'submitted',
+      at: '2026-08-09T14:20:00.000Z',
+      by: 'agent',
+      reason: 'sources_delivered',
+    });
+
+    const status = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(job.issueNumber, secret)}`,
+      headers: authHeaders,
+    });
+
+    expect(status.statusCode).toBe(200);
+    // `phase` is the raw job state, not the public projection — `submitted` (unlike
+    // `ready_for_review` / `needs_changes` above) is where this one differs from
+    // `toSubmissionStatus`, which would read this back as `building`.
+    expect(status.json().phase).toBe('submitted');
+    expect(status.json().status).toBe('building');
+
+    await app.close();
+  });
+
   it('posts the gate capture screenshot into the build thread on reconcile', async () => {
     const { githubClient } = createGithubClientStub({ issueNumber: 197 });
     const { backend } = createBackendStub();

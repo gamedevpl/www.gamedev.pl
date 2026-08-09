@@ -2416,29 +2416,64 @@ export async function registerSubmissionRoutes(
     try {
       const manifest = await gamesStore.getManifest(record.slug, record.deliveredVersion);
       const verdict = manifest?.gate;
-      if (!verdict) return null;
-      // Green means publishable, never published: the human review this waits for is the
-      // moderation boundary, and a gate that promoted past it would quietly delete it.
-      const to = verdict.green ? 'ready_for_review' : 'needs_changes';
+      if (verdict) {
+        // Green means publishable, never published: the human review this waits for is the
+        // moderation boundary, and a gate that promoted past it would quietly delete it.
+        const to = verdict.green ? 'ready_for_review' : 'needs_changes';
+        if (!canTransition(state, to)) return null;
+        const transition: JobTransition = {
+          to,
+          at: verdict.ranAt,
+          by: 'gate',
+          reason: verdict.green ? 'gate_green' : verdict.status === 'kit_outdated' ? 'kit_outdated' : 'gate_red',
+        };
+        const recorded = await store.recordJobTransition(record.issueNumber, transition);
+        if (!recorded) return null;
+        // First time we act on this verdict: post the capture frame into the thread so the
+        // creator sees what the platform check saw, on the same path as agent-sent shots.
+        if (verdict.screenshot) {
+          await postGateScreenshotToThread({
+            store,
+            gamesStore,
+            issueNumber: record.issueNumber,
+            slug: record.slug,
+            version: record.deliveredVersion,
+            screenshotPath: verdict.screenshot,
+          }).catch((error) => {
+            app.log.warn({ err: error, issueNumber: record.issueNumber }, 'could not post gate screenshot');
+          });
+        }
+        return transition;
+      }
+      // No publish gate ran — this delivery was mode=preview. A green preview proves
+      // nothing about publish readiness (typecheck/smoke/build only, BY-28a) and must
+      // never promote to review; but a RED preview still has to unstick the round the same
+      // way a red publish gate does. Without this, a session that submits and then calls
+      // `end` right after (the documented workflow) races the async Cloud Build gate: if
+      // the gate turns red after the session is already gone, nothing was ever watching to
+      // repair it in-session, and nothing else transitions the job — it sat in `submitted`
+      // indefinitely with Studio polling a "still assembling" state that never resolved
+      // (arena-brawlers, 2026-08-09).
+      const preview = manifest?.previewGate;
+      if (!preview || preview.green) return null;
+      const to = 'needs_changes' as const;
       if (!canTransition(state, to)) return null;
       const transition: JobTransition = {
         to,
-        at: verdict.ranAt,
+        at: preview.ranAt,
         by: 'gate',
-        reason: verdict.green ? 'gate_green' : verdict.status === 'kit_outdated' ? 'kit_outdated' : 'gate_red',
+        reason: preview.status === 'kit_outdated' ? 'kit_outdated' : 'gate_red',
       };
       const recorded = await store.recordJobTransition(record.issueNumber, transition);
       if (!recorded) return null;
-      // First time we act on this verdict: post the capture frame into the thread so the
-      // creator sees what the platform check saw, on the same path as agent-sent shots.
-      if (verdict.screenshot) {
+      if (preview.screenshot) {
         await postGateScreenshotToThread({
           store,
           gamesStore,
           issueNumber: record.issueNumber,
           slug: record.slug,
           version: record.deliveredVersion,
-          screenshotPath: verdict.screenshot,
+          screenshotPath: preview.screenshot,
         }).catch((error) => {
           app.log.warn({ err: error, issueNumber: record.issueNumber }, 'could not post gate screenshot');
         });

@@ -124,6 +124,54 @@ remembers. (Observed 2026-08-05: an agent treated a stale `stop: true` as a stan
 prohibition and reported a protocol violation, while the response in front of it said
 `stop: false`.)
 
+### A red gate outlives the session that triggered it
+
+The documented loop is submit → `end` (see "`end` is required after submit" below), and
+Cloud Build takes 1-3 minutes — so the session that delivered is very often gone before
+its own gate finishes. Two things close that gap, added after a round (arena-brawlers,
+2026-08-09) shipped two straight red preview gates and neither was ever seen: the first
+session correctly stopped on `gate_pending`; the second submitted a fix, called `end`
+immediately per the workflow, and the _second_ gate turned red only after the session
+that could have fixed it had already left. Nothing was watching, and nothing else picked
+it up — the job sat in `submitted` (reads as "building" to the creator) indefinitely.
+
+- **Reconciliation now covers preview, not just publish.** `reconcileGateVerdict`
+  (`apps/api/src/submissions.ts`) used to read only `manifest.gate` (the publish-mode
+  verdict) — a `mode=preview` delivery writes `manifest.previewGate` instead, so a red
+  preview never transitioned the job at all. It now also reacts to a **red**
+  `previewGate` the same way: `needs_changes` / `gate_red`, `transitionClosesRound`
+  still keeps the round open (same-session repair, no new token). A **green** preview is
+  never promoted — that would let an unpublished, unreviewed draft skip moderation
+  (BY-28a: typecheck/smoke/build only, not publish readiness).
+- **`start` now surfaces an outstanding red gate itself.** `must_fix_gate` used to only
+  ride `show_round` / `get_gate_verdict` / `report_progress` replies — a session that
+  reconnects and calls `start` first (the normal first call of any session) got no
+  signal unless it happened to call one of those three next. `start`'s response now
+  carries an optional `gate: { status, deliveryId }` (mirroring `show_round`'s shape,
+  via the shared `apps/api/src/gate-verdict.ts`) whenever the last delivery still needs
+  a fix, with `warnings.code=must_fix_gate` riding the same reply. Absent when nothing
+  is outstanding — a passing round's `start` response is unchanged.
+
+### GAME.json shape is checked at stage/patch time, not just at the gate
+
+The shared kit's `assemble.ts` reads `manifest.engine.modules` unconditionally when
+building the game — a missing/empty `engine.modules` (or `audio` selected without
+`audio.sounds`/`audio.music`) is not a validation error, it is a silent
+`Cannot read properties of undefined (reading 'modules')` crash at smoke time, with a
+stack trace that points at the test harness, not at GAME.json. That is what sank
+arena-brawlers' two deliveries: GAME.json never had an `engine` block, and the agent
+that fixed an unrelated typecheck bug in `game.ts` never looked at GAME.json again
+because nothing pointed it there until a Cloud Build log did, minutes later.
+
+`stage_source_file` and `patch_source_file` now run a shallow shape check
+(`apps/api/src/game-manifest-hint.ts`) whenever the staged/patched path is `GAME.json`,
+and emit `warnings.code=game_manifest_invalid` on the _same_ reply if it's missing
+`engine.modules` (or `audio` is selected without `audio.sounds`/`audio.music`). This is
+deliberately shallow — it does not know the kit's module catalog, canonical order, or
+duplicates (that's `validate.ts` in the games repo, which still runs as the source of
+truth in the gate) — it only catches the shapes that crash outright before any real
+validation runs.
+
 ### `kit_outdated` — do not re-upload the tree
 
 When the gate returns `kit_outdated` (or soft copy says the kit rotated):
@@ -288,16 +336,17 @@ cache), so a resume cannot keep showing “finished this round” next to live p
 
 Merged by `applySessionNudges` / submit handler. Act, then continue:
 
-| Code                | Meaning                                                                                                                                                                    |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `call_end`          | Call `end` when finished iterating this round                                                                                                                              |
-| `must_fix_gate`     | Last delivery refused (`preview_failed` / `red` / `kit_outdated`) — fix and **`submit_sources` again**; staging alone does not re-run the gate or refresh the creator card |
-| `must_deliver`      | Nothing delivered yet — submit before finishing                                                                                                                            |
-| `gate_not_started`  | Delivery ok but Cloud Build did not start — no preview yet                                                                                                                 |
-| `gate_poll_backoff` | Repeated one-shot gate check — stop checking; build/submit or honour `stop:true`                                                                                           |
-| `progress_stale`    | Call `report_progress`                                                                                                                                                     |
-| `inbox_pending`     | `read_inbox` → apply → `ack_inbox`                                                                                                                                         |
-| `seed_unread`       | Call `get_seed` before scaffolding from the kit                                                                                                                            |
+| Code                    | Meaning                                                                                                                                                                    |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `call_end`              | Call `end` when finished iterating this round                                                                                                                              |
+| `must_fix_gate`         | Last delivery refused (`preview_failed` / `red` / `kit_outdated`) — fix and **`submit_sources` again**; staging alone does not re-run the gate or refresh the creator card |
+| `must_deliver`          | Nothing delivered yet — submit before finishing                                                                                                                            |
+| `gate_not_started`      | Delivery ok but Cloud Build did not start — no preview yet                                                                                                                 |
+| `gate_poll_backoff`     | Repeated one-shot gate check — stop checking; build/submit or honour `stop:true`                                                                                           |
+| `progress_stale`        | Call `report_progress`                                                                                                                                                     |
+| `inbox_pending`         | `read_inbox` → apply → `ack_inbox`                                                                                                                                         |
+| `seed_unread`           | Call `get_seed` before scaffolding from the kit                                                                                                                            |
+| `game_manifest_invalid` | Just-staged/patched `GAME.json` has a shape that crashes the gate before typecheck (e.g. missing `engine.modules`) — fix it now, in the same session, before submitting    |
 
 ## Builder handoff (Studio)
 
@@ -356,21 +405,24 @@ queued.
 
 ## Key code
 
-| Area                         | Path                                                                                                                                                                      |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| MCP tools                    | `apps/api/src/mcp-server.ts` (`screenshot_upload_url` / `stage_upload_url` → signed PUT; no base64 shot tool)                                                             |
-| Upload tokens                | `apps/api/src/agent-upload-token.ts` + `POST …/shot/upload-url` + `PUT …/shot/upload` + `PUT …/sources/stage/upload`                                                      |
-| Presence pulses              | `apps/api/src/mcp-presence.ts` (`start` → `joining_round` in the MCP dispatcher)                                                                                          |
-| Gate milestones              | `apps/api/src/gate-progress.ts` + `GamesStore.putGateProgress` (GCS; Studio/MCP poll while checks run)                                                                    |
-| Account-session invalidation | `apps/api/src/agent-session-revocation.ts`                                                                                                                                |
-| Channel (`POST …/end`, …)    | `apps/api/src/agent-channel.ts`                                                                                                                                           |
-| Stall / `ended`              | `apps/api/src/job-state.ts` (`detectStall`)                                                                                                                               |
-| Handoff gate                 | `apps/api/src/builder.ts` (`allowsCreatorBuilderHandoff`)                                                                                                                 |
-| Live staged preview          | `apps/api/src/staged-preview.ts`                                                                                                                                          |
-| Studio live-preview frame    | `apps/web/src/StudioLivePreview.tsx`                                                                                                                                      |
-| Studio status poll cadence   | `apps/web/src/studioStatusPoll.ts` (tight poll on `ended` / `quiet` / `no_agent_yet` / `dispatched`)                                                                      |
-| Feedback / resume            | `apps/api/src/submissions.ts`                                                                                                                                             |
-| Studio copy / builder choice | `apps/web/src/selfBuildCopy.ts`, `BuilderModeBadge.tsx`, `SubmissionStatusView.tsx` (sticky badge + Change modal at round boundaries; full two-up stays in create wizard) |
+| Area                          | Path                                                                                                                                                                      |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| MCP tools                     | `apps/api/src/mcp-server.ts` (`screenshot_upload_url` / `stage_upload_url` → signed PUT; no base64 shot tool)                                                             |
+| Upload tokens                 | `apps/api/src/agent-upload-token.ts` + `POST …/shot/upload-url` + `PUT …/shot/upload` + `PUT …/sources/stage/upload`                                                      |
+| Presence pulses               | `apps/api/src/mcp-presence.ts` (`start` → `joining_round` in the MCP dispatcher)                                                                                          |
+| Gate milestones               | `apps/api/src/gate-progress.ts` + `GamesStore.putGateProgress` (GCS; Studio/MCP poll while checks run)                                                                    |
+| Gate verdict (shared)         | `apps/api/src/gate-verdict.ts` — `readGateVerdict` / `deriveGateStatusString`, used by the channel's `/api/agent/build/gate` route and by `start`'s reconnect visibility  |
+| Preview-gate reconciliation   | `apps/api/src/submissions.ts` (`reconcileGateVerdict`) — red `previewGate` → `needs_changes`/`gate_red`; green preview never promotes                                     |
+| GAME.json staging shape check | `apps/api/src/game-manifest-hint.ts` (`gameManifestHint`) — wired into the stage/patch routes in `agent-channel.ts`                                                       |
+| Account-session invalidation  | `apps/api/src/agent-session-revocation.ts`                                                                                                                                |
+| Channel (`POST …/end`, …)     | `apps/api/src/agent-channel.ts`                                                                                                                                           |
+| Stall / `ended`               | `apps/api/src/job-state.ts` (`detectStall`)                                                                                                                               |
+| Handoff gate                  | `apps/api/src/builder.ts` (`allowsCreatorBuilderHandoff`)                                                                                                                 |
+| Live staged preview           | `apps/api/src/staged-preview.ts`                                                                                                                                          |
+| Studio live-preview frame     | `apps/web/src/StudioLivePreview.tsx`                                                                                                                                      |
+| Studio status poll cadence    | `apps/web/src/studioStatusPoll.ts` (tight poll on `ended` / `quiet` / `no_agent_yet` / `dispatched`)                                                                      |
+| Feedback / resume             | `apps/api/src/submissions.ts`                                                                                                                                             |
+| Studio copy / builder choice  | `apps/web/src/selfBuildCopy.ts`, `BuilderModeBadge.tsx`, `SubmissionStatusView.tsx` (sticky badge + Change modal at round boundaries; full two-up stays in create wizard) |
 
 ## Safety invariant (unchanged)
 

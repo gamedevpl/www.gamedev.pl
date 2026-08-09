@@ -44,6 +44,8 @@ import { decodeCanonicalBase64Utf8, InvalidBase64Error } from './canonical-base6
 import { selfBuildDeliveryCap } from './builder.js';
 import type { BuilderKind } from './builder.js';
 import { assertDeliverableSourcePath, InvalidUploadError, MAX_UPLOAD_FILES, type GamesStore } from './games-store.js';
+import { deriveGateStatusString, readGateVerdict } from './gate-verdict.js';
+import { gameManifestHint } from './game-manifest-hint.js';
 import { detectStall, resolveJobState, toSubmissionStatus } from './job-state.js';
 import { largeSourceFileHint, moduleSizeWarnings } from './module-size.js';
 import type { GcsObjectStore } from './gcs-sign.js';
@@ -542,6 +544,28 @@ function channelControlFields(
 /** Gate statuses that mean "fix and deliver again" — not a finished round. */
 function gateNeedsResubmit(status: unknown): boolean {
   return status === 'preview_failed' || status === 'red' || status === 'kit_outdated';
+}
+
+/**
+ * `start`'s reconnect-visibility field: the last delivery's gate status, when it still
+ * needs a fix. Absent (not `null`) when nothing is amiss, so a passing round's response
+ * shape is unchanged.
+ *
+ * Without this, a session that reconnects after the delivering session already called
+ * `end` — e.g. because the gate was still running Cloud Build when `end` was called, per
+ * the documented "submit then end" workflow — got no signal at all: `must_fix_gate` was
+ * only ever attached to `show_round` / `get_gate_verdict` / `report_progress` replies, and
+ * a fresh `start()` call has no reason to make any of those next (arena-brawlers, 2026-08-09).
+ */
+async function gateFieldForStart(
+  gamesStore: GamesStore | undefined,
+  record: Pick<SubmissionRecord, 'slug' | 'previewVersion' | 'deliveredVersion'>,
+): Promise<{ gate: { status: string; deliveryId: string } } | Record<string, never>> {
+  const gate = await readGateVerdict(gamesStore, record).catch(() => null);
+  if (!gate) return {};
+  const status = deriveGateStatusString(gate);
+  if (!gateNeedsResubmit(status)) return {};
+  return { gate: { status, deliveryId: gate.version } };
 }
 
 function mustFixGateWarningForStatus(status: string, deliveryId?: string | null): NudgeWarning {
@@ -1171,7 +1195,10 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       !hasMustFix &&
       gateStatus &&
       gateNeedsResubmit(gateStatus) &&
-      (toolName === 'show_round' || toolName === 'get_gate_verdict' || toolName === 'report_progress')
+      (toolName === 'start' ||
+        toolName === 'show_round' ||
+        toolName === 'get_gate_verdict' ||
+        toolName === 'report_progress')
     ) {
       prior.push(mustFixGateWarningForStatus(gateStatus, gateDelivery));
     }
@@ -1256,7 +1283,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     warnings: {
       type: 'array',
       description:
-        'Soft session nudges (progress_stale, inbox_pending, call_end, seed_unread, gate_not_started, gate_poll_backoff, module_too_large, card_unopened, must_fix_gate, must_deliver). Not errors — act on them, then continue the workflow. module_too_large means split that game/*.ts module before adding more behavior. card_unopened means the creator has no status card yet — call show_round once. must_fix_gate means the last delivery was refused — fix and submit_sources again; staging alone does not re-run the gate.',
+        "Soft session nudges (progress_stale, inbox_pending, call_end, seed_unread, gate_not_started, gate_poll_backoff, module_too_large, game_manifest_invalid, card_unopened, must_fix_gate, must_deliver). Not errors — act on them, then continue the workflow. module_too_large means split that game/*.ts module before adding more behavior. game_manifest_invalid means the just-staged GAME.json has a shape that crashes the gate before typecheck (e.g. missing engine.modules) — fix it in the SAME stage/patch call's target, do not wait for submit_sources to find out. card_unopened means the creator has no status card yet — call show_round once. must_fix_gate means the last delivery was refused — fix and submit_sources again; staging alone does not re-run the gate.",
       items: {
         type: 'object',
         properties: {
@@ -1270,6 +1297,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
               'gate_not_started',
               'gate_poll_backoff',
               'module_too_large',
+              'game_manifest_invalid',
               'card_unopened',
               'must_fix_gate',
               'must_deliver',
@@ -1340,6 +1368,14 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           seedAvailable: { type: 'boolean' },
           seedStatus: { type: 'string', enum: ['pending', 'available', 'unavailable'] },
           seedNotice: { type: ['string', 'null'] },
+          gate: {
+            type: 'object',
+            description:
+              'Present only when the round already has a delivery whose gate needs a fix (preview_failed / red / ' +
+              'kit_outdated) — e.g. a prior session submitted and ended before its gate finished. Absent when ' +
+              'nothing is outstanding. warnings.code=must_fix_gate rides alongside this on the same reply.',
+            properties: { status: { type: 'string' }, deliveryId: { type: 'string' } },
+          },
         },
         required: ['sessionKey', 'jobId', 'workflow', 'seedAvailable', 'seedStatus'],
       },
@@ -1386,7 +1422,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         const slugArg = typeof args.slug === 'string' ? args.slug.trim() : '';
         const bearer = ctx.bearerToken;
 
-        const bindActiveRound = (active: SubmissionRecord): ToolResult => {
+        const bindActiveRound = async (active: SubmissionRecord): Promise<ToolResult> => {
           pruneTransportSessions(now());
           pruneInvalidStartBuckets(now());
           // Prefer the client's correlator when well-formed — even if this instance
@@ -1409,6 +1445,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           const used = active.roundDeliveryCount ?? 0;
 
           const seed = seedPayload(active);
+          const gateField = await gateFieldForStart(options.gamesStore, active);
           const structured = {
             sessionKey,
             sessionId,
@@ -1424,6 +1461,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             inboxPolicy: INBOX_POLICY,
             whenRefused: RETIRED_KEY_ETIQUETTE,
             ...seed,
+            ...gateField,
           };
           const base = toolOk(structured);
           return {
@@ -1441,7 +1479,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             noteInvalidStart(ctx.request);
             return toolErr(resolved.reason);
           }
-          return bindActiveRound(resolved.record);
+          return await bindActiveRound(resolved.record);
         }
 
         if (!key && bearer && looksLikeAsAccessToken(bearer)) {
@@ -1470,7 +1508,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             return toolErr(PLATFORM_ROUND_REASON);
           }
 
-          return bindActiveRound(active);
+          return await bindActiveRound(active);
         }
 
         if (key && looksLikeAsAccessToken(key)) {
@@ -1565,6 +1603,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         const used = record.roundDeliveryCount ?? 0;
 
         const seed = seedPayload(record);
+        const gateField = await gateFieldForStart(options.gamesStore, record);
         const structured = {
           sessionKey,
           sessionId,
@@ -1580,6 +1619,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           inboxPolicy: INBOX_POLICY,
           whenRefused: RETIRED_KEY_ETIQUETTE,
           ...seed,
+          ...gateField,
         };
         // Base shape via toolOk so we do not drift from other tools; append the human-
         // readable loop so an agent reading either form knows when to stop.
@@ -3454,6 +3494,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           path?: string;
           bytes?: number;
           hint?: string;
+          manifestHint?: string;
           staged?: {
             files: Array<{ path: string; bytes: number }>;
             totalBytes: number;
@@ -3469,6 +3510,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         const hint =
           body.hint ??
           (typeof body.bytes === 'number' ? largeSourceFileHint(body.path ?? path, body.bytes, content) : null);
+        const manifestHint = body.manifestHint ?? gameManifestHint(body.path ?? path, content);
         return toolOk({
           ok: body.accepted !== false,
           ...(body.rejected ? { rejected: body.rejected } : {}),
@@ -3476,7 +3518,10 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           bytes: body.bytes ?? 0,
           ...(hint ? { hint } : {}),
           staged: body.staged ?? { files: [], totalBytes: 0, maxBytes: 0, maxFiles: 0 },
-          ...channelControlFields(body, hint ? [{ code: 'module_too_large' as const, message: hint }] : []),
+          ...channelControlFields(body, [
+            ...(manifestHint ? [{ code: 'game_manifest_invalid' as const, message: manifestHint }] : []),
+            ...(hint ? [{ code: 'module_too_large' as const, message: hint }] : []),
+          ]),
           pendingMessages: pendingMessagesFromChannel(body),
         });
       },
@@ -3589,6 +3634,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           replacements?: number;
           baseFrom?: 'staged' | 'delivery' | 'seed';
           hint?: string;
+          manifestHint?: string;
           staged?: {
             files: Array<{ path: string; bytes: number }>;
             totalBytes: number;
@@ -3612,7 +3658,10 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           baseFrom: body.baseFrom ?? 'staged',
           ...(hint ? { hint } : {}),
           staged: body.staged ?? { files: [], totalBytes: 0, maxBytes: 0, maxFiles: 0 },
-          ...channelControlFields(body, hint ? [{ code: 'module_too_large' as const, message: hint }] : []),
+          ...channelControlFields(body, [
+            ...(body.manifestHint ? [{ code: 'game_manifest_invalid' as const, message: body.manifestHint }] : []),
+            ...(hint ? [{ code: 'module_too_large' as const, message: hint }] : []),
+          ]),
           pendingMessages: pendingMessagesFromChannel(body),
         });
       },

@@ -1504,6 +1504,55 @@ describe('POST /api/mcp (BY-05)', () => {
     expect((shown.structured as { gate?: { status?: string } }).gate?.status).toBe('preview_failed');
   });
 
+  // Before this, `must_fix_gate` was only attached to show_round / get_gate_verdict /
+  // report_progress replies. A session that reconnects after the delivering session
+  // already called `end` — because the gate was still running Cloud Build when `end` was
+  // called, per the documented "submit then end" workflow — called `start` first and got
+  // no signal at all unless it happened to call one of those three tools next. This is the
+  // arena-brawlers gap (2026-08-09): two red preview deliveries, the second session ended
+  // right after resubmitting, and nothing surfaced the second failure to anyone.
+  it('surfaces must_fix_gate on start itself when reconnecting after a red gate', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    await store.setSubmissionDeliveredVersion(ISSUE, 'v1');
+    await store.incrementRoundDeliveryCount(ISSUE);
+    const { gamesStore } = stubGamesStore({
+      green: false,
+      lane: 'preview',
+      status: 'preview_failed',
+      report: "FAIL smoke arena-brawlers\n  - Cannot read properties of undefined (reading 'modules')",
+      ranAt: '2026-08-09T14:32:00.000Z',
+    });
+    app = await createApp(store, gamesStore);
+    const sessionId = await initialize(app);
+
+    // The very first call of the new session — no show_round / get_gate_verdict yet.
+    const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
+    expect(started.isError).toBe(false);
+    const structured = started.structured as {
+      gate?: { status?: string; deliveryId?: string };
+      warnings?: Array<{ code: string; message: string }>;
+    };
+    expect(structured.gate?.status).toBe('preview_failed');
+    expect(structured.gate?.deliveryId).toBe('v1');
+    expect(structured.warnings?.some((w) => w.code === 'must_fix_gate')).toBe(true);
+  });
+
+  // A passing round must not gain a `gate` field or any new warning — the response shape
+  // for the common case (no outstanding refusal) is unchanged.
+  it('start omits gate when there is nothing outstanding to fix', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    const { gamesStore } = stubGamesStore();
+    app = await createApp(store, gamesStore);
+    const sessionId = await initialize(app);
+
+    const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
+    expect(started.isError).toBe(false);
+    const structured = started.structured as { gate?: unknown };
+    expect(structured.gate).toBeUndefined();
+  });
+
   describe('terminal receipt (generation one behind) on all three transports', () => {
     async function closeRoundGreen(store: InMemoryStore, gamesStore: GamesStore) {
       await store.setSubmissionDeliveredVersion(ISSUE, 'v1');

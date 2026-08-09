@@ -28,6 +28,7 @@ import {
 } from './agent-upload-token.js';
 import { selfBuildDeliveryCap } from './builder.js';
 import { canonicalAppBaseUrl } from './canonical-app-url.js';
+import { deriveGateStatusString, readGateVerdict } from './gate-verdict.js';
 import { DEFAULT_SIGNED_URL_TTL_SECONDS, type GcsObjectStore } from './gcs-sign.js';
 import {
   InvalidUploadError,
@@ -57,6 +58,7 @@ import {
 } from './kit-registry.js';
 import { seedPayload } from './seed-status.js';
 import { largeSourceFileHint } from './module-size.js';
+import { gameManifestHint } from './game-manifest-hint.js';
 import { applyExactReplace, applySourcePatch, SourcePatchError } from './source-patch.js';
 import { overlayGameSources } from './staged-preview.js';
 import { type BuilderHandoff, type CreatorMessage, type Store, type SubmissionRecord } from './store.js';
@@ -715,51 +717,12 @@ export async function registerAgentChannelRoutes(
    * yet", which is what the agent would have seen a moment earlier anyway.
    */
   async function gateVerdict(record: SubmissionRecord) {
-    const { slug } = record;
-    // Prefer previewVersion: publish writes both pointers to the same id, while a later
-    // mode=preview only advances previewVersion. delivered-first would keep reporting the
-    // stale publish red after the agent already fixed and re-previewed.
-    const version = record.previewVersion ?? record.deliveredVersion;
-    if (!options.gamesStore || !slug || !version) return null;
-    try {
-      const manifest = await options.gamesStore.getManifest(slug, version);
-      if (manifest?.gate) {
-        return {
-          // Named so the agent can tell a verdict about *this* delivery from a stale one
-          // about the previous round — the difference between "fix it" and "already fixed".
-          version,
-          lane: 'publish' as const,
-          green: manifest.gate.green,
-          ranAt: manifest.gate.ranAt,
-          // The tail is where the chain names the check that stopped it; the runner has
-          // already trimmed to 4000 characters for exactly this reason.
-          ...(manifest.gate.report ? { report: manifest.gate.report } : {}),
-          // `kit_outdated` is a distinct refusal: refresh the kit, do not chase check:game.
-          ...(manifest.gate.status === 'kit_outdated' ? { status: 'kit_outdated' as const } : {}),
-        };
-      }
-      // Preview-lane check: never report as publishable green (that ends the MCP round).
-      if (manifest?.previewGate) {
-        const kitOutdated = manifest.previewGate.status === 'kit_outdated';
-        return {
-          version,
-          lane: 'preview' as const,
-          green: false,
-          previewPassed: manifest.previewGate.green,
-          ranAt: manifest.previewGate.ranAt,
-          ...(manifest.previewGate.report ? { report: manifest.previewGate.report } : {}),
-          status: kitOutdated
-            ? ('kit_outdated' as const)
-            : manifest.previewGate.green
-              ? ('preview_passed' as const)
-              : ('preview_failed' as const),
-        };
-      }
-      return null;
-    } catch (error) {
-      app.log.warn({ err: error, issueNumber: record.issueNumber, slug }, 'could not read the gate verdict');
-      return null;
-    }
+    return readGateVerdict(options.gamesStore, record, (error) =>
+      app.log.warn(
+        { err: error, issueNumber: record.issueNumber, slug: record.slug },
+        'could not read the gate verdict',
+      ),
+    );
   }
 
   /**
@@ -1192,6 +1155,7 @@ export async function registerAgentChannelRoutes(
         // After the buffer is durable, so the assembly it schedules reads this file too.
         options.onSourcesStaged?.({ issueNumber, slug, roundGeneration });
         const hint = largeSourceFileHint(staged.path, staged.bytes, parsed.data.content);
+        const manifestHint = gameManifestHint(staged.path, parsed.data.content);
         return reply.send({
           accepted: true,
           path: staged.path,
@@ -1203,6 +1167,7 @@ export async function registerAgentChannelRoutes(
             maxFiles: staged.maxFiles,
             updatedAt: staged.updatedAt,
           },
+          ...(manifestHint ? { manifestHint } : {}),
           ...(hint ? { hint } : {}),
           ...(await channelState(issueNumber, (await store!.getSubmission(issueNumber)) ?? record)),
         });
@@ -1281,6 +1246,7 @@ export async function registerAgentChannelRoutes(
         options.onEvent?.(issueNumber);
         options.onSourcesStaged?.({ issueNumber, slug, roundGeneration });
         const hint = largeSourceFileHint(staged.path, staged.bytes, content);
+        const manifestHint = gameManifestHint(staged.path, content);
         return reply.send({
           accepted: true,
           path: staged.path,
@@ -1292,6 +1258,7 @@ export async function registerAgentChannelRoutes(
             maxFiles: staged.maxFiles,
             updatedAt: staged.updatedAt,
           },
+          ...(manifestHint ? { manifestHint } : {}),
           ...(hint ? { hint } : {}),
           ...(await channelState(issueNumber, (await store!.getSubmission(issueNumber)) ?? record)),
         });
@@ -1418,6 +1385,7 @@ export async function registerAgentChannelRoutes(
         options.onSourcesStaged?.({ issueNumber, slug, roundGeneration });
 
         const hint = largeSourceFileHint(staged.path, staged.bytes, patched.content);
+        const manifestHint = gameManifestHint(staged.path, patched.content);
         return reply.send({
           accepted: true,
           path: staged.path,
@@ -1431,6 +1399,7 @@ export async function registerAgentChannelRoutes(
             maxFiles: staged.maxFiles,
             updatedAt: staged.updatedAt,
           },
+          ...(manifestHint ? { manifestHint } : {}),
           ...(hint ? { hint } : {}),
           ...(await channelState(issueNumber, (await store!.getSubmission(issueNumber)) ?? record)),
         });
@@ -2554,15 +2523,7 @@ export async function registerAgentChannelRoutes(
         });
       }
 
-      const status = gate.green
-        ? 'green'
-        : gate.status === 'kit_outdated'
-          ? 'kit_outdated'
-          : gate.status === 'preview_passed'
-            ? 'preview_passed'
-            : gate.status === 'preview_failed'
-              ? 'preview_failed'
-              : 'red';
+      const status = deriveGateStatusString(gate);
       return reply.send({
         status,
         deliveryId: version,
