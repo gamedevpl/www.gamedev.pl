@@ -186,11 +186,15 @@ export function CreatorStudioView({
   const [days, setDays] = useState(7);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  /** Title of the game just removed — for the docked notice below. */
   const [abandonNotice, setAbandonNotice] = useState<string | null>(null);
   // Internally a game is its token — that is what every API call on this screen takes.
   // The URL says slug; the shelf is what translates between them.
   const [selected, setSelected] = useState<string | null>(null);
+  // Synchronous mirror of `selected` for in-flight async checks.
+  const selectedRef = useRef(selected);
+  useEffect(() => {
+    selectedRef.current = selected;
+  }, [selected]);
   const [tab, setTab] = useState<StudioTab>(selectedTab ?? 'thread');
   const [shelfQuery, setShelfQuery] = useState('');
   const [shelfFilter, setShelfFilter] = useState<StudioShelfFilter>('all');
@@ -572,7 +576,6 @@ export function CreatorStudioView({
         {/* Profile edit lives on /creators/:handle. Studio only claims at publish need. */}
         <ClaimHandleModal isOpen={claimOpen} onClose={() => setClaimOpen(false)} />
 
-        {/* Same docked-banner pattern as AppUpdateBanner. */}
         {abandonNotice ? (
           <aside className="studio-abandon-notice" role="status" aria-live="polite">
             <PixelIcon name="trash" size={16} className="studio-abandon-notice__icon" />
@@ -942,10 +945,10 @@ export function CreatorStudioView({
                           onRemoved={async (token) => {
                             const abandonedSlug = activeGame.slug;
                             const abandonedTitle = activeGame.title;
+                            if (selectedRef.current === token) selectedRef.current = null;
                             setSelected((current) => (current === token ? null : current));
                             // Hide tip first; refetch may restore a published sibling.
                             setGames((prev) => prev.filter((game) => game.token !== token));
-                            // Same default order the initial load falls back to.
                             const fallbackToken = (list: readonly StudioGame[]) =>
                               sortStudioGames(collapseStudioGames(list))[0]?.token ?? null;
                             try {
@@ -955,6 +958,8 @@ export function CreatorStudioView({
                               setGames(shelfPage.games);
                               setShelfTruncated(shelfPage.truncated);
                               setTotalGames(shelfPage.totalGames);
+                              // The creator may have picked another game while this awaited.
+                              if (selectedRef.current !== null) return;
                               const sibling =
                                 abandonedSlug &&
                                 shelfPage.games.find((game) => game.slug === abandonedSlug && game.token !== token);
@@ -963,15 +968,14 @@ export function CreatorStudioView({
                                 setSelected(sibling.token);
                               } else {
                                 setAbandonNotice(abandonedTitle);
-                                const fallback = fallbackToken(shelfPage.games);
-                                setSelected((current) => (current === null ? fallback : current));
+                                setSelected(fallbackToken(shelfPage.games));
                               }
                             } catch {
                               // Optimistic remove stands if refetch fails.
+                              if (selectedRef.current !== null) return;
                               onNavigate(studioPath());
                               setAbandonNotice(abandonedTitle);
-                              const fallback = fallbackToken(games.filter((game) => game.token !== token));
-                              setSelected((current) => (current === null ? fallback : current));
+                              setSelected(fallbackToken(games.filter((game) => game.token !== token)));
                             }
                           }}
                         />

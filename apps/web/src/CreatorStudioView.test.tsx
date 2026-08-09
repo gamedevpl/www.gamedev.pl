@@ -1559,7 +1559,6 @@ describe('CreatorStudioView abandon', () => {
     // Detail pane must render, not a blank main area.
     expect(container.querySelector('.studio-detail')).not.toBeNull();
     expect(container.querySelector('.studio-detail-title-block h2')?.textContent).toContain('Other Game');
-    // The redirect to a different game is called out, not silent.
     expect(container.querySelector('.studio-abandon-notice')?.textContent).toContain('Neon Draft');
 
     const dismiss = container.querySelector<HTMLButtonElement>('.studio-abandon-notice__close');
@@ -1611,7 +1610,6 @@ describe('CreatorStudioView abandon', () => {
 
     expect(onNavigate).toHaveBeenCalledWith('/studio');
     expect(container.querySelector('.studio-abandon-notice')?.textContent).toContain('Neon Draft');
-    // The optimistic remove stands, so the other game already on the shelf still shows.
     expect(container.querySelector('.studio-detail-title-block h2')?.textContent).toContain('Other Game');
 
     root.unmount();
@@ -1676,6 +1674,7 @@ describe('CreatorStudioView abandon', () => {
     await act(async () => {
       third!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
+    expect(onNavigate).toHaveBeenLastCalledWith('/studio/third-game/details', { replace: true });
 
     await act(async () => {
       resolveRefetch(
@@ -1698,8 +1697,8 @@ describe('CreatorStudioView abandon', () => {
       );
     });
 
-    expect(onNavigate).toHaveBeenCalledWith('/studio');
-    // The creator's own pick stands over the resolved fallback.
+    expect(onNavigate).not.toHaveBeenCalledWith('/studio');
+    expect(onNavigate).toHaveBeenLastCalledWith('/studio/third-game/details', { replace: true });
     expect(container.querySelector('.studio-detail-title-block h2')?.textContent).toContain('Third Game');
 
     root.unmount();
