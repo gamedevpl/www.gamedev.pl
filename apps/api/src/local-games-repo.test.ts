@@ -108,6 +108,20 @@ describe('local games repo', () => {
 
       expect(sources).toBeNull();
     });
+
+    it('returns null rather than throwing when goal/hint are truthy but not {en, pl} strings', async () => {
+      // `goal: true` used to crash inside generateIndexHtml instead of returning null
+      const sources = await client.getGameSources('main', 'pixel-dodge', {
+        'index.html': '',
+        'GAME.json': JSON.stringify({
+          engine: { modules: [] },
+          audio: { sounds: [] },
+          howToPlay: { goal: true, hint: { en: 'Keep moving', pl: 'Nie zatrzymuj się' } },
+        }),
+      });
+
+      expect(sources).toBeNull();
+    });
   });
 
   it('refuses to read outside the games directory', async () => {

@@ -118,6 +118,29 @@ describe('validateSourceUpload — the delivery contract', () => {
         validateSourceUpload([...withoutIndexHtml, { path: 'GAME.json', content: '{"howToPlay": {' }]),
       ).toThrow(/index\.html or GAME\.json\.howToPlay is required/);
     });
+
+    it('refuses a howToPlay whose goal/hint are truthy but not {en, pl} strings', () => {
+      // `'goal' in howToPlay` used to pass this, crashing deep in the assembler
+      expect(() =>
+        validateSourceUpload([
+          ...withoutIndexHtml,
+          {
+            path: 'GAME.json',
+            content: JSON.stringify({ engine: { modules: [] }, howToPlay: { goal: true, hint: howToPlay.hint } }),
+          },
+        ]),
+      ).toThrow(/index\.html or GAME\.json\.howToPlay is required/);
+    });
+
+    it('treats a whitespace-only index.html as absent, same as getGameSources does', () => {
+      expect(() =>
+        validateSourceUpload([
+          ...withoutIndexHtml,
+          { path: 'index.html', content: '   \n  ' },
+          { path: 'GAME.json', content: JSON.stringify({ engine: { modules: [] } }) },
+        ]),
+      ).toThrow(/index\.html or GAME\.json\.howToPlay is required/);
+    });
   });
 
   it('catches an enabled audio module without selected sounds before the gate', () => {

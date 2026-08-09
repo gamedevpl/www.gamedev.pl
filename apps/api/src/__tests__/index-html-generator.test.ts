@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { generateIndexHtml } from '../index-html-generator.js';
+import { generateIndexHtml, hasPlayableHowToPlay } from '../index-html-generator.js';
 
 describe('index-html-generator', () => {
   it('generates a basic index.html fragment', () => {
@@ -181,5 +181,46 @@ describe('index-html-generator', () => {
     expect(html).toContain('data-i18n-en="Mode:"');
     expect(html).toContain('data-i18n-pl="Tryb:"');
     expect(html).toContain('10 points per item');
+  });
+
+  it('falls back to default canvas dimensions when GAME.json carries a non-number', () => {
+    const manifest = {
+      canvas: { width: '640"><script>alert(1)</script>', height: null },
+      howToPlay: { goal: { en: 'Test', pl: 'Test' }, hint: { en: 'Test', pl: 'Test' } },
+    };
+
+    const html = generateIndexHtml(manifest, { title: 'Game' });
+
+    expect(html).toContain('width="640"');
+    expect(html).toContain('height="400"');
+    expect(html).not.toContain('<script>');
+  });
+});
+
+describe('hasPlayableHowToPlay', () => {
+  it('accepts a goal/hint pair of non-empty bilingual strings', () => {
+    expect(
+      hasPlayableHowToPlay({
+        goal: { en: 'Survive', pl: 'Przetrwaj' },
+        hint: { en: 'Keep moving', pl: 'Nie zatrzymuj się' },
+      }),
+    ).toBe(true);
+  });
+
+  it('refuses a manifest whose howToPlay is not an object', () => {
+    expect(hasPlayableHowToPlay(undefined)).toBe(false);
+    expect(hasPlayableHowToPlay(null)).toBe(false);
+    expect(hasPlayableHowToPlay('goal: survive')).toBe(false);
+  });
+
+  it('refuses goal/hint that are present but not {en, pl} strings', () => {
+    // The shape a malformed upload could send: truthy, but not renderable.
+    expect(hasPlayableHowToPlay({ goal: true, hint: { en: 'x', pl: 'x' } })).toBe(false);
+    expect(hasPlayableHowToPlay({ goal: { en: 'x', pl: 'x' }, hint: 'go' })).toBe(false);
+    expect(hasPlayableHowToPlay({ goal: { en: 'x' }, hint: { en: 'x', pl: 'x' } })).toBe(false);
+  });
+
+  it('refuses empty-string goal or hint text', () => {
+    expect(hasPlayableHowToPlay({ goal: { en: '', pl: '' }, hint: { en: 'x', pl: 'x' } })).toBe(false);
   });
 });

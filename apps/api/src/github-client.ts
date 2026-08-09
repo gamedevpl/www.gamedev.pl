@@ -10,7 +10,11 @@ import {
   type GameKitModuleName,
 } from './games-repo-contract.js';
 import { isRateLimitResponse } from './github-rate-limit.js';
-import { generateIndexHtml, type GameManifest as IndexHtmlManifest } from './index-html-generator.js';
+import {
+  generateIndexHtml,
+  hasPlayableHowToPlay,
+  type GameManifest as IndexHtmlManifest,
+} from './index-html-generator.js';
 import { mergeMusicTrackMaps, parseGameMusicTracks, parseMusicCatalogTracks } from './music-tracks.js';
 
 export type { CatalogGameTouch } from './catalog-touch.js';
@@ -87,8 +91,7 @@ function generateIndexHtmlFromManifest(manifestSource: string, title: string): s
   } catch {
     return null;
   }
-  const howToPlay = manifest.howToPlay;
-  if (!howToPlay?.goal || !howToPlay.hint) return null;
+  if (!hasPlayableHowToPlay(manifest.howToPlay)) return null;
   return generateIndexHtml(manifest, { title });
 }
 

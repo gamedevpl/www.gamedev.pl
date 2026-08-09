@@ -36,11 +36,34 @@ export interface GameSpec {
   [key: string]: unknown;
 }
 
+function isBilingualString(value: unknown): value is { en: string; pl: string } {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { en?: unknown }).en === 'string' &&
+    (value as { en: string }).en.length > 0 &&
+    typeof (value as { pl?: unknown }).pl === 'string' &&
+    (value as { pl: string }).pl.length > 0
+  );
+}
+
+// Shared by upload validation, generation, and staged-preview readiness — see docs.
+export function hasPlayableHowToPlay(howToPlay: unknown): howToPlay is HowToPlay {
+  if (typeof howToPlay !== 'object' || howToPlay === null) return false;
+  const candidate = howToPlay as { goal?: unknown; hint?: unknown };
+  return isBilingualString(candidate.goal) && isBilingualString(candidate.hint);
+}
+
 interface LegendRow {
   type: 'control' | 'reserved';
   keys: string | { en: string; pl: string };
   action: { en: string; pl: string };
   reserved?: 'goal' | 'scoring' | 'mode';
+}
+
+// Unescaped below — anything but a finite number is an injection vector.
+function toCanvasDimension(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.round(value) : fallback;
 }
 
 function escapeHtml(value: string): string {
@@ -192,8 +215,8 @@ export function generateIndexHtml(manifest: GameManifest, spec: GameSpec): strin
         : '';
   const howToPlay = manifest.howToPlay;
   const canvas = manifest.canvas || {};
-  const canvasWidth = canvas.width ?? 640;
-  const canvasHeight = canvas.height ?? 400;
+  const canvasWidth = toCanvasDimension(canvas.width, 640);
+  const canvasHeight = toCanvasDimension(canvas.height, 400);
   const hint = howToPlay?.hint || { en: '', pl: '' };
   const ariaLabelEn = canvas.ariaLabel?.en ?? `${title} playfield`;
   const ariaLabelPl = canvas.ariaLabel?.pl ?? `${title} — pole gry`;

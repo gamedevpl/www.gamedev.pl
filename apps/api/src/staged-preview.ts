@@ -33,6 +33,7 @@ import { createHash } from 'node:crypto';
 import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './assemble.js';
 import { MAX_BUILD_PREVIEW_BYTES } from './agent-channel.js';
 import type { GamesStore, SourceFile } from './games-store.js';
+import { hasPlayableHowToPlay } from './index-html-generator.js';
 import type { GitHubClient } from './github-client.js';
 import type { Store } from './store.js';
 
@@ -161,7 +162,8 @@ export function overlayGameSources(layers: OverlayLayers): Record<string, string
 
 /** True when the overlay carries everything an assembly needs from the game's own tree. */
 export function hasPlayableOverlay(overlay: Record<string, string>): boolean {
-  const staged = (path: string): boolean => typeof overlay[path] === 'string' && overlay[path].length > 0;
+  // trim(), matching getGameSources: a whitespace-only file is absent, not staged.
+  const staged = (path: string): boolean => typeof overlay[path] === 'string' && overlay[path].trim().length > 0;
   if (!PLAYABLE_OVERLAY_FILES.every(staged)) return false;
   // Neither means half-staged: a quiet no.
   if (staged('index.html')) return true;
@@ -171,8 +173,8 @@ export function hasPlayableOverlay(overlay: Record<string, string>): boolean {
 function manifestDeclaresHowToPlay(source: string | undefined): boolean {
   if (typeof source !== 'string') return false;
   try {
-    const manifest = JSON.parse(source) as { howToPlay?: { goal?: unknown; hint?: unknown } };
-    return Boolean(manifest.howToPlay?.goal && manifest.howToPlay.hint);
+    const manifest = JSON.parse(source) as { howToPlay?: unknown };
+    return hasPlayableHowToPlay(manifest.howToPlay);
   } catch {
     // Mid-write manifests are invalid JSON
     return false;

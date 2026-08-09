@@ -151,6 +151,25 @@ describe('hasPlayableOverlay', () => {
     expect(hasPlayableOverlay(empty)).toBe(false);
   });
 
+  it('treats a whitespace-only index.html as absent, same as getGameSources does', () => {
+    // A whitespace-only file must not short-circuit the howToPlay fallback check.
+    const overlay = {
+      ...Object.fromEntries(PLAYABLE_TREE.map((f) => [f.path, f.content])),
+      'index.html': '   \n  ',
+      'GAME.json': JSON.stringify({ howToPlay: { goal: { en: 'Win', pl: 'Wygraj' }, hint: { en: 'Go', pl: 'Idź' } } }),
+    };
+    expect(hasPlayableOverlay(overlay)).toBe(true);
+  });
+
+  it('refuses a whitespace-only index.html with no howToPlay to fall back on', () => {
+    const overlay = {
+      ...Object.fromEntries(PLAYABLE_TREE.map((f) => [f.path, f.content])),
+      'index.html': '   \n  ',
+      'GAME.json': JSON.stringify({}),
+    };
+    expect(hasPlayableOverlay(overlay)).toBe(false);
+  });
+
   it('accepts a tree with no index.html when GAME.json declares howToPlay', () => {
     // Markup may come from schema instead of a file
     const overlay = Object.fromEntries(
