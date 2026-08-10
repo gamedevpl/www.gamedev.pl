@@ -913,8 +913,18 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     const bearerIsOpener = Boolean(bearer) && looksLikeCreatorAgentKey(bearer!);
     const bearerIsRetiredGameKey = Boolean(bearer) && looksLikeGameAgentKey(bearer!);
     const bearerIsOAuth = Boolean(bearer) && looksLikeAsAccessToken(bearer!);
+    let bearerIsManagedOpener = false;
+    if (bearer && !bearerIsOpener && !bearerIsRetiredGameKey && !bearerIsOAuth) {
+      try {
+        verifyManagedMcpOpener(bearer, agentTokenSecret);
+        bearerIsManagedOpener = true;
+      } catch (error) {
+        if (!(error instanceof InvalidAgentTokenError)) throw error;
+      }
+    }
     const preferSessionKey =
-      Boolean(sessionKeyArg) && (!bearer || bearerIsOAuth || bearerIsOpener || bearerIsRetiredGameKey);
+      Boolean(sessionKeyArg) &&
+      (!bearer || bearerIsOAuth || bearerIsOpener || bearerIsRetiredGameKey || bearerIsManagedOpener);
 
     if (preferSessionKey) {
       if (looksLikeGameAgentKey(sessionKeyArg)) {
@@ -977,6 +987,10 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     } else if (bearerIsOpener) {
       return toolErr(
         'this creator key only opens a session via start() — pass the sessionKey start returned for later tools',
+      );
+    } else if (bearerIsManagedOpener) {
+      return toolErr(
+        'this session opener only opens a session via start() — pass the sessionKey start returned for later tools',
       );
     } else if (bearer) {
       try {
