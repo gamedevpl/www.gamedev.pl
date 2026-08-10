@@ -6,7 +6,6 @@ import {
   MAX_PROMPT_CHARS,
   StubStudioChatAgent,
   VertexStudioChatAgent,
-  chatAgentEnabled,
   type ChatAgentStatus,
 } from './chat-agent.js';
 
@@ -111,6 +110,23 @@ describe('VertexStudioChatAgent', () => {
     await expect(agent.decide({ message: 'hi', status: STATUS, history: [] })).rejects.toThrow('vertex unavailable');
   });
 
+  it('collapses several build calls in one turn into a single build decision', async () => {
+    // Parallel tool calls are possible; only one message ever dispatches.
+    const agent = new VertexStudioChatAgent({
+      client: stubClient({
+        parts: [
+          { type: 'toolCall', toolCall: { name: 'build', arguments: { ack: 'first' } } },
+          { type: 'toolCall', toolCall: { name: 'build', arguments: { ack: 'second' } } },
+          { type: 'toolCall', toolCall: { name: 'build', arguments: { ack: 'third' } } },
+          { type: 'toolCall', toolCall: { name: 'build', arguments: { ack: 'fourth' } } },
+          { type: 'toolCall', toolCall: { name: 'build', arguments: { ack: 'fifth' } } },
+        ],
+      }),
+    });
+    const decision = await agent.decide({ message: 'build it', status: STATUS, history: [] });
+    expect(decision).toEqual({ kind: 'build', text: 'first', model: expect.any(String) });
+  });
+
   it('never states a fact not injected in the status block by construction — the context turn only', async () => {
     let seen: GenerationRequest | undefined;
     const agent = new VertexStudioChatAgent({
@@ -142,6 +158,20 @@ describe('VertexStudioChatAgent', () => {
     });
     const assistantTexts = seen!.prompt.filter((item) => item.type === 'assistant').map((item) => item.text);
     expect(assistantTexts.some((text) => text?.includes('forwarded'))).toBe(true);
+  });
+
+  it('includes the ack text when a past "build" turn had one', async () => {
+    let seen: GenerationRequest | undefined;
+    const agent = new VertexStudioChatAgent({
+      client: stubClient(textResult('ok'), (req) => (seen = req)),
+    });
+    await agent.decide({
+      message: 'and now?',
+      status: STATUS,
+      history: [{ message: 'make it faster', built: true, ackText: 'On it!' }],
+    });
+    const assistantTexts = seen!.prompt.filter((item) => item.type === 'assistant').map((item) => item.text);
+    expect(assistantTexts.some((text) => text?.includes('On it!'))).toBe(true);
   });
 
   it("carries the creator's own concept into the context turn, truncated, never the source", async () => {
@@ -261,13 +291,5 @@ describe('StubStudioChatAgent', () => {
       kind: 'reply',
       text: 'reply 2',
     });
-  });
-});
-
-describe('chatAgentEnabled', () => {
-  it('is off unless explicitly set to the string "true"', () => {
-    expect(chatAgentEnabled({})).toBe(false);
-    expect(chatAgentEnabled({ STUDIO_CHAT_AGENT: 'false' })).toBe(false);
-    expect(chatAgentEnabled({ STUDIO_CHAT_AGENT: 'true' })).toBe(true);
   });
 });

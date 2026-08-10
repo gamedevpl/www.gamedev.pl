@@ -83,7 +83,6 @@ import {
   type DeliveryGateStatus,
 } from './delivery-metrics.js';
 import {
-  chatAgentEnabled,
   VertexStudioChatAgent,
   type ChatAgentScope,
   type ChatAgentStatus,
@@ -109,6 +108,7 @@ import { mintGameSlug } from './slug.js';
 import { runSlugBackfill, settleSlugClaim } from './slug-backfill.js';
 import {
   DELETED_ACCOUNT_UID,
+  isStudioOrigin,
   type BuildPreviewSummary,
   type BuildShotSummary,
   type CreatorMessageOrigin,
@@ -271,6 +271,13 @@ function stripPlaytestContext(text: string): string {
   return marker === -1 ? text : text.slice(0, marker).trimEnd();
 }
 
+// 'studio_ack' displays exactly like 'studio' — only the backend tells them apart.
+function revisionOriginOf(message: { origin?: CreatorMessageOrigin }): 'agent' | 'studio' | undefined {
+  if (message.origin === 'agent') return 'agent';
+  if (isStudioOrigin(message.origin)) return 'studio';
+  return undefined;
+}
+
 async function storeCreatorPlaytestShot(
   store: Store,
   issueNumber: number,
@@ -337,7 +344,7 @@ export interface SubmissionRoutesOptions {
   dailyFeedbackQuota?: number;
   /** Separate from submissions so improving a live game does not crowd out creating one. */
   dailyImprovementQuota?: number;
-  // Fronts feedback/improve messages, gated by chatAgentEnabled() (chat-agent.ts).
+  // Fronts every feedback/improve message (chat-agent.ts). Always on when set.
   chatAgent?: StudioChatAgent;
   // The chat agent's own circuit breaker (creation-limits.ts); null disables.
   chatGate?: ChatGate | null;
@@ -1461,6 +1468,14 @@ export async function registerSubmissionRoutes(
         }
         continue;
       }
+      if (message.origin === 'studio_ack') {
+        if (pending !== null) {
+          turns = rememberChatTurn(turns, { message: pending, built: true, ackText: message.text });
+          pending = null;
+        }
+        continue;
+      }
+      // Unpaired: sent to the builder either way, ack or not.
       if (pending !== null) turns = rememberChatTurn(turns, { message: pending, built: true });
       pending = stripPlaytestContext(message.text);
     }
@@ -1482,7 +1497,7 @@ export async function registerSubmissionRoutes(
     uid: string;
     directToBuilder?: boolean;
   }): Promise<ChatAgentOutcome | null> {
-    if (!store || !chatAgentLog || !chatAgentEnabled()) return null;
+    if (!store || !chatAgentLog) return null;
     if (input.directToBuilder) {
       logChatAgentEscapeHatch(chatAgentLog, { issueNumber: input.issueNumber, scope: input.scope });
       return null;
@@ -2044,7 +2059,7 @@ export async function registerSubmissionRoutes(
           messages.map((message) => ({
             text: stripPlaytestContext(message.text),
             createdAt: message.createdAt,
-            ...(message.origin === 'agent' || message.origin === 'studio' ? { origin: message.origin } : {}),
+            ...(revisionOriginOf(message) ? { origin: revisionOriginOf(message) } : {}),
             ...(message.textLocalized && message.locale
               ? { textLocalized: stripPlaytestContext(message.textLocalized), locale: message.locale }
               : {}),
@@ -2512,7 +2527,7 @@ export async function registerSubmissionRoutes(
           revisions: messages.map((message) => ({
             text: stripPlaytestContext(message.text),
             createdAt: message.createdAt,
-            ...(message.origin === 'agent' || message.origin === 'studio' ? { origin: message.origin } : {}),
+            ...(revisionOriginOf(message) ? { origin: revisionOriginOf(message) } : {}),
             ...(message.textLocalized && message.locale
               ? { textLocalized: stripPlaytestContext(message.textLocalized), locale: message.locale }
               : {}),
@@ -3824,19 +3839,9 @@ export async function registerSubmissionRoutes(
         return reply.status(429).send({ error: 'too many feedback requests, please try again later' });
       }
 
-      // 3. Daily per-user quota.
       const dateStr = new Date(currentTime).toISOString().slice(0, 10);
-      if (store) {
-        const quota = await store.checkAndIncrementQuota(request.user!.uid, dateStr, dailyFeedbackQuota, 'feedback');
-        if (!quota.allowed) {
-          if (quota.tier === 'blocked') {
-            return reply.status(403).send({ error: 'account is blocked' });
-          }
-          return reply.status(429).send({ error: 'daily feedback quota exceeded' });
-        }
-      }
 
-      // 4. A published game is done; a revision is a new idea, not a change request.
+      // 3. A published game is done; a revision is a new idea, not a change request.
       //    The record is the authority — there is no PR to consult any more.
       const record = store ? await store.getSubmission(issueNumber) : null;
       if (record?.publishedAt) {
@@ -3939,6 +3944,17 @@ export async function registerSubmissionRoutes(
         if (chatOutcome?.kind === 'build') studioAckText = chatOutcome.ackText;
       }
 
+      // 4. Daily per-user quota — a conversational reply above already returned.
+      if (store) {
+        const quota = await store.checkAndIncrementQuota(request.user!.uid, dateStr, dailyFeedbackQuota, 'feedback');
+        if (!quota.allowed) {
+          if (quota.tier === 'blocked') {
+            return reply.status(403).send({ error: 'account is blocked' });
+          }
+          return reply.status(429).send({ error: 'daily feedback quota exceeded' });
+        }
+      }
+
       // Queue *before* dispatch. resumeBuild awaits the agent-tasks API, and a slow or
       // hung upstream used to hold this handler open with the creator's words still only
       // in the request body — so a timed-out send lost the note. The inbox is the durable
@@ -3955,7 +3971,7 @@ export async function registerSubmissionRoutes(
       if (store && queued && studioAckText) {
         // Optional ack, after the creator's own message so order stays honest.
         await store
-          .appendCreatorMessage(issueNumber, studioAckText, { origin: 'studio', delivered: true })
+          .appendCreatorMessage(issueNumber, studioAckText, { origin: 'studio_ack', delivered: true })
           .catch(() => {});
       }
 
@@ -4134,6 +4150,8 @@ export async function registerSubmissionRoutes(
 
       // Classify before spending any build-only quota or availability check.
       let studioAckText: string | undefined;
+      // A pending copy left on this job by a failed reply attempt, if any.
+      let orphanedChatMessageId: string | undefined;
       const chatOutcome = await runChatAgent({
         issueNumber,
         message: sanitizedFeedback,
@@ -4148,8 +4166,10 @@ export async function registerSubmissionRoutes(
         try {
           // Avoids an orphaned "delivered" copy if the reply write below fails.
           const creatorMessage = await store.appendCreatorMessage(issueNumber, inboxText);
+          orphanedChatMessageId = creatorMessage.id;
           await store.appendCreatorMessage(issueNumber, chatOutcome.replyText, { origin: 'studio', delivered: true });
           await store.markCreatorMessagesDelivered(issueNumber, [creatorMessage.id]);
+          orphanedChatMessageId = undefined;
           invalidateStatusCache(issueNumber);
           return reply.send({ ok: true, ...(shotId ? { shotId } : {}) });
         } catch (queueError) {
@@ -4206,10 +4226,14 @@ export async function registerSubmissionRoutes(
       if (started.route === 'unavailable') {
         return reply.status(409).send({ error: MANAGED_UNAVAILABLE_ERROR, reason: started.reason });
       }
+      // Resolve it now — the new round carries this request forward.
+      if (orphanedChatMessageId) {
+        await store.markCreatorMessagesDelivered(issueNumber, [orphanedChatMessageId]).catch(() => {});
+      }
       // The ack belongs on the new job's thread, where the creator lands next.
       if (studioAckText) {
         await store
-          .appendCreatorMessage(started.jobId, studioAckText, { origin: 'studio', delivered: true })
+          .appendCreatorMessage(started.jobId, studioAckText, { origin: 'studio_ack', delivered: true })
           .catch(() => {});
       }
       // Publishing is terminal, so this is a *new* job with its own capability. The

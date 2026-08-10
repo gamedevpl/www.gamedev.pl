@@ -4,6 +4,8 @@ export type ChatTurn = {
   message: string;
   reply?: string;
   built?: boolean;
+  // Meaningful only with built: true.
+  ackText?: string;
 };
 
 export const MAX_CHAT_TURNS = 5;

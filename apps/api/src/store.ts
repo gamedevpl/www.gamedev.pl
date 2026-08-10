@@ -526,7 +526,9 @@ export interface CreatorMessage {
   deliveredAt?: string | null;
   // 'agent': relayed on the creator's behalf — the only kind ever translated.
 
-  // 'studio': the mini chat agent (chat-agent.ts) — pre-delivered, never queued.
+  // 'studio': the mini chat agent's own reply — pre-delivered, never queued.
+
+  // 'studio_ack': the same agent's build ack — displays identically to 'studio'.
 
   // Absent: the creator's own words, typed in the composer.
   origin?: CreatorMessageOrigin;
@@ -546,7 +548,12 @@ export interface CreatorMessage {
 }
 
 /** @see CreatorMessage.origin */
-export type CreatorMessageOrigin = 'creator' | 'agent' | 'studio';
+export type CreatorMessageOrigin = 'creator' | 'agent' | 'studio' | 'studio_ack';
+
+// Both never reach a builder and both render as the studio voice — see below.
+export function isStudioOrigin(origin: CreatorMessageOrigin | undefined): boolean {
+  return origin === 'studio' || origin === 'studio_ack';
+}
 
 /**
  * A screenshot the agent pushed over the build channel rather than committing.
@@ -3581,7 +3588,7 @@ export class InMemoryStore implements Store {
       text,
       createdAt: now,
       deliveredAt: opts?.delivered ? now : null,
-      ...(opts?.origin === 'agent' || opts?.origin === 'studio' ? { origin: opts.origin } : {}),
+      ...(opts?.origin === 'agent' || isStudioOrigin(opts?.origin) ? { origin: opts?.origin } : {}),
       ...(opts?.textLocalized && opts?.locale ? { textLocalized: opts.textLocalized, locale: opts.locale } : {}),
     };
     const existing = this.creatorMessages.get(issueNumber) ?? [];
@@ -3592,7 +3599,7 @@ export class InMemoryStore implements Store {
 
   async listPendingCreatorMessages(issueNumber: number, opts?: { limit?: number }): Promise<CreatorMessage[]> {
     return (this.creatorMessages.get(issueNumber) ?? [])
-      .filter((message) => !message.deliveredAt && message.origin !== 'studio')
+      .filter((message) => !message.deliveredAt && !isStudioOrigin(message.origin))
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
       .slice(0, opts?.limit ?? 10)
       .map((message) => ({ ...message }));
@@ -6067,7 +6074,7 @@ export class FirestoreStore implements Store {
       text,
       createdAt: now,
       deliveredAt: opts?.delivered ? now : null,
-      ...(opts?.origin === 'agent' || opts?.origin === 'studio' ? { origin: opts.origin } : {}),
+      ...(opts?.origin === 'agent' || isStudioOrigin(opts?.origin) ? { origin: opts?.origin } : {}),
       ...(opts?.textLocalized && opts?.locale ? { textLocalized: opts.textLocalized, locale: opts.locale } : {}),
     };
     await this.messagesCollection(issueNumber).doc(record.id).set(record);
@@ -6081,7 +6088,7 @@ export class FirestoreStore implements Store {
     const snap = await this.messagesCollection(issueNumber).where('deliveredAt', '==', null).get();
     return snap.docs
       .map((doc) => doc.data() as CreatorMessage)
-      .filter((message) => message.origin !== 'studio')
+      .filter((message) => !isStudioOrigin(message.origin))
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
       .slice(0, opts?.limit ?? 10);
   }
