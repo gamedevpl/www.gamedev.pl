@@ -195,19 +195,6 @@ export class VertexSpecRefiner implements SpecRefiner {
         defaultRegion: 'global',
         model: this.options.model,
         defaultModel: 'gemini-3.6-flash',
-        generationConfig: {
-          // Plain text, not JSON: Vertex rejects googleSearch combined with a JSON
-          // response mode, which is why this is a separate call and client from the
-          // structured-output one below rather than one client with tools toggled on.
-          //
-          // Thinking is disabled via the request-level `.thinking(false)` call below,
-          // not here: a raw `thinkingConfig: { thinkingBudget: 0 }` default (no request
-          // going through `.responseFormat('json')`, which is the only path that
-          // overrides it) reaches Gemini 3 verbatim and it 400s on that exact literal —
-          // confirmed against the real API while building this. `.thinking(false)`
-          // converts to the supported `thinkingLevel: MINIMAL` instead.
-          tools: [{ googleSearch: {} }],
-        } as VertexGenerationConfig,
       });
     return this.groundingClient;
   }
@@ -235,6 +222,7 @@ ${concept}
       const text = await this.getGroundingClient()(groundingPrompt)
         .temperature(0.2)
         .thinking(false)
+        .search(true)
         .signal(AbortSignal.timeout(this.groundingTimeoutMs))
         .text();
       const trimmed = text.trim();
