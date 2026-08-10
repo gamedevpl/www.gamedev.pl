@@ -1,0 +1,206 @@
+// @vitest-environment jsdom
+
+import { act } from 'react';
+import { createRoot } from 'react-dom/client';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import i18n from './i18n/index.js';
+import { StudioStage, type StudioStageProps } from './StudioStage.js';
+
+vi.mock('./submissionApi.js', async () => {
+  const actual = await vi.importActual<typeof import('./submissionApi.js')>('./submissionApi.js');
+  return { ...actual, submitFeedback: vi.fn() };
+});
+vi.mock('./studioApi.js', async () => {
+  const actual = await vi.importActual<typeof import('./studioApi.js')>('./studioApi.js');
+  return { ...actual, submitImprovement: vi.fn() };
+});
+
+const GAME_A = '<!doctype html><html><head></head><body><canvas id="game">A</canvas></body></html>';
+const GAME_B = '<!doctype html><html><head></head><body><canvas id="game">B</canvas></body></html>';
+
+function baseProps(overrides: Partial<StudioStageProps> = {}): StudioStageProps {
+  return {
+    token: 'tok',
+    title: 'Sky Dodge',
+    published: false,
+    source: { html: GAME_A, origin: { kind: 'staged', at: Date.now(), versionLabel: null } },
+    posture: 'watch',
+    onPostureChange: vi.fn(),
+    covered: false,
+    ...overrides,
+  };
+}
+
+async function mount(props: StudioStageProps) {
+  (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  await i18n.changeLanguage('en');
+  const host = document.createElement('div');
+  document.body.appendChild(host);
+  const root = createRoot(host);
+  await act(async () => {
+    root.render(<StudioStage {...props} />);
+  });
+  return {
+    host,
+    root,
+    rerender: async (next: StudioStageProps) => {
+      await act(async () => {
+        root.render(<StudioStage {...next} />);
+      });
+    },
+    unmount: () => {
+      root.unmount();
+      host.remove();
+    },
+  };
+}
+
+describe('StudioStage', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+    vi.useRealTimers();
+  });
+
+  it('is pointer-inert in watch posture — a window, not a place to play', async () => {
+    const { host, unmount } = await mount(baseProps());
+    expect(host.querySelector('.studio-stage')?.classList.contains('is-watch')).toBe(true);
+    const frame = host.querySelector('iframe');
+    expect(frame).not.toBeNull();
+    expect(frame!.getAttribute('sandbox')).toBe('allow-scripts allow-pointer-lock');
+    unmount();
+  });
+
+  it('swaps the srcDoc immediately in watch posture', async () => {
+    const props = baseProps();
+    const { host, rerender, unmount } = await mount(props);
+    expect(host.querySelector('iframe')?.getAttribute('srcdoc')).toContain('>A<');
+
+    await rerender({
+      ...props,
+      source: { html: GAME_B, origin: { kind: 'staged', at: Date.now(), versionLabel: null } },
+    });
+    expect(host.querySelector('iframe')?.getAttribute('srcdoc')).toContain('>B<');
+    unmount();
+  });
+
+  it('holds a new stage during play instead of yanking it mid-run, and offers a toast', async () => {
+    const props = baseProps({ posture: 'play' });
+    const { host, rerender, unmount } = await mount(props);
+    expect(host.querySelector('iframe')?.getAttribute('srcdoc')).toContain('>A<');
+
+    await rerender({
+      ...props,
+      source: { html: GAME_B, origin: { kind: 'staged', at: Date.now(), versionLabel: null } },
+    });
+
+    // A4: never replace srcDoc mid-run — the old run keeps going...
+    expect(host.querySelector('iframe')?.getAttribute('srcdoc')).toContain('>A<');
+    // ...and the toast offers the choice instead.
+    const toast = host.querySelector('.studio-swap-toast');
+    expect(toast).not.toBeNull();
+    expect(toast!.textContent).toMatch(/new build staged/i);
+    unmount();
+  });
+
+  it('applies the held swap once the creator asks to restart on it', async () => {
+    const props = baseProps({ posture: 'play' });
+    const { host, rerender, unmount } = await mount(props);
+    await rerender({
+      ...props,
+      source: { html: GAME_B, origin: { kind: 'staged', at: Date.now(), versionLabel: null } },
+    });
+
+    const restartBtn = Array.from(host.querySelectorAll('button')).find((btn) =>
+      /restart on it/i.test(btn.textContent ?? ''),
+    );
+    expect(restartBtn).toBeTruthy();
+    await act(async () => {
+      restartBtn!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(host.querySelector('iframe')?.getAttribute('srcdoc')).toContain('>B<');
+    expect(host.querySelector('.studio-swap-toast')).toBeNull();
+    unmount();
+  });
+
+  it('applies a held swap automatically once posture returns to watch, if the creator chose to finish first', async () => {
+    const props = baseProps({ posture: 'play' });
+    const { host, rerender, unmount } = await mount(props);
+    await rerender({
+      ...props,
+      source: { html: GAME_B, origin: { kind: 'staged', at: Date.now(), versionLabel: null } },
+    });
+
+    const finishBtn = Array.from(host.querySelectorAll('button')).find((btn) =>
+      /finish this run/i.test(btn.textContent ?? ''),
+    );
+    await act(async () => {
+      finishBtn!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    // Toast collapses; the swap has not applied yet.
+    expect(host.querySelector('.studio-swap-toast')).toBeNull();
+    expect(host.querySelector('iframe')?.getAttribute('srcdoc')).toContain('>A<');
+
+    await rerender({
+      ...props,
+      posture: 'watch',
+      source: { html: GAME_B, origin: { kind: 'staged', at: Date.now(), versionLabel: null } },
+    });
+    expect(host.querySelector('iframe')?.getAttribute('srcdoc')).toContain('>B<');
+    unmount();
+  });
+
+  it('reports status changes to the parent as builds land and go away', async () => {
+    const onStatusChange = vi.fn();
+    const props = baseProps({
+      source: { html: null, origin: { kind: 'none', at: null, versionLabel: null } },
+      onStatusChange,
+    });
+    const { rerender, unmount } = await mount(props);
+
+    await rerender({
+      ...props,
+      source: { html: GAME_A, origin: { kind: 'staged', at: Date.now(), versionLabel: null } },
+    });
+    expect(onStatusChange).toHaveBeenCalledWith({ kind: 'ready' });
+
+    onStatusChange.mockClear();
+    await rerender({ ...props, source: { html: null, origin: { kind: 'none', at: null, versionLabel: null } } });
+    expect(onStatusChange).toHaveBeenCalledWith({ kind: 'empty' });
+    unmount();
+  });
+
+  it('Escape exits play posture only when nothing covers the stage (topmost-layer-first)', async () => {
+    const onPostureChange = vi.fn();
+    const covered = await mount(baseProps({ posture: 'play', covered: true, onPostureChange }));
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    });
+    expect(onPostureChange).not.toHaveBeenCalled();
+    covered.unmount();
+
+    const uncovered = await mount(baseProps({ posture: 'play', covered: false, onPostureChange }));
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    });
+    expect(onPostureChange).toHaveBeenCalledWith('watch');
+    uncovered.unmount();
+  });
+
+  it('throttles to idle after ten minutes of watching with no activity, and resumes on tap', async () => {
+    vi.useFakeTimers();
+    const { host, unmount } = await mount(baseProps());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10 * 60 * 1000 + 10);
+    });
+    expect(host.querySelector('.studio-stage')?.classList.contains('is-idle')).toBe(true);
+    const poster = host.querySelector('.studio-stage-idle-poster') as HTMLButtonElement | null;
+    expect(poster).not.toBeNull();
+
+    await act(async () => {
+      poster!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(host.querySelector('.studio-stage')?.classList.contains('is-idle')).toBe(false);
+    unmount();
+  });
+});

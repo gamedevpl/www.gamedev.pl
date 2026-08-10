@@ -377,7 +377,11 @@
       "overview": "Overview",
       "stats": "Stats",
       "connectEmpty": "This round does not need a coding-agent connect step.",
-      "buildEmpty": "No checklist yet — it appears once the agent posts tasks."
+      "buildEmpty": "No checklist yet — it appears once the agent posts tasks.",
+      "openThread": "Open chat",
+      "collapse": "Collapse",
+      "popOut": "Open as page",
+      "peekEmpty": "No updates yet"
     },
     "share": {
       "title": "Share the draft",
@@ -505,6 +509,34 @@
       "autoTuneHint": "Also adjusts where players get stuck, within your spec.",
       "saved": "Saved",
       "failed": "Could not save that. Please try again."
+    },
+    "stage": {
+      "idleResume": "Paused — idle. Tap to resume.",
+      "crashedTitle": "This build crashed.",
+      "drewNothingTitle": "This build didn't draw anything.",
+      "backTo": "Back to {{time}}",
+      "newBuildStaged": "New build staged ({{time}})",
+      "restartOnIt": "Restart on it",
+      "finishThisRun": "Finish this run first",
+      "stopPlaying": "Stop playing",
+      "backToGame": "Back to the game",
+      "assembling": "The build is coming together.",
+      "assemblingHint": "The agent hasn't landed a playable first draft yet — the thread has its progress."
+    },
+    "ribbon": {
+      "staged": "STAGED {{time}} · not delivered yet",
+      "stagedUnknown": "STAGED · not delivered yet",
+      "delivered": "Delivered {{time}}",
+      "deliveredUnknown": "Delivered",
+      "seed": "SEED",
+      "crashed": "crashed",
+      "drewNothing": "drew nothing",
+      "deliveryInGate": "delivery in the gate",
+      "newerStageWaiting": "newer stage waiting",
+      "checked": "checked ✓",
+      "notChecked": "not yet checked",
+      "checkedTitle": "This build passed the preview gate.",
+      "notCheckedTitle": "This build hasn't been checked yet."
     }
   },
   "submit": {
@@ -1099,7 +1131,7 @@
     "gamesAria": "Published games",
     "gamesHeading": "Games ({{count}})",
     "noGames": "No published games yet.",
-    "openGamePage": "Open {{title}} game page",
+    "openGamePage": "Game page",
     "openStudio": "Open in Studio",
     "editorTitle": "Your public profile",
     "publishGateTitle": "Claim a handle to publish",
@@ -1146,8 +1178,7 @@
       "cooldown": "You renamed recently — try again after the cooldown.",
       "unchanged": "That is already your handle.",
       "unknown": "Could not update the profile."
-    },
-    "openGamePage": "Game page"
+    }
   },
   "pwa": {
     "ariaLabel": "Install this app",

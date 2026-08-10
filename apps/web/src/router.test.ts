@@ -119,7 +119,14 @@ describe('parsePathRoute', () => {
       game: 'abc/token',
       tab: 'thread',
     });
-    expect(parsePathRoute('/studio/tok/playtest')).toEqual({ view: 'studio', game: 'tok', tab: 'playtest' });
+    // Play is a posture of the stage now, not a place — `/playtest` still resolves,
+    // onto the thread tab with `posture: 'play'` carrying the old meaning forward.
+    expect(parsePathRoute('/studio/tok/playtest')).toEqual({
+      view: 'studio',
+      game: 'tok',
+      tab: 'thread',
+      posture: 'play',
+    });
     expect(parsePathRoute('/studio/tok/nope')).toEqual({ view: 'notFound' });
     // The stubbed feedback surface is gone from the UI, so its path is gone too —
     // otherwise a deep link resolves to a tab with nothing to render.
@@ -322,12 +329,13 @@ describe('path builders', () => {
       ['improve', 'thread'],
       ['overview', 'details'],
       ['stats', 'details'],
-      ['playtest', 'playtest'],
+      ['playtest', 'thread'],
     ] as const) {
       expect(parsePathRoute(`/studio/tv-tycoon/${old}`)).toEqual({
         view: 'studio',
         game: 'tv-tycoon',
         tab: surface,
+        ...(old === 'playtest' ? { posture: 'play' } : {}),
       });
     }
     // Still a 404 for a segment that never named anything.
@@ -367,7 +375,7 @@ describe('navUpTarget', () => {
     expect(navUpTarget({ view: 'home' })).toBeNull();
     expect(navUpTarget({ view: 'join', code: 'ABC123', token: 'tok' })).toBeNull();
     expect(navUpTarget({ view: 'play', slug: 'sky-dodge' })).toEqual({ path: '/', labelKey: 'upHome' });
-    expect(navUpTarget({ view: 'studio', game: 'tok', tab: 'playtest' })).toBeNull();
+    expect(navUpTarget({ view: 'studio', game: 'tok', tab: 'thread', posture: 'play' })).toBeNull();
   });
 
   it('walks studio game work surfaces to the shelf, then home', () => {

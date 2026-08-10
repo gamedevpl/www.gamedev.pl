@@ -28,7 +28,6 @@ import { NAVIGATE_EVENT, statusPath, studioPath } from './router.js';
 import { formatRelativeTime } from './relativeTime.js';
 import { connectCardMode, selfComposerRoute, selfStatusCopy, shouldShowConnectCard } from './selfBuildCopy.js';
 import { StudioConnectCard, SwitchToPlatformControl, SwitchToSelfControl } from './StudioConnectCard.js';
-import { StudioLivePreview } from './StudioLivePreview.js';
 import { StudioPriorRounds } from './StudioPriorRounds.js';
 import { submitImprovement } from './studioApi.js';
 import { pollDelayMs } from './studioStatusPoll.js';
@@ -319,6 +318,14 @@ type SubmissionStatusViewProps = {
    * that performed the switch.
    */
   justHandedOff?: boolean;
+  /**
+   * Embedded only: reports the transcript's entry count and latest entry's text on
+   * every change, so a parent shell that collapses this thread (the game-first
+   * layout's `StudioChatRail`) can derive an unread badge and a one-line peek without
+   * duplicating `buildActivityFeed`. `latest` is untrusted, agent- or creator-authored
+   * text — render it escaped, same as every other transcript row.
+   */
+  onActivityCount?: (count: number, latest: string | null) => void;
 };
 
 export function SubmissionStatusView({
@@ -332,6 +339,7 @@ export function SubmissionStatusView({
   embedded = false,
   onImproved,
   justHandedOff = false,
+  onActivityCount,
 }: SubmissionStatusViewProps) {
   const { t, i18n } = useTranslation();
   const [status, setStatus] = useState<SubmissionStatus | null>(null);
@@ -509,6 +517,8 @@ export function SubmissionStatusView({
   const prevOpenedByRef = useRef<SubmissionStatus['openedBy'] | undefined>(undefined);
   const hasSeenStatusRef = useRef(false);
   useEffect(() => {
+    if (embedded)
+      onActivityCountRef.current?.(activity.length, activity.length > 0 ? activity[activity.length - 1].text : null);
     if (!status) return;
     const builder = status.builder && isBuilderKind(status.builder) ? status.builder : null;
 
@@ -551,6 +561,11 @@ export function SubmissionStatusView({
     prevVerdictRef.current = verdict;
     prevOpenedByRef.current = status.openedBy;
     hasSeenStatusRef.current = true;
+    // `activity`/`embedded` deliberately excluded: this effect is keyed on `status`
+    // alone so the telemetry above stays idempotent (see the comment at the top of this
+    // block), and `onActivityCountRef` is already a ref precisely so its report can
+    // ride along without becoming a second effect (see the comment where it is declared).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
 
   // No share link here any more. It used to be shown unconditionally and pointed at
@@ -707,6 +722,26 @@ export function SubmissionStatusView({
       return result;
     });
 
+  // Hoisted above the `embedded` branch below so `StudioChatRail` can derive an
+  // unread badge from the same count without re-running `buildActivityFeed` itself.
+  // A plain computed value, not `useMemo` behind its own `useEffect` — this component's
+  // status poll (above) depends on an unstabilized `t`, so it re-runs on every render;
+  // one more independently-scheduled effect here was enough to multiply its fire count
+  // under fake timers (and, on the real clock, waste real polls). Reported from the
+  // existing per-`status` telemetry effect below instead of a new one of its own.
+  const activity =
+    embedded && status
+      ? buildActivityFeed(
+          status.progress,
+          status.events ?? [],
+          pendingRevisions,
+          status.media ?? [],
+          t('statusView.gallery.caption'),
+        )
+      : [];
+  const onActivityCountRef = useRef(onActivityCount);
+  onActivityCountRef.current = onActivityCount;
+
   /**
    * Inside Creator Studio this is a thread, not a page.
    *
@@ -716,15 +751,6 @@ export function SubmissionStatusView({
    * conversation scrolls, and the box you answer in does not move.
    */
   if (embedded) {
-    const activity = status
-      ? buildActivityFeed(
-          status.progress,
-          status.events ?? [],
-          pendingRevisions,
-          status.media ?? [],
-          t('statusView.gallery.caption'),
-        )
-      : [];
     const agentWorking = Boolean(status && isAgentWorkActive(status));
     const gateThought =
       status?.gateProgress?.stage && agentWorking
@@ -810,30 +836,6 @@ export function SubmissionStatusView({
               />
 
               <div className="studio-thread-foot">
-                {/* The draft, running, in the corner of the conversation — so a creator
-                    can see the game move while the agent is deep in details, without
-                    deciding to open anything. Rendered here rather than over the thread
-                    because this block is what the composer's height is made of: anchored
-                    to its top edge, the card cannot land on the reply box whatever the
-                    status chips below add. Hidden while the theater is up — the same
-                    game at full size is already on screen, and two live copies of one
-                    game is two game loops and one confusing picture.
-
-                    Not on a published or abandoned build: there the round that produced
-                    this draft is over, and a card labelled "live" beside a game that is
-                    already live (or a build that was stopped) describes nothing. A
-                    `needs_changes` bounce deliberately keeps it — the draft is precisely
-                    what the creator is deciding about. */}
-                {playing === null && status.status !== 'published' && status.status !== 'abandoned' ? (
-                  <StudioLivePreview
-                    token={token}
-                    html={preview?.html ?? channelHtml}
-                    title={preview ? previewTitle : (submittedTitle ?? latestChannelBuild?.slug ?? previewTitle)}
-                    label={preview ? undefined : latestChannelBuild?.label}
-                    onOpen={preview ? openDraft : openChannel}
-                  />
-                ) : null}
-
                 {/* Trouble is said once, immediately above the box the creator would use
                     to do something about it. A dead round outranks a slow one: when both
                     are set the failure is the explanation and the stall is its symptom.
