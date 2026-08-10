@@ -1136,7 +1136,7 @@
     "gamesAria": "Opublikowane gry",
     "gamesHeading": "Gry ({{count}})",
     "noGames": "Brak opublikowanych gier.",
-    "openGamePage": "Strona gry",
+    "openGamePage": "Otwórz stronę gry {{title}}",
     "openStudio": "Otwórz w Studio",
     "editorTitle": "Twój publiczny profil",
     "publishGateTitle": "Zajmij handle, żeby opublikować",

@@ -1132,7 +1132,7 @@
     "gamesAria": "Published games",
     "gamesHeading": "Games ({{count}})",
     "noGames": "No published games yet.",
-    "openGamePage": "Game page",
+    "openGamePage": "Open {{title}} game page",
     "openStudio": "Open in Studio",
     "editorTitle": "Your public profile",
     "publishGateTitle": "Claim a handle to publish",

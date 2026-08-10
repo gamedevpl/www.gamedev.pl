@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PixelIcon } from './PixelIcon.js';
 
@@ -33,6 +33,17 @@ export function StudioChatRail({
   const { t } = useTranslation();
   const [isSheet, setIsSheet] = useState(false);
   const [detent, setDetent] = useState<SheetDetent>('half');
+  const asideRef = useRef<HTMLElement | null>(null);
+
+  // Collapsed rail stays mounted (see below) but is clipped to 1px via CSS, not
+  // display:none — `aria-hidden` alone does not remove its buttons/textarea from the
+  // tab order, so a keyboard user tabbing past the pill can land on invisible controls.
+  // `inert` (imperative, since @types/react 18 doesn't type it as a JSX prop) removes
+  // the whole collapsed subtree from both focus and the accessibility tree.
+  useEffect(() => {
+    const node = asideRef.current as (HTMLElement & { inert: boolean }) | null;
+    if (node) node.inert = !open;
+  }, [open]);
 
   useEffect(() => {
     const query =
@@ -80,6 +91,7 @@ export function StudioChatRail({
         </button>
       ) : null}
       <aside
+        ref={asideRef}
         className={`studio-chat-rail${detentClass}${open ? '' : ' is-collapsed'}`}
         aria-label={title}
         aria-hidden={open ? undefined : true}

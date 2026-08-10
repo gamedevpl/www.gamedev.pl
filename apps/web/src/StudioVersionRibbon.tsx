@@ -70,13 +70,12 @@ export function StudioVersionRibbon(props: StudioVersionRibbonProps) {
                 : t('studioPanel.ribbon.newerStageWaiting')}
         </span>
       ) : props.checked != null ? (
-        <button
-          type="button"
+        <span
           className="studio-version-ribbon-depth"
           title={props.checked ? t('studioPanel.ribbon.checkedTitle') : t('studioPanel.ribbon.notCheckedTitle')}
         >
           {props.checked ? t('studioPanel.ribbon.checked') : t('studioPanel.ribbon.notChecked')}
-        </button>
+        </span>
       ) : null}
     </div>
   );

@@ -92,17 +92,20 @@ export function StudioStage({
   const { t } = useTranslation();
   const frameRef = useRef<HTMLIFrameElement | null>(null);
 
-  // The document actually rendered. Distinct from `source.html`: while playing, a new
-  // stage never replaces this mid-run (A4's swap policy) — it waits in `pendingHtml`.
-  const [shownHtml, setShownHtml] = useState<string | null>(source.html);
+  // The document actually rendered. Distinct from `source.rawHtml`: while playing, a
+  // new stage never replaces this mid-run (A4's swap policy) — it waits in
+  // `pendingHtml`. Uses the pre-embed document — this component is the one that passes
+  // `embed` to `GameFrame`, so feeding it `source.html` (already embedded) would inject
+  // the player bridge twice.
+  const [shownHtml, setShownHtml] = useState<string | null>(source.rawHtml);
   const [pendingHtml, setPendingHtml] = useState<string | null>(null);
   const [pendingAt, setPendingAt] = useState<number | null>(null);
   const [finishFirst, setFinishFirst] = useState(false);
   const [shimmer, setShimmer] = useState(false);
-  const lastGoodRef = useRef<string | null>(source.html);
+  const lastGoodRef = useRef<string | null>(source.rawHtml);
   const lastGoodAtRef = useRef<number | null>(source.origin.at);
 
-  const [status, setStatus] = useState<StageStatus>(source.html ? { kind: 'ready' } : { kind: 'empty' });
+  const [status, setStatus] = useState<StageStatus>(source.rawHtml ? { kind: 'ready' } : { kind: 'empty' });
   const setStatusAndReport = useCallback(
     (next: StageStatus) => {
       setStatus(next);
@@ -120,7 +123,7 @@ export function StudioStage({
 
   // Apply (or hold) an incoming stage source.
   useEffect(() => {
-    const next = source.html;
+    const next = source.rawHtml;
     if (next === shownHtml) return;
     if (posture === 'play' && shownHtml !== null) {
       // A4: never replace srcDoc mid-run. Hold it and let the toast offer the choice.
@@ -131,7 +134,7 @@ export function StudioStage({
     }
     applySwap(next);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [source.html, posture]);
+  }, [source.rawHtml, posture]);
 
   // Returning to watch posture applies a swap the creator chose to finish first.
   useEffect(() => {
@@ -150,7 +153,7 @@ export function StudioStage({
     setShimmer(showShimmer);
     setShownHtml(next);
     setStatusAndReport(next ? { kind: 'ready' } : { kind: 'empty' });
-    if (next) watchSwappedDocument();
+    if (next) watchSwappedDocument(next);
     if (showShimmer) {
       window.setTimeout(() => setShimmer(false), 400);
     }
@@ -161,8 +164,12 @@ export function StudioStage({
    * painted." The error path is exactly what RemixPanel already ships for the public
    * Remix code lane (SWAP_WATCH_MS, the same constant) — no new bridge message, no
    * assembler change, no sandbox change.
+   *
+   * `candidate` is only promoted to `lastGoodRef` once the full watch window elapses
+   * with no crash reported — marking it good the instant it's shown would let a crash
+   * *during* the window "restore" the same build that just crashed.
    */
-  function watchSwappedDocument() {
+  function watchSwappedDocument(candidate: string) {
     let sawFrame = false;
     function onMessage(event: MessageEvent) {
       if (event.origin !== 'null') return;
@@ -184,13 +191,22 @@ export function StudioStage({
       window.clearTimeout(drewNothingTimer);
       if (swapWatchRef.current?.stop === stop) swapWatchRef.current = null;
     }
-    const errorTimer = window.setTimeout(stop, SWAP_WATCH_MS);
+    const errorTimer = window.setTimeout(() => {
+      lastGoodRef.current = candidate;
+      lastGoodAtRef.current = source.origin.at ?? Date.now();
+      stop();
+    }, SWAP_WATCH_MS);
     const drewNothingTimer = window.setTimeout(() => {
       if (!sawFrame) setStatusAndReport({ kind: 'drew-nothing' });
     }, DREW_NOTHING_CHECK_MS);
     swapWatchRef.current = { stop };
     window.addEventListener('message', onMessage);
   }
+
+  // Timers/listener installed above must not outlive the component — a candidate that
+  // never gets to finish its watch window (e.g. the creator navigates away) must not
+  // call setState after unmount.
+  useEffect(() => () => swapWatchRef.current?.stop(), []);
 
   function reportCrash(message: string) {
     if (posture === 'play') {
@@ -206,16 +222,6 @@ export function StudioStage({
     // for it — auto-reverting would hide the signal from the creator and the agent both.
     setStatusAndReport({ kind: 'crashed', message });
   }
-
-  // Once a swap is confirmed good (no crash within the watch window, no drew-nothing),
-  // remember it as the recovery target for the *next* swap.
-  useEffect(() => {
-    if (status.kind === 'ready' && shownHtml) {
-      lastGoodRef.current = shownHtml;
-      lastGoodAtRef.current = source.origin.at ?? Date.now();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status.kind, shownHtml]);
 
   function recoverToLastGood() {
     const good = lastGoodRef.current;
@@ -360,7 +366,7 @@ export function StudioStage({
     <div className={stageClasses}>
       {shownHtml ? (
         <div className="studio-stage-frame">
-          <GameFrame frameRef={frameRef} title={title} html={shownHtml} embed />
+          <GameFrame frameRef={frameRef} title={title} html={shownHtml} embed autoFocus={posture === 'play'} />
         </div>
       ) : (
         <div className="studio-stage-void" aria-hidden="true" />

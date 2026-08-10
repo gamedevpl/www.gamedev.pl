@@ -4,6 +4,7 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import i18n from './i18n/index.js';
+import { embedGameHtml, withGameLocale } from './gamePlayer.js';
 import { StudioStage, type StudioStageProps } from './StudioStage.js';
 
 vi.mock('./submissionApi.js', async () => {
@@ -204,6 +205,56 @@ describe('StudioStage', () => {
       poster!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(host.querySelector('.studio-stage')?.classList.contains('is-idle')).toBe(false);
+    unmount();
+  });
+
+  it('embeds the player bridge exactly once — the stage does its own embedding, not a pre-embedded document', async () => {
+    // Mirrors what useStageSource actually hands the stage: `html` pre-embedded for a
+    // caller that renders it directly, `rawHtml` for one (this component) that embeds
+    // it itself via GameFrame's `embed` prop.
+    const embedded = embedGameHtml(withGameLocale(GAME_A, 'en'));
+    const { host, unmount } = await mount(
+      baseProps({
+        source: { html: embedded, rawHtml: GAME_A, origin: { kind: 'staged', at: Date.now(), versionLabel: null } },
+      }),
+    );
+    const srcdoc = host.querySelector('iframe')?.getAttribute('srcdoc') ?? '';
+    expect(srcdoc.match(/id="gdpl-embed"/g)?.length).toBe(1);
+    unmount();
+  });
+
+  it('does not promote a crashing swap to the crash-recovery target', async () => {
+    vi.useFakeTimers();
+    const props = baseProps({ posture: 'play' });
+    const { host, rerender, unmount } = await mount(props);
+
+    await rerender({
+      ...props,
+      source: { html: GAME_B, rawHtml: GAME_B, origin: { kind: 'staged', at: Date.now(), versionLabel: null } },
+    });
+    const restartBtn = Array.from(host.querySelectorAll('button')).find((btn) =>
+      /restart on it/i.test(btn.textContent ?? ''),
+    );
+    await act(async () => {
+      restartBtn!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(host.querySelector('iframe')?.getAttribute('srcdoc')).toContain('>B<');
+
+    // B crashes well inside the watch window — before it could ever have been
+    // confirmed good. Play posture's crash handler must restore A, not the same B
+    // that just crashed.
+    const iframe = host.querySelector('iframe')!;
+    await act(async () => {
+      const event = new MessageEvent('message', {
+        data: { source: 'gdpl-player', type: 'error', message: 'boom' },
+      });
+      Object.defineProperty(event, 'source', { value: iframe.contentWindow });
+      Object.defineProperty(event, 'origin', { value: 'null' });
+      window.dispatchEvent(event);
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(host.querySelector('iframe')?.getAttribute('srcdoc')).toContain('>A<');
     unmount();
   });
 });
