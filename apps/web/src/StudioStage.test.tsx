@@ -23,7 +23,7 @@ function baseProps(overrides: Partial<StudioStageProps> = {}): StudioStageProps 
     token: 'tok',
     title: 'Sky Dodge',
     published: false,
-    source: { html: GAME_A, origin: { kind: 'staged', at: Date.now(), versionLabel: null } },
+    source: { html: GAME_A, rawHtml: GAME_A, origin: { kind: 'staged', at: Date.now(), versionLabel: null } },
     posture: 'watch',
     onPostureChange: vi.fn(),
     covered: false,
@@ -77,7 +77,7 @@ describe('StudioStage', () => {
 
     await rerender({
       ...props,
-      source: { html: GAME_B, origin: { kind: 'staged', at: Date.now(), versionLabel: null } },
+      source: { html: GAME_B, rawHtml: GAME_B, origin: { kind: 'staged', at: Date.now(), versionLabel: null } },
     });
     expect(host.querySelector('iframe')?.getAttribute('srcdoc')).toContain('>B<');
     unmount();
@@ -90,7 +90,7 @@ describe('StudioStage', () => {
 
     await rerender({
       ...props,
-      source: { html: GAME_B, origin: { kind: 'staged', at: Date.now(), versionLabel: null } },
+      source: { html: GAME_B, rawHtml: GAME_B, origin: { kind: 'staged', at: Date.now(), versionLabel: null } },
     });
 
     // A4: never replace srcDoc mid-run — the old run keeps going...
@@ -107,7 +107,7 @@ describe('StudioStage', () => {
     const { host, rerender, unmount } = await mount(props);
     await rerender({
       ...props,
-      source: { html: GAME_B, origin: { kind: 'staged', at: Date.now(), versionLabel: null } },
+      source: { html: GAME_B, rawHtml: GAME_B, origin: { kind: 'staged', at: Date.now(), versionLabel: null } },
     });
 
     const restartBtn = Array.from(host.querySelectorAll('button')).find((btn) =>
@@ -128,7 +128,7 @@ describe('StudioStage', () => {
     const { host, rerender, unmount } = await mount(props);
     await rerender({
       ...props,
-      source: { html: GAME_B, origin: { kind: 'staged', at: Date.now(), versionLabel: null } },
+      source: { html: GAME_B, rawHtml: GAME_B, origin: { kind: 'staged', at: Date.now(), versionLabel: null } },
     });
 
     const finishBtn = Array.from(host.querySelectorAll('button')).find((btn) =>
@@ -144,7 +144,7 @@ describe('StudioStage', () => {
     await rerender({
       ...props,
       posture: 'watch',
-      source: { html: GAME_B, origin: { kind: 'staged', at: Date.now(), versionLabel: null } },
+      source: { html: GAME_B, rawHtml: GAME_B, origin: { kind: 'staged', at: Date.now(), versionLabel: null } },
     });
     expect(host.querySelector('iframe')?.getAttribute('srcdoc')).toContain('>B<');
     unmount();
@@ -153,19 +153,22 @@ describe('StudioStage', () => {
   it('reports status changes to the parent as builds land and go away', async () => {
     const onStatusChange = vi.fn();
     const props = baseProps({
-      source: { html: null, origin: { kind: 'none', at: null, versionLabel: null } },
+      source: { html: null, rawHtml: null, origin: { kind: 'none', at: null, versionLabel: null } },
       onStatusChange,
     });
     const { rerender, unmount } = await mount(props);
 
     await rerender({
       ...props,
-      source: { html: GAME_A, origin: { kind: 'staged', at: Date.now(), versionLabel: null } },
+      source: { html: GAME_A, rawHtml: GAME_A, origin: { kind: 'staged', at: Date.now(), versionLabel: null } },
     });
     expect(onStatusChange).toHaveBeenCalledWith({ kind: 'ready' });
 
     onStatusChange.mockClear();
-    await rerender({ ...props, source: { html: null, origin: { kind: 'none', at: null, versionLabel: null } } });
+    await rerender({
+      ...props,
+      source: { html: null, rawHtml: null, origin: { kind: 'none', at: null, versionLabel: null } },
+    });
     expect(onStatusChange).toHaveBeenCalledWith({ kind: 'empty' });
     unmount();
   });

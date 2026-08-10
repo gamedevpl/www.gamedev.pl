@@ -521,7 +521,8 @@
       "stopPlaying": "Stop playing",
       "backToGame": "Back to the game",
       "assembling": "The build is coming together.",
-      "assemblingHint": "The agent hasn't landed a playable first draft yet — the thread has its progress."
+      "assemblingHint": "The agent hasn't landed a playable first draft yet — the thread has its progress.",
+      "openTheater": "Open in theater"
     },
     "ribbon": {
       "staged": "STAGED {{time}} · not delivered yet",

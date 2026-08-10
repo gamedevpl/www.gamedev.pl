@@ -556,7 +556,8 @@ describe('CreatorStudioView', () => {
     );
     expect(shareWrap).not.toBeNull();
     expect(play).toBeGreaterThanOrEqual(0);
-    expect(actions.indexOf(shareWrap!)).toBe(play + 1);
+    // Play, then "open in theater", then share.
+    expect(actions.indexOf(shareWrap!)).toBe(play + 2);
     expect(details).toBe(actions.indexOf(shareWrap!) + 1);
 
     const shareBtn = container.querySelector<HTMLButtonElement>('[data-testid="studio-head-share"]');

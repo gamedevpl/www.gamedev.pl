@@ -44,6 +44,10 @@ export type StudioStripProps = {
   canClaim: boolean;
   onClaim: () => void;
   shareSlot?: ReactNode;
+  /** Opens the build in the full site `GameTheater` (fullscreen, share, report) — see
+   * studio-game-first-implementation-plan.md's follow-up: the stage's own play posture
+   * is Studio's lighter theater, and this is the way to the site's fuller one. */
+  onOpenTheater?: () => void;
 };
 
 export function StudioStrip({
@@ -64,6 +68,7 @@ export function StudioStrip({
   canClaim,
   onClaim,
   shareSlot,
+  onOpenTheater,
 }: StudioStripProps) {
   const { t, i18n } = useTranslation();
   const heartbeatAt = latestAgentActivityAt(status);
@@ -139,6 +144,20 @@ export function StudioStrip({
             {posture === 'play' ? t('studioPanel.stage.stopPlaying') : t('studioPanel.tabs.playtest')}
           </span>
         </button>
+
+        {onOpenTheater ? (
+          <button
+            type="button"
+            className="studio-head-action is-icon-only"
+            aria-label={t('studioPanel.stage.openTheater')}
+            title={t('studioPanel.stage.openTheater')}
+            disabled={stageEmpty}
+            onClick={onOpenTheater}
+          >
+            <PixelIcon name="gamepad" size={12} />{' '}
+            <span className="studio-head-action-label">{t('studioPanel.stage.openTheater')}</span>
+          </button>
+        ) : null}
 
         {shareSlot}
 

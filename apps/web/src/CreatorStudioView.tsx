@@ -19,6 +19,7 @@ import { StudioStageCard } from './StudioStageCard.js';
 import { StudioFullBleed } from './StudioFullBleed.js';
 import { useStageSource } from './useStageSource.js';
 import { useStudioStatusPoll, defaultRailOpen } from './useStudioStatusPoll.js';
+import { GameTheater } from './GameTheater.js';
 import {
   collapseStudioGames,
   filterStudioGames,
@@ -386,6 +387,16 @@ export function CreatorStudioView({
   const railOpen = railManualOpen ?? defaultRailOpen(studioStatus);
   const seenActivityRef = useRef(0);
   const latestActivityRef = useRef<string | null>(null);
+  // The site's full `GameTheater` (fullscreen, share, report) — a heavier surface than
+  // the stage's own play posture, opened deliberately rather than in place of it.
+  const [theaterOpen, setTheaterOpen] = useState(false);
+  // GameTheater documents that callers own page scroll-locking; SubmissionStatusView's
+  // own copy of this effect is keyed to its own `playing` state and does not see this one.
+  useEffect(() => {
+    if (!theaterOpen) return;
+    document.body.classList.add('player-open');
+    return () => document.body.classList.remove('player-open');
+  }, [theaterOpen]);
 
   // A game switch starts every per-game bit of stage state fresh. The very first
   // resolution applies the deep link's posture (if any); every later switch — the
@@ -402,6 +413,7 @@ export function CreatorStudioView({
     setNewerStageWaiting(false);
     setChecklistUnread(0);
     setRailManualOpen(null);
+    setTheaterOpen(false);
     seenActivityRef.current = 0;
     latestActivityRef.current = null;
   }, [stageToken]);
@@ -834,7 +846,26 @@ export function CreatorStudioView({
                         canClaim={canClaim}
                         onClaim={() => setClaimOpen(true)}
                         shareSlot={shareSlot}
+                        onOpenTheater={() => setTheaterOpen(true)}
                       />
+
+                      {theaterOpen ? (
+                        stageSource.origin.kind === 'delivered' && activeGame.slug ? (
+                          <GameTheater
+                            title={activeGame.title}
+                            badge={{ icon: 'gamepad', label: t('catalog.playingBadge', { defaultValue: 'Playing' }) }}
+                            source={{ slug: activeGame.slug }}
+                            onExit={() => setTheaterOpen(false)}
+                          />
+                        ) : stageSource.rawHtml ? (
+                          <GameTheater
+                            title={activeGame.title}
+                            badge={{ icon: 'wrench', label: t('statusView.draftBadge') }}
+                            source={{ html: stageSource.rawHtml }}
+                            onExit={() => setTheaterOpen(false)}
+                          />
+                        ) : null
+                      ) : null}
 
                       {/* The stage: always mounted, always full-bleed. Every surface below
                         is a layer over it, never a replacement for it (the ground-state

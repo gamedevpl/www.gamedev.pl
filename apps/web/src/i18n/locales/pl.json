@@ -525,7 +525,8 @@
       "stopPlaying": "Zakończ granie",
       "backToGame": "Wróć do gry",
       "assembling": "Budowa gry trwa.",
-      "assemblingHint": "Agent nie dostarczył jeszcze grywalnej wersji — postęp widać w wątku."
+      "assemblingHint": "Agent nie dostarczył jeszcze grywalnej wersji — postęp widać w wątku.",
+      "openTheater": "Otwórz w trybie kinowym"
     },
     "ribbon": {
       "staged": "WERSJA ROBOCZA {{time}} · jeszcze niedostarczona",

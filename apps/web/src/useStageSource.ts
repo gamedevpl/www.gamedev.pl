@@ -25,6 +25,13 @@ export type StageOrigin = {
 export type StageSource = {
   /** Assembled + player-bridge-embedded HTML ready for `srcDoc`, or null before anything lands. */
   html: string | null;
+  /**
+   * The same document before `embedGameHtml`/`withGameLocale` — for a caller that does
+   * its own embedding, `GameTheater` via `GameFrame`'s `embed` prop being the one that
+   * matters here. Feeding it the already-embedded `html` would inject the player
+   * bridge twice.
+   */
+  rawHtml: string | null;
   origin: StageOrigin;
 };
 
@@ -161,5 +168,5 @@ export function useStageSource(token: string, status: SubmissionStatus | null): 
     origin = NONE_ORIGIN;
   }
 
-  return { html, origin };
+  return { html, rawHtml, origin };
 }
