@@ -97,6 +97,7 @@ export const INBOX_PIGGYBACK_TOOLS = new Set([
   'list_examples',
   'get_example',
   'get_seed',
+  'knowledge_query',
 ]);
 
 /** Kit browse without get_seed while a draft is ready → seed_unread. */

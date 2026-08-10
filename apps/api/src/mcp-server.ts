@@ -134,6 +134,8 @@ const MCP_VISIBLE_TOOLS = new Set([
   'read_kit_file',
   'read_kit_files',
   'read_kit_file_fragment',
+  // Everything get_kit_api doesn't cover — EditorKit, examples, docs, capability Q&A.
+  'knowledge_query',
   'report_progress',
   'screenshot_upload_url',
   'stage_upload_url',
@@ -643,6 +645,7 @@ const SESSION_WORKFLOW: readonly string[] = [
   // unconditional rather than gated on a round type the agent cannot see.
   'get_sources — when it returns available:true this round improves an existing game: continue those files. Never scaffold over them. If warnings.code=module_too_large, split those oversized modules into cohesive game/*.ts pieces BEFORE adding features — do not grow them further.',
   "get_kit — keep engineRef for submit_sources and for get_kit_api. This platform and its Creator Kit are not on the public web: for what the kit can build (module names — party, zone, commons, presence, and the rest — or the API itself), call get_kit_api or the kit browse tools, never a web search; the digest and browse tools are the complete, authoritative reference, and a web search for gamedev.pl documentation will not find anything, or worse, finds an unrelated platform's docs that do not describe this kit. With shell egress, unpack via the returned one-liner and follow SKILL.md locally instead of either. Never dump the whole kit into context, and never call a tool this session did not advertise.",
+  'Capability and "how do I…" questions: check get_kit_api first for exact kit-API surface (signatures, module names). knowledge_query is for everything get_kit_api does not cover — EditorKit internals, example-game patterns, docs/process, and broader capability questions — with citations and an indexedCommit; treat its prose as a pointer to verify via get_kit_api / read_kit_file, not a source of truth for exact signatures.',
   'Build the game — continuing the seed or sources you fetched, otherwise from the kit; report_progress before and after long steps. Soft module budget: keep each game/*.ts under ~350 lines / ~12 KiB. When a file approaches that, split cohesive pieces (render→art/ui/hud/rooms; model→tables/layout/types; runtime→systems) before more feature work. Honour warnings.code=module_too_large the same way you honour call_end — act, then continue.',
   'As soon as the game draws anything playable: screenshot_upload_url then curl --upload-file <png> "$url". There is no base64 send path — PNG bytes must never enter the model. Without shell egress, skip mid-build screenshots; the gate still captures on delivery.',
   'While iterating: run only npm run typecheck -- <slug> locally, then prefer stage_upload_url({ path }) and curl --upload-file <file> "$url" for new/rewritten paths when you have shell egress (bytes never re-enter the model). Fall back to stage_source_file({ path, content }) without shell. For edits prefer patch_source_file({ path, old, new }) — exact unique substring replace, no unified-diff arithmetic. Or patch_source_file({ path, patch }) with a unified diff (bare @@ ok). Stage only changed paths — never re-upload the whole tree. Then submit_sources({ fromStaged: true, mode: "preview", kitEngineRef }) — fromStaged overlays onto the latest delivery/seed and the server verifies it; no browser, npm ci, capture, playtest, or agency is required for this preview. If a browser is available near delivery, optionally run npm run check:game -- <slug> --preview. Run the full gate only immediately before a mode:"publish" seal. Inline files[] still works for tiny trees.',
@@ -1090,6 +1093,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     'read_kit_file',
     'read_kit_files',
     'read_kit_file_fragment',
+    'knowledge_query',
   ]);
 
   /**
@@ -2990,6 +2994,91 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         const body = res.json() as { error?: string; message?: string };
         if (res.statusCode !== 200) {
           return toolErr(body.message ?? body.error ?? `read_kit_file_fragment failed (${res.statusCode})`, body);
+        }
+        return toolOk(body);
+      },
+    },
+
+    knowledge_query: {
+      annotations: { title: 'Query GameKit/EditorKit/example-game knowledge', ...READS },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          mode: { type: 'string', enum: ['answer', 'chunks'] },
+          fallback: { type: 'boolean' },
+          answer: { type: 'string' },
+          chunks: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                repoPath: { type: 'string' },
+                corpus: { type: 'string' },
+                snippet: { type: 'string' },
+              },
+              required: ['repoPath', 'snippet'],
+            },
+          },
+          repoPaths: { type: 'array', items: { type: 'string' } },
+          indexedCommit: { type: 'string' },
+          guidance: { type: 'string' },
+          truncated: { type: 'boolean' },
+          cached: { type: 'boolean' },
+          ...WARNINGS_PROP,
+        },
+        required: ['mode', 'fallback', 'chunks', 'repoPaths', 'guidance', 'truncated', 'cached'],
+      },
+      description:
+        'Ask a natural-language question about GameKit, EditorKit, the allowlisted example games, or platform ' +
+        'docs/process — for capability and "how do I…" questions that get_kit_api and the kit browse tools do ' +
+        "not cover. Answers a question web search cannot: this platform's docs are not public. " +
+        'mode=answer (default) synthesizes prose with citations; it can fall back to raw chunks ' +
+        '(fallback:true) when no answer could be generated even though relevant content exists — treat that ' +
+        'the same as a normal chunks response. mode=chunks returns raw retrieved excerpts only, better for ' +
+        'grounding code generation in exact source. scope narrows retrieval: kit (GameKit API/modules), ' +
+        'editor (EditorKit), examples (allowlisted example games), docs (process/spec/skill docs). ' +
+        'Every response carries repoPaths and indexedCommit for attribution, and guidance to verify exact ' +
+        'current API signatures via get_kit_api / read_kit_file rather than trusting prose alone. ' +
+        'Prefer get_kit_api first for kit API surface questions. ' +
+        BEHAVIOURAL_CONTRACT,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          sessionKey: SESSION_KEY_PROP,
+          query: { type: 'string', description: 'Natural-language question (2–500 chars).' },
+          mode: {
+            type: 'string',
+            enum: ['chunks', 'answer'],
+            description: 'Default answer — better for explanation/Q&A. chunks for raw grounding excerpts.',
+          },
+          scope: {
+            type: 'string',
+            enum: ['kit', 'editor', 'examples', 'docs'],
+            description: 'Narrows retrieval; omit to search everything.',
+          },
+          engineRef: KIT_ENGINE_REF_PROP,
+        },
+        required: ['query'],
+      },
+      handler: async (args, ctx) => {
+        const auth = await resolveAuth(ctx, args);
+        if (!('channelToken' in auth)) return auth;
+        const query = typeof args.query === 'string' ? args.query.trim() : '';
+        if (!query) return toolErr('query is required');
+        const params = new URLSearchParams({ query });
+        if (args.mode === 'chunks' || args.mode === 'answer') params.set('mode', args.mode);
+        if (args.scope === 'kit' || args.scope === 'editor' || args.scope === 'examples' || args.scope === 'docs') {
+          params.set('scope', args.scope);
+        }
+        const res = await injectChannel(
+          ctx.request,
+          'GET',
+          `/api/agent/build/knowledge/query?${params.toString()}`,
+          auth.channelToken,
+        );
+        const body = res.json() as { error?: string; message?: string };
+        if (res.statusCode !== 200) {
+          return toolErr(body.message ?? body.error ?? `knowledge_query failed (${res.statusCode})`, body);
         }
         return toolOk(body);
       },

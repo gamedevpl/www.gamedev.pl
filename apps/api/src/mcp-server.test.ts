@@ -12,6 +12,7 @@ import { buildApp } from './app.js';
 import type { GamesStore } from './games-store.js';
 import type { GcsObjectStore } from './gcs-sign.js';
 import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './github-client.js';
+import type { KnowledgeQueryResult, QueryKnowledgeFn } from './knowledge-search.js';
 import { mintMcpSessionKey, verifyMcpSessionKey } from './mcp-session-key.js';
 import { MCP_UNADVERTISED_TOOLS } from './mcp-server.js';
 import { InMemoryStore } from './store.js';
@@ -150,6 +151,7 @@ async function createApp(
   objectStore?: GcsObjectStore,
   channelExtras?: {
     onSourcesDelivered?: (input: unknown) => Promise<{ buildId?: string; accepted?: boolean } | void> | void;
+    knowledgeSearch?: QueryKnowledgeFn;
   },
 ) {
   return await buildApp({
@@ -401,6 +403,7 @@ describe('POST /api/mcp (BY-05)', () => {
         'read_kit_file',
         'read_kit_files',
         'read_kit_file_fragment',
+        'knowledge_query',
       ]),
     );
     expect(names).not.toEqual(expect.arrayContaining(['list_examples', 'get_example']));
@@ -591,6 +594,46 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(structured.digest).toMatch(/GameKitApi/);
     expect(structured.digest).toMatch(/`party`/);
     expect(structured.digest).toMatch(/`zone`/);
+  });
+
+  it('knowledge_query is advertised and returns the seam result', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    const knowledgeResult: KnowledgeQueryResult = {
+      mode: 'answer',
+      fallback: false,
+      answer: 'The party module handles same-screen multiplayer.',
+      chunks: [{ repoPath: 'kits/current/shared/modules/party.d.ts', snippet: 'export interface PartyApi {}' }],
+      repoPaths: ['kits/current/shared/modules/party.d.ts'],
+      indexedCommit: 'commit-1',
+      guidance: 'Verify signatures via get_kit_api.',
+      truncated: false,
+      cached: false,
+      warnings: [],
+    };
+    const knowledgeSearch: QueryKnowledgeFn = async () => knowledgeResult;
+    app = await createApp(store, undefined, undefined, { knowledgeSearch });
+    const sessionId = await initialize(app);
+
+    const listed = await mcpCall(app, 'tools/list', {}, { 'mcp-session-id': sessionId });
+    const listedNames = (listed.json().result.tools as Array<{ name: string }>).map((t) => t.name);
+    expect(listedNames).toContain('knowledge_query');
+
+    const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    const result = await callTool(
+      app,
+      'knowledge_query',
+      { sessionKey, query: 'how do parties work', mode: 'answer', scope: 'kit' },
+      { 'mcp-session-id': sessionId },
+    );
+
+    expect(result.isError).toBe(false);
+    const structured = result.structured as KnowledgeQueryResult;
+    expect(structured.answer).toContain('party module');
+    expect(structured.repoPaths).toEqual(['kits/current/shared/modules/party.d.ts']);
+    expect(structured.indexedCommit).toBe('commit-1');
   });
 
   it('start issues a sessionKey; subsequent tools work with it', async () => {
@@ -2221,7 +2264,15 @@ describe('POST /api/mcp (BY-05)', () => {
       expect(tools.find((tool) => tool.name === name)?.annotations?.destructiveHint, name).toBe(false);
     }
 
-    const readers = ['get_brief', 'get_seed', 'get_kit', 'get_sources', 'list_staged_sources', 'read_inbox'];
+    const readers = [
+      'get_brief',
+      'get_seed',
+      'get_kit',
+      'get_sources',
+      'list_staged_sources',
+      'read_inbox',
+      'knowledge_query',
+    ];
     for (const name of readers) {
       expect(tools.find((tool) => tool.name === name)?.annotations?.readOnlyHint, name).toBe(true);
     }

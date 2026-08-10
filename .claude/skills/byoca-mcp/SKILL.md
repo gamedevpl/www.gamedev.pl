@@ -62,7 +62,9 @@ progress, staging/submission, gate media, inbox — and, since 2026-08-09, the k
 itself. Proposal and example browse/read tools remain callable for compatibility but
 are not advertised to models; kit browse/read tools (`list_kit_files`,
 `search_kit_files`, `read_kit_file`, `read_kit_files`, `read_kit_file_fragment`) now
-are, alongside a new `get_kit_api`.
+are, alongside a new `get_kit_api`, and — once the games-repo knowledge corpus and its
+Discovery Engine data store exist — `knowledge_query` for everything `get_kit_api`
+does not cover.
 
 **Trimming the surface is only half the job — the prose has to follow.** The channel names
 the kit browse tools in every `get_kit` reply, because a REST agent can call them by URL.
@@ -148,6 +150,35 @@ rather than growing past its reserve.
 `DEFAULT_KIT_DIGEST_MAX_BYTES` (the raw-stored-digest sanity ceiling, not a prompt budget)
 moved from 100,000 to 150,000 bytes: the stored digest was already at 99,552 bytes before
 the catalog addition, one small API growth from failing regardless.
+
+**`knowledge_query` — everything `get_kit_api` does not cover.** `get_kit_api` is the
+exact-signature reference for the Creator Kit's own API surface; it says nothing about
+EditorKit internals, how the allowlisted example games are actually put together, or
+platform docs/process, and a capability question that falls outside its digest previously
+had nowhere to go but a web search for gamedev.pl documentation that does not exist
+publicly — the same trap `get_kit_api` itself was built to close for the kit surface.
+`knowledge_query` (`GET /api/agent/build/knowledge/query`, `apps/api/src/agent-channel.ts`,
+backed by the Discovery Engine seam in `apps/api/src/knowledge-search.ts`) answers that
+gap over a corpus the games repo builds and republishes from GameKit/EditorKit source,
+the allowlisted examples, and process docs. `mode` defaults to `answer` (synthesized prose
+with citations, measured better for explanation/Q&A); `mode=chunks` returns raw retrieved
+excerpts only and is what server-internal callers like the seed generator use to avoid
+inventing API usage from paraphrased prose. `scope` (`kit` / `editor` / `examples` /
+`docs`) narrows retrieval to one slice of the corpus's `structData.corpus` taxonomy.
+Every response — answer or chunks — carries `repoPaths` and an `indexedCommit` for
+attribution, a `guidance` string pointing back at `get_kit_api` / `read_kit_file` for
+exact current signatures, and degrades rather than errors: an `:answer` call that comes
+back with Discovery Engine's "no answer could be generated" boilerplate — measured at
+roughly 1 in 10 queries for content that genuinely exists in the corpus — automatically
+falls back to raw chunks with `fallback:true`, and any upstream failure (timeout, 5xx, a
+malformed payload) degrades to a `warnings`-carrying result rather than ever throwing into
+a tool result or a hard error mid-round. A per-round soft cap (roughly 15 `answer` + 30
+`chunks` calls, split because an `answer` call costs several times a `chunks` call) also
+degrades to a warning rather than a hard 429. Shipped unadvertised first (present in the
+tool registry, absent from `MCP_VISIBLE_TOOLS`, so it stayed callable for tests and direct
+invocation while KQ-04 through KQ-08 proved out) and only added to `MCP_VISIBLE_TOOLS`
+once that seam, its cache, the channel route, and the tool handler were solid and tested —
+the same staged-rollout shape `get_kit_api` itself went through.
 
 ### A digest-sized tool result is not free — get_kit_api broke in production at 100 KiB
 
@@ -517,26 +548,27 @@ queued.
 
 ## Key code
 
-| Area                          | Path                                                                                                                                                                      |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| MCP tools                     | `apps/api/src/mcp-server.ts` (`screenshot_upload_url` / `stage_upload_url` → signed PUT; no base64 shot tool)                                                             |
-| Kit API digest (get_kit_api)  | `apps/api/src/kit-digest.ts` (`compactKitDigestForApi`, `splitDeclarationBlocks`, `selectApiBlocks`) + `GET /api/agent/build/kit/api` in `agent-channel.ts`               |
-| Engine modules catalog        | games repo `tools/lib/pack-kit.ts` (`digestEngineModules`) — generated from `shared/modules/*.ts` header comments, not hand-maintained                                    |
-| Upload tokens                 | `apps/api/src/agent-upload-token.ts` + `POST …/shot/upload-url` + `PUT …/shot/upload` + `PUT …/sources/stage/upload`                                                      |
-| Presence pulses               | `apps/api/src/mcp-presence.ts` (`start` → `joining_round` in the MCP dispatcher)                                                                                          |
-| Gate milestones               | `apps/api/src/gate-progress.ts` + `GamesStore.putGateProgress` (GCS; Studio/MCP poll while checks run)                                                                    |
-| Gate verdict (shared)         | `apps/api/src/gate-verdict.ts` — `readGateVerdict` / `deriveGateStatusString`, used by the channel's `/api/agent/build/gate` route and by `start`'s reconnect visibility  |
-| Preview-gate reconciliation   | `apps/api/src/submissions.ts` (`reconcileGateVerdict`) — red `previewGate` → `needs_changes`/`gate_red`; green preview never promotes                                     |
-| GAME.json staging shape check | `apps/api/src/game-manifest-hint.ts` (`gameManifestHint`) — wired into the stage/patch routes in `agent-channel.ts`                                                       |
-| Account-session invalidation  | `apps/api/src/agent-session-revocation.ts`                                                                                                                                |
-| Channel (`POST …/end`, …)     | `apps/api/src/agent-channel.ts`                                                                                                                                           |
-| Stall / `ended`               | `apps/api/src/job-state.ts` (`detectStall`)                                                                                                                               |
-| Handoff gate                  | `apps/api/src/builder.ts` (`allowsCreatorBuilderHandoff`)                                                                                                                 |
-| Live staged preview           | `apps/api/src/staged-preview.ts`                                                                                                                                          |
-| Studio live-preview frame     | `apps/web/src/StudioLivePreview.tsx`                                                                                                                                      |
-| Studio status poll cadence    | `apps/web/src/studioStatusPoll.ts` (tight poll on `ended` / `quiet` / `no_agent_yet` / `dispatched`)                                                                      |
-| Feedback / resume             | `apps/api/src/submissions.ts`                                                                                                                                             |
-| Studio copy / builder choice  | `apps/web/src/selfBuildCopy.ts`, `BuilderModeBadge.tsx`, `SubmissionStatusView.tsx` (sticky badge + Change modal at round boundaries; full two-up stays in create wizard) |
+| Area                               | Path                                                                                                                                                                      |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| MCP tools                          | `apps/api/src/mcp-server.ts` (`screenshot_upload_url` / `stage_upload_url` → signed PUT; no base64 shot tool)                                                             |
+| Kit API digest (get_kit_api)       | `apps/api/src/kit-digest.ts` (`compactKitDigestForApi`, `splitDeclarationBlocks`, `selectApiBlocks`) + `GET /api/agent/build/kit/api` in `agent-channel.ts`               |
+| Knowledge query (Discovery Engine) | `apps/api/src/knowledge-search.ts` (the one Discovery Engine seam) + `GET /api/agent/build/knowledge/query` in `agent-channel.ts` + `knowledge_query` in `mcp-server.ts`  |
+| Engine modules catalog             | games repo `tools/lib/pack-kit.ts` (`digestEngineModules`) — generated from `shared/modules/*.ts` header comments, not hand-maintained                                    |
+| Upload tokens                      | `apps/api/src/agent-upload-token.ts` + `POST …/shot/upload-url` + `PUT …/shot/upload` + `PUT …/sources/stage/upload`                                                      |
+| Presence pulses                    | `apps/api/src/mcp-presence.ts` (`start` → `joining_round` in the MCP dispatcher)                                                                                          |
+| Gate milestones                    | `apps/api/src/gate-progress.ts` + `GamesStore.putGateProgress` (GCS; Studio/MCP poll while checks run)                                                                    |
+| Gate verdict (shared)              | `apps/api/src/gate-verdict.ts` — `readGateVerdict` / `deriveGateStatusString`, used by the channel's `/api/agent/build/gate` route and by `start`'s reconnect visibility  |
+| Preview-gate reconciliation        | `apps/api/src/submissions.ts` (`reconcileGateVerdict`) — red `previewGate` → `needs_changes`/`gate_red`; green preview never promotes                                     |
+| GAME.json staging shape check      | `apps/api/src/game-manifest-hint.ts` (`gameManifestHint`) — wired into the stage/patch routes in `agent-channel.ts`                                                       |
+| Account-session invalidation       | `apps/api/src/agent-session-revocation.ts`                                                                                                                                |
+| Channel (`POST …/end`, …)          | `apps/api/src/agent-channel.ts`                                                                                                                                           |
+| Stall / `ended`                    | `apps/api/src/job-state.ts` (`detectStall`)                                                                                                                               |
+| Handoff gate                       | `apps/api/src/builder.ts` (`allowsCreatorBuilderHandoff`)                                                                                                                 |
+| Live staged preview                | `apps/api/src/staged-preview.ts`                                                                                                                                          |
+| Studio live-preview frame          | `apps/web/src/StudioLivePreview.tsx`                                                                                                                                      |
+| Studio status poll cadence         | `apps/web/src/studioStatusPoll.ts` (tight poll on `ended` / `quiet` / `no_agent_yet` / `dispatched`)                                                                      |
+| Feedback / resume                  | `apps/api/src/submissions.ts`                                                                                                                                             |
+| Studio copy / builder choice       | `apps/web/src/selfBuildCopy.ts`, `BuilderModeBadge.tsx`, `SubmissionStatusView.tsx` (sticky badge + Change modal at round boundaries; full two-up stays in create wizard) |
 
 ## Safety invariant (unchanged)
 
