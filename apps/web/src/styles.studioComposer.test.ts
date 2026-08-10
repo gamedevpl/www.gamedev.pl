@@ -35,3 +35,16 @@ describe('studio compact composer empty state', () => {
     expect(card).toMatch(/cursor:\s*text/);
   });
 });
+
+describe('escape hatch mobile touch target', () => {
+  it('grows the escape hatch to the same 44px floor as send on phones', () => {
+    const marker =
+      '.status-composer.is-compact .status-composer-send,\n  .status-composer.is-compact .status-composer-escape {';
+    const start = css.indexOf(marker);
+    expect(start, 'escape hatch is not sized alongside send in the mobile rule').toBeGreaterThan(-1);
+    const end = css.indexOf('}', start);
+    const body = css.slice(start + marker.length, end);
+    expect(body).toMatch(/width:\s*44px/);
+    expect(body).toMatch(/height:\s*44px/);
+  });
+});

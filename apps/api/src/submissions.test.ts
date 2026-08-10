@@ -14,7 +14,7 @@ import type { GamesStore } from './games-store.js';
 import { DELIVERY_GATE_VERDICT_MSG } from './delivery-metrics.js';
 import { JOB_ID_FLOOR } from './store.js';
 import { createManagedAvailabilityGate, type ManagedAvailabilityGate } from './managed-availability.js';
-import type { StudioChatAgent } from './chat-agent.js';
+import type { ChatAgentRequest, StudioChatAgent } from './chat-agent.js';
 import type { ChatGate } from './creation-limits.js';
 
 const secret = 'submission-secret';
@@ -3133,6 +3133,52 @@ describe('the Studio mini chat agent (feedback route)', () => {
     await app.close();
   });
 
+  it('passes recent build events oldest-first, though the store returns them newest-first', async () => {
+    process.env.STUDIO_CHAT_AGENT = 'true';
+    const { backend } = createBackendStub();
+    let seenEvents: string[] = [];
+    const decide = vi.fn(async (request: ChatAgentRequest) => {
+      seenEvents = request.status.recentEvents;
+      return { kind: 'reply' as const, text: 'a reply' };
+    });
+    const { app, authHeaders, store } = await createApp({
+      githubClient: createGithubClientStub({ issueNumber: 90 }).githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      chatAgent: { decide },
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about a garden full of robots.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+
+    await store.appendBuildEvent(job.issueNumber, {
+      kind: 'step',
+      text: 'Sketching the level layout.',
+      createdAt: '2026-08-01T00:00:00.000Z',
+    });
+    await store.appendBuildEvent(job.issueNumber, {
+      kind: 'step',
+      text: 'Fixed the jump bug.',
+      createdAt: '2026-08-01T00:05:00.000Z',
+    });
+
+    const token = mintToken(job.issueNumber, secret);
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${token}/feedback`,
+      headers: authHeaders,
+      payload: { feedback: 'what changed recently?' },
+    });
+    expect(res.statusCode).toBe(200);
+    // Chronological, oldest first — matching what describeStatus tells the model.
+    expect(seenEvents).toEqual(['Sketching the level layout.', 'Fixed the jump bug.']);
+    await app.close();
+  });
+
   it('fails open to the pre-existing path when the model errors', async () => {
     process.env.STUDIO_CHAT_AGENT = 'true';
     const { backend } = createBackendStub();
@@ -3433,6 +3479,9 @@ describe('the Studio mini chat agent (feedback route)', () => {
     expect(res.statusCode).toBe(200);
     const pending = await store.listPendingCreatorMessages(job.issueNumber);
     expect(pending.map((m) => m.text)).toContain('is it done yet?');
+    // The fallback below must not queue a second, duplicate copy.
+    const all = await store.listCreatorMessages(job.issueNumber);
+    expect(all.filter((m) => m.text === 'is it done yet?')).toHaveLength(1);
     await app.close();
   });
 });
@@ -3705,6 +3754,9 @@ describe('POST /api/submissions/:token/improve', () => {
       expect(res.json()).toMatchObject({ ok: true, slug: 'sky-dodge' });
       expect(briefs).toHaveLength(1);
       expect(briefs.at(-1)!.feedback).toContain('is it done yet?');
+      // No duplicate left behind on the old, published job.
+      const onOldJob = await store.listCreatorMessages(123);
+      expect(onOldJob.filter((m) => m.text === 'is it done yet?')).toHaveLength(1);
       await app.close();
     });
   });

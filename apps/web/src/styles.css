@@ -6282,7 +6282,8 @@ a.user-name--profile:focus-visible {
 /* Square again where every button gets a 44px floor for fingers — with a fixed width and
    a floored height it would have come out an oval. */
 @media (max-width: 768px) {
-  .status-composer.is-compact .status-composer-send {
+  .status-composer.is-compact .status-composer-send,
+  .status-composer.is-compact .status-composer-escape {
     width: 44px;
     height: 44px;
   }

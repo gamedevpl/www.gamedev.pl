@@ -1436,7 +1436,11 @@ export async function registerSubmissionRoutes(
       hasDelivered: Boolean(record.deliveredVersion),
       ...(scope === 'improve' ? { isPublished: Boolean(record.publishedAt) } : {}),
       pendingCount: pending.length,
-      recentEvents: events.filter((event) => !isMcpPresenceEventText(event.text)).map((event) => event.text),
+      // listBuildEvents is newest-first; describeStatus labels these oldest-first.
+      recentEvents: events
+        .filter((event) => !isMcpPresenceEventText(event.text))
+        .map((event) => event.text)
+        .reverse(),
       minutesSinceLastSignal: record.lastAgentSignalAt
         ? Math.max(0, Math.round((now() - Date.parse(record.lastAgentSignalAt)) / 60_000))
         : null,
@@ -3902,6 +3906,8 @@ export async function registerSubmissionRoutes(
       }
       // Fronts the message (chat-agent.ts); null takes this route unchanged.
       let studioAckText: string | undefined;
+      // Guards the fallback queuing step below against a duplicate write.
+      let creatorMessageQueued = false;
       if (record) {
         const chatOutcome = await runChatAgent({
           issueNumber,
@@ -3915,12 +3921,14 @@ export async function registerSubmissionRoutes(
         });
         if (chatOutcome?.kind === 'replied' && store) {
           try {
-            // Pre-delivered: on the thread, but never handed to a builder.
-            await store.appendCreatorMessage(issueNumber, inboxText, { delivered: true });
+            // Marked delivered once the reply lands too — see markCreatorMessagesDelivered below.
+            const creatorMessage = await store.appendCreatorMessage(issueNumber, inboxText);
+            creatorMessageQueued = true;
             await store.appendCreatorMessage(issueNumber, chatOutcome.replyText, {
               origin: 'studio',
               delivered: true,
             });
+            await store.markCreatorMessagesDelivered(issueNumber, [creatorMessage.id]);
             invalidateStatusCache(issueNumber);
             return reply.send({ ok: true, ...(shotId ? { shotId } : {}) });
           } catch (queueError) {
@@ -3935,20 +3943,20 @@ export async function registerSubmissionRoutes(
       // hung upstream used to hold this handler open with the creator's words still only
       // in the request body — so a timed-out send lost the note. The inbox is the durable
       // copy; the dispatch is the head start.
-      let queued = false;
-      if (store) {
+      let queued = creatorMessageQueued;
+      if (store && !creatorMessageQueued) {
         try {
           await store.appendCreatorMessage(issueNumber, inboxText);
           queued = true;
-          // Optional ack, after the creator's own message so order stays honest.
-          if (studioAckText) {
-            await store
-              .appendCreatorMessage(issueNumber, studioAckText, { origin: 'studio', delivered: true })
-              .catch(() => {});
-          }
         } catch (queueError) {
           request.log.error({ err: queueError }, 'failed to queue feedback for the agent');
         }
+      }
+      if (store && queued && studioAckText) {
+        // Optional ack, after the creator's own message so order stays honest.
+        await store
+          .appendCreatorMessage(issueNumber, studioAckText, { origin: 'studio', delivered: true })
+          .catch(() => {});
       }
 
       // An in-flight round that already has a dispatch ref steers via the inbox (every
@@ -4138,8 +4146,10 @@ export async function registerSubmissionRoutes(
       });
       if (chatOutcome?.kind === 'replied') {
         try {
-          await store.appendCreatorMessage(issueNumber, inboxText, { delivered: true });
+          // Avoids an orphaned "delivered" copy if the reply write below fails.
+          const creatorMessage = await store.appendCreatorMessage(issueNumber, inboxText);
           await store.appendCreatorMessage(issueNumber, chatOutcome.replyText, { origin: 'studio', delivered: true });
+          await store.markCreatorMessagesDelivered(issueNumber, [creatorMessage.id]);
           invalidateStatusCache(issueNumber);
           return reply.send({ ok: true, ...(shotId ? { shotId } : {}) });
         } catch (queueError) {
