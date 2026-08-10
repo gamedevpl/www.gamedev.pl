@@ -174,7 +174,7 @@
     "apps/api/src/mcp-presence.ts": 224,
     "apps/api/src/mcp-server-discovery.test.ts": 90,
     "apps/api/src/mcp-server-discovery.ts": 316,
-    "apps/api/src/mcp-server.test.ts": 1533,
+    "apps/api/src/mcp-server.test.ts": 1585,
     "apps/api/src/mcp-server.ts": 4535,
     "apps/api/src/mcp-session-key.ts": 287,
     "apps/api/src/mcp-session-nudges.test.ts": 17,

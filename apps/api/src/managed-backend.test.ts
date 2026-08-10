@@ -605,7 +605,7 @@ describe('managed backend', () => {
   it('ends a round blocked on tool confirmation instead of leaving Studio on building', async () => {
     const sendMessage = vi.fn(async () => undefined);
     const warn = vi.fn();
-    const { provider, setState, setStopReason } = fakeProvider({ sendMessage });
+    const { provider, setState, setStopReason } = fakeProvider({ promptLane: 'mcp', sendMessage });
     const backend = createManagedBackend({
       provider,
       tools: { mcpEndpoints: [{ url: 'https://example.test/api/mcp', name: 'gamedevpl' }] },
@@ -633,7 +633,7 @@ describe('managed backend', () => {
         'anthropic managed agents /v1/sessions/x/events failed: 400 only user.tool_confirmation events are allowed',
       );
     });
-    const { provider, setState } = fakeProvider({ sendMessage });
+    const { provider, setState } = fakeProvider({ promptLane: 'mcp', sendMessage });
     const backend = createManagedBackend({
       provider,
       tools: { mcpEndpoints: [{ url: 'https://example.test/api/mcp', name: 'gamedevpl' }] },
@@ -652,7 +652,7 @@ describe('managed backend', () => {
 
   it('does not spend a nudged idle round that delivered a preview between polls', async () => {
     const sendMessage = vi.fn(async () => undefined);
-    const { provider, setState } = fakeProvider({ sendMessage });
+    const { provider, setState } = fakeProvider({ promptLane: 'mcp', sendMessage });
     const signals: { previewVersion?: string } = {};
     const backend = createManagedBackend({
       provider,
