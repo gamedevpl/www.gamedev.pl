@@ -40,7 +40,7 @@
     "esbuild": "0.25.12",
     "fastify": "^5.10.0",
     "fastify-rate-limit": "npm:@fastify/rate-limit@^11.1.0",
-    "genaicode": "git+https://github.com/gtanczyk/genaicode.git#claude/brawl-stars-unspecced-w1brh3",
+    "genaicode": "^2.3.0",
     "google-auth-library": "^10.9.0",
     "jose": "^6.2.4",
     "pngjs": "^7.0.0",
