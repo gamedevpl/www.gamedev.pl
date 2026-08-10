@@ -201,10 +201,7 @@ const FeedbackRequestSchema = z.object({
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const MAX_CREATOR_SHOT_BYTES = 300 * 1024;
-// A creator-forced handoff (`stopActivePlatformAgent` / `stopActiveSelfAgent`) waits for
-// the currently active agent to call MCP `end` and acknowledge the stop. If that agent is
-// gone or wedged, nothing ever acks and the Studio UI would wait forever — the sweep below
-// force-acknowledges a request that's sat this long unanswered.
+// Max wait for a handoff ack before the sweep forces it.
 const HANDOFF_ACK_STALL_MS = 10 * 60 * 1000;
 
 /** Fenced playtest context block + optional stored screenshot id for agent fetch. */
@@ -1307,15 +1304,7 @@ export async function registerSubmissionRoutes(
     }
   }
 
-  /**
-   * Acknowledges a pending builder handoff and starts the target builder's round.
-   *
-   * Shared by the agent's own MCP `end` call (the happy path: the outgoing agent hits a
-   * checkpoint and acks its own stop) and the sweep's stale-handoff fallback below (the
-   * outgoing agent never acks — gone, crashed, or wedged — so the sweep acks on its
-   * behalf rather than leaving the creator staring at a "waiting for the agent" spinner
-   * forever).
-   */
+  // Acks a pending handoff and starts the target builder.
   async function acknowledgeBuilderHandoff(input: {
     issueNumber: number;
     acknowledgedAt: string;
@@ -4346,10 +4335,7 @@ export async function registerSubmissionRoutes(
             continue;
           }
 
-          // A creator-forced builder handoff waits for the outgoing agent to ack via MCP
-          // `end`. If that agent is gone or wedged, the ack never arrives and Studio would
-          // show "waiting for the current agent" forever — force it through once it's sat
-          // unanswered past the stall window.
+          // Stale handoff ack: outgoing agent may be gone.
           if (
             record.builderHandoff &&
             record.builderHandoff.awaitsAgentAck !== false &&

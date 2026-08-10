@@ -841,7 +841,7 @@ describe('self builder (BY-02)', () => {
   });
 
   it('force-acknowledges a builder handoff nobody ever acked once it goes stale', async () => {
-    const { backend, briefs } = platformStub();
+    const { backend } = platformStub();
     const { gamesStore } = stubGamesStore();
     const opened = Date.parse('2026-08-01T00:00:00Z');
     let clock = opened;
@@ -879,8 +879,7 @@ describe('self builder (BY-02)', () => {
     expect(handoff.json()).toMatchObject({ pending: true, target: 'self' });
     expect((await store.getSubmission(issueNumber))?.builderHandoff?.to).toBe('self');
 
-    // The platform agent that was supposed to ack via MCP `end` never does — crashed,
-    // wedged, gone. A sweep just past the stall window must not still be waiting on it.
+    // The platform agent never acks via MCP `end` — crashed or wedged.
     clock = opened + 9 * 60 * 1000;
     const tooSoon = await app.inject({
       method: 'POST',
