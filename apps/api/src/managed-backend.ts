@@ -13,10 +13,12 @@ import {
   selectManagedOutputs,
   type ManagedAgentEffort,
   type ManagedAgentProvider,
+  type ManagedBudgetStop,
   type ManagedOutputCaps,
   type ManagedOutputFile,
   type ManagedOutputPlan,
   type ManagedMcpBearerCredential,
+  type ManagedUsageBudget,
   type ManagedToolAccess,
 } from './managed-agent.js';
 
@@ -91,6 +93,7 @@ export interface ManagedBackendOptions {
   outputPath?: string;
   effort?: ManagedAgentEffort;
   maxDurationSeconds?: number;
+  budget?: ManagedUsageBudget;
   outputCaps?: ManagedOutputCaps;
   tools?: ManagedToolAccess;
   mcpBearerCredential?: (brief: BuildBrief) => ManagedMcpBearerCredential | undefined;
@@ -119,17 +122,20 @@ export function isUnnudgeableManagedIdleError(error: unknown): boolean {
 
 export function createManagedBackend(options: ManagedBackendOptions): AgentBackend {
   const deliver = options.deliver;
-  if (!deliver && !options.tools?.mcpEndpoints?.length) {
-    throw new ManagedAgentError(
-      'a managed backend needs either a delivery sink or an MCP endpoint the agent can submit through',
-    );
+  const promptLane = options.provider.promptLane;
+  const channelMode = promptLane === 'mcp' || promptLane === 'harness';
+  if (promptLane === 'outputs' && !deliver) {
+    throw new ManagedAgentError('a managed backend needs either a delivery sink or an MCP endpoint');
+  }
+  if (promptLane === 'mcp' && !options.tools?.mcpEndpoints?.length) {
+    throw new ManagedAgentError('the MCP prompt lane needs an MCP endpoint');
   }
   const outputPath = options.outputPath ?? DEFAULT_MANAGED_OUTPUT_PATH;
   const deliveryMode = options.deliveryMode ?? 'preview';
-  const channelMode = Boolean(options.tools?.mcpEndpoints?.length);
   const backendName = `managed:${options.provider.vendor}`;
   // At-most-once per session; a re-poll cannot duplicate.
   const harvested = new Set<string>();
+  const budgetStops = new Map<string, ManagedBudgetStop>();
   const startedAt = new Map<string, number>();
   const idleNudged = new Set<string>();
   const sessionGenerations = new Map<string, number>();
@@ -176,7 +182,9 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
       prompt: buildPrompt(
         brief,
         channelMode
-          ? { kind: 'channel', fast: true }
+          ? promptLane === 'mcp'
+            ? { kind: 'channel', fast: true }
+            : { kind: 'channel' }
           : deliver
             ? { kind: 'outputs', path: outputPath }
             : { kind: 'channel', fast: true },
@@ -215,7 +223,11 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
         'managed round credential minted',
       );
     }
-    return { ref: session.id, ...(session.credentialRef ? { credentialRef: session.credentialRef } : {}) };
+    return {
+      ref: session.id,
+      ...(session.workspace ? { workspace: session.workspace } : {}),
+      ...(session.credentialRef ? { credentialRef: session.credentialRef } : {}),
+    };
   }
 
   // `pending` means ask again, so the round is not spent.
@@ -314,6 +326,53 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
       const session = await options.provider.getSession(ref);
       if (!session) return null;
 
+      const usage = session.usage;
+      const usageFields = usage
+        ? usage.unit === 'tokens'
+          ? {
+              sessionTokens: { input: usage.inputTokens, output: usage.outputTokens },
+              sessionUsage: usage,
+            }
+          : { sessionCredits: usage.credits, sessionUsage: usage }
+        : {};
+      const stopped = budgetStops.get(ref);
+      if (stopped) {
+        return {
+          state: 'cancelled',
+          hasCandidate: observeOptions.hasCandidate,
+          stopReason: 'budget_reached',
+          budgetStop: stopped,
+          ...(session.workspace ? { workspace: session.workspace } : {}),
+          ...usageFields,
+        };
+      }
+
+      const observedBudget =
+        options.budget?.unit === 'credits' && usage?.unit === 'credits' ? usage.credits : undefined;
+      if (observedBudget !== undefined && observedBudget > options.budget!.max) {
+        const cancellation = await options.provider.cancelSession(ref);
+        const budgetStop: ManagedBudgetStop = {
+          unit: options.budget!.unit,
+          observed: observedBudget,
+          max: options.budget!.max,
+          enforced: cancellation.enforced,
+        };
+        budgetStops.set(ref, budgetStop);
+        await releaseCredential(ref, observeOptions.issueNumber);
+        options.log?.warn(
+          { ref, observed: observedBudget, max: options.budget!.max, enforced: cancellation.enforced },
+          'managed round stopped at its usage budget',
+        );
+        return {
+          state: 'cancelled',
+          hasCandidate: observeOptions.hasCandidate,
+          stopReason: 'budget_reached',
+          budgetStop,
+          ...(session.workspace ? { workspace: session.workspace } : {}),
+          ...usageFields,
+        };
+      }
+
       const started = startedAt.get(ref) ?? (session.startedAt ? Date.parse(session.startedAt) : NaN);
       const expired =
         options.maxDurationSeconds !== undefined &&
@@ -326,9 +385,8 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
         return {
           state: 'timed_out',
           hasCandidate: observeOptions.hasCandidate,
-          ...(session.usage
-            ? { sessionTokens: { input: session.usage.inputTokens, output: session.usage.outputTokens } }
-            : {}),
+          ...(session.workspace ? { workspace: session.workspace } : {}),
+          ...usageFields,
         };
       }
 
@@ -432,9 +490,8 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
       return {
         state,
         hasCandidate,
-        ...(session.usage
-          ? { sessionTokens: { input: session.usage.inputTokens, output: session.usage.outputTokens } }
-          : {}),
+        ...(session.workspace ? { workspace: session.workspace } : {}),
+        ...usageFields,
       };
     },
 
@@ -453,10 +510,12 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
       idleNudged.delete(previous.ref);
       harvested.delete(previous.ref);
       sessionGenerations.delete(previous.ref);
+      budgetStops.delete(previous.ref);
       if (previous.credentialRef) credentialRefs.set(previous.ref, previous.credentialRef);
       await releaseCredential(previous.ref);
       credentialRefs.delete(previous.ref);
       sessionJobs.delete(previous.ref);
+      if (previous.workspace) await options.provider.deleteWorkspace?.(previous.workspace);
       await options.provider.deleteSession?.(previous.ref);
     },
   };

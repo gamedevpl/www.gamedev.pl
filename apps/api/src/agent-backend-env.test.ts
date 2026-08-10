@@ -10,7 +10,12 @@ const ENV_KEYS = [
   'MANAGED_AGENT_MAX_SECONDS',
   'MANAGED_AGENT_MAX_LIST_COST_CENTS',
   'MANAGED_AGENT_MCP_URL',
+  'MANAGED_AGENT_COPILOT_MAX_CREDITS',
   'AGENT_TASKS_TOKEN',
+  'AGENT_TASKS_MODEL',
+  'GAMES_REPO',
+  'GAMES_PUBLISHED_REF',
+  'AGENT_CUSTOM_AGENT',
 ] as const;
 
 describe('createAgentBackendRegistryFromEnv', () => {
@@ -75,5 +80,24 @@ describe('createAgentBackendRegistryFromEnv', () => {
     });
     const registry = createAgentBackendRegistryFromEnv({ info: vi.fn(), warn: vi.fn() });
     expect(registry.platform?.name).toBe('managed:anthropic');
+  });
+
+  it('builds Copilot from its own token and model configuration', () => {
+    setEnv({
+      MANAGED_AGENT_VENDOR: 'copilot',
+      AGENT_TASKS_TOKEN: 'ghp_managed_copilot',
+      AGENT_TASKS_MODEL: undefined,
+      MANAGED_AGENT_COPILOT_MAX_CREDITS: '25',
+    });
+    const info = vi.fn();
+    const registry = createAgentBackendRegistryFromEnv({ info, warn: vi.fn() }, undefined, {
+      deliver: async () => ({ version: 'v1' }),
+    });
+
+    expect(registry.platform?.name).toBe('managed:copilot');
+    expect(info).toHaveBeenCalledWith(
+      expect.objectContaining({ vendor: 'copilot', model: 'claude-sonnet-4.6' }),
+      'managed agent dispatch enabled',
+    );
   });
 });

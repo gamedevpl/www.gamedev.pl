@@ -13,6 +13,7 @@ import {
   type ManagedSession,
 } from '../src/managed-agent.js';
 import '../src/managed-provider-anthropic.js';
+import '../src/managed-provider-copilot.js';
 import { createManagedBackend, type ManagedDeliveryInput } from '../src/managed-backend.js';
 import { createFileKitDigestLoader } from '../src/kit-digest.js';
 
@@ -33,11 +34,13 @@ const apiBaseUrl = (value('base-url') ?? 'https://api.anthropic.com').replace(/\
 const wait = flag('wait');
 const waitSeconds = Number(value('wait-seconds') ?? process.env.MANAGED_AGENT_MAX_SECONDS ?? '');
 const budgetUsd = Number(value('budget-usd') ?? process.env.MANAGED_AGENT_MAX_LIST_BUDGET_USD ?? '');
+const budgetCredits = Number(value('budget-credits') ?? process.env.MANAGED_AGENT_COPILOT_MAX_CREDITS ?? '');
 const vaultIds = (process.env.MANAGED_AGENT_VAULT_IDS ?? process.env.MANAGED_AGENT_VAULT_ID)
   ?.split(',')
   .map((id) => id.trim())
   .filter(Boolean);
 const mcpOnly = flag('mcp');
+const vendor = value('vendor');
 const mcpUrl = (value('mcp-url') ?? process.env.MANAGED_AGENT_MCP_URL ?? 'https://www.gamedev.pl/api/mcp').replace(
   /\/$/,
   '',
@@ -56,6 +59,10 @@ if (mcpOnly && (!Number.isSafeInteger(ISSUE) || ISSUE <= 0)) {
 }
 if (mcpOnly && (!Number.isSafeInteger(roundGeneration) || roundGeneration < 1)) {
   console.error('--round-generation must be a positive integer');
+  process.exit(1);
+}
+if (vendor === 'copilot' && (mcpOnly || flag('override-tools') || args.includes('--mcp-url'))) {
+  console.error('Copilot uses the harness prompt lane; MCP-lane flags are not valid for --vendor copilot');
   process.exit(1);
 }
 
@@ -97,6 +104,7 @@ function stubProvider(): ManagedAgentProvider {
   return {
     vendor: 'stub',
     model: 'stub-model',
+    promptLane: 'outputs',
     async startSession(request) {
       rule('startSession');
       console.log(`model            ${request.model}`);
@@ -122,7 +130,13 @@ function stubProvider(): ManagedAgentProvider {
         id: 'stub-session-1',
         state: polls === 1 ? 'in_progress' : 'idle',
         vendorState: polls === 1 ? 'running' : 'status_idle',
-        usage: { inputTokens: 1_240_000, outputTokens: 18_400, model: 'stub-model' },
+        usage: {
+          unit: 'tokens',
+          vendor: 'stub',
+          inputTokens: 1_240_000,
+          outputTokens: 18_400,
+          model: 'stub-model',
+        },
       };
     },
     async listOutputs(): Promise<ManagedOutputRef[]> {
@@ -148,18 +162,34 @@ function stubProvider(): ManagedAgentProvider {
   };
 }
 
-const vendor = value('vendor');
 const apiKey =
   process.env.MANAGED_AGENT_API_KEY?.trim() ??
-  (vendor === 'anthropic' ? process.env.ANTHROPIC_API_KEY?.trim() : undefined);
+  (vendor === 'anthropic'
+    ? process.env.ANTHROPIC_API_KEY?.trim()
+    : vendor === 'copilot'
+      ? process.env.AGENT_TASKS_TOKEN?.trim()
+      : undefined);
 const model =
-  value('model') ?? process.env.MANAGED_AGENT_MODEL?.trim() ?? (vendor === 'anthropic' ? 'claude-sonnet-5' : undefined);
+  value('model') ??
+  (vendor === 'copilot' ? process.env.AGENT_TASKS_MODEL?.trim() : process.env.MANAGED_AGENT_MODEL?.trim()) ??
+  (vendor === 'anthropic' ? 'claude-sonnet-5' : vendor === 'copilot' ? 'claude-sonnet-4.6' : undefined);
 if (vendor && (!apiKey || !model)) {
   console.error(`--vendor ${vendor} needs an API key and model`);
   process.exit(1);
 }
-if (wait && (!Number.isInteger(waitSeconds) || waitSeconds <= 0 || !Number.isFinite(budgetUsd) || budgetUsd <= 0)) {
-  console.error('--wait requires positive --wait-seconds and --budget-usd values');
+if (
+  wait &&
+  (!Number.isInteger(waitSeconds) ||
+    waitSeconds <= 0 ||
+    (vendor === 'copilot'
+      ? !Number.isFinite(budgetCredits) || budgetCredits <= 0
+      : !Number.isFinite(budgetUsd) || budgetUsd <= 0))
+) {
+  console.error(
+    vendor === 'copilot'
+      ? '--wait requires positive --wait-seconds and --budget-credits values'
+      : '--wait requires positive --wait-seconds and --budget-usd values',
+  );
   process.exit(1);
 }
 // MCP rounds override the Agent tool list, like production.
@@ -168,6 +198,14 @@ const provider = vendor
   ? createManagedProvider(vendor, {
       apiKey: apiKey!,
       model: model!,
+      ...(vendor === 'copilot'
+        ? {
+            repo: process.env.GAMES_REPO?.trim() ?? 'gamedevpl/www.gamedev.pl-games',
+            baseRef: process.env.GAMES_PUBLISHED_REF?.trim() || 'main',
+            customAgent: process.env.AGENT_CUSTOM_AGENT?.trim() || 'game-builder',
+            createPullRequest: false,
+          }
+        : {}),
       ...(process.env.MANAGED_AGENT_ID ? { agentId: process.env.MANAGED_AGENT_ID.trim() } : {}),
       ...(process.env.MANAGED_AGENT_ENVIRONMENT_ID
         ? { environmentId: process.env.MANAGED_AGENT_ENVIRONMENT_ID.trim() }
@@ -206,6 +244,9 @@ const backend = createManagedBackend({
   ...(manifest?.agent?.system ? { systemPrompt: async () => manifest.agent!.system } : {}),
   ...(digestPath ? { kitDigest: createFileKitDigestLoader(digestPath) } : {}),
   ...(wait ? { maxDurationSeconds: waitSeconds } : {}),
+  ...(vendor === 'copilot' && Number.isFinite(budgetCredits) && budgetCredits > 0
+    ? { budget: { unit: 'credits' as const, max: budgetCredits } }
+    : {}),
   // The probe cannot see MCP deliveries, so nudging would mislead.
   ...(mcpOnly && !flag('nudge') ? { nudgeIdle: false } : {}),
 });
@@ -232,6 +273,7 @@ if (mcpOnly && vendor === 'anthropic' && !dispatch.credentialRef) {
 }
 
 const pollCount = wait ? Math.ceil((waitSeconds * 1000) / 5000) + 1 : 2;
+const timeline: Array<{ at: string; state: string; candidate: boolean }> = [];
 for (let attempt = 1; attempt <= pollCount; attempt += 1) {
   if (attempt > 1) await new Promise((resolve) => setTimeout(resolve, 5000));
   rule(`observe #${attempt}`);
@@ -241,13 +283,23 @@ for (let attempt = 1; attempt <= pollCount; attempt += 1) {
     slug: SLUG,
     roundGeneration,
   });
-  console.log(observation ?? '(vendor has forgotten this session)');
+  if (observation) {
+    const entry = { at: new Date().toISOString(), state: observation.state, candidate: observation.hasCandidate };
+    timeline.push(entry);
+    console.log(`${entry.at}  ${entry.state}  candidate=${entry.candidate}`);
+    console.log(observation);
+  } else {
+    console.log('(vendor has forgotten this session)');
+  }
   if (
     observation &&
     (observation.hasCandidate || ['idle', 'failed', 'timed_out', 'cancelled'].includes(observation.state))
   )
     break;
 }
+
+rule('state-transition timeline');
+for (const entry of timeline) console.log(`${entry.at}  ${entry.state}  candidate=${entry.candidate}`);
 
 rule('what the platform would store');
 if (delivered.length === 0) {

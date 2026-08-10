@@ -23,7 +23,7 @@ describe('anthropic managed provider', () => {
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
     expect(await provider.getSession('sess_0')).toMatchObject({
-      usage: { inputTokens: 0, outputTokens: 0 },
+      usage: { unit: 'tokens', vendor: 'anthropic', inputTokens: 0, outputTokens: 0 },
     });
   });
 
@@ -195,7 +195,7 @@ describe('anthropic managed provider', () => {
     expect(session).toMatchObject({
       state: 'completed',
       vendorState: 'completed',
-      usage: { inputTokens: 1_050, outputTokens: 25, model: 'test-model' },
+      usage: { unit: 'tokens', vendor: 'anthropic', inputTokens: 1_050, outputTokens: 25, model: 'test-model' },
     });
   });
 

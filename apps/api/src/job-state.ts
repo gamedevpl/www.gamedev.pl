@@ -12,6 +12,7 @@
 // reconciler sweep, and the operator surface alike.
 
 import type { AgentTaskState } from './agent-state.js';
+import type { ManagedBudgetStop, ManagedSessionUsage } from './managed-agent.js';
 import type { SubmissionStatus } from './submission-status.js';
 
 /**
@@ -341,6 +342,9 @@ export interface AgentObservation {
   sessionCredits?: number;
   // Tokens, for token-billed backends; not convertible to credits.
   sessionTokens?: { input: number; output: number };
+  sessionUsage?: ManagedSessionUsage;
+  stopReason?: string;
+  budgetStop?: ManagedBudgetStop;
 }
 
 export interface ReconcileResult {
@@ -385,7 +389,7 @@ export function reconcileAgentObservation(current: JobState, observation: AgentO
       case 'timed_out':
         return { to: 'failed', reason: 'task_timed_out' };
       case 'cancelled':
-        return { to: 'canceled', reason: 'task_cancelled' };
+        return { to: 'canceled', reason: observation.stopReason ?? 'task_cancelled' };
     }
   })();
 

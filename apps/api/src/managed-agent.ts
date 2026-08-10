@@ -4,6 +4,8 @@ import type { AgentTaskState } from './agent-state.js';
 // Coarse reasoning budget; vendors name it differently.
 export type ManagedAgentEffort = 'low' | 'medium' | 'high';
 
+export type ManagedPromptLane = 'mcp' | 'harness' | 'outputs';
+
 export interface ManagedWorkspaceFile {
   path: string;
   content: string;
@@ -22,20 +24,40 @@ export interface ManagedOutputRef {
   handle?: string;
 }
 
-// Tokens: the only unit every vendor reports.
 export interface ManagedTokenUsage {
+  unit: 'tokens';
+  vendor: string;
   inputTokens: number;
   outputTokens: number;
   model?: string;
+}
+
+export interface ManagedCreditUsage {
+  unit: 'credits';
+  vendor: string;
+  credits: number;
+  model?: string;
+}
+
+export type ManagedSessionUsage = ManagedTokenUsage | ManagedCreditUsage;
+
+export type ManagedUsageBudget = { unit: 'credits'; max: number } | { unit: 'cents'; max: number };
+
+export interface ManagedBudgetStop {
+  unit: ManagedUsageBudget['unit'];
+  observed: number;
+  max: number;
+  enforced: boolean;
 }
 
 export interface ManagedSession {
   id: string;
   state: AgentTaskState;
   credentialRef?: string;
+  workspace?: string;
   // The vendor's own word, kept for operator views.
   vendorState?: string;
-  usage?: ManagedTokenUsage;
+  usage?: ManagedSessionUsage;
   startedAt?: string;
   endedAt?: string;
   stopReason?: string;
@@ -71,6 +93,7 @@ export interface ManagedSessionRequest {
 export interface ManagedAgentProvider {
   readonly vendor: string;
   readonly model: string;
+  readonly promptLane: ManagedPromptLane;
   startSession(request: ManagedSessionRequest): Promise<ManagedSession>;
   getSession(sessionId: string): Promise<ManagedSession | null>;
   // Paths are relative to the request's outputPath.
@@ -80,6 +103,7 @@ export interface ManagedAgentProvider {
   sendMessage?(sessionId: string, message: string): Promise<void>;
   cancelSession(sessionId: string): Promise<{ enforced: boolean }>;
   deleteSession?(sessionId: string): Promise<void>;
+  deleteWorkspace?(workspace: string): Promise<void>;
   releaseCredential?(credentialRef: string): Promise<void>;
 }
 
@@ -263,6 +287,10 @@ export function selectManagedOutputs(refs: readonly ManagedOutputRef[], slug: st
 export interface ManagedProviderConfig {
   apiKey: string;
   model: string;
+  repo?: string;
+  baseRef?: string;
+  customAgent?: string;
+  createPullRequest?: boolean;
   agentId?: string;
   environmentId?: string;
   maxListCostCents?: number;
