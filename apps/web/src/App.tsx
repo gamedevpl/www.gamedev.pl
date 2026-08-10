@@ -567,13 +567,7 @@ export function App() {
     const trimmedConcept = concept.trim();
     if (!trimmedConcept) return;
 
-    // Circuit breaker: the refiner and the submission route both reject anything
-    // shorter than this, but the refiner call is fail-open (an outage must not block
-    // creation) — so a too-short concept used to fail that check silently, sail through
-    // the whole naming/QA wizard with zero questions asked, and only surface the raw
-    // "concept must be at least 30 characters" error on the final "Create now". Catching
-    // it here means the creator sees "tell us more" once, immediately, in the box they
-    // are already looking at — not as a dead end three screens later.
+    // Catch a too-short concept before the fail-open refiner would.
     if (trimmedConcept.length < MIN_CONCEPT_LENGTH) {
       setSubmissionError(t('errors.conceptTooShort', { minLength: MIN_CONCEPT_LENGTH }));
       return;

@@ -231,10 +231,7 @@ describe('VertexSpecRefiner over a genaicode client', () => {
     });
   }
 
-  // The grounding call is a real, separate client — without a stub here it would hit
-  // real GCP on every test in this file. 'NONE' is what the grounder is told to reply
-  // with when the concept does not clearly name a real game, so this is what an absent
-  // (rather than failing) grounder looks like.
+  // 'NONE' is what an absent (not failing) grounder replies with.
   const noGroundingClient = stubClient('NONE');
   function makeRefiner(options: ConstructorParameters<typeof VertexSpecRefiner>[0]) {
     return new VertexSpecRefiner({ groundingClient: noGroundingClient, ...options });

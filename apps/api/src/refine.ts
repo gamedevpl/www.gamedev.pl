@@ -68,9 +68,6 @@ export interface VertexSpecRefinerOptions {
   refinerFetcher?: (params: RefineParams) => Promise<RefineResponse>;
   // Lower-level seam than `refinerFetcher` — see VertexCheckerOptions.client.
   client?: GenAIClient;
-  // Separate from `client`: the grounding call needs its own client (it carries the
-  // googleSearch tool, which cannot share a client with the structured-JSON one), so
-  // tests need their own seam for it too rather than reusing `client`.
   groundingClient?: GenAIClient;
 }
 
@@ -81,14 +78,6 @@ export interface VertexSpecRefinerOptions {
 // never rendered a question. Env-tunable so the ceiling can move without a deploy.
 export const DEFAULT_REFINE_TIMEOUT_MS = 20_000;
 
-/**
- * The refiner used to read only the words the creator typed — it had no way to know
- * that "Brawl Stars Clone" names a real game with a specific genre and mechanics, so
- * it asked generic questions (or none) instead of ones grounded in what that game
- * actually is. This is its own short, separate budget: it runs before the main call
- * and adds to total latency, so it stays small and — like the main call — fails open
- * to no context rather than delaying or blocking refinement.
- */
 export const DEFAULT_GROUNDING_TIMEOUT_MS = 6_000;
 
 /**
@@ -148,9 +137,6 @@ export class VertexSpecRefiner implements SpecRefiner {
   private refinerFetcher?: (params: RefineParams) => Promise<RefineResponse>;
   // Lazy for the same reason as VertexChecker: building one must not touch GCP.
   private client?: GenAIClient;
-  // Separate from `client`: it carries the googleSearch tool, which the Vertex API does
-  // not accept alongside the structured-JSON response mode the main call relies on —
-  // two clients, not one config toggled per call.
   private groundingClient?: GenAIClient;
 
   constructor(options: VertexSpecRefinerOptions = {}) {
@@ -199,13 +185,7 @@ export class VertexSpecRefiner implements SpecRefiner {
     return this.groundingClient;
   }
 
-  /**
-   * A short factual note on the real game the concept names, or '' when it does not
-   * clearly name one (or the lookup fails/times out — fail-open, same as `refine`
-   * itself). Best-effort grounding, not a fact-check: the model still writes its own
-   * questions, this just stops it guessing at genre conventions for a franchise it
-   * would otherwise only know by name.
-   */
+  // Fail-open, same as `refine`.
   private async groundConcept(concept: string, languageName: string): Promise<string> {
     try {
       const groundingPrompt = `You are a fact-lookup tool, not a game designer. The idea below may reference a specific real, already-existing game or franchise by name — directly, or as "a clone of X", "like X", "X but Y", or similar. It may also be a wholly original idea in the creator's own words with no such reference.
