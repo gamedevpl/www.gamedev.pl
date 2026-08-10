@@ -166,7 +166,7 @@ describe('CreatorStudioView publish→improve handoff', () => {
       });
 
       // Terminal published thread: no connect card of its own.
-      expect(container.querySelector('.studio-build')).not.toBeNull();
+      expect(container.querySelector('.studio-thread')).not.toBeNull();
       expect(container.querySelector('.studio-connect')).toBeNull();
 
       const box = container.querySelector<HTMLTextAreaElement>('.status-feedback-input');
@@ -198,6 +198,12 @@ describe('CreatorStudioView publish→improve handoff', () => {
 
       // Play must follow the handoff token too — otherwise pause-feedback would
       // call submitImprovement on the published job and open a second concurrent round.
+      // The stage is a posture now, not a separate panel with its own fetch: it is
+      // always mounted on whichever token the thread is on, so what proves the handoff
+      // followed is that its status poll reads the new job's token continuously, not
+      // the published shelf token, once the handoff has happened.
+      expect(mockedGetSubmissionStatus).toHaveBeenCalledWith('new-self-job');
+      mockedGetSubmissionStatus.mockClear();
       await act(async () => {
         const playTab = Array.from(container.querySelectorAll('.studio-head-action.is-primary')).find(Boolean);
         expect(playTab).toBeTruthy();
@@ -205,9 +211,7 @@ describe('CreatorStudioView publish→improve handoff', () => {
         await flushEffects();
         await flushEffects();
       });
-      // Unpublished preview path uses the new job's token (not the published slug fetch).
-      const { getSubmissionPreview } = await import('./submissionApi.js');
-      expect(vi.mocked(getSubmissionPreview)).toHaveBeenCalledWith('new-self-job');
+      expect(mockedGetSubmissionStatus).not.toHaveBeenCalledWith('pub-self-shelf');
 
       // Back to thread, then Details → Media must poll the handoff job — not the
       // published shelf token — or toast shots from the new round are missing.

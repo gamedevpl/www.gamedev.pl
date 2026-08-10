@@ -14,6 +14,11 @@ type GameFrameProps = GameFrameSource & {
   // When shown in the app's game player, inject the bridge that hides the game's
   // own title/description/sound chrome and relays sound control to the header.
   embed?: boolean;
+  /** Skip stealing keyboard focus on load/srcDoc swap, and drop the frame out of the
+   * tab order. Defaults to true. Studio's watch posture sets this false: the frame is
+   * already pointer-inert there, and a build landing mid-poll must not yank focus out
+   * of whatever the creator is typing into. */
+  autoFocus?: boolean;
 };
 
 /**
@@ -52,8 +57,11 @@ export function GameFrame(props: GameFrameProps) {
     if (props.embed) srcDoc = embedGameHtml(srcDoc);
   }
 
+  const autoFocus = props.autoFocus ?? true;
+
   // Hand keyboard focus to the game so arrow keys / WASD work without a click first.
   const focusGame = useCallback(() => {
+    if (!autoFocus) return;
     const frame = iframeRef.current;
     if (!frame) return;
     frame.focus();
@@ -62,7 +70,7 @@ export function GameFrame(props: GameFrameProps) {
     // takes it back. `focus()` is one of the few methods callable across an opaque
     // origin, so this works under sandbox="allow-scripts allow-pointer-lock".
     frame.contentWindow?.focus();
-  }, [iframeRef]);
+  }, [iframeRef, autoFocus]);
 
   useEffect(() => {
     // Backstop for the cases the load event doesn't cover — a document that had
@@ -86,7 +94,7 @@ export function GameFrame(props: GameFrameProps) {
       // Parent-side backstop for the iOS callout when the long-press hits the iframe
       // chrome rather than a node inside the opaque-origin document.
       onContextMenu={(event) => event.preventDefault()}
-      tabIndex={0}
+      tabIndex={autoFocus ? 0 : -1}
       width="100%"
       height="100%"
     />

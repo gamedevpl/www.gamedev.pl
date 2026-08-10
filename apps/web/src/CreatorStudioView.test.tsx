@@ -302,13 +302,13 @@ describe('CreatorStudioView', () => {
     root.unmount();
   });
 
-  it('closes the shelf on Escape while in playtest tab without exiting playtest', async () => {
+  it('closes the shelf on Escape while playing without exiting play posture', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
     authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
     fetchStudioGames.mockResolvedValue(studioShelf(manyGames(6)));
 
-    const { container, root } = await renderStudio({ selectedGame: 'game-2', selectedTab: 'playtest' });
+    const { container, root } = await renderStudio({ selectedGame: 'game-2', selectedPosture: 'play' });
 
     const openShelf = container.querySelector('.studio-shelf-open');
     expect(openShelf).toBeTruthy();
@@ -432,10 +432,59 @@ describe('CreatorStudioView', () => {
     });
 
     expect(onNavigate).toHaveBeenCalledWith('/studio/token-0/details');
-    // Beside the thread, not instead of it: opening the facts about a game must not
-    // take the game off the screen.
+    // A layer over the stage, not instead of it: opening the facts about a game must
+    // not take the game off the screen (the ground-state rule).
     expect(container.querySelector('.studio-rail')).not.toBeNull();
-    expect(container.querySelector('.studio-build')).not.toBeNull();
+    expect(container.querySelector('.studio-stage')).not.toBeNull();
+
+    root.unmount();
+  });
+
+  it('the ground-state rule: every surface that covers the stage offers a way back to it', async () => {
+    // A state with no exit should fail here, not reach a bug report — see
+    // docs/studio-game-first-implementation-plan.md Workstream F.
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
+    fetchStudioGames.mockResolvedValue(studioShelf(manyGames(2)));
+    window.history.replaceState(null, '', '/studio/token-0');
+
+    const { container, root } = await renderStudio({ selectedGame: 'token-0' });
+
+    // Nothing covers the stage yet: no full-bleed control is needed.
+    expect(container.querySelector('.studio-fullbleed')).toBeNull();
+
+    const detailsAction = Array.from(container.querySelectorAll('.studio-head-action')).find((button) =>
+      button.textContent?.includes('Details'),
+    );
+    await act(async () => {
+      detailsAction!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    // Details covers the stage: the way back appears, and it works.
+    const fullBleed = container.querySelector<HTMLButtonElement>('.studio-fullbleed');
+    expect(fullBleed).not.toBeNull();
+    await act(async () => {
+      fullBleed!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(container.querySelector('.studio-rail')).toBeNull();
+    expect(container.querySelector('.studio-fullbleed')).toBeNull();
+    expect(container.querySelector('.studio-stage')).not.toBeNull();
+
+    // The shelf drawer also covers the stage on a narrow screen, and also has the exit.
+    const shelfOpen = container.querySelector<HTMLButtonElement>('.studio-shelf-open');
+    await act(async () => {
+      shelfOpen!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(container.querySelector('.studio-layout')?.classList.contains('is-shelf-open')).toBe(true);
+    expect(container.querySelector('.studio-fullbleed')).not.toBeNull();
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('.studio-fullbleed')!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(container.querySelector('.studio-layout')?.classList.contains('is-shelf-open')).toBe(false);
+    expect(container.querySelector('.studio-stage')).not.toBeNull();
 
     root.unmount();
   });
@@ -496,7 +545,7 @@ describe('CreatorStudioView', () => {
 
     const { container, root, rerender } = await renderStudio({ selectedGame: 'tv-tycoon' });
 
-    const actions = Array.from(container.querySelector('.studio-head-actions')?.children ?? []);
+    const actions = Array.from(container.querySelector('.studio-strip-actions')?.children ?? []);
     const play = actions.findIndex((node) => node instanceof HTMLElement && node.classList.contains('is-play'));
     const shareWrap = container.querySelector('.studio-head-share');
     const details = actions.findIndex(
@@ -507,7 +556,8 @@ describe('CreatorStudioView', () => {
     );
     expect(shareWrap).not.toBeNull();
     expect(play).toBeGreaterThanOrEqual(0);
-    expect(actions.indexOf(shareWrap!)).toBe(play + 1);
+    // Play, then "open in theater", then share.
+    expect(actions.indexOf(shareWrap!)).toBe(play + 2);
     expect(details).toBe(actions.indexOf(shareWrap!) + 1);
 
     const shareBtn = container.querySelector<HTMLButtonElement>('[data-testid="studio-head-share"]');
@@ -551,30 +601,31 @@ describe('CreatorStudioView', () => {
     root.unmount();
   });
 
-  it('lets Play toggle back to the thread when already open', async () => {
+  it('lets Play toggle back to watch posture when already playing', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
     authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
     fetchStudioGames.mockResolvedValue(studioShelf(manyGames(2)));
     window.history.replaceState(null, '', '/studio/token-0/playtest');
 
-    const { container, root, onNavigate } = await renderStudio({
+    // Play is a posture of the always-mounted stage now, not a tab — the old
+    // `/playtest` deep link carries its meaning through `selectedPosture` instead.
+    const { container, root } = await renderStudio({
       selectedGame: 'token-0',
-      selectedTab: 'playtest',
+      selectedPosture: 'play',
     });
 
     const play = Array.from(container.querySelectorAll('.studio-head-action')).find((button) =>
       button.classList.contains('is-primary'),
     );
     expect(play?.getAttribute('aria-pressed')).toBe('true');
-    expect(container.querySelector('.studio-playtest')).not.toBeNull();
-    expect(container.querySelector('.studio-build')).toBeNull();
+    expect(container.querySelector('.studio-stage')?.classList.contains('is-play')).toBe(true);
 
     await act(async () => {
       play!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
-    expect(onNavigate).toHaveBeenCalledWith('/studio/token-0/thread');
+    expect(container.querySelector('.studio-stage')?.classList.contains('is-watch')).toBe(true);
 
     root.unmount();
   });
@@ -959,7 +1010,7 @@ describe('CreatorStudioView', () => {
 
     const { container, root } = await renderStudio({ selectedGame: 'game-2' });
 
-    expect(container.querySelector('.studio-detail-title-block h2')?.textContent).toContain('Game 2');
+    expect(container.querySelector('.studio-strip-title')?.textContent).toContain('Game 2');
     expect(fetchStudioGames).toHaveBeenCalledWith('game-2');
 
     root.unmount();
@@ -977,7 +1028,7 @@ describe('CreatorStudioView', () => {
     const { container, root, onNavigate } = await renderStudio({ selectedGame: 'token-1' });
 
     // It still opens the right game…
-    expect(container.querySelector('.studio-detail-title-block h2')?.textContent).toContain('Game 2');
+    expect(container.querySelector('.studio-strip-title')?.textContent).toContain('Game 2');
     // …and leaves a readable URL behind it, taking the capability out of history. In
     // place, so the old address does not become an entry to go Back through.
     expect(onNavigate).toHaveBeenCalledWith('/studio/game-2/thread', { replace: true });
@@ -1558,7 +1609,7 @@ describe('CreatorStudioView abandon', () => {
     expect(onNavigate).toHaveBeenCalledWith('/studio');
     // Detail pane must render, not a blank main area.
     expect(container.querySelector('.studio-detail')).not.toBeNull();
-    expect(container.querySelector('.studio-detail-title-block h2')?.textContent).toContain('Other Game');
+    expect(container.querySelector('.studio-strip-title')?.textContent).toContain('Other Game');
     expect(container.querySelector('.studio-abandon-notice')?.textContent).toContain('Neon Draft');
 
     const dismiss = container.querySelector<HTMLButtonElement>('.studio-abandon-notice__close');
@@ -1610,7 +1661,7 @@ describe('CreatorStudioView abandon', () => {
 
     expect(onNavigate).toHaveBeenCalledWith('/studio');
     expect(container.querySelector('.studio-abandon-notice')?.textContent).toContain('Neon Draft');
-    expect(container.querySelector('.studio-detail-title-block h2')?.textContent).toContain('Other Game');
+    expect(container.querySelector('.studio-strip-title')?.textContent).toContain('Other Game');
 
     root.unmount();
   });
@@ -1699,7 +1750,7 @@ describe('CreatorStudioView abandon', () => {
 
     expect(onNavigate).not.toHaveBeenCalledWith('/studio');
     expect(onNavigate).toHaveBeenLastCalledWith('/studio/third-game/details', { replace: true });
-    expect(container.querySelector('.studio-detail-title-block h2')?.textContent).toContain('Third Game');
+    expect(container.querySelector('.studio-strip-title')?.textContent).toContain('Third Game');
 
     root.unmount();
   });

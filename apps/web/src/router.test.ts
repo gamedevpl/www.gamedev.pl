@@ -119,7 +119,14 @@ describe('parsePathRoute', () => {
       game: 'abc/token',
       tab: 'thread',
     });
-    expect(parsePathRoute('/studio/tok/playtest')).toEqual({ view: 'studio', game: 'tok', tab: 'playtest' });
+    // Play is a posture of the stage now, not a place — `/playtest` still resolves,
+    // onto the thread tab with `posture: 'play'` carrying the old meaning forward.
+    expect(parsePathRoute('/studio/tok/playtest')).toEqual({
+      view: 'studio',
+      game: 'tok',
+      tab: 'thread',
+      posture: 'play',
+    });
     expect(parsePathRoute('/studio/tok/nope')).toEqual({ view: 'notFound' });
     // The stubbed feedback surface is gone from the UI, so its path is gone too —
     // otherwise a deep link resolves to a tab with nothing to render.
@@ -256,6 +263,12 @@ describe('path builders', () => {
     // An old tab name is not the current address for the surface that absorbed it.
     expect(canonicalPath('/studio/tv-tycoon/build')).toBe('/studio/tv-tycoon/thread');
     expect(canonicalPath('/studio/tv-tycoon/stats')).toBe('/studio/tv-tycoon/details');
+    // `/playtest` must NOT be eagerly rewritten: `readLocationRoute` in App.tsx runs
+    // this before React ever mounts, and an eager rewrite here drops the `posture:
+    // 'play'` deep link before CreatorStudioView gets a chance to read it (caught by
+    // hand-testing in a real browser, not by the component-level tests, which pass
+    // `selectedPosture` directly and never exercise this canonicalization step).
+    expect(canonicalPath('/studio/tv-tycoon/playtest')).toBeNull();
     expect(canonicalPath('/nightshift/neon-courier/board')).toBe('/nightshift/neon-courier');
     expect(canonicalPath('/nightshift/neon-courier/review')).toBe('/nightshift/neon-courier');
     expect(canonicalPath('/nightshift/neon-courier/releases')).toBe('/nightshift/neon-courier');
@@ -322,12 +335,13 @@ describe('path builders', () => {
       ['improve', 'thread'],
       ['overview', 'details'],
       ['stats', 'details'],
-      ['playtest', 'playtest'],
+      ['playtest', 'thread'],
     ] as const) {
       expect(parsePathRoute(`/studio/tv-tycoon/${old}`)).toEqual({
         view: 'studio',
         game: 'tv-tycoon',
         tab: surface,
+        ...(old === 'playtest' ? { posture: 'play' } : {}),
       });
     }
     // Still a 404 for a segment that never named anything.
@@ -367,7 +381,7 @@ describe('navUpTarget', () => {
     expect(navUpTarget({ view: 'home' })).toBeNull();
     expect(navUpTarget({ view: 'join', code: 'ABC123', token: 'tok' })).toBeNull();
     expect(navUpTarget({ view: 'play', slug: 'sky-dodge' })).toEqual({ path: '/', labelKey: 'upHome' });
-    expect(navUpTarget({ view: 'studio', game: 'tok', tab: 'playtest' })).toBeNull();
+    expect(navUpTarget({ view: 'studio', game: 'tok', tab: 'thread', posture: 'play' })).toBeNull();
   });
 
   it('walks studio game work surfaces to the shelf, then home', () => {

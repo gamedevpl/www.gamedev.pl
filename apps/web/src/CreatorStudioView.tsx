@@ -9,9 +9,17 @@ import { PixelIcon, type PixelIconName } from './PixelIcon.js';
 import { formatRelativeTime } from './relativeTime.js';
 import { playPath, studioPath, type StudioTab } from './router.js';
 import { abandonSubmission, handoffToPlatform } from './submissionApi.js';
-import { StudioPlaytestPanel } from './StudioPlaytestPanel.js';
 import { StudioShotToasts } from './StudioShotToasts.js';
 import { EditorPanel } from './EditorPanel.js';
+import { StudioStage, type StagePosture, type StageStatus } from './StudioStage.js';
+import { StudioStrip } from './StudioStrip.js';
+import { StudioVersionRibbon } from './StudioVersionRibbon.js';
+import { StudioChatRail } from './StudioChatRail.js';
+import { StudioStageCard } from './StudioStageCard.js';
+import { StudioFullBleed } from './StudioFullBleed.js';
+import { useStageSource, type StageOrigin } from './useStageSource.js';
+import { useStudioStatusPoll, defaultRailOpen } from './useStudioStatusPoll.js';
+import { GameTheater } from './GameTheater.js';
 import {
   collapseStudioGames,
   filterStudioGames,
@@ -100,6 +108,8 @@ type CreatorStudioViewProps = {
   selectedGame?: string;
   /** Deep-link into a work-surface tab when present. */
   selectedTab?: StudioTab;
+  /** Deep-link that carries `/playtest`'s old meaning: open with play posture engaged. */
+  selectedPosture?: 'play';
   onNavigate: (path: string, options?: NavigateOptions) => void;
   onPlay: (slug: string) => void;
   /** Loads a failed/abandoned concept back into the home hero prompt. */
@@ -167,6 +177,7 @@ function healthFor(game: StudioGame, rows: GameHealth[]): GameHealth | null {
 export function CreatorStudioView({
   selectedGame,
   selectedTab,
+  selectedPosture,
   onNavigate,
   onPlay,
   onRetryConcept,
@@ -356,6 +367,66 @@ export function CreatorStudioView({
     };
   }, [activeGame, handoffToken]);
   const playtestPublished = Boolean(playtestGame && isStudioGamePublished(playtestGame) && !handoffToken);
+
+  // The stage: always mounted, whether or not the creator asked to see it (the
+  // game-first inversion's core claim — see docs/studio-game-first-implementation-plan.md).
+  const stageToken = playtestGame?.token ?? null;
+  const [posture, setPosture] = useState<StagePosture>('watch');
+  // Captured once at mount, never updated: the URL-canonicalization effect below
+  // rewrites `/playtest` onto its posture-free canonical form as soon as the game
+  // resolves, which would otherwise race the reset effect and drop the deep link's
+  // play posture before it ever applied.
+  const initialSelectedPostureRef = useRef(selectedPosture);
+  const firstStageTokenAppliedRef = useRef(false);
+  const studioStatus = useStudioStatusPoll(stageToken);
+  const stageSource = useStageSource(stageToken ?? '', studioStatus);
+  const [stageStatus, setStageStatus] = useState<StageStatus>({ kind: 'empty' });
+  // What the ribbon should describe — the *displayed* document's origin, reported back
+  // by the stage. Distinct from `stageSource.origin` (the latest fetched one) while a
+  // swap is held during play: the ribbon must not claim a not-yet-applied build's
+  // provenance for whatever's actually running.
+  const [displayedOrigin, setDisplayedOrigin] = useState<StageOrigin>(stageSource.origin);
+  const [newerStageWaiting, setNewerStageWaiting] = useState(false);
+  const [checklistUnread, setChecklistUnread] = useState(0);
+  const [railManualOpen, setRailManualOpen] = useState<boolean | null>(null);
+  const railOpen = railManualOpen ?? defaultRailOpen(studioStatus);
+  // Distinct from `railOpen`: true only while the transcript body is actually visible.
+  // The phone sheet can be `open` yet collapsed to its `peek` detent, showing just a
+  // one-line preview — reported back by StudioChatRail so unread accounting below
+  // doesn't treat peeking as having read what scrolled by.
+  const [railVisiblyOpen, setRailVisiblyOpen] = useState(railOpen);
+  const seenActivityRef = useRef(0);
+  const latestActivityRef = useRef<string | null>(null);
+  // The site's full `GameTheater` (fullscreen, share, report) — a heavier surface than
+  // the stage's own play posture, opened deliberately rather than in place of it.
+  const [theaterOpen, setTheaterOpen] = useState(false);
+  // GameTheater documents that callers own page scroll-locking; SubmissionStatusView's
+  // own copy of this effect is keyed to its own `playing` state and does not see this one.
+  useEffect(() => {
+    if (!theaterOpen) return;
+    document.body.classList.add('player-open');
+    return () => document.body.classList.remove('player-open');
+  }, [theaterOpen]);
+
+  // A game switch starts every per-game bit of stage state fresh. The very first
+  // resolution applies the deep link's posture (if any); every later switch — the
+  // creator picking a different game — always starts back in watch.
+  useEffect(() => {
+    if (!stageToken) return;
+    if (!firstStageTokenAppliedRef.current) {
+      firstStageTokenAppliedRef.current = true;
+      setPosture(initialSelectedPostureRef.current === 'play' ? 'play' : 'watch');
+    } else {
+      setPosture('watch');
+    }
+    setStageStatus({ kind: 'empty' });
+    setNewerStageWaiting(false);
+    setChecklistUnread(0);
+    setRailManualOpen(null);
+    setTheaterOpen(false);
+    seenActivityRef.current = 0;
+    latestActivityRef.current = null;
+  }, [stageToken]);
   const selectedHealth = activeGame ? healthFor(activeGame, healthRows) : null;
   const selectedScorecard = activeGame?.slug
     ? (scorecards.find((card) => card.slug === activeGame.slug) ?? null)
@@ -560,7 +631,7 @@ export function CreatorStudioView({
   return (
     <StudioCreatorProfileProvider>
       <section
-        className={`studio-panel${tab === 'playtest' ? ' is-playtesting' : ''}${activeGame ? ' is-focused' : ''}`}
+        className={`studio-panel${posture === 'play' ? ' is-playtesting' : ''}${activeGame ? ' is-focused' : ''}`}
       >
         <header className="studio-panel-header">
           <div>
@@ -715,106 +786,66 @@ export function CreatorStudioView({
 
             {activeGame ? (
               <div className="studio-detail">
-                <div className="studio-detail-head">
-                  <button
-                    type="button"
-                    className="studio-shelf-open"
-                    ref={shelfOpenRef}
-                    onClick={() => setShelfOpen(true)}
-                    aria-expanded={shelfOpen}
-                    aria-label={t('studioPanel.shelf.openShelf')}
-                  >
-                    <PixelIcon name="folder" size={12} />
-                    <span className="studio-shelf-open-label">{t('studioPanel.shelf.openShelf')}</span>
-                  </button>
-                  <div className="studio-detail-title-row">
-                    <div className="studio-detail-title-block">
-                      <h2>{activeGame.title}</h2>
-                      {activeGame.slug ? <code className="studio-slug">{activeGame.slug}</code> : null}
-                    </div>
-                    {/* Actions, not tabs. A tab strip across the work surface says the
-                      surfaces are peers; the thread is not a peer of the panel listing
-                      when the game was made. These open things beside it and leave it
-                      where it is. */}
-                    <div className="studio-head-actions">
-                      {/* Rendered only for games whose delivered version ships an editor
-                        definition (EditorKit) — for every other game this row is
-                        byte-for-byte what it always was. */}
-                      {tabAvailable(activeGame, 'edit') ? (
-                        <button
-                          type="button"
-                          className={`studio-head-action is-icon-only${tab === 'edit' ? ' is-active' : ''}`}
-                          aria-pressed={tab === 'edit'}
-                          aria-label={t('studioPanel.tabs.edit')}
-                          onClick={() => openTab(tab === 'edit' ? 'thread' : 'edit')}
-                        >
-                          <PixelIcon name="pencil" size={12} />{' '}
-                          <span className="studio-head-action-label">{t('studioPanel.tabs.edit')}</span>
-                        </button>
-                      ) : null}
-                      {/* Claude-shaped cluster: one primary Play verb, icon-only peers for
-                        Edit / Details (side panel). Labels stay in the DOM for AT. */}
-                      {!user?.handle &&
-                      (activeGame.lastKnownStatus === 'in_review' || activeGame.lastKnownStatus === 'publishing') ? (
-                        <button
-                          type="button"
-                          className="studio-head-action is-icon-only studio-head-action--claim"
-                          onClick={() => setClaimOpen(true)}
-                          aria-label={t('creatorProfile.publishGateTitle')}
-                        >
-                          <PixelIcon name="sparkle" size={12} />{' '}
-                          <span className="studio-head-action-label">{t('creatorProfile.publishGateTitle')}</span>
-                        </button>
-                      ) : null}
-                      {/* One primary Play verb — opens the playtest theater. Pause lives
-                        inside that theater (pause-and-note), not in this chrome. */}
+                {(() => {
+                  const covered = shelfOpen || tab === 'details' || tab === 'edit';
+                  const canClaim = Boolean(
+                    !user?.handle &&
+                    (activeGame.lastKnownStatus === 'in_review' || activeGame.lastKnownStatus === 'publishing'),
+                  );
+                  const backToFullBleed = () => {
+                    if (shelfOpen) closeShelf({ restoreFocus: shelfIsDrawer });
+                    if (tab !== 'thread') openTab('thread');
+                  };
+                  const shareSlot = canShare ? (
+                    <div className="studio-head-share">
                       <button
                         type="button"
-                        className={`studio-head-action is-primary is-play${tab === 'playtest' ? ' is-active' : ''}`}
-                        aria-pressed={tab === 'playtest'}
-                        onClick={() => openTab(tab === 'playtest' ? 'thread' : 'playtest')}
+                        className={`studio-head-action is-icon-only${shareMenuOpen ? ' is-active' : ''}`}
+                        aria-pressed={shareMenuOpen}
+                        aria-expanded={shareMenuOpen}
+                        aria-label={shareTitle}
+                        data-testid="studio-head-share"
+                        onClick={() => setShareMenuOpen((open) => !open)}
                       >
-                        <PixelIcon name="play" size={14} />{' '}
-                        <span className="studio-head-action-label">{t('studioPanel.tabs.playtest')}</span>
+                        <PixelIcon name="share" size={14} />{' '}
+                        <span className="studio-head-action-label">{shareTitle}</span>
                       </button>
-                      {canShare && activeGame ? (
-                        <div className="studio-head-share">
-                          <button
-                            type="button"
-                            className={`studio-head-action is-icon-only${shareMenuOpen ? ' is-active' : ''}`}
-                            aria-pressed={shareMenuOpen}
-                            aria-expanded={shareMenuOpen}
-                            aria-label={shareTitle}
-                            data-testid="studio-head-share"
-                            onClick={() => setShareMenuOpen((open) => !open)}
-                          >
-                            <PixelIcon name="share" size={14} />{' '}
-                            <span className="studio-head-action-label">{shareTitle}</span>
-                          </button>
-                          {shareMenuOpen ? (
-                            <div className="studio-head-share-popover" role="dialog" aria-label={shareTitle}>
-                              <DraftShareControl
-                                game={activeGame}
-                                compact
-                                live={shareIsLive}
-                                onSharedChange={(shared) => {
-                                  setGames((prev) =>
-                                    prev.map((game) =>
-                                      game.token === activeGame.token ? { ...game, draftShared: shared } : game,
-                                    ),
-                                  );
-                                }}
-                              />
-                            </div>
-                          ) : null}
+                      {shareMenuOpen ? (
+                        <div className="studio-head-share-popover" role="dialog" aria-label={shareTitle}>
+                          <DraftShareControl
+                            game={activeGame}
+                            compact
+                            live={shareIsLive}
+                            onSharedChange={(shared) => {
+                              setGames((prev) =>
+                                prev.map((game) =>
+                                  game.token === activeGame.token ? { ...game, draftShared: shared } : game,
+                                ),
+                              );
+                            }}
+                          />
                         </div>
                       ) : null}
-                      <button
-                        type="button"
-                        className={`studio-head-action is-icon-only${tab === 'details' ? ' is-active' : ''}`}
-                        aria-pressed={tab === 'details'}
-                        aria-label={t('studioPanel.tabs.details')}
-                        onClick={() => {
+                    </div>
+                  ) : null;
+
+                  return (
+                    <>
+                      <StudioStrip
+                        title={activeGame.title}
+                        slug={activeGame.slug ?? undefined}
+                        status={studioStatus}
+                        posture={posture}
+                        onPostureChange={setPosture}
+                        stageEmpty={!stageSource.html}
+                        onOpenShelf={() => setShelfOpen(true)}
+                        shelfOpenRef={shelfOpenRef}
+                        shelfOpen={shelfOpen}
+                        editAvailable={tabAvailable(activeGame, 'edit')}
+                        editActive={tab === 'edit'}
+                        onToggleEdit={() => openTab(tab === 'edit' ? 'thread' : 'edit')}
+                        detailsActive={tab === 'details'}
+                        onToggleDetails={() => {
                           if (tab === 'details') {
                             openTab('thread');
                             return;
@@ -822,167 +853,233 @@ export function CreatorStudioView({
                           setDetailsPane('overview');
                           openTab('details');
                         }}
-                      >
-                        <PixelIcon name="panel" size={12} />{' '}
-                        <span className="studio-head-action-label">{t('studioPanel.tabs.details')}</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* The thread stays put. Details opens beside it on a wide screen and over
-                  it on a narrow one; only playtest, which needs the whole viewport to be
-                  a game, replaces it. Agent screenshots float as dismissable toasts that
-                  open Details → Media. Hide while Details or the shelf is open. */}
-                {tab !== 'playtest' && tab !== 'edit' && tab !== 'details' && !shelfOpen ? (
-                  <StudioShotToasts
-                    token={threadToken ?? activeGame.token}
-                    placement="near-play"
-                    onOpenMedia={() => {
-                      setDetailsPane('media');
-                      openTab('details');
-                    }}
-                  />
-                ) : null}
-
-                <div className={`studio-workspace${tab === 'details' ? ' is-details-open' : ''}`}>
-                  {tab === 'edit' ? (
-                    <EditorPanel
-                      key={activeGame.token}
-                      game={activeGame}
-                      onOpenPlaytest={() => openTab('playtest')}
-                      onBack={() => openTab('thread')}
-                    />
-                  ) : null}
-
-                  {tab !== 'playtest' && tab !== 'edit' ? (
-                    <div className="studio-build">
-                      <SubmissionStatusView
-                        key={threadToken ?? activeGame.token}
-                        token={threadToken ?? activeGame.token}
-                        embedded
-                        justHandedOff={handoffToken != null}
-                        onImproved={(newToken) => setHandoffToken(newToken)}
-                        onPlaytest={() => openTab('playtest')}
-                        onOpenConnect={() => {
-                          setDetailsPane('connect');
-                          openTab('details');
-                        }}
-                        onRetry={
-                          onRetryConcept
-                            ? (concept) => {
-                                onRetryConcept(concept);
-                                onNavigate('/');
-                              }
-                            : undefined
-                        }
+                        canClaim={canClaim}
+                        onClaim={() => setClaimOpen(true)}
+                        shareSlot={shareSlot}
+                        onOpenTheater={() => setTheaterOpen(true)}
                       />
-                    </div>
-                  ) : null}
 
-                  {tab === 'playtest' && playtestGame ? (
-                    <StudioPlaytestPanel
-                      game={playtestGame}
-                      published={playtestPublished}
-                      onExit={() => openTab('thread')}
-                      shelfOpen={shelfOpen}
-                    />
-                  ) : null}
-
-                  {/* Everything that is about the game rather than said to it: when it was
-                    made, who can play it, how it is doing, and how to stop it. */}
-                  {tab === 'details' ? (
-                    <>
-                      {detailsIsSheet ? (
-                        <div
-                          className="modal-backdrop studio-rail-backdrop"
-                          role="presentation"
-                          onClick={() => openTab('thread')}
-                        />
+                      {theaterOpen ? (
+                        stageSource.origin.kind === 'delivered' && activeGame.slug ? (
+                          <GameTheater
+                            title={activeGame.title}
+                            badge={{ icon: 'gamepad', label: t('catalog.playingBadge', { defaultValue: 'Playing' }) }}
+                            source={{ slug: activeGame.slug }}
+                            onExit={() => setTheaterOpen(false)}
+                          />
+                        ) : stageSource.rawHtml ? (
+                          <GameTheater
+                            title={activeGame.title}
+                            badge={{ icon: 'wrench', label: t('statusView.draftBadge') }}
+                            source={{ html: stageSource.rawHtml }}
+                            onExit={() => setTheaterOpen(false)}
+                          />
+                        ) : null
                       ) : null}
-                      <aside
-                        className="studio-rail"
-                        aria-label={t('studioPanel.tabs.details')}
-                        {...(detailsIsSheet ? { role: 'dialog', 'aria-modal': true } : {})}
-                      >
-                        <DetailsPanel
-                          // Keyed on the game, so switching to another one gives a fresh
-                          // panel rather than reusing this one's state. Without it every
-                          // `useState(game.…)` initialiser inside keeps the previous game's
-                          // value — the share switch reading the wrong game's setting, and,
-                          // worse, an armed Stop-build carrying across to a game the creator
-                          // never armed it on. Reachable by any move between two `/details`
-                          // URLs, browser Back included.
-                          key={activeGame.token}
-                          game={activeGame}
-                          // Handoff (published → improve) keeps the shelf on the live game
-                          // while the thread rides a new job token. Media must follow that
-                          // thread, or toast clicks open the prior round's shots.
-                          mediaToken={threadToken ?? activeGame.token}
-                          health={selectedHealth}
-                          days={days}
-                          healthDays={healthDays}
-                          truncated={truncated}
-                          scorecard={selectedScorecard}
-                          pane={detailsPane}
-                          onPaneChange={setDetailsPane}
-                          onClose={() => openTab('thread')}
-                          onDaysChange={setDays}
-                          onOpenPlaytest={() => openTab('playtest')}
-                          onSwitchToPlatform={async () => {
-                            await handoffToPlatform(activeGame.token);
-                            setDetailsPane('overview');
-                            openTab('thread');
-                          }}
-                          onPlay={() => activeGame.slug && onPlay(activeGame.slug)}
-                          onDraftSharedChange={(shared) => {
-                            setGames((prev) =>
-                              prev.map((game) =>
-                                game.token === activeGame.token ? { ...game, draftShared: shared } : game,
-                              ),
-                            );
-                          }}
-                          onRemoved={async (token) => {
-                            const abandonedSlug = activeGame.slug;
-                            const abandonedTitle = activeGame.title;
-                            if (selectedRef.current === token) selectedRef.current = null;
-                            setSelected((current) => (current === token ? null : current));
-                            // Hide tip first; refetch may restore a published sibling.
-                            setGames((prev) => prev.filter((game) => game.token !== token));
-                            const fallbackToken = (list: readonly StudioGame[]) =>
-                              sortStudioGames(collapseStudioGames(list))[0]?.token ?? null;
-                            try {
-                              // Pass the slug so a live sibling below the shelf ceiling
-                              // is still returned (same deep-link path as Open in Studio).
-                              const shelfPage = await fetchStudioGames(abandonedSlug);
-                              setGames(shelfPage.games);
-                              setShelfTruncated(shelfPage.truncated);
-                              setTotalGames(shelfPage.totalGames);
-                              // The creator may have picked another game while this awaited.
-                              if (selectedRef.current !== null) return;
-                              const sibling =
-                                abandonedSlug &&
-                                shelfPage.games.find((game) => game.slug === abandonedSlug && game.token !== token);
-                              onNavigate(sibling && abandonedSlug ? studioPath(abandonedSlug) : studioPath());
-                              if (sibling) {
-                                setSelected(sibling.token);
-                              } else {
-                                setAbandonNotice(abandonedTitle);
-                                setSelected(fallbackToken(shelfPage.games));
-                              }
-                            } catch {
-                              // Optimistic remove stands if refetch fails.
-                              if (selectedRef.current !== null) return;
-                              onNavigate(studioPath());
-                              setAbandonNotice(abandonedTitle);
-                              setSelected(fallbackToken(games.filter((game) => game.token !== token)));
+
+                      {/* The stage: always mounted, always full-bleed. Every surface below
+                        is a layer over it, never a replacement for it (the ground-state
+                        rule) — see docs/studio-game-first-implementation-plan.md Workstream C. */}
+                      <div className="studio-stage-layout">
+                        <StudioStage
+                          // Remounts on game switch — StudioStage's own per-document caches
+                          // (pendingHtml, lastGoodRef, …) must not carry over from the
+                          // previous game (Codex review of PR #739).
+                          key={playtestGame?.token ?? activeGame.token}
+                          token={playtestGame?.token ?? activeGame.token}
+                          title={activeGame.title}
+                          slug={activeGame.slug ?? undefined}
+                          editable={activeGame.editable}
+                          published={playtestPublished}
+                          source={stageSource}
+                          posture={posture}
+                          onPostureChange={setPosture}
+                          covered={covered}
+                          onStatusChange={setStageStatus}
+                          onNewerStageWaiting={setNewerStageWaiting}
+                          onImproved={(newToken) => setHandoffToken(newToken)}
+                          onDisplayedOriginChange={setDisplayedOrigin}
+                        />
+
+                        {stageStatus.kind === 'empty' &&
+                        !stageSource.html &&
+                        studioStatus &&
+                        studioStatus.status !== 'published' &&
+                        studioStatus.status !== 'abandoned' &&
+                        studioStatus.status !== 'needs_changes' ? (
+                          <StudioStageCard />
+                        ) : null}
+
+                        <StudioVersionRibbon
+                          origin={displayedOrigin}
+                          publishedAt={activeGame.publishedAt ?? activeGame.livePublishedAt}
+                          stageStatus={stageStatus}
+                          deliveryInGate={Boolean(studioStatus?.gateProgress)}
+                          newerStageWaiting={newerStageWaiting}
+                          checked={studioStatus?.previewGate ? studioStatus.previewGate.green : null}
+                        />
+
+                        {posture === 'watch' && !covered ? (
+                          <StudioShotToasts
+                            token={threadToken ?? activeGame.token}
+                            placement="near-play"
+                            onOpenMedia={() => {
+                              setDetailsPane('media');
+                              openTab('details');
+                            }}
+                          />
+                        ) : null}
+
+                        <StudioChatRail
+                          title={activeGame.title}
+                          open={railOpen}
+                          onOpenChange={(next) => {
+                            setRailManualOpen(next);
+                            if (next) {
+                              seenActivityRef.current += checklistUnread;
+                              setChecklistUnread(0);
                             }
                           }}
-                        />
-                      </aside>
+                          unreadCount={checklistUnread}
+                          standaloneHref={`/status/${encodeURIComponent(threadToken ?? activeGame.token)}`}
+                          latestEntryLabel={latestActivityRef.current}
+                          onVisiblyOpenChange={setRailVisiblyOpen}
+                        >
+                          <SubmissionStatusView
+                            key={threadToken ?? activeGame.token}
+                            token={threadToken ?? activeGame.token}
+                            embedded
+                            justHandedOff={handoffToken != null}
+                            onImproved={(newToken) => setHandoffToken(newToken)}
+                            onPlaytest={() => setPosture('play')}
+                            onOpenConnect={() => {
+                              setDetailsPane('connect');
+                              openTab('details');
+                            }}
+                            onActivityCount={(count, latest) => {
+                              latestActivityRef.current = latest;
+                              if (!railVisiblyOpen && count > seenActivityRef.current) {
+                                setChecklistUnread(count - seenActivityRef.current);
+                              } else if (railVisiblyOpen) {
+                                seenActivityRef.current = count;
+                                setChecklistUnread(0);
+                              }
+                            }}
+                            onRetry={
+                              onRetryConcept
+                                ? (concept) => {
+                                    onRetryConcept(concept);
+                                    onNavigate('/');
+                                  }
+                                : undefined
+                            }
+                          />
+                        </StudioChatRail>
+
+                        {tab === 'edit' ? (
+                          <div className="studio-edit-overlay">
+                            <EditorPanel
+                              key={activeGame.token}
+                              game={activeGame}
+                              onOpenPlaytest={() => setPosture('play')}
+                              onBack={() => openTab('thread')}
+                            />
+                          </div>
+                        ) : null}
+
+                        {tab === 'details' ? (
+                          <>
+                            {detailsIsSheet ? (
+                              <div
+                                className="modal-backdrop studio-rail-backdrop"
+                                role="presentation"
+                                onClick={() => openTab('thread')}
+                              />
+                            ) : null}
+                            <aside
+                              className="studio-rail"
+                              aria-label={t('studioPanel.tabs.details')}
+                              {...(detailsIsSheet ? { role: 'dialog', 'aria-modal': true } : {})}
+                            >
+                              <DetailsPanel
+                                // Keyed on the game, so switching to another one gives a
+                                // fresh panel rather than reusing this one's state.
+                                key={activeGame.token}
+                                game={activeGame}
+                                mediaToken={threadToken ?? activeGame.token}
+                                health={selectedHealth}
+                                days={days}
+                                healthDays={healthDays}
+                                truncated={truncated}
+                                scorecard={selectedScorecard}
+                                pane={detailsPane}
+                                onPaneChange={setDetailsPane}
+                                onClose={() => openTab('thread')}
+                                onDaysChange={setDays}
+                                onOpenPlaytest={() => setPosture('play')}
+                                onSwitchToPlatform={async () => {
+                                  await handoffToPlatform(activeGame.token);
+                                  setDetailsPane('overview');
+                                  openTab('thread');
+                                }}
+                                onPlay={() => activeGame.slug && onPlay(activeGame.slug)}
+                                onDraftSharedChange={(shared) => {
+                                  setGames((prev) =>
+                                    prev.map((game) =>
+                                      game.token === activeGame.token ? { ...game, draftShared: shared } : game,
+                                    ),
+                                  );
+                                }}
+                                onRemoved={async (token) => {
+                                  const abandonedSlug = activeGame.slug;
+                                  const abandonedTitle = activeGame.title;
+                                  if (selectedRef.current === token) selectedRef.current = null;
+                                  setSelected((current) => (current === token ? null : current));
+                                  // Hide tip first; refetch may restore a published sibling.
+                                  setGames((prev) => prev.filter((game) => game.token !== token));
+                                  const fallbackToken = (list: readonly StudioGame[]) =>
+                                    sortStudioGames(collapseStudioGames(list))[0]?.token ?? null;
+                                  try {
+                                    // Pass the slug so a live sibling below the shelf
+                                    // ceiling is still returned (same deep-link path as
+                                    // Open in Studio).
+                                    const shelfPage = await fetchStudioGames(abandonedSlug);
+                                    setGames(shelfPage.games);
+                                    setShelfTruncated(shelfPage.truncated);
+                                    setTotalGames(shelfPage.totalGames);
+                                    // The creator may have picked another game while this
+                                    // awaited.
+                                    if (selectedRef.current !== null) return;
+                                    const sibling =
+                                      abandonedSlug &&
+                                      shelfPage.games.find(
+                                        (game) => game.slug === abandonedSlug && game.token !== token,
+                                      );
+                                    onNavigate(sibling && abandonedSlug ? studioPath(abandonedSlug) : studioPath());
+                                    if (sibling) {
+                                      setSelected(sibling.token);
+                                    } else {
+                                      setAbandonNotice(abandonedTitle);
+                                      setSelected(fallbackToken(shelfPage.games));
+                                    }
+                                  } catch {
+                                    // Optimistic remove stands if refetch fails.
+                                    if (selectedRef.current !== null) return;
+                                    onNavigate(studioPath());
+                                    setAbandonNotice(abandonedTitle);
+                                    setSelected(fallbackToken(games.filter((game) => game.token !== token)));
+                                  }
+                                }}
+                              />
+                            </aside>
+                          </>
+                        ) : null}
+
+                        <StudioFullBleed visible={covered} onClick={backToFullBleed} />
+                      </div>
                     </>
-                  ) : null}
-                </div>
+                  );
+                })()}
               </div>
             ) : null}
           </div>

@@ -1165,6 +1165,7 @@ export function App() {
           <CreatorStudioView
             selectedGame={route.game}
             selectedTab={route.tab}
+            selectedPosture={route.posture}
             onNavigate={navigate}
             onPlay={(slug) => navigate(playPath(slug))}
             onRetryConcept={(concept) => {

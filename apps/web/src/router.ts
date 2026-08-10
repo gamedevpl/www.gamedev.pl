@@ -10,7 +10,7 @@ import type { LegalDocId } from './legal/types.js';
  * state they had to know to find it. Now: the thread, the things beside the thread, and
  * the one surface that genuinely takes over the screen.
  */
-export type StudioTab = 'thread' | 'details' | 'playtest' | 'edit';
+export type StudioTab = 'thread' | 'details' | 'edit';
 
 /**
  * Every name a surface has answered to, including the five-tab vocabulary that came
@@ -25,7 +25,10 @@ const STUDIO_TAB_ALIASES: Record<string, StudioTab> = {
   details: 'details',
   overview: 'details',
   stats: 'details',
-  playtest: 'playtest',
+  // Play is a posture of the stage now, not a place — see `isPlaytestAliasSegment`.
+  // Landing here still resolves to the thread; the stage's play posture engages
+  // separately via `AppRoute`'s `posture` field.
+  playtest: 'thread',
   // The content editor (EditorKit). Only games whose delivered version ships an
   // editor definition render the surface; for every other game the studio
   // resolves the URL and falls back to the thread.
@@ -36,6 +39,15 @@ const STUDIO_TAB_ALIASES: Record<string, StudioTab> = {
 /** The surface this URL segment names, or null when it names nothing. */
 export function parseStudioTab(value: string): StudioTab | null {
   return STUDIO_TAB_ALIASES[value] ?? null;
+}
+
+/**
+ * Whether a studio URL segment is the old playtest tab — resolved to the thread by
+ * {@link parseStudioTab} above, but still meaning "open with play posture engaged"
+ * (Workstream D: `/playtest` keeps resolving forever, onto a posture rather than a tab).
+ */
+export function isPlaytestAliasSegment(value: string): boolean {
+  return value === 'playtest';
 }
 
 export function isStudioTab(value: string): value is StudioTab {
@@ -104,8 +116,10 @@ export type AppRoute =
   // games, so a slug belonging to somebody else resolves to nothing at all.
   //
   // `/status/:token` is accepted as an alias and resolves here too. Optional `tab`
-  // deep-links into a work surface (`/studio/tv-tycoon/build`).
-  | { view: 'studio'; game?: string; tab?: StudioTab }
+  // deep-links into a work surface (`/studio/tv-tycoon/build`). Optional `posture`
+  // carries the old `/playtest` URL's meaning forward: the stage's full-viewport play
+  // posture, engaged on open rather than a separate tab.
+  | { view: 'studio'; game?: string; tab?: StudioTab; posture?: 'play' }
   | { view: 'studioWelcome'; game: string }
   | { view: 'studioConnect'; game: string }
   // Privacy policy and terms. Reachable without a session — someone deciding whether
@@ -337,7 +351,9 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
     if (!tab) {
       return { view: 'notFound' };
     }
-    return { view: 'studio', game, tab };
+    return isPlaytestAliasSegment(tabSegment)
+      ? { view: 'studio', game, tab, posture: 'play' }
+      : { view: 'studio', game, tab };
   }
 
   // Hybrid join: /join/<code>#<token> — credential stays out of the request line.
@@ -436,8 +452,14 @@ export function canonicalPath(pathname: string): string | null {
       // Only the addressed form. `/studio` itself is canonical, and a tab is added by
       // the view once it knows which game it is showing rather than here. Rewriting a
       // token to its slug also happens there, for the same reason: it takes the shelf.
+      //
+      // `/playtest` carries `posture: 'play'` alongside its resolved tab — rewriting
+      // eagerly here (this runs before React ever mounts) would drop that meaning
+      // before `CreatorStudioView` gets a chance to read it. Leave it be; the view's
+      // own URL-sync effect settles onto the tab-only address once the posture has
+      // been consumed.
       case 'studio':
-        return route.game ? studioPath(route.game, route.tab) : null;
+        return route.posture ? null : route.game ? studioPath(route.game, route.tab) : null;
       case 'studioWelcome':
         return studioWelcomePath(route.game);
       case 'studioConnect':
@@ -509,8 +531,8 @@ export function navUpTarget(route: AppRoute): NavUpTarget | null {
     case 'play':
       return { path: '/', labelKey: 'upHome' };
     case 'studio':
-      // Playtest is a full-viewport theater with its own Close back to overview.
-      if (route.tab === 'playtest') return null;
+      // Play posture is a full-viewport theater with its own Escape back to watch.
+      if (route.posture === 'play') return null;
       // Any selected-game URL (with or without a tab) goes to the shelf — not to
       // `/studio/:game`. CreatorStudioView canonicalizes a bare game URL onto the
       // default tab (Build for in-progress games), which would immediately undo an

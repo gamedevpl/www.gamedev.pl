@@ -379,7 +379,12 @@
       "overview": "Przegląd",
       "stats": "Statystyki",
       "connectEmpty": "Ta runda nie potrzebuje kroku połączenia z agentem.",
-      "buildEmpty": "Nie ma jeszcze checklisty — pojawi się, gdy agent doda zadania."
+      "buildEmpty": "Nie ma jeszcze checklisty — pojawi się, gdy agent doda zadania.",
+      "openThread": "Otwórz czat",
+      "collapse": "Zwiń",
+      "expand": "Rozwiń",
+      "popOut": "Otwórz jako stronę",
+      "peekEmpty": "Brak nowości"
     },
     "share": {
       "title": "Udostępnij wersję roboczą",
@@ -509,6 +514,35 @@
       "autoTuneHint": "Poprawia też miejsca, w których gracze utykają, zgodnie ze specyfikacją.",
       "saved": "Zapisano",
       "failed": "Nie udało się zapisać. Spróbuj ponownie."
+    },
+    "stage": {
+      "idleResume": "Zapauzowano — bezczynność. Stuknij, aby wznowić.",
+      "crashedTitle": "Ta wersja się wysypała.",
+      "drewNothingTitle": "Ta wersja niczego nie narysowała.",
+      "backTo": "Wróć do {{time}}",
+      "newBuildStaged": "Nowa wersja gotowa ({{time}})",
+      "restartOnIt": "Zrestartuj na niej",
+      "finishThisRun": "Dokończ tę rozgrywkę",
+      "stopPlaying": "Zakończ granie",
+      "backToGame": "Wróć do gry",
+      "assembling": "Budowa gry trwa.",
+      "assemblingHint": "Agent nie dostarczył jeszcze grywalnej wersji — postęp widać w wątku.",
+      "openTheater": "Otwórz w trybie kinowym"
+    },
+    "ribbon": {
+      "staged": "WERSJA ROBOCZA {{time}} · jeszcze niedostarczona",
+      "stagedUnknown": "WERSJA ROBOCZA · jeszcze niedostarczona",
+      "delivered": "Dostarczono {{time}}",
+      "deliveredUnknown": "Dostarczono",
+      "seed": "ZALĄŻEK",
+      "crashed": "wysypała się",
+      "drewNothing": "niczego nie narysowała",
+      "deliveryInGate": "dostawa w bramce kontrolnej",
+      "newerStageWaiting": "czeka nowsza wersja",
+      "checked": "sprawdzona ✓",
+      "notChecked": "jeszcze niesprawdzona",
+      "checkedTitle": "Ta wersja przeszła bramkę podglądu.",
+      "notCheckedTitle": "Ta wersja nie została jeszcze sprawdzona."
     }
   },
   "submit": {
@@ -1150,8 +1184,7 @@
       "cooldown": "Niedawno zmieniałeś handle — spróbuj ponownie po okresie oczekiwania.",
       "unchanged": "To już jest Twój handle.",
       "unknown": "Nie udało się zaktualizować profilu."
-    },
-    "openGamePage": "Strona gry"
+    }
   },
   "pwa": {
     "ariaLabel": "Zainstaluj tę aplikację",

@@ -5104,20 +5104,10 @@ a.user-name--profile:focus-visible {
   border-color: rgba(0, 228, 172, 0.4);
 }
 
-/* Thread on the left, details beside it when asked for. A grid rather than a tab swap,
-   because opening the facts about a game should not take the game off the screen. */
-.studio-workspace {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 18px;
-  align-items: start;
-}
-
-@media (min-width: 1100px) {
-  .studio-workspace.is-details-open {
-    grid-template-columns: minmax(0, 1fr) minmax(300px, 400px);
-  }
-}
+/* `.studio-workspace`'s two-column details grid is gone — the stage is always
+   full-bleed now, and Details is always the overlay sheet/rail (`.studio-rail`
+   below), never a grid sibling. See studio-game-first-implementation-plan.md
+   Workstream E. */
 
 /* Louder Play in the head cluster — still one verb, no Pause sibling. */
 .studio-head-action.is-primary.is-play {
@@ -5358,16 +5348,8 @@ a.user-name--profile:focus-visible {
   }
 }
 
-.studio-rail {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  border-radius: 12px;
-  border: 1px solid var(--panel-border);
-  background: var(--panel-card);
-  padding: 0;
-  overflow: hidden;
-}
+/* Base `.studio-rail` positioning (absolute overlay, all widths) now lives with the
+   rest of the stage-layout overlays — see the "THE STAGE" section above. */
 
 .studio-rail-shell {
   /* Head + pane in the content column, icon strip beside both — close stays in the
@@ -5487,40 +5469,8 @@ a.user-name--profile:focus-visible {
   z-index: 1090;
 }
 
-/* Below the rail breakpoint the details arrive over the thread as a sheet, anchored to
-   the bottom where a thumb is — the same shape the game picker already uses. */
-@media (max-width: 1099px) {
-  .studio-workspace.is-details-open .studio-rail {
-    position: fixed;
-    inset: auto 0 0 0;
-    z-index: 1100;
-    max-height: min(80vh, 40rem);
-    overflow: hidden;
-    border-radius: 16px 16px 0 0;
-    border-bottom: 0;
-    background: var(--panel);
-    box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.45);
-    animation: fadeIn 0.2s ease;
-  }
-
-  /* Phone sheet: icons as a horizontal strip under the title, not a side column. */
-  .studio-workspace.is-details-open .studio-rail-shell {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto auto minmax(0, 1fr);
-    grid-template-areas:
-      'head'
-      'icons'
-      'pane';
-  }
-
-  .studio-workspace.is-details-open .studio-rail-icons {
-    flex-direction: row;
-    justify-content: center;
-    border-left: 0;
-    border-bottom: 1px solid var(--panel-border);
-    padding: 8px 10px;
-  }
-}
+/* The phone-sheet shape for `.studio-rail` (position/inset/grid-areas) now lives with
+   the rest of the stage-layout overlays — see the "THE STAGE" section above. */
 
 /* Header actions, in place of the tab strip that used to sit across the work surface. */
 .studio-head-actions {
@@ -5972,139 +5922,9 @@ a.user-name--profile:focus-visible {
   position: relative;
 }
 
-/* The running draft, floating over the end of the conversation.
-
-   `bottom: 100%` is load-bearing, not decorative: it is measured from the foot, which is
-   everything the creator replies with, so the card rides above all of it by construction
-   rather than by a number someone would have to keep in step. */
-.studio-live-preview {
-  position: absolute;
-  right: 4px;
-  bottom: calc(100% + 10px);
-  z-index: 40;
-  width: 190px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  border-radius: 12px;
-  border: 1px solid var(--panel-border);
-  background: var(--panel-card);
-  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.45);
-  padding: 6px;
-  animation: studio-live-preview-in 0.3s ease-out both;
-}
-
-@keyframes studio-live-preview-in {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-.studio-live-preview-frame {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 4 / 3;
-  border-radius: 8px;
-  overflow: hidden;
-  background: #0b1018;
-}
-
-/* Deaf to the pointer on purpose — the open button above it is the only way in, so a tap
-   near the card can never be swallowed by a game that is not meant to be played here. */
-.studio-live-preview-iframe {
-  display: block;
-  width: 100%;
-  height: 100%;
-  border: 0;
-  pointer-events: none;
-}
-
-.studio-live-preview-open {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  padding: 0 0 8px;
-  border: 0;
-  background: linear-gradient(to top, rgba(6, 10, 18, 0.75), rgba(6, 10, 18, 0) 55%);
-  color: var(--text);
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.18s ease;
-}
-
-.studio-live-preview-open:hover,
-.studio-live-preview-open:focus-visible {
-  opacity: 1;
-}
-
-/* Touch has no hover to reveal the affordance with, so the label stays put there. */
-@media (hover: none) {
-  .studio-live-preview-open {
-    opacity: 1;
-  }
-}
-
-.studio-live-preview-open-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 8px;
-  border-radius: 999px;
-  background: rgba(6, 10, 18, 0.8);
-  font-size: 0.68rem;
-}
-
-.studio-live-preview-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-}
-
-.studio-live-preview-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 0.66rem;
-  color: var(--muted);
-}
-
-.studio-live-preview-dismiss {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-}
-
-.studio-live-preview-dismiss:hover,
-.studio-live-preview-dismiss:focus-visible {
-  color: var(--text);
-  background: var(--panel-border);
-}
-
-/* Agent-authored text. One line, ellipsised — a caption is a hint, not a paragraph. */
-.studio-live-preview-caption {
-  margin: 0;
-  font-size: 0.64rem;
-  color: var(--muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+/* `.studio-live-preview*` is gone — the stage itself is the live preview now, at full
+   size, not a 190px thumb over the thread. Workstream E; the component that rendered
+   this (`StudioLivePreview.tsx`) is deleted. */
 
 /* Where the work is, and the one thing to do about it — the bar directly above the
    composer, in place of a timeline, a progress bar, a pill and a sentence stacked over
@@ -6549,49 +6369,9 @@ a.user-name--profile:focus-visible {
   justify-content: center;
 }
 
-/* On a narrow screen the thread does not get a scroller of its own.
-   It had one, and the page had one too: scrolling the transcript moved the page instead,
-   or the other way about, and the composer sat 477px below the fold behind whichever of
-   the two you guessed wrong. One scroller — the page — and the composer rides at the
-   bottom of the viewport until the thread ends.
-
-   Only reaches the studio when the shell above has not claimed it; every rule here is
-   overridden by its higher-specificity counterpart when a game is open. */
-@media (max-width: 900px) {
-  .studio-thread {
-    height: auto;
-    min-height: 0;
-  }
-
-  .studio-thread-scroll {
-    overflow: visible;
-  }
-
-  .studio-thread-foot {
-    position: sticky;
-    bottom: 0;
-    z-index: 2;
-    padding-bottom: 10px;
-    background: var(--panel);
-  }
-
-  /* Narrower here because the card floats over the last message rather than beside it,
-     and on a phone that message is most of the screen. Still legible as a moving game;
-     still one tap from the theater, which is where playing happens. */
-  .studio-live-preview {
-    width: 132px;
-    padding: 5px;
-    gap: 3px;
-  }
-
-  .studio-live-preview-badge {
-    font-size: 0.6rem;
-  }
-
-  .studio-live-preview-caption {
-    font-size: 0.58rem;
-  }
-}
+/* The ≤900px "thread reverts to page scroll" legacy band is gone — the thread now
+   always lives inside `.studio-chat-rail`, which is its own small scrollport at every
+   width, not a section of a page. Single-layout rule (Workstream E). */
 
 /* The studio thread as an app screen rather than a section of a scrolling page.
    Measured on a phone, the old shape put the composer mid-document with ~350px of empty
@@ -6635,39 +6415,26 @@ a.user-name--profile:focus-visible {
     max-width: 100%;
   }
 
-  .app:has(.studio-layout.is-game-open) .studio-detail-head {
+  .app:has(.studio-layout.is-game-open) .studio-strip {
     min-width: 0;
     max-width: 100%;
-    flex-direction: row;
-    align-items: center;
     gap: 8px;
   }
 
-  .app:has(.studio-layout.is-game-open) .studio-detail-title-row {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .app:has(.studio-layout.is-game-open) .studio-detail-title-block {
-    flex: 1;
+  .app:has(.studio-layout.is-game-open) .studio-strip-title-block {
     min-width: 0;
   }
 
-  .app:has(.studio-layout.is-game-open) .studio-detail-title-block h2 {
+  .app:has(.studio-layout.is-game-open) .studio-strip-title {
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
-  .app:has(.studio-layout.is-game-open) .studio-detail-title-block .studio-slug {
+  .app:has(.studio-layout.is-game-open) .studio-strip .studio-slug,
+  .app:has(.studio-layout.is-game-open) .studio-strip-heartbeat {
     display: none;
   }
 
-  .app:has(.studio-layout.is-game-open) .studio-head-actions {
+  .app:has(.studio-layout.is-game-open) .studio-strip-actions {
     flex: none;
     flex-wrap: nowrap;
   }
@@ -6829,7 +6596,7 @@ a.user-name--profile:focus-visible {
   }
 
   /* The rail is as tall as the window now, and what is in it can be longer than that. */
-  .app:has(.studio-layout.is-game-open) .studio-workspace.is-details-open .studio-rail {
+  .app:has(.studio-layout.is-game-open) .studio-rail {
     min-height: 0;
     overflow-y: auto;
   }
@@ -11082,14 +10849,625 @@ button.builder-mode-selector:disabled {
   align-self: center;
 }
 
+/* No card chrome any more — the stage is full-bleed, so this is a plain flex
+   column filling the space the shelf leaves, not a bordered panel around it. The
+   strip and the stage-layout below are its only two children. */
 .studio-detail {
   position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* ── THE STAGE (game-first inversion) ────────────────────────────────────────────
+   docs/studio-game-first-implementation-plan.md. The stage is always mounted and
+   always full-bleed; `.studio-strip` sits over its top edge, and every other
+   surface (`.studio-rail`, `.studio-chat-rail`, `.studio-edit-overlay`) is an
+   absolutely-positioned layer inside `.studio-stage-layout`, never a replacement
+   for it — the ground-state rule. */
+
+.studio-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  border-radius: 12px;
+  border: 1px solid var(--panel-border);
+  background: rgba(10, 14, 20, 0.72);
+  backdrop-filter: blur(10px);
+}
+
+.studio-strip-title-block {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+.studio-strip-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-strip-phase-pill {
+  flex: none;
+  padding: 2px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 228, 172, 0.35);
+  background: rgba(0, 228, 172, 0.1);
+  color: var(--turquoise);
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+}
+
+.studio-strip-heartbeat {
+  flex: none;
+  font-size: 0.74rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.studio-strip-spacer {
+  flex: 1;
+  min-width: 8px;
+}
+
+.studio-strip-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  flex-wrap: nowrap;
+}
+
+.studio-stage-layout {
+  position: relative;
+  flex: 1;
+  min-height: 320px;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 14px;
+  background: #05070a;
+}
+
+.studio-stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.studio-stage-frame {
+  position: absolute;
+  inset: 0;
+}
+
+.studio-stage-frame .game-frame,
+.studio-stage-frame iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+}
+
+/* Watch posture: a window, not a place to play — same three constraints
+   `StudioLivePreview` used to own, now the stage's own permanent properties. */
+.studio-stage.is-watch .studio-stage-frame {
+  pointer-events: none;
+}
+
+.studio-stage-void {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, rgba(0, 228, 172, 0.06), transparent 65%);
+}
+
+.studio-stage.is-shimmering .studio-stage-frame {
+  animation: studio-stage-shimmer 0.4s ease-out;
+}
+
+@keyframes studio-stage-shimmer {
+  from {
+    opacity: 0.3;
+    filter: blur(2px);
+  }
+  to {
+    opacity: 1;
+    filter: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-stage.is-shimmering .studio-stage-frame {
+    animation: none;
+  }
+}
+
+.studio-stage-idle-poster {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 0;
+  background: rgba(5, 7, 10, 0.55);
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Dead stage: crashed / drew-nothing / assembling. Same card shape for all three —
+   what changes is the copy and whether a detail line and a recovery action show. */
+.studio-stage-card {
+  position: absolute;
+  z-index: 30;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: min(420px, calc(100% - 32px));
+  padding: 22px 20px;
+  border-radius: 16px;
+  border: 1px solid var(--panel-border);
+  background: rgba(12, 16, 22, 0.94);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  text-align: center;
+}
+
+.studio-stage-card-title {
+  margin: 0;
+  font-size: 0.98rem;
+  font-weight: 700;
+}
+
+.studio-stage-card-detail {
+  margin: 0;
+  max-width: 100%;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(248, 113, 113, 0.1);
+  color: #fca5a5;
+  font-size: 0.76rem;
+  overflow-wrap: anywhere;
+}
+
+.studio-stage-card-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.studio-stage-card.is-assembling .studio-stage-card-spinner {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2.5px solid rgba(0, 228, 172, 0.22);
+  border-top-color: var(--turquoise);
+  animation: status-spin 0.8s linear infinite;
+}
+
+/* Version ribbon (the honesty organ) — bottom-center, non-dismissible. */
+.studio-version-ribbon {
+  position: absolute;
+  z-index: 25;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100% - 24px);
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--panel-border);
+  background: rgba(8, 12, 16, 0.82);
+  backdrop-filter: blur(6px);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.studio-version-ribbon-identity {
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.studio-version-ribbon.has-exception .studio-version-ribbon-exception {
+  color: #fca5a5;
+}
+
+.studio-version-ribbon-depth {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--turquoise);
+  font: inherit;
+  font-weight: 600;
+  cursor: default;
+}
+
+/* Swap toast — held during play, per A4's swap policy. */
+.studio-swap-toast {
+  position: absolute;
+  z-index: 35;
+  right: 14px;
+  top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(280px, calc(100% - 28px));
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 228, 172, 0.35);
+  background: rgba(10, 14, 20, 0.94);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+  font-size: 0.8rem;
+  animation: fadeIn 0.2s ease;
+}
+
+.studio-swap-toast-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.studio-swap-toast-dismiss {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.78rem;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.studio-stage-play-bar {
+  position: absolute;
+  z-index: 25;
+  right: 14px;
+  bottom: 14px;
+  display: inline-flex;
+  gap: 8px;
+}
+
+.studio-stage-sheet {
+  position: absolute;
+  z-index: 40;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  width: min(480px, 100%);
+  max-height: 70%;
+  overflow-y: auto;
+  border-radius: 16px 16px 0 0;
   background: var(--panel);
   border: 1px solid var(--panel-border);
-  border-radius: 14px;
-  padding: 22px 24px 26px;
+  border-bottom: 0;
+  padding: 16px;
+  box-shadow: 0 -12px 32px rgba(0, 0, 0, 0.45);
+}
+
+/* The way back — the ground-state rule's named exit, shown whenever any surface
+   covers the stage. Must outrank every surface `covered` can mean: the Edit overlay
+   (55), the Details rail (60 desktop / 1100 phone) and its backdrop (1090), and the
+   shelf drawer (1101) and its backdrop (1100) — otherwise the one named escape from
+   those surfaces is itself hidden behind them. */
+.studio-fullbleed {
+  position: absolute;
+  z-index: 1150;
+  left: 14px;
+  top: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 228, 172, 0.4);
+  background: rgba(8, 12, 16, 0.88);
+  color: var(--turquoise);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.studio-fullbleed:hover {
+  background: rgba(0, 228, 172, 0.14);
+}
+
+/* Details/Edit as layers over the stage, not grid siblings — always the overlay
+   shape now, desktop panel or phone sheet by width, never a two-column grid. */
+.studio-rail {
+  position: absolute;
+  z-index: 60;
+  inset: 0 0 0 auto;
+  width: min(400px, 100%);
   min-width: 0;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.18);
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--panel-border);
+  border-radius: 0;
+  background: var(--panel);
+  padding: 0;
+  overflow: hidden;
+  box-shadow: -12px 0 32px rgba(0, 0, 0, 0.35);
+}
+
+.studio-edit-overlay {
+  position: absolute;
+  z-index: 55;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  overflow: hidden;
+}
+
+@media (max-width: 1099px) {
+  .studio-rail {
+    inset: auto 0 0 0;
+    width: auto;
+    z-index: 1100;
+    max-height: min(80vh, 40rem);
+    border-left: 0;
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.45);
+    animation: fadeIn 0.2s ease;
+  }
+
+  /* Phone sheet: icons as a horizontal strip under the title, not a side column. */
+  .studio-rail .studio-rail-shell {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr);
+    grid-template-areas:
+      'head'
+      'icons'
+      'pane';
+  }
+
+  .studio-rail .studio-rail-icons {
+    flex-direction: row;
+    justify-content: center;
+    border-left: 0;
+    border-bottom: 1px solid var(--panel-border);
+    padding: 8px 10px;
+  }
+}
+
+/* ── THE CHAT RAIL ────────────────────────────────────────────────────────────── */
+
+.studio-chat-rail-pill {
+  position: absolute;
+  z-index: 45;
+  right: 14px;
+  bottom: 54px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 228, 172, 0.4);
+  background: rgba(8, 12, 16, 0.88);
+  color: var(--turquoise);
+  cursor: pointer;
+}
+
+.studio-chat-rail-pill-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #f87171;
+  color: #1a0505;
+  font-size: 0.62rem;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.studio-chat-rail {
+  position: absolute;
+  z-index: 40;
+  inset: 12px 12px auto auto;
+  bottom: 12px;
+  width: min(380px, calc(100% - 24px));
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: calc(100% - 24px);
+  border-radius: 16px;
+  border: 1px solid var(--panel-border);
+  background: rgba(10, 14, 20, 0.86);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+
+.studio-chat-rail-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  padding: 10px 10px 8px 14px;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.studio-chat-rail-title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 0.86rem;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-chat-rail-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+
+.studio-chat-rail-popout {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  color: var(--muted);
+}
+
+.studio-chat-rail-popout:hover {
+  color: var(--text);
+  background: rgba(148, 163, 184, 0.1);
+}
+
+.studio-chat-rail-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.studio-chat-rail-body .studio-thread {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 8px 12px 12px;
+}
+
+.studio-chat-rail-grab {
+  display: none;
+}
+
+.studio-chat-rail-peek {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px 14px 16px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.studio-chat-rail-peek-line {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.82rem;
+}
+
+.studio-chat-rail-backdrop {
+  z-index: 1090;
+}
+
+/* Collapsed to the pill: the thread stays mounted (its poll, and any unsent composer
+   text, must survive a collapse) but is out of the layout and the accessibility tree. */
+.studio-chat-rail.is-collapsed {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Phone: the rail is a bottom sheet with three detents (Workstream B4). */
+@media (max-width: 800px) {
+  .studio-chat-rail-pill {
+    right: 10px;
+    bottom: 66px;
+  }
+
+  .studio-chat-rail.is-sheet {
+    position: fixed;
+    inset: auto 0 0 0;
+    z-index: 1100;
+    width: auto;
+    max-height: 85vh;
+    border-radius: 16px 16px 0 0;
+    animation: fadeIn 0.2s ease;
+  }
+
+  /* Install / update banners pin to the bottom edge too — lift the sheet above them
+     (measured overlay height, --studio-chat-rail-overlay-lift from StudioChatRail)
+     instead of painting over their dismiss/reload controls. */
+  .app:has(.install-prompt) .studio-chat-rail.is-sheet,
+  .app:has(.app-update) .studio-chat-rail.is-sheet {
+    bottom: var(--studio-chat-rail-overlay-lift, 5.5rem);
+  }
+
+  .studio-chat-rail.is-sheet .studio-chat-rail-grab {
+    display: flex;
+    justify-content: center;
+    padding: 8px 0 0;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+  }
+
+  .studio-chat-rail.is-sheet .studio-chat-rail-grab-bar {
+    width: 36px;
+    height: 4px;
+    border-radius: 999px;
+    background: var(--panel-border);
+  }
+
+  .studio-chat-rail.is-peek {
+    max-height: none;
+  }
+
+  .studio-chat-rail.is-half {
+    height: 46vh;
+  }
+
+  .studio-chat-rail.is-full {
+    height: 88vh;
+  }
 }
 
 .studio-detail-head {
