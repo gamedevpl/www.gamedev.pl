@@ -452,8 +452,14 @@ export function canonicalPath(pathname: string): string | null {
       // Only the addressed form. `/studio` itself is canonical, and a tab is added by
       // the view once it knows which game it is showing rather than here. Rewriting a
       // token to its slug also happens there, for the same reason: it takes the shelf.
+      //
+      // `/playtest` carries `posture: 'play'` alongside its resolved tab — rewriting
+      // eagerly here (this runs before React ever mounts) would drop that meaning
+      // before `CreatorStudioView` gets a chance to read it. Leave it be; the view's
+      // own URL-sync effect settles onto the tab-only address once the posture has
+      // been consumed.
       case 'studio':
-        return route.game ? studioPath(route.game, route.tab) : null;
+        return route.posture ? null : route.game ? studioPath(route.game, route.tab) : null;
       case 'studioWelcome':
         return studioWelcomePath(route.game);
       case 'studioConnect':

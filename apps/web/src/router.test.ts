@@ -263,6 +263,12 @@ describe('path builders', () => {
     // An old tab name is not the current address for the surface that absorbed it.
     expect(canonicalPath('/studio/tv-tycoon/build')).toBe('/studio/tv-tycoon/thread');
     expect(canonicalPath('/studio/tv-tycoon/stats')).toBe('/studio/tv-tycoon/details');
+    // `/playtest` must NOT be eagerly rewritten: `readLocationRoute` in App.tsx runs
+    // this before React ever mounts, and an eager rewrite here drops the `posture:
+    // 'play'` deep link before CreatorStudioView gets a chance to read it (caught by
+    // hand-testing in a real browser, not by the component-level tests, which pass
+    // `selectedPosture` directly and never exercise this canonicalization step).
+    expect(canonicalPath('/studio/tv-tycoon/playtest')).toBeNull();
     expect(canonicalPath('/nightshift/neon-courier/board')).toBe('/nightshift/neon-courier');
     expect(canonicalPath('/nightshift/neon-courier/review')).toBe('/nightshift/neon-courier');
     expect(canonicalPath('/nightshift/neon-courier/releases')).toBe('/nightshift/neon-courier');

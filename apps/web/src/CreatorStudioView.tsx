@@ -370,7 +370,13 @@ export function CreatorStudioView({
   // The stage: always mounted, whether or not the creator asked to see it (the
   // game-first inversion's core claim — see docs/studio-game-first-implementation-plan.md).
   const stageToken = playtestGame?.token ?? null;
-  const [posture, setPosture] = useState<StagePosture>(selectedPosture === 'play' ? 'play' : 'watch');
+  const [posture, setPosture] = useState<StagePosture>('watch');
+  // Captured once at mount, never updated: the URL-canonicalization effect below
+  // rewrites `/playtest` onto its posture-free canonical form as soon as the game
+  // resolves, which would otherwise race the reset effect and drop the deep link's
+  // play posture before it ever applied.
+  const initialSelectedPostureRef = useRef(selectedPosture);
+  const firstStageTokenAppliedRef = useRef(false);
   const studioStatus = useStudioStatusPoll(stageToken);
   const stageSource = useStageSource(stageToken ?? '', studioStatus);
   const [stageStatus, setStageStatus] = useState<StageStatus>({ kind: 'empty' });
@@ -381,16 +387,23 @@ export function CreatorStudioView({
   const seenActivityRef = useRef(0);
   const latestActivityRef = useRef<string | null>(null);
 
-  // A game switch starts every per-game bit of stage state fresh.
+  // A game switch starts every per-game bit of stage state fresh. The very first
+  // resolution applies the deep link's posture (if any); every later switch — the
+  // creator picking a different game — always starts back in watch.
   useEffect(() => {
-    setPosture(selectedPosture === 'play' ? 'play' : 'watch');
+    if (!stageToken) return;
+    if (!firstStageTokenAppliedRef.current) {
+      firstStageTokenAppliedRef.current = true;
+      setPosture(initialSelectedPostureRef.current === 'play' ? 'play' : 'watch');
+    } else {
+      setPosture('watch');
+    }
     setStageStatus({ kind: 'empty' });
     setNewerStageWaiting(false);
     setChecklistUnread(0);
     setRailManualOpen(null);
     seenActivityRef.current = 0;
     latestActivityRef.current = null;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stageToken]);
   const selectedHealth = activeGame ? healthFor(activeGame, healthRows) : null;
   const selectedScorecard = activeGame?.slug
