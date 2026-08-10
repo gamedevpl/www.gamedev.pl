@@ -85,10 +85,20 @@ build round; the authoritative list is whatever `tools/list` returns, and
 | `ack_inbox`              | Acknowledge creator messages            | destructive |
 
 The third column is the tool's own `annotations`, not a summary written here: `read` is
-`readOnlyHint`, `destructive` is `destructiveHint`. Five tools are destructive in the
-protocol's sense — they overwrite or consume staged scratch space rather than delete
-anything a creator can see. `ack_inbox` is there because acknowledging a message consumes
-it.
+`readOnlyHint`, `destructive` is `destructiveHint`. Six tools are destructive, and the
+protocol's opposite of destructive is _additive_, not "deletes" — a client may skip its
+approval prompt for anything marked non-destructive, so anything that consumes or
+overwrites is marked honestly even when nothing is erased. What each one actually does:
+
+- `stage_source_file` overwrites the same path if staged again;
+- `patch_source_file` can remove lines;
+- `delete_source_file` and `clear_staged_sources` delete staged files;
+- `submit_sources` burns one of a capped number of deliveries and can move the pointer
+  that decides what publishes;
+- `ack_inbox` makes creator messages stop appearing.
+
+The first four touch staged scratch space, which is undelivered by definition. The last
+two have effects a creator sees, which is exactly why they carry the hint.
 
 **Not in that list, deliberately.** `get_round_status` and `get_round_media` appear only
 for a client that negotiates the UI extension, since a client with no views would offer

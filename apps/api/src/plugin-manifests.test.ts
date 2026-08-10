@@ -258,15 +258,6 @@ describe('the documented tool list', () => {
     expect([...documented].sort()).toEqual([...advertised].sort());
   });
 
-  // The registry listing renders the root README.
-  it('names every advertised tool in the root README too', () => {
-    const rootReadme = readFileSync(join(repoRoot, 'README.md'), 'utf8');
-    const advertised = [...MCP_VISIBLE_TOOLS].filter((name) => !MCP_UI_APP_ONLY_TOOLS.has(name));
-    for (const name of advertised) {
-      expect(rootReadme, `README.md must name ${name}`).toContain(`\`${name}\``);
-    }
-  });
-
   it('does not document a tool no agent can discover', () => {
     for (const name of MCP_UNADVERTISED_TOOLS) {
       expect(documented, `${name} is unadvertised and must not read as available`).not.toContain(name);

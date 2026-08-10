@@ -46,29 +46,21 @@ The interesting engineering is written up in [`docs/`](./docs) — start with
 ## Connect your agent (MCP)
 
 The server is remote and needs no install: point an MCP-capable client at
-`https://www.gamedev.pl/api/mcp` and sign in with OAuth, or add it as a plugin with
-`/plugin marketplace add gamedevpl/www.gamedev.pl`.
+`https://www.gamedev.pl/api/mcp` and sign in with OAuth. Claude users can install it as a
+plugin instead — [`listings/mcp/claude-plugin/README.md`](./listings/mcp/claude-plugin/README.md)
+has the exact sequence, including the connector approval that installing does not do on its
+own.
 
-Thirty tools are advertised, and they follow the shape of one build round:
+Thirty tools cover one build round: opening or rejoining it, reading the brief and the
+engine kit, staging and delivering source files, checking the quality gate, and exchanging
+progress, screenshots and messages with the creator. Nine more exist and are deliberately
+never advertised, so an agent will not discover them.
+[`listings/mcp/README.md`](./listings/mcp/README.md) lists every tool with its annotations,
+what each destructive one actually consumes, and why the rest are hidden.
 
-- **Round lifecycle** — `create_game`, `start`, `open_round`, `continue_draft`, `end`
-- **The job** — `get_brief`, `get_seed`, `get_sources`
-- **The engine kit** — `get_kit`, `get_kit_api`, `list_kit_files`, `search_kit_files`,
-  `read_kit_file`, `read_kit_files`, `read_kit_file_fragment`
-- **Writing the game** — `stage_source_file`, `patch_source_file`, `delete_source_file`,
-  `clear_staged_sources`, `list_staged_sources`, `stage_upload_url`, `submit_sources`
-- **The quality gate** — `get_gate_verdict`, `get_gate_media`
-- **Talking to the creator** — `report_progress`, `screenshot_upload_url`, `show_round`,
-  `show_media`, `read_inbox`, `ack_inbox`
-
-Nothing here deletes a published game or spends money. The five tools marked destructive in
-their annotations overwrite or consume _staged_ scratch space, which is undelivered by
-definition. Nine further tools exist and are deliberately never advertised, so an agent will
-not discover them — [`listings/mcp/README.md`](./listings/mcp/README.md) has the full table,
-the per-tool annotations, and the reasons.
-
-> **Creating games is in closed beta.** The tools load for anyone; the calls need an approved
-> creator account. That is the gate, not an outage — [join the waitlist](https://www.gamedev.pl).
+> **Creating games is in closed beta.** The tools load for anyone; the calls need an
+> approved creator account. That is the gate, not an outage —
+> [join the waitlist](https://www.gamedev.pl).
 
 ## Try it locally in five minutes
 
