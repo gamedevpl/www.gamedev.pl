@@ -43,6 +43,25 @@ playability it does not have.
 The interesting engineering is written up in [`docs/`](./docs) — start with
 [`docs/README.md`](./docs/README.md).
 
+## Connect your agent (MCP)
+
+The server is remote and needs no install: point an MCP-capable client at
+`https://www.gamedev.pl/api/mcp` and sign in with OAuth. Claude users can install it as a
+plugin instead — [`listings/mcp/claude-plugin/README.md`](./listings/mcp/claude-plugin/README.md)
+has the exact sequence, including the connector approval that installing does not do on its
+own.
+
+Thirty tools cover one build round: opening or rejoining it, reading the brief and the
+engine kit, staging and delivering source files, checking the quality gate, and exchanging
+progress, screenshots and messages with the creator. Nine more exist and are deliberately
+never advertised, so an agent will not discover them.
+[`listings/mcp/README.md`](./listings/mcp/README.md) lists every tool with its annotations,
+what each destructive one actually consumes, and why the rest are hidden.
+
+> **Creating games is in closed beta.** The tools load for anyone; the calls need an
+> approved creator account. That is the gate, not an outage —
+> [join the waitlist](https://www.gamedev.pl).
+
 ## Try it locally in five minutes
 
 ```bash

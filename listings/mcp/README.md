@@ -45,6 +45,72 @@ dedicated repo because the manifest must sit at a repo root — too much standin
 for the reach that surface has today. The consumer Gemini app has no third-party MCP
 channel at all. Revisit only if Gemini CLI adoption changes.
 
+## What the server exposes
+
+Thirty tools, advertised to every client that connects. Grouped by where they fall in a
+build round; the authoritative list is whatever `tools/list` returns, and
+`plugin-manifests.test.ts` fails if this table drifts from it.
+
+| Tool                     | What it does                            |             |
+| ------------------------ | --------------------------------------- | ----------- |
+| `create_game`            | Create a game                           | write       |
+| `start`                  | Start or rejoin a build round           | write       |
+| `open_round`             | Open an improvement round               | write       |
+| `continue_draft`         | Continue an unpublished draft           | write       |
+| `get_brief`              | Read the build brief                    | read        |
+| `get_seed`               | Fetch the seed draft                    | read        |
+| `get_sources`            | Fetch existing game sources             | read        |
+| `get_kit`                | Fetch the Creator Kit                   | read        |
+| `get_kit_api`            | Fetch the Creator Kit's API reference   | read        |
+| `list_kit_files`         | List Creator Kit files                  | read        |
+| `search_kit_files`       | Search Creator Kit files                | read        |
+| `read_kit_file`          | Read one Creator Kit file               | read        |
+| `read_kit_files`         | Read several Creator Kit files          | read        |
+| `read_kit_file_fragment` | Read a Creator Kit file fragment        | read        |
+| `stage_source_file`      | Stage one source file                   | destructive |
+| `patch_source_file`      | Edit one staged source file             | destructive |
+| `delete_source_file`     | Delete one staged source file           | destructive |
+| `clear_staged_sources`   | Clear staged source files               | destructive |
+| `list_staged_sources`    | List staged source files                | read        |
+| `stage_upload_url`       | Get a stage upload URL                  | write       |
+| `submit_sources`         | Deliver sources to the gate             | destructive |
+| `end`                    | End (commit) this round                 | write       |
+| `get_gate_verdict`       | Check the gate once                     | read        |
+| `get_gate_media`         | Fetch the gate's screenshots and video  | read        |
+| `report_progress`        | Report progress                         | write       |
+| `screenshot_upload_url`  | Get a screenshot upload URL             | write       |
+| `show_round`             | Show the creator a live round card      | read        |
+| `show_media`             | Show the creator the gate's screenshots | read        |
+| `read_inbox`             | Read creator messages                   | read        |
+| `ack_inbox`              | Acknowledge creator messages            | destructive |
+
+The third column is the tool's own `annotations`, not a summary written here: `read` is
+`readOnlyHint`, `destructive` is `destructiveHint`. Six tools are destructive, and the
+protocol's opposite of destructive is _additive_, not "deletes" — a client may skip its
+approval prompt for anything marked non-destructive, so anything that consumes or
+overwrites is marked honestly even when nothing is erased. What each one actually does:
+
+- `stage_source_file` overwrites the same path if staged again;
+- `patch_source_file` can remove lines;
+- `delete_source_file` and `clear_staged_sources` delete staged files;
+- `submit_sources` burns one of a capped number of deliveries and can move the pointer
+  that decides what publishes;
+- `ack_inbox` makes creator messages stop appearing.
+
+The first four touch staged scratch space, which is undelivered by definition. The last
+two have effects a creator sees, which is exactly why they carry the hint.
+
+**Not in that list, deliberately.** `get_round_status` and `get_round_media` appear only
+for a client that negotiates the UI extension, since a client with no views would offer
+them to its model. Seven more — the proposal tools (`open_proposal_round`,
+`submit_proposal`, `get_proposal_status`) and the exemplar tools (`list_examples`,
+`get_example`, `list_example_files`, `read_example_file`) — are callable but never
+advertised and never named to a model (`MCP_UNADVERTISED_TOOLS`). An agent will not
+discover them, so do not write a client, a listing or a test case that expects to.
+
+**Every one of them needs an approved creator account.** The tools load for anyone; the
+calls are refused without one. That is the gate, not an outage.
+
 ## The official registry entry
 
 Live at

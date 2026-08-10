@@ -359,6 +359,32 @@ describe('POST /api/mcp (BY-05)', () => {
     app = null;
   });
 
+  // Pin the annotation value, not just the name.
+  it('documents each advertised tool with the annotation it actually reports', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    app = await createApp(store);
+
+    const sessionId = await initialize(app);
+    const listed = await mcpCall(app, 'tools/list', {}, { 'mcp-session-id': sessionId });
+    const live = new Map(
+      (listed.json().result.tools as Array<{ name: string; annotations?: Record<string, boolean> }>).map((tool) => [
+        tool.name,
+        tool.annotations?.readOnlyHint ? 'read' : tool.annotations?.destructiveHint ? 'destructive' : 'write',
+      ]),
+    );
+
+    const readme = await readFile(new URL('../../../listings/mcp/README.md', import.meta.url), 'utf8');
+    const documented = new Map(
+      [...readme.matchAll(/^\|\s*`([a-z_]+)`\s*\|[^|]*\|\s*(read|write|destructive)\s*\|/gm)].map((m) => [m[1], m[2]]),
+    );
+
+    expect(documented.size).toBe(live.size);
+    for (const [name, kind] of live) {
+      expect(documented.get(name), `README row for ${name}`).toBe(kind);
+    }
+  });
+
   it('initialize issues Mcp-Session-Id (transport only) and tools/list exposes the contract', async () => {
     const store = new InMemoryStore();
     await seedJob(store);

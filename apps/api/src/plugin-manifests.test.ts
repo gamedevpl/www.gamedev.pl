@@ -3,6 +3,8 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { MCP_INSTALL_LINK_CREDENTIAL_MARKERS } from './mcp-install-links.js';
+import { MCP_UNADVERTISED_TOOLS, MCP_VISIBLE_TOOLS } from './mcp-server.js';
+import { MCP_UI_APP_ONLY_TOOLS } from './mcp-ui.js';
 
 // Copy in several places drifts — the closed-beta clause already did.
 // Every manifest must match the registry and its endpoint.
@@ -242,6 +244,30 @@ describe('plugin skills', () => {
         expect(keys.has('name'), `${label} needs a name`).toBe(true);
         expect(keys.has('description'), `${label} needs a description`).toBe(true);
       }
+    }
+  });
+});
+
+describe('the documented tool list', () => {
+  const readme = readFileSync(join(repoRoot, 'listings/mcp/README.md'), 'utf8');
+  const documented = [...readme.matchAll(/^\|\s*`([a-z_]+)`\s*\|/gm)].map((m) => m[1]);
+
+  // Hand-kept lists go stale.
+  it('names exactly the tools a connecting client is offered', () => {
+    const advertised = [...MCP_VISIBLE_TOOLS].filter((name) => !MCP_UI_APP_ONLY_TOOLS.has(name));
+    expect([...documented].sort()).toEqual([...advertised].sort());
+  });
+
+  it('does not document a tool no agent can discover', () => {
+    for (const name of MCP_UNADVERTISED_TOOLS) {
+      expect(documented, `${name} is unadvertised and must not read as available`).not.toContain(name);
+    }
+  });
+
+  // Invisible without the UI extension; say so.
+  it('says why the app-only tools are missing rather than omitting them silently', () => {
+    for (const name of MCP_UI_APP_ONLY_TOOLS) {
+      expect(readme).toContain(name);
     }
   });
 });

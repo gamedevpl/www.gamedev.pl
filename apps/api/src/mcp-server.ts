@@ -118,7 +118,7 @@ const FINISHED_REASON = STALE_AGENT_TOKEN_REASON;
 
 const SESSION_HEADER = 'mcp-session-id';
 
-const MCP_VISIBLE_TOOLS = new Set([
+export const MCP_VISIBLE_TOOLS = new Set([
   'create_game',
   'start',
   'open_round',
