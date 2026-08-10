@@ -4,7 +4,7 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import i18n from './i18n/index.js';
-import { embedGameHtml, withGameLocale } from './gamePlayer.js';
+import { embedGameHtml, postGameHostMessage, withGameLocale } from './gamePlayer.js';
 import { StudioStage, type StudioStageProps } from './StudioStage.js';
 
 vi.mock('./submissionApi.js', async () => {
@@ -15,6 +15,12 @@ vi.mock('./studioApi.js', async () => {
   const actual = await vi.importActual<typeof import('./studioApi.js')>('./studioApi.js');
   return { ...actual, submitImprovement: vi.fn() };
 });
+vi.mock('./gamePlayer.js', async () => {
+  const actual = await vi.importActual<typeof import('./gamePlayer.js')>('./gamePlayer.js');
+  return { ...actual, postGameHostMessage: vi.fn(actual.postGameHostMessage) };
+});
+
+const mockedPostGameHostMessage = vi.mocked(postGameHostMessage);
 
 const GAME_A = '<!doctype html><html><head></head><body><canvas id="game">A</canvas></body></html>';
 const GAME_B = '<!doctype html><html><head></head><body><canvas id="game">B</canvas></body></html>';
@@ -255,6 +261,26 @@ describe('StudioStage', () => {
     });
 
     expect(host.querySelector('iframe')?.getAttribute('srcdoc')).toContain('>A<');
+    unmount();
+  });
+
+  it('unmutes and resumes the frame on entering play — watching must not leave a game silent forever', async () => {
+    vi.useFakeTimers();
+    const props = baseProps({ posture: 'watch' });
+    const { rerender, unmount } = await mount(props);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(750);
+    });
+    mockedPostGameHostMessage.mockClear();
+
+    await rerender({ ...props, posture: 'play' });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(750);
+    });
+
+    const messages = mockedPostGameHostMessage.mock.calls.map(([, message]) => message);
+    expect(messages).toContainEqual({ type: 'resume' });
+    expect(messages).toContainEqual({ type: 'setSound', muted: false });
     unmount();
   });
 });

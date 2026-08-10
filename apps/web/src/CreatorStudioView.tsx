@@ -17,7 +17,7 @@ import { StudioVersionRibbon } from './StudioVersionRibbon.js';
 import { StudioChatRail } from './StudioChatRail.js';
 import { StudioStageCard } from './StudioStageCard.js';
 import { StudioFullBleed } from './StudioFullBleed.js';
-import { useStageSource } from './useStageSource.js';
+import { useStageSource, type StageOrigin } from './useStageSource.js';
 import { useStudioStatusPoll, defaultRailOpen } from './useStudioStatusPoll.js';
 import { GameTheater } from './GameTheater.js';
 import {
@@ -381,6 +381,11 @@ export function CreatorStudioView({
   const studioStatus = useStudioStatusPoll(stageToken);
   const stageSource = useStageSource(stageToken ?? '', studioStatus);
   const [stageStatus, setStageStatus] = useState<StageStatus>({ kind: 'empty' });
+  // What the ribbon should describe — the *displayed* document's origin, reported back
+  // by the stage. Distinct from `stageSource.origin` (the latest fetched one) while a
+  // swap is held during play: the ribbon must not claim a not-yet-applied build's
+  // provenance for whatever's actually running.
+  const [displayedOrigin, setDisplayedOrigin] = useState<StageOrigin>(stageSource.origin);
   const [newerStageWaiting, setNewerStageWaiting] = useState(false);
   const [checklistUnread, setChecklistUnread] = useState(0);
   const [railManualOpen, setRailManualOpen] = useState<boolean | null>(null);
@@ -872,6 +877,10 @@ export function CreatorStudioView({
                         rule) — see docs/studio-game-first-implementation-plan.md Workstream C. */}
                       <div className="studio-stage-layout">
                         <StudioStage
+                          // Remounts on game switch — StudioStage's own per-document caches
+                          // (pendingHtml, lastGoodRef, …) must not carry over from the
+                          // previous game (Codex review of PR #739).
+                          key={playtestGame?.token ?? activeGame.token}
                           token={playtestGame?.token ?? activeGame.token}
                           title={activeGame.title}
                           slug={activeGame.slug ?? undefined}
@@ -884,6 +893,7 @@ export function CreatorStudioView({
                           onStatusChange={setStageStatus}
                           onNewerStageWaiting={setNewerStageWaiting}
                           onImproved={(newToken) => setHandoffToken(newToken)}
+                          onDisplayedOriginChange={setDisplayedOrigin}
                         />
 
                         {stageStatus.kind === 'empty' &&
@@ -896,7 +906,7 @@ export function CreatorStudioView({
                         ) : null}
 
                         <StudioVersionRibbon
-                          origin={stageSource.origin}
+                          origin={displayedOrigin}
                           publishedAt={activeGame.publishedAt ?? activeGame.livePublishedAt}
                           stageStatus={stageStatus}
                           deliveryInGate={Boolean(studioStatus?.gateProgress)}

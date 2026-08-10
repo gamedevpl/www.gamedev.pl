@@ -64,6 +64,8 @@ export function useStageSource(token: string, status: SubmissionStatus | null): 
   const publishedInFlightRef = useRef(false);
   const publishedRetryRef = useRef(0);
   const [publishedRetryTick, setPublishedRetryTick] = useState(0);
+  const channelRetryRef = useRef(0);
+  const [channelRetryTick, setChannelRetryTick] = useState(0);
 
   // Every fetch below closes over the token it was issued for and checks this ref
   // before applying its result — a game switch must never show the previous game's
@@ -84,6 +86,7 @@ export function useStageSource(token: string, status: SubmissionStatus | null): 
     loadedPublishedSlugRef.current = null;
     publishedInFlightRef.current = false;
     publishedRetryRef.current = 0;
+    channelRetryRef.current = 0;
   }, [token]);
 
   // Auto-load the live preview as soon as one is available, and silently refresh it
@@ -134,6 +137,7 @@ export function useStageSource(token: string, status: SubmissionStatus | null): 
       .then((html) => {
         if (activeTokenRef.current !== requestToken) return;
         loadedChannelRef.current = latest.ref;
+        channelRetryRef.current = 0;
         setChannel({
           html,
           at: latest.createdAt ? Date.parse(latest.createdAt) : Date.now(),
@@ -142,13 +146,23 @@ export function useStageSource(token: string, status: SubmissionStatus | null): 
       })
       .catch(() => {
         if (activeTokenRef.current !== requestToken) return;
-        loadedChannelRef.current = latest.ref;
+        // Same reasoning as the published-fetch retry below: a transient failure must
+        // not permanently blank the stage just because this ref will never come around
+        // again on its own (no PR preview means no other trigger to retry with).
+        if (channelRetryRef.current < 3) {
+          channelRetryRef.current += 1;
+          window.setTimeout(() => {
+            if (activeTokenRef.current === requestToken) setChannelRetryTick((tick) => tick + 1);
+          }, 4_000);
+        } else {
+          loadedChannelRef.current = latest.ref;
+        }
       })
       .finally(() => {
         if (activeTokenRef.current !== requestToken) return;
         channelInFlightRef.current = false;
       });
-  }, [preview, status?.playable, token]);
+  }, [preview, status?.playable, token, channelRetryTick]);
 
   // Once the game has published, the stage shows the delivered build itself — the
   // same document a player sees — rather than a stale staged/channel copy.

@@ -6,7 +6,7 @@ import { useEditorDraftBridge } from './editorBridge.js';
 import { PixelIcon } from './PixelIcon.js';
 import { submitFeedback, type FeedbackContext, type SubmissionApiError } from './submissionApi.js';
 import { submitImprovement } from './studioApi.js';
-import type { StageSource } from './useStageSource.js';
+import type { StageOrigin, StageSource } from './useStageSource.js';
 
 /**
  * The stage: always mounted, always full-bleed, running the game whether or not the
@@ -73,6 +73,10 @@ export type StudioStageProps = {
   onNewerStageWaiting?: (waiting: boolean) => void;
   /** A published-game improvement opened a new job; the parent moves the thread onto it. */
   onImproved?: (token: string) => void;
+  /** The origin of whatever `source` is *actually shown* right now — distinct from
+   * `source.origin` while a swap is held during play. The ribbon must describe the
+   * document on screen, not the one waiting in the wings. */
+  onDisplayedOriginChange?: (origin: StageOrigin) => void;
 };
 
 export function StudioStage({
@@ -88,6 +92,7 @@ export function StudioStage({
   onStatusChange,
   onNewerStageWaiting,
   onImproved,
+  onDisplayedOriginChange,
 }: StudioStageProps) {
   const { t } = useTranslation();
   const frameRef = useRef<HTMLIFrameElement | null>(null);
@@ -98,11 +103,17 @@ export function StudioStage({
   // `embed` to `GameFrame`, so feeding it `source.html` (already embedded) would inject
   // the player bridge twice.
   const [shownHtml, setShownHtml] = useState<string | null>(source.rawHtml);
+  // What's actually on screen, for the ribbon — distinct from `source.origin` while a
+  // swap is held during play (Codex review of PR #739: the ribbon must not claim the
+  // held/pending build's provenance for a document that hasn't been applied yet).
+  const [shownOrigin, setShownOrigin] = useState<StageOrigin>(source.origin);
   const [pendingHtml, setPendingHtml] = useState<string | null>(null);
+  const [pendingOrigin, setPendingOrigin] = useState<StageOrigin | null>(null);
   const [pendingAt, setPendingAt] = useState<number | null>(null);
   const [finishFirst, setFinishFirst] = useState(false);
   const [shimmer, setShimmer] = useState(false);
   const lastGoodRef = useRef<string | null>(source.rawHtml);
+  const lastGoodOriginRef = useRef<StageOrigin>(source.origin);
   const lastGoodAtRef = useRef<number | null>(source.origin.at);
 
   const [status, setStatus] = useState<StageStatus>(source.rawHtml ? { kind: 'ready' } : { kind: 'empty' });
@@ -128,32 +139,40 @@ export function StudioStage({
     if (posture === 'play' && shownHtml !== null) {
       // A4: never replace srcDoc mid-run. Hold it and let the toast offer the choice.
       setPendingHtml(next);
+      setPendingOrigin(source.origin);
       setPendingAt(Date.now());
       setFinishFirst(false);
       return;
     }
-    applySwap(next);
+    applySwap(next, source.origin);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source.rawHtml, posture]);
 
   // Returning to watch posture applies a swap the creator chose to finish first.
   useEffect(() => {
     if (posture === 'watch' && finishFirst && pendingHtml !== null) {
-      applySwap(pendingHtml);
+      applySwap(pendingHtml, pendingOrigin ?? source.origin);
       setPendingHtml(null);
+      setPendingOrigin(null);
       setPendingAt(null);
       setFinishFirst(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [posture]);
 
-  function applySwap(next: string | null) {
+  useEffect(() => {
+    onDisplayedOriginChange?.(shownOrigin);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shownOrigin]);
+
+  function applySwap(next: string | null, origin: StageOrigin) {
     swapWatchRef.current?.stop();
     const showShimmer = !reducedMotion && next != null && shownHtml != null;
     setShimmer(showShimmer);
     setShownHtml(next);
+    setShownOrigin(origin);
     setStatusAndReport(next ? { kind: 'ready' } : { kind: 'empty' });
-    if (next) watchSwappedDocument(next);
+    if (next) watchSwappedDocument(next, origin);
     if (showShimmer) {
       window.setTimeout(() => setShimmer(false), 400);
     }
@@ -166,10 +185,11 @@ export function StudioStage({
    * assembler change, no sandbox change.
    *
    * `candidate` is only promoted to `lastGoodRef` once the full watch window elapses
-   * with no crash reported — marking it good the instant it's shown would let a crash
-   * *during* the window "restore" the same build that just crashed.
+   * with no crash reported *and* the document actually painted a frame — marking it
+   * good the instant it's shown would let a crash, or a build that silently draws
+   * nothing, "restore" the same broken document on the next recovery.
    */
-  function watchSwappedDocument(candidate: string) {
+  function watchSwappedDocument(candidate: string, origin: StageOrigin) {
     let sawFrame = false;
     function onMessage(event: MessageEvent) {
       if (event.origin !== 'null') return;
@@ -192,8 +212,11 @@ export function StudioStage({
       if (swapWatchRef.current?.stop === stop) swapWatchRef.current = null;
     }
     const errorTimer = window.setTimeout(() => {
-      lastGoodRef.current = candidate;
-      lastGoodAtRef.current = source.origin.at ?? Date.now();
+      if (sawFrame) {
+        lastGoodRef.current = candidate;
+        lastGoodOriginRef.current = origin;
+        lastGoodAtRef.current = origin.at ?? Date.now();
+      }
       stop();
     }, SWAP_WATCH_MS);
     const drewNothingTimer = window.setTimeout(() => {
@@ -214,6 +237,7 @@ export function StudioStage({
       // status; a card in the middle of a play session has nowhere honest to sit.
       const good = lastGoodRef.current;
       setShownHtml(good);
+      setShownOrigin(lastGoodOriginRef.current);
       setStatusAndReport(good ? { kind: 'crashed', message } : { kind: 'empty' });
       return;
     }
@@ -227,13 +251,15 @@ export function StudioStage({
     const good = lastGoodRef.current;
     swapWatchRef.current?.stop();
     setShownHtml(good);
+    setShownOrigin(lastGoodOriginRef.current);
     setStatusAndReport(good ? { kind: 'ready' } : { kind: 'empty' });
   }
 
   function restartOnPending() {
     if (pendingHtml === null) return;
-    applySwap(pendingHtml);
+    applySwap(pendingHtml, pendingOrigin ?? source.origin);
     setPendingHtml(null);
+    setPendingOrigin(null);
     setPendingAt(null);
     setFinishFirst(false);
   }
@@ -277,12 +303,23 @@ export function StudioStage({
     resetIdle();
   }
 
-  // Watch posture: muted, frozen when hidden — the three constraints StudioLivePreview
-  // used to own, now permanent properties of the stage itself.
+  // Entering play must undo both of watch posture's standing effects: the idle
+  // throttle's `pause` (posture-change alone only clears the *overlay*, per
+  // `resetIdle` above — the frame stays paused until told otherwise) and the mute
+  // below. Idempotent on the bridge either way, so this is safe to send unconditionally.
   useEffect(() => {
-    if (posture !== 'watch' || !shownHtml) return;
+    if (posture !== 'play') return;
+    postGameHostMessage(frameRef.current, { type: 'resume' });
+  }, [posture]);
+
+  // Watch posture: muted, frozen when hidden — the three constraints StudioLivePreview
+  // used to own, now permanent properties of the stage itself. Play posture: audible —
+  // a game only ever watched, never played, must not stay silent forever.
+  useEffect(() => {
+    if (!shownHtml) return;
+    const muted = posture === 'watch';
     for (let attempt = 0; attempt < 4; attempt++) {
-      window.setTimeout(() => postGameHostMessage(frameRef.current, { type: 'setSound', muted: true }), attempt * 250);
+      window.setTimeout(() => postGameHostMessage(frameRef.current, { type: 'setSound', muted }), attempt * 250);
     }
   }, [posture, shownHtml]);
 

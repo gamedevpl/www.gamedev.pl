@@ -62,6 +62,42 @@ export function StudioChatRail({
     if (open && isSheet) setDetent((current) => (current === 'peek' ? 'half' : current));
   }, [open, isSheet]);
 
+  // The install/update banner pins to the bottom edge too (reflowed in-flow while a
+  // game is open, see styles.css around `.studio-layout.is-game-open .install-prompt`)
+  // — without this, the viewport-fixed sheet paints over its dismiss/reload controls
+  // instead of sitting above them. Same measured-lift pattern as ReviewDesk's sticky dock.
+  useEffect(() => {
+    if (typeof ResizeObserver === 'undefined') return;
+    const root = document.documentElement;
+    const measure = () => {
+      const overlay = document.querySelector('.install-prompt, .app-update') as HTMLElement | null;
+      if (!overlay) {
+        root.style.removeProperty('--studio-chat-rail-overlay-lift');
+        return;
+      }
+      const top = overlay.getBoundingClientRect().top;
+      const lift = Math.max(0, Math.ceil(window.innerHeight - top + 8));
+      root.style.setProperty('--studio-chat-rail-overlay-lift', `${lift}px`);
+    };
+    measure();
+    const resizeObserver = new ResizeObserver(measure);
+    const watchOverlays = () => {
+      resizeObserver.disconnect();
+      document.querySelectorAll('.install-prompt, .app-update').forEach((node) => resizeObserver.observe(node));
+      measure();
+    };
+    watchOverlays();
+    const mutationObserver = new MutationObserver(watchOverlays);
+    mutationObserver.observe(document.body, { childList: true, subtree: true });
+    window.addEventListener('resize', measure);
+    return () => {
+      resizeObserver.disconnect();
+      mutationObserver.disconnect();
+      window.removeEventListener('resize', measure);
+      root.style.removeProperty('--studio-chat-rail-overlay-lift');
+    };
+  }, []);
+
   const detentClass = isSheet ? ` is-sheet is-${detent}` : '';
 
   // The thread stays mounted whether the rail is a pill, a peek, or fully open — a

@@ -11430,6 +11430,14 @@ button.builder-mode-selector:disabled {
     animation: fadeIn 0.2s ease;
   }
 
+  /* Install / update banners pin to the bottom edge too — lift the sheet above them
+     (measured overlay height, --studio-chat-rail-overlay-lift from StudioChatRail)
+     instead of painting over their dismiss/reload controls. */
+  .app:has(.install-prompt) .studio-chat-rail.is-sheet,
+  .app:has(.app-update) .studio-chat-rail.is-sheet {
+    bottom: var(--studio-chat-rail-overlay-lift, 5.5rem);
+  }
+
   .studio-chat-rail.is-sheet .studio-chat-rail-grab {
     display: flex;
     justify-content: center;
