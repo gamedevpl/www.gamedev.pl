@@ -2639,6 +2639,73 @@ describe('SubmissionStatusView stop & retry', () => {
     });
   });
 
+  it('standalone: a chat-only reply on a published game refreshes the thread without a token', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    // A `reply` outcome carries no jobId/token/slug — see runChatAgent.
+    mockedSubmitImprovement.mockResolvedValue({ ok: true });
+    let calls = 0;
+    mockedGetSubmissionStatus.mockImplementation(async () => {
+      calls += 1;
+      return calls === 1
+        ? { status: 'published', slug: 'tv-tycoon' }
+        : {
+            status: 'published',
+            slug: 'tv-tycoon',
+            progress: {
+              headSha: '',
+              commits: [],
+              checklist: [],
+              revisions: [
+                { text: 'is it done yet?', createdAt: new Date().toISOString() },
+                {
+                  text: 'Still polishing — no changes to report yet.',
+                  createdAt: new Date().toISOString(),
+                  origin: 'studio',
+                },
+              ],
+            },
+          };
+    });
+    await i18n.changeLanguage('en');
+    window.history.pushState(null, '', '/status/reply-only-token');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'reply-only-token' }));
+      await flushEffects();
+    });
+
+    const box = container.querySelector<HTMLTextAreaElement>('.status-feedback-input');
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+      setter?.call(box, 'is it done yet?');
+      box!.dispatchEvent(new Event('input', { bubbles: true }));
+      await flushEffects();
+    });
+    await act(async () => {
+      container
+        .querySelector('.status-feedback .primary-btn')!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushEffects();
+      await flushEffects();
+    });
+
+    // Published stops the poll timer; refresh must come from send.
+    expect(mockedGetSubmissionStatus).toHaveBeenCalledTimes(2);
+    // No new round opened, so no handoff navigation fired.
+    expect(window.location.pathname).toBe('/status/reply-only-token');
+    expect(container.querySelector('.build-activity-studio')?.textContent).toContain(
+      'Still polishing — no changes to report yet.',
+    );
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it('embedded: a published self-improve switches the thread and surfaces the new round’s connect card', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     const connectFetch = vi.fn(async () => ({

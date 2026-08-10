@@ -3913,21 +3913,20 @@ export async function registerSubmissionRoutes(
           uid: request.user!.uid,
           directToBuilder: parsed.data.directToBuilder,
         });
-        if (chatOutcome?.kind === 'replied') {
-          if (store) {
-            try {
-              // Pre-delivered: on the thread, but never handed to a builder.
-              await store.appendCreatorMessage(issueNumber, inboxText, { delivered: true });
-              await store.appendCreatorMessage(issueNumber, chatOutcome.replyText, {
-                origin: 'studio',
-                delivered: true,
-              });
-            } catch (queueError) {
-              request.log.error({ err: queueError }, 'failed to record studio chat reply');
-            }
+        if (chatOutcome?.kind === 'replied' && store) {
+          try {
+            // Pre-delivered: on the thread, but never handed to a builder.
+            await store.appendCreatorMessage(issueNumber, inboxText, { delivered: true });
+            await store.appendCreatorMessage(issueNumber, chatOutcome.replyText, {
+              origin: 'studio',
+              delivered: true,
+            });
+            invalidateStatusCache(issueNumber);
+            return reply.send({ ok: true, ...(shotId ? { shotId } : {}) });
+          } catch (queueError) {
+            // A failed write must not claim success — fail open instead.
+            request.log.error({ err: queueError }, 'failed to record studio chat reply; failing open to the builder');
           }
-          invalidateStatusCache(issueNumber);
-          return reply.send({ ok: true, ...(shotId ? { shotId } : {}) });
         }
         if (chatOutcome?.kind === 'build') studioAckText = chatOutcome.ackText;
       }
@@ -4111,6 +4110,45 @@ export async function registerSubmissionRoutes(
 
       const currentTime = now();
       const dateStr = new Date(currentTime).toISOString().slice(0, 10);
+      const sanitizedFeedback = sanitizeCreatorText(parsed.data.feedback, { singleLine: false });
+      const sanitizedTitle = sanitizeCreatorText(`Improve ${record.title}`, { singleLine: true });
+      let shotId: string | undefined;
+      if (parsed.data.context?.screenshotPng) {
+        try {
+          shotId = await storeCreatorPlaytestShot(store, issueNumber, parsed.data.context.screenshotPng);
+        } catch (shotError) {
+          request.log.error({ err: shotError }, 'failed to store creator playtest screenshot');
+        }
+      }
+      const contextBlock = formatPlaytestContextBlock(parsed.data.context, shotId);
+      const inboxText = contextBlock ? `${sanitizedFeedback}\n\n${contextBlock}` : sanitizedFeedback;
+      const requestedBuilder = parsed.data.builder;
+
+      // Classify before spending any build-only quota or availability check.
+      let studioAckText: string | undefined;
+      const chatOutcome = await runChatAgent({
+        issueNumber,
+        message: sanitizedFeedback,
+        scope: 'improve',
+        record,
+        locale: record.locale ?? 'en',
+        ip: request.ip,
+        uid: request.user!.uid,
+        directToBuilder: parsed.data.directToBuilder,
+      });
+      if (chatOutcome?.kind === 'replied') {
+        try {
+          await store.appendCreatorMessage(issueNumber, inboxText, { delivered: true });
+          await store.appendCreatorMessage(issueNumber, chatOutcome.replyText, { origin: 'studio', delivered: true });
+          invalidateStatusCache(issueNumber);
+          return reply.send({ ok: true, ...(shotId ? { shotId } : {}) });
+        } catch (queueError) {
+          // A failed write must not claim success — fail open instead.
+          request.log.error({ err: queueError }, 'failed to record studio chat reply; failing open to the builder');
+        }
+      }
+      if (chatOutcome?.kind === 'build') studioAckText = chatOutcome.ackText;
+
       const requestedBuilderForCheck = parsed.data.builder;
       const effectiveBuilder =
         requestedBuilderForCheck && isBuilderKind(requestedBuilderForCheck)
@@ -4136,44 +4174,6 @@ export async function registerSubmissionRoutes(
         }
         return reply.status(429).send({ error: 'daily improvement quota exceeded' });
       }
-
-      const sanitizedFeedback = sanitizeCreatorText(parsed.data.feedback, { singleLine: false });
-      const sanitizedTitle = sanitizeCreatorText(`Improve ${record.title}`, { singleLine: true });
-      let shotId: string | undefined;
-      if (parsed.data.context?.screenshotPng) {
-        try {
-          shotId = await storeCreatorPlaytestShot(store, issueNumber, parsed.data.context.screenshotPng);
-        } catch (shotError) {
-          request.log.error({ err: shotError }, 'failed to store creator playtest screenshot');
-        }
-      }
-      const contextBlock = formatPlaytestContextBlock(parsed.data.context, shotId);
-      const inboxText = contextBlock ? `${sanitizedFeedback}\n\n${contextBlock}` : sanitizedFeedback;
-      const requestedBuilder = parsed.data.builder;
-
-      // A "reply" answers on the current job's thread and opens no new one.
-      let studioAckText: string | undefined;
-      const chatOutcome = await runChatAgent({
-        issueNumber,
-        message: sanitizedFeedback,
-        scope: 'improve',
-        record,
-        locale: record.locale ?? 'en',
-        ip: request.ip,
-        uid: request.user!.uid,
-        directToBuilder: parsed.data.directToBuilder,
-      });
-      if (chatOutcome?.kind === 'replied') {
-        try {
-          await store.appendCreatorMessage(issueNumber, inboxText, { delivered: true });
-          await store.appendCreatorMessage(issueNumber, chatOutcome.replyText, { origin: 'studio', delivered: true });
-        } catch (queueError) {
-          request.log.error({ err: queueError }, 'failed to record studio chat reply');
-        }
-        invalidateStatusCache(issueNumber);
-        return reply.send({ ok: true, ...(shotId ? { shotId } : {}) });
-      }
-      if (chatOutcome?.kind === 'build') studioAckText = chatOutcome.ackText;
 
       const started = await startImprovementRound({
         issueNumber,

@@ -119,6 +119,7 @@ async function createApp(params: {
   store?: Store;
   dailySubmissionQuota?: number;
   dailyFeedbackQuota?: number;
+  dailyImprovementQuota?: number;
   globalDailySubmissionCap?: number;
   creationLimitsTtlMs?: number;
   contentChecker?: ContentChecker;
@@ -159,6 +160,7 @@ async function createApp(params: {
       now: params.now,
       dailySubmissionQuota: params.dailySubmissionQuota,
       dailyFeedbackQuota: params.dailyFeedbackQuota,
+      dailyImprovementQuota: params.dailyImprovementQuota,
       globalDailySubmissionCap: params.globalDailySubmissionCap,
       creationLimitsTtlMs: params.creationLimitsTtlMs,
       maxCachedDraftPreviews: params.maxCachedDraftPreviews,
@@ -3388,6 +3390,51 @@ describe('the Studio mini chat agent (feedback route)', () => {
     expect(pending.map((m) => m.text)).toContain('Please make the robots water the flowers faster.');
     await app.close();
   });
+
+  it('a Firestore blip while recording the reply falls open to the builder’s inbox', async () => {
+    process.env.STUDIO_CHAT_AGENT = 'true';
+    class FlakyReplyStore extends InMemoryStore {
+      async appendCreatorMessage(
+        issueNumber: number,
+        text: string,
+        opts?: { origin?: 'agent' | 'studio'; delivered?: boolean; textLocalized?: string; locale?: string },
+      ) {
+        if (opts?.origin === 'studio') throw new Error('firestore unavailable');
+        return super.appendCreatorMessage(issueNumber, text, opts);
+      }
+    }
+    const store = new FlakyReplyStore();
+    const { backend } = createBackendStub();
+    const decide = vi.fn(async () => ({ kind: 'reply' as const, text: 'Still building.' }));
+    const { app, authHeaders } = await createApp({
+      githubClient: createGithubClientStub({ issueNumber: 90 }).githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      store,
+      chatAgent: { decide },
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about a garden full of robots.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    const token = mintToken(job.issueNumber, secret);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${token}/feedback`,
+      headers: authHeaders,
+      payload: { feedback: 'is it done yet?' },
+    });
+
+    // The write failed, so this should fail open, not claim success.
+    expect(res.statusCode).toBe(200);
+    const pending = await store.listPendingCreatorMessages(job.issueNumber);
+    expect(pending.map((m) => m.text)).toContain('is it done yet?');
+    await app.close();
+  });
 });
 
 describe('POST /api/submissions/:token/improve', () => {
@@ -3538,6 +3585,126 @@ describe('POST /api/submissions/:token/improve', () => {
       expect(res.json()).toMatchObject({ ok: true, slug: 'sky-dodge' });
       expect(briefs).toHaveLength(1);
       expect(briefs.at(-1)!.feedback).toContain('Make level two less punishing');
+      await app.close();
+    });
+
+    it('a conversational reply does not spend the daily improvement quota', async () => {
+      process.env.STUDIO_CHAT_AGENT = 'true';
+      const { githubClient, createIssue } = createGithubClientStub({ issueNumber: 501 });
+      const store = new InMemoryStore();
+      const { backend, briefs } = createBackendStub();
+      const responses: Array<{ kind: 'reply'; text: string } | { kind: 'build' }> = [
+        { kind: 'reply', text: 'first answer' },
+        { kind: 'reply', text: 'second answer' },
+        { kind: 'build' },
+      ];
+      let next = 0;
+      const decide = vi.fn(async () => responses[next++]!);
+      const { app, authHeaders } = await createApp({
+        githubClient,
+        agentBackend: backend,
+        submissionTokenSecret: secret,
+        store,
+        chatAgent: { decide },
+        // One slot total — a question must not spend it.
+        dailyImprovementQuota: 1,
+      });
+      await store.createSubmission(123, 'g:test-user', 'Sky Dodge');
+      await store.setSubmissionSlug(123, 'sky-dodge');
+      await store.setSubmissionPublishedAt(123, '2026-07-20T00:00:00.000Z');
+
+      for (let i = 0; i < 2; i++) {
+        const res = await app.inject({
+          method: 'POST',
+          url: `/api/submissions/${mintToken(123, secret)}/improve`,
+          headers: authHeaders,
+          payload: { feedback: `question ${i}, is it done yet?` },
+        });
+        expect(res.statusCode).toBe(200);
+        expect(res.json()).toEqual({ ok: true });
+      }
+      expect(createIssue).not.toHaveBeenCalled();
+
+      const build = await app.inject({
+        method: 'POST',
+        url: `/api/submissions/${mintToken(123, secret)}/improve`,
+        headers: authHeaders,
+        payload: { feedback: 'Make level two less punishing and add a checkpoint.' },
+      });
+      expect(build.statusCode).toBe(200);
+      expect(briefs).toHaveLength(1);
+      await app.close();
+    });
+
+    it('a conversational reply is not blocked by platform unavailability', async () => {
+      process.env.STUDIO_CHAT_AGENT = 'true';
+      const { githubClient } = createGithubClientStub({ issueNumber: 501 });
+      const store = new InMemoryStore();
+      const { backend } = createBackendStub();
+      const decide = vi.fn(async () => ({ kind: 'reply' as const, text: 'Still building.' }));
+      const { app, authHeaders } = await createApp({
+        githubClient,
+        agentBackend: backend,
+        submissionTokenSecret: secret,
+        store,
+        chatAgent: { decide },
+        managedAvailabilityGate: createManagedAvailabilityGate({ hasPlatformBackend: false }),
+      });
+      await store.createSubmission(123, 'g:test-user', 'Sky Dodge');
+      await store.setSubmissionSlug(123, 'sky-dodge');
+      await store.setSubmissionPublishedAt(123, '2026-07-20T00:00:00.000Z');
+
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/submissions/${mintToken(123, secret)}/improve`,
+        headers: authHeaders,
+        payload: { feedback: 'is it done yet?' },
+      });
+      // Would 409 here if this ran the build-only availability check.
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ ok: true });
+      await app.close();
+    });
+
+    it('a Firestore blip while recording the reply falls open to a real improvement round', async () => {
+      process.env.STUDIO_CHAT_AGENT = 'true';
+      const { githubClient } = createGithubClientStub({ issueNumber: 501 });
+      class FlakyReplyStore extends InMemoryStore {
+        async appendCreatorMessage(
+          issueNumber: number,
+          text: string,
+          opts?: { origin?: 'agent' | 'studio'; delivered?: boolean; textLocalized?: string; locale?: string },
+        ) {
+          if (opts?.origin === 'studio') throw new Error('firestore unavailable');
+          return super.appendCreatorMessage(issueNumber, text, opts);
+        }
+      }
+      const store = new FlakyReplyStore();
+      const { backend, briefs } = createBackendStub();
+      const decide = vi.fn(async () => ({ kind: 'reply' as const, text: 'Still building.' }));
+      const { app, authHeaders } = await createApp({
+        githubClient,
+        agentBackend: backend,
+        submissionTokenSecret: secret,
+        store,
+        chatAgent: { decide },
+      });
+      await store.createSubmission(123, 'g:test-user', 'Sky Dodge');
+      await store.setSubmissionSlug(123, 'sky-dodge');
+      await store.setSubmissionPublishedAt(123, '2026-07-20T00:00:00.000Z');
+
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/submissions/${mintToken(123, secret)}/improve`,
+        headers: authHeaders,
+        payload: { feedback: 'is it done yet?' },
+      });
+
+      // The write failed, so this should fail open, not claim success.
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({ ok: true, slug: 'sky-dodge' });
+      expect(briefs).toHaveLength(1);
+      expect(briefs.at(-1)!.feedback).toContain('is it done yet?');
       await app.close();
     });
   });
