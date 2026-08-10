@@ -794,6 +794,37 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(started.structured).toMatchObject({ slug: 'comet-courier', round: 1 });
   });
 
+  // Managed-agent connectors (Claude, ChatGPT Apps) keep echoing the opener bearer on
+  // every later call, not just start(). resolveAuth must still prefer the sessionKey
+  // start() minted rather than trying to verify that opener as a write bearer, or every
+  // post-start call fails with "invalid build token" (reported live 2026-08-10).
+  it('prefers sessionKey when the managed-agent opener bearer is echoed on later calls', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    await store.setRoundBuilder(ISSUE, 'platform');
+    app = await createApp(store);
+    const sessionId = await initialize(app);
+    const openerBearer = `Bearer ${mintManagedMcpOpener(ISSUE, secret, { roundGeneration: 1 })}`;
+
+    const started = await callTool(
+      app,
+      'start',
+      { slug: 'comet-courier' },
+      { 'mcp-session-id': sessionId, authorization: openerBearer },
+    );
+    expect(started.isError).toBe(false);
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    const brief = await callTool(
+      app,
+      'get_brief',
+      { sessionKey },
+      { 'mcp-session-id': sessionId, authorization: openerBearer },
+    );
+    expect(brief.isError).toBe(false);
+    expect(brief.structured).toMatchObject({ title: 'Comet Courier' });
+  });
+
   it('retired-key etiquette in start matches the error agents relay on a refused call', async () => {
     const store = new InMemoryStore();
     await seedJob(store);
