@@ -118,6 +118,7 @@ const STATE_ALIASES: Record<string, AgentTaskState> = {
   succeeded: 'completed',
   success: 'completed',
   finished: 'completed',
+  ended: 'completed',
   failed: 'failed',
   error: 'failed',
   errored: 'failed',

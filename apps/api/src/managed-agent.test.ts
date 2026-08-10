@@ -20,6 +20,7 @@ describe('managed agent state normalization', () => {
     expect(normalizeManagedState('RUNNING')).toBe('in_progress');
     expect(normalizeManagedState('status_idle')).toBe('idle');
     expect(normalizeManagedState('succeeded')).toBe('completed');
+    expect(normalizeManagedState('ended')).toBe('completed');
     expect(normalizeManagedState('expired')).toBe('timed_out');
     expect(normalizeManagedState('canceled')).toBe('cancelled');
     expect(normalizeManagedState('awaiting_input')).toBe('waiting_for_user');

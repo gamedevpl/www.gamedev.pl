@@ -106,6 +106,17 @@ export interface ManagedBackendOptions {
 
 export const DEFAULT_MANAGED_OUTPUT_PATH = 'outputs';
 
+// Idle requires_action: tool_confirmation Studio cannot Approve.
+export function isManagedIdleBlockedOnAction(stopReason: string | undefined): boolean {
+  return stopReason === 'requires_action';
+}
+
+// Nudge 400 while waiting on tool_confirmation.
+export function isUnnudgeableManagedIdleError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /tool_confirmation|requires_action|waiting for.*confirmation/i.test(message);
+}
+
 export function createManagedBackend(options: ManagedBackendOptions): AgentBackend {
   const deliver = options.deliver;
   if (!deliver && !options.tools?.mcpEndpoints?.length) {
@@ -352,11 +363,16 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
         !hasCandidate &&
         options.nudgeIdle !== false &&
         session.stopReason !== 'budget_reached' &&
+        !isManagedIdleBlockedOnAction(session.stopReason) &&
         Boolean(options.provider.sendMessage) &&
         !idleNudged.has(ref);
-      // Provider cannot see a channel submit or end; read once.
+      // Re-read signals after a spent nudge.
       const needsSignals =
-        nudgeCandidate || credentialRefs.has(ref) || Boolean(options.readCredentialRef && session.state === 'idle');
+        nudgeCandidate ||
+        credentialRefs.has(ref) ||
+        Boolean(options.readCredentialRef && session.state === 'idle') ||
+        (session.state === 'idle' && !hasCandidate && idleNudged.has(ref)) ||
+        isManagedIdleBlockedOnAction(session.stopReason);
       const signals =
         needsSignals && options.readSignals && observeOptions.issueNumber !== undefined
           ? await options.readSignals(observeOptions.issueNumber)
@@ -365,7 +381,22 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
       const agentEnded = Boolean(signals?.agentEndedAt);
 
       let nudged = false;
-      if (nudgeCandidate && !roundDelivered && !agentEnded && options.provider.sendMessage) {
+      let spentWithoutDelivery = false;
+      if (
+        session.state === 'idle' &&
+        !hasCandidate &&
+        !roundDelivered &&
+        !agentEnded &&
+        isManagedIdleBlockedOnAction(session.stopReason)
+      ) {
+        // Tool confirmation: Studio cannot Approve — spend the round.
+        idleNudged.add(ref);
+        spentWithoutDelivery = true;
+        options.log?.warn(
+          { ref, stopReason: session.stopReason },
+          'idle managed session blocked on required action; ending round without delivery',
+        );
+      } else if (nudgeCandidate && !roundDelivered && !agentEnded && options.provider.sendMessage) {
         try {
           await options.provider.sendMessage(
             ref,
@@ -375,16 +406,35 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
           nudged = true;
           options.log?.info?.({ ref }, 'nudged idle managed session to continue');
         } catch (error) {
+          // Transient: retry next poll. Confirmation: spend the round.
+          if (isUnnudgeableManagedIdleError(error)) {
+            idleNudged.add(ref);
+            spentWithoutDelivery = true;
+          }
           options.log?.warn({ err: error, ref }, 'could not nudge idle managed session');
         }
+      } else if (
+        session.state === 'idle' &&
+        !hasCandidate &&
+        !roundDelivered &&
+        !agentEnded &&
+        idleNudged.has(ref) &&
+        !nudged
+      ) {
+        // Nudge spent; still idle; nothing delivered.
+        spentWithoutDelivery = true;
       }
 
-      if (isManagedSessionHarvestable(session.state) && (session.state !== 'idle' || agentEnded)) {
+      if (
+        isManagedSessionHarvestable(session.state) &&
+        (session.state !== 'idle' || agentEnded || spentWithoutDelivery)
+      ) {
         await releaseCredential(ref, observeOptions.issueNumber);
       }
 
-      // A settled session with no candidate fails the round.
-      const state = outcome === 'pending' || nudged ? 'in_progress' : session.state;
+      // Spent idle → completed so reconcile leaves building (no "Powstaje kod").
+      const state =
+        outcome === 'pending' || nudged ? 'in_progress' : spentWithoutDelivery ? 'completed' : session.state;
 
       return {
         state,
