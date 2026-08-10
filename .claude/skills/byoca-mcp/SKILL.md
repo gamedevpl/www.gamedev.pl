@@ -13,6 +13,8 @@ private content into PRs).
 Platform Copilot's MCP lane uses the same session loop with one extra boundary: the
 Copilot MCP connector authenticates the connection, while `start({ slug, key })` binds a
 live round. Connector-only requests are inert; do not treat the connector as a round key.
+The GitHub Agents-side secret reference must use the `COPILOT_MCP_` prefix. Copilot's
+firewall does not cover MCP servers, so the round-key boundary is the isolation layer.
 
 ## Session loop (what agents must do)
 

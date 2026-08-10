@@ -92,6 +92,33 @@ The two lanes are never combined in one round. Publish seals stay on the harness
 until a caller explicitly selects MCP for a different round. The connector-only replay
 test enumerates every mutating tool advertised by the MCP server and requires refusal.
 
+GitHub configures this connector outside the repository, under the repository's Copilot
+MCP settings. The remote-server header must reference an Agents secret named
+`COPILOT_MCP_CONNECTOR_SECRET`, for example:
+
+```json
+{
+  "mcpServers": {
+    "gamedevpl": {
+      "url": "https://www.gamedev.pl/api/mcp",
+      "headers": {
+        "Authorization": "Bearer $COPILOT_MCP_CONNECTOR_SECRET"
+      }
+    }
+  }
+}
+```
+
+The Cloud Run deployment maps the corresponding runtime value into the same environment
+name. GitHub's MCP secret-prefix rule applies to the Agents-side secret; the lower-level
+Secret Manager resource name is only a deployment detail. The checked-in root `mcp.json`
+is the Cursor manifest and does not configure Copilot.
+
+Copilot's firewall does not apply to MCP servers; it only covers processes started through
+the agent's Bash tool. The connector bearer is therefore not an isolation boundary. The
+security property is the round-key exchange and the refusal of every mutating tool before
+that exchange, which the connector-only replay test keeps load-bearing.
+
 ## Two delivery shapes, and the one guard that covers both
 
 A managed round can deliver the way every other round does, or by being read out:
