@@ -19,6 +19,7 @@ import {
   type ManagedRoundSignals,
 } from './managed-backend.js';
 import type { KitDigestLoader } from './kit-digest.js';
+import type { QueryKnowledgeFn } from './knowledge-search.js';
 import { createArchiveSeedContextSource } from './seed-context.js';
 import { createSelfBuildBackend, type SelfBuildBackendOptions } from './self-build-backend.js';
 
@@ -217,7 +218,7 @@ export function createAgentBackendFromEnv(log?: Logger): AgentBackend | undefine
  * serving) rather than the dispatch PAT: assembling context is a read, and giving the
  * dispatch credential another job would widen what one expiry takes down.
  */
-export function createGameSeederFromEnv(log?: Logger): GameSeeder | undefined {
+export function createGameSeederFromEnv(log?: Logger, knowledgeSearch?: QueryKnowledgeFn): GameSeeder | undefined {
   if (process.env.SEED_DISPATCH?.trim() !== 'true') return undefined;
 
   const token = process.env.GAMES_REPO_TOKEN?.trim() ?? process.env.GITHUB_TOKEN?.trim();
@@ -235,5 +236,6 @@ export function createGameSeederFromEnv(log?: Logger): GameSeeder | undefined {
     context: createArchiveSeedContextSource({ repo, ref, token, ...(log ? { log } : {}) }),
     ...(model ? { model } : {}),
     ...(log ? { log } : {}),
+    ...(knowledgeSearch ? { knowledgeSearch } : {}),
   });
 }

@@ -292,6 +292,26 @@ jobs:
             fi
           done
 
+          # Same threading rule as the Vertex levers above: knowledge_query's Discovery
+          # Engine client (knowledge-search.ts) stays off — 503, degrading everywhere it
+          # is called — until KNOWLEDGE_SEARCH_ENGINE_ID is both set here AND the
+          # games-repo corpus has actually been imported into that engine.
+          for KNOWLEDGE_VAR in KNOWLEDGE_SEARCH_ENGINE_ID KNOWLEDGE_SEARCH_PROJECT_ID KNOWLEDGE_SEARCH_LOCATION \
+            KNOWLEDGE_SEARCH_COLLECTION KNOWLEDGE_SEARCH_SERVING_CONFIG KNOWLEDGE_SEARCH_QUOTA_PROJECT; do
+            case "$KNOWLEDGE_VAR" in
+              KNOWLEDGE_SEARCH_ENGINE_ID) KNOWLEDGE_VAL="${{ vars.KNOWLEDGE_SEARCH_ENGINE_ID }}" ;;
+              KNOWLEDGE_SEARCH_PROJECT_ID) KNOWLEDGE_VAL="${{ vars.KNOWLEDGE_SEARCH_PROJECT_ID }}" ;;
+              KNOWLEDGE_SEARCH_LOCATION) KNOWLEDGE_VAL="${{ vars.KNOWLEDGE_SEARCH_LOCATION }}" ;;
+              KNOWLEDGE_SEARCH_COLLECTION) KNOWLEDGE_VAL="${{ vars.KNOWLEDGE_SEARCH_COLLECTION }}" ;;
+              KNOWLEDGE_SEARCH_SERVING_CONFIG) KNOWLEDGE_VAL="${{ vars.KNOWLEDGE_SEARCH_SERVING_CONFIG }}" ;;
+              KNOWLEDGE_SEARCH_QUOTA_PROJECT) KNOWLEDGE_VAL="${{ vars.KNOWLEDGE_SEARCH_QUOTA_PROJECT }}" ;;
+            esac
+            if [ -n "$KNOWLEDGE_VAL" ]; then
+              ENV_VARS="${ENV_VARS}|${KNOWLEDGE_VAR}=${KNOWLEDGE_VAL}"
+              echo "Threading ${KNOWLEDGE_VAR}=${KNOWLEDGE_VAL}"
+            fi
+          done
+
           gcloud run deploy "$SERVICE" \
             --image "$IMAGE" \
             --region "$REGION" \

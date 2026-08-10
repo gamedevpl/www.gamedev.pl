@@ -75,6 +75,17 @@
 #                               unchanged — the intended default. Must be passed on EVERY
 #                               deploy: --set-env-vars replaces the whole map, so omitting
 #                               it here silently switches zones off.)
+#   KNOWLEDGE_SEARCH_ENGINE_ID=... (the games-repo knowledge_query Discovery Engine
+#                               engine id, from infra/setup-gcp.sh's knowledge_query
+#                               step — see knowledge-search.ts. Unset (the default until
+#                               that step has been run and a corpus imported) leaves
+#                               knowledge_query answering 503; every downstream caller
+#                               degrades to a warning, nothing else changes.)
+#   KNOWLEDGE_SEARCH_PROJECT_ID / KNOWLEDGE_SEARCH_LOCATION / KNOWLEDGE_SEARCH_COLLECTION /
+#   KNOWLEDGE_SEARCH_SERVING_CONFIG / KNOWLEDGE_SEARCH_QUOTA_PROJECT=...
+#                              (override the Discovery Engine resource path; each has a
+#                               working default in knowledge-search.ts and is normally
+#                               left unset)
 #
 # Then run:
 #   PROJECT_ID=my-proj ./infra/deploy-api.sh
@@ -254,6 +265,15 @@ for VERTEX_VAR in VERTEX_MODEL VERTEX_REGION TRANSLATE_BUILD_LOG; do
   eval "VERTEX_VAL=\${${VERTEX_VAR}:-}"
   if [ -n "${VERTEX_VAL}" ]; then
     ENV_VARS="${ENV_VARS}|${VERTEX_VAR}=${VERTEX_VAL}"
+  fi
+done
+# Same threading rule: knowledge_query's Discovery Engine client is off (503) until
+# KNOWLEDGE_SEARCH_ENGINE_ID is both set here AND actually provisioned (setup-gcp.sh).
+for KNOWLEDGE_VAR in KNOWLEDGE_SEARCH_ENGINE_ID KNOWLEDGE_SEARCH_PROJECT_ID KNOWLEDGE_SEARCH_LOCATION \
+  KNOWLEDGE_SEARCH_COLLECTION KNOWLEDGE_SEARCH_SERVING_CONFIG KNOWLEDGE_SEARCH_QUOTA_PROJECT; do
+  eval "KNOWLEDGE_VAL=\${${KNOWLEDGE_VAR}:-}"
+  if [ -n "${KNOWLEDGE_VAL}" ]; then
+    ENV_VARS="${ENV_VARS}|${KNOWLEDGE_VAR}=${KNOWLEDGE_VAL}"
   fi
 done
 # Feature flags the Actions workflow threads from repo variables but this script did not,

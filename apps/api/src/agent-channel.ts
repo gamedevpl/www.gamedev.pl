@@ -48,6 +48,8 @@ import {
   readKitFiles,
   searchKitFiles,
 } from './kit-files.js';
+import { logKnowledgeQuery } from './knowledge-metrics.js';
+import type { KnowledgeMode, KnowledgeQueryResult, KnowledgeScope, QueryKnowledgeFn } from './knowledge-search.js';
 import {
   KIT_ENTRY,
   KitRegistryError,
@@ -382,6 +384,12 @@ export interface AgentChannelOptions {
    * inventing an engineRef or a URL.
    */
   objectStore?: GcsObjectStore;
+  // Discovery Engine seam; absent means knowledge_query answers 503.
+  knowledgeSearch?: QueryKnowledgeFn;
+  // Per-round soft cap on knowledge_query mode='answer' calls.
+  maxKnowledgeAnswersPerWindow?: number;
+  // Per-round soft cap on knowledge_query mode='chunks' calls.
+  maxKnowledgeChunksPerWindow?: number;
   /** Deliveries one build may make per hour. */
   maxSubmitsPerWindow?: number;
   /** Shared source-delivery core used by HTTP/MCP and managed harvest. */
@@ -424,6 +432,27 @@ type RejectionReason =
   /** Self-round sources-delivery budget exhausted; machine-readable for agents. */
   | 'delivery_cap';
 
+const KNOWLEDGE_SCOPES = new Set(['kit', 'editor', 'examples', 'docs']);
+
+// Fail-open: a soft cap degrades to a warning, not an error.
+function knowledgeCapWarning(mode: KnowledgeMode, cap: number): KnowledgeQueryResult {
+  return {
+    mode,
+    fallback: false,
+    chunks: [],
+    repoPaths: [],
+    guidance: 'Verify exact API signatures via get_kit_api / read_kit_file rather than prose.',
+    truncated: false,
+    cached: false,
+    warnings: [
+      {
+        code: 'rate_limited',
+        message: `Per-round knowledge_query ${mode} cap reached (${cap}/hour) — try a narrower query or wait.`,
+      },
+    ],
+  };
+}
+
 /** Sliding-window limiter keyed by build. The token is the identity, not the IP. */
 function isRateLimited(buckets: Map<number, number[]>, key: number, currentTime: number, max: number): boolean {
   const windowMs = 60 * 60 * 1000;
@@ -451,6 +480,10 @@ export async function registerAgentChannelRoutes(
   // Screenshots are far heavier than sentences, so they get their own, tighter caps.
   const maxShotsPerBuild = options.maxShotsPerBuild ?? 24;
   const maxShotsPerWindow = options.maxShotsPerWindow ?? 40;
+  // Answer costs far more than chunks, hence separate per-mode caps.
+  const maxKnowledgeAnswersPerWindow = options.maxKnowledgeAnswersPerWindow ?? 15;
+  const maxKnowledgeChunksPerWindow = options.maxKnowledgeChunksPerWindow ?? 30;
+  const knowledgeSearch = options.knowledgeSearch;
 
   // Raw PUT parsers for curl --upload-file (octet-stream / PNG / text).
   const parseRawBuffer = (
@@ -486,6 +519,8 @@ export async function registerAgentChannelRoutes(
   const inboxChecksByBuild = new Map<number, number[]>();
   const shotsByBuild = new Map<number, number[]>();
   const previewsByBuild = new Map<number, number[]>();
+  const knowledgeAnswersByBuild = new Map<number, number[]>();
+  const knowledgeChunksByBuild = new Map<number, number[]>();
   const kitFileStore = options.objectStore ? createKitFileStore(options.objectStore) : null;
   const exampleFileStore = options.objectStore ? createExampleFileStore(options.objectStore) : null;
 
@@ -2300,6 +2335,51 @@ export async function registerAgentChannelRoutes(
         if (sent) return sent;
         throw error;
       }
+    },
+  );
+
+  // knowledge_query's route. A capped round still returns 200, not an error.
+  app.get(
+    '/api/agent/build/knowledge/query',
+    { config: { rateLimit: { max: 120, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      const resolved = await resolveBuild(request, reply);
+      if (!resolved) return reply;
+      const { issueNumber } = resolved;
+      if (!knowledgeSearch) {
+        return reply
+          .status(503)
+          .send({ error: 'knowledge_search_unavailable', message: 'knowledge_query is not configured' });
+      }
+
+      const query = request.query as { query?: string; q?: string; mode?: string; scope?: string };
+      const text = (query.query ?? query.q ?? '').trim();
+      if (!text) {
+        return reply.status(400).send({ error: 'knowledge_query_invalid', message: 'query is required' });
+      }
+      const mode: KnowledgeMode = query.mode === 'chunks' ? 'chunks' : 'answer';
+      const scope = KNOWLEDGE_SCOPES.has(query.scope as KnowledgeScope) ? (query.scope as KnowledgeScope) : undefined;
+
+      const bucket = mode === 'answer' ? knowledgeAnswersByBuild : knowledgeChunksByBuild;
+      const cap = mode === 'answer' ? maxKnowledgeAnswersPerWindow : maxKnowledgeChunksPerWindow;
+      if (isRateLimited(bucket, issueNumber, now(), cap)) {
+        return reply.send(knowledgeCapWarning(mode, cap));
+      }
+
+      const startedAt = now();
+      const result = await knowledgeSearch({ query: text, mode, scope });
+      logKnowledgeQuery(request.log, {
+        issueNumber,
+        mode,
+        scope,
+        cacheHit: result.cached,
+        fallback: result.fallback,
+        truncated: result.truncated,
+        chunkCount: result.chunks.length,
+        warningCodes: result.warnings.map((warning) => warning.code),
+        ms: now() - startedAt,
+      });
+      return reply.send(result);
     },
   );
 

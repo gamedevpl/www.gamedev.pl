@@ -134,6 +134,7 @@ export const MCP_VISIBLE_TOOLS = new Set([
   'read_kit_file',
   'read_kit_files',
   'read_kit_file_fragment',
+  // KQ-09: callable below, not advertised until the data store is live.
   'report_progress',
   'screenshot_upload_url',
   'stage_upload_url',
@@ -1090,6 +1091,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     'read_kit_file',
     'read_kit_files',
     'read_kit_file_fragment',
+    'knowledge_query',
   ]);
 
   /**
@@ -2990,6 +2992,91 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         const body = res.json() as { error?: string; message?: string };
         if (res.statusCode !== 200) {
           return toolErr(body.message ?? body.error ?? `read_kit_file_fragment failed (${res.statusCode})`, body);
+        }
+        return toolOk(body);
+      },
+    },
+
+    knowledge_query: {
+      annotations: { title: 'Query GameKit/EditorKit/example-game knowledge', ...READS },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          mode: { type: 'string', enum: ['answer', 'chunks'] },
+          fallback: { type: 'boolean' },
+          answer: { type: 'string' },
+          chunks: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                repoPath: { type: 'string' },
+                corpus: { type: 'string' },
+                snippet: { type: 'string' },
+              },
+              required: ['repoPath', 'snippet'],
+            },
+          },
+          repoPaths: { type: 'array', items: { type: 'string' } },
+          indexedCommit: { type: 'string' },
+          guidance: { type: 'string' },
+          truncated: { type: 'boolean' },
+          cached: { type: 'boolean' },
+          ...WARNINGS_PROP,
+        },
+        required: ['mode', 'fallback', 'chunks', 'repoPaths', 'guidance', 'truncated', 'cached'],
+      },
+      description:
+        'Ask a natural-language question about GameKit, EditorKit, the allowlisted example games, or platform ' +
+        'docs/process — for capability and "how do I…" questions that get_kit_api and the kit browse tools do ' +
+        "not cover. Answers a question web search cannot: this platform's docs are not public. " +
+        'mode=answer (default) synthesizes prose with citations; it can fall back to raw chunks ' +
+        '(fallback:true) when no answer could be generated even though relevant content exists — treat that ' +
+        'the same as a normal chunks response. mode=chunks returns raw retrieved excerpts only, better for ' +
+        'grounding code generation in exact source. scope narrows retrieval: kit (GameKit API/modules), ' +
+        'editor (EditorKit), examples (allowlisted example games), docs (process/spec/skill docs). ' +
+        'Every response carries repoPaths and indexedCommit for attribution, and guidance to verify exact ' +
+        'current API signatures via get_kit_api / read_kit_file rather than trusting prose alone. ' +
+        'Prefer get_kit_api first for kit API surface questions. ' +
+        BEHAVIOURAL_CONTRACT,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          sessionKey: SESSION_KEY_PROP,
+          query: { type: 'string', description: 'Natural-language question (2–500 chars).' },
+          mode: {
+            type: 'string',
+            enum: ['chunks', 'answer'],
+            description: 'Default answer — better for explanation/Q&A. chunks for raw grounding excerpts.',
+          },
+          scope: {
+            type: 'string',
+            enum: ['kit', 'editor', 'examples', 'docs'],
+            description: 'Narrows retrieval; omit to search everything.',
+          },
+          engineRef: KIT_ENGINE_REF_PROP,
+        },
+        required: ['query'],
+      },
+      handler: async (args, ctx) => {
+        const auth = await resolveAuth(ctx, args);
+        if (!('channelToken' in auth)) return auth;
+        const query = typeof args.query === 'string' ? args.query.trim() : '';
+        if (!query) return toolErr('query is required');
+        const params = new URLSearchParams({ query });
+        if (args.mode === 'chunks' || args.mode === 'answer') params.set('mode', args.mode);
+        if (args.scope === 'kit' || args.scope === 'editor' || args.scope === 'examples' || args.scope === 'docs') {
+          params.set('scope', args.scope);
+        }
+        const res = await injectChannel(
+          ctx.request,
+          'GET',
+          `/api/agent/build/knowledge/query?${params.toString()}`,
+          auth.channelToken,
+        );
+        const body = res.json() as { error?: string; message?: string };
+        if (res.statusCode !== 200) {
+          return toolErr(body.message ?? body.error ?? `knowledge_query failed (${res.statusCode})`, body);
         }
         return toolOk(body);
       },

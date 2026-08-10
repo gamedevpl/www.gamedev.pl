@@ -350,6 +350,9 @@ export interface SubmissionRoutesOptions {
     | 'objectStore'
     | 'maxSubmitsPerWindow'
     | 'onSourcesDelivered'
+    | 'knowledgeSearch'
+    | 'maxKnowledgeAnswersPerWindow'
+    | 'maxKnowledgeChunksPerWindow'
   >;
   /**
    * Timing seams for the live staged preview (`staged-preview.ts`). The defaults are

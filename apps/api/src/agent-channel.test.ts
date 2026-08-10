@@ -7,6 +7,7 @@ import { buildApp } from './app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './github-client.js';
 import type { GamesStore } from './games-store.js';
+import type { KnowledgeQueryResult } from './knowledge-search.js';
 import { InMemoryStore } from './store.js';
 import { mintToken } from './submission-token.js';
 import type { Translator } from './translate.js';
@@ -42,6 +43,9 @@ async function createApp(
     maxEventsPerWindow?: number;
     gamesStore?: GamesStore;
     maxSubmitsPerWindow?: number;
+    knowledgeSearch?: AgentChannelOptions['knowledgeSearch'];
+    maxKnowledgeAnswersPerWindow?: number;
+    maxKnowledgeChunksPerWindow?: number;
     onSourcesDelivered?: (input: {
       issueNumber: number;
       slug: string;
@@ -2221,5 +2225,154 @@ describe('the delivery reminder on every channel call', () => {
     expect(response.json().control.mustDeliver).toBeUndefined();
 
     await app.close();
+  });
+});
+
+function stubKnowledgeResult(overrides: Partial<KnowledgeQueryResult> = {}): KnowledgeQueryResult {
+  return {
+    mode: 'answer',
+    fallback: false,
+    answer: 'Use the party module for same-screen multiplayer.',
+    chunks: [{ repoPath: 'kits/current/shared/modules/party.d.ts', snippet: 'export interface PartyApi {}' }],
+    repoPaths: ['kits/current/shared/modules/party.d.ts'],
+    indexedCommit: 'abc123',
+    guidance: 'Verify signatures via get_kit_api.',
+    truncated: false,
+    cached: false,
+    warnings: [],
+    ...overrides,
+  };
+}
+
+describe('GET /api/agent/build/knowledge/query', () => {
+  let app: FastifyInstance | null = null;
+
+  afterEach(async () => {
+    await app?.close();
+    app = null;
+  });
+
+  it('answers 503 when knowledge search is not configured', async () => {
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    app = await createApp(store);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/agent/build/knowledge/query?query=how+do+parties+work',
+      headers: agentHeaders(),
+    });
+
+    expect(response.statusCode).toBe(503);
+    expect(response.json().error).toBe('knowledge_search_unavailable');
+  });
+
+  it('requires a query', async () => {
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    const knowledgeSearch = vi.fn(async () => stubKnowledgeResult());
+    app = await createApp(store, { knowledgeSearch });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/agent/build/knowledge/query',
+      headers: agentHeaders(),
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(knowledgeSearch).not.toHaveBeenCalled();
+  });
+
+  it('forwards query/mode/scope and returns the result untouched', async () => {
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    const knowledgeSearch = vi.fn(async () => stubKnowledgeResult());
+    app = await createApp(store, { knowledgeSearch });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/agent/build/knowledge/query?query=how+do+parties+work&mode=chunks&scope=kit',
+      headers: agentHeaders(),
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(knowledgeSearch).toHaveBeenCalledWith({ query: 'how do parties work', mode: 'chunks', scope: 'kit' });
+    expect(response.json().repoPaths).toEqual(['kits/current/shared/modules/party.d.ts']);
+  });
+
+  it('defaults to mode=answer and ignores an unknown scope', async () => {
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    const knowledgeSearch = vi.fn(async () => stubKnowledgeResult());
+    app = await createApp(store, { knowledgeSearch });
+
+    await app.inject({
+      method: 'GET',
+      url: '/api/agent/build/knowledge/query?query=hello&scope=nonsense',
+      headers: agentHeaders(),
+    });
+
+    expect(knowledgeSearch).toHaveBeenCalledWith({ query: 'hello', mode: 'answer', scope: undefined });
+  });
+
+  it('degrades to a 200 warning once the per-round answer cap is hit, without calling through', async () => {
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    const knowledgeSearch = vi.fn(async () => stubKnowledgeResult());
+    app = await createApp(store, { knowledgeSearch, maxKnowledgeAnswersPerWindow: 1 });
+
+    const first = await app.inject({
+      method: 'GET',
+      url: '/api/agent/build/knowledge/query?query=first',
+      headers: agentHeaders(),
+    });
+    expect(first.statusCode).toBe(200);
+
+    const second = await app.inject({
+      method: 'GET',
+      url: '/api/agent/build/knowledge/query?query=second',
+      headers: agentHeaders(),
+    });
+
+    expect(second.statusCode).toBe(200);
+    expect(second.json().warnings).toEqual([expect.objectContaining({ code: 'rate_limited' })]);
+    expect(knowledgeSearch).toHaveBeenCalledTimes(1);
+  });
+
+  it('caps chunks and answer modes separately', async () => {
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    const knowledgeSearch = vi.fn(async () => stubKnowledgeResult());
+    app = await createApp(store, { knowledgeSearch, maxKnowledgeAnswersPerWindow: 1 });
+
+    await app.inject({
+      method: 'GET',
+      url: '/api/agent/build/knowledge/query?query=answer+one',
+      headers: agentHeaders(),
+    });
+    const chunksResponse = await app.inject({
+      method: 'GET',
+      url: '/api/agent/build/knowledge/query?query=chunks+one&mode=chunks',
+      headers: agentHeaders(),
+    });
+
+    expect(chunksResponse.json().warnings ?? []).toEqual([]);
+    expect(knowledgeSearch).toHaveBeenCalledTimes(2);
+  });
+
+  it('refuses an invalid build token the same as every other channel route', async () => {
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    const knowledgeSearch = vi.fn(async () => stubKnowledgeResult());
+    app = await createApp(store, { knowledgeSearch });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/agent/build/knowledge/query?query=hello',
+      headers: { authorization: 'Bearer not-a-real-token' },
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(knowledgeSearch).not.toHaveBeenCalled();
   });
 });
