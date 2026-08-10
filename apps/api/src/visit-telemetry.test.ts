@@ -143,9 +143,15 @@ describe('POST /api/telemetry/visit', () => {
       ],
     });
 
-    const events = await store.listVisitEvents(today());
+    // 60s backdate can put event 0 on yesterday near UTC midnight.
+    const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+    const events = [
+      ...(await store.listVisitEvents(today(), { visitId })),
+      ...(await store.listVisitEvents(yesterday, { visitId })),
+    ];
+    expect(events).toHaveLength(2);
     const [first, second] = events.sort((a, b) => a.msSinceStart - b.msSinceStart);
-    expect(Date.parse(second.at) - Date.parse(first.at)).toBe(60_000);
+    expect(Date.parse(second!.at) - Date.parse(first!.at)).toBe(60_000);
   });
 
   it('rejects a malformed visit id', async () => {
