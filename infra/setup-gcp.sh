@@ -447,7 +447,13 @@ else
   # layout-based chunking. Creation is an async long-running operation — this call only
   # confirms GCP accepted the request, not that the store is ready yet; the engine step
   # right below may need a re-run of this script a minute later if it 404s on a race.
-  curl -s -X POST "https://${DE_HOST}/v1/${DE_PARENT}/dataStores?dataStoreId=${KNOWLEDGE_DATA_STORE_ID}" \
+  #
+  # No --fail: a 4xx/5xx body is the only diagnostic for an unverified request shape,
+  # and --fail discards it. Status is captured and checked explicitly instead, so a
+  # rejected create still stops the script (set -e) instead of printing "Creating..."
+  # and reporting Done over a data store that was never actually accepted.
+  DE_HTTP_STATUS=$(curl -s -o /tmp/knowledge-datastore-create.json -w '%{http_code}' \
+    -X POST "https://${DE_HOST}/v1/${DE_PARENT}/dataStores?dataStoreId=${KNOWLEDGE_DATA_STORE_ID}" \
     -H "Authorization: Bearer ${DE_ACCESS_TOKEN}" \
     -H "X-Goog-User-Project: ${PROJECT_ID}" \
     -H "Content-Type: application/json" \
@@ -461,7 +467,12 @@ else
           "layoutBasedChunkingConfig": { "chunkSize": 500, "includeAncestorHeadings": true }
         }
       }
-    }' >/dev/null
+    }')
+  if [ "$DE_HTTP_STATUS" -lt 200 ] || [ "$DE_HTTP_STATUS" -ge 300 ]; then
+    echo "    ERROR: data store creation rejected (HTTP ${DE_HTTP_STATUS}):" >&2
+    cat /tmp/knowledge-datastore-create.json >&2
+    exit 1
+  fi
   echo "    Creating data store ${KNOWLEDGE_DATA_STORE_ID} (async — re-run this script if the engine step below 404s)."
 fi
 
@@ -472,8 +483,11 @@ if curl -s -H "Authorization: Bearer ${DE_ACCESS_TOKEN}" -H "X-Goog-User-Project
 else
   # UNVERIFIED against a live call from this environment — see the data-store note above.
   # searchEngineConfig is what a generic/SEARCH engine uses for tier + add-ons; confirm
-  # this field name against the live API on the first real run.
-  curl -s -X POST "https://${DE_HOST}/v1/${DE_PARENT}/engines?engineId=${KNOWLEDGE_ENGINE_ID}" \
+  # this field name against the live API on the first real run. No --fail, same reason
+  # as the data-store call: the error body is the only diagnostic, so capture + check
+  # status explicitly rather than discard it.
+  DE_HTTP_STATUS=$(curl -s -o /tmp/knowledge-engine-create.json -w '%{http_code}' \
+    -X POST "https://${DE_HOST}/v1/${DE_PARENT}/engines?engineId=${KNOWLEDGE_ENGINE_ID}" \
     -H "Authorization: Bearer ${DE_ACCESS_TOKEN}" \
     -H "X-Goog-User-Project: ${PROJECT_ID}" \
     -H "Content-Type: application/json" \
@@ -486,7 +500,12 @@ else
         \"searchTier\": \"SEARCH_TIER_STANDARD\",
         \"searchAddOns\": [\"SEARCH_ADD_ON_LLM\"]
       }
-    }" >/dev/null
+    }")
+  if [ "$DE_HTTP_STATUS" -lt 200 ] || [ "$DE_HTTP_STATUS" -ge 300 ]; then
+    echo "    ERROR: engine creation rejected (HTTP ${DE_HTTP_STATUS}):" >&2
+    cat /tmp/knowledge-engine-create.json >&2
+    exit 1
+  fi
   echo "    Creating engine ${KNOWLEDGE_ENGINE_ID} (async)."
 fi
 

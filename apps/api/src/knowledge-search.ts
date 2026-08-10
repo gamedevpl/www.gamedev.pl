@@ -273,12 +273,17 @@ export interface CreateQueryKnowledgeOptions {
   targetBytes?: number;
   hardCapBytes?: number;
   cacheMaxEntries?: number;
+  cacheTtlMs?: number;
 }
 
 interface CacheEntry {
   result: KnowledgeQueryResult;
   indexedCommit?: string;
+  cachedAt: number;
 }
+
+// Bounds staleness — noteIndexedCommit never runs on a cache hit.
+export const DEFAULT_CACHE_TTL_MS = 10 * 60 * 1000;
 
 function baseGuidanceResult(mode: KnowledgeMode): KnowledgeQueryResult {
   return {
@@ -305,6 +310,8 @@ export function createQueryKnowledge(options: CreateQueryKnowledgeOptions): Quer
   const targetBytes = options.targetBytes ?? DEFAULT_RESULT_TARGET_BYTES;
   const hardCapBytes = options.hardCapBytes ?? DEFAULT_RESULT_HARD_CAP_BYTES;
   const cacheMaxEntries = options.cacheMaxEntries ?? DEFAULT_CACHE_MAX_ENTRIES;
+  const cacheTtlMs = options.cacheTtlMs ?? DEFAULT_CACHE_TTL_MS;
+  const now = options.now ?? Date.now;
   const projectId = options.projectId ?? 'gamedevpl';
 
   let auth: GoogleAuth | null = null;
@@ -320,7 +327,7 @@ export function createQueryKnowledge(options: CreateQueryKnowledgeOptions): Quer
   const host = `${location}-discoveryengine.googleapis.com`;
   const parent = `projects/${projectId}/locations/${location}/collections/${collection}/engines/${options.engineId}`;
 
-  // Keyed on (mode, scope, query); staleness is flushed on a new indexedCommit.
+  // Keyed on (mode, scope, query); flushed on a new commit or TTL.
   const cache = new Map<string, CacheEntry>();
   let lastIndexedCommit: string | undefined;
 
@@ -419,7 +426,10 @@ export function createQueryKnowledge(options: CreateQueryKnowledgeOptions): Quer
     const key = cacheKey({ mode, scope: input.scope, query });
     const cached = cache.get(key);
     if (cached) {
-      return { ...cached.result, cached: true };
+      if (now() - cached.cachedAt < cacheTtlMs) {
+        return { ...cached.result, cached: true };
+      }
+      cache.delete(key); // expired — fall through and refetch rather than serve stale
     }
 
     let result: KnowledgeQueryResult;
@@ -451,7 +461,7 @@ export function createQueryKnowledge(options: CreateQueryKnowledgeOptions): Quer
 
     result = applyResultSizeBudget(result, targetBytes, hardCapBytes);
     if (cacheable) {
-      rememberBounded(cache, key, { result, indexedCommit: result.indexedCommit }, cacheMaxEntries);
+      rememberBounded(cache, key, { result, indexedCommit: result.indexedCommit, cachedAt: now() }, cacheMaxEntries);
     }
     return result;
   };

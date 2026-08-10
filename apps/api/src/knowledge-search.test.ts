@@ -319,6 +319,28 @@ describe('caching', () => {
     expect(third.cached).toBe(false);
   });
 
+  it('expires a cache entry after its TTL, even with no new indexedCommit observed', async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse(searchBody(1)));
+    let clock = 0;
+    const queryKnowledge = testClient({
+      engineId: 'gamedevpl-knowledge',
+      fetchImpl,
+      cacheTtlMs: 1000,
+      now: () => clock,
+    });
+
+    const first = await queryKnowledge({ query: 'party module', mode: 'chunks' });
+    clock += 500;
+    const second = await queryKnowledge({ query: 'party module', mode: 'chunks' });
+    clock += 501; // crosses the 1000ms TTL measured from the first fetch
+    const third = await queryKnowledge({ query: 'party module', mode: 'chunks' });
+
+    expect(first.cached).toBe(false);
+    expect(second.cached).toBe(true);
+    expect(third.cached).toBe(false);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
   it('does not cache a fully degraded (both tiers failed) result', async () => {
     const fetchImpl = vi.fn(async () => new Response('boom', { status: 500 }));
     const queryKnowledge = testClient({ engineId: 'gamedevpl-knowledge', fetchImpl });
