@@ -191,6 +191,11 @@ else
   echo "==> agent-tasks-token not found; submissions will queue without being dispatched."
 fi
 
+if gcloud secrets describe copilot-mcp-connector --project "$PROJECT_ID" >/dev/null 2>&1; then
+  SECRET_MAPPINGS+=("COPILOT_MCP_CONNECTOR_SECRET=copilot-mcp-connector:latest")
+  echo "==> Copilot MCP connector configured."
+fi
+
 if gcloud secrets describe anthropic-api-key --project "$PROJECT_ID" >/dev/null 2>&1; then
   SECRET_MAPPINGS+=("MANAGED_AGENT_API_KEY=anthropic-api-key:latest")
   echo "==> anthropic-api-key found; managed agent API access enabled."

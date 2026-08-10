@@ -91,6 +91,10 @@ jobs:
             SECRET_MAPPINGS+=("AGENT_TASKS_TOKEN=agent-tasks-token:latest")
           fi
 
+          if gcloud secrets describe copilot-mcp-connector --project "$PROJECT_ID" >/dev/null 2>&1; then
+            SECRET_MAPPINGS+=("COPILOT_MCP_CONNECTOR_SECRET=copilot-mcp-connector:latest")
+          fi
+
           if gcloud secrets describe anthropic-api-key --project "$PROJECT_ID" >/dev/null 2>&1; then
             SECRET_MAPPINGS+=("MANAGED_AGENT_API_KEY=anthropic-api-key:latest")
           fi

@@ -10,6 +10,10 @@ Creators connect their own coding agent (ChatGPT, Claude, Cursor, …) to a roun
 contract; internal planning lives in the ops repo’s `docs/byoca-*.md` (do not copy
 private content into PRs).
 
+Platform Copilot's MCP lane uses the same session loop with one extra boundary: the
+Copilot MCP connector authenticates the connection, while `start({ slug, key })` binds a
+live round. Connector-only requests are inert; do not treat the connector as a round key.
+
 ## Session loop (what agents must do)
 
 Source of truth: `SESSION_WORKFLOW` + `BEHAVIOURAL_CONTRACT` in

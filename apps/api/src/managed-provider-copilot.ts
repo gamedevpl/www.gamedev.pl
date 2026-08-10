@@ -122,10 +122,11 @@ export function createCopilotManagedProvider(
     promptLane: 'harness',
 
     async startSession(request: ManagedSessionRequest): Promise<ManagedSession> {
-      if (request.tools?.mcpEndpoints?.length) {
+      const promptLane = request.promptLane ?? 'harness';
+      if (promptLane !== 'mcp' && request.tools?.mcpEndpoints?.length) {
         throw new ManagedAgentError('copilot managed provider uses the harness prompt lane, not MCP');
       }
-      const seedBranch = await stageSeed(request, baseRef, github);
+      const seedBranch = promptLane === 'mcp' ? null : await stageSeed(request, baseRef, github);
       const task = await tasks.startTask({
         prompt: seedBranch ? request.prompt : withoutSeedPrompt(request.prompt),
         baseRef: seedBranch ?? baseRef,

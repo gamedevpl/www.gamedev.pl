@@ -61,8 +61,8 @@ if (mcpOnly && (!Number.isSafeInteger(roundGeneration) || roundGeneration < 1)) 
   console.error('--round-generation must be a positive integer');
   process.exit(1);
 }
-if (vendor === 'copilot' && (mcpOnly || flag('override-tools') || args.includes('--mcp-url'))) {
-  console.error('Copilot uses the harness prompt lane; MCP-lane flags are not valid for --vendor copilot');
+if (vendor === 'copilot' && flag('override-tools')) {
+  console.error('Copilot does not accept --override-tools');
   process.exit(1);
 }
 
@@ -77,6 +77,7 @@ const brief: BuildBrief = {
   channelToken: 'tok_probe',
   ...(mcpOpenerToken ? { mcpOpenerToken } : {}),
   apiBaseUrl: 'http://127.0.0.1:3001',
+  ...(mcpOnly ? { promptLane: 'mcp' as const } : {}),
   ...(flag('feedback') ? { feedback: 'make the comets bigger' } : {}),
 };
 const manifestPath = fileURLToPath(new URL('../../../infra/managed-agent.json', import.meta.url));
@@ -227,9 +228,13 @@ const backend = createManagedBackend({
   ...(mcpOnly
     ? {
         tools: { mcpEndpoints: [{ url: mcpUrl, name: 'gamedevpl' }] },
-        // Per-round vault holds the opener, as in production.
-        mcpBearerCredential: (input) =>
-          input.mcpOpenerToken ? { url: mcpUrl, token: input.mcpOpenerToken } : undefined,
+        ...(vendor === 'copilot'
+          ? {}
+          : {
+              // Per-round vault holds the opener, as in production.
+              mcpBearerCredential: (input) =>
+                input.mcpOpenerToken ? { url: mcpUrl, token: input.mcpOpenerToken } : undefined,
+            }),
       }
     : {
         deliver: async (input) => {
@@ -244,6 +249,7 @@ const backend = createManagedBackend({
   ...(manifest?.agent?.system ? { systemPrompt: async () => manifest.agent!.system } : {}),
   ...(digestPath ? { kitDigest: createFileKitDigestLoader(digestPath) } : {}),
   ...(wait ? { maxDurationSeconds: waitSeconds } : {}),
+  ...(mcpOnly ? { promptLane: 'mcp' as const } : {}),
   ...(vendor === 'copilot' && Number.isFinite(budgetCredits) && budgetCredits > 0
     ? { budget: { unit: 'credits' as const, max: budgetCredits } }
     : {}),

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { randomBytes } from 'node:crypto';
 import type { AgentTask, AgentTaskInput, AgentTasksClient } from './agent-tasks.js';
 import { buildPrompt } from './build-prompt.js';
 import type { BuildBrief } from './agent-backend.js';
@@ -11,6 +12,8 @@ const BRIEF: BuildBrief = {
   channelToken: 'tok_abc',
   apiBaseUrl: 'https://www.gamedev.pl',
 };
+
+const apiKey = () => randomBytes(32).toString('hex');
 
 function task(overrides: Partial<AgentTask> = {}): AgentTask {
   return { id: 'task-1', state: 'queued', sessionCount: 0, sessions: [], ...overrides };
@@ -30,7 +33,7 @@ describe('Copilot managed provider', () => {
   it('declares the harness lane and preserves the legacy task payload', async () => {
     const stub = tasks(task({ branch: { baseRef: 'main', headRef: 'copilot/courier' } }));
     const provider = createCopilotManagedProvider(
-      { apiKey: 'token', model: 'gpt-5.4', repo: 'gamedevpl/www.gamedev.pl-games' },
+      { apiKey: apiKey(), model: 'gpt-5.4', repo: 'gamedevpl/www.gamedev.pl-games' },
       { tasks: stub.client, github: { deleteBranch: vi.fn(), createBranchWithFiles: vi.fn() } },
     );
 
@@ -51,11 +54,33 @@ describe('Copilot managed provider', () => {
     });
   });
 
+  it('accepts a per-round MCP lane without staging a harness seed branch', async () => {
+    const stub = tasks();
+    const createBranchWithFiles = vi.fn(async () => undefined);
+    const provider = createCopilotManagedProvider(
+      { apiKey: apiKey(), model: 'gpt-5.4', repo: 'gamedevpl/www.gamedev.pl-games' },
+      { tasks: stub.client, github: { deleteBranch: vi.fn(), createBranchWithFiles } },
+    );
+
+    await provider.startSession({
+      correlationId: '42',
+      prompt: buildPrompt(BRIEF, { kind: 'channel', fast: true }),
+      model: 'gpt-5.4',
+      outputPath: 'outputs',
+      promptLane: 'mcp',
+      tools: { mcpEndpoints: [{ url: 'https://www.gamedev.pl/api/mcp', name: 'gamedevpl' }] },
+      workspaceFiles: [{ path: 'games/comet-courier/game.ts', content: 'x' }],
+    });
+
+    expect(createBranchWithFiles).not.toHaveBeenCalled();
+    expect(stub.startTask.mock.calls[0]?.[0].prompt).toContain('"key": "tok_abc"');
+  });
+
   it('stages a seed on the same disposable branch as legacy Copilot', async () => {
     const stub = tasks();
     const github = { deleteBranch: vi.fn(async () => undefined), createBranchWithFiles: vi.fn(async () => undefined) };
     const provider = createCopilotManagedProvider(
-      { apiKey: 'token', model: 'gpt-5.4', repo: 'gamedevpl/www.gamedev.pl-games' },
+      { apiKey: apiKey(), model: 'gpt-5.4', repo: 'gamedevpl/www.gamedev.pl-games' },
       { tasks: stub.client, github },
     );
 
@@ -90,7 +115,7 @@ describe('Copilot managed provider', () => {
       }),
     };
     const provider = createCopilotManagedProvider(
-      { apiKey: 'token', model: 'gpt-5.4', repo: 'gamedevpl/www.gamedev.pl-games' },
+      { apiKey: apiKey(), model: 'gpt-5.4', repo: 'gamedevpl/www.gamedev.pl-games' },
       { tasks: stub.client, github },
     );
     const prompt = buildPrompt({
@@ -121,7 +146,7 @@ describe('Copilot managed provider', () => {
       }),
     );
     const provider = createCopilotManagedProvider(
-      { apiKey: 'token', model: 'gpt-5.4', repo: 'gamedevpl/www.gamedev.pl-games' },
+      { apiKey: apiKey(), model: 'gpt-5.4', repo: 'gamedevpl/www.gamedev.pl-games' },
       { tasks: stub.client, github: { deleteBranch: vi.fn(), createBranchWithFiles: vi.fn() } },
     );
 
@@ -137,7 +162,7 @@ describe('Copilot managed provider', () => {
   it('maps the task branch into the managed workspace field', async () => {
     const stub = tasks(task({ state: 'in_progress', branch: { headRef: 'copilot/tv-tycoon' } }));
     const provider = createCopilotManagedProvider(
-      { apiKey: 'token', model: 'gpt-5.4', repo: 'gamedevpl/www.gamedev.pl-games' },
+      { apiKey: apiKey(), model: 'gpt-5.4', repo: 'gamedevpl/www.gamedev.pl-games' },
       { tasks: stub.client, github: { deleteBranch: vi.fn(), createBranchWithFiles: vi.fn() } },
     );
 
@@ -150,7 +175,7 @@ describe('Copilot managed provider', () => {
   it('does not expose outputs or a message channel', async () => {
     const stub = tasks();
     const provider = createCopilotManagedProvider(
-      { apiKey: 'token', model: 'gpt-5.4', repo: 'gamedevpl/www.gamedev.pl-games' },
+      { apiKey: apiKey(), model: 'gpt-5.4', repo: 'gamedevpl/www.gamedev.pl-games' },
       { tasks: stub.client, github: { deleteBranch: vi.fn(), createBranchWithFiles: vi.fn() } },
     );
 
@@ -159,14 +184,14 @@ describe('Copilot managed provider', () => {
     await expect(provider.readOutput('task-1', { path: 'game.ts' })).rejects.toThrow(/does not expose session output/);
     expect(await provider.cancelSession('task-1')).toEqual({ enforced: false });
     await expect(provider.deleteSession?.('task-1')).resolves.toBeUndefined();
-    await expect(provider.releaseCredential?.('channel-token')).resolves.toBeUndefined();
+    await expect(provider.releaseCredential?.(apiKey())).resolves.toBeUndefined();
   });
 
   it('deletes the disposable workspace branch during backend cleanup', async () => {
     const stub = tasks();
     const deleteBranch = vi.fn(async () => undefined);
     const provider = createCopilotManagedProvider(
-      { apiKey: 'token', model: 'gpt-5.4', repo: 'gamedevpl/www.gamedev.pl-games' },
+      { apiKey: apiKey(), model: 'gpt-5.4', repo: 'gamedevpl/www.gamedev.pl-games' },
       { tasks: stub.client, github: { deleteBranch, createBranchWithFiles: vi.fn() } },
     );
 

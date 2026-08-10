@@ -39,7 +39,7 @@ import {
 import { startHealthCheck } from './game-health.js';
 import { createStagedPreviewPublisher, type StagedPreviewOptions } from './staged-preview.js';
 import { createInternalAuthVerifierFromEnv, type InternalAuthVerifier } from './internal-auth.js';
-import type { AgentBackend, SeedFiles } from './agent-backend.js';
+import type { AgentBackend, BuildPromptLane, SeedFiles } from './agent-backend.js';
 import {
   createAgentBackendRegistryFromEnv,
   resolveBuilderBackend,
@@ -310,6 +310,7 @@ export interface SubmissionRoutesOptions {
     slug: string,
   ) => Promise<{ base: import('./store.js').ProposalBase; files: import('./games-store.js').SourceFile[] } | null>;
   submissionTokenSecret?: string;
+  platformConnectorSecret?: string;
   /**
    * Localizes an agent-relayed change request on the write that stores it. Used by the
    * two relay paths and by nothing that serves a read — see the note on the instance.
@@ -1052,6 +1053,7 @@ export async function registerSubmissionRoutes(
     feedback?: string;
     /** Who builds this round. Defaults to the game's last builder, then `platform`. */
     builder?: BuilderKind;
+    promptLane?: BuildPromptLane;
   }): Promise<boolean> {
     // Without the signing secret there is no per-job channel credential to give the
     // agent, and an agent that cannot report or deliver is worse than one never started.
@@ -1133,6 +1135,7 @@ export async function registerSubmissionRoutes(
         apiBaseUrl: notifyAppBaseUrl,
         ...(input.slug ? { slug: input.slug } : {}),
         ...(input.feedback ? { feedback: input.feedback } : {}),
+        ...(input.promptLane ? { promptLane: input.promptLane } : {}),
         ...(seed ? { seed } : {}),
       });
       // A seed that went in without a workspace coming back is a *platform* backend that
@@ -1248,6 +1251,7 @@ export async function registerSubmissionRoutes(
     transition?: { by: JobTransition['by']; reason: string };
     /** Builder for the new round. Ignored on undelivered nudges (same round). */
     builder?: BuilderKind;
+    promptLane?: BuildPromptLane;
     /** Handoffs keep the per-job delivery budget across builder changes. */
     preserveRoundBudget?: boolean;
   }): Promise<ResumeOutcome> {
@@ -1306,6 +1310,7 @@ export async function registerSubmissionRoutes(
         spec: input.feedback,
         feedback: input.feedback,
         locale: input.locale,
+        ...(input.promptLane ? { promptLane: input.promptLane } : {}),
         channelToken: mintAgentToken(input.issueNumber, submissionTokenSecret, {
           roundGeneration,
           now: now(),
@@ -5611,6 +5616,7 @@ export async function registerSubmissionRoutes(
   await registerMcpServerRoutes(app, {
     store,
     agentTokenSecret: submissionTokenSecret,
+    platformConnectorSecret: options.platformConnectorSecret,
     now,
     privateBeta: options.privateBeta,
     // MCP Apps views (SEP-1865) read MCP_UI directly — off in production until the

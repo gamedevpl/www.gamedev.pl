@@ -442,6 +442,24 @@ describe('managed backend', () => {
     expect(start).toHaveBeenCalledTimes(1);
   });
 
+  it('lets one round opt into MCP without changing the provider selection', async () => {
+    const { provider, started, setState, setOutputs, read } = fakeProvider({ promptLane: 'harness' });
+    const backend = createManagedBackend({
+      provider,
+      deliver: async () => ({ version: 'v1' }),
+      tools: { mcpEndpoints: [{ url: 'https://www.gamedev.pl/api/mcp', name: 'gamedevpl' }] },
+    });
+
+    await backend.dispatch(brief({ promptLane: 'mcp' }));
+    expect(started[0]?.promptLane).toBe('mcp');
+    expect(started[0]?.prompt).toContain('"key": "token"');
+    setOutputs([{ path: `games/${SLUG}/game.ts`, content: 'export {};' }]);
+    setState('completed');
+
+    await backend.observe('session-1', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
+    expect(read).toEqual([]);
+  });
+
   it('does not nudge the Copilot harness lane', async () => {
     const { provider, setState } = fakeProvider({ promptLane: 'harness' });
     const backend = createManagedBackend({ provider, deliver: async () => ({ version: 'v1' }) });

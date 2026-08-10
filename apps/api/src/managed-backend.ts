@@ -12,6 +12,7 @@ import {
   ManagedOutputRejectedError,
   selectManagedOutputs,
   type ManagedAgentEffort,
+  type ManagedPromptLane,
   type ManagedAgentProvider,
   type ManagedBudgetStop,
   type ManagedOutputCaps,
@@ -92,6 +93,7 @@ export interface ManagedBackendOptions {
   kitDigest?: KitDigestLoader;
   outputPath?: string;
   effort?: ManagedAgentEffort;
+  promptLane?: ManagedPromptLane;
   maxDurationSeconds?: number;
   budget?: ManagedUsageBudget;
   outputCaps?: ManagedOutputCaps;
@@ -122,8 +124,9 @@ export function isUnnudgeableManagedIdleError(error: unknown): boolean {
 
 export function createManagedBackend(options: ManagedBackendOptions): AgentBackend {
   const deliver = options.deliver;
-  const promptLane = options.provider.promptLane;
-  const channelMode = promptLane === 'mcp' || promptLane === 'harness';
+  const configuredPromptLane = options.promptLane;
+  const defaultPromptLane = configuredPromptLane ?? options.provider.promptLane;
+  const promptLane = defaultPromptLane;
   if (promptLane === 'outputs' && !deliver) {
     throw new ManagedAgentError('a managed backend needs either a delivery sink or an MCP endpoint');
   }
@@ -139,6 +142,7 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
   const startedAt = new Map<string, number>();
   const idleNudged = new Set<string>();
   const sessionGenerations = new Map<string, number>();
+  const sessionLanes = new Map<string, ManagedPromptLane>();
   const credentialRefs = new Map<string, string>();
   const releasedCredentials = new Set<string>();
   // So cancel/cleanup can still log issueNumber/slug without a caller hint.
@@ -170,6 +174,14 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
   }
 
   async function start(brief: BuildBrief): Promise<DispatchResult> {
+    const roundPromptLane = brief.promptLane ?? defaultPromptLane;
+    if (roundPromptLane === 'mcp' && !options.tools?.mcpEndpoints?.length) {
+      throw new ManagedAgentError('the MCP prompt lane needs an MCP endpoint');
+    }
+    if (roundPromptLane === 'outputs' && !deliver) {
+      throw new ManagedAgentError('the outputs prompt lane needs a delivery sink');
+    }
+    const roundChannelMode = roundPromptLane === 'mcp' || roundPromptLane === 'harness';
     const systemPrompt = appendKitDigest(
       options.systemPrompt ? await options.systemPrompt() : undefined,
       options.kitDigest ? await options.kitDigest.load() : undefined,
@@ -181,8 +193,8 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
       // The prompt has to describe the delivery this backend will actually read.
       prompt: buildPrompt(
         brief,
-        channelMode
-          ? promptLane === 'mcp'
+        roundChannelMode
+          ? roundPromptLane === 'mcp'
             ? { kind: 'channel', fast: true }
             : { kind: 'channel' }
           : deliver
@@ -190,6 +202,7 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
             : { kind: 'channel', fast: true },
       ),
       model: options.provider.model,
+      promptLane: roundPromptLane,
       ...(options.effort ? { effort: options.effort } : {}),
       ...(brief.seed
         ? {
@@ -205,6 +218,7 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
       ...(mcpBearerCredential ? { mcpBearerCredential } : {}),
     });
     startedAt.set(session.id, Date.now());
+    sessionLanes.set(session.id, roundPromptLane);
     sessionGenerations.set(session.id, brief.roundGeneration ?? 1);
     sessionJobs.set(session.id, {
       issueNumber: brief.issueNumber,
@@ -394,7 +408,7 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
       let outcome: HarvestOutcome = 'empty';
       const canHarvest =
         Boolean(deliver) &&
-        !channelMode &&
+        !(['mcp', 'harness'] as ManagedPromptLane[]).includes(sessionLanes.get(ref) ?? defaultPromptLane) &&
         !hasCandidate &&
         isManagedSessionHarvestable(session.state) &&
         observeOptions.issueNumber !== undefined &&
@@ -510,6 +524,7 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
       idleNudged.delete(previous.ref);
       harvested.delete(previous.ref);
       sessionGenerations.delete(previous.ref);
+      sessionLanes.delete(previous.ref);
       budgetStops.delete(previous.ref);
       if (previous.credentialRef) credentialRefs.set(previous.ref, previous.credentialRef);
       await releaseCredential(previous.ref);

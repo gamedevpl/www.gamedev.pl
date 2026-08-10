@@ -1,9 +1,10 @@
 # Managed agent backend — running the builder ourselves, on a swappable vendor
 
 > Status: ✅ **MCP and Copilot drivers are implemented.** Anthropic uses the MCP lane;
-> Copilot uses the existing repository harness and build channel. Both run through the
-> managed lifecycle and record their native usage units. Production cutover remains gated
-> by the MP-04 owner approval described in the migration brief.
+> Copilot defaults to the existing repository harness and build channel, with an opt-in
+> MCP lane for selected rounds. Both run through the managed lifecycle and record their
+> native usage units. Production cutover remains gated by the MP-04 owner approval
+> described in the migration brief.
 >
 > **Why this is not the execution model that was removed for legal reasons.** The thing
 > [`games-repo.md`](./games-repo.md) abandoned was agent compute _we operate_ — containers
@@ -69,15 +70,27 @@ a second vendor would spell differently belongs in its adapter.
 
 Copilot now implements `ManagedAgentProvider` while keeping its harness-specific answers:
 
-| Seam capability          | Copilot's answer                                                                     |
-| ------------------------ | ------------------------------------------------------------------------------------ |
-| `startSession` workspace | A **branch**, staged with git writes — not a list of files                           |
-| `getSession` usage       | **Credits**, never tokens                                                            |
-| `listOutputs`            | Nothing to list. Delivery is a push over the build channel                           |
-| `cancelSession`          | Fits — cooperative, `enforced: false`                                                |
+| Seam capability          | Copilot's answer                                           |
+| ------------------------ | ---------------------------------------------------------- |
+| `startSession` workspace | A **branch**, staged with git writes — not a list of files |
+| `getSession` usage       | **Credits**, never tokens                                  |
+| `listOutputs`            | Nothing to list. Delivery is a push over the build channel |
+| `cancelSession`          | Fits — cooperative, `enforced: false`                      |
 
-The driver declares the harness prompt lane. The backend selects the lane from that
-declaration, so vendor names do not choose prompt behavior.
+The driver declares the harness prompt lane by default. A round may override that lane
+through `BuildBrief.promptLane`; vendor names do not choose prompt behavior.
+
+### Copilot MCP lane
+
+The Copilot MCP lane replaces the harness lane for the selected round. It is intended for
+fast previews: the prompt uses the same `buildPrompt` fast contract as Anthropic, and the
+round key travels in `start({ slug, key })`. The static Copilot MCP connector authenticates
+the connection only; the MCP server requires the live round key before it resolves any
+round-scoped tool.
+
+The two lanes are never combined in one round. Publish seals stay on the harness lane
+until a caller explicitly selects MCP for a different round. The connector-only replay
+test enumerates every mutating tool advertised by the MCP server and requires refusal.
 
 ## Two delivery shapes, and the one guard that covers both
 
@@ -300,9 +313,11 @@ npm run managed:probe -w @gamedevpl/api -- --vendor copilot --create --wait \
   --wait-seconds 120 --budget-credits 25
 ```
 
-`--vendor copilot` rejects `--mcp`, `--mcp-url`, and `--override-tools`. A standalone
-Copilot probe can print task transitions and usage, but the production channel signals and
-gate verdict require the app's configured store and delivery wiring.
+`--vendor copilot --mcp` selects the MCP prompt lane without passing a per-round bearer
+credential to GitHub. The repository's Copilot MCP configuration supplies the static
+connector header. A standalone probe can print task transitions and usage, but the
+production channel signals and gate verdict require the app's configured store and
+delivery wiring.
 
 The probe can inject a digest file while exercising this path:
 
@@ -341,10 +356,10 @@ With `MANAGED_AGENT_DELIVERY_MODE=preview` (the default), a successful delivery 
 | `MANAGED_AGENT_API_KEY`             | Anthropic credential. Never logged, never persisted              |
 | `MANAGED_AGENT_MODEL`               | Anthropic model label; the actual model is on its Agent          |
 | `AGENT_TASKS_TOKEN`                 | Copilot Agent Tasks credential                                   |
-| `AGENT_TASKS_MODEL`                 | Copilot model label; defaults to the existing Copilot model     |
-| `GAMES_REPO`                        | Games repository targeted by Copilot                            |
-| `GAMES_PUBLISHED_REF`               | Copilot harness base ref                                        |
-| `AGENT_CUSTOM_AGENT`                | Copilot custom agent name                                       |
+| `AGENT_TASKS_MODEL`                 | Copilot model label; defaults to the existing Copilot model      |
+| `GAMES_REPO`                        | Games repository targeted by Copilot                             |
+| `GAMES_PUBLISHED_REF`               | Copilot harness base ref                                         |
+| `AGENT_CUSTOM_AGENT`                | Copilot custom agent name                                        |
 | `MANAGED_AGENT_ID`                  | Anthropic Managed Agent resource id                              |
 | `MANAGED_AGENT_ENVIRONMENT_ID`      | Anthropic Managed Environment resource id                        |
 | `MANAGED_AGENT_MCP_URL`             | MCP endpoint; triggers per-round vault + `overrideTools`         |
@@ -353,6 +368,7 @@ With `MANAGED_AGENT_DELIVERY_MODE=preview` (the default), a successful delivery 
 | `MANAGED_AGENT_MAX_SECONDS`         | Hard ceiling on one session's wall clock                         |
 | `MANAGED_AGENT_MAX_LIST_COST_CENTS` | Anthropic session budget, in whole cents                         |
 | `MANAGED_AGENT_COPILOT_MAX_CREDITS` | Optional Copilot per-round credit ceiling                        |
+| `MANAGED_AGENT_PROMPT_LANE`         | Optional default lane: `mcp`, `harness`, or `outputs`            |
 | `MANAGED_AGENT_DELIVERY_MODE`       | `preview` (default) or `publish`                                 |
 | `MANAGED_AGENT_BASE_URL`            | Override the API origin — gateways, tests                        |
 

@@ -85,6 +85,7 @@ export interface ManagedSessionRequest {
   effort?: ManagedAgentEffort;
   workspaceFiles?: ManagedWorkspaceFile[];
   outputPath: string;
+  promptLane?: ManagedPromptLane;
   maxDurationSeconds?: number;
   tools?: ManagedToolAccess;
   mcpBearerCredential?: ManagedMcpBearerCredential;

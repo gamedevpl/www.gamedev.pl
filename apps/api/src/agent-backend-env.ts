@@ -10,7 +10,7 @@ import { createAgentTasksClient, type AgentTaskModel } from './agent-tasks.js';
 import { createCopilotBackend } from './copilot-backend.js';
 import { VertexGameSeeder, type GameSeeder } from './game-seed.js';
 import { createGitHubClient } from './github-client.js';
-import { createManagedProvider, type ManagedAgentEffort } from './managed-agent.js';
+import { createManagedProvider, type ManagedAgentEffort, type ManagedPromptLane } from './managed-agent.js';
 import './managed-provider-anthropic.js';
 import './managed-provider-copilot.js';
 import {
@@ -109,10 +109,17 @@ export function createManagedPlatformBackendFromEnv(deps?: ManagedBackendDeps, l
       return undefined;
     }
   }
+  const configuredPromptLane = process.env.MANAGED_AGENT_PROMPT_LANE?.trim();
+  const promptLane = configuredPromptLane as ManagedPromptLane | undefined;
+  if (configuredPromptLane && !['mcp', 'harness', 'outputs'].includes(configuredPromptLane)) {
+    log?.warn({ vendor }, 'managed agent prompt lane must be mcp, harness, or outputs');
+    return undefined;
+  }
   // An MCP agent submits for itself, so it needs no sink.
-  const mcpUrl = isCopilot ? undefined : process.env.MANAGED_AGENT_MCP_URL?.trim();
-  if (!isCopilot && !mcpUrl) {
-    log?.warn({ vendor }, 'managed agent vendor is set but MANAGED_AGENT_MCP_URL is missing');
+  const mcpUrl = process.env.MANAGED_AGENT_MCP_URL?.trim();
+  const needsMcpEndpoint = promptLane === 'mcp' || (!isCopilot && Boolean(mcpUrl));
+  if (needsMcpEndpoint && !mcpUrl) {
+    log?.warn({ vendor }, 'managed agent MCP lane is enabled but MANAGED_AGENT_MCP_URL is missing');
     return undefined;
   }
 
@@ -138,7 +145,7 @@ export function createManagedPlatformBackendFromEnv(deps?: ManagedBackendDeps, l
             createPullRequest: false,
           }
         : {}),
-      ...(mcpUrl ? { overrideTools: true } : {}),
+      ...(!isCopilot && mcpUrl ? { overrideTools: true } : {}),
       ...(process.env.MANAGED_AGENT_BASE_URL?.trim() ? { baseUrl: process.env.MANAGED_AGENT_BASE_URL.trim() } : {}),
     });
   } catch (error) {
@@ -154,8 +161,10 @@ export function createManagedPlatformBackendFromEnv(deps?: ManagedBackendDeps, l
     ...(deps?.readCredentialRef ? { readCredentialRef: deps.readCredentialRef } : {}),
     ...(deps?.deliver ? { deliver: deps.deliver } : {}),
     ...(deps?.lock ? { lock: deps.lock } : {}),
-    ...(mcpUrl ? { tools: { mcpEndpoints: [{ url: mcpUrl, name: 'gamedevpl' }] } } : {}),
-    ...(mcpUrl
+    ...(mcpUrl && (needsMcpEndpoint || !isCopilot)
+      ? { tools: { mcpEndpoints: [{ url: mcpUrl, name: 'gamedevpl' }] } }
+      : {}),
+    ...(mcpUrl && !isCopilot
       ? {
           mcpBearerCredential: (brief) =>
             brief.mcpOpenerToken ? { url: mcpUrl, token: brief.mcpOpenerToken } : undefined,
@@ -164,6 +173,7 @@ export function createManagedPlatformBackendFromEnv(deps?: ManagedBackendDeps, l
     ...(deps?.systemPrompt ? { systemPrompt: deps.systemPrompt } : {}),
     ...(deps?.kitDigest ? { kitDigest: deps.kitDigest } : {}),
     ...(effort ? { effort } : {}),
+    ...(promptLane ? { promptLane } : {}),
     ...(Number.isFinite(maxDurationSeconds) && maxDurationSeconds > 0 ? { maxDurationSeconds } : {}),
     ...(isCopilot && Number.isFinite(maxCopilotCredits) && maxCopilotCredits > 0
       ? { budget: { unit: 'credits' as const, max: maxCopilotCredits } }
