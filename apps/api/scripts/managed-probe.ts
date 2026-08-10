@@ -14,6 +14,7 @@ import {
 } from '../src/managed-agent.js';
 import '../src/managed-provider-anthropic.js';
 import '../src/managed-provider-copilot.js';
+import '../src/managed-provider-gemini.js';
 import { createManagedBackend, type ManagedDeliveryInput } from '../src/managed-backend.js';
 import { createFileKitDigestLoader } from '../src/kit-digest.js';
 
@@ -30,17 +31,21 @@ const CREATE_CONCEPT =
   'Guide a small courier ship across a bright sky, collect parcels, and dodge drifting clouds before reaching the beacon.';
 const outDir = value('out');
 const digestPath = value('digest-file');
-const apiBaseUrl = (value('base-url') ?? 'https://api.anthropic.com').replace(/\/$/, '');
+const vendor = value('vendor');
+const apiBaseUrl = (
+  value('base-url') ??
+  (vendor === 'gemini' ? 'https://generativelanguage.googleapis.com/v1beta' : 'https://api.anthropic.com')
+).replace(/\/$/, '');
 const wait = flag('wait');
 const waitSeconds = Number(value('wait-seconds') ?? process.env.MANAGED_AGENT_MAX_SECONDS ?? '');
 const budgetUsd = Number(value('budget-usd') ?? process.env.MANAGED_AGENT_MAX_LIST_BUDGET_USD ?? '');
 const budgetCredits = Number(value('budget-credits') ?? process.env.MANAGED_AGENT_COPILOT_MAX_CREDITS ?? '');
+const budgetTokens = Number(value('budget-tokens') ?? process.env.MANAGED_AGENT_MAX_TOTAL_TOKENS ?? '');
 const vaultIds = (process.env.MANAGED_AGENT_VAULT_IDS ?? process.env.MANAGED_AGENT_VAULT_ID)
   ?.split(',')
   .map((id) => id.trim())
   .filter(Boolean);
 const mcpOnly = flag('mcp');
-const vendor = value('vendor');
 const mcpUrl = (value('mcp-url') ?? process.env.MANAGED_AGENT_MCP_URL ?? 'https://www.gamedev.pl/api/mcp').replace(
   /\/$/,
   '',
@@ -169,11 +174,19 @@ const apiKey =
     ? process.env.ANTHROPIC_API_KEY?.trim()
     : vendor === 'copilot'
       ? process.env.AGENT_TASKS_TOKEN?.trim()
-      : undefined);
+      : vendor === 'gemini'
+        ? process.env.GEMINI_API_KEY?.trim()
+        : undefined);
 const model =
   value('model') ??
   (vendor === 'copilot' ? process.env.AGENT_TASKS_MODEL?.trim() : process.env.MANAGED_AGENT_MODEL?.trim()) ??
-  (vendor === 'anthropic' ? 'claude-sonnet-5' : vendor === 'copilot' ? 'claude-sonnet-4.6' : undefined);
+  (vendor === 'anthropic'
+    ? 'claude-sonnet-5'
+    : vendor === 'copilot'
+      ? 'claude-sonnet-4.6'
+      : vendor === 'gemini'
+        ? 'gemini-3.6-flash'
+        : undefined);
 if (vendor && (!apiKey || !model)) {
   console.error(`--vendor ${vendor} needs an API key and model`);
   process.exit(1);
@@ -184,12 +197,16 @@ if (
     waitSeconds <= 0 ||
     (vendor === 'copilot'
       ? !Number.isFinite(budgetCredits) || budgetCredits <= 0
-      : !Number.isFinite(budgetUsd) || budgetUsd <= 0))
+      : vendor === 'gemini'
+        ? !Number.isSafeInteger(budgetTokens) || budgetTokens <= 0
+        : !Number.isFinite(budgetUsd) || budgetUsd <= 0))
 ) {
   console.error(
     vendor === 'copilot'
       ? '--wait requires positive --wait-seconds and --budget-credits values'
-      : '--wait requires positive --wait-seconds and --budget-usd values',
+      : vendor === 'gemini'
+        ? '--wait requires positive --wait-seconds and --budget-tokens values'
+        : '--wait requires positive --wait-seconds and --budget-usd values',
   );
   process.exit(1);
 }
@@ -213,6 +230,9 @@ const provider = vendor
         : {}),
       ...(Number.isFinite(budgetUsd) && budgetUsd > 0
         ? { maxListCostCents: Math.max(1, Math.round(budgetUsd * 100)) }
+        : {}),
+      ...(Number.isSafeInteger(budgetTokens) && budgetTokens > 0
+        ? { budget: { unit: 'tokens' as const, max: budgetTokens } }
         : {}),
       ...(vaultIds?.length ? { vaultIds } : {}),
       ...(overrideTools ? { overrideTools: true } : {}),
@@ -252,6 +272,9 @@ const backend = createManagedBackend({
   ...(mcpOnly ? { promptLane: 'mcp' as const } : {}),
   ...(vendor === 'copilot' && Number.isFinite(budgetCredits) && budgetCredits > 0
     ? { budget: { unit: 'credits' as const, max: budgetCredits } }
+    : {}),
+  ...(vendor === 'gemini' && Number.isSafeInteger(budgetTokens) && budgetTokens > 0
+    ? { budget: { unit: 'tokens' as const, max: budgetTokens } }
     : {}),
   // The probe cannot see MCP deliveries, so nudging would mislead.
   ...(mcpOnly && !flag('nudge') ? { nudgeIdle: false } : {}),

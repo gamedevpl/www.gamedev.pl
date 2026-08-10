@@ -24,12 +24,24 @@ export interface ManagedOutputRef {
   handle?: string;
 }
 
-export interface ManagedTokenUsage {
+export interface ManagedTokenUsageBase {
   unit: 'tokens';
-  vendor: string;
   inputTokens: number;
   outputTokens: number;
   model?: string;
+}
+
+export interface ManagedTokenUsage extends ManagedTokenUsageBase {
+  vendor: string;
+}
+
+export interface ManagedGeminiTokenUsage extends ManagedTokenUsageBase {
+  vendor: 'gemini';
+  model: string;
+  totalTokens: number;
+  thoughtTokens: number;
+  cachedTokens: number;
+  toolUseTokens: number;
 }
 
 export interface ManagedCreditUsage {
@@ -39,9 +51,10 @@ export interface ManagedCreditUsage {
   model?: string;
 }
 
-export type ManagedSessionUsage = ManagedTokenUsage | ManagedCreditUsage;
+export type ManagedSessionUsage = ManagedTokenUsage | ManagedGeminiTokenUsage | ManagedCreditUsage;
 
-export type ManagedUsageBudget = { unit: 'credits'; max: number } | { unit: 'cents'; max: number };
+export type ManagedUsageBudget =
+  { unit: 'tokens'; max: number } | { unit: 'credits'; max: number } | { unit: 'cents'; max: number };
 
 export interface ManagedBudgetStop {
   unit: ManagedUsageBudget['unit'];
@@ -154,6 +167,8 @@ const STATE_ALIASES: Record<string, AgentTaskState> = {
   canceled: 'cancelled',
   aborted: 'cancelled',
   stopped: 'cancelled',
+  incomplete: 'completed',
+  budget_exceeded: 'completed',
   waiting_for_user: 'waiting_for_user',
   needs_input: 'waiting_for_user',
   awaiting_input: 'waiting_for_user',
@@ -288,6 +303,7 @@ export function selectManagedOutputs(refs: readonly ManagedOutputRef[], slug: st
 export interface ManagedProviderConfig {
   apiKey: string;
   model: string;
+  budget?: ManagedUsageBudget;
   repo?: string;
   baseRef?: string;
   customAgent?: string;

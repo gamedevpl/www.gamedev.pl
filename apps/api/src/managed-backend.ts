@@ -2,7 +2,7 @@
 import type { AgentBackend, BuildBrief, DispatchResult } from './agent-backend.js';
 import { buildPrompt } from './build-prompt.js';
 import { forbiddenDeliveryPathReason } from './games-store.js';
-import type { AgentObservation } from './job-state.js';
+import type { AgentObservation, AgentSessionTokens } from './job-state.js';
 import { appendKitDigest, type KitDigestLoader } from './kit-digest.js';
 import {
   assertWithinManagedOutputPlan,
@@ -15,6 +15,9 @@ import {
   type ManagedPromptLane,
   type ManagedAgentProvider,
   type ManagedBudgetStop,
+  type ManagedSessionUsage,
+  type ManagedTokenUsage,
+  type ManagedGeminiTokenUsage,
   type ManagedOutputCaps,
   type ManagedOutputFile,
   type ManagedOutputPlan,
@@ -110,6 +113,39 @@ export interface ManagedBackendOptions {
 }
 
 export const DEFAULT_MANAGED_OUTPUT_PATH = 'outputs';
+
+function ledgerTokens(usage: ManagedTokenUsage | ManagedGeminiTokenUsage): AgentSessionTokens {
+  if ('totalTokens' in usage) {
+    return {
+      vendor: 'gemini',
+      model: usage.model,
+      input: usage.inputTokens,
+      output: usage.outputTokens,
+      total: usage.totalTokens,
+      thought: usage.thoughtTokens,
+      cached: usage.cachedTokens,
+      toolUse: usage.toolUseTokens,
+    };
+  }
+  return {
+    input: usage.inputTokens,
+    output: usage.outputTokens,
+    ...(usage.vendor === 'anthropic' || usage.vendor === 'copilot' ? { vendor: usage.vendor } : {}),
+    ...(usage.model ? { model: usage.model } : {}),
+  };
+}
+
+function observedBudget(
+  usage: ManagedSessionUsage | undefined,
+  budget: ManagedUsageBudget | undefined,
+): number | undefined {
+  if (!usage || !budget) return undefined;
+  if (budget.unit === 'credits' && usage.unit === 'credits') return usage.credits;
+  if (budget.unit === 'tokens' && usage.unit === 'tokens') {
+    return 'totalTokens' in usage ? usage.totalTokens : usage.inputTokens + usage.outputTokens;
+  }
+  return undefined;
+}
 
 // Idle requires_action: tool_confirmation Studio cannot Approve.
 export function isManagedIdleBlockedOnAction(stopReason: string | undefined): boolean {
@@ -343,10 +379,7 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
       const usage = session.usage;
       const usageFields = usage
         ? usage.unit === 'tokens'
-          ? {
-              sessionTokens: { input: usage.inputTokens, output: usage.outputTokens },
-              sessionUsage: usage,
-            }
+          ? { sessionTokens: ledgerTokens(usage), sessionUsage: usage }
           : { sessionCredits: usage.credits, sessionUsage: usage }
         : {};
       const stopped = budgetStops.get(ref);
@@ -361,20 +394,23 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
         };
       }
 
-      const observedBudget =
-        options.budget?.unit === 'credits' && usage?.unit === 'credits' ? usage.credits : undefined;
-      if (observedBudget !== undefined && observedBudget > options.budget!.max) {
-        const cancellation = await options.provider.cancelSession(ref);
+      const measuredBudget = observedBudget(usage, options.budget);
+      const nativeBudgetStop = session.stopReason === 'budget_reached';
+      if (
+        options.budget &&
+        ((measuredBudget !== undefined && measuredBudget > options.budget.max) || nativeBudgetStop)
+      ) {
+        const cancellation = nativeBudgetStop ? { enforced: true } : await options.provider.cancelSession(ref);
         const budgetStop: ManagedBudgetStop = {
           unit: options.budget!.unit,
-          observed: observedBudget,
+          observed: measuredBudget ?? options.budget.max,
           max: options.budget!.max,
           enforced: cancellation.enforced,
         };
         budgetStops.set(ref, budgetStop);
         await releaseCredential(ref, observeOptions.issueNumber);
         options.log?.warn(
-          { ref, observed: observedBudget, max: options.budget!.max, enforced: cancellation.enforced },
+          { ref, observed: budgetStop.observed, max: options.budget!.max, enforced: cancellation.enforced },
           'managed round stopped at its usage budget',
         );
         return {

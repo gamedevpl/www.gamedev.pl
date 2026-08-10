@@ -341,11 +341,24 @@ export interface AgentObservation {
    */
   sessionCredits?: number;
   // Tokens, for token-billed backends; not convertible to credits.
-  sessionTokens?: { input: number; output: number };
+  sessionTokens?: AgentSessionTokens;
   sessionUsage?: ManagedSessionUsage;
   stopReason?: string;
   budgetStop?: ManagedBudgetStop;
 }
+
+export type AgentSessionTokens =
+  | { input: number; output: number; vendor?: 'anthropic' | 'copilot'; model?: string }
+  | {
+      vendor: 'gemini';
+      model: string;
+      input: number;
+      output: number;
+      total: number;
+      thought: number;
+      cached: number;
+      toolUse: number;
+    };
 
 export interface ReconcileResult {
   to: JobState;

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { createAgentBackendRegistryFromEnv } from './agent-backend-env.js';
 
 const ENV_KEYS = [
@@ -13,6 +13,8 @@ const ENV_KEYS = [
   'MANAGED_AGENT_MCP_URL',
   'MANAGED_AGENT_PROMPT_LANE',
   'MANAGED_AGENT_COPILOT_MAX_CREDITS',
+  'MANAGED_AGENT_MAX_TOTAL_TOKENS',
+  'GEMINI_API_KEY',
   'AGENT_TASKS_TOKEN',
   'AGENT_TASKS_MODEL',
   'GAMES_REPO',
@@ -115,5 +117,41 @@ describe('createAgentBackendRegistryFromEnv', () => {
     });
 
     expect(registry.platform?.name).toBe('managed:copilot');
+  });
+
+  it('builds Gemini with its native token budget and default model', () => {
+    setEnv({
+      MANAGED_AGENT_VENDOR: 'gemini',
+      MANAGED_AGENT_API_KEY: `gemini-${randomUUID()}`,
+      MANAGED_AGENT_MODEL: undefined,
+      MANAGED_AGENT_MAX_TOTAL_TOKENS: '50000',
+      MANAGED_AGENT_MCP_URL: 'https://www.gamedev.pl/api/mcp',
+      AGENT_TASKS_TOKEN: `copilot-${randomUUID()}`,
+    });
+    const info = vi.fn();
+    const registry = createAgentBackendRegistryFromEnv({ info, warn: vi.fn() });
+
+    expect(registry.platform?.name).toBe('managed:gemini');
+    expect(info).toHaveBeenCalledWith(
+      expect.objectContaining({ vendor: 'gemini', model: 'gemini-3.6-flash' }),
+      'managed agent dispatch enabled',
+    );
+  });
+
+  it('fails closed when Gemini has an invalid token ceiling', () => {
+    setEnv({
+      MANAGED_AGENT_VENDOR: 'gemini',
+      MANAGED_AGENT_API_KEY: `gemini-${randomUUID()}`,
+      MANAGED_AGENT_MCP_URL: 'https://www.gamedev.pl/api/mcp',
+      MANAGED_AGENT_MAX_TOTAL_TOKENS: '0',
+    });
+    const warn = vi.fn();
+    const registry = createAgentBackendRegistryFromEnv({ info: vi.fn(), warn });
+
+    expect(registry.platform).toBeUndefined();
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({ vendor: 'gemini' }),
+      expect.stringContaining('token ceiling'),
+    );
   });
 });

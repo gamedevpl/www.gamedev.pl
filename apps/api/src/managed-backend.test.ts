@@ -381,11 +381,71 @@ describe('managed backend', () => {
     expect(observation).toMatchObject({ state: 'in_progress', hasCandidate: false });
   });
 
+  it('stops a Gemini session once native token usage exceeds the backend cap', async () => {
+    const cancel = vi.fn(async () => ({ enforced: true }));
+    const { provider } = fakeProvider({
+      vendor: 'gemini',
+      model: 'gemini-test-model',
+      getSession: async () => ({
+        id: 'session-1',
+        state: 'in_progress',
+        usage: {
+          unit: 'tokens',
+          vendor: 'gemini',
+          model: 'gemini-test-model',
+          inputTokens: 80,
+          outputTokens: 30,
+          totalTokens: 110,
+          thoughtTokens: 10,
+          cachedTokens: 4,
+          toolUseTokens: 6,
+        },
+      }),
+      cancelSession: cancel,
+    });
+    const backend = createManagedBackend({
+      provider,
+      deliver: async () => ({ version: 'v1' }),
+      budget: { unit: 'tokens', max: 100 },
+    });
+
+    const first = await backend.observe('session-1', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
+    const second = await backend.observe('session-1', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
+
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(first).toMatchObject({
+      state: 'cancelled',
+      hasCandidate: false,
+      sessionTokens: { vendor: 'gemini', total: 110 },
+      budgetStop: { unit: 'tokens', observed: 110, max: 100, enforced: true },
+    });
+    expect(second).toMatchObject({ state: 'cancelled', hasCandidate: false, stopReason: 'budget_reached' });
+  });
+
   it('cancels a session when the backend wall-clock limit expires', async () => {
     vi.useFakeTimers();
     try {
       const cancel = vi.fn(async () => ({ enforced: true }));
-      const { provider, setState } = fakeProvider({ cancelSession: cancel });
+      const { provider, setState } = fakeProvider({
+        vendor: 'gemini',
+        model: 'gemini-test-model',
+        cancelSession: cancel,
+        getSession: async () => ({
+          id: 'session-1',
+          state: normalizeManagedState('in_progress'),
+          usage: {
+            unit: 'tokens',
+            vendor: 'gemini',
+            model: 'gemini-test-model',
+            inputTokens: 10,
+            outputTokens: 5,
+            totalTokens: 15,
+            thoughtTokens: 2,
+            cachedTokens: 1,
+            toolUseTokens: 1,
+          },
+        }),
+      });
       const backend = createManagedBackend({
         provider,
         deliver: async () => ({ version: 'v1' }),
