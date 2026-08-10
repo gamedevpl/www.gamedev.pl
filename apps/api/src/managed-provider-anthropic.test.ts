@@ -167,7 +167,11 @@ describe('anthropic managed provider', () => {
     expect(body.agent.mcp_servers).toEqual([{ type: 'url', name: 'gamedevpl', url: 'https://example.test/mcp' }]);
     expect(body.agent.tools).toEqual([
       { type: 'agent_toolset_20260401' },
-      { type: 'mcp_toolset', mcp_server_name: 'gamedevpl' },
+      {
+        type: 'mcp_toolset',
+        mcp_server_name: 'gamedevpl',
+        default_config: { permission_policy: { type: 'always_allow' } },
+      },
     ]);
   });
 

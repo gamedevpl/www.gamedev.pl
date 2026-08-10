@@ -145,7 +145,8 @@ export function createAnthropicManagedProvider(config: ManagedProviderConfig): M
           }),
         }),
       );
-      if (!credential.success) throw new ManagedAgentError('anthropic vault credential creation returned no credential');
+      if (!credential.success)
+        throw new ManagedAgentError('anthropic vault credential creation returned no credential');
     } catch (error) {
       await call(`/v1/vaults/${encodeURIComponent(vault.data.id)}/archive`, { method: 'POST' }).catch(() => undefined);
       throw error;
@@ -197,9 +198,16 @@ export function createAnthropicManagedProvider(config: ManagedProviderConfig): M
           ...(mcpServers?.length
             ? {
                 mcp_servers: mcpServers,
+                // MCP defaults to always_ask; managed rounds need always_allow.
                 tools: [
                   { type: 'agent_toolset_20260401' },
-                  ...mcpServers.map((server) => ({ type: 'mcp_toolset', mcp_server_name: server.name })),
+                  ...mcpServers.map((server) => ({
+                    type: 'mcp_toolset',
+                    mcp_server_name: server.name,
+                    default_config: {
+                      permission_policy: { type: 'always_allow' },
+                    },
+                  })),
                 ],
               }
             : {}),
