@@ -69,7 +69,17 @@ function toSession(parsed: z.infer<typeof SessionSchema>): ManagedSession {
     id: parsed.id,
     state: normalizeManagedState(parsed.status),
     ...(parsed.status ? { vendorState: parsed.status } : {}),
-    ...(hasUsage ? { usage: { inputTokens, outputTokens, ...(parsed.model ? { model: parsed.model } : {}) } } : {}),
+    ...(hasUsage
+      ? {
+          usage: {
+            unit: 'tokens' as const,
+            vendor: ANTHROPIC_VENDOR,
+            inputTokens,
+            outputTokens,
+            ...(parsed.model ? { model: parsed.model } : {}),
+          },
+        }
+      : {}),
     ...(parsed.created_at ? { startedAt: parsed.created_at } : {}),
     ...(parsed.ended_at ? { endedAt: parsed.ended_at } : {}),
     ...(parsed.stop_reason?.type ? { stopReason: parsed.stop_reason.type } : {}),
@@ -157,6 +167,7 @@ export function createAnthropicManagedProvider(config: ManagedProviderConfig): M
   return {
     vendor: ANTHROPIC_VENDOR,
     model: config.model,
+    promptLane: 'mcp',
 
     async startSession(request: ManagedSessionRequest): Promise<ManagedSession> {
       if (!agentId || !environmentId) {

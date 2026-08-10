@@ -1,11 +1,9 @@
 # Managed agent backend — running the builder ourselves, on a swappable vendor
 
-> Status: ✅ **MCP shape live when selected.** With a valid managed configuration and the
-> environment registry selected, the managed Anthropic adapter occupies the platform
-> builder slot. A round mints a per-round vault for `MANAGED_AGENT_MCP_URL`, the agent
-> delivers through `submit_sources`, and preview mode lands at `ready_for_review`. The
-> remaining gap is the **pull-shape** delivery sink — see
-> [What is not wired yet](#what-is-not-wired-yet).
+> Status: ✅ **MCP and Copilot drivers are implemented.** Anthropic uses the MCP lane;
+> Copilot uses the existing repository harness and build channel. Both run through the
+> managed lifecycle and record their native usage units. Production cutover remains gated
+> by the MP-04 owner approval described in the migration brief.
 >
 > **Why this is not the execution model that was removed for legal reasons.** The thing
 > [`games-repo.md`](./games-repo.md) abandoned was agent compute _we operate_ — containers
@@ -35,7 +33,7 @@ else:
 | Capability | Method                       | Why it is the whole surface                           |
 | ---------- | ---------------------------- | ----------------------------------------------------- |
 | Start      | `startSession`               | A prompt, a model, a workspace, an output directory   |
-| Observe    | `getSession`                 | One normalized state plus token usage                 |
+| Observe    | `getSession`                 | One normalized state plus native usage                |
 | Harvest    | `listOutputs` / `readOutput` | The delivery, pulled — never pushed through the model |
 | Stop       | `cancelSession`              | With an honest `enforced` answer                      |
 
@@ -57,10 +55,8 @@ a second vendor would spell differently belongs in its adapter.
    onto the `AgentTaskState` the job machine already understands. An unknown word reads as
    `in_progress`, never `failed`: a vendor adding a state is not a reason to abandon a live
    build.
-2. **Usage is tokens.** Credits are one vendor's billing unit and cannot be converted to
-   another's at any published rate, so `sessionTokens` is its own field beside
-   `sessionCredits` rather than a reinterpretation of it. A cost report stays honest
-   because each backend reports the only unit it actually knows.
+2. **Usage keeps native units.** Token and credit observations are discriminated and carry
+   their vendor/model identity. No driver converts one unit into another.
 3. **The shared parts are shared, and live in neutral files.** The state vocabulary is
    `agent-state.ts`, not GitHub's client; the brief is `build-prompt.ts`, not Copilot's
    backend. Both used to sit inside the first backend that needed them, which made a second
@@ -69,33 +65,19 @@ a second vendor would spell differently belongs in its adapter.
    Adding one is a `registerManagedProvider` line and a file; replacing one is an
    environment change and a deploy.
 
-## Why Copilot does not move under this seam
+## Copilot under the seam
 
-The obvious tidying — make architecture A a `ManagedAgentProvider` too, so there is one
-abstraction instead of two — makes both worse, and it is worth writing down why before
-someone tries it.
-
-`AgentBackend` is already the shared abstraction, and it is the one carrying its weight:
-Copilot, self and managed all implement it, and the job machine, gate, store, review and
-publication cannot tell them apart. `ManagedAgentProvider` is a deliberately narrower seam
-one level down, for vendors that share the hosted-session shape. Copilot does not share it:
+Copilot now implements `ManagedAgentProvider` while keeping its harness-specific answers:
 
 | Seam capability          | Copilot's answer                                                                     |
 | ------------------------ | ------------------------------------------------------------------------------------ |
 | `startSession` workspace | A **branch**, staged with git writes — not a list of files                           |
-| `getSession` usage       | **Credits**, never tokens. The seam's "tokens are universal" claim is not true of it |
+| `getSession` usage       | **Credits**, never tokens                                                            |
 | `listOutputs`            | Nothing to list. Delivery is a push over the build channel                           |
 | `cancelSession`          | Fits — cooperative, `enforced: false`                                                |
 
-One of four fits. Bending the rest means either a lowest-common-denominator seam where
-every capability is optional — which stops constraining anything and stops being an
-abstraction — or a fat one carrying branches, credits and output directories so that each
-implementation ignores two thirds of it.
-
-What is genuinely shared was shared instead: the state vocabulary (`agent-state.ts`), the
-brief (`build-prompt.ts`), the observation shape, and — once the sink is extracted — one
-definition of "delivered". That is convergence where the two architectures actually agree,
-rather than a common interface over two things that differ.
+The driver declares the harness prompt lane. The backend selects the lane from that
+declaration, so vendor names do not choose prompt behavior.
 
 ## Two delivery shapes, and the one guard that covers both
 
@@ -310,6 +292,18 @@ variable keeps its explicit cents name for server configuration. The backend int
 session when the wall-clock cap expires. Omitting either value makes the probe refuse to start
 rather than run unbounded.
 
+Copilot uses the harness lane and its own Agent Tasks credential:
+
+```bash
+AGENT_TASKS_TOKEN=... \
+npm run managed:probe -w @gamedevpl/api -- --vendor copilot --create --wait \
+  --wait-seconds 120 --budget-credits 25
+```
+
+`--vendor copilot` rejects `--mcp`, `--mcp-url`, and `--override-tools`. A standalone
+Copilot probe can print task transitions and usage, but the production channel signals and
+gate verdict require the app's configured store and delivery wiring.
+
 The probe can inject a digest file while exercising this path:
 
 ```bash
@@ -344,8 +338,13 @@ With `MANAGED_AGENT_DELIVERY_MODE=preview` (the default), a successful delivery 
 | Variable                            | Meaning                                                          |
 | ----------------------------------- | ---------------------------------------------------------------- |
 | `MANAGED_AGENT_VENDOR`              | Registered adapter id; required configuration must also be valid |
-| `MANAGED_AGENT_API_KEY`             | Vendor credential. Never logged, never persisted                 |
-| `MANAGED_AGENT_MODEL`               | Provider model label; Anthropic's actual model is on its Agent   |
+| `MANAGED_AGENT_API_KEY`             | Anthropic credential. Never logged, never persisted              |
+| `MANAGED_AGENT_MODEL`               | Anthropic model label; the actual model is on its Agent          |
+| `AGENT_TASKS_TOKEN`                 | Copilot Agent Tasks credential                                   |
+| `AGENT_TASKS_MODEL`                 | Copilot model label; defaults to the existing Copilot model     |
+| `GAMES_REPO`                        | Games repository targeted by Copilot                            |
+| `GAMES_PUBLISHED_REF`               | Copilot harness base ref                                        |
+| `AGENT_CUSTOM_AGENT`                | Copilot custom agent name                                       |
 | `MANAGED_AGENT_ID`                  | Anthropic Managed Agent resource id                              |
 | `MANAGED_AGENT_ENVIRONMENT_ID`      | Anthropic Managed Environment resource id                        |
 | `MANAGED_AGENT_MCP_URL`             | MCP endpoint; triggers per-round vault + `overrideTools`         |
@@ -353,6 +352,7 @@ With `MANAGED_AGENT_DELIVERY_MODE=preview` (the default), a successful delivery 
 | `MANAGED_AGENT_EFFORT`              | `low` / `medium` / `high`                                        |
 | `MANAGED_AGENT_MAX_SECONDS`         | Hard ceiling on one session's wall clock                         |
 | `MANAGED_AGENT_MAX_LIST_COST_CENTS` | Anthropic session budget, in whole cents                         |
+| `MANAGED_AGENT_COPILOT_MAX_CREDITS` | Optional Copilot per-round credit ceiling                        |
 | `MANAGED_AGENT_DELIVERY_MODE`       | `preview` (default) or `publish`                                 |
 | `MANAGED_AGENT_BASE_URL`            | Override the API origin — gateways, tests                        |
 
@@ -363,11 +363,12 @@ agent we happen to run.
 ## Adding a vendor
 
 1. Write `managed-provider-<vendor>.ts` implementing `ManagedAgentProvider`.
-2. Normalize states with `normalizeManagedState`; report usage in tokens.
-3. Return paths relative to the request's `outputPath`.
-4. Answer `cancelSession` honestly — `enforced: false` if the stop is cooperative.
-5. `registerManagedProvider('<vendor>', factory)` at the bottom of the file.
-6. Import it once where adapters are registered.
+2. Normalize states; report usage in the vendor's native unit.
+3. Declare the prompt lane (`mcp`, `harness`, or `outputs`).
+4. Return paths relative to the request's `outputPath`.
+5. Answer `cancelSession` honestly — `enforced: false` if the stop is cooperative.
+6. `registerManagedProvider('<vendor>', factory)` at the bottom of the file.
+7. Import it once where adapters are registered.
 
 The test suite for the Anthropic adapter is the shape to copy: an injected `fetchImpl`,
 no network, and assertions that the credential never reaches a URL.

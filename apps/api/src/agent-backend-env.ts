@@ -12,6 +12,7 @@ import { VertexGameSeeder, type GameSeeder } from './game-seed.js';
 import { createGitHubClient } from './github-client.js';
 import { createManagedProvider, type ManagedAgentEffort } from './managed-agent.js';
 import './managed-provider-anthropic.js';
+import './managed-provider-copilot.js';
 import {
   createManagedBackend,
   type ManagedDeliveryLock,
@@ -61,16 +62,25 @@ export function createManagedPlatformBackendFromEnv(deps?: ManagedBackendDeps, l
   const vendor = process.env.MANAGED_AGENT_VENDOR?.trim();
   if (!vendor) return undefined;
 
-  const apiKey = process.env.MANAGED_AGENT_API_KEY?.trim();
-  const model = process.env.MANAGED_AGENT_MODEL?.trim();
+  const isCopilot = vendor === 'copilot';
+  const apiKey = (isCopilot ? process.env.AGENT_TASKS_TOKEN : process.env.MANAGED_AGENT_API_KEY)?.trim();
+  const model = (
+    isCopilot ? process.env.AGENT_TASKS_MODEL?.trim() || 'claude-sonnet-4.6' : process.env.MANAGED_AGENT_MODEL?.trim()
+  )?.trim();
   if (!apiKey || !model) {
-    log?.warn({ vendor }, 'managed agent vendor is set but MANAGED_AGENT_API_KEY / MANAGED_AGENT_MODEL are missing');
+    log?.warn(
+      { vendor },
+      isCopilot
+        ? 'copilot managed agent requires AGENT_TASKS_TOKEN'
+        : 'managed agent vendor requires MANAGED_AGENT_API_KEY / MANAGED_AGENT_MODEL',
+    );
     return undefined;
   }
   const agentId = process.env.MANAGED_AGENT_ID?.trim();
   const environmentId = process.env.MANAGED_AGENT_ENVIRONMENT_ID?.trim();
   const maxDurationSeconds = Number(process.env.MANAGED_AGENT_MAX_SECONDS ?? '');
   const maxListCostCents = Number(process.env.MANAGED_AGENT_MAX_LIST_COST_CENTS ?? '');
+  const maxCopilotCredits = Number(process.env.MANAGED_AGENT_COPILOT_MAX_CREDITS ?? '');
   const vaultIds = (process.env.MANAGED_AGENT_VAULT_IDS ?? process.env.MANAGED_AGENT_VAULT_ID)
     ?.split(',')
     .map((id) => id.trim())
@@ -92,10 +102,16 @@ export function createManagedPlatformBackendFromEnv(deps?: ManagedBackendDeps, l
     );
     return undefined;
   }
+  if (isCopilot && process.env.MANAGED_AGENT_COPILOT_MAX_CREDITS !== undefined) {
+    if (!Number.isFinite(maxCopilotCredits) || maxCopilotCredits <= 0) {
+      log?.warn({ vendor }, 'copilot managed agent credit ceiling must be positive');
+      return undefined;
+    }
+  }
   // An MCP agent submits for itself, so it needs no sink.
-  const mcpUrl = process.env.MANAGED_AGENT_MCP_URL?.trim();
-  if (!deps?.deliver && !mcpUrl) {
-    log?.warn({ vendor }, 'managed agent vendor is set but neither a delivery sink nor MANAGED_AGENT_MCP_URL exists');
+  const mcpUrl = isCopilot ? undefined : process.env.MANAGED_AGENT_MCP_URL?.trim();
+  if (!isCopilot && !mcpUrl) {
+    log?.warn({ vendor }, 'managed agent vendor is set but MANAGED_AGENT_MCP_URL is missing');
     return undefined;
   }
 
@@ -113,6 +129,14 @@ export function createManagedPlatformBackendFromEnv(deps?: ManagedBackendDeps, l
         : {}),
       ...(Number.isInteger(maxListCostCents) && maxListCostCents > 0 ? { maxListCostCents } : {}),
       ...(vaultIds?.length ? { vaultIds } : {}),
+      ...(isCopilot
+        ? {
+            repo: process.env.GAMES_REPO?.trim() ?? 'gamedevpl/www.gamedev.pl-games',
+            baseRef: process.env.GAMES_PUBLISHED_REF?.trim() || 'main',
+            customAgent: process.env.AGENT_CUSTOM_AGENT?.trim() || 'game-builder',
+            createPullRequest: false,
+          }
+        : {}),
       ...(mcpUrl ? { overrideTools: true } : {}),
       ...(process.env.MANAGED_AGENT_BASE_URL?.trim() ? { baseUrl: process.env.MANAGED_AGENT_BASE_URL.trim() } : {}),
     });
@@ -140,6 +164,9 @@ export function createManagedPlatformBackendFromEnv(deps?: ManagedBackendDeps, l
     ...(deps?.kitDigest ? { kitDigest: deps.kitDigest } : {}),
     ...(effort ? { effort } : {}),
     ...(Number.isFinite(maxDurationSeconds) && maxDurationSeconds > 0 ? { maxDurationSeconds } : {}),
+    ...(isCopilot && Number.isFinite(maxCopilotCredits) && maxCopilotCredits > 0
+      ? { budget: { unit: 'credits' as const, max: maxCopilotCredits } }
+      : {}),
     deliveryMode,
     ...(log ? { log } : {}),
   });
