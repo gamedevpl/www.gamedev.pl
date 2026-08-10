@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { DEFAULT_SIGNED_URL_TTL_SECONDS, type GcsObjectStore } from './gcs-sign.js';
 import { KitRegistryError, parseKitRegistry, parseKitSidecar } from './kit-registry.js';
+import { codeSurfaceEnabled } from './code-surface.js';
 import { collapseJobsToOwnerGames, MAX_OWNER_GAMES, pageOwnerGames } from './owner-games.js';
 import { readTarEntries, type TarEntry } from './tar.js';
 import { recentPartitions, summarizeGameHealth, type GameHealth } from './telemetry-health.js';
@@ -70,6 +71,13 @@ export interface CreatorStudioGame {
    * for those.
    */
   editable?: boolean;
+  /**
+   * Whether the Code surface's kill switch (CE-02) is on. All-creators from M1 by
+   * owner decision — unlike {@link editable} this needs no manifest read, only the
+   * flag — so it is the same value for every row on a page where it is present at
+   * all, and absent entirely when the switch is off.
+   */
+  codeSurface?: boolean;
 }
 
 export interface CreatorHealthResponse {
@@ -252,6 +260,7 @@ export async function registerCreatorStudioRoutes(
       ...(catalogPublishedAt ? { livePublishedAt: catalogPublishedAt } : {}),
       ...(tip.draftSharedAt ? { draftShared: true } : {}),
       ...(tip.slug && editableSlugs.has(tip.slug) ? { editable: true } : {}),
+      ...(codeSurfaceEnabled() ? { codeSurface: true } : {}),
     }));
 
     return reply.send({ games, truncated, totalGames: total });

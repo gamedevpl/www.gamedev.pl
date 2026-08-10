@@ -233,6 +233,24 @@ describe('createStagedPreviewPublisher', () => {
     );
   });
 
+  it('assembles a one-file owner edit against an already-delivered game (CE-12a)', async () => {
+    // The exact shape the execution plan's CE-12a worried about: an owner stages one
+    // file (not the three PLAYABLE_OVERLAY_FILES) on a game that has already delivered.
+    // `overlayGameSources`'s own unit tests already prove the delivered layer fills the
+    // gap (see 'keeps base files the agent has not staged' above) — this is the same
+    // claim at the full `attempt()` level, through a real delivered-version read, to
+    // confirm the fix CE-12a asked for was already true of the shipped layering and
+    // nothing here needs to change to seed the buffer on a game's first *owner* write.
+    const { publisher, previews } = harness({
+      record: { issueNumber: 7, slug: 'comet-courier', roundGeneration: 2, deliveredVersion: 'v1' },
+      staged: [{ path: 'game/render.ts', content: 'export const paint = () => {};' }],
+      delivered: { version: 'v1', files: PLAYABLE_TREE },
+    });
+
+    expect(await publisher.publishNow(7)).toBe('published');
+    expect(previews).toHaveLength(1);
+  });
+
   it('marks the assembled document network-restricted, like every other unreviewed preview', async () => {
     const { publisher, previews } = harness();
 

@@ -309,7 +309,35 @@
       "thread": "Wątek",
       "details": "Szczegóły",
       "playtest": "Zagraj",
-      "edit": "Edytuj"
+      "edit": "Edytuj",
+      "code": "Kod"
+    },
+    "code": {
+      "back": "Wątek",
+      "loading": "Wczytywanie plików źródłowych…",
+      "loadError": "Nie udało się teraz wczytać plików źródłowych.",
+      "agentRound": "Agent aktywnie pracuje — tylko do odczytu, dopóki nie skończy",
+      "stagedBy": "przygotowane przez: {{who}}",
+      "lockedHint": "Tylko do odczytu — GameKit i narzędzia są wspólne, nie edytuje się ich tutaj",
+      "noFiles": "Nie ma jeszcze nic do pokazania",
+      "budget": "{{lines}}/{{maxLines}} linii",
+      "stageIt": "Przygotuj wersję roboczą",
+      "staging": "Przygotowywanie…",
+      "staged": "Przygotowano",
+      "rebuildError": "Nie udało się przygotować — spróbuj ponownie",
+      "attestation": "To moja własna praca lub mam prawo jej używać",
+      "deliver": "Wyślij do recenzji",
+      "delivering": "Wysyłanie…",
+      "deliverSuccess": "Wysłano — bramka właśnie to sprawdza.",
+      "deliverRefused": "Nie wysłano — spróbuj ponownie za chwilę.",
+      "deliverError": "Nie udało się wysłać — spróbuj ponownie",
+      "saveState": {
+        "clean": "Aktualne",
+        "dirty": "Niezapisane",
+        "saving": "Zapisywanie…",
+        "saved": "Szkic zapisany",
+        "error": "Nie udało się zapisać — ponawiam"
+      }
     },
     "editor": {
       "loading": "Wczytywanie edytora…",

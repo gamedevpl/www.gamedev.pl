@@ -279,6 +279,25 @@ export interface SubmissionStatusResponseBase {
    * opens a new job. Absent when this is the only job, or the job has no slug yet.
    */
   priorRounds?: PriorRoundHistory[];
+  /**
+   * Read-only capability probe for the Code surface (creator-code-editing-execution-plan.md
+   * CE-05): one field the web reads instead of re-deriving lock rules client-side.
+   * Absent for a job with no bound slug yet (nothing to edit before one exists).
+   */
+  codeSurface?: {
+    available: boolean;
+    readOnly: boolean;
+    reason?: 'agent_round' | 'killed';
+  };
+  /**
+   * When the owner's staging buffer was last written (`StagedSourcesSummary.updatedAt`),
+   * ISO. Folded into the stage's `previewKey` (`useStageSource.ts`) alongside `headSha`
+   * and `previewGate.ranAt` so an owner's stage write is a refresh trigger too — see
+   * CE-12: neither of those two signals moves on a staging write, only on a commit,
+   * delivery, or gate run, which is why the stage silently failed to refresh for an
+   * owner edit before this field existed.
+   */
+  stagedAt?: string;
 }
 
 /**

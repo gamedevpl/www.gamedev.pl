@@ -27,6 +27,8 @@ export type StudioGame = {
    * studio must render exactly as before for those.
    */
   editable?: boolean;
+  /** Whether the Code surface's kill switch (CE-02) is on for this deployment. */
+  codeSurface?: boolean;
 };
 
 /* ---------------------------------------------------------------------------

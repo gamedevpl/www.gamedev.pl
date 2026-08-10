@@ -441,6 +441,16 @@ export interface VersionManifest {
    */
   health?: { green: boolean; ranAt: string; engineRef?: string; report?: string };
   sourceFiles: string[];
+  /**
+   * Who wrote this delivery (CE-20), derived from the staging buffer's `stagedBy` set
+   * (CE-04) at the moment it delivered. `'mixed'` means the buffer held both an agent's
+   * and an owner's staged files at delivery — a manual round on a game an agent had
+   * already been partway through. Absent on every version delivered before this field
+   * existed, and on any delivery path that does not pass it (every lane stamps it now,
+   * but a legacy manifest is not backfilled). The user-visible marking this enables is
+   * counsel-gated (§4); this field exists so the data is not lost waiting for that.
+   */
+  authorship?: 'agent' | 'owner' | 'mixed';
 }
 
 /** What the gate wrote onto a candidate — green, red, or a kit-window refusal. */
@@ -504,7 +514,17 @@ export interface PublicationRecord {
 }
 
 /** One path in a job's pre-delivery staging buffer (file-by-file MCP uploads). */
-export type StagedSourceEntry = { path: string; bytes: number; deleted?: true };
+export type StagedSourceEntry = {
+  path: string;
+  bytes: number;
+  deleted?: true;
+  /**
+   * Who wrote this staged file (CE-04). Absent means `'agent'` — the backfill rule for
+   * every entry staged before this field existed, and the default for the agent
+   * channel's own writes, which do not pass it explicitly.
+   */
+  stagedBy?: 'agent' | 'owner';
+};
 
 /** Summary of a job's staging buffer — paths only, no contents. */
 export type StagedSourcesSummary = {
@@ -543,6 +563,8 @@ export interface GamesStore {
     mode?: DeliveryMode;
     /** Marks the version as somebody else's proposed change — see {@link DeliveryMode}. */
     proposal?: { id: string; proposerUid: string };
+    /** Who wrote this delivery — see {@link VersionManifest.authorship} (CE-20). */
+    authorship?: 'agent' | 'owner' | 'mixed';
   }): Promise<{ version: string; manifest: VersionManifest }>;
   /**
    * Flips an accepted proposal version from `proposal` to `publish` and records who
@@ -571,12 +593,15 @@ export interface GamesStore {
     roundGeneration: number;
     path: string;
     content: string;
+    /** Who is writing this file (CE-04). Defaults to `'agent'` when omitted. */
+    stagedBy?: 'agent' | 'owner';
   }): Promise<StagedSourcesSummary & { path: string; bytes: number }>;
   deleteStagedSourceFile(input: {
     slug: string;
     issueNumber: number;
     roundGeneration: number;
     path: string;
+    stagedBy?: 'agent' | 'owner';
   }): Promise<StagedSourcesSummary & { path: string }>;
   /** Lists staged paths + byte totals (no contents). */
   listStagedSources(input: {
@@ -851,6 +876,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
         ...(input.origin ? { origin: input.origin } : {}),
         ...(input.forkedFrom ? { forkedFrom: input.forkedFrom } : {}),
         ...(input.proposal ? { proposal: input.proposal } : {}),
+        ...(input.authorship ? { authorship: input.authorship } : {}),
         sourceFiles: files.map((file) => file.path),
       };
       // Written last: a manifest is what makes a version real, so a run that dies
@@ -887,9 +913,10 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
         const generation = existing?.generation ?? 0;
 
         const previous = base.files.find((file) => file.path === path);
+        const entry: StagedSourceEntry = { path, bytes, stagedBy: input.stagedBy ?? 'agent' };
         const nextFiles = previous
-          ? base.files.map((file) => (file.path === path ? { path, bytes } : file))
-          : [...base.files, { path, bytes }];
+          ? base.files.map((file) => (file.path === path ? entry : file))
+          : [...base.files, entry];
         if (nextFiles.length > MAX_UPLOAD_FILES) {
           throw new InvalidUploadError(`too many staged files: ${nextFiles.length} > ${MAX_UPLOAD_FILES}`);
         }
@@ -943,7 +970,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
         const generation = existing?.generation ?? 0;
 
         const previous = base.files.find((file) => file.path === path);
-        const entry: StagedSourceEntry = { path, bytes: 0, deleted: true };
+        const entry: StagedSourceEntry = { path, bytes: 0, deleted: true, stagedBy: input.stagedBy ?? 'agent' };
         const nextFiles = previous
           ? base.files.map((file) => (file.path === path ? entry : file))
           : [...base.files, entry];

@@ -140,10 +140,25 @@ export function useStageSource(token: string, status: SubmissionStatus | null): 
       });
   }, [status?.preview?.slug, status?.progress?.headSha, status?.previewGate?.ranAt, token, previewRetryTick]);
 
-  // Prefetch the latest channel build when there is no PR preview yet.
+  // Prefetch the latest channel build when there is no PR preview yet — or when a
+  // staged assembly has landed more recently than the PR preview currently on screen.
+  //
+  // Before this comparison existed, `preview` alone disabled this effect for the rest
+  // of the session the instant any gate-built preview had loaded — which the preview
+  // effect above never does for a staging write, only for a commit, a delivery, or a
+  // gate run (`getSubmissionPreview` serves a *gate-built* artifact and never reflects
+  // the live staging buffer at all). On a game that has ever delivered, that is always,
+  // so an owner staging a file through the Code surface (or an agent staging one after
+  // its own gate-built preview loaded) would edit, stage, and watch nothing happen —
+  // silently, because staged-preview failures are silent by design (CE-12).
   useEffect(() => {
     const latest = status?.playable?.[0];
-    if (preview || !latest) {
+    const latestAt = latest?.createdAt ? Date.parse(latest.createdAt) : null;
+    // Conservative when the newest playable carries no timestamp: treat the loaded
+    // preview as still the freshest thing we know about, same as the old behaviour.
+    const previewIsFresher =
+      preview != null && (latestAt === null || !Number.isFinite(latestAt) || preview.at >= latestAt);
+    if (previewIsFresher || !latest) {
       if (!latest) {
         setChannel(null);
         loadedChannelRef.current = null;
@@ -222,12 +237,22 @@ export function useStageSource(token: string, status: SubmissionStatus | null): 
   }, [status?.status, status?.slug, token, publishedRetryTick]);
 
   const isPublished = status?.status === 'published' && Boolean(status.slug);
-  const rawHtml = isPublished ? (published?.html ?? null) : (preview?.html ?? channel?.html ?? null);
+  // The fetch-freshness fix above (CE-12) is wasted if display still prefers `preview`
+  // unconditionally — a fresher `channel` document that gets fetched must also get
+  // shown, or the stage keeps rendering the stale gate-built preview underneath it.
+  const showChannel = channel != null && (preview === null || channel.at > preview.at);
+  const rawHtml = isPublished
+    ? (published?.html ?? null)
+    : showChannel
+      ? channel!.html
+      : (preview?.html ?? channel?.html ?? null);
   const html = rawHtml ? embedGameHtml(withGameLocale(rawHtml, i18n.language)) : null;
 
   let origin: StageOrigin = NONE_ORIGIN;
   if (isPublished) {
     origin = { kind: 'delivered', at: null, versionLabel: null };
+  } else if (showChannel) {
+    origin = { kind: 'staged', at: channel!.at, versionLabel: channel!.label };
   } else if (preview) {
     origin = { kind: 'staged', at: preview.at, versionLabel: null };
   } else if (channel) {

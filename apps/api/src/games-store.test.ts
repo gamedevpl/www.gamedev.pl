@@ -577,7 +577,8 @@ describe('GCS games store', () => {
     expect(objects.has('games/g/staging/7/g1/source/game/old-module.ts')).toBe(false);
 
     const listed = await store.listStagedSources({ slug: 'g', issueNumber: 7, roundGeneration: 1 });
-    expect(listed.files).toEqual([{ path: 'game/old-module.ts', bytes: 0, deleted: true }]);
+    // CE-04: every staging write is now stamped with who wrote it; omitted here defaults to 'agent'.
+    expect(listed.files).toEqual([{ path: 'game/old-module.ts', bytes: 0, deleted: true, stagedBy: 'agent' }]);
 
     const assembled = await store.getStagedSourceFiles({ slug: 'g', issueNumber: 7, roundGeneration: 1 });
     expect(assembled).toEqual([{ path: 'game/old-module.ts', content: '', deleted: true }]);

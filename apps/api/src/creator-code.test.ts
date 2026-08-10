@@ -1,0 +1,394 @@
+import { createHash } from 'node:crypto';
+import { gzipSync } from 'node:zlib';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { buildApp } from './app.js';
+import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
+import { createGcsObjectStore, type GcsObjectStore } from './gcs-sign.js';
+import { createGcsGamesStore, type GamesStore } from './games-store.js';
+import { KIT_ROOT_DIR } from './kit-registry.js';
+import { InMemoryStore } from './store.js';
+
+const sessionSecret = 'dev-session-secret-change-me';
+const submissionTokenSecret = 'test-submission-secret';
+
+function authHeaders(uid: string) {
+  return { cookie: `${SESSION_COOKIE_NAME}=${mintSessionToken(uid, sessionSecret)}` };
+}
+
+/** Same fake GCS HTTP layer games-store.test.ts uses — real store logic, no network. */
+function stubGcs() {
+  const objects = new Map<string, Buffer>();
+  const generations = new Map<string, number>();
+  const impl = (async (url: string | URL, init: RequestInit = {}) => {
+    const href = String(url);
+    if (init.method === 'POST') {
+      const parsed = new URL(href);
+      const name = decodeURIComponent(parsed.searchParams.get('name') ?? '');
+      const ifMatch = parsed.searchParams.get('ifGenerationMatch');
+      const current = generations.get(name) ?? 0;
+      if (ifMatch !== null && Number(ifMatch) !== current) {
+        return new Response('Precondition Failed', { status: 412 });
+      }
+      objects.set(name, Buffer.from(init.body as Uint8Array));
+      const next = current + 1;
+      generations.set(name, next);
+      return new Response(JSON.stringify({ generation: String(next) }), { status: 200 });
+    }
+    if (init.method === 'DELETE') {
+      const name = decodeURIComponent(href.split('/o/')[1].split('?')[0]);
+      objects.delete(name);
+      generations.delete(name);
+      return new Response(null, { status: 200 });
+    }
+    if (!href.includes('/o/')) {
+      const parsed = new URL(href);
+      const prefix = parsed.searchParams.get('prefix') ?? '';
+      const prefixes = new Set<string>();
+      for (const name of objects.keys()) {
+        if (!name.startsWith(prefix)) continue;
+        const rest = name.slice(prefix.length);
+        const slash = rest.indexOf('/');
+        if (slash !== -1) prefixes.add(`${prefix}${rest.slice(0, slash + 1)}`);
+      }
+      return new Response(JSON.stringify({ prefixes: [...prefixes] }), { status: 200 });
+    }
+    const name = decodeURIComponent(href.split('/o/')[1].split('?')[0]);
+    const body = objects.get(name);
+    if (!body) return new Response('', { status: 404 });
+    const generation = String(generations.get(name) ?? 1);
+    return new Response(new Uint8Array(body), { status: 200, headers: { 'x-goog-generation': generation } });
+  }) as unknown as typeof fetch;
+  return { impl, objects, generations };
+}
+
+function gamesStore(): GamesStore {
+  const { impl } = stubGcs();
+  return createGcsGamesStore({ bucket: 'b', getAccessToken: async () => 'token', fetchImpl: impl });
+}
+
+const ENGINE_REF = 'deadbeef0123456789abcdef0123456789abcdef';
+const TAR_BLOCK = 512;
+
+/** Minimal single-file ustar tarball — same recipe kit-files.test.ts uses. */
+function kitTarball(files: Record<string, string>): Buffer {
+  const entries = Object.entries(files).map(([name, body]) => {
+    const path = `${KIT_ROOT_DIR}/${name}`;
+    const payload = Buffer.from(body, 'utf8');
+    const header = Buffer.alloc(TAR_BLOCK);
+    header.write(path, 0, 100, 'utf8');
+    header.write(`${payload.length.toString(8).padStart(11, '0')} `, 124, 12, 'utf8');
+    header.write('0', 156, 1, 'utf8');
+    header.write('ustar\0', 257, 6, 'utf8');
+    const padding = Buffer.alloc((TAR_BLOCK - (payload.length % TAR_BLOCK)) % TAR_BLOCK);
+    return Buffer.concat([header, payload, padding]);
+  });
+  return gzipSync(Buffer.concat([...entries, Buffer.alloc(TAR_BLOCK * 2)]));
+}
+
+/** A games store and an object store sharing one fake bucket, with a kit published. */
+function storesWithKit(kitDts: string): { games: GamesStore; objectStore: GcsObjectStore } {
+  const { impl, objects } = stubGcs();
+  const tarball = kitTarball({ 'shared/game-kit.d.ts': kitDts });
+  objects.set(
+    'kits/current.json',
+    Buffer.from(JSON.stringify({ current: ENGINE_REF, previous: null, updatedAt: '2026-08-10T00:00:00.000Z' })),
+  );
+  objects.set(`kits/${ENGINE_REF}.tgz`, tarball);
+  objects.set(
+    `kits/${ENGINE_REF}.json`,
+    Buffer.from(JSON.stringify({ sha256: createHash('sha256').update(tarball).digest('hex') })),
+  );
+  const games = createGcsGamesStore({ bucket: 'b', getAccessToken: async () => 'token', fetchImpl: impl });
+  const objectStore = createGcsObjectStore({ bucket: 'b', getAccessToken: async () => 'token', fetchImpl: impl });
+  return { games, objectStore };
+}
+
+describe('the Code surface routes (creator-code.ts)', () => {
+  let store: InMemoryStore;
+  let games: GamesStore;
+
+  beforeEach(async () => {
+    store = new InMemoryStore();
+    games = gamesStore();
+    await store.upsertUser({ uid: 'g:creator' });
+    await store.upsertUser({ uid: 'g:other' });
+    await store.createSubmission(10, 'g:creator', 'Sky Dodge');
+    await store.setSubmissionSlug(10, 'sky-dodge');
+  });
+
+  async function withApp<T>(
+    fn: (app: Awaited<ReturnType<typeof buildApp>>) => Promise<T>,
+    options: { objectStore?: GcsObjectStore; games?: GamesStore } = {},
+  ): Promise<T> {
+    const app = await buildApp({
+      store,
+      sessionSecret,
+      submissionRoutes: {
+        submissionTokenSecret,
+        agentChannel: { gamesStore: options.games ?? games, objectStore: options.objectStore },
+      },
+    });
+    try {
+      return await fn(app);
+    } finally {
+      await app.close();
+    }
+  }
+
+  describe('GET /api/me/studio/games/:slug/sources', () => {
+    it('404s for a slug the caller does not own — never 403', async () =>
+      withApp(async (app) => {
+        const res = await app.inject({
+          method: 'GET',
+          url: '/api/me/studio/games/sky-dodge/sources',
+          headers: authHeaders('g:other'),
+        });
+        expect(res.statusCode).toBe(404);
+      }));
+
+    it('404s when the CODE_SURFACE kill switch is off', async () => {
+      const prior = process.env.CODE_SURFACE;
+      process.env.CODE_SURFACE = 'false';
+      try {
+        await withApp(async (app) => {
+          const res = await app.inject({
+            method: 'GET',
+            url: '/api/me/studio/games/sky-dodge/sources',
+            headers: authHeaders('g:creator'),
+          });
+          expect(res.statusCode).toBe(404);
+        });
+      } finally {
+        if (prior === undefined) delete process.env.CODE_SURFACE;
+        else process.env.CODE_SURFACE = prior;
+      }
+    });
+
+    it('merges a staged edit over the delivered version, stamping who staged it (CE-03, CE-04)', async () =>
+      withApp(async (app) => {
+        await games.putCandidateSources({
+          slug: 'sky-dodge',
+          issueNumber: 10,
+          files: [
+            { path: 'SPEC.md', content: '# Sky Dodge' },
+            { path: 'index.html', content: '<div id="game-root"></div>' },
+            { path: 'GAME.json', content: '{"engine":{"modules":[]}}' },
+            { path: 'game.ts', content: 'export const boot = 1;' },
+            { path: 'game/render.ts', content: 'export const paint = 1;' },
+          ],
+          mode: 'preview',
+        });
+        await store.setSubmissionDeliveredVersion(10, (await games.listVersions('sky-dodge'))[0]!.version);
+        await games.putStagedSourceFile({
+          slug: 'sky-dodge',
+          issueNumber: 10,
+          roundGeneration: 1,
+          path: 'game/render.ts',
+          content: 'export const paint = 2; // owner edit',
+          stagedBy: 'owner',
+        });
+
+        const res = await app.inject({
+          method: 'GET',
+          url: '/api/me/studio/games/sky-dodge/sources',
+          headers: authHeaders('g:creator'),
+        });
+        expect(res.statusCode).toBe(200);
+        const body = res.json() as {
+          files: Array<{ path: string; content: string; stagedBy?: string }>;
+          readOnly: boolean;
+        };
+        expect(body.readOnly).toBe(false);
+        const render = body.files.find((f) => f.path === 'game/render.ts');
+        expect(render?.content).toContain('owner edit');
+        expect(render?.stagedBy).toBe('owner');
+        const untouched = body.files.find((f) => f.path === 'game.ts');
+        expect(untouched?.content).toBe('export const boot = 1;');
+        expect(untouched?.stagedBy).toBeUndefined();
+      }));
+
+    it('reports readOnly with reason agent_round while a dispatched agent is live', async () =>
+      withApp(async (app) => {
+        await store.recordDispatch(10, { backend: 'managed', ref: 'session-1' });
+        const res = await app.inject({
+          method: 'GET',
+          url: '/api/me/studio/games/sky-dodge/sources',
+          headers: authHeaders('g:creator'),
+        });
+        expect(res.statusCode).toBe(200);
+        const body = res.json() as { readOnly: boolean; reason?: string };
+        expect(body.readOnly).toBe(true);
+        expect(body.reason).toBe('agent_round');
+      }));
+  });
+
+  describe('PUT /api/me/studio/games/:slug/sources/stage', () => {
+    it('stages an owner write and refuses it once an agent round goes live', async () =>
+      withApp(async (app) => {
+        const ok = await app.inject({
+          method: 'PUT',
+          url: '/api/me/studio/games/sky-dodge/sources/stage',
+          headers: { ...authHeaders('g:creator'), 'content-type': 'application/json' },
+          payload: { path: 'game.ts', content: 'export const boot = 1;', rebuild: false },
+        });
+        expect(ok.statusCode).toBe(200);
+        const listed = await games.listStagedSources({ slug: 'sky-dodge', issueNumber: 10, roundGeneration: 1 });
+        expect(listed.files).toEqual([{ path: 'game.ts', bytes: expect.any(Number), stagedBy: 'owner' }]);
+
+        await store.recordDispatch(10, { backend: 'managed', ref: 'session-1' });
+        const refused = await app.inject({
+          method: 'PUT',
+          url: '/api/me/studio/games/sky-dodge/sources/stage',
+          headers: { ...authHeaders('g:creator'), 'content-type': 'application/json' },
+          payload: { path: 'game.ts', content: 'x', rebuild: false },
+        });
+        expect(refused.statusCode).toBe(409);
+        expect(refused.json()).toMatchObject({ error: 'agent_round' });
+      }));
+  });
+
+  describe('POST /api/me/studio/games/:slug/sources/stage/discard', () => {
+    it("clears only the owner's own staged paths, leaving an agent's staged work standing", async () =>
+      withApp(async () => {
+        await games.putStagedSourceFile({
+          slug: 'sky-dodge',
+          issueNumber: 10,
+          roundGeneration: 1,
+          path: 'game/agent-file.ts',
+          content: 'agent wrote this',
+          stagedBy: 'agent',
+        });
+        await games.putStagedSourceFile({
+          slug: 'sky-dodge',
+          issueNumber: 10,
+          roundGeneration: 1,
+          path: 'game/owner-file.ts',
+          content: 'owner wrote this',
+          stagedBy: 'owner',
+        });
+
+        const app = await buildApp({
+          store,
+          sessionSecret,
+          submissionRoutes: { submissionTokenSecret, agentChannel: { gamesStore: games } },
+        });
+        const res = await app.inject({
+          method: 'POST',
+          url: '/api/me/studio/games/sky-dodge/sources/stage/discard',
+          headers: authHeaders('g:creator'),
+        });
+        await app.close();
+
+        expect(res.statusCode).toBe(200);
+        expect(res.json()).toEqual({ cleared: 1 });
+        const remaining = await games.listStagedSources({ slug: 'sky-dodge', issueNumber: 10, roundGeneration: 1 });
+        expect(remaining.files.map((f) => f.path)).toEqual(['game/agent-file.ts']);
+      }));
+  });
+
+  describe('POST /api/me/studio/games/:slug/sources/typecheck', () => {
+    it('skips checking (ok: true) when no kit is configured — the check cannot run, not "the game is broken"', async () =>
+      withApp(async (app) => {
+        const res = await app.inject({
+          method: 'POST',
+          url: '/api/me/studio/games/sky-dodge/sources/typecheck',
+          headers: { ...authHeaders('g:creator'), 'content-type': 'application/json' },
+          payload: { overlay: [{ path: 'game.ts', content: 'const x: number = "not a number";' }] },
+        });
+        expect(res.statusCode).toBe(200);
+        expect(res.json()).toEqual({ ok: true });
+      }));
+
+    it('reports a real type error once a kit is published, and passes clean code', async () => {
+      const { games: withKitGames, objectStore } = storesWithKit('declare const GameKit: { boot(): void };');
+
+      await withApp(
+        async (app) => {
+          const bad = await app.inject({
+            method: 'POST',
+            url: '/api/me/studio/games/sky-dodge/sources/typecheck',
+            headers: { ...authHeaders('g:creator'), 'content-type': 'application/json' },
+            payload: { overlay: [{ path: 'game.ts', content: 'const x: number = "not a number";' }] },
+          });
+          expect(bad.statusCode).toBe(200);
+          const badBody = bad.json() as { ok: boolean; errors?: string[] };
+          expect(badBody.ok).toBe(false);
+          expect(badBody.errors?.[0]).toContain('game.ts');
+
+          const good = await app.inject({
+            method: 'POST',
+            url: '/api/me/studio/games/sky-dodge/sources/typecheck',
+            headers: { ...authHeaders('g:creator'), 'content-type': 'application/json' },
+            payload: { overlay: [{ path: 'game.ts', content: 'const x: number = 1;' }] },
+          });
+          expect(good.statusCode).toBe(200);
+          expect(good.json()).toEqual({ ok: true });
+        },
+        { objectStore, games: withKitGames },
+      );
+    });
+  });
+
+  describe('POST /api/me/studio/games/:slug/sources/deliver', () => {
+    it('refuses without the IP attestation', async () =>
+      withApp(async (app) => {
+        const res = await app.inject({
+          method: 'POST',
+          url: '/api/me/studio/games/sky-dodge/sources/deliver',
+          headers: { ...authHeaders('g:creator'), 'content-type': 'application/json' },
+          payload: { mode: 'preview' },
+        });
+        expect(res.statusCode).toBe(400);
+      }));
+
+    it('refuses a game with no active round to deliver into', async () =>
+      withApp(async (app) => {
+        await store.recordJobTransition(10, { to: 'published', at: new Date().toISOString(), by: 'operator' });
+        const res = await app.inject({
+          method: 'POST',
+          url: '/api/me/studio/games/sky-dodge/sources/deliver',
+          headers: { ...authHeaders('g:creator'), 'content-type': 'application/json' },
+          payload: { mode: 'preview', attestation: true },
+        });
+        expect(res.statusCode).toBe(409);
+        expect(res.json()).toMatchObject({ error: 'no_active_round' });
+      }));
+
+    it('delivers a staged owner edit, stamping owner authorship, and enforces the cooldown', async () =>
+      withApp(async (app) => {
+        const stage = (path: string, content: string) =>
+          games.putStagedSourceFile({
+            slug: 'sky-dodge',
+            issueNumber: 10,
+            roundGeneration: 1,
+            path,
+            content,
+            stagedBy: 'owner',
+          });
+        await stage('SPEC.md', '# Sky Dodge');
+        await stage('index.html', '<div id="game-root"></div>');
+        await stage('GAME.json', '{"engine":{"modules":[]}}');
+        await stage('game.ts', 'export const boot = () => {};');
+
+        const res = await app.inject({
+          method: 'POST',
+          url: '/api/me/studio/games/sky-dodge/sources/deliver',
+          headers: { ...authHeaders('g:creator'), 'content-type': 'application/json' },
+          payload: { mode: 'preview', attestation: true },
+        });
+        expect(res.statusCode).toBe(200);
+        const body = res.json() as { accepted: boolean; version?: string };
+        expect(body.accepted).toBe(true);
+        const manifest = await games.getManifest('sky-dodge', body.version!);
+        expect(manifest?.authorship).toBe('owner');
+
+        const again = await app.inject({
+          method: 'POST',
+          url: '/api/me/studio/games/sky-dodge/sources/deliver',
+          headers: { ...authHeaders('g:creator'), 'content-type': 'application/json' },
+          payload: { mode: 'preview', attestation: true },
+        });
+        expect(again.statusCode).toBe(429);
+      }));
+  });
+});

@@ -39,6 +39,10 @@ export type StudioStripProps = {
   editAvailable: boolean;
   editActive: boolean;
   onToggleEdit: () => void;
+  /** The Code surface (CE-06) — the `</>` entry, following the Edit triplet exactly. */
+  codeAvailable: boolean;
+  codeActive: boolean;
+  onToggleCode: () => void;
   detailsActive: boolean;
   onToggleDetails: () => void;
   canClaim: boolean;
@@ -63,6 +67,9 @@ export function StudioStrip({
   editAvailable,
   editActive,
   onToggleEdit,
+  codeAvailable,
+  codeActive,
+  onToggleCode,
   detailsActive,
   onToggleDetails,
   canClaim,
@@ -117,6 +124,19 @@ export function StudioStrip({
           >
             <PixelIcon name="pencil" size={12} />{' '}
             <span className="studio-head-action-label">{t('studioPanel.tabs.edit')}</span>
+          </button>
+        ) : null}
+
+        {codeAvailable ? (
+          <button
+            type="button"
+            className={`studio-head-action is-icon-only${codeActive ? ' is-active' : ''}`}
+            aria-pressed={codeActive}
+            aria-label={t('studioPanel.tabs.code')}
+            onClick={onToggleCode}
+          >
+            <PixelIcon name="code" size={12} />{' '}
+            <span className="studio-head-action-label">{t('studioPanel.tabs.code')}</span>
           </button>
         ) : null}
 

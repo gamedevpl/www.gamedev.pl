@@ -36,6 +36,8 @@ export interface SourceDeliveryInput {
   // Channel may bind a legacy slug; managed harvest may not.
   bindSlug?: boolean;
   authority?: SourceDeliveryAuthority;
+  /** Who wrote this delivery — see {@link VersionManifest.authorship} (CE-20). */
+  authorship?: 'agent' | 'owner' | 'mixed';
 }
 
 export interface SourceDeliveryAccepted {
@@ -350,6 +352,7 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
           backend: input.backend ?? record.dispatch?.backend ?? record.builder,
           mode: input.mode,
           ...(input.kitEngineRef ? { kitEngineRef: input.kitEngineRef } : {}),
+          ...(input.authorship ? { authorship: input.authorship } : {}),
         }));
       } catch (error) {
         if (error instanceof InvalidUploadError && (error.kind === 'audio' || error.kind === 'symbols')) {

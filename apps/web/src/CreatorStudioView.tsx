@@ -10,6 +10,7 @@ import { formatRelativeTime } from './relativeTime.js';
 import { playPath, studioPath, type StudioTab } from './router.js';
 import { abandonSubmission, handoffToPlatform } from './submissionApi.js';
 import { StudioShotToasts } from './StudioShotToasts.js';
+import { CodeSurface } from './CodeSurface.js';
 import { EditorPanel } from './EditorPanel.js';
 import { StudioStage, type StagePosture, type StageStatus } from './StudioStage.js';
 import { StudioStrip } from './StudioStrip.js';
@@ -138,6 +139,11 @@ function tabAvailable(game: StudioGame, tab: StudioTab): boolean {
   // editor definition. Every other game keeps exactly the three surfaces it
   // had — an /edit URL for one of those resolves and falls back to the thread.
   if (tab === 'edit') return Boolean(game.editable && game.slug);
+  // The Code surface (CE-06): every owned game with a slug, once the kill switch is
+  // on — no manifest condition, unlike Edit, per the owner decision (all creators
+  // from M1). `game.slug` still gates it: there is nothing to read or write before
+  // the game has one.
+  if (tab === 'code') return Boolean(game.codeSurface && game.slug);
   return true;
 }
 
@@ -787,7 +793,7 @@ export function CreatorStudioView({
             {activeGame ? (
               <div className="studio-detail">
                 {(() => {
-                  const covered = shelfOpen || tab === 'details' || tab === 'edit';
+                  const covered = shelfOpen || tab === 'details' || tab === 'edit' || tab === 'code';
                   const canClaim = Boolean(
                     !user?.handle &&
                     (activeGame.lastKnownStatus === 'in_review' || activeGame.lastKnownStatus === 'publishing'),
@@ -844,6 +850,9 @@ export function CreatorStudioView({
                         editAvailable={tabAvailable(activeGame, 'edit')}
                         editActive={tab === 'edit'}
                         onToggleEdit={() => openTab(tab === 'edit' ? 'thread' : 'edit')}
+                        codeAvailable={tabAvailable(activeGame, 'code')}
+                        codeActive={tab === 'code'}
+                        onToggleCode={() => openTab(tab === 'code' ? 'thread' : 'code')}
                         detailsActive={tab === 'details'}
                         onToggleDetails={() => {
                           if (tab === 'details') {
@@ -982,6 +991,16 @@ export function CreatorStudioView({
                               key={activeGame.token}
                               game={activeGame}
                               onOpenPlaytest={() => setPosture('play')}
+                              onBack={() => openTab('thread')}
+                            />
+                          </div>
+                        ) : null}
+
+                        {tab === 'code' && activeGame.slug ? (
+                          <div className="studio-edit-overlay">
+                            <CodeSurface
+                              key={activeGame.token}
+                              slug={activeGame.slug}
                               onBack={() => openTab('thread')}
                             />
                           </div>
