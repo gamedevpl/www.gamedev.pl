@@ -413,14 +413,7 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
           }
           options.log?.warn({ err: error, ref }, 'could not nudge idle managed session');
         }
-      } else if (
-        session.state === 'idle' &&
-        !hasCandidate &&
-        !roundDelivered &&
-        !agentEnded &&
-        idleNudged.has(ref) &&
-        !nudged
-      ) {
+      } else if (session.state === 'idle' && !hasCandidate && !roundDelivered && !agentEnded && idleNudged.has(ref)) {
         // Nudge spent; still idle; nothing delivered.
         spentWithoutDelivery = true;
       }
