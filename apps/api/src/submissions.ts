@@ -7,7 +7,13 @@ import { registerAgentChannelRoutes, type AgentChannelOptions } from './agent-ch
 import { mintAgentToken, mintManagedMcpOpener } from './agent-token.js';
 import { registerMcpServerRoutes } from './mcp-server.js';
 import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './assemble.js';
-import { createCreationGate, CREATION_REFUSAL_CODES, type CreationGate } from './creation-limits.js';
+import {
+  createCreationGate,
+  createChatGate,
+  CREATION_REFUSAL_CODES,
+  type ChatGate,
+  type CreationGate,
+} from './creation-limits.js';
 import {
   createManagedAvailabilityGate,
   MANAGED_UNAVAILABLE_ERROR,
@@ -333,6 +339,12 @@ export interface SubmissionRoutesOptions {
   dailyImprovementQuota?: number;
   // Fronts feedback/improve messages, gated by chatAgentEnabled() (chat-agent.ts).
   chatAgent?: StudioChatAgent;
+  // The chat agent's own circuit breaker (creation-limits.ts); null disables.
+  chatGate?: ChatGate | null;
+  // Ceiling used when the config doc sets none (creation-limits.ts).
+  globalDailyChatCap?: number;
+  // Per-creator daily ceiling on chat-agent turns — separate from build quota.
+  dailyChatQuota?: number;
   contentChecker?: ContentChecker;
   internalAuthVerifier?: InternalAuthVerifier;
   /** Mailer for notification email fan-out; defaults to createMailerFromEnv(). */
@@ -616,10 +628,25 @@ export async function registerSubmissionRoutes(
   // See chat-agent.ts. Lazy Vertex client — cheap to construct unconditionally.
   const chatAgent = options.chatAgent ?? new VertexStudioChatAgent();
   const chatAgentLog = asChatAgentLogger(app.log);
-  // Own bucket: chat turns bill no quota, bounding free-chatbot farming.
+  // Per-IP burst limit — independent of the per-user daily quota below.
   const chatTurnsByIp = new Map<string, number[]>();
   const chatTurnRateLimitWindowMs = 60_000;
   const maxChatTurnsPerWindow = 20;
+  // Per-creator daily ceiling, same UsageCounters mechanism as feedback/improve.
+  const dailyChatQuota = options.dailyChatQuota ?? Number(process.env.DAILY_CHAT_QUOTA ?? '300');
+  // See creation-limits.ts.
+  const chatGate =
+    options.chatGate === undefined
+      ? store
+        ? createChatGate({
+            store,
+            now,
+            ttlMs: options.creationLimitsTtlMs,
+            defaultGlobalDailyCap: options.globalDailyChatCap,
+            logWarn: (payload, message) => app.log.warn(payload, message),
+          })
+        : null
+      : options.chatGate;
   const improvementRateLimitWindowMs = 60 * 60 * 1000;
   const maxImprovementsPerWindow = 10;
   const internalAuthVerifier = options.internalAuthVerifier ?? createInternalAuthVerifierFromEnv();
@@ -1448,6 +1475,7 @@ export async function registerSubmissionRoutes(
     record: SubmissionRecord;
     locale: string;
     ip: string;
+    uid: string;
     directToBuilder?: boolean;
   }): Promise<ChatAgentOutcome | null> {
     if (!store || !chatAgentLog || !chatAgentEnabled()) return null;
@@ -1458,7 +1486,29 @@ export async function registerSubmissionRoutes(
     if (isRateLimited(chatTurnsByIp, input.ip, now(), maxChatTurnsPerWindow, chatTurnRateLimitWindowMs)) {
       return null;
     }
+    // The gate/quota reads sit inside this same fail-open boundary too.
     try {
+      const dateStr = new Date(now()).toISOString().slice(0, 10);
+      if (chatGate) {
+        const gate = await chatGate.checkAndSpend(input.uid, dateStr);
+        if (!gate.allowed) {
+          logChatAgentFailOpen(chatAgentLog, {
+            issueNumber: input.issueNumber,
+            scope: input.scope,
+            reason: gate.reason,
+          });
+          return null;
+        }
+      }
+      const quota = await store.checkAndIncrementQuota(input.uid, dateStr, dailyChatQuota, 'chats');
+      if (!quota.allowed) {
+        logChatAgentFailOpen(chatAgentLog, {
+          issueNumber: input.issueNumber,
+          scope: input.scope,
+          reason: 'daily_quota',
+        });
+        return null;
+      }
       const [status, history] = await Promise.all([
         buildChatAgentStatus(input.record, input.scope),
         recentChatTurns(input.issueNumber),
@@ -1468,7 +1518,9 @@ export async function registerSubmissionRoutes(
         status,
         history,
         locale: input.locale,
-        ...(input.record.title ? { game: { title: input.record.title } } : {}),
+        ...(input.record.title || input.record.spec
+          ? { game: { title: input.record.title, concept: input.record.spec } }
+          : {}),
       });
       logChatAgentDecision(chatAgentLog, {
         issueNumber: input.issueNumber,
@@ -3858,6 +3910,7 @@ export async function registerSubmissionRoutes(
           record,
           locale: creatorLocale,
           ip: request.ip,
+          uid: request.user!.uid,
           directToBuilder: parsed.data.directToBuilder,
         });
         if (chatOutcome?.kind === 'replied') {
@@ -4107,6 +4160,7 @@ export async function registerSubmissionRoutes(
         record,
         locale: record.locale ?? 'en',
         ip: request.ip,
+        uid: request.user!.uid,
         directToBuilder: parsed.data.directToBuilder,
       });
       if (chatOutcome?.kind === 'replied') {

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  createChatGate,
   createCreationGate,
   createEditingGate,
   DEFAULT_GLOBAL_DAILY_SUBMISSION_CAP,
@@ -227,5 +228,48 @@ describe('editing gate (the remix/assist spend breaker)', () => {
     expect(await gate.checkAndSpend('bot:e2e', '2026-08-02')).toEqual({ allowed: true });
     expect(await gate.checkAndSpend('g:alice', '2026-08-02')).toEqual({ allowed: true });
     expect(await gate.checkAndSpend('g:alice', '2026-08-02')).toEqual({ allowed: false, reason: 'over_capacity' });
+  });
+});
+
+describe('chat gate (the studio mini chat agent spend breaker)', () => {
+  it('spends slots until the cap, then refuses with over_capacity', async () => {
+    const store = new InMemoryStore();
+    const gate = createChatGate({ store, ttlMs: 0, defaultGlobalDailyCap: 2 });
+    expect(await gate.checkAndSpend('g:alice', '2026-08-02')).toEqual({ allowed: true });
+    expect(await gate.checkAndSpend('g:bob', '2026-08-02')).toEqual({ allowed: true });
+    expect(await gate.checkAndSpend('g:carol', '2026-08-02')).toEqual({ allowed: false, reason: 'over_capacity' });
+    // A new day is a new allowance.
+    expect(await gate.checkAndSpend('g:carol', '2026-08-03')).toEqual({ allowed: true });
+  });
+
+  it('honours the stored chatPaused switch without touching editing or creation', async () => {
+    const store = new InMemoryStore();
+    await store.setCreationLimits({ chatPaused: true }, 'operator');
+    const gate = createChatGate({ store, ttlMs: 0 });
+    expect(await gate.checkAndSpend('g:alice', '2026-08-02')).toEqual({ allowed: false, reason: 'paused' });
+    const editing = createEditingGate({ store, ttlMs: 0, defaultGlobalDailyCap: 5 });
+    expect(await editing.checkAndSpend('g:alice', '2026-08-02')).toEqual({ allowed: true });
+  });
+
+  it('has its own cap, independent of the editing lanes’ cap', async () => {
+    const store = new InMemoryStore();
+    await store.setCreationLimits({ globalDailyEditCap: 1, globalDailyChatCap: 100 }, 'operator');
+    const chat = createChatGate({ store, ttlMs: 0 });
+    const editing = createEditingGate({ store, ttlMs: 0 });
+    // The edit cap is already spent...
+    expect(await editing.checkAndSpend('g:alice', '2026-08-02')).toEqual({ allowed: true });
+    expect(await editing.checkAndSpend('g:bob', '2026-08-02')).toEqual({ allowed: false, reason: 'over_capacity' });
+    // ...but chat has its own, much larger, untouched budget.
+    expect(await chat.checkAndSpend('g:bob', '2026-08-02')).toEqual({ allowed: true });
+  });
+
+  it('lets bots through uncounted', async () => {
+    const store = new InMemoryStore();
+    await store.setCreationLimits({ globalDailyChatCap: 1 }, 'operator');
+    const gate = createChatGate({ store, ttlMs: 0 });
+    expect(await gate.checkAndSpend('bot:e2e', '2026-08-02')).toEqual({ allowed: true });
+    expect(await gate.checkAndSpend('bot:e2e', '2026-08-02')).toEqual({ allowed: true });
+    expect(await gate.checkAndSpend('g:alice', '2026-08-02')).toEqual({ allowed: true });
+    expect(await gate.checkAndSpend('g:bob', '2026-08-02')).toEqual({ allowed: false, reason: 'over_capacity' });
   });
 });

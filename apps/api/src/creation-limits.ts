@@ -80,6 +80,20 @@ export function resolveDefaultGlobalDailyEditCap(override?: number, env: NodeJS.
   return DEFAULT_GLOBAL_DAILY_EDIT_CAP;
 }
 
+// Shared daily allowance of chat-agent calls — own cap, separate from editing.
+export const DEFAULT_GLOBAL_DAILY_CHAT_CAP = 5000;
+
+// Same not-configured semantics as the submission cap resolver above.
+export function resolveDefaultGlobalDailyChatCap(override?: number, env: NodeJS.ProcessEnv = process.env): number {
+  if (typeof override === 'number' && Number.isFinite(override) && override >= 0) return override;
+  const raw = env.GLOBAL_DAILY_CHAT_CAP?.trim();
+  if (raw) {
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed) && parsed >= 0) return parsed;
+  }
+  return DEFAULT_GLOBAL_DAILY_CHAT_CAP;
+}
+
 export type CreationRefusal = 'paused' | 'over_capacity';
 
 export type CreationGateOutcome = { allowed: true } | { allowed: false; reason: CreationRefusal };
@@ -299,6 +313,78 @@ export function createEditingGate(options: CreationGateOptions): EditingGate {
       }
       if (spent.current >= Math.ceil(cap * 0.8)) {
         logWarn({ dateStr, cap, current: spent.current }, 'global daily edit cap is over 80% spent');
+      }
+      return { allowed: true };
+    },
+  };
+}
+
+export interface ChatGate {
+  // Decides and spends one of the day's chat-agent slots.
+  checkAndSpend(uid: string, dateStr: string): Promise<CreationGateOutcome>;
+}
+
+// Same chassis as creation/editing; falls open in runChatAgent on refusal.
+export function createChatGate(options: CreationGateOptions): ChatGate {
+  const { store } = options;
+  const now = options.now ?? Date.now;
+  const ttlMs = options.ttlMs ?? DEFAULT_CREATION_LIMITS_TTL_MS;
+  const defaultCap = resolveDefaultGlobalDailyChatCap(options.defaultGlobalDailyCap);
+  const logWarn = options.logWarn ?? (() => {});
+
+  const defaults: CreationLimits = {
+    paused: false,
+    globalDailySubmissionCap: null,
+    editingPaused: false,
+    globalDailyEditCap: null,
+    chatPaused: false,
+    globalDailyChatCap: null,
+    managedDailyCap: null,
+    managedDailyUserCap: null,
+  };
+  let cache: { value: CreationLimits; expiresAt: number } | null = null;
+
+  async function limits(): Promise<CreationLimits> {
+    if (cache && cache.expiresAt > now()) return cache.value;
+    try {
+      const stored = (await store.getCreationLimits()) ?? defaults;
+      cache = { value: stored, expiresAt: now() + ttlMs };
+      return stored;
+    } catch (error) {
+      if (cache) {
+        logWarn({ err: error }, 'creation limits unreadable; chat gate using the last known values');
+        return cache.value;
+      }
+      logWarn({ err: error }, 'creation limits unreadable and never read; chat gate using defaults');
+      return defaults;
+    }
+  }
+
+  return {
+    async checkAndSpend(uid, dateStr) {
+      if (bypassesBreaker(uid)) return { allowed: true };
+
+      const value = await limits();
+      if (value.chatPaused) return { allowed: false, reason: 'paused' };
+
+      const cap = value.globalDailyChatCap ?? defaultCap;
+      if (cap <= 0) return { allowed: false, reason: 'over_capacity' };
+
+      let spent: { allowed: boolean; current: number };
+      try {
+        spent = await store.checkAndIncrementGlobalChats(dateStr, cap);
+      } catch (error) {
+        // Same reasoning as creation/editing — a blip is not "over capacity".
+        logWarn({ err: error, dateStr }, 'global chat counter unreachable; admitting the request');
+        return { allowed: true };
+      }
+
+      if (!spent.allowed) {
+        logWarn({ dateStr, cap, current: spent.current }, 'global daily chat cap reached; refusing chat-agent calls');
+        return { allowed: false, reason: 'over_capacity' };
+      }
+      if (spent.current >= Math.ceil(cap * 0.8)) {
+        logWarn({ dateStr, cap, current: spent.current }, 'global daily chat cap is over 80% spent');
       }
       return { allowed: true };
     },

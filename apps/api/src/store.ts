@@ -644,6 +644,10 @@ export interface CreationLimits {
    * flag goes on. Same null semantics as the submission cap.
    */
   globalDailyEditCap: number | null;
+  // Refuse the studio mini chat agent outright; feedback/improve still work normally.
+  chatPaused?: boolean;
+  // Own daily ceiling on chat-agent calls, separate from the edit cap.
+  globalDailyChatCap?: number | null;
   // Switches the `platform` option; `auto` defers to whether a backend exists.
   managedBuilderMode?: 'auto' | 'off' | 'coming_soon';
   // Shared daily ceiling on platform rounds started. `null` = no cap.
@@ -672,6 +676,8 @@ export interface UsageCounters {
   improvements: number;
   /** Natural-language tuning requests in the editor (one Vertex call each). */
   assists: number;
+  // Studio mini chat agent turns (chat-agent.ts), one per model call.
+  chats: number;
   // Platform rounds this creator started today.
   managedBuilds: number;
 }
@@ -2119,6 +2125,8 @@ export interface Store {
   checkAndIncrementGlobalSubmissions(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }>;
   /** Same shape for the editing lanes' shared daily allowance of model calls. */
   checkAndIncrementGlobalEdits(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }>;
+  /** Same shape, for the chat agent's own shared daily allowance. */
+  checkAndIncrementGlobalChats(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }>;
   // Platform rounds everyone together has started on `dateStr`.
   getGlobalManagedBuildCount(dateStr: string): Promise<number>;
   // Same shape, for the shared daily ceiling.
@@ -2625,6 +2633,7 @@ function emptyUsageCounters(): UsageCounters {
     playerFeedback: 0,
     improvements: 0,
     assists: 0,
+    chats: 0,
     managedBuilds: 0,
   };
 }
@@ -2647,6 +2656,7 @@ export class InMemoryStore implements Store {
   // yyyy-mm-dd -> submissions accepted that day across every account
   private globalSubmissions = new Map<string, number>();
   private globalEdits = new Map<string, number>();
+  private globalChats = new Map<string, number>();
   private globalManagedBuilds = new Map<string, number>();
   private creationLimits: CreationLimits | null = null;
   private publicPlayConfig: PublicPlayConfig | null = null;
@@ -3731,6 +3741,11 @@ export class InMemoryStore implements Store {
         patch.globalDailyEditCap !== undefined
           ? patch.globalDailyEditCap
           : (this.creationLimits?.globalDailyEditCap ?? null),
+      chatPaused: patch.chatPaused ?? this.creationLimits?.chatPaused ?? false,
+      globalDailyChatCap:
+        patch.globalDailyChatCap !== undefined
+          ? patch.globalDailyChatCap
+          : (this.creationLimits?.globalDailyChatCap ?? null),
       managedBuilderMode: patch.managedBuilderMode ?? this.creationLimits?.managedBuilderMode ?? 'auto',
       managedDailyCap:
         patch.managedDailyCap !== undefined ? patch.managedDailyCap : (this.creationLimits?.managedDailyCap ?? null),
@@ -3781,6 +3796,15 @@ export class InMemoryStore implements Store {
       return { allowed: false, current };
     }
     this.globalEdits.set(dateStr, current + 1);
+    return { allowed: true, current: current + 1 };
+  }
+
+  async checkAndIncrementGlobalChats(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }> {
+    const current = this.globalChats.get(dateStr) ?? 0;
+    if (current >= limit) {
+      return { allowed: false, current };
+    }
+    this.globalChats.set(dateStr, current + 1);
     return { allowed: true, current: current + 1 };
   }
 
@@ -6283,6 +6307,8 @@ export class FirestoreStore implements Store {
       editingPaused: data?.editingPaused === true,
       remixTracePaused: data?.remixTracePaused === true,
       globalDailyEditCap: typeof data?.globalDailyEditCap === 'number' ? data.globalDailyEditCap : null,
+      chatPaused: data?.chatPaused === true,
+      globalDailyChatCap: typeof data?.globalDailyChatCap === 'number' ? data.globalDailyChatCap : null,
       managedBuilderMode:
         data?.managedBuilderMode === 'off' || data?.managedBuilderMode === 'coming_soon'
           ? data.managedBuilderMode
@@ -6311,6 +6337,9 @@ export class FirestoreStore implements Store {
         editingPaused: patch.editingPaused ?? existing.editingPaused ?? false,
         globalDailyEditCap:
           patch.globalDailyEditCap !== undefined ? patch.globalDailyEditCap : (existing.globalDailyEditCap ?? null),
+        chatPaused: patch.chatPaused ?? existing.chatPaused ?? false,
+        globalDailyChatCap:
+          patch.globalDailyChatCap !== undefined ? patch.globalDailyChatCap : (existing.globalDailyChatCap ?? null),
         managedBuilderMode: patch.managedBuilderMode ?? existing.managedBuilderMode ?? 'auto',
         managedDailyCap:
           patch.managedDailyCap !== undefined ? patch.managedDailyCap : (existing.managedDailyCap ?? null),
@@ -6385,6 +6414,23 @@ export class FirestoreStore implements Store {
 
       const nextVal = current + 1;
       transaction.set(ref, { edits: nextVal }, { merge: true });
+      return { allowed: true, current: nextVal };
+    });
+  }
+
+  async checkAndIncrementGlobalChats(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }> {
+    const ref = this.globalUsageRef(dateStr);
+    return await this.db.runTransaction(async (transaction) => {
+      const snap = await transaction.get(ref);
+      const value = snap.data()?.chats;
+      const current = typeof value === 'number' ? value : 0;
+
+      if (current >= limit) {
+        return { allowed: false, current };
+      }
+
+      const nextVal = current + 1;
+      transaction.set(ref, { chats: nextVal }, { merge: true });
       return { allowed: true, current: nextVal };
     });
   }

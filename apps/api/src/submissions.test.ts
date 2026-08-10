@@ -15,6 +15,7 @@ import { DELIVERY_GATE_VERDICT_MSG } from './delivery-metrics.js';
 import { JOB_ID_FLOOR } from './store.js';
 import { createManagedAvailabilityGate, type ManagedAvailabilityGate } from './managed-availability.js';
 import type { StudioChatAgent } from './chat-agent.js';
+import type { ChatGate } from './creation-limits.js';
 
 const secret = 'submission-secret';
 const repo = 'gamedevpl/www.gamedev.pl-games';
@@ -138,6 +139,8 @@ async function createApp(params: {
   managedAvailabilityGate?: ManagedAvailabilityGate | null;
   // Also needs STUDIO_CHAT_AGENT='true'.
   chatAgent?: StudioChatAgent;
+  dailyChatQuota?: number;
+  chatGate?: ChatGate | null;
 }): Promise<{ app: FastifyInstance; store: Store; authHeaders: Record<string, string> }> {
   const store = params.store ?? new InMemoryStore();
   await store.upsertUser({ uid: 'g:test-user' });
@@ -162,6 +165,8 @@ async function createApp(params: {
       ...(params.agentChannel ? { agentChannel: params.agentChannel } : {}),
       managedAvailabilityGate: params.managedAvailabilityGate === undefined ? null : params.managedAvailabilityGate,
       ...(params.chatAgent ? { chatAgent: params.chatAgent } : {}),
+      ...(params.dailyChatQuota !== undefined ? { dailyChatQuota: params.dailyChatQuota } : {}),
+      ...(params.chatGate !== undefined ? { chatGate: params.chatGate } : {}),
     },
   });
   return { app, store, authHeaders: getAuthHeaders('g:test-user') };
@@ -3264,6 +3269,123 @@ describe('the Studio mini chat agent (feedback route)', () => {
     const record = await store.getSubmission(job.issueNumber);
     const entry = record?.costs?.find((cost) => cost.kind === 'chat');
     expect(entry).toMatchObject({ by: 'gemini-3.6-flash', tokens: { input: 500, output: 40 } });
+    await app.close();
+  });
+
+  it('falls open once the per-user daily chat quota is spent', async () => {
+    process.env.STUDIO_CHAT_AGENT = 'true';
+    const { backend } = createBackendStub();
+    const decide = vi.fn(async () => ({ kind: 'reply' as const, text: 'a reply' }));
+    const { app, authHeaders, store } = await createApp({
+      githubClient: createGithubClientStub({ issueNumber: 90 }).githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      chatAgent: { decide },
+      dailyChatQuota: 1,
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about a garden full of robots.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    const token = mintToken(job.issueNumber, secret);
+
+    const first = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${token}/feedback`,
+      headers: authHeaders,
+      payload: { feedback: 'is it done yet?' },
+    });
+    expect(first.statusCode).toBe(200);
+    expect(decide).toHaveBeenCalledTimes(1);
+
+    // Quota spent: the day's next message falls open to the builder.
+    const second = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${token}/feedback`,
+      headers: authHeaders,
+      payload: { feedback: 'Please make the robots water the flowers faster.' },
+    });
+    expect(second.statusCode).toBe(200);
+    expect(decide).toHaveBeenCalledTimes(1);
+    const pending = await store.listPendingCreatorMessages(job.issueNumber);
+    expect(pending.map((m) => m.text)).toContain('Please make the robots water the flowers faster.');
+    await app.close();
+  });
+
+  it('falls open when the global chat breaker is paused, without touching editing', async () => {
+    process.env.STUDIO_CHAT_AGENT = 'true';
+    const { backend } = createBackendStub();
+    const decide = vi.fn(async () => ({ kind: 'reply' as const, text: 'a reply' }));
+    const store = new InMemoryStore();
+    await store.setCreationLimits({ chatPaused: true }, 'operator');
+    const { app, authHeaders } = await createApp({
+      githubClient: createGithubClientStub({ issueNumber: 90 }).githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      chatAgent: { decide },
+      store,
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about a garden full of robots.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    const token = mintToken(job.issueNumber, secret);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${token}/feedback`,
+      headers: authHeaders,
+      payload: { feedback: 'Please make the robots water the flowers faster.' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(decide).not.toHaveBeenCalled();
+    const pending = await store.listPendingCreatorMessages(job.issueNumber);
+    expect(pending.map((m) => m.text)).toContain('Please make the robots water the flowers faster.');
+    await app.close();
+  });
+
+  it('a breaker that throws (a Firestore blip) falls open rather than failing the request', async () => {
+    // A broken gate must degrade to "skip the layer", never a 500.
+    process.env.STUDIO_CHAT_AGENT = 'true';
+    const { backend } = createBackendStub();
+    const decide = vi.fn(async () => ({ kind: 'reply' as const, text: 'a reply' }));
+    const failingChatGate: ChatGate = {
+      checkAndSpend: async () => {
+        throw new Error('firestore unavailable');
+      },
+    };
+    const { app, authHeaders, store } = await createApp({
+      githubClient: createGithubClientStub({ issueNumber: 90 }).githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      chatAgent: { decide },
+      chatGate: failingChatGate,
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about a garden full of robots.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    const token = mintToken(job.issueNumber, secret);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${token}/feedback`,
+      headers: authHeaders,
+      payload: { feedback: 'Please make the robots water the flowers faster.' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(decide).not.toHaveBeenCalled();
+    const pending = await store.listPendingCreatorMessages(job.issueNumber);
+    expect(pending.map((m) => m.text)).toContain('Please make the robots water the flowers faster.');
     await app.close();
   });
 });
