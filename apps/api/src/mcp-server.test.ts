@@ -794,10 +794,7 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(started.structured).toMatchObject({ slug: 'comet-courier', round: 1 });
   });
 
-  // Managed-agent connectors (Claude, ChatGPT Apps) keep echoing the opener bearer on
-  // every later call, not just start(). resolveAuth must still prefer the sessionKey
-  // start() minted rather than trying to verify that opener as a write bearer, or every
-  // post-start call fails with "invalid build token" (reported live 2026-08-10).
+  // Opener bearer echoed post-start must not override the sessionKey.
   it('prefers sessionKey when the managed-agent opener bearer is echoed on later calls', async () => {
     const store = new InMemoryStore();
     await seedJob(store);

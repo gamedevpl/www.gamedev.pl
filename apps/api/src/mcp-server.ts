@@ -913,10 +913,6 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     const bearerIsOpener = Boolean(bearer) && looksLikeCreatorAgentKey(bearer!);
     const bearerIsRetiredGameKey = Boolean(bearer) && looksLikeGameAgentKey(bearer!);
     const bearerIsOAuth = Boolean(bearer) && looksLikeAsAccessToken(bearer!);
-    // Managed-agent connectors (Claude, ChatGPT Apps) keep echoing the opener bearer
-    // start() consumed on every later call. That opener shares its wire shape with a
-    // real round-scoped write bearer, so only signature verification tells them apart —
-    // wrong scope throws and we fall through to the write-bearer branch below.
     let bearerIsManagedOpener = false;
     if (bearer && !bearerIsOpener && !bearerIsRetiredGameKey && !bearerIsOAuth) {
       try {
