@@ -26,6 +26,7 @@ function fakeProvider(overrides: Partial<ManagedAgentProvider> = {}) {
   const started: ManagedSessionRequest[] = [];
   const read: string[] = [];
   let state: string = 'queued';
+  let stopReason: string | undefined;
   let outputs: ManagedOutputFile[] = [];
   let listedSizes = false;
   const provider: ManagedAgentProvider = {
@@ -40,6 +41,7 @@ function fakeProvider(overrides: Partial<ManagedAgentProvider> = {}) {
       // Adapters normalize before returning; the fake honours that contract.
       state: normalizeManagedState(state),
       usage: { inputTokens: 1_000, outputTokens: 250 },
+      ...(stopReason ? { stopReason } : {}),
     }),
     listOutputs: async () =>
       outputs.map((file) => ({
@@ -63,6 +65,9 @@ function fakeProvider(overrides: Partial<ManagedAgentProvider> = {}) {
     read,
     setState: (next: string) => {
       state = next;
+    },
+    setStopReason: (next: string | undefined) => {
+      stopReason = next;
     },
     setOutputs: (next: ManagedOutputFile[], options: { withSizes?: boolean } = {}) => {
       outputs = next;
@@ -398,7 +403,7 @@ describe('managed backend', () => {
     }
   });
 
-  it('nudges an idle session once instead of spending the round', async () => {
+  it('nudges an idle session once, then spends the round if still idle without delivery', async () => {
     const sendMessage = vi.fn(async () => undefined);
     const { provider, setState } = fakeProvider({ sendMessage });
     const backend = createManagedBackend({ provider, deliver: async () => ({ version: 'v1' }) });
@@ -410,7 +415,8 @@ describe('managed backend', () => {
     const second = await backend.observe('session-1', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
 
     expect(first).toMatchObject({ state: 'in_progress', hasCandidate: false });
-    expect(second).toMatchObject({ state: 'idle', hasCandidate: false });
+    // Spent nudge + still idle → completed (leave building).
+    expect(second).toMatchObject({ state: 'completed', hasCandidate: false });
     expect(sendMessage).toHaveBeenCalledTimes(1);
   });
 
@@ -458,11 +464,81 @@ describe('managed backend', () => {
 
     await backend.dispatch(brief());
     setState('idle');
-    await backend.observe('session-1', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
-    await backend.observe('session-1', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
+    const first = await backend.observe('session-1', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
+    const second = await backend.observe('session-1', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
 
     expect(sendMessage).toHaveBeenCalledTimes(1);
     expect(sendMessage.mock.calls[0]?.[1]).toContain('No delivery is recorded for this round');
+    expect(first).toMatchObject({ state: 'in_progress' });
+    expect(second).toMatchObject({ state: 'completed', hasCandidate: false });
+  });
+
+  it('ends a round blocked on tool confirmation instead of leaving Studio on building', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const warn = vi.fn();
+    const { provider, setState, setStopReason } = fakeProvider({ sendMessage });
+    const backend = createManagedBackend({
+      provider,
+      tools: { mcpEndpoints: [{ url: 'https://example.test/api/mcp', name: 'gamedevpl' }] },
+      readSignals: async () => ({}),
+      log: { warn },
+    });
+
+    await backend.dispatch(brief());
+    setState('idle');
+    setStopReason('requires_action');
+
+    const observation = await backend.observe('session-1', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
+
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(observation).toMatchObject({ state: 'completed', hasCandidate: false });
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({ stopReason: 'requires_action' }),
+      expect.stringMatching(/blocked on required action/),
+    );
+  });
+
+  it('spends the round when a nudge is refused because the session awaits tool confirmation', async () => {
+    const sendMessage = vi.fn(async () => {
+      throw new Error(
+        'anthropic managed agents /v1/sessions/x/events failed: 400 only user.tool_confirmation events are allowed',
+      );
+    });
+    const { provider, setState } = fakeProvider({ sendMessage });
+    const backend = createManagedBackend({
+      provider,
+      tools: { mcpEndpoints: [{ url: 'https://example.test/api/mcp', name: 'gamedevpl' }] },
+      readSignals: async () => ({}),
+      log: { warn: vi.fn() },
+    });
+
+    await backend.dispatch(brief());
+    setState('idle');
+
+    const observation = await backend.observe('session-1', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
+
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+    expect(observation).toMatchObject({ state: 'completed', hasCandidate: false });
+  });
+
+  it('does not spend a nudged idle round that delivered a preview between polls', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const { provider, setState } = fakeProvider({ sendMessage });
+    const signals: { previewVersion?: string } = {};
+    const backend = createManagedBackend({
+      provider,
+      tools: { mcpEndpoints: [{ url: 'https://example.test/api/mcp', name: 'gamedevpl' }] },
+      readSignals: async () => signals,
+    });
+
+    await backend.dispatch(brief());
+    setState('idle');
+    await backend.observe('session-1', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
+    signals.previewVersion = 'v20260809T071502153Z-9fbd2f';
+    const second = await backend.observe('session-1', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
+
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+    expect(second).toMatchObject({ state: 'idle', hasCandidate: false });
   });
 
   it('releases the lock when delivery fails, so the retry is not locked out', async () => {
