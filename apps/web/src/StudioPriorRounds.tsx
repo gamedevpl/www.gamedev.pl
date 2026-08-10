@@ -56,15 +56,19 @@ export function StudioPriorRounds({ slug, rounds }: { slug: string; rounds: Prio
 
 function PriorRoundTurn({ entry }: { entry: PriorRoundEntry }) {
   const { t, i18n } = useTranslation();
-  const mine = entry.kind === 'revision';
+  const isStudioVoice = entry.kind === 'revision' && entry.origin === 'studio';
+  const mine = entry.kind === 'revision' && !isStudioVoice;
   return (
-    <li className={`studio-turn studio-prior-turn${mine ? ' is-mine' : ''}`}>
+    <li className={`studio-turn studio-prior-turn${mine ? ' is-mine' : ''}${isStudioVoice ? ' is-studio-voice' : ''}`}>
       <div className="studio-turn-body">
-        {!mine && entry.step ? (
+        {!mine && !isStudioVoice && entry.step ? (
           <span className="studio-turn-kicker">{t(`statusView.progress.steps.${entry.step}`)}</span>
         ) : null}
         {mine && entry.origin === 'agent' ? (
           <span className="studio-turn-kicker">{t('statusView.progress.relayedRequest')}</span>
+        ) : null}
+        {isStudioVoice ? (
+          <span className="studio-turn-kicker studio-turn-kicker-studio">{t('statusView.progress.studioVoice')}</span>
         ) : null}
         <p className="studio-turn-text">{entry.text}</p>
       </div>

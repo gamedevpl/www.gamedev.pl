@@ -430,7 +430,7 @@ export interface JobSeedOutcome {
  * (docs: architecture B), so that arriving is a writer, not a migration.
  */
 export interface JobCostEntry {
-  kind: 'agent_session' | 'gate_run' | 'seed' | 'assist';
+  kind: 'agent_session' | 'gate_run' | 'seed' | 'assist' | 'chat';
   at: string;
   /**
    * Who charged for it: an agent backend (`copilot`), a service (`cloud-build`), or —
@@ -524,18 +524,11 @@ export interface CreatorMessage {
   createdAt: string;
   /** Set once an agent has collected it. Undelivered messages are re-served. */
   deliveredAt?: string | null;
-  /**
-   * Who actually typed this. `creator` — the words came out of the Studio composer and
-   * are the creator's own, in their own language. `agent` — an agent wrote them on the
-   * creator's behalf (MCP `continue_draft({ feedback })`), which is nearly always an
-   * English paraphrase of something said in a chat we never saw.
-   *
-   * Absent means `creator`: every message written before this field existed came from
-   * the composer, and the two paths are not interchangeable downstream. Studio labels
-   * them differently and only the relayed kind is ever translated — presenting an agent's
-   * English summary as the creator's own message is how a Polish creator ended up
-   * reading words they never wrote, in a language they did not choose.
-   */
+  // 'agent': relayed on the creator's behalf — the only kind ever translated.
+
+  // 'studio': the mini chat agent (chat-agent.ts) — pre-delivered, never queued.
+
+  // Absent: the creator's own words, typed in the composer.
   origin?: CreatorMessageOrigin;
   /**
    * The relayed text in the creator's language, filled in on the write (see
@@ -553,7 +546,7 @@ export interface CreatorMessage {
 }
 
 /** @see CreatorMessage.origin */
-export type CreatorMessageOrigin = 'creator' | 'agent';
+export type CreatorMessageOrigin = 'creator' | 'agent' | 'studio';
 
 /**
  * A screenshot the agent pushed over the build channel rather than committing.
@@ -2016,7 +2009,7 @@ export interface Store {
     text: string,
     opts?: { origin?: CreatorMessageOrigin; delivered?: boolean; textLocalized?: string; locale?: string },
   ): Promise<CreatorMessage>;
-  /** Undelivered creator messages, oldest first — the agent's inbox. */
+  // Undelivered messages, oldest first — the agent's inbox. Never a 'studio' row.
   listPendingCreatorMessages(issueNumber: number, opts?: { limit?: number }): Promise<CreatorMessage[]>;
   /**
    * Every creator message on a build, delivered or not, oldest first. The status page
@@ -3578,7 +3571,7 @@ export class InMemoryStore implements Store {
       text,
       createdAt: now,
       deliveredAt: opts?.delivered ? now : null,
-      ...(opts?.origin === 'agent' ? { origin: 'agent' as const } : {}),
+      ...(opts?.origin === 'agent' || opts?.origin === 'studio' ? { origin: opts.origin } : {}),
       ...(opts?.textLocalized && opts?.locale ? { textLocalized: opts.textLocalized, locale: opts.locale } : {}),
     };
     const existing = this.creatorMessages.get(issueNumber) ?? [];
@@ -3589,7 +3582,7 @@ export class InMemoryStore implements Store {
 
   async listPendingCreatorMessages(issueNumber: number, opts?: { limit?: number }): Promise<CreatorMessage[]> {
     return (this.creatorMessages.get(issueNumber) ?? [])
-      .filter((message) => !message.deliveredAt)
+      .filter((message) => !message.deliveredAt && message.origin !== 'studio')
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
       .slice(0, opts?.limit ?? 10)
       .map((message) => ({ ...message }));
@@ -6043,15 +6036,14 @@ export class FirestoreStore implements Store {
     text: string,
     opts?: { origin?: CreatorMessageOrigin; delivered?: boolean; textLocalized?: string; locale?: string },
   ): Promise<CreatorMessage> {
-    // `origin` is spread in only when it is `agent`: Firestore rejects an explicit
-    // `undefined`, and a stored `'creator'` would say nothing the absent field does not.
+    // Spread in only for agent/studio — Firestore rejects an explicit undefined.
     const now = new Date().toISOString();
     const record: CreatorMessage = {
       id: randomUUID(),
       text,
       createdAt: now,
       deliveredAt: opts?.delivered ? now : null,
-      ...(opts?.origin === 'agent' ? { origin: 'agent' as const } : {}),
+      ...(opts?.origin === 'agent' || opts?.origin === 'studio' ? { origin: opts.origin } : {}),
       ...(opts?.textLocalized && opts?.locale ? { textLocalized: opts.textLocalized, locale: opts.locale } : {}),
     };
     await this.messagesCollection(issueNumber).doc(record.id).set(record);
@@ -6059,11 +6051,13 @@ export class FirestoreStore implements Store {
   }
 
   async listPendingCreatorMessages(issueNumber: number, opts?: { limit?: number }): Promise<CreatorMessage[]> {
-    // Equality on deliveredAt plus an ordered range would need a composite index;
-    // the message count per build is tiny, so order and filter here instead.
+    // Filtered and sorted here rather than in a composite index — the set is tiny.
+
+    // Studio rows are pre-delivered already; this filter is the belt-and-braces guard.
     const snap = await this.messagesCollection(issueNumber).where('deliveredAt', '==', null).get();
     return snap.docs
       .map((doc) => doc.data() as CreatorMessage)
+      .filter((message) => message.origin !== 'studio')
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
       .slice(0, opts?.limit ?? 10);
   }

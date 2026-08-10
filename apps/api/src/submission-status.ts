@@ -31,13 +31,8 @@ export interface ChecklistItem {
 export interface CreatorRevision {
   text: string;
   createdAt: string;
-  /**
-   * Present, and `'agent'`, when an agent wrote this request on the creator's behalf
-   * instead of the creator typing it (MCP `continue_draft({ feedback })`). Studio labels
-   * those as relayed and they are the only kind ever translated; a creator's own words
-   * are shown untouched. Absent means the creator typed it.
-   */
-  origin?: 'agent';
+  // 'agent': relayed by the agent. 'studio': the chat agent. Else: the creator.
+  origin?: 'agent' | 'studio';
   /**
    * Server-internal, and stripped before this reaches the wire — exactly like the pair on
    * BuildEvent. The translation is stored on the write and resolved against the reader's
@@ -301,8 +296,8 @@ export interface PriorRoundEntry {
   kind: 'revision' | 'event';
   text: string;
   createdAt: string;
-  /** Present on revisions an agent wrote on the creator's behalf. */
-  origin?: 'agent';
+  // See CreatorRevision.origin — same meaning, on a 'revision' entry here.
+  origin?: 'agent' | 'studio';
   step?: BuildStep;
 }
 
