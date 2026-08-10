@@ -336,6 +336,14 @@ ensure_log_metric seed_staging_failures \
   'Generated seeds a backend could not commit. Backs alert A23.' \
   "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"${PRIMARY_SERVICE}\" AND jsonPayload.msg=\"seed staging failed\""
 
+# knowledge_query calls (KQ-10). The message string is the contract with
+# apps/api/src/knowledge-metrics.ts, asserted from both sides by knowledge-metrics.test.ts.
+# Backs A26 below: a cost-runaway guard on the SEARCH_ADD_ON_LLM generative add-on, which is
+# billed per :answer call and is not covered by the platform's free 10k/month allotment.
+ensure_log_metric knowledge_query_calls \
+  'knowledge_query calls, any mode. Backs alert A26.' \
+  "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"${PRIMARY_SERVICE}\" AND jsonPayload.msg=\"knowledge_query answered\""
+
 # A3 — a scheduled job is failing. notify-sweep already runs every 2 minutes against auth,
 # Firestore and the app in one request, which makes it a synthetic monitor we are getting
 # for free; all that was missing was anyone listening. Its failure is also a real
@@ -687,6 +695,46 @@ cat > "${POLICY_DIR}/a25.json" <<EOF
   "alertStrategy": { "autoClose": "86400s" },
   "documentation": {
     "content": "Vertex is emitting output tokens far faster than this project's traffic explains. Output tokens are the dominant cost (~5x input per token), so this is the closest thing to a live spend alarm. If A24 is also firing, it is a call loop — start there. If A24 is quiet, it is a small number of very large generations: look at game-seed.ts and code-lane.ts, which both request up to 65,536 output tokens. Confirm the size distribution from the output_token_size label on model_invocation_count before changing any maxOutputTokens.",
+    "mimeType": "text/markdown"
+  }
+}
+EOF
+
+# A26 — knowledge_query volume, a cost-runaway guard on Discovery Engine's Agent Search
+# add-on (KQ-10). SEARCH_ADD_ON_LLM (the :answer generative synthesis) is billed per call
+# and is NOT covered by the platform's free 10k-query/month allotment the way plain
+# :search chunk retrieval is, so an unexpected surge in call volume is a real bill, the
+# same shape of risk A24/A25 watch for Vertex.
+#
+# No production traffic exists for this feature yet, so — unlike A23/A24/A25 — this
+# threshold is NOT calibrated against a real distribution. 200/day is a conservative
+# placeholder (the per-round soft caps in agent-channel.ts bound one round to at most
+# 15 answer + 30 chunk calls, so 200/day assumes roughly 4-5 rounds calling it hard).
+# Recalibrate against real usage once knowledge_query is visible (KQ-09) and revisit this
+# comment rather than trusting the number.
+cat > "${POLICY_DIR}/a26.json" <<EOF
+{
+  "displayName": "A26 knowledge_query daily volume abnormally high",
+  "combiner": "OR",
+  "conditions": [{
+    "displayName": "knowledge_query calls sustained over a day",
+    "conditionThreshold": {
+      "filter": "metric.type=\"logging.googleapis.com/user/knowledge_query_calls\" AND resource.type=\"cloud_run_revision\" AND resource.label.\"service_name\"=\"${PRIMARY_SERVICE}\"",
+      "aggregations": [{
+        "alignmentPeriod": "86400s",
+        "perSeriesAligner": "ALIGN_SUM",
+        "crossSeriesReducer": "REDUCE_SUM"
+      }],
+      "comparison": "COMPARISON_GT",
+      "thresholdValue": 200,
+      "duration": "0s",
+      "trigger": { "count": 1 }
+    }
+  }],
+  "notificationChannels": ["${CHANNEL_NAME}"],
+  "alertStrategy": { "autoClose": "86400s" },
+  "documentation": {
+    "content": "knowledge_query is being called far more than expected in a day. This protects against cost runaway on Discovery Engine's SEARCH_ADD_ON_LLM (:answer), which is billed per call unlike plain chunk retrieval. Triage: Logs Explorer, jsonPayload.msg=\"knowledge_query answered\", group by jsonPayload.knowledgeQuery.mode (answer costs ~3.7x chunks) and .issueNumber (one round looping vs many rounds using it normally). The per-round soft caps live in apps/api/src/agent-channel.ts (maxKnowledgeAnswersPerWindow / maxKnowledgeChunksPerWindow); a single round cannot exceed them, so sustained volume above this threshold means many rounds, not one runaway loop.",
     "mimeType": "text/markdown"
   }
 }

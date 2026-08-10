@@ -406,5 +406,106 @@ echo "    Cloud Run may signBlob as itself for games-store signed URLs."
 echo "==> 10/10 Ensuring delayed account-deletion cleanup infrastructure"
 PROJECT_ID="$PROJECT_ID" REGION="$APP_REGION" "$SCRIPT_DIR/setup-account-deletion.sh"
 
+# knowledge_query's Discovery Engine (Agent Search) data store — eu region, generic
+# vertical, SOLUTION_TYPE_SEARCH, layout-based chunking (must be set at data-store
+# creation; it cannot be added to an existing one), SEARCH_TIER_STANDARD +
+# SEARCH_ADD_ON_LLM on the engine (serves both :search chunk retrieval and :answer
+# generative synthesis — verified live against the real API, no Enterprise tier needed).
+#
+# `gcloud discovery-engine` / `gcloud alpha discovery-engine` in this CLI generation has
+# no first-class commands for data-store or engine creation with a chunking config or
+# searchTier/searchAddOns, so this step talks to the REST API directly with
+# `gcloud auth print-access-token` + curl — the same pattern step 7 above uses for the
+# Firestore single-field index, and the same no-SDK idiom apps/api/src/gcs-sign.ts and
+# apps/api/src/knowledge-search.ts use for the runtime's own calls.
+#
+# IDs are deterministic (not timestamp-based) so this script stays safely re-runnable.
+#
+# NOTE for a future test/spike harness (not acted on here): a deleted Discovery Engine
+# data-store ID is not reusable for several hours after deletion — mint a unique ID per
+# test run rather than reusing a fixed name.
+KNOWLEDGE_LOCATION="${KNOWLEDGE_LOCATION:-eu}"
+KNOWLEDGE_COLLECTION="${KNOWLEDGE_COLLECTION:-default_collection}"
+KNOWLEDGE_DATA_STORE_ID="${KNOWLEDGE_DATA_STORE_ID:-gamedevpl-knowledge}"
+KNOWLEDGE_ENGINE_ID="${KNOWLEDGE_ENGINE_ID:-gamedevpl-knowledge}"
+DE_HOST="${KNOWLEDGE_LOCATION}-discoveryengine.googleapis.com"
+DE_PARENT="projects/${PROJECT_ID}/locations/${KNOWLEDGE_LOCATION}/collections/${KNOWLEDGE_COLLECTION}"
+
+echo "==> 11/11 Provisioning Discovery Engine (Agent Search) for knowledge_query"
+gcloud services enable discoveryengine.googleapis.com --project="$PROJECT_ID"
+DE_ACCESS_TOKEN="$(gcloud auth print-access-token --project="$PROJECT_ID")"
+
+if curl -s -H "Authorization: Bearer ${DE_ACCESS_TOKEN}" -H "X-Goog-User-Project: ${PROJECT_ID}" \
+  "https://${DE_HOST}/v1/${DE_PARENT}/dataStores/${KNOWLEDGE_DATA_STORE_ID}" \
+  | grep -q '"industryVertical"'; then
+  echo "    Data store ${KNOWLEDGE_DATA_STORE_ID} already exists."
+else
+  # UNVERIFIED against a live call from this environment (no gcloud credentials here):
+  # the request shape below follows the Discovery Engine v1 REST reference as read, but
+  # was not exercised end-to-end. Watch the first real run's output carefully.
+  # layoutBasedChunkingConfig.chunkSize is a token count; 500 matches the corpus's own
+  # layout-based chunking. Creation is an async long-running operation — this call only
+  # confirms GCP accepted the request, not that the store is ready yet; the engine step
+  # right below may need a re-run of this script a minute later if it 404s on a race.
+  curl -s -X POST "https://${DE_HOST}/v1/${DE_PARENT}/dataStores?dataStoreId=${KNOWLEDGE_DATA_STORE_ID}" \
+    -H "Authorization: Bearer ${DE_ACCESS_TOKEN}" \
+    -H "X-Goog-User-Project: ${PROJECT_ID}" \
+    -H "Content-Type: application/json" \
+    -d '{
+      "displayName": "gamedevpl-knowledge",
+      "industryVertical": "GENERIC",
+      "solutionTypes": ["SOLUTION_TYPE_SEARCH"],
+      "contentConfig": "CONTENT_REQUIRED",
+      "documentProcessingConfig": {
+        "chunkingConfig": {
+          "layoutBasedChunkingConfig": { "chunkSize": 500, "includeAncestorHeadings": true }
+        }
+      }
+    }' >/dev/null
+  echo "    Creating data store ${KNOWLEDGE_DATA_STORE_ID} (async — re-run this script if the engine step below 404s)."
+fi
+
+if curl -s -H "Authorization: Bearer ${DE_ACCESS_TOKEN}" -H "X-Goog-User-Project: ${PROJECT_ID}" \
+  "https://${DE_HOST}/v1/${DE_PARENT}/engines/${KNOWLEDGE_ENGINE_ID}" \
+  | grep -q '"solutionType"'; then
+  echo "    Engine ${KNOWLEDGE_ENGINE_ID} already exists."
+else
+  # UNVERIFIED against a live call from this environment — see the data-store note above.
+  # searchEngineConfig is what a generic/SEARCH engine uses for tier + add-ons; confirm
+  # this field name against the live API on the first real run.
+  curl -s -X POST "https://${DE_HOST}/v1/${DE_PARENT}/engines?engineId=${KNOWLEDGE_ENGINE_ID}" \
+    -H "Authorization: Bearer ${DE_ACCESS_TOKEN}" \
+    -H "X-Goog-User-Project: ${PROJECT_ID}" \
+    -H "Content-Type: application/json" \
+    -d "{
+      \"displayName\": \"gamedevpl-knowledge-engine\",
+      \"solutionType\": \"SOLUTION_TYPE_SEARCH\",
+      \"industryVertical\": \"GENERIC\",
+      \"dataStoreIds\": [\"${KNOWLEDGE_DATA_STORE_ID}\"],
+      \"searchEngineConfig\": {
+        \"searchTier\": \"SEARCH_TIER_STANDARD\",
+        \"searchAddOns\": [\"SEARCH_ADD_ON_LLM\"]
+      }
+    }" >/dev/null
+  echo "    Creating engine ${KNOWLEDGE_ENGINE_ID} (async)."
+fi
+
+echo "    Granting roles/discoveryengine.viewer to Cloud Run runtime (${RUN_SA})"
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member="serviceAccount:${RUN_SA}" \
+  --role="roles/discoveryengine.viewer" \
+  --condition=None \
+  >/dev/null
+
+# UNVERIFIED role name: not confirmed against `gcloud iam roles describe` from this
+# environment. If it 404s, list `roles/discoveryengine.*` and pick the editor-level one —
+# CI needs write access for `documents:import`, not full admin.
+echo "    Granting roles/discoveryengine.editor to CI deployer (${DEPLOYER_SA}, for documents:import)"
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member="serviceAccount:${DEPLOYER_SA}" \
+  --role="roles/discoveryengine.editor" \
+  --condition=None \
+  >/dev/null
+
 echo ""
-echo "==> Done. Firestore database, storage, IAM, deletion sweep, session secret, telemetry TTL, indexes, and gate-runner configured for project ${PROJECT_ID}."
+echo "==> Done. Firestore database, storage, IAM, deletion sweep, session secret, telemetry TTL, indexes, gate-runner, and the knowledge_query Discovery Engine data store configured for project ${PROJECT_ID}."
