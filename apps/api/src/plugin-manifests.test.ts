@@ -250,13 +250,21 @@ describe('plugin skills', () => {
 
 describe('the documented tool list', () => {
   const readme = readFileSync(join(repoRoot, 'listings/mcp/README.md'), 'utf8');
-  // Prettier pads the table columns.
   const documented = [...readme.matchAll(/^\|\s*`([a-z_]+)`\s*\|/gm)].map((m) => m[1]);
 
-  // Asked for by GitHub's registry review; hand-kept lists go stale.
+  // Hand-kept lists go stale.
   it('names exactly the tools a connecting client is offered', () => {
     const advertised = [...MCP_VISIBLE_TOOLS].filter((name) => !MCP_UI_APP_ONLY_TOOLS.has(name));
     expect([...documented].sort()).toEqual([...advertised].sort());
+  });
+
+  // The registry listing renders the root README.
+  it('names every advertised tool in the root README too', () => {
+    const rootReadme = readFileSync(join(repoRoot, 'README.md'), 'utf8');
+    const advertised = [...MCP_VISIBLE_TOOLS].filter((name) => !MCP_UI_APP_ONLY_TOOLS.has(name));
+    for (const name of advertised) {
+      expect(rootReadme, `README.md must name ${name}`).toContain(`\`${name}\``);
+    }
   });
 
   it('does not document a tool no agent can discover', () => {
@@ -265,7 +273,7 @@ describe('the documented tool list', () => {
     }
   });
 
-  // Invisible without the UI extension; saying so is the point.
+  // Invisible without the UI extension; say so.
   it('says why the app-only tools are missing rather than omitting them silently', () => {
     for (const name of MCP_UI_APP_ONLY_TOOLS) {
       expect(readme).toContain(name);
