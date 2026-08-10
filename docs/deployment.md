@@ -237,6 +237,24 @@ The raw code is returned only when the link is created. Firestore stores its SHA
 and claiming uses a transaction. The panel shows claimed/revoked status and can revoke an
 unused link. If a link is lost or shared accidentally, revoke it and create a replacement.
 
+A claim also writes the claimant's approved `waitlist` row (`recordBetaInviteAdmission`),
+which is what makes the invite durable rather than a one-session pass: the row is what
+`/admin/waitlist` lists and what `isWaitlistApproved` reads on every later sign-in. Without
+it the claimant would hold a 12-hour session and then be locked out, because the link that
+let them in is already spent. The row carries the uid always, and the email only when the
+provider verified it — the Google/Apple sign-in paths pass one, `/api/beta-invites/claim`
+does not. `requestedAt` is preserved when the claimant had already joined the waitlist.
+
+Invites claimed before that write existed leave no row. Reconcile them:
+
+```bash
+npm run beta:invite:backfill -w @gamedevpl/api            # report only
+npm run beta:invite:backfill -w @gamedevpl/api -- --apply # write the rows
+```
+
+It walks `betaInvites` where `status == 'claimed'`, takes email/name from the bound
+account, and skips claimants who are already approved.
+
 ## Issuing agent access tokens
 
 Coding agents authenticate to the deployed site with personal access tokens

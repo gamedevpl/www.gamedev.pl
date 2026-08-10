@@ -17,6 +17,7 @@
     "managed:agent:apply": "tsx scripts/managed-agent-apply.ts",
     "beta:approve": "tsx scripts/beta-approve.ts",
     "beta:invite": "tsx scripts/beta-invite.ts",
+    "beta:invite:backfill": "tsx scripts/beta-invite-backfill.ts",
     "token:mint": "tsx scripts/access-token.ts mint",
     "token:list": "tsx scripts/access-token.ts list",
     "token:revoke": "tsx scripts/access-token.ts revoke",

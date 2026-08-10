@@ -222,6 +222,88 @@ describe('Auth API Routes', () => {
     expect(invites[0]).not.toHaveProperty('code');
   });
 
+  it('records an invite claim as closed-beta membership', async () => {
+    // No row: invisible in the console, locked out when sessions lapse.
+    const { app, store } = await setupTestServer(
+      {
+        'invited-token': { sub: '10013', email: 'Invited@Example.com', emailVerified: true, name: 'Invited' },
+      },
+      undefined,
+      true,
+    );
+    const created = await store.createBetaInvite('g:operator');
+
+    const claimed = await app.inject({
+      method: 'POST',
+      url: '/api/auth/google',
+      payload: { idToken: 'invited-token', inviteCode: created.code },
+    });
+    expect(claimed.statusCode).toBe(200);
+
+    expect(await store.getWaitlistEntry('g:10013')).toMatchObject({
+      uid: 'g:10013',
+      email: 'invited@example.com',
+      name: 'Invited',
+      status: 'approved',
+    });
+    expect(await store.listWaitlistEntries({ status: 'approved' })).toHaveLength(1);
+
+    // Membership is what lets them back in without the link.
+    const returning = await app.inject({
+      method: 'POST',
+      url: '/api/auth/google',
+      payload: { idToken: 'invited-token' },
+    });
+    expect(returning.statusCode).toBe(200);
+  });
+
+  it('does not record membership for an invite that was not claimed', async () => {
+    const { app, store } = await setupTestServer(
+      {
+        'first-token': { sub: '10014', email: 'first@example.com', emailVerified: true },
+        'second-token': { sub: '10015', email: 'second@example.com', emailVerified: true },
+      },
+      undefined,
+      true,
+    );
+    const created = await store.createBetaInvite('g:operator');
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/auth/google',
+      payload: { idToken: 'first-token', inviteCode: created.code },
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/api/auth/google',
+      payload: { idToken: 'second-token', inviteCode: created.code },
+    });
+
+    expect(await store.getWaitlistEntry('g:10015')).toBeNull();
+  });
+
+  it('keeps requestedAt when an invite is claimed by someone already on the waitlist', async () => {
+    // Accepting an invite should not rewrite how long they had been waiting.
+    const { app, store } = await setupTestServer(
+      {
+        'waiting-token': { sub: '10016', email: 'waiting@example.com', emailVerified: true },
+      },
+      undefined,
+      true,
+    );
+    await store.upsertWaitlistEntry({ uid: 'g:10016', email: 'waiting@example.com' });
+    const joinedAt = (await store.getWaitlistEntry('g:10016'))!.requestedAt;
+    const created = await store.createBetaInvite('g:operator');
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/auth/google',
+      payload: { idToken: 'waiting-token', inviteCode: created.code },
+    });
+
+    expect(await store.getWaitlistEntry('g:10016')).toMatchObject({ status: 'approved', requestedAt: joinedAt });
+  });
+
   it('POST /api/auth/google rejects blocked user', async () => {
     const { app, store } = await setupTestServer({
       'blocked-token': { sub: 'blocked_user' },

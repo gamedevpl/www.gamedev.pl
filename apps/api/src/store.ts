@@ -2151,6 +2151,13 @@ export interface Store {
    * creates `waitlist/email:<lower>` with the requested status.
    */
   setWaitlistStatusByEmail(email: string, status: WaitlistStatus): Promise<WaitlistEntry>;
+  // Invite claim becomes membership; keeps requestedAt. See docs/deployment.md.
+  recordBetaInviteAdmission(entry: {
+    uid: string;
+    email?: string;
+    name?: string;
+    locale?: string;
+  }): Promise<WaitlistEntry>;
   createBetaInvite(createdByUid: string): Promise<CreatedBetaInvite>;
   listBetaInvites(opts?: { limit?: number }): Promise<BetaInvite[]>;
   claimBetaInvite(code: string, uid: string): Promise<ClaimBetaInviteResult>;
@@ -3888,6 +3895,28 @@ export class InMemoryStore implements Store {
     };
     this.waitlist.set(created.uid, created);
     return { ...created };
+  }
+
+  async recordBetaInviteAdmission(entry: {
+    uid: string;
+    email?: string;
+    name?: string;
+    locale?: string;
+  }): Promise<WaitlistEntry> {
+    const existing = this.waitlist.get(entry.uid);
+    const rawEmail = entry.email ?? existing?.email;
+
+    const updated: WaitlistEntry = {
+      uid: entry.uid,
+      email: rawEmail !== undefined ? rawEmail.toLowerCase() : undefined,
+      name: entry.name ?? existing?.name,
+      requestedAt: existing?.requestedAt ?? new Date().toISOString(),
+      locale: entry.locale ?? existing?.locale,
+      status: 'approved',
+    };
+
+    this.waitlist.set(entry.uid, updated);
+    return { ...updated };
   }
 
   async createBetaInvite(createdByUid: string): Promise<CreatedBetaInvite> {
@@ -6499,6 +6528,29 @@ export class FirestoreStore implements Store {
     };
     await this.db.collection('waitlist').doc(created.uid).set(stripUndefined(created));
     return created;
+  }
+
+  async recordBetaInviteAdmission(entry: {
+    uid: string;
+    email?: string;
+    name?: string;
+    locale?: string;
+  }): Promise<WaitlistEntry> {
+    const docRef = this.db.collection('waitlist').doc(entry.uid);
+    const snap = await docRef.get();
+    const existing = snap.exists ? (snap.data() as WaitlistEntry) : null;
+    const rawEmail = entry.email !== undefined ? entry.email : existing?.email;
+
+    const record: WaitlistEntry = {
+      uid: entry.uid,
+      email: rawEmail !== undefined ? rawEmail.toLowerCase() : undefined,
+      name: entry.name ?? existing?.name,
+      requestedAt: existing?.requestedAt ?? new Date().toISOString(),
+      locale: entry.locale ?? existing?.locale,
+      status: 'approved',
+    };
+    await docRef.set(stripUndefined(record), { merge: true });
+    return record;
   }
 
   async createBetaInvite(createdByUid: string): Promise<CreatedBetaInvite> {

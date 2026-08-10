@@ -105,6 +105,8 @@ link once, with a copy button, and keeps only its status afterward:
 - The code is hashed in Firestore and claimed in a transaction, so concurrent clicks cannot
   spend it twice.
 - The invitation is bound to the account used during sign-in, not to an email address.
+- Accepting writes that account's approved `waitlist` row, so the claimant shows up in
+  `/admin/waitlist` and keeps access after the session that claimed the link expires.
 - Operators can revoke an unused link and create another if it is lost or shared too widely.
 - The invitation page explains that the first account to accept owns the link; forwarding is
   therefore intentional access delegation, not proof of a particular person's identity.

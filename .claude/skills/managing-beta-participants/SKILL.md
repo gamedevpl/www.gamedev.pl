@@ -58,7 +58,13 @@ operator console. From there you can:
 - list applicants (filter pending / approved / rejected / all);
 - approve, reject, or reset an existing row;
 - pre-approve by email before the person has visited (creates
-  `waitlist/email:<lower>` the same way the CLI does).
+  `waitlist/email:<lower>` the same way the CLI does);
+- create a one-time invite link for someone whose email you do not know. Accepting it
+  writes the claimant's approved `waitlist/g:<sub>` row, so they appear in this list like
+  any other member and keep access after that first session
+  ([`docs/deployment.md`](../../docs/deployment.md) → "Sending a one-time invite link").
+  Claims made before that write existed leave no row — `npm run beta:invite:backfill`
+  reconciles them.
 
 Join notifications deep-link here. The same writes go through
 `GET|POST /api/admin/waitlist` (session-only admin, 404 to everyone else).

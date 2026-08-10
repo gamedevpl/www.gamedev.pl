@@ -271,6 +271,19 @@ const BetaInviteClaimSchema = z.object({
   code: z.string().regex(BETA_INVITE_CODE_PATTERN, 'invalid invite code'),
 });
 
+// Best-effort: a failed write must not break an allowed sign-in.
+async function recordInviteAdmission(
+  store: Store,
+  request: FastifyRequest,
+  entry: { uid: string; email?: string; name?: string; locale?: string },
+): Promise<void> {
+  try {
+    await store.recordBetaInviteAdmission(entry);
+  } catch (err) {
+    request.log.error({ err, uid: entry.uid }, 'beta invite claimed but waitlist approval write failed');
+  }
+}
+
 function isRateLimited(
   buckets: Map<string, number[]>,
   ip: string,
@@ -478,6 +491,16 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
               waitlistStatus: waitlistEntry?.status ?? null,
             });
           }
+          if (inviteClaim?.ok === true) {
+            const claimLocale = localeFromRequest(request);
+            await recordInviteAdmission(store, request, {
+              uid,
+              // Verified-only: an unverified address would admit its real owner.
+              ...(emailLower !== '' ? { email: emailLower } : {}),
+              ...(googleUser.name ? { name: googleUser.name } : {}),
+              ...(claimLocale ? { locale: claimLocale } : {}),
+            });
+          }
         }
 
         await store.cancelAccountDeletion(uid);
@@ -581,6 +604,16 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
                   ? 'private beta — sign-ups are closed'
                   : 'beta invite is invalid or already used',
               waitlistStatus: waitlistEntry?.status ?? null,
+            });
+          }
+          if (inviteClaim?.ok === true) {
+            const claimLocale = localeFromRequest(request);
+            await recordInviteAdmission(store, request, {
+              uid,
+              // Already the verified, linkable address — never a relay alias.
+              ...(emailLower !== '' ? { email: emailLower } : {}),
+              ...(parseResult.data.name ? { name: parseResult.data.name } : {}),
+              ...(claimLocale ? { locale: claimLocale } : {}),
             });
           }
         }
@@ -732,6 +765,12 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
       if (!result.ok) {
         return reply.status(409).send({ error: 'beta invite is invalid or already used' });
       }
+      // No email here: only the uid was actually proven.
+      await recordInviteAdmission(store, request, {
+        uid: request.user.uid,
+        ...(request.user.name ? { name: request.user.name } : {}),
+        ...(request.user.locale ? { locale: request.user.locale } : {}),
+      });
       return { status: 'claimed' };
     },
   );
