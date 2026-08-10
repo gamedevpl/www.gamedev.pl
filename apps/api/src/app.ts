@@ -13,6 +13,7 @@ import { createGameSeederFromEnv } from './agent-backend-env.js';
 import { createManagedDeliveryLock } from './managed-backend.js';
 import { createGcsGamesStore } from './games-store.js';
 import { createGcsObjectStore } from './gcs-sign.js';
+import { createQueryKnowledgeFromEnv } from './knowledge-search.js';
 import { createCloudBuildGateTrigger, gateTriggerOptionsFromEnv } from './gate-trigger.js';
 import { registerAdminRoutes } from './admin.js';
 import { parseAppleClientIds, type AppleAuthVerifier } from './apple-auth.js';
@@ -325,6 +326,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   const gateTrigger =
     options.submissionRoutes?.agentChannel?.onSourcesDelivered ??
     createCloudBuildGateTrigger(gateTriggerOptionsFromEnv(), app.log);
+  // Off unless KNOWLEDGE_SEARCH_ENGINE_ID is set — see knowledge-search.ts.
+  const knowledgeSearch =
+    options.submissionRoutes?.agentChannel?.knowledgeSearch ?? createQueryKnowledgeFromEnv(app.log);
 
   /**
    * The catalog lane's plumbing (research §4a), assembled once and shared.
@@ -409,7 +413,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
               return record?.dispatch?.credentialRefs?.[sessionRef];
             },
           }),
-    gameSeeder: options.submissionRoutes?.gameSeeder ?? createGameSeederFromEnv(app.log),
+    gameSeeder: options.submissionRoutes?.gameSeeder ?? createGameSeederFromEnv(app.log, knowledgeSearch),
     agentChannel: {
       ...options.submissionRoutes?.agentChannel,
       // Without a bucket the delivery verb answers 503 rather than accepting an agent's
@@ -417,6 +421,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       // development, where there is no bucket at all.
       gamesStore,
       objectStore,
+      knowledgeSearch,
       // Run the gate as soon as a game is delivered. Without this a candidate is stored
       // and never verified, so it can never publish — the upload path would end in a
       // queue nobody drains.
