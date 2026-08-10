@@ -34,6 +34,7 @@ import type { GenAIClient, GenerationResult } from 'genaicode';
 import { createVertexClient, type VertexGenerationConfig } from './genai.js';
 import { checkSeedBundles, type SeedBundleResult } from './seed-bundle.js';
 import type { SeedContext, SeedContextSource } from './seed-context.js';
+import type { QueryKnowledgeFn } from './knowledge-search.js';
 
 /**
  * Files a seed is allowed to write, relative to `games/<slug>/`.
@@ -58,6 +59,13 @@ export const DEFAULT_SEED_REFERENCES = 3;
 
 /** Total reference source put in context. Games run 8-31 KB, so this fits several. */
 const CONTEXT_BYTE_BUDGET = 240_000;
+
+// Chunks mode crowds out the reference budget rather than expanding the total.
+const KNOWLEDGE_CONTEXT_BUDGET_FRACTION = 0.18;
+const KNOWLEDGE_CONTEXT_BYTE_BUDGET = Math.floor(CONTEXT_BYTE_BUDGET * KNOWLEDGE_CONTEXT_BUDGET_FRACTION);
+
+// Bounds how long knowledge context is worth waiting for.
+const DEFAULT_SEED_KNOWLEDGE_TIMEOUT_MS = 8_000;
 
 /** Refuse a single generated file larger than this. Nothing legitimate approaches it. */
 const MAX_SEED_FILE_BYTES = 120_000;
@@ -286,6 +294,7 @@ export function buildGeneratePrompt(input: {
   spec: string;
   scaffold: string;
   references: string;
+  knowledgeContext?: string; // raw GameKit chunks, grounding beyond the reference games
 }): string {
   return [
     'You write a first draft of a browser game for this repository. A coding agent will finish it;',
@@ -321,9 +330,29 @@ export function buildGeneratePrompt(input: {
     '=== TEMPLATE SCAFFOLD (replace its placeholder gameplay) ===',
     input.scaffold,
     '',
+    ...(input.knowledgeContext
+      ? ['=== ENGINE / DOCS CONTEXT (excerpts, not files — do not write these back) ===', input.knowledgeContext, '']
+      : []),
     '=== REFERENCE GAMES (full source) ===',
     input.references,
   ].join('\n');
+}
+
+// Renders knowledge-search chunks as labelled excerpts, cut to a byte budget.
+export function renderKnowledgeContext(
+  chunks: ReadonlyArray<{ repoPath: string; snippet: string }>,
+  byteBudget: number,
+): string {
+  const parts: string[] = [];
+  let used = 0;
+  for (const chunk of chunks) {
+    const block = `--- ${chunk.repoPath} ---\n${chunk.snippet.trim()}\n`;
+    const bytes = Buffer.byteLength(block, 'utf8');
+    if (used + bytes > byteBudget) break;
+    parts.push(block);
+    used += bytes;
+  }
+  return parts.join('\n');
 }
 
 /**
@@ -377,6 +406,9 @@ export interface VertexGameSeederOptions {
   log?: { warn: (context: object, message: string) => void; info: (context: object, message: string) => void };
   /** Test seam, mirroring VertexChecker/VertexSpecRefiner: a prebuilt client. */
   client?: GenAIClient;
+  // knowledge-search.ts, called server-internally (chunks mode).
+  knowledgeSearch?: QueryKnowledgeFn;
+  knowledgeTimeoutMs?: number;
   /**
    * Test seam for the bundle check. Defaults to the real esbuild pass; tests substitute
    * verdicts so the repair flow is exercised without esbuild's opinion in the loop.
@@ -452,6 +484,23 @@ export class VertexGameSeeder implements GameSeeder {
     return { picks, usage: usageOf(result, this.model) };
   }
 
+  // Fail-open: absent or timed out just means references-only generation.
+  private async fetchKnowledgeContext(slug: string, spec: string): Promise<string | undefined> {
+    if (!this.options.knowledgeSearch) return undefined;
+    try {
+      const timeoutMs = this.options.knowledgeTimeoutMs ?? DEFAULT_SEED_KNOWLEDGE_TIMEOUT_MS;
+      const result = await Promise.race([
+        this.options.knowledgeSearch({ query: spec.slice(0, 400), mode: 'chunks', scope: 'kit' }),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('knowledge timeout')), timeoutMs)),
+      ]);
+      const rendered = renderKnowledgeContext(result.chunks, KNOWLEDGE_CONTEXT_BYTE_BUDGET);
+      return rendered || undefined;
+    } catch (error) {
+      this.options.log?.warn({ err: error, slug }, 'seed knowledge context unavailable, using references only');
+      return undefined;
+    }
+  }
+
   async seed(request: SeedRequest): Promise<SeedDraft | null> {
     const startedAt = Date.now();
     try {
@@ -468,13 +517,19 @@ export class VertexGameSeeder implements GameSeeder {
         return null;
       }
 
+      const knowledgeContext = await this.fetchKnowledgeContext(slug, spec);
+      const referenceBudget = knowledgeContext
+        ? CONTEXT_BYTE_BUDGET - KNOWLEDGE_CONTEXT_BYTE_BUDGET
+        : CONTEXT_BYTE_BUDGET;
+
       const result = await this.client('generate')(
         buildGeneratePrompt({
           slug,
           title: request.title,
           spec,
           scaffold: context.scaffold,
-          references: context.renderReferences(picks, CONTEXT_BYTE_BUDGET),
+          references: context.renderReferences(picks, referenceBudget),
+          ...(knowledgeContext ? { knowledgeContext } : {}),
         }),
       )
         .maxOutputTokens(65_536)
