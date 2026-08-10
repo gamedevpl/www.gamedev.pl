@@ -840,6 +840,70 @@ describe('self builder (BY-02)', () => {
     expect(staleReport.json().error).toBe(STALE_AGENT_TOKEN_REASON);
   });
 
+  it('force-acknowledges a builder handoff nobody ever acked once it goes stale', async () => {
+    const { backend } = platformStub();
+    const { gamesStore } = stubGamesStore();
+    const opened = Date.parse('2026-08-01T00:00:00Z');
+    let clock = opened;
+    const created = await createApp({
+      platform: backend,
+      gamesStore,
+      now: () => clock,
+      internalAuthVerifier: { verify: async () => true },
+    });
+    app = created.app;
+    const { store } = created;
+
+    const submit = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders(),
+      payload: { title: 'Wedged Handoff', concept: CONCEPT, builder: 'platform' },
+    });
+    expect(submit.statusCode).toBe(200);
+    let issueNumber = 0;
+    await vi.waitFor(async () => {
+      issueNumber = (await store.listSubmissionsByOwner('g:creator'))[0]!.issueNumber;
+      expect((await store.getSubmission(issueNumber))?.state).toBe('dispatched');
+    });
+    await store.touchLastAgentSignalAt(issueNumber, new Date(clock).toISOString());
+
+    const token = mintToken(issueNumber, secret);
+    const handoff = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${token}/handoff`,
+      headers: authHeaders(),
+      payload: { builder: 'self', stopActivePlatformAgent: true },
+    });
+    expect(handoff.statusCode).toBe(202);
+    expect(handoff.json()).toMatchObject({ pending: true, target: 'self' });
+    expect((await store.getSubmission(issueNumber))?.builderHandoff?.to).toBe('self');
+
+    // The platform agent never acks via MCP `end` — crashed or wedged.
+    clock = opened + 9 * 60 * 1000;
+    const tooSoon = await app.inject({
+      method: 'POST',
+      url: '/api/internal/notify-sweep',
+      headers: { authorization: 'Bearer internal' },
+    });
+    expect(tooSoon.statusCode).toBe(200);
+    expect((await store.getSubmission(issueNumber))?.builderHandoff?.to).toBe('self');
+    expect((await store.getSubmission(issueNumber))?.builder).toBe('platform');
+
+    clock = opened + 11 * 60 * 1000;
+    const sweep = await app.inject({
+      method: 'POST',
+      url: '/api/internal/notify-sweep',
+      headers: { authorization: 'Bearer internal' },
+    });
+    expect(sweep.statusCode).toBe(200);
+    await vi.waitFor(async () => {
+      const record = await store.getSubmission(issueNumber);
+      expect(record?.builder).toBe('self');
+      expect(record?.builderHandoff).toBeUndefined();
+    });
+  });
+
   it('hands a quiet self round to platform, bumps generation, and seeds from the candidate', async () => {
     const { backend, briefs } = platformStub();
     const { gamesStore } = stubGamesStore();

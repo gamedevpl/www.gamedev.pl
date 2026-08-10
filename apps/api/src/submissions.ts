@@ -201,6 +201,8 @@ const FeedbackRequestSchema = z.object({
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const MAX_CREATOR_SHOT_BYTES = 300 * 1024;
+// Max wait for a handoff ack before the sweep forces it.
+const HANDOFF_ACK_STALL_MS = 10 * 60 * 1000;
 
 /** Fenced playtest context block + optional stored screenshot id for agent fetch. */
 function formatPlaytestContextBlock(
@@ -1300,6 +1302,35 @@ export async function registerSubmissionRoutes(
       input.log.error({ err: error, issueNumber: input.issueNumber, reason }, 'agent resume failed');
       return { started: false, reason };
     }
+  }
+
+  // Acks a pending handoff and starts the target builder.
+  async function acknowledgeBuilderHandoff(input: {
+    issueNumber: number;
+    acknowledgedAt: string;
+    log: { error: (context: object, message: string) => void };
+  }): Promise<ResumeOutcome | { started: false; reason: string }> {
+    if (!store) return { started: false, reason: 'not_configured' };
+    const current = await store.getSubmission(input.issueNumber);
+    const requested = current?.builderHandoff;
+    if (!requested) return { started: false, reason: 'handoff_not_pending' };
+    const acknowledged = await store.acknowledgeBuilderHandoff(input.issueNumber, input.acknowledgedAt);
+    if (!acknowledged) return { started: false, reason: 'handoff_already_acknowledged' };
+    const outcome = await resumeBuild({
+      issueNumber: input.issueNumber,
+      feedback: current?.spec ?? `Continue building "${current?.title ?? 'this game'}" for gamedev.pl.`,
+      locale: current?.locale ?? 'en',
+      log: input.log,
+      builder: acknowledged.to,
+      preserveRoundBudget: true,
+      transition: {
+        by: 'creator',
+        reason: acknowledged.to === 'self' ? 'platform_builder_handoff' : 'self_builder_handoff',
+      },
+    });
+    if (outcome.started) await store.clearBuilderHandoff(input.issueNumber);
+    invalidateStatusCache(input.issueNumber);
+    return outcome;
   }
 
   /**
@@ -4304,6 +4335,21 @@ export async function registerSubmissionRoutes(
             continue;
           }
 
+          // Stale handoff ack: outgoing agent may be gone.
+          if (
+            record.builderHandoff &&
+            record.builderHandoff.awaitsAgentAck !== false &&
+            !record.builderHandoff.acknowledgedAt &&
+            now() - Date.parse(record.builderHandoff.requestedAt) > HANDOFF_ACK_STALL_MS
+          ) {
+            await acknowledgeBuilderHandoff({
+              issueNumber: record.issueNumber,
+              acknowledgedAt: new Date(now()).toISOString(),
+              log: request.log,
+            });
+            continue;
+          }
+
           // Unread-request detection. A creator's change request is dispatched to the
           // agent and queued here; the queue is what an agent already mid-session
           // drains. If dispatch succeeded but no agent ever collects — a dead session,
@@ -5244,28 +5290,7 @@ export async function registerSubmissionRoutes(
       // minute-old stall next to fresh progress (submit auto-end + continue loop).
       invalidateStatusCache(issueNumber);
     },
-    onBuilderHandoffAcknowledged: async ({ issueNumber, acknowledgedAt, log }) => {
-      const current = await store!.getSubmission(issueNumber);
-      const requested = current?.builderHandoff;
-      if (!requested) return { started: false, reason: 'handoff_not_pending' };
-      const acknowledged = await store!.acknowledgeBuilderHandoff(issueNumber, acknowledgedAt);
-      if (!acknowledged) return { started: false, reason: 'handoff_already_acknowledged' };
-      const outcome = await resumeBuild({
-        issueNumber,
-        feedback: current?.spec ?? `Continue building "${current?.title ?? 'this game'}" for gamedev.pl.`,
-        locale: current?.locale ?? 'en',
-        log,
-        builder: acknowledged.to,
-        preserveRoundBudget: true,
-        transition: {
-          by: 'creator',
-          reason: acknowledged.to === 'self' ? 'platform_builder_handoff' : 'self_builder_handoff',
-        },
-      });
-      if (outcome.started) await store!.clearBuilderHandoff(issueNumber);
-      invalidateStatusCache(issueNumber);
-      return outcome;
-    },
+    onBuilderHandoffAcknowledged: (input) => acknowledgeBuilderHandoff(input),
     ...(stagedPreviews
       ? { onSourcesStaged: ({ issueNumber }: { issueNumber: number }) => stagedPreviews.schedule(issueNumber) }
       : {}),
