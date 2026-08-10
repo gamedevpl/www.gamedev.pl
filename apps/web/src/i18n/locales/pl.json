@@ -382,6 +382,7 @@
       "buildEmpty": "Nie ma jeszcze checklisty — pojawi się, gdy agent doda zadania.",
       "openThread": "Otwórz czat",
       "collapse": "Zwiń",
+      "expand": "Rozwiń",
       "popOut": "Otwórz jako stronę",
       "peekEmpty": "Brak nowości"
     },

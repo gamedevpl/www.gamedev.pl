@@ -11173,10 +11173,13 @@ button.builder-mode-selector:disabled {
 }
 
 /* The way back — the ground-state rule's named exit, shown whenever any surface
-   covers the stage. */
+   covers the stage. Must outrank every surface `covered` can mean: the Edit overlay
+   (55), the Details rail (60 desktop / 1100 phone) and its backdrop (1090), and the
+   shelf drawer (1101) and its backdrop (1100) — otherwise the one named escape from
+   those surfaces is itself hidden behind them. */
 .studio-fullbleed {
   position: absolute;
-  z-index: 50;
+  z-index: 1150;
   left: 14px;
   top: 14px;
   display: inline-flex;

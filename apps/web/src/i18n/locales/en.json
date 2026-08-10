@@ -380,6 +380,7 @@
       "buildEmpty": "No checklist yet — it appears once the agent posts tasks.",
       "openThread": "Open chat",
       "collapse": "Collapse",
+      "expand": "Expand",
       "popOut": "Open as page",
       "peekEmpty": "No updates yet"
     },

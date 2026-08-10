@@ -23,6 +23,16 @@ function delayFor(status: SubmissionStatus | null): number {
  */
 export function useStudioStatusPoll(token: string | null): SubmissionStatus | null {
   const [status, setStatus] = useState<SubmissionStatus | null>(null);
+  const [statusToken, setStatusToken] = useState(token);
+
+  // React's sanctioned render-phase bailout ("adjusting state when a prop changes"):
+  // an *effect*-based reset alone would let this same render pass the previous game's
+  // status to a freshly key-remounted `StudioStage` (via useStageSource) before the
+  // effect ever runs (Codex review of PR #739).
+  if (token !== statusToken) {
+    setStatusToken(token);
+    setStatus(null);
+  }
 
   useEffect(() => {
     if (!token) {

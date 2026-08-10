@@ -55,6 +55,7 @@ export function useStageSource(token: string, status: SubmissionStatus | null): 
   const [preview, setPreview] = useState<{ html: string; at: number } | null>(null);
   const [channel, setChannel] = useState<{ html: string; at: number; label: string | null } | null>(null);
   const [published, setPublished] = useState<{ html: string; slug: string } | null>(null);
+  const [dataToken, setDataToken] = useState(token);
 
   const loadedPreviewKeyRef = useRef<string | null>(null);
   const previewInFlightRef = useRef(false);
@@ -66,6 +67,8 @@ export function useStageSource(token: string, status: SubmissionStatus | null): 
   const [publishedRetryTick, setPublishedRetryTick] = useState(0);
   const channelRetryRef = useRef(0);
   const [channelRetryTick, setChannelRetryTick] = useState(0);
+  const previewRetryRef = useRef(0);
+  const [previewRetryTick, setPreviewRetryTick] = useState(0);
 
   // Every fetch below closes over the token it was issued for and checks this ref
   // before applying its result — a game switch must never show the previous game's
@@ -73,8 +76,13 @@ export function useStageSource(token: string, status: SubmissionStatus | null): 
   // resolves after the switch.
   const activeTokenRef = useRef(token);
 
-  // A game switch must never show the previous game's stage under the new title.
-  useEffect(() => {
+  // React's sanctioned render-phase bailout ("adjusting state when a prop changes"):
+  // an *effect*-based reset alone would let this same render pass the previous game's
+  // preview/channel/published HTML to a freshly key-remounted `StudioStage` before the
+  // effect ever runs — the parent renders the new `token` and the new stage in the
+  // same pass (Codex review of PR #739).
+  if (token !== dataToken) {
+    setDataToken(token);
     activeTokenRef.current = token;
     setPreview(null);
     setChannel(null);
@@ -87,7 +95,8 @@ export function useStageSource(token: string, status: SubmissionStatus | null): 
     publishedInFlightRef.current = false;
     publishedRetryRef.current = 0;
     channelRetryRef.current = 0;
-  }, [token]);
+    previewRetryRef.current = 0;
+  }
 
   // Auto-load the live preview as soon as one is available, and silently refresh it
   // whenever the agent pushes a new commit (headSha changes) — no click required.
@@ -106,18 +115,30 @@ export function useStageSource(token: string, status: SubmissionStatus | null): 
       .then((result) => {
         if (activeTokenRef.current !== requestToken) return;
         loadedPreviewKeyRef.current = previewKey;
+        previewRetryRef.current = 0;
         setPreview({ html: result.html, at: Date.now() });
       })
       .catch(() => {
-        // Keep last-good on a refetch failure — a stale stage beats a blank one.
+        // Keep last-good on a refetch failure — a stale stage beats a blank one. But
+        // don't mark this head/gate key loaded yet: a 409 while assembly is still
+        // finishing is transient, and marking it now would block every later poll with
+        // the same head/gate from ever trying again (bounded retry, same as channel/
+        // published below).
         if (activeTokenRef.current !== requestToken) return;
-        loadedPreviewKeyRef.current = previewKey;
+        if (previewRetryRef.current < 3) {
+          previewRetryRef.current += 1;
+          window.setTimeout(() => {
+            if (activeTokenRef.current === requestToken) setPreviewRetryTick((tick) => tick + 1);
+          }, 4_000);
+        } else {
+          loadedPreviewKeyRef.current = previewKey;
+        }
       })
       .finally(() => {
         if (activeTokenRef.current !== requestToken) return;
         previewInFlightRef.current = false;
       });
-  }, [status?.preview?.slug, status?.progress?.headSha, status?.previewGate?.ranAt, token]);
+  }, [status?.preview?.slug, status?.progress?.headSha, status?.previewGate?.ranAt, token, previewRetryTick]);
 
   // Prefetch the latest channel build when there is no PR preview yet.
   useEffect(() => {

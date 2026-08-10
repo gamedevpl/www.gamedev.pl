@@ -390,6 +390,11 @@ export function CreatorStudioView({
   const [checklistUnread, setChecklistUnread] = useState(0);
   const [railManualOpen, setRailManualOpen] = useState<boolean | null>(null);
   const railOpen = railManualOpen ?? defaultRailOpen(studioStatus);
+  // Distinct from `railOpen`: true only while the transcript body is actually visible.
+  // The phone sheet can be `open` yet collapsed to its `peek` detent, showing just a
+  // one-line preview — reported back by StudioChatRail so unread accounting below
+  // doesn't treat peeking as having read what scrolled by.
+  const [railVisiblyOpen, setRailVisiblyOpen] = useState(railOpen);
   const seenActivityRef = useRef(0);
   const latestActivityRef = useRef<string | null>(null);
   // The site's full `GameTheater` (fullscreen, share, report) — a heavier surface than
@@ -938,6 +943,7 @@ export function CreatorStudioView({
                           unreadCount={checklistUnread}
                           standaloneHref={`/status/${encodeURIComponent(threadToken ?? activeGame.token)}`}
                           latestEntryLabel={latestActivityRef.current}
+                          onVisiblyOpenChange={setRailVisiblyOpen}
                         >
                           <SubmissionStatusView
                             key={threadToken ?? activeGame.token}
@@ -952,9 +958,9 @@ export function CreatorStudioView({
                             }}
                             onActivityCount={(count, latest) => {
                               latestActivityRef.current = latest;
-                              if (!railOpen && count > seenActivityRef.current) {
+                              if (!railVisiblyOpen && count > seenActivityRef.current) {
                                 setChecklistUnread(count - seenActivityRef.current);
-                              } else if (railOpen) {
+                              } else if (railVisiblyOpen) {
                                 seenActivityRef.current = count;
                                 setChecklistUnread(0);
                               }

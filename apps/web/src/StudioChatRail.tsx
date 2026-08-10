@@ -18,6 +18,11 @@ export type StudioChatRailProps = {
   unreadCount: number;
   standaloneHref?: string;
   latestEntryLabel?: string | null;
+  /** Whether the transcript body is actually visible right now — `open` alone is true
+   * even at the phone sheet's `peek` detent, where the body is hidden behind a one-line
+   * preview. The parent needs this distinction for unread accounting: peeking must not
+   * count as having read what scrolled by. */
+  onVisiblyOpenChange?: (visiblyOpen: boolean) => void;
   children: ReactNode;
 };
 
@@ -28,6 +33,7 @@ export function StudioChatRail({
   unreadCount,
   standaloneHref,
   latestEntryLabel,
+  onVisiblyOpenChange,
   children,
 }: StudioChatRailProps) {
   const { t } = useTranslation();
@@ -61,6 +67,12 @@ export function StudioChatRail({
   useEffect(() => {
     if (open && isSheet) setDetent((current) => (current === 'peek' ? 'half' : current));
   }, [open, isSheet]);
+
+  const visiblyOpen = open && !(isSheet && detent === 'peek');
+  useEffect(() => {
+    onVisiblyOpenChange?.(visiblyOpen);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visiblyOpen]);
 
   // The install/update banner pins to the bottom edge too (reflowed in-flow while a
   // game is open, see styles.css around `.studio-layout.is-game-open .install-prompt`)
@@ -138,8 +150,15 @@ export function StudioChatRail({
             <button
               type="button"
               className="studio-chat-rail-grab"
-              onClick={() => setDetent(detent === 'full' ? 'half' : detent === 'half' ? 'peek' : 'half')}
-              aria-label={t('studioPanel.rail.collapse', { defaultValue: 'Collapse' })}
+              // Cycles peek -> half -> full -> peek — the only way to reach `full`
+              // (and its `.is-full` CSS) short of a drag gesture this sheet doesn't
+              // implement.
+              onClick={() => setDetent(detent === 'peek' ? 'half' : detent === 'half' ? 'full' : 'peek')}
+              aria-label={
+                detent === 'full'
+                  ? t('studioPanel.rail.collapse', { defaultValue: 'Collapse' })
+                  : t('studioPanel.rail.expand', { defaultValue: 'Expand' })
+              }
             >
               <span className="studio-chat-rail-grab-bar" aria-hidden="true" />
             </button>
