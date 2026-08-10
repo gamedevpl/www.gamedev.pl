@@ -174,11 +174,15 @@ falls back to raw chunks with `fallback:true`, and any upstream failure (timeout
 malformed payload) degrades to a `warnings`-carrying result rather than ever throwing into
 a tool result or a hard error mid-round. A per-round soft cap (roughly 15 `answer` + 30
 `chunks` calls, split because an `answer` call costs several times a `chunks` call) also
-degrades to a warning rather than a hard 429. Shipped unadvertised first (present in the
-tool registry, absent from `MCP_VISIBLE_TOOLS`, so it stayed callable for tests and direct
-invocation while KQ-04 through KQ-08 proved out) and only added to `MCP_VISIBLE_TOOLS`
-once that seam, its cache, the channel route, and the tool handler were solid and tested —
-the same staged-rollout shape `get_kit_api` itself went through.
+degrades to a warning rather than a hard 429. Shipped unadvertised (present in the tool
+registry, absent from `MCP_VISIBLE_TOOLS`, so it stays callable for tests and direct
+invocation) on purpose: no production data store is populated yet, so advertising it
+before an owner runs the games repo's `infra/setup-gcp.sh` counterpart and confirms a
+real `documents:import` has succeeded would hand every agent a tool that 503s on every
+call. Add `knowledge_query` to `MCP_VISIBLE_TOOLS` (and update the three surface-guard
+tests plus the `SESSION_WORKFLOW` line pointing agents at it, both reverted alongside
+it) once that is confirmed live — the same staged-rollout shape `get_kit_api` itself
+went through.
 
 ### A digest-sized tool result is not free — get_kit_api broke in production at 100 KiB
 

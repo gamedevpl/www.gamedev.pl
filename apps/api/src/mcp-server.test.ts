@@ -403,9 +403,10 @@ describe('POST /api/mcp (BY-05)', () => {
         'read_kit_file',
         'read_kit_files',
         'read_kit_file_fragment',
-        'knowledge_query',
       ]),
     );
+    // Callable (below), not advertised yet — KQ-09 pending a live data store.
+    expect(names).not.toContain('knowledge_query');
     expect(names).not.toEqual(expect.arrayContaining(['list_examples', 'get_example']));
     expect(names).not.toContain('send_screenshot');
     const tools = listed.json().result.tools as Array<{
@@ -596,7 +597,7 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(structured.digest).toMatch(/`zone`/);
   });
 
-  it('knowledge_query is advertised and returns the seam result', async () => {
+  it('knowledge_query is unadvertised but callable, and returns the seam result', async () => {
     const store = new InMemoryStore();
     await seedJob(store);
     const knowledgeResult: KnowledgeQueryResult = {
@@ -615,9 +616,10 @@ describe('POST /api/mcp (BY-05)', () => {
     app = await createApp(store, undefined, undefined, { knowledgeSearch });
     const sessionId = await initialize(app);
 
+    // Not advertised yet (KQ-09) — reachable by name, like MCP_UNADVERTISED_TOOLS.
     const listed = await mcpCall(app, 'tools/list', {}, { 'mcp-session-id': sessionId });
     const listedNames = (listed.json().result.tools as Array<{ name: string }>).map((t) => t.name);
-    expect(listedNames).toContain('knowledge_query');
+    expect(listedNames).not.toContain('knowledge_query');
 
     const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
     const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
@@ -2264,15 +2266,7 @@ describe('POST /api/mcp (BY-05)', () => {
       expect(tools.find((tool) => tool.name === name)?.annotations?.destructiveHint, name).toBe(false);
     }
 
-    const readers = [
-      'get_brief',
-      'get_seed',
-      'get_kit',
-      'get_sources',
-      'list_staged_sources',
-      'read_inbox',
-      'knowledge_query',
-    ];
+    const readers = ['get_brief', 'get_seed', 'get_kit', 'get_sources', 'list_staged_sources', 'read_inbox'];
     for (const name of readers) {
       expect(tools.find((tool) => tool.name === name)?.annotations?.readOnlyHint, name).toBe(true);
     }
