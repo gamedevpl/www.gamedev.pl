@@ -231,6 +231,12 @@ describe('VertexSpecRefiner over a genaicode client', () => {
     });
   }
 
+  // 'NONE' is what an absent (not failing) grounder replies with.
+  const noGroundingClient = stubClient('NONE');
+  function makeRefiner(options: ConstructorParameters<typeof VertexSpecRefiner>[0]) {
+    return new VertexSpecRefiner({ groundingClient: noGroundingClient, ...options });
+  }
+
   it('normalizes questions and caps them at four', async () => {
     let seen: GenerationRequest | undefined;
     const questions = Array.from({ length: 6 }, (_, i) => ({
@@ -238,7 +244,7 @@ describe('VertexSpecRefiner over a genaicode client', () => {
       question: `Question ${i}?`,
       options: [{ label: 'A', detail: 'first' }],
     }));
-    const refiner = new VertexSpecRefiner({
+    const refiner = makeRefiner({
       client: stubClient(JSON.stringify({ questions }), (req) => (seen = req)),
     });
 
@@ -264,7 +270,7 @@ describe('VertexSpecRefiner over a genaicode client', () => {
 
   it('asks for English by name when locale is missing or unknown', async () => {
     let seen: GenerationRequest | undefined;
-    const refiner = new VertexSpecRefiner({
+    const refiner = makeRefiner({
       client: stubClient(JSON.stringify({ questions: [] }), (req) => (seen = req)),
     });
 
@@ -274,7 +280,7 @@ describe('VertexSpecRefiner over a genaicode client', () => {
   });
 
   it('fills defaults for partial question objects', async () => {
-    const refiner = new VertexSpecRefiner({
+    const refiner = makeRefiner({
       client: stubClient('{"questions": [{"allowFreeText": false}]}'),
     });
 
@@ -286,7 +292,7 @@ describe('VertexSpecRefiner over a genaicode client', () => {
   it('fails open when the call outruns its abort budget', async () => {
     // The production failure mode this guards: the model answers, just not within
     // the budget, so the request aborts and the creator silently gets no questions.
-    const refiner = new VertexSpecRefiner({
+    const refiner = makeRefiner({
       timeoutMs: 20,
       client: genaicode({
         name: 'hangs',
@@ -308,7 +314,7 @@ describe('VertexSpecRefiner over a genaicode client', () => {
 
   it('fails open on a malformed or non-conforming response', async () => {
     for (const body of ['not json at all', '', '{"questions": "nope"}']) {
-      const refiner = new VertexSpecRefiner({ client: stubClient(body) });
+      const refiner = makeRefiner({ client: stubClient(body) });
       expect(await refiner.refine({ title: 'Game', concept: 'Concept' })).toEqual({ questions: [] });
     }
   });
@@ -317,7 +323,7 @@ describe('VertexSpecRefiner over a genaicode client', () => {
     // The concept arrives with no title now: the creator has not been asked for one,
     // which is exactly why the model is asked to propose it.
     let seen: GenerationRequest | undefined;
-    const refiner = new VertexSpecRefiner({
+    const refiner = makeRefiner({
       client: stubClient(JSON.stringify({ suggestedTitle: 'TV Tycoon', questions: [] }), (req) => (seen = req)),
     });
 
@@ -330,7 +336,7 @@ describe('VertexSpecRefiner over a genaicode client', () => {
   });
 
   it('tidies a title the model wrapped in quotes or ended with a full stop', async () => {
-    const refiner = new VertexSpecRefiner({
+    const refiner = makeRefiner({
       client: stubClient(JSON.stringify({ suggestedTitle: '  "TV Tycoon."  ', questions: [] })),
     });
 
@@ -341,13 +347,13 @@ describe('VertexSpecRefiner over a genaicode client', () => {
     // A suggestion the creator could not submit unedited is worse than none: they
     // would meet a validation error on a name they never wrote.
     for (const suggested of ['', 'ab', '   ']) {
-      const refiner = new VertexSpecRefiner({
+      const refiner = makeRefiner({
         client: stubClient(JSON.stringify({ suggestedTitle: suggested, questions: [] })),
       });
       expect((await refiner.refine({ concept: 'Run a television studio' })).suggestedTitle).toBeUndefined();
     }
 
-    const long = new VertexSpecRefiner({
+    const long = makeRefiner({
       client: stubClient(JSON.stringify({ suggestedTitle: 'A'.repeat(200), questions: [] })),
     });
     expect((await long.refine({ concept: 'Run a television studio' })).suggestedTitle).toHaveLength(80);
@@ -355,12 +361,56 @@ describe('VertexSpecRefiner over a genaicode client', () => {
 
   it('passes a working title through when the creator did supply one', async () => {
     let seen: GenerationRequest | undefined;
-    const refiner = new VertexSpecRefiner({
+    const refiner = makeRefiner({
       client: stubClient(JSON.stringify({ questions: [] }), (req) => (seen = req)),
     });
 
     await refiner.refine({ title: 'Carrot Farm', concept: 'Grow carrots' });
 
     expect(seen?.prompt[0]?.text).toContain('Carrot Farm');
+  });
+
+  it('grounds the questions in what a named real game actually is', async () => {
+    let seen: GenerationRequest | undefined;
+    const refiner = new VertexSpecRefiner({
+      client: stubClient(JSON.stringify({ questions: [] }), (req) => (seen = req)),
+      groundingClient: stubClient('A fast-paced 3v3 top-down multiplayer shooter with short rounds.'),
+    });
+
+    await refiner.refine({ concept: 'A Brawl Stars clone with brawlers and gems' });
+
+    expect(seen?.prompt[0]?.text).toContain('fast-paced 3v3 top-down multiplayer shooter');
+  });
+
+  it('does not pollute the prompt when grounding finds nothing (NONE)', async () => {
+    let seen: GenerationRequest | undefined;
+    const refiner = makeRefiner({
+      client: stubClient(JSON.stringify({ questions: [] }), (req) => (seen = req)),
+    });
+
+    await refiner.refine({ concept: 'An original game about a lighthouse keeper and the tides' });
+
+    expect(seen?.prompt[0]?.text).not.toContain('Real-world context');
+  });
+
+  it('fails open on grounding, still refining from the concept alone', async () => {
+    let seen: GenerationRequest | undefined;
+    const hangingGrounder = genaicode({
+      name: 'hangs',
+      generate: (request) =>
+        new Promise((_resolve, reject) => {
+          request.signal?.addEventListener('abort', () => reject(request.signal?.reason));
+        }),
+    });
+    const refiner = new VertexSpecRefiner({
+      client: stubClient(JSON.stringify({ questions: [] }), (req) => (seen = req)),
+      groundingClient: hangingGrounder,
+      groundingTimeoutMs: 20,
+    });
+
+    const result = await refiner.refine({ concept: 'Run a television studio and chase ratings' });
+
+    expect(result).toEqual({ questions: [] });
+    expect(seen?.prompt[0]?.text).not.toContain('Real-world context');
   });
 });

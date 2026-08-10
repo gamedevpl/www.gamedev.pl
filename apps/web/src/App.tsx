@@ -14,6 +14,7 @@ import { ReviewDesk } from './ReviewDesk.js';
 import { PixelIcon } from './PixelIcon.js';
 import { CreatorQA, type QAQuestion } from './CreatorQA.js';
 import { deriveTitleFromConcept } from './gameTitle.js';
+import { MIN_CONCEPT_LENGTH } from './conceptLength.js';
 import {
   adminPath,
   canonicalPath,
@@ -565,6 +566,12 @@ export function App() {
 
     const trimmedConcept = concept.trim();
     if (!trimmedConcept) return;
+
+    // Catch a too-short concept before the fail-open refiner would.
+    if (trimmedConcept.length < MIN_CONCEPT_LENGTH) {
+      setSubmissionError(t('errors.conceptTooShort', { minLength: MIN_CONCEPT_LENGTH }));
+      return;
+    }
 
     setSubmissionStatus('refining');
     setSubmissionError(null);

@@ -64,9 +64,11 @@ export interface VertexSpecRefinerOptions {
   region?: string;
   model?: string;
   timeoutMs?: number;
+  groundingTimeoutMs?: number;
   refinerFetcher?: (params: RefineParams) => Promise<RefineResponse>;
   // Lower-level seam than `refinerFetcher` — see VertexCheckerOptions.client.
   client?: GenAIClient;
+  groundingClient?: GenAIClient;
 }
 
 // Moderation's 5s is right for a one-token verdict; refinement has to author up to
@@ -75,6 +77,8 @@ export interface VertexSpecRefinerOptions {
 // attempts after the model fix aborting on the old 5s budget, so the panel has
 // never rendered a question. Env-tunable so the ceiling can move without a deploy.
 export const DEFAULT_REFINE_TIMEOUT_MS = 20_000;
+
+export const DEFAULT_GROUNDING_TIMEOUT_MS = 6_000;
 
 /**
  * How long an answered spec stays free to re-ask, and how many are held. Short
@@ -129,13 +133,17 @@ const RefineResultSchema = z.object({
 export class VertexSpecRefiner implements SpecRefiner {
   private options: VertexSpecRefinerOptions;
   private timeoutMs: number;
+  private groundingTimeoutMs: number;
   private refinerFetcher?: (params: RefineParams) => Promise<RefineResponse>;
   // Lazy for the same reason as VertexChecker: building one must not touch GCP.
   private client?: GenAIClient;
+  private groundingClient?: GenAIClient;
 
   constructor(options: VertexSpecRefinerOptions = {}) {
     this.options = options;
     this.timeoutMs = options.timeoutMs ?? Number(process.env.REFINE_TIMEOUT_MS ?? DEFAULT_REFINE_TIMEOUT_MS);
+    this.groundingTimeoutMs =
+      options.groundingTimeoutMs ?? Number(process.env.REFINE_GROUNDING_TIMEOUT_MS ?? DEFAULT_GROUNDING_TIMEOUT_MS);
     this.refinerFetcher = options.refinerFetcher;
   }
 
@@ -164,6 +172,49 @@ export class VertexSpecRefiner implements SpecRefiner {
     return this.client;
   }
 
+  private getGroundingClient(): GenAIClient {
+    this.groundingClient ??=
+      this.options.groundingClient ??
+      createVertexClient({
+        projectId: this.options.projectId,
+        region: this.options.region,
+        defaultRegion: 'global',
+        model: this.options.model,
+        defaultModel: 'gemini-3.6-flash',
+      });
+    return this.groundingClient;
+  }
+
+  // Fail-open, same as `refine`.
+  private async groundConcept(concept: string, languageName: string): Promise<string> {
+    try {
+      const groundingPrompt = `You are a fact-lookup tool, not a game designer. The idea below may reference a specific real, already-existing game or franchise by name — directly, or as "a clone of X", "like X", "X but Y", or similar. It may also be a wholly original idea in the creator's own words with no such reference.
+
+If it references a specific real existing game by name in any of those ways, use web search and reply with one or two sentences, in ${languageName}, stating that real game's actual genre and core mechanics — so a design assistant can ask about it accurately instead of guessing from the name alone. Report only researched facts; do not invent, brainstorm, or design anything, and do not describe the creator's own idea back to them.
+
+If it does not reference any specific real existing game by name, reply with exactly and only the single word: NONE
+Do not explain your reasoning. Do not add anything else when replying NONE.
+
+Idea:
+"""
+${concept}
+"""`;
+      const text = await this.getGroundingClient()(groundingPrompt)
+        .temperature(0.2)
+        .thinking(false)
+        .search(true)
+        .signal(AbortSignal.timeout(this.groundingTimeoutMs))
+        .text();
+      const trimmed = text.trim();
+      return trimmed && trimmed.toUpperCase() !== 'NONE' ? trimmed : '';
+    } catch (err) {
+      if (process.env.NODE_ENV !== 'test') {
+        console.warn(`Vertex AI concept grounding failed/timed out (budget ${this.groundingTimeoutMs}ms):`, err);
+      }
+      return '';
+    }
+  }
+
   async refine(params: RefineParams): Promise<RefineResponse> {
     if (this.refinerFetcher) {
       return this.refinerFetcher(params);
@@ -175,6 +226,7 @@ export class VertexSpecRefiner implements SpecRefiner {
       // when the creator typed their idea in another language.
       const locale = normalizeLocale(params.locale);
       const languageName = LANGUAGE_NAMES[locale] ?? 'English';
+      const groundingNote = await this.groundConcept(params.concept, languageName);
 
       const promptText = `You are a helpful game design assistant for gamedev.pl.
 Analyze the following game concept specification.
@@ -204,7 +256,7 @@ Respond STRICTLY with a JSON object following this schema:
 Set "multiple": true only when the options genuinely combine rather than compete — "which mechanics should be in?" can take several, "which visual style?" cannot. Default to false.
 
 If the concept is already fully specified, return an empty "questions" array — but always propose a title.
-${params.title ? `\nThe creator's working title, to improve on or keep: "${params.title}"\n` : ''}
+${groundingNote ? `\nReal-world context on a game this concept appears to name (from a web search — use it to ask sharper, genre-accurate questions; do not quote it back to the creator verbatim):\n${groundingNote}\n` : ''}${params.title ? `\nThe creator's working title, to improve on or keep: "${params.title}"\n` : ''}
 Game Concept:
 """
 ${params.concept}
