@@ -11241,7 +11241,11 @@ button.builder-mode-selector:disabled {
   align-items: center;
   gap: 10px;
   flex: none;
-  padding: 10px 14px;
+  /* Extra top clearance: `.studio-fullbleed` floats over this same top-left corner
+     (position:absolute, top:14px, left:14px, z-index:1150) whenever this panel is
+     open, since opening it is what makes `covered` true. Reserve room below it
+     rather than let the two overlap. */
+  padding: 44px 14px 10px;
   border-bottom: 1px solid var(--panel-border);
 }
 

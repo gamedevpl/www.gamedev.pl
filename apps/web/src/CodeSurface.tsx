@@ -233,8 +233,8 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
     return (
       <div className="code-surface" data-testid="code-surface">
         <header className="code-surface-head">
-          <button type="button" className="modal-close-btn" onClick={onBack} aria-label={t('studioPanel.code.back')}>
-            <PixelIcon name="close" size={14} />
+          <button type="button" className="studio-head-action" onClick={onBack}>
+            {'←'} {t('studioPanel.code.back')}
           </button>
           <h2>{t('studioPanel.tabs.code')}</h2>
         </header>
@@ -247,8 +247,8 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
     return (
       <div className="code-surface" data-testid="code-surface">
         <header className="code-surface-head">
-          <button type="button" className="modal-close-btn" onClick={onBack} aria-label={t('studioPanel.code.back')}>
-            <PixelIcon name="close" size={14} />
+          <button type="button" className="studio-head-action" onClick={onBack}>
+            {'←'} {t('studioPanel.code.back')}
           </button>
           <h2>{t('studioPanel.tabs.code')}</h2>
         </header>
@@ -262,8 +262,8 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
   return (
     <div className="code-surface" data-testid="code-surface">
       <header className="code-surface-head">
-        <button type="button" className="modal-close-btn" onClick={onBack} aria-label={t('studioPanel.code.back')}>
-          <PixelIcon name="close" size={14} />
+        <button type="button" className="studio-head-action" onClick={onBack}>
+          {'←'} {t('studioPanel.code.back')}
         </button>
         <h2>{t('studioPanel.tabs.code')}</h2>
         {sources.readOnly ? (
