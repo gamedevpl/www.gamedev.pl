@@ -135,7 +135,11 @@ export function isReviewerSession(
   reviewerUids: Set<string> | undefined,
   adminUids: Set<string> | undefined,
 ): boolean {
-  return request.authMethod === 'session' && isReviewer(request.user?.uid, reviewerUids, adminUids);
+  // Unlike the admin door, review desk access also accepts PAT auth: reviewer bots
+  // (e.g. bot:grok) authenticate with a token only and have no interactive session.
+  // Still gated by REVIEWER_UIDS/adminUids, so a bare token buys nothing on its own.
+  if (request.authMethod !== 'session' && request.authMethod !== 'token') return false;
+  return isReviewer(request.user?.uid, reviewerUids, adminUids);
 }
 
 function titleFromSubmission(record: SubmissionRecord): string {
