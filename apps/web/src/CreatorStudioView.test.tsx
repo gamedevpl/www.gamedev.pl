@@ -517,11 +517,13 @@ describe('CreatorStudioView', () => {
     root.unmount();
   });
 
-  it('keeps the chat launcher in the head actions instead of floating over the game', async () => {
+  it('keeps the chat launcher in the head actions and reveals it above covering panes', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
     authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
-    fetchStudioGames.mockResolvedValue(studioShelf(manyGames(2)));
+    const games = manyGames(2);
+    games[0] = { ...games[0]!, slug: 'game-1', editable: true };
+    fetchStudioGames.mockResolvedValue(studioShelf(games));
     window.history.replaceState(null, '', '/studio/token-0');
 
     const { container, root } = await renderStudio({ selectedGame: 'token-0' });
@@ -533,11 +535,40 @@ describe('CreatorStudioView', () => {
     expect(chat?.getAttribute('title')).toMatch(/chat/i);
     expect(container.querySelector('.studio-chat-rail-pill')).toBeNull();
 
-    const wasOpen = chat?.getAttribute('aria-pressed') === 'true';
+    if (chat?.getAttribute('aria-pressed') === 'true') {
+      await act(async () => {
+        chat.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+    }
+    expect(chat?.getAttribute('aria-pressed')).toBe('false');
+
+    const details = container.querySelector<HTMLButtonElement>('[aria-label="Details"]');
+    await act(async () => {
+      details!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(container.querySelector('.studio-rail')).not.toBeNull();
+
     await act(async () => {
       chat!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    expect(chat?.getAttribute('aria-pressed')).toBe(wasOpen ? 'false' : 'true');
+    expect(chat?.getAttribute('aria-pressed')).toBe('true');
+    expect(container.querySelector('.studio-chat-rail.is-collapsed')).toBeNull();
+    expect(container.querySelector('.studio-rail')).toBeNull();
+
+    await act(async () => {
+      chat!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      container
+        .querySelector<HTMLButtonElement>('[aria-label="Edit"]')!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(container.querySelector('.studio-edit-overlay')).not.toBeNull();
+
+    await act(async () => {
+      chat!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(chat?.getAttribute('aria-pressed')).toBe('true');
+    expect(container.querySelector('.studio-chat-rail.is-collapsed')).toBeNull();
+    expect(container.querySelector('.studio-edit-overlay')).toBeNull();
 
     root.unmount();
   });
