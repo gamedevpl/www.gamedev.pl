@@ -75,3 +75,20 @@ describe('send button mobile touch target', () => {
     expect(body).toMatch(/height:\s*44px/);
   });
 });
+
+describe('CI repair quick action', () => {
+  it('looks interactive and keeps a phone-sized touch target', () => {
+    const chip = firstRuleBody('.status-feedback-quick-action');
+    expect(chip).toMatch(/border-radius:\s*999px/);
+    expect(chip).toMatch(/cursor:\s*pointer/);
+
+    const mediaStart = css.indexOf('@media (max-width: 768px) {', css.indexOf(chip));
+    expect(mediaStart, 'no phone media query after the quick action').toBeGreaterThan(-1);
+    const marker = '.status-feedback-quick-action {';
+    const start = css.indexOf(marker, mediaStart);
+    expect(start, 'no phone override for the quick action').toBeGreaterThan(-1);
+    const end = css.indexOf('}', start);
+    const body = css.slice(start + marker.length, end);
+    expect(body).toMatch(/min-height:\s*44px/);
+  });
+});

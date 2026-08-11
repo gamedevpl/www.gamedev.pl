@@ -729,6 +729,8 @@
       "titlePublished": "Ask for a change",
       "hintPublished": "Your game is live. Describe what to change and an agent picks it up as an improvement to it.",
       "composerHintPublished": "Describe an improvement",
+      "debugCi": "Debug CI",
+      "debugCiPrompt": "Debug the failing CI checks, fix the problems, and submit a corrected build.",
       "placeholder": "e.g. make the car faster, add a second track, use brighter colours…",
       "submit": "Send feedback",
       "sending": "Sending…",

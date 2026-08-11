@@ -2249,6 +2249,47 @@ describe('SubmissionStatusView expectations & failures', () => {
     });
   });
 
+  it('offers one-click CI debugging when a gate-red build needs changes', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'needs_changes',
+      phase: 'needs_changes',
+      builder: 'platform',
+      failure: { reason: 'gate_red' },
+    });
+    mockedSubmitFeedback.mockResolvedValue({ ok: true, target: 'build_channel' });
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'gate-red-token', embedded: true }));
+      await flushEffects();
+      await flushEffects();
+    });
+
+    const action = container.querySelector<HTMLButtonElement>('.status-feedback-quick-action');
+    expect(action?.textContent).toContain('Debug CI');
+    expect(action?.closest('.status-composer')).toBeNull();
+
+    await act(async () => {
+      action?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushEffects();
+      await flushEffects();
+    });
+
+    expect(mockedSubmitFeedback).toHaveBeenCalledWith(
+      'gate-red-token',
+      'Debug the failing CI checks, fix the problems, and submit a corrected build.',
+    );
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it('names a dead build round and points at feedback as the retry', async () => {
     // `failed` arrives projected as `needs_changes`; without the failure banner the
     // page reads "waiting for your input" about a session that died.

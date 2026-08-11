@@ -6131,6 +6131,40 @@ a.user-name--profile:focus-visible {
   grid-column: 1 / -1;
 }
 
+.status-feedback-quick-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-feedback-quick-action {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  min-height: 32px;
+  padding: 5px 10px;
+  border: 1px solid rgba(251, 191, 36, 0.38);
+  border-radius: 999px;
+  background: rgba(251, 191, 36, 0.1);
+  color: #fbbf24;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.status-feedback-quick-action:hover {
+  border-color: rgba(251, 191, 36, 0.62);
+  background: rgba(251, 191, 36, 0.16);
+}
+
+.status-feedback-quick-action:focus-visible {
+  outline: 2px solid #fbbf24;
+  outline-offset: 2px;
+}
+
 .status-composer.is-compact.is-empty .status-feedback-input {
   grid-column: 1;
   grid-row: auto;
@@ -6286,6 +6320,11 @@ a.user-name--profile:focus-visible {
   .status-composer.is-compact .status-composer-send {
     width: 44px;
     height: 44px;
+  }
+
+  .status-feedback-quick-action {
+    min-height: 44px;
+    padding-inline: 14px;
   }
 
   .status-composer.is-compact.is-empty .status-feedback-input {
