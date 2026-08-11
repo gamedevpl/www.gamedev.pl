@@ -1,3 +1,4 @@
+import { autocompletion } from '@codemirror/autocomplete';
 import { indentWithTab } from '@codemirror/commands';
 import { css } from '@codemirror/lang-css';
 import { html } from '@codemirror/lang-html';
@@ -11,6 +12,8 @@ import { EditorView, keymap } from '@codemirror/view';
 import { tags } from '@lezer/highlight';
 import { basicSetup } from 'codemirror';
 import { useEffect, useRef } from 'react';
+import { tsAutocomplete, tsFacet, tsHover, tsLintSource, tsSync } from '@valtown/codemirror-ts';
+import type { WorkerShape } from '@valtown/codemirror-ts/worker';
 import type { CodeLanguage } from './codeTokens.js';
 
 /**
@@ -27,6 +30,10 @@ import type { CodeLanguage } from './codeTokens.js';
 
 export type CodeMirrorDiagnostic = { line: number; message: string; severity?: 'error' | 'warning' };
 
+/** GA-05: a live worker handle from codeSurfaceLanguageService.ts, bound to the file
+ * currently open in this editor instance. */
+export type CodeMirrorLanguageService = { worker: Omit<WorkerShape, 'initialize'>; path: string };
+
 export type CodeMirrorEditorProps = {
   value: string;
   language: CodeLanguage;
@@ -35,6 +42,11 @@ export type CodeMirrorEditorProps = {
   onSave?: () => void;
   diagnostics: CodeMirrorDiagnostic[];
   readOnly?: boolean;
+  /** Present once GA-04's worker has initialized and this file is a `.ts`/`.tsx` —
+   * wires tsSync/tsAutocomplete/tsHover/advisory tsLinter against it. Absent (worker
+   * still loading, its chunk failed, or a non-TypeScript file) means plain CodeMirror,
+   * same as before this existed (GA-06). */
+  languageService?: CodeMirrorLanguageService;
 };
 
 function languageExtension(language: CodeLanguage): Extension | null {
@@ -101,6 +113,19 @@ const darkChrome = EditorView.theme(
   { dark: true },
 );
 
+/**
+ * GA-08: the worker's own diagnostics, advisory only — never the same visual weight
+ * as `diagnostics` (the server typecheck gate, plumbed through `linter()` below at
+ * `severity: 'error'`). Capped to `warning` so CodeMirror's built-in lint styling
+ * tells them apart on sight, without a custom class: the server's red squiggle is the
+ * one that can block a delivery, the worker's amber one is a live guess that follows
+ * every keystroke and can be wrong or stale.
+ */
+const tsAdvisoryLintSource = async (view: EditorView): Promise<CmDiagnostic[]> => {
+  const found = await tsLintSource(view);
+  return found.map((d) => (d.severity === 'error' ? { ...d, severity: 'warning' as const } : d));
+};
+
 function toCmDiagnostics(view: EditorView, diagnostics: CodeMirrorDiagnostic[]): CmDiagnostic[] {
   const doc = view.state.doc;
   const out: CmDiagnostic[] = [];
@@ -119,6 +144,7 @@ export default function CodeMirrorEditor({
   onSave,
   diagnostics,
   readOnly,
+  languageService,
 }: CodeMirrorEditorProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -154,6 +180,17 @@ export default function CodeMirrorEditor({
           ...(langExt ? [langExt] : []),
           lintGutter(),
           linter((v) => toCmDiagnostics(v, diagnosticsRef.current)),
+          // GA-05: only once the worker (GA-04) has a language service ready for this
+          // file — see CodeMirrorLanguageService's own doc comment for what "ready" means.
+          ...(languageService
+            ? [
+                tsFacet.of({ worker: languageService.worker, path: languageService.path }),
+                tsSync(),
+                autocompletion({ override: [tsAutocomplete()] }),
+                tsHover(),
+                linter(tsAdvisoryLintSource),
+              ]
+            : []),
           EditorView.editable.of(!readOnly),
           EditorView.updateListener.of((update) => {
             if (update.docChanged) onChangeRef.current(update.state.doc.toString());
@@ -169,7 +206,7 @@ export default function CodeMirrorEditor({
       view.destroy();
       viewRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount once per keyed instance; value/onChange/diagnostics flow through refs above
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount once per keyed instance; value/onChange/diagnostics flow through refs above; languageService's caller keys this component on its readiness, so a change here always means a remount too
   }, []);
 
   useEffect(() => {

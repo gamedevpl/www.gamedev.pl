@@ -4,6 +4,7 @@ import type { CodeMirrorDiagnostic } from './CodeMirrorEditor.js';
 import {
   CodeSurfaceApiError,
   deliverCodeSurface,
+  fetchCodeSurfaceKitDeclaration,
   fetchCodeSurfaceSources,
   rebuildCodeSurfaceStage,
   stageCodeSurfaceFile,
@@ -12,6 +13,7 @@ import {
   type CodeSurfaceSources,
 } from './codeSurfaceApi.js';
 import { getCodeSurfaceSessionState, setCodeSurfaceSessionState } from './codeSurfaceSessionState.js';
+import { createCodeSurfaceLanguageService, type CodeSurfaceLanguageService } from './codeSurfaceLanguageService.js';
 import { type CodeLanguage, tokenizeLine } from './codeTokens.js';
 import { PixelIcon } from './PixelIcon.js';
 import { recordCodeStep } from './visitTelemetry.js';
@@ -84,6 +86,13 @@ function fileDotClass(file: CodeSurfaceFile): string {
   return file.stagedBy ? ` has-staged-edits is-staged-by-${file.stagedBy}` : '';
 }
 
+/** GA-04: which files the worker's TypeScript project actually knows about — mirrors
+ * apps/api/src/type-check.ts's own `.ts`-only filter, so the browser and server never
+ * disagree about what's in the program. */
+function isTsPath(path: string): boolean {
+  return path.endsWith('.ts') || path.endsWith('.tsx');
+}
+
 export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
   const { t } = useTranslation();
   const [sources, setSources] = useState<CodeSurfaceSources | null>(null);
@@ -107,6 +116,13 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
   const typecheckTimerRef = useRef<number | null>(null);
   const draftsRef = useRef(drafts);
   draftsRef.current = drafts;
+
+  /** GA-04: the worker-backed language service (GA-02/GA-03). A ref, not state — its
+   * identity must survive re-renders untouched; `languageServiceReady` below is the
+   * render-triggering signal that it exists. */
+  const languageServiceRef = useRef<CodeSurfaceLanguageService | null>(null);
+  const languageServiceInitRef = useRef(false);
+  const [languageServiceReady, setLanguageServiceReady] = useState(false);
 
   useEffect(() => {
     if (openedRecordedRef.current) return;
@@ -194,6 +210,49 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
     return () => document.removeEventListener('visibilitychange', onHide);
   }, [slug]);
 
+  const editable = sources !== null && !sources.readOnly;
+
+  // GA-04: create the worker-backed language service once the first sources load
+  // lands for an editable surface, seeded with every `.ts`/`.tsx` file plus the kit
+  // declaration (GA-01). Advisory only (§1.1) — a slow or failed init just means
+  // `languageServiceReady` never flips, and CodeMirror stays a plain editor (GA-06).
+  useEffect(() => {
+    if (!sources || !editable || languageServiceInitRef.current) return undefined;
+    languageServiceInitRef.current = true;
+    let cancelled = false;
+    const initialFiles = Object.fromEntries(
+      sources.files
+        .filter((entry) => isTsPath(entry.path))
+        .map((entry) => [entry.path, draftsRef.current[entry.path] ?? entry.content]),
+    );
+    void (async () => {
+      const kit = await fetchCodeSurfaceKitDeclaration(slug);
+      if (cancelled) return;
+      const service = await createCodeSurfaceLanguageService(initialFiles, kit?.declaration ?? null);
+      if (cancelled) {
+        service?.destroy();
+        return;
+      }
+      languageServiceRef.current = service;
+      setLanguageServiceReady(service !== null);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [sources, editable, slug]);
+
+  // Slug change (switching games without unmounting CodeSurface) tears the old
+  // worker down and lets the effect above rebuild one for the new slug; unmount does
+  // the same.
+  useEffect(() => {
+    return () => {
+      languageServiceRef.current?.destroy();
+      languageServiceRef.current = null;
+      languageServiceInitRef.current = false;
+      setLanguageServiceReady(false);
+    };
+  }, [slug]);
+
   const file = useMemo(() => sources?.files.find((entry) => entry.path === selected) ?? null, [sources, selected]);
   const content = selected !== null ? (drafts[selected] ?? file?.content ?? '') : '';
 
@@ -236,6 +295,11 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
         await stageCodeSurfaceFile(slug, path, value, { rebuild: false });
         setSaveState('saved');
         recordCodeStep('edited');
+        // GA-04: keep the worker's vfs current for every saved file, not just the one
+        // open in CodeMirror — tsSync() only covers the currently-focused editor
+        // instance, so a sibling file's cross-file completions/hovers would otherwise
+        // go stale the moment the creator switches away from it.
+        if (isTsPath(path)) languageServiceRef.current?.updateFile(path, value);
         return true;
       } catch (error) {
         setSaveState('error');
@@ -373,8 +437,6 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
     );
   }
 
-  const editable = !sources.readOnly;
-
   /** CodeMirror's fallback while its chunk loads, and its permanent stand-in if that
    * chunk fails to load at all (CE-14) — the same plain textarea either way. */
   function plainTextarea(openFile: CodeSurfaceFile) {
@@ -440,12 +502,22 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
             <CodeMirrorBoundary fallback={plainTextarea(file)}>
               <Suspense fallback={plainTextarea(file)}>
                 <LazyCodeMirrorEditor
-                  key={selected}
+                  // GA-05: the worker (GA-04) usually isn't ready on the very first
+                  // paint — appending its readiness to the key forces exactly one
+                  // remount, the moment it becomes available for this file, so the
+                  // TS-backed extensions below get installed without waiting for the
+                  // creator to switch files.
+                  key={`${selected}:${languageServiceReady ? 'ts' : 'plain'}`}
                   value={content}
                   language={languageFor(file.path)}
                   onChange={onEdit}
                   onSave={() => void flushPendingSaves()}
                   diagnostics={cmDiagnostics}
+                  languageService={
+                    languageServiceReady && languageServiceRef.current && isTsPath(file.path)
+                      ? { worker: languageServiceRef.current.worker, path: file.path }
+                      : undefined
+                  }
                 />
               </Suspense>
             </CodeMirrorBoundary>
