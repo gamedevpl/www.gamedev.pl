@@ -99,48 +99,55 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
 
   const openedRecordedRef = useRef(false);
   const fileOpenedRecordedRef = useRef(new Set<string>());
-  const saveTimerRef = useRef<number | null>(null);
+  /** One autosave timer per dirty path, not one shared timer — editing a second file
+   * inside the debounce window must not cancel the first file's pending save. */
+  const saveTimersRef = useRef<Map<string, number>>(new Map());
   const typecheckTimerRef = useRef<number | null>(null);
   const draftsRef = useRef(drafts);
   draftsRef.current = drafts;
-  const selectedRef = useRef<string | null>(null);
-  selectedRef.current = selected;
 
   useEffect(() => {
     if (openedRecordedRef.current) return;
     openedRecordedRef.current = true;
-    recordCodeStep('offered');
     recordCodeStep('opened');
   }, []);
 
-  const load = useCallback(() => {
-    fetchCodeSurfaceSources(slug)
-      .then((result) => {
-        setSources(result);
-        setLoadError(null);
-        setSelected((current) => current ?? result.files[0]?.path ?? null);
-        if (result.readOnly) recordCodeStep('read_only_agent');
-      })
-      .catch((error: unknown) => {
-        setLoadError(error instanceof CodeSurfaceApiError ? error.message : 'could not load sources');
-      });
-  }, [slug]);
+  const load = useCallback(
+    (isInitialLoad: boolean) => {
+      fetchCodeSurfaceSources(slug)
+        .then((result) => {
+          setSources(result);
+          setLoadError(null);
+          setSelected((current) => current ?? result.files[0]?.path ?? null);
+          if (result.readOnly) recordCodeStep('read_only_agent');
+        })
+        .catch((error: unknown) => {
+          // A background poll refresh failing (e.g. its own rate limit) must not blank
+          // an already-loaded surface — only the initial load can put up the error
+          // screen; a stale read-only view beats no view.
+          if (!isInitialLoad) return;
+          setLoadError(error instanceof CodeSurfaceApiError ? error.message : 'could not load sources');
+        });
+    },
+    [slug],
+  );
 
   useEffect(() => {
-    load();
+    load(true);
   }, [load]);
 
   // Watching an agent's files land live, while the buffer is locked (CE-08) — the same
   // polling cadence the read-only banner needs to stay current without a page reload.
   useEffect(() => {
     if (!sources?.readOnly) return undefined;
-    const id = window.setInterval(load, 4_000);
+    const id = window.setInterval(() => load(false), 4_000);
     return () => window.clearInterval(id);
   }, [sources?.readOnly, load]);
 
   useEffect(
     () => () => {
-      if (saveTimerRef.current !== null) window.clearTimeout(saveTimerRef.current);
+      saveTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+      saveTimersRef.current.clear();
       if (typecheckTimerRef.current !== null) window.clearTimeout(typecheckTimerRef.current);
     },
     [],
@@ -167,8 +174,10 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
     }
   }
 
+  /** Returns whether the save actually landed — `stageIt`/`deliver` must not proceed
+   * over a flush that failed, or they ship a build missing the creator's last edit. */
   const saveNow = useCallback(
-    async (path: string, value: string) => {
+    async (path: string, value: string): Promise<boolean> => {
       setSaveState('saving');
       try {
         // Autosave never drives the rebuild — see CE-13: the visible stage must not
@@ -176,6 +185,7 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
         await stageCodeSurfaceFile(slug, path, value, { rebuild: false });
         setSaveState('saved');
         recordCodeStep('edited');
+        return true;
       } catch (error) {
         setSaveState('error');
         if (error instanceof CodeSurfaceApiError && error.code === 'agent_round') {
@@ -185,10 +195,23 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
           recordCodeStep('conflict_seen');
           setSources((current) => (current ? { ...current, readOnly: true, reason: 'agent_round' } : current));
         }
+        return false;
       }
     },
     [slug],
   );
+
+  /** Flushes every path with a pending autosave — not just the one currently open —
+   * before a "Stage it" or deliver acts on the buffer. Returns false if any of them
+   * failed to save, so the caller can refuse to proceed over an incomplete flush. */
+  const flushPendingSaves = useCallback(async (): Promise<boolean> => {
+    const pending = Array.from(saveTimersRef.current.entries());
+    saveTimersRef.current.clear();
+    for (const [, timer] of pending) window.clearTimeout(timer);
+    if (pending.length === 0) return true;
+    const results = await Promise.all(pending.map(([path]) => saveNow(path, draftsRef.current[path] ?? '')));
+    return results.every(Boolean);
+  }, [saveNow]);
 
   const runTypecheck = useCallback(async () => {
     const overlay = Object.entries(draftsRef.current).map(([path, draftContent]) => ({ path, content: draftContent }));
@@ -206,10 +229,15 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
     if (!path) return;
     setDrafts((prev) => ({ ...prev, [path]: value }));
     setSaveState('dirty');
-    if (saveTimerRef.current !== null) window.clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = window.setTimeout(() => {
-      void saveNow(path, value);
-    }, AUTOSAVE_MS);
+    const existing = saveTimersRef.current.get(path);
+    if (existing !== undefined) window.clearTimeout(existing);
+    saveTimersRef.current.set(
+      path,
+      window.setTimeout(() => {
+        saveTimersRef.current.delete(path);
+        void saveNow(path, value);
+      }, AUTOSAVE_MS),
+    );
     if (typecheckTimerRef.current !== null) window.clearTimeout(typecheckTimerRef.current);
     typecheckTimerRef.current = window.setTimeout(() => {
       void runTypecheck();
@@ -220,11 +248,11 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
     setRebuildError(false);
     setRebuildState('pending');
     try {
-      const path = selectedRef.current;
-      if (saveTimerRef.current !== null && path) {
-        window.clearTimeout(saveTimerRef.current);
-        saveTimerRef.current = null;
-        await saveNow(path, draftsRef.current[path] ?? '');
+      const flushed = await flushPendingSaves();
+      if (!flushed) {
+        setRebuildError(true);
+        setRebuildState('idle');
+        return;
       }
       await rebuildCodeSurfaceStage(slug);
       recordCodeStep('previewed');
@@ -245,11 +273,11 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
     setDeliverState('delivering');
     setDeliverMessage(null);
     try {
-      const path = selectedRef.current;
-      if (saveTimerRef.current !== null && path) {
-        window.clearTimeout(saveTimerRef.current);
-        saveTimerRef.current = null;
-        await saveNow(path, draftsRef.current[path] ?? '');
+      const flushed = await flushPendingSaves();
+      if (!flushed) {
+        setDeliverState('idle');
+        setDeliverMessage(t('studioPanel.code.deliverError'));
+        return;
       }
       const outcome = await deliverCodeSurface(slug, 'publish');
       if (outcome.accepted) {

@@ -1,9 +1,10 @@
-import { type ReactNode, type RefObject } from 'react';
+import { useEffect, type ReactNode, type RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PixelIcon } from './PixelIcon.js';
 import { formatRelativeTime } from './relativeTime.js';
 import type { SubmissionStatus } from './submissionApi.js';
 import type { StagePosture } from './StudioStage.js';
+import { recordCodeStep } from './visitTelemetry.js';
 
 /**
  * Replaces `.studio-detail-head` (Workstream B1): a thin, translucent bar that stays
@@ -78,6 +79,14 @@ export function StudioStrip({
   onOpenTheater,
 }: StudioStripProps) {
   const { t, i18n } = useTranslation();
+
+  // The D.15 denominator (CE-01): recorded where the door itself renders, not where
+  // the surface behind it mounts — otherwise "offered" only ever fires alongside
+  // "opened" and the funnel can never show anyone who saw the button and skipped it.
+  useEffect(() => {
+    if (codeAvailable) recordCodeStep('offered');
+  }, [codeAvailable]);
+
   const heartbeatAt = latestAgentActivityAt(status);
   const showPhasePill = Boolean(status && HEARTBEAT_STATES.has(status.status));
   const phaseLabel = status

@@ -7,7 +7,13 @@ import {
 } from './delivery-metrics.js';
 import { InvalidUploadError, type GamesStore, type SourceFile } from './games-store.js';
 import { parseSpecTitle } from './github-client.js';
-import { canTransition, resolveJobState, TERMINAL_JOB_STATES, type JobState } from './job-state.js';
+import {
+  canTransition,
+  resolveJobState,
+  TERMINAL_JOB_STATES,
+  type JobState,
+  type TransitionActor,
+} from './job-state.js';
 import type { KitFileStore } from './kit-files.js';
 import { sanitizeCreatorText } from './submission-status.js';
 import type { Store, SubmissionRecord } from './store.js';
@@ -38,6 +44,11 @@ export interface SourceDeliveryInput {
   authority?: SourceDeliveryAuthority;
   /** Who wrote this delivery — see {@link VersionManifest.authorship} (CE-20). */
   authorship?: 'agent' | 'owner' | 'mixed';
+  /** Who *called this route* — distinct from `authorship`'s file-level provenance.
+   * Drives the `by` field on the job transitions this delivery records. Defaults to
+   * `'agent'` (the agent channel and managed-harvest callers never set this); the Code
+   * surface's manual delivery route is the one caller that passes `'creator'`. */
+  actor?: 'agent' | 'creator';
 }
 
 export interface SourceDeliveryAccepted {
@@ -186,13 +197,13 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
     return false;
   }
 
-  async function markBuilding(issueNumber: number, record: SubmissionRecord): Promise<JobState> {
+  async function markBuilding(issueNumber: number, record: SubmissionRecord, by: TransitionActor): Promise<JobState> {
     const state = currentState(record);
     if (!canTransition(state, 'building')) return state;
     await options.store.recordJobTransition(issueNumber, {
       to: 'building',
       at: new Date(now()).toISOString(),
-      by: 'agent',
+      by,
       reason: 'channel_signal',
     });
     return 'building';
@@ -342,7 +353,8 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
         record = (await options.store.getSubmission(input.issueNumber)) ?? record;
       }
 
-      const stateAfterSignal = await markBuilding(input.issueNumber, record);
+      const transitionActor: TransitionActor = input.actor === 'creator' ? 'creator' : 'agent';
+      const stateAfterSignal = await markBuilding(input.issueNumber, record, transitionActor);
       let version: string;
       try {
         ({ version } = await options.gamesStore.putCandidateSources({
@@ -402,7 +414,7 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
         await options.store.recordJobTransition(input.issueNumber, {
           to: 'submitted',
           at: new Date(now()).toISOString(),
-          by: 'agent',
+          by: transitionActor,
           reason: 'sources_delivered',
         });
       }

@@ -2387,8 +2387,7 @@ export async function registerSubmissionRoutes(
     if (roundBuilder) status.builder = roundBuilder;
     const lastBuilder = record.defaultBuilder ?? record.builder;
     if (lastBuilder) status.defaultBuilder = lastBuilder;
-    // Code surface probe + staging-generation signal (CE-05, CE-12). Nothing to edit
-    // before the job has a bound slug.
+    // Code surface probe (CE-05). Nothing to edit before the job has a bound slug.
     if (record.slug) {
       const killed = !codeSurfaceEnabled();
       const liveAgent = isLiveAgentRound(record);
@@ -2397,19 +2396,6 @@ export async function registerSubmissionRoutes(
         readOnly: killed || liveAgent,
         ...(killed ? { reason: 'killed' as const } : liveAgent ? { reason: 'agent_round' as const } : {}),
       };
-      const gamesStoreForStaging = options.agentChannel?.gamesStore;
-      if (gamesStoreForStaging?.listStagedSources) {
-        try {
-          const summary = await gamesStoreForStaging.listStagedSources({
-            slug: record.slug,
-            issueNumber: record.issueNumber,
-            roundGeneration: record.roundGeneration ?? 1,
-          });
-          if (summary.updatedAt) status.stagedAt = summary.updatedAt;
-        } catch {
-          /* advisory, same posture as the previewGate read above */
-        }
-      }
     }
     if (managedAvailabilityGate) {
       status.platformBuilder = await managedAvailabilityGate.peek(

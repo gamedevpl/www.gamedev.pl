@@ -284,6 +284,30 @@ describe('the Code surface routes (creator-code.ts)', () => {
         const remaining = await games.listStagedSources({ slug: 'sky-dodge', issueNumber: 10, roundGeneration: 1 });
         expect(remaining.files.map((f) => f.path)).toEqual(['game/agent-file.ts']);
       }));
+
+    it('refuses once an agent round goes live — same guard stage and patch already enforce', async () =>
+      withApp(async (app) => {
+        await games.putStagedSourceFile({
+          slug: 'sky-dodge',
+          issueNumber: 10,
+          roundGeneration: 1,
+          path: 'game/owner-file.ts',
+          content: 'owner wrote this',
+          stagedBy: 'owner',
+        });
+        await store.recordDispatch(10, { backend: 'managed', ref: 'session-1' });
+
+        const res = await app.inject({
+          method: 'POST',
+          url: '/api/me/studio/games/sky-dodge/sources/stage/discard',
+          headers: authHeaders('g:creator'),
+        });
+
+        expect(res.statusCode).toBe(409);
+        expect(res.json()).toMatchObject({ error: 'agent_round' });
+        const remaining = await games.listStagedSources({ slug: 'sky-dodge', issueNumber: 10, roundGeneration: 1 });
+        expect(remaining.files.map((f) => f.path)).toEqual(['game/owner-file.ts']);
+      }));
   });
 
   describe('POST /api/me/studio/games/:slug/sources/typecheck', () => {
@@ -389,6 +413,85 @@ describe('the Code surface routes (creator-code.ts)', () => {
           payload: { mode: 'preview', attestation: true },
         });
         expect(again.statusCode).toBe(429);
+      }));
+
+    it("an empty staging buffer inherits the base version's authorship, not a default of owner", async () => {
+      const stageAgent = (path: string, content: string) =>
+        games.putStagedSourceFile({
+          slug: 'sky-dodge',
+          issueNumber: 10,
+          roundGeneration: 1,
+          path,
+          content,
+          stagedBy: 'agent',
+        });
+      const paths = ['SPEC.md', 'index.html', 'GAME.json', 'game.ts'] as const;
+      await stageAgent('SPEC.md', '# Sky Dodge');
+      await stageAgent('index.html', '<div id="game-root"></div>');
+      await stageAgent('GAME.json', '{"engine":{"modules":[]}}');
+      await stageAgent('game.ts', 'export const boot = () => {};');
+
+      // A separate `withApp` each time — its per-slug deliver cooldown is process-local
+      // to that app instance, so this does not need to wait it out between the two.
+      const firstVersion = await withApp(async (app) => {
+        const res = await app.inject({
+          method: 'POST',
+          url: '/api/me/studio/games/sky-dodge/sources/deliver',
+          headers: { ...authHeaders('g:creator'), 'content-type': 'application/json' },
+          payload: { mode: 'preview', attestation: true },
+        });
+        expect(res.statusCode).toBe(200);
+        return (res.json() as { version: string }).version;
+      });
+      expect((await games.getManifest('sky-dodge', firstVersion))?.authorship).toBe('agent');
+
+      // The owner discards their own staged paths (there are none) or simply never
+      // staged anything this round — either way the buffer is empty, and the delivered
+      // content is byte-identical to the agent-authored version above.
+      await games.clearStagedSources({ slug: 'sky-dodge', issueNumber: 10, roundGeneration: 1, paths: [...paths] });
+
+      const secondVersion = await withApp(async (app) => {
+        const res = await app.inject({
+          method: 'POST',
+          url: '/api/me/studio/games/sky-dodge/sources/deliver',
+          headers: { ...authHeaders('g:creator'), 'content-type': 'application/json' },
+          payload: { mode: 'preview', attestation: true },
+        });
+        expect(res.statusCode).toBe(200);
+        return (res.json() as { version: string }).version;
+      });
+      expect((await games.getManifest('sky-dodge', secondVersion))?.authorship).toBe('agent');
+    });
+
+    it('a publish-mode delivery records its own submitted transition as the creator, not the agent channel', async () =>
+      withApp(async (app) => {
+        const stage = (path: string, content: string) =>
+          games.putStagedSourceFile({
+            slug: 'sky-dodge',
+            issueNumber: 10,
+            roundGeneration: 1,
+            path,
+            content,
+            stagedBy: 'owner',
+          });
+        await stage('SPEC.md', '# Sky Dodge');
+        await stage('index.html', '<div id="game-root"></div>');
+        await stage('GAME.json', '{"engine":{"modules":[]}}');
+        await stage('game.ts', 'export const boot = () => {};');
+        await stage('TRACE.json', '{"samples":[]}');
+        await stage('PLAYTEST.json', '{"expectProgress":["round-start"]}');
+
+        const res = await app.inject({
+          method: 'POST',
+          url: '/api/me/studio/games/sky-dodge/sources/deliver',
+          headers: { ...authHeaders('g:creator'), 'content-type': 'application/json' },
+          payload: { mode: 'publish', attestation: true },
+        });
+        expect(res.statusCode).toBe(200);
+
+        const record = await store.getSubmission(10);
+        const submitted = record?.transitions?.find((entry) => entry.to === 'submitted');
+        expect(submitted?.by).toBe('creator');
       }));
   });
 });

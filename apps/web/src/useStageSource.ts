@@ -7,8 +7,12 @@ import { getChannelPlayable, getSubmissionPreview, type SubmissionStatus } from 
 /**
  * Which build is on screen, and what to call it in the ribbon (`StudioVersionRibbon`).
  *
- * `at` is an epoch ms the client actually observed the build land — not a server
- * timestamp — because a staged build's own "produced at" time is not available (the
+ * `at` is an epoch ms marking when this build was produced, read from a server
+ * timestamp when the pipeline reports one (`previewGate.ranAt` for a PR preview,
+ * `playable.createdAt` for a channel build) — comparing a preview and a channel build
+ * needs a shared clock, or a preview loaded a while ago always looks "fresher" than a
+ * channel build that just landed, even across a page reload (CE-12). Falls back to the
+ * client's own observed-landing time only when the server does not report one (the
  * staged-preview pipeline's failures are silent by design; see
  * docs/studio-game-first-implementation-plan.md Workstream B2). `null` means unknown,
  * which the ribbon must render as "unknown" rather than guess.
@@ -103,8 +107,8 @@ export function useStageSource(token: string, status: SubmissionStatus | null): 
   useEffect(() => {
     const previewSlug = status?.preview?.slug;
     const headSha = status?.progress?.headSha;
-    const gateRun = status?.previewGate?.ranAt ?? '';
-    const previewKey = `${headSha ?? 'unknown'}:${gateRun}`;
+    const gateRunAt = status?.previewGate?.ranAt;
+    const previewKey = `${headSha ?? 'unknown'}:${gateRunAt ?? ''}`;
     if (!previewSlug || previewInFlightRef.current) return;
     if (headSha && previewKey === loadedPreviewKeyRef.current) return;
     if (!headSha && loadedPreviewKeyRef.current !== null) return;
@@ -116,7 +120,11 @@ export function useStageSource(token: string, status: SubmissionStatus | null): 
         if (activeTokenRef.current !== requestToken) return;
         loadedPreviewKeyRef.current = previewKey;
         previewRetryRef.current = 0;
-        setPreview({ html: result.html, at: Date.now() });
+        // Prefer the gate's own "produced at" over the client's fetch time — the
+        // latter is only comparable to a channel build's `createdAt` while the page
+        // stays open (see the CE-12 note above).
+        const producedAt = gateRunAt ? Date.parse(gateRunAt) : NaN;
+        setPreview({ html: result.html, at: Number.isFinite(producedAt) ? producedAt : Date.now() });
       })
       .catch(() => {
         // Keep last-good on a refetch failure — a stale stage beats a blank one. But

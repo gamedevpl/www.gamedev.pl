@@ -193,12 +193,6 @@ export type SubmissionStatus = {
   priorRounds?: PriorRoundHistory[];
   /** Read-only capability probe for the Code surface (CE-05). Absent before a bound slug. */
   codeSurface?: { available: boolean; readOnly: boolean; reason?: 'agent_round' | 'killed' };
-  /**
-   * When the owner's staging buffer was last written, ISO. The signal an owner's
-   * `PUT …/sources/stage` produces that a pushed commit or a gate run does not — see
-   * `useStageSource.ts` for why the stage's refresh logic needs it (CE-12).
-   */
-  stagedAt?: string;
 };
 
 /** One superseded build job's transcript, for the collapsed history blocks. */

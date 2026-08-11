@@ -7,6 +7,18 @@ import { CodeSurface } from './CodeSurface.js';
 import * as codeSurfaceApi from './codeSurfaceApi.js';
 import i18n from './i18n/index.js';
 
+// The real CodeMirror editor needs DOM layout measurement jsdom cannot provide, and
+// its dynamic import races the plain-textarea Suspense fallback these tests rely on —
+// a stand-in with the same value/onChange contract keeps that race out of the picture.
+vi.mock('./CodeMirrorEditor.js', () => ({
+  default: (props: { value: string; onChange: (value: string) => void }) =>
+    createElement('textarea', {
+      className: 'code-surface-editor',
+      value: props.value,
+      onChange: (event: { target: { value: string } }) => props.onChange(event.target.value),
+    }),
+}));
+
 vi.mock('./codeSurfaceApi.js', async () => {
   const actual = await vi.importActual<typeof import('./codeSurfaceApi.js')>('./codeSurfaceApi.js');
   return {
@@ -16,6 +28,7 @@ vi.mock('./codeSurfaceApi.js', async () => {
     rebuildCodeSurfaceStage: vi.fn(),
     typecheckCodeSurface: vi.fn(),
     discardCodeSurfaceEdits: vi.fn(),
+    deliverCodeSurface: vi.fn(),
   };
 });
 
@@ -53,6 +66,7 @@ describe('CodeSurface', () => {
     mocked.stageCodeSurfaceFile.mockReset();
     mocked.rebuildCodeSurfaceStage.mockReset();
     mocked.typecheckCodeSurface.mockReset();
+    mocked.deliverCodeSurface.mockReset();
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -182,5 +196,119 @@ describe('CodeSurface', () => {
     }
     expect(mocked.fetchCodeSurfaceSources).toHaveBeenCalledTimes(1);
     expect(mocked.stageCodeSurfaceFile).not.toHaveBeenCalled();
+  });
+
+  function typeInto(textarea: HTMLTextAreaElement, value: string) {
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')!.set!;
+    setter.call(textarea, value);
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  it('autosaves both files edited inside one debounce window — a second file must not cancel the first', async () => {
+    mocked.fetchCodeSurfaceSources.mockResolvedValue(sourcesFor());
+    mocked.stageCodeSurfaceFile.mockResolvedValue({
+      accepted: true,
+      path: 'x',
+      bytes: 1,
+      staged: { totalBytes: 1, maxBytes: 1_000_000, maxFiles: 60, updatedAt: null },
+    });
+
+    await render();
+    await act(async () => {
+      typeInto(container.querySelector('textarea')!, 'export const boot = () => { /* game.ts edit */ };');
+    });
+
+    // Switch files before game.ts's own 1500ms debounce fires — its timer must keep
+    // running independently, not get cancelled by render.ts's own edit below.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    const renderTsButton = [...container.querySelectorAll('.code-surface-rail-item')].find((btn) =>
+      btn.textContent?.includes('game/render.ts'),
+    ) as HTMLButtonElement;
+    await act(async () => {
+      renderTsButton.click();
+    });
+    await act(async () => {
+      typeInto(container.querySelector('textarea')!, 'export const paint = () => { /* render.ts edit */ };');
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+
+    expect(mocked.stageCodeSurfaceFile).toHaveBeenCalledWith(
+      'sky-dodge',
+      'game.ts',
+      expect.stringContaining('game.ts edit'),
+      { rebuild: false },
+    );
+    expect(mocked.stageCodeSurfaceFile).toHaveBeenCalledWith(
+      'sky-dodge',
+      'game/render.ts',
+      expect.stringContaining('render.ts edit'),
+      { rebuild: false },
+    );
+  });
+
+  it('"Stage it" flushes every dirty file, not just the one currently open', async () => {
+    mocked.fetchCodeSurfaceSources.mockResolvedValue(sourcesFor());
+    mocked.stageCodeSurfaceFile.mockResolvedValue({
+      accepted: true,
+      path: 'x',
+      bytes: 1,
+      staged: { totalBytes: 1, maxBytes: 1_000_000, maxFiles: 60, updatedAt: null },
+    });
+    mocked.rebuildCodeSurfaceStage.mockResolvedValue({ scheduled: true });
+
+    await render();
+    await act(async () => {
+      typeInto(container.querySelector('textarea')!, 'export const boot = () => { /* edited game.ts */ };');
+    });
+    const renderTsButton = [...container.querySelectorAll('.code-surface-rail-item')].find((btn) =>
+      btn.textContent?.includes('game/render.ts'),
+    ) as HTMLButtonElement;
+    await act(async () => {
+      renderTsButton.click();
+    });
+
+    // Click "Stage it" well inside both files' debounce windows — the currently open
+    // file (render.ts, untouched) must not be what gets flushed instead of game.ts.
+    const stageButton = [...container.querySelectorAll('button')].find((b) => b.textContent === 'Stage it')!;
+    await act(async () => {
+      stageButton.click();
+      await flush();
+    });
+
+    expect(mocked.stageCodeSurfaceFile).toHaveBeenCalledWith(
+      'sky-dodge',
+      'game.ts',
+      expect.stringContaining('edited game.ts'),
+      { rebuild: false },
+    );
+    expect(mocked.rebuildCodeSurfaceStage).toHaveBeenCalledWith('sky-dodge');
+  });
+
+  it('deliver refuses to ship when the pre-flight autosave fails, rather than delivering without the edit', async () => {
+    mocked.fetchCodeSurfaceSources.mockResolvedValue(sourcesFor());
+    mocked.stageCodeSurfaceFile.mockRejectedValue(new Error('network blip'));
+
+    await render();
+    await act(async () => {
+      typeInto(container.querySelector('textarea')!, 'export const boot = () => { /* edited */ };');
+    });
+
+    const attestCheckbox = container.querySelector<HTMLInputElement>('.code-surface-attestation input')!;
+    await act(async () => {
+      attestCheckbox.click();
+    });
+    const deliverButton = container.querySelector<HTMLButtonElement>('.code-surface-deliver-btn')!;
+    await act(async () => {
+      deliverButton.click();
+      await flush();
+    });
+
+    expect(mocked.stageCodeSurfaceFile).toHaveBeenCalled();
+    expect(mocked.deliverCodeSurface).not.toHaveBeenCalled();
   });
 });

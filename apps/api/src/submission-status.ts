@@ -289,15 +289,6 @@ export interface SubmissionStatusResponseBase {
     readOnly: boolean;
     reason?: 'agent_round' | 'killed';
   };
-  /**
-   * When the owner's staging buffer was last written (`StagedSourcesSummary.updatedAt`),
-   * ISO. Folded into the stage's `previewKey` (`useStageSource.ts`) alongside `headSha`
-   * and `previewGate.ranAt` so an owner's stage write is a refresh trigger too — see
-   * CE-12: neither of those two signals moves on a staging write, only on a commit,
-   * delivery, or gate run, which is why the stage silently failed to refresh for an
-   * owner edit before this field existed.
-   */
-  stagedAt?: string;
 }
 
 /**

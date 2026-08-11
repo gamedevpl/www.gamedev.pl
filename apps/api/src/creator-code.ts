@@ -196,10 +196,15 @@ export async function registerCreatorCodeRoutes(
    * list and text, merged with the staging overlay (per-file `stagedBy`, CE-04), so the
    * response is "what the next delivery would contain" — not just what was last
    * delivered.
+   *
+   * The limit has to clear CodeSurface.tsx's own read-only poll (every 4s while an
+   * agent round is live, ~900/hour) with headroom for ordinary navigation — a limit
+   * sized only for the initial load would 429 that poll into a permanent error screen
+   * a couple minutes into watching an agent work.
    */
   app.get<{ Params: { slug: string } }>(
     '/api/me/studio/games/:slug/sources',
-    { config: { rateLimit: { max: 30, timeWindow: '1 hour' } } },
+    { config: { rateLimit: { max: 1200, timeWindow: '1 hour' } } },
     async (request, reply) => {
       if (notFoundIfDisabled(reply)) return;
       if (!options.gamesStore) {
@@ -490,6 +495,10 @@ export async function registerCreatorCodeRoutes(
       if (!resolved) return;
       const { record, slug } = resolved;
 
+      if (isLiveAgentRound(record)) {
+        return reply.status(409).send({ error: 'agent_round', message: 'an agent is actively building this round' });
+      }
+
       const parsed = DiscardInputSchema.safeParse(request.body ?? {});
       if (!parsed.success) {
         return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
@@ -683,18 +692,16 @@ export async function registerCreatorCodeRoutes(
       const roundGeneration = record.roundGeneration ?? 1;
       const version = await resolveVersion(store, record, slug);
       const baseFiles = new Map<string, string>();
-      if (version) {
-        const manifest = await gamesStore.getManifest(slug, version);
-        if (manifest) {
-          const reads = await Promise.all(
-            manifest.sourceFiles.map(async (path) => ({
-              path,
-              content: await gamesStore.getSourceFile(slug, version, path),
-            })),
-          );
-          for (const entry of reads) {
-            if (entry.content !== null) baseFiles.set(entry.path, entry.content);
-          }
+      const baseManifest = version ? await gamesStore.getManifest(slug, version) : null;
+      if (baseManifest) {
+        const reads = await Promise.all(
+          baseManifest.sourceFiles.map(async (path) => ({
+            path,
+            content: await gamesStore.getSourceFile(slug, version!, path),
+          })),
+        );
+        for (const entry of reads) {
+          if (entry.content !== null) baseFiles.set(entry.path, entry.content);
         }
       }
       const staged = await gamesStore.getStagedSourceFiles({ slug, issueNumber: record.issueNumber, roundGeneration });
@@ -714,10 +721,17 @@ export async function registerCreatorCodeRoutes(
 
       // CE-20: authorship from the staged set's own stamps. A file the buffer never
       // touched (unchanged since the last delivery) says nothing about who wrote
-      // *this* delivery, so only staged entries vote.
+      // *this* delivery, so only staged entries vote. An empty buffer re-delivers the
+      // base version byte-for-byte — that content's authorship is whoever wrote *it*
+      // (the base manifest's own stamp), not a default of 'owner' just because this
+      // click happened to come from the owner-only Code surface route.
       const stagedByValues = new Set(stagedEntries.files.map((entry) => entry.stagedBy ?? 'agent'));
       const authorship: 'agent' | 'owner' | 'mixed' =
-        stagedByValues.size === 0 ? 'owner' : stagedByValues.size > 1 ? 'mixed' : [...stagedByValues][0]!;
+        stagedByValues.size === 0
+          ? (baseManifest?.authorship ?? 'owner')
+          : stagedByValues.size > 1
+            ? 'mixed'
+            : [...stagedByValues][0]!;
 
       // Pin the delivery to the kit window's current head, same convention as an
       // agent's own get_kit-pinned round — a manual round never calls get_kit.
@@ -747,6 +761,7 @@ export async function registerCreatorCodeRoutes(
           mode: parsed.data.mode,
           ...(kitEngineRef ? { kitEngineRef } : {}),
           authorship,
+          actor: 'creator',
         });
         if (outcome.accepted) lastDeliverAt.set(slug, nowMs);
         options.invalidateStatusCache?.(record.issueNumber);
