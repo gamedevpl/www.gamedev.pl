@@ -1,3 +1,4 @@
+import { autocompletion } from '@codemirror/autocomplete';
 import { indentWithTab } from '@codemirror/commands';
 import { css } from '@codemirror/lang-css';
 import { html } from '@codemirror/lang-html';
@@ -6,35 +7,40 @@ import { json } from '@codemirror/lang-json';
 import { markdown } from '@codemirror/lang-markdown';
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { forceLinting, linter, lintGutter, type Diagnostic as CmDiagnostic } from '@codemirror/lint';
-import { EditorState, type Extension } from '@codemirror/state';
+import { Compartment, EditorState, type Extension } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
 import { tags } from '@lezer/highlight';
 import { basicSetup } from 'codemirror';
 import { useEffect, useRef } from 'react';
+import {
+  renderDisplayParts,
+  tsAutocomplete,
+  tsFacet,
+  tsHover,
+  tsLintSource,
+  tsSync,
+  type HoverInfo,
+} from '@valtown/codemirror-ts';
+import type { WorkerShape } from '@valtown/codemirror-ts/worker';
 import type { CodeLanguage } from './codeTokens.js';
 
-/**
- * CodeMirror 6 (creator-code-editing-execution-plan.md CE-14, owner decision). Lazy
- * chunk — this module is only reached by a dynamic `import()` from CodeSurface.tsx, so
- * catalog/player/thread visitors pay zero bytes for it. Loaded only when the Code
- * surface is both open and editable; the read path (CE-07) never imports this at all.
- *
- * Uncontrolled by design after mount: `value` seeds the initial document and the
- * caller keys this component by file path so switching files remounts it cleanly
- * (fresh undo history, fresh cursor) rather than fighting CodeMirror's own state with
- * an external doc replacement on every keystroke.
- */
+// CodeMirror 6 (CE-14): lazy chunk; keyed by file path to remount.
 
 export type CodeMirrorDiagnostic = { line: number; message: string; severity?: 'error' | 'warning' };
+
+// GA-05: the worker bound to this editor's open file.
+export type CodeMirrorLanguageService = { worker: Omit<WorkerShape, 'initialize'>; path: string };
 
 export type CodeMirrorEditorProps = {
   value: string;
   language: CodeLanguage;
   onChange: (value: string) => void;
-  /** Bound to Mod-S — without it, Ctrl/Cmd+S opens the browser's save-page dialog. */
+  // Bound to Mod-S — else the browser's save dialog opens.
   onSave?: () => void;
   diagnostics: CodeMirrorDiagnostic[];
   readOnly?: boolean;
+  // Once set, wires tsSync/tsAutocomplete/tsHover/tsLinter; else plain CodeMirror.
+  languageService?: CodeMirrorLanguageService;
 };
 
 function languageExtension(language: CodeLanguage): Extension | null {
@@ -101,6 +107,25 @@ const darkChrome = EditorView.theme(
   { dark: true },
 );
 
+// GA-08: worker diagnostics capped to warning, distinct from server errors.
+const tsAdvisoryLintSource = async (view: EditorView): Promise<CmDiagnostic[]> => {
+  const found = await tsLintSource(view);
+  return found.map((d) => (d.severity === 'error' ? { ...d, severity: 'warning' as const } : d));
+};
+
+// GA-07: default tsHover() drops documentation — this renderer adds it back.
+function renderHoverTooltip(info: HoverInfo) {
+  const dom = document.createElement('div');
+  if (info.quickInfo?.displayParts) dom.appendChild(renderDisplayParts(info.quickInfo.displayParts));
+  if (info.quickInfo?.documentation?.length) {
+    const doc = document.createElement('div');
+    doc.className = 'cm-ts-hover-doc';
+    doc.textContent = info.quickInfo.documentation.map((part) => part.text).join('');
+    dom.appendChild(doc);
+  }
+  return { dom };
+}
+
 function toCmDiagnostics(view: EditorView, diagnostics: CodeMirrorDiagnostic[]): CmDiagnostic[] {
   const doc = view.state.doc;
   const out: CmDiagnostic[] = [];
@@ -112,6 +137,18 @@ function toCmDiagnostics(view: EditorView, diagnostics: CodeMirrorDiagnostic[]):
   return out;
 }
 
+// GA-05: ts extensions, or none — worker can turn ready mid-file.
+function languageServiceExtensions(languageService: CodeMirrorLanguageService | undefined): Extension[] {
+  if (!languageService) return [];
+  return [
+    tsFacet.of({ worker: languageService.worker, path: languageService.path }),
+    tsSync(),
+    autocompletion({ override: [tsAutocomplete()] }),
+    tsHover({ renderTooltip: renderHoverTooltip }),
+    linter(tsAdvisoryLintSource),
+  ];
+}
+
 export default function CodeMirrorEditor({
   value,
   language,
@@ -119,18 +156,19 @@ export default function CodeMirrorEditor({
   onSave,
   diagnostics,
   readOnly,
+  languageService,
 }: CodeMirrorEditorProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
-  // Refs so the extensions below (installed once at mount) always see the latest
-  // callback/data without forcing a full editor remount on every prop change — the
-  // one thing that must not remount on every keystroke or diagnostics update.
+  // Refs so mount-once extensions see the latest values, no remount.
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
   const onSaveRef = useRef(onSave);
   onSaveRef.current = onSave;
   const diagnosticsRef = useRef(diagnostics);
   diagnosticsRef.current = diagnostics;
+  // GA-05: reconfigured live below — a ready worker never remounts.
+  const languageServiceCompartmentRef = useRef(new Compartment());
 
   useEffect(() => {
     if (!containerRef.current) return undefined;
@@ -154,6 +192,7 @@ export default function CodeMirrorEditor({
           ...(langExt ? [langExt] : []),
           lintGutter(),
           linter((v) => toCmDiagnostics(v, diagnosticsRef.current)),
+          languageServiceCompartmentRef.current.of(languageServiceExtensions(languageService)),
           EditorView.editable.of(!readOnly),
           EditorView.updateListener.of((update) => {
             if (update.docChanged) onChangeRef.current(update.state.doc.toString());
@@ -169,12 +208,20 @@ export default function CodeMirrorEditor({
       view.destroy();
       viewRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount once per keyed instance; value/onChange/diagnostics flow through refs above
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refs carry live values
   }, []);
 
   useEffect(() => {
     if (viewRef.current) forceLinting(viewRef.current);
   }, [diagnostics]);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    view.dispatch({
+      effects: languageServiceCompartmentRef.current.reconfigure(languageServiceExtensions(languageService)),
+    });
+  }, [languageService]);
 
   return <div ref={containerRef} className="code-surface-codemirror" data-testid="codemirror-editor" />;
 }

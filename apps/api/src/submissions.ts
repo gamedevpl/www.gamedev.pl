@@ -39,7 +39,7 @@ import {
 import { startHealthCheck } from './game-health.js';
 import { createStagedPreviewPublisher, type StagedPreviewOptions } from './staged-preview.js';
 import { createInternalAuthVerifierFromEnv, type InternalAuthVerifier } from './internal-auth.js';
-import type { AgentBackend, SeedFiles } from './agent-backend.js';
+import type { AgentBackend, BuildPromptLane, SeedFiles } from './agent-backend.js';
 import {
   createAgentBackendRegistryFromEnv,
   resolveBuilderBackend,
@@ -62,7 +62,7 @@ import { ManagedOutputRejectedError } from './managed-agent.js';
 import { createManagedDeliveryLock } from './managed-backend.js';
 import { createSourceDeliveryService, SourceDeliveryAuthorityError } from './source-delivery.js';
 import { createKitFileStore } from './kit-files.js';
-import { InvalidUploadError } from './games-store.js';
+import { InvalidUploadError, type GamesStore } from './games-store.js';
 import {
   canTransition,
   detectStall,
@@ -89,12 +89,7 @@ import {
   type ChatAgentStatus,
   type StudioChatAgent,
 } from './chat-agent.js';
-import {
-  asChatAgentLogger,
-  logChatAgentDecision,
-  logChatAgentEscapeHatch,
-  logChatAgentFailOpen,
-} from './chat-agent-metrics.js';
+import { asChatAgentLogger, logChatAgentDecision, logChatAgentFailOpen } from './chat-agent-metrics.js';
 import { MAX_CHAT_TURNS, rememberChatTurn, type ChatTurn } from './chat-turns.js';
 import { mintConnectPayload } from './self-build-connect.js';
 import { createLocalGamesClient, resolveLocalGamesDir } from './local-games-repo.js';
@@ -197,8 +192,6 @@ const FeedbackRequestSchema = z.object({
    * is still active — switching is a round-boundary decision only.
    */
   builder: z.enum(['platform', 'self']).optional(),
-  // Composer escape hatch: skip the mini chat agent for this one message.
-  directToBuilder: z.boolean().optional(),
   /**
    * Optional playtest attachment from Creator Studio: a paused-frame PNG (base64,
    * no data: prefix) plus a small instrumentation digest. Treated as data, never
@@ -317,6 +310,7 @@ export interface SubmissionRoutesOptions {
     slug: string,
   ) => Promise<{ base: import('./store.js').ProposalBase; files: import('./games-store.js').SourceFile[] } | null>;
   submissionTokenSecret?: string;
+  platformConnectorSecret?: string;
   /**
    * Localizes an agent-relayed change request on the write that stores it. Used by the
    * two relay paths and by nothing that serves a read — see the note on the instance.
@@ -1059,6 +1053,7 @@ export async function registerSubmissionRoutes(
     feedback?: string;
     /** Who builds this round. Defaults to the game's last builder, then `platform`. */
     builder?: BuilderKind;
+    promptLane?: BuildPromptLane;
   }): Promise<boolean> {
     // Without the signing secret there is no per-job channel credential to give the
     // agent, and an agent that cannot report or deliver is worse than one never started.
@@ -1140,6 +1135,7 @@ export async function registerSubmissionRoutes(
         apiBaseUrl: notifyAppBaseUrl,
         ...(input.slug ? { slug: input.slug } : {}),
         ...(input.feedback ? { feedback: input.feedback } : {}),
+        ...(input.promptLane ? { promptLane: input.promptLane } : {}),
         ...(seed ? { seed } : {}),
       });
       // A seed that went in without a workspace coming back is a *platform* backend that
@@ -1255,6 +1251,7 @@ export async function registerSubmissionRoutes(
     transition?: { by: JobTransition['by']; reason: string };
     /** Builder for the new round. Ignored on undelivered nudges (same round). */
     builder?: BuilderKind;
+    promptLane?: BuildPromptLane;
     /** Handoffs keep the per-job delivery budget across builder changes. */
     preserveRoundBudget?: boolean;
   }): Promise<ResumeOutcome> {
@@ -1313,6 +1310,7 @@ export async function registerSubmissionRoutes(
         spec: input.feedback,
         feedback: input.feedback,
         locale: input.locale,
+        ...(input.promptLane ? { promptLane: input.promptLane } : {}),
         channelToken: mintAgentToken(input.issueNumber, submissionTokenSecret, {
           roundGeneration,
           now: now(),
@@ -1337,6 +1335,9 @@ export async function registerSubmissionRoutes(
             workspace: previous!.workspace,
           })
         : await selected.dispatch(brief);
+      if (input.undelivered) {
+        await store.clearAgentEnded(input.issueNumber);
+      }
       await store.recordDispatch(input.issueNumber, {
         backend: selected.name,
         ref: result.ref,
@@ -1513,13 +1514,8 @@ export async function registerSubmissionRoutes(
     locale: string;
     ip: string;
     uid: string;
-    directToBuilder?: boolean;
   }): Promise<ChatAgentOutcome | null> {
     if (!store || !chatAgentLog) return null;
-    if (input.directToBuilder) {
-      logChatAgentEscapeHatch(chatAgentLog, { issueNumber: input.issueNumber, scope: input.scope });
-      return null;
-    }
     if (isRateLimited(chatTurnsByIp, input.ip, now(), maxChatTurnsPerWindow, chatTurnRateLimitWindowMs)) {
       return null;
     }
@@ -2834,12 +2830,27 @@ export async function registerSubmissionRoutes(
    */
   async function reconcileGateVerdict(record: SubmissionRecord): Promise<JobTransition | null> {
     const gamesStore = options.agentChannel?.gamesStore;
-    const version = record.deliveredVersion ?? record.previewVersion;
-    if (!gamesStore || !store || !version || !record.slug) return null;
+    if (!gamesStore || !store || !record.slug) return null;
     const state = record.state ?? 'queued';
     if (state !== 'building' && state !== 'submitted' && state !== 'gating') return null;
     try {
-      const manifest = await gamesStore.getManifest(record.slug, version);
+      const roundGeneration = record.roundGeneration ?? 1;
+      // Retained versions may belong to an older round.
+      // Check previews first, accepting only this round's manifest.
+      const candidateVersions = [record.previewVersion, record.deliveredVersion].filter(
+        (version, index, versions): version is string => Boolean(version) && versions.indexOf(version) === index,
+      );
+      let version: string | undefined;
+      let manifest: Awaited<ReturnType<GamesStore['getManifest']>> = null;
+      for (const candidate of candidateVersions) {
+        const candidateManifest = await gamesStore.getManifest(record.slug, candidate);
+        if (candidateManifest?.roundGeneration === roundGeneration) {
+          version = candidate;
+          manifest = candidateManifest;
+          break;
+        }
+      }
+      if (!version || !manifest) return null;
       const emitGateMetric = async (input: {
         mode: 'preview' | 'publish';
         outcome: 'passed' | 'failed';
@@ -2852,7 +2863,7 @@ export async function registerSubmissionRoutes(
         record.roundLastGateMetricKey = key;
         logDeliveryGateVerdict(app.log, {
           issueNumber: record.issueNumber,
-          roundGeneration: record.roundGeneration ?? 1,
+          roundGeneration,
           builder: builderLabelFromRecord(record.builder, record.dispatch?.backend),
           mode: input.mode,
           outcome: input.outcome,
@@ -3907,6 +3918,9 @@ export async function registerSubmissionRoutes(
       // (`deliveredVersion`); pass that through so `buildPrompt` leads with recovery
       // of the previous branch instead.
       const requestedBuilder = parsed.data.builder;
+      const builderChanging = Boolean(
+        record && requestedBuilder && isBuilderKind(requestedBuilder) && requestedBuilder !== builderOf(record),
+      );
       if (record && requestedBuilder && isActiveBuildRound(record)) {
         const current = builderOf(record);
         if (requestedBuilder !== current) {
@@ -3941,7 +3955,9 @@ export async function registerSubmissionRoutes(
       let studioAckText: string | undefined;
       // Guards the fallback queuing step below against a duplicate write.
       let creatorMessageQueued = false;
-      if (record) {
+      // An explicit builder switch is routing intent, not chat. Letting the chat agent
+      // answer it would prevent the requested new round from starting.
+      if (record && !builderChanging) {
         const chatOutcome = await runChatAgent({
           issueNumber,
           message: sanitizedFeedback,
@@ -3950,7 +3966,6 @@ export async function registerSubmissionRoutes(
           locale: creatorLocale,
           ip: request.ip,
           uid: request.user!.uid,
-          directToBuilder: parsed.data.directToBuilder,
         });
         if (chatOutcome?.kind === 'replied' && store) {
           try {
@@ -4015,9 +4030,6 @@ export async function registerSubmissionRoutes(
       //
       // Self→platform handoff must resume (generation bump + platform dispatch),
       // not drop mail for the agent we are about to invalidate.
-      const builderChanging = Boolean(
-        record && requestedBuilder && isBuilderKind(requestedBuilder) && requestedBuilder !== builderOf(record),
-      );
       if (record && shouldSteerFeedbackViaInbox(record, { builderChanging })) {
         if (!queued) {
           return reply.status(503).send({ error: 'failed to queue feedback for the agent' });
@@ -4188,7 +4200,6 @@ export async function registerSubmissionRoutes(
         locale: record.locale ?? 'en',
         ip: request.ip,
         uid: request.user!.uid,
-        directToBuilder: parsed.data.directToBuilder,
       });
       if (chatOutcome?.kind === 'replied') {
         try {
@@ -5625,6 +5636,7 @@ export async function registerSubmissionRoutes(
   await registerMcpServerRoutes(app, {
     store,
     agentTokenSecret: submissionTokenSecret,
+    platformConnectorSecret: options.platformConnectorSecret,
     now,
     privateBeta: options.privateBeta,
     // MCP Apps views (SEP-1865) read MCP_UI directly — off in production until the

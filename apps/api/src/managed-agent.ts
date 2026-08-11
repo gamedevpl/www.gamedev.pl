@@ -4,6 +4,8 @@ import type { AgentTaskState } from './agent-state.js';
 // Coarse reasoning budget; vendors name it differently.
 export type ManagedAgentEffort = 'low' | 'medium' | 'high';
 
+export type ManagedPromptLane = 'mcp' | 'harness' | 'outputs';
+
 export interface ManagedWorkspaceFile {
   path: string;
   content: string;
@@ -22,20 +24,54 @@ export interface ManagedOutputRef {
   handle?: string;
 }
 
-// Tokens: the only unit every vendor reports.
-export interface ManagedTokenUsage {
+export interface ManagedTokenUsageBase {
+  unit: 'tokens';
   inputTokens: number;
   outputTokens: number;
   model?: string;
+}
+
+export interface ManagedTokenUsage extends ManagedTokenUsageBase {
+  vendor: string;
+}
+
+export interface ManagedGeminiTokenUsage extends ManagedTokenUsageBase {
+  vendor: 'gemini';
+  model: string;
+  totalTokens: number;
+  thoughtTokens: number;
+  cachedTokens: number;
+  toolUseTokens: number;
+}
+
+export interface ManagedCreditUsage {
+  unit: 'credits';
+  vendor: string;
+  credits: number;
+  model?: string;
+}
+
+export type ManagedSessionUsage = ManagedTokenUsage | ManagedGeminiTokenUsage | ManagedCreditUsage;
+
+export type ManagedUsageBudget =
+  { unit: 'tokens'; max: number } | { unit: 'credits'; max: number } | { unit: 'cents'; max: number };
+
+export interface ManagedBudgetStop {
+  unit: ManagedUsageBudget['unit'];
+  observed: number;
+  max: number;
+  enforced: boolean;
 }
 
 export interface ManagedSession {
   id: string;
   state: AgentTaskState;
   credentialRef?: string;
+  workspace?: string;
+  seedWorkspace?: string;
   // The vendor's own word, kept for operator views.
   vendorState?: string;
-  usage?: ManagedTokenUsage;
+  usage?: ManagedSessionUsage;
   startedAt?: string;
   endedAt?: string;
   stopReason?: string;
@@ -63,6 +99,7 @@ export interface ManagedSessionRequest {
   effort?: ManagedAgentEffort;
   workspaceFiles?: ManagedWorkspaceFile[];
   outputPath: string;
+  promptLane?: ManagedPromptLane;
   maxDurationSeconds?: number;
   tools?: ManagedToolAccess;
   mcpBearerCredential?: ManagedMcpBearerCredential;
@@ -71,6 +108,7 @@ export interface ManagedSessionRequest {
 export interface ManagedAgentProvider {
   readonly vendor: string;
   readonly model: string;
+  readonly promptLane: ManagedPromptLane;
   startSession(request: ManagedSessionRequest): Promise<ManagedSession>;
   getSession(sessionId: string): Promise<ManagedSession | null>;
   // Paths are relative to the request's outputPath.
@@ -80,6 +118,7 @@ export interface ManagedAgentProvider {
   sendMessage?(sessionId: string, message: string): Promise<void>;
   cancelSession(sessionId: string): Promise<{ enforced: boolean }>;
   deleteSession?(sessionId: string): Promise<void>;
+  deleteWorkspace?(workspace: string): Promise<void>;
   releaseCredential?(credentialRef: string): Promise<void>;
 }
 
@@ -129,6 +168,8 @@ const STATE_ALIASES: Record<string, AgentTaskState> = {
   canceled: 'cancelled',
   aborted: 'cancelled',
   stopped: 'cancelled',
+  incomplete: 'completed',
+  budget_exceeded: 'completed',
   waiting_for_user: 'waiting_for_user',
   needs_input: 'waiting_for_user',
   awaiting_input: 'waiting_for_user',
@@ -263,6 +304,11 @@ export function selectManagedOutputs(refs: readonly ManagedOutputRef[], slug: st
 export interface ManagedProviderConfig {
   apiKey: string;
   model: string;
+  budget?: ManagedUsageBudget;
+  repo?: string;
+  baseRef?: string;
+  customAgent?: string;
+  createPullRequest?: boolean;
   agentId?: string;
   environmentId?: string;
   maxListCostCents?: number;

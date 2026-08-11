@@ -34,7 +34,7 @@ import ts from 'typescript';
  * games-repo contract check's sibling assertions; if the repo loosens a rule,
  * loosen it here too rather than letting players hit a gate their game does not.
  */
-const COMPILER_OPTIONS: ts.CompilerOptions = {
+export const COMPILER_OPTIONS: ts.CompilerOptions = {
   noEmit: true,
   strict: true,
   noImplicitAny: false,

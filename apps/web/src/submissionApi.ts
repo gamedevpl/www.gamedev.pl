@@ -472,8 +472,6 @@ export async function submitFeedback(
   feedback: string,
   context?: FeedbackContext,
   builder?: 'platform' | 'self',
-  // Composer escape hatch: skip the chat agent for this one message.
-  directToBuilder?: boolean,
 ): Promise<FeedbackResult> {
   const response = await fetch(`${API_BASE}/api/submissions/${encodeURIComponent(token)}/feedback`, {
     method: 'POST',
@@ -483,7 +481,6 @@ export async function submitFeedback(
       feedback,
       ...(context ? { context } : {}),
       ...(builder ? { builder } : {}),
-      ...(directToBuilder ? { directToBuilder } : {}),
     }),
   });
 

@@ -408,9 +408,12 @@
       "connectEmpty": "This round does not need a coding-agent connect step.",
       "buildEmpty": "No checklist yet — it appears once the agent posts tasks.",
       "openThread": "Open chat",
+      "closeThread": "Close chat",
+      "chat": "Chat",
       "collapse": "Collapse",
       "expand": "Expand",
       "popOut": "Open as page",
+      "closeThread": "Close chat",
       "peekEmpty": "No updates yet"
     },
     "share": {
@@ -740,8 +743,7 @@
       "notStarted": "Saved — but a new build round didn't start. Your note is safe; we're looking into it.",
       "error": "We couldn't send that right now. Please try again in a moment.",
       "quota": "You've sent a lot of feedback today — please try again tomorrow.",
-      "published": "This game is already published. Submit a new idea to make another version.",
-      "directToBuilder": "Send straight to the builder, skipping the studio's reply"
+      "published": "This game is already published. Submit a new idea to make another version."
     },
     "handoff": {
       "notice": "Improvement round started — this is the new build thread.",

@@ -13,6 +13,8 @@ const CATALOG = JSON.stringify([
 
 const FILES: Record<string, string> = {
   'catalog.json': CATALOG,
+  'shared/game-kit.d.ts': 'interface GameKitDraw { circle(x: number, y: number, r: number): void; }\n',
+  'shared/modules/core.ts': 'export const core = true;\n',
   'templates/game/SPEC.md': '---\ntitle: __TITLE__\n---\n',
   'templates/game/game.ts': "import { startGame } from './game/runtime.ts';\n",
   'templates/game/game/runtime.ts': 'export function startGame() {}\n',
@@ -33,6 +35,7 @@ describe('buildSeedContext', () => {
     expect(context.catalogIndex).toBe(
       'apex-sprint — Apex Sprint — arcade racing\nword-forge — Word Forge — word puzzle',
     );
+    expect(context.kitDeclaration).toContain('interface GameKitDraw');
   });
 
   it('excludes games that are not published', () => {
@@ -54,6 +57,7 @@ describe('buildSeedContext', () => {
     // to run makes any comparison between runs meaningless.
     expect(rendered.indexOf('game/model.ts')).toBeLessThan(rendered.indexOf('game/render.ts'));
     expect(rendered).toContain('export const SPEED = 1;');
+    expect(rendered).not.toContain('game-kit.d.ts');
   });
 
   it('spends the byte budget across games in pick order', () => {
@@ -148,6 +152,7 @@ describe('createArchiveSeedContextSource', () => {
     const second = await source.load();
 
     expect(first?.hasGame('apex-sprint')).toBe(true);
+    expect(first?.kitDeclaration).toContain('interface GameKitDraw');
     expect(second).toBe(first);
     expect(downloads).toBe(1);
   });

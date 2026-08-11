@@ -123,7 +123,13 @@ describe('shared source delivery', () => {
       buildId: 'build-managed-1',
     });
     expect(putCandidateSources).toHaveBeenCalledWith(
-      expect.objectContaining({ issueNumber: ISSUE, slug: SLUG, backend: BACKEND, mode: 'preview' }),
+      expect.objectContaining({
+        issueNumber: ISSUE,
+        roundGeneration: 1,
+        slug: SLUG,
+        backend: BACKEND,
+        mode: 'preview',
+      }),
     );
     expect(gate).toHaveBeenCalledWith({ issueNumber: ISSUE, slug: SLUG, version: 'v-managed-1', mode: 'preview' });
     const record = await store.getSubmission(ISSUE);

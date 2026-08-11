@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { createAgentBackendRegistryFromEnv } from './agent-backend-env.js';
 
 const ENV_KEYS = [
@@ -10,7 +11,15 @@ const ENV_KEYS = [
   'MANAGED_AGENT_MAX_SECONDS',
   'MANAGED_AGENT_MAX_LIST_COST_CENTS',
   'MANAGED_AGENT_MCP_URL',
+  'MANAGED_AGENT_PROMPT_LANE',
+  'MANAGED_AGENT_COPILOT_MAX_CREDITS',
+  'MANAGED_AGENT_MAX_TOTAL_TOKENS',
+  'GEMINI_API_KEY',
   'AGENT_TASKS_TOKEN',
+  'AGENT_TASKS_MODEL',
+  'GAMES_REPO',
+  'GAMES_PUBLISHED_REF',
+  'AGENT_CUSTOM_AGENT',
 ] as const;
 
 describe('createAgentBackendRegistryFromEnv', () => {
@@ -39,7 +48,7 @@ describe('createAgentBackendRegistryFromEnv', () => {
     setEnv({
       MANAGED_AGENT_VENDOR: 'anthropic',
       // Missing key/model/ids — config is invalid.
-      AGENT_TASKS_TOKEN: 'ghp_test_token_for_fail_closed',
+      AGENT_TASKS_TOKEN: randomBytes(32).toString('hex'),
     });
     const warn = vi.fn();
     const registry = createAgentBackendRegistryFromEnv({ info: vi.fn(), warn });
@@ -55,7 +64,7 @@ describe('createAgentBackendRegistryFromEnv', () => {
   it('falls back to Copilot only when no managed vendor was selected', () => {
     setEnv({
       MANAGED_AGENT_VENDOR: undefined,
-      AGENT_TASKS_TOKEN: 'ghp_test_token_for_copilot_fallback',
+      AGENT_TASKS_TOKEN: randomBytes(32).toString('hex'),
     });
     const registry = createAgentBackendRegistryFromEnv({ info: vi.fn(), warn: vi.fn() });
     expect(registry.platform?.name).toBe('copilot');
@@ -64,16 +73,100 @@ describe('createAgentBackendRegistryFromEnv', () => {
   it('selects the managed vendor over Copilot when the managed config is valid', () => {
     setEnv({
       MANAGED_AGENT_VENDOR: 'anthropic',
-      MANAGED_AGENT_API_KEY: 'sk-test',
+      MANAGED_AGENT_API_KEY: randomBytes(32).toString('hex'),
       MANAGED_AGENT_MODEL: 'claude-sonnet-5',
       MANAGED_AGENT_ID: 'agent_test',
       MANAGED_AGENT_ENVIRONMENT_ID: 'env_test',
       MANAGED_AGENT_MAX_SECONDS: '120',
       MANAGED_AGENT_MAX_LIST_COST_CENTS: '100',
       MANAGED_AGENT_MCP_URL: 'https://www.gamedev.pl/api/mcp',
-      AGENT_TASKS_TOKEN: 'ghp_must_not_win_when_managed_is_valid',
+      AGENT_TASKS_TOKEN: randomBytes(32).toString('hex'),
     });
     const registry = createAgentBackendRegistryFromEnv({ info: vi.fn(), warn: vi.fn() });
     expect(registry.platform?.name).toBe('managed:anthropic');
+  });
+
+  it('builds Copilot from its own token and model configuration', () => {
+    setEnv({
+      MANAGED_AGENT_VENDOR: 'copilot',
+      AGENT_TASKS_TOKEN: randomBytes(32).toString('hex'),
+      AGENT_TASKS_MODEL: undefined,
+      MANAGED_AGENT_COPILOT_MAX_CREDITS: '25',
+    });
+    const info = vi.fn();
+    const registry = createAgentBackendRegistryFromEnv({ info, warn: vi.fn() }, undefined, {
+      deliver: async () => ({ version: 'v1' }),
+    });
+
+    expect(registry.platform?.name).toBe('managed:copilot');
+    expect(info).toHaveBeenCalledWith(
+      expect.objectContaining({ vendor: 'copilot', model: 'claude-sonnet-4.6' }),
+      'managed agent dispatch enabled',
+    );
+  });
+
+  it('can select the Copilot MCP lane without changing backend selection', () => {
+    setEnv({
+      MANAGED_AGENT_VENDOR: 'copilot',
+      AGENT_TASKS_TOKEN: randomBytes(32).toString('hex'),
+      MANAGED_AGENT_MCP_URL: 'https://www.gamedev.pl/api/mcp',
+      MANAGED_AGENT_PROMPT_LANE: 'mcp',
+    });
+    const registry = createAgentBackendRegistryFromEnv({ info: vi.fn(), warn: vi.fn() }, undefined, {
+      deliver: async () => ({ version: 'v1' }),
+    });
+
+    expect(registry.platform?.name).toBe('managed:copilot');
+  });
+
+  it('builds Gemini with its native token budget and default model', () => {
+    setEnv({
+      MANAGED_AGENT_VENDOR: 'gemini',
+      MANAGED_AGENT_API_KEY: `gemini-${randomUUID()}`,
+      MANAGED_AGENT_MODEL: undefined,
+      MANAGED_AGENT_MAX_TOTAL_TOKENS: '50000',
+      MANAGED_AGENT_MCP_URL: 'https://www.gamedev.pl/api/mcp',
+      AGENT_TASKS_TOKEN: `copilot-${randomUUID()}`,
+    });
+    const info = vi.fn();
+    const registry = createAgentBackendRegistryFromEnv({ info, warn: vi.fn() });
+
+    expect(registry.platform?.name).toBe('managed:gemini');
+    expect(info).toHaveBeenCalledWith(
+      expect.objectContaining({ vendor: 'gemini', model: 'gemini-3.6-flash' }),
+      'managed agent dispatch enabled',
+    );
+  });
+
+  it('fails closed when Gemini has an invalid token ceiling', () => {
+    setEnv({
+      MANAGED_AGENT_VENDOR: 'gemini',
+      MANAGED_AGENT_API_KEY: `gemini-${randomUUID()}`,
+      MANAGED_AGENT_MCP_URL: 'https://www.gamedev.pl/api/mcp',
+      MANAGED_AGENT_MAX_TOTAL_TOKENS: '0',
+    });
+    const warn = vi.fn();
+    const registry = createAgentBackendRegistryFromEnv({ info: vi.fn(), warn });
+
+    expect(registry.platform).toBeUndefined();
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({ vendor: 'gemini' }),
+      expect.stringContaining('token ceiling'),
+    );
+  });
+
+  it('fails closed when an MCP-default provider has no endpoint', () => {
+    setEnv({
+      MANAGED_AGENT_VENDOR: 'gemini',
+      MANAGED_AGENT_API_KEY: `gemini-${randomUUID()}`,
+    });
+    const warn = vi.fn();
+    const registry = createAgentBackendRegistryFromEnv({ info: vi.fn(), warn });
+
+    expect(registry.platform).toBeUndefined();
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({ vendor: 'gemini' }),
+      expect.stringContaining('MCP lane'),
+    );
   });
 });

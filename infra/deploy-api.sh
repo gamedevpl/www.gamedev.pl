@@ -191,9 +191,19 @@ else
   echo "==> agent-tasks-token not found; submissions will queue without being dispatched."
 fi
 
+if gcloud secrets describe copilot-mcp-connector --project "$PROJECT_ID" >/dev/null 2>&1; then
+  SECRET_MAPPINGS+=("COPILOT_MCP_CONNECTOR_SECRET=copilot-mcp-connector:latest")
+  echo "==> Copilot MCP connector configured."
+fi
+
 if gcloud secrets describe anthropic-api-key --project "$PROJECT_ID" >/dev/null 2>&1; then
   SECRET_MAPPINGS+=("MANAGED_AGENT_API_KEY=anthropic-api-key:latest")
   echo "==> anthropic-api-key found; managed agent API access enabled."
+fi
+
+if gcloud secrets describe gemini-api-key --project "$PROJECT_ID" >/dev/null 2>&1; then
+  SECRET_MAPPINGS+=("GEMINI_API_KEY=gemini-api-key:latest")
+  echo "==> gemini-api-key found; Gemini managed agent access enabled."
 fi
 
 if gcloud secrets describe session-secret --project "$PROJECT_ID" >/dev/null 2>&1; then
@@ -297,6 +307,8 @@ for MANAGED_VAR in \
   MANAGED_AGENT_ENVIRONMENT_ID \
   MANAGED_AGENT_MAX_SECONDS \
   MANAGED_AGENT_MAX_LIST_COST_CENTS \
+  MANAGED_AGENT_PROMPT_LANE \
+  MANAGED_AGENT_MAX_TOTAL_TOKENS \
   MANAGED_AGENT_VAULT_IDS \
   MANAGED_AGENT_MCP_URL \
   MANAGED_AGENT_DELIVERY_MODE; do

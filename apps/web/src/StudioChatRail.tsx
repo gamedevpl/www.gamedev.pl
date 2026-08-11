@@ -14,6 +14,7 @@ export type SheetDetent = 'peek' | 'half' | 'full';
 export type StudioChatRailProps = {
   title: string;
   open: boolean;
+  covered?: boolean;
   onOpenChange: (open: boolean) => void;
   unreadCount: number;
   standaloneHref?: string;
@@ -29,6 +30,7 @@ export type StudioChatRailProps = {
 export function StudioChatRail({
   title,
   open,
+  covered = false,
   onOpenChange,
   unreadCount,
   standaloneHref,
@@ -40,16 +42,17 @@ export function StudioChatRail({
   const [isSheet, setIsSheet] = useState(false);
   const [detent, setDetent] = useState<SheetDetent>('half');
   const asideRef = useRef<HTMLElement | null>(null);
+  const visible = open && !covered;
 
-  // Collapsed rail stays mounted (see below) but is clipped to 1px via CSS, not
+  // A collapsed rail stays mounted but is clipped to 1px via CSS, not
   // display:none — `aria-hidden` alone does not remove its buttons/textarea from the
-  // tab order, so a keyboard user tabbing past the pill can land on invisible controls.
+  // tab order, so a keyboard user can otherwise land on invisible controls.
   // `inert` (imperative, since @types/react 18 doesn't type it as a JSX prop) removes
   // the whole collapsed subtree from both focus and the accessibility tree.
   useEffect(() => {
     const node = asideRef.current as (HTMLElement & { inert: boolean }) | null;
-    if (node) node.inert = !open;
-  }, [open]);
+    if (node) node.inert = !visible;
+  }, [visible]);
 
   useEffect(() => {
     const query =
@@ -68,7 +71,9 @@ export function StudioChatRail({
     if (open && isSheet) setDetent((current) => (current === 'peek' ? 'half' : current));
   }, [open, isSheet]);
 
-  const visiblyOpen = open && !(isSheet && detent === 'peek');
+  const visiblyOpen = visible && !(isSheet && detent === 'peek');
+  const popOutLabel = t('studioPanel.rail.popOut', { defaultValue: 'Open as page' });
+  const closeLabel = t('studioPanel.rail.closeThread', { defaultValue: 'Close chat' });
   useEffect(() => {
     onVisiblyOpenChange?.(visiblyOpen);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -112,38 +117,24 @@ export function StudioChatRail({
 
   const detentClass = isSheet ? ` is-sheet is-${detent}` : '';
 
-  // The thread stays mounted whether the rail is a pill, a peek, or fully open — a
-  // collapse must never unmount `SubmissionStatusView` (its own status poll, and any
-  // text the creator has typed but not sent, would be lost). Only the pill markup is
-  // conditionally rendered; the aside + children are always present, hidden via CSS.
+  // The thread stays mounted whether collapsed, peeking, or fully open — a collapse
+  // must never unmount `SubmissionStatusView` (its poll and unsent composer text would
+  // be lost). The aside + children remain present and are hidden via CSS.
   return (
     <>
-      {open && isSheet && detent !== 'peek' ? (
+      {visible && isSheet && detent !== 'peek' ? (
         <div
           className="modal-backdrop studio-chat-rail-backdrop"
           role="presentation"
           onClick={() => setDetent('peek')}
         />
       ) : null}
-      {!open ? (
-        <button
-          type="button"
-          className="studio-chat-rail-pill"
-          onClick={() => onOpenChange(true)}
-          aria-label={t('studioPanel.rail.openThread', { defaultValue: 'Open chat' })}
-        >
-          <PixelIcon name="signal" size={14} />
-          {unreadCount > 0 ? (
-            <span className="studio-chat-rail-pill-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>
-          ) : null}
-        </button>
-      ) : null}
       <aside
         ref={asideRef}
-        className={`studio-chat-rail${detentClass}${open ? '' : ' is-collapsed'}`}
+        className={`studio-chat-rail${detentClass}${visible ? '' : ' is-collapsed'}`}
         aria-label={title}
-        aria-hidden={open ? undefined : true}
-        {...(open && isSheet && detent !== 'peek' ? { role: 'dialog', 'aria-modal': true } : {})}
+        aria-hidden={visible ? undefined : true}
+        {...(visible && isSheet && detent !== 'peek' ? { role: 'dialog', 'aria-modal': true } : {})}
       >
         <div className="studio-chat-rail-head">
           {open && isSheet ? (
@@ -167,18 +158,20 @@ export function StudioChatRail({
           <div className="studio-chat-rail-head-actions">
             {standaloneHref ? (
               <a
-                className="studio-chat-rail-popout"
+                className="studio-chat-rail-head-action studio-chat-rail-popout"
                 href={standaloneHref}
-                title={t('studioPanel.rail.popOut', { defaultValue: 'Open as page' })}
+                aria-label={popOutLabel}
+                data-tooltip={popOutLabel}
               >
-                <PixelIcon name="expand" size={12} />
+                <PixelIcon name="expand" size={14} />
               </a>
             ) : null}
             <button
               type="button"
-              className="modal-close-btn"
+              className="studio-chat-rail-head-action studio-chat-rail-close"
               onClick={() => onOpenChange(false)}
-              aria-label={t('studioPanel.close')}
+              aria-label={closeLabel}
+              data-tooltip={closeLabel}
             >
               <PixelIcon name="close" size={14} />
             </button>
@@ -191,7 +184,7 @@ export function StudioChatRail({
               {latestEntryLabel ?? t('studioPanel.rail.peekEmpty', { defaultValue: 'No updates yet' })}
             </span>
             {unreadCount > 0 ? (
-              <span className="studio-chat-rail-pill-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>
+              <span className="studio-chat-unread-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>
             ) : null}
           </button>
         ) : null}

@@ -5,7 +5,13 @@ import type { SeedFiles } from './agent-backend.js';
 import type { BuilderKind } from './builder.js';
 import type { PublicationHealthCheck, PublicationRecord } from './games-store.js';
 import type { AvatarMode } from './creator-profile.js';
-import { nextRoundGeneration, transitionClosesRound, type JobState, type JobTransition } from './job-state.js';
+import {
+  nextRoundGeneration,
+  transitionClosesRound,
+  type AgentSessionTokens,
+  type JobState,
+  type JobTransition,
+} from './job-state.js';
 import type { DeclineReason, ProposalState, ProposalTransition } from './proposal-state.js';
 import type { BuildEvent, SubmissionStatus } from './submission-status.js';
 
@@ -460,7 +466,7 @@ export interface JobCostEntry {
    * SDK hands the count back, so a seeded job carries a real measurement rather than the
    * absence Copilot's opaque premium requests leave behind.
    */
-  tokens?: { input: number; output: number };
+  tokens?: AgentSessionTokens;
   /** Money, when a service reports it directly rather than in its own unit. */
   usd?: number;
 }
@@ -476,14 +482,36 @@ export const MAX_JOB_COSTS = 200;
 export function applyMeasuredTokens(
   costs: readonly JobCostEntry[],
   ref: string,
-  tokens: { input: number; output: number },
+  tokens: AgentSessionTokens,
 ): JobCostEntry[] | null {
+  const sameTokens = (left: AgentSessionTokens | undefined, right: AgentSessionTokens): boolean => {
+    if (!left) return false;
+    if (left.vendor === 'gemini' || right.vendor === 'gemini') {
+      return (
+        left.vendor === 'gemini' &&
+        right.vendor === 'gemini' &&
+        left.model === right.model &&
+        left.input === right.input &&
+        left.output === right.output &&
+        left.total === right.total &&
+        left.thought === right.thought &&
+        left.cached === right.cached &&
+        left.toolUse === right.toolUse
+      );
+    }
+    return (
+      left.input === right.input &&
+      left.output === right.output &&
+      left.vendor === right.vendor &&
+      left.model === right.model
+    );
+  };
   let changed = false;
   const next = costs.map((entry) => {
     if (entry.kind !== 'agent_session' || entry.ref !== ref) return entry;
-    const sameTokens = entry.tokens?.input === tokens.input && entry.tokens?.output === tokens.output;
+    const same = sameTokens(entry.tokens, tokens);
     const placeholder = entry.credits !== undefined && !entry.creditsMeasured;
-    if (sameTokens && !placeholder) return entry;
+    if (same && !placeholder) return entry;
     changed = true;
     const { credits: _dropped, ...withoutCredits } = entry;
     return placeholder ? { ...withoutCredits, tokens } : { ...entry, tokens };
@@ -1798,6 +1826,8 @@ export interface Store {
    * validation rejects the brand-new key (`active === undefined`).
    */
   ensureRoundGeneration(issueNumber: number): Promise<number | null>;
+  // Clears stale agentEndedAt/lastAgentSignalAt/lastAgentPresence without touching round counters.
+  clearAgentEnded(issueNumber: number): Promise<void>;
   // Fixes the round's kit engine and returns it; first caller wins.
   // `replace` overrides the pin: kit_outdated recovery, or a kit gone.
   pinRoundKitEngineRef(issueNumber: number, engineRef: string, replace?: boolean): Promise<string | null>;
@@ -1865,7 +1895,7 @@ export interface Store {
    */
   setJobCostCredits(issueNumber: number, ref: string, credits: number): Promise<void>;
   // Token-billed twin of setJobCostCredits; drops the credit placeholder.
-  setJobCostTokens(issueNumber: number, ref: string, tokens: { input: number; output: number }): Promise<void>;
+  setJobCostTokens(issueNumber: number, ref: string, tokens: AgentSessionTokens): Promise<void>;
   /**
    * Records where a dispatched job's work actually lives, once the backend can say.
    *
@@ -3134,6 +3164,16 @@ export class InMemoryStore implements Store {
     return 1;
   }
 
+  async clearAgentEnded(issueNumber: number): Promise<void> {
+    const sub = this.submissions.get(issueNumber);
+    if (!sub) return;
+    const next = { ...sub };
+    delete next.lastAgentSignalAt;
+    delete next.lastAgentPresence;
+    delete next.agentEndedAt;
+    this.submissions.set(issueNumber, next);
+  }
+
   async setSubmissionAgentState(issueNumber: number, agentState: AgentTaskState): Promise<void> {
     const sub = this.submissions.get(issueNumber);
     if (sub) this.submissions.set(issueNumber, { ...sub, agentState });
@@ -3314,7 +3354,7 @@ export class InMemoryStore implements Store {
     this.submissions.set(issueNumber, { ...sub, costs });
   }
 
-  async setJobCostTokens(issueNumber: number, ref: string, tokens: { input: number; output: number }): Promise<void> {
+  async setJobCostTokens(issueNumber: number, ref: string, tokens: AgentSessionTokens): Promise<void> {
     const sub = this.submissions.get(issueNumber);
     if (!sub?.costs?.length) return;
     const costs = applyMeasuredTokens(sub.costs, ref, tokens);
@@ -5499,6 +5539,20 @@ export class FirestoreStore implements Store {
     });
   }
 
+  async clearAgentEnded(issueNumber: number): Promise<void> {
+    const ref = this.db.collection('submissions').doc(String(issueNumber));
+    await this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return;
+      const current = snap.data() as SubmissionRecord;
+      const next = { ...current };
+      delete next.lastAgentSignalAt;
+      delete next.lastAgentPresence;
+      delete next.agentEndedAt;
+      tx.set(ref, next);
+    });
+  }
+
   async setSubmissionAgentState(issueNumber: number, agentState: AgentTaskState): Promise<void> {
     await this.db.collection('submissions').doc(String(issueNumber)).set({ agentState }, { merge: true });
   }
@@ -5732,7 +5786,7 @@ export class FirestoreStore implements Store {
     });
   }
 
-  async setJobCostTokens(issueNumber: number, ref: string, tokens: { input: number; output: number }): Promise<void> {
+  async setJobCostTokens(issueNumber: number, ref: string, tokens: AgentSessionTokens): Promise<void> {
     const docRef = this.db.collection('submissions').doc(String(issueNumber));
     await this.db.runTransaction(async (tx) => {
       const snap = await tx.get(docRef);

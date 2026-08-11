@@ -371,8 +371,6 @@ export async function submitImprovement(
   feedback: string,
   context?: FeedbackContext,
   builder?: 'platform' | 'self',
-  // Composer escape hatch: skip the chat agent for this one message.
-  directToBuilder?: boolean,
 ): Promise<{ ok: boolean; jobId?: number; token?: string; slug?: string; shotId?: string }> {
   const response = await fetch(`${API_BASE}/api/submissions/${encodeURIComponent(token)}/improve`, {
     method: 'POST',
@@ -382,7 +380,6 @@ export async function submitImprovement(
       feedback,
       ...(context ? { context } : {}),
       ...(builder ? { builder } : {}),
-      ...(directToBuilder ? { directToBuilder } : {}),
     }),
   });
   if (!response.ok) {

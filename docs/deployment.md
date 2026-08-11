@@ -92,6 +92,7 @@ a single `--set-secrets` list.
 | `MCP_AUTHORIZATION_SERVERS` (optional) | Comma-separated issuer URL(s) for the MCP OAuth authorization server — advertised in `/.well-known/oauth-protected-resource` when set. Wired into the deploy ENV_VARS map as the canonical app origin (`https://www.gamedev.pl`); not a Secret Manager secret. | ✅ set — `https://www.gamedev.pl`                                                                   |
 | _(none — static)_                      | Live MCP discovery document at `/.well-known/mcp/server.json` (BY-18c). Auth facts stay in the PRM URL above; listing drafts live under `listings/mcp/` and are **not** submitted from deploy.                                                                 | always on                                                                                           |
 | `session-secret`                       | HMAC key for session cookies → `SESSION_SECRET`                                                                                                                                                                                                                | ✅ set                                                                                              |
+| `gemini-api-key`                       | Gemini managed-agent credential → `GEMINI_API_KEY`                                                                                                                                                                                                             | optional                                                                                            |
 | `resend-api-key`                       | Outbound email → `RESEND_API_KEY` (see below)                                                                                                                                                                                                                  | ✅ set                                                                                              |
 | `vapid-private-key`                    | Web push signing → `VAPID_PRIVATE_KEY`                                                                                                                                                                                                                         | ✅ set                                                                                              |
 | `site-basic-auth`                      | Former "not public yet" lock → `SITE_BASIC_AUTH`                                                                                                                                                                                                               | ⚠️ exists but **unused**                                                                            |
@@ -101,22 +102,24 @@ a single `--set-secrets` list.
 The managed backend is selected by these Cloud Run variables; the deploy scripts carry them
 on every revision because `--set-env-vars` replaces the whole map:
 
-| Variable                            | Meaning                                            |
-| ----------------------------------- | -------------------------------------------------- |
-| `MANAGED_AGENT_VENDOR`              | Provider adapter, currently `anthropic`            |
-| `MANAGED_AGENT_MODEL`               | Provider model label                               |
-| `MANAGED_AGENT_ID`                  | Managed Agent resource                             |
-| `MANAGED_AGENT_ENVIRONMENT_ID`      | Managed Environment resource                       |
-| `MANAGED_AGENT_MAX_SECONDS`         | Per-session wall-clock limit                       |
-| `MANAGED_AGENT_MAX_LIST_COST_CENTS` | Anthropic budget in whole US cents                 |
-| `MANAGED_AGENT_VAULT_IDS`           | Optional static vaults for probe-only integrations |
-| `MANAGED_AGENT_MCP_URL`             | The MCP endpoint the agent calls                   |
-| `MANAGED_AGENT_DELIVERY_MODE`       | `preview` or `publish`                             |
+| Variable                            | Meaning                                                |
+| ----------------------------------- | ------------------------------------------------------ |
+| `MANAGED_AGENT_VENDOR`              | Provider adapter: `anthropic`, `copilot`, or `gemini`  |
+| `MANAGED_AGENT_MODEL`               | Provider model label                                   |
+| `MANAGED_AGENT_ID`                  | Managed Agent resource                                 |
+| `MANAGED_AGENT_ENVIRONMENT_ID`      | Managed Environment resource                           |
+| `MANAGED_AGENT_MAX_SECONDS`         | Per-session wall-clock limit                           |
+| `MANAGED_AGENT_MAX_LIST_COST_CENTS` | Anthropic budget in whole US cents                     |
+| `MANAGED_AGENT_PROMPT_LANE`         | Optional lane override: `mcp`, `harness`, or `outputs` |
+| `MANAGED_AGENT_MAX_TOTAL_TOKENS`    | Gemini native interaction token ceiling                |
+| `MANAGED_AGENT_VAULT_IDS`           | Optional static vaults for probe-only integrations     |
+| `MANAGED_AGENT_MCP_URL`             | The MCP endpoint the agent calls                       |
+| `MANAGED_AGENT_DELIVERY_MODE`       | `preview` or `publish`                                 |
 
-`MANAGED_AGENT_API_KEY` is wired from the `anthropic-api-key` Secret Manager secret and never
-belongs in variables, the repository, or a workflow body. If the managed vendor variables or
-secret are absent, the platform slot remains unset and platform jobs stay queued; self builds
-continue to work.
+`MANAGED_AGENT_API_KEY` is wired from the `anthropic-api-key` Secret Manager secret, while
+`GEMINI_API_KEY` is wired from `gemini-api-key`. Neither belongs in variables, the repository,
+or a workflow body. If the selected vendor's variables or secret are absent, the platform slot
+remains unset and platform jobs stay queued; self builds continue to work.
 
 When `MANAGED_AGENT_MCP_URL` is set, each managed round receives its own short-lived
 build-channel capability through a vendor vault. The vault is created for that session, is

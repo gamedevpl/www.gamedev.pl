@@ -15,6 +15,7 @@ import type { CodeMirrorDiagnostic } from './CodeMirrorEditor.js';
 import {
   CodeSurfaceApiError,
   deliverCodeSurface,
+  fetchCodeSurfaceKitDeclaration,
   fetchCodeSurfaceSources,
   rebuildCodeSurfaceStage,
   stageCodeSurfaceFile,
@@ -23,6 +24,11 @@ import {
   type CodeSurfaceSources,
 } from './codeSurfaceApi.js';
 import { getCodeSurfaceSessionState, setCodeSurfaceSessionState } from './codeSurfaceSessionState.js';
+import {
+  createCodeSurfaceLanguageService,
+  toVfsPath,
+  type CodeSurfaceLanguageService,
+} from './codeSurfaceLanguageService.js';
 import { type CodeLanguage, tokenizeLine } from './codeTokens.js';
 import { declaredParamDefaultChanges, type DeclaredParamChange } from './editorJsonLiveDiff.js';
 import { PixelIcon } from './PixelIcon.js';
@@ -99,6 +105,11 @@ function fileDotClass(file: CodeSurfaceFile): string {
   return file.stagedBy ? ` has-staged-edits is-staged-by-${file.stagedBy}` : '';
 }
 
+// GA-04: mirrors type-check.ts's own .ts filter.
+function isTsPath(path: string): boolean {
+  return path.endsWith('.ts') || path.endsWith('.tsx');
+}
+
 export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
   const { t } = useTranslation();
   const [sources, setSources] = useState<CodeSurfaceSources | null>(null);
@@ -128,6 +139,13 @@ export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
   /** The content doc believed live in the game now — lazy-fetched, kept current by pushes. */
   const liveContentRef = useRef<EditorContentDoc | null>(null);
   const liveContentPromiseRef = useRef<Promise<EditorContentDoc | null> | null>(null);
+  const sourcesRef = useRef(sources);
+  sourcesRef.current = sources;
+
+  // GA-04: a ref, not state — languageServiceReady below signals it exists.
+  const languageServiceRef = useRef<CodeSurfaceLanguageService | null>(null);
+  const languageServiceInitRef = useRef(false);
+  const [languageServiceReady, setLanguageServiceReady] = useState(false);
 
   useEffect(() => {
     if (openedRecordedRef.current) return;
@@ -216,8 +234,54 @@ export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
     return () => document.removeEventListener('visibilitychange', onHide);
   }, [slug]);
 
+  const editable = sources !== null && !sources.readOnly;
+
+  // GA-04: keyed on editable/slug — avoids a re-fetch cleanup race.
+  useEffect(() => {
+    if (!editable || languageServiceInitRef.current) return undefined;
+    const sourcesAtStart = sourcesRef.current;
+    if (!sourcesAtStart) return undefined;
+    languageServiceInitRef.current = true;
+    let cancelled = false;
+    const initialFiles = Object.fromEntries(
+      sourcesAtStart.files
+        .filter((entry) => isTsPath(entry.path))
+        .map((entry) => [entry.path, draftsRef.current[entry.path] ?? entry.content]),
+    );
+    void (async () => {
+      const kit = await fetchCodeSurfaceKitDeclaration(slug);
+      if (cancelled) return;
+      const service = await createCodeSurfaceLanguageService(initialFiles, kit?.declaration ?? null);
+      if (cancelled) {
+        service?.destroy();
+        return;
+      }
+      languageServiceRef.current = service;
+      setLanguageServiceReady(service !== null);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [editable, slug]);
+
+  // Slug change or unmount tears the worker down for a rebuild.
+  useEffect(() => {
+    return () => {
+      languageServiceRef.current?.destroy();
+      languageServiceRef.current = null;
+      languageServiceInitRef.current = false;
+      setLanguageServiceReady(false);
+    };
+  }, [slug]);
+
   const file = useMemo(() => sources?.files.find((entry) => entry.path === selected) ?? null, [sources, selected]);
   const content = selected !== null ? (drafts[selected] ?? file?.content ?? '') : '';
+
+  // GA-05: memoized so a keystroke doesn't re-trigger the editor.
+  const languageServiceForEditor = useMemo(() => {
+    if (!languageServiceReady || !languageServiceRef.current || !file || !isTsPath(file.path)) return undefined;
+    return { worker: languageServiceRef.current.worker, path: toVfsPath(file.path) };
+  }, [languageServiceReady, file]);
 
   /** The budget meter fed by the live draft, not the last fetch — the counter has to
    * move as the creator types toward the ceiling, not jump on the next reload. */
@@ -258,6 +322,8 @@ export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
         await stageCodeSurfaceFile(slug, path, value, { rebuild: false });
         setSaveState('saved');
         recordCodeStep('edited');
+        // GA-04: syncs siblings — tsSync() only covers the focused editor.
+        if (isTsPath(path)) languageServiceRef.current?.updateFile(path, value);
         return true;
       } catch (error) {
         setSaveState('error');
@@ -430,8 +496,6 @@ export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
     );
   }
 
-  const editable = !sources.readOnly;
-
   /** CodeMirror's fallback while its chunk loads, and its permanent stand-in if that
    * chunk fails to load at all (CE-14) — the same plain textarea either way. */
   function plainTextarea(openFile: CodeSurfaceFile) {
@@ -503,6 +567,7 @@ export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
                   onChange={onEdit}
                   onSave={() => void flushPendingSaves()}
                   diagnostics={cmDiagnostics}
+                  languageService={languageServiceForEditor}
                 />
               </Suspense>
             </CodeMirrorBoundary>

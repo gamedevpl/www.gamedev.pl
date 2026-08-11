@@ -1,0 +1,117 @@
+name: Games catalog gate
+
+# The full-catalog behavioral sweep for gamedevpl/www.gamedev.pl-games — trace,
+# check:webgl, accept, agency --all --strict, agent-play, and playtest --all
+# across every game. This used to run inline in that repo's `validate` workflow
+# on every push/schedule to its main branch and was routinely landing at
+# 24-45 minutes on a single billed runner (private repo => billed Actions
+# minutes). This repo is public, so its Actions minutes are free — the sweep
+# runs here instead, against a checkout of the games repo pulled in with
+# GAMES_REPO_TOKEN (same contents:read PAT the snapshot bake and the
+# games-repo contract check already use).
+#
+# Triggered by a repository_dispatch from the games repo's `publish` job on
+# every push/schedule to its main (see
+# gamedevpl/www.gamedev.pl-games/.github/workflows/validate.yml) — so catalog
+# coverage on main is now roughly per-push instead of the old weekly-only
+# sweep. The schedule below is the safety net for a missed/failed dispatch,
+# same pattern as publish-games.yml.
+#
+# Best effort in one direction only: nothing here can block or fail a push in
+# the games repo (the dispatch step there ignores this workflow's outcome).
+# A red run here is a real finding, but it does not gate anything upstream —
+# watch this repo's Actions tab (or wire up notifications) to see it.
+
+on:
+  repository_dispatch:
+    types: [games-catalog-verify]
+  # 08:47 UTC: off the top of the hour, and clear of publish-games.yml's 04:23
+  # nightly bake so the two don't contend for the runner queue.
+  schedule:
+    - cron: '47 8 * * *'
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Games-repo ref to run the gate against'
+        required: false
+        default: 'main'
+
+# Only the newest games-repo SHA is worth verifying; a queued older run proves
+# nothing the newer one does not, and this sweep can take a while.
+concurrency:
+  group: games-catalog-gate
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  catalog-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      GAMES_REPO: 'gamedevpl/www.gamedev.pl-games'
+    steps:
+      - name: Resolve games-repo ref
+        env:
+          DISPATCH_REF: ${{ github.event.client_payload.ref }}
+          DISPATCH_SHA: ${{ github.event.client_payload.sha }}
+          INPUT_REF: ${{ github.event.inputs.ref }}
+        run: |
+          # Payload values come from another repository's workflow, so they are
+          # treated as data: passed through the environment (never interpolated
+          # into the script) and constrained before use — same discipline as
+          # publish-games.yml's ref handling.
+          REF="${DISPATCH_SHA:-${DISPATCH_REF:-${INPUT_REF:-main}}}"
+          case "$REF" in
+            *[!A-Za-z0-9._/-]*)
+              echo "Error: refusing to check out a ref with unexpected characters"
+              exit 1
+              ;;
+          esac
+          echo "GAMES_REF=${REF}" >> "$GITHUB_ENV"
+
+      - name: Check out games repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.GAMES_REPO }}
+          ref: ${{ env.GAMES_REF }}
+          token: ${{ secrets.GAMES_REPO_TOKEN }}
+          path: games-repo
+          # checkout persists the token into games-repo/.git/config by default.
+          # The steps below run npm ci and this repo's own scripts against that
+          # checkout — any of them (postinstall, a compromised dependency, the
+          # gate scripts themselves) could read and exfiltrate the token from
+          # there. It's only needed for the clone itself.
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: games-repo/package-lock.json
+
+      - name: Install dependencies
+        working-directory: games-repo
+        run: npm ci
+
+      - name: Install Chrome for WebGL / playtest
+        uses: browser-actions/setup-chrome@v1
+        id: chrome
+        with:
+          chrome-version: stable
+
+      - name: Run the full catalog behavioral gate
+        working-directory: games-repo
+        env:
+          GAME_CAPTURE_CHROME: ${{ steps.chrome.outputs.chrome-path }}
+        run: |
+          set -euo pipefail
+          npm run trace
+          npm run build
+          npm run check:webgl
+          npm run accept
+          npm run agency -- --all --strict
+          npm run agent-play
+          npm run playtest -- --all

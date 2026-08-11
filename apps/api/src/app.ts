@@ -379,6 +379,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   const submissionSeams = await registerSubmissionRoutes(app, {
     ...options.submissionRoutes,
     resolveProposalBase: resolveBaseForProposal,
+    platformConnectorSecret:
+      options.submissionRoutes?.platformConnectorSecret ?? process.env.COPILOT_MCP_CONNECTOR_SECRET,
     store,
     contentChecker,
     // So /api/mcp can tell a visitor the product is closed rather than sending them to

@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import { looksLikeCreatorAgentKey } from './agent-creator-key.js';
 import { canonicalAppBaseUrl } from './canonical-app-url.js';
@@ -283,6 +284,7 @@ const MAX_TRANSPORT_SESSIONS = 10_000;
 export interface McpServerOptions {
   store?: Store;
   agentTokenSecret?: string;
+  platformConnectorSecret?: string;
   now?: () => number;
   /**
    * Closed beta, so the endpoint can say so. The beta wall itself sits on sign-in, not
@@ -391,6 +393,7 @@ interface AuthedJob {
   issueNumber: number;
   record: SubmissionRecord;
   access: AgentTokenAccess;
+  identity: 'creator' | 'oauth' | 'round' | 'platform_connector';
   /** Round-scoped agent token for channel inject (same generation as the capability). */
   channelToken: string;
   claims: Pick<AgentTokenClaims, 'jobId' | 'roundGeneration' | 'exp'>;
@@ -422,6 +425,15 @@ function toolErr(message: string, data?: unknown): ToolResult {
     structuredContent: payload,
     isError: true,
   };
+}
+
+const PLATFORM_CONNECTOR_ONLY_REASON = 'the Copilot MCP connector must be paired with a live round key in start()';
+
+function matchesPlatformConnectorSecret(presented: string | null, expected: string | undefined): boolean {
+  if (!presented || !expected) return false;
+  const left = createHash('sha256').update(presented).digest();
+  const right = createHash('sha256').update(expected).digest();
+  return timingSafeEqual(left, right);
 }
 
 /** Job id for a coarse presence pulse — sessionKey preferred, else round Bearer. */
@@ -742,6 +754,7 @@ const KIT_ENGINE_REF_PROP = {
 export async function registerMcpServerRoutes(app: FastifyInstance, options: McpServerOptions = {}): Promise<void> {
   const store = options.store;
   const agentTokenSecret = options.agentTokenSecret ?? process.env.SUBMISSION_TOKEN_SECRET;
+  const platformConnectorSecret = options.platformConnectorSecret;
   const now = options.now ?? Date.now;
   const allowedOrigins = options.allowedOrigins ?? parseAllowedOrigins();
   const startImprovementRound = options.startImprovementRound;
@@ -771,6 +784,9 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
   ): Promise<{ ok: true; uid: string } | { ok: false; reason: string }> {
     if (!store || !agentTokenSecret) return { ok: false, reason: 'the MCP endpoint is not configured' };
     if (!bearer) return { ok: false, reason: missingCredentialHint };
+    if (matchesPlatformConnectorSecret(bearer, platformConnectorSecret)) {
+      return { ok: false, reason: PLATFORM_CONNECTOR_ONLY_REASON };
+    }
 
     if (looksLikeCreatorAgentKey(bearer)) {
       // The shared verifier, so rotation and revocation bite here exactly as they do on
@@ -928,9 +944,16 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         if (!(error instanceof InvalidAgentTokenError)) throw error;
       }
     }
+    const bearerIsPlatformConnector = matchesPlatformConnectorSecret(bearer, platformConnectorSecret);
     const preferSessionKey =
       Boolean(sessionKeyArg) &&
-      (!bearer || bearerIsOAuth || bearerIsOpener || bearerIsRetiredGameKey || bearerIsManagedOpener);
+      (!bearer ||
+        bearerIsOAuth ||
+        bearerIsOpener ||
+        bearerIsRetiredGameKey ||
+        bearerIsPlatformConnector ||
+        bearerIsManagedOpener);
+    let identity!: AuthedJob['identity'];
 
     if (preferSessionKey) {
       if (looksLikeGameAgentKey(sessionKeyArg)) {
@@ -984,6 +1007,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         now: now(),
         ttlDays: 1,
       });
+      identity = bearerIsPlatformConnector ? 'platform_connector' : 'round';
     } else if (bearerIsOAuth) {
       return toolErr(
         'OAuth access proves your identity only — call start() with your game slug (Authorization: Bearer <oauth access>) to get a session key',
@@ -998,6 +1022,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       return toolErr(
         'this session opener only opens a session via start() — pass the sessionKey start returned for later tools',
       );
+    } else if (bearerIsPlatformConnector) {
+      return toolErr(PLATFORM_CONNECTOR_ONLY_REASON);
     } else if (bearer) {
       try {
         claims = verifyAgentToken(bearer, agentTokenSecret);
@@ -1008,6 +1034,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         throw error;
       }
       channelToken = bearer;
+      identity = 'round';
     } else {
       // Possession of Mcp-Session-Id alone authorizes nothing.
       return toolErr(missingCredentialHint);
@@ -1036,6 +1063,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       issueNumber: claims.jobId,
       record,
       access,
+      identity,
       channelToken,
       claims: {
         jobId: claims.jobId,
@@ -1446,6 +1474,11 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         const slugArg = typeof args.slug === 'string' ? args.slug.trim() : '';
         const bearer = ctx.bearerToken;
 
+        if (!key && matchesPlatformConnectorSecret(bearer, platformConnectorSecret)) {
+          noteInvalidStart(ctx.request);
+          return toolErr(PLATFORM_CONNECTOR_ONLY_REASON);
+        }
+
         const bindActiveRound = async (active: SubmissionRecord): Promise<ToolResult> => {
           pruneTransportSessions(now());
           pruneInvalidStartBuckets(now());
@@ -1726,10 +1759,13 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         required: ['title', 'concept'],
       },
       handler: async (args, ctx) => {
+        const bearer = ctx.bearerToken;
+        if (matchesPlatformConnectorSecret(bearer, platformConnectorSecret)) {
+          return toolErr(PLATFORM_CONNECTOR_ONLY_REASON);
+        }
         if (!createGame || !store || !agentTokenSecret) {
           return toolErr('creating games is not available on this deployment');
         }
-        const bearer = ctx.bearerToken;
 
         // Creating a game is a creator-wide act, so only a creator-wide credential can
         // do it. A sessionKey is an in-round capability and cannot widen itself.
@@ -2077,6 +2113,10 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         const slugArg = typeof args.slug === 'string' ? args.slug.trim() : '';
         const bearer = ctx.bearerToken;
 
+        if (matchesPlatformConnectorSecret(bearer, platformConnectorSecret)) {
+          return toolErr(PLATFORM_CONNECTOR_ONLY_REASON);
+        }
+
         const feedbackRaw = typeof args.feedback === 'string' ? args.feedback.trim() : '';
         if (!feedbackRaw) {
           return toolErr('feedback is required — relay what the creator wants changed');
@@ -2289,6 +2329,10 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         const key = typeof args.key === 'string' ? args.key.trim() : '';
         const slugArg = typeof args.slug === 'string' ? args.slug.trim() : '';
         const bearer = ctx.bearerToken;
+
+        if (matchesPlatformConnectorSecret(bearer, platformConnectorSecret)) {
+          return toolErr(PLATFORM_CONNECTOR_ONLY_REASON);
+        }
 
         const feedbackRaw = typeof args.feedback === 'string' ? args.feedback.trim() : '';
         if (!feedbackRaw) {

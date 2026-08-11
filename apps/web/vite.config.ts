@@ -106,4 +106,8 @@ export default defineConfig({
       '/api': { target: apiTarget, changeOrigin: true },
     },
   },
+  // GA-02: tsWorker.ts needs code-split chunks; IIFE can't.
+  worker: {
+    format: 'es',
+  },
 });

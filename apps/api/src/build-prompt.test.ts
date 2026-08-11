@@ -26,6 +26,7 @@ describe('buildPrompt delivery contract', () => {
     expect(prompt).toContain('engine.modules array');
     expect(prompt).toContain('audio.music must be one music id string');
     expect(prompt).toContain('submit_sources');
+    expect(prompt).toContain('"key": "tok_abc"');
     expect(prompt).toContain('delivered rough');
     expect(prompt).not.toContain('npm run submit');
     expect(prompt).not.toContain('GAMEDEVPL_BUILD_TOKEN');

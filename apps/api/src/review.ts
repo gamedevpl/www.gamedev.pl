@@ -135,7 +135,9 @@ export function isReviewerSession(
   reviewerUids: Set<string> | undefined,
   adminUids: Set<string> | undefined,
 ): boolean {
-  return request.authMethod === 'session' && isReviewer(request.user?.uid, reviewerUids, adminUids);
+  // Reviewer bots (e.g. bot:grok) authenticate via PAT only, REVIEWER_UIDS-gated.
+  if (request.authMethod !== 'session' && request.authMethod !== 'token') return false;
+  return isReviewer(request.user?.uid, reviewerUids, adminUids);
 }
 
 function titleFromSubmission(record: SubmissionRecord): string {

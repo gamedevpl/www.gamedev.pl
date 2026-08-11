@@ -517,6 +517,93 @@ describe('CreatorStudioView', () => {
     root.unmount();
   });
 
+  it('keeps the chat launcher in the head actions and reveals it above covering panes', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
+    const games = manyGames(2);
+    games[0] = { ...games[0]!, slug: 'game-1', editable: true, codeSurface: true };
+    fetchStudioGames.mockResolvedValue(studioShelf(games));
+    window.history.replaceState(null, '', '/studio/token-0');
+
+    const { container, root } = await renderStudio({ selectedGame: 'token-0' });
+
+    const chat = container.querySelector<HTMLButtonElement>('.studio-strip-actions .studio-head-action--chat');
+    expect(chat).not.toBeNull();
+    expect(chat?.textContent).toContain('Chat');
+    expect(chat?.querySelector('svg')?.getAttribute('data-icon')).toBe('chat');
+    expect(chat?.getAttribute('title')).toMatch(/chat/i);
+    expect(container.querySelector('.studio-chat-rail-pill')).toBeNull();
+
+    if (chat?.getAttribute('aria-pressed') === 'true') {
+      await act(async () => {
+        chat.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+    }
+    expect(chat?.getAttribute('aria-pressed')).toBe('false');
+
+    const details = container.querySelector<HTMLButtonElement>('[aria-label="Details"]');
+    await act(async () => {
+      details!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(container.querySelector('.studio-rail')).not.toBeNull();
+
+    await act(async () => {
+      chat!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(chat?.getAttribute('aria-pressed')).toBe('true');
+    expect(container.querySelector('.studio-chat-rail.is-collapsed')).toBeNull();
+    expect(container.querySelector('.studio-rail')).toBeNull();
+
+    await act(async () => {
+      details!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(chat?.getAttribute('aria-pressed')).toBe('false');
+    expect(chat?.getAttribute('title')).toMatch(/open chat/i);
+    expect(container.querySelector('.studio-rail')).not.toBeNull();
+    expect(container.querySelector('.studio-chat-rail')?.getAttribute('aria-hidden')).toBe('true');
+    expect((container.querySelector('.studio-chat-rail') as HTMLElement & { inert: boolean }).inert).toBe(true);
+
+    await act(async () => {
+      chat!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(chat?.getAttribute('aria-pressed')).toBe('true');
+    expect(container.querySelector('.studio-chat-rail.is-collapsed')).toBeNull();
+    expect(container.querySelector('.studio-rail')).toBeNull();
+
+    await act(async () => {
+      chat!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      container
+        .querySelector<HTMLButtonElement>('[aria-label="Edit"]')!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(container.querySelector('.studio-edit-overlay')).not.toBeNull();
+
+    await act(async () => {
+      chat!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(chat?.getAttribute('aria-pressed')).toBe('true');
+    expect(container.querySelector('.studio-chat-rail.is-collapsed')).toBeNull();
+    expect(container.querySelector('.studio-edit-overlay')).toBeNull();
+
+    await act(async () => {
+      chat!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      container
+        .querySelector<HTMLButtonElement>('[aria-label="Code"]')!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(container.querySelector('.code-surface')).not.toBeNull();
+
+    await act(async () => {
+      chat!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(chat?.getAttribute('aria-pressed')).toBe('true');
+    expect(container.querySelector('.studio-chat-rail.is-collapsed')).toBeNull();
+    expect(container.querySelector('.code-surface')).not.toBeNull();
+
+    root.unmount();
+  });
+
   it('exposes draft share between Play and Details in the head actions', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
