@@ -322,7 +322,6 @@
       "rebuildError": "Could not update the preview — try again",
       "previewUpdating": "Updating preview…",
       "previewReady": "Preview updated",
-      "attestation": "This is my own work, or I have the right to use it",
       "deliver": "Publish",
       "delivering": "Publishing…",
       "deliverSuccess": "Published — the gate is checking it now.",
@@ -331,7 +330,7 @@
       "discard": "Discard changes",
       "discarding": "Discarding…",
       "discardError": "Could not discard — try again",
-      "publishHint": "Edits stay in your working copy until you publish. Publishing runs the game gate and an operator reviews it before anything goes live.",
+      "publishHint": "Publishing confirms this is your own work (or you have the right to use it), runs the game gate, and an operator reviews it before anything goes live.",
       "workingCopy": {
         "clean": "No local changes",
         "changed_one": "1 file changed · not published",

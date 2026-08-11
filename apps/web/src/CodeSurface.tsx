@@ -134,7 +134,6 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
   const [rebuildState, setRebuildState] = useState<RebuildState>('idle');
   const [rebuildError, setRebuildError] = useState(false);
   const [discardState, setDiscardState] = useState<DiscardState>('idle');
-  const [attested, setAttested] = useState(false);
   const [deliverState, setDeliverState] = useState<'idle' | 'delivering' | 'delivered'>('idle');
   const [deliverMessage, setDeliverMessage] = useState<string | null>(null);
 
@@ -458,7 +457,6 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
       setDrafts({});
       setSaveState('clean');
       setDiagnostics(null);
-      setAttested(false);
       setDeliverState('idle');
       const result = await fetchCodeSurfaceSources(slug);
       setSources(result);
@@ -471,7 +469,6 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
   }
 
   async function deliver() {
-    if (!attested) return;
     setDeliverState('delivering');
     setDeliverMessage(null);
     try {
@@ -481,6 +478,7 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
         setDeliverMessage(t('studioPanel.code.deliverError'));
         return;
       }
+      // Publish click is the attestation; API still gets attestation:true.
       const outcome = await deliverCodeSurface(slug, 'publish');
       if (outcome.accepted) {
         recordCodeStep('delivered');
@@ -488,7 +486,6 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
         setDeliverMessage(t('studioPanel.code.deliverSuccess'));
         setDrafts({});
         setSaveState('clean');
-        setAttested(false);
         // Delivery clears the staging buffer server-side — refresh the rail dots.
         load(false);
       } else {
@@ -676,14 +673,10 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
           </div>
 
           <div className="code-surface-deliver">
-            <label className="code-surface-attestation">
-              <input type="checkbox" checked={attested} onChange={(event) => setAttested(event.target.checked)} />
-              {t('studioPanel.code.attestation')}
-            </label>
             <button
               type="button"
               className="code-surface-deliver-btn studio-head-action is-primary"
-              disabled={!attested || !hasWorkingCopy || deliverState === 'delivering' || discardState === 'discarding'}
+              disabled={!hasWorkingCopy || deliverState === 'delivering' || discardState === 'discarding'}
               onClick={() => void deliver()}
             >
               {deliverState === 'delivering' ? t('studioPanel.code.delivering') : t('studioPanel.code.deliver')}

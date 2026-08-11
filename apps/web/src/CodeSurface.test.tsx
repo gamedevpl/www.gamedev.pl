@@ -348,10 +348,6 @@ describe('CodeSurface', () => {
       renderTsButton.click();
     });
 
-    const attestCheckbox = container.querySelector<HTMLInputElement>('.code-surface-attestation input')!;
-    await act(async () => {
-      attestCheckbox.click();
-    });
     const publishButton = container.querySelector<HTMLButtonElement>('.code-surface-deliver-btn')!;
     await act(async () => {
       publishButton.click();
@@ -376,10 +372,6 @@ describe('CodeSurface', () => {
       typeInto(container.querySelector('textarea')!, 'export const boot = () => { /* edited */ };');
     });
 
-    const attestCheckbox = container.querySelector<HTMLInputElement>('.code-surface-attestation input')!;
-    await act(async () => {
-      attestCheckbox.click();
-    });
     const deliverButton = container.querySelector<HTMLButtonElement>('.code-surface-deliver-btn')!;
     await act(async () => {
       deliverButton.click();

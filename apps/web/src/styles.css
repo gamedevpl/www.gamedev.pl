@@ -11765,15 +11765,6 @@ button.builder-mode-selector:disabled {
   gap: 10px;
 }
 
-.code-surface-attestation {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.76rem;
-  color: var(--muted);
-  cursor: pointer;
-}
-
 .code-surface-deliver-btn {
   margin-left: auto;
 }
@@ -11794,42 +11785,6 @@ button.builder-mode-selector:disabled {
   font-size: 0.72rem;
   color: var(--muted);
   line-height: 1.35;
-}
-
-.code-surface-attestation:hover {
-  color: var(--text);
-}
-
-.code-surface-attestation input {
-  appearance: none;
-  flex: none;
-  width: 15px;
-  height: 15px;
-  margin: 0;
-  border-radius: 4px;
-  border: 1px solid var(--panel-border);
-  background: transparent;
-  cursor: pointer;
-  display: inline-grid;
-  place-content: center;
-}
-
-.code-surface-attestation input:checked {
-  border-color: var(--turquoise);
-  background: rgba(0, 228, 172, 0.16);
-}
-
-.code-surface-attestation input:checked::before {
-  content: '';
-  width: 7px;
-  height: 7px;
-  background: var(--turquoise);
-  clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
-}
-
-.code-surface-attestation input:focus-visible {
-  outline: 2px solid rgba(0, 228, 172, 0.5);
-  outline-offset: 1px;
 }
 
 @media (max-width: 1099px) {

@@ -675,9 +675,8 @@ export async function registerCreatorCodeRoutes(
   const DeliverInputSchema = z.object({
     mode: z.enum(['preview', 'publish']),
     /**
-     * CE-18's IP attestation: "this is your own work, or you have the right to use
-     * it" — a product sentence, not drafted legal text (counsel reviews the wording
-     * later, §4). Must be explicitly true; there is no default.
+     * CE-18's IP attestation: recorded on every delivery. Studio treats the
+     * Publish click itself as the confirmation (no separate checkbox).
      */
     attestation: z.literal(true),
   });
