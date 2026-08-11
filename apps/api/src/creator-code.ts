@@ -810,7 +810,12 @@ export async function registerCreatorCodeRoutes(
           // Publish consumes the buffer, like agent fromStaged submit.
           await gamesStore
             .clearStagedSources({ slug, issueNumber: record.issueNumber, roundGeneration })
-            .catch(() => {});
+            .catch((error: unknown) => {
+              request.log.warn(
+                { err: error, issueNumber: record.issueNumber, slug },
+                'code surface deliver: could not clear working copy after publish',
+              );
+            });
         }
         options.invalidateStatusCache?.(record.issueNumber);
         return reply.send(outcome);

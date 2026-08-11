@@ -99,6 +99,8 @@ function isTsPath(path: string): boolean {
 }
 
 function markFileStaged(sources: CodeSurfaceSources, path: string, content: string): CodeSurfaceSources {
+  const lines = content.split('\n').length;
+  const bytes = new TextEncoder().encode(content).length;
   return {
     ...sources,
     files: sources.files.map((entry) =>
@@ -110,11 +112,9 @@ function markFileStaged(sources: CodeSurfaceSources, path: string, content: stri
             budget: entry.budget
               ? {
                   ...entry.budget,
-                  lines: content.split('\n').length,
-                  bytes: new TextEncoder().encode(content).length,
-                  oversize:
-                    content.split('\n').length > entry.budget.maxLines ||
-                    new TextEncoder().encode(content).length > entry.budget.maxBytes,
+                  lines,
+                  bytes,
+                  oversize: lines > entry.budget.maxLines || bytes > entry.budget.maxBytes,
                 }
               : undefined,
           }
@@ -145,6 +145,7 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
   const saveTimersRef = useRef<Map<string, number>>(new Map());
   const typecheckTimerRef = useRef<number | null>(null);
   const previewTimerRef = useRef<number | null>(null);
+  const cooldownTimerRef = useRef<number | null>(null);
   const lastRebuildAtRef = useRef(0);
   const draftsRef = useRef(drafts);
   draftsRef.current = drafts;
@@ -225,6 +226,7 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
       saveTimersRef.current.clear();
       if (typecheckTimerRef.current !== null) window.clearTimeout(typecheckTimerRef.current);
       if (previewTimerRef.current !== null) window.clearTimeout(previewTimerRef.current);
+      if (cooldownTimerRef.current !== null) window.clearTimeout(cooldownTimerRef.current);
     },
     [slug],
   );
@@ -339,6 +341,10 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
 
   const schedulePreviewRebuild = useCallback(() => {
     if (previewTimerRef.current !== null) window.clearTimeout(previewTimerRef.current);
+    if (cooldownTimerRef.current !== null) {
+      window.clearTimeout(cooldownTimerRef.current);
+      cooldownTimerRef.current = null;
+    }
     const arm = () => {
       previewTimerRef.current = null;
       const since = Date.now() - lastRebuildAtRef.current;
@@ -353,7 +359,10 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
           recordCodeStep('previewed');
           lastRebuildAtRef.current = Date.now();
           setRebuildState('cooling');
-          window.setTimeout(() => setRebuildState('idle'), STAGE_REBUILD_COOLDOWN_MS);
+          cooldownTimerRef.current = window.setTimeout(() => {
+            cooldownTimerRef.current = null;
+            setRebuildState('idle');
+          }, STAGE_REBUILD_COOLDOWN_MS);
         })
         .catch(() => {
           setRebuildError(true);
@@ -676,6 +685,7 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
             <span
               className="code-surface-publish-hint"
               aria-label={t('studioPanel.code.publishHintTitle')}
+              tabIndex={0}
               title={t('studioPanel.code.publishHintTitle')}
             >
               {t('studioPanel.code.publishHint')}

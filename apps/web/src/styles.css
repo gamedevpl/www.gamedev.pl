@@ -11792,6 +11792,11 @@ button.builder-mode-selector:disabled {
   cursor: help;
 }
 
+.code-surface-publish-hint:focus-visible {
+  outline: 2px solid rgba(0, 228, 172, 0.5);
+  outline-offset: 2px;
+}
+
 @media (max-width: 1099px) {
   .code-surface-body {
     grid-template-columns: minmax(0, 1fr);
