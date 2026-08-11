@@ -13,21 +13,21 @@ judgment_ from someone who knows what the shelf should feel like.
 
 ## Shape
 
-| Piece         | Choice                                                                                                                               |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| Role          | Env allowlist `REVIEWER_UIDS` (comma UIDs). Admins are reviewers too. Session-only, same posture as `ADMIN_UIDS` — PATs never count. |
-| Surface       | Unlisted `/review`. 404 to everyone else (API answers 404, not 403).                                                                 |
-| Queue         | **Catalog** (published) and **Creator** (delivered, shared drafts that are not yet published). Private unshared drafts stay private. |
-| Gesture       | Swipe right = keep, left = cut, down/button = skip. Keyboard: `→` / `←` / `↓`.                                                       |
-| Preview       | Catalog **MP4 + screenshots** first (gate media). Optional **Try play** opens full-screen theater (no play telemetry, no remix).     |
-| Mobile dock   | Note + Cut/Skip/Keep sit in a **sticky bottom dock** (thumb zone). Install/update banners lift the dock via `:has(...)`.             |
-| Rationale     | **Required** free text and/or speech-to-text (same Web Speech API as the hero mic). Transcript only — no audio upload.               |
-| Checklist     | Required marks for **graphics / gameplay / fun / sound / controls** — each `ok` · `weak` · `bad`.                                    |
-| Client env    | Viewport, screen size, DPR, input method (`touch`/`mouse`/`mixed`), platform, lang, truncated UA — stored on the row at commit time. |
-| Storage       | `gameAssessments/{slug}:{reviewerUid}` — one row per reviewer per game; a second pass overwrites.                                    |
-| Operator read | `/admin/assessments` — **review sweeps** (dispatch / rate / pause / notify) plus keep/cut aggregates and recent notes.               |
-| Sweeps        | Operator opens a bounded pass; desk shows only the released prefix. `releasePerDay` drips by 24h from `startedAt`; manual Release.   |
-| Notify        | Starting or re-notifying a sweep fans out `operator.review_sweep` to `REVIEWER_UIDS` ∪ admins (in-app + email + push).               |
+| Piece         | Choice                                                                                                                                                                 |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Role          | Env allowlist `REVIEWER_UIDS` (comma UIDs). Admins are reviewers too. Session-only, same posture as `ADMIN_UIDS` — PATs never count.                                   |
+| Surface       | Unlisted `/review`. 404 to everyone else (API answers 404, not 403).                                                                                                   |
+| Queue         | **Catalog** (published) and **Creator** (delivered, shared drafts that are not yet published). Private unshared drafts stay private.                                   |
+| Gesture       | Swipe right = keep, left = cut, down/button = skip. Keyboard: `→` / `←` / `↓`.                                                                                         |
+| Preview       | Catalog **MP4 + screenshots** first (gate media). Optional **Try play** opens full-screen theater (no play telemetry, no remix).                                       |
+| Mobile dock   | Note + Cut/Skip/Keep sit in a **bottom dock** (thumb zone). The desk owns the window like Studio; install/update banners join the column instead of covering the game. |
+| Rationale     | **Required** free text and/or speech-to-text (same Web Speech API as the hero mic). Transcript only — no audio upload.                                                 |
+| Checklist     | Required marks for **graphics / gameplay / fun / sound / controls** — each `ok` · `weak` · `bad`.                                                                      |
+| Client env    | Viewport, screen size, DPR, input method (`touch`/`mouse`/`mixed`), platform, lang, truncated UA — stored on the row at commit time.                                   |
+| Storage       | `gameAssessments/{slug}:{reviewerUid}` — one row per reviewer per game; a second pass overwrites.                                                                      |
+| Operator read | `/admin/assessments` — **review sweeps** (dispatch / rate / pause / notify) plus keep/cut aggregates and recent notes.                                                 |
+| Sweeps        | Operator opens a bounded pass; desk shows only the released prefix. `releasePerDay` drips by 24h from `startedAt`; manual Release.                                     |
+| Notify        | Starting or re-notifying a sweep fans out `operator.review_sweep` to `REVIEWER_UIDS` ∪ admins (in-app + email + push).                                                 |
 
 ## Non-goals (this steel thread)
 

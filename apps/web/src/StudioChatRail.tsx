@@ -82,7 +82,7 @@ export function StudioChatRail({
   // The install/update banner pins to the bottom edge too (reflowed in-flow while a
   // game is open, see styles.css around `.studio-layout.is-game-open .install-prompt`)
   // — without this, the viewport-fixed sheet paints over its dismiss/reload controls
-  // instead of sitting above them. Same measured-lift pattern as ReviewDesk's sticky dock.
+  // instead of sitting above them.
   useEffect(() => {
     if (typeof ResizeObserver === 'undefined') return;
     const root = document.documentElement;

@@ -1,0 +1,58 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { describe, expect, it } from 'vitest';
+
+const css = readFileSync(fileURLToPath(new URL('./styles.css', import.meta.url)), 'utf8').replace(
+  /\/\*[\s\S]*?\*\//g,
+  '',
+);
+
+function ruleBody(selector: string): string {
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = new RegExp(`(?:^|})\\s*${escaped}\\s*\\{([^}]+)\\}`, 'm').exec(css);
+  expect(match, `no ${selector} rule in styles.css`).not.toBeNull();
+  return match![1]!;
+}
+
+// Refuse a revert that drops the review shell or keyboard escape path.
+describe('review desk shell', () => {
+  it('claims the window while the desk is mounted', () => {
+    expect(css).toMatch(/\.app:has\(\.review-desk\)\s*\{/);
+    expect(ruleBody('.app:has(.review-desk)')).toMatch(/height:\s*100dvh/);
+    expect(ruleBody('.app:has(.review-desk)')).toMatch(/overflow:\s*hidden/);
+    expect(css).toMatch(/\.app:has\(\.review-desk\)\s*>\s*\.content\s*\{/);
+    expect(css).toMatch(/\.app:has\(\.review-desk\)\s*\.site-footer\s*\{/);
+  });
+
+  it('pulls install/update banners into the column instead of covering the dock', () => {
+    expect(css).toMatch(
+      /\.app:has\(\.review-desk\)\s*\.install-prompt\s*,\s*\.app:has\(\.review-desk\)\s*\.app-update\s*\{[\s\S]*?position:\s*static/,
+    );
+    expect(css).not.toMatch(/--review-overlay-lift/);
+  });
+
+  it('keeps a floor under the media scroller and a ceiling on the dock', () => {
+    const scroll = ruleBody('.review-scroll');
+    expect(scroll).toMatch(/min-height:\s*min\(32dvh,\s*200px\)/);
+    expect(scroll).toMatch(/flex:\s*1\s+1\s+40%/);
+
+    const dock = ruleBody('.review-dock');
+    expect(dock).toMatch(/max-height:\s*min\(48dvh,\s*420px\)/);
+    expect(dock).toMatch(/min-height:\s*0/);
+    expect(dock).toMatch(/overflow-y:\s*auto/);
+    expect(dock).not.toMatch(/position:\s*sticky/);
+
+    const checklist = ruleBody('.review-checklist');
+    expect(checklist).toMatch(/flex:\s*none/);
+    expect(checklist).toMatch(/overflow:\s*visible/);
+
+    const play = ruleBody('.review-play-btn.is-overlay');
+    expect(play).toMatch(/top:\s*0\.55rem/);
+    expect(play).not.toMatch(/bottom:\s*0\.55rem/);
+
+    const keep = ruleBody('.review-stamp.is-keep');
+    expect(keep).toMatch(/left:\s*50%/);
+    expect(keep).toMatch(/right:\s*auto/);
+    expect(keep).toMatch(/translateX\(-50%\)/);
+  });
+});

@@ -139,39 +139,6 @@ export function ReviewDesk() {
     };
   }, [authLoading, user?.reviewer, source]);
 
-  // Measure install/update banners; lift the sticky dock.
-  useEffect(() => {
-    if (typeof ResizeObserver === 'undefined') return;
-    const root = document.documentElement;
-    const measure = () => {
-      const overlay = document.querySelector('.install-prompt, .app-update') as HTMLElement | null;
-      if (!overlay) {
-        root.style.removeProperty('--review-overlay-lift');
-        return;
-      }
-      const top = overlay.getBoundingClientRect().top;
-      const lift = Math.max(0, Math.ceil(window.innerHeight - top + 8));
-      root.style.setProperty('--review-overlay-lift', `${lift}px`);
-    };
-    measure();
-    const resizeObserver = new ResizeObserver(measure);
-    const watchOverlays = () => {
-      resizeObserver.disconnect();
-      document.querySelectorAll('.install-prompt, .app-update').forEach((node) => resizeObserver.observe(node));
-      measure();
-    };
-    watchOverlays();
-    const mutationObserver = new MutationObserver(watchOverlays);
-    mutationObserver.observe(document.body, { childList: true, subtree: true });
-    window.addEventListener('resize', measure);
-    return () => {
-      resizeObserver.disconnect();
-      mutationObserver.disconnect();
-      window.removeEventListener('resize', measure);
-      root.style.removeProperty('--review-overlay-lift');
-    };
-  }, []);
-
   // Open theater when preview media is missing.
   useEffect(() => {
     if (!current) return;
