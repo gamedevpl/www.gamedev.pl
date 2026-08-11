@@ -13,7 +13,11 @@ import {
   type CodeSurfaceSources,
 } from './codeSurfaceApi.js';
 import { getCodeSurfaceSessionState, setCodeSurfaceSessionState } from './codeSurfaceSessionState.js';
-import { createCodeSurfaceLanguageService, type CodeSurfaceLanguageService } from './codeSurfaceLanguageService.js';
+import {
+  createCodeSurfaceLanguageService,
+  toVfsPath,
+  type CodeSurfaceLanguageService,
+} from './codeSurfaceLanguageService.js';
 import { type CodeLanguage, tokenizeLine } from './codeTokens.js';
 import { PixelIcon } from './PixelIcon.js';
 import { recordCodeStep } from './visitTelemetry.js';
@@ -116,6 +120,8 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
   const typecheckTimerRef = useRef<number | null>(null);
   const draftsRef = useRef(drafts);
   draftsRef.current = drafts;
+  const sourcesRef = useRef(sources);
+  sourcesRef.current = sources;
 
   /** GA-04: the worker-backed language service (GA-02/GA-03). A ref, not state — its
    * identity must survive re-renders untouched; `languageServiceReady` below is the
@@ -216,12 +222,23 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
   // lands for an editable surface, seeded with every `.ts`/`.tsx` file plus the kit
   // declaration (GA-01). Advisory only (§1.1) — a slow or failed init just means
   // `languageServiceReady` never flips, and CodeMirror stays a plain editor (GA-06).
+  //
+  // Deliberately keyed on `editable`/`slug`, not `sources` itself: `sources` gets a
+  // fresh object identity on every fetch (StrictMode's double-invoked initial load
+  // in dev being the sharpest example, but any future re-fetch has the same shape),
+  // and re-running this effect on every one of those would race its own cleanup —
+  // the `cancelled` flag from the first run would flip before its async work reaches
+  // `createCodeSurfaceLanguageService`, silently dropping the worker with no error to
+  // show for it. Reading `sourcesRef.current` inside instead means this only fires
+  // when *editability itself* changes (surface loads, or an agent round ends).
   useEffect(() => {
-    if (!sources || !editable || languageServiceInitRef.current) return undefined;
+    if (!editable || languageServiceInitRef.current) return undefined;
+    const sourcesAtStart = sourcesRef.current;
+    if (!sourcesAtStart) return undefined;
     languageServiceInitRef.current = true;
     let cancelled = false;
     const initialFiles = Object.fromEntries(
-      sources.files
+      sourcesAtStart.files
         .filter((entry) => isTsPath(entry.path))
         .map((entry) => [entry.path, draftsRef.current[entry.path] ?? entry.content]),
     );
@@ -239,7 +256,7 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
     return () => {
       cancelled = true;
     };
-  }, [sources, editable, slug]);
+  }, [editable, slug]);
 
   // Slug change (switching games without unmounting CodeSurface) tears the old
   // worker down and lets the effect above rebuild one for the new slug; unmount does
@@ -255,6 +272,15 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
 
   const file = useMemo(() => sources?.files.find((entry) => entry.path === selected) ?? null, [sources, selected]);
   const content = selected !== null ? (drafts[selected] ?? file?.content ?? '') : '';
+
+  /** GA-05: memoized so CodeMirrorEditor's reconfigure effect only fires when the
+   * worker actually becomes ready or the open file changes — not on every keystroke
+   * (an object literal in the JSX below would get a fresh identity on every one of
+   * `content`'s re-renders otherwise). */
+  const languageServiceForEditor = useMemo(() => {
+    if (!languageServiceReady || !languageServiceRef.current || !file || !isTsPath(file.path)) return undefined;
+    return { worker: languageServiceRef.current.worker, path: toVfsPath(file.path) };
+  }, [languageServiceReady, file]);
 
   /** The budget meter fed by the live draft, not the last fetch — the counter has to
    * move as the creator types toward the ceiling, not jump on the next reload. */
@@ -502,22 +528,13 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
             <CodeMirrorBoundary fallback={plainTextarea(file)}>
               <Suspense fallback={plainTextarea(file)}>
                 <LazyCodeMirrorEditor
-                  // GA-05: the worker (GA-04) usually isn't ready on the very first
-                  // paint — appending its readiness to the key forces exactly one
-                  // remount, the moment it becomes available for this file, so the
-                  // TS-backed extensions below get installed without waiting for the
-                  // creator to switch files.
-                  key={`${selected}:${languageServiceReady ? 'ts' : 'plain'}`}
+                  key={selected}
                   value={content}
                   language={languageFor(file.path)}
                   onChange={onEdit}
                   onSave={() => void flushPendingSaves()}
                   diagnostics={cmDiagnostics}
-                  languageService={
-                    languageServiceReady && languageServiceRef.current && isTsPath(file.path)
-                      ? { worker: languageServiceRef.current.worker, path: file.path }
-                      : undefined
-                  }
+                  languageService={languageServiceForEditor}
                 />
               </Suspense>
             </CodeMirrorBoundary>

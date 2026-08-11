@@ -44,6 +44,9 @@ vi.mock('./codeSurfaceApi.js', async () => {
 
 vi.mock('./codeSurfaceLanguageService.js', () => ({
   createCodeSurfaceLanguageService: vi.fn(),
+  // Real implementation, not a mock: pure string logic CodeSurface.tsx calls
+  // directly (not through the worker), and the tests assert on its output.
+  toVfsPath: (path: string) => (path.startsWith('/') ? path : `/${path}`),
 }));
 
 const mockedApi = vi.mocked(codeSurfaceApi);
@@ -161,7 +164,9 @@ describe('CodeSurface language-service degradation (GA-06)', () => {
       { 'game.ts': 'export const boot = () => {};' },
       'declare const x: 1;',
     );
-    expect(lastEditorProps?.languageService).toEqual({ worker, path: 'game.ts' });
+    // @typescript/vfs roots every path at "/" (codeSurfaceLanguageService.ts's toVfsPath) —
+    // the facet path handed to CodeMirror must match what the worker actually seeded.
+    expect(lastEditorProps?.languageService).toEqual({ worker, path: '/game.ts' });
   });
 
   it('syncs a saved .ts file to the ready worker, without touching non-.ts saves', async () => {

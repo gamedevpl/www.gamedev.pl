@@ -7,12 +7,20 @@ import { json } from '@codemirror/lang-json';
 import { markdown } from '@codemirror/lang-markdown';
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { forceLinting, linter, lintGutter, type Diagnostic as CmDiagnostic } from '@codemirror/lint';
-import { EditorState, type Extension } from '@codemirror/state';
+import { Compartment, EditorState, type Extension } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
 import { tags } from '@lezer/highlight';
 import { basicSetup } from 'codemirror';
 import { useEffect, useRef } from 'react';
-import { tsAutocomplete, tsFacet, tsHover, tsLintSource, tsSync } from '@valtown/codemirror-ts';
+import {
+  renderDisplayParts,
+  tsAutocomplete,
+  tsFacet,
+  tsHover,
+  tsLintSource,
+  tsSync,
+  type HoverInfo,
+} from '@valtown/codemirror-ts';
 import type { WorkerShape } from '@valtown/codemirror-ts/worker';
 import type { CodeLanguage } from './codeTokens.js';
 
@@ -126,6 +134,26 @@ const tsAdvisoryLintSource = async (view: EditorView): Promise<CmDiagnostic[]> =
   return found.map((d) => (d.severity === 'error' ? { ...d, severity: 'warning' as const } : d));
 };
 
+/**
+ * GA-07's own acceptance bar names this explicitly: hovering a kit-typed parameter
+ * must show the kit's doc comment, not just its type. `tsHover()`'s own default
+ * renderer (`defaultRenderer` in `@valtown/codemirror-ts`) only renders
+ * `quickInfo.displayParts` — the signature — and drops `quickInfo.documentation`
+ * entirely, so the `/** ... *\/` on a kit interface never reaches the tooltip
+ * without this.
+ */
+function renderHoverTooltip(info: HoverInfo) {
+  const dom = document.createElement('div');
+  if (info.quickInfo?.displayParts) dom.appendChild(renderDisplayParts(info.quickInfo.displayParts));
+  if (info.quickInfo?.documentation?.length) {
+    const doc = document.createElement('div');
+    doc.className = 'cm-ts-hover-doc';
+    doc.textContent = info.quickInfo.documentation.map((part) => part.text).join('');
+    dom.appendChild(doc);
+  }
+  return { dom };
+}
+
 function toCmDiagnostics(view: EditorView, diagnostics: CodeMirrorDiagnostic[]): CmDiagnostic[] {
   const doc = view.state.doc;
   const out: CmDiagnostic[] = [];
@@ -135,6 +163,21 @@ function toCmDiagnostics(view: EditorView, diagnostics: CodeMirrorDiagnostic[]):
     out.push({ from: line.from, to: line.to, severity: diagnostic.severity ?? 'error', message: diagnostic.message });
   }
   return out;
+}
+
+/** GA-05: tsFacet/tsSync/tsAutocomplete/tsHover/advisory-tsLinter, or nothing — the
+ * worker (GA-04) usually isn't ready on first mount, and can also become ready
+ * *while* the creator is mid-file, so this has to be able to turn on live rather
+ * than only at mount (see `languageServiceCompartment` below for how). */
+function languageServiceExtensions(languageService: CodeMirrorLanguageService | undefined): Extension[] {
+  if (!languageService) return [];
+  return [
+    tsFacet.of({ worker: languageService.worker, path: languageService.path }),
+    tsSync(),
+    autocompletion({ override: [tsAutocomplete()] }),
+    tsHover({ renderTooltip: renderHoverTooltip }),
+    linter(tsAdvisoryLintSource),
+  ];
 }
 
 export default function CodeMirrorEditor({
@@ -157,6 +200,12 @@ export default function CodeMirrorEditor({
   onSaveRef.current = onSave;
   const diagnosticsRef = useRef(diagnostics);
   diagnosticsRef.current = diagnostics;
+  // GA-05: a Compartment, not baked into the mount-once extensions list below — the
+  // worker can finish loading *after* this editor is already mounted and the creator
+  // is already typing, and reconfiguring the compartment updates the live view in
+  // place (keeping cursor, undo history, and focus) instead of the remount a prop
+  // change would otherwise force.
+  const languageServiceCompartmentRef = useRef(new Compartment());
 
   useEffect(() => {
     if (!containerRef.current) return undefined;
@@ -180,17 +229,7 @@ export default function CodeMirrorEditor({
           ...(langExt ? [langExt] : []),
           lintGutter(),
           linter((v) => toCmDiagnostics(v, diagnosticsRef.current)),
-          // GA-05: only once the worker (GA-04) has a language service ready for this
-          // file — see CodeMirrorLanguageService's own doc comment for what "ready" means.
-          ...(languageService
-            ? [
-                tsFacet.of({ worker: languageService.worker, path: languageService.path }),
-                tsSync(),
-                autocompletion({ override: [tsAutocomplete()] }),
-                tsHover(),
-                linter(tsAdvisoryLintSource),
-              ]
-            : []),
+          languageServiceCompartmentRef.current.of(languageServiceExtensions(languageService)),
           EditorView.editable.of(!readOnly),
           EditorView.updateListener.of((update) => {
             if (update.docChanged) onChangeRef.current(update.state.doc.toString());
@@ -206,12 +245,20 @@ export default function CodeMirrorEditor({
       view.destroy();
       viewRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount once per keyed instance; value/onChange/diagnostics flow through refs above; languageService's caller keys this component on its readiness, so a change here always means a remount too
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount once per keyed instance; value/onChange/diagnostics flow through refs above; languageService's initial value is captured here too, live changes go through the compartment-reconfigure effect below
   }, []);
 
   useEffect(() => {
     if (viewRef.current) forceLinting(viewRef.current);
   }, [diagnostics]);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    view.dispatch({
+      effects: languageServiceCompartmentRef.current.reconfigure(languageServiceExtensions(languageService)),
+    });
+  }, [languageService]);
 
   return <div ref={containerRef} className="code-surface-codemirror" data-testid="codemirror-editor" />;
 }

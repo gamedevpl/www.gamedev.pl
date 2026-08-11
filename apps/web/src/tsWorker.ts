@@ -25,7 +25,11 @@ async function loadLibFiles(): Promise<Map<string, string>> {
     needed.map(async (fileName) => {
       const entry = Object.entries(libLoaders).find(([path]) => path.endsWith(`/${fileName}`));
       if (!entry) return;
-      map.set(fileName, await entry[1]());
+      // @typescript/vfs roots every path at "/" — its own getDefaultLibFileName()
+      // asks the system for "/lib.es2022.d.ts", not the bare name. Keyed any other
+      // way, the default lib silently never resolves and every global (Math, Array,
+      // ...) reads as unknown, which is a much stranger failure than a missing file.
+      map.set(`/${fileName}`, await entry[1]());
     }),
   );
   return map;
