@@ -673,6 +673,13 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
           </div>
 
           <div className="code-surface-deliver">
+            <span
+              className="code-surface-publish-hint"
+              aria-label={t('studioPanel.code.publishHintTitle')}
+              title={t('studioPanel.code.publishHintTitle')}
+            >
+              {t('studioPanel.code.publishHint')}
+            </span>
             <button
               type="button"
               className="code-surface-deliver-btn studio-head-action is-primary"
@@ -693,7 +700,6 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
               {deliverMessage}
             </span>
           ) : null}
-          <p className="code-surface-publish-hint">{t('studioPanel.code.publishHint')}</p>
         </footer>
       ) : null}
     </div>

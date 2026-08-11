@@ -348,6 +348,13 @@ describe('CodeSurface', () => {
       renderTsButton.click();
     });
 
+    expect(container.querySelector('.code-surface-attestation')).toBeNull();
+    const publishHint = container.querySelector<HTMLElement>('.code-surface-publish-hint')!;
+    expect(publishHint.parentElement?.classList.contains('code-surface-deliver')).toBe(true);
+    expect(publishHint.textContent).toContain('Confirms your right');
+    expect(publishHint.title).toContain('Publishing confirms');
+    expect(publishHint.getAttribute('aria-label')).toBe(publishHint.title);
+
     const publishButton = container.querySelector<HTMLButtonElement>('.code-surface-deliver-btn')!;
     await act(async () => {
       publishButton.click();

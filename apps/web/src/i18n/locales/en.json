@@ -330,7 +330,8 @@
       "discard": "Discard changes",
       "discarding": "Discarding…",
       "discardError": "Could not discard — try again",
-      "publishHint": "Publishing confirms this is your own work (or you have the right to use it), runs the game gate, and an operator reviews it before anything goes live.",
+      "publishHint": "Confirms your right to use this work.",
+      "publishHintTitle": "Publishing confirms this is your own work (or you have the right to use it), runs the game gate, and an operator reviews it before anything goes live.",
       "workingCopy": {
         "clean": "No local changes",
         "changed_one": "1 file changed · not published",

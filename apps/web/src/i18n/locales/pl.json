@@ -332,7 +332,8 @@
       "discard": "Odrzuć zmiany",
       "discarding": "Odrzucanie…",
       "discardError": "Nie udało się odrzucić — spróbuj ponownie",
-      "publishHint": "Publikacja potwierdza, że to Twoja własna praca (lub masz prawo jej używać), uruchamia bramkę, a operator zatwierdza wejście na żywo.",
+      "publishHint": "Potwierdzasz prawo do użycia tej pracy.",
+      "publishHintTitle": "Publikacja potwierdza, że to Twoja własna praca (lub masz prawo jej używać), uruchamia bramkę, a operator zatwierdza wejście na żywo.",
       "workingCopy": {
         "clean": "Brak lokalnych zmian",
         "changed_one": "1 plik zmieniony · nieopublikowany",

@@ -11781,10 +11781,15 @@ button.builder-mode-selector:disabled {
 }
 
 .code-surface-publish-hint {
-  margin: 0;
-  font-size: 0.72rem;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.68rem;
   color: var(--muted);
-  line-height: 1.35;
+  line-height: 1.25;
+  cursor: help;
 }
 
 @media (max-width: 1099px) {
