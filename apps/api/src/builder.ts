@@ -82,12 +82,9 @@ export function allowsCreatorBuilderHandoff(input: {
 /**
  * Whether creator feedback should only go to the build-channel inbox (no new dispatch).
  *
- * An in-flight round that already has a dispatch ref has an agent that will poll the
- * inbox — including after delivery while the gate runs, and on gate-red / kit_outdated
- * repair, where the same session is often still alive. Starting another Copilot task on
- * top of that is what produced concurrent builds of one game.
- *
- * Ended or stalled platform rounds restart instead.
+ * Live rounds with dispatch refs steer feedback through the inbox, including gate waits
+ * and gate-red repair while the same session remains alive. Starting another Copilot task
+ * caused concurrent builds of one game.
  *
  * Excludes `publishing`: reaching it already closed the round (token generation bumped),
  * so no session can collect inbox mail — the feedback route rejects that state instead.
