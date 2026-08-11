@@ -425,6 +425,14 @@ creator **self→platform** handoff immediately). Still call **`end`**:
 - Without `end`, your session may look finished while still connected; quiet
   (~15 minutes) remains a fallback only
 
+### Submit handoff is not an explicit end
+
+`submit_sources` also marks `agentEndedAt` optimistically so creator handoff unlocks
+immediately. That marker does **not** prove the platform session stopped: an agent may
+still be iterating locally and clear it with its next channel write. Feedback routing must
+distinguish the submit marker from an explicit `end` (or a confirmed terminal vendor state)
+before superseding a platform session. The API records this as `agentEndedBy: submit | end`.
+
 ### `end({ summary })` is the only channel for a closing answer
 
 The platform reads tool calls, never the agent's transcript. An agent that answers

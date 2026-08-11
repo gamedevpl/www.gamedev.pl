@@ -102,17 +102,21 @@ export function shouldSteerFeedbackViaInbox(
     dispatch?: { refs?: readonly string[] } | null;
     builder?: BuilderKind;
     agentEndedAt?: string | null;
+    agentEndedBy?: 'submit' | 'end';
+    agentState?: string;
   },
   opts?: { builderChanging?: boolean; stall?: JobStall | null },
 ): boolean {
   if (opts?.builderChanging) return false;
   if (record.state === 'publishing') return false;
   if (!isActiveBuildRound(record)) return false;
-  // A platform session that ended or stalled cannot collect another inbox note.
-  if (
-    (record.builder ?? 'platform') === 'platform' &&
-    (record.agentEndedAt || opts?.stall === 'not_dispatched' || opts?.stall === 'quiet' || opts?.stall === 'ended')
-  ) {
+  // A terminal platform session cannot collect another inbox note.
+  const terminalAgent = ['completed', 'failed', 'timed_out', 'cancelled'].includes(record.agentState ?? '');
+  const submitMarkerActive = record.agentEndedAt && record.agentEndedBy === 'submit' && !terminalAgent;
+  const platformSessionEnded = Boolean(record.agentEndedAt) && !submitMarkerActive;
+  const platformStalled =
+    opts?.stall === 'not_dispatched' || opts?.stall === 'quiet' || (opts?.stall === 'ended' && !submitMarkerActive);
+  if ((record.builder ?? 'platform') === 'platform' && (platformSessionEnded || platformStalled)) {
     return false;
   }
   return (record.dispatch?.refs?.length ?? 0) > 0;

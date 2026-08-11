@@ -864,6 +864,40 @@ describe('submission routes', () => {
     await app.close();
   });
 
+  it('keeps feedback in the inbox after an optimistic submit marker', async () => {
+    const { githubClient } = createGithubClientStub({ issueNumber: 77 });
+    const { backend, briefs } = createBackendStub();
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      chatAgent: { decide: async () => ({ kind: 'build' as const, text: 'On it!' }) },
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    const briefsBefore = briefs.length;
+    await store.markAgentEnded(job.issueNumber, new Date().toISOString(), 'submit');
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(job.issueNumber, secret)}/feedback`,
+      headers: authHeaders,
+      payload: { feedback: 'Please make the parcels bigger and the asteroids slower.' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(briefs).toHaveLength(briefsBefore);
+    expect((await store.getSubmission(job.issueNumber))?.agentEndedBy).toBe('submit');
+
+    await app.close();
+  });
+
   it('keeps gate-wait and gate-red rounds on inbox steering rather than a new session', async () => {
     // After submit the job is `submitted` while the same session waits on the gate; a
     // red verdict moves it to `needs_changes` with mustFixGate. Both must stay inbox-only.
