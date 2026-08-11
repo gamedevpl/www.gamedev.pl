@@ -11118,15 +11118,6 @@ button.builder-mode-selector:disabled {
   justify-content: center;
 }
 
-.studio-stage-card.is-assembling .studio-stage-card-spinner {
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  border: 2.5px solid rgba(0, 228, 172, 0.22);
-  border-top-color: var(--turquoise);
-  animation: status-spin 0.8s linear infinite;
-}
-
 /* Version ribbon (the honesty organ) — bottom-center, non-dismissible. */
 .studio-version-ribbon {
   position: absolute;
