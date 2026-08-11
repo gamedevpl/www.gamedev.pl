@@ -1537,7 +1537,8 @@ describe('SubmissionStatusView', () => {
 
     expect(container.querySelector('.status-composer.is-sending')).not.toBeNull();
     expect(container.querySelector('.status-feedback-sending')?.textContent).toMatch(/Sending/i);
-    expect(container.querySelector('.status-composer-send-spinner')).not.toBeNull();
+    // Not duplicated in the text row below — the button already has one.
+    expect(container.querySelectorAll('.status-composer-send-spinner')).toHaveLength(1);
     expect(container.querySelector<HTMLButtonElement>('.status-composer-send')?.disabled).toBe(true);
 
     await act(async () => {
