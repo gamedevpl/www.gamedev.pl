@@ -1,7 +1,17 @@
-import type { EditorCollectionSpec, EditorItemContent, EditorLabel } from './studioApi.js';
+import type {
+  EditorCollectionSpec,
+  EditorItemContent,
+  EditorLabel,
+  EditorTilemapItemContent,
+  EditorTilemapSpec,
+} from './studioApi.js';
 
 export function defaultCollectionKey(collections: Record<string, unknown>): string | null {
   return Object.keys(collections).find((key) => key.length > 0) ?? null;
+}
+
+export function isTilemapItem(item: EditorItemContent): item is EditorTilemapItemContent {
+  return 'rows' in item;
 }
 
 /**
@@ -21,8 +31,8 @@ export function defaultCollectionKey(collections: Record<string, unknown>): stri
  * remixer, whose paintings never reach the server, would never find out at all.
  */
 export function unreachableCount(
-  spec: EditorCollectionSpec['item'],
-  item: EditorItemContent,
+  spec: EditorTilemapSpec,
+  item: EditorTilemapItemContent,
   rule: { from: string; blockedBy: string[]; require: string[] },
 ): number {
   const rows = item.rows;
@@ -73,12 +83,18 @@ export function unreachableCount(
   return missed;
 }
 
-/** Client-side mirror of the constraint arithmetic — hints only; the server re-checks. */
+/**
+ * Client-side mirror of the constraint arithmetic — hints only; the server
+ * re-checks. Entities have no grid, so their rules are collection-wide
+ * (`collectionProblems`, below) rather than per-item; this always returns
+ * `[]` for an entities item.
+ */
 export function itemProblems(
   spec: EditorCollectionSpec['item'],
   item: EditorItemContent,
   name: (label: EditorLabel) => string,
 ) {
+  if (spec.widget !== 'tilemap' || !isTilemapItem(item)) return [];
   const counts = new Map<string, number>(spec.tiles.map((tile) => [tile.key, 0]));
   const charToKey = new Map(spec.tiles.map((tile) => [tile.char, tile.key]));
   for (const row of item.rows) {
@@ -109,6 +125,7 @@ export function itemProblems(
       }
       continue;
     }
+    if ('uniqueBy' in rule) continue;
     const count = counts.get(rule.tile) ?? 0;
     if (rule.exactly !== undefined && count !== rule.exactly) {
       problems.push(`${tileName(rule.tile)}: ${count} / ${rule.exactly}`);
@@ -123,16 +140,45 @@ export function itemProblems(
   return problems;
 }
 
-export function setCell(item: EditorItemContent, row: number, col: number, char: string): EditorItemContent {
+/**
+ * Entities have no per-item rules — their only constraint is collection-wide
+ * ("uniqueBy": no two items may share a value), so it is checked once over
+ * every item rather than per selected item. Mirrors the server's own check
+ * (`editor-contract.ts`'s `validateCollectionContent`) exactly.
+ */
+export function collectionProblems(spec: EditorCollectionSpec, items: EditorItemContent[]): string[] {
+  if (spec.item.widget !== 'entities') return [];
+  const problems: string[] = [];
+  for (const rule of spec.item.constraints) {
+    if (!('uniqueBy' in rule)) continue;
+    const seenAt = new Map<string, number>();
+    items.forEach((entry, index) => {
+      const value = entry.properties[rule.uniqueBy];
+      const encoded = JSON.stringify(value);
+      if (encoded === undefined) return;
+      const firstIndex = seenAt.get(encoded);
+      if (firstIndex !== undefined) {
+        problems.push(`${firstIndex + 1} & ${index + 1} share the same ${rule.uniqueBy}`);
+      } else {
+        seenAt.set(encoded, index);
+      }
+    });
+  }
+  return problems;
+}
+
+export function setCell(
+  item: EditorTilemapItemContent,
+  row: number,
+  col: number,
+  char: string,
+): EditorTilemapItemContent {
   const rows = item.rows.slice();
   rows[row] = rows[row].slice(0, col) + char + rows[row].slice(col + 1);
   return { ...item, rows };
 }
 
 export function blankItem(spec: EditorCollectionSpec['item']): EditorItemContent {
-  // A fresh item starts as the smallest legal grid, all first-tile — the
-  // creator paints from there; constraints show what is still missing.
-  const fill = spec.tiles[0]?.char ?? '.';
   const properties: Record<string, unknown> = {};
   for (const [name, propertySpec] of Object.entries(spec.properties)) {
     if (propertySpec.type === 'text') properties[name] = '';
@@ -140,5 +186,9 @@ export function blankItem(spec: EditorCollectionSpec['item']): EditorItemContent
     else if (propertySpec.type === 'enum') properties[name] = propertySpec.values[0];
     else properties[name] = false;
   }
+  if (spec.widget !== 'tilemap') return { properties };
+  // A fresh tilemap item starts as the smallest legal grid, all first-tile —
+  // the creator paints from there; constraints show what is still missing.
+  const fill = spec.tiles[0]?.char ?? '.';
   return { properties, rows: Array.from({ length: spec.grid.minRows }, () => fill.repeat(spec.grid.minCols)) };
 }

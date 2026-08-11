@@ -163,3 +163,65 @@ describe('multi-collection editor surfaces', () => {
     expect(container.querySelector('.editor-collection-selector')).toBeNull();
   });
 });
+
+describe('the entities widget', () => {
+  const cardOne: EditorItemContent = { properties: { name: 'Strike', cost: 1 } };
+  const cardTwo: EditorItemContent = { properties: { name: 'Guard', cost: 2 } };
+
+  const entitiesDefinition: EditorDefinition = {
+    version: 1,
+    content: {
+      cards: {
+        widget: 'collection',
+        label: { en: 'Cards', pl: 'Karty' },
+        itemLabel: { en: 'Card', pl: 'Karta' },
+        min: 1,
+        max: 4,
+        item: {
+          widget: 'entities',
+          properties: { name: { type: 'text', max: 24 }, cost: { type: 'int', min: 0, max: 3 } },
+          constraints: [{ uniqueBy: 'cost' }],
+        },
+        defaults: [cardOne, cardTwo],
+      },
+    },
+  };
+
+  it('renders properties without a board, and passes checks when values are unique', async () => {
+    fetchGameEditor.mockResolvedValue(
+      editorState({ definition: entitiesDefinition, content: { cards: [cardOne, cardTwo] } }),
+    );
+    await renderEditor();
+
+    expect(container.querySelector('.editor-board')).toBeNull();
+    expect(container.querySelector('.editor-palette')).toBeNull();
+    expect(container.querySelector('.editor-item-list')?.textContent).toContain('Strike');
+    expect(container.querySelector('.editor-item-list')?.textContent).toContain('Guard');
+    expect(container.textContent).toContain('cost');
+    expect(container.querySelector('.editor-check.is-ok')).not.toBeNull();
+    expect(container.querySelector<HTMLButtonElement>('.studio-head-action.is-primary')?.disabled).toBe(false);
+  });
+
+  it('flags a duplicate uniqueBy value and blocks publish', async () => {
+    const duplicateCard: EditorItemContent = { properties: { name: 'Guard 2', cost: 1 } };
+    fetchGameEditor.mockResolvedValue(
+      editorState({ definition: entitiesDefinition, content: { cards: [cardOne, duplicateCard] } }),
+    );
+    await renderEditor();
+
+    expect(container.querySelector('.editor-check.is-bad')?.textContent).toContain('cost');
+    expect(container.querySelector<HTMLButtonElement>('.studio-head-action.is-primary')?.disabled).toBe(true);
+  });
+
+  it('remix painter renders entities properties without a board', async () => {
+    const onChange = vi.fn();
+    root = createRoot(container);
+    await act(async () => {
+      root!.render(
+        <RemixPainter content={entitiesDefinition.content} doc={{ cards: [cardOne, cardTwo] }} onChange={onChange} />,
+      );
+    });
+    expect(container.querySelector('.editor-board')).toBeNull();
+    expect(container.querySelector('.remix-painter-items')?.textContent).toContain('Strike');
+  });
+});

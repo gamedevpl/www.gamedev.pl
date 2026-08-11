@@ -28,6 +28,9 @@
  * demand that the fetch happened, and it did.
  */
 
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   DELIVERY_CONTRACT_PATH,
   DELIVERY_CONTRACT_VERSION,
@@ -36,6 +39,7 @@ import {
   DELIVERY_MAX_FILES,
   DELIVERY_MAX_UPLOAD_BYTES,
   DELIVERY_RESERVED_SEGMENTS,
+  EDITOR_CONTRACT_PATH,
   extractDeliveryContract,
   extractGameKitModules,
   extractGameKitVerticals,
@@ -44,10 +48,13 @@ import {
   GAME_KIT_MODULES,
   GAME_KIT_VERTICAL_ENTRIES,
   MAX_PROJECT_BYTES,
+  stripLeadingDocComment,
   type DeliveryContract,
   type GameKitModuleName,
 } from './games-repo-contract.js';
 import { isRateLimitResponse } from './github-rate-limit.js';
+
+const LOCAL_EDITOR_CONTRACT_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), 'editor-contract.ts');
 
 export type ContractCheckOutcome =
   /** No token configured — forks and fresh clones still go green. */
@@ -73,6 +80,8 @@ export interface ContractCheckOptions {
   sleep?: (ms: number) => Promise<void>;
   /** Test seam for expiring website-first module rollout exceptions. */
   now?: () => number;
+  /** Test seam — replaced so the editor-contract mirror check does not read real disk. */
+  readLocalFile?: (path: string) => string;
 }
 
 /** Attempts per file, including the first. Bounded so a dead remote fails fast. */
@@ -151,6 +160,20 @@ export function describeQuota(response: Response): string | null {
   const reset = Number(response.headers.get('x-ratelimit-reset'));
   const resetAt = Number.isFinite(reset) && reset > 0 ? new Date(reset * 1000).toISOString() : null;
   return `rate limit ${remaining ?? '?'}/${limit ?? '?'} remaining${resetAt ? `, resets ${resetAt}` : ''}`;
+}
+
+/** Enough context around the first divergence to spot a botched merge without pasting the whole file. */
+export function describeTextDrift(remote: string, local: string): string {
+  const maxLen = Math.max(remote.length, local.length);
+  let index = 0;
+  while (index < maxLen && remote[index] === local[index]) index += 1;
+  if (index === maxLen) return 'lengths differ but no character mismatch was found';
+  const context = (text: string) => JSON.stringify(text.slice(Math.max(0, index - 20), index + 40));
+  return (
+    `first difference at offset ${index} (games-repo length ${remote.length}, website length ${local.length})\n` +
+    `  games-repo: …${context(remote)}…\n` +
+    `  website:    …${context(local)}…`
+  );
 }
 
 /**
@@ -260,11 +283,13 @@ export async function runGamesRepoContractCheck(options: ContractCheckOptions): 
   let assembleSource: string;
   let validateSource: string;
   let deliverySource: string | null;
+  let editorContractSource: string;
   try {
-    [assembleSource, validateSource, deliverySource] = await Promise.all([
+    [assembleSource, validateSource, deliverySource, editorContractSource] = await Promise.all([
       readGamesRepoFile('tools/lib/assemble.ts'),
       readGamesRepoFile('tools/validate.ts'),
       readOptionalGamesRepoFile(DELIVERY_CONTRACT_PATH),
+      readGamesRepoFile(EDITOR_CONTRACT_PATH),
     ]);
   } catch (error: unknown) {
     if (error instanceof UnreachableGamesRepoError) {
@@ -412,6 +437,21 @@ export async function runGamesRepoContractCheck(options: ContractCheckOptions): 
     };
   }
   log('  ✓ music contract (__GAME_AUDIO_MUSIC__ + tracks + readMusicCatalog)');
+
+  const readLocalFile = options.readLocalFile ?? ((filePath: string) => readFileSync(filePath, 'utf8'));
+  const localEditorContract = stripLeadingDocComment(readLocalFile(LOCAL_EDITOR_CONTRACT_PATH));
+  const remoteEditorContract = stripLeadingDocComment(editorContractSource);
+  if (localEditorContract !== remoteEditorContract) {
+    return {
+      kind: 'drift',
+      reason:
+        `editor-contract mismatch (${EDITOR_CONTRACT_PATH} vs apps/api/src/editor-contract.ts): ` +
+        `${describeTextDrift(remoteEditorContract, localEditorContract)}\n` +
+        `  The two files must stay byte-equivalent below their own header comments — EditorKit L0/L4 ` +
+        `is a lockstep, not an asymmetric rollout contract. Update both files in one paired change.`,
+    };
+  }
+  log('  ✓ editor-contract (EditorKit L0/L4, byte-equivalent below the header)');
 
   const notes: string[] = [];
   if (verticalNote) {

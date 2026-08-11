@@ -51,7 +51,9 @@ export type EditorConstraint =
   | { tile: string; min?: number; max?: number; exactly?: number }
   | { equalCounts: [string, string] }
   /** Every `require` tile must be reachable from `from` without crossing `blockedBy`. */
-  | { reachable: { from: string; blockedBy: string[]; require: string[] } };
+  | { reachable: { from: string; blockedBy: string[]; require: string[] } }
+  /** No two items in the collection may share this property's value. */
+  | { uniqueBy: string };
 
 export type EditorTileSpec = {
   key: string;
@@ -69,17 +71,28 @@ export type EditorTilemapSpec = {
   constraints: EditorConstraint[];
 };
 
+/** A property-sheet-only item — no grid, no tiles. */
+export type EditorEntitiesSpec = {
+  widget: 'entities';
+  properties: Record<string, EditorPropertySpec>;
+  constraints: EditorConstraint[];
+};
+
+export type EditorCollectionItemSpec = EditorTilemapSpec | EditorEntitiesSpec;
+
 export type EditorCollectionSpec = {
   widget: 'collection';
   label: EditorLabel;
   itemLabel: EditorLabel;
   min: number;
   max: number;
-  item: EditorTilemapSpec;
+  item: EditorCollectionItemSpec;
   defaults: EditorItemContent[];
 };
 
-export type EditorItemContent = { properties: Record<string, unknown>; rows: string[] };
+export type EditorTilemapItemContent = { properties: Record<string, unknown>; rows: string[] };
+export type EditorEntityItemContent = { properties: Record<string, unknown> };
+export type EditorItemContent = EditorTilemapItemContent | EditorEntityItemContent;
 
 export type EditorParamValue = string | number | boolean;
 

@@ -95,7 +95,8 @@ export type ParamSpec = PropertySpec & { label: EditorLabel; default: ParamValue
 export type EditorConstraint =
   | { tile: string; min?: number; max?: number; exactly?: number }
   | { equalCounts: [string, string] }
-  | { reachable: { from: string; blockedBy: string[]; require: string[] } };
+  | { reachable: { from: string; blockedBy: string[]; require: string[] } }
+  | { uniqueBy: string };
 
 export interface TilemapItemSpec {
   widget: 'tilemap';
@@ -105,19 +106,31 @@ export interface TilemapItemSpec {
   constraints: EditorConstraint[];
 }
 
+export interface EntitiesItemSpec {
+  widget: 'entities';
+  properties: Record<string, PropertySpec>;
+  constraints: EditorConstraint[];
+}
+
+export type CollectionItemSpec = TilemapItemSpec | EntitiesItemSpec;
+
 export interface CollectionSpec {
   widget: 'collection';
   label: EditorLabel;
   itemLabel: EditorLabel;
   min: number;
   max: number;
-  item: TilemapItemSpec;
-  defaults: TilemapItemContent[];
+  item: CollectionItemSpec;
+  defaults: Array<TilemapItemContent | EntityItemContent>;
 }
 
 export interface TilemapItemContent {
   properties: Record<string, unknown>;
   rows: string[];
+}
+
+export interface EntityItemContent {
+  properties: Record<string, unknown>;
 }
 
 export interface EditorDefinition {
@@ -419,6 +432,47 @@ function validateTilemapSpec(owner: string, raw: unknown, errors: string[]): Til
   return { widget: 'tilemap', grid: g, tiles, properties, constraints };
 }
 
+function validateEntitiesSpec(owner: string, raw: unknown, errors: string[]): EntitiesItemSpec | null {
+  if (!isPlainObject(raw)) {
+    errors.push(`${owner}: "item" must be an object`);
+    return null;
+  }
+  const properties = validateProperties(owner, raw.properties ?? {}, errors);
+  const constraints: EditorConstraint[] = [];
+  if (raw.constraints !== undefined) {
+    if (!Array.isArray(raw.constraints) || raw.constraints.length > MAX_CONSTRAINTS) {
+      errors.push(`${owner}: "constraints" must be an array of at most ${MAX_CONSTRAINTS} rules`);
+    } else {
+      for (const rule of raw.constraints) {
+        if (
+          !isPlainObject(rule) ||
+          Object.keys(rule).length !== 1 ||
+          typeof rule.uniqueBy !== 'string' ||
+          !KEY_PATTERN.test(rule.uniqueBy)
+        ) {
+          errors.push(`${owner}: entities constraints only support "uniqueBy" with a property key`);
+          continue;
+        }
+        if (!(rule.uniqueBy in properties)) {
+          errors.push(`${owner}: "uniqueBy" property "${rule.uniqueBy}" is not declared`);
+          continue;
+        }
+        constraints.push({ uniqueBy: rule.uniqueBy });
+      }
+    }
+  }
+  return { widget: 'entities', properties, constraints };
+}
+
+function validateCollectionItemSpec(owner: string, raw: unknown, errors: string[]): CollectionItemSpec | null {
+  if (isPlainObject(raw) && raw.widget === 'entities') return validateEntitiesSpec(owner, raw, errors);
+  if (isPlainObject(raw) && raw.widget === 'tilemap') return validateTilemapSpec(owner, raw, errors);
+  errors.push(
+    `${owner}: unknown item widget "${String(isPlainObject(raw) ? raw.widget : undefined)}" (vocabulary: tilemap, entities)`,
+  );
+  return null;
+}
+
 /**
  * Parse and validate an EDITOR.json source. Returns the typed definition and a
  * list of human-readable problems; a non-empty `errors` means the definition
@@ -498,7 +552,7 @@ export function parseEditorDefinition(source: string): { definition: EditorDefin
       errors.push(`${owner}: needs integer "min" and "max" with 1 <= min <= max <= ${MAX_COLLECTION_ITEMS}`);
       continue;
     }
-    const item = validateTilemapSpec(owner, raw.item, errors);
+    const item = validateCollectionItemSpec(owner, raw.item, errors);
     if (!item) continue;
 
     if (!Array.isArray(raw.defaults)) {
@@ -512,7 +566,7 @@ export function parseEditorDefinition(source: string): { definition: EditorDefin
       min: raw.min as number,
       max: raw.max as number,
       item,
-      defaults: raw.defaults as TilemapItemContent[],
+      defaults: raw.defaults as Array<TilemapItemContent | EntityItemContent>,
     };
     // Defaults must satisfy the schema they ship with — the round-trip that
     // proves the pipeline works before a creator ever touches it.
@@ -598,7 +652,30 @@ function unreachable(
   ];
 }
 
-function validateItemContent(spec: TilemapItemSpec, item: unknown, where: string): string[] {
+function validateEntityItemContent(spec: EntitiesItemSpec, item: unknown, where: string): string[] {
+  const errors: string[] = [];
+  if (!isPlainObject(item)) return [`${where}: must be an object`];
+  const unknown = Object.keys(item).filter((key) => key !== 'properties');
+  if (unknown.length > 0) errors.push(`${where}: unknown keys ${unknown.join(', ')}`);
+  const properties = item.properties;
+  if (!isPlainObject(properties)) return [...errors, `${where}: "properties" must be an object`];
+  for (const name of Object.keys(properties)) {
+    if (!(name in spec.properties)) errors.push(`${where}: undeclared property "${name}"`);
+  }
+  for (const [name, propertySpec] of Object.entries(spec.properties)) {
+    const value = properties[name];
+    if (value === undefined) {
+      errors.push(`${where}: missing property "${name}"`);
+      continue;
+    }
+    const problem = valueProblem(propertySpec, value);
+    if (problem) errors.push(`${where}: property "${name}" ${problem}`);
+  }
+  return errors;
+}
+
+function validateItemContent(spec: CollectionItemSpec, item: unknown, where: string): string[] {
+  if (spec.widget === 'entities') return validateEntityItemContent(spec, item, where);
   const errors: string[] = [];
   if (!isPlainObject(item)) return [`${where}: must be an object`];
   const unknown = Object.keys(item).filter((key) => key !== 'properties' && key !== 'rows');
@@ -644,6 +721,7 @@ function validateItemContent(spec: TilemapItemSpec, item: unknown, where: string
         errors.push(...unreachable(rule.reachable, rows as string[], charToKey, where));
         continue;
       }
+      if ('uniqueBy' in rule) continue;
       const count = counts.get(rule.tile) ?? 0;
       if (rule.exactly !== undefined && count !== rule.exactly) {
         errors.push(`${where}: needs exactly ${rule.exactly} "${rule.tile}" (has ${count})`);
@@ -686,6 +764,24 @@ function validateCollectionContent(spec: CollectionSpec, items: unknown): string
   }
   for (const [index, item] of items.entries()) {
     errors.push(...validateItemContent(spec.item, item, `item ${index + 1}`));
+  }
+  if (spec.item.widget === 'entities') {
+    for (const rule of spec.item.constraints) {
+      if (!('uniqueBy' in rule)) continue;
+      const firstByValue = new Map<string, number>();
+      for (const [index, rawItem] of items.entries()) {
+        if (!isPlainObject(rawItem) || !isPlainObject(rawItem.properties)) continue;
+        const value = rawItem.properties[rule.uniqueBy];
+        const encoded = JSON.stringify(value);
+        if (encoded === undefined) continue;
+        const firstIndex = firstByValue.get(encoded);
+        if (firstIndex !== undefined) {
+          errors.push(`item ${index + 1}: property "${rule.uniqueBy}" duplicates item ${firstIndex + 1}`);
+        } else {
+          firstByValue.set(encoded, index);
+        }
+      }
+    }
   }
   return errors;
 }
@@ -776,7 +872,7 @@ export function generateEditorContentModule(definition: EditorDefinition): strin
     lines.push('}', '');
     lines.push(`export interface ${itemType} {`);
     lines.push(`  properties: ${itemType}Properties;`);
-    lines.push('  rows: string[];');
+    if (spec.item.widget === 'tilemap') lines.push('  rows: string[];');
     lines.push('}', '');
     contentFields.push(`  ${key}: ${itemType}[];`);
   }

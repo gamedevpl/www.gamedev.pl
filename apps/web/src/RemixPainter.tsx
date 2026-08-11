@@ -1,7 +1,26 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { blankItem, defaultCollectionKey, itemProblems, setCell } from './editorContentTools.js';
-import type { EditorCollectionSpec, EditorContentDoc, EditorItemContent, EditorLabel } from './studioApi.js';
+import { blankItem, defaultCollectionKey, isTilemapItem, itemProblems, setCell } from './editorContentTools.js';
+import type {
+  EditorCollectionSpec,
+  EditorContentDoc,
+  EditorItemContent,
+  EditorLabel,
+  EditorTilemapSpec,
+} from './studioApi.js';
+
+/** Narrows a collection to its tilemap spec — entities render no board. */
+function tilemapCollection(
+  spec: EditorCollectionSpec | null,
+): (EditorCollectionSpec & { item: EditorTilemapSpec }) | null {
+  return spec && spec.item.widget === 'tilemap' ? (spec as EditorCollectionSpec & { item: EditorTilemapSpec }) : null;
+}
+
+/** The palette's initial selection — entities have no tiles to paint with. */
+function firstTileKey(spec: EditorCollectionSpec | null | undefined): string | null {
+  if (!spec || spec.item.widget !== 'tilemap') return null;
+  return spec.item.tiles.find((tile) => tile.key.length > 0)?.key ?? null;
+}
 
 /**
  * The declared content painter for remix.
@@ -38,13 +57,11 @@ export function RemixPainter(props: {
     ? (((props.doc[collectionKey] as EditorItemContent[] | undefined) ?? []) as EditorItemContent[])
     : [];
   const [itemIndex, setItemIndex] = useState(0);
-  const [tileKey, setTileKey] = useState<string | null>(
-    spec?.item.tiles.find((tile) => tile.key.length > 0)?.key ?? null,
-  );
+  const [tileKey, setTileKey] = useState<string | null>(firstTileKey(spec));
 
   useEffect(() => {
     setItemIndex(0);
-    setTileKey(spec?.item.tiles.find((tile) => tile.key.length > 0)?.key ?? null);
+    setTileKey(firstTileKey(spec));
   }, [collectionKey, spec]);
 
   const item = items[Math.min(itemIndex, Math.max(0, items.length - 1))] ?? null;
@@ -58,7 +75,7 @@ export function RemixPainter(props: {
     if (props.selectedCollectionKey === undefined) setInternalCollectionKey(nextKey);
     props.onCollectionChange?.(nextKey);
     setItemIndex(0);
-    setTileKey(props.content[nextKey].item.tiles.find((tile) => tile.key.length > 0)?.key ?? null);
+    setTileKey(firstTileKey(props.content[nextKey]));
   }
 
   function updateItems(list: EditorItemContent[]) {
@@ -72,7 +89,9 @@ export function RemixPainter(props: {
   }
 
   const problems = item ? itemProblems(spec.item, item, name) : [];
-  const width = item ? (item.rows[0]?.length ?? 0) : 0;
+  const tilemapItem = item && isTilemapItem(item) ? item : null;
+  const boardSpec = tilemapCollection(spec);
+  const width = tilemapItem ? (tilemapItem.rows[0]?.length ?? 0) : 0;
 
   return (
     <div className="remix-painter">
@@ -135,17 +154,17 @@ export function RemixPainter(props: {
         ) : null}
       </div>
 
-      {item ? (
+      {boardSpec && tilemapItem ? (
         <>
           <div
             className="editor-board"
             role="grid"
-            aria-label={name(spec.itemLabel)}
+            aria-label={name(boardSpec.itemLabel)}
             style={{ gridTemplateColumns: `repeat(${width}, var(--editor-cell))` }}
           >
-            {item.rows.map((rowChars, row) =>
+            {tilemapItem.rows.map((rowChars, row) =>
               Array.from(rowChars).map((char, col) => {
-                const tile = spec.item.tiles.find((entry) => entry.char === char);
+                const tile = boardSpec.item.tiles.find((entry) => entry.char === char);
                 return (
                   <button
                     key={`${row}-${col}`}
@@ -155,8 +174,8 @@ export function RemixPainter(props: {
                     {...(tile?.color ? { style: { background: tile.color } } : {})}
                     aria-label={`${row + 1},${col + 1}: ${tile ? name(tile.label) : char}`}
                     onClick={() => {
-                      const selected = spec.item.tiles.find((entry) => entry.key === tileKey);
-                      if (selected) updateItem(setCell(item, row, col, selected.char));
+                      const selected = boardSpec.item.tiles.find((entry) => entry.key === tileKey);
+                      if (selected) updateItem(setCell(tilemapItem, row, col, selected.char));
                     }}
                   />
                 );
@@ -164,7 +183,7 @@ export function RemixPainter(props: {
             )}
           </div>
           <div className="editor-palette" role="radiogroup" aria-label={t('studioPanel.editor.tiles')}>
-            {spec.item.tiles.map((tile) => (
+            {boardSpec.item.tiles.map((tile) => (
               <button
                 key={tile.key}
                 type="button"
