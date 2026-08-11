@@ -45,7 +45,7 @@ describe('studio compact composer empty state', () => {
     expect(override).toMatch(/flex-direction:\s*column/);
 
     const toolbarLeft = firstRuleBody(
-      '.status-composer.is-compact.is-empty:has(.status-composer-toolbar-left:not(:empty))\n  .status-composer-toolbar-left',
+      '.status-composer.is-compact.is-empty:has(.status-composer-toolbar-left:not(:empty)) .status-composer-toolbar-left',
     );
     expect(toolbarLeft).toMatch(/flex:\s*1/);
   });
