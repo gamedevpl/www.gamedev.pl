@@ -751,8 +751,7 @@ export function GameTheater({
               aria-label={t('player.hideControls')}
               title={t('player.hideControls')}
             >
-              <PixelIcon name="eye" size={13} />
-              <span className="btn-label">{t('player.hideControls')}</span>
+              <PixelIcon name="chevronUp" size={15} />
             </button>
             <button
               className="secondary-btn exit-btn"

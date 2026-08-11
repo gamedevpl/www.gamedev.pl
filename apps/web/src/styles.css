@@ -2199,7 +2199,8 @@ body.player-open {
   position: relative;
 }
 
-/* Icon-only close control — label lives in aria-label / title. */
+/* Icon-only theater controls keep labels in aria-label / title. */
+.game-theater-actions .theater-hide-btn,
 .game-theater-actions .exit-btn {
   min-width: 40px;
   justify-content: center;

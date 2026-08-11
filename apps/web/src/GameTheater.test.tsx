@@ -563,6 +563,7 @@ describe('GameTheater how-to-play visit telemetry', () => {
     const hide = container.querySelector('.theater-hide-btn') as HTMLButtonElement;
 
     expect(hide.getAttribute('aria-label')).toBe('Hide controls');
+    expect(hide.querySelector('[data-icon="chevronUp"]')).not.toBeNull();
     await click(hide);
     expect(bar.classList.contains('is-idle')).toBe(true);
     expect(container.querySelector('.theater-reveal-btn')).not.toBeNull();
