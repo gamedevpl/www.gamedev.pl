@@ -410,6 +410,7 @@
       "collapse": "Collapse",
       "expand": "Expand",
       "popOut": "Open as page",
+      "closeThread": "Close chat",
       "peekEmpty": "No updates yet"
     },
     "share": {

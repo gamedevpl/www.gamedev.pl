@@ -69,6 +69,8 @@ export function StudioChatRail({
   }, [open, isSheet]);
 
   const visiblyOpen = open && !(isSheet && detent === 'peek');
+  const popOutLabel = t('studioPanel.rail.popOut', { defaultValue: 'Open as page' });
+  const closeLabel = t('studioPanel.rail.closeThread', { defaultValue: 'Close chat' });
   useEffect(() => {
     onVisiblyOpenChange?.(visiblyOpen);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -167,18 +169,20 @@ export function StudioChatRail({
           <div className="studio-chat-rail-head-actions">
             {standaloneHref ? (
               <a
-                className="studio-chat-rail-popout"
+                className="studio-chat-rail-head-action studio-chat-rail-popout"
                 href={standaloneHref}
-                title={t('studioPanel.rail.popOut', { defaultValue: 'Open as page' })}
+                aria-label={popOutLabel}
+                data-tooltip={popOutLabel}
               >
-                <PixelIcon name="expand" size={12} />
+                <PixelIcon name="expand" size={14} />
               </a>
             ) : null}
             <button
               type="button"
-              className="modal-close-btn"
+              className="studio-chat-rail-head-action studio-chat-rail-close"
               onClick={() => onOpenChange(false)}
-              aria-label={t('studioPanel.close')}
+              aria-label={closeLabel}
+              data-tooltip={closeLabel}
             >
               <PixelIcon name="close" size={14} />
             </button>
