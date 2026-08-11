@@ -1335,6 +1335,9 @@ export async function registerSubmissionRoutes(
             workspace: previous!.workspace,
           })
         : await selected.dispatch(brief);
+      if (input.undelivered) {
+        await store.clearAgentEnded(input.issueNumber);
+      }
       await store.recordDispatch(input.issueNumber, {
         backend: selected.name,
         ref: result.ref,

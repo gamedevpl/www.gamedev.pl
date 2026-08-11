@@ -1145,6 +1145,116 @@ describe('submission routes', () => {
     await app.close();
   });
 
+  it('drops cached stall=ended when an undelivered round is resumed via retry', async () => {
+    const { githubClient } = createGithubClientStub({ issueNumber: 79 });
+    const { backend } = createBackendStub();
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      adminUids: 'g:boss',
+    });
+    await store.upsertUser({ uid: 'g:boss' });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    const token = mintToken(job.issueNumber, secret);
+    await store.setRoundBuilder(job.issueNumber, 'self');
+    await store.ensureRoundGeneration(job.issueNumber);
+    await store.recordJobTransition(job.issueNumber, {
+      to: 'building',
+      at: new Date().toISOString(),
+      by: 'agent',
+      reason: 'self_signal',
+    });
+    await store.touchLastAgentSignalAt(job.issueNumber, new Date().toISOString());
+    await store.markAgentEnded(job.issueNumber, new Date().toISOString());
+
+    const before = await store.getSubmission(job.issueNumber);
+    expect(before?.deliveredVersion).toBeFalsy();
+
+    const ended = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
+    expect(ended.statusCode).toBe(200);
+    expect(ended.json()).toMatchObject({ builder: 'self', stall: 'ended' });
+    expect(ended.json().agentEndedAt).toBeTruthy();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/admin/jobs/${job.issueNumber}/retry`,
+      headers: getAuthHeaders('g:boss'),
+    });
+    expect(response.statusCode).toBe(200);
+
+    const after = await store.getSubmission(job.issueNumber);
+    expect(after?.agentEndedAt).toBeUndefined();
+
+    const resumed = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
+    expect(resumed.statusCode).toBe(200);
+    expect(resumed.json().stall).not.toBe('ended');
+    expect(resumed.json().agentEndedAt).toBeUndefined();
+
+    await app.close();
+  });
+
+  it('keeps stall=ended when an undelivered retry fails to start', async () => {
+    const { githubClient } = createGithubClientStub({ issueNumber: 80 });
+    let failNext = false;
+    const backend: AgentBackend = {
+      name: 'stub',
+      dispatch: async () => {
+        if (failNext) throw new Error('backend unavailable');
+        return { ref: 'task-1', workspace: 'copilot/x' };
+      },
+      resume: async () => {
+        if (failNext) throw new Error('backend unavailable');
+        return { ref: 'task-2', workspace: 'copilot/y' };
+      },
+      observe: async () => null,
+      cancel: async () => ({ enforced: false }),
+    };
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      adminUids: 'g:boss',
+    });
+    await store.upsertUser({ uid: 'g:boss' });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    const token = mintToken(job.issueNumber, secret);
+    await store.ensureRoundGeneration(job.issueNumber);
+    await store.touchLastAgentSignalAt(job.issueNumber, new Date().toISOString());
+    await store.markAgentEnded(job.issueNumber, new Date().toISOString());
+
+    failNext = true;
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/admin/jobs/${job.issueNumber}/retry`,
+      headers: getAuthHeaders('g:boss'),
+    });
+    expect(response.statusCode).toBe(502);
+
+    const after = await store.getSubmission(job.issueNumber);
+    expect(after?.agentEndedAt).toBeTruthy();
+
+    const resumed = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
+    expect(resumed.statusCode).toBe(200);
+    expect(resumed.json().stall).toBe('ended');
+
+    await app.close();
+  });
+
   it('self→platform handoff lands on dispatched and busts the status cache', async () => {
     // Without the cache bust, Studio kept serving the previous self stall
     // (`no_agent_yet` / ended) for up to a minute while Copilot was already queued.

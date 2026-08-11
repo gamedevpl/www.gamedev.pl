@@ -1826,6 +1826,8 @@ export interface Store {
    * validation rejects the brand-new key (`active === undefined`).
    */
   ensureRoundGeneration(issueNumber: number): Promise<number | null>;
+  // Clears stale agentEndedAt/lastAgentSignalAt/lastAgentPresence without touching round counters.
+  clearAgentEnded(issueNumber: number): Promise<void>;
   // Fixes the round's kit engine and returns it; first caller wins.
   // `replace` overrides the pin: kit_outdated recovery, or a kit gone.
   pinRoundKitEngineRef(issueNumber: number, engineRef: string, replace?: boolean): Promise<string | null>;
@@ -3160,6 +3162,16 @@ export class InMemoryStore implements Store {
     if (sub.roundGeneration !== undefined) return sub.roundGeneration;
     this.submissions.set(issueNumber, { ...sub, roundGeneration: 1 });
     return 1;
+  }
+
+  async clearAgentEnded(issueNumber: number): Promise<void> {
+    const sub = this.submissions.get(issueNumber);
+    if (!sub) return;
+    const next = { ...sub };
+    delete next.lastAgentSignalAt;
+    delete next.lastAgentPresence;
+    delete next.agentEndedAt;
+    this.submissions.set(issueNumber, next);
   }
 
   async setSubmissionAgentState(issueNumber: number, agentState: AgentTaskState): Promise<void> {
@@ -5524,6 +5536,20 @@ export class FirestoreStore implements Store {
       if (current.roundGeneration !== undefined) return current.roundGeneration;
       tx.set(ref, { roundGeneration: 1 }, { merge: true });
       return 1;
+    });
+  }
+
+  async clearAgentEnded(issueNumber: number): Promise<void> {
+    const ref = this.db.collection('submissions').doc(String(issueNumber));
+    await this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return;
+      const current = snap.data() as SubmissionRecord;
+      const next = { ...current };
+      delete next.lastAgentSignalAt;
+      delete next.lastAgentPresence;
+      delete next.agentEndedAt;
+      tx.set(ref, next);
     });
   }
 
