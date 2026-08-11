@@ -35,6 +35,20 @@ describe('studio compact composer empty state', () => {
     const card = firstRuleBody('.status-composer.is-compact');
     expect(card).toMatch(/cursor:\s*text/);
   });
+
+  it('gives the builder pill its own row, pinned left, instead of the collapsed grid row', () => {
+    // The one-row grid otherwise squeezes the pill next to send.
+    const override = firstRuleBody(
+      '.status-composer.is-compact.is-empty:has(.status-composer-toolbar-left:not(:empty))',
+    );
+    expect(override).toMatch(/display:\s*flex/);
+    expect(override).toMatch(/flex-direction:\s*column/);
+
+    const toolbarLeft = firstRuleBody(
+      '.status-composer.is-compact.is-empty:has(.status-composer-toolbar-left:not(:empty))\n  .status-composer-toolbar-left',
+    );
+    expect(toolbarLeft).toMatch(/flex:\s*1/);
+  });
 });
 
 describe('escape hatch mobile touch target', () => {
