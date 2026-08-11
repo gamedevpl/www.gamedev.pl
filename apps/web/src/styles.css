@@ -11362,6 +11362,22 @@ button.builder-mode-selector:disabled {
   outline: none;
 }
 
+.code-surface-codemirror {
+  flex: 1;
+  min-height: 200px;
+  overflow: hidden;
+}
+
+.code-surface-codemirror .cm-editor {
+  height: 100%;
+}
+
+.code-surface-codemirror .cm-gutters {
+  background: transparent;
+  border-right: 1px solid var(--panel-border);
+  color: var(--muted);
+}
+
 .code-surface-readonly-view {
   margin: 0;
   padding: 12px 0;

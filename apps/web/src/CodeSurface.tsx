@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Component, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { CodeMirrorDiagnostic } from './CodeMirrorEditor.js';
 import {
   CodeSurfaceApiError,
   deliverCodeSurface,
@@ -20,13 +21,40 @@ import { recordCodeStep } from './visitTelemetry.js';
  * pattern (CE-13's own instruction: "the pattern is already there; copy it rather than
  * invent a second one").
  *
- * Ships with a plain, always-available text surface — CodeMirror (CE-14) is a planned
- * lazy-loaded enhancement over this same autosave/typecheck/stage-it plumbing, not a
- * prerequisite for it; the surface must not be blank while a chunk loads or fails to.
+ * CodeMirror 6 (CE-14) is a lazy-loaded route-level chunk — `LazyCodeMirrorEditor`
+ * below is a dynamic `import()`, so catalog/player/thread visitors pay zero bytes for
+ * it. The read path (CE-07) never imports it at all: a non-owner or a locked agent
+ * round gets the plain `codeTokens.ts` viewer, zero new dependencies. When the chunk
+ * fails to load — a flaky connection, a CDN hiccup — `CodeMirrorBoundary` below
+ * catches it and falls back to a plain `<textarea>`, never a blank panel.
  *
  * No preview column: the full-bleed game behind this panel *is* the preview (§7 of the
  * plan). "Stage it" is the one thing that changes what it shows — see the rebuild route.
  */
+
+const LazyCodeMirrorEditor = lazy(() => import('./CodeMirrorEditor.js'));
+
+/** Catches a lazy-chunk load failure and degrades to `fallback` — CE-14's own rule. */
+class CodeMirrorBoundary extends Component<{ fallback: ReactNode; children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  componentDidCatch() {
+    // Advisory only — degrading to the plain textarea is the whole point; nothing
+    // else to do with the error, and it must never blank the panel.
+  }
+  render() {
+    return this.state.failed ? this.props.fallback : this.props.children;
+  }
+}
+
+/** `type-check.ts`'s `file:line: message` shape, back into a structured diagnostic. */
+function parseDiagnostic(raw: string): { path: string; line: number; message: string } | null {
+  const match = /^(.+?):(\d+): (.+)$/.exec(raw);
+  if (!match) return null;
+  return { path: match[1]!, line: Number(match[2]), message: match[3]! };
+}
 
 const AUTOSAVE_MS = 1500;
 const TYPECHECK_DEBOUNCE_MS = 400;
@@ -120,6 +148,15 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
 
   const file = useMemo(() => sources?.files.find((entry) => entry.path === selected) ?? null, [sources, selected]);
   const content = selected !== null ? (drafts[selected] ?? file?.content ?? '') : '';
+
+  /** CE-11's diagnostics, reshaped for CodeMirror's gutter and scoped to the open file. */
+  const cmDiagnostics = useMemo((): CodeMirrorDiagnostic[] => {
+    if (!diagnostics || !selected) return [];
+    return diagnostics
+      .map(parseDiagnostic)
+      .filter((entry): entry is NonNullable<typeof entry> => entry !== null && entry.path === selected)
+      .map((entry) => ({ line: entry.line, message: entry.message, severity: 'error' as const }));
+  }, [diagnostics, selected]);
 
   function selectFile(path: string) {
     setSelected(path);
@@ -259,6 +296,20 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
 
   const editable = !sources.readOnly;
 
+  /** CodeMirror's fallback while its chunk loads, and its permanent stand-in if that
+   * chunk fails to load at all (CE-14) — the same plain textarea either way. */
+  function plainTextarea(openFile: CodeSurfaceFile) {
+    return (
+      <textarea
+        className="code-surface-editor"
+        value={content}
+        onChange={(event) => onEdit(event.target.value)}
+        spellCheck={false}
+        aria-label={openFile.path}
+      />
+    );
+  }
+
   return (
     <div className="code-surface" data-testid="code-surface">
       <header className="code-surface-head">
@@ -299,13 +350,17 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
           {!file ? (
             <p className="code-surface-empty">{t('studioPanel.code.noFiles')}</p>
           ) : editable ? (
-            <textarea
-              className="code-surface-editor"
-              value={content}
-              onChange={(event) => onEdit(event.target.value)}
-              spellCheck={false}
-              aria-label={file.path}
-            />
+            <CodeMirrorBoundary fallback={plainTextarea(file)}>
+              <Suspense fallback={plainTextarea(file)}>
+                <LazyCodeMirrorEditor
+                  key={selected}
+                  value={content}
+                  language={languageFor(file.path)}
+                  onChange={onEdit}
+                  diagnostics={cmDiagnostics}
+                />
+              </Suspense>
+            </CodeMirrorBoundary>
           ) : (
             <pre className="code-surface-readonly-view" aria-label={file.path}>
               {content.split('\n').map((line, index) => (
