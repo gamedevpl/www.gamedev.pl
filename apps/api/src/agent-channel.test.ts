@@ -469,6 +469,61 @@ describe('agent build channel', () => {
     });
   });
 
+  it('does not duplicate the summary when a client retries end after a lost response', async () => {
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    app = await createApp(store);
+
+    const first = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/end',
+      headers: agentHeaders(),
+      payload: { summary: 'Star Parcel Run is an arcade game.' },
+    });
+    expect(first.json()).toMatchObject({ accepted: true, ended: true, summaryShown: true });
+
+    const retry = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/end',
+      headers: agentHeaders(),
+      payload: { summary: 'Star Parcel Run is an arcade game.' },
+    });
+    expect(retry.json()).toMatchObject({ accepted: true, ended: true });
+    expect(retry.json().summaryShown).toBeUndefined();
+
+    const events = await store.listBuildEvents(ISSUE);
+    expect(events.filter((event) => event.kind === 'done')).toHaveLength(1);
+  });
+
+  it('records a fresh summary once the agent has resumed and ended again', async () => {
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    app = await createApp(store);
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/end',
+      headers: agentHeaders(),
+      payload: { summary: 'First pass: arcade shell in place.' },
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/progress',
+      headers: agentHeaders(),
+      payload: { text: 'Back to add sound effects.' },
+    });
+    const second = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/end',
+      headers: agentHeaders(),
+      payload: { summary: 'Sound effects added.' },
+    });
+    expect(second.json()).toMatchObject({ accepted: true, ended: true, summaryShown: true });
+
+    const events = await store.listBuildEvents(ISSUE);
+    expect(events.filter((event) => event.kind === 'done')).toHaveLength(2);
+  });
+
   it('takes the agent at its word when end carries a localized summary', async () => {
     const store = new InMemoryStore();
     await seedSubmission(store);
