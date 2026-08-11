@@ -154,4 +154,19 @@ describe('createAgentBackendRegistryFromEnv', () => {
       expect.stringContaining('token ceiling'),
     );
   });
+
+  it('fails closed when an MCP-default provider has no endpoint', () => {
+    setEnv({
+      MANAGED_AGENT_VENDOR: 'gemini',
+      MANAGED_AGENT_API_KEY: `gemini-${randomUUID()}`,
+    });
+    const warn = vi.fn();
+    const registry = createAgentBackendRegistryFromEnv({ info: vi.fn(), warn });
+
+    expect(registry.platform).toBeUndefined();
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({ vendor: 'gemini' }),
+      expect.stringContaining('MCP lane'),
+    );
+  });
 });

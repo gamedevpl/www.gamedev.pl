@@ -62,7 +62,7 @@ import { ManagedOutputRejectedError } from './managed-agent.js';
 import { createManagedDeliveryLock } from './managed-backend.js';
 import { createSourceDeliveryService, SourceDeliveryAuthorityError } from './source-delivery.js';
 import { createKitFileStore } from './kit-files.js';
-import { InvalidUploadError } from './games-store.js';
+import { InvalidUploadError, type GamesStore } from './games-store.js';
 import {
   canTransition,
   detectStall,
@@ -2827,12 +2827,27 @@ export async function registerSubmissionRoutes(
    */
   async function reconcileGateVerdict(record: SubmissionRecord): Promise<JobTransition | null> {
     const gamesStore = options.agentChannel?.gamesStore;
-    const version = record.deliveredVersion ?? record.previewVersion;
-    if (!gamesStore || !store || !version || !record.slug) return null;
+    if (!gamesStore || !store || !record.slug) return null;
     const state = record.state ?? 'queued';
     if (state !== 'building' && state !== 'submitted' && state !== 'gating') return null;
     try {
-      const manifest = await gamesStore.getManifest(record.slug, version);
+      const roundGeneration = record.roundGeneration ?? 1;
+      // Retained versions may belong to an older round.
+      // Check previews first, accepting only this round's manifest.
+      const candidateVersions = [record.previewVersion, record.deliveredVersion].filter(
+        (version, index, versions): version is string => Boolean(version) && versions.indexOf(version) === index,
+      );
+      let version: string | undefined;
+      let manifest: Awaited<ReturnType<GamesStore['getManifest']>> = null;
+      for (const candidate of candidateVersions) {
+        const candidateManifest = await gamesStore.getManifest(record.slug, candidate);
+        if (candidateManifest?.roundGeneration === roundGeneration) {
+          version = candidate;
+          manifest = candidateManifest;
+          break;
+        }
+      }
+      if (!version || !manifest) return null;
       const emitGateMetric = async (input: {
         mode: 'preview' | 'publish';
         outcome: 'passed' | 'failed';
@@ -2845,7 +2860,7 @@ export async function registerSubmissionRoutes(
         record.roundLastGateMetricKey = key;
         logDeliveryGateVerdict(app.log, {
           issueNumber: record.issueNumber,
-          roundGeneration: record.roundGeneration ?? 1,
+          roundGeneration,
           builder: builderLabelFromRecord(record.builder, record.dispatch?.backend),
           mode: input.mode,
           outcome: input.outcome,

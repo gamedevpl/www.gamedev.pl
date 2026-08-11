@@ -193,6 +193,22 @@ describe('hasPlayableOverlay', () => {
     expect(hasPlayableOverlay(overlay)).toBe(true);
   });
 
+  it('accepts a tree with no style.css when GAME.json declares a theme', () => {
+    const overlay = Object.fromEntries(
+      PLAYABLE_TREE.filter((file) => file.path !== 'style.css').map((file) => [
+        file.path,
+        file.path === 'GAME.json'
+          ? JSON.stringify({
+              howToPlay: { goal: { en: 'Win', pl: 'Wygraj' }, hint: { en: 'Go', pl: 'Idź' } },
+              theme: { accent: '#ffd56a' },
+            })
+          : file.content,
+      ]),
+    );
+
+    expect(hasPlayableOverlay(overlay)).toBe(true);
+  });
+
   it('refuses a tree with neither index.html nor a howToPlay to generate it from', () => {
     const overlay = Object.fromEntries(
       PLAYABLE_TREE.filter((f) => f.path !== 'index.html').map((f) => [f.path, f.content]),

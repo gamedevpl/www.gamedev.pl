@@ -70,7 +70,7 @@ export function createManagedPlatformBackendFromEnv(deps?: ManagedBackendDeps, l
     isCopilot
       ? process.env.AGENT_TASKS_TOKEN
       : isGemini
-        ? (process.env.MANAGED_AGENT_API_KEY ?? process.env.GEMINI_API_KEY)
+        ? (process.env.GEMINI_API_KEY ?? process.env.MANAGED_AGENT_API_KEY)
         : process.env.MANAGED_AGENT_API_KEY
   )?.trim();
   const model = (
@@ -136,7 +136,10 @@ export function createManagedPlatformBackendFromEnv(deps?: ManagedBackendDeps, l
   }
   // An MCP agent submits for itself, so it needs no sink.
   const mcpUrl = process.env.MANAGED_AGENT_MCP_URL?.trim();
-  const needsMcpEndpoint = promptLane === 'mcp' || (!isCopilot && Boolean(mcpUrl));
+  // Anthropic and Gemini default to MCP.
+  // Validate before backend construction so startup fails closed.
+  const effectivePromptLane = promptLane ?? (isCopilot ? 'harness' : 'mcp');
+  const needsMcpEndpoint = effectivePromptLane === 'mcp';
   if (needsMcpEndpoint && !mcpUrl) {
     log?.warn({ vendor }, 'managed agent MCP lane is enabled but MANAGED_AGENT_MCP_URL is missing');
     return undefined;
