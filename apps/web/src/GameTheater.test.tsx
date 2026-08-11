@@ -557,6 +557,36 @@ describe('GameTheater how-to-play visit telemetry', () => {
     }
   });
 
+  it('keeps controls hidden after an explicit hide until the player reveals them', async () => {
+    await draw();
+    const bar = container.querySelector('.game-theater-bar') as HTMLElement;
+    const hide = container.querySelector('.theater-hide-btn') as HTMLButtonElement;
+
+    expect(hide.getAttribute('aria-label')).toBe('Hide controls');
+    await click(hide);
+    expect(bar.classList.contains('is-idle')).toBe(true);
+    expect(container.querySelector('.theater-reveal-btn')).not.toBeNull();
+
+    await act(async () => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: { source: 'gdpl-player', type: 'end', outcome: 'lost' },
+          origin: 'null',
+        }),
+      );
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: { source: 'gdpl-player', type: 'activity' },
+          origin: 'null',
+        }),
+      );
+    });
+    expect(bar.classList.contains('is-idle')).toBe(true);
+
+    await click(container.querySelector('.theater-reveal-btn'));
+    expect(bar.classList.contains('is-idle')).toBe(false);
+  });
+
   it('pins the bar while one of its controls is focused', async () => {
     vi.useFakeTimers();
     try {

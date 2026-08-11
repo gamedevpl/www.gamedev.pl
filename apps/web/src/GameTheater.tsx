@@ -167,6 +167,7 @@ export function GameTheater({
   const [playerEngaged, setPlayerEngaged] = useState(false);
   const [chromeIdle, setChromeIdle] = useState(false);
   const [chromeFocused, setChromeFocused] = useState(false);
+  const [chromeManuallyHidden, setChromeManuallyHidden] = useState(false);
   /**
    * The always-available doors to Remix and its painter (ops repo,
    * remix-content-editing-plan §3.1): nonces the menu bumps, threaded down to
@@ -222,6 +223,7 @@ export function GameTheater({
   }, []);
 
   const revealChrome = useCallback(() => {
+    setChromeManuallyHidden(false);
     setPlayerEngaged(true);
     setChromeIdle(false);
   }, []);
@@ -230,7 +232,14 @@ export function GameTheater({
     // A terminal screen is another orientation moment: surface exit/feedback/remix
     // controls and keep them there until the next round begins with fresh input.
     setPlayerEngaged(false);
-    setChromeIdle(false);
+    if (!chromeManuallyHidden) setChromeIdle(false);
+  }, [chromeManuallyHidden]);
+
+  const hideChrome = useCallback(() => {
+    setChromeManuallyHidden(true);
+    setChromeIdle(true);
+    frameRef.current?.focus();
+    frameRef.current?.contentWindow?.focus();
   }, []);
 
   // Closing hands focus to the game, not back to the trigger. In a player the next key
@@ -362,14 +371,14 @@ export function GameTheater({
   // Gated on real game input: chrome stays while somebody is still orienting.
   // Focused controls stay reachable; repeated gameplay input does not reset the clock.
   useEffect(() => {
-    if (chromeIdle) return;
+    if (chromeManuallyHidden || chromeIdle) return;
     if (!playerEngaged || chromeFocused || moreOpen || howToOpen || fullscreen) {
       setChromeIdle(false);
       return;
     }
     const timer = window.setTimeout(() => setChromeIdle(true), PLAYER_CHROME_IDLE_MS);
     return () => window.clearTimeout(timer);
-  }, [chromeFocused, chromeIdle, fullscreen, howToOpen, moreOpen, playerEngaged]);
+  }, [chromeFocused, chromeIdle, chromeManuallyHidden, fullscreen, howToOpen, moreOpen, playerEngaged]);
 
   const toggleFullscreen = useCallback(() => {
     if (document.fullscreenElement) {
@@ -735,6 +744,16 @@ export function GameTheater({
                 </div>
               </div>
             )}
+            <button
+              type="button"
+              className="secondary-btn theater-hide-btn"
+              onClick={hideChrome}
+              aria-label={t('player.hideControls')}
+              title={t('player.hideControls')}
+            >
+              <PixelIcon name="eye" size={13} />
+              <span className="btn-label">{t('player.hideControls')}</span>
+            </button>
             <button
               className="secondary-btn exit-btn"
               onClick={onExit}
