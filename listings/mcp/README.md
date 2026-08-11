@@ -47,7 +47,7 @@ channel at all. Revisit only if Gemini CLI adoption changes.
 
 ## What the server exposes
 
-Thirty tools, advertised to every client that connects. Grouped by where they fall in a
+Thirty-one tools, advertised to every client that connects. Grouped by where they fall in a
 build round; the authoritative list is whatever `tools/list` returns, and
 `plugin-manifests.test.ts` fails if this table drifts from it.
 
@@ -67,6 +67,7 @@ build round; the authoritative list is whatever `tools/list` returns, and
 | `read_kit_file`          | Read one Creator Kit file               | read        |
 | `read_kit_files`         | Read several Creator Kit files          | read        |
 | `read_kit_file_fragment` | Read a Creator Kit file fragment        | read        |
+| `knowledge_query`        | Ask GameKit/EditorKit/docs a question   | read        |
 | `stage_source_file`      | Stage one source file                   | destructive |
 | `patch_source_file`      | Edit one staged source file             | destructive |
 | `delete_source_file`     | Delete one staged source file           | destructive |
