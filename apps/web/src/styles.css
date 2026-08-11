@@ -9911,6 +9911,15 @@ button.builder-mode-selector:disabled {
   animation: mascot-hustle 0.45s ease-in-out infinite;
 }
 
+/*
+ * The stir is the "busy" tell while cooking — a full-body hustle on top of it reads as
+ * two animations fighting instead of one. Same specificity as the busy rule above, so
+ * source order alone decides; this has to stay below it to win.
+ */
+.mascot:not(.mascot--static).mascot--cooking .mascot__body-group {
+  animation: mascot-breathe 2.8s ease-in-out infinite;
+}
+
 .mascot:not(.mascot--static).mascot--sad .mascot__body-group {
   animation: mascot-sigh 3.6s ease-in-out infinite;
 }
@@ -10121,6 +10130,127 @@ button.builder-mode-selector:disabled {
   }
   55% {
     transform: translateY(7px);
+  }
+}
+
+/*
+ * Cooking mime — a stockpot the mascot stirs for build/loading moments
+ * (`cooking` prop). Same fade-in-arm + pop-in-prop shape as the scroll phone
+ * above; put-away is a CSS transition so the pot can tuck away when `cooking`
+ * drops rather than vanishing.
+ */
+.mascot__pot {
+  pointer-events: none;
+}
+
+.mascot__pot-arm {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.mascot__pot-rig {
+  opacity: 0;
+  transform: translate(4px, 18px) scale(0.55);
+  transform-origin: 55px 46px;
+  transition:
+    opacity 0.2s ease,
+    transform 0.42s cubic-bezier(0.34, 1.45, 0.64, 1);
+}
+
+.mascot__pot-spoon {
+  transform-origin: 55px 40px;
+}
+
+.mascot__pot-shake {
+  transform-origin: 55px 44px;
+}
+
+.mascot__pot-steam-a,
+.mascot__pot-steam-b,
+.mascot__pot-steam-c {
+  opacity: 0;
+}
+
+.mascot:not(.mascot--static).mascot--cooking .mascot__pot-arm {
+  opacity: 1;
+  transition-delay: 0.06s;
+}
+
+.mascot:not(.mascot--static).mascot--cooking .mascot__pot-rig {
+  opacity: 1;
+  transform: translate(0, 0) scale(1);
+}
+
+.mascot:not(.mascot--static).mascot--cooking .mascot__pot-spoon {
+  animation: mascot-pot-stir 0.9s ease-in-out infinite;
+}
+
+/* The pan-toss half of the gag — the pot itself rocks, on its own beat from the spoon. */
+.mascot:not(.mascot--static).mascot--cooking .mascot__pot-shake {
+  animation: mascot-pot-rock 0.6s ease-in-out infinite;
+}
+
+.mascot:not(.mascot--static).mascot--cooking .mascot__pot-steam-a {
+  animation: mascot-pot-steam 1.8s ease-out infinite;
+}
+
+.mascot:not(.mascot--static).mascot--cooking .mascot__pot-steam-b {
+  animation: mascot-pot-steam 1.8s ease-out infinite;
+  animation-delay: 0.5s;
+}
+
+.mascot:not(.mascot--static).mascot--cooking .mascot__pot-steam-c {
+  animation: mascot-pot-steam 1.8s ease-out infinite;
+  animation-delay: 1s;
+}
+
+@keyframes mascot-pot-stir {
+  0%,
+  100% {
+    transform: rotate(-18deg);
+  }
+  50% {
+    transform: rotate(14deg);
+  }
+}
+
+@keyframes mascot-pot-rock {
+  0%,
+  100% {
+    transform: rotate(-3deg) translateY(0);
+  }
+  50% {
+    transform: rotate(3deg) translateY(-1px);
+  }
+}
+
+/* Chef's hat — worn only while cooking, sits still above the head. */
+.mascot__chef-hat {
+  opacity: 0;
+  transform: translateY(4px) scale(0.8);
+  transform-origin: 35px 0px;
+  transition:
+    opacity 0.2s ease,
+    transform 0.3s cubic-bezier(0.34, 1.45, 0.64, 1);
+}
+
+.mascot:not(.mascot--static).mascot--cooking .mascot__chef-hat {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  transition-delay: 0.06s;
+}
+
+@keyframes mascot-pot-steam {
+  0% {
+    transform: translateY(0);
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.7;
+  }
+  100% {
+    transform: translateY(-10px);
+    opacity: 0;
   }
 }
 
@@ -10510,10 +10640,20 @@ button.builder-mode-selector:disabled {
   }
 
   .mascot .mascot__phone-arm,
-  .mascot .mascot__phone-device {
+  .mascot .mascot__phone-device,
+  .mascot .mascot__pot-arm,
+  .mascot .mascot__pot-rig,
+  .mascot .mascot__chef-hat {
     transition: none !important;
     opacity: 0 !important;
     transform: none !important;
+  }
+
+  /* Cooking prop is motion by definition too — same treatment as the phone mime. */
+  .mascot__pot-spoon,
+  .mascot__pot-shake,
+  .mascot__pot-steam > path {
+    animation: none !important;
   }
 }
 
@@ -11111,15 +11251,6 @@ button.builder-mode-selector:disabled {
   gap: 8px;
   flex-wrap: wrap;
   justify-content: center;
-}
-
-.studio-stage-card.is-assembling .studio-stage-card-spinner {
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  border: 2.5px solid rgba(0, 228, 172, 0.22);
-  border-top-color: var(--turquoise);
-  animation: status-spin 0.8s linear infinite;
 }
 
 /* Version ribbon (the honesty organ) — bottom-center, non-dismissible. */

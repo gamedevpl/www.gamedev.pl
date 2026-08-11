@@ -59,6 +59,8 @@ type MascotProps = {
    * every other instance.
    */
   scrolling?: boolean;
+  /** Mounts the stirring-stockpot prop for busy/loading moments. */
+  cooking?: boolean;
 };
 
 type Span = readonly [number, number, number];
@@ -357,6 +359,88 @@ function ScrollPhone({ clipId }: { clipId: string }) {
   );
 }
 
+// Stirring stockpot for the `cooking` gag.
+function CookingPot() {
+  return (
+    <g className="mascot__pot" aria-hidden="true">
+      <path
+        className="mascot__pot-arm"
+        d="M46 48 Q52 42 55 38"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="3.2"
+        strokeLinecap="round"
+      />
+      <g className="mascot__pot-rig">
+        <g className="mascot__pot-shake">
+          <path
+            className="mascot__pot-handle mascot__pot-handle--left"
+            d="M45 41 Q40 41 41 45"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+          />
+          <path
+            className="mascot__pot-handle mascot__pot-handle--right"
+            d="M65 41 Q70 41 69 45"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+          />
+          <rect className="mascot__pot-belly" x="45" y="40" width="20" height="9" rx="2.4" fill="#241a12" />
+          <ellipse
+            className="mascot__pot-rim"
+            cx="55"
+            cy="40"
+            rx="10.5"
+            ry="3.2"
+            fill="#2f2216"
+            stroke="currentColor"
+            strokeWidth="1.4"
+          />
+        </g>
+        <g className="mascot__pot-steam" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+          <path className="mascot__pot-steam-a" d="M50 37 q-2 -4 0 -8 q2 -4 0 -8" />
+          <path className="mascot__pot-steam-b" d="M55 36 q-2 -4 0 -8 q2 -4 0 -8" />
+          <path className="mascot__pot-steam-c" d="M60 37 q-2 -4 0 -8 q2 -4 0 -8" />
+        </g>
+        <g className="mascot__pot-spoon">
+          <path d="M55 40 L57 26" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" fill="none" />
+          <ellipse cx="57.4" cy="24.6" rx="1.9" ry="2.7" fill="currentColor" />
+        </g>
+      </g>
+    </g>
+  );
+}
+
+// Toque above the head, clear of the eye cutouts.
+function ChefHat() {
+  return (
+    <g className="mascot__chef-hat" aria-hidden="true">
+      <path
+        className="mascot__chef-hat-poof"
+        d="M23 -4 C21 -16 29 -22 35 -22 C41 -22 49 -16 47 -4 C44 -8 40 -5 35 -5 C30 -5 26 -8 23 -4 Z"
+        fill="#f4f4f4"
+        stroke="#c9c9c9"
+        strokeWidth="1"
+      />
+      <rect
+        className="mascot__chef-hat-band"
+        x="24"
+        y="-4.4"
+        width="22"
+        height="4.4"
+        rx="1.6"
+        fill="#f4f4f4"
+        stroke="#c9c9c9"
+        strokeWidth="1"
+      />
+    </g>
+  );
+}
+
 export function Mascot({
   emotion = 'idle',
   size = 48,
@@ -365,6 +449,7 @@ export function Mascot({
   staticPose = false,
   look,
   scrolling,
+  cooking = false,
 }: MascotProps) {
   const reactId = useId().replace(/:/g, '');
   const maskId = `mascot-mask-${reactId}`;
@@ -375,6 +460,7 @@ export function Mascot({
     `mascot--${emotion}`,
     staticPose ? 'mascot--static' : null,
     scrolling ? 'mascot--scrolling' : null,
+    cooking ? 'mascot--cooking' : null,
     className,
   ]
     .filter(Boolean)
@@ -437,6 +523,8 @@ export function Mascot({
         ) : null}
 
         {showPhone ? <ScrollPhone clipId={phoneClipId} /> : null}
+        {cooking ? <ChefHat /> : null}
+        {cooking ? <CookingPot /> : null}
       </g>
     </svg>
   );
