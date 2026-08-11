@@ -129,6 +129,7 @@ describe('provider registry', () => {
     const stub: ManagedAgentProvider = {
       vendor: 'test-vendor',
       model: 'test-model',
+      promptLane: 'outputs',
       startSession: async () => ({ id: 's1', state: 'queued' }),
       getSession: async () => null,
       listOutputs: async () => [],

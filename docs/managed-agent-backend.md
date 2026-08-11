@@ -1,11 +1,10 @@
 # Managed agent backend — running the builder ourselves, on a swappable vendor
 
-> Status: ✅ **MCP shape live when selected.** With a valid managed configuration and the
-> environment registry selected, the managed Anthropic adapter occupies the platform
-> builder slot. A round mints a per-round vault for `MANAGED_AGENT_MCP_URL`, the agent
-> delivers through `submit_sources`, and preview mode lands at `ready_for_review`. The
-> remaining gap is the **pull-shape** delivery sink — see
-> [What is not wired yet](#what-is-not-wired-yet).
+> Status: ✅ **MCP, Copilot, and Gemini drivers are implemented.** Anthropic and Gemini use
+> the MCP lane; Copilot defaults to the existing repository harness and build channel, with
+> an opt-in MCP lane for selected rounds. All three run through the managed lifecycle and
+> record their native usage units. Production cutover remains gated by the MP-04 owner
+> approval described in the migration brief.
 >
 > **Why this is not the execution model that was removed for legal reasons.** The thing
 > [`games-repo.md`](./games-repo.md) abandoned was agent compute _we operate_ — containers
@@ -27,6 +26,23 @@ cancellation possible, because we own the session rather than assigning it.
 The risk in building it is picking a vendor and discovering the vendor is the design. So
 the vendor is behind a seam narrow enough to be re-implemented in an afternoon.
 
+## GM-01 Gemini Managed Agents research findings
+
+This is the written vendor gate for the Gemini driver. It records the five questions that
+had to be answered before implementation, with links to the primary Google documentation.
+
+| Question                                                        | Finding                                                                                                                                                                                                                                           | Evidence and implementation consequence                                                                                                                                                                                                                                                                                            |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Can a background interaction call a remote MCP server mid-loop? | Yes. Remote `mcp_server` tools are part of the managed-agent interaction shape, and tool-call/result steps are represented in the interaction record.                                                                                             | [Managed Agents](https://ai.google.dev/gemini-api/docs/antigravity-agent) and the [Interactions API](https://ai.google.dev/api/interactions-api). Gemini declares the platform MCP endpoint as a tool and uses the MCP prompt lane.                                                                                                |
+| How does a round authenticate its MCP call?                     | MCP tool headers can carry an interaction-specific `Authorization` header. A static connector-tier secret is therefore not a prerequisite for this provider.                                                                                      | [Managed Agents authentication](https://ai.google.dev/gemini-api/docs/antigravity-agent). The adapter matches the current round's MCP URL and places its bearer only in that interaction's tool definition.                                                                                                                        |
+| Can remote egress be restricted to the MCP host?                | Yes. A remote environment accepts a network allowlist; the adapter derives it from MCP endpoint hostnames plus configured allowed hosts.                                                                                                          | [Agent environments](https://ai.google.dev/gemini-api/docs/agent-environment). Named environments are refreshed with the allowlist; inline seed files are rejected for named environments rather than silently ignored.                                                                                                            |
+| Is there a native token ceiling and usage ledger?               | Yes. `agent_config.max_total_tokens` is the native interaction ceiling, and usage exposes input, output, thought, cached, tool-use, and total token fields.                                                                                       | [Custom agents](https://ai.google.dev/gemini-api/docs/custom-agents) and the [Interactions API](https://ai.google.dev/api/interactions-api). The shared backend represents the ceiling as `ManagedUsageBudget` with `unit: 'tokens'`, while the provider forwards the same value natively.                                         |
+| What are the lifecycle, cancellation, and output boundaries?    | Background interactions expose lifecycle states including running, completed, failed, incomplete, and budget-exceeded; cancellation is a dedicated interaction endpoint. The API does not provide a session file-listing surface for this driver. | [Background execution](https://ai.google.dev/gemini-api/docs/background-execution) and the [Interactions API](https://ai.google.dev/api/interactions-api). The adapter maps incomplete/budget-exceeded to a finished state, reports `enforced` only after a non-empty cancel response, and deliberately exposes no output harvest. |
+
+The conclusions above remove the assumed MP-05 static connector dependency for Gemini, while
+preserving the platform's existing round-scoped MCP capability and the shared cancellation
+and budget-stop record.
+
 ## The seam
 
 [`managed-agent.ts`](../apps/api/src/managed-agent.ts) is four capabilities and nothing
@@ -35,7 +51,7 @@ else:
 | Capability | Method                       | Why it is the whole surface                           |
 | ---------- | ---------------------------- | ----------------------------------------------------- |
 | Start      | `startSession`               | A prompt, a model, a workspace, an output directory   |
-| Observe    | `getSession`                 | One normalized state plus token usage                 |
+| Observe    | `getSession`                 | One normalized state plus native usage                |
 | Harvest    | `listOutputs` / `readOutput` | The delivery, pulled — never pushed through the model |
 | Stop       | `cancelSession`              | With an honest `enforced` answer                      |
 
@@ -57,10 +73,8 @@ a second vendor would spell differently belongs in its adapter.
    onto the `AgentTaskState` the job machine already understands. An unknown word reads as
    `in_progress`, never `failed`: a vendor adding a state is not a reason to abandon a live
    build.
-2. **Usage is tokens.** Credits are one vendor's billing unit and cannot be converted to
-   another's at any published rate, so `sessionTokens` is its own field beside
-   `sessionCredits` rather than a reinterpretation of it. A cost report stays honest
-   because each backend reports the only unit it actually knows.
+2. **Usage keeps native units.** Token and credit observations are discriminated and carry
+   their vendor/model identity. No driver converts one unit into another.
 3. **The shared parts are shared, and live in neutral files.** The state vocabulary is
    `agent-state.ts`, not GitHub's client; the brief is `build-prompt.ts`, not Copilot's
    backend. Both used to sit inside the first backend that needed them, which made a second
@@ -69,33 +83,82 @@ a second vendor would spell differently belongs in its adapter.
    Adding one is a `registerManagedProvider` line and a file; replacing one is an
    environment change and a deploy.
 
-## Why Copilot does not move under this seam
+## Copilot under the seam
 
-The obvious tidying — make architecture A a `ManagedAgentProvider` too, so there is one
-abstraction instead of two — makes both worse, and it is worth writing down why before
-someone tries it.
+Copilot now implements `ManagedAgentProvider` while keeping its harness-specific answers:
 
-`AgentBackend` is already the shared abstraction, and it is the one carrying its weight:
-Copilot, self and managed all implement it, and the job machine, gate, store, review and
-publication cannot tell them apart. `ManagedAgentProvider` is a deliberately narrower seam
-one level down, for vendors that share the hosted-session shape. Copilot does not share it:
+| Seam capability          | Copilot's answer                                           |
+| ------------------------ | ---------------------------------------------------------- |
+| `startSession` workspace | A **branch**, staged with git writes — not a list of files |
+| `getSession` usage       | **Credits**, never tokens                                  |
+| `listOutputs`            | Nothing to list. Delivery is a push over the build channel |
+| `cancelSession`          | Fits — cooperative, `enforced: false`                      |
 
-| Seam capability          | Copilot's answer                                                                     |
-| ------------------------ | ------------------------------------------------------------------------------------ |
-| `startSession` workspace | A **branch**, staged with git writes — not a list of files                           |
-| `getSession` usage       | **Credits**, never tokens. The seam's "tokens are universal" claim is not true of it |
-| `listOutputs`            | Nothing to list. Delivery is a push over the build channel                           |
-| `cancelSession`          | Fits — cooperative, `enforced: false`                                                |
+The driver declares the harness prompt lane by default. A round may override that lane
+through `BuildBrief.promptLane`; vendor names do not choose prompt behavior.
 
-One of four fits. Bending the rest means either a lowest-common-denominator seam where
-every capability is optional — which stops constraining anything and stops being an
-abstraction — or a fat one carrying branches, credits and output directories so that each
-implementation ignores two thirds of it.
+### Copilot MCP lane
 
-What is genuinely shared was shared instead: the state vocabulary (`agent-state.ts`), the
-brief (`build-prompt.ts`), the observation shape, and — once the sink is extracted — one
-definition of "delivered". That is convergence where the two architectures actually agree,
-rather than a common interface over two things that differ.
+The Copilot MCP lane replaces the harness lane for the selected round. It is intended for
+fast previews: the prompt uses the same `buildPrompt` fast contract as Anthropic, and the
+round key travels in `start({ slug, key })`. The static Copilot MCP connector authenticates
+the connection only; the MCP server requires the live round key before it resolves any
+round-scoped tool.
+
+The two lanes are never combined in one round. Publish seals stay on the harness lane
+until a caller explicitly selects MCP for a different round. The connector-only replay
+test enumerates every mutating tool advertised by the MCP server and requires refusal.
+
+GitHub configures this connector outside the repository, under the repository's Copilot
+MCP settings. The remote-server header must reference an Agents secret named
+`COPILOT_MCP_CONNECTOR_SECRET`, for example:
+
+```json
+{
+  "mcpServers": {
+    "gamedevpl": {
+      "url": "https://www.gamedev.pl/api/mcp",
+      "headers": {
+        "Authorization": "Bearer $COPILOT_MCP_CONNECTOR_SECRET"
+      }
+    }
+  }
+}
+```
+
+The Cloud Run deployment maps the corresponding runtime value into the same environment
+name. GitHub's MCP secret-prefix rule applies to the Agents-side secret; the lower-level
+Secret Manager resource name is only a deployment detail. The checked-in root `mcp.json`
+is the Cursor manifest and does not configure Copilot.
+
+Copilot's firewall does not apply to MCP servers; it only covers processes started through
+the agent's Bash tool. The connector bearer is therefore not an isolation boundary. The
+security property is the round-key exchange and the refusal of every mutating tool before
+that exchange, which the connector-only replay test keeps load-bearing.
+
+## Gemini under the seam
+
+Gemini uses the MCP lane and starts a background interaction with the documented
+`antigravity` agent configuration. Each MCP endpoint is declared as an `mcp_server` tool;
+the current round's bearer is attached to that tool's `Authorization` header, so no static
+connector secret is copied into the environment or persisted in the session. The remote
+environment carries the allowlist derived from the endpoint hostnames and configured
+additional hosts.
+
+An unnamed remote environment may receive the round's seed files as inline sources. A named
+environment cannot accept those files through this path, so the adapter rejects that mixed
+configuration before dispatch. Gemini has no file-output listing API in this seam; delivery
+is therefore by MCP `submit_sources`, and `listOutputs` remains empty.
+
+The backend budget is the shared unit-tagged shape:
+
+```ts
+{ unit: 'tokens', max: 50_000 }
+```
+
+The provider forwards that same value as Gemini's native `max_total_tokens`. If measured usage
+passes the ceiling, the backend records a `ManagedBudgetStop` and reports the round as
+`cancelled` with `stopReason: 'budget_reached'`; a wall-clock expiry remains `timed_out`.
 
 ## Two delivery shapes, and the one guard that covers both
 
@@ -232,7 +295,8 @@ There are four levels of test:
 
 ```bash
 npx vitest run apps/api/src/managed-agent.test.ts apps/api/src/managed-backend.test.ts \
-  apps/api/src/managed-provider-anthropic.test.ts apps/api/src/build-prompt.test.ts
+  apps/api/src/managed-provider-anthropic.test.ts apps/api/src/managed-provider-gemini.test.ts \
+  apps/api/src/build-prompt.test.ts
 ```
 
 **2. The probe.** One whole round through the real backend, real caps and real path
@@ -310,6 +374,34 @@ variable keeps its explicit cents name for server configuration. The backend int
 session when the wall-clock cap expires. Omitting either value makes the probe refuse to start
 rather than run unbounded.
 
+Copilot uses the harness lane and its own Agent Tasks credential:
+
+```bash
+AGENT_TASKS_TOKEN=... \
+npm run managed:probe -w @gamedevpl/api -- --vendor copilot --create --wait \
+  --wait-seconds 120 --budget-credits 25
+```
+
+`--vendor copilot --mcp` selects the MCP prompt lane without passing a per-round bearer
+credential to GitHub. The repository's Copilot MCP configuration supplies the static
+connector header. A standalone probe can print task transitions and usage, but the
+production channel signals and gate verdict require the app's configured store and
+delivery wiring.
+
+Gemini uses the MCP lane and a native token ceiling:
+
+```bash
+GEMINI_API_KEY=... \
+MANAGED_AGENT_MCP_URL=https://www.gamedev.pl/api/mcp \
+npm run managed:probe -w @gamedevpl/api -- --vendor gemini --mcp --wait \
+  --wait-seconds 120 --budget-tokens 50000
+```
+
+`--vendor gemini` defaults to `gemini-3.6-flash`; `GEMINI_API_KEY` or
+`MANAGED_AGENT_API_KEY` supplies the credential and `--model` overrides the model label.
+The provider records native interaction usage and does not attempt to pull files from the
+session.
+
 The probe can inject a digest file while exercising this path:
 
 ```bash
@@ -344,8 +436,14 @@ With `MANAGED_AGENT_DELIVERY_MODE=preview` (the default), a successful delivery 
 | Variable                            | Meaning                                                          |
 | ----------------------------------- | ---------------------------------------------------------------- |
 | `MANAGED_AGENT_VENDOR`              | Registered adapter id; required configuration must also be valid |
-| `MANAGED_AGENT_API_KEY`             | Vendor credential. Never logged, never persisted                 |
-| `MANAGED_AGENT_MODEL`               | Provider model label; Anthropic's actual model is on its Agent   |
+| `MANAGED_AGENT_API_KEY`             | Anthropic or Gemini credential. Never logged, never persisted    |
+| `GEMINI_API_KEY`                    | Optional Gemini-specific credential fallback                     |
+| `MANAGED_AGENT_MODEL`               | Anthropic or Gemini model label                                  |
+| `AGENT_TASKS_TOKEN`                 | Copilot Agent Tasks credential                                   |
+| `AGENT_TASKS_MODEL`                 | Copilot model label; defaults to the existing Copilot model      |
+| `GAMES_REPO`                        | Games repository targeted by Copilot                             |
+| `GAMES_PUBLISHED_REF`               | Copilot harness base ref                                         |
+| `AGENT_CUSTOM_AGENT`                | Copilot custom agent name                                        |
 | `MANAGED_AGENT_ID`                  | Anthropic Managed Agent resource id                              |
 | `MANAGED_AGENT_ENVIRONMENT_ID`      | Anthropic Managed Environment resource id                        |
 | `MANAGED_AGENT_MCP_URL`             | MCP endpoint; triggers per-round vault + `overrideTools`         |
@@ -353,6 +451,9 @@ With `MANAGED_AGENT_DELIVERY_MODE=preview` (the default), a successful delivery 
 | `MANAGED_AGENT_EFFORT`              | `low` / `medium` / `high`                                        |
 | `MANAGED_AGENT_MAX_SECONDS`         | Hard ceiling on one session's wall clock                         |
 | `MANAGED_AGENT_MAX_LIST_COST_CENTS` | Anthropic session budget, in whole cents                         |
+| `MANAGED_AGENT_COPILOT_MAX_CREDITS` | Optional Copilot per-round credit ceiling                        |
+| `MANAGED_AGENT_PROMPT_LANE`         | Optional default lane: `mcp`, `harness`, or `outputs`            |
+| `MANAGED_AGENT_MAX_TOTAL_TOKENS`    | Optional Gemini per-round token ceiling                          |
 | `MANAGED_AGENT_DELIVERY_MODE`       | `preview` (default) or `publish`                                 |
 | `MANAGED_AGENT_BASE_URL`            | Override the API origin — gateways, tests                        |
 
@@ -363,11 +464,12 @@ agent we happen to run.
 ## Adding a vendor
 
 1. Write `managed-provider-<vendor>.ts` implementing `ManagedAgentProvider`.
-2. Normalize states with `normalizeManagedState`; report usage in tokens.
-3. Return paths relative to the request's `outputPath`.
-4. Answer `cancelSession` honestly — `enforced: false` if the stop is cooperative.
-5. `registerManagedProvider('<vendor>', factory)` at the bottom of the file.
-6. Import it once where adapters are registered.
+2. Normalize states; report usage in the vendor's native unit.
+3. Declare the prompt lane (`mcp`, `harness`, or `outputs`).
+4. Return paths relative to the request's `outputPath`.
+5. Answer `cancelSession` honestly — `enforced: false` if the stop is cooperative.
+6. `registerManagedProvider('<vendor>', factory)` at the bottom of the file.
+7. Import it once where adapters are registered.
 
 The test suite for the Anthropic adapter is the shape to copy: an injected `fetchImpl`,
 no network, and assertions that the credential never reaches a URL.

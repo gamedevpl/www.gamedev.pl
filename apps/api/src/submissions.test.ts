@@ -1476,6 +1476,7 @@ describe('submission routes', () => {
         version: 'v3',
         createdAt: '2026-07-31T10:00:00.000Z',
         issueNumber: 97,
+        roundGeneration: 1,
         sourceFiles: [],
         gate: { green: true, ranAt: '2026-07-31T10:30:00.000Z' },
       }),
@@ -1521,6 +1522,61 @@ describe('submission routes', () => {
     await app.close();
   });
 
+  it('ignores carried-over gate verdicts from an older round', async () => {
+    const { githubClient } = createGithubClientStub({ issueNumber: 99 });
+    const { backend } = createBackendStub();
+    const getManifest = vi.fn(async (_slug: string, version: string) =>
+      version === 'v1'
+        ? {
+            roundGeneration: 1,
+            gate: { green: true, ranAt: '2026-07-31T10:30:00.000Z' },
+          }
+        : {
+            roundGeneration: 2,
+            gate: { green: true, ranAt: '2026-08-01T10:30:00.000Z' },
+          },
+    );
+    const gamesStore = { getManifest } as unknown as GamesStore;
+
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      agentChannel: { gamesStore },
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    await store.setSubmissionSlug(job.issueNumber, 'space-parcels');
+    await store.setSubmissionDeliveredVersion(job.issueNumber, 'v1');
+    await store.setSubmissionPreviewVersion(job.issueNumber, 'v2');
+    await store.recordJobTransition(job.issueNumber, {
+      to: 'submitted',
+      at: '2026-07-31T10:00:00.000Z',
+      by: 'agent',
+      reason: 'sources_delivered',
+    });
+    await store.bumpRoundGeneration(job.issueNumber);
+
+    const status = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(job.issueNumber, secret)}`,
+      headers: authHeaders,
+    });
+
+    expect(status.statusCode).toBe(200);
+    expect(status.json().phase).toBe('ready_for_review');
+    expect(getManifest).toHaveBeenCalledWith('space-parcels', 'v2');
+    expect(getManifest).not.toHaveBeenCalledWith('space-parcels', 'v1');
+
+    await app.close();
+  });
+
   // mode=preview writes manifest.previewGate, not manifest.gate (arena-brawlers).
   it('acts on a red preview-only gate verdict for a job still sitting in submitted', async () => {
     const { githubClient } = createGithubClientStub({ issueNumber: 197 });
@@ -1531,6 +1587,7 @@ describe('submission routes', () => {
         version: 'v3',
         createdAt: '2026-08-09T14:20:00.000Z',
         issueNumber: 197,
+        roundGeneration: 1,
         sourceFiles: [],
         previewGate: {
           green: false,
@@ -1588,6 +1645,7 @@ describe('submission routes', () => {
         version: 'v4',
         createdAt: '2026-08-09T14:20:00.000Z',
         issueNumber: 198,
+        roundGeneration: 1,
         sourceFiles: [],
         previewGate: { green: true, ranAt: '2026-08-09T14:22:00.000Z' },
       }),
@@ -1641,6 +1699,7 @@ describe('submission routes', () => {
         version: 'v3',
         createdAt: '2026-08-09T22:00:00.000Z',
         issueNumber: 727,
+        roundGeneration: 1,
         sourceFiles: [],
         previewGate: { green: true, ranAt: '2026-08-09T22:30:00.000Z' },
       }),
@@ -1720,6 +1779,7 @@ describe('submission routes', () => {
         version: 'v3',
         createdAt: '2026-07-31T10:00:00.000Z',
         issueNumber: 197,
+        roundGeneration: 1,
         sourceFiles: [],
         gate: {
           green: true,
@@ -1790,6 +1850,7 @@ describe('submission routes', () => {
         version,
         createdAt: '2026-07-31T10:00:00.000Z',
         issueNumber: 98,
+        roundGeneration: 1,
         sourceFiles: [],
         gate:
           version === 'v3'

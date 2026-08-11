@@ -195,6 +195,16 @@ describe('reconcileAgentObservation', () => {
     });
   });
 
+  it('keeps a budget stop visible in the round transition', () => {
+    expect(
+      reconcileAgentObservation('building', {
+        state: 'cancelled',
+        hasCandidate: false,
+        stopReason: 'budget_reached',
+      }),
+    ).toEqual({ to: 'canceled', reason: 'budget_reached' });
+  });
+
   it('ignores agent lifecycle once the work has been delivered', () => {
     // A session reporting failure after a successful upload must not snatch the
     // candidate back from the gate or the reviewer.

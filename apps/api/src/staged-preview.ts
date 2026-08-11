@@ -105,7 +105,9 @@ export const MAX_CONCURRENT_STAGED_PREVIEWS = 2;
 export const MAX_STAGED_PREVIEW_JOBS = 2_000;
 
 /**
- * Files the assembler cannot proceed without.
+ * Files the assembler normally reads from the game's own tree. `style.css` can instead
+ * be generated from the `theme` in GAME.json, so the readiness predicate below treats it
+ * as optional only for that explicit case.
  *
  * `getGameSources` reads them from the ref when an overlay does not carry them, and a
  * self-build game usually lives in no ref at all — so a tree missing any of these is not
@@ -168,10 +170,12 @@ export function overlayGameSources(layers: OverlayLayers): Record<string, string
 export function hasPlayableOverlay(overlay: Record<string, string>): boolean {
   // trim(), matching getGameSources: a whitespace-only file is absent, not staged.
   const staged = (path: string): boolean => typeof overlay[path] === 'string' && overlay[path].trim().length > 0;
-  if (!PLAYABLE_OVERLAY_FILES.every(staged)) return false;
+  if (!staged('game.ts') || !staged('GAME.json')) return false;
   // Neither means half-staged: a quiet no.
-  if (staged('index.html')) return true;
-  return manifestDeclaresHowToPlay(overlay['GAME.json']);
+  if (!staged('index.html') && !manifestDeclaresHowToPlay(overlay['GAME.json'])) return false;
+  // The assembler derives CSS from GAME.json themes.
+  // Otherwise require style.css to reject partial trees.
+  return staged('style.css') || manifestDeclaresTheme(overlay['GAME.json']);
 }
 
 function manifestDeclaresHowToPlay(source: string | undefined): boolean {
@@ -181,6 +185,16 @@ function manifestDeclaresHowToPlay(source: string | undefined): boolean {
     return hasPlayableHowToPlay(manifest.howToPlay);
   } catch {
     // Mid-write manifests are invalid JSON
+    return false;
+  }
+}
+
+function manifestDeclaresTheme(source: string | undefined): boolean {
+  if (typeof source !== 'string') return false;
+  try {
+    const manifest = JSON.parse(source) as { theme?: unknown };
+    return typeof manifest.theme === 'object' && manifest.theme !== null;
+  } catch {
     return false;
   }
 }

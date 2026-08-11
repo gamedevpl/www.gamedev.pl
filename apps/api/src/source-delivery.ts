@@ -360,6 +360,7 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
         ({ version } = await options.gamesStore.putCandidateSources({
           slug: input.slug,
           issueNumber: input.issueNumber,
+          roundGeneration,
           files: input.files,
           backend: input.backend ?? record.dispatch?.backend ?? record.builder,
           mode: input.mode,

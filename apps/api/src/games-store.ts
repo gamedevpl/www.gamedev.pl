@@ -355,6 +355,8 @@ export interface VersionManifest {
   createdAt: string;
   /** The job that produced it. */
   issueNumber: number;
+  // Producing round, used to reject stale verdicts.
+  roundGeneration?: number;
   /** Which backend and model built it — unattributable cost is how budgets get lost. */
   backend?: string;
   model?: string;
@@ -549,6 +551,8 @@ export interface GamesStore {
   putCandidateSources(input: {
     slug: string;
     issueNumber: number;
+    // Producing round, persisted with the candidate manifest.
+    roundGeneration?: number;
     files: SourceFile[];
     backend?: string;
     model?: string;
@@ -868,6 +872,7 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
         version,
         createdAt: at.toISOString(),
         issueNumber: input.issueNumber,
+        ...(input.roundGeneration !== undefined ? { roundGeneration: input.roundGeneration } : {}),
         backend: input.backend,
         model: input.model,
         engineRef: input.engineRef,

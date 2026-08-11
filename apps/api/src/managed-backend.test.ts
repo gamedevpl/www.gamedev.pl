@@ -32,6 +32,7 @@ function fakeProvider(overrides: Partial<ManagedAgentProvider> = {}) {
   const provider: ManagedAgentProvider = {
     vendor: 'fake',
     model: 'fake-model',
+    promptLane: 'outputs',
     startSession: async (request) => {
       started.push(request);
       return { id: 'session-1', state: 'queued' };
@@ -40,7 +41,7 @@ function fakeProvider(overrides: Partial<ManagedAgentProvider> = {}) {
       id: 'session-1',
       // Adapters normalize before returning; the fake honours that contract.
       state: normalizeManagedState(state),
-      usage: { inputTokens: 1_000, outputTokens: 250 },
+      usage: { unit: 'tokens', vendor: 'fake', inputTokens: 1_000, outputTokens: 250, model: 'fake-model' },
       ...(stopReason ? { stopReason } : {}),
     }),
     listOutputs: async () =>
@@ -89,7 +90,7 @@ describe('managed backend', () => {
   });
 
   it('accepts an MCP-only configuration, where the agent submits for itself', async () => {
-    const { provider, setState, setOutputs, read } = fakeProvider();
+    const { provider, setState, setOutputs, read } = fakeProvider({ promptLane: 'mcp' });
     const backend = createManagedBackend({
       provider,
       tools: { mcpEndpoints: [{ url: 'https://www.gamedev.pl/api/mcp', name: 'gamedevpl' }] },
@@ -105,7 +106,7 @@ describe('managed backend', () => {
   });
 
   it('prefers the MCP delivery contract when both delivery paths are configured', async () => {
-    const { provider, started, setState, setOutputs, read } = fakeProvider();
+    const { provider, started, setState, setOutputs, read } = fakeProvider({ promptLane: 'mcp' });
     const backend = createManagedBackend({
       provider,
       deliver: async () => ({ version: 'v1' }),
@@ -126,6 +127,7 @@ describe('managed backend', () => {
     const released: string[] = [];
     const info = vi.fn();
     const { provider, started, setState } = fakeProvider({
+      promptLane: 'mcp',
       startSession: async (request) => {
         started.push(request);
         return { id: 'session-1', state: 'queued', credentialRef: 'lease-1' };
@@ -183,6 +185,24 @@ describe('managed backend', () => {
     expect(started[0].model).toBe('fake-model');
     expect(started[0].correlationId).toBe(String(ISSUE));
     expect(started[0].workspaceFiles).toEqual([{ path: `games/${SLUG}/game.ts`, content: 'export {};' }]);
+  });
+
+  it('preserves the provider seed workspace separately from the agent workspace', async () => {
+    const { provider } = fakeProvider({
+      startSession: async () => ({
+        id: 'session-1',
+        state: 'queued',
+        workspace: 'copilot/comet-courier',
+        seedWorkspace: 'seed/job-42',
+      }),
+    });
+    const backend = createManagedBackend({ provider, deliver: async () => ({ version: 'v1' }) });
+
+    await expect(backend.dispatch(brief())).resolves.toEqual({
+      ref: 'session-1',
+      workspace: 'copilot/comet-courier',
+      seedWorkspace: 'seed/job-42',
+    });
   });
 
   it('pulls the delivery once the session parks, and reports tokens not credits', async () => {
@@ -379,11 +399,71 @@ describe('managed backend', () => {
     expect(observation).toMatchObject({ state: 'in_progress', hasCandidate: false });
   });
 
+  it('stops a Gemini session once native token usage exceeds the backend cap', async () => {
+    const cancel = vi.fn(async () => ({ enforced: true }));
+    const { provider } = fakeProvider({
+      vendor: 'gemini',
+      model: 'gemini-test-model',
+      getSession: async () => ({
+        id: 'session-1',
+        state: 'in_progress',
+        usage: {
+          unit: 'tokens',
+          vendor: 'gemini',
+          model: 'gemini-test-model',
+          inputTokens: 80,
+          outputTokens: 30,
+          totalTokens: 110,
+          thoughtTokens: 10,
+          cachedTokens: 4,
+          toolUseTokens: 6,
+        },
+      }),
+      cancelSession: cancel,
+    });
+    const backend = createManagedBackend({
+      provider,
+      deliver: async () => ({ version: 'v1' }),
+      budget: { unit: 'tokens', max: 100 },
+    });
+
+    const first = await backend.observe('session-1', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
+    const second = await backend.observe('session-1', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
+
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(first).toMatchObject({
+      state: 'cancelled',
+      hasCandidate: false,
+      sessionTokens: { vendor: 'gemini', total: 110 },
+      budgetStop: { unit: 'tokens', observed: 110, max: 100, enforced: true },
+    });
+    expect(second).toMatchObject({ state: 'cancelled', hasCandidate: false, stopReason: 'budget_reached' });
+  });
+
   it('cancels a session when the backend wall-clock limit expires', async () => {
     vi.useFakeTimers();
     try {
       const cancel = vi.fn(async () => ({ enforced: true }));
-      const { provider, setState } = fakeProvider({ cancelSession: cancel });
+      const { provider, setState } = fakeProvider({
+        vendor: 'gemini',
+        model: 'gemini-test-model',
+        cancelSession: cancel,
+        getSession: async () => ({
+          id: 'session-1',
+          state: normalizeManagedState('in_progress'),
+          usage: {
+            unit: 'tokens',
+            vendor: 'gemini',
+            model: 'gemini-test-model',
+            inputTokens: 10,
+            outputTokens: 5,
+            totalTokens: 15,
+            thoughtTokens: 2,
+            cachedTokens: 1,
+            toolUseTokens: 1,
+          },
+        }),
+      });
       const backend = createManagedBackend({
         provider,
         deliver: async () => ({ version: 'v1' }),
@@ -401,6 +481,73 @@ describe('managed backend', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('stops a Copilot round once summed credits exceed its ceiling', async () => {
+    const cancel = vi.fn(async () => ({ enforced: false }));
+    const start = vi.fn();
+    const { provider } = fakeProvider({
+      promptLane: 'harness',
+      startSession: async (request) => {
+        start(request);
+        return { id: 'copilot-task', state: 'queued' };
+      },
+      getSession: async () => ({
+        id: 'copilot-task',
+        state: 'in_progress',
+        usage: { unit: 'credits', vendor: 'copilot', credits: 3.5, model: 'gpt-5.4' },
+      }),
+      cancelSession: cancel,
+    });
+    const backend = createManagedBackend({
+      provider,
+      budget: { unit: 'credits', max: 3 },
+      deliver: async () => ({ version: 'v1' }),
+    });
+
+    await backend.dispatch(brief());
+    const first = await backend.observe('copilot-task', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
+    const second = await backend.observe('copilot-task', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
+
+    expect(first).toMatchObject({
+      state: 'cancelled',
+      stopReason: 'budget_reached',
+      sessionCredits: 3.5,
+      budgetStop: { unit: 'credits', observed: 3.5, max: 3, enforced: false },
+    });
+    expect(second).toMatchObject({ state: 'cancelled', stopReason: 'budget_reached' });
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(start).toHaveBeenCalledTimes(1);
+  });
+
+  it('lets one round opt into MCP without changing the provider selection', async () => {
+    const { provider, started, setState, setOutputs, read } = fakeProvider({ promptLane: 'harness' });
+    const backend = createManagedBackend({
+      provider,
+      deliver: async () => ({ version: 'v1' }),
+      tools: { mcpEndpoints: [{ url: 'https://www.gamedev.pl/api/mcp', name: 'gamedevpl' }] },
+    });
+
+    await backend.dispatch(brief({ promptLane: 'mcp' }));
+    expect(started[0]?.promptLane).toBe('mcp');
+    expect(started[0]?.prompt).toContain('"key": "token"');
+    setOutputs([{ path: `games/${SLUG}/game.ts`, content: 'export {};' }]);
+    setState('completed');
+
+    await backend.observe('session-1', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
+    expect(read).toEqual([]);
+  });
+
+  it('does not nudge the Copilot harness lane', async () => {
+    const { provider, setState } = fakeProvider({ promptLane: 'harness' });
+    const backend = createManagedBackend({ provider, deliver: async () => ({ version: 'v1' }) });
+
+    await backend.dispatch(brief());
+    setState('idle');
+
+    const observation = await backend.observe('session-1', { hasCandidate: false, issueNumber: ISSUE, slug: SLUG });
+
+    expect(observation).toMatchObject({ state: 'idle', hasCandidate: false });
   });
 
   it('nudges an idle session once, then spends the round if still idle without delivery', async () => {
@@ -422,7 +569,7 @@ describe('managed backend', () => {
 
   it('does not nudge a round that delivered a preview but has no sealed version yet', async () => {
     const sendMessage = vi.fn(async () => undefined);
-    const { provider, setState } = fakeProvider({ sendMessage });
+    const { provider, setState } = fakeProvider({ promptLane: 'mcp', sendMessage });
     const backend = createManagedBackend({
       provider,
       tools: { mcpEndpoints: [{ url: 'https://example.test/api/mcp', name: 'gamedevpl' }] },
@@ -438,7 +585,7 @@ describe('managed backend', () => {
 
   it('does not re-enter a session the agent deliberately ended', async () => {
     const sendMessage = vi.fn(async () => undefined);
-    const { provider, setState } = fakeProvider({ sendMessage });
+    const { provider, setState } = fakeProvider({ promptLane: 'mcp', sendMessage });
     const backend = createManagedBackend({
       provider,
       tools: { mcpEndpoints: [{ url: 'https://example.test/api/mcp', name: 'gamedevpl' }] },
@@ -455,7 +602,7 @@ describe('managed backend', () => {
 
   it('still nudges a session that went idle without delivering or ending', async () => {
     const sendMessage = vi.fn(async () => undefined);
-    const { provider, setState } = fakeProvider({ sendMessage });
+    const { provider, setState } = fakeProvider({ promptLane: 'mcp', sendMessage });
     const backend = createManagedBackend({
       provider,
       tools: { mcpEndpoints: [{ url: 'https://example.test/api/mcp', name: 'gamedevpl' }] },
@@ -476,7 +623,7 @@ describe('managed backend', () => {
   it('ends a round blocked on tool confirmation instead of leaving Studio on building', async () => {
     const sendMessage = vi.fn(async () => undefined);
     const warn = vi.fn();
-    const { provider, setState, setStopReason } = fakeProvider({ sendMessage });
+    const { provider, setState, setStopReason } = fakeProvider({ promptLane: 'mcp', sendMessage });
     const backend = createManagedBackend({
       provider,
       tools: { mcpEndpoints: [{ url: 'https://example.test/api/mcp', name: 'gamedevpl' }] },
@@ -504,7 +651,7 @@ describe('managed backend', () => {
         'anthropic managed agents /v1/sessions/x/events failed: 400 only user.tool_confirmation events are allowed',
       );
     });
-    const { provider, setState } = fakeProvider({ sendMessage });
+    const { provider, setState } = fakeProvider({ promptLane: 'mcp', sendMessage });
     const backend = createManagedBackend({
       provider,
       tools: { mcpEndpoints: [{ url: 'https://example.test/api/mcp', name: 'gamedevpl' }] },
@@ -523,7 +670,7 @@ describe('managed backend', () => {
 
   it('does not spend a nudged idle round that delivered a preview between polls', async () => {
     const sendMessage = vi.fn(async () => undefined);
-    const { provider, setState } = fakeProvider({ sendMessage });
+    const { provider, setState } = fakeProvider({ promptLane: 'mcp', sendMessage });
     const signals: { previewVersion?: string } = {};
     const backend = createManagedBackend({
       provider,
@@ -630,5 +777,15 @@ describe('managed backend', () => {
     const backend = createManagedBackend({ provider, deliver: async () => ({ version: 'v1' }) });
     await backend.cleanup?.({ ref: 'session-1' });
     expect(deleteSession).toHaveBeenCalledWith('session-1');
+  });
+
+  it('deletes provider workspaces on cleanup', async () => {
+    const deleteWorkspace = vi.fn(async () => undefined);
+    const { provider } = fakeProvider({ deleteWorkspace });
+    const backend = createManagedBackend({ provider, deliver: async () => ({ version: 'v1' }) });
+
+    await backend.cleanup?.({ ref: 'session-1', workspace: 'copilot/spent' });
+
+    expect(deleteWorkspace).toHaveBeenCalledWith('copilot/spent');
   });
 });

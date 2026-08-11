@@ -487,11 +487,17 @@ describe('GCS games store', () => {
   it('records a gate verdict onto the version it judged', async () => {
     const { impl } = stubGcs();
     const store = createGcsGamesStore({ ...base, fetchImpl: impl });
-    const { version } = await store.putCandidateSources({ slug: 'g', issueNumber: 1, files: MINIMAL });
+    const { version } = await store.putCandidateSources({
+      slug: 'g',
+      issueNumber: 1,
+      roundGeneration: 4,
+      files: MINIMAL,
+    });
 
     await store.putGateResult('g', version, { green: false, report: '3 checks failed' });
 
     expect((await store.getManifest('g', version))?.gate).toMatchObject({ green: false, report: '3 checks failed' });
+    expect((await store.getManifest('g', version))?.roundGeneration).toBe(4);
   });
 
   it('lists versions newest first, skipping directories without a manifest', async () => {

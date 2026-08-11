@@ -14,6 +14,8 @@
 
 import type { AgentObservation } from './job-state.js';
 
+export type BuildPromptLane = 'mcp' | 'harness';
+
 /** Everything a backend needs to start a build. Deliberately not a GitHub issue. */
 export interface BuildBrief {
   /** Our job identity, for correlating an agent's reports back to the job. */
@@ -28,6 +30,7 @@ export interface BuildBrief {
   locale?: string;
   /** Per-job build-channel credential. Scoped to this job and this slug. */
   channelToken: string;
+  promptLane?: BuildPromptLane;
   mcpOpenerToken?: string;
   /** Where the agent reports progress and delivers its work. */
   apiBaseUrl: string;

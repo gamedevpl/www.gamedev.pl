@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { randomBytes } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
@@ -152,8 +153,12 @@ async function createApp(
   channelExtras?: {
     onSourcesDelivered?: (input: unknown) => Promise<{ buildId?: string; accepted?: boolean } | void> | void;
     knowledgeSearch?: QueryKnowledgeFn;
+    platformConnectorSecret?: string;
   },
 ) {
+  const platformConnectorSecret = channelExtras?.platformConnectorSecret;
+  const agentChannel = { ...channelExtras };
+  delete agentChannel.platformConnectorSecret;
   return await buildApp({
     store,
     sessionSecret: 'dev-session-secret-change-me',
@@ -161,10 +166,11 @@ async function createApp(
       githubClient: stubGitHub(),
       githubToken: 'gh-token',
       submissionTokenSecret: secret,
+      ...(platformConnectorSecret ? { platformConnectorSecret } : {}),
       agentChannel: {
         ...(gamesStore ? { gamesStore } : {}),
         ...(objectStore ? { objectStore } : {}),
-        ...channelExtras,
+        ...agentChannel,
       },
     },
   });
@@ -516,6 +522,66 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(names).not.toEqual(expect.arrayContaining(['list_examples', 'submit_proposal']));
   });
 
+  it('keeps the Copilot MCP connector inert without a round key', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    const connectorSecret = randomBytes(32).toString('hex');
+    app = await createApp(store, undefined, undefined, { platformConnectorSecret: connectorSecret });
+    const sessionId = await initialize(app);
+    const headers = {
+      'mcp-session-id': sessionId,
+      authorization: `Bearer ${connectorSecret}`,
+    };
+    const listed = await mcpCall(app, 'tools/list', undefined, headers);
+    const tools = listed.json().result.tools as Array<{
+      name: string;
+      annotations?: { readOnlyHint?: boolean };
+    }>;
+    const mutating = tools.filter((tool) => tool.annotations?.readOnlyHint !== true);
+    expect(mutating.map((tool) => tool.name)).toEqual(
+      expect.arrayContaining(['start', 'stage_source_file', 'submit_sources', 'end']),
+    );
+
+    const before = JSON.stringify(await store.getSubmission(ISSUE));
+    for (const tool of mutating) {
+      const result = await callTool(app, tool.name, {}, headers);
+      expect(result.isError, tool.name).toBe(true);
+      expect(JSON.stringify(result.structured), tool.name).toMatch(/connector|key|credential/i);
+    }
+    const foreign = await callTool(
+      app,
+      'start',
+      { key: mintAgentToken(ISSUE + 1, secret, { roundGeneration: 1 }) },
+      headers,
+    );
+    expect(foreign.isError).toBe(true);
+    expect(JSON.stringify(await store.getSubmission(ISSUE))).toBe(before);
+  });
+
+  it('exchanges a live round key when the connector is present', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    const connectorSecret = randomBytes(32).toString('hex');
+    app = await createApp(store, undefined, undefined, { platformConnectorSecret: connectorSecret });
+    const sessionId = await initialize(app);
+    const started = await callTool(
+      app,
+      'start',
+      { key: roundKey() },
+      { 'mcp-session-id': sessionId, authorization: `Bearer ${connectorSecret}` },
+    );
+
+    expect(started.isError).toBe(false);
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+    const brief = await callTool(
+      app,
+      'get_brief',
+      { sessionKey },
+      { 'mcp-session-id': sessionId, authorization: `Bearer ${connectorSecret}` },
+    );
+    expect(brief.isError, JSON.stringify(brief.structured)).toBe(false);
+  });
+
   it('never names an unadvertised tool in anything the model reads', async () => {
     const store = new InMemoryStore();
     await seedJob(store);
@@ -863,7 +929,10 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(started.structured).toMatchObject({ slug: 'comet-courier', round: 1 });
   });
 
-  // Opener bearer echoed post-start must not override the sessionKey.
+  // Managed-agent connectors (Claude, ChatGPT Apps) keep echoing the opener bearer on
+  // every later call, not just start(). resolveAuth must still prefer the sessionKey
+  // start() minted rather than trying to verify that opener as a write bearer, or every
+  // post-start call fails with "invalid build token" (reported live 2026-08-10).
   it('prefers sessionKey when the managed-agent opener bearer is echoed on later calls', async () => {
     const store = new InMemoryStore();
     await seedJob(store);

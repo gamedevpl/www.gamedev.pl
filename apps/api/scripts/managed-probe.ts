@@ -13,6 +13,8 @@ import {
   type ManagedSession,
 } from '../src/managed-agent.js';
 import '../src/managed-provider-anthropic.js';
+import '../src/managed-provider-copilot.js';
+import '../src/managed-provider-gemini.js';
 import { createManagedBackend, type ManagedDeliveryInput } from '../src/managed-backend.js';
 import { createFileKitDigestLoader } from '../src/kit-digest.js';
 
@@ -29,10 +31,16 @@ const CREATE_CONCEPT =
   'Guide a small courier ship across a bright sky, collect parcels, and dodge drifting clouds before reaching the beacon.';
 const outDir = value('out');
 const digestPath = value('digest-file');
-const apiBaseUrl = (value('base-url') ?? 'https://api.anthropic.com').replace(/\/$/, '');
+const vendor = value('vendor');
+const apiBaseUrl = (
+  value('base-url') ??
+  (vendor === 'gemini' ? 'https://generativelanguage.googleapis.com/v1beta' : 'https://api.anthropic.com')
+).replace(/\/$/, '');
 const wait = flag('wait');
 const waitSeconds = Number(value('wait-seconds') ?? process.env.MANAGED_AGENT_MAX_SECONDS ?? '');
 const budgetUsd = Number(value('budget-usd') ?? process.env.MANAGED_AGENT_MAX_LIST_BUDGET_USD ?? '');
+const budgetCredits = Number(value('budget-credits') ?? process.env.MANAGED_AGENT_COPILOT_MAX_CREDITS ?? '');
+const budgetTokens = Number(value('budget-tokens') ?? process.env.MANAGED_AGENT_MAX_TOTAL_TOKENS ?? '');
 const vaultIds = (process.env.MANAGED_AGENT_VAULT_IDS ?? process.env.MANAGED_AGENT_VAULT_ID)
   ?.split(',')
   .map((id) => id.trim())
@@ -58,6 +66,10 @@ if (mcpOnly && (!Number.isSafeInteger(roundGeneration) || roundGeneration < 1)) 
   console.error('--round-generation must be a positive integer');
   process.exit(1);
 }
+if (vendor === 'copilot' && flag('override-tools')) {
+  console.error('Copilot does not accept --override-tools');
+  process.exit(1);
+}
 
 const mcpOpenerToken = mcpOnly ? mintManagedMcpOpener(ISSUE, openerSecret, { roundGeneration }) : undefined;
 
@@ -70,6 +82,7 @@ const brief: BuildBrief = {
   channelToken: 'tok_probe',
   ...(mcpOpenerToken ? { mcpOpenerToken } : {}),
   apiBaseUrl: 'http://127.0.0.1:3001',
+  ...(mcpOnly ? { promptLane: 'mcp' as const } : {}),
   ...(flag('feedback') ? { feedback: 'make the comets bigger' } : {}),
 };
 const manifestPath = fileURLToPath(new URL('../../../infra/managed-agent.json', import.meta.url));
@@ -97,6 +110,7 @@ function stubProvider(): ManagedAgentProvider {
   return {
     vendor: 'stub',
     model: 'stub-model',
+    promptLane: 'outputs',
     async startSession(request) {
       rule('startSession');
       console.log(`model            ${request.model}`);
@@ -122,7 +136,13 @@ function stubProvider(): ManagedAgentProvider {
         id: 'stub-session-1',
         state: polls === 1 ? 'in_progress' : 'idle',
         vendorState: polls === 1 ? 'running' : 'status_idle',
-        usage: { inputTokens: 1_240_000, outputTokens: 18_400, model: 'stub-model' },
+        usage: {
+          unit: 'tokens',
+          vendor: 'stub',
+          inputTokens: 1_240_000,
+          outputTokens: 18_400,
+          model: 'stub-model',
+        },
       };
     },
     async listOutputs(): Promise<ManagedOutputRef[]> {
@@ -148,18 +168,46 @@ function stubProvider(): ManagedAgentProvider {
   };
 }
 
-const vendor = value('vendor');
 const apiKey =
   process.env.MANAGED_AGENT_API_KEY?.trim() ??
-  (vendor === 'anthropic' ? process.env.ANTHROPIC_API_KEY?.trim() : undefined);
+  (vendor === 'anthropic'
+    ? process.env.ANTHROPIC_API_KEY?.trim()
+    : vendor === 'copilot'
+      ? process.env.AGENT_TASKS_TOKEN?.trim()
+      : vendor === 'gemini'
+        ? process.env.GEMINI_API_KEY?.trim()
+        : undefined);
 const model =
-  value('model') ?? process.env.MANAGED_AGENT_MODEL?.trim() ?? (vendor === 'anthropic' ? 'claude-sonnet-5' : undefined);
+  value('model') ??
+  (vendor === 'copilot' ? process.env.AGENT_TASKS_MODEL?.trim() : process.env.MANAGED_AGENT_MODEL?.trim()) ??
+  (vendor === 'anthropic'
+    ? 'claude-sonnet-5'
+    : vendor === 'copilot'
+      ? 'claude-sonnet-4.6'
+      : vendor === 'gemini'
+        ? 'gemini-3.6-flash'
+        : undefined);
 if (vendor && (!apiKey || !model)) {
   console.error(`--vendor ${vendor} needs an API key and model`);
   process.exit(1);
 }
-if (wait && (!Number.isInteger(waitSeconds) || waitSeconds <= 0 || !Number.isFinite(budgetUsd) || budgetUsd <= 0)) {
-  console.error('--wait requires positive --wait-seconds and --budget-usd values');
+if (
+  wait &&
+  (!Number.isInteger(waitSeconds) ||
+    waitSeconds <= 0 ||
+    (vendor === 'copilot'
+      ? !Number.isFinite(budgetCredits) || budgetCredits <= 0
+      : vendor === 'gemini'
+        ? !Number.isSafeInteger(budgetTokens) || budgetTokens <= 0
+        : !Number.isFinite(budgetUsd) || budgetUsd <= 0))
+) {
+  console.error(
+    vendor === 'copilot'
+      ? '--wait requires positive --wait-seconds and --budget-credits values'
+      : vendor === 'gemini'
+        ? '--wait requires positive --wait-seconds and --budget-tokens values'
+        : '--wait requires positive --wait-seconds and --budget-usd values',
+  );
   process.exit(1);
 }
 // MCP rounds override the Agent tool list, like production.
@@ -168,12 +216,23 @@ const provider = vendor
   ? createManagedProvider(vendor, {
       apiKey: apiKey!,
       model: model!,
+      ...(vendor === 'copilot'
+        ? {
+            repo: process.env.GAMES_REPO?.trim() ?? 'gamedevpl/www.gamedev.pl-games',
+            baseRef: process.env.GAMES_PUBLISHED_REF?.trim() || 'main',
+            customAgent: process.env.AGENT_CUSTOM_AGENT?.trim() || 'game-builder',
+            createPullRequest: false,
+          }
+        : {}),
       ...(process.env.MANAGED_AGENT_ID ? { agentId: process.env.MANAGED_AGENT_ID.trim() } : {}),
       ...(process.env.MANAGED_AGENT_ENVIRONMENT_ID
         ? { environmentId: process.env.MANAGED_AGENT_ENVIRONMENT_ID.trim() }
         : {}),
       ...(Number.isFinite(budgetUsd) && budgetUsd > 0
         ? { maxListCostCents: Math.max(1, Math.round(budgetUsd * 100)) }
+        : {}),
+      ...(Number.isSafeInteger(budgetTokens) && budgetTokens > 0
+        ? { budget: { unit: 'tokens' as const, max: budgetTokens } }
         : {}),
       ...(vaultIds?.length ? { vaultIds } : {}),
       ...(overrideTools ? { overrideTools: true } : {}),
@@ -189,9 +248,13 @@ const backend = createManagedBackend({
   ...(mcpOnly
     ? {
         tools: { mcpEndpoints: [{ url: mcpUrl, name: 'gamedevpl' }] },
-        // Per-round vault holds the opener, as in production.
-        mcpBearerCredential: (input) =>
-          input.mcpOpenerToken ? { url: mcpUrl, token: input.mcpOpenerToken } : undefined,
+        ...(vendor === 'copilot'
+          ? {}
+          : {
+              // Per-round vault holds the opener, as in production.
+              mcpBearerCredential: (input) =>
+                input.mcpOpenerToken ? { url: mcpUrl, token: input.mcpOpenerToken } : undefined,
+            }),
       }
     : {
         deliver: async (input) => {
@@ -206,6 +269,13 @@ const backend = createManagedBackend({
   ...(manifest?.agent?.system ? { systemPrompt: async () => manifest.agent!.system } : {}),
   ...(digestPath ? { kitDigest: createFileKitDigestLoader(digestPath) } : {}),
   ...(wait ? { maxDurationSeconds: waitSeconds } : {}),
+  ...(mcpOnly ? { promptLane: 'mcp' as const } : {}),
+  ...(vendor === 'copilot' && Number.isFinite(budgetCredits) && budgetCredits > 0
+    ? { budget: { unit: 'credits' as const, max: budgetCredits } }
+    : {}),
+  ...(vendor === 'gemini' && Number.isSafeInteger(budgetTokens) && budgetTokens > 0
+    ? { budget: { unit: 'tokens' as const, max: budgetTokens } }
+    : {}),
   // The probe cannot see MCP deliveries, so nudging would mislead.
   ...(mcpOnly && !flag('nudge') ? { nudgeIdle: false } : {}),
 });
@@ -232,6 +302,7 @@ if (mcpOnly && vendor === 'anthropic' && !dispatch.credentialRef) {
 }
 
 const pollCount = wait ? Math.ceil((waitSeconds * 1000) / 5000) + 1 : 2;
+const timeline: Array<{ at: string; state: string; candidate: boolean }> = [];
 for (let attempt = 1; attempt <= pollCount; attempt += 1) {
   if (attempt > 1) await new Promise((resolve) => setTimeout(resolve, 5000));
   rule(`observe #${attempt}`);
@@ -241,13 +312,23 @@ for (let attempt = 1; attempt <= pollCount; attempt += 1) {
     slug: SLUG,
     roundGeneration,
   });
-  console.log(observation ?? '(vendor has forgotten this session)');
+  if (observation) {
+    const entry = { at: new Date().toISOString(), state: observation.state, candidate: observation.hasCandidate };
+    timeline.push(entry);
+    console.log(`${entry.at}  ${entry.state}  candidate=${entry.candidate}`);
+    console.log(observation);
+  } else {
+    console.log('(vendor has forgotten this session)');
+  }
   if (
     observation &&
     (observation.hasCandidate || ['idle', 'failed', 'timed_out', 'cancelled'].includes(observation.state))
   )
     break;
 }
+
+rule('state-transition timeline');
+for (const entry of timeline) console.log(`${entry.at}  ${entry.state}  candidate=${entry.candidate}`);
 
 rule('what the platform would store');
 if (delivered.length === 0) {
