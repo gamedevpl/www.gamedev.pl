@@ -10735,19 +10735,21 @@ button.builder-mode-selector:disabled {
   color: var(--muted);
 }
 
-/* Match the app-update toast instead of pushing Studio down below the top bar. */
+/* Keep the removal result visible without pushing Studio down or competing with
+   the bottom install/update toast. The top offset clears the sticky app header
+   (including its safe-area inset) before the card begins. */
 .studio-abandon-notice {
   position: fixed;
-  left: 12px;
-  right: 12px;
-  bottom: max(12px, env(safe-area-inset-bottom));
+  top: calc(max(12px, env(safe-area-inset-top)) + 69px);
+  right: 24px;
+  left: auto;
   z-index: 900;
   display: flex;
   align-items: center;
   gap: 12px;
-  width: auto;
+  width: min(560px, calc(100vw - 48px));
   max-width: 560px;
-  margin: 0 auto;
+  margin: 0;
   padding: 12px 14px;
   border: 1px solid var(--panel-border);
   border-radius: 14px;
@@ -10758,13 +10760,18 @@ button.builder-mode-selector:disabled {
   animation: install-prompt-in 220ms ease-out;
 }
 
-.app:has(:is(.install-prompt, .app-update)) .studio-abandon-notice {
-  bottom: max(88px, calc(76px + env(safe-area-inset-bottom)));
-}
-
 @media (prefers-reduced-motion: reduce) {
   .studio-abandon-notice {
     animation: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .studio-abandon-notice {
+    top: calc(max(8px, env(safe-area-inset-top)) + 65px);
+    right: 12px;
+    left: 12px;
+    width: auto;
   }
 }
 
