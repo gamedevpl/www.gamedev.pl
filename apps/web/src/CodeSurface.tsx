@@ -165,6 +165,20 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
     [slug],
   );
 
+  useEffect(() => {
+    function onHide() {
+      if (document.visibilityState !== 'hidden') return;
+      saveTimersRef.current.forEach((_timer, path) => {
+        const draft = draftsRef.current[path];
+        if (draft !== undefined) {
+          stageCodeSurfaceFile(slug, path, draft, { rebuild: false, keepalive: true }).catch(() => {});
+        }
+      });
+    }
+    document.addEventListener('visibilitychange', onHide);
+    return () => document.removeEventListener('visibilitychange', onHide);
+  }, [slug]);
+
   const file = useMemo(() => sources?.files.find((entry) => entry.path === selected) ?? null, [sources, selected]);
   const content = selected !== null ? (drafts[selected] ?? file?.content ?? '') : '';
 

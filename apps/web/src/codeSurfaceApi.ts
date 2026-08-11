@@ -71,12 +71,14 @@ export async function stageCodeSurfaceFile(
   slug: string,
   path: string,
   content: string,
-  options?: { rebuild?: boolean },
+  options?: { rebuild?: boolean; keepalive?: boolean },
 ): Promise<CodeSurfaceStageResult> {
   const response = await fetch(`${API_BASE}/api/me/studio/games/${encodeURIComponent(slug)}/sources/stage`, {
     method: 'PUT',
     credentials: 'include',
     headers: { 'content-type': 'application/json' },
+    // Same keepalive technique telemetry.ts uses for its own final flush.
+    ...(options?.keepalive ? { keepalive: true } : {}),
     body: JSON.stringify({ path, content, ...(options?.rebuild === false ? { rebuild: false } : {}) }),
   });
   if (!response.ok) await throwResponseError(response);

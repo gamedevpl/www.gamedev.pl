@@ -565,7 +565,7 @@ export function CreatorStudioView({
 
   function selectGame(token: string) {
     const next = shelfGames.find((game) => game.token === token) ?? null;
-    const nextTab = defaultTabFor();
+    const nextTab = token === selected ? tab : defaultTabFor();
     setSelected(token);
     setTab(nextTab);
     closeShelf({ restoreFocus: shelfIsDrawer });
@@ -582,6 +582,9 @@ export function CreatorStudioView({
     if (!activeGame || !tabAvailable(activeGame, next)) return;
     setShareMenuOpen(false);
     setTab(next);
+    if ((next === 'edit' || next === 'code' || next === 'details') && posture === 'play') {
+      setPosture('watch');
+    }
     onNavigate(studioPath(studioAddress(activeGame), next));
   }
   openTabRef.current = openTab;
@@ -802,6 +805,10 @@ export function CreatorStudioView({
                     if (shelfOpen) closeShelf({ restoreFocus: shelfIsDrawer });
                     if (tab !== 'thread') openTab('thread');
                   };
+                  const changePosture = (next: StagePosture) => {
+                    if (next === 'play' && covered) backToFullBleed();
+                    setPosture(next);
+                  };
                   const shareSlot = canShare ? (
                     <div className="studio-head-share">
                       <button
@@ -842,7 +849,7 @@ export function CreatorStudioView({
                         slug={activeGame.slug ?? undefined}
                         status={studioStatus}
                         posture={posture}
-                        onPostureChange={setPosture}
+                        onPostureChange={changePosture}
                         stageEmpty={!stageSource.html}
                         onOpenShelf={() => setShelfOpen(true)}
                         shelfOpenRef={shelfOpenRef}
@@ -960,7 +967,7 @@ export function CreatorStudioView({
                             embedded
                             justHandedOff={handoffToken != null}
                             onImproved={(newToken) => setHandoffToken(newToken)}
-                            onPlaytest={() => setPosture('play')}
+                            onPlaytest={() => changePosture('play')}
                             onOpenConnect={() => {
                               setDetailsPane('connect');
                               openTab('details');
@@ -990,7 +997,7 @@ export function CreatorStudioView({
                             <EditorPanel
                               key={activeGame.token}
                               game={activeGame}
-                              onOpenPlaytest={() => setPosture('play')}
+                              onOpenPlaytest={() => changePosture('play')}
                               onBack={() => openTab('thread')}
                             />
                           </div>
@@ -1035,7 +1042,7 @@ export function CreatorStudioView({
                                 onPaneChange={setDetailsPane}
                                 onClose={() => openTab('thread')}
                                 onDaysChange={setDays}
-                                onOpenPlaytest={() => setPosture('play')}
+                                onOpenPlaytest={() => changePosture('play')}
                                 onSwitchToPlatform={async () => {
                                   await handoffToPlatform(activeGame.token);
                                   setDetailsPane('overview');

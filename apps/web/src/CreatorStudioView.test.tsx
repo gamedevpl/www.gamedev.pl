@@ -630,6 +630,94 @@ describe('CreatorStudioView', () => {
     root.unmount();
   });
 
+  it('opening Code while playing drops back to watch posture instead of playing invisibly behind it', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
+    fetchStudioGames.mockResolvedValue(
+      studioShelf([
+        {
+          token: 'token-coded',
+          title: 'Comet Courier',
+          createdAt: '2026-07-30T09:00:00.000Z',
+          lastKnownStatus: 'building',
+          slug: 'comet-courier',
+          codeSurface: true,
+        },
+      ]),
+    );
+
+    const { container, root } = await renderStudio({ selectedGame: 'token-coded', selectedPosture: 'play' });
+    expect(container.querySelector('.studio-stage')?.classList.contains('is-play')).toBe(true);
+
+    const codeButton = container.querySelector<HTMLButtonElement>('[aria-label="Code"]');
+    expect(codeButton).not.toBeNull();
+    await act(async () => {
+      codeButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(container.querySelector('.studio-stage')?.classList.contains('is-watch')).toBe(true);
+    expect(codeButton?.getAttribute('aria-pressed')).toBe('true');
+
+    root.unmount();
+  });
+
+  it('re-selecting the already-open game from the shelf keeps the current tab, Code included', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
+    fetchStudioGames.mockResolvedValue(
+      studioShelf([
+        {
+          token: 'token-coded',
+          title: 'Comet Courier',
+          createdAt: '2026-07-30T09:00:00.000Z',
+          lastKnownStatus: 'building',
+          slug: 'comet-courier',
+          codeSurface: true,
+        },
+        {
+          token: 'token-other',
+          title: 'Other Game',
+          createdAt: '2026-07-29T09:00:00.000Z',
+          lastKnownStatus: 'building',
+          slug: 'other-game',
+          codeSurface: true,
+        },
+      ]),
+    );
+
+    const { container, root } = await renderStudio({ selectedGame: 'token-coded' });
+
+    const codeButton = container.querySelector<HTMLButtonElement>('[aria-label="Code"]');
+    await act(async () => {
+      codeButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(container.querySelector('[aria-label="Code"]')?.getAttribute('aria-pressed')).toBe('true');
+
+    const activeItem = Array.from(container.querySelectorAll<HTMLButtonElement>('.studio-shelf-item')).find((item) =>
+      item.classList.contains('is-active'),
+    );
+    expect(activeItem?.title).toBe('Comet Courier');
+    await act(async () => {
+      activeItem!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(container.querySelector('[aria-label="Code"]')?.getAttribute('aria-pressed')).toBe('true');
+    expect(container.querySelector('.code-surface')).not.toBeNull();
+
+    // A genuine switch to a different game still resets to Thread.
+    const otherItem = Array.from(container.querySelectorAll<HTMLButtonElement>('.studio-shelf-item')).find(
+      (item) => item.title === 'Other Game',
+    );
+    await act(async () => {
+      otherItem!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(container.querySelector('[aria-label="Code"]')?.getAttribute('aria-pressed')).toBe('false');
+
+    root.unmount();
+  });
+
   it('lands an old tab name on the surface that absorbed it, and corrects the URL', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
