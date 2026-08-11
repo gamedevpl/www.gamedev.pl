@@ -739,8 +739,7 @@
       "notStarted": "Saved — but a new build round didn't start. Your note is safe; we're looking into it.",
       "error": "We couldn't send that right now. Please try again in a moment.",
       "quota": "You've sent a lot of feedback today — please try again tomorrow.",
-      "published": "This game is already published. Submit a new idea to make another version.",
-      "directToBuilder": "Send straight to the builder, skipping the studio's reply"
+      "published": "This game is already published. Submit a new idea to make another version."
     },
     "handoff": {
       "notice": "Improvement round started — this is the new build thread.",

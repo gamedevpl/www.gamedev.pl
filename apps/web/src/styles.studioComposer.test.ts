@@ -37,12 +37,11 @@ describe('studio compact composer empty state', () => {
   });
 });
 
-describe('escape hatch mobile touch target', () => {
-  it('grows the escape hatch to the same 44px floor as send on phones', () => {
-    const marker =
-      '.status-composer.is-compact .status-composer-send,\n  .status-composer.is-compact .status-composer-escape {';
+describe('send button mobile touch target', () => {
+  it('grows send to a 44px floor on phones', () => {
+    const marker = '.status-composer.is-compact .status-composer-send {';
     const start = css.indexOf(marker);
-    expect(start, 'escape hatch is not sized alongside send in the mobile rule').toBeGreaterThan(-1);
+    expect(start, 'send is not sized in the mobile rule').toBeGreaterThan(-1);
     const end = css.indexOf('}', start);
     const body = css.slice(start + marker.length, end);
     expect(body).toMatch(/width:\s*44px/);

@@ -2,7 +2,6 @@
 
 export const CHAT_AGENT_DECISION_MSG = 'studio chat agent decision';
 export const CHAT_AGENT_FAILOPEN_MSG = 'studio chat agent failed open';
-export const CHAT_AGENT_ESCAPE_HATCH_MSG = 'studio chat agent escape hatch used';
 
 export type ChatAgentScopeLabel = 'draft' | 'improve';
 export type ChatAgentOutcome = 'build' | 'reply';
@@ -42,8 +41,4 @@ export function logChatAgentFailOpen(
     { chatAgent: { issueNumber: input.issueNumber, scope: input.scope, reason: input.reason } },
     CHAT_AGENT_FAILOPEN_MSG,
   );
-}
-
-export function logChatAgentEscapeHatch(log: Logger, input: { issueNumber: number; scope: ChatAgentScopeLabel }): void {
-  log.info({ chatAgent: { issueNumber: input.issueNumber, scope: input.scope } }, CHAT_AGENT_ESCAPE_HATCH_MSG);
 }

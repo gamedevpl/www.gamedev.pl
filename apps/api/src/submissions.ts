@@ -89,12 +89,7 @@ import {
   type ChatAgentStatus,
   type StudioChatAgent,
 } from './chat-agent.js';
-import {
-  asChatAgentLogger,
-  logChatAgentDecision,
-  logChatAgentEscapeHatch,
-  logChatAgentFailOpen,
-} from './chat-agent-metrics.js';
+import { asChatAgentLogger, logChatAgentDecision, logChatAgentFailOpen } from './chat-agent-metrics.js';
 import { MAX_CHAT_TURNS, rememberChatTurn, type ChatTurn } from './chat-turns.js';
 import { mintConnectPayload } from './self-build-connect.js';
 import { createLocalGamesClient, resolveLocalGamesDir } from './local-games-repo.js';
@@ -197,8 +192,6 @@ const FeedbackRequestSchema = z.object({
    * is still active — switching is a round-boundary decision only.
    */
   builder: z.enum(['platform', 'self']).optional(),
-  // Composer escape hatch: skip the mini chat agent for this one message.
-  directToBuilder: z.boolean().optional(),
   /**
    * Optional playtest attachment from Creator Studio: a paused-frame PNG (base64,
    * no data: prefix) plus a small instrumentation digest. Treated as data, never
@@ -1513,13 +1506,8 @@ export async function registerSubmissionRoutes(
     locale: string;
     ip: string;
     uid: string;
-    directToBuilder?: boolean;
   }): Promise<ChatAgentOutcome | null> {
     if (!store || !chatAgentLog) return null;
-    if (input.directToBuilder) {
-      logChatAgentEscapeHatch(chatAgentLog, { issueNumber: input.issueNumber, scope: input.scope });
-      return null;
-    }
     if (isRateLimited(chatTurnsByIp, input.ip, now(), maxChatTurnsPerWindow, chatTurnRateLimitWindowMs)) {
       return null;
     }
@@ -3950,7 +3938,6 @@ export async function registerSubmissionRoutes(
           locale: creatorLocale,
           ip: request.ip,
           uid: request.user!.uid,
-          directToBuilder: parsed.data.directToBuilder,
         });
         if (chatOutcome?.kind === 'replied' && store) {
           try {
@@ -4188,7 +4175,6 @@ export async function registerSubmissionRoutes(
         locale: record.locale ?? 'en',
         ip: request.ip,
         uid: request.user!.uid,
-        directToBuilder: parsed.data.directToBuilder,
       });
       if (chatOutcome?.kind === 'replied') {
         try {

@@ -743,8 +743,7 @@
       "notStarted": "Zapisano — ale nowa runda budowania się nie rozpoczęła. Twoja wiadomość jest bezpieczna; sprawdzamy, co się stało.",
       "error": "Nie udało się teraz tego wysłać. Spróbuj ponownie za chwilę.",
       "quota": "Wysłałeś dziś dużo uwag — spróbuj ponownie jutro.",
-      "published": "Ta gra jest już opublikowana. Prześlij nowy pomysł, aby stworzyć kolejną wersję.",
-      "directToBuilder": "Wyślij bezpośrednio do agenta budującego, z pominięciem odpowiedzi studia"
+      "published": "Ta gra jest już opublikowana. Prześlij nowy pomysł, aby stworzyć kolejną wersję."
     },
     "handoff": {
       "notice": "Runda ulepszeń rozpoczęta — to jest wątek nowej wersji.",
