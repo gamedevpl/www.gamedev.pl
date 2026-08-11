@@ -51,10 +51,10 @@ plugin instead — [`listings/mcp/claude-plugin/README.md`](./listings/mcp/claud
 has the exact sequence, including the connector approval that installing does not do on its
 own.
 
-Thirty tools cover one build round: opening or rejoining it, reading the brief and the
-engine kit, staging and delivering source files, checking the quality gate, and exchanging
-progress, screenshots and messages with the creator. Nine more exist and are deliberately
-never advertised, so an agent will not discover them.
+The tools cover one build round: opening or rejoining it, reading the brief and the engine
+kit, asking the kit and docs a question, staging and delivering source files, checking the
+quality gate, and exchanging progress, screenshots and messages with the creator. Several
+more exist and are deliberately never advertised, so an agent will not discover them.
 [`listings/mcp/README.md`](./listings/mcp/README.md) lists every tool with its annotations,
 what each destructive one actually consumes, and why the rest are hidden.
 
