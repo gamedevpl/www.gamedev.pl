@@ -2465,6 +2465,7 @@ body.player-open {
   /* Sized for a thumb (Apple/Google both land on ~44px) rather than a cursor. */
   .game-theater-actions > button,
   .game-theater-actions .theater-more-btn,
+  .game-theater-actions .theater-hide-btn,
   .game-theater-actions .exit-btn {
     min-width: 44px;
     min-height: 44px;
