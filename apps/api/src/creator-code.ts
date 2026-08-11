@@ -543,16 +543,15 @@ export async function registerCreatorCodeRoutes(
         paths,
       });
       options.invalidateStatusCache?.(record.issueNumber);
+      // Rebuild so Play drops the cancelled draft.
+      options.scheduleStagedPreview?.(record.issueNumber);
       return reply.send(result);
     },
   );
 
   /**
-   * POST /api/me/studio/games/:slug/sources/stage/rebuild (CE-13) — "Stage it": the
-   * deliberate act that makes the full-bleed stage change, over whatever autosave has
-   * already written to the buffer. Debounced/rate-limited the same way the agent
-   * channel's own staging writes are (`STAGED_PREVIEW_MIN_GAP_MS` etc. in
-   * staged-preview.ts) — this route only arms that timer, it does not bypass it.
+   * POST /api/me/studio/games/:slug/sources/stage/rebuild (CE-13) — arms the
+   * debounced staged-preview assembly. Studio auto-calls after autosave/discard.
    */
   app.post<{ Params: { slug: string } }>(
     '/api/me/studio/games/:slug/sources/stage/rebuild',
@@ -676,9 +675,8 @@ export async function registerCreatorCodeRoutes(
   const DeliverInputSchema = z.object({
     mode: z.enum(['preview', 'publish']),
     /**
-     * CE-18's IP attestation: "this is your own work, or you have the right to use
-     * it" — a product sentence, not drafted legal text (counsel reviews the wording
-     * later, §4). Must be explicitly true; there is no default.
+     * CE-18's IP attestation: recorded on every delivery. Studio treats the
+     * Publish click itself as the confirmation (no separate checkbox).
      */
     attestation: z.literal(true),
   });
@@ -807,7 +805,18 @@ export async function registerCreatorCodeRoutes(
           authorship,
           actor: 'creator',
         });
-        if (outcome.accepted) lastDeliverAt.set(slug, nowMs);
+        if (outcome.accepted) {
+          lastDeliverAt.set(slug, nowMs);
+          // Publish consumes the buffer, like agent fromStaged submit.
+          await gamesStore
+            .clearStagedSources({ slug, issueNumber: record.issueNumber, roundGeneration })
+            .catch((error: unknown) => {
+              request.log.warn(
+                { err: error, issueNumber: record.issueNumber, slug },
+                'code surface deliver: could not clear working copy after publish',
+              );
+            });
+        }
         options.invalidateStatusCache?.(record.issueNumber);
         return reply.send(outcome);
       } catch (error) {

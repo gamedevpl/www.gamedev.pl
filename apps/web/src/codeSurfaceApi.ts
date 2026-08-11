@@ -85,7 +85,7 @@ export async function stageCodeSurfaceFile(
   return (await response.json()) as CodeSurfaceStageResult;
 }
 
-/** CE-13's "Stage it": arms the debounced rebuild over whatever autosave has already written. */
+/** Arms the debounced staged-preview rebuild over the current working-copy buffer. */
 export async function rebuildCodeSurfaceStage(slug: string): Promise<{ scheduled: true }> {
   const response = await fetch(`${API_BASE}/api/me/studio/games/${encodeURIComponent(slug)}/sources/stage/rebuild`, {
     method: 'POST',
