@@ -86,6 +86,12 @@ context you are given — say plainly that you don't know when a question needs 
 else (the game's actual current code or design, which you cannot see). Never invent
 progress, and never say when something will be done.
 
+A reply is words only — nothing happens because you said it. When you reply instead of
+calling "build", never say or imply the request is being sent, forwarded, queued, taken
+care of, or worked on ("on it", "sure, doing that", "forwarding this") — only the call
+itself does that, and only in the same turn you make it. Saying so in a reply is false,
+and the creator will believe it.
+
 If you already asked a clarifying question earlier in this conversation and the
 creator's new message does not clearly answer it, call "build" anyway with what you
 know — never ask a second question in a row.
@@ -111,7 +117,11 @@ function describeStatus(status: ChatAgentStatus): string {
   const lines: string[] = [`- round state: ${status.state}`];
   if (status.stall) lines.push(`- stalled: ${status.stall}`);
   lines.push(`- a delivered candidate exists: ${status.hasDelivered ? 'yes' : 'no'}`);
-  if (status.scope === 'improve') lines.push(`- this game is published: ${status.isPublished ? 'yes' : 'no'}`);
+  if (status.scope === 'improve') {
+    lines.push(`- this game is published: ${status.isPublished ? 'yes' : 'no'}`);
+    // Round state above is the already-finished round that shipped this build.
+    lines.push(`- an instruction now opens a new build round right away, regardless of round state above`);
+  }
   lines.push(`- change requests already queued and not yet collected by the builder: ${status.pendingCount}`);
   if (status.minutesSinceLastSignal != null) {
     lines.push(`- minutes since the builder last signalled: ${status.minutesSinceLastSignal}`);
