@@ -245,8 +245,8 @@ describe('VertexStudioChatAgent', () => {
       history: [],
     });
     await draftAgent.decide({ message: 'better graphics', status: STATUS, history: [] });
-    expect(contextText(seenImprove!)).toContain('opens a new build round right away');
-    expect(contextText(seenDraft!)).not.toContain('opens a new build round right away');
+    expect(contextText(seenImprove!)).toContain('targets a fresh build round');
+    expect(contextText(seenDraft!)).not.toContain('targets a fresh build round');
   });
 
   it('never sends a request over the prompt-size ceiling — it throws instead', async () => {

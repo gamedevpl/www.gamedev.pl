@@ -119,8 +119,8 @@ function describeStatus(status: ChatAgentStatus): string {
   lines.push(`- a delivered candidate exists: ${status.hasDelivered ? 'yes' : 'no'}`);
   if (status.scope === 'improve') {
     lines.push(`- this game is published: ${status.isPublished ? 'yes' : 'no'}`);
-    // Round state above is the already-finished round that shipped this build.
-    lines.push(`- an instruction now opens a new build round right away, regardless of round state above`);
+    // Never promise admission (quota, availability) here — that's checked later.
+    lines.push(`- an instruction targets a fresh build round, independent of round state above`);
   }
   lines.push(`- change requests already queued and not yet collected by the builder: ${status.pendingCount}`);
   if (status.minutesSinceLastSignal != null) {
