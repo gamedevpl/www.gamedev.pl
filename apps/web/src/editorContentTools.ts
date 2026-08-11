@@ -83,12 +83,7 @@ export function unreachableCount(
   return missed;
 }
 
-/**
- * Client-side mirror of the constraint arithmetic — hints only; the server
- * re-checks. Entities have no grid, so their rules are collection-wide
- * (`collectionProblems`, below) rather than per-item; this always returns
- * `[]` for an entities item.
- */
+/** Hints only, server re-checks. Entities' rules are collection-wide (see below), so this returns `[]` for one. */
 export function itemProblems(
   spec: EditorCollectionSpec['item'],
   item: EditorItemContent,
@@ -140,12 +135,7 @@ export function itemProblems(
   return problems;
 }
 
-/**
- * Entities have no per-item rules — their only constraint is collection-wide
- * ("uniqueBy": no two items may share a value), so it is checked once over
- * every item rather than per selected item. Mirrors the server's own check
- * (`editor-contract.ts`'s `validateCollectionContent`) exactly.
- */
+/** Entities' one rule (uniqueBy) is collection-wide — checked once, mirroring the server. */
 export function collectionProblems(spec: EditorCollectionSpec, items: EditorItemContent[]): string[] {
   if (spec.item.widget !== 'entities') return [];
   const problems: string[] = [];
@@ -187,8 +177,7 @@ export function blankItem(spec: EditorCollectionSpec['item']): EditorItemContent
     else properties[name] = false;
   }
   if (spec.widget !== 'tilemap') return { properties };
-  // A fresh tilemap item starts as the smallest legal grid, all first-tile —
-  // the creator paints from there; constraints show what is still missing.
+  // Smallest legal grid, all first-tile — the creator paints from there.
   const fill = spec.tiles[0]?.char ?? '.';
   return { properties, rows: Array.from({ length: spec.grid.minRows }, () => fill.repeat(spec.grid.minCols)) };
 }

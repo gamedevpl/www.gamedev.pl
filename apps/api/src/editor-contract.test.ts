@@ -186,8 +186,7 @@ describe('editor-contract mirror', () => {
     });
     expect(withRows.some((message) => message.includes('unknown keys rows'))).toBe(true);
 
-    // L1 generation must not emit `rows: string[]` for an entities item — the
-    // games repo's generator only does so when the item widget is tilemap.
+    // L1 must not emit `rows: string[]` for an entities item.
     const generated = generateEditorContentModule(definition!);
     expect(generated).toContain('export interface CardsItem {\n  properties: CardsItemProperties;\n}');
     expect(generated).not.toContain('rows');

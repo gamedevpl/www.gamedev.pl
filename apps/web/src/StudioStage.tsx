@@ -77,9 +77,7 @@ export type StudioStageProps = {
    * `source.origin` while a swap is held during play. The ribbon must describe the
    * document on screen, not the one waiting in the wings. */
   onDisplayedOriginChange?: (origin: StageOrigin) => void;
-  /** Filled in with the editor bridge's live-push function (realtime-game-editing-plan.md
-   * §E tier 1) so a sibling surface — the Code surface — can push a declared tunable's new
-   * value straight to the running game without going through this component's props. */
+  /** Filled in with the editor bridge's live-push function, for the Code surface (§E tier 1). */
   editorPushRef?: MutableRefObject<((content: EditorContentDoc) => void) | null>;
 };
 

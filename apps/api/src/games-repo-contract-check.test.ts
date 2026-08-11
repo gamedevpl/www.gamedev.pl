@@ -14,11 +14,7 @@ import {
   MAX_PROJECT_BYTES,
 } from './games-repo-contract.js';
 
-/**
- * The two sides' headers are deliberately different prose (each file explains
- * itself in its own voice) — only the code below the header is required to
- * match, so the fixtures below prove header text is exempt.
- */
+/** Deliberately different header prose — proves only the code below it must match. */
 const EDITOR_CONTRACT_CODE = `export const EDITOR_FILE = 'EDITOR.json';\nexport function noop() {}\n`;
 const EDITOR_CONTRACT_REMOTE = `/**\n * The editor content contract — L0 of EditorKit.\n */\n\n${EDITOR_CONTRACT_CODE}`;
 const EDITOR_CONTRACT_LOCAL = `/**\n * MIRROR of the games repo's tools/lib/editor-contract.ts.\n */\n\n${EDITOR_CONTRACT_CODE}`;

@@ -370,8 +370,7 @@ describe('stripLeadingDocComment', () => {
   });
 
   it('does not consume a doc comment that is not at the very top of the file', () => {
-    // A leading single-line comment before the doc block must not be swallowed —
-    // only the file's own opening `/** */` is exempt from the byte-equivalence rule.
+    // Only the file's own opening /** */ is exempt — not a comment before it.
     const source = '// eslint-disable-next-line\n/**\n * Not actually the header.\n */\nexport const x = 1;\n';
     expect(stripLeadingDocComment(source)).toBe(source.trim());
   });

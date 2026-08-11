@@ -18,17 +18,10 @@ import { fetchGameEditor, type EditorContentDoc } from './studioApi.js';
  * Everything arriving from the frame is hostile input: only the `editor:hello`
  * type is read, and nothing from the game is echoed back beyond the draft.
  *
- * `push` is the one exception to "pull-based": realtime-game-editing-plan.md §E's
- * tier 1 — a declared tunable changed from the Code surface (not the Tuning
- * panel) still has to reach the *running* game without a restart. It posts
- * straight to the frame, independent of the hello-listener's `active` gate,
- * because the stage keeps the game mounted and running under every posture
- * (`StudioStage`'s own "always mounted" invariant) — a param pushed while the
- * creator is looking at Code, not Play, must still land. Whatever `push` sends
- * also becomes the content the *next* `editor:hello` gets answered with, so a
- * later restart (a collection edit, a fresh play session) never regresses a
- * value the creator already saw applied — "the source and the running game
- * agree" (§E.2).
+ * `push` is the one exception to pull-based (§E tier 1, Code-surface param
+ * edits): posts straight to the frame regardless of the `active` gate, since
+ * the stage stays mounted under every posture. Also updates what the next
+ * `editor:hello` gets answered with, so a later restart cannot regress it.
  */
 export function useEditorDraftBridge(
   frameRef: MutableRefObject<HTMLIFrameElement | null>,
@@ -36,7 +29,7 @@ export function useEditorDraftBridge(
   slug: string | undefined,
   editable: boolean,
 ): { push: (content: EditorContentDoc) => void } {
-  /** The most recently sent (or fetched) content — what the next hello gets answered with. */
+  /** What the next `editor:hello` gets answered with. */
   const lastContentRef = useRef<EditorContentDoc | null>(null);
 
   useEffect(() => {
@@ -62,9 +55,7 @@ export function useEditorDraftBridge(
       if (!data || data.ns !== BRIDGE_NAMESPACE || data.v !== PROTOCOL_VERSION) return;
       if (data.t !== 'editor:hello') return;
 
-      // A push already answered a prior hello (or a live tunable edit) more
-      // recently than the fetch — that value wins; it is what the creator is
-      // actually looking at.
+      // A push already sent fresher content than the fetch would — that wins.
       if (lastContentRef.current !== null) {
         frameRef.current?.contentWindow?.postMessage(
           { ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, t: 'editor:content', content: lastContentRef.current },

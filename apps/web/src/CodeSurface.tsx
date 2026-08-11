@@ -80,9 +80,7 @@ type SaveState = 'clean' | 'dirty' | 'saving' | 'saved' | 'error';
 export type CodeSurfaceProps = {
   slug: string;
   onBack: () => void;
-  /** Set by `CreatorStudioView`; `StudioStage` publishes its bridge's `push` into it.
-   * A live-pushable `EDITOR.json` edit (see `onEdit`) reads it to reach the running
-   * game without going through this component's own rebuild machinery. */
+  /** Filled in by `StudioStage`; lets a live param edit reach the running game. */
   editorPushRef?: MutableRefObject<((content: EditorContentDoc) => void) | null>;
 };
 
@@ -114,8 +112,7 @@ export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
   const [attested, setAttested] = useState(false);
   const [deliverState, setDeliverState] = useState<'idle' | 'delivering' | 'delivered'>('idle');
   const [deliverMessage, setDeliverMessage] = useState<string | null>(null);
-  /** True for a brief moment after an `EDITOR.json` param default reaches the running
-   * game live (§E tier 1) — distinct from `saveState`, which tracks the draft save. */
+  /** Briefly true after a live param push (§E tier 1) — separate from `saveState`. */
   const [livePush, setLivePush] = useState(false);
 
   const openedRecordedRef = useRef(false);
@@ -128,9 +125,7 @@ export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
   const livePushTimerRef = useRef<number | null>(null);
   const draftsRef = useRef(drafts);
   draftsRef.current = drafts;
-  /** The content doc believed to be live in the running game right now — lazily
-   * fetched once per mount, then kept current by each push so later param edits
-   * merge onto what the creator last saw applied, not a stale fetch. */
+  /** The content doc believed live in the game now — lazy-fetched, kept current by pushes. */
   const liveContentRef = useRef<EditorContentDoc | null>(null);
   const liveContentPromiseRef = useRef<Promise<EditorContentDoc | null> | null>(null);
 
@@ -302,9 +297,7 @@ export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
     }
   }, [slug]);
 
-  /** Fetches the game's current content doc once per mount and remembers it — the base
-   * a live param push merges onto. Reused (not refetched) by every later push in this
-   * session, since each push already updates `liveContentRef` with what it just sent. */
+  /** Fetches and caches the base content doc a live param push merges onto. */
   const loadLiveContent = useCallback((): Promise<EditorContentDoc | null> => {
     if (liveContentRef.current) return Promise.resolve(liveContentRef.current);
     liveContentPromiseRef.current ??= fetchGameEditor(slug)
@@ -313,9 +306,7 @@ export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
     return liveContentPromiseRef.current;
   }, [slug]);
 
-  /** realtime-game-editing-plan.md §E tier 1: a declared param's default value changed
-   * and nothing else — merge the new values onto the last-known content doc and post it
-   * straight to the running game, no rebuild, no restart. */
+  /** §E tier 1: a declared param default changed — push it live, no rebuild. */
   const pushLiveParamChanges = useCallback(
     async (changes: DeclaredParamChange[]) => {
       const push = editorPushRef?.current;

@@ -427,8 +427,7 @@ describe('CodeSurface', () => {
       expect(pushRef.current).toHaveBeenCalledWith({ params: { speed: 8 } });
       expect(container.textContent).toContain('Live');
 
-      // The normal autosave/staging path still runs — a live push is additive, not
-      // a replacement for persisting the draft.
+      // A live push is additive — the normal autosave/staging still runs.
       await act(async () => {
         await vi.advanceTimersByTimeAsync(1500);
       });

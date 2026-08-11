@@ -480,21 +480,10 @@ function tryEvalArithmetic(expression: string, definitions: Map<string, number>)
   return Number.isFinite(result) ? result : null;
 }
 
-/**
- * The EditorKit L0/L4 contract mirror (issue: entities widget shipped games-side
- * only, silently diverging this file — see `editor-contract.ts`'s own header).
- * Unlike the rest of this file, the two sides are not an asymmetric rollout
- * contract with an intentional website-ahead/games-ahead order; they are meant
- * to be byte-equivalent below each side's own header comment, so this is
- * checked as an exact match rather than extracted field-by-field.
- */
+/** Unlike the rest of this file: the two sides must be byte-equivalent below their headers. */
 export const EDITOR_CONTRACT_PATH = 'tools/lib/editor-contract.ts';
 
-/**
- * Strips a file's leading `/** ... *\/` doc comment — each side's own header,
- * exempted from the byte-equivalence rule — and returns the remainder, trimmed
- * of surrounding blank lines so a stray newline is not reported as drift.
- */
+/** Strips a file's own leading doc-comment header, exempted from the byte-equivalence rule. */
 export function stripLeadingDocComment(source: string): string {
   const match = /^\s*\/\*\*[\s\S]*?\*\/\s*/.exec(source);
   return (match ? source.slice(match[0].length) : source).trim();

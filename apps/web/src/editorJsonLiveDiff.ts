@@ -1,11 +1,8 @@
 /**
- * Recognises the one class of `EDITOR.json` edit the Code surface can push
- * straight to the running game instead of queuing a rebuild — a declared
- * param's `default` value changing, and nothing else (realtime-game-editing-
- * plan.md §E, tier 1). Everything else — a new/removed param, a type/range/
- * label change, a collection edit, invalid JSON — still needs the normal
- * staged rebuild, because it changes the *shape* the running game was booted
- * with, not just a value it reads at use-time.
+ * Recognises the one `EDITOR.json` edit that can push live instead of
+ * rebuilding: a declared param's `default` changing, nothing else (§E tier 1).
+ * Anything shape-changing — added/removed param, type/range/label, content — still
+ * needs the normal staged rebuild.
  */
 
 export type DeclaredParamChange = { key: string; value: unknown };
@@ -30,12 +27,7 @@ function deepEqual(a: unknown, b: unknown): boolean {
   return false;
 }
 
-/**
- * `null` means "not a live-pushable edit — fall back to the normal staged
- * rebuild flow". A non-null, non-empty array is the set of param keys whose
- * `default` actually changed value, ready to merge into the content document
- * and push over the `editor:content` bridge.
- */
+/** `null` means fall back to a staged rebuild; otherwise the changed param keys. */
 export function declaredParamDefaultChanges(prevText: string, nextText: string): DeclaredParamChange[] | null {
   let prev: unknown;
   let next: unknown;
@@ -49,9 +41,7 @@ export function declaredParamDefaultChanges(prevText: string, nextText: string):
 
   const { params: prevParams, ...prevRest } = prev;
   const { params: nextParams, ...nextRest } = next;
-  // Everything outside `params` — `content`, `version`, any future top-level
-  // key — must be untouched, or this is a shape change the game was not
-  // booted to handle.
+  // Anything outside `params` changing is a shape change, not a value tweak.
   if (!deepEqual(prevRest, nextRest)) return null;
   if (!isPlainObject(prevParams) || !isPlainObject(nextParams)) return null;
 
@@ -66,8 +56,7 @@ export function declaredParamDefaultChanges(prevText: string, nextText: string):
     if (!isPlainObject(prevSpec) || !isPlainObject(nextSpec)) return null;
     const { default: prevDefault, ...prevSpecRest } = prevSpec;
     const { default: nextDefault, ...nextSpecRest } = nextSpec;
-    // A type/min/max/label change is a declaration change, not a value tweak —
-    // it needs Check 31 / the L4 validator, not a live push.
+    // A type/min/max/label change needs the L4 validator, not a live push.
     if (!deepEqual(prevSpecRest, nextSpecRest)) return null;
     if (!deepEqual(prevDefault, nextDefault)) changes.push({ key, value: nextDefault });
   }
