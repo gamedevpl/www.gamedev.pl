@@ -34,6 +34,9 @@ import type { GenAIClient, GenerationResult } from 'genaicode';
 import { createVertexClient, type VertexGenerationConfig } from './genai.js';
 import { checkSeedBundles, type SeedBundleResult } from './seed-bundle.js';
 import type { SeedContext, SeedContextSource } from './seed-context.js';
+import { typeCheckGame } from './type-check.js';
+import type { TypeCheckResult } from './type-check.js';
+import { TYPECHECK_PREFLIGHT_BUDGET_MS } from './typecheck-preflight.js';
 import type { QueryKnowledgeFn } from './knowledge-search.js';
 
 /**
@@ -76,6 +79,7 @@ const MAX_SEED_TOTAL_BYTES = 400_000;
 /** A seed that has not arrived by now has stopped being an optimization. */
 export const DEFAULT_SEED_PICK_TIMEOUT_MS = 30_000;
 export const DEFAULT_SEED_GENERATE_TIMEOUT_MS = 180_000;
+export const DEFAULT_SEED_TYPECHECK_TIMEOUT_MS = TYPECHECK_PREFLIGHT_BUDGET_MS;
 
 /** Same model family as the rest of our Vertex call sites; flash is the measured choice. */
 const DEFAULT_SEED_MODEL = 'gemini-3.6-flash';
@@ -117,6 +121,8 @@ export interface SeedDraft {
   compiles: boolean;
   /** Whether a repair round ran, so the rate of first-try-correct drafts is measurable. */
   repaired: boolean;
+  typeChecked: boolean;
+  typeErrors: number;
 }
 
 export interface SeedRequest {
@@ -365,9 +371,9 @@ export function renderKnowledgeContext(
  */
 export function buildRepairPrompt(input: { slug: string; errors: string[]; files: SeedFile[] }): string {
   return [
-    'The game draft below fails to compile. Fix it.',
+    'The game draft below fails validation. Fix it.',
     '',
-    'Compiler errors:',
+    'Validation errors:',
     ...input.errors.map((error) => `- ${error}`),
     '',
     'Rules:',
@@ -403,12 +409,14 @@ export interface VertexGameSeederOptions {
   references?: number;
   pickTimeoutMs?: number;
   generateTimeoutMs?: number;
+  typeCheckTimeoutMs?: number;
   log?: { warn: (context: object, message: string) => void; info: (context: object, message: string) => void };
   /** Test seam, mirroring VertexChecker/VertexSpecRefiner: a prebuilt client. */
   client?: GenAIClient;
   // knowledge-search.ts, called server-internally (chunks mode).
   knowledgeSearch?: QueryKnowledgeFn;
   knowledgeTimeoutMs?: number;
+  typeCheck?: (sources: Record<string, string>, kitDeclaration: string | null) => TypeCheckResult;
   /**
    * Test seam for the bundle check. Defaults to the real esbuild pass; tests substitute
    * verdicts so the repair flow is exercised without esbuild's opinion in the loop.
@@ -429,6 +437,7 @@ export class VertexGameSeeder implements GameSeeder {
   private readonly references: number;
   private readonly pickTimeoutMs: number;
   private readonly generateTimeoutMs: number;
+  private readonly typeCheckTimeoutMs: number;
   private readonly model: string;
   private pickClient?: GenAIClient;
   private generateClient?: GenAIClient;
@@ -442,6 +451,10 @@ export class VertexGameSeeder implements GameSeeder {
     this.generateTimeoutMs = positiveNumber(
       options.generateTimeoutMs ?? process.env.SEED_GENERATE_TIMEOUT_MS,
       DEFAULT_SEED_GENERATE_TIMEOUT_MS,
+    );
+    this.typeCheckTimeoutMs = positiveNumber(
+      options.typeCheckTimeoutMs ?? process.env.SEED_TYPECHECK_TIMEOUT_MS,
+      DEFAULT_SEED_TYPECHECK_TIMEOUT_MS,
     );
     this.model = options.model ?? process.env.SEED_MODEL?.trim() ?? DEFAULT_SEED_MODEL;
   }
@@ -501,6 +514,27 @@ export class VertexGameSeeder implements GameSeeder {
     }
   }
 
+  private typeCheck(
+    files: SeedFile[],
+    kitDeclaration: string | null,
+  ): { verdict: TypeCheckResult; checked: boolean } {
+    if (!kitDeclaration) return { verdict: { ok: true }, checked: false };
+
+    const startedAt = Date.now();
+    try {
+      const verdict = (this.options.typeCheck ?? typeCheckGame)(
+        Object.fromEntries(files.map((file) => [file.path, file.content])),
+        kitDeclaration,
+      );
+      if (Date.now() - startedAt > this.typeCheckTimeoutMs) {
+        return { verdict: { ok: true }, checked: false };
+      }
+      return { verdict, checked: true };
+    } catch {
+      return { verdict: { ok: true }, checked: false };
+    }
+  }
+
   async seed(request: SeedRequest): Promise<SeedDraft | null> {
     const startedAt = Date.now();
     try {
@@ -556,11 +590,26 @@ export class VertexGameSeeder implements GameSeeder {
       // One round, not a loop — a draft two rounds from compiling is better finished by
       // the agent, which was going to read it anyway.
       const bundleCheck = this.options.bundleCheck ?? checkSeedBundles;
-      let verdict = await bundleCheck(slug, files);
+      const checkDraft = async (candidate: SeedFile[]) => {
+        const [bundleVerdict, typeCheckResult] = await Promise.all([
+          bundleCheck(slug, candidate),
+          Promise.resolve(this.typeCheck(candidate, context.kitDeclaration)),
+        ]);
+        return { bundleVerdict, typeCheckResult };
+      };
+
+      let checks = await checkDraft(files);
       let repaired = false;
-      if (!verdict.ok) {
+      const validationErrors = () => [
+        ...(checks.bundleVerdict.ok ? [] : checks.bundleVerdict.errors),
+        ...(checks.typeCheckResult.verdict.ok ? [] : checks.typeCheckResult.verdict.errors),
+      ];
+
+      if (validationErrors().length > 0) {
         repaired = true;
-        const repairResult = await this.client('generate')(buildRepairPrompt({ slug, errors: verdict.errors, files }))
+        const repairResult = await this.client('generate')(
+          buildRepairPrompt({ slug, errors: validationErrors(), files }),
+        )
           .maxOutputTokens(65_536)
           .signal(AbortSignal.timeout(this.generateTimeoutMs))
           .run();
@@ -579,8 +628,11 @@ export class VertexGameSeeder implements GameSeeder {
           // still exists and is still a usable head start for the agent.
           if (isUsableSeed(candidate)) files = candidate;
         }
-        verdict = await bundleCheck(slug, files);
+        checks = await checkDraft(files);
       }
+      const typeErrors = checks.typeCheckResult.verdict.ok
+        ? 0
+        : checks.typeCheckResult.verdict.errors.length;
 
       const draft: SeedDraft = {
         slug,
@@ -589,8 +641,10 @@ export class VertexGameSeeder implements GameSeeder {
         ...(parsed.notes ? { notes: parsed.notes } : {}),
         usage,
         elapsedMs: Date.now() - startedAt,
-        compiles: verdict.ok,
+        compiles: checks.bundleVerdict.ok,
         repaired,
+        typeChecked: checks.typeCheckResult.checked,
+        typeErrors,
       };
       this.options.log?.info(
         {
@@ -601,6 +655,8 @@ export class VertexGameSeeder implements GameSeeder {
           tokens: draft.usage,
           compiles: draft.compiles,
           repaired: draft.repaired,
+          typeChecked: draft.typeChecked,
+          typeErrors: draft.typeErrors,
         },
         'seed generated',
       );

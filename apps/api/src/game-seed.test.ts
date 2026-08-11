@@ -273,6 +273,7 @@ function stubContext(overrides: Partial<SeedContext> = {}): SeedContextSource {
   const context: SeedContext = {
     catalogIndex: 'apex-sprint — Apex Sprint — arcade racing\nword-forge — Word Forge — word puzzle',
     scaffold: '--- games/<slug>/game.ts ---\nexport {};',
+    kitDeclaration: null,
     hasGame: (slug) => ['apex-sprint', 'word-forge'].includes(slug),
     renderReferences: (slugs) => slugs.map((slug) => `--- games/${slug}/game.ts ---\nexport {};`).join('\n'),
     ...overrides,
@@ -303,6 +304,27 @@ function stubClient(responses: { text: string; inputTokens?: number; outputToken
     return chain;
   };
   return builder as unknown as ConstructorParameters<typeof VertexGameSeeder>[0]['client'];
+}
+
+function stubClientWithPrompts(responses: { text: string }[]) {
+  const prompts: string[] = [];
+  let call = 0;
+  const builder = ((prompt: string) => {
+    prompts.push(prompt);
+    const response = responses[Math.min(call++, responses.length - 1)];
+    const chain = {
+      temperature: () => chain,
+      maxOutputTokens: () => chain,
+      signal: () => chain,
+      run: async () => ({
+        parts: [{ type: 'text' as const, text: response.text }],
+        model: 'gemini-3.6-flash',
+        usage: { inputTokens: 100, outputTokens: 50 },
+      }),
+    };
+    return chain;
+  }) as unknown as ConstructorParameters<typeof VertexGameSeeder>[0]['client'];
+  return { client: builder, prompts };
 }
 
 const draftFor = (slug: string) =>
@@ -340,6 +362,20 @@ const GOOD_DRAFT = [
   'The trace still needs recording.',
 ].join('\n');
 
+const KIT = `
+interface GameKitDraw {
+  circle(x: number, y: number, r: number): void;
+  ellipse(x: number, y: number, rx: number, ry: number): void;
+}
+interface GameKitSensing {
+  createVoiceMeter(): unknown;
+}
+interface GameKitGameContext {
+  draw: GameKitDraw;
+  sensing: GameKitSensing;
+}
+`;
+
 describe('VertexGameSeeder', () => {
   const request = { slug: 'my-game', title: 'My Game', spec: 'A game about tanks' };
 
@@ -358,8 +394,46 @@ describe('VertexGameSeeder', () => {
     expect(draft!.references).toEqual(['apex-sprint', 'word-forge']);
     expect(draft!.files.map((file) => file.path)).toEqual(['SPEC.md', 'game.ts', 'game/model.ts']);
     expect(draft!.notes).toBe('The trace still needs recording.');
+    expect(draft!.typeChecked).toBe(false);
+    expect(draft!.typeErrors).toBe(0);
     // Both calls are billed to the job, not just the expensive one.
     expect(draft!.usage).toEqual({ inputTokens: 30_400, outputTokens: 8_010, model: 'gemini-3.6-flash' });
+  });
+
+  it('combines bundle and GameKit validation errors into one repair round', async () => {
+    const bundleVerdicts = [
+      { ok: false as const, errors: ['bundle: missing game/render.ts'] },
+      { ok: true as const },
+    ];
+    const typeCheckVerdicts = [
+      { ok: false as const, errors: ['game.ts:1: error TS2339: draw.flash'] },
+      { ok: true as const },
+    ];
+    const { client, prompts } = stubClientWithPrompts([
+      { text: '{"picks":["apex-sprint"]}' },
+      { text: GOOD_DRAFT },
+      { text: '--- games/my-game/game.ts ---\n// repaired\n' },
+    ]);
+
+    const seeder = new VertexGameSeeder({
+      context: stubContext({ kitDeclaration: KIT }),
+      client,
+      bundleCheck: async () => bundleVerdicts.shift()!,
+      typeCheck: (_sources, kitDeclaration) => {
+        expect(kitDeclaration).toBe(KIT);
+        return typeCheckVerdicts.shift()!;
+      },
+    });
+
+    const draft = await seeder.seed(request);
+
+    expect(draft).not.toBeNull();
+    expect(draft!.repaired).toBe(true);
+    expect(draft!.compiles).toBe(true);
+    expect(draft!.typeChecked).toBe(true);
+    expect(draft!.typeErrors).toBe(0);
+    expect(prompts[2]).toContain('bundle: missing game/render.ts');
+    expect(prompts[2]).toContain('game.ts:1: error TS2339: draw.flash');
   });
 
   it('drops hallucinated slugs and keeps the real ones', async () => {
@@ -511,7 +585,7 @@ describe('VertexGameSeeder', () => {
     expect(draft!.files.some((file) => file.path.includes('shared'))).toBe(false);
   });
 
-  const ENV_KEYS = ['SEED_REFERENCES', 'SEED_PICK_TIMEOUT_MS', 'SEED_GENERATE_TIMEOUT_MS'] as const;
+  const ENV_KEYS = ['SEED_REFERENCES', 'SEED_PICK_TIMEOUT_MS', 'SEED_GENERATE_TIMEOUT_MS', 'SEED_TYPECHECK_TIMEOUT_MS'] as const;
   const saved: Record<string, string | undefined> = {};
 
   beforeEach(() => {
@@ -590,6 +664,7 @@ describe('knowledge context injection (KQ-11)', () => {
     const context: SeedContext = {
       catalogIndex: 'apex-sprint — Apex Sprint — arcade racing',
       scaffold: '--- games/<slug>/game.ts ---\nexport {};',
+      kitDeclaration: null,
       hasGame: (slug) => slug === 'apex-sprint',
       renderReferences: (slugs, byteBudget) => {
         budgets.push(byteBudget);

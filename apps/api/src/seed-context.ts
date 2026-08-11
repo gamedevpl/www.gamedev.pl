@@ -24,12 +24,12 @@ const TEXT_EXTENSIONS = ['.ts', '.json', '.md', '.css', '.html'];
  *
  * Media is the whole reason the games repo is large and none of it can enter a text
  * prompt, so it is dropped at the tar boundary rather than downloaded into memory and
- * ignored. `shared/` is excluded too: GameKit's own source is far larger than the
- * reference budget, and a game's *use* of the engine — which is what the model needs to
- * copy — is visible in the reference games themselves.
+ * ignored. `shared/` stays excluded for prompt budget, except `shared/game-kit.d.ts`,
+ * which the checker reads without rendering.
  */
 function seedInclude(relativePath: string): boolean {
   if (relativePath === 'catalog.json') return true;
+  if (relativePath === 'shared/game-kit.d.ts') return true;
   const inScope = relativePath.startsWith('games/') || relativePath.startsWith('templates/');
   return inScope && TEXT_EXTENSIONS.some((extension) => relativePath.endsWith(extension));
 }
@@ -48,6 +48,8 @@ export interface SeedContext {
   catalogIndex: string;
   /** The `templates/game` skeleton, rendered in the same fence format as references. */
   scaffold: string;
+  /** GameKit declarations for validation, never rendered into a prompt. */
+  kitDeclaration: string | null;
   hasGame(slug: string): boolean;
   /** Full source of the picked games, in fence format, truncated to a byte budget. */
   renderReferences(slugs: string[], byteBudget: number): string;
@@ -126,6 +128,7 @@ export function buildSeedContext(index: SeedFileIndex): SeedContext | null {
   return {
     catalogIndex: published.map((entry) => `${entry.slug} — ${entry.title} — ${entry.genre}`).join('\n'),
     scaffold: renderTree('templates/game', 'games/<slug>', { remaining: CONTEXT_SCAFFOLD_BUDGET }),
+    kitDeclaration: index.read('shared/game-kit.d.ts'),
     hasGame: (slug: string) => slugs.has(slug),
     renderReferences(picks: string[], byteBudget: number): string {
       const budget = { remaining: byteBudget };
