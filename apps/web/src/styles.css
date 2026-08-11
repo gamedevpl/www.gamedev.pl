@@ -1852,9 +1852,12 @@ body.player-open {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* The bar owns a flex row above the game, so its safe-area insets cannot cover HUDs. */
+/* The bar floats over the game and clears itself after gameplay starts. */
 .game-theater-bar {
-  position: relative;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2244,7 +2247,7 @@ body.player-open {
   margin: 0;
 }
 
-/* Immersive fullscreen: keep the exit affordance away from top-edge game HUDs. */
+/* Immersive fullscreen: the bar is gone; one floating control exits it. */
 .theater-exit-fullscreen {
   position: absolute;
   top: auto;
@@ -2324,7 +2327,7 @@ body.player-open {
 
 .theater-camera-indicator {
   position: absolute;
-  top: max(12px, env(safe-area-inset-top));
+  top: calc(max(12px, env(safe-area-inset-top)) + 58px);
   left: max(12px, env(safe-area-inset-left));
   z-index: 2;
   display: inline-flex;
@@ -2421,7 +2424,8 @@ body.player-open {
 /* MOBILE GAME THEATER
    Two independent squeezes. Narrow (portrait phone): the bar can't fit three
    labelled buttons plus a description, so labels and secondary text go. Short
-   (landscape phone, ~380px tall): the bar shrinks to preserve game space. */
+   (landscape phone, ~380px tall): the overlay shrinks so it obscures less of the
+   game. A landscape phone hits both. */
 @media (max-width: 768px) {
   .game-theater-bar {
     padding: 8px 12px;
@@ -2476,7 +2480,7 @@ body.player-open {
   }
 
   .theater-camera-indicator {
-    top: max(8px, env(safe-area-inset-top));
+    top: calc(max(8px, env(safe-area-inset-top)) + 57px);
   }
 
   /* Phone: sound + fullscreen leave the bar and appear as menu rows instead. */
@@ -2518,7 +2522,7 @@ body.player-open {
   }
 
   .theater-camera-indicator {
-    top: max(4px, env(safe-area-inset-top));
+    top: calc(max(4px, env(safe-area-inset-top)) + 45px);
   }
 
   /* Shrink bar chrome only — leave the overflow menu rows at their thumb target. */

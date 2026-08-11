@@ -520,6 +520,43 @@ describe('GameTheater how-to-play visit telemetry', () => {
     }
   });
 
+  it('does not postpone the hide clock when gameplay repeats input', async () => {
+    vi.useFakeTimers();
+    try {
+      await draw();
+      const frame = container.querySelector('iframe') as HTMLIFrameElement;
+      const bar = container.querySelector('.game-theater-bar') as HTMLElement;
+
+      await act(async () => {
+        frame.focus();
+        window.dispatchEvent(
+          new MessageEvent('message', {
+            data: { source: 'gdpl-player', type: 'activity' },
+            origin: 'null',
+          }),
+        );
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(Math.floor(PLAYER_CHROME_IDLE_MS / 2));
+      });
+      expect(bar.classList.contains('is-idle')).toBe(false);
+
+      await act(async () => {
+        window.dispatchEvent(
+          new MessageEvent('message', {
+            data: { source: 'gdpl-player', type: 'activity' },
+            origin: 'null',
+          }),
+        );
+        vi.advanceTimersByTime(Math.ceil(PLAYER_CHROME_IDLE_MS / 2));
+      });
+
+      expect(bar.classList.contains('is-idle')).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('pins the bar while one of its controls is focused', async () => {
     vi.useFakeTimers();
     try {

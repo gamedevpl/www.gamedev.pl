@@ -166,8 +166,7 @@ export function GameTheater({
   const [howToOpen, setHowToOpen] = useState(false);
   const [playerEngaged, setPlayerEngaged] = useState(false);
   const [chromeIdle, setChromeIdle] = useState(false);
-  const [activityVersion, setActivityVersion] = useState(0);
-  const [chromeHeld, setChromeHeld] = useState(false);
+  const [chromeFocused, setChromeFocused] = useState(false);
   /**
    * The always-available doors to Remix and its painter (ops repo,
    * remix-content-editing-plan §3.1): nonces the menu bumps, threaded down to
@@ -217,19 +216,14 @@ export function GameTheater({
   const moreOpenRef = useRef(moreOpen);
   moreOpenRef.current = moreOpen;
 
-  // Play input starts the hide clock and can postpone a still-visible bar, but it
-  // must never bring a faded bar back — mouse-aim and click-heavy games would
-  // otherwise flap the chrome on every move. Peek / game-over are the return paths
-  // (ops D.11.6: pause moments + always-visible peek affordance).
+  // Play input starts the hide clock but never brings faded chrome back.
   const notePlayerActivity = useCallback(() => {
     setPlayerEngaged(true);
-    setActivityVersion((version) => version + 1);
   }, []);
 
   const revealChrome = useCallback(() => {
     setPlayerEngaged(true);
     setChromeIdle(false);
-    setActivityVersion((version) => version + 1);
   }, []);
 
   const notePlayerEnd = useCallback(() => {
@@ -365,19 +359,17 @@ export function GameTheater({
     setHowToOpen(false);
   }, [fullscreen]);
 
-  // Gated on real game input: chrome never vanishes while somebody is still
-  // orienting themselves. Once play begins, a quiet grace period fades it; further
-  // play input does not un-fade it (see notePlayerActivity). Hover/focus and open
-  // control surfaces pin the bar — including a race where the idle timer and a
-  // pointerenter land in the same tick.
+  // Gated on real game input: chrome stays while somebody is still orienting.
+  // Focused controls stay reachable; repeated gameplay input does not reset the clock.
   useEffect(() => {
-    if (!playerEngaged || chromeHeld || moreOpen || howToOpen || fullscreen) {
+    if (chromeIdle) return;
+    if (!playerEngaged || chromeFocused || moreOpen || howToOpen || fullscreen) {
       setChromeIdle(false);
       return;
     }
     const timer = window.setTimeout(() => setChromeIdle(true), PLAYER_CHROME_IDLE_MS);
     return () => window.clearTimeout(timer);
-  }, [activityVersion, chromeHeld, fullscreen, howToOpen, moreOpen, playerEngaged]);
+  }, [chromeFocused, chromeIdle, fullscreen, howToOpen, moreOpen, playerEngaged]);
 
   const toggleFullscreen = useCallback(() => {
     if (document.fullscreenElement) {
@@ -609,11 +601,9 @@ export function GameTheater({
         <div
           className={`game-theater-bar${chromeIdle ? ' is-idle' : ''}`}
           aria-hidden={chromeIdle}
-          onPointerEnter={() => setChromeHeld(true)}
-          onPointerLeave={() => setChromeHeld(false)}
-          onFocusCapture={() => setChromeHeld(true)}
+          onFocusCapture={() => setChromeFocused(true)}
           onBlurCapture={(event) => {
-            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setChromeHeld(false);
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setChromeFocused(false);
           }}
         >
           <div className="game-theater-meta">
