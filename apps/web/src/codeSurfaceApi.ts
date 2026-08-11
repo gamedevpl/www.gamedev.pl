@@ -139,6 +139,22 @@ export async function typecheckCodeSurface(
   return (await response.json()) as CodeSurfaceTypecheckResult;
 }
 
+export type CodeSurfaceKitDeclaration = { engineRef: string; declaration: string };
+
+// GA-01: advisory — null, not a throw, on any failure.
+export async function fetchCodeSurfaceKitDeclaration(slug: string): Promise<CodeSurfaceKitDeclaration | null> {
+  try {
+    const response = await fetch(
+      `${API_BASE}/api/me/studio/games/${encodeURIComponent(slug)}/sources/kit-declaration`,
+      { credentials: 'include' },
+    );
+    if (!response.ok) return null;
+    return (await response.json()) as CodeSurfaceKitDeclaration;
+  } catch {
+    return null;
+  }
+}
+
 export type CodeSurfaceDeliverOutcome =
   | {
       accepted: true;
