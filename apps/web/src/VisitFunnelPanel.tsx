@@ -76,6 +76,19 @@ const REMIX_VIA_LABELS: Record<string, string> = {
   unknown: 'unknown (pre-via clients)',
 };
 
+const CODE_LABELS: Record<string, string> = {
+  offered: 'was shown the Code control',
+  opened: 'opened the Code surface',
+  file_opened: 'opened a file',
+  edited: 'edited a file',
+  typechecked: 'ran a typecheck',
+  previewed: 'staged a preview',
+  delivered: 'delivered a build',
+  published: 'published from Code',
+  read_only_agent: 'hit the agent-round lock',
+  conflict_seen: 'saw a staging conflict',
+};
+
 const ASSIST_LABELS: Record<string, string> = {
   asked: 'typed a tuning request',
   applied: 'got a change applied',
@@ -422,6 +435,36 @@ export function VisitFunnelPanel({ data }: { data: VisitsResponse }) {
                      * edits — almost none of it will, and that is fine.
                      */}
                     <td className="num">{percent(row.visits, funnel.editing[0]?.visits ?? 0)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <div className="funnel-block">
+          <h3>Code surface</h3>
+          {(funnel.coding ?? []).every((row) => row.visits === 0) ? (
+            <p className="health-empty">Nobody was shown the Code control in this window.</p>
+          ) : (
+            <table className="health-table">
+              <thead>
+                <tr>
+                  <th scope="col">Step</th>
+                  <th scope="col" className="num">
+                    Visits
+                  </th>
+                  <th scope="col" className="num">
+                    Of offered
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {(funnel.coding ?? []).map((row) => (
+                  <tr key={row.step}>
+                    <td>{CODE_LABELS[row.step] ?? row.step}</td>
+                    <td className="num">{row.visits}</td>
+                    <td className="num">{percent(row.visits, funnel.coding?.[0]?.visits ?? 0)}</td>
                   </tr>
                 ))}
               </tbody>

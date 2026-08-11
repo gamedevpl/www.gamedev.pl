@@ -187,6 +187,8 @@ export type SubmissionStatus = {
    * API deploys omit it.
    */
   priorRounds?: PriorRoundHistory[];
+  /** Read-only capability probe for the Code surface (CE-05). Absent before a bound slug. */
+  codeSurface?: { available: boolean; readOnly: boolean; reason?: 'agent_round' | 'killed' };
 };
 
 /** One superseded build job's transcript, for the collapsed history blocks. */

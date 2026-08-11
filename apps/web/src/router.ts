@@ -9,8 +9,13 @@ import type { LegalDocId } from './legal/types.js';
  * living in three of them, so which box a creator was allowed depended on a lifecycle
  * state they had to know to find it. Now: the thread, the things beside the thread, and
  * the one surface that genuinely takes over the screen.
+ *
+ * `'code'` is the fourth (creator-code-editing-execution-plan.md CE-06) — manual editing
+ * of a game's own sources, docked as a panel the same way `edit` is. It follows `edit`'s
+ * own rule for who gets it: not "IDE", not "editor" (taken), not "sources" (the
+ * read-only public view already has that name).
  */
-export type StudioTab = 'thread' | 'details' | 'edit';
+export type StudioTab = 'thread' | 'details' | 'edit' | 'code';
 
 /**
  * Every name a surface has answered to, including the five-tab vocabulary that came
@@ -34,6 +39,9 @@ const STUDIO_TAB_ALIASES: Record<string, StudioTab> = {
   // resolves the URL and falls back to the thread.
   edit: 'edit',
   editor: 'edit',
+  // The Code surface (CE-06). Only games the caller owns render it; the studio
+  // resolves the URL and falls back to the thread for everyone else, same as `edit`.
+  code: 'code',
 };
 
 /** The surface this URL segment names, or null when it names nothing. */

@@ -56,6 +56,7 @@ import {
   selfBuildDeliveryCap,
   type BuilderKind,
 } from './builder.js';
+import { codeSurfaceEnabled, isLiveAgentRound } from './code-surface.js';
 import type { GameSeeder, SeedDraft } from './game-seed.js';
 import { ManagedOutputRejectedError } from './managed-agent.js';
 import { createManagedDeliveryLock } from './managed-backend.js';
@@ -579,6 +580,23 @@ export interface SubmissionRoutesHandle {
     /** When set, the new job is owned by this uid (slug-transfer safe). */
     ownerUid?: string;
   }) => Promise<{ route: 'job'; jobId: number } | { route: 'unavailable'; reason: ManagedUnavailableReason } | null>;
+  /**
+   * Drops the cached status response for a job, so the next poll reflects a write that
+   * did not come through the agent channel or the submission routes themselves.
+   *
+   * Exposed for the Code surface's owner-authored staging routes (creator-code.ts):
+   * an owner's `PUT …/sources/stage` is the same kind of write the channel's own
+   * `onEvent` busts the cache for, and a second, independent cache would let Studio
+   * poll a stale status for up to the 60s TTL after an owner staged a file.
+   */
+  invalidateStatusCache: (issueNumber: number) => void;
+  /**
+   * Arms the staged-preview publisher for a job, the same debounced assembly the agent
+   * channel's `onSourcesStaged` triggers. Null when the publisher could not be built
+   * (no store / games store / GitHub client configured) — callers treat that as a
+   * no-op, same as the channel does.
+   */
+  scheduleStagedPreview: ((issueNumber: number) => void) | null;
 }
 
 /**
@@ -2577,6 +2595,16 @@ export async function registerSubmissionRoutes(
     if (roundBuilder) status.builder = roundBuilder;
     const lastBuilder = record.defaultBuilder ?? record.builder;
     if (lastBuilder) status.defaultBuilder = lastBuilder;
+    // Code surface probe (CE-05). Nothing to edit before the job has a bound slug.
+    if (record.slug) {
+      const killed = !codeSurfaceEnabled();
+      const liveAgent = isLiveAgentRound(record);
+      status.codeSurface = {
+        available: !killed,
+        readOnly: killed || liveAgent,
+        ...(killed ? { reason: 'killed' as const } : liveAgent ? { reason: 'agent_round' as const } : {}),
+      };
+    }
     if (managedAvailabilityGate) {
       status.platformBuilder = await managedAvailabilityGate.peek(
         record.ownerUid,
@@ -5623,5 +5651,7 @@ export async function registerSubmissionRoutes(
       githubClient ? getPublishedCatalogEntry(githubClient, slug) : Promise.resolve(null),
     startImprovementRound,
     buildNotifyDeps,
+    invalidateStatusCache,
+    scheduleStagedPreview: stagedPreviews ? (issueNumber) => stagedPreviews.schedule(issueNumber) : null,
   };
 }

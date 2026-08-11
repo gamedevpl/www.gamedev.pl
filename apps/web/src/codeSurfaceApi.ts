@@ -1,0 +1,169 @@
+// Client for the Code surface's own routes (creator-code-editing-execution-plan.md
+// CE-03, CE-10, CE-11) — mirrors studioApi.ts's shape (a small typed fetch wrapper
+// per route, one shared error class) rather than adding a dependency.
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
+
+export class CodeSurfaceApiError extends Error {
+  status?: number;
+  code?: string;
+}
+
+async function throwResponseError(response: Response): Promise<never> {
+  const body = (await response.json().catch(() => null)) as { error?: string; message?: string } | null;
+  const error = new CodeSurfaceApiError(body?.message ?? body?.error ?? `Request failed (${response.status})`);
+  error.status = response.status;
+  error.code = body?.error;
+  throw error;
+}
+
+export type CodeSurfaceFileBudget = {
+  bytes: number;
+  lines: number;
+  maxBytes: number;
+  maxLines: number;
+  oversize: boolean;
+};
+
+export type CodeSurfaceFile = {
+  path: string;
+  content: string;
+  /** Present only when the staging buffer overrides the delivered content. */
+  stagedBy?: 'agent' | 'owner';
+  budget?: CodeSurfaceFileBudget;
+};
+
+export type CodeSurfaceStagingSummary = {
+  totalBytes: number;
+  maxBytes: number;
+  maxFiles: number;
+  updatedAt: string | null;
+};
+
+export type CodeSurfaceSources = {
+  slug: string;
+  version: string | null;
+  files: CodeSurfaceFile[];
+  /** Paths staged for deletion — excluded from `files`. */
+  deleted: string[];
+  readOnly: boolean;
+  reason?: 'agent_round';
+  staged: CodeSurfaceStagingSummary;
+};
+
+export async function fetchCodeSurfaceSources(slug: string): Promise<CodeSurfaceSources> {
+  const response = await fetch(`${API_BASE}/api/me/studio/games/${encodeURIComponent(slug)}/sources`, {
+    credentials: 'include',
+  });
+  if (!response.ok) await throwResponseError(response);
+  return (await response.json()) as CodeSurfaceSources;
+}
+
+export type CodeSurfaceStageResult = {
+  accepted: true;
+  path: string;
+  bytes: number;
+  hint?: string;
+  staged: CodeSurfaceStagingSummary;
+};
+
+export async function stageCodeSurfaceFile(
+  slug: string,
+  path: string,
+  content: string,
+  options?: { rebuild?: boolean },
+): Promise<CodeSurfaceStageResult> {
+  const response = await fetch(`${API_BASE}/api/me/studio/games/${encodeURIComponent(slug)}/sources/stage`, {
+    method: 'PUT',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ path, content, ...(options?.rebuild === false ? { rebuild: false } : {}) }),
+  });
+  if (!response.ok) await throwResponseError(response);
+  return (await response.json()) as CodeSurfaceStageResult;
+}
+
+/** CE-13's "Stage it": arms the debounced rebuild over whatever autosave has already written. */
+export async function rebuildCodeSurfaceStage(slug: string): Promise<{ scheduled: true }> {
+  const response = await fetch(`${API_BASE}/api/me/studio/games/${encodeURIComponent(slug)}/sources/stage/rebuild`, {
+    method: 'POST',
+    credentials: 'include',
+  });
+  if (!response.ok) await throwResponseError(response);
+  return (await response.json()) as { scheduled: true };
+}
+
+export type CodeSurfacePatchResult = CodeSurfaceStageResult & { replacements: number; baseFrom: 'staged' | 'delivery' };
+
+export async function patchCodeSurfaceFile(
+  slug: string,
+  path: string,
+  edit: { old: string; new: string } | { patch: string },
+): Promise<CodeSurfacePatchResult> {
+  const response = await fetch(`${API_BASE}/api/me/studio/games/${encodeURIComponent(slug)}/sources/stage/patch`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ path, ...edit }),
+  });
+  if (!response.ok) await throwResponseError(response);
+  return (await response.json()) as CodeSurfacePatchResult;
+}
+
+export async function discardCodeSurfaceEdits(slug: string, paths?: string[]): Promise<{ cleared: number }> {
+  const response = await fetch(`${API_BASE}/api/me/studio/games/${encodeURIComponent(slug)}/sources/stage/discard`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(paths ? { paths } : {}),
+  });
+  if (!response.ok) await throwResponseError(response);
+  return (await response.json()) as { cleared: number };
+}
+
+export type CodeSurfaceTypecheckResult = { ok: true } | { ok: false; errors: string[] };
+
+export async function typecheckCodeSurface(
+  slug: string,
+  overlay?: Array<{ path: string; content: string }>,
+): Promise<CodeSurfaceTypecheckResult> {
+  const response = await fetch(`${API_BASE}/api/me/studio/games/${encodeURIComponent(slug)}/sources/typecheck`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(overlay ? { overlay } : {}),
+  });
+  if (!response.ok) await throwResponseError(response);
+  return (await response.json()) as CodeSurfaceTypecheckResult;
+}
+
+export type CodeSurfaceDeliverOutcome =
+  | {
+      accepted: true;
+      slug: string;
+      version: string;
+      mode: 'preview' | 'publish';
+      gateStarted: boolean;
+      buildId?: string;
+    }
+  | {
+      accepted: false;
+      rejected: 'stopped' | 'rate_limited' | 'delivery_cap';
+      deliveryCap?: number;
+      deliveriesUsed?: number;
+    };
+
+/** CE-18: the manual round's delivery, with the required IP attestation. */
+export async function deliverCodeSurface(
+  slug: string,
+  mode: 'preview' | 'publish',
+): Promise<CodeSurfaceDeliverOutcome> {
+  const response = await fetch(`${API_BASE}/api/me/studio/games/${encodeURIComponent(slug)}/sources/deliver`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ mode, attestation: true }),
+  });
+  if (!response.ok) await throwResponseError(response);
+  return (await response.json()) as CodeSurfaceDeliverOutcome;
+}

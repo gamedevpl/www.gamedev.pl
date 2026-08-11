@@ -274,6 +274,16 @@ export interface SubmissionStatusResponseBase {
    * opens a new job. Absent when this is the only job, or the job has no slug yet.
    */
   priorRounds?: PriorRoundHistory[];
+  /**
+   * Read-only capability probe for the Code surface (creator-code-editing-execution-plan.md
+   * CE-05): one field the web reads instead of re-deriving lock rules client-side.
+   * Absent for a job with no bound slug yet (nothing to edit before one exists).
+   */
+  codeSurface?: {
+    available: boolean;
+    readOnly: boolean;
+    reason?: 'agent_round' | 'killed';
+  };
 }
 
 /**

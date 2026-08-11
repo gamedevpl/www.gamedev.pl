@@ -790,7 +790,8 @@ export interface VisitEvent {
     | 'studio_step'
     | 'editor_step'
     | 'assist_step'
-    | 'remix_step';
+    | 'remix_step'
+    | 'code_step';
   /** Server-anchored instant, derived like `TelemetryEvent.at`. */
   at: string;
   /** Milliseconds from visit start — the trustworthy measure of within-visit timing. */
@@ -801,7 +802,9 @@ export interface VisitEvent {
   route?: string;
   /**
    * `create_step` / `waitlist_step` / `studio_step` / `editor_step` /
-   * `assist_step` / `remix_step`: which funnel step or outcome this visit reached.
+   * `assist_step` / `remix_step` / `code_step`: which funnel step or outcome this
+   * visit reached. `code_step` never carries a file path or source text — see its
+   * type definition in the web client for the closed vocabulary.
    */
   step?: string;
   /**

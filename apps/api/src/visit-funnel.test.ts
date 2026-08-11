@@ -196,6 +196,39 @@ describe('summarizeVisitFunnel', () => {
     ]);
   });
 
+  it('reports the Code surface funnel in step order, zeroes included', () => {
+    const step = (visitId: string, step: string): VisitEvent =>
+      ({ visitId, type: 'code_step', at: '2026-08-11T10:00:00.000Z', msSinceStart: 0, step }) as VisitEvent;
+
+    const funnel = summarizeVisitFunnel([
+      started('a'),
+      step('a', 'offered'),
+      step('a', 'opened'),
+      step('a', 'file_opened'),
+      step('a', 'edited'),
+      step('a', 'delivered'),
+      started('b'),
+      step('b', 'offered'),
+      // A repeated edit in one visit counts once, not twice.
+      step('b', 'edited'),
+      step('b', 'edited'),
+      started('c'),
+    ]);
+
+    expect(funnel.coding).toEqual([
+      { step: 'offered', visits: 2 },
+      { step: 'opened', visits: 1 },
+      { step: 'file_opened', visits: 1 },
+      { step: 'edited', visits: 2 },
+      { step: 'typechecked', visits: 0 },
+      { step: 'previewed', visits: 0 },
+      { step: 'delivered', visits: 1 },
+      { step: 'published', visits: 0 },
+      { step: 'read_only_agent', visits: 0 },
+      { step: 'conflict_seen', visits: 0 },
+    ]);
+  });
+
   it('keeps editor steps out of the create and waitlist funnels', () => {
     // All three event types share the `step` field on the wire; separate Sets are what
     // stop an editor save from ever reading as a create or waitlist rung.
