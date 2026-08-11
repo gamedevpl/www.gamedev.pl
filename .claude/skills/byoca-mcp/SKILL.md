@@ -419,6 +419,25 @@ creator **self→platform** handoff immediately). Still call **`end`**:
 - Without `end`, your session may look finished while still connected; quiet
   (~15 minutes) remains a fallback only
 
+### `end({ summary })` is the only channel for a closing answer
+
+The platform reads tool calls, never the agent's transcript. An agent that answers
+the creator in ordinary assistant prose — "this is an arcade game", "nothing needed
+changing" — answers nobody: that text is dropped with the session. Observed on
+round 1000043, where the whole round was a question and the answer never left the
+model.
+
+- `end` takes optional `summary` (≤300 chars), plus `summaryLocalized` + `locale`
+  on the same zero-cost pair contract as `report_progress`
+- Stored as a `BuildEvent` with `kind: 'done'` — the same feed Studio already
+  renders, so nothing new was needed on the web side
+- Reply carries `summaryShown: true` when it landed. Best-effort by design: a
+  summary that hits the per-build event ceiling never fails the `end`
+- Rejected the same way a progress report is when the round is already stopped
+- The `stopped` and builder-handoff paths differ: handoff **does** record the
+  summary (it is the outgoing agent's last word), `stopped` does not
+- The empty body every older client sends is still valid
+
 `gateStarted` is **true when Cloud Build accepted the create** (HTTP 2xx), even
 if the build id could not be parsed. If `ok` but `gateStarted: false`, honour
 `warnings.code=gate_not_started` (no preview is assembling — safe to retry).
