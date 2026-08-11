@@ -354,6 +354,7 @@ describe('CodeSurface', () => {
     expect(publishHint.textContent).toContain('Confirms your right');
     expect(publishHint.title).toContain('Publishing confirms');
     expect(publishHint.getAttribute('aria-label')).toBe(publishHint.title);
+    expect(publishHint.tabIndex).toBe(0);
 
     const publishButton = container.querySelector<HTMLButtonElement>('.code-surface-deliver-btn')!;
     await act(async () => {
