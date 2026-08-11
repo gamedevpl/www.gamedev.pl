@@ -2271,7 +2271,7 @@ describe('SubmissionStatusView expectations & failures', () => {
     });
 
     const action = container.querySelector<HTMLButtonElement>('.status-feedback-quick-action');
-    expect(action?.textContent).toContain('Debug CI');
+    expect(action?.textContent).toContain('Fix checks');
     expect(action?.closest('.status-composer')).not.toBeNull();
 
     await act(async () => {
@@ -2283,7 +2283,7 @@ describe('SubmissionStatusView expectations & failures', () => {
     expect(container.querySelector('.status-feedback-quick-action')).toBeNull();
     expect(mockedSubmitFeedback).toHaveBeenCalledWith(
       'gate-red-token',
-      'Debug the failing CI checks and submit a fixed build.',
+      'Fix the failing checks and submit a fixed build.',
     );
 
     await act(async () => {
