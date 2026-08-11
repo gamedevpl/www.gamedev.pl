@@ -647,6 +647,32 @@ export async function registerCreatorCodeRoutes(
     },
   );
 
+  // GA-01: feeds the browser language service, same kit resolution as typecheck.
+  app.get<{ Params: { slug: string } }>(
+    '/api/me/studio/games/:slug/sources/kit-declaration',
+    { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      if (notFoundIfDisabled(reply)) return;
+      const resolved = await resolveForSlug(request, reply);
+      if (!resolved) return;
+      if (!kitFileStore) {
+        return reply.status(404).send({ error: 'no kit published' });
+      }
+      try {
+        const tree = await kitFileStore.loadTree();
+        const declaration = sharedSourcesFromKitTree(tree)['shared/game-kit.d.ts'] ?? null;
+        if (declaration === null) {
+          return reply.status(404).send({ error: 'no kit published' });
+        }
+        reply.header('etag', `"${tree.engineRef}"`);
+        return reply.send({ engineRef: tree.engineRef, declaration });
+      } catch (error) {
+        request.log.warn({ err: error, slug: resolved.slug }, 'code surface: kit declaration load failed');
+        return reply.status(404).send({ error: 'no kit published' });
+      }
+    },
+  );
+
   const DeliverInputSchema = z.object({
     mode: z.enum(['preview', 'publish']),
     /**

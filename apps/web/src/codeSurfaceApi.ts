@@ -71,12 +71,14 @@ export async function stageCodeSurfaceFile(
   slug: string,
   path: string,
   content: string,
-  options?: { rebuild?: boolean },
+  options?: { rebuild?: boolean; keepalive?: boolean },
 ): Promise<CodeSurfaceStageResult> {
   const response = await fetch(`${API_BASE}/api/me/studio/games/${encodeURIComponent(slug)}/sources/stage`, {
     method: 'PUT',
     credentials: 'include',
     headers: { 'content-type': 'application/json' },
+    // Same keepalive technique telemetry.ts uses for its own final flush.
+    ...(options?.keepalive ? { keepalive: true } : {}),
     body: JSON.stringify({ path, content, ...(options?.rebuild === false ? { rebuild: false } : {}) }),
   });
   if (!response.ok) await throwResponseError(response);
@@ -135,6 +137,22 @@ export async function typecheckCodeSurface(
   });
   if (!response.ok) await throwResponseError(response);
   return (await response.json()) as CodeSurfaceTypecheckResult;
+}
+
+export type CodeSurfaceKitDeclaration = { engineRef: string; declaration: string };
+
+// GA-01: advisory — null, not a throw, on any failure.
+export async function fetchCodeSurfaceKitDeclaration(slug: string): Promise<CodeSurfaceKitDeclaration | null> {
+  try {
+    const response = await fetch(
+      `${API_BASE}/api/me/studio/games/${encodeURIComponent(slug)}/sources/kit-declaration`,
+      { credentials: 'include' },
+    );
+    if (!response.ok) return null;
+    return (await response.json()) as CodeSurfaceKitDeclaration;
+  } catch {
+    return null;
+  }
 }
 
 export type CodeSurfaceDeliverOutcome =

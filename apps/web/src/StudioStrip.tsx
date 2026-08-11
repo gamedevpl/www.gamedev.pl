@@ -137,9 +137,10 @@ export function StudioStrip({
         ) : null}
 
         {codeAvailable ? (
+          // Visible label like Play's: the bare glyph read as decoration.
           <button
             type="button"
-            className={`studio-head-action is-icon-only${codeActive ? ' is-active' : ''}`}
+            className={`studio-head-action${codeActive ? ' is-active' : ''}`}
             aria-pressed={codeActive}
             aria-label={t('studioPanel.tabs.code')}
             onClick={onToggleCode}

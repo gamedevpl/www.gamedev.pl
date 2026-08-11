@@ -11285,6 +11285,19 @@ button.builder-mode-selector:disabled {
   overflow: hidden;
 }
 
+/* Chat stays reachable while Code is open (owner feedback, 2026-08-11): the rail and
+   its pill float over the code overlay exactly as they float over the stage. Scoped to
+   Code — Edit keeps its full-cover behaviour untouched. */
+.studio-stage-layout:has(.studio-code-overlay) .studio-chat-rail {
+  z-index: 60;
+}
+
+.studio-stage-layout:has(.studio-code-overlay) .studio-chat-rail-pill {
+  z-index: 61;
+  /* Clear the panel's Stage/Deliver footer rows instead of sitting on the button. */
+  bottom: 118px;
+}
+
 /* ── THE CODE SURFACE (creator-code-editing-execution-plan.md) ─────────────────── */
 
 .code-surface {
@@ -11449,7 +11462,6 @@ button.builder-mode-selector:disabled {
   display: flex;
   gap: 12px;
   padding: 0 14px;
-  white-space: pre;
 }
 
 .code-surface-line-number {
@@ -11458,6 +11470,15 @@ button.builder-mode-selector:disabled {
   text-align: right;
   color: var(--muted);
   user-select: none;
+}
+
+/* Wraps, unlike the line it sits in: a long line breaks under its own number rather
+   than forcing horizontal scroll, which fights the page's own vertical one on touch. */
+.code-surface-line-text {
+  flex: 1;
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .code-tok-comment {
@@ -11528,6 +11549,27 @@ button.builder-mode-selector:disabled {
   margin-left: auto;
 }
 
+/* Belt and braces with the `studio-head-action is-primary` classes both buttons also
+   carry (pill shape, hover glow — Play's exact look): these self-contained rules keep
+   the fill guaranteed even if that pairing drifts, and the regression test reads them. */
+.code-surface-stage-it.is-primary,
+.code-surface-deliver-btn.is-primary {
+  border: 1px solid var(--turquoise);
+  background: var(--turquoise);
+  color: #08241d;
+  font-weight: 700;
+}
+
+.code-surface-stage-it.is-primary:disabled,
+.code-surface-deliver-btn.is-primary:disabled {
+  border-color: var(--panel-border);
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--muted);
+  cursor: default;
+  filter: none;
+  box-shadow: none;
+}
+
 .code-surface-deliver {
   flex: none;
   display: flex;
@@ -11541,9 +11583,46 @@ button.builder-mode-selector:disabled {
 .code-surface-attestation {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   font-size: 0.76rem;
   color: var(--muted);
+  cursor: pointer;
+}
+
+.code-surface-attestation:hover {
+  color: var(--text);
+}
+
+.code-surface-attestation input {
+  appearance: none;
+  flex: none;
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  border-radius: 4px;
+  border: 1px solid var(--panel-border);
+  background: transparent;
+  cursor: pointer;
+  display: inline-grid;
+  place-content: center;
+}
+
+.code-surface-attestation input:checked {
+  border-color: var(--turquoise);
+  background: rgba(0, 228, 172, 0.16);
+}
+
+.code-surface-attestation input:checked::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  background: var(--turquoise);
+  clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+}
+
+.code-surface-attestation input:focus-visible {
+  outline: 2px solid rgba(0, 228, 172, 0.5);
+  outline-offset: 1px;
 }
 
 .code-surface-deliver-btn {
@@ -11554,6 +11633,12 @@ button.builder-mode-selector:disabled {
   font-size: 0.76rem;
   color: var(--muted);
   flex-basis: 100%;
+}
+
+/* A refusal or failure is the one line explaining why nothing shipped — it must not
+   read as footnote grey. */
+.code-surface-deliver-message.is-error {
+  color: #ff7b72;
 }
 
 @media (max-width: 1099px) {
@@ -11567,6 +11652,20 @@ button.builder-mode-selector:disabled {
     overflow-x: auto;
     border-right: 0;
     border-bottom: 1px solid var(--panel-border);
+    scroll-snap-type: x proximity;
+  }
+
+  /* Row mode has no bounded width like the desktop rail's own column, so without a
+     cap the ellipsis rule on .code-surface-rail-path never triggers — a handful of
+     `game/`-prefixed files spell out the whole row and the active one scrolls off. */
+  .code-surface-rail-item {
+    flex: 0 0 auto;
+    max-width: 40vw;
+    scroll-snap-align: start;
+  }
+
+  .code-surface-rail-locked {
+    flex: none;
   }
 }
 

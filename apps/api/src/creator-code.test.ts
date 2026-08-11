@@ -383,6 +383,53 @@ describe('the Code surface routes (creator-code.ts)', () => {
     });
   });
 
+  describe('GET /api/me/studio/games/:slug/sources/kit-declaration', () => {
+    it('404s when no kit is published', async () =>
+      withApp(async (app) => {
+        const res = await app.inject({
+          method: 'GET',
+          url: '/api/me/studio/games/sky-dodge/sources/kit-declaration',
+          headers: authHeaders('g:creator'),
+        });
+        expect(res.statusCode).toBe(404);
+      }));
+
+    it('404s for a slug the caller does not own — never 403', async () => {
+      const { games: withKitGames, objectStore } = storesWithKit('declare const GameKit: { boot(): void };');
+      await withApp(
+        async (app) => {
+          const res = await app.inject({
+            method: 'GET',
+            url: '/api/me/studio/games/not-mine/sources/kit-declaration',
+            headers: authHeaders('g:creator'),
+          });
+          expect(res.statusCode).toBe(404);
+        },
+        { objectStore, games: withKitGames },
+      );
+    });
+
+    it('serves the declaration text and engineRef, ETagged by ref, once a kit is published', async () => {
+      const { games: withKitGames, objectStore } = storesWithKit('declare const GameKit: { boot(): void };');
+      await withApp(
+        async (app) => {
+          const res = await app.inject({
+            method: 'GET',
+            url: '/api/me/studio/games/sky-dodge/sources/kit-declaration',
+            headers: authHeaders('g:creator'),
+          });
+          expect(res.statusCode).toBe(200);
+          expect(res.json()).toEqual({
+            engineRef: ENGINE_REF,
+            declaration: 'declare const GameKit: { boot(): void };',
+          });
+          expect(res.headers.etag).toBe(`"${ENGINE_REF}"`);
+        },
+        { objectStore, games: withKitGames },
+      );
+    });
+  });
+
   describe('POST /api/me/studio/games/:slug/sources/deliver', () => {
     it('refuses without the IP attestation', async () =>
       withApp(async (app) => {

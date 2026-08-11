@@ -11,6 +11,7 @@ import {
   type CodeSurfaceFile,
   type CodeSurfaceSources,
 } from './codeSurfaceApi.js';
+import { getCodeSurfaceSessionState, setCodeSurfaceSessionState } from './codeSurfaceSessionState.js';
 import { type CodeLanguage, tokenizeLine } from './codeTokens.js';
 import { PixelIcon } from './PixelIcon.js';
 import { recordCodeStep } from './visitTelemetry.js';
@@ -87,8 +88,8 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
   const { t } = useTranslation();
   const [sources, setSources] = useState<CodeSurfaceSources | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [selected, setSelected] = useState<string | null>(null);
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [selected, setSelected] = useState<string | null>(() => getCodeSurfaceSessionState(slug)?.selected ?? null);
+  const [drafts, setDrafts] = useState<Record<string, string>>(() => getCodeSurfaceSessionState(slug)?.drafts ?? {});
   const [saveState, setSaveState] = useState<SaveState>('clean');
   const [diagnostics, setDiagnostics] = useState<string[] | null>(null);
   const [rebuildState, setRebuildState] = useState<'idle' | 'pending' | 'cooling'>('idle');
@@ -99,6 +100,7 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
 
   const openedRecordedRef = useRef(false);
   const fileOpenedRecordedRef = useRef(new Set<string>());
+  const railRef = useRef<HTMLElement | null>(null);
   /** One autosave timer per dirty path, not one shared timer — editing a second file
    * inside the debounce window must not cancel the first file's pending save. */
   const saveTimersRef = useRef<Map<string, number>>(new Map());
@@ -112,13 +114,27 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
     recordCodeStep('opened');
   }, []);
 
+  useEffect(() => {
+    // jsdom has no scrollIntoView — optional call, not just optional chaining.
+    railRef.current?.querySelector('.code-surface-rail-item.is-active')?.scrollIntoView?.({
+      block: 'nearest',
+      inline: 'nearest',
+    });
+  }, [selected]);
+
   const load = useCallback(
     (isInitialLoad: boolean) => {
       fetchCodeSurfaceSources(slug)
         .then((result) => {
           setSources(result);
           setLoadError(null);
-          setSelected((current) => current ?? result.files[0]?.path ?? null);
+          // Land on the game's entry module, not whatever sorts first alphabetically —
+          // the server's sorted listing puts GAME.json ahead of game.ts, and a creator
+          // opening "Code" came for the code, not the manifest.
+          setSelected(
+            (current) =>
+              current ?? (result.files.some((f) => f.path === 'game.ts') ? 'game.ts' : (result.files[0]?.path ?? null)),
+          );
           if (result.readOnly) recordCodeStep('read_only_agent');
         })
         .catch((error: unknown) => {
@@ -144,17 +160,52 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
     return () => window.clearInterval(id);
   }, [sources?.readOnly, load]);
 
+  useEffect(() => {
+    setCodeSurfaceSessionState(slug, { selected, drafts });
+  }, [slug, selected, drafts]);
+
   useEffect(
     () => () => {
-      saveTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+      // Unmount flushes pending autosaves — direct calls, no setState after unmount.
+      saveTimersRef.current.forEach((timer, path) => {
+        window.clearTimeout(timer);
+        const draft = draftsRef.current[path];
+        if (draft !== undefined) {
+          stageCodeSurfaceFile(slug, path, draft, { rebuild: false }).catch(() => {});
+        }
+      });
       saveTimersRef.current.clear();
       if (typecheckTimerRef.current !== null) window.clearTimeout(typecheckTimerRef.current);
     },
-    [],
+    [slug],
   );
+
+  useEffect(() => {
+    function onHide() {
+      if (document.visibilityState !== 'hidden') return;
+      saveTimersRef.current.forEach((_timer, path) => {
+        const draft = draftsRef.current[path];
+        if (draft !== undefined) {
+          stageCodeSurfaceFile(slug, path, draft, { rebuild: false, keepalive: true }).catch(() => {});
+        }
+      });
+    }
+    document.addEventListener('visibilitychange', onHide);
+    return () => document.removeEventListener('visibilitychange', onHide);
+  }, [slug]);
 
   const file = useMemo(() => sources?.files.find((entry) => entry.path === selected) ?? null, [sources, selected]);
   const content = selected !== null ? (drafts[selected] ?? file?.content ?? '') : '';
+
+  /** The budget meter fed by the live draft, not the last fetch — the counter has to
+   * move as the creator types toward the ceiling, not jump on the next reload. */
+  const liveBudget = useMemo(() => {
+    const base = file?.budget;
+    if (!base) return null;
+    const lines = content.split('\n').length;
+    const bytes = new TextEncoder().encode(content).length;
+    return { ...base, lines, bytes, oversize: lines > base.maxLines || bytes > base.maxBytes };
+  }, [file, content]);
 
   /** CE-11's diagnostics, reshaped for CodeMirror's gutter and scoped to the open file. */
   const cmDiagnostics = useMemo((): CodeMirrorDiagnostic[] => {
@@ -332,6 +383,14 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
         className="code-surface-editor"
         value={content}
         onChange={(event) => onEdit(event.target.value)}
+        onKeyDown={(event) => {
+          // Muscle-memory save: without this, Ctrl/Cmd+S in a code editor opens the
+          // browser's save-page dialog over the panel.
+          if ((event.ctrlKey || event.metaKey) && event.key === 's') {
+            event.preventDefault();
+            void flushPendingSaves();
+          }
+        }}
         spellCheck={false}
         aria-label={openFile.path}
       />
@@ -353,7 +412,7 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
       </header>
 
       <div className="code-surface-body">
-        <nav className="code-surface-rail" aria-label={t('studioPanel.tabs.code')}>
+        <nav className="code-surface-rail" aria-label={t('studioPanel.tabs.code')} ref={railRef}>
           {sources.files.map((entry) => (
             <button
               key={entry.path}
@@ -385,6 +444,7 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
                   value={content}
                   language={languageFor(file.path)}
                   onChange={onEdit}
+                  onSave={() => void flushPendingSaves()}
                   diagnostics={cmDiagnostics}
                 />
               </Suspense>
@@ -408,16 +468,16 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
         </div>
       </div>
 
-      {file?.budget ? (
-        <div className={`code-surface-budget${file.budget.oversize ? ' is-oversize' : ''}`}>
-          {t('studioPanel.code.budget', { lines: file.budget.lines, maxLines: file.budget.maxLines })}
+      {liveBudget ? (
+        <div className={`code-surface-budget${liveBudget.oversize ? ' is-oversize' : ''}`}>
+          {t('studioPanel.code.budget', { lines: liveBudget.lines, maxLines: liveBudget.maxLines })}
         </div>
       ) : null}
 
       {diagnostics && diagnostics.length > 0 ? (
         <ul className="code-surface-diagnostics" role="alert">
-          {diagnostics.map((diagnostic) => (
-            <li key={diagnostic}>{diagnostic}</li>
+          {diagnostics.map((diagnostic, index) => (
+            <li key={index}>{diagnostic}</li>
           ))}
         </ul>
       ) : null}
@@ -432,7 +492,7 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
           ) : null}
           <button
             type="button"
-            className="code-surface-stage-it is-primary"
+            className="code-surface-stage-it studio-head-action is-primary"
             onClick={() => void stageIt()}
             disabled={rebuildState !== 'idle'}
           >
@@ -453,14 +513,19 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
           </label>
           <button
             type="button"
-            className="code-surface-deliver-btn is-primary"
+            className="code-surface-deliver-btn studio-head-action is-primary"
             disabled={!attested || deliverState === 'delivering'}
             onClick={() => void deliver()}
           >
             {deliverState === 'delivering' ? t('studioPanel.code.delivering') : t('studioPanel.code.deliver')}
           </button>
           {deliverMessage ? (
-            <span className="code-surface-deliver-message" role="status">
+            // Anything short of a delivered outcome is a problem report — muted grey
+            // for those buried the one line telling the creator why nothing shipped.
+            <span
+              className={`code-surface-deliver-message${deliverState === 'delivered' ? '' : ' is-error'}`}
+              role="status"
+            >
               {deliverMessage}
             </span>
           ) : null}

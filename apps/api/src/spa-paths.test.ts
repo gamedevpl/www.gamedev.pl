@@ -56,6 +56,9 @@ describe('isKnownSpaShellPath', () => {
     '/studio/tok-abc/stats',
     '/studio/tok-abc/improve',
     '/studio/tok-abc/edit',
+    // The Code surface (CE-06) — a reload while it is open lands on this URL.
+    '/studio/tok-abc/code',
+    '/studio/sky-dodge/code',
     '/studio/tok-abc/welcome',
     '/studio/tok-abc/connect',
     '/admin',
