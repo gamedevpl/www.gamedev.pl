@@ -947,17 +947,12 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     const bearerIsPlatformConnector = matchesPlatformConnectorSecret(bearer, platformConnectorSecret);
     const preferSessionKey =
       Boolean(sessionKeyArg) &&
-<<<<<<< HEAD
-      (!bearer || bearerIsOAuth || bearerIsOpener || bearerIsRetiredGameKey || bearerIsManagedOpener || bearerIsPlatformConnector);
-=======
       (!bearer ||
         bearerIsOAuth ||
         bearerIsOpener ||
         bearerIsRetiredGameKey ||
         bearerIsPlatformConnector ||
         bearerIsManagedOpener);
-
->>>>>>> f9057ebdc (Fix invalid build token when managed-agent bearer echoed after start())
     let identity!: AuthedJob['identity'];
 
     if (preferSessionKey) {
