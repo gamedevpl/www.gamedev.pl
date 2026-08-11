@@ -16978,17 +16978,54 @@ body.remix-entry-open {
 }
 
 /* Reviewer assessment desk (docs/game-assessment-plan.md)
-   Shape is written once outside media queries: scrollable media above a sticky
-   dock that holds the note + Cut/Skip/Keep. Phone rules only change sizes. */
+   Shape is written once outside media queries: media above a verdict dock.
+   Phone rules only change sizes. The desk owns the window via :has(.review-desk)
+   below — same coexistence pattern as the studio shell, so an update/install
+   banner cannot bury the game preview. */
 .review-desk {
   width: min(720px, 100%);
   margin: 0 auto;
-  padding: 1rem 1rem 0;
+  padding: 0.75rem 0 0;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  /* Fill the viewport under the site header so the dock can stick to the bottom. */
-  min-height: calc(100dvh - 4.5rem);
+  flex: 1;
+  min-height: 0;
+}
+
+/* Own the window while the desk is mounted: no page scroll, no marketing footer,
+   banners join the column instead of covering the dock. Written once here so
+   phone and desktop cannot drift apart the way the studio shell once did. */
+.app:has(.review-desk) {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.app:has(.review-desk) > .content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  overflow: hidden;
+  /* Drop the marketing-page padding; the desk is an app screen. */
+  padding: 12px 24px 0;
+  max-width: none;
+  width: 100%;
+}
+
+.app:has(.review-desk) .site-footer {
+  display: none;
+}
+
+.app:has(.review-desk) .install-prompt,
+.app:has(.review-desk) .app-update {
+  position: static;
+  flex: none;
+  margin: 0 12px max(12px, env(safe-area-inset-bottom, 0px));
+  animation: none;
 }
 
 .review-desk-header {
@@ -17036,8 +17073,11 @@ body.remix-entry-open {
 }
 
 .review-scroll {
-  flex: 1 1 auto;
-  min-height: 0;
+  /* Claim the leftover column so the game card stays on the first paint.
+     min-height keeps a short window from collapsing the preview to zero when
+     the checklist dock is tall. */
+  flex: 1 1 40%;
+  min-height: min(32dvh, 200px);
   overflow: auto;
   overscroll-behavior: contain;
 }
@@ -17165,11 +17205,12 @@ body.remix-entry-open {
   cursor: pointer;
 }
 
-/* Sit on the media so the sticky checklist dock cannot bury Try play. */
+/* Sit on the media near the top so a clipped stage still shows Try play. */
 .review-play-btn.is-overlay {
   position: absolute;
   right: 0.55rem;
-  bottom: 0.55rem;
+  top: 0.55rem;
+  bottom: auto;
   z-index: 3;
   background: color-mix(in srgb, var(--panel-card, #1b2229) 88%, transparent);
   backdrop-filter: blur(8px);
@@ -17218,28 +17259,22 @@ body.remix-entry-open {
   border-color: var(--muted);
 }
 
-/* Sticky verdict dock — always in the thumb zone; media scrolls above it. */
+/* Verdict dock — pinned by the shell column. Checklist can scroll inside;
+   note + Cut/Skip/Keep stay on screen so a full form cannot hide the verdicts. */
 .review-dock {
-  position: sticky;
-  bottom: 0;
+  position: relative;
   z-index: 5;
-  flex: none;
+  flex: 0 1 auto;
+  max-height: min(48dvh, 420px);
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   gap: 0.55rem;
-  margin: 0 -1rem;
-  padding: 0.65rem 1rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  margin: 0 -24px;
+  padding: 0.65rem 24px 0.75rem;
   border-top: 1px solid var(--panel-border);
   background: color-mix(in srgb, var(--bg, #0f1418) 92%, transparent);
   backdrop-filter: blur(10px);
-}
-
-/* Install / update banners pin to the bottom edge too — lift the dock by the
-   measured overlay height (--review-overlay-lift from ReviewDesk). */
-.app:has(.install-prompt) .review-dock,
-.app:has(.app-update) .review-dock {
-  bottom: var(--review-overlay-lift, 5.5rem);
-  padding-bottom: 0.75rem;
 }
 
 .review-checklist {
@@ -17249,6 +17284,10 @@ body.remix-entry-open {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .review-checklist-legend {
@@ -17306,6 +17345,10 @@ body.remix-entry-open {
   color: var(--text);
   border-color: rgba(255, 107, 107, 0.55);
   background: rgba(255, 107, 107, 0.12);
+}
+
+.review-note {
+  flex: none;
 }
 
 .review-note-label {
@@ -17368,6 +17411,7 @@ body.remix-entry-open {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
   gap: 0.5rem;
+  flex: none;
 }
 
 .review-action {
@@ -17578,10 +17622,13 @@ body.remix-entry-open {
 }
 
 @media (max-width: 640px) {
+  .app:has(.review-desk) > .content {
+    padding: 8px 12px 0;
+  }
+
   .review-desk {
-    padding-top: 0.65rem;
+    padding-top: 0.35rem;
     gap: 0.55rem;
-    min-height: calc(100dvh - 3.75rem);
   }
 
   .review-desk-title {
@@ -17592,7 +17639,7 @@ body.remix-entry-open {
     padding: 0.65rem 0.75rem 0.35rem;
   }
 
-  /* Preview stays compact; the sticky dock owns the verdicts. Live play grows. */
+  /* Preview stays compact; the dock owns the verdicts. Live play grows. */
   .review-card-stage:not(.is-playing) {
     aspect-ratio: 16 / 10;
     max-height: min(38dvh, 260px);
@@ -17600,6 +17647,16 @@ body.remix-entry-open {
 
   .review-card-stage.is-playing {
     min-height: min(46dvh, 340px);
+  }
+
+  .review-scroll {
+    min-height: min(28dvh, 160px);
+  }
+
+  .review-dock {
+    margin: 0 -12px;
+    padding: 0.55rem 12px 0.65rem;
+    max-height: min(52dvh, 380px);
   }
 
   .review-note-label {
