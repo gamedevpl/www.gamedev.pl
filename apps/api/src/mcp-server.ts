@@ -4313,7 +4313,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         // call_end was ignored; mark ended here so Studio unlocks self→platform
         // handoff immediately. Further channel writes clear agentEndedAt again.
         if (accepted && store) {
-          await store.markAgentEnded(auth.issueNumber).catch(() => {});
+          await store.markAgentEnded(auth.issueNumber, undefined, 'submit').catch(() => {});
         }
         const warnings: Array<{ code: string; message: string }> = [];
         if (accepted) {

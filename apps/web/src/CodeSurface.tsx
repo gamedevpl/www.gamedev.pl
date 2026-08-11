@@ -16,6 +16,7 @@ import {
   CodeSurfaceApiError,
   deliverCodeSurface,
   fetchCodeSurfaceKitDeclaration,
+  discardCodeSurfaceEdits,
   fetchCodeSurfaceSources,
   rebuildCodeSurfaceStage,
   stageCodeSurfaceFile,
@@ -37,19 +38,17 @@ import { recordCodeStep } from './visitTelemetry.js';
 
 /**
  * The Code surface (creator-code-editing-execution-plan.md CE-06/07/08/09/13/15):
- * docked over the stage the way `EditorPanel` docks for Edit, mirroring its autosave
- * pattern (CE-13's own instruction: "the pattern is already there; copy it rather than
- * invent a second one").
+ * docked over the stage the way `EditorPanel` docks for Edit.
  *
- * CodeMirror 6 (CE-14) is a lazy-loaded route-level chunk — `LazyCodeMirrorEditor`
- * below is a dynamic `import()`, so catalog/player/thread visitors pay zero bytes for
- * it. The read path (CE-07) never imports it at all: a non-owner or a locked agent
- * round gets the plain `codeTokens.ts` viewer, zero new dependencies. When the chunk
- * fails to load — a flaky connection, a CDN hiccup — `CodeMirrorBoundary` below
- * catches it and falls back to a plain `<textarea>`, never a blank panel.
+ * Working-copy model (owner feedback 2026-08-11): edits autosave into the staging
+ * buffer (MCP `stage` equivalent); the full-bleed stage auto-rebuilds after saves
+ * settle; Publish delivers through the gate (MCP `submit_sources`); Discard clears
+ * the owner's unsubmitted buffer. No separate "Stage it" click — that read as a
+ * second save and hid that the buffer already held the working copy.
  *
- * No preview column: the full-bleed game behind this panel *is* the preview (§7 of the
- * plan). "Stage it" is the one thing that changes what it shows — see the rebuild route.
+ * CodeMirror 6 (CE-14) is a lazy route chunk. The read path (CE-07) never imports
+ * it: a locked agent round gets `codeTokens.ts`. `CodeMirrorBoundary` falls back
+ * to a plain `<textarea>` if the chunk fails to load.
  */
 
 const LazyCodeMirrorEditor = lazy(() => import('./CodeMirrorEditor.js'));
@@ -78,10 +77,14 @@ function parseDiagnostic(raw: string): { path: string; line: number; message: st
 
 const AUTOSAVE_MS = 1500;
 const TYPECHECK_DEBOUNCE_MS = 400;
+/** Wait after the last successful stage write before arming a preview rebuild. */
+const PREVIEW_DEBOUNCE_MS = 2_500;
 /** Mirrors staged-preview.ts's STAGED_PREVIEW_MIN_GAP_MS: the floor between rebuilds. */
 const STAGE_REBUILD_COOLDOWN_MS = 25_000;
 
 type SaveState = 'clean' | 'dirty' | 'saving' | 'saved' | 'error';
+type RebuildState = 'idle' | 'pending' | 'cooling';
+type DiscardState = 'idle' | 'discarding';
 
 export type CodeSurfaceProps = {
   slug: string;
@@ -110,6 +113,31 @@ function isTsPath(path: string): boolean {
   return path.endsWith('.ts') || path.endsWith('.tsx');
 }
 
+function markFileStaged(sources: CodeSurfaceSources, path: string, content: string): CodeSurfaceSources {
+  const lines = content.split('\n').length;
+  const bytes = new TextEncoder().encode(content).length;
+  return {
+    ...sources,
+    files: sources.files.map((entry) =>
+      entry.path === path
+        ? {
+            ...entry,
+            content,
+            stagedBy: 'owner',
+            budget: entry.budget
+              ? {
+                  ...entry.budget,
+                  lines,
+                  bytes,
+                  oversize: lines > entry.budget.maxLines || bytes > entry.budget.maxBytes,
+                }
+              : undefined,
+          }
+        : entry,
+    ),
+  };
+}
+
 export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
   const { t } = useTranslation();
   const [sources, setSources] = useState<CodeSurfaceSources | null>(null);
@@ -118,9 +146,9 @@ export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
   const [drafts, setDrafts] = useState<Record<string, string>>(() => getCodeSurfaceSessionState(slug)?.drafts ?? {});
   const [saveState, setSaveState] = useState<SaveState>('clean');
   const [diagnostics, setDiagnostics] = useState<string[] | null>(null);
-  const [rebuildState, setRebuildState] = useState<'idle' | 'pending' | 'cooling'>('idle');
+  const [rebuildState, setRebuildState] = useState<RebuildState>('idle');
   const [rebuildError, setRebuildError] = useState(false);
-  const [attested, setAttested] = useState(false);
+  const [discardState, setDiscardState] = useState<DiscardState>('idle');
   const [deliverState, setDeliverState] = useState<'idle' | 'delivering' | 'delivered'>('idle');
   const [deliverMessage, setDeliverMessage] = useState<string | null>(null);
   /** Briefly true after a live param push (§E tier 1) — separate from `saveState`. */
@@ -134,6 +162,9 @@ export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
   const saveTimersRef = useRef<Map<string, number>>(new Map());
   const typecheckTimerRef = useRef<number | null>(null);
   const livePushTimerRef = useRef<number | null>(null);
+  const previewTimerRef = useRef<number | null>(null);
+  const cooldownTimerRef = useRef<number | null>(null);
+  const lastRebuildAtRef = useRef(0);
   const draftsRef = useRef(drafts);
   draftsRef.current = drafts;
   /** The content doc believed live in the game now — lazy-fetched, kept current by pushes. */
@@ -216,6 +247,8 @@ export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
       saveTimersRef.current.clear();
       if (typecheckTimerRef.current !== null) window.clearTimeout(typecheckTimerRef.current);
       if (livePushTimerRef.current !== null) window.clearTimeout(livePushTimerRef.current);
+      if (previewTimerRef.current !== null) window.clearTimeout(previewTimerRef.current);
+      if (cooldownTimerRef.current !== null) window.clearTimeout(cooldownTimerRef.current);
     },
     [slug],
   );
@@ -283,6 +316,23 @@ export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
     return { worker: languageServiceRef.current.worker, path: toVfsPath(file.path) };
   }, [languageServiceReady, file]);
 
+  /** Owner-staged paths plus local drafts that still differ — the working-copy set. */
+  const changedPaths = useMemo(() => {
+    if (!sources) return [] as string[];
+    const paths = new Set<string>();
+    for (const entry of sources.files) {
+      if (entry.stagedBy === 'owner') paths.add(entry.path);
+    }
+    for (const [path, draft] of Object.entries(drafts)) {
+      const base = sources.files.find((entry) => entry.path === path);
+      if (base && draft !== base.content) paths.add(path);
+      else if (!base) paths.add(path);
+    }
+    return [...paths];
+  }, [sources, drafts]);
+
+  const hasWorkingCopy = changedPaths.length > 0 || saveState === 'dirty' || saveState === 'saving';
+
   /** The budget meter fed by the live draft, not the last fetch — the counter has to
    * move as the creator types toward the ceiling, not jump on the next reload. */
   const liveBudget = useMemo(() => {
@@ -311,19 +361,57 @@ export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
     }
   }
 
-  /** Returns whether the save actually landed — `stageIt`/`deliver` must not proceed
-   * over a flush that failed, or they ship a build missing the creator's last edit. */
+  const schedulePreviewRebuild = useCallback(() => {
+    if (previewTimerRef.current !== null) window.clearTimeout(previewTimerRef.current);
+    if (cooldownTimerRef.current !== null) {
+      window.clearTimeout(cooldownTimerRef.current);
+      cooldownTimerRef.current = null;
+    }
+    const arm = () => {
+      previewTimerRef.current = null;
+      const since = Date.now() - lastRebuildAtRef.current;
+      if (since < STAGE_REBUILD_COOLDOWN_MS && lastRebuildAtRef.current > 0) {
+        previewTimerRef.current = window.setTimeout(arm, STAGE_REBUILD_COOLDOWN_MS - since);
+        return;
+      }
+      setRebuildError(false);
+      setRebuildState('pending');
+      void rebuildCodeSurfaceStage(slug)
+        .then(() => {
+          recordCodeStep('previewed');
+          lastRebuildAtRef.current = Date.now();
+          setRebuildState('cooling');
+          cooldownTimerRef.current = window.setTimeout(() => {
+            cooldownTimerRef.current = null;
+            setRebuildState('idle');
+          }, STAGE_REBUILD_COOLDOWN_MS);
+        })
+        .catch(() => {
+          setRebuildError(true);
+          setRebuildState('idle');
+        });
+    };
+    previewTimerRef.current = window.setTimeout(arm, PREVIEW_DEBOUNCE_MS);
+  }, [slug]);
+
+  /** Returns whether the save actually landed — deliver must not proceed over a flush
+   * that failed, or it ships a build missing the creator's last edit. */
   const saveNow = useCallback(
     async (path: string, value: string): Promise<boolean> => {
       setSaveState('saving');
       try {
-        // Autosave never drives the rebuild — see CE-13: the visible stage must not
-        // change out from under a creator who is still typing.
-        await stageCodeSurfaceFile(slug, path, value, { rebuild: false });
+        // Autosave writes the working copy only; preview rebuild is scheduled after
+        // the write settles so the stage does not thrash on every keystroke.
+        const result = await stageCodeSurfaceFile(slug, path, value, { rebuild: false });
+        setSources((current) => {
+          if (!current) return current;
+          return { ...markFileStaged(current, path, value), staged: result.staged };
+        });
         setSaveState('saved');
         recordCodeStep('edited');
         // GA-04: syncs siblings — tsSync() only covers the focused editor.
         if (isTsPath(path)) languageServiceRef.current?.updateFile(path, value);
+        schedulePreviewRebuild();
         return true;
       } catch (error) {
         setSaveState('error');
@@ -337,12 +425,11 @@ export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
         return false;
       }
     },
-    [slug],
+    [slug, schedulePreviewRebuild],
   );
 
   /** Flushes every path with a pending autosave — not just the one currently open —
-   * before a "Stage it" or deliver acts on the buffer. Returns false if any of them
-   * failed to save, so the caller can refuse to proceed over an incomplete flush. */
+   * before deliver acts on the buffer. Returns false if any of them failed to save. */
   const flushPendingSaves = useCallback(async (): Promise<boolean> => {
     const pending = Array.from(saveTimersRef.current.entries());
     saveTimersRef.current.clear();
@@ -405,6 +492,8 @@ export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
     }
     setDrafts((prev) => ({ ...prev, [path]: value }));
     setSaveState('dirty');
+    setDeliverState((current) => (current === 'delivered' ? 'idle' : current));
+    setDeliverMessage(null);
     const existing = saveTimersRef.current.get(path);
     if (existing !== undefined) window.clearTimeout(existing);
     saveTimersRef.current.set(
@@ -420,32 +509,34 @@ export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
     }, TYPECHECK_DEBOUNCE_MS);
   }
 
-  async function stageIt() {
-    setRebuildError(false);
-    setRebuildState('pending');
+  async function discardWorkingCopy() {
+    if (discardState === 'discarding') return;
+    setDiscardState('discarding');
+    setDeliverMessage(null);
+    // Cancel pending saves — discard must not flush them into the buffer first.
+    saveTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    saveTimersRef.current.clear();
+    if (previewTimerRef.current !== null) {
+      window.clearTimeout(previewTimerRef.current);
+      previewTimerRef.current = null;
+    }
     try {
-      const flushed = await flushPendingSaves();
-      if (!flushed) {
-        setRebuildError(true);
-        setRebuildState('idle');
-        return;
-      }
-      await rebuildCodeSurfaceStage(slug);
-      recordCodeStep('previewed');
-      // The debounce/gap floor in staged-preview.ts means the rebuild is not
-      // instant — say so on the button rather than looking broken for up to ~25s
-      // (CE-13's explicit "the one thing not allowed is a click that appears to do
-      // nothing").
-      setRebuildState('cooling');
-      window.setTimeout(() => setRebuildState('idle'), STAGE_REBUILD_COOLDOWN_MS);
-    } catch {
-      setRebuildError(true);
-      setRebuildState('idle');
+      await discardCodeSurfaceEdits(slug);
+      setDrafts({});
+      setSaveState('clean');
+      setDiagnostics(null);
+      setDeliverState('idle');
+      const result = await fetchCodeSurfaceSources(slug);
+      setSources(result);
+      schedulePreviewRebuild();
+    } catch (error) {
+      setDeliverMessage(error instanceof CodeSurfaceApiError ? error.message : t('studioPanel.code.discardError'));
+    } finally {
+      setDiscardState('idle');
     }
   }
 
   async function deliver() {
-    if (!attested) return;
     setDeliverState('delivering');
     setDeliverMessage(null);
     try {
@@ -455,11 +546,16 @@ export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
         setDeliverMessage(t('studioPanel.code.deliverError'));
         return;
       }
+      // Publish click is the attestation; API still gets attestation:true.
       const outcome = await deliverCodeSurface(slug, 'publish');
       if (outcome.accepted) {
         recordCodeStep('delivered');
         setDeliverState('delivered');
         setDeliverMessage(t('studioPanel.code.deliverSuccess'));
+        setDrafts({});
+        setSaveState('clean');
+        // Delivery clears the staging buffer server-side — refresh the rail dots.
+        load(false);
       } else {
         setDeliverState('idle');
         setDeliverMessage(t('studioPanel.code.deliverRefused'));
@@ -469,6 +565,19 @@ export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
       setDeliverMessage(error instanceof CodeSurfaceApiError ? error.message : t('studioPanel.code.deliverError'));
     }
   }
+
+  const workingCopyLabel = (() => {
+    if (saveState === 'dirty') return t('studioPanel.code.saveState.dirty');
+    if (saveState === 'saving') return t('studioPanel.code.saveState.saving');
+    if (saveState === 'error') return t('studioPanel.code.saveState.error');
+    if (rebuildState === 'pending') return t('studioPanel.code.previewUpdating');
+    if (changedPaths.length > 0) {
+      return t('studioPanel.code.workingCopy.changed', { count: changedPaths.length });
+    }
+    if (rebuildState === 'cooling') return t('studioPanel.code.previewReady');
+    if (saveState === 'saved') return t('studioPanel.code.saveState.saved');
+    return t('studioPanel.code.workingCopy.clean');
+  })();
 
   if (loadError) {
     return (
@@ -608,46 +717,53 @@ export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
 
       {editable ? (
         <footer className="code-surface-foot">
-          <span className={`code-surface-save-state is-${saveState}`} aria-live="polite">
-            {t(`studioPanel.code.saveState.${saveState}`)}
-          </span>
-          {livePush ? (
-            <span className="code-surface-live-push" aria-live="polite">
-              {t('studioPanel.code.livePush')}
+          <div className="code-surface-working-copy">
+            <span
+              className={`code-surface-save-state is-${saveState}${hasWorkingCopy ? ' has-changes' : ''}`}
+              aria-live="polite"
+              data-testid="code-working-copy-status"
+            >
+              {workingCopyLabel}
             </span>
-          ) : null}
-          {rebuildError ? (
-            <span className="code-surface-rebuild-error">{t('studioPanel.code.rebuildError')}</span>
-          ) : null}
-          <button
-            type="button"
-            className="code-surface-stage-it studio-head-action is-primary"
-            onClick={() => void stageIt()}
-            disabled={rebuildState !== 'idle'}
-          >
-            {rebuildState === 'pending'
-              ? t('studioPanel.code.staging')
-              : rebuildState === 'cooling'
-                ? t('studioPanel.code.staged')
-                : t('studioPanel.code.stageIt')}
-          </button>
-        </footer>
-      ) : null}
+            {livePush ? (
+              <span className="code-surface-live-push" aria-live="polite">
+                {t('studioPanel.code.livePush')}
+              </span>
+            ) : null}
+            {rebuildError ? (
+              <span className="code-surface-rebuild-error">{t('studioPanel.code.rebuildError')}</span>
+            ) : null}
+            {hasWorkingCopy ? (
+              <button
+                type="button"
+                className="code-surface-discard"
+                disabled={discardState === 'discarding' || deliverState === 'delivering'}
+                onClick={() => void discardWorkingCopy()}
+              >
+                {discardState === 'discarding' ? t('studioPanel.code.discarding') : t('studioPanel.code.discard')}
+              </button>
+            ) : null}
+          </div>
 
-      {editable ? (
-        <div className="code-surface-deliver">
-          <label className="code-surface-attestation">
-            <input type="checkbox" checked={attested} onChange={(event) => setAttested(event.target.checked)} />
-            {t('studioPanel.code.attestation')}
-          </label>
-          <button
-            type="button"
-            className="code-surface-deliver-btn studio-head-action is-primary"
-            disabled={!attested || deliverState === 'delivering'}
-            onClick={() => void deliver()}
-          >
-            {deliverState === 'delivering' ? t('studioPanel.code.delivering') : t('studioPanel.code.deliver')}
-          </button>
+          <div className="code-surface-deliver">
+            <span
+              className="code-surface-publish-hint"
+              aria-label={t('studioPanel.code.publishHintTitle')}
+              tabIndex={0}
+              title={t('studioPanel.code.publishHintTitle')}
+            >
+              {t('studioPanel.code.publishHint')}
+            </span>
+            <button
+              type="button"
+              className="code-surface-deliver-btn studio-head-action is-primary"
+              disabled={!hasWorkingCopy || deliverState === 'delivering' || discardState === 'discarding'}
+              onClick={() => void deliver()}
+            >
+              {deliverState === 'delivering' ? t('studioPanel.code.delivering') : t('studioPanel.code.deliver')}
+            </button>
+          </div>
+
           {deliverMessage ? (
             // Anything short of a delivered outcome is a problem report — muted grey
             // for those buried the one line telling the creator why nothing shipped.
@@ -658,7 +774,7 @@ export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
               {deliverMessage}
             </span>
           ) : null}
-        </div>
+        </footer>
       ) : null}
     </div>
   );

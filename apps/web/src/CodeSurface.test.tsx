@@ -75,8 +75,10 @@ describe('CodeSurface', () => {
     mocked.stageCodeSurfaceFile.mockReset();
     mocked.rebuildCodeSurfaceStage.mockReset();
     mocked.typecheckCodeSurface.mockReset();
+    mocked.discardCodeSurfaceEdits.mockReset();
     mocked.deliverCodeSurface.mockReset();
     mockedStudioApi.fetchGameEditor.mockReset();
+    mocked.rebuildCodeSurfaceStage.mockResolvedValue({ scheduled: true });
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -95,6 +97,12 @@ describe('CodeSurface', () => {
     await act(async () => {
       await flush();
     });
+  }
+
+  function typeInto(textarea: HTMLTextAreaElement, value: string) {
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')!.set!;
+    setter.call(textarea, value);
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
   }
 
   it('lists the manifest files and shows the selected one, read-only, with no dependency beyond codeTokens', async () => {
@@ -129,7 +137,7 @@ describe('CodeSurface', () => {
     expect(textarea.value).toContain('export const boot');
   });
 
-  it('autosaves an edit to the staging buffer without triggering a rebuild', async () => {
+  it('autosaves an edit into the working copy, marks the rail dirty, and schedules a preview rebuild', async () => {
     mocked.fetchCodeSurfaceSources.mockResolvedValue(sourcesFor());
     mocked.stageCodeSurfaceFile.mockResolvedValue({
       accepted: true,
@@ -142,17 +150,13 @@ describe('CodeSurface', () => {
     const textarea = container.querySelector('textarea')!;
     expect(textarea).not.toBeNull();
 
-    // React tracks a controlled input's value through its own property descriptor, so
-    // a plain `.value = x` assignment is invisible to it — go through the native
-    // setter, then dispatch the event React's synthetic system listens for.
     await act(async () => {
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')!.set!;
-      setter.call(textarea, 'export const boot = () => { /* edited */ };');
-      textarea.dispatchEvent(new Event('input', { bubbles: true }));
+      typeInto(textarea, 'export const boot = () => { /* edited */ };');
     });
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1500);
+      await flush();
     });
 
     expect(mocked.stageCodeSurfaceFile).toHaveBeenCalledWith(
@@ -161,6 +165,16 @@ describe('CodeSurface', () => {
       expect.stringContaining('edited'),
       { rebuild: false },
     );
+    expect(container.querySelector('.code-surface-rail-item.has-staged-edits')).not.toBeNull();
+    expect(container.querySelector('[data-testid="code-working-copy-status"]')!.textContent).toMatch(/changed|saved/i);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_500);
+      await flush();
+    });
+
+    expect(mocked.rebuildCodeSurfaceStage).toHaveBeenCalledWith('sky-dodge');
+    expect([...container.querySelectorAll('button')].some((b) => b.textContent === 'Stage it')).toBe(false);
   });
 
   it('restores the selected file and draft after close/reopen, flushing the pending save on unmount', async () => {
@@ -181,9 +195,7 @@ describe('CodeSurface', () => {
     });
     const textarea = container.querySelector('textarea')!;
     await act(async () => {
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')!.set!;
-      setter.call(textarea, 'export const paint = () => { /* tweaked */ };');
-      textarea.dispatchEvent(new Event('input', { bubbles: true }));
+      typeInto(textarea, 'export const paint = () => { /* tweaked */ };');
     });
 
     // Unmount inside the autosave window: pending saves must flush.
@@ -202,22 +214,30 @@ describe('CodeSurface', () => {
     expect(container.querySelector('textarea')!.value).toContain('tweaked');
   });
 
-  it('"Stage it" arms the rebuild and shows a cooling state rather than looking instant', async () => {
-    mocked.fetchCodeSurfaceSources.mockResolvedValue(sourcesFor());
-    mocked.rebuildCodeSurfaceStage.mockResolvedValue({ scheduled: true });
+  it('shows Discard when the buffer has owner changes, and discard reloads the delivered tree', async () => {
+    const stagedSources = sourcesFor({
+      files: [
+        { path: 'game.ts', content: 'export const boot = () => { /* staged */ };', stagedBy: 'owner' },
+        { path: 'game/render.ts', content: 'export const paint = () => {};' },
+      ],
+      staged: { totalBytes: 40, maxBytes: 1_000_000, maxFiles: 60, updatedAt: '2026-08-11T00:00:00.000Z' },
+    });
+    mocked.fetchCodeSurfaceSources.mockResolvedValueOnce(stagedSources).mockResolvedValueOnce(sourcesFor());
+    mocked.discardCodeSurfaceEdits.mockResolvedValue({ cleared: 1 });
 
     await render();
-    const button = [...container.querySelectorAll('button')].find((b) => b.textContent === 'Stage it')!;
-    expect(button).not.toBeUndefined();
+
+    expect(container.textContent).toMatch(/1 file changed/i);
+    const discard = [...container.querySelectorAll('button')].find((b) => b.textContent === 'Discard changes')!;
+    expect(discard).not.toBeUndefined();
 
     await act(async () => {
-      button.click();
+      discard.click();
       await flush();
     });
 
-    expect(mocked.rebuildCodeSurfaceStage).toHaveBeenCalledWith('sky-dodge');
-    expect(button.disabled).toBe(true);
-    expect(button.textContent).toBe('Staged');
+    expect(mocked.discardCodeSurfaceEdits).toHaveBeenCalledWith('sky-dodge');
+    expect(container.textContent).toMatch(/No local changes/i);
   });
 
   it('renders typecheck diagnostics without ever sending source text to telemetry', async () => {
@@ -233,9 +253,7 @@ describe('CodeSurface', () => {
     await render();
     const textarea = container.querySelector('textarea')!;
     await act(async () => {
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')!.set!;
-      setter.call(textarea, 'export const boot = () => { nope.x; };');
-      textarea.dispatchEvent(new Event('input', { bubbles: true }));
+      typeInto(textarea, 'export const boot = () => { nope.x; };');
     });
 
     await act(async () => {
@@ -263,12 +281,6 @@ describe('CodeSurface', () => {
     expect(mocked.fetchCodeSurfaceSources).toHaveBeenCalledTimes(1);
     expect(mocked.stageCodeSurfaceFile).not.toHaveBeenCalled();
   });
-
-  function typeInto(textarea: HTMLTextAreaElement, value: string) {
-    const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')!.set!;
-    setter.call(textarea, value);
-    textarea.dispatchEvent(new Event('input', { bubbles: true }));
-  }
 
   it('autosaves both files edited inside one debounce window — a second file must not cancel the first', async () => {
     mocked.fetchCodeSurfaceSources.mockResolvedValue(sourcesFor());
@@ -317,7 +329,7 @@ describe('CodeSurface', () => {
     );
   });
 
-  it('"Stage it" flushes every dirty file, not just the one currently open', async () => {
+  it('Publish flushes every dirty file, not just the one currently open', async () => {
     mocked.fetchCodeSurfaceSources.mockResolvedValue(sourcesFor());
     mocked.stageCodeSurfaceFile.mockResolvedValue({
       accepted: true,
@@ -325,7 +337,13 @@ describe('CodeSurface', () => {
       bytes: 1,
       staged: { totalBytes: 1, maxBytes: 1_000_000, maxFiles: 60, updatedAt: null },
     });
-    mocked.rebuildCodeSurfaceStage.mockResolvedValue({ scheduled: true });
+    mocked.deliverCodeSurface.mockResolvedValue({
+      accepted: true,
+      slug: 'sky-dodge',
+      version: 'v2',
+      mode: 'publish',
+      gateStarted: true,
+    });
 
     await render();
     await act(async () => {
@@ -338,11 +356,17 @@ describe('CodeSurface', () => {
       renderTsButton.click();
     });
 
-    // Click "Stage it" well inside both files' debounce windows — the currently open
-    // file (render.ts, untouched) must not be what gets flushed instead of game.ts.
-    const stageButton = [...container.querySelectorAll('button')].find((b) => b.textContent === 'Stage it')!;
+    expect(container.querySelector('.code-surface-attestation')).toBeNull();
+    const publishHint = container.querySelector<HTMLElement>('.code-surface-publish-hint')!;
+    expect(publishHint.parentElement?.classList.contains('code-surface-deliver')).toBe(true);
+    expect(publishHint.textContent).toContain('Confirms your right');
+    expect(publishHint.title).toContain('Publishing confirms');
+    expect(publishHint.getAttribute('aria-label')).toBe(publishHint.title);
+    expect(publishHint.tabIndex).toBe(0);
+
+    const publishButton = container.querySelector<HTMLButtonElement>('.code-surface-deliver-btn')!;
     await act(async () => {
-      stageButton.click();
+      publishButton.click();
       await flush();
     });
 
@@ -352,10 +376,10 @@ describe('CodeSurface', () => {
       expect.stringContaining('edited game.ts'),
       { rebuild: false },
     );
-    expect(mocked.rebuildCodeSurfaceStage).toHaveBeenCalledWith('sky-dodge');
+    expect(mocked.deliverCodeSurface).toHaveBeenCalledWith('sky-dodge', 'publish');
   });
 
-  it('deliver refuses to ship when the pre-flight autosave fails, rather than delivering without the edit', async () => {
+  it('Publish refuses to ship when the pre-flight autosave fails, rather than delivering without the edit', async () => {
     mocked.fetchCodeSurfaceSources.mockResolvedValue(sourcesFor());
     mocked.stageCodeSurfaceFile.mockRejectedValue(new Error('network blip'));
 
@@ -364,10 +388,6 @@ describe('CodeSurface', () => {
       typeInto(container.querySelector('textarea')!, 'export const boot = () => { /* edited */ };');
     });
 
-    const attestCheckbox = container.querySelector<HTMLInputElement>('.code-surface-attestation input')!;
-    await act(async () => {
-      attestCheckbox.click();
-    });
     const deliverButton = container.querySelector<HTMLButtonElement>('.code-surface-deliver-btn')!;
     await act(async () => {
       deliverButton.click();

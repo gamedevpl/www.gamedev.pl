@@ -82,10 +82,9 @@ export function allowsCreatorBuilderHandoff(input: {
 /**
  * Whether creator feedback should only go to the build-channel inbox (no new dispatch).
  *
- * An in-flight round that already has a dispatch ref has an agent that will poll the
- * inbox — including after delivery while the gate runs, and on gate-red / kit_outdated
- * repair, where the same session is often still alive. Starting another Copilot task on
- * top of that is what produced concurrent builds of one game.
+ * Live rounds with dispatch refs steer feedback through the inbox, including gate waits
+ * and gate-red repair while the same session remains alive. Starting another Copilot task
+ * caused concurrent builds of one game.
  *
  * Excludes `publishing`: reaching it already closed the round (token generation bumped),
  * so no session can collect inbox mail — the feedback route rejects that state instead.
@@ -101,11 +100,24 @@ export function shouldSteerFeedbackViaInbox(
     state?: JobState;
     transitions?: JobTransition[];
     dispatch?: { refs?: readonly string[] } | null;
+    builder?: BuilderKind;
+    agentEndedAt?: string | null;
+    agentEndedBy?: 'submit' | 'end';
+    agentState?: string;
   },
-  opts?: { builderChanging?: boolean },
+  opts?: { builderChanging?: boolean; stall?: JobStall | null },
 ): boolean {
   if (opts?.builderChanging) return false;
   if (record.state === 'publishing') return false;
   if (!isActiveBuildRound(record)) return false;
+  // A terminal platform session cannot collect another inbox note.
+  const terminalAgent = ['completed', 'failed', 'timed_out', 'cancelled'].includes(record.agentState ?? '');
+  const submitMarkerActive = record.agentEndedAt && record.agentEndedBy === 'submit' && !terminalAgent;
+  const platformSessionEnded = Boolean(record.agentEndedAt) && !submitMarkerActive;
+  const platformStalled =
+    opts?.stall === 'not_dispatched' || opts?.stall === 'quiet' || (opts?.stall === 'ended' && !submitMarkerActive);
+  if ((record.builder ?? 'platform') === 'platform' && (platformSessionEnded || platformStalled)) {
+    return false;
+  }
   return (record.dispatch?.refs?.length ?? 0) > 0;
 }

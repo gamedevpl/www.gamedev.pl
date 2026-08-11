@@ -828,6 +828,76 @@ describe('submission routes', () => {
     await app.close();
   });
 
+  it('restarts a platform round after its agent has ended', async () => {
+    const { githubClient } = createGithubClientStub({ issueNumber: 77 });
+    const { backend, briefs } = createBackendStub();
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      chatAgent: { decide: async () => ({ kind: 'build' as const, text: 'On it!' }) },
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    const briefsBefore = briefs.length;
+    await store.markAgentEnded(job.issueNumber, new Date().toISOString());
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(job.issueNumber, secret)}/feedback`,
+      headers: authHeaders,
+      payload: { feedback: 'Please make the parcels bigger and the asteroids slower.' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(briefs).toHaveLength(briefsBefore + 1);
+    expect((await store.getSubmission(job.issueNumber))?.state).toBe('dispatched');
+    const messages = await store.listCreatorMessages(job.issueNumber);
+    expect(messages.some((message) => message.origin === 'studio_ack')).toBe(true);
+
+    await app.close();
+  });
+
+  it('keeps feedback in the inbox after an optimistic submit marker', async () => {
+    const { githubClient } = createGithubClientStub({ issueNumber: 77 });
+    const { backend, briefs } = createBackendStub();
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      chatAgent: { decide: async () => ({ kind: 'build' as const, text: 'On it!' }) },
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    const briefsBefore = briefs.length;
+    await store.markAgentEnded(job.issueNumber, new Date().toISOString(), 'submit');
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(job.issueNumber, secret)}/feedback`,
+      headers: authHeaders,
+      payload: { feedback: 'Please make the parcels bigger and the asteroids slower.' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(briefs).toHaveLength(briefsBefore);
+    expect((await store.getSubmission(job.issueNumber))?.agentEndedBy).toBe('submit');
+
+    await app.close();
+  });
+
   it('keeps gate-wait and gate-red rounds on inbox steering rather than a new session', async () => {
     // After submit the job is `submitted` while the same session waits on the gate; a
     // red verdict moves it to `needs_changes` with mustFixGate. Both must stay inbox-only.
@@ -2257,6 +2327,7 @@ describe('submission routes', () => {
       githubClient,
       agentBackend: backend,
       submissionTokenSecret: secret,
+      chatAgent: { decide: async () => ({ kind: 'build' as const, text: 'On it!' }) },
     });
 
     await app.inject({
@@ -2285,7 +2356,10 @@ describe('submission routes', () => {
     // of nothing: out of capacity is a billing problem, not a broken game.
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({ ok: true, roundStarted: false, reason: 'no_capacity' });
-    expect(await store.listCreatorMessages(job.issueNumber)).not.toHaveLength(0);
+    const messages = await store.listCreatorMessages(job.issueNumber);
+    expect(messages).not.toHaveLength(0);
+    // A failed dispatch must not leave a transcript claiming it started.
+    expect(messages.some((message) => message.origin === 'studio_ack')).toBe(false);
     // And the job must not claim to be building when no session exists.
     expect((await store.getSubmission(job.issueNumber))?.state).not.toBe('building');
 

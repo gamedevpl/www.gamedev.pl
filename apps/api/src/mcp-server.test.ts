@@ -1478,11 +1478,13 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(submitWarnings.some((w) => w.code === 'gate_not_started')).toBe(true);
     // Successful MCP submit unlocks handoff even before explicit end.
     expect((await store.getSubmission(ISSUE))?.agentEndedAt).toBeTruthy();
+    expect((await store.getSubmission(ISSUE))?.agentEndedBy).toBe('submit');
 
     const ended = await callTool(app, 'end', { sessionKey }, { 'mcp-session-id': sessionId });
     expect(ended.isError).toBe(false);
     expect(ended.structured).toMatchObject({ ok: true, ended: true, stop: true, reason: 'agent_ended' });
     expect((await store.getSubmission(ISSUE))?.agentEndedAt).toBeTruthy();
+    expect((await store.getSubmission(ISSUE))?.agentEndedBy).toBe('end');
 
     // Gate red keeps the round open — verdict readable on the active key.
     await store.setSubmissionDeliveredVersion(ISSUE, 'v1');
