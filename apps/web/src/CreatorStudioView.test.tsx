@@ -561,6 +561,8 @@ describe('CreatorStudioView', () => {
     expect(chat?.getAttribute('aria-pressed')).toBe('false');
     expect(chat?.getAttribute('title')).toMatch(/open chat/i);
     expect(container.querySelector('.studio-rail')).not.toBeNull();
+    expect(container.querySelector('.studio-chat-rail')?.getAttribute('aria-hidden')).toBe('true');
+    expect((container.querySelector('.studio-chat-rail') as HTMLElement & { inert: boolean }).inert).toBe(true);
 
     await act(async () => {
       chat!.dispatchEvent(new MouseEvent('click', { bubbles: true }));

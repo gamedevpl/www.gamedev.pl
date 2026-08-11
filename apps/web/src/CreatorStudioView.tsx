@@ -797,6 +797,8 @@ export function CreatorStudioView({
               <div className="studio-detail">
                 {(() => {
                   const covered = shelfOpen || tab === 'details' || tab === 'edit' || tab === 'code';
+                  const chatCovered = tab === 'details' || tab === 'edit';
+                  const chatVisible = railOpen && !chatCovered;
                   const canClaim = Boolean(
                     !user?.handle &&
                     (activeGame.lastKnownStatus === 'in_review' || activeGame.lastKnownStatus === 'publishing'),
@@ -869,13 +871,12 @@ export function CreatorStudioView({
                           setDetailsPane('overview');
                           openTab('details');
                         }}
-                        threadOpen={railOpen && tab !== 'details' && tab !== 'edit'}
+                        threadOpen={chatVisible}
                         onToggleThread={() => {
-                          const covered = tab === 'details' || tab === 'edit';
-                          const next = covered || !railOpen;
+                          const next = chatCovered || !railOpen;
                           setRailManualOpen(next);
                           if (next) {
-                            if (covered) openTab('thread');
+                            if (chatCovered) openTab('thread');
                             seenActivityRef.current += checklistUnread;
                             setChecklistUnread(0);
                           }
@@ -960,7 +961,7 @@ export function CreatorStudioView({
 
                         <StudioChatRail
                           title={activeGame.title}
-                          open={railOpen}
+                          open={chatVisible}
                           onOpenChange={(next) => {
                             setRailManualOpen(next);
                             if (next) {
