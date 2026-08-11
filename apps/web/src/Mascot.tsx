@@ -383,33 +383,36 @@ function CookingPot() {
         strokeLinecap="round"
       />
       <g className="mascot__pot-rig">
-        <path
-          className="mascot__pot-handle mascot__pot-handle--left"
-          d="M45 41 Q40 41 41 45"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.6"
-          strokeLinecap="round"
-        />
-        <path
-          className="mascot__pot-handle mascot__pot-handle--right"
-          d="M65 41 Q70 41 69 45"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.6"
-          strokeLinecap="round"
-        />
-        <rect className="mascot__pot-belly" x="45" y="40" width="20" height="9" rx="2.4" fill="#241a12" />
-        <ellipse
-          className="mascot__pot-rim"
-          cx="55"
-          cy="40"
-          rx="10.5"
-          ry="3.2"
-          fill="#2f2216"
-          stroke="currentColor"
-          strokeWidth="1.4"
-        />
+        {/* Rocks on its own — the pan-toss half of the gag, independent of the spoon's stir. */}
+        <g className="mascot__pot-shake">
+          <path
+            className="mascot__pot-handle mascot__pot-handle--left"
+            d="M45 41 Q40 41 41 45"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+          />
+          <path
+            className="mascot__pot-handle mascot__pot-handle--right"
+            d="M65 41 Q70 41 69 45"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+          />
+          <rect className="mascot__pot-belly" x="45" y="40" width="20" height="9" rx="2.4" fill="#241a12" />
+          <ellipse
+            className="mascot__pot-rim"
+            cx="55"
+            cy="40"
+            rx="10.5"
+            ry="3.2"
+            fill="#2f2216"
+            stroke="currentColor"
+            strokeWidth="1.4"
+          />
+        </g>
         <g className="mascot__pot-steam" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
           <path className="mascot__pot-steam-a" d="M50 37 q-2 -4 0 -8 q2 -4 0 -8" />
           <path className="mascot__pot-steam-b" d="M55 36 q-2 -4 0 -8 q2 -4 0 -8" />
@@ -420,6 +423,37 @@ function CookingPot() {
           <ellipse cx="57.4" cy="24.6" rx="1.9" ry="2.7" fill="currentColor" />
         </g>
       </g>
+    </g>
+  );
+}
+
+/**
+ * Toque perched on top of the head — the other half of the `cooking` costume.
+ * The idle silhouette's top row starts at y=1, and the face cutouts (eyes) sit
+ * around y=3–8, so the band has to rest above y=1 rather than dip onto the head
+ * proper — any lower and it swallows the eyes instead of crowning them.
+ */
+function ChefHat() {
+  return (
+    <g className="mascot__chef-hat" aria-hidden="true">
+      <path
+        className="mascot__chef-hat-poof"
+        d="M23 -4 C21 -16 29 -22 35 -22 C41 -22 49 -16 47 -4 C44 -8 40 -5 35 -5 C30 -5 26 -8 23 -4 Z"
+        fill="#f4f4f4"
+        stroke="#c9c9c9"
+        strokeWidth="1"
+      />
+      <rect
+        className="mascot__chef-hat-band"
+        x="24"
+        y="-4.4"
+        width="22"
+        height="4.4"
+        rx="1.6"
+        fill="#f4f4f4"
+        stroke="#c9c9c9"
+        strokeWidth="1"
+      />
     </g>
   );
 }
@@ -506,6 +540,7 @@ export function Mascot({
         ) : null}
 
         {showPhone ? <ScrollPhone clipId={phoneClipId} /> : null}
+        {cooking ? <ChefHat /> : null}
         {cooking ? <CookingPot /> : null}
       </g>
     </svg>
