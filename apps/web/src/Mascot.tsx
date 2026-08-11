@@ -59,6 +59,13 @@ type MascotProps = {
    * every other instance.
    */
   scrolling?: boolean;
+  /**
+   * When true, mounts the stockpot prop and stirs it — the "still working on it"
+   * gag for build/loading moments. Unlike `scrolling` this one is a plain boolean
+   * used only where it's set (loading cards), so it can default to `false` instead
+   * of needing `undefined` reserved as an off state.
+   */
+  cooking?: boolean;
 };
 
 type Span = readonly [number, number, number];
@@ -357,6 +364,66 @@ function ScrollPhone({ clipId }: { clipId: string }) {
   );
 }
 
+/**
+ * Stockpot the mascot stirs for build/loading moments (`cooking` prop). Same
+ * arm-plus-prop shape as `ScrollPhone` — an arm fades in reaching toward the pot,
+ * the pot rig pops in behind it — but the payoff is a spoon rotating around the
+ * rim instead of a thumb scrolling a feed, with steam wisps rising and fading on
+ * a staggered loop so the three don't read as one blob of motion.
+ */
+function CookingPot() {
+  return (
+    <g className="mascot__pot" aria-hidden="true">
+      <path
+        className="mascot__pot-arm"
+        d="M46 48 Q52 42 55 38"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="3.2"
+        strokeLinecap="round"
+      />
+      <g className="mascot__pot-rig">
+        <path
+          className="mascot__pot-handle mascot__pot-handle--left"
+          d="M45 41 Q40 41 41 45"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+        />
+        <path
+          className="mascot__pot-handle mascot__pot-handle--right"
+          d="M65 41 Q70 41 69 45"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+        />
+        <rect className="mascot__pot-belly" x="45" y="40" width="20" height="9" rx="2.4" fill="#241a12" />
+        <ellipse
+          className="mascot__pot-rim"
+          cx="55"
+          cy="40"
+          rx="10.5"
+          ry="3.2"
+          fill="#2f2216"
+          stroke="currentColor"
+          strokeWidth="1.4"
+        />
+        <g className="mascot__pot-steam" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+          <path className="mascot__pot-steam-a" d="M50 37 q-2 -4 0 -8 q2 -4 0 -8" />
+          <path className="mascot__pot-steam-b" d="M55 36 q-2 -4 0 -8 q2 -4 0 -8" />
+          <path className="mascot__pot-steam-c" d="M60 37 q-2 -4 0 -8 q2 -4 0 -8" />
+        </g>
+        <g className="mascot__pot-spoon">
+          <path d="M55 40 L57 26" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" fill="none" />
+          <ellipse cx="57.4" cy="24.6" rx="1.9" ry="2.7" fill="currentColor" />
+        </g>
+      </g>
+    </g>
+  );
+}
+
 export function Mascot({
   emotion = 'idle',
   size = 48,
@@ -365,6 +432,7 @@ export function Mascot({
   staticPose = false,
   look,
   scrolling,
+  cooking = false,
 }: MascotProps) {
   const reactId = useId().replace(/:/g, '');
   const maskId = `mascot-mask-${reactId}`;
@@ -375,6 +443,7 @@ export function Mascot({
     `mascot--${emotion}`,
     staticPose ? 'mascot--static' : null,
     scrolling ? 'mascot--scrolling' : null,
+    cooking ? 'mascot--cooking' : null,
     className,
   ]
     .filter(Boolean)
@@ -437,6 +506,7 @@ export function Mascot({
         ) : null}
 
         {showPhone ? <ScrollPhone clipId={phoneClipId} /> : null}
+        {cooking ? <CookingPot /> : null}
       </g>
     </svg>
   );
