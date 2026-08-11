@@ -87,6 +87,8 @@ export function allowsCreatorBuilderHandoff(input: {
  * repair, where the same session is often still alive. Starting another Copilot task on
  * top of that is what produced concurrent builds of one game.
  *
+ * Ended or stalled platform rounds restart instead.
+ *
  * Excludes `publishing`: reaching it already closed the round (token generation bumped),
  * so no session can collect inbox mail — the feedback route rejects that state instead.
  *
@@ -101,11 +103,20 @@ export function shouldSteerFeedbackViaInbox(
     state?: JobState;
     transitions?: JobTransition[];
     dispatch?: { refs?: readonly string[] } | null;
+    builder?: BuilderKind;
+    agentEndedAt?: string | null;
   },
-  opts?: { builderChanging?: boolean },
+  opts?: { builderChanging?: boolean; stall?: JobStall | null },
 ): boolean {
   if (opts?.builderChanging) return false;
   if (record.state === 'publishing') return false;
   if (!isActiveBuildRound(record)) return false;
+  // A platform session that ended or stalled cannot collect another inbox note.
+  if (
+    (record.builder ?? 'platform') === 'platform' &&
+    (record.agentEndedAt || opts?.stall === 'not_dispatched' || opts?.stall === 'quiet' || opts?.stall === 'ended')
+  ) {
+    return false;
+  }
   return (record.dispatch?.refs?.length ?? 0) > 0;
 }
