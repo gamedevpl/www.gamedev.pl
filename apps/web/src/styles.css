@@ -6145,27 +6145,27 @@ a.user-name--profile:focus-visible {
 
 /* The builder pill needs its own row, pinned left like a model picker — squeezed
    next to send otherwise. Higher specificity than the grid row above, so it wins. */
-.status-composer.is-compact.is-empty:has(.status-composer-toolbar-left:not(:empty)) {
+.status-composer.is-compact.is-empty:has(.builder-mode-controls:not(:empty)) {
   display: flex;
   flex-direction: column;
   align-items: stretch;
   padding: 10px 12px 8px;
 }
 
-.status-composer.is-compact.is-empty:has(.status-composer-toolbar-left:not(:empty)) .status-feedback-input {
+.status-composer.is-compact.is-empty:has(.builder-mode-controls:not(:empty)) .status-feedback-input {
   grid-column: auto;
   padding: 2px 0 6px;
   min-height: 1.6rem;
   line-height: 1.45;
 }
 
-.status-composer.is-compact.is-empty:has(.status-composer-toolbar-left:not(:empty)) .status-composer-toolbar {
+.status-composer.is-compact.is-empty:has(.builder-mode-controls:not(:empty)) .status-composer-toolbar {
   grid-column: auto;
   padding-top: 2px;
   width: auto;
 }
 
-.status-composer.is-compact.is-empty:has(.status-composer-toolbar-left:not(:empty)) .status-composer-toolbar-left {
+.status-composer.is-compact.is-empty:has(.builder-mode-controls:not(:empty)) .status-composer-toolbar-left {
   flex: 1;
 }
 
@@ -6315,6 +6315,13 @@ a.user-name--profile:focus-visible {
   }
 
   .status-composer.is-compact.is-empty .status-feedback-input {
+    min-height: 44px;
+    padding-block: 11px;
+  }
+
+  /* The pill-visible layout above restates min-height at desktop size — redo the
+     44px floor here, same selector, so it wins by source order under this query. */
+  .status-composer.is-compact.is-empty:has(.builder-mode-controls:not(:empty)) .status-feedback-input {
     min-height: 44px;
     padding-block: 11px;
   }

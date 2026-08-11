@@ -37,17 +37,28 @@ describe('studio compact composer empty state', () => {
   });
 
   it('gives the builder pill its own row, pinned left, instead of the collapsed grid row', () => {
-    // The one-row grid otherwise squeezes the pill next to send.
-    const override = firstRuleBody(
-      '.status-composer.is-compact.is-empty:has(.status-composer-toolbar-left:not(:empty))',
-    );
+    // Key on the pill: toolbar-left also always holds the escape toggle.
+    const override = firstRuleBody('.status-composer.is-compact.is-empty:has(.builder-mode-controls:not(:empty))');
     expect(override).toMatch(/display:\s*flex/);
     expect(override).toMatch(/flex-direction:\s*column/);
 
     const toolbarLeft = firstRuleBody(
-      '.status-composer.is-compact.is-empty:has(.status-composer-toolbar-left:not(:empty)) .status-composer-toolbar-left',
+      '.status-composer.is-compact.is-empty:has(.builder-mode-controls:not(:empty)) .status-composer-toolbar-left',
     );
     expect(toolbarLeft).toMatch(/flex:\s*1/);
+  });
+
+  it('keeps the pill-visible textarea at the 44px mobile floor too', () => {
+    // The desktop pill-visible rule would otherwise outrank the plain mobile one.
+    const mediaStart = css.indexOf('.status-composer.is-compact .status-composer-send,');
+    expect(mediaStart, 'no composer mobile media query found').toBeGreaterThan(-1);
+    const marker =
+      '.status-composer.is-compact.is-empty:has(.builder-mode-controls:not(:empty)) .status-feedback-input {';
+    const start = css.indexOf(marker, mediaStart);
+    expect(start, 'no mobile override for the pill-visible textarea').toBeGreaterThan(-1);
+    const end = css.indexOf('}', start);
+    const body = css.slice(start + marker.length, end);
+    expect(body).toMatch(/min-height:\s*44px/);
   });
 });
 
