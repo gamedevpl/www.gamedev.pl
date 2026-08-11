@@ -11285,6 +11285,19 @@ button.builder-mode-selector:disabled {
   overflow: hidden;
 }
 
+/* Chat stays reachable while Code is open (owner feedback, 2026-08-11): the rail and
+   its pill float over the code overlay exactly as they float over the stage. Scoped to
+   Code — Edit keeps its full-cover behaviour untouched. */
+.studio-stage-layout:has(.studio-code-overlay) .studio-chat-rail {
+  z-index: 60;
+}
+
+.studio-stage-layout:has(.studio-code-overlay) .studio-chat-rail-pill {
+  z-index: 61;
+  /* Clear the panel's Stage/Deliver footer rows instead of sitting on the button. */
+  bottom: 118px;
+}
+
 /* ── THE CODE SURFACE (creator-code-editing-execution-plan.md) ─────────────────── */
 
 .code-surface {
@@ -11528,6 +11541,19 @@ button.builder-mode-selector:disabled {
   margin-left: auto;
 }
 
+/* Both act as `.studio-head-action.is-primary` — that pair has no disabled look of its
+   own (Play disables only when the stage is empty and hides its state elsewhere), and
+   these two spend most of their life disabled (cooldown, unchecked attestation). */
+.code-surface-stage-it:disabled,
+.code-surface-deliver-btn:disabled {
+  background: rgba(0, 228, 172, 0.14);
+  border-color: rgba(0, 228, 172, 0.2);
+  color: var(--muted);
+  cursor: default;
+  filter: none;
+  box-shadow: none;
+}
+
 .code-surface-deliver {
   flex: none;
   display: flex;
@@ -11541,9 +11567,46 @@ button.builder-mode-selector:disabled {
 .code-surface-attestation {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   font-size: 0.76rem;
   color: var(--muted);
+  cursor: pointer;
+}
+
+.code-surface-attestation:hover {
+  color: var(--text);
+}
+
+.code-surface-attestation input {
+  appearance: none;
+  flex: none;
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  border-radius: 4px;
+  border: 1px solid var(--panel-border);
+  background: transparent;
+  cursor: pointer;
+  display: inline-grid;
+  place-content: center;
+}
+
+.code-surface-attestation input:checked {
+  border-color: var(--turquoise);
+  background: rgba(0, 228, 172, 0.16);
+}
+
+.code-surface-attestation input:checked::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  background: var(--turquoise);
+  clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+}
+
+.code-surface-attestation input:focus-visible {
+  outline: 2px solid rgba(0, 228, 172, 0.5);
+  outline-offset: 1px;
 }
 
 .code-surface-deliver-btn {

@@ -11,6 +11,7 @@ import {
   type CodeSurfaceFile,
   type CodeSurfaceSources,
 } from './codeSurfaceApi.js';
+import { getCodeSurfaceSessionState, setCodeSurfaceSessionState } from './codeSurfaceSessionState.js';
 import { type CodeLanguage, tokenizeLine } from './codeTokens.js';
 import { PixelIcon } from './PixelIcon.js';
 import { recordCodeStep } from './visitTelemetry.js';
@@ -87,8 +88,8 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
   const { t } = useTranslation();
   const [sources, setSources] = useState<CodeSurfaceSources | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [selected, setSelected] = useState<string | null>(null);
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [selected, setSelected] = useState<string | null>(() => getCodeSurfaceSessionState(slug)?.selected ?? null);
+  const [drafts, setDrafts] = useState<Record<string, string>>(() => getCodeSurfaceSessionState(slug)?.drafts ?? {});
   const [saveState, setSaveState] = useState<SaveState>('clean');
   const [diagnostics, setDiagnostics] = useState<string[] | null>(null);
   const [rebuildState, setRebuildState] = useState<'idle' | 'pending' | 'cooling'>('idle');
@@ -144,13 +145,24 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
     return () => window.clearInterval(id);
   }, [sources?.readOnly, load]);
 
+  useEffect(() => {
+    setCodeSurfaceSessionState(slug, { selected, drafts });
+  }, [slug, selected, drafts]);
+
   useEffect(
     () => () => {
-      saveTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+      // Unmount flushes pending autosaves — direct calls, no setState after unmount.
+      saveTimersRef.current.forEach((timer, path) => {
+        window.clearTimeout(timer);
+        const draft = draftsRef.current[path];
+        if (draft !== undefined) {
+          stageCodeSurfaceFile(slug, path, draft, { rebuild: false }).catch(() => {});
+        }
+      });
       saveTimersRef.current.clear();
       if (typecheckTimerRef.current !== null) window.clearTimeout(typecheckTimerRef.current);
     },
-    [],
+    [slug],
   );
 
   const file = useMemo(() => sources?.files.find((entry) => entry.path === selected) ?? null, [sources, selected]);
@@ -432,7 +444,7 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
           ) : null}
           <button
             type="button"
-            className="code-surface-stage-it is-primary"
+            className="code-surface-stage-it studio-head-action is-primary"
             onClick={() => void stageIt()}
             disabled={rebuildState !== 'idle'}
           >
@@ -453,7 +465,7 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
           </label>
           <button
             type="button"
-            className="code-surface-deliver-btn is-primary"
+            className="code-surface-deliver-btn studio-head-action is-primary"
             disabled={!attested || deliverState === 'delivering'}
             onClick={() => void deliver()}
           >

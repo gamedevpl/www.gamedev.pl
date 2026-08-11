@@ -4,6 +4,7 @@ import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CodeSurface } from './CodeSurface.js';
+import { resetCodeSurfaceSessionState } from './codeSurfaceSessionState.js';
 import * as codeSurfaceApi from './codeSurfaceApi.js';
 import i18n from './i18n/index.js';
 
@@ -61,6 +62,7 @@ describe('CodeSurface', () => {
   beforeEach(async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
+    resetCodeSurfaceSessionState();
     vi.useFakeTimers({ shouldAdvanceTime: true });
     mocked.fetchCodeSurfaceSources.mockReset();
     mocked.stageCodeSurfaceFile.mockReset();
@@ -134,6 +136,45 @@ describe('CodeSurface', () => {
       expect.stringContaining('edited'),
       { rebuild: false },
     );
+  });
+
+  it('restores the selected file and draft after close/reopen, flushing the pending save on unmount', async () => {
+    mocked.fetchCodeSurfaceSources.mockResolvedValue(sourcesFor());
+    mocked.stageCodeSurfaceFile.mockResolvedValue({
+      accepted: true,
+      path: 'game/render.ts',
+      bytes: 40,
+      staged: { totalBytes: 40, maxBytes: 1_000_000, maxFiles: 60, updatedAt: null },
+    });
+
+    await render();
+    const renderTab = [...container.querySelectorAll('.code-surface-rail-item')].find((b) =>
+      b.textContent?.includes('game/render.ts'),
+    ) as HTMLButtonElement;
+    await act(async () => {
+      renderTab.click();
+    });
+    const textarea = container.querySelector('textarea')!;
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')!.set!;
+      setter.call(textarea, 'export const paint = () => { /* tweaked */ };');
+      textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+
+    // Unmount inside the autosave window: pending saves must flush.
+    await act(async () => root.unmount());
+    expect(mocked.stageCodeSurfaceFile).toHaveBeenCalledWith(
+      'sky-dodge',
+      'game/render.ts',
+      expect.stringContaining('tweaked'),
+      { rebuild: false },
+    );
+
+    root = createRoot(container);
+    await render();
+    const active = container.querySelector('.code-surface-rail-item.is-active');
+    expect(active?.textContent).toContain('game/render.ts');
+    expect(container.querySelector('textarea')!.value).toContain('tweaked');
   });
 
   it('"Stage it" arms the rebuild and shows a cooling state rather than looking instant', async () => {

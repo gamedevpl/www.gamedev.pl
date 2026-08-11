@@ -4,9 +4,11 @@ import { html } from '@codemirror/lang-html';
 import { javascript } from '@codemirror/lang-javascript';
 import { json } from '@codemirror/lang-json';
 import { markdown } from '@codemirror/lang-markdown';
+import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { forceLinting, linter, lintGutter, type Diagnostic as CmDiagnostic } from '@codemirror/lint';
 import { EditorState, type Extension } from '@codemirror/state';
-import { EditorView, highlightActiveLine, highlightActiveLineGutter, keymap, lineNumbers } from '@codemirror/view';
+import { EditorView, keymap } from '@codemirror/view';
+import { tags } from '@lezer/highlight';
 import { basicSetup } from 'codemirror';
 import { useEffect, useRef } from 'react';
 import type { CodeLanguage } from './codeTokens.js';
@@ -50,6 +52,53 @@ function languageExtension(language: CodeLanguage): Extension | null {
   }
 }
 
+// Palette matches the read-only viewer's .code-tok-* colors.
+const darkHighlight = HighlightStyle.define([
+  { tag: [tags.comment, tags.lineComment, tags.blockComment], color: 'var(--muted, #8b949e)' },
+  { tag: [tags.string, tags.special(tags.string), tags.regexp], color: '#7ee787' },
+  { tag: [tags.number, tags.bool, tags.null, tags.atom], color: '#79c0ff' },
+  { tag: [tags.keyword, tags.operatorKeyword, tags.modifier, tags.self], color: '#ff7b72' },
+  { tag: [tags.propertyName, tags.attributeName, tags.labelName], color: '#d2a8ff' },
+  { tag: [tags.function(tags.variableName), tags.function(tags.propertyName)], color: '#d2a8ff' },
+  { tag: [tags.typeName, tags.className, tags.namespace], color: '#ffa657' },
+  { tag: [tags.definition(tags.variableName), tags.variableName], color: 'var(--text, #e6edf3)' },
+  { tag: [tags.operator, tags.punctuation, tags.separator, tags.bracket], color: 'var(--text, #e6edf3)' },
+  { tag: tags.heading, color: '#79c0ff', fontWeight: 'bold' },
+  { tag: tags.link, color: '#7ee787', textDecoration: 'underline' },
+  { tag: tags.invalid, color: '#ff7b72', textDecoration: 'underline wavy' },
+]);
+
+const darkChrome = EditorView.theme(
+  {
+    '&': { height: '100%', fontSize: '0.84rem', backgroundColor: 'transparent', color: 'var(--text, #e6edf3)' },
+    '.cm-scroller': { fontFamily: 'var(--mono-font, monospace)', overflow: 'auto' },
+    '.cm-content': { caretColor: '#00e4ac' },
+    '.cm-cursor, .cm-dropCursor': { borderLeftColor: '#00e4ac' },
+    '.cm-activeLine': { backgroundColor: 'rgba(148, 163, 184, 0.07)' },
+    '.cm-activeLineGutter': { backgroundColor: 'rgba(148, 163, 184, 0.07)' },
+    '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground': {
+      backgroundColor: 'rgba(0, 228, 172, 0.16)',
+    },
+    '.cm-selectionMatch': { backgroundColor: 'rgba(0, 228, 172, 0.12)' },
+    '&.cm-focused .cm-matchingBracket': { backgroundColor: 'rgba(0, 228, 172, 0.2)', outline: 'none' },
+    '&.cm-focused .cm-nonmatchingBracket': { backgroundColor: 'rgba(255, 123, 114, 0.2)' },
+    '.cm-gutters': { backgroundColor: 'transparent', color: 'var(--muted, #8b949e)', border: 'none' },
+    '.cm-foldGutter, .cm-lineNumbers': { color: 'var(--muted, #8b949e)' },
+    '.cm-tooltip': {
+      backgroundColor: 'var(--panel-bg, #0c1218)',
+      color: 'var(--text, #e6edf3)',
+      border: '1px solid rgba(148, 163, 184, 0.25)',
+      borderRadius: '8px',
+    },
+    '.cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected]': {
+      backgroundColor: 'rgba(0, 228, 172, 0.16)',
+      color: 'var(--text, #e6edf3)',
+    },
+    '.cm-panels': { backgroundColor: 'var(--panel-bg, #0c1218)', color: 'var(--text, #e6edf3)' },
+  },
+  { dark: true },
+);
+
 function toCmDiagnostics(view: EditorView, diagnostics: CodeMirrorDiagnostic[]): CmDiagnostic[] {
   const doc = view.state.doc;
   const out: CmDiagnostic[] = [];
@@ -81,9 +130,6 @@ export default function CodeMirrorEditor({ value, language, onChange, diagnostic
         doc: value,
         extensions: [
           basicSetup,
-          lineNumbers(),
-          highlightActiveLine(),
-          highlightActiveLineGutter(),
           keymap.of([indentWithTab]),
           ...(langExt ? [langExt] : []),
           lintGutter(),
@@ -92,14 +138,8 @@ export default function CodeMirrorEditor({ value, language, onChange, diagnostic
           EditorView.updateListener.of((update) => {
             if (update.docChanged) onChangeRef.current(update.state.doc.toString());
           }),
-          EditorView.theme(
-            {
-              '&': { height: '100%', fontSize: '0.84rem' },
-              '.cm-scroller': { fontFamily: 'var(--mono-font, monospace)', overflow: 'auto' },
-              '.cm-content': { caretColor: '#00e4ac' },
-            },
-            { dark: true },
-          ),
+          syntaxHighlighting(darkHighlight),
+          darkChrome,
         ],
       }),
     });

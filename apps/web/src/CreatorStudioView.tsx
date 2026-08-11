@@ -997,7 +997,7 @@ export function CreatorStudioView({
                         ) : null}
 
                         {tab === 'code' && activeGame.slug ? (
-                          <div className="studio-edit-overlay">
+                          <div className="studio-edit-overlay studio-code-overlay">
                             <CodeSurface
                               key={activeGame.token}
                               slug={activeGame.slug}
