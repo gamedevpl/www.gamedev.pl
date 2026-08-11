@@ -6137,6 +6137,11 @@ a.user-name--profile:focus-visible {
   gap: 8px;
 }
 
+.status-composer.is-compact .status-feedback-quick-actions {
+  grid-column: 1 / -1;
+  margin: 0 0 2px;
+}
+
 .status-feedback-quick-action {
   appearance: none;
   display: inline-flex;

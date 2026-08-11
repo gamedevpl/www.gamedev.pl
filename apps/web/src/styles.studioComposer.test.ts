@@ -77,6 +77,11 @@ describe('send button mobile touch target', () => {
 });
 
 describe('CI repair quick action', () => {
+  it('blends into the compact composer instead of sitting above it', () => {
+    const quickActions = firstRuleBody('.status-composer.is-compact .status-feedback-quick-actions');
+    expect(quickActions).toMatch(/grid-column:\s*1 \/ -1/);
+  });
+
   it('looks interactive and keeps a phone-sized touch target', () => {
     const chip = firstRuleBody('.status-feedback-quick-action');
     expect(chip).toMatch(/border-radius:\s*999px/);

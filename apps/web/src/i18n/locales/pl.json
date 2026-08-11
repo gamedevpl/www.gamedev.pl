@@ -734,7 +734,7 @@
       "hintPublished": "Twoja gra jest opublikowana. Opisz, co zmienić — agent podejmie to jako ulepszenie.",
       "composerHintPublished": "Opisz ulepszenie",
       "debugCi": "Debug CI",
-      "debugCiPrompt": "Zdiagnozuj błędy CI, popraw je i wyślij poprawioną wersję.",
+      "debugCiPrompt": "Zdiagnozuj błędy CI i wyślij poprawioną wersję.",
       "placeholder": "np. przyspiesz samochód, dodaj drugą trasę, użyj jaśniejszych kolorów…",
       "submit": "Wyślij uwagi",
       "sending": "Wysyłanie…",
@@ -869,7 +869,7 @@
       "task_failed": "Agent budujący niespodziewanie przerwał pracę. Twoja gra i dotychczasowe postępy są bezpieczne — wyślij poniżej uwagi, aby rozpocząć kolejną rundę.",
       "task_timed_out": "Budowanie nie zdążyło się skończyć w wyznaczonym czasie. Postępy są bezpieczne — wyślij poniżej uwagi, aby rozpocząć kolejną rundę.",
       "task_completed_without_delivery": "Agent zakończył pracę, ale nie dostarczył gry. Wyślij poniżej uwagi, aby rozpocząć kolejną rundę.",
-      "gate_red": "Ta wersja nie przeszła naszych automatycznych testów, więc jeszcze nie może trafić do arcade. Napisz poniżej, co zmienić — agent zobaczy, co nie przeszło, i to poprawi.",
+      "gate_red": "Automatyczne testy nie przeszły, więc ta wersja nie może jeszcze trafić do arcade.",
       "self_build_delivery_cap": "Ta runda wyczerpała limit dostarczeń, więc Twój agent nie może wysłać kolejnej wersji, dopóki nie zaczniesz nowej rundy. Wyślij poniżej krótką uwagę, aby kontynuować — dotychczasowe postępy są bezpieczne.",
       "generic": "Ta runda budowania zakończyła się błędem. Postępy są bezpieczne — wyślij poniżej uwagi, aby rozpocząć kolejną rundę."
     },

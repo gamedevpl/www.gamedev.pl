@@ -1418,6 +1418,7 @@ function FeedbackPanel({
   const [text, setText] = useState('');
   const [state, setState] = useState<'idle' | 'sending' | 'sent'>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [quickActionDismissed, setQuickActionDismissed] = useState(false);
   // Sent, kept, and *not* acted on: the API took the message but no round started behind
   // it. Its own slot rather than `error`, because nothing failed on the creator's side and
   // there is nothing for them to redo — the note is safe and will be read by the next
@@ -1430,6 +1431,10 @@ function FeedbackPanel({
   useEffect(() => {
     setBuilder(initialBuilder);
   }, [initialBuilder, token]);
+
+  useEffect(() => {
+    setQuickActionDismissed(false);
+  }, [failureReason, token]);
 
   // A receipt is confirmation, not furniture: clear it on its own so the composer returns
   // to one row. Typing also clears it (below); the timer covers the common case where the
@@ -1543,6 +1548,11 @@ function FeedbackPanel({
     }
   };
 
+  const sendDebugCi = () => {
+    setQuickActionDismissed(true);
+    void send(t('statusView.feedback.debugCiPrompt'));
+  };
+
   const handleBuilderChange = (next: BuilderKind) => {
     setBuilder(next);
   };
@@ -1633,96 +1643,90 @@ function FeedbackPanel({
     const sending = state === 'sending';
     const empty = text.length === 0;
     return (
-      <>
-        {failureReason === 'gate_red' && !sending ? (
+      <div
+        className={`status-feedback status-composer is-compact${empty ? ' is-empty' : ''}${sending ? ' is-sending' : ''}`}
+        aria-busy={sending || undefined}
+        onClick={(event) => {
+          // Clicking card chrome focuses the textarea; skip real controls.
+          const target = event.target;
+          if (!(target instanceof Element)) return;
+          if (target.closest('button, a, textarea, input, select, [role="button"]')) return;
+          inputRef.current?.focus();
+        }}
+      >
+        {failureReason === 'gate_red' && !quickActionDismissed && !sending ? (
           <div className="status-feedback-quick-actions">
-            <button
-              type="button"
-              className="status-feedback-quick-action"
-              onClick={() => void send(t('statusView.feedback.debugCiPrompt'))}
-            >
+            <button type="button" className="status-feedback-quick-action" onClick={sendDebugCi}>
               <PixelIcon name="wrench" size={12} />
               {t('statusView.feedback.debugCi')}
             </button>
           </div>
         ) : null}
-        <div
-          className={`status-feedback status-composer is-compact${empty ? ' is-empty' : ''}${sending ? ' is-sending' : ''}`}
-          aria-busy={sending || undefined}
-          onClick={(event) => {
-            // Clicking card chrome focuses the textarea; skip real controls.
-            const target = event.target;
-            if (!(target instanceof Element)) return;
-            if (target.closest('button, a, textarea, input, select, [role="button"]')) return;
-            inputRef.current?.focus();
+        {routeNoteKey && !sending && state !== 'sent' && !error && !notice ? (
+          <p className="status-feedback-route">{t(routeNoteKey)}</p>
+        ) : null}
+        <textarea
+          ref={inputRef}
+          className="status-feedback-input"
+          value={text}
+          onChange={(event) => {
+            setText(event.target.value);
+            autoGrow();
+            if (state === 'sent') setState('idle');
           }}
-        >
-          {routeNoteKey && !sending && state !== 'sent' && !error && !notice ? (
-            <p className="status-feedback-route">{t(routeNoteKey)}</p>
-          ) : null}
-          <textarea
-            ref={inputRef}
-            className="status-feedback-input"
-            value={text}
-            onChange={(event) => {
-              setText(event.target.value);
-              autoGrow();
-              if (state === 'sent') setState('idle');
-            }}
-            onKeyDown={(event) => {
-              // Enter sends; Shift+Enter keeps a newline (same as RemixAsk).
-              // Skip while IME is composing — Enter confirms a candidate there.
-              const native = event.nativeEvent;
-              if (event.key !== 'Enter' || event.shiftKey || native.isComposing || native.keyCode === 229) {
-                return;
-              }
-              event.preventDefault();
-              void send();
-            }}
-            placeholder={t(composerHintKey)}
-            aria-label={t(titleKey)}
-            rows={1}
-            maxLength={2000}
-            disabled={sending}
-          />
-          <div className="status-composer-toolbar">
-            <div className="status-composer-toolbar-left">{builderControls}</div>
-            <div className="status-composer-toolbar-right">
-              <button
-                type="button"
-                className="primary-btn status-composer-send"
-                onClick={() => void send()}
-                disabled={sending || trimmed.length < 10}
-                aria-label={sending ? t('statusView.feedback.sending') : t('statusView.feedback.submit')}
-                title={sending ? t('statusView.feedback.sending') : t('statusView.feedback.submit')}
-              >
-                {sending ? (
-                  <span className="status-composer-send-spinner" aria-hidden="true" />
-                ) : (
-                  <PixelIcon name="arrowRight" size={13} />
-                )}
-              </button>
-            </div>
-          </div>
-          {/* Failures, in-flight, and "kept but nothing started" still need a row — they
-              ask the creator to wait or act. A plain Sent receipt does not: the thread
-              already shows the message the moment send succeeds. */}
-          {error || sending || notice ? (
-            <div className="status-feedback-actions">
-              {error ? (
-                <p className="error">{error}</p>
-              ) : sending ? (
-                // The send button already animates its own spinner — one is enough.
-                <span className="status-feedback-sending" role="status">
-                  {t('statusView.feedback.sending')}
-                </span>
+          onKeyDown={(event) => {
+            // Enter sends; Shift+Enter keeps a newline (same as RemixAsk).
+            // Skip while IME is composing — Enter confirms a candidate there.
+            const native = event.nativeEvent;
+            if (event.key !== 'Enter' || event.shiftKey || native.isComposing || native.keyCode === 229) {
+              return;
+            }
+            event.preventDefault();
+            void send();
+          }}
+          placeholder={t(composerHintKey)}
+          aria-label={t(titleKey)}
+          rows={1}
+          maxLength={2000}
+          disabled={sending}
+        />
+        <div className="status-composer-toolbar">
+          <div className="status-composer-toolbar-left">{builderControls}</div>
+          <div className="status-composer-toolbar-right">
+            <button
+              type="button"
+              className="primary-btn status-composer-send"
+              onClick={() => void send()}
+              disabled={sending || trimmed.length < 10}
+              aria-label={sending ? t('statusView.feedback.sending') : t('statusView.feedback.submit')}
+              title={sending ? t('statusView.feedback.sending') : t('statusView.feedback.submit')}
+            >
+              {sending ? (
+                <span className="status-composer-send-spinner" aria-hidden="true" />
               ) : (
-                <p className="status-feedback-notice">{notice}</p>
+                <PixelIcon name="arrowRight" size={13} />
               )}
-            </div>
-          ) : null}
+            </button>
+          </div>
         </div>
-      </>
+        {/* Failures, in-flight, and "kept but nothing started" still need a row — they
+            ask the creator to wait or act. A plain Sent receipt does not: the thread
+            already shows the message the moment send succeeds. */}
+        {error || sending || notice ? (
+          <div className="status-feedback-actions">
+            {error ? (
+              <p className="error">{error}</p>
+            ) : sending ? (
+              // The send button already animates its own spinner — one is enough.
+              <span className="status-feedback-sending" role="status">
+                {t('statusView.feedback.sending')}
+              </span>
+            ) : (
+              <p className="status-feedback-notice">{notice}</p>
+            )}
+          </div>
+        ) : null}
+      </div>
     );
   }
 
@@ -1734,13 +1738,9 @@ function FeedbackPanel({
       {routeNoteKey && state !== 'sent' && !error && !notice ? (
         <p className="status-feedback-route">{t(routeNoteKey)}</p>
       ) : null}
-      {failureReason === 'gate_red' && state !== 'sending' ? (
+      {failureReason === 'gate_red' && !quickActionDismissed && state !== 'sending' ? (
         <div className="status-feedback-quick-actions">
-          <button
-            type="button"
-            className="status-feedback-quick-action"
-            onClick={() => void send(t('statusView.feedback.debugCiPrompt'))}
-          >
+          <button type="button" className="status-feedback-quick-action" onClick={sendDebugCi}>
             <PixelIcon name="wrench" size={12} />
             {t('statusView.feedback.debugCi')}
           </button>

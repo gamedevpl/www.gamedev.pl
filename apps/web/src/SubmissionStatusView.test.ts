@@ -1096,7 +1096,7 @@ describe('SubmissionStatusView', () => {
       await flushEffects();
     });
 
-    expect(container.querySelector('.status-warning')?.textContent).toContain("didn't pass our automatic checks");
+    expect(container.querySelector('.status-warning')?.textContent).toContain('Automatic checks failed');
     expect(container.textContent).toContain('Needs a tweak');
     // Active repair round — builder is locked server-side; do not offer a switch that 409s.
     expect(container.querySelector('.builder-choice')).toBeNull();
@@ -2272,7 +2272,7 @@ describe('SubmissionStatusView expectations & failures', () => {
 
     const action = container.querySelector<HTMLButtonElement>('.status-feedback-quick-action');
     expect(action?.textContent).toContain('Debug CI');
-    expect(action?.closest('.status-composer')).toBeNull();
+    expect(action?.closest('.status-composer')).not.toBeNull();
 
     await act(async () => {
       action?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -2280,9 +2280,10 @@ describe('SubmissionStatusView expectations & failures', () => {
       await flushEffects();
     });
 
+    expect(container.querySelector('.status-feedback-quick-action')).toBeNull();
     expect(mockedSubmitFeedback).toHaveBeenCalledWith(
       'gate-red-token',
-      'Debug the failing CI checks, fix the problems, and submit a corrected build.',
+      'Debug the failing CI checks and submit a fixed build.',
     );
 
     await act(async () => {
