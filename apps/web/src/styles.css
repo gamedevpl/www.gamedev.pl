@@ -6101,8 +6101,8 @@ a.user-name--profile:focus-visible {
 .status-composer.is-compact.is-empty .status-feedback-input {
   grid-column: 1;
   grid-row: auto;
-  padding: 2px 0;
-  /* Match send height so the placeholder centers. */
+  padding: 6px 0;
+  /* Center the placeholder line inside the send button's height. */
   min-height: 34px;
   line-height: 1.35;
 }
@@ -6233,6 +6233,7 @@ a.user-name--profile:focus-visible {
 
   .status-composer.is-compact.is-empty .status-feedback-input {
     min-height: 44px;
+    padding-block: 11px;
   }
 }
 
