@@ -1278,11 +1278,6 @@ export async function registerSubmissionRoutes(
       const roundGeneration = input.undelivered
         ? ((await store.ensureRoundGeneration(input.issueNumber)) ?? 1)
         : ((await store.bumpRoundGeneration(input.issueNumber)) ?? (record?.roundGeneration ?? 0) + 1);
-      if (!input.undelivered) {
-        await store.setRoundBuilder(input.issueNumber, builder, {
-          resetRoundBudget: !input.preserveRoundBudget,
-        });
-      }
       const previousBackend = backendFor(previousBuilder);
       if (previous?.refs.length && (!input.undelivered || previousBackend?.name.startsWith('managed:'))) {
         const previousRef = previous.refs[previous.refs.length - 1];
@@ -1335,6 +1330,12 @@ export async function registerSubmissionRoutes(
             workspace: previous!.workspace,
           })
         : await selected.dispatch(brief);
+      // Commit builder only after its dispatch/resume actually succeeded.
+      if (!input.undelivered) {
+        await store.setRoundBuilder(input.issueNumber, builder, {
+          resetRoundBudget: !input.preserveRoundBudget,
+        });
+      }
       if (input.undelivered) {
         await store.clearAgentEnded(input.issueNumber);
       }

@@ -1390,6 +1390,62 @@ describe('submission routes', () => {
     await app.close();
   });
 
+  it('does not commit the requested builder when its dispatch fails', async () => {
+    const { githubClient } = createGithubClientStub({ issueNumber: 77 });
+    const backend: AgentBackend = {
+      name: 'stub',
+      dispatch: async () => {
+        throw new Error('vendor rejected the session');
+      },
+      resume: async () => {
+        throw new Error('vendor rejected the session');
+      },
+      observe: async () => null,
+      cancel: async () => ({ enforced: false }),
+    };
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    const token = mintToken(job.issueNumber, secret);
+    await store.setRoundBuilder(job.issueNumber, 'self');
+    await store.recordDispatch(job.issueNumber, { backend: 'self', ref: 'self:77' });
+    await store.recordJobTransition(job.issueNumber, {
+      to: 'building',
+      at: new Date().toISOString(),
+      by: 'agent',
+      reason: 'self_signal',
+    });
+    await store.markAgentEnded(job.issueNumber, new Date().toISOString());
+
+    const handoff = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${token}/feedback`,
+      headers: authHeaders,
+      payload: {
+        feedback: 'Please continue this round with the platform coding agent.',
+        builder: 'platform',
+      },
+    });
+    expect(handoff.statusCode).toBe(200);
+    expect(handoff.json()).toMatchObject({ ok: true, roundStarted: false });
+
+    const after = await store.getSubmission(job.issueNumber);
+    expect(after?.builder).toBe('self');
+    expect(after?.dispatch?.refs.at(-1)).toBe('self:77');
+
+    await app.close();
+  });
+
   it('echoes the creator’s revisions back from the store, without the playtest context', async () => {
     // A native job has no PR conversation to re-read a revision from, so the store copy
     // is the durable record. The page used to show a sent revision from its own local
