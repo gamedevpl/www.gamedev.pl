@@ -50,4 +50,38 @@ describe('StudioChatRail', () => {
 
     await act(async () => root.unmount());
   });
+
+  it('keeps a phone peek detent while another pane temporarily covers chat', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    window.matchMedia = vi.fn().mockReturnValue({
+      matches: true,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    });
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    const render = (covered: boolean) =>
+      root.render(
+        <StudioChatRail title="Sky Dodge" open covered={covered} onOpenChange={vi.fn()} unreadCount={0}>
+          <p>Thread</p>
+        </StudioChatRail>,
+      );
+
+    await act(async () => render(false));
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('.studio-chat-rail-grab')?.click();
+    });
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('.studio-chat-rail-grab')?.click();
+    });
+    expect(host.querySelector('.studio-chat-rail')?.classList.contains('is-peek')).toBe(true);
+
+    await act(async () => render(true));
+    expect(host.querySelector('.studio-chat-rail')?.classList.contains('is-collapsed')).toBe(true);
+    await act(async () => render(false));
+    expect(host.querySelector('.studio-chat-rail')?.classList.contains('is-peek')).toBe(true);
+
+    await act(async () => root.unmount());
+  });
 });
