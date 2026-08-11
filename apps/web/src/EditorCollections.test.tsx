@@ -15,10 +15,11 @@ import type {
 
 const fetchGameEditor = vi.hoisted(() => vi.fn());
 const putEditorDraft = vi.hoisted(() => vi.fn());
+const publishEditorContent = vi.hoisted(() => vi.fn());
 
 vi.mock('./studioApi.js', async () => {
   const actual = await vi.importActual<typeof import('./studioApi.js')>('./studioApi.js');
-  return { ...actual, fetchGameEditor, putEditorDraft };
+  return { ...actual, fetchGameEditor, putEditorDraft, publishEditorContent };
 });
 
 vi.mock('./visitTelemetry.js', () => ({ recordAssistStep: vi.fn(), recordEditorStep: vi.fn() }));
@@ -88,6 +89,7 @@ beforeEach(async () => {
   document.body.appendChild(container);
   fetchGameEditor.mockResolvedValue(editorState());
   putEditorDraft.mockResolvedValue({ revision: 1, updatedAt: '2026-08-07T00:00:01.000Z' });
+  publishEditorContent.mockResolvedValue({ version: 'v2-editor', jobId: 42 });
 });
 
 afterEach(() => {
@@ -200,6 +202,26 @@ describe('the entities widget', () => {
     expect(container.textContent).toContain('cost');
     expect(container.querySelector('.editor-check.is-ok')).not.toBeNull();
     expect(container.querySelector<HTMLButtonElement>('.studio-head-action.is-primary')?.disabled).toBe(false);
+  });
+
+  it('clicking Publish carries the slug through to the API and shows the published banner', async () => {
+    fetchGameEditor.mockResolvedValue(
+      editorState({ definition: entitiesDefinition, content: { cards: [cardOne, cardTwo] } }),
+    );
+    await renderEditor();
+
+    const publishButton = container.querySelector<HTMLButtonElement>('.studio-head-action.is-primary');
+    expect(publishButton?.disabled).toBe(false);
+    await act(async () => {
+      publishButton!.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(publishEditorContent).toHaveBeenCalledWith('fixture-game');
+    expect(container.querySelector('.editor-banner.is-ok')?.textContent).toContain(
+      i18n.t('studioPanel.editor.published'),
+    );
   });
 
   it('flags a duplicate uniqueBy value and blocks publish', async () => {
