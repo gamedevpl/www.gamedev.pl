@@ -558,7 +558,8 @@ describe('CreatorStudioView', () => {
     await act(async () => {
       details!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    expect(chat?.getAttribute('aria-pressed')).toBe('true');
+    expect(chat?.getAttribute('aria-pressed')).toBe('false');
+    expect(chat?.getAttribute('title')).toMatch(/open chat/i);
     expect(container.querySelector('.studio-rail')).not.toBeNull();
 
     await act(async () => {

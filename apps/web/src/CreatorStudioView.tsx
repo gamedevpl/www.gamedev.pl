@@ -869,7 +869,7 @@ export function CreatorStudioView({
                           setDetailsPane('overview');
                           openTab('details');
                         }}
-                        threadOpen={railOpen}
+                        threadOpen={railOpen && tab !== 'details' && tab !== 'edit'}
                         onToggleThread={() => {
                           const covered = tab === 'details' || tab === 'edit';
                           const next = covered || !railOpen;
