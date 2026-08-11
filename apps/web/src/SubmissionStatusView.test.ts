@@ -1096,7 +1096,7 @@ describe('SubmissionStatusView', () => {
       await flushEffects();
     });
 
-    expect(container.querySelector('.status-warning')?.textContent).toContain("didn't pass our automatic checks");
+    expect(container.querySelector('.status-warning')?.textContent).toContain('Automatic checks failed');
     expect(container.textContent).toContain('Needs a tweak');
     // Active repair round — builder is locked server-side; do not offer a switch that 409s.
     expect(container.querySelector('.builder-choice')).toBeNull();
@@ -2243,6 +2243,48 @@ describe('SubmissionStatusView expectations & failures', () => {
     });
 
     expect(container.querySelector('.status-warning')?.textContent).toContain('Automatic checks are failing');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('offers one-click CI debugging when a gate-red build needs changes', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'needs_changes',
+      phase: 'needs_changes',
+      builder: 'platform',
+      failure: { reason: 'gate_red' },
+    });
+    mockedSubmitFeedback.mockResolvedValue({ ok: true, target: 'build_channel' });
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'gate-red-token', embedded: true }));
+      await flushEffects();
+      await flushEffects();
+    });
+
+    const action = container.querySelector<HTMLButtonElement>('.status-feedback-quick-action');
+    expect(action?.textContent).toContain('Fix checks');
+    expect(action?.closest('.status-composer')).not.toBeNull();
+
+    await act(async () => {
+      action?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushEffects();
+      await flushEffects();
+    });
+
+    expect(container.querySelector('.status-feedback-quick-action')).toBeNull();
+    expect(mockedSubmitFeedback).toHaveBeenCalledWith(
+      'gate-red-token',
+      'Fix the failing checks and submit a fixed build.',
+    );
 
     await act(async () => {
       root.unmount();

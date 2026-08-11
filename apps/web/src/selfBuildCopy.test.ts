@@ -116,13 +116,8 @@ describe('selfComposerRoute', () => {
   });
 });
 
-// CP-2 confirmed this pair on a live failed round: the banner told the creator that
-// sending feedback starts another round, while the helper directly beneath it said
-// their agent would pick the note up on its next check-in. A creator could not tell
-// whether they were starting something or feeding something already running.
-//
-// The helper is the accurate one — a gate_red self round stays open, and the agent
-// resubmits on the same key — so the banner must not claim a new round begins.
+// A gate-red self round stays open, and the agent resubmits on the same key. The
+// warning stays concise while the composer carries the actionable repair control.
 describe('the failed-round card reads as one story', () => {
   const en = enLocale.statusView as {
     failure: Record<string, string>;
@@ -139,11 +134,11 @@ describe('the failed-round card reads as one story', () => {
     expect(selfStatusCopy({ builder: 'self', stall: null })).toBeNull();
   });
 
-  it('does not tell the creator they start a round the agent is already in', () => {
+  it('keeps the gate warning concise while the composer carries the action', () => {
     expect(en.failure.gate_red).not.toMatch(/start another round/i);
     expect(pl.failure.gate_red).not.toMatch(/rozpocząć kolejną rundę/i);
-    // Still has to say what to do, or removing the claim would just leave a dead end.
-    expect(en.failure.gate_red).toMatch(/below/i);
+    expect(en.failure.gate_red).toMatch(/automatic checks/i);
+    expect(pl.failure.gate_red).toMatch(/automatyczne testy/i);
     expect(en.feedback.routeSelfActive).toMatch(/picks this up/i);
   });
 });

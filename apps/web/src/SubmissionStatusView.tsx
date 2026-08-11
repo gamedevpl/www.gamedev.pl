@@ -1418,6 +1418,7 @@ function FeedbackPanel({
   const [text, setText] = useState('');
   const [state, setState] = useState<'idle' | 'sending' | 'sent'>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [quickActionDismissed, setQuickActionDismissed] = useState(false);
   // Sent, kept, and *not* acted on: the API took the message but no round started behind
   // it. Its own slot rather than `error`, because nothing failed on the creator's side and
   // there is nothing for them to redo — the note is safe and will be read by the next
@@ -1430,6 +1431,10 @@ function FeedbackPanel({
   useEffect(() => {
     setBuilder(initialBuilder);
   }, [initialBuilder, token]);
+
+  useEffect(() => {
+    setQuickActionDismissed(false);
+  }, [failureReason, token]);
 
   // A receipt is confirmation, not furniture: clear it on its own so the composer returns
   // to one row. Typing also clears it (below); the timer covers the common case where the
@@ -1474,8 +1479,9 @@ function FeedbackPanel({
     input.style.height = `${Math.min(input.scrollHeight, 220)}px`;
   };
 
-  const send = async () => {
-    if (trimmed.length < 10 || state === 'sending') return;
+  const send = async (requestedText: string = trimmed) => {
+    const message = requestedText.trim();
+    if (message.length < 10 || state === 'sending') return;
     setState('sending');
     setError(null);
     setNotice(null);
@@ -1494,16 +1500,16 @@ function FeedbackPanel({
       // Shortest call shape for the ordinary case — tests assert on it.
       if (published) {
         const improved = roundBuilder
-          ? await submitImprovement(token, trimmed, undefined, roundBuilder)
-          : await submitImprovement(token, trimmed);
+          ? await submitImprovement(token, message, undefined, roundBuilder)
+          : await submitImprovement(token, message);
         // Publishing is terminal: the improvement is a new job with its own token. The
         // builder memory is keyed by token in localStorage, so persist the choice under
         // the *new* token as well — the old token's memory dies with its round.
         handoffToken = improved.token;
       } else {
         const result = roundBuilder
-          ? await submitFeedback(token, trimmed, undefined, roundBuilder)
-          : await submitFeedback(token, trimmed);
+          ? await submitFeedback(token, message, undefined, roundBuilder)
+          : await submitFeedback(token, message);
         if (result.roundStarted === false) {
           setNotice(
             result.reason === 'no_capacity' ? t('statusView.feedback.noCapacity') : t('statusView.feedback.notStarted'),
@@ -1523,7 +1529,7 @@ function FeedbackPanel({
       if (inputRef.current) inputRef.current.style.height = '';
       // Echo it into the activity feed straight away: the API only sees it once the
       // comment round-trips through GitHub, which is a poll or two away.
-      onSent(trimmed);
+      onSent(message);
       // Then move the creator onto the new build thread. Last, so the receipt and the
       // local echo are already committed before the thread this box lives in is swapped.
       if (handoffToken) onPublishedImprove?.(handoffToken);
@@ -1540,6 +1546,11 @@ function FeedbackPanel({
       }
       setState('idle');
     }
+  };
+
+  const sendDebugCi = () => {
+    setQuickActionDismissed(true);
+    void send(t('statusView.feedback.debugCiPrompt'));
   };
 
   const handleBuilderChange = (next: BuilderKind) => {
@@ -1643,6 +1654,14 @@ function FeedbackPanel({
           inputRef.current?.focus();
         }}
       >
+        {failureReason === 'gate_red' && !quickActionDismissed && !sending ? (
+          <div className="status-feedback-quick-actions">
+            <button type="button" className="status-feedback-quick-action" onClick={sendDebugCi}>
+              <PixelIcon name="wrench" size={12} />
+              {t('statusView.feedback.debugCi')}
+            </button>
+          </div>
+        ) : null}
         {routeNoteKey && !sending && state !== 'sent' && !error && !notice ? (
           <p className="status-feedback-route">{t(routeNoteKey)}</p>
         ) : null}
@@ -1718,6 +1737,14 @@ function FeedbackPanel({
       {builderSelector ? <div className="builder-mode-row">{builderControls}</div> : null}
       {routeNoteKey && state !== 'sent' && !error && !notice ? (
         <p className="status-feedback-route">{t(routeNoteKey)}</p>
+      ) : null}
+      {failureReason === 'gate_red' && !quickActionDismissed && state !== 'sending' ? (
+        <div className="status-feedback-quick-actions">
+          <button type="button" className="status-feedback-quick-action" onClick={sendDebugCi}>
+            <PixelIcon name="wrench" size={12} />
+            {t('statusView.feedback.debugCi')}
+          </button>
+        </div>
       ) : null}
       <textarea
         className="status-feedback-input"

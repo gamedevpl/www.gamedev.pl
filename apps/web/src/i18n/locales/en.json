@@ -738,6 +738,8 @@
       "titlePublished": "Ask for a change",
       "hintPublished": "Your game is live. Describe what to change and an agent picks it up as an improvement to it.",
       "composerHintPublished": "Describe an improvement",
+      "debugCi": "Fix checks",
+      "debugCiPrompt": "Fix the failing checks and submit a fixed build.",
       "placeholder": "e.g. make the car faster, add a second track, use brighter colours…",
       "submit": "Send feedback",
       "sending": "Sending…",
@@ -872,7 +874,7 @@
       "task_failed": "The build agent stopped unexpectedly before finishing. Your game and everything built so far are safe — send feedback below to start another round.",
       "task_timed_out": "The build ran out of time before finishing. Your progress is safe — send feedback below to start another round.",
       "task_completed_without_delivery": "The agent finished without delivering the game. Send feedback below to start another round.",
-      "gate_red": "This build didn't pass our automatic checks, so it can't go live yet. Tell the agent what to change below — it will see what failed and fix it.",
+      "gate_red": "Automatic checks failed, so this build can't go live yet.",
       "self_build_delivery_cap": "This round hit its delivery limit, so your agent can't submit another build until you start a new round. Send a short note below to continue — your progress so far is safe.",
       "generic": "This build round ended with an error. Your progress is safe — send feedback below to start another round."
     },
