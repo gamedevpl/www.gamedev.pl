@@ -8,7 +8,8 @@ import type { JobStall } from './job-state.js';
 // decide() throws on any failure; callers must fail open.
 
 export const DEFAULT_CHAT_MODEL = 'gemini-3.6-flash';
-export const DEFAULT_CHAT_TIMEOUT_MS = 5000;
+// ~3x the ~1s typical seen against real Gemini traffic.
+export const DEFAULT_CHAT_TIMEOUT_MS = 3000;
 // Enough for genre/premise, not a spec dump.
 export const MAX_CONCEPT_CHARS = 400;
 // ~2x any legitimate composition of the fields below — a bloat backstop.
