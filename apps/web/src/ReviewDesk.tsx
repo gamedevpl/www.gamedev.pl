@@ -93,6 +93,7 @@ export function ReviewDesk() {
   const dragXRef = useRef(0);
   const dragYRef = useRef(0);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const flashTimerRef = useRef<number | null>(null);
 
   const current = items[0] ?? null;
   const screenshots = current?.media?.screenshots ?? [];
@@ -102,7 +103,12 @@ export function ReviewDesk() {
   const videoUrl = current && videoFile ? catalogMediaUrl(current.slug, videoFile) : null;
 
   useEffect(() => {
-    return () => recognitionRef.current?.stop();
+    return () => {
+      recognitionRef.current?.stop();
+      if (flashTimerRef.current !== null) {
+        window.clearTimeout(flashTimerRef.current);
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -207,7 +213,13 @@ export function ReviewDesk() {
       setError(err instanceof Error ? err.message : t('review.error'));
     } finally {
       setBusy(false);
-      window.setTimeout(() => setFlash(null), 280);
+      if (flashTimerRef.current !== null) {
+        window.clearTimeout(flashTimerRef.current);
+      }
+      flashTimerRef.current = window.setTimeout(() => {
+        flashTimerRef.current = null;
+        setFlash(null);
+      }, 280);
     }
   };
 

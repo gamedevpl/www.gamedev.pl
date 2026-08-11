@@ -145,6 +145,8 @@ export interface BuilderHandoff {
   acknowledgedAt?: string;
 }
 
+export type AgentEndedBy = 'submit' | 'end';
+
 export interface SubmissionRecord {
   issueNumber: number;
   ownerUid: string;
@@ -284,6 +286,7 @@ export interface SubmissionRecord {
    * writes again or the round generation advances.
    */
   agentEndedAt?: string;
+  agentEndedBy?: AgentEndedBy;
   /**
    * Latest MCP presence thought (closed vocabulary key + timestamp).
    *
@@ -2009,7 +2012,7 @@ export interface Store {
    * Marks that the agent finished iterating this round (MCP `end`). Idempotent.
    * Does not bump generation or stop the channel — creator handoff does that.
    */
-  markAgentEnded(issueNumber: number, at?: string): Promise<void>;
+  markAgentEnded(issueNumber: number, at?: string, by?: AgentEndedBy): Promise<void>;
   /** Agent progress events for a build, newest first. */
   listBuildEvents(issueNumber: number, opts?: { limit?: number }): Promise<BuildEvent[]>;
   /** How many events a build has recorded — the cap that bounds a runaway agent. */
@@ -3084,6 +3087,7 @@ export class InMemoryStore implements Store {
       delete next.lastAgentSignalAt;
       delete next.lastAgentPresence;
       delete next.agentEndedAt;
+      delete next.agentEndedBy;
       delete next.roundKitEngineRef;
       delete next.roundTypecheckPreflightBypassErrors;
       delete next.roundLastGateMetricKey;
@@ -3111,6 +3115,7 @@ export class InMemoryStore implements Store {
     delete next.lastAgentSignalAt;
     delete next.lastAgentPresence;
     delete next.agentEndedAt;
+    delete next.agentEndedBy;
     delete next.roundKitEngineRef;
     delete next.roundTypecheckPreflightBypassErrors;
     delete next.roundLastGateMetricKey;
@@ -3171,6 +3176,7 @@ export class InMemoryStore implements Store {
     delete next.lastAgentSignalAt;
     delete next.lastAgentPresence;
     delete next.agentEndedAt;
+    delete next.agentEndedBy;
     this.submissions.set(issueNumber, next);
   }
 
@@ -3494,6 +3500,7 @@ export class InMemoryStore implements Store {
       delete next.lastAgentPresence;
       // Resumed work after MCP `end` — clear so stall is no longer `ended`.
       delete next.agentEndedAt;
+      delete next.agentEndedBy;
       this.submissions.set(issueNumber, next);
     }
     return { ...record };
@@ -3515,16 +3522,18 @@ export class InMemoryStore implements Store {
     };
     if (!options?.preserveEnded) {
       delete next.agentEndedAt;
+      delete next.agentEndedBy;
     }
     this.submissions.set(issueNumber, next);
   }
 
-  async markAgentEnded(issueNumber: number, at?: string): Promise<void> {
+  async markAgentEnded(issueNumber: number, at?: string, by: AgentEndedBy = 'end'): Promise<void> {
     const submission = this.submissions.get(issueNumber);
     if (!submission) return;
     this.submissions.set(issueNumber, {
       ...submission,
       agentEndedAt: at ?? new Date().toISOString(),
+      agentEndedBy: by,
     });
   }
 
@@ -5421,6 +5430,7 @@ export class FirestoreStore implements Store {
         delete next.lastAgentSignalAt;
         delete next.lastAgentPresence;
         delete next.agentEndedAt;
+        delete next.agentEndedBy;
         delete next.roundKitEngineRef;
         delete next.roundTypecheckPreflightBypassErrors;
         delete next.roundLastGateMetricKey;
@@ -5462,6 +5472,7 @@ export class FirestoreStore implements Store {
       delete next.lastAgentSignalAt;
       delete next.lastAgentPresence;
       delete next.agentEndedAt;
+      delete next.agentEndedBy;
       delete next.roundKitEngineRef;
       delete next.roundTypecheckPreflightBypassErrors;
       delete next.roundLastGateMetricKey;
@@ -5549,6 +5560,7 @@ export class FirestoreStore implements Store {
       delete next.lastAgentSignalAt;
       delete next.lastAgentPresence;
       delete next.agentEndedAt;
+      delete next.agentEndedBy;
       tx.set(ref, next);
     });
   }
@@ -5984,6 +5996,7 @@ export class FirestoreStore implements Store {
         lastAgentPresence: FieldValue.delete(),
         // Resumed work after MCP `end`.
         agentEndedAt: FieldValue.delete(),
+        agentEndedBy: FieldValue.delete(),
       },
       { merge: true },
     );
@@ -6003,18 +6016,18 @@ export class FirestoreStore implements Store {
       .set(
         {
           lastAgentSignalAt: stamped,
-          ...(options?.preserveEnded ? {} : { agentEndedAt: FieldValue.delete() }),
+          ...(options?.preserveEnded ? {} : { agentEndedAt: FieldValue.delete(), agentEndedBy: FieldValue.delete() }),
           ...(presence ? { lastAgentPresence: { key: presence.key, at: stamped } } : {}),
         },
         { merge: true },
       );
   }
 
-  async markAgentEnded(issueNumber: number, at?: string): Promise<void> {
+  async markAgentEnded(issueNumber: number, at?: string, by: AgentEndedBy = 'end'): Promise<void> {
     await this.db
       .collection('submissions')
       .doc(String(issueNumber))
-      .set({ agentEndedAt: at ?? new Date().toISOString() }, { merge: true });
+      .set({ agentEndedAt: at ?? new Date().toISOString(), agentEndedBy: by }, { merge: true });
   }
 
   async listBuildEvents(issueNumber: number, opts?: { limit?: number }): Promise<BuildEvent[]> {

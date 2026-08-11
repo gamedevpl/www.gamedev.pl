@@ -1852,9 +1852,7 @@ body.player-open {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* The bar floats over the game instead of taking a flex row away from it. Its safe-area
-   insets keep controls clear of a notch or rounded corner; the game remains full-bleed
-   underneath, with its own side/bottom insets below. */
+/* The bar floats over the game and clears itself after gameplay starts. */
 .game-theater-bar {
   position: absolute;
   top: 0;
@@ -2201,7 +2199,8 @@ body.player-open {
   position: relative;
 }
 
-/* Icon-only close control — label lives in aria-label / title. */
+/* Icon-only theater controls keep labels in aria-label / title. */
+.game-theater-actions .theater-hide-btn,
 .game-theater-actions .exit-btn {
   min-width: 40px;
   justify-content: center;
@@ -2249,12 +2248,11 @@ body.player-open {
   margin: 0;
 }
 
-/* Immersive fullscreen: the bar is gone; one floating control exits it.
-   High z-index + post-iframe DOM order keep it above the sandboxed game surface,
-   which otherwise paints over low-z siblings in some browsers. */
+/* Immersive fullscreen: the bar is gone; one floating control exits it. */
 .theater-exit-fullscreen {
   position: absolute;
-  top: max(12px, env(safe-area-inset-top));
+  top: auto;
+  bottom: max(12px, env(safe-area-inset-bottom));
   left: max(12px, env(safe-area-inset-left));
   z-index: 50;
   display: inline-flex;
@@ -2467,6 +2465,7 @@ body.player-open {
   /* Sized for a thumb (Apple/Google both land on ~44px) rather than a cursor. */
   .game-theater-actions > button,
   .game-theater-actions .theater-more-btn,
+  .game-theater-actions .theater-hide-btn,
   .game-theater-actions .exit-btn {
     min-width: 44px;
     min-height: 44px;
@@ -11685,15 +11684,27 @@ button.builder-mode-selector:disabled {
 .code-surface-foot {
   flex: none;
   display: flex;
-  align-items: center;
-  gap: 10px;
+  flex-direction: column;
+  gap: 8px;
   padding: 8px 14px;
   border-top: 1px solid var(--panel-border);
+}
+
+.code-surface-working-copy {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .code-surface-save-state {
   font-size: 0.78rem;
   color: var(--muted);
+}
+
+.code-surface-save-state.has-changes {
+  color: var(--text);
+  font-weight: 600;
 }
 
 .code-surface-save-state.is-error {
@@ -11705,14 +11716,31 @@ button.builder-mode-selector:disabled {
   color: #ff7b72;
 }
 
-.code-surface-stage-it {
+.code-surface-discard {
   margin-left: auto;
+  border: 1px solid var(--panel-border);
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.78rem;
+  padding: 6px 10px;
+  border-radius: 8px;
+  cursor: pointer;
 }
 
-/* Belt and braces with the `studio-head-action is-primary` classes both buttons also
-   carry (pill shape, hover glow — Play's exact look): these self-contained rules keep
-   the fill guaranteed even if that pairing drifts, and the regression test reads them. */
-.code-surface-stage-it.is-primary,
+.code-surface-discard:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--muted);
+}
+
+.code-surface-discard:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* Belt and braces with the `studio-head-action is-primary` class the Publish button
+   also carries (pill shape, hover glow — Play's exact look): this self-contained
+   rule keeps the fill guaranteed even if that pairing drifts, and the regression
+   test reads it. */
 .code-surface-deliver-btn.is-primary {
   border: 1px solid var(--turquoise);
   background: var(--turquoise);
@@ -11720,7 +11748,6 @@ button.builder-mode-selector:disabled {
   font-weight: 700;
 }
 
-.code-surface-stage-it.is-primary:disabled,
 .code-surface-deliver-btn.is-primary:disabled {
   border-color: var(--panel-border);
   background: rgba(148, 163, 184, 0.12);
@@ -11731,58 +11758,10 @@ button.builder-mode-selector:disabled {
 }
 
 .code-surface-deliver {
-  flex: none;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 10px;
-  padding: 8px 14px;
-  border-top: 1px solid var(--panel-border);
-}
-
-.code-surface-attestation {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.76rem;
-  color: var(--muted);
-  cursor: pointer;
-}
-
-.code-surface-attestation:hover {
-  color: var(--text);
-}
-
-.code-surface-attestation input {
-  appearance: none;
-  flex: none;
-  width: 15px;
-  height: 15px;
-  margin: 0;
-  border-radius: 4px;
-  border: 1px solid var(--panel-border);
-  background: transparent;
-  cursor: pointer;
-  display: inline-grid;
-  place-content: center;
-}
-
-.code-surface-attestation input:checked {
-  border-color: var(--turquoise);
-  background: rgba(0, 228, 172, 0.16);
-}
-
-.code-surface-attestation input:checked::before {
-  content: '';
-  width: 7px;
-  height: 7px;
-  background: var(--turquoise);
-  clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
-}
-
-.code-surface-attestation input:focus-visible {
-  outline: 2px solid rgba(0, 228, 172, 0.5);
-  outline-offset: 1px;
 }
 
 .code-surface-deliver-btn {
@@ -11792,13 +11771,29 @@ button.builder-mode-selector:disabled {
 .code-surface-deliver-message {
   font-size: 0.76rem;
   color: var(--muted);
-  flex-basis: 100%;
 }
 
 /* A refusal or failure is the one line explaining why nothing shipped — it must not
    read as footnote grey. */
 .code-surface-deliver-message.is-error {
   color: #ff7b72;
+}
+
+.code-surface-publish-hint {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.68rem;
+  color: var(--muted);
+  line-height: 1.25;
+  cursor: help;
+}
+
+.code-surface-publish-hint:focus-visible {
+  outline: 2px solid rgba(0, 228, 172, 0.5);
+  outline-offset: 2px;
 }
 
 @media (max-width: 1099px) {

@@ -99,6 +99,38 @@ describe('builder helpers', () => {
     ).toBe(true);
     // Builder handoff must resume, not mail the agent we are about to invalidate.
     expect(shouldSteerFeedbackViaInbox({ state: 'building', ...withRef }, { builderChanging: true })).toBe(false);
+    expect(
+      shouldSteerFeedbackViaInbox(
+        { state: 'building', agentEndedAt: '2026-08-11T16:00:00Z', ...withRef },
+        { stall: 'ended' },
+      ),
+    ).toBe(false);
+    expect(
+      shouldSteerFeedbackViaInbox(
+        { state: 'submitted', agentEndedAt: '2026-08-11T16:00:00Z', agentEndedBy: 'submit', ...withRef },
+        { stall: 'ended' },
+      ),
+    ).toBe(true);
+    expect(
+      shouldSteerFeedbackViaInbox(
+        {
+          state: 'submitted',
+          agentEndedAt: '2026-08-11T16:00:00Z',
+          agentEndedBy: 'submit',
+          agentState: 'completed',
+          ...withRef,
+        },
+        { stall: 'ended' },
+      ),
+    ).toBe(false);
+    expect(shouldSteerFeedbackViaInbox({ state: 'building', ...withRef }, { stall: 'quiet' })).toBe(false);
+    expect(shouldSteerFeedbackViaInbox({ state: 'dispatched', ...withRef }, { stall: 'not_dispatched' })).toBe(false);
+    expect(
+      shouldSteerFeedbackViaInbox(
+        { state: 'building', builder: 'self', agentEndedAt: '2026-08-11T16:00:00Z', ...withRef },
+        { stall: 'ended' },
+      ),
+    ).toBe(true);
     // Dispatch never landed — feedback must retry starting a session.
     expect(shouldSteerFeedbackViaInbox({ state: 'queued' })).toBe(false);
     expect(shouldSteerFeedbackViaInbox({ state: 'queued', dispatch: { refs: [] } })).toBe(false);
