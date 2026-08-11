@@ -158,6 +158,7 @@ export default function CodeMirrorEditor({
           EditorView.updateListener.of((update) => {
             if (update.docChanged) onChangeRef.current(update.state.doc.toString());
           }),
+          EditorView.lineWrapping,
           syntaxHighlighting(darkHighlight),
           darkChrome,
         ],

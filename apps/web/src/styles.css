@@ -11462,7 +11462,6 @@ button.builder-mode-selector:disabled {
   display: flex;
   gap: 12px;
   padding: 0 14px;
-  white-space: pre;
 }
 
 .code-surface-line-number {
@@ -11471,6 +11470,15 @@ button.builder-mode-selector:disabled {
   text-align: right;
   color: var(--muted);
   user-select: none;
+}
+
+/* Wraps, unlike the line it sits in: a long line breaks under its own number rather
+   than forcing horizontal scroll, which fights the page's own vertical one on touch. */
+.code-surface-line-text {
+  flex: 1;
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .code-tok-comment {
@@ -11644,6 +11652,20 @@ button.builder-mode-selector:disabled {
     overflow-x: auto;
     border-right: 0;
     border-bottom: 1px solid var(--panel-border);
+    scroll-snap-type: x proximity;
+  }
+
+  /* Row mode has no bounded width like the desktop rail's own column, so without a
+     cap the ellipsis rule on .code-surface-rail-path never triggers — a handful of
+     `game/`-prefixed files spell out the whole row and the active one scrolls off. */
+  .code-surface-rail-item {
+    flex: 0 0 auto;
+    max-width: 40vw;
+    scroll-snap-align: start;
+  }
+
+  .code-surface-rail-locked {
+    flex: none;
   }
 }
 

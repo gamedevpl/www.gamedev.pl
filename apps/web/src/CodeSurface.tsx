@@ -100,6 +100,7 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
 
   const openedRecordedRef = useRef(false);
   const fileOpenedRecordedRef = useRef(new Set<string>());
+  const railRef = useRef<HTMLElement | null>(null);
   /** One autosave timer per dirty path, not one shared timer — editing a second file
    * inside the debounce window must not cancel the first file's pending save. */
   const saveTimersRef = useRef<Map<string, number>>(new Map());
@@ -112,6 +113,14 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
     openedRecordedRef.current = true;
     recordCodeStep('opened');
   }, []);
+
+  useEffect(() => {
+    // jsdom has no scrollIntoView — optional call, not just optional chaining.
+    railRef.current?.querySelector('.code-surface-rail-item.is-active')?.scrollIntoView?.({
+      block: 'nearest',
+      inline: 'nearest',
+    });
+  }, [selected]);
 
   const load = useCallback(
     (isInitialLoad: boolean) => {
@@ -403,7 +412,7 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
       </header>
 
       <div className="code-surface-body">
-        <nav className="code-surface-rail" aria-label={t('studioPanel.tabs.code')}>
+        <nav className="code-surface-rail" aria-label={t('studioPanel.tabs.code')} ref={railRef}>
           {sources.files.map((entry) => (
             <button
               key={entry.path}
