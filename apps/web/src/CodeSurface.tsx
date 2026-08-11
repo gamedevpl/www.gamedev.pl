@@ -119,7 +119,13 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
         .then((result) => {
           setSources(result);
           setLoadError(null);
-          setSelected((current) => current ?? result.files[0]?.path ?? null);
+          // Land on the game's entry module, not whatever sorts first alphabetically —
+          // the server's sorted listing puts GAME.json ahead of game.ts, and a creator
+          // opening "Code" came for the code, not the manifest.
+          setSelected(
+            (current) =>
+              current ?? (result.files.some((f) => f.path === 'game.ts') ? 'game.ts' : (result.files[0]?.path ?? null)),
+          );
           if (result.readOnly) recordCodeStep('read_only_agent');
         })
         .catch((error: unknown) => {
@@ -181,6 +187,16 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
 
   const file = useMemo(() => sources?.files.find((entry) => entry.path === selected) ?? null, [sources, selected]);
   const content = selected !== null ? (drafts[selected] ?? file?.content ?? '') : '';
+
+  /** The budget meter fed by the live draft, not the last fetch — the counter has to
+   * move as the creator types toward the ceiling, not jump on the next reload. */
+  const liveBudget = useMemo(() => {
+    const base = file?.budget;
+    if (!base) return null;
+    const lines = content.split('\n').length;
+    const bytes = new TextEncoder().encode(content).length;
+    return { ...base, lines, bytes, oversize: lines > base.maxLines || bytes > base.maxBytes };
+  }, [file, content]);
 
   /** CE-11's diagnostics, reshaped for CodeMirror's gutter and scoped to the open file. */
   const cmDiagnostics = useMemo((): CodeMirrorDiagnostic[] => {
@@ -358,6 +374,14 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
         className="code-surface-editor"
         value={content}
         onChange={(event) => onEdit(event.target.value)}
+        onKeyDown={(event) => {
+          // Muscle-memory save: without this, Ctrl/Cmd+S in a code editor opens the
+          // browser's save-page dialog over the panel.
+          if ((event.ctrlKey || event.metaKey) && event.key === 's') {
+            event.preventDefault();
+            void flushPendingSaves();
+          }
+        }}
         spellCheck={false}
         aria-label={openFile.path}
       />
@@ -411,6 +435,7 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
                   value={content}
                   language={languageFor(file.path)}
                   onChange={onEdit}
+                  onSave={() => void flushPendingSaves()}
                   diagnostics={cmDiagnostics}
                 />
               </Suspense>
@@ -434,16 +459,16 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
         </div>
       </div>
 
-      {file?.budget ? (
-        <div className={`code-surface-budget${file.budget.oversize ? ' is-oversize' : ''}`}>
-          {t('studioPanel.code.budget', { lines: file.budget.lines, maxLines: file.budget.maxLines })}
+      {liveBudget ? (
+        <div className={`code-surface-budget${liveBudget.oversize ? ' is-oversize' : ''}`}>
+          {t('studioPanel.code.budget', { lines: liveBudget.lines, maxLines: liveBudget.maxLines })}
         </div>
       ) : null}
 
       {diagnostics && diagnostics.length > 0 ? (
         <ul className="code-surface-diagnostics" role="alert">
-          {diagnostics.map((diagnostic) => (
-            <li key={diagnostic}>{diagnostic}</li>
+          {diagnostics.map((diagnostic, index) => (
+            <li key={index}>{diagnostic}</li>
           ))}
         </ul>
       ) : null}
@@ -486,7 +511,12 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
             {deliverState === 'delivering' ? t('studioPanel.code.delivering') : t('studioPanel.code.deliver')}
           </button>
           {deliverMessage ? (
-            <span className="code-surface-deliver-message" role="status">
+            // Anything short of a delivered outcome is a problem report — muted grey
+            // for those buried the one line telling the creator why nothing shipped.
+            <span
+              className={`code-surface-deliver-message${deliverState === 'delivered' ? '' : ' is-error'}`}
+              role="status"
+            >
               {deliverMessage}
             </span>
           ) : null}

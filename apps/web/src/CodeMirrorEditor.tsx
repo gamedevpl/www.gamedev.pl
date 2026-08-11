@@ -31,6 +31,8 @@ export type CodeMirrorEditorProps = {
   value: string;
   language: CodeLanguage;
   onChange: (value: string) => void;
+  /** Bound to Mod-S — without it, Ctrl/Cmd+S opens the browser's save-page dialog. */
+  onSave?: () => void;
   diagnostics: CodeMirrorDiagnostic[];
   readOnly?: boolean;
 };
@@ -110,7 +112,14 @@ function toCmDiagnostics(view: EditorView, diagnostics: CodeMirrorDiagnostic[]):
   return out;
 }
 
-export default function CodeMirrorEditor({ value, language, onChange, diagnostics, readOnly }: CodeMirrorEditorProps) {
+export default function CodeMirrorEditor({
+  value,
+  language,
+  onChange,
+  onSave,
+  diagnostics,
+  readOnly,
+}: CodeMirrorEditorProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
   // Refs so the extensions below (installed once at mount) always see the latest
@@ -118,6 +127,8 @@ export default function CodeMirrorEditor({ value, language, onChange, diagnostic
   // one thing that must not remount on every keystroke or diagnostics update.
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
+  const onSaveRef = useRef(onSave);
+  onSaveRef.current = onSave;
   const diagnosticsRef = useRef(diagnostics);
   diagnosticsRef.current = diagnostics;
 
@@ -130,7 +141,16 @@ export default function CodeMirrorEditor({ value, language, onChange, diagnostic
         doc: value,
         extensions: [
           basicSetup,
-          keymap.of([indentWithTab]),
+          keymap.of([
+            indentWithTab,
+            {
+              key: 'Mod-s',
+              run: () => {
+                onSaveRef.current?.();
+                return true;
+              },
+            },
+          ]),
           ...(langExt ? [langExt] : []),
           lintGutter(),
           linter((v) => toCmDiagnostics(v, diagnosticsRef.current)),
