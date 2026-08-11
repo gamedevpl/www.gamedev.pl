@@ -56,6 +56,8 @@ export const GAME_KIT_MODULES = [
   'drawing',
   'actors',
   'gfx',
+  // Shared interaction primitives (games-repo #682).
+  'ui',
   'gfx3d',
   // Genre verticals: the GitHub client bundles their private shared/verticals graphs.
   'racing',
