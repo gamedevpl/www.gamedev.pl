@@ -166,6 +166,13 @@ adjacent flow, close the gap in the same change or flag it explicitly in the PR:
     series (`selfChosen` / `connected` / `signaled` / `gateVerdicts`) on
     `GET /api/admin/telemetry/trends`, rendered on the Trends strip of the operator
     telemetry tab beside visits/plays/creations.
+  - ~~Code surface funnel written but unread~~ — **closed 2026-08-11**: `code_step`
+    (`offered` → `opened` → `file_opened` → `edited` → `typechecked` → `previewed` →
+    `delivered` → `published`, plus `read_only_agent`/`conflict_seen` outcomes beside the
+    ladder) was landing on the visit stream since CE-01 with no read side —
+    `summarizeVisitFunnel` had no rollup and the admin route couldn't expose it. Added
+    `coding` to `VisitFunnel` (`visit-funnel.ts`), rendered as a Code surface block on
+    `VisitFunnelPanel` beside Editing. Same three-place contract as the others.
   - ~~Managed delivery preflight / gate effectiveness unmeasured~~ — **closed (MR-07)**:
     server log metrics in `delivery-metrics.ts` (`delivery preflight refused`,
     `delivery accepted`, `delivery gate verdict`) answer whether audio/symbols/typecheck
