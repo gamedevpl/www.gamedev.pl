@@ -59,12 +59,7 @@ type MascotProps = {
    * every other instance.
    */
   scrolling?: boolean;
-  /**
-   * When true, mounts the stockpot prop and stirs it — the "still working on it"
-   * gag for build/loading moments. Unlike `scrolling` this one is a plain boolean
-   * used only where it's set (loading cards), so it can default to `false` instead
-   * of needing `undefined` reserved as an off state.
-   */
+  /** Mounts the stirring-stockpot prop for busy/loading moments. */
   cooking?: boolean;
 };
 
@@ -364,13 +359,7 @@ function ScrollPhone({ clipId }: { clipId: string }) {
   );
 }
 
-/**
- * Stockpot the mascot stirs for build/loading moments (`cooking` prop). Same
- * arm-plus-prop shape as `ScrollPhone` — an arm fades in reaching toward the pot,
- * the pot rig pops in behind it — but the payoff is a spoon rotating around the
- * rim instead of a thumb scrolling a feed, with steam wisps rising and fading on
- * a staggered loop so the three don't read as one blob of motion.
- */
+// Stirring stockpot for the `cooking` gag.
 function CookingPot() {
   return (
     <g className="mascot__pot" aria-hidden="true">
@@ -383,7 +372,6 @@ function CookingPot() {
         strokeLinecap="round"
       />
       <g className="mascot__pot-rig">
-        {/* Rocks on its own — the pan-toss half of the gag, independent of the spoon's stir. */}
         <g className="mascot__pot-shake">
           <path
             className="mascot__pot-handle mascot__pot-handle--left"
@@ -427,12 +415,7 @@ function CookingPot() {
   );
 }
 
-/**
- * Toque perched on top of the head — the other half of the `cooking` costume.
- * The idle silhouette's top row starts at y=1, and the face cutouts (eyes) sit
- * around y=3–8, so the band has to rest above y=1 rather than dip onto the head
- * proper — any lower and it swallows the eyes instead of crowning them.
- */
+// Toque above the head, clear of the eye cutouts.
 function ChefHat() {
   return (
     <g className="mascot__chef-hat" aria-hidden="true">
