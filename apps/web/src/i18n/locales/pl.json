@@ -321,6 +321,7 @@
       "lockedHint": "Tylko do odczytu — GameKit i narzędzia są wspólne, nie edytuje się ich tutaj",
       "noFiles": "Nie ma jeszcze nic do pokazania",
       "budget": "{{lines}}/{{maxLines}} linii",
+      "livePush": "Na żywo — gra zaktualizowana, bez przebudowy",
       "stageIt": "Przygotuj wersję roboczą",
       "staging": "Przygotowywanie…",
       "staged": "Przygotowano",

@@ -1,4 +1,15 @@
-import { Component, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  Component,
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MutableRefObject,
+  type ReactNode,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import type { CodeMirrorDiagnostic } from './CodeMirrorEditor.js';
 import {
@@ -13,7 +24,9 @@ import {
 } from './codeSurfaceApi.js';
 import { getCodeSurfaceSessionState, setCodeSurfaceSessionState } from './codeSurfaceSessionState.js';
 import { type CodeLanguage, tokenizeLine } from './codeTokens.js';
+import { declaredParamDefaultChanges, type DeclaredParamChange } from './editorJsonLiveDiff.js';
 import { PixelIcon } from './PixelIcon.js';
+import { fetchGameEditor, type EditorContentDoc, type EditorParamValue } from './studioApi.js';
 import { recordCodeStep } from './visitTelemetry.js';
 
 /**
@@ -67,6 +80,10 @@ type SaveState = 'clean' | 'dirty' | 'saving' | 'saved' | 'error';
 export type CodeSurfaceProps = {
   slug: string;
   onBack: () => void;
+  /** Set by `CreatorStudioView`; `StudioStage` publishes its bridge's `push` into it.
+   * A live-pushable `EDITOR.json` edit (see `onEdit`) reads it to reach the running
+   * game without going through this component's own rebuild machinery. */
+  editorPushRef?: MutableRefObject<((content: EditorContentDoc) => void) | null>;
 };
 
 const LOCKED_DIRS = ['shared/', 'tools/'] as const;
@@ -84,7 +101,7 @@ function fileDotClass(file: CodeSurfaceFile): string {
   return file.stagedBy ? ` has-staged-edits is-staged-by-${file.stagedBy}` : '';
 }
 
-export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
+export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
   const { t } = useTranslation();
   const [sources, setSources] = useState<CodeSurfaceSources | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -97,6 +114,9 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
   const [attested, setAttested] = useState(false);
   const [deliverState, setDeliverState] = useState<'idle' | 'delivering' | 'delivered'>('idle');
   const [deliverMessage, setDeliverMessage] = useState<string | null>(null);
+  /** True for a brief moment after an `EDITOR.json` param default reaches the running
+   * game live (§E tier 1) — distinct from `saveState`, which tracks the draft save. */
+  const [livePush, setLivePush] = useState(false);
 
   const openedRecordedRef = useRef(false);
   const fileOpenedRecordedRef = useRef(new Set<string>());
@@ -105,8 +125,14 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
    * inside the debounce window must not cancel the first file's pending save. */
   const saveTimersRef = useRef<Map<string, number>>(new Map());
   const typecheckTimerRef = useRef<number | null>(null);
+  const livePushTimerRef = useRef<number | null>(null);
   const draftsRef = useRef(drafts);
   draftsRef.current = drafts;
+  /** The content doc believed to be live in the running game right now — lazily
+   * fetched once per mount, then kept current by each push so later param edits
+   * merge onto what the creator last saw applied, not a stale fetch. */
+  const liveContentRef = useRef<EditorContentDoc | null>(null);
+  const liveContentPromiseRef = useRef<Promise<EditorContentDoc | null> | null>(null);
 
   useEffect(() => {
     if (openedRecordedRef.current) return;
@@ -176,6 +202,7 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
       });
       saveTimersRef.current.clear();
       if (typecheckTimerRef.current !== null) window.clearTimeout(typecheckTimerRef.current);
+      if (livePushTimerRef.current !== null) window.clearTimeout(livePushTimerRef.current);
     },
     [slug],
   );
@@ -275,9 +302,48 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
     }
   }, [slug]);
 
+  /** Fetches the game's current content doc once per mount and remembers it — the base
+   * a live param push merges onto. Reused (not refetched) by every later push in this
+   * session, since each push already updates `liveContentRef` with what it just sent. */
+  const loadLiveContent = useCallback((): Promise<EditorContentDoc | null> => {
+    if (liveContentRef.current) return Promise.resolve(liveContentRef.current);
+    liveContentPromiseRef.current ??= fetchGameEditor(slug)
+      .then((state) => state.draft?.content ?? state.content ?? null)
+      .catch(() => null);
+    return liveContentPromiseRef.current;
+  }, [slug]);
+
+  /** realtime-game-editing-plan.md §E tier 1: a declared param's default value changed
+   * and nothing else — merge the new values onto the last-known content doc and post it
+   * straight to the running game, no rebuild, no restart. */
+  const pushLiveParamChanges = useCallback(
+    async (changes: DeclaredParamChange[]) => {
+      const push = editorPushRef?.current;
+      if (!push) return;
+      const base = await loadLiveContent();
+      if (!base) return;
+      const prevParams = base.params;
+      const params: Record<string, EditorParamValue> = {
+        ...(prevParams && !Array.isArray(prevParams) ? prevParams : {}),
+      };
+      for (const change of changes) params[change.key] = change.value as EditorParamValue;
+      const merged: EditorContentDoc = { ...base, params };
+      liveContentRef.current = merged;
+      push(merged);
+      setLivePush(true);
+      if (livePushTimerRef.current !== null) window.clearTimeout(livePushTimerRef.current);
+      livePushTimerRef.current = window.setTimeout(() => setLivePush(false), 1_500);
+    },
+    [editorPushRef, loadLiveContent],
+  );
+
   function onEdit(value: string) {
     const path = selected;
     if (!path) return;
+    if (path === 'EDITOR.json') {
+      const changes = declaredParamDefaultChanges(content, value);
+      if (changes) void pushLiveParamChanges(changes);
+    }
     setDrafts((prev) => ({ ...prev, [path]: value }));
     setSaveState('dirty');
     const existing = saveTimersRef.current.get(path);
@@ -487,6 +553,11 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
           <span className={`code-surface-save-state is-${saveState}`} aria-live="polite">
             {t(`studioPanel.code.saveState.${saveState}`)}
           </span>
+          {livePush ? (
+            <span className="code-surface-live-push" aria-live="polite">
+              {t('studioPanel.code.livePush')}
+            </span>
+          ) : null}
           {rebuildError ? (
             <span className="code-surface-rebuild-error">{t('studioPanel.code.rebuildError')}</span>
           ) : null}

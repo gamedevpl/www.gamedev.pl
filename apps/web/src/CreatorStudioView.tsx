@@ -56,6 +56,7 @@ import {
   type StudioScorecard,
   type StudioSuggestion,
   type AutonomyMode,
+  type EditorContentDoc,
 } from './studioApi.js';
 
 /**
@@ -213,6 +214,10 @@ export function CreatorStudioView({
     selectedRef.current = selected;
   }, [selected]);
   const [tab, setTab] = useState<StudioTab>(selectedTab ?? 'thread');
+  // The Code surface's live-tunable push (realtime-game-editing-plan.md §E tier 1) — the
+  // stage owns the frame, so it fills this in; the Code surface reads it to push a
+  // declared param's new value straight to the running game, no rebuild.
+  const editorPushRef = useRef<((content: EditorContentDoc) => void) | null>(null);
   const [shelfQuery, setShelfQuery] = useState('');
   const [shelfFilter, setShelfFilter] = useState<StudioShelfFilter>('all');
   /** Desktop rail expand, or mobile drawer open. Closed by default once a game is open. */
@@ -915,6 +920,7 @@ export function CreatorStudioView({
                           onNewerStageWaiting={setNewerStageWaiting}
                           onImproved={(newToken) => setHandoffToken(newToken)}
                           onDisplayedOriginChange={setDisplayedOrigin}
+                          editorPushRef={editorPushRef}
                         />
 
                         {stageStatus.kind === 'empty' &&
@@ -1009,6 +1015,7 @@ export function CreatorStudioView({
                               key={activeGame.token}
                               slug={activeGame.slug}
                               onBack={() => openTab('thread')}
+                              editorPushRef={editorPushRef}
                             />
                           </div>
                         ) : null}

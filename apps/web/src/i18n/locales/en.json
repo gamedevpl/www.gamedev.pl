@@ -319,6 +319,7 @@
       "lockedHint": "Read-only — GameKit and the tooling are shared, never edited here",
       "noFiles": "Nothing to show yet",
       "budget": "{{lines}}/{{maxLines}} lines",
+      "livePush": "Live — running game updated, no rebuild",
       "stageIt": "Stage it",
       "staging": "Staging…",
       "staged": "Staged",

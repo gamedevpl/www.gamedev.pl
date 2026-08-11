@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import { GameFrame } from './GameFrame.js';
 import { useCreatorPlaytest, useGamePlayer, postGameHostMessage, type PlaytestInstrumentation } from './gamePlayer.js';
 import { useEditorDraftBridge } from './editorBridge.js';
 import { PixelIcon } from './PixelIcon.js';
 import { submitFeedback, type FeedbackContext, type SubmissionApiError } from './submissionApi.js';
-import { submitImprovement } from './studioApi.js';
+import { submitImprovement, type EditorContentDoc } from './studioApi.js';
 import type { StageOrigin, StageSource } from './useStageSource.js';
 
 /**
@@ -77,6 +77,10 @@ export type StudioStageProps = {
    * `source.origin` while a swap is held during play. The ribbon must describe the
    * document on screen, not the one waiting in the wings. */
   onDisplayedOriginChange?: (origin: StageOrigin) => void;
+  /** Filled in with the editor bridge's live-push function (realtime-game-editing-plan.md
+   * §E tier 1) so a sibling surface — the Code surface — can push a declared tunable's new
+   * value straight to the running game without going through this component's props. */
+  editorPushRef?: MutableRefObject<((content: EditorContentDoc) => void) | null>;
 };
 
 export function StudioStage({
@@ -93,6 +97,7 @@ export function StudioStage({
   onNewerStageWaiting,
   onImproved,
   onDisplayedOriginChange,
+  editorPushRef,
 }: StudioStageProps) {
   const { t } = useTranslation();
   const frameRef = useRef<HTMLIFrameElement | null>(null);
@@ -337,7 +342,14 @@ export function StudioStage({
   const { paused, snapshot, instrumentation, pause, resume, clearSnapshot } = useCreatorPlaytest(frameRef, active);
   const requestWatch = useCallback(() => onPostureChange('watch'), [onPostureChange]);
   useGamePlayer(frameRef, active, requestWatch);
-  useEditorDraftBridge(frameRef, active, slug, Boolean(editable));
+  const editorBridge = useEditorDraftBridge(frameRef, active, slug, Boolean(editable));
+  useEffect(() => {
+    if (!editorPushRef) return undefined;
+    editorPushRef.current = editorBridge.push;
+    return () => {
+      if (editorPushRef.current === editorBridge.push) editorPushRef.current = null;
+    };
+  }, [editorPushRef, editorBridge.push]);
 
   // Escape closes the topmost layer first (Workstream C's ground-state rule test):
   // while a surface covers the stage (shelf, Details, Edit), that surface owns Escape

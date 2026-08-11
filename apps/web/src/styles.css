@@ -11545,6 +11545,11 @@ button.builder-mode-selector:disabled {
   color: #ff7b72;
 }
 
+.code-surface-live-push {
+  font-size: 0.78rem;
+  color: var(--success, #2e8b57);
+}
+
 .code-surface-stage-it {
   margin-left: auto;
 }
