@@ -612,6 +612,8 @@ const BEHAVIOURAL_CONTRACT = [
   'If the last gate was preview_failed / red / kit_outdated (warnings.code=must_fix_gate), fix then submit_sources again — do not stop at stage/patch/show_round. Staging does not re-run the gate; the creator card stays on the refused delivery until you submit.',
   'While iterating, run only npm run typecheck -- <slug> (no browser, npm ci, capture, playtest, or agency), then stage and submit_sources({ fromStaged: true, mode: "preview", kitEngineRef }); the server verifies the preview. If a browser is available and the draft is approaching delivery, optionally run npm run check:game -- <slug> --preview (typecheck → smoke → build). Run the full gate only immediately before a mode:"publish" seal.',
   'After submit_sources, if you will not deliver more this round, call end (required — warnings.code=call_end; submit already unlocks creator handoff). Prefer end over sitting in a get_gate_verdict loop — Studio shows the gate. Do not stop after submit alone without end. If you are fixing a refused gate, ignore call_end until after the next submit_sources.',
+  // Prose is not a channel: creators never see the transcript.
+  'Everything you want the creator to read must be an argument to a tool — report_progress while you work, end({ summary }) as your closing word. Prose you write outside a tool call is never shown to them, so a question they asked is only answered once it is in one of those two fields. When your round has no code change to make (they asked a question, or the answer is that nothing needs changing), the answer itself is the deliverable: put it in end({ summary }).',
   'Honour stop immediately — do not continue after stop:true. For reason builder_handoff, call end once to acknowledge the stop request, then exit.',
   'gateStarted true means Cloud Build accepted the gate create; gateStarted false after ok submit means no preview is assembling — honour warnings.code=gate_not_started.',
   'Treat get_gate_verdict as a one-shot check, never a polling loop. Pending with a deliveryId returns stop:true: stop immediately and let Studio show the eventual result. Pending with deliveryId:null means you checked before delivering: stop is false, so continue building and call submit_sources instead of checking again. A later creator-led run may check a delivered gate again. Honour warnings.code=gate_poll_backoff on repeated checks.',
@@ -650,6 +652,8 @@ const SESSION_WORKFLOW: readonly string[] = [
   'While iterating: run only npm run typecheck -- <slug> locally, then prefer stage_upload_url({ path }) and curl --upload-file <file> "$url" for new/rewritten paths when you have shell egress (bytes never re-enter the model). Fall back to stage_source_file({ path, content }) without shell. For edits prefer patch_source_file({ path, old, new }) — exact unique substring replace, no unified-diff arithmetic. Or patch_source_file({ path, patch }) with a unified diff (bare @@ ok). Stage only changed paths — never re-upload the whole tree. Then submit_sources({ fromStaged: true, mode: "preview", kitEngineRef }) — fromStaged overlays onto the latest delivery/seed and the server verifies it; no browser, npm ci, capture, playtest, or agency is required for this preview. If a browser is available near delivery, optionally run npm run check:game -- <slug> --preview. Run the full gate only immediately before a mode:"publish" seal. Inline files[] still works for tiny trees.',
   'Staging is already visible: once game.ts, GAME.json and markup are present across staging + delivery/seed, the platform assembles a live playable preview — without waiting for submit or the gate. Markup means either an index.html or a GAME.json howToPlay carrying goal and hint, from which the body is generated. style.css is optional the same way: a GAME.json theme (accent/canvasBackground/canvasBorderColor/pixelArt) generates it when none is staged. Stage a runnable tree early and keep staging/patching as you work; a buffer that does not compile simply leaves the previous preview up.',
   'After every successful submit_sources: creator handoff is already unlocked; still call end immediately if you will not deliver more (warnings.code=call_end). Prefer end over sitting in a get_gate_verdict loop — Studio shows the gate. submit alone leaves your MCP session open — end sets stop:true. ChatGPT-class agents often stop after submit; end closes the session cleanly.',
+  // The thread is the creator's whole view of the round.
+  "Say goodbye inside end: pass summary with your closing sentence for the creator — what changed this round, or the answer to whatever they asked — plus summaryLocalized and locale when get_brief.locales[0] is not 'en'. Only text passed to report_progress or end reaches them; anything you write outside a tool call is dropped. If the creator only asked a question and no code needs to change, answering in end({ summary }) is the round.",
   'If a reply has control.reason=builder_handoff, stop work and call end once. That acknowledges the creator’s handoff request; do not retry other build calls afterward.',
   'Only call get_gate_verdict once when an already-available verdict would change what you deliver. It is not a wait loop. Pending with a deliveryId returns stop:true: stop immediately and let Studio show the eventual result. Pending with deliveryId:null returns stop:false because you checked too early — continue building and call submit_sources; do not check again before a delivery. A later creator-led run may check a delivered gate again. Preview lane: preview_passed / preview_failed — fix and re-preview on the SAME key; preview_passed does NOT end the round.',
   'When ready to seal: record TRACE (`npm run trace -- <slug> --accept` if you have a kit checkout), stage/include PLAYTEST.json + TRACE.json, then submit_sources({ fromStaged: true, mode: "publish", kitEngineRef }) (or inline files[]).',
@@ -4309,6 +4313,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           ok: { type: 'boolean' },
           ended: { type: 'boolean' },
           rejected: { type: 'string' },
+          summaryShown: { type: 'boolean' },
           ...REPLY_CONTROL,
         },
         required: ['ok', 'ended', 'stop', 'pendingMessages'],
@@ -4318,23 +4323,51 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         'when you will not deliver more — required whenever submit returns warnings.code=call_end (sets stop:true). ' +
         'Successful submit already unlocks creator handoff (agentEndedAt); end closes your MCP session cleanly. ' +
         'Does not publish by itself. After a green publish verdict the key already retires — end is optional then. ' +
+        'Put your closing word to the creator in `summary` — anything you would otherwise write as plain prose ' +
+        'after this call is never seen by them. ' +
         BEHAVIOURAL_CONTRACT,
       inputSchema: {
         type: 'object',
         properties: {
           sessionKey: SESSION_KEY_PROP,
+          summary: {
+            type: 'string',
+            description:
+              'Your last sentence to the creator, ≤300 chars: what changed this round, or the answer to what ' +
+              'they asked. It is the only way a plain reply reaches them — the creator reads this thread, not ' +
+              'your transcript, so text you write outside a tool call is dropped. Skip it only when a ' +
+              'report_progress note already said the same thing.',
+          },
+          summaryLocalized: {
+            type: 'string',
+            description:
+              "The same sentence in the creator's language — the first entry of get_brief.locales. Sending it " +
+              'with locale is the cheap path: the pair is stored as-is and costs nothing. Omit it and the ' +
+              'platform normalizes `summary` into both languages itself.',
+          },
+          locale: {
+            type: 'string',
+            description:
+              "Which language summaryLocalized is written in, e.g. 'pl'. Without it summaryLocalized is ignored.",
+          },
         },
       },
       handler: async (args, ctx) => {
         const auth = await resolveAuth(ctx, args);
         if (!('channelToken' in auth)) return auth;
 
-        const res = await injectChannel(ctx.request, 'POST', '/api/agent/build/end', auth.channelToken, {});
+        const payload: Record<string, unknown> = {
+          ...(typeof args.summary === 'string' ? { summary: args.summary } : {}),
+          ...(typeof args.summaryLocalized === 'string' ? { summaryLocalized: args.summaryLocalized } : {}),
+          ...(typeof args.locale === 'string' ? { locale: args.locale } : {}),
+        };
+        const res = await injectChannel(ctx.request, 'POST', '/api/agent/build/end', auth.channelToken, payload);
         const body = res.json() as {
           error?: string;
           accepted?: boolean;
           ended?: boolean;
           rejected?: string;
+          summaryShown?: boolean;
           handoffAcknowledged?: boolean;
           control?: { stop?: boolean; reason?: string };
           pending?: Array<{ id: string; text: string; createdAt: string }>;
@@ -4347,6 +4380,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           ok: ended,
           ended,
           ...(body.rejected ? { rejected: body.rejected } : {}),
+          ...(body.summaryShown ? { summaryShown: true } : {}),
           ...(body.handoffAcknowledged ? { handoffAcknowledged: true } : {}),
           stop: true,
           reason: body.handoffAcknowledged ? 'builder_handoff_acknowledged' : 'agent_ended',

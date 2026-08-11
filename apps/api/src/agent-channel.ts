@@ -121,6 +121,26 @@ const AckRequestSchema = z.object({
   ids: z.array(z.string().trim().min(1).max(64)).max(50),
 });
 
+// Empty body stays valid — every existing client sends one.
+const EndRequestSchema = z.object({
+  summary: z
+    .string()
+    .trim()
+    .max(MAX_EVENT_TEXT * 4, 'summary is too long')
+    .optional(),
+  summaryLocalized: z
+    .string()
+    .trim()
+    .max(MAX_EVENT_TEXT * 4)
+    .optional(),
+  locale: z
+    .string()
+    .trim()
+    .max(10)
+    .regex(/^[a-z]{2}(-[A-Za-z0-9]{2,8})?$/, 'invalid locale')
+    .optional(),
+});
+
 const MAX_SHOT_LABEL = 120;
 /**
  * Decoded PNG ceiling. Shots are stored as canonical base64 in a single Firestore
@@ -853,6 +873,43 @@ export async function registerAgentChannelRoutes(
     return normalizeAtIntake(translator, text, { kind: 'log', maxLength: MAX_EVENT_TEXT });
   }
 
+  // Shared by report_progress and end so the two cannot diverge.
+  async function composeCreatorEvent(input: {
+    kind: BuildEvent['kind'];
+    step?: BuildEvent['step'];
+    text: string;
+    textLocalized?: string;
+    locale?: string;
+    progress?: { done: number; total: number };
+  }): Promise<Omit<BuildEvent, 'id' | 'createdAt'> | null> {
+    const text = sanitizeCreatorText(input.text, { singleLine: true }).slice(0, MAX_EVENT_TEXT);
+    if (!text) return null;
+    const localized = input.textLocalized
+      ? sanitizeCreatorText(input.textLocalized, { singleLine: true }).slice(0, MAX_EVENT_TEXT)
+      : '';
+    // A localized sentence without a language tag cannot be matched to a reader, so
+    // it is dropped rather than shown to someone who may not read it.
+    const hasLocalized = Boolean(localized && input.locale);
+    // An agent that sends the pair has answered both halves itself and is taken at its
+    // word — that is the zero-cost path report_progress asks for. Everything else goes
+    // through normalization, which decides what English is rather than assuming `text`
+    // already was: agents write in whatever language the conversation is happening in.
+    const intake: IntakeText = hasLocalized
+      ? { text, textLocalized: localized, locale: input.locale as string }
+      : await localizeForCreator(text);
+    const progress = input.progress
+      ? { done: Math.min(input.progress.done, input.progress.total), total: input.progress.total }
+      : undefined;
+
+    return {
+      kind: input.kind,
+      ...(input.step ? { step: input.step } : {}),
+      text: intake.text,
+      ...(intake.textLocalized && intake.locale ? { textLocalized: intake.textLocalized, locale: intake.locale } : {}),
+      ...(progress ? { progress } : {}),
+    };
+  }
+
   // IP ceilings sit above the per-build limiters inside each handler. Agents
   // share a Cloud Run egress IP, so these are generous; the build-keyed checks
   // remain the real abuse control.
@@ -884,36 +941,10 @@ export async function registerAgentChannelRoutes(
         return reject('too_many_events');
       }
 
-      const text = sanitizeCreatorText(parsed.data.text, { singleLine: true }).slice(0, MAX_EVENT_TEXT);
-      if (!text) {
+      const event = await composeCreatorEvent(parsed.data);
+      if (!event) {
         return reply.status(400).send({ error: 'text is required' });
       }
-      const localized = parsed.data.textLocalized
-        ? sanitizeCreatorText(parsed.data.textLocalized, { singleLine: true }).slice(0, MAX_EVENT_TEXT)
-        : '';
-      // A localized sentence without a language tag cannot be matched to a reader, so
-      // it is dropped rather than shown to someone who may not read it.
-      const hasLocalized = Boolean(localized && parsed.data.locale);
-      // An agent that sends the pair has answered both halves itself and is taken at its
-      // word — that is the zero-cost path report_progress asks for. Everything else goes
-      // through normalization, which decides what English is rather than assuming `text`
-      // already was: agents write in whatever language the conversation is happening in.
-      const intake: IntakeText = hasLocalized
-        ? { text, textLocalized: localized, locale: parsed.data.locale as string }
-        : await localizeForCreator(text);
-      const progress = parsed.data.progress
-        ? { done: Math.min(parsed.data.progress.done, parsed.data.progress.total), total: parsed.data.progress.total }
-        : undefined;
-
-      const event: Omit<BuildEvent, 'id' | 'createdAt'> = {
-        kind: parsed.data.kind,
-        ...(parsed.data.step ? { step: parsed.data.step } : {}),
-        text: intake.text,
-        ...(intake.textLocalized && intake.locale
-          ? { textLocalized: intake.textLocalized, locale: intake.locale }
-          : {}),
-        ...(progress ? { progress } : {}),
-      };
 
       const stored = await store!.appendBuildEvent(issueNumber, event);
       const stateAfterSignal = await markBuildingFromChannel(issueNumber, record);
@@ -1909,6 +1940,7 @@ export async function registerAgentChannelRoutes(
    * green. Sets `agentEndedAt` so Studio surfaces stall `ended` and unlocks
    * self→platform without waiting for the quiet window.
    */
+  // summary carries the closing word; prose outside tool calls reaches nobody.
   app.post(
     '/api/agent/build/end',
     { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
@@ -1916,6 +1948,26 @@ export async function registerAgentChannelRoutes(
       const resolved = await resolveBuild(request, reply);
       if (!resolved) return reply;
       const { issueNumber, record } = resolved;
+
+      const parsed = EndRequestSchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
+      }
+
+      // A summary that cannot be stored must not fail the end.
+      const recordSummary = async () => {
+        if (!parsed.data.summary) return false;
+        if ((await store!.countBuildEvents(issueNumber)) >= maxEventsPerBuild) return false;
+        const event = await composeCreatorEvent({
+          kind: 'done',
+          text: parsed.data.summary,
+          ...(parsed.data.summaryLocalized ? { textLocalized: parsed.data.summaryLocalized } : {}),
+          ...(parsed.data.locale ? { locale: parsed.data.locale } : {}),
+        });
+        if (!event) return false;
+        await store!.appendBuildEvent(issueNumber, event);
+        return true;
+      };
 
       if (
         record.builderHandoff &&
@@ -1936,11 +1988,13 @@ export async function registerAgentChannelRoutes(
             ...(await channelState(issueNumber, fresh)),
           });
         }
+        const summarized = await recordSummary();
         const state = await channelState(issueNumber, fresh);
         return reply.send({
           accepted: true,
           ended: true,
           handoffAcknowledged: true,
+          ...(summarized ? { summaryShown: true } : {}),
           ...state,
           control: { ...state.control, stop: true, reason: 'builder_handoff_acknowledged' },
         });
@@ -1950,12 +2004,14 @@ export async function registerAgentChannelRoutes(
         return reply.send({ accepted: false, rejected: 'stopped', ...(await channelState(issueNumber, record)) });
       }
 
+      const summarized = await recordSummary();
       await store!.markAgentEnded(issueNumber);
       options.onEvent?.(issueNumber);
       const fresh = (await store!.getSubmission(issueNumber)) ?? record;
       return reply.send({
         accepted: true,
         ended: true,
+        ...(summarized ? { summaryShown: true } : {}),
         ...(await channelState(issueNumber, fresh)),
       });
     },
