@@ -17237,10 +17237,11 @@ body.remix-entry-open {
 }
 
 .review-stamp.is-keep {
-  right: 0.75rem;
+  left: 50%;
+  right: auto;
   color: var(--turquoise);
   border-color: var(--turquoise);
-  transform: rotate(12deg);
+  transform: translateX(-50%) rotate(12deg);
 }
 
 .review-stamp.is-cut {
@@ -17259,14 +17260,17 @@ body.remix-entry-open {
   border-color: var(--muted);
 }
 
-/* Verdict dock — pinned by the shell column. Checklist can scroll inside;
-   note + Cut/Skip/Keep stay on screen so a full form cannot hide the verdicts. */
+/* Verdict dock — pinned by the shell column. It becomes its own scrollport when
+   the keyboard or a banner leaves too little room for the complete form. */
 .review-dock {
   position: relative;
   z-index: 5;
   flex: 0 1 auto;
+  min-height: 0;
   max-height: min(48dvh, 420px);
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
   gap: 0.55rem;
@@ -17284,10 +17288,8 @@ body.remix-entry-open {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  flex: none;
+  overflow: visible;
 }
 
 .review-checklist-legend {

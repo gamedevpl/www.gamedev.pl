@@ -14,7 +14,7 @@ function ruleBody(selector: string): string {
   return match![1]!;
 }
 
-// Refuse a revert that drops the review shell or uncapped dock.
+// Refuse a revert that drops the review shell or keyboard escape path.
 describe('review desk shell', () => {
   it('claims the window while the desk is mounted', () => {
     expect(css).toMatch(/\.app:has\(\.review-desk\)\s*\{/);
@@ -38,15 +38,21 @@ describe('review desk shell', () => {
 
     const dock = ruleBody('.review-dock');
     expect(dock).toMatch(/max-height:\s*min\(48dvh,\s*420px\)/);
-    expect(dock).toMatch(/overflow:\s*hidden/);
+    expect(dock).toMatch(/min-height:\s*0/);
+    expect(dock).toMatch(/overflow-y:\s*auto/);
     expect(dock).not.toMatch(/position:\s*sticky/);
 
     const checklist = ruleBody('.review-checklist');
-    expect(checklist).toMatch(/overflow-y:\s*auto/);
-    expect(checklist).toMatch(/min-height:\s*0/);
+    expect(checklist).toMatch(/flex:\s*none/);
+    expect(checklist).toMatch(/overflow:\s*visible/);
 
     const play = ruleBody('.review-play-btn.is-overlay');
     expect(play).toMatch(/top:\s*0\.55rem/);
     expect(play).not.toMatch(/bottom:\s*0\.55rem/);
+
+    const keep = ruleBody('.review-stamp.is-keep');
+    expect(keep).toMatch(/left:\s*50%/);
+    expect(keep).toMatch(/right:\s*auto/);
+    expect(keep).toMatch(/translateX\(-50%\)/);
   });
 });
