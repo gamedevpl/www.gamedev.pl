@@ -235,7 +235,7 @@ describe('the entities widget', () => {
     expect(container.querySelector<HTMLButtonElement>('.studio-head-action.is-primary')?.disabled).toBe(true);
   });
 
-  it('remix painter renders entities properties without a board', async () => {
+  it('remix painter lets a remixer edit entity properties and see uniqueBy checks (no board)', async () => {
     const onChange = vi.fn();
     root = createRoot(container);
     await act(async () => {
@@ -244,6 +244,34 @@ describe('the entities widget', () => {
       );
     });
     expect(container.querySelector('.editor-board')).toBeNull();
+    expect(container.querySelector('.editor-palette')).toBeNull();
     expect(container.querySelector('.remix-painter-items')?.textContent).toContain('Strike');
+
+    // Strike's "cost" field is editable, not just displayed.
+    const costInput = container.querySelector<HTMLInputElement>('.remix-painter-properties input[type="number"]');
+    expect(costInput).not.toBeNull();
+    expect(costInput!.value).toBe('1');
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!;
+      setter.call(costInput, '2');
+      costInput!.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(onChange).toHaveBeenCalledWith({
+      cards: [{ properties: { name: 'Strike', cost: 2 } }, cardTwo],
+    });
+
+    // Collides with Guard's cost (2) — the uniqueBy check must surface here too.
+    act(() => root!.unmount());
+    root = createRoot(container);
+    await act(async () => {
+      root!.render(
+        <RemixPainter
+          content={entitiesDefinition.content}
+          doc={{ cards: [{ properties: { name: 'Strike', cost: 2 } }, cardTwo] }}
+          onChange={vi.fn()}
+        />,
+      );
+    });
+    expect(container.querySelector('.remix-painter-checks .editor-check.is-bad')?.textContent).toContain('cost');
   });
 });

@@ -73,4 +73,55 @@ describe('declaredParamDefaultChanges', () => {
     const noParams = JSON.stringify({ content: { cards: [] } });
     expect(declaredParamDefaultChanges(noParams, noParams)).toBeNull();
   });
+
+  it('returns null for a new default that violates its own declared range', () => {
+    const next = JSON.parse(BASE);
+    next.params.speed.default = 999; // max is 10
+    expect(declaredParamDefaultChanges(BASE, JSON.stringify(next))).toBeNull();
+  });
+
+  it('returns null for a new default of the wrong type', () => {
+    const next = JSON.parse(BASE);
+    next.params.speed.default = 'fast';
+    expect(declaredParamDefaultChanges(BASE, JSON.stringify(next))).toBeNull();
+  });
+
+  it('returns null for a non-integer default on an int param', () => {
+    const intBase = JSON.stringify({
+      content: { cards: [] },
+      params: { lives: { type: 'int', label: { en: 'Lives', pl: 'Życia' }, min: 1, max: 9, default: 3 } },
+    });
+    const next = JSON.parse(intBase);
+    next.params.lives.default = 3.5;
+    expect(declaredParamDefaultChanges(intBase, JSON.stringify(next))).toBeNull();
+  });
+
+  it('returns null for a text default longer than its declared max', () => {
+    const textBase = JSON.stringify({
+      content: { cards: [] },
+      params: { title: { type: 'text', label: { en: 'Title', pl: 'Tytuł' }, max: 4, default: 'Ok' } },
+    });
+    const next = JSON.parse(textBase);
+    next.params.title.default = 'way too long';
+    expect(declaredParamDefaultChanges(textBase, JSON.stringify(next))).toBeNull();
+  });
+
+  it('returns null for an enum default outside its declared values', () => {
+    const enumBase = JSON.stringify({
+      content: { cards: [] },
+      params: {
+        mode: { type: 'enum', label: { en: 'Mode', pl: 'Tryb' }, values: ['easy', 'hard'], default: 'easy' },
+      },
+    });
+    const next = JSON.parse(enumBase);
+    next.params.mode.default = 'nightmare';
+    expect(declaredParamDefaultChanges(enumBase, JSON.stringify(next))).toBeNull();
+  });
+
+  it('rejects the whole batch when one of several changed defaults is invalid', () => {
+    const next = JSON.parse(BASE);
+    next.params.speed.default = 8; // valid on its own
+    next.params.hardMode.default = 'yes'; // not a boolean
+    expect(declaredParamDefaultChanges(BASE, JSON.stringify(next))).toBeNull();
+  });
 });

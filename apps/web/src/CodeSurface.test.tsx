@@ -7,7 +7,7 @@ import { CodeSurface } from './CodeSurface.js';
 import { resetCodeSurfaceSessionState } from './codeSurfaceSessionState.js';
 import * as codeSurfaceApi from './codeSurfaceApi.js';
 import i18n from './i18n/index.js';
-import type { EditorContentDoc } from './studioApi.js';
+import type { EditorContentDoc, GameEditorState } from './studioApi.js';
 
 // The real CodeMirror editor needs DOM layout measurement jsdom cannot provide, and
 // its dynamic import races the plain-textarea Suspense fallback these tests rely on —
@@ -468,6 +468,104 @@ describe('CodeSurface', () => {
       expect(pushRef.current).not.toHaveBeenCalled();
       expect(mockedStudioApi.fetchGameEditor).not.toHaveBeenCalled();
       expect(container.textContent).not.toContain('Live');
+    });
+
+    it('does not push a default that violates its own declared range', async () => {
+      mocked.fetchCodeSurfaceSources.mockResolvedValue(sourcesWithEditorJson());
+      mocked.stageCodeSurfaceFile.mockResolvedValue({
+        accepted: true,
+        path: 'EDITOR.json',
+        bytes: 10,
+        staged: { totalBytes: 10, maxBytes: 1_000_000, maxFiles: 60, updatedAt: null },
+      });
+      const pushRef: { current: ((content: EditorContentDoc) => void) | null } = { current: vi.fn() };
+
+      await render('sky-dodge', pushRef);
+      const editorTab = [...container.querySelectorAll('.code-surface-rail-item')].find((b) =>
+        b.textContent?.includes('EDITOR.json'),
+      ) as HTMLButtonElement;
+      await act(async () => {
+        editorTab.click();
+      });
+
+      const next = JSON.parse(editorJson);
+      next.params.speed.default = 999; // max is 10
+      await act(async () => {
+        typeInto(container.querySelector('textarea')!, JSON.stringify(next));
+        await flush();
+      });
+
+      expect(pushRef.current).not.toHaveBeenCalled();
+      expect(mockedStudioApi.fetchGameEditor).not.toHaveBeenCalled();
+      expect(container.textContent).not.toContain('Live');
+    });
+
+    it('merges two concurrent live pushes instead of the second overwriting the first', async () => {
+      const twoParams = JSON.stringify({
+        content: { cards: [] },
+        params: {
+          speed: { type: 'number', label: { en: 'Speed', pl: 'Prędkość' }, min: 1, max: 10, default: 5 },
+          hardMode: { type: 'boolean', label: { en: 'Hard mode', pl: 'Tryb trudny' }, default: false },
+        },
+      });
+      mocked.fetchCodeSurfaceSources.mockResolvedValue(
+        sourcesFor({
+          files: [
+            { path: 'game.ts', content: 'export const boot = () => {};' },
+            { path: 'EDITOR.json', content: twoParams },
+          ],
+        }),
+      );
+      mocked.stageCodeSurfaceFile.mockResolvedValue({
+        accepted: true,
+        path: 'EDITOR.json',
+        bytes: 10,
+        staged: { totalBytes: 10, maxBytes: 1_000_000, maxFiles: 60, updatedAt: null },
+      });
+      // Held open — both edits below must race this, like two quick keystrokes would.
+      let resolveFetch!: (value: GameEditorState) => void;
+      mockedStudioApi.fetchGameEditor.mockReturnValue(
+        new Promise((resolve) => {
+          resolveFetch = resolve;
+        }),
+      );
+      const pushRef: { current: ((content: EditorContentDoc) => void) | null } = { current: vi.fn() };
+
+      await render('sky-dodge', pushRef);
+      const editorTab = [...container.querySelectorAll('.code-surface-rail-item')].find((b) =>
+        b.textContent?.includes('EDITOR.json'),
+      ) as HTMLButtonElement;
+      await act(async () => {
+        editorTab.click();
+      });
+
+      const afterFirst = JSON.parse(twoParams);
+      afterFirst.params.speed.default = 8;
+      await act(async () => {
+        typeInto(container.querySelector('textarea')!, JSON.stringify(afterFirst));
+        await flush();
+      });
+
+      const afterSecond = JSON.parse(JSON.stringify(afterFirst));
+      afterSecond.params.hardMode.default = true;
+      await act(async () => {
+        typeInto(container.querySelector('textarea')!, JSON.stringify(afterSecond));
+        await flush();
+      });
+
+      expect(pushRef.current).not.toHaveBeenCalled(); // both onEdit calls await the same fetch
+
+      await act(async () => {
+        resolveFetch({
+          version: 'v1',
+          definition: { version: 1, content: {} },
+          content: { params: { speed: 5, hardMode: false } },
+          draft: null,
+        });
+        await flush();
+      });
+
+      expect(pushRef.current).toHaveBeenLastCalledWith({ params: { speed: 8, hardMode: true } });
     });
 
     it('does nothing when no editorPushRef was supplied — Play-tab-only sessions must not throw', async () => {

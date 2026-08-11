@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { blankItem, defaultCollectionKey, isTilemapItem, itemProblems, setCell } from './editorContentTools.js';
+import {
+  blankItem,
+  collectionProblems,
+  defaultCollectionKey,
+  isTilemapItem,
+  itemProblems,
+  setCell,
+} from './editorContentTools.js';
 import type {
   EditorCollectionSpec,
   EditorContentDoc,
@@ -89,6 +96,7 @@ export function RemixPainter(props: {
   }
 
   const problems = item ? itemProblems(spec.item, item, name) : [];
+  const collectionWideProblems = collectionProblems(spec, items);
   const tilemapItem = item && isTilemapItem(item) ? item : null;
   const boardSpec = tilemapCollection(spec);
   const width = tilemapItem ? (tilemapItem.rows[0]?.length ?? 0) : 0;
@@ -201,21 +209,100 @@ export function RemixPainter(props: {
               </button>
             ))}
           </div>
-          {/*
-           * Verdicts, not vetoes: nothing here blocks anything (there is no save
-           * to refuse), but a map that breaks its own game's rules should say so
-           * before the player wonders why their level cannot be won.
-           */}
-          {problems.length > 0 ? (
-            <div className="remix-painter-checks" role="status">
-              {problems.slice(0, 3).map((problem) => (
-                <p key={problem} className="editor-check is-bad">
-                  ✕ {problem}
-                </p>
-              ))}
-            </div>
-          ) : null}
         </>
+      ) : null}
+
+      {item && spec ? (
+        <div className="remix-painter-properties">
+          {Object.entries(spec.item.properties).map(([propertyName, propertySpec]) => {
+            const value = item.properties[propertyName];
+            if (propertySpec.type === 'text') {
+              return (
+                <label key={propertyName} className="editor-prop">
+                  <span>{propertyName}</span>
+                  <input
+                    type="text"
+                    maxLength={propertySpec.max}
+                    value={typeof value === 'string' ? value : ''}
+                    onChange={(event) =>
+                      updateItem({ ...item, properties: { ...item.properties, [propertyName]: event.target.value } })
+                    }
+                  />
+                </label>
+              );
+            }
+            if (propertySpec.type === 'int' || propertySpec.type === 'number') {
+              return (
+                <label key={propertyName} className="editor-prop">
+                  <span>
+                    {propertyName}{' '}
+                    <em>
+                      {propertySpec.min}–{propertySpec.max}
+                    </em>
+                  </span>
+                  <input
+                    type="number"
+                    min={propertySpec.min}
+                    max={propertySpec.max}
+                    step={propertySpec.type === 'int' ? 1 : 'any'}
+                    value={typeof value === 'number' ? value : propertySpec.min}
+                    onChange={(event) => {
+                      const parsed = Number(event.target.value);
+                      if (!Number.isFinite(parsed)) return;
+                      updateItem({ ...item, properties: { ...item.properties, [propertyName]: parsed } });
+                    }}
+                  />
+                </label>
+              );
+            }
+            if (propertySpec.type === 'enum') {
+              return (
+                <label key={propertyName} className="editor-prop">
+                  <span>{propertyName}</span>
+                  <select
+                    value={typeof value === 'string' ? value : propertySpec.values[0]}
+                    onChange={(event) =>
+                      updateItem({ ...item, properties: { ...item.properties, [propertyName]: event.target.value } })
+                    }
+                  >
+                    {propertySpec.values.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              );
+            }
+            return (
+              <label key={propertyName} className="editor-prop">
+                <span>{propertyName}</span>
+                <input
+                  type="checkbox"
+                  checked={value === true}
+                  onChange={(event) =>
+                    updateItem({ ...item, properties: { ...item.properties, [propertyName]: event.target.checked } })
+                  }
+                />
+              </label>
+            );
+          })}
+        </div>
+      ) : null}
+
+      {/*
+       * Verdicts, not vetoes: nothing here blocks anything (there is no save
+       * to refuse), but content that breaks its own game's rules should say so
+       * before the player wonders why their level cannot be won.
+       */}
+      {problems.length > 0 || collectionWideProblems.length > 0 ? (
+        <div className="remix-painter-checks" role="status">
+          {[...problems, ...collectionWideProblems].slice(0, 3).map((problem) => (
+            <p key={problem} className="editor-check is-bad">
+              ✕ {problem}
+            </p>
+          ))}
+        </div>
       ) : null}
     </div>
   );

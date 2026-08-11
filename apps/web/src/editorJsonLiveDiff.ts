@@ -27,6 +27,27 @@ function deepEqual(a: unknown, b: unknown): boolean {
   return false;
 }
 
+/** Mirrors editor-contract.ts's `valueProblem` — what the L4 validator would refuse. */
+function defaultSatisfiesSpec(spec: Record<string, unknown>, value: unknown): boolean {
+  if (spec.type === 'text') return typeof value === 'string' && value.length <= (spec.max as number);
+  if (spec.type === 'int') {
+    return (
+      Number.isInteger(value) && (value as number) >= (spec.min as number) && (value as number) <= (spec.max as number)
+    );
+  }
+  if (spec.type === 'number') {
+    return (
+      typeof value === 'number' &&
+      Number.isFinite(value) &&
+      value >= (spec.min as number) &&
+      value <= (spec.max as number)
+    );
+  }
+  if (spec.type === 'enum')
+    return typeof value === 'string' && Array.isArray(spec.values) && spec.values.includes(value);
+  return typeof value === 'boolean';
+}
+
 /** `null` means fall back to a staged rebuild; otherwise the changed param keys. */
 export function declaredParamDefaultChanges(prevText: string, nextText: string): DeclaredParamChange[] | null {
   let prev: unknown;
@@ -58,7 +79,10 @@ export function declaredParamDefaultChanges(prevText: string, nextText: string):
     const { default: nextDefault, ...nextSpecRest } = nextSpec;
     // A type/min/max/label change needs the L4 validator, not a live push.
     if (!deepEqual(prevSpecRest, nextSpecRest)) return null;
-    if (!deepEqual(prevDefault, nextDefault)) changes.push({ key, value: nextDefault });
+    if (deepEqual(prevDefault, nextDefault)) continue;
+    // An out-of-range default is refused at declaration time, not discovered live.
+    if (!defaultSatisfiesSpec(nextSpecRest, nextDefault)) return null;
+    changes.push({ key, value: nextDefault });
   }
   return changes.length > 0 ? changes : null;
 }

@@ -377,7 +377,9 @@ export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
     async (changes: DeclaredParamChange[]) => {
       const push = editorPushRef?.current;
       if (!push) return;
-      const base = await loadLiveContent();
+      const fetched = await loadLiveContent();
+      // A concurrent push may have updated the ref during this await — merge onto that.
+      const base = liveContentRef.current ?? fetched;
       if (!base) return;
       const prevParams = base.params;
       const params: Record<string, EditorParamValue> = {
