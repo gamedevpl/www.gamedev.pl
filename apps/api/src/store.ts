@@ -430,7 +430,7 @@ export interface JobSeedOutcome {
  * (docs: architecture B), so that arriving is a writer, not a migration.
  */
 export interface JobCostEntry {
-  kind: 'agent_session' | 'gate_run' | 'seed' | 'assist';
+  kind: 'agent_session' | 'gate_run' | 'seed' | 'assist' | 'chat';
   at: string;
   /**
    * Who charged for it: an agent backend (`copilot`), a service (`cloud-build`), or —
@@ -524,18 +524,13 @@ export interface CreatorMessage {
   createdAt: string;
   /** Set once an agent has collected it. Undelivered messages are re-served. */
   deliveredAt?: string | null;
-  /**
-   * Who actually typed this. `creator` — the words came out of the Studio composer and
-   * are the creator's own, in their own language. `agent` — an agent wrote them on the
-   * creator's behalf (MCP `continue_draft({ feedback })`), which is nearly always an
-   * English paraphrase of something said in a chat we never saw.
-   *
-   * Absent means `creator`: every message written before this field existed came from
-   * the composer, and the two paths are not interchangeable downstream. Studio labels
-   * them differently and only the relayed kind is ever translated — presenting an agent's
-   * English summary as the creator's own message is how a Polish creator ended up
-   * reading words they never wrote, in a language they did not choose.
-   */
+  // 'agent': relayed on the creator's behalf — the only kind ever translated.
+
+  // 'studio': the mini chat agent's own reply — pre-delivered, never queued.
+
+  // 'studio_ack': the same agent's build ack — displays identically to 'studio'.
+
+  // Absent: the creator's own words, typed in the composer.
   origin?: CreatorMessageOrigin;
   /**
    * The relayed text in the creator's language, filled in on the write (see
@@ -553,7 +548,12 @@ export interface CreatorMessage {
 }
 
 /** @see CreatorMessage.origin */
-export type CreatorMessageOrigin = 'creator' | 'agent';
+export type CreatorMessageOrigin = 'creator' | 'agent' | 'studio' | 'studio_ack';
+
+// Both never reach a builder and both render as the studio voice — see below.
+export function isStudioOrigin(origin: CreatorMessageOrigin | undefined): boolean {
+  return origin === 'studio' || origin === 'studio_ack';
+}
 
 /**
  * A screenshot the agent pushed over the build channel rather than committing.
@@ -651,6 +651,10 @@ export interface CreationLimits {
    * flag goes on. Same null semantics as the submission cap.
    */
   globalDailyEditCap: number | null;
+  // Refuse the studio mini chat agent outright; feedback/improve still work normally.
+  chatPaused?: boolean;
+  // Own daily ceiling on chat-agent calls, separate from the edit cap.
+  globalDailyChatCap?: number | null;
   // Switches the `platform` option; `auto` defers to whether a backend exists.
   managedBuilderMode?: 'auto' | 'off' | 'coming_soon';
   // Shared daily ceiling on platform rounds started. `null` = no cap.
@@ -679,6 +683,8 @@ export interface UsageCounters {
   improvements: number;
   /** Natural-language tuning requests in the editor (one Vertex call each). */
   assists: number;
+  // Studio mini chat agent turns (chat-agent.ts), one per model call.
+  chats: number;
   // Platform rounds this creator started today.
   managedBuilds: number;
 }
@@ -2016,7 +2022,7 @@ export interface Store {
     text: string,
     opts?: { origin?: CreatorMessageOrigin; delivered?: boolean; textLocalized?: string; locale?: string },
   ): Promise<CreatorMessage>;
-  /** Undelivered creator messages, oldest first — the agent's inbox. */
+  // Undelivered messages, oldest first — the agent's inbox. Never a 'studio' row.
   listPendingCreatorMessages(issueNumber: number, opts?: { limit?: number }): Promise<CreatorMessage[]>;
   /**
    * Every creator message on a build, delivered or not, oldest first. The status page
@@ -2126,6 +2132,8 @@ export interface Store {
   checkAndIncrementGlobalSubmissions(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }>;
   /** Same shape for the editing lanes' shared daily allowance of model calls. */
   checkAndIncrementGlobalEdits(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }>;
+  /** Same shape, for the chat agent's own shared daily allowance. */
+  checkAndIncrementGlobalChats(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }>;
   // Platform rounds everyone together has started on `dateStr`.
   getGlobalManagedBuildCount(dateStr: string): Promise<number>;
   // Same shape, for the shared daily ceiling.
@@ -2632,6 +2640,7 @@ function emptyUsageCounters(): UsageCounters {
     playerFeedback: 0,
     improvements: 0,
     assists: 0,
+    chats: 0,
     managedBuilds: 0,
   };
 }
@@ -2654,6 +2663,7 @@ export class InMemoryStore implements Store {
   // yyyy-mm-dd -> submissions accepted that day across every account
   private globalSubmissions = new Map<string, number>();
   private globalEdits = new Map<string, number>();
+  private globalChats = new Map<string, number>();
   private globalManagedBuilds = new Map<string, number>();
   private creationLimits: CreationLimits | null = null;
   private publicPlayConfig: PublicPlayConfig | null = null;
@@ -3578,7 +3588,7 @@ export class InMemoryStore implements Store {
       text,
       createdAt: now,
       deliveredAt: opts?.delivered ? now : null,
-      ...(opts?.origin === 'agent' ? { origin: 'agent' as const } : {}),
+      ...(opts?.origin === 'agent' || isStudioOrigin(opts?.origin) ? { origin: opts?.origin } : {}),
       ...(opts?.textLocalized && opts?.locale ? { textLocalized: opts.textLocalized, locale: opts.locale } : {}),
     };
     const existing = this.creatorMessages.get(issueNumber) ?? [];
@@ -3589,7 +3599,7 @@ export class InMemoryStore implements Store {
 
   async listPendingCreatorMessages(issueNumber: number, opts?: { limit?: number }): Promise<CreatorMessage[]> {
     return (this.creatorMessages.get(issueNumber) ?? [])
-      .filter((message) => !message.deliveredAt)
+      .filter((message) => !message.deliveredAt && !isStudioOrigin(message.origin))
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
       .slice(0, opts?.limit ?? 10)
       .map((message) => ({ ...message }));
@@ -3738,6 +3748,11 @@ export class InMemoryStore implements Store {
         patch.globalDailyEditCap !== undefined
           ? patch.globalDailyEditCap
           : (this.creationLimits?.globalDailyEditCap ?? null),
+      chatPaused: patch.chatPaused ?? this.creationLimits?.chatPaused ?? false,
+      globalDailyChatCap:
+        patch.globalDailyChatCap !== undefined
+          ? patch.globalDailyChatCap
+          : (this.creationLimits?.globalDailyChatCap ?? null),
       managedBuilderMode: patch.managedBuilderMode ?? this.creationLimits?.managedBuilderMode ?? 'auto',
       managedDailyCap:
         patch.managedDailyCap !== undefined ? patch.managedDailyCap : (this.creationLimits?.managedDailyCap ?? null),
@@ -3788,6 +3803,15 @@ export class InMemoryStore implements Store {
       return { allowed: false, current };
     }
     this.globalEdits.set(dateStr, current + 1);
+    return { allowed: true, current: current + 1 };
+  }
+
+  async checkAndIncrementGlobalChats(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }> {
+    const current = this.globalChats.get(dateStr) ?? 0;
+    if (current >= limit) {
+      return { allowed: false, current };
+    }
+    this.globalChats.set(dateStr, current + 1);
     return { allowed: true, current: current + 1 };
   }
 
@@ -6043,15 +6067,14 @@ export class FirestoreStore implements Store {
     text: string,
     opts?: { origin?: CreatorMessageOrigin; delivered?: boolean; textLocalized?: string; locale?: string },
   ): Promise<CreatorMessage> {
-    // `origin` is spread in only when it is `agent`: Firestore rejects an explicit
-    // `undefined`, and a stored `'creator'` would say nothing the absent field does not.
+    // Spread in only for agent/studio — Firestore rejects an explicit undefined.
     const now = new Date().toISOString();
     const record: CreatorMessage = {
       id: randomUUID(),
       text,
       createdAt: now,
       deliveredAt: opts?.delivered ? now : null,
-      ...(opts?.origin === 'agent' ? { origin: 'agent' as const } : {}),
+      ...(opts?.origin === 'agent' || isStudioOrigin(opts?.origin) ? { origin: opts?.origin } : {}),
       ...(opts?.textLocalized && opts?.locale ? { textLocalized: opts.textLocalized, locale: opts.locale } : {}),
     };
     await this.messagesCollection(issueNumber).doc(record.id).set(record);
@@ -6059,11 +6082,13 @@ export class FirestoreStore implements Store {
   }
 
   async listPendingCreatorMessages(issueNumber: number, opts?: { limit?: number }): Promise<CreatorMessage[]> {
-    // Equality on deliveredAt plus an ordered range would need a composite index;
-    // the message count per build is tiny, so order and filter here instead.
+    // Filtered and sorted here rather than in a composite index — the set is tiny.
+
+    // Studio rows are pre-delivered already; this filter is the belt-and-braces guard.
     const snap = await this.messagesCollection(issueNumber).where('deliveredAt', '==', null).get();
     return snap.docs
       .map((doc) => doc.data() as CreatorMessage)
+      .filter((message) => !isStudioOrigin(message.origin))
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
       .slice(0, opts?.limit ?? 10);
   }
@@ -6289,6 +6314,8 @@ export class FirestoreStore implements Store {
       editingPaused: data?.editingPaused === true,
       remixTracePaused: data?.remixTracePaused === true,
       globalDailyEditCap: typeof data?.globalDailyEditCap === 'number' ? data.globalDailyEditCap : null,
+      chatPaused: data?.chatPaused === true,
+      globalDailyChatCap: typeof data?.globalDailyChatCap === 'number' ? data.globalDailyChatCap : null,
       managedBuilderMode:
         data?.managedBuilderMode === 'off' || data?.managedBuilderMode === 'coming_soon'
           ? data.managedBuilderMode
@@ -6317,6 +6344,9 @@ export class FirestoreStore implements Store {
         editingPaused: patch.editingPaused ?? existing.editingPaused ?? false,
         globalDailyEditCap:
           patch.globalDailyEditCap !== undefined ? patch.globalDailyEditCap : (existing.globalDailyEditCap ?? null),
+        chatPaused: patch.chatPaused ?? existing.chatPaused ?? false,
+        globalDailyChatCap:
+          patch.globalDailyChatCap !== undefined ? patch.globalDailyChatCap : (existing.globalDailyChatCap ?? null),
         managedBuilderMode: patch.managedBuilderMode ?? existing.managedBuilderMode ?? 'auto',
         managedDailyCap:
           patch.managedDailyCap !== undefined ? patch.managedDailyCap : (existing.managedDailyCap ?? null),
@@ -6391,6 +6421,23 @@ export class FirestoreStore implements Store {
 
       const nextVal = current + 1;
       transaction.set(ref, { edits: nextVal }, { merge: true });
+      return { allowed: true, current: nextVal };
+    });
+  }
+
+  async checkAndIncrementGlobalChats(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }> {
+    const ref = this.globalUsageRef(dateStr);
+    return await this.db.runTransaction(async (transaction) => {
+      const snap = await transaction.get(ref);
+      const value = snap.data()?.chats;
+      const current = typeof value === 'number' ? value : 0;
+
+      if (current >= limit) {
+        return { allowed: false, current };
+      }
+
+      const nextVal = current + 1;
+      transaction.set(ref, { chats: nextVal }, { merge: true });
       return { allowed: true, current: nextVal };
     });
   }

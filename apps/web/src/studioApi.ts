@@ -350,23 +350,15 @@ export async function setDraftShared(token: string, shared: boolean): Promise<{ 
   return (await response.json()) as { shared: boolean; slug: string };
 }
 
-/**
- * Files a post-publish improvement issue. Draft revisions still use
- * {@link submitFeedback} on the open PR. Optional playtest context attaches a
- * paused-frame screenshot + instrumentation digest (Creator Studio Playtest).
- *
- * Publishing is terminal, so this opens a *new* job: the response carries that job's
- * own `jobId` and a fresh `token` addressing it, and the caller hands the creator's
- * thread over to it. The field was declared `issueNumber` here while the server has
- * always sent `jobId` — a mismatch that only ever read as `undefined`; keep the wire
- * name (`jobId`) and correct the type.
- */
+// jobId/token/slug are absent when the chat agent replied instead of opening a job.
 export async function submitImprovement(
   token: string,
   feedback: string,
   context?: FeedbackContext,
   builder?: 'platform' | 'self',
-): Promise<{ ok: boolean; jobId: number; token: string; slug: string; shotId?: string }> {
+  // Composer escape hatch: skip the chat agent for this one message.
+  directToBuilder?: boolean,
+): Promise<{ ok: boolean; jobId?: number; token?: string; slug?: string; shotId?: string }> {
   const response = await fetch(`${API_BASE}/api/submissions/${encodeURIComponent(token)}/improve`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -375,6 +367,7 @@ export async function submitImprovement(
       feedback,
       ...(context ? { context } : {}),
       ...(builder ? { builder } : {}),
+      ...(directToBuilder ? { directToBuilder } : {}),
     }),
   });
   if (!response.ok) {

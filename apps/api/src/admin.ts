@@ -149,6 +149,9 @@ const CreationLimitsPatchSchema = z
     // The editing lanes' breaker rides the same document — one place to look.
     editingPaused: z.boolean().optional(),
     globalDailyEditCap: z.number().int().min(0).max(100_000).nullable().optional(),
+    // The studio chat breaker rides the same document too.
+    chatPaused: z.boolean().optional(),
+    globalDailyChatCap: z.number().int().min(0).max(100_000).nullable().optional(),
     // Same document: whether the platform builder is offered. See managed-availability.ts.
     managedBuilderMode: z.enum(['auto', 'off', 'coming_soon']).optional(),
     managedDailyCap: z.number().int().min(0).max(100_000).nullable().optional(),
@@ -160,10 +163,12 @@ const CreationLimitsPatchSchema = z
       patch.globalDailySubmissionCap !== undefined ||
       patch.editingPaused !== undefined ||
       patch.globalDailyEditCap !== undefined ||
+      patch.chatPaused !== undefined ||
+      patch.globalDailyChatCap !== undefined ||
       patch.managedBuilderMode !== undefined ||
       patch.managedDailyCap !== undefined ||
       patch.managedDailyUserCap !== undefined,
-    'nothing to change: send paused, globalDailySubmissionCap, editingPaused, globalDailyEditCap, managedBuilderMode, managedDailyCap and/or managedDailyUserCap',
+    'nothing to change: send paused, globalDailySubmissionCap, editingPaused, globalDailyEditCap, chatPaused, globalDailyChatCap, managedBuilderMode, managedDailyCap and/or managedDailyUserCap',
   );
 
 const PublicPlayPatchSchema = z.object({

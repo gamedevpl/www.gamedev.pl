@@ -557,6 +557,21 @@ describe('/api/admin/creation-limits', () => {
     await app.close();
   });
 
+  it('accepts a chat-breaker patch, same document as the other lanes', async () => {
+    const app = await appWith(store);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/admin/creation-limits',
+      headers: authHeaders('g:boss'),
+      payload: { chatPaused: true, globalDailyChatCap: 500 },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(await store.getCreationLimits()).toMatchObject({ chatPaused: true, globalDailyChatCap: 500 });
+    await app.close();
+  });
+
   it('rejects an empty patch rather than pretending to change something', async () => {
     const app = await appWith(store);
 
