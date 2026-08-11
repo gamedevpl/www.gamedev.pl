@@ -11541,13 +11541,21 @@ button.builder-mode-selector:disabled {
   margin-left: auto;
 }
 
-/* Both act as `.studio-head-action.is-primary` — that pair has no disabled look of its
-   own (Play disables only when the stage is empty and hides its state elsewhere), and
-   these two spend most of their life disabled (cooldown, unchecked attestation). */
-.code-surface-stage-it:disabled,
-.code-surface-deliver-btn:disabled {
-  background: rgba(0, 228, 172, 0.14);
-  border-color: rgba(0, 228, 172, 0.2);
+/* Belt and braces with the `studio-head-action is-primary` classes both buttons also
+   carry (pill shape, hover glow — Play's exact look): these self-contained rules keep
+   the fill guaranteed even if that pairing drifts, and the regression test reads them. */
+.code-surface-stage-it.is-primary,
+.code-surface-deliver-btn.is-primary {
+  border: 1px solid var(--turquoise);
+  background: var(--turquoise);
+  color: #08241d;
+  font-weight: 700;
+}
+
+.code-surface-stage-it.is-primary:disabled,
+.code-surface-deliver-btn.is-primary:disabled {
+  border-color: var(--panel-border);
+  background: rgba(148, 163, 184, 0.12);
   color: var(--muted);
   cursor: default;
   filter: none;
