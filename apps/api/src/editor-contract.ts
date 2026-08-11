@@ -286,13 +286,6 @@ function validateTilemapSpec(owner: string, raw: unknown, errors: string[]): Til
     errors.push(`${owner}: "item" must be an object`);
     return null;
   }
-  // The closed vocabulary: an unknown widget fails validation rather than
-  // rendering as nothing. Editor ambition is bounded by what the Studio has
-  // been taught, one widget at a time.
-  if (raw.widget !== 'tilemap') {
-    errors.push(`${owner}: unknown item widget "${String(raw.widget)}" (vocabulary v0: tilemap)`);
-    return null;
-  }
   const grid = raw.grid;
   if (
     !isPlainObject(grid) ||
