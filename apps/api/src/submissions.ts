@@ -3915,6 +3915,9 @@ export async function registerSubmissionRoutes(
       // (`deliveredVersion`); pass that through so `buildPrompt` leads with recovery
       // of the previous branch instead.
       const requestedBuilder = parsed.data.builder;
+      const builderChanging = Boolean(
+        record && requestedBuilder && isBuilderKind(requestedBuilder) && requestedBuilder !== builderOf(record),
+      );
       if (record && requestedBuilder && isActiveBuildRound(record)) {
         const current = builderOf(record);
         if (requestedBuilder !== current) {
@@ -3949,7 +3952,9 @@ export async function registerSubmissionRoutes(
       let studioAckText: string | undefined;
       // Guards the fallback queuing step below against a duplicate write.
       let creatorMessageQueued = false;
-      if (record) {
+      // An explicit builder switch is routing intent, not chat. Letting the chat agent
+      // answer it would prevent the requested new round from starting.
+      if (record && !builderChanging) {
         const chatOutcome = await runChatAgent({
           issueNumber,
           message: sanitizedFeedback,
@@ -4022,9 +4027,6 @@ export async function registerSubmissionRoutes(
       //
       // Self→platform handoff must resume (generation bump + platform dispatch),
       // not drop mail for the agent we are about to invalidate.
-      const builderChanging = Boolean(
-        record && requestedBuilder && isBuilderKind(requestedBuilder) && requestedBuilder !== builderOf(record),
-      );
       if (record && shouldSteerFeedbackViaInbox(record, { builderChanging })) {
         if (!queued) {
           return reply.status(503).send({ error: 'failed to queue feedback for the agent' });
