@@ -517,6 +517,31 @@ describe('CreatorStudioView', () => {
     root.unmount();
   });
 
+  it('keeps the chat launcher in the head actions instead of floating over the game', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
+    fetchStudioGames.mockResolvedValue(studioShelf(manyGames(2)));
+    window.history.replaceState(null, '', '/studio/token-0');
+
+    const { container, root } = await renderStudio({ selectedGame: 'token-0' });
+
+    const chat = container.querySelector<HTMLButtonElement>('.studio-strip-actions .studio-head-action--chat');
+    expect(chat).not.toBeNull();
+    expect(chat?.textContent).toContain('Chat');
+    expect(chat?.querySelector('svg')?.getAttribute('data-icon')).toBe('chat');
+    expect(chat?.getAttribute('title')).toMatch(/chat/i);
+    expect(container.querySelector('.studio-chat-rail-pill')).toBeNull();
+
+    const wasOpen = chat?.getAttribute('aria-pressed') === 'true';
+    await act(async () => {
+      chat!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(chat?.getAttribute('aria-pressed')).toBe(wasOpen ? 'false' : 'true');
+
+    root.unmount();
+  });
+
   it('exposes draft share between Play and Details in the head actions', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');

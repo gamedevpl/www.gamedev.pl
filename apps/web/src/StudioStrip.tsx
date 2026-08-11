@@ -46,6 +46,9 @@ export type StudioStripProps = {
   onToggleCode: () => void;
   detailsActive: boolean;
   onToggleDetails: () => void;
+  threadOpen: boolean;
+  onToggleThread: () => void;
+  threadUnreadCount: number;
   canClaim: boolean;
   onClaim: () => void;
   shareSlot?: ReactNode;
@@ -73,6 +76,9 @@ export function StudioStrip({
   onToggleCode,
   detailsActive,
   onToggleDetails,
+  threadOpen,
+  onToggleThread,
+  threadUnreadCount,
   canClaim,
   onClaim,
   shareSlot,
@@ -200,6 +206,23 @@ export function StudioStrip({
         >
           <PixelIcon name="panel" size={12} />{' '}
           <span className="studio-head-action-label">{t('studioPanel.tabs.details')}</span>
+        </button>
+
+        <button
+          type="button"
+          className={`studio-head-action studio-head-action--chat${threadOpen ? ' is-active' : ''}`}
+          aria-pressed={threadOpen}
+          aria-label={t(threadOpen ? 'studioPanel.rail.closeThread' : 'studioPanel.rail.openThread')}
+          title={t(threadOpen ? 'studioPanel.rail.closeThread' : 'studioPanel.rail.openThread')}
+          onClick={onToggleThread}
+        >
+          <PixelIcon name="chat" size={12} />
+          <span className="studio-head-action-label">{t('studioPanel.rail.chat')}</span>
+          {threadUnreadCount > 0 ? (
+            <span className="studio-chat-unread-badge" aria-hidden="true">
+              {threadUnreadCount > 99 ? '99+' : threadUnreadCount}
+            </span>
+          ) : null}
         </button>
       </div>
     </header>

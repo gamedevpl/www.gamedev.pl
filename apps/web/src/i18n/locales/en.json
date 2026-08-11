@@ -407,6 +407,8 @@
       "connectEmpty": "This round does not need a coding-agent connect step.",
       "buildEmpty": "No checklist yet — it appears once the agent posts tasks.",
       "openThread": "Open chat",
+      "closeThread": "Close chat",
+      "chat": "Chat",
       "collapse": "Collapse",
       "expand": "Expand",
       "popOut": "Open as page",

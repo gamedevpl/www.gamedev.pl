@@ -41,9 +41,9 @@ export function StudioChatRail({
   const [detent, setDetent] = useState<SheetDetent>('half');
   const asideRef = useRef<HTMLElement | null>(null);
 
-  // Collapsed rail stays mounted (see below) but is clipped to 1px via CSS, not
+  // A collapsed rail stays mounted but is clipped to 1px via CSS, not
   // display:none — `aria-hidden` alone does not remove its buttons/textarea from the
-  // tab order, so a keyboard user tabbing past the pill can land on invisible controls.
+  // tab order, so a keyboard user can otherwise land on invisible controls.
   // `inert` (imperative, since @types/react 18 doesn't type it as a JSX prop) removes
   // the whole collapsed subtree from both focus and the accessibility tree.
   useEffect(() => {
@@ -114,10 +114,9 @@ export function StudioChatRail({
 
   const detentClass = isSheet ? ` is-sheet is-${detent}` : '';
 
-  // The thread stays mounted whether the rail is a pill, a peek, or fully open — a
-  // collapse must never unmount `SubmissionStatusView` (its own status poll, and any
-  // text the creator has typed but not sent, would be lost). Only the pill markup is
-  // conditionally rendered; the aside + children are always present, hidden via CSS.
+  // The thread stays mounted whether collapsed, peeking, or fully open — a collapse
+  // must never unmount `SubmissionStatusView` (its poll and unsent composer text would
+  // be lost). The aside + children remain present and are hidden via CSS.
   return (
     <>
       {open && isSheet && detent !== 'peek' ? (
@@ -126,19 +125,6 @@ export function StudioChatRail({
           role="presentation"
           onClick={() => setDetent('peek')}
         />
-      ) : null}
-      {!open ? (
-        <button
-          type="button"
-          className="studio-chat-rail-pill"
-          onClick={() => onOpenChange(true)}
-          aria-label={t('studioPanel.rail.openThread', { defaultValue: 'Open chat' })}
-        >
-          <PixelIcon name="signal" size={14} />
-          {unreadCount > 0 ? (
-            <span className="studio-chat-rail-pill-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>
-          ) : null}
-        </button>
       ) : null}
       <aside
         ref={asideRef}
@@ -195,7 +181,7 @@ export function StudioChatRail({
               {latestEntryLabel ?? t('studioPanel.rail.peekEmpty', { defaultValue: 'No updates yet' })}
             </span>
             {unreadCount > 0 ? (
-              <span className="studio-chat-rail-pill-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>
+              <span className="studio-chat-unread-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>
             ) : null}
           </button>
         ) : null}

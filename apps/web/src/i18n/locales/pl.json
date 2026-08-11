@@ -409,6 +409,8 @@
       "connectEmpty": "Ta runda nie potrzebuje kroku połączenia z agentem.",
       "buildEmpty": "Nie ma jeszcze checklisty — pojawi się, gdy agent doda zadania.",
       "openThread": "Otwórz czat",
+      "closeThread": "Zamknij czat",
+      "chat": "Czat",
       "collapse": "Zwiń",
       "expand": "Rozwiń",
       "popOut": "Otwórz jako stronę",

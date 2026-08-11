@@ -869,6 +869,16 @@ export function CreatorStudioView({
                           setDetailsPane('overview');
                           openTab('details');
                         }}
+                        threadOpen={railOpen}
+                        onToggleThread={() => {
+                          const next = !railOpen;
+                          setRailManualOpen(next);
+                          if (next) {
+                            seenActivityRef.current += checklistUnread;
+                            setChecklistUnread(0);
+                          }
+                        }}
+                        threadUnreadCount={checklistUnread}
                         canClaim={canClaim}
                         onClaim={() => setClaimOpen(true)}
                         shareSlot={shareSlot}

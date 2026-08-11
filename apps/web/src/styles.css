@@ -5512,6 +5512,18 @@ a.user-name--profile:focus-visible {
   border-color: rgba(0, 228, 172, 0.35);
 }
 
+.studio-head-action--chat {
+  position: relative;
+}
+
+.studio-head-action--chat:hover,
+.studio-head-action--chat:focus-visible {
+  color: var(--turquoise);
+  border-color: rgba(0, 228, 172, 0.55);
+  background: rgba(0, 228, 172, 0.08);
+  box-shadow: 0 0 14px rgba(0, 228, 172, 0.12);
+}
+
 .studio-head-action.is-active {
   color: var(--turquoise);
   border-color: rgba(0, 228, 172, 0.4);
@@ -11835,24 +11847,7 @@ button.builder-mode-selector:disabled {
 
 /* ── THE CHAT RAIL ────────────────────────────────────────────────────────────── */
 
-.studio-chat-rail-pill {
-  position: absolute;
-  z-index: 45;
-  right: 14px;
-  bottom: 54px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 46px;
-  height: 46px;
-  border-radius: 50%;
-  border: 1px solid rgba(0, 228, 172, 0.4);
-  background: rgba(8, 12, 16, 0.88);
-  color: var(--turquoise);
-  cursor: pointer;
-}
-
-.studio-chat-rail-pill-badge {
+.studio-chat-unread-badge {
   position: absolute;
   top: -4px;
   right: -4px;
@@ -12047,11 +12042,6 @@ button.builder-mode-selector:disabled {
 
 /* Phone: the rail is a bottom sheet with three detents (Workstream B4). */
 @media (max-width: 800px) {
-  .studio-chat-rail-pill {
-    right: 10px;
-    bottom: 66px;
-  }
-
   .studio-chat-rail.is-sheet {
     position: fixed;
     inset: auto 0 0 0;
