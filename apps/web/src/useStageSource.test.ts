@@ -4,7 +4,7 @@ import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useStageSource } from './useStageSource.js';
-import { getSubmissionPreview } from './submissionApi.js';
+import { getChannelPlayable, getSubmissionPreview } from './submissionApi.js';
 import type { SubmissionStatus } from './submissionApi.js';
 
 vi.mock('./submissionApi.js', async () => {
@@ -13,6 +13,7 @@ vi.mock('./submissionApi.js', async () => {
 });
 
 const mockedGetSubmissionPreview = vi.mocked(getSubmissionPreview);
+const mockedGetChannelPlayable = vi.mocked(getChannelPlayable);
 
 function statusFor(slug: string, headSha: string): SubmissionStatus {
   return {
@@ -47,6 +48,7 @@ describe('useStageSource', () => {
   beforeEach(() => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     mockedGetSubmissionPreview.mockReset();
+    mockedGetChannelPlayable.mockReset();
   });
 
   afterEach(() => {
@@ -73,6 +75,78 @@ describe('useStageSource', () => {
     await render('token-b', null);
     expect(latest().rawHtml).toBeNull();
     expect(latest().origin.kind).toBe('none');
+
+    root.unmount();
+  });
+
+  it('re-fetches and shows the channel build once a staged assembly lands after the loaded preview (CE-12)', async () => {
+    // The exact shape CE-12 fixes: a game that has already delivered (so a gate-built
+    // preview loads first, same as every game an owner would actually want to
+    // hand-edit), then a staging write (owner or agent) lands a fresher channel build.
+    // Before the fix, `if (preview || !latest) return;` disabled this effect for the
+    // rest of the session the instant the preview above loaded — the stage would never
+    // refresh again for this round.
+    mockedGetSubmissionPreview.mockResolvedValue({ slug: 'sky-dodge', title: 'Sky Dodge', html: '<p>gate-built</p>' });
+    mockedGetChannelPlayable.mockResolvedValue('<p>owner-staged</p>');
+
+    const { render, latest, root } = probe();
+    const base = statusFor('sky-dodge', 'sha-a');
+    await render('token-a', base);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(latest().rawHtml).toBe('<p>gate-built</p>');
+    expect(mockedGetChannelPlayable).not.toHaveBeenCalled();
+
+    const staged: SubmissionStatus = {
+      ...base,
+      playable: [{ ref: 'p1', createdAt: new Date(Date.now() + 60_000).toISOString() }],
+    };
+    await render('token-a', staged);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mockedGetChannelPlayable).toHaveBeenCalledTimes(1);
+    expect(latest().rawHtml).toBe('<p>owner-staged</p>');
+    expect(latest().origin.kind).toBe('staged');
+
+    root.unmount();
+  });
+
+  it('keeps showing the loaded preview when the newest playable is not actually newer', async () => {
+    // A channel item that predates (or has no timestamp relative to) the loaded
+    // preview must not flip the display to a stale document — the freshness check
+    // has to be a real comparison, not "any playable item wins".
+    mockedGetSubmissionPreview.mockResolvedValue({ slug: 'sky-dodge', title: 'Sky Dodge', html: '<p>gate-built</p>' });
+    mockedGetChannelPlayable.mockResolvedValue('<p>stale channel</p>');
+
+    const { render, latest, root } = probe();
+    const base = statusFor('sky-dodge', 'sha-a');
+    await render('token-a', base);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(latest().rawHtml).toBe('<p>gate-built</p>');
+
+    // A playable item older than the preview that already loaded — must not trigger a
+    // fetch, and must not be shown even if it somehow were fetched (regression guard
+    // on the freshness comparison itself, not just the effect's early return).
+    const olderPlayable: SubmissionStatus = {
+      ...base,
+      playable: [{ ref: 'p0', createdAt: new Date(Date.now() - 60_000).toISOString() }],
+    };
+    await render('token-a', olderPlayable);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mockedGetChannelPlayable).not.toHaveBeenCalled();
+    expect(latest().rawHtml).toBe('<p>gate-built</p>');
 
     root.unmount();
   });

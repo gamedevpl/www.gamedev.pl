@@ -212,6 +212,16 @@ jobs:
             ENV_VARS="${ENV_VARS}|CODE_LANE=${CODE_LANE_VAL}"
           fi
 
+          # The Code surface (creator-code-editing-execution-plan.md CE-02): manual
+          # editing of a game's own sources in the Studio. A kill switch, not a cohort
+          # gate — the owner decision is all-creators, so it ships on by default and this
+          # variable is only ever set to turn it *off*. Threaded so a hand-set value
+          # cannot vanish on the next deploy the way the incident above found others had.
+          CODE_SURFACE_VAL="${{ vars.CODE_SURFACE }}"
+          if [ -n "$CODE_SURFACE_VAL" ]; then
+            ENV_VARS="${ENV_VARS}|CODE_SURFACE=${CODE_SURFACE_VAL}"
+          fi
+
           # MCP Apps views (SEP-1865) on /api/mcp: a ui:// resource registry and _meta.ui
           # for clients that negotiate the io.modelcontextprotocol/ui extension. Threaded
           # rather than hand-set for the same reason as everything above. Turning it on is

@@ -79,6 +79,7 @@ export interface VisitFunnel {
    * this is a per-visit funnel and deliberately not a per-game one.
    */
   editing: Array<{ step: EditorStep; visits: number }>;
+  coding: Array<{ step: CodeStep; visits: number }>;
   /**
    * The NL tuning lane, against `asked` as its denominator: of the sittings that
    * typed a request, how many got a patch, were told honestly that it needs code,
@@ -262,6 +263,21 @@ export const REMIX_STEPS = [
 
 export type RemixStep = (typeof REMIX_STEPS)[number];
 
+export const CODE_STEPS = [
+  'offered',
+  'opened',
+  'file_opened',
+  'edited',
+  'typechecked',
+  'previewed',
+  'delivered',
+  'published',
+  'read_only_agent',
+  'conflict_seen',
+] as const;
+
+export type CodeStep = (typeof CODE_STEPS)[number];
+
 interface VisitRollup {
   started: boolean;
   /** Creation steps this visit reached. A Set, so a repeated step counts once. */
@@ -276,6 +292,7 @@ interface VisitRollup {
   paintedVia?: string;
   assistSteps: Set<string>;
   remixSteps: Set<string>;
+  codeSteps: Set<string>;
   /** Which control opened the remix — first one wins, like `paintedVia`. */
   remixControl?: string;
   /** How far into the visit the remix was first opened. */
@@ -324,6 +341,7 @@ export function summarizeVisitFunnel(events: VisitEvent[]): VisitFunnel {
       editorSteps: new Set<string>(),
       assistSteps: new Set<string>(),
       remixSteps: new Set<string>(),
+      codeSteps: new Set<string>(),
       howToPlayOpens: 0,
       howToPlayVias: new Set<string>(),
       howToPlayReopened: false,
@@ -350,6 +368,8 @@ export function summarizeVisitFunnel(events: VisitEvent[]): VisitFunnel {
       if (event.step) rollup.editorSteps.add(event.step);
     } else if (event.type === 'assist_step') {
       if (event.step) rollup.assistSteps.add(event.step);
+    } else if (event.type === 'code_step') {
+      if (event.step) rollup.codeSteps.add(event.step);
     } else if (event.type === 'remix_step') {
       if (event.step) rollup.remixSteps.add(event.step);
       if (event.step === 'painted' && rollup.paintedVia === undefined) {
@@ -529,6 +549,10 @@ export function summarizeVisitFunnel(events: VisitEvent[]): VisitFunnel {
     editing: EDITOR_STEPS.map((step) => ({
       step,
       visits: rollups.filter((rollup) => rollup.editorSteps.has(step)).length,
+    })),
+    coding: CODE_STEPS.map((step) => ({
+      step,
+      visits: rollups.filter((rollup) => rollup.codeSteps.has(step)).length,
     })),
     assisting: ASSIST_STEPS.map((step) => ({
       step,

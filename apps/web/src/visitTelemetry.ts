@@ -72,7 +72,8 @@ export type VisitEvent =
   | { type: 'studio_step'; step: StudioStep; builder: BuilderDimension; detail?: StudioStepDetail }
   | { type: 'editor_step'; step: EditorStep }
   | { type: 'assist_step'; step: AssistStep }
-  | { type: 'remix_step'; step: RemixStep; via?: RemixPaintedVia; control?: RemixControl };
+  | { type: 'remix_step'; step: RemixStep; via?: RemixPaintedVia; control?: RemixControl }
+  | { type: 'code_step'; step: CodeStep };
 
 /**
  * The creation funnel, in the order a creator meets it.
@@ -233,6 +234,27 @@ export type RemixStep =
  * and this dimension is what settles it.
  */
 export type RemixPaintedVia = 'redirect' | 'menu' | 'panel';
+
+/**
+ * The Code surface funnel (creator-code-editing-execution-plan.md CE-01): the D.15
+ * lesson applied here — ship the denominator (`offered`) with the door, so "does
+ * anyone edit" is answerable from day one rather than guessed at later.
+ *
+ * `read_only_agent` and `conflict_seen` are not rungs of the ladder; they are states
+ * a visit can be in at any point in it, recorded once per visit like everything else
+ * here. Never carries a file path or source text — nothing below this line does.
+ */
+export type CodeStep =
+  | 'offered'
+  | 'opened'
+  | 'file_opened'
+  | 'edited'
+  | 'typechecked'
+  | 'previewed'
+  | 'delivered'
+  | 'published'
+  | 'read_only_agent'
+  | 'conflict_seen';
 
 /**
  * Which door was used to open a remix: the game page, the theater chrome bar,
@@ -598,6 +620,19 @@ export function recordAssistStep(step: AssistStep): void {
   currentSession.record({ type: 'assist_step', step });
 }
 
+/**
+ * Code-surface steps already recorded for the live visit — same one-rung-per-visit
+ * dedupe as every other funnel here, so a creator who edits fifty lines across ten
+ * files is one `edited`, not fifty.
+ */
+let recordedCodeSteps = new Set<CodeStep>();
+
+export function recordCodeStep(step: CodeStep): void {
+  if (!currentSession || recordedCodeSteps.has(step)) return;
+  recordedCodeSteps.add(step);
+  currentSession.record({ type: 'code_step', step });
+}
+
 let recordedRemixSteps = new Set<string>();
 
 export function recordRemixStep(step: RemixStep, options?: { via?: RemixPaintedVia; control?: RemixControl }): void {
@@ -628,6 +663,7 @@ export function setVisitSessionForTesting(session: VisitSession | null): void {
   recordedEditorSteps = new Set();
   recordedAssistSteps = new Set();
   recordedRemixSteps = new Set();
+  recordedCodeSteps = new Set();
 }
 
 export interface StartVisitTrackingOptions {

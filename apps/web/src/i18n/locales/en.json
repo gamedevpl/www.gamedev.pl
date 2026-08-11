@@ -307,7 +307,35 @@
       "thread": "Thread",
       "details": "Details",
       "playtest": "Play",
-      "edit": "Edit"
+      "edit": "Edit",
+      "code": "Code"
+    },
+    "code": {
+      "back": "Thread",
+      "loading": "Loading your game's sources…",
+      "loadError": "Sources could not be loaded right now.",
+      "agentRound": "An agent is actively building — read only until it finishes",
+      "stagedBy": "staged by {{who}}",
+      "lockedHint": "Read-only — GameKit and the tooling are shared, never edited here",
+      "noFiles": "Nothing to show yet",
+      "budget": "{{lines}}/{{maxLines}} lines",
+      "stageIt": "Stage it",
+      "staging": "Staging…",
+      "staged": "Staged",
+      "rebuildError": "Could not stage — try again",
+      "attestation": "This is my own work, or I have the right to use it",
+      "deliver": "Submit for review",
+      "delivering": "Submitting…",
+      "deliverSuccess": "Delivered — the gate is checking it now.",
+      "deliverRefused": "Not delivered — try again shortly.",
+      "deliverError": "Could not deliver — try again",
+      "saveState": {
+        "clean": "Up to date",
+        "dirty": "Unsaved",
+        "saving": "Saving…",
+        "saved": "Draft saved",
+        "error": "Could not save — retrying"
+      }
     },
     "editor": {
       "loading": "Loading the editor…",

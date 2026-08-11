@@ -115,6 +115,24 @@ const StudioStepDetailSchema = z.enum([
 const EditorStepSchema = z.enum(['opened', 'draft_saved', 'previewed', 'published']);
 /** The NL tuning lane's outcomes — a dimension beside the editing funnel, not a rung in it. */
 const AssistStepSchema = z.enum(['asked', 'applied', 'handoff', 'rejected']);
+/**
+ * The Code surface funnel (creator-code-editing-execution-plan.md CE-01). Reaches a
+ * grouping key on an open endpoint like every other funnel here — and, same as the
+ * editor funnel, never carries a file path or source text; those never leave the
+ * client at all.
+ */
+const CodeStepSchema = z.enum([
+  'offered',
+  'opened',
+  'file_opened',
+  'edited',
+  'typechecked',
+  'previewed',
+  'delivered',
+  'published',
+  'read_only_agent',
+  'conflict_seen',
+]);
 /** The player-side remix funnel — see visit-funnel's REMIX_STEPS for the order's meaning. */
 const RemixStepSchema = z.enum([
   'offered',
@@ -212,6 +230,7 @@ const EventSchema = z.discriminatedUnion('type', [
     control: RemixControlSchema.optional(),
     ...offsetField,
   }),
+  z.object({ type: z.literal('code_step'), step: CodeStepSchema, ...offsetField }),
 ]);
 
 const RequestSchema = z.object({
@@ -325,6 +344,8 @@ export async function registerVisitTelemetryRoutes(
         case 'editor_step':
           return { ...base, type: event.type, step: event.step };
         case 'assist_step':
+          return { ...base, type: event.type, step: event.step };
+        case 'code_step':
           return { ...base, type: event.type, step: event.step };
         case 'remix_step':
           return {

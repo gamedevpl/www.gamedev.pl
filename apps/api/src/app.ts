@@ -28,6 +28,7 @@ import { resolveProposalBase } from './proposal-base.js';
 import { applyProposalToRepo } from './proposal-apply-bot.js';
 import { createSnapshotReaderFromEnv, type GameSnapshotStore } from './game-snapshot.js';
 import { registerAccountDeletionRoutes, type AccountDeletionRoutesOptions } from './account-deletion-routes.js';
+import { registerCreatorCodeRoutes } from './creator-code.js';
 import { registerCreatorStudioRoutes } from './creator-studio.js';
 import { registerEditorRoutes } from './editor-drafts.js';
 import { VertexEditorAssistant, type EditorAssistant } from './editor-assist.js';
@@ -737,6 +738,21 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     gamesStore,
     mintStatusToken: submissionTokenSecret ? (issueNumber) => mintToken(issueNumber, submissionTokenSecret) : undefined,
     objectStore,
+  });
+
+  // The Code surface (creator-code-editing-execution-plan.md): owner reads and
+  // owner-authored staging writes over the same games store and staging buffer the
+  // agent channel uses. `invalidateStatusCache` / `scheduleStagedPreview` are the two
+  // seams `registerSubmissionRoutes` exposes so an owner write busts the same cache and
+  // arms the same staged-preview assembly an agent write does (CE-12).
+  await registerCreatorCodeRoutes(app, {
+    store,
+    gamesStore,
+    objectStore,
+    invalidateStatusCache: submissionSeams.invalidateStatusCache,
+    scheduleStagedPreview: submissionSeams.scheduleStagedPreview ?? undefined,
+    onSourcesDelivered: gateTrigger,
+    log: app.log,
   });
 
   // The Creator Studio content editor (EditorKit): drafts in Firestore, publish
