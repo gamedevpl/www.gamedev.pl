@@ -2289,7 +2289,8 @@ body.player-open {
   width: 100%;
   /* Positioning context for the rotate hint / camera backdrop that overlay the game. */
   position: relative;
-  /* The bar is a sibling flex row, so this child receives the remaining height. */
+  /* The header is absolutely positioned, so this flex child receives the entire
+     theater instead of only the height left below the controls. */
   min-height: 0;
   display: flex;
   align-items: center;
@@ -2327,6 +2328,7 @@ body.player-open {
 
 .theater-camera-indicator {
   position: absolute;
+  /* Clear the floating bar while staying attached to the full-height game surface. */
   top: calc(max(12px, env(safe-area-inset-top)) + 58px);
   left: max(12px, env(safe-area-inset-left));
   z-index: 2;
