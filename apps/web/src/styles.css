@@ -11627,6 +11627,12 @@ button.builder-mode-selector:disabled {
   flex-basis: 100%;
 }
 
+/* A refusal or failure is the one line explaining why nothing shipped — it must not
+   read as footnote grey. */
+.code-surface-deliver-message.is-error {
+  color: #ff7b72;
+}
+
 @media (max-width: 1099px) {
   .code-surface-body {
     grid-template-columns: minmax(0, 1fr);

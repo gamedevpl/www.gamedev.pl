@@ -104,6 +104,23 @@ describe('CodeSurface', () => {
     expect(container.textContent).toContain('export const boot');
   });
 
+  it('opens on game.ts, not whatever sorts first — the manifest listing leads with GAME.json', async () => {
+    mocked.fetchCodeSurfaceSources.mockResolvedValue(
+      sourcesFor({
+        files: [
+          { path: 'GAME.json', content: '{"engine":{"modules":[]}}' },
+          { path: 'SPEC.md', content: '# Sky Dodge' },
+          { path: 'game.ts', content: 'export const boot = () => {};' },
+        ],
+      }),
+    );
+
+    await render();
+
+    const textarea = container.querySelector<HTMLTextAreaElement>('textarea')!;
+    expect(textarea.value).toContain('export const boot');
+  });
+
   it('autosaves an edit to the staging buffer without triggering a rebuild', async () => {
     mocked.fetchCodeSurfaceSources.mockResolvedValue(sourcesFor());
     mocked.stageCodeSurfaceFile.mockResolvedValue({
