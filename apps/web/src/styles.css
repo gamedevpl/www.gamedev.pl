@@ -1852,9 +1852,7 @@ body.player-open {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* The bar floats over the game instead of taking a flex row away from it. Its safe-area
-   insets keep controls clear of a notch or rounded corner; the game remains full-bleed
-   underneath, with its own side/bottom insets below. */
+/* The bar floats over the game and clears itself after gameplay starts. */
 .game-theater-bar {
   position: absolute;
   top: 0;
@@ -2201,7 +2199,8 @@ body.player-open {
   position: relative;
 }
 
-/* Icon-only close control — label lives in aria-label / title. */
+/* Icon-only theater controls keep labels in aria-label / title. */
+.game-theater-actions .theater-hide-btn,
 .game-theater-actions .exit-btn {
   min-width: 40px;
   justify-content: center;
@@ -2249,12 +2248,11 @@ body.player-open {
   margin: 0;
 }
 
-/* Immersive fullscreen: the bar is gone; one floating control exits it.
-   High z-index + post-iframe DOM order keep it above the sandboxed game surface,
-   which otherwise paints over low-z siblings in some browsers. */
+/* Immersive fullscreen: the bar is gone; one floating control exits it. */
 .theater-exit-fullscreen {
   position: absolute;
-  top: max(12px, env(safe-area-inset-top));
+  top: auto;
+  bottom: max(12px, env(safe-area-inset-bottom));
   left: max(12px, env(safe-area-inset-left));
   z-index: 50;
   display: inline-flex;
@@ -2467,6 +2465,7 @@ body.player-open {
   /* Sized for a thumb (Apple/Google both land on ~44px) rather than a cursor. */
   .game-theater-actions > button,
   .game-theater-actions .theater-more-btn,
+  .game-theater-actions .theater-hide-btn,
   .game-theater-actions .exit-btn {
     min-width: 44px;
     min-height: 44px;

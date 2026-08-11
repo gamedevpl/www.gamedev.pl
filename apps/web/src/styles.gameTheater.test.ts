@@ -15,7 +15,7 @@ function ruleBody(selector: string): string {
 }
 
 describe('game theater floating bar', () => {
-  it('overlays the full-height game instead of taking a flex row', () => {
+  it('overlays the full-height game until gameplay makes it idle', () => {
     const bar = ruleBody('.game-theater-bar');
 
     expect(bar).toMatch(/position:\s*absolute/);
@@ -52,5 +52,12 @@ describe('game theater floating bar', () => {
     expect(reveal).toMatch(/width:\s*44px/);
     expect(reveal).toMatch(/height:\s*44px/);
     expect(reveal).toMatch(/background:\s*rgba\(12,\s*18,\s*24,\s*0\.62\)/);
+  });
+
+  it('keeps the native fullscreen exit away from top-edge game HUDs', () => {
+    const exit = ruleBody('.theater-exit-fullscreen');
+
+    expect(exit).toMatch(/top:\s*auto/);
+    expect(exit).toMatch(/bottom:\s*max\(12px,\s*env\(safe-area-inset-bottom\)\)/);
   });
 });
