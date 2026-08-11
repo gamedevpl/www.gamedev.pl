@@ -100,10 +100,11 @@ describe('Copilot managed provider', () => {
       branch: 'seed/job-42',
       baseRef: 'main',
       message: 'Seed round 0 for comet-courier (job 42)',
-      files: [{ path: 'game.ts', content: 'x' }],
+      files: [{ path: 'games/comet-courier/game.ts', content: 'x' }],
     });
     expect(stub.startTask.mock.calls[0]?.[0].baseRef).toBe('seed/job-42');
-    expect(session.workspace).toBe('seed/job-42');
+    expect(session.workspace).toBeUndefined();
+    expect(session.seedWorkspace).toBe('seed/job-42');
   });
 
   it('fails open to an unseeded prompt when the seed branch cannot be written', async () => {

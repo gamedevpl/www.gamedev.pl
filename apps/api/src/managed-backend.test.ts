@@ -187,6 +187,24 @@ describe('managed backend', () => {
     expect(started[0].workspaceFiles).toEqual([{ path: `games/${SLUG}/game.ts`, content: 'export {};' }]);
   });
 
+  it('preserves the provider seed workspace separately from the agent workspace', async () => {
+    const { provider } = fakeProvider({
+      startSession: async () => ({
+        id: 'session-1',
+        state: 'queued',
+        workspace: 'copilot/comet-courier',
+        seedWorkspace: 'seed/job-42',
+      }),
+    });
+    const backend = createManagedBackend({ provider, deliver: async () => ({ version: 'v1' }) });
+
+    await expect(backend.dispatch(brief())).resolves.toEqual({
+      ref: 'session-1',
+      workspace: 'copilot/comet-courier',
+      seedWorkspace: 'seed/job-42',
+    });
+  });
+
   it('pulls the delivery once the session parks, and reports tokens not credits', async () => {
     const { provider, setState, setOutputs } = fakeProvider();
     const delivered: ManagedDeliveryInput[] = [];

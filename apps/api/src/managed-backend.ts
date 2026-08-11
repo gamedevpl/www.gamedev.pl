@@ -276,6 +276,7 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
     return {
       ref: session.id,
       ...(session.workspace ? { workspace: session.workspace } : {}),
+      ...(session.seedWorkspace ? { seedWorkspace: session.seedWorkspace } : {}),
       ...(session.credentialRef ? { credentialRef: session.credentialRef } : {}),
     };
   }

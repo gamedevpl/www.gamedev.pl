@@ -68,6 +68,7 @@ export interface ManagedSession {
   state: AgentTaskState;
   credentialRef?: string;
   workspace?: string;
+  seedWorkspace?: string;
   // The vendor's own word, kept for operator views.
   vendorState?: string;
   usage?: ManagedSessionUsage;

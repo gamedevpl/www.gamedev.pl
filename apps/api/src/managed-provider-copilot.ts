@@ -57,7 +57,6 @@ async function stageSeed(
   const files = request.workspaceFiles;
   const slug = seedSlug(files);
   if (!files?.length || !slug) return null;
-  const prefix = `games/${slug}/`;
   const branch = seedBranchName(request.correlationId);
   try {
     await github.deleteBranch(branch).catch(() => undefined);
@@ -65,7 +64,7 @@ async function stageSeed(
       branch,
       baseRef,
       message: `Seed round 0 for ${slug} (job ${request.correlationId})`,
-      files: files.map((file) => ({ path: file.path.slice(prefix.length), content: file.content })),
+      files,
     });
     return branch;
   } catch {
@@ -134,7 +133,7 @@ export function createCopilotManagedProvider(
         createPullRequest,
         customAgent,
       });
-      return { ...taskSession(task, request.model), ...(seedBranch ? { workspace: seedBranch } : {}) };
+      return { ...taskSession(task, request.model), ...(seedBranch ? { seedWorkspace: seedBranch } : {}) };
     },
 
     async getSession(sessionId: string): Promise<ManagedSession | null> {
