@@ -543,16 +543,15 @@ export async function registerCreatorCodeRoutes(
         paths,
       });
       options.invalidateStatusCache?.(record.issueNumber);
+      // Rebuild so Play drops the cancelled draft.
+      options.scheduleStagedPreview?.(record.issueNumber);
       return reply.send(result);
     },
   );
 
   /**
-   * POST /api/me/studio/games/:slug/sources/stage/rebuild (CE-13) — "Stage it": the
-   * deliberate act that makes the full-bleed stage change, over whatever autosave has
-   * already written to the buffer. Debounced/rate-limited the same way the agent
-   * channel's own staging writes are (`STAGED_PREVIEW_MIN_GAP_MS` etc. in
-   * staged-preview.ts) — this route only arms that timer, it does not bypass it.
+   * POST /api/me/studio/games/:slug/sources/stage/rebuild (CE-13) — arms the
+   * debounced staged-preview assembly. Studio auto-calls after autosave/discard.
    */
   app.post<{ Params: { slug: string } }>(
     '/api/me/studio/games/:slug/sources/stage/rebuild',
@@ -807,7 +806,13 @@ export async function registerCreatorCodeRoutes(
           authorship,
           actor: 'creator',
         });
-        if (outcome.accepted) lastDeliverAt.set(slug, nowMs);
+        if (outcome.accepted) {
+          lastDeliverAt.set(slug, nowMs);
+          // Publish consumes the buffer, like agent fromStaged submit.
+          await gamesStore
+            .clearStagedSources({ slug, issueNumber: record.issueNumber, roundGeneration })
+            .catch(() => {});
+        }
         options.invalidateStatusCache?.(record.issueNumber);
         return reply.send(outcome);
       } catch (error) {
