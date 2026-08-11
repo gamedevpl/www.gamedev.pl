@@ -165,10 +165,12 @@ describe('InMemoryStore', () => {
       { preserveEnded: true },
     );
     expect((await store.getSubmission(62))?.agentEndedAt).toBe('2026-08-04T01:00:00.000Z');
+    expect((await store.getSubmission(62))?.agentEndedBy).toBe('end');
     expect((await store.getSubmission(62))?.lastAgentSignalAt).toBe('2026-08-04T01:01:00.000Z');
 
     await store.touchLastAgentSignalAt(62, '2026-08-04T01:02:00.000Z', { key: 'browsing_kit' });
     expect((await store.getSubmission(62))?.agentEndedAt).toBeUndefined();
+    expect((await store.getSubmission(62))?.agentEndedBy).toBeUndefined();
   });
 
   it('ensureRoundGeneration initializes a legacy job without bumping an existing one', async () => {

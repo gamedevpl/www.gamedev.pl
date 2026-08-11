@@ -3921,25 +3921,27 @@ export async function registerSubmissionRoutes(
       const builderChanging = Boolean(
         record && requestedBuilder && isBuilderKind(requestedBuilder) && requestedBuilder !== builderOf(record),
       );
-      if (record && requestedBuilder && isActiveBuildRound(record)) {
-        const current = builderOf(record);
-        if (requestedBuilder !== current) {
-          const stall = detectStall({
+      const currentStall = record
+        ? detectStall({
             state: record.state ?? 'queued',
             stateSince: record.stateSince ?? record.createdAt,
             lastAgentSignalAt: record.lastAgentSignalAt,
             agentState: record.agentState,
             agentEndedAt: record.agentEndedAt,
             now: now(),
-            builder: current,
-          });
+            builder: builderOf(record),
+          })
+        : null;
+      if (record && requestedBuilder && isActiveBuildRound(record)) {
+        const current = builderOf(record);
+        if (requestedBuilder !== current) {
           // Ended (MCP `end`) or quiet self → platform is the handoff escape hatch.
           // Anything else mid-round stays locked (two agents must not write the same round).
           if (
             !allowsSelfToPlatformHandoff({
               currentBuilder: current,
               requestedBuilder,
-              stall,
+              stall: currentStall,
               agentEndedAt: record.agentEndedAt,
             })
           ) {
@@ -4011,12 +4013,12 @@ export async function registerSubmissionRoutes(
           request.log.error({ err: queueError }, 'failed to queue feedback for the agent');
         }
       }
-      if (store && queued && studioAckText) {
-        // Optional ack, after the creator's own message so order stays honest.
+      const appendStudioAck = async () => {
+        if (!store || !queued || !studioAckText) return;
         await store
           .appendCreatorMessage(issueNumber, studioAckText, { origin: 'studio_ack', delivered: true })
           .catch(() => {});
-      }
+      };
 
       // An in-flight round that already has a dispatch ref steers via the inbox (every
       // progress reply carries pending messages) — including gate-wait and gate-red
@@ -4030,10 +4032,12 @@ export async function registerSubmissionRoutes(
       //
       // Self→platform handoff must resume (generation bump + platform dispatch),
       // not drop mail for the agent we are about to invalidate.
-      if (record && shouldSteerFeedbackViaInbox(record, { builderChanging })) {
+      if (record && shouldSteerFeedbackViaInbox(record, { builderChanging, stall: currentStall })) {
         if (!queued) {
           return reply.status(503).send({ error: 'failed to queue feedback for the agent' });
         }
+        // The current agent accepted the note, so its acknowledgement is truthful.
+        await appendStudioAck();
         // Inbox-only: still drop the status cache so the creator's note appears on the
         // next poll instead of riding a stale 60s snapshot.
         invalidateStatusCache(issueNumber);
@@ -4043,18 +4047,7 @@ export async function registerSubmissionRoutes(
         });
       }
 
-      const handoffStall =
-        builderChanging && record
-          ? detectStall({
-              state: record.state ?? 'queued',
-              stateSince: record.stateSince ?? record.createdAt,
-              lastAgentSignalAt: record.lastAgentSignalAt,
-              agentState: record.agentState,
-              agentEndedAt: record.agentEndedAt,
-              now: now(),
-              builder: builderOf(record),
-            })
-          : null;
+      const handoffStall = builderChanging && record ? currentStall : null;
       const handoffReason =
         record?.agentEndedAt || handoffStall === 'ended'
           ? 'agent_ended_handoff'
@@ -4080,6 +4073,8 @@ export async function registerSubmissionRoutes(
         },
       });
 
+      // Store the acknowledgement only after a new session is accepted.
+      if (outcome.started) await appendStudioAck();
       // Drop the cached status: without this, Studio kept serving the previous self
       // round (`no_agent_yet` / ended) for up to a minute while Copilot was already
       // queued on GitHub — exactly the "agent not connected" false warning.
