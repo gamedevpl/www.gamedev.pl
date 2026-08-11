@@ -9916,6 +9916,15 @@ button.builder-mode-selector:disabled {
   animation: mascot-hustle 0.45s ease-in-out infinite;
 }
 
+/*
+ * The stir is the "busy" tell while cooking — a full-body hustle on top of it reads as
+ * two animations fighting instead of one. Same specificity as the busy rule above, so
+ * source order alone decides; this has to stay below it to win.
+ */
+.mascot:not(.mascot--static).mascot--cooking .mascot__body-group {
+  animation: mascot-breathe 2.8s ease-in-out infinite;
+}
+
 .mascot:not(.mascot--static).mascot--sad .mascot__body-group {
   animation: mascot-sigh 3.6s ease-in-out infinite;
 }
