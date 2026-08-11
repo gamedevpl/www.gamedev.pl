@@ -1281,11 +1281,7 @@ export async function registerSubmissionRoutes(
       const roundGeneration = input.undelivered
         ? ((await store.ensureRoundGeneration(input.issueNumber)) ?? 1)
         : ((await store.bumpRoundGeneration(input.issueNumber)) ?? (record?.roundGeneration ?? 0) + 1);
-      // `bumpRoundGeneration` already clears these as part of closing the previous
-      // round. `ensureRoundGeneration` does not — an undelivered nudge keeps the same
-      // round, but a fresh agent invocation is still about to run, so a stale
-      // `agentEndedAt` from the prior turn must not survive to make Studio read the
-      // new turn as idle. Calling this unconditionally is a no-op on the bumped path.
+      // ensureRoundGeneration doesn't clear agentEndedAt like bumpRoundGeneration does.
       if (input.undelivered) {
         await store.clearAgentEnded(input.issueNumber);
       }

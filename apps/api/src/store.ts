@@ -1798,15 +1798,7 @@ export interface Store {
    * validation rejects the brand-new key (`active === undefined`).
    */
   ensureRoundGeneration(issueNumber: number): Promise<number | null>;
-  /**
-   * Clears the ended/stall signals a previous turn left behind — `agentEndedAt`,
-   * `lastAgentSignalAt`, `lastAgentPresence` — without touching round counters or
-   * generation. `bumpRoundGeneration` already does this as part of closing a round;
-   * this exists for resumes that keep the round open (`ensureRoundGeneration`, the
-   * undelivered path) but still hand the job to a fresh agent invocation, so a stale
-   * `agentEndedAt` from the prior turn must not make Studio show the build as idle
-   * while the new turn is actively running.
-   */
+  // Clears stale agentEndedAt/lastAgentSignalAt/lastAgentPresence without touching round counters.
   clearAgentEnded(issueNumber: number): Promise<void>;
   // Fixes the round's kit engine and returns it; first caller wins.
   // `replace` overrides the pin: kit_outdated recovery, or a kit gone.

@@ -1146,14 +1146,6 @@ describe('submission routes', () => {
   });
 
   it('drops cached stall=ended when an undelivered round is resumed via retry', async () => {
-    // Same hazard as the delivered case above, but for a game with no candidate yet.
-    // `resumeBuild`'s `undelivered: true` branch (used whenever `deliveredVersion` is
-    // unset — creator feedback, the reconciler's "finished without delivering" nudge,
-    // and operator retry all take it) called `ensureRoundGeneration`, which — unlike
-    // `bumpRoundGeneration` on the delivered path — did not clear a stale
-    // `agentEndedAt` left over from a prior MCP `end`. Studio's foot bar treated that
-    // leftover as "agent not working" and collapsed the build-progress UI even while a
-    // fresh session was actively running underneath.
     const { githubClient } = createGithubClientStub({ issueNumber: 79 });
     const { backend } = createBackendStub();
     const { app, authHeaders, store } = await createApp({
@@ -1183,8 +1175,6 @@ describe('submission routes', () => {
     await store.touchLastAgentSignalAt(job.issueNumber, new Date().toISOString());
     await store.markAgentEnded(job.issueNumber, new Date().toISOString());
 
-    // No deliveredVersion — the job never uploaded a candidate, so this is the
-    // `undelivered: true` path.
     const before = await store.getSubmission(job.issueNumber);
     expect(before?.deliveredVersion).toBeFalsy();
 
