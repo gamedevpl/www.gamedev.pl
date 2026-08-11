@@ -1281,10 +1281,6 @@ export async function registerSubmissionRoutes(
       const roundGeneration = input.undelivered
         ? ((await store.ensureRoundGeneration(input.issueNumber)) ?? 1)
         : ((await store.bumpRoundGeneration(input.issueNumber)) ?? (record?.roundGeneration ?? 0) + 1);
-      // ensureRoundGeneration doesn't clear agentEndedAt like bumpRoundGeneration does.
-      if (input.undelivered) {
-        await store.clearAgentEnded(input.issueNumber);
-      }
       if (!input.undelivered) {
         await store.setRoundBuilder(input.issueNumber, builder, {
           resetRoundBudget: !input.preserveRoundBudget,
@@ -1341,6 +1337,9 @@ export async function registerSubmissionRoutes(
             workspace: previous!.workspace,
           })
         : await selected.dispatch(brief);
+      if (input.undelivered) {
+        await store.clearAgentEnded(input.issueNumber);
+      }
       await store.recordDispatch(input.issueNumber, {
         backend: selected.name,
         ref: result.ref,
