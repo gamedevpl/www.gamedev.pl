@@ -121,9 +121,8 @@ async function stubStudioThreadData(page: Page) {
     }
     const path = new URL(route.request().url()).pathname.replace(/\/$/, '');
     if (path.endsWith(`/api/submissions/${FIXTURE_TOKEN}`)) {
-      // Terminal status so the view stops polling; composer still mounts for any
-      // non-abandoned state (SubmissionStatusView, embedded + compact).
-      await fulfillJson(route, { status: 'published', slug: FIXTURE_SLUG });
+      // needs_changes: rail stays open; published collapses it (#739).
+      await fulfillJson(route, { status: 'needs_changes', slug: FIXTURE_SLUG });
       return;
     }
     await route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"not found"}' });
@@ -204,9 +203,9 @@ describe.skipIf(!prereq.ok)('the studio thread as an app screen', () => {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
       await visit(page, '/studio', 4_000);
 
-      // The fixture must put a composer on screen. If it does not, the shell CSS under
-      // test never ran — fail loudly rather than green-ticking an empty assertion.
+      // Expanded rail + composer — collapsed 1px clip makes stick checks nonsense.
       try {
+        await page.waitForSelector('.studio-chat-rail:not(.is-collapsed)', { state: 'attached', timeout: 15_000 });
         await page.waitForSelector('.status-composer.is-compact', { state: 'visible', timeout: 15_000 });
       } catch {
         expect.fail(
@@ -220,6 +219,7 @@ describe.skipIf(!prereq.ok)('the studio thread as an app screen', () => {
         const body = document.querySelector('.studio-thread-scroll-body');
         const detail = document.querySelector('.studio-detail');
         const layout = document.querySelector('.studio-layout');
+        const rail = document.querySelector('.studio-chat-rail');
         // The fixture thread is empty/short. A pad sized as a fraction of the
         // scrollport cannot create overflow by itself (percentage of H is ≤ H),
         // so "scrollHeight - clientHeight" is the wrong signal here — it would
@@ -236,8 +236,9 @@ describe.skipIf(!prereq.ok)('the studio thread as an app screen', () => {
           scrollerClientHeight = scroller.clientHeight;
           const turn = document.createElement('div');
           turn.dataset.e2eInjected = 'true';
-          // Taller than the 4.5rem the pad leaves, so max-scroll is non-trivial.
-          turn.style.cssText = 'height:200px;flex:none;';
+          // Probe must fit the scrollport (phone half-sheet is ~150px tall).
+          const turnHeight = Math.min(200, Math.max(48, Math.floor(scrollerClientHeight * 0.3) || 48));
+          turn.style.cssText = `height:${turnHeight}px;flex:none;`;
           const mount = body ?? pad.parentElement;
           if (mount && body) {
             body.appendChild(turn);
@@ -272,10 +273,20 @@ describe.skipIf(!prereq.ok)('the studio thread as an app screen', () => {
           viewportWidth: window.innerWidth,
           hasSwitcher: Boolean(document.querySelector('.studio-game-switcher')),
           hasShelf: Boolean(document.querySelector('.studio-shelf')),
+          railCollapsed: Boolean(rail?.classList.contains('is-collapsed')),
+          railHeight: rail?.getBoundingClientRect().height ?? 0,
         };
       });
 
       expect(shell.gameOpen, 'the studio should mark a game open so the shell CSS applies').toBe(true);
+      expect(shell.railCollapsed, 'chat rail must stay expanded so stick/runway can be measured').toBe(false);
+      expect(shell.railHeight, 'expanded chat rail needs a real height, not the 1px collapsed clip').toBeGreaterThan(
+        120,
+      );
+      expect(
+        shell.scrollerClientHeight,
+        'transcript scrollport must be tall enough to measure stick geometry',
+      ).toBeGreaterThan(80);
       expect(shell.compactShelf, 'the fixture shelf must be large enough to enter compact-rail mode').toBe(true);
       expect(shell.shelfOpen, 'compact shelf should start collapsed/closed').toBe(false);
       expect(shell.hasSwitcher, 'the switch-game combo must stay gone').toBe(false);

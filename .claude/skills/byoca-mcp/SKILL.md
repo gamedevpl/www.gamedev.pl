@@ -62,9 +62,8 @@ progress, staging/submission, gate media, inbox — and, since 2026-08-09, the k
 itself. Proposal and example browse/read tools remain callable for compatibility but
 are not advertised to models; kit browse/read tools (`list_kit_files`,
 `search_kit_files`, `read_kit_file`, `read_kit_files`, `read_kit_file_fragment`) now
-are, alongside a new `get_kit_api`, and — once the games-repo knowledge corpus and its
-Discovery Engine data store exist — `knowledge_query` for everything `get_kit_api`
-does not cover.
+are, alongside `get_kit_api` and, since 2026-08-11, `knowledge_query` for everything
+`get_kit_api` does not cover.
 
 **Trimming the surface is only half the job — the prose has to follow.** The channel names
 the kit browse tools in every `get_kit` reply, because a REST agent can call them by URL.
@@ -174,15 +173,12 @@ falls back to raw chunks with `fallback:true`, and any upstream failure (timeout
 malformed payload) degrades to a `warnings`-carrying result rather than ever throwing into
 a tool result or a hard error mid-round. A per-round soft cap (roughly 15 `answer` + 30
 `chunks` calls, split because an `answer` call costs several times a `chunks` call) also
-degrades to a warning rather than a hard 429. Shipped unadvertised (present in the tool
-registry, absent from `MCP_VISIBLE_TOOLS`, so it stays callable for tests and direct
-invocation) on purpose: no production data store is populated yet, so advertising it
-before an owner runs the games repo's `infra/setup-gcp.sh` counterpart and confirms a
-real `documents:import` has succeeded would hand every agent a tool that 503s on every
-call. Add `knowledge_query` to `MCP_VISIBLE_TOOLS` (and update the three surface-guard
-tests plus the `SESSION_WORKFLOW` line pointing agents at it, both reverted alongside
-it) once that is confirmed live — the same staged-rollout shape `get_kit_api` itself
-went through.
+degrades to a warning rather than a hard 429. Shipped unadvertised at first (present in
+the tool registry, absent from `MCP_VISIBLE_TOOLS`) while the production data store did
+not exist yet — went visible 2026-08-11, once an owner ran the games repo's
+`infra/setup-gcp.sh` counterpart, a real `documents:import` landed 238/238 documents,
+and the live `:search`/`:answer` response shapes were confirmed against the parser —
+the same staged-rollout shape `get_kit_api` itself went through.
 
 ### A digest-sized tool result is not free — get_kit_api broke in production at 100 KiB
 

@@ -14,6 +14,8 @@ import type { GamesStore } from './games-store.js';
 import { DELIVERY_GATE_VERDICT_MSG } from './delivery-metrics.js';
 import { JOB_ID_FLOOR } from './store.js';
 import { createManagedAvailabilityGate, type ManagedAvailabilityGate } from './managed-availability.js';
+import { StubStudioChatAgent, type ChatAgentRequest, type StudioChatAgent } from './chat-agent.js';
+import type { ChatGate } from './creation-limits.js';
 
 const secret = 'submission-secret';
 const repo = 'gamedevpl/www.gamedev.pl-games';
@@ -117,6 +119,7 @@ async function createApp(params: {
   store?: Store;
   dailySubmissionQuota?: number;
   dailyFeedbackQuota?: number;
+  dailyImprovementQuota?: number;
   globalDailySubmissionCap?: number;
   creationLimitsTtlMs?: number;
   contentChecker?: ContentChecker;
@@ -135,6 +138,9 @@ async function createApp(params: {
   gameSeeder?: GameSeeder;
   // Defaults to always-available; tests of the switch pass an explicit gate.
   managedAvailabilityGate?: ManagedAvailabilityGate | null;
+  chatAgent?: StudioChatAgent;
+  dailyChatQuota?: number;
+  chatGate?: ChatGate | null;
 }): Promise<{ app: FastifyInstance; store: Store; authHeaders: Record<string, string> }> {
   const store = params.store ?? new InMemoryStore();
   await store.upsertUser({ uid: 'g:test-user' });
@@ -153,11 +159,16 @@ async function createApp(params: {
       now: params.now,
       dailySubmissionQuota: params.dailySubmissionQuota,
       dailyFeedbackQuota: params.dailyFeedbackQuota,
+      dailyImprovementQuota: params.dailyImprovementQuota,
       globalDailySubmissionCap: params.globalDailySubmissionCap,
       creationLimitsTtlMs: params.creationLimitsTtlMs,
       maxCachedDraftPreviews: params.maxCachedDraftPreviews,
       ...(params.agentChannel ? { agentChannel: params.agentChannel } : {}),
       managedAvailabilityGate: params.managedAvailabilityGate === undefined ? null : params.managedAvailabilityGate,
+      // No deploy flag anymore — keeps unrelated tests off the real network.
+      chatAgent: params.chatAgent ?? new StubStudioChatAgent({ kind: 'build' }),
+      ...(params.dailyChatQuota !== undefined ? { dailyChatQuota: params.dailyChatQuota } : {}),
+      ...(params.chatGate !== undefined ? { chatGate: params.chatGate } : {}),
     },
   });
   return { app, store, authHeaders: getAuthHeaders('g:test-user') };
@@ -3034,6 +3045,484 @@ describe('submission feedback route', () => {
   });
 });
 
+describe('the Studio mini chat agent (feedback route)', () => {
+  it('answers conversationally and never queues or dispatches a change request', async () => {
+    const { backend } = createBackendStub();
+    const decide = vi.fn(async () => ({ kind: 'reply' as const, text: 'Still building — nothing has shipped yet.' }));
+    const { app, authHeaders, store } = await createApp({
+      githubClient: createGithubClientStub({ issueNumber: 90 }).githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      chatAgent: { decide },
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about a garden full of robots.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    const token = mintToken(job.issueNumber, secret);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${token}/feedback`,
+      headers: authHeaders,
+      payload: { feedback: 'is it done yet?' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(decide).toHaveBeenCalledTimes(1);
+
+    // Never entered the builder's inbox — not collectable as work.
+    const pending = await store.listPendingCreatorMessages(job.issueNumber);
+    expect(pending.some((m) => m.text === 'is it done yet?')).toBe(false);
+
+    // Both turns land on the thread, in order and distinguishable.
+    const all = await store.listCreatorMessages(job.issueNumber);
+    const tail = all.slice(-2);
+    expect(tail[0].text).toBe('is it done yet?');
+    expect(tail[0].origin).toBeUndefined();
+    expect(tail[1]).toMatchObject({ text: 'Still building — nothing has shipped yet.', origin: 'studio' });
+
+    const status = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
+    const revisions = status.json().progress?.revisions ?? [];
+    expect(revisions.at(-1)).toMatchObject({
+      text: 'Still building — nothing has shipped yet.',
+      origin: 'studio',
+    });
+    await app.close();
+  });
+
+  it('passes recent build events oldest-first, though the store returns them newest-first', async () => {
+    const { backend } = createBackendStub();
+    let seenEvents: string[] = [];
+    const decide = vi.fn(async (request: ChatAgentRequest) => {
+      seenEvents = request.status.recentEvents;
+      return { kind: 'reply' as const, text: 'a reply' };
+    });
+    const { app, authHeaders, store } = await createApp({
+      githubClient: createGithubClientStub({ issueNumber: 90 }).githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      chatAgent: { decide },
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about a garden full of robots.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+
+    await store.appendBuildEvent(job.issueNumber, {
+      kind: 'step',
+      text: 'Sketching the level layout.',
+      createdAt: '2026-08-01T00:00:00.000Z',
+    });
+    await store.appendBuildEvent(job.issueNumber, {
+      kind: 'step',
+      text: 'Fixed the jump bug.',
+      createdAt: '2026-08-01T00:05:00.000Z',
+    });
+
+    const token = mintToken(job.issueNumber, secret);
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${token}/feedback`,
+      headers: authHeaders,
+      payload: { feedback: 'what changed recently?' },
+    });
+    expect(res.statusCode).toBe(200);
+    // Chronological, oldest first — matching what describeStatus tells the model.
+    expect(seenEvents).toEqual(['Sketching the level layout.', 'Fixed the jump bug.']);
+    await app.close();
+  });
+
+  it('fails open to the pre-existing path when the model errors', async () => {
+    const { backend } = createBackendStub();
+    const decide = vi.fn(async () => {
+      throw new Error('vertex timeout');
+    });
+    const { app, authHeaders, store } = await createApp({
+      githubClient: createGithubClientStub({ issueNumber: 90 }).githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      chatAgent: { decide },
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about a garden full of robots.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    const token = mintToken(job.issueNumber, secret);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${token}/feedback`,
+      headers: authHeaders,
+      payload: { feedback: 'Make the robots water the flowers faster.' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(decide).toHaveBeenCalledTimes(1);
+    // Lost nothing: the message still reached the builder's inbox.
+    const pending = await store.listPendingCreatorMessages(job.issueNumber);
+    expect(pending.map((m) => m.text)).toContain('Make the robots water the flowers faster.');
+    await app.close();
+  });
+
+  it('the composer escape hatch skips the model entirely', async () => {
+    const { backend } = createBackendStub();
+    const decide = vi.fn(async () => ({ kind: 'reply' as const, text: 'should never be read' }));
+    const { app, authHeaders, store } = await createApp({
+      githubClient: createGithubClientStub({ issueNumber: 90 }).githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      chatAgent: { decide },
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about a garden full of robots.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    const token = mintToken(job.issueNumber, secret);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${token}/feedback`,
+      headers: authHeaders,
+      payload: { feedback: 'Make the robots water the flowers faster.', directToBuilder: true },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(decide).not.toHaveBeenCalled();
+    const pending = await store.listPendingCreatorMessages(job.issueNumber);
+    expect(pending.map((m) => m.text)).toContain('Make the robots water the flowers faster.');
+    await app.close();
+  });
+
+  it("a build decision still queues the creator's own words, plus an optional studio ack", async () => {
+    const { backend } = createBackendStub();
+    const decide = vi.fn(async () => ({ kind: 'build' as const, text: 'On it!' }));
+    const { app, authHeaders, store } = await createApp({
+      githubClient: createGithubClientStub({ issueNumber: 90 }).githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      chatAgent: { decide },
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about a garden full of robots.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    const token = mintToken(job.issueNumber, secret);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${token}/feedback`,
+      headers: authHeaders,
+      payload: { feedback: 'Make the robots water the flowers faster.' },
+    });
+    expect(res.statusCode).toBe(200);
+
+    // Dispatched the creator's own words verbatim, never the model's.
+    const pending = await store.listPendingCreatorMessages(job.issueNumber);
+    expect(pending.map((m) => m.text)).toContain('Make the robots water the flowers faster.');
+
+    const all = await store.listCreatorMessages(job.issueNumber);
+    const ack = all.find((m) => m.origin === 'studio_ack');
+    expect(ack?.text).toBe('On it!');
+    await app.close();
+  });
+
+  it('remembers a past build turn as built, not as a reply, even when it had an ack', async () => {
+    const { backend } = createBackendStub();
+    // First call dispatches with an ack; second call is what actually asserts.
+    const decide = vi
+      .fn<(request: ChatAgentRequest) => Promise<{ kind: 'build' | 'reply'; text: string }>>()
+      .mockResolvedValueOnce({ kind: 'build', text: 'On it!' })
+      .mockResolvedValueOnce({ kind: 'reply', text: 'Still working on it.' });
+    const { app, authHeaders, store } = await createApp({
+      githubClient: createGithubClientStub({ issueNumber: 90 }).githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      chatAgent: { decide },
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about a garden full of robots.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    const token = mintToken(job.issueNumber, secret);
+
+    await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${token}/feedback`,
+      headers: authHeaders,
+      payload: { feedback: 'make it faster' },
+    });
+    await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${token}/feedback`,
+      headers: authHeaders,
+      payload: { feedback: 'is it done yet?' },
+    });
+
+    expect(decide).toHaveBeenCalledTimes(2);
+    const secondRequest = decide.mock.calls[1]![0];
+    // Not a reply — that would say it never dispatched last time.
+    expect(secondRequest.history).toContainEqual({ message: 'make it faster', built: true, ackText: 'On it!' });
+    await app.close();
+  });
+
+  it('a conversational reply does not spend the daily feedback quota', async () => {
+    const { backend } = createBackendStub();
+    const decide = vi
+      .fn<(request: ChatAgentRequest) => Promise<{ kind: 'build' | 'reply'; text?: string }>>()
+      .mockResolvedValueOnce({ kind: 'reply', text: 'Still building.' })
+      .mockResolvedValueOnce({ kind: 'build' });
+    const { app, authHeaders, store } = await createApp({
+      githubClient: createGithubClientStub({ issueNumber: 90 }).githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      chatAgent: { decide },
+      // One slot total — a question must not spend it.
+      dailyFeedbackQuota: 1,
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about a garden full of robots.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    const token = mintToken(job.issueNumber, secret);
+
+    const question = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${token}/feedback`,
+      headers: authHeaders,
+      payload: { feedback: 'is it done yet?' },
+    });
+    expect(question.statusCode).toBe(200);
+    expect(question.json()).toEqual({ ok: true });
+
+    const realFeedback = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${token}/feedback`,
+      headers: authHeaders,
+      payload: { feedback: 'Make the robots water the flowers faster.' },
+    });
+    expect(realFeedback.statusCode).toBe(200);
+    const pending = await store.listPendingCreatorMessages(job.issueNumber);
+    expect(pending.map((m) => m.text)).toContain('Make the robots water the flowers faster.');
+    await app.close();
+  });
+
+  it("books the model tokens on the job's own cost ledger, beside gate runs and seeds", async () => {
+    const { backend } = createBackendStub();
+    const decide = vi.fn(async () => ({
+      kind: 'reply' as const,
+      text: 'Still building.',
+      tokens: { input: 500, output: 40 },
+      model: 'gemini-3.6-flash',
+    }));
+    const { app, authHeaders, store } = await createApp({
+      githubClient: createGithubClientStub({ issueNumber: 90 }).githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      chatAgent: { decide },
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about a garden full of robots.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    const token = mintToken(job.issueNumber, secret);
+
+    await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${token}/feedback`,
+      headers: authHeaders,
+      payload: { feedback: 'is it done yet?' },
+    });
+
+    const record = await store.getSubmission(job.issueNumber);
+    const entry = record?.costs?.find((cost) => cost.kind === 'chat');
+    expect(entry).toMatchObject({ by: 'gemini-3.6-flash', tokens: { input: 500, output: 40 } });
+    await app.close();
+  });
+
+  it('falls open once the per-user daily chat quota is spent', async () => {
+    const { backend } = createBackendStub();
+    const decide = vi.fn(async () => ({ kind: 'reply' as const, text: 'a reply' }));
+    const { app, authHeaders, store } = await createApp({
+      githubClient: createGithubClientStub({ issueNumber: 90 }).githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      chatAgent: { decide },
+      dailyChatQuota: 1,
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about a garden full of robots.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    const token = mintToken(job.issueNumber, secret);
+
+    const first = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${token}/feedback`,
+      headers: authHeaders,
+      payload: { feedback: 'is it done yet?' },
+    });
+    expect(first.statusCode).toBe(200);
+    expect(decide).toHaveBeenCalledTimes(1);
+
+    // Quota spent: the day's next message falls open to the builder.
+    const second = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${token}/feedback`,
+      headers: authHeaders,
+      payload: { feedback: 'Please make the robots water the flowers faster.' },
+    });
+    expect(second.statusCode).toBe(200);
+    expect(decide).toHaveBeenCalledTimes(1);
+    const pending = await store.listPendingCreatorMessages(job.issueNumber);
+    expect(pending.map((m) => m.text)).toContain('Please make the robots water the flowers faster.');
+    await app.close();
+  });
+
+  it('falls open when the global chat breaker is paused, without touching editing', async () => {
+    const { backend } = createBackendStub();
+    const decide = vi.fn(async () => ({ kind: 'reply' as const, text: 'a reply' }));
+    const store = new InMemoryStore();
+    await store.setCreationLimits({ chatPaused: true }, 'operator');
+    const { app, authHeaders } = await createApp({
+      githubClient: createGithubClientStub({ issueNumber: 90 }).githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      chatAgent: { decide },
+      store,
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about a garden full of robots.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    const token = mintToken(job.issueNumber, secret);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${token}/feedback`,
+      headers: authHeaders,
+      payload: { feedback: 'Please make the robots water the flowers faster.' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(decide).not.toHaveBeenCalled();
+    const pending = await store.listPendingCreatorMessages(job.issueNumber);
+    expect(pending.map((m) => m.text)).toContain('Please make the robots water the flowers faster.');
+    await app.close();
+  });
+
+  it('a breaker that throws (a Firestore blip) falls open rather than failing the request', async () => {
+    // A broken gate must degrade to "skip the layer", never a 500.
+    const { backend } = createBackendStub();
+    const decide = vi.fn(async () => ({ kind: 'reply' as const, text: 'a reply' }));
+    const failingChatGate: ChatGate = {
+      checkAndSpend: async () => {
+        throw new Error('firestore unavailable');
+      },
+    };
+    const { app, authHeaders, store } = await createApp({
+      githubClient: createGithubClientStub({ issueNumber: 90 }).githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      chatAgent: { decide },
+      chatGate: failingChatGate,
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about a garden full of robots.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    const token = mintToken(job.issueNumber, secret);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${token}/feedback`,
+      headers: authHeaders,
+      payload: { feedback: 'Please make the robots water the flowers faster.' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(decide).not.toHaveBeenCalled();
+    const pending = await store.listPendingCreatorMessages(job.issueNumber);
+    expect(pending.map((m) => m.text)).toContain('Please make the robots water the flowers faster.');
+    await app.close();
+  });
+
+  it('a Firestore blip while recording the reply falls open to the builder’s inbox', async () => {
+    class FlakyReplyStore extends InMemoryStore {
+      async appendCreatorMessage(
+        issueNumber: number,
+        text: string,
+        opts?: { origin?: 'agent' | 'studio'; delivered?: boolean; textLocalized?: string; locale?: string },
+      ) {
+        if (opts?.origin === 'studio') throw new Error('firestore unavailable');
+        return super.appendCreatorMessage(issueNumber, text, opts);
+      }
+    }
+    const store = new FlakyReplyStore();
+    const { backend } = createBackendStub();
+    const decide = vi.fn(async () => ({ kind: 'reply' as const, text: 'Still building.' }));
+    const { app, authHeaders } = await createApp({
+      githubClient: createGithubClientStub({ issueNumber: 90 }).githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      store,
+      chatAgent: { decide },
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about a garden full of robots.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    const token = mintToken(job.issueNumber, secret);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${token}/feedback`,
+      headers: authHeaders,
+      payload: { feedback: 'is it done yet?' },
+    });
+
+    // The write failed, so this should fail open, not claim success.
+    expect(res.statusCode).toBe(200);
+    const pending = await store.listPendingCreatorMessages(job.issueNumber);
+    expect(pending.map((m) => m.text)).toContain('is it done yet?');
+    // The fallback below must not queue a second, duplicate copy.
+    const all = await store.listCreatorMessages(job.issueNumber);
+    expect(all.filter((m) => m.text === 'is it done yet?')).toHaveLength(1);
+    await app.close();
+  });
+});
+
 describe('POST /api/submissions/:token/improve', () => {
   it('dispatches a job for a published game the caller owns, rather than filing an issue', async () => {
     // Changed deliberately (IL-3). This used to create a games-repo issue, which was the
@@ -3107,6 +3596,197 @@ describe('POST /api/submissions/:token/improve', () => {
     expect(res.statusCode).toBe(403);
     expect(createIssue).not.toHaveBeenCalled();
     await app.close();
+  });
+
+  describe('the Studio mini chat agent', () => {
+    it('a conversational reply answers on the current job and opens no new one', async () => {
+      const { githubClient, createIssue } = createGithubClientStub({ issueNumber: 501 });
+      const store = new InMemoryStore();
+      const { backend, briefs } = createBackendStub();
+      const decide = vi.fn(async () => ({ kind: 'reply' as const, text: 'You can tune difficulty from Settings.' }));
+      const { app, authHeaders } = await createApp({
+        githubClient,
+        agentBackend: backend,
+        submissionTokenSecret: secret,
+        store,
+        chatAgent: { decide },
+      });
+      await store.createSubmission(123, 'g:test-user', 'Sky Dodge');
+      await store.setSubmissionSlug(123, 'sky-dodge');
+      await store.setSubmissionPublishedAt(123, '2026-07-20T00:00:00.000Z');
+
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/submissions/${mintToken(123, secret)}/improve`,
+        headers: authHeaders,
+        payload: { feedback: 'how do I make it harder?' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ ok: true });
+      expect(createIssue).not.toHaveBeenCalled();
+      // No new job: the reply lives on the published job's thread.
+      expect(briefs).toHaveLength(0);
+      const all = await store.listCreatorMessages(123);
+      expect(all.map((m) => ({ text: m.text, origin: m.origin }))).toEqual([
+        { text: 'how do I make it harder?', origin: undefined },
+        { text: 'You can tune difficulty from Settings.', origin: 'studio' },
+      ]);
+      await app.close();
+    });
+
+    it('a build decision still opens a new improvement job as before', async () => {
+      const { githubClient } = createGithubClientStub({ issueNumber: 501 });
+      const store = new InMemoryStore();
+      const { backend, briefs } = createBackendStub();
+      const decide = vi.fn(async () => ({ kind: 'build' as const }));
+      const { app, authHeaders } = await createApp({
+        githubClient,
+        agentBackend: backend,
+        submissionTokenSecret: secret,
+        store,
+        chatAgent: { decide },
+      });
+      await store.createSubmission(123, 'g:test-user', 'Sky Dodge');
+      await store.setSubmissionSlug(123, 'sky-dodge');
+      await store.setSubmissionPublishedAt(123, '2026-07-20T00:00:00.000Z');
+
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/submissions/${mintToken(123, secret)}/improve`,
+        headers: authHeaders,
+        payload: { feedback: 'Make level two less punishing and add a checkpoint.' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({ ok: true, slug: 'sky-dodge' });
+      expect(briefs).toHaveLength(1);
+      expect(briefs.at(-1)!.feedback).toContain('Make level two less punishing');
+      await app.close();
+    });
+
+    it('a conversational reply does not spend the daily improvement quota', async () => {
+      const { githubClient, createIssue } = createGithubClientStub({ issueNumber: 501 });
+      const store = new InMemoryStore();
+      const { backend, briefs } = createBackendStub();
+      const responses: Array<{ kind: 'reply'; text: string } | { kind: 'build' }> = [
+        { kind: 'reply', text: 'first answer' },
+        { kind: 'reply', text: 'second answer' },
+        { kind: 'build' },
+      ];
+      let next = 0;
+      const decide = vi.fn(async () => responses[next++]!);
+      const { app, authHeaders } = await createApp({
+        githubClient,
+        agentBackend: backend,
+        submissionTokenSecret: secret,
+        store,
+        chatAgent: { decide },
+        // One slot total — a question must not spend it.
+        dailyImprovementQuota: 1,
+      });
+      await store.createSubmission(123, 'g:test-user', 'Sky Dodge');
+      await store.setSubmissionSlug(123, 'sky-dodge');
+      await store.setSubmissionPublishedAt(123, '2026-07-20T00:00:00.000Z');
+
+      for (let i = 0; i < 2; i++) {
+        const res = await app.inject({
+          method: 'POST',
+          url: `/api/submissions/${mintToken(123, secret)}/improve`,
+          headers: authHeaders,
+          payload: { feedback: `question ${i}, is it done yet?` },
+        });
+        expect(res.statusCode).toBe(200);
+        expect(res.json()).toEqual({ ok: true });
+      }
+      expect(createIssue).not.toHaveBeenCalled();
+
+      const build = await app.inject({
+        method: 'POST',
+        url: `/api/submissions/${mintToken(123, secret)}/improve`,
+        headers: authHeaders,
+        payload: { feedback: 'Make level two less punishing and add a checkpoint.' },
+      });
+      expect(build.statusCode).toBe(200);
+      expect(briefs).toHaveLength(1);
+      await app.close();
+    });
+
+    it('a conversational reply is not blocked by platform unavailability', async () => {
+      const { githubClient } = createGithubClientStub({ issueNumber: 501 });
+      const store = new InMemoryStore();
+      const { backend } = createBackendStub();
+      const decide = vi.fn(async () => ({ kind: 'reply' as const, text: 'Still building.' }));
+      const { app, authHeaders } = await createApp({
+        githubClient,
+        agentBackend: backend,
+        submissionTokenSecret: secret,
+        store,
+        chatAgent: { decide },
+        managedAvailabilityGate: createManagedAvailabilityGate({ hasPlatformBackend: false }),
+      });
+      await store.createSubmission(123, 'g:test-user', 'Sky Dodge');
+      await store.setSubmissionSlug(123, 'sky-dodge');
+      await store.setSubmissionPublishedAt(123, '2026-07-20T00:00:00.000Z');
+
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/submissions/${mintToken(123, secret)}/improve`,
+        headers: authHeaders,
+        payload: { feedback: 'is it done yet?' },
+      });
+      // Would 409 here if this ran the build-only availability check.
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ ok: true });
+      await app.close();
+    });
+
+    it('a Firestore blip while recording the reply falls open to a real improvement round', async () => {
+      const { githubClient } = createGithubClientStub({ issueNumber: 501 });
+      class FlakyReplyStore extends InMemoryStore {
+        async appendCreatorMessage(
+          issueNumber: number,
+          text: string,
+          opts?: { origin?: 'agent' | 'studio'; delivered?: boolean; textLocalized?: string; locale?: string },
+        ) {
+          if (opts?.origin === 'studio') throw new Error('firestore unavailable');
+          return super.appendCreatorMessage(issueNumber, text, opts);
+        }
+      }
+      const store = new FlakyReplyStore();
+      const { backend, briefs } = createBackendStub();
+      const decide = vi.fn(async () => ({ kind: 'reply' as const, text: 'Still building.' }));
+      const { app, authHeaders } = await createApp({
+        githubClient,
+        agentBackend: backend,
+        submissionTokenSecret: secret,
+        store,
+        chatAgent: { decide },
+      });
+      await store.createSubmission(123, 'g:test-user', 'Sky Dodge');
+      await store.setSubmissionSlug(123, 'sky-dodge');
+      await store.setSubmissionPublishedAt(123, '2026-07-20T00:00:00.000Z');
+
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/submissions/${mintToken(123, secret)}/improve`,
+        headers: authHeaders,
+        payload: { feedback: 'is it done yet?' },
+      });
+
+      // The write failed, so this should fail open, not claim success.
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({ ok: true, slug: 'sky-dodge' });
+      expect(briefs).toHaveLength(1);
+      expect(briefs.at(-1)!.feedback).toContain('is it done yet?');
+      // No duplicate left behind on the old, published job.
+      const onOldJob = await store.listCreatorMessages(123);
+      const copies = onOldJob.filter((m) => m.text === 'is it done yet?');
+      expect(copies).toHaveLength(1);
+      // Delivered, not pending — priorRounds must not show it as a live duplicate.
+      expect(copies[0]!.deliveredAt).toBeTruthy();
+      await app.close();
+    });
   });
 });
 

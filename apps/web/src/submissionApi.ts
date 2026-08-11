@@ -33,12 +33,8 @@ export type BuildProgress = {
   revisions?: Array<{
     text: string;
     createdAt: string;
-    /**
-     * `'agent'` when an agent wrote the request on the creator's behalf rather than the
-     * creator typing it. Those get a "relayed by your agent" label instead of being
-     * presented as the creator's own words. Absent means the creator typed it.
-     */
-    origin?: 'agent';
+    // 'agent': relayed by the agent. 'studio': the chat agent. Else: the creator.
+    origin?: 'agent' | 'studio';
   }>;
 };
 
@@ -209,7 +205,7 @@ export type PriorRoundEntry = {
   /** Untrusted text — render escaped. */
   text: string;
   createdAt: string;
-  origin?: 'agent';
+  origin?: 'agent' | 'studio';
   step?: BuildStep;
 };
 
@@ -476,6 +472,8 @@ export async function submitFeedback(
   feedback: string,
   context?: FeedbackContext,
   builder?: 'platform' | 'self',
+  // Composer escape hatch: skip the chat agent for this one message.
+  directToBuilder?: boolean,
 ): Promise<FeedbackResult> {
   const response = await fetch(`${API_BASE}/api/submissions/${encodeURIComponent(token)}/feedback`, {
     method: 'POST',
@@ -485,6 +483,7 @@ export async function submitFeedback(
       feedback,
       ...(context ? { context } : {}),
       ...(builder ? { builder } : {}),
+      ...(directToBuilder ? { directToBuilder } : {}),
     }),
   });
 

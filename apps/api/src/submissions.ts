@@ -7,7 +7,13 @@ import { registerAgentChannelRoutes, type AgentChannelOptions } from './agent-ch
 import { mintAgentToken, mintManagedMcpOpener } from './agent-token.js';
 import { registerMcpServerRoutes } from './mcp-server.js';
 import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './assemble.js';
-import { createCreationGate, CREATION_REFUSAL_CODES, type CreationGate } from './creation-limits.js';
+import {
+  createCreationGate,
+  createChatGate,
+  CREATION_REFUSAL_CODES,
+  type ChatGate,
+  type CreationGate,
+} from './creation-limits.js';
 import {
   createManagedAvailabilityGate,
   MANAGED_UNAVAILABLE_ERROR,
@@ -77,6 +83,19 @@ import {
   logDeliveryGateVerdict,
   type DeliveryGateStatus,
 } from './delivery-metrics.js';
+import {
+  VertexStudioChatAgent,
+  type ChatAgentScope,
+  type ChatAgentStatus,
+  type StudioChatAgent,
+} from './chat-agent.js';
+import {
+  asChatAgentLogger,
+  logChatAgentDecision,
+  logChatAgentEscapeHatch,
+  logChatAgentFailOpen,
+} from './chat-agent-metrics.js';
+import { MAX_CHAT_TURNS, rememberChatTurn, type ChatTurn } from './chat-turns.js';
 import { mintConnectPayload } from './self-build-connect.js';
 import { createLocalGamesClient, resolveLocalGamesDir } from './local-games-repo.js';
 import { createMailerFromEnv, type Mailer } from './mailer.js';
@@ -90,6 +109,7 @@ import { mintGameSlug } from './slug.js';
 import { runSlugBackfill, settleSlugClaim } from './slug-backfill.js';
 import {
   DELETED_ACCOUNT_UID,
+  isStudioOrigin,
   type BuildPreviewSummary,
   type BuildShotSummary,
   type CreatorMessageOrigin,
@@ -177,6 +197,8 @@ const FeedbackRequestSchema = z.object({
    * is still active — switching is a round-boundary decision only.
    */
   builder: z.enum(['platform', 'self']).optional(),
+  // Composer escape hatch: skip the mini chat agent for this one message.
+  directToBuilder: z.boolean().optional(),
   /**
    * Optional playtest attachment from Creator Studio: a paused-frame PNG (base64,
    * no data: prefix) plus a small instrumentation digest. Treated as data, never
@@ -250,6 +272,13 @@ function stripPlaytestContext(text: string): string {
   return marker === -1 ? text : text.slice(0, marker).trimEnd();
 }
 
+// 'studio_ack' displays exactly like 'studio' — only the backend tells them apart.
+function revisionOriginOf(message: { origin?: CreatorMessageOrigin }): 'agent' | 'studio' | undefined {
+  if (message.origin === 'agent') return 'agent';
+  if (isStudioOrigin(message.origin)) return 'studio';
+  return undefined;
+}
+
 async function storeCreatorPlaytestShot(
   store: Store,
   issueNumber: number,
@@ -316,6 +345,14 @@ export interface SubmissionRoutesOptions {
   dailyFeedbackQuota?: number;
   /** Separate from submissions so improving a live game does not crowd out creating one. */
   dailyImprovementQuota?: number;
+  // Fronts every feedback/improve message (chat-agent.ts). Always on when set.
+  chatAgent?: StudioChatAgent;
+  // The chat agent's own circuit breaker (creation-limits.ts); null disables.
+  chatGate?: ChatGate | null;
+  // Ceiling used when the config doc sets none (creation-limits.ts).
+  globalDailyChatCap?: number;
+  // Per-creator daily ceiling on chat-agent turns — separate from build quota.
+  dailyChatQuota?: number;
   contentChecker?: ContentChecker;
   internalAuthVerifier?: InternalAuthVerifier;
   /** Mailer for notification email fan-out; defaults to createMailerFromEnv(). */
@@ -613,6 +650,28 @@ export async function registerSubmissionRoutes(
   // Start small (docs/improvement-loop-plan.md): agent runs are scarce, and a published
   // improvement is a real implementer job — not a draft tweak.
   const dailyImprovementQuota = options.dailyImprovementQuota ?? Number(process.env.DAILY_IMPROVEMENT_QUOTA ?? '2');
+  // See chat-agent.ts. Lazy Vertex client — cheap to construct unconditionally.
+  const chatAgent = options.chatAgent ?? new VertexStudioChatAgent();
+  const chatAgentLog = asChatAgentLogger(app.log);
+  // Per-IP burst limit — independent of the per-user daily quota below.
+  const chatTurnsByIp = new Map<string, number[]>();
+  const chatTurnRateLimitWindowMs = 60_000;
+  const maxChatTurnsPerWindow = 20;
+  // Per-creator daily ceiling, same UsageCounters mechanism as feedback/improve.
+  const dailyChatQuota = options.dailyChatQuota ?? Number(process.env.DAILY_CHAT_QUOTA ?? '300');
+  // See creation-limits.ts.
+  const chatGate =
+    options.chatGate === undefined
+      ? store
+        ? createChatGate({
+            store,
+            now,
+            ttlMs: options.creationLimitsTtlMs,
+            defaultGlobalDailyCap: options.globalDailyChatCap,
+            logWarn: (payload, message) => app.log.warn(payload, message),
+          })
+        : null
+      : options.chatGate;
   const improvementRateLimitWindowMs = 60 * 60 * 1000;
   const maxImprovementsPerWindow = 10;
   const internalAuthVerifier = options.internalAuthVerifier ?? createInternalAuthVerifierFromEnv();
@@ -1373,15 +1432,164 @@ export async function registerSubmissionRoutes(
    * suggestion — so that they cannot disagree about how work reaches an agent. When the
    * legacy issue leg is retired this is one branch to delete rather than two that drifted.
    */
-  /**
-   * The localization pair to store alongside a relayed change request, or nothing.
-   *
-   * Only for `origin: 'agent'`. A creator's own words are already in the language they
-   * chose to type them in; translating those would hand them back a paraphrase of their
-   * own request, which is the bug the `origin` field exists to prevent.
-   */
+  // Facts the mini chat agent may speak from (chat-agent.ts).
+  async function buildChatAgentStatus(record: SubmissionRecord, scope: ChatAgentScope): Promise<ChatAgentStatus> {
+    const state = record.state ?? 'queued';
+    // A fresh improvement job has no round to classify a stall for.
+    const stall =
+      scope === 'draft'
+        ? detectStall({
+            state,
+            stateSince: record.stateSince ?? record.createdAt,
+            lastAgentSignalAt: record.lastAgentSignalAt,
+            agentState: record.agentState,
+            agentEndedAt: record.agentEndedAt,
+            now: now(),
+            builder: builderOf(record),
+          })
+        : null;
+    const [pending, events] = store
+      ? await Promise.all([
+          store.listPendingCreatorMessages(record.issueNumber, { limit: 20 }),
+          store.listBuildEvents(record.issueNumber, { limit: 3 }),
+        ])
+      : [[], []];
+    return {
+      scope,
+      state,
+      ...(stall ? { stall } : {}),
+      hasDelivered: Boolean(record.deliveredVersion),
+      ...(scope === 'improve' ? { isPublished: Boolean(record.publishedAt) } : {}),
+      pendingCount: pending.length,
+      // listBuildEvents is newest-first; describeStatus labels these oldest-first.
+      recentEvents: events
+        .filter((event) => !isMcpPresenceEventText(event.text))
+        .map((event) => event.text)
+        .reverse(),
+      minutesSinceLastSignal: record.lastAgentSignalAt
+        ? Math.max(0, Math.round((now() - Date.parse(record.lastAgentSignalAt)) / 60_000))
+        : null,
+    };
+  }
+
+  // Recent turns for the chat agent's history (chat-turns.ts), oldest first.
+  async function recentChatTurns(issueNumber: number): Promise<ChatTurn[]> {
+    if (!store) return [];
+    const raw = await store.listCreatorMessages(issueNumber, { limit: MAX_CHAT_TURNS * 3 });
+    let turns: ChatTurn[] = [];
+    let pending: string | null = null;
+    for (const message of raw) {
+      if (message.origin === 'studio') {
+        if (pending !== null) {
+          turns = rememberChatTurn(turns, { message: pending, reply: message.text });
+          pending = null;
+        }
+        continue;
+      }
+      if (message.origin === 'studio_ack') {
+        if (pending !== null) {
+          turns = rememberChatTurn(turns, { message: pending, built: true, ackText: message.text });
+          pending = null;
+        }
+        continue;
+      }
+      // Unpaired: sent to the builder either way, ack or not.
+      if (pending !== null) turns = rememberChatTurn(turns, { message: pending, built: true });
+      pending = stripPlaytestContext(message.text);
+    }
+    if (pending !== null) turns = rememberChatTurn(turns, { message: pending, built: true });
+    return turns;
+  }
+
+  type ChatAgentOutcome = { kind: 'build'; ackText?: string } | { kind: 'replied'; replyText: string };
+
+  // Runs the mini chat agent; null takes the pre-existing path unchanged.
+  async function runChatAgent(input: {
+    issueNumber: number;
+    // The clean creator sentence, never the fenced playtest context block.
+    message: string;
+    scope: ChatAgentScope;
+    record: SubmissionRecord;
+    locale: string;
+    ip: string;
+    uid: string;
+    directToBuilder?: boolean;
+  }): Promise<ChatAgentOutcome | null> {
+    if (!store || !chatAgentLog) return null;
+    if (input.directToBuilder) {
+      logChatAgentEscapeHatch(chatAgentLog, { issueNumber: input.issueNumber, scope: input.scope });
+      return null;
+    }
+    if (isRateLimited(chatTurnsByIp, input.ip, now(), maxChatTurnsPerWindow, chatTurnRateLimitWindowMs)) {
+      return null;
+    }
+    // The gate/quota reads sit inside this same fail-open boundary too.
+    try {
+      const dateStr = new Date(now()).toISOString().slice(0, 10);
+      if (chatGate) {
+        const gate = await chatGate.checkAndSpend(input.uid, dateStr);
+        if (!gate.allowed) {
+          logChatAgentFailOpen(chatAgentLog, {
+            issueNumber: input.issueNumber,
+            scope: input.scope,
+            reason: gate.reason,
+          });
+          return null;
+        }
+      }
+      const quota = await store.checkAndIncrementQuota(input.uid, dateStr, dailyChatQuota, 'chats');
+      if (!quota.allowed) {
+        logChatAgentFailOpen(chatAgentLog, {
+          issueNumber: input.issueNumber,
+          scope: input.scope,
+          reason: 'daily_quota',
+        });
+        return null;
+      }
+      const [status, history] = await Promise.all([
+        buildChatAgentStatus(input.record, input.scope),
+        recentChatTurns(input.issueNumber),
+      ]);
+      const decision = await chatAgent.decide({
+        message: input.message,
+        status,
+        history,
+        locale: input.locale,
+        ...(input.record.title || input.record.spec
+          ? { game: { title: input.record.title, concept: input.record.spec } }
+          : {}),
+      });
+      logChatAgentDecision(chatAgentLog, {
+        issueNumber: input.issueNumber,
+        scope: input.scope,
+        outcome: decision.kind,
+      });
+      if (decision.tokens) {
+        await store
+          .recordJobCost(input.issueNumber, {
+            kind: 'chat',
+            at: new Date(now()).toISOString(),
+            by: decision.model ?? 'vertex',
+            tokens: decision.tokens,
+          })
+          .catch(() => {});
+      }
+      return decision.kind === 'build'
+        ? { kind: 'build', ...(decision.text ? { ackText: decision.text } : {}) }
+        : { kind: 'replied', replyText: decision.text };
+    } catch (error) {
+      logChatAgentFailOpen(chatAgentLog, {
+        issueNumber: input.issueNumber,
+        scope: input.scope,
+        reason: error instanceof Error ? error.message : String(error),
+      });
+      return null;
+    }
+  }
+
+  // Localization pair for a relayed request, or nothing — only 'agent' translates.
   async function relayedMessageLocalization(
-    origin: 'agent' | 'creator' | undefined,
+    origin: CreatorMessageOrigin | undefined,
     text: string,
   ): Promise<IntakeText> {
     // A creator's own words are stored exactly as typed, in whatever language they chose.
@@ -1869,7 +2077,7 @@ export async function registerSubmissionRoutes(
           messages.map((message) => ({
             text: stripPlaytestContext(message.text),
             createdAt: message.createdAt,
-            ...(message.origin === 'agent' ? { origin: 'agent' as const } : {}),
+            ...(revisionOriginOf(message) ? { origin: revisionOriginOf(message) } : {}),
             ...(message.textLocalized && message.locale
               ? { textLocalized: stripPlaytestContext(message.textLocalized), locale: message.locale }
               : {}),
@@ -1879,7 +2087,7 @@ export async function registerSubmissionRoutes(
           kind: 'revision' as const,
           text: revision.text,
           createdAt: revision.createdAt,
-          ...(revision.origin === 'agent' ? { origin: 'agent' as const } : {}),
+          ...(revision.origin === 'agent' || revision.origin === 'studio' ? { origin: revision.origin } : {}),
         }));
         const eventEntries: PriorRoundEntry[] = localizeEvents(events, locale).map((event) => ({
           kind: 'event' as const,
@@ -2337,7 +2545,7 @@ export async function registerSubmissionRoutes(
           revisions: messages.map((message) => ({
             text: stripPlaytestContext(message.text),
             createdAt: message.createdAt,
-            ...(message.origin === 'agent' ? { origin: 'agent' as const } : {}),
+            ...(revisionOriginOf(message) ? { origin: revisionOriginOf(message) } : {}),
             ...(message.textLocalized && message.locale
               ? { textLocalized: stripPlaytestContext(message.textLocalized), locale: message.locale }
               : {}),
@@ -3659,19 +3867,9 @@ export async function registerSubmissionRoutes(
         return reply.status(429).send({ error: 'too many feedback requests, please try again later' });
       }
 
-      // 3. Daily per-user quota.
       const dateStr = new Date(currentTime).toISOString().slice(0, 10);
-      if (store) {
-        const quota = await store.checkAndIncrementQuota(request.user!.uid, dateStr, dailyFeedbackQuota, 'feedback');
-        if (!quota.allowed) {
-          if (quota.tier === 'blocked') {
-            return reply.status(403).send({ error: 'account is blocked' });
-          }
-          return reply.status(429).send({ error: 'daily feedback quota exceeded' });
-        }
-      }
 
-      // 4. A published game is done; a revision is a new idea, not a change request.
+      // 3. A published game is done; a revision is a new idea, not a change request.
       //    The record is the authority — there is no PR to consult any more.
       const record = store ? await store.getSubmission(issueNumber) : null;
       if (record?.publishedAt) {
@@ -3694,6 +3892,7 @@ export async function registerSubmissionRoutes(
         }
       }
       const contextBlock = formatPlaytestContextBlock(parsed.data.context, shotId);
+      const inboxText = contextBlock ? `${sanitizedFeedback}\n\n${contextBlock}` : sanitizedFeedback;
 
       // A revision is a new task on the job's existing workspace, dispatched by us. This
       // used to be a GitHub comment carrying a marker, which a games-repo workflow then
@@ -3738,19 +3937,70 @@ export async function registerSubmissionRoutes(
           }
         }
       }
+      // Fronts the message (chat-agent.ts); null takes this route unchanged.
+      let studioAckText: string | undefined;
+      // Guards the fallback queuing step below against a duplicate write.
+      let creatorMessageQueued = false;
+      if (record) {
+        const chatOutcome = await runChatAgent({
+          issueNumber,
+          message: sanitizedFeedback,
+          scope: 'draft',
+          record,
+          locale: creatorLocale,
+          ip: request.ip,
+          uid: request.user!.uid,
+          directToBuilder: parsed.data.directToBuilder,
+        });
+        if (chatOutcome?.kind === 'replied' && store) {
+          try {
+            // Marked delivered once the reply lands too — see markCreatorMessagesDelivered below.
+            const creatorMessage = await store.appendCreatorMessage(issueNumber, inboxText);
+            creatorMessageQueued = true;
+            await store.appendCreatorMessage(issueNumber, chatOutcome.replyText, {
+              origin: 'studio',
+              delivered: true,
+            });
+            await store.markCreatorMessagesDelivered(issueNumber, [creatorMessage.id]);
+            invalidateStatusCache(issueNumber);
+            return reply.send({ ok: true, ...(shotId ? { shotId } : {}) });
+          } catch (queueError) {
+            // A failed write must not claim success — fail open instead.
+            request.log.error({ err: queueError }, 'failed to record studio chat reply; failing open to the builder');
+          }
+        }
+        if (chatOutcome?.kind === 'build') studioAckText = chatOutcome.ackText;
+      }
+
+      // 4. Daily per-user quota — a conversational reply above already returned.
+      if (store) {
+        const quota = await store.checkAndIncrementQuota(request.user!.uid, dateStr, dailyFeedbackQuota, 'feedback');
+        if (!quota.allowed) {
+          if (quota.tier === 'blocked') {
+            return reply.status(403).send({ error: 'account is blocked' });
+          }
+          return reply.status(429).send({ error: 'daily feedback quota exceeded' });
+        }
+      }
+
       // Queue *before* dispatch. resumeBuild awaits the agent-tasks API, and a slow or
       // hung upstream used to hold this handler open with the creator's words still only
       // in the request body — so a timed-out send lost the note. The inbox is the durable
       // copy; the dispatch is the head start.
-      const inboxText = contextBlock ? `${sanitizedFeedback}\n\n${contextBlock}` : sanitizedFeedback;
-      let queued = false;
-      if (store) {
+      let queued = creatorMessageQueued;
+      if (store && !creatorMessageQueued) {
         try {
           await store.appendCreatorMessage(issueNumber, inboxText);
           queued = true;
         } catch (queueError) {
           request.log.error({ err: queueError }, 'failed to queue feedback for the agent');
         }
+      }
+      if (store && queued && studioAckText) {
+        // Optional ack, after the creator's own message so order stays honest.
+        await store
+          .appendCreatorMessage(issueNumber, studioAckText, { origin: 'studio_ack', delivered: true })
+          .catch(() => {});
       }
 
       // An in-flight round that already has a dispatch ref steers via the inbox (every
@@ -3912,6 +4162,51 @@ export async function registerSubmissionRoutes(
 
       const currentTime = now();
       const dateStr = new Date(currentTime).toISOString().slice(0, 10);
+      const sanitizedFeedback = sanitizeCreatorText(parsed.data.feedback, { singleLine: false });
+      const sanitizedTitle = sanitizeCreatorText(`Improve ${record.title}`, { singleLine: true });
+      let shotId: string | undefined;
+      if (parsed.data.context?.screenshotPng) {
+        try {
+          shotId = await storeCreatorPlaytestShot(store, issueNumber, parsed.data.context.screenshotPng);
+        } catch (shotError) {
+          request.log.error({ err: shotError }, 'failed to store creator playtest screenshot');
+        }
+      }
+      const contextBlock = formatPlaytestContextBlock(parsed.data.context, shotId);
+      const inboxText = contextBlock ? `${sanitizedFeedback}\n\n${contextBlock}` : sanitizedFeedback;
+      const requestedBuilder = parsed.data.builder;
+
+      // Classify before spending any build-only quota or availability check.
+      let studioAckText: string | undefined;
+      // A pending copy left on this job by a failed reply attempt, if any.
+      let orphanedChatMessageId: string | undefined;
+      const chatOutcome = await runChatAgent({
+        issueNumber,
+        message: sanitizedFeedback,
+        scope: 'improve',
+        record,
+        locale: record.locale ?? 'en',
+        ip: request.ip,
+        uid: request.user!.uid,
+        directToBuilder: parsed.data.directToBuilder,
+      });
+      if (chatOutcome?.kind === 'replied') {
+        try {
+          // Avoids an orphaned "delivered" copy if the reply write below fails.
+          const creatorMessage = await store.appendCreatorMessage(issueNumber, inboxText);
+          orphanedChatMessageId = creatorMessage.id;
+          await store.appendCreatorMessage(issueNumber, chatOutcome.replyText, { origin: 'studio', delivered: true });
+          await store.markCreatorMessagesDelivered(issueNumber, [creatorMessage.id]);
+          orphanedChatMessageId = undefined;
+          invalidateStatusCache(issueNumber);
+          return reply.send({ ok: true, ...(shotId ? { shotId } : {}) });
+        } catch (queueError) {
+          // A failed write must not claim success — fail open instead.
+          request.log.error({ err: queueError }, 'failed to record studio chat reply; failing open to the builder');
+        }
+      }
+      if (chatOutcome?.kind === 'build') studioAckText = chatOutcome.ackText;
+
       const requestedBuilderForCheck = parsed.data.builder;
       const effectiveBuilder =
         requestedBuilderForCheck && isBuilderKind(requestedBuilderForCheck)
@@ -3938,21 +4233,9 @@ export async function registerSubmissionRoutes(
         return reply.status(429).send({ error: 'daily improvement quota exceeded' });
       }
 
-      const sanitizedFeedback = sanitizeCreatorText(parsed.data.feedback, { singleLine: false });
-      const sanitizedTitle = sanitizeCreatorText(`Improve ${record.title}`, { singleLine: true });
-      let shotId: string | undefined;
-      if (parsed.data.context?.screenshotPng) {
-        try {
-          shotId = await storeCreatorPlaytestShot(store, issueNumber, parsed.data.context.screenshotPng);
-        } catch (shotError) {
-          request.log.error({ err: shotError }, 'failed to store creator playtest screenshot');
-        }
-      }
-      const contextBlock = formatPlaytestContextBlock(parsed.data.context, shotId);
-      const requestedBuilder = parsed.data.builder;
       const started = await startImprovementRound({
         issueNumber,
-        text: contextBlock ? `${sanitizedFeedback}\n\n${contextBlock}` : sanitizedFeedback,
+        text: inboxText,
         title: sanitizedTitle,
         // Their own words, typed in the improve composer — the new round's thread opens
         // with them instead of empty. `stripPlaytestContext` keeps the instrumentation
@@ -3970,6 +4253,16 @@ export async function registerSubmissionRoutes(
       }
       if (started.route === 'unavailable') {
         return reply.status(409).send({ error: MANAGED_UNAVAILABLE_ERROR, reason: started.reason });
+      }
+      // Resolve it now — the new round carries this request forward.
+      if (orphanedChatMessageId) {
+        await store.markCreatorMessagesDelivered(issueNumber, [orphanedChatMessageId]).catch(() => {});
+      }
+      // The ack belongs on the new job's thread, where the creator lands next.
+      if (studioAckText) {
+        await store
+          .appendCreatorMessage(started.jobId, studioAckText, { origin: 'studio_ack', delivered: true })
+          .catch(() => {});
       }
       // Publishing is terminal, so this is a *new* job with its own capability. The
       // creator's thread has to move onto it — the old (published) token cannot address

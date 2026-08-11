@@ -1425,6 +1425,8 @@ function FeedbackPanel({
   // hours, which is exactly how an exhausted agent allowance reads as a hung game.
   const [notice, setNotice] = useState<string | null>(null);
   const [builder, setBuilder] = useState<BuilderKind>(initialBuilder);
+  // Escape hatch for the chat agent: armed per-message, cleared after send.
+  const [directToBuilder, setDirectToBuilder] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
@@ -1491,20 +1493,23 @@ function FeedbackPanel({
       let handoffToken: string | undefined;
       // Same box, same act, different destination — decided here from the state the
       // server reported rather than by asking the creator which one they meant.
-      // Only pass builder when a new round is being chosen — keeps the 2-arg call
-      // shape for ordinary mid-round messages (and the tests that assert it).
+      // Shortest call shape for the ordinary case — tests assert on it.
       if (published) {
-        const improved = roundBuilder
-          ? await submitImprovement(token, trimmed, undefined, roundBuilder)
-          : await submitImprovement(token, trimmed);
+        const improved = directToBuilder
+          ? await submitImprovement(token, trimmed, undefined, roundBuilder, true)
+          : roundBuilder
+            ? await submitImprovement(token, trimmed, undefined, roundBuilder)
+            : await submitImprovement(token, trimmed);
         // Publishing is terminal: the improvement is a new job with its own token. The
         // builder memory is keyed by token in localStorage, so persist the choice under
         // the *new* token as well — the old token's memory dies with its round.
         handoffToken = improved.token;
       } else {
-        const result = roundBuilder
-          ? await submitFeedback(token, trimmed, undefined, roundBuilder)
-          : await submitFeedback(token, trimmed);
+        const result = directToBuilder
+          ? await submitFeedback(token, trimmed, undefined, roundBuilder, true)
+          : roundBuilder
+            ? await submitFeedback(token, trimmed, undefined, roundBuilder)
+            : await submitFeedback(token, trimmed);
         if (result.roundStarted === false) {
           setNotice(
             result.reason === 'no_capacity' ? t('statusView.feedback.noCapacity') : t('statusView.feedback.notStarted'),
@@ -1519,6 +1524,7 @@ function FeedbackPanel({
       }
       setState('sent');
       setText('');
+      setDirectToBuilder(false);
       // Back to the CSS height rather than the height the sent message grew it to: an
       // empty box the size of the last paragraph is a leftover, not a state.
       if (inputRef.current) inputRef.current.style.height = '';
@@ -1606,6 +1612,20 @@ function FeedbackPanel({
     </div>
   );
 
+  // Recovery from any misclassification — always available, not just mid-round.
+  const directToBuilderToggle = (
+    <button
+      type="button"
+      className={`status-composer-escape${directToBuilder ? ' is-armed' : ''}`}
+      onClick={() => setDirectToBuilder((armed) => !armed)}
+      disabled={state === 'sending'}
+      aria-pressed={directToBuilder}
+      title={t('statusView.feedback.directToBuilder')}
+    >
+      <PixelIcon name="send" size={12} />
+    </button>
+  );
+
   // Standalone status page still shows a brief receipt next to Send. The studio
   // composer does not: the message is echoed into the thread immediately, so a
   // second "Sent!" under the box is the same confirmation twice.
@@ -1673,7 +1693,10 @@ function FeedbackPanel({
           disabled={sending}
         />
         <div className="status-composer-toolbar">
-          <div className="status-composer-toolbar-left">{builderControls}</div>
+          <div className="status-composer-toolbar-left">
+            {builderControls}
+            {directToBuilderToggle}
+          </div>
           <div className="status-composer-toolbar-right">
             <button
               type="button"
@@ -1739,6 +1762,7 @@ function FeedbackPanel({
         >
           {state === 'sending' ? t('statusView.feedback.sending') : t('statusView.feedback.submit')}
         </button>
+        {directToBuilderToggle}
         {sentReceipt}
       </div>
       {error ? <p className="error">{error}</p> : null}
@@ -1850,11 +1874,12 @@ function ThreadStream({
         <ol className="studio-thread-turns">
           {entries.map((entry, index) => {
             const mine = entry.kind === 'revision';
+            const isStudioVoice = entry.kind === 'studio';
             const media = entry.media?.filter((item) => !broken.includes(item.ref)) ?? [];
             return (
               <li
                 key={`${entry.kind}-${entry.at}-${index}`}
-                className={`studio-turn${mine ? ' is-mine' : ''}${entry.pending ? ' is-pending' : ''}`}
+                className={`studio-turn${mine ? ' is-mine' : ''}${isStudioVoice ? ' is-studio-voice' : ''}${entry.pending ? ' is-pending' : ''}`}
               >
                 <div className="studio-turn-body">
                   {/* The step is a closed set, so it is our own translated copy rather than
@@ -1866,6 +1891,11 @@ function ThreadStream({
                       summary of a chat held elsewhere reads as words the creator typed. */}
                   {mine && entry.relayed ? (
                     <span className="studio-turn-kicker">{t('statusView.progress.relayedRequest')}</span>
+                  ) : null}
+                  {entry.kind === 'studio' ? (
+                    <span className="studio-turn-kicker studio-turn-kicker-studio">
+                      {t('statusView.progress.studioVoice')}
+                    </span>
                   ) : null}
                   <p className="studio-turn-text">{entry.text}</p>
                   {media.length > 0 ? (
@@ -2020,7 +2050,8 @@ function ThreadContextBar({
 const QUIET_BUILD_MS = 15 * 60_000;
 
 type ActivityEntry = {
-  kind: 'commit' | 'revision' | 'event' | 'media';
+  // 'studio': the chat agent's own turn — a third voice, not is-mine.
+  kind: 'commit' | 'revision' | 'event' | 'media' | 'studio';
   text: string;
   at: number;
   /** Sent from this tab but not yet echoed back by the API. */
@@ -2100,12 +2131,16 @@ function buildActivityFeed(
       text: commit.message,
       at: Date.parse(commit.committedDate),
     })),
-    ...(progress?.revisions ?? []).map((revision) => ({
-      kind: 'revision' as const,
-      text: revision.text,
-      at: Date.parse(revision.createdAt),
-      ...(revision.origin === 'agent' ? { relayed: true } : {}),
-    })),
+    ...(progress?.revisions ?? []).map((revision) =>
+      revision.origin === 'studio'
+        ? { kind: 'studio' as const, text: revision.text, at: Date.parse(revision.createdAt) }
+        : {
+            kind: 'revision' as const,
+            text: revision.text,
+            at: Date.parse(revision.createdAt),
+            ...(revision.origin === 'agent' ? { relayed: true } : {}),
+          },
+    ),
   ];
 
   // A revision the API has already echoed back must not appear twice.
@@ -2253,9 +2288,11 @@ function BuildProgressPanel({
                         ? 'pencil'
                         : entry.kind === 'media'
                           ? 'eye'
-                          : entry.kind === 'event'
-                            ? EVENT_ICONS[entry.eventKind ?? 'step']
-                            : 'wrench'
+                          : entry.kind === 'studio'
+                            ? 'sparkle'
+                            : entry.kind === 'event'
+                              ? EVENT_ICONS[entry.eventKind ?? 'step']
+                              : 'wrench'
                     }
                     size={12}
                   />
@@ -2269,6 +2306,8 @@ function BuildProgressPanel({
                           ? t('statusView.progress.relayedRequest')
                           : t('statusView.progress.yourRequest')}
                     </span>
+                  ) : entry.kind === 'studio' ? (
+                    <span className="build-activity-label">{t('statusView.progress.studioVoice')}</span>
                   ) : entry.step ? (
                     // The step is a closed set, so it is real translated copy rather
                     // than a machine translation of whatever the agent happened to write.

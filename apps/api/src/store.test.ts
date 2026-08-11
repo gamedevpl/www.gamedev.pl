@@ -623,4 +623,33 @@ describe('creator message history', () => {
     for (let i = 0; i < 5; i++) await store.appendCreatorMessage(9, `request ${i}`);
     expect((await store.listCreatorMessages(9, { limit: 2 })).map((m) => m.text)).toEqual(['request 3', 'request 4']);
   });
+
+  it('never returns a studio-origin message from the pending inbox, even if not marked delivered', async () => {
+    // Belt and braces: a studio row must never reach a builder.
+    const store = new InMemoryStore();
+    await store.appendCreatorMessage(9, 'make the enemies faster');
+    await store.appendCreatorMessage(9, 'Still building — no changes are live yet.', {
+      origin: 'studio',
+      delivered: true,
+    });
+
+    // A writer that forgets to mark a studio row delivered.
+    await store.appendCreatorMessage(9, 'a studio row nobody delivered', { origin: 'studio' });
+
+    const pending = await store.listPendingCreatorMessages(9);
+    expect(pending.map((m) => m.text)).toEqual(['make the enemies faster']);
+    expect(pending.some((m) => m.origin === 'studio')).toBe(false);
+  });
+
+  it('includes studio-origin messages in the full thread history, in order', async () => {
+    const store = new InMemoryStore();
+    await store.appendCreatorMessage(9, 'is it done?', { delivered: true });
+    await store.appendCreatorMessage(9, 'Still building.', { origin: 'studio', delivered: true });
+
+    const all = await store.listCreatorMessages(9);
+    expect(all.map((m) => ({ text: m.text, origin: m.origin }))).toEqual([
+      { text: 'is it done?', origin: undefined },
+      { text: 'Still building.', origin: 'studio' },
+    ]);
+  });
 });

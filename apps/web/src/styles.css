@@ -3717,6 +3717,13 @@ body.player-open {
   color: var(--turquoise);
 }
 
+/* The mini chat agent's row — distinct from both the creator's italic bubble text and
+   the builder's plain log lines, so it cannot be misread as either. */
+.build-activity-studio .build-activity-icon,
+.build-activity-studio .build-activity-label {
+  color: var(--accent-blue);
+}
+
 /* CI is red on this build — stated plainly, without alarm. */
 .status-warning {
   display: flex;
@@ -5839,6 +5846,20 @@ a.user-name--profile:focus-visible {
   opacity: 0.7;
 }
 
+/* The mini chat agent's own turn: a third voice, visually distinct from both the
+   builder's prose (turquoise kicker, full width) and the creator's bubble (right side,
+   panel background). Left-aligned like the builder — it is not the creator's words —
+   but a thin accent rule and a different kicker colour keep it from being mistaken for
+   the builder talking, which would read as a commitment the builder never made. */
+.studio-turn.is-studio-voice .studio-turn-body {
+  border-left: 2px solid var(--accent-blue);
+  padding-left: 10px;
+}
+
+.studio-turn-kicker-studio {
+  color: var(--accent-blue) !important;
+}
+
 /* Live agent work — last transcript row, Claude-shaped. Pulse is a mascot-colour
    square so motion reads without another spinner next to the composer. */
 .studio-turn.is-working {
@@ -6101,8 +6122,8 @@ a.user-name--profile:focus-visible {
 .status-composer.is-compact.is-empty .status-feedback-input {
   grid-column: 1;
   grid-row: auto;
-  padding: 2px 0;
-  /* Match send height so the placeholder centers. */
+  padding: 6px 0;
+  /* Center the placeholder line inside the send button's height. */
   min-height: 34px;
   line-height: 1.35;
 }
@@ -6223,16 +6244,53 @@ a.user-name--profile:focus-visible {
   border-top-color: var(--turquoise);
 }
 
+/* The mini chat agent's escape hatch: armed, the next send skips it and goes straight
+   to the builder. Quiet until pressed — this is a recovery control, not a primary
+   action — then it takes the same accent as the studio voice it is bypassing, so the
+   armed state reads as "talking to the builder directly" rather than as an error. */
+.status-composer-escape {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--panel-border);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.status-composer-escape:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--muted);
+}
+
+.status-composer-escape.is-armed {
+  color: var(--accent-blue);
+  border-color: var(--accent-blue);
+  background: rgba(56, 189, 248, 0.12);
+}
+
+.status-composer-escape:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* Square again where every button gets a 44px floor for fingers — with a fixed width and
    a floored height it would have come out an oval. */
 @media (max-width: 768px) {
-  .status-composer.is-compact .status-composer-send {
+  .status-composer.is-compact .status-composer-send,
+  .status-composer.is-compact .status-composer-escape {
     width: 44px;
     height: 44px;
   }
 
   .status-composer.is-compact.is-empty .status-feedback-input {
     min-height: 44px;
+    padding-block: 11px;
   }
 }
 

@@ -366,7 +366,8 @@ export function StudioStage({
     try {
       if (published) {
         const result = await submitImprovement(token, trimmedNote, context);
-        onImproved?.(result.token);
+        // No token means the agent replied instead of opening a round.
+        if (result.token) onImproved?.(result.token);
       } else {
         await submitFeedback(token, trimmedNote, context);
       }

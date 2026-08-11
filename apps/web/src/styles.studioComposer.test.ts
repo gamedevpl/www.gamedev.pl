@@ -24,6 +24,7 @@ describe('studio compact composer empty state', () => {
     const input = firstRuleBody('.status-composer.is-compact.is-empty .status-feedback-input');
     expect(input).toMatch(/grid-column:\s*1/);
     expect(input).toMatch(/min-height:\s*34px/);
+    expect(input).toMatch(/padding:\s*6px\s+0/);
 
     const toolbar = firstRuleBody('.status-composer.is-compact.is-empty .status-composer-toolbar');
     expect(toolbar).toMatch(/grid-column:\s*2/);
@@ -33,5 +34,18 @@ describe('studio compact composer empty state', () => {
   it('marks the card as a text target so chrome clicks feel like the field', () => {
     const card = firstRuleBody('.status-composer.is-compact');
     expect(card).toMatch(/cursor:\s*text/);
+  });
+});
+
+describe('escape hatch mobile touch target', () => {
+  it('grows the escape hatch to the same 44px floor as send on phones', () => {
+    const marker =
+      '.status-composer.is-compact .status-composer-send,\n  .status-composer.is-compact .status-composer-escape {';
+    const start = css.indexOf(marker);
+    expect(start, 'escape hatch is not sized alongside send in the mobile rule').toBeGreaterThan(-1);
+    const end = css.indexOf('}', start);
+    const body = css.slice(start + marker.length, end);
+    expect(body).toMatch(/width:\s*44px/);
+    expect(body).toMatch(/height:\s*44px/);
   });
 });
