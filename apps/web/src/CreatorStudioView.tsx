@@ -874,7 +874,7 @@ export function CreatorStudioView({
                           const next = !railOpen;
                           setRailManualOpen(next);
                           if (next) {
-                            if (tab !== 'thread') openTab('thread');
+                            if (tab === 'details' || tab === 'edit') openTab('thread');
                             seenActivityRef.current += checklistUnread;
                             setChecklistUnread(0);
                           }

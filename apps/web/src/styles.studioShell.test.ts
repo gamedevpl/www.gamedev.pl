@@ -22,4 +22,13 @@ describe('studio shell claim selectors', () => {
       /\.app:has\(:is\(\.studio-layout\.is-game-open,\s*\.studio-shell-pending\)\)\s*\.install-prompt/,
     );
   });
+
+  it('gives the complete phone action set a full-width row', () => {
+    expect(css).toMatch(
+      /@media \(max-width: 800px\)[\s\S]*?\.app:has\(\.studio-layout\.is-game-open\) \.studio-strip\s*\{[\s\S]*?flex-wrap:\s*wrap;/,
+    );
+    expect(css).toMatch(
+      /\.app:has\(\.studio-layout\.is-game-open\) \.studio-strip-actions\s*\{[\s\S]*?grid-template-columns:\s*repeat\(auto-fit, minmax\(36px, 1fr\)\);[\s\S]*?width:\s*100%;/,
+    );
+  });
 });

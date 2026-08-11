@@ -522,7 +522,7 @@ describe('CreatorStudioView', () => {
     await i18n.changeLanguage('en');
     authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
     const games = manyGames(2);
-    games[0] = { ...games[0]!, slug: 'game-1', editable: true };
+    games[0] = { ...games[0]!, slug: 'game-1', editable: true, codeSurface: true };
     fetchStudioGames.mockResolvedValue(studioShelf(games));
     window.history.replaceState(null, '', '/studio/token-0');
 
@@ -569,6 +569,21 @@ describe('CreatorStudioView', () => {
     expect(chat?.getAttribute('aria-pressed')).toBe('true');
     expect(container.querySelector('.studio-chat-rail.is-collapsed')).toBeNull();
     expect(container.querySelector('.studio-edit-overlay')).toBeNull();
+
+    await act(async () => {
+      chat!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      container
+        .querySelector<HTMLButtonElement>('[aria-label="Code"]')!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(container.querySelector('.code-surface')).not.toBeNull();
+
+    await act(async () => {
+      chat!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(chat?.getAttribute('aria-pressed')).toBe('true');
+    expect(container.querySelector('.studio-chat-rail.is-collapsed')).toBeNull();
+    expect(container.querySelector('.code-surface')).not.toBeNull();
 
     root.unmount();
   });

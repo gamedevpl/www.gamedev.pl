@@ -6484,6 +6484,7 @@ a.user-name--profile:focus-visible {
     min-width: 0;
     max-width: 100%;
     gap: 8px;
+    flex-wrap: wrap;
   }
 
   .app:has(.studio-layout.is-game-open) .studio-strip-title-block {
@@ -6500,8 +6501,18 @@ a.user-name--profile:focus-visible {
   }
 
   .app:has(.studio-layout.is-game-open) .studio-strip-actions {
-    flex: none;
-    flex-wrap: nowrap;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(36px, 1fr));
+    width: 100%;
+    flex: 1 0 100%;
+    gap: 6px;
+  }
+
+  .app:has(.studio-layout.is-game-open) .studio-strip-actions > *,
+  .app:has(.studio-layout.is-game-open) .studio-strip-actions .studio-head-action {
+    min-width: 0;
+    width: 100%;
+    justify-content: center;
   }
 
   .app:has(.studio-layout.is-game-open) .studio-head-action {
