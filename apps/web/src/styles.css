@@ -6502,7 +6502,7 @@ a.user-name--profile:focus-visible {
 
   .app:has(.studio-layout.is-game-open) .studio-strip-actions {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(36px, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     width: 100%;
     flex: 1 0 100%;
     gap: 6px;
@@ -6513,6 +6513,10 @@ a.user-name--profile:focus-visible {
     min-width: 0;
     width: 100%;
     justify-content: center;
+  }
+
+  .app:has(.studio-layout.is-game-open) .studio-strip-actions .studio-head-action.is-primary {
+    grid-column: span 2;
   }
 
   .app:has(.studio-layout.is-game-open) .studio-head-action {

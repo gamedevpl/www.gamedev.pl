@@ -871,10 +871,11 @@ export function CreatorStudioView({
                         }}
                         threadOpen={railOpen}
                         onToggleThread={() => {
-                          const next = !railOpen;
+                          const covered = tab === 'details' || tab === 'edit';
+                          const next = covered || !railOpen;
                           setRailManualOpen(next);
                           if (next) {
-                            if (tab === 'details' || tab === 'edit') openTab('thread');
+                            if (covered) openTab('thread');
                             seenActivityRef.current += checklistUnread;
                             setChecklistUnread(0);
                           }

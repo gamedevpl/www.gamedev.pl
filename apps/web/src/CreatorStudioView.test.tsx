@@ -556,6 +556,19 @@ describe('CreatorStudioView', () => {
     expect(container.querySelector('.studio-rail')).toBeNull();
 
     await act(async () => {
+      details!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(chat?.getAttribute('aria-pressed')).toBe('true');
+    expect(container.querySelector('.studio-rail')).not.toBeNull();
+
+    await act(async () => {
+      chat!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(chat?.getAttribute('aria-pressed')).toBe('true');
+    expect(container.querySelector('.studio-chat-rail.is-collapsed')).toBeNull();
+    expect(container.querySelector('.studio-rail')).toBeNull();
+
+    await act(async () => {
       chat!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       container
         .querySelector<HTMLButtonElement>('[aria-label="Edit"]')!

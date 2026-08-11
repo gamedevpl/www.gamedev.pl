@@ -28,7 +28,10 @@ describe('studio shell claim selectors', () => {
       /@media \(max-width: 800px\)[\s\S]*?\.app:has\(\.studio-layout\.is-game-open\) \.studio-strip\s*\{[\s\S]*?flex-wrap:\s*wrap;/,
     );
     expect(css).toMatch(
-      /\.app:has\(\.studio-layout\.is-game-open\) \.studio-strip-actions\s*\{[\s\S]*?grid-template-columns:\s*repeat\(auto-fit, minmax\(36px, 1fr\)\);[\s\S]*?width:\s*100%;/,
+      /\.app:has\(\.studio-layout\.is-game-open\) \.studio-strip-actions\s*\{[\s\S]*?grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\);[\s\S]*?width:\s*100%;/,
+    );
+    expect(css).toMatch(
+      /\.app:has\(\.studio-layout\.is-game-open\) \.studio-strip-actions \.studio-head-action\.is-primary\s*\{[\s\S]*?grid-column:\s*span 2;/,
     );
   });
 });
