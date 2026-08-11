@@ -479,3 +479,12 @@ function tryEvalArithmetic(expression: string, definitions: Map<string, number>)
   const result = Function(`"use strict"; return (${replaced});`)() as number;
   return Number.isFinite(result) ? result : null;
 }
+
+/** Unlike the rest of this file: the two sides must be byte-equivalent below their headers. */
+export const EDITOR_CONTRACT_PATH = 'tools/lib/editor-contract.ts';
+
+/** Strips a file's own leading doc-comment header, exempted from the byte-equivalence rule. */
+export function stripLeadingDocComment(source: string): string {
+  const match = /^\s*\/\*\*[\s\S]*?\*\/\s*/.exec(source);
+  return (match ? source.slice(match[0].length) : source).trim();
+}

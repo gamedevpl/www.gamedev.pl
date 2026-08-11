@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PixelIcon } from './PixelIcon.js';
-import { blankItem, defaultCollectionKey, itemProblems, setCell } from './editorContentTools.js';
+import {
+  blankItem,
+  collectionProblems,
+  defaultCollectionKey,
+  isTilemapItem,
+  itemProblems,
+  setCell,
+} from './editorContentTools.js';
 import { recordAssistStep, recordEditorStep } from './visitTelemetry.js';
 import {
   deleteEditorDraft,
@@ -9,10 +16,12 @@ import {
   publishEditorContent,
   putEditorDraft,
   requestEditorAssist,
+  type EditorCollectionSpec,
   type EditorContentDoc,
   type EditorItemContent,
   type EditorLabel,
   type EditorParamValue,
+  type EditorTilemapSpec,
   type GameEditorState,
   type StudioApiError,
   type StudioGame,
@@ -85,6 +94,19 @@ function itemsOf(doc: EditorContentDoc, key: string): EditorItemContent[] {
   return (doc[key] ?? []) as EditorItemContent[];
 }
 
+/** The palette's initial selection — entities have no tiles to paint with. */
+function firstTileKey(spec: EditorCollectionSpec | undefined): string | null {
+  if (!spec || spec.item.widget !== 'tilemap') return null;
+  return spec.item.tiles.find((tile) => tile.key.length > 0)?.key ?? null;
+}
+
+/** Narrows a collection to its tilemap spec — entities render no board. */
+function tilemapCollection(
+  spec: EditorCollectionSpec | null,
+): (EditorCollectionSpec & { item: EditorTilemapSpec }) | null {
+  return spec && spec.item.widget === 'tilemap' ? (spec as EditorCollectionSpec & { item: EditorTilemapSpec }) : null;
+}
+
 export function EditorPanel(props: { game: StudioGame; onOpenPlaytest: () => void; onBack: () => void }) {
   const { t, i18n } = useTranslation();
   const name = useLabel();
@@ -127,11 +149,7 @@ export function EditorPanel(props: { game: StudioGame; onOpenPlaytest: () => voi
         const defaultKey = defaultCollectionKey(loaded.definition.content);
         setSelectedCollectionKey(defaultKey);
         setItemIndex(0);
-        setTileKey(
-          defaultKey
-            ? (loaded.definition.content[defaultKey]?.item.tiles.find((tile) => tile.key.length > 0)?.key ?? null)
-            : null,
-        );
+        setTileKey(defaultKey ? firstTileKey(loaded.definition.content[defaultKey]) : null);
         setState('ready');
       })
       .catch(() => {
@@ -285,11 +303,7 @@ export function EditorPanel(props: { game: StudioGame; onOpenPlaytest: () => voi
       const defaultKey = defaultCollectionKey(loaded.definition.content);
       setSelectedCollectionKey(defaultKey);
       setItemIndex(0);
-      setTileKey(
-        defaultKey
-          ? (loaded.definition.content[defaultKey]?.item.tiles.find((tile) => tile.key.length > 0)?.key ?? null)
-          : null,
-      );
+      setTileKey(defaultKey ? firstTileKey(loaded.definition.content[defaultKey]) : null);
       setSaveState('clean');
     } catch {
       setSaveState('error');
@@ -301,7 +315,7 @@ export function EditorPanel(props: { game: StudioGame; onOpenPlaytest: () => voi
     if (!nextSpec) return;
     setSelectedCollectionKey(nextKey);
     setItemIndex(0);
-    setTileKey(nextSpec.item.tiles.find((tile) => tile.key.length > 0)?.key ?? null);
+    setTileKey(firstTileKey(nextSpec));
   }
 
   async function discardDraft() {
@@ -361,16 +375,22 @@ export function EditorPanel(props: { game: StudioGame; onOpenPlaytest: () => voi
   }
 
   const problems = item && spec ? itemProblems(spec.item, item, name) : [];
+  const collectionWideProblems = spec ? collectionProblems(spec, items) : [];
   const allProblems = editor
     ? collectionKeys.flatMap((key) => {
         const collection = editor.definition.content[key];
-        return itemsOf(content, key).flatMap((entry, index) => {
+        const collectionItems = itemsOf(content, key);
+        const perItem = collectionItems.flatMap((entry, index) => {
           const found = itemProblems(collection.item, entry, name);
           return found.length > 0 ? [`${name(collection.itemLabel)} ${index + 1}`] : [];
         });
+        const collectionWide = collectionProblems(collection, collectionItems);
+        return collectionWide.length > 0 ? [...perItem, name(collection.itemLabel)] : perItem;
       })
     : [];
-  const width = item ? (item.rows[0]?.length ?? 0) : 0;
+  const tilemapItem = item && isTilemapItem(item) ? item : null;
+  const boardSpec = tilemapCollection(spec);
+  const width = tilemapItem ? (tilemapItem.rows[0]?.length ?? 0) : 0;
 
   return (
     <div className="editor-panel">
@@ -451,19 +471,19 @@ export function EditorPanel(props: { game: StudioGame; onOpenPlaytest: () => voi
       ) : null}
 
       <div className="editor-body">
-        {spec ? (
+        {boardSpec ? (
           <div className="editor-board-col">
-            {item ? (
+            {tilemapItem ? (
               <>
                 <div
                   className="editor-board"
                   role="grid"
-                  aria-label={t('studioPanel.editor.boardAria', { name: name(spec.itemLabel) })}
+                  aria-label={t('studioPanel.editor.boardAria', { name: name(boardSpec.itemLabel) })}
                   style={{ gridTemplateColumns: `repeat(${width}, var(--editor-cell))` }}
                 >
-                  {item.rows.map((rowChars, row) =>
+                  {tilemapItem.rows.map((rowChars, row) =>
                     Array.from(rowChars).map((char, col) => {
-                      const tile = spec.item.tiles.find((entry) => entry.char === char);
+                      const tile = boardSpec.item.tiles.find((entry) => entry.char === char);
                       return (
                         <button
                           key={`${row}-${col}`}
@@ -476,8 +496,8 @@ export function EditorPanel(props: { game: StudioGame; onOpenPlaytest: () => voi
                           {...(tile?.color ? { style: { background: tile.color } } : {})}
                           aria-label={`${row + 1},${col + 1}: ${tile ? name(tile.label) : char}`}
                           onClick={() => {
-                            const selected = spec.item.tiles.find((entry) => entry.key === tileKey);
-                            if (selected) updateItem(setCell(item, row, col, selected.char));
+                            const selected = boardSpec.item.tiles.find((entry) => entry.key === tileKey);
+                            if (selected) updateItem(setCell(tilemapItem, row, col, selected.char));
                           }}
                         />
                       );
@@ -485,7 +505,7 @@ export function EditorPanel(props: { game: StudioGame; onOpenPlaytest: () => voi
                   )}
                 </div>
                 <div className="editor-palette" role="radiogroup" aria-label={t('studioPanel.editor.tiles')}>
-                  {spec.item.tiles.map((tile) => (
+                  {boardSpec.item.tiles.map((tile) => (
                     <button
                       key={tile.key}
                       type="button"
@@ -793,10 +813,10 @@ export function EditorPanel(props: { game: StudioGame; onOpenPlaytest: () => voi
 
           <div className="editor-side-group">
             <h4>{t('studioPanel.editor.checks')}</h4>
-            {problems.length === 0 ? (
+            {problems.length === 0 && collectionWideProblems.length === 0 ? (
               <p className="editor-check is-ok">✓ {t('studioPanel.editor.checksOk')}</p>
             ) : (
-              problems.map((problem) => (
+              [...problems, ...collectionWideProblems].map((problem) => (
                 <p key={problem} className="editor-check is-bad">
                   ✕ {problem}
                 </p>

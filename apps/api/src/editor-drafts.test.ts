@@ -325,6 +325,98 @@ describe('editor draft routes', () => {
     });
     expect(response.statusCode).toBe(409);
   });
+
+  describe('the entities widget', () => {
+    const ENTITIES_EDITOR_JSON = JSON.stringify({
+      version: 1,
+      content: {
+        cards: {
+          widget: 'collection',
+          label: { en: 'Cards', pl: 'Karty' },
+          itemLabel: { en: 'Card', pl: 'Karta' },
+          min: 2,
+          max: 4,
+          item: {
+            widget: 'entities',
+            properties: { cost: { type: 'int', min: 0, max: 3 } },
+            constraints: [{ uniqueBy: 'cost' }],
+          },
+          defaults: [{ properties: { cost: 0 } }, { properties: { cost: 1 } }],
+        },
+      },
+    });
+
+    async function createEntitiesApp(gateRuns: string[] = []) {
+      const { gamesStore, stored } = stubGamesStore();
+      const withEntities = {
+        ...gamesStore,
+        getSourceFile: async (slug: string, version: string, path: string) =>
+          path === 'EDITOR.json' && version === 'v1'
+            ? ENTITIES_EDITOR_JSON
+            : ((await (
+                gamesStore as unknown as { getSourceFile: (s: string, v: string, p: string) => Promise<string | null> }
+              ).getSourceFile(slug, version, path)) ?? null),
+      } as unknown as GamesStore;
+      app = await buildApp({
+        store,
+        sessionSecret,
+        submissionRoutes: {
+          submissionTokenSecret: 'token-secret',
+          agentChannel: {
+            gamesStore: withEntities,
+            onSourcesDelivered: ({ version }: { version: string }) => {
+              gateRuns.push(version);
+              return { buildId: 'build-1' };
+            },
+          },
+        },
+      });
+      return { app, stored };
+    }
+
+    it('refuses a draft with a duplicate uniqueBy value', async () => {
+      const { app } = await createEntitiesApp();
+      const response = await app.inject({
+        method: 'PUT',
+        url: '/api/me/games/garden-gather/editor/draft',
+        headers: authHeaders('g:alice'),
+        payload: { content: { cards: [{ properties: { cost: 1 } }, { properties: { cost: 1 } }] } },
+      });
+      expect(response.statusCode).toBe(422);
+      expect(response.json().problems.some((p: string) => p.includes('duplicates'))).toBe(true);
+    });
+
+    it('drafts, publishes, and gates an entities collection — no board, no rows in L1', async () => {
+      const gateRuns: string[] = [];
+      const { app, stored } = await createEntitiesApp(gateRuns);
+      const content = { cards: [{ properties: { cost: 2 } }, { properties: { cost: 3 } }] };
+      const draft = await app.inject({
+        method: 'PUT',
+        url: '/api/me/games/garden-gather/editor/draft',
+        headers: authHeaders('g:alice'),
+        payload: { content },
+      });
+      expect(draft.statusCode).toBe(200);
+
+      const publish = await app.inject({
+        method: 'POST',
+        url: '/api/me/games/garden-gather/editor/publish',
+        headers: authHeaders('g:alice'),
+      });
+      expect(publish.statusCode).toBe(200);
+      expect(stored).toHaveLength(1);
+
+      const editorJson = stored[0].files.find((file) => file.path === 'EDITOR.json')!;
+      const publishedDefaults = JSON.parse(editorJson.content).content.cards.defaults;
+      expect(publishedDefaults).toEqual([{ properties: { cost: 2 } }, { properties: { cost: 3 } }]);
+
+      const generated = stored[0].files.find((file) => file.path === 'game/editor-content.ts')!;
+      expect(generated.content).toContain('export const DEFAULT_CONTENT');
+      expect(generated.content).not.toContain('rows');
+
+      expect(gateRuns).toEqual(['v2-editor']);
+    });
+  });
 });
 
 /*

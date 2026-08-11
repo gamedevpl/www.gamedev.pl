@@ -8,10 +8,16 @@ import {
   DELIVERY_MAX_FILES,
   DELIVERY_MAX_UPLOAD_BYTES,
   DELIVERY_RESERVED_SEGMENTS,
+  EDITOR_CONTRACT_PATH,
   GAME_KIT_MODULES,
   GAME_KIT_VERTICAL_ENTRIES,
   MAX_PROJECT_BYTES,
 } from './games-repo-contract.js';
+
+/** Deliberately different header prose — proves only the code below it must match. */
+const EDITOR_CONTRACT_CODE = `export const EDITOR_FILE = 'EDITOR.json';\nexport function noop() {}\n`;
+const EDITOR_CONTRACT_REMOTE = `/**\n * The editor content contract — L0 of EditorKit.\n */\n\n${EDITOR_CONTRACT_CODE}`;
+const EDITOR_CONTRACT_LOCAL = `/**\n * MIRROR of the games repo's tools/lib/editor-contract.ts.\n */\n\n${EDITOR_CONTRACT_CODE}`;
 
 const VERTICALS_SOURCE = `
   const GAME_KIT_VERTICALS = Object.freeze({
@@ -45,12 +51,13 @@ function deliverySource(overrides: Record<string, unknown> = {}): string {
   });
 }
 
-/** The three files the check reads, all in agreement. */
+/** The four files the check reads, all in agreement. */
 function agreeingPages(delivery: string | Response[] = deliverySource()): Record<string, Response[]> {
   return {
     'tools/lib/assemble.ts': [ok(ASSEMBLE_SOURCE)],
     'tools/validate.ts': [ok(VALIDATE_SOURCE)],
     [DELIVERY_CONTRACT_PATH]: typeof delivery === 'string' ? [ok(delivery)] : delivery,
+    [EDITOR_CONTRACT_PATH]: [ok(EDITOR_CONTRACT_REMOTE)],
   };
 }
 
@@ -78,7 +85,13 @@ function createFetch(pages: Record<string, Response[]>): { fetchImpl: typeof fet
   return { fetchImpl, calls };
 }
 
-const BASE = { repo: 'gamedevpl/www.gamedev.pl-games', ref: 'main', token: 't', sleep: async () => {} };
+const BASE = {
+  repo: 'gamedevpl/www.gamedev.pl-games',
+  ref: 'main',
+  token: 't',
+  sleep: async () => {},
+  readLocalFile: () => EDITOR_CONTRACT_LOCAL,
+};
 
 describe('runGamesRepoContractCheck', () => {
   it('passes when both halves agree', async () => {
@@ -305,6 +318,48 @@ describe('runGamesRepoContractCheck', () => {
     const outcome = await runGamesRepoContractCheck({ ...BASE, fetchImpl });
     expect(outcome.kind).toBe('unreachable');
     expect(outcome.kind === 'unreachable' && outcome.reason).toContain('ENOTFOUND');
+  });
+});
+
+describe('runGamesRepoContractCheck — editor-contract mirror', () => {
+  it('passes when the code below the header matches, even though the header prose differs', async () => {
+    const { fetchImpl } = createFetch(agreeingPages());
+    await expect(runGamesRepoContractCheck({ ...BASE, fetchImpl })).resolves.toEqual({ kind: 'ok' });
+  });
+
+  it('reports drift when the games repo has code the website mirror lacks', async () => {
+    const { fetchImpl } = createFetch({
+      ...agreeingPages(),
+      [EDITOR_CONTRACT_PATH]: [
+        ok(
+          EDITOR_CONTRACT_REMOTE.replace(
+            'export function noop() {}',
+            'export function noop() {}\nexport const uniqueBy = 1;',
+          ),
+        ),
+      ],
+    });
+
+    const outcome = await runGamesRepoContractCheck({ ...BASE, fetchImpl });
+    expect(outcome.kind).toBe('drift');
+    expect(outcome.kind === 'drift' && outcome.reason).toContain('editor-contract mismatch');
+    expect(outcome.kind === 'drift' && outcome.reason).toContain('first difference at offset');
+  });
+
+  it('reports drift when the website mirror has code the games repo lacks', async () => {
+    const { fetchImpl } = createFetch(agreeingPages());
+
+    const outcome = await runGamesRepoContractCheck({
+      ...BASE,
+      fetchImpl,
+      readLocalFile: () =>
+        EDITOR_CONTRACT_LOCAL.replace(
+          'export function noop() {}',
+          'export function noop() {}\nexport const extra = 1;',
+        ),
+    });
+    expect(outcome.kind).toBe('drift');
+    expect(outcome.kind === 'drift' && outcome.reason).toContain('editor-contract mismatch');
   });
 });
 

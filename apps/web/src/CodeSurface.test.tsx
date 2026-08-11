@@ -7,6 +7,7 @@ import { CodeSurface } from './CodeSurface.js';
 import { resetCodeSurfaceSessionState } from './codeSurfaceSessionState.js';
 import * as codeSurfaceApi from './codeSurfaceApi.js';
 import i18n from './i18n/index.js';
+import type { EditorContentDoc, GameEditorState } from './studioApi.js';
 
 // The real CodeMirror editor needs DOM layout measurement jsdom cannot provide, and
 // its dynamic import races the plain-textarea Suspense fallback these tests rely on —
@@ -33,7 +34,13 @@ vi.mock('./codeSurfaceApi.js', async () => {
   };
 });
 
+vi.mock('./studioApi.js', async () => {
+  const actual = await vi.importActual<typeof import('./studioApi.js')>('./studioApi.js');
+  return { ...actual, fetchGameEditor: vi.fn() };
+});
+
 const mocked = vi.mocked(codeSurfaceApi);
+const mockedStudioApi = vi.mocked(await import('./studioApi.js'));
 
 async function flush() {
   await Promise.resolve();
@@ -70,6 +77,7 @@ describe('CodeSurface', () => {
     mocked.typecheckCodeSurface.mockReset();
     mocked.discardCodeSurfaceEdits.mockReset();
     mocked.deliverCodeSurface.mockReset();
+    mockedStudioApi.fetchGameEditor.mockReset();
     mocked.rebuildCodeSurfaceStage.mockResolvedValue({ scheduled: true });
     container = document.createElement('div');
     document.body.appendChild(container);
@@ -82,9 +90,9 @@ describe('CodeSurface', () => {
     vi.useRealTimers();
   });
 
-  async function render(slug = 'sky-dodge') {
+  async function render(slug = 'sky-dodge', editorPushRef?: { current: ((content: EditorContentDoc) => void) | null }) {
     await act(async () => {
-      root.render(createElement(CodeSurface, { slug, onBack: () => {} }));
+      root.render(createElement(CodeSurface, { slug, onBack: () => {}, editorPushRef }));
     });
     await act(async () => {
       await flush();
@@ -388,5 +396,223 @@ describe('CodeSurface', () => {
 
     expect(mocked.stageCodeSurfaceFile).toHaveBeenCalled();
     expect(mocked.deliverCodeSurface).not.toHaveBeenCalled();
+  });
+
+  describe('EDITOR.json live push (realtime-game-editing-plan.md §E tier 1)', () => {
+    const editorJson = JSON.stringify({
+      content: { cards: [] },
+      params: { speed: { type: 'number', label: { en: 'Speed', pl: 'Prędkość' }, min: 1, max: 10, default: 5 } },
+    });
+
+    function sourcesWithEditorJson() {
+      return sourcesFor({
+        files: [
+          { path: 'game.ts', content: 'export const boot = () => {};' },
+          { path: 'EDITOR.json', content: editorJson },
+        ],
+      });
+    }
+
+    it('pushes a changed param default straight to the running game, live, alongside the normal autosave', async () => {
+      mocked.fetchCodeSurfaceSources.mockResolvedValue(sourcesWithEditorJson());
+      mocked.stageCodeSurfaceFile.mockResolvedValue({
+        accepted: true,
+        path: 'EDITOR.json',
+        bytes: 10,
+        staged: { totalBytes: 10, maxBytes: 1_000_000, maxFiles: 60, updatedAt: null },
+      });
+      mockedStudioApi.fetchGameEditor.mockResolvedValue({
+        version: 'v1',
+        definition: { version: 1, content: {} },
+        content: { params: { speed: 5 } },
+        draft: null,
+      });
+      const pushRef: { current: ((content: EditorContentDoc) => void) | null } = { current: vi.fn() };
+
+      await render('sky-dodge', pushRef);
+      const editorTab = [...container.querySelectorAll('.code-surface-rail-item')].find((b) =>
+        b.textContent?.includes('EDITOR.json'),
+      ) as HTMLButtonElement;
+      await act(async () => {
+        editorTab.click();
+      });
+
+      const next = JSON.parse(editorJson);
+      next.params.speed.default = 8;
+      await act(async () => {
+        typeInto(container.querySelector('textarea')!, JSON.stringify(next));
+        await flush();
+      });
+
+      expect(pushRef.current).toHaveBeenCalledWith({ params: { speed: 8 } });
+      expect(container.textContent).toContain('Live');
+
+      // A live push is additive — the normal autosave/staging still runs.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1500);
+      });
+      expect(mocked.stageCodeSurfaceFile).toHaveBeenCalledWith(
+        'sky-dodge',
+        'EDITOR.json',
+        expect.stringContaining('"default":8'),
+        { rebuild: false },
+      );
+      expect(mocked.rebuildCodeSurfaceStage).not.toHaveBeenCalled();
+    });
+
+    it('does not push a label/range change — that still needs the staged rebuild path', async () => {
+      mocked.fetchCodeSurfaceSources.mockResolvedValue(sourcesWithEditorJson());
+      mocked.stageCodeSurfaceFile.mockResolvedValue({
+        accepted: true,
+        path: 'EDITOR.json',
+        bytes: 10,
+        staged: { totalBytes: 10, maxBytes: 1_000_000, maxFiles: 60, updatedAt: null },
+      });
+      const pushRef: { current: ((content: EditorContentDoc) => void) | null } = { current: vi.fn() };
+
+      await render('sky-dodge', pushRef);
+      const editorTab = [...container.querySelectorAll('.code-surface-rail-item')].find((b) =>
+        b.textContent?.includes('EDITOR.json'),
+      ) as HTMLButtonElement;
+      await act(async () => {
+        editorTab.click();
+      });
+
+      const next = JSON.parse(editorJson);
+      next.params.speed.max = 20;
+      await act(async () => {
+        typeInto(container.querySelector('textarea')!, JSON.stringify(next));
+        await flush();
+      });
+
+      expect(pushRef.current).not.toHaveBeenCalled();
+      expect(mockedStudioApi.fetchGameEditor).not.toHaveBeenCalled();
+      expect(container.textContent).not.toContain('Live');
+    });
+
+    it('does not push a default that violates its own declared range', async () => {
+      mocked.fetchCodeSurfaceSources.mockResolvedValue(sourcesWithEditorJson());
+      mocked.stageCodeSurfaceFile.mockResolvedValue({
+        accepted: true,
+        path: 'EDITOR.json',
+        bytes: 10,
+        staged: { totalBytes: 10, maxBytes: 1_000_000, maxFiles: 60, updatedAt: null },
+      });
+      const pushRef: { current: ((content: EditorContentDoc) => void) | null } = { current: vi.fn() };
+
+      await render('sky-dodge', pushRef);
+      const editorTab = [...container.querySelectorAll('.code-surface-rail-item')].find((b) =>
+        b.textContent?.includes('EDITOR.json'),
+      ) as HTMLButtonElement;
+      await act(async () => {
+        editorTab.click();
+      });
+
+      const next = JSON.parse(editorJson);
+      next.params.speed.default = 999; // max is 10
+      await act(async () => {
+        typeInto(container.querySelector('textarea')!, JSON.stringify(next));
+        await flush();
+      });
+
+      expect(pushRef.current).not.toHaveBeenCalled();
+      expect(mockedStudioApi.fetchGameEditor).not.toHaveBeenCalled();
+      expect(container.textContent).not.toContain('Live');
+    });
+
+    it('merges two concurrent live pushes instead of the second overwriting the first', async () => {
+      const twoParams = JSON.stringify({
+        content: { cards: [] },
+        params: {
+          speed: { type: 'number', label: { en: 'Speed', pl: 'Prędkość' }, min: 1, max: 10, default: 5 },
+          hardMode: { type: 'boolean', label: { en: 'Hard mode', pl: 'Tryb trudny' }, default: false },
+        },
+      });
+      mocked.fetchCodeSurfaceSources.mockResolvedValue(
+        sourcesFor({
+          files: [
+            { path: 'game.ts', content: 'export const boot = () => {};' },
+            { path: 'EDITOR.json', content: twoParams },
+          ],
+        }),
+      );
+      mocked.stageCodeSurfaceFile.mockResolvedValue({
+        accepted: true,
+        path: 'EDITOR.json',
+        bytes: 10,
+        staged: { totalBytes: 10, maxBytes: 1_000_000, maxFiles: 60, updatedAt: null },
+      });
+      // Held open — both edits below must race this, like two quick keystrokes would.
+      let resolveFetch!: (value: GameEditorState) => void;
+      mockedStudioApi.fetchGameEditor.mockReturnValue(
+        new Promise((resolve) => {
+          resolveFetch = resolve;
+        }),
+      );
+      const pushRef: { current: ((content: EditorContentDoc) => void) | null } = { current: vi.fn() };
+
+      await render('sky-dodge', pushRef);
+      const editorTab = [...container.querySelectorAll('.code-surface-rail-item')].find((b) =>
+        b.textContent?.includes('EDITOR.json'),
+      ) as HTMLButtonElement;
+      await act(async () => {
+        editorTab.click();
+      });
+
+      const afterFirst = JSON.parse(twoParams);
+      afterFirst.params.speed.default = 8;
+      await act(async () => {
+        typeInto(container.querySelector('textarea')!, JSON.stringify(afterFirst));
+        await flush();
+      });
+
+      const afterSecond = JSON.parse(JSON.stringify(afterFirst));
+      afterSecond.params.hardMode.default = true;
+      await act(async () => {
+        typeInto(container.querySelector('textarea')!, JSON.stringify(afterSecond));
+        await flush();
+      });
+
+      expect(pushRef.current).not.toHaveBeenCalled(); // both onEdit calls await the same fetch
+
+      await act(async () => {
+        resolveFetch({
+          version: 'v1',
+          definition: { version: 1, content: {} },
+          content: { params: { speed: 5, hardMode: false } },
+          draft: null,
+        });
+        await flush();
+      });
+
+      expect(pushRef.current).toHaveBeenLastCalledWith({ params: { speed: 8, hardMode: true } });
+    });
+
+    it('does nothing when no editorPushRef was supplied — Play-tab-only sessions must not throw', async () => {
+      mocked.fetchCodeSurfaceSources.mockResolvedValue(sourcesWithEditorJson());
+      mocked.stageCodeSurfaceFile.mockResolvedValue({
+        accepted: true,
+        path: 'EDITOR.json',
+        bytes: 10,
+        staged: { totalBytes: 10, maxBytes: 1_000_000, maxFiles: 60, updatedAt: null },
+      });
+
+      await render('sky-dodge');
+      const editorTab = [...container.querySelectorAll('.code-surface-rail-item')].find((b) =>
+        b.textContent?.includes('EDITOR.json'),
+      ) as HTMLButtonElement;
+      await act(async () => {
+        editorTab.click();
+      });
+
+      const next = JSON.parse(editorJson);
+      next.params.speed.default = 8;
+      await act(async () => {
+        typeInto(container.querySelector('textarea')!, JSON.stringify(next));
+        await flush();
+      });
+
+      expect(container.textContent).not.toContain('Live');
+    });
   });
 });

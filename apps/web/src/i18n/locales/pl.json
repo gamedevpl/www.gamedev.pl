@@ -322,6 +322,7 @@
       "lockedHint": "Tylko do odczytu — GameKit i narzędzia są wspólne, nie edytuje się ich tutaj",
       "noFiles": "Nie ma jeszcze nic do pokazania",
       "budget": "{{lines}}/{{maxLines}} linii",
+      "livePush": "Na żywo — gra zaktualizowana, bez przebudowy",
       "rebuildError": "Nie udało się zaktualizować podglądu — spróbuj ponownie",
       "previewUpdating": "Aktualizowanie podglądu…",
       "previewReady": "Podgląd zaktualizowany",

@@ -18,6 +18,7 @@ import {
   MAX_PROJECT_BYTES,
   MUSIC_CONTRACT,
   SOURCE_GRAPH_BUDGET_BYTES,
+  stripLeadingDocComment,
 } from './games-repo-contract.js';
 import { MAX_PROJECT_BYTES as ASSEMBLE_MAX } from './assemble.js';
 import { ALLOWED_SOURCE_FILES, MAX_UPLOAD_BYTES, MAX_UPLOAD_FILES } from './games-store.js';
@@ -347,5 +348,30 @@ describe('games-repo source extractors', () => {
       out += \`window.__GAME_AUDIO_MUSIC__ = \${JSON.stringify(name)};\`;
     `;
     expect(extractMusicContractSignals(source).readsMusicCatalog).toBe(false);
+  });
+});
+
+describe('stripLeadingDocComment', () => {
+  it('removes the leading /** */ block and trims the surrounding blank lines', () => {
+    const source = '/**\n * Some header prose.\n * Second line.\n */\n\nexport const x = 1;\n';
+    expect(stripLeadingDocComment(source)).toBe('export const x = 1;');
+  });
+
+  it('lets each side keep different header prose without affecting the result', () => {
+    const code = 'export const x = 1;\nexport function y() {}\n';
+    const withHeaderA = `/**\n * Header A explains itself one way.\n */\n\n${code}`;
+    const withHeaderB = `/**\n * Header B — same code, different words, different length.\n */\n\n${code}`;
+    expect(stripLeadingDocComment(withHeaderA)).toBe(stripLeadingDocComment(withHeaderB));
+  });
+
+  it('returns the source unchanged when there is no leading doc comment', () => {
+    const source = 'export const x = 1;\n';
+    expect(stripLeadingDocComment(source)).toBe('export const x = 1;');
+  });
+
+  it('does not consume a doc comment that is not at the very top of the file', () => {
+    // Only the file's own opening /** */ is exempt — not a comment before it.
+    const source = '// eslint-disable-next-line\n/**\n * Not actually the header.\n */\nexport const x = 1;\n';
+    expect(stripLeadingDocComment(source)).toBe(source.trim());
   });
 });

@@ -1,7 +1,33 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { blankItem, defaultCollectionKey, itemProblems, setCell } from './editorContentTools.js';
-import type { EditorCollectionSpec, EditorContentDoc, EditorItemContent, EditorLabel } from './studioApi.js';
+import {
+  blankItem,
+  collectionProblems,
+  defaultCollectionKey,
+  isTilemapItem,
+  itemProblems,
+  setCell,
+} from './editorContentTools.js';
+import type {
+  EditorCollectionSpec,
+  EditorContentDoc,
+  EditorItemContent,
+  EditorLabel,
+  EditorTilemapSpec,
+} from './studioApi.js';
+
+/** Narrows a collection to its tilemap spec — entities render no board. */
+function tilemapCollection(
+  spec: EditorCollectionSpec | null,
+): (EditorCollectionSpec & { item: EditorTilemapSpec }) | null {
+  return spec && spec.item.widget === 'tilemap' ? (spec as EditorCollectionSpec & { item: EditorTilemapSpec }) : null;
+}
+
+/** The palette's initial selection — entities have no tiles to paint with. */
+function firstTileKey(spec: EditorCollectionSpec | null | undefined): string | null {
+  if (!spec || spec.item.widget !== 'tilemap') return null;
+  return spec.item.tiles.find((tile) => tile.key.length > 0)?.key ?? null;
+}
 
 /**
  * The declared content painter for remix.
@@ -38,13 +64,11 @@ export function RemixPainter(props: {
     ? (((props.doc[collectionKey] as EditorItemContent[] | undefined) ?? []) as EditorItemContent[])
     : [];
   const [itemIndex, setItemIndex] = useState(0);
-  const [tileKey, setTileKey] = useState<string | null>(
-    spec?.item.tiles.find((tile) => tile.key.length > 0)?.key ?? null,
-  );
+  const [tileKey, setTileKey] = useState<string | null>(firstTileKey(spec));
 
   useEffect(() => {
     setItemIndex(0);
-    setTileKey(spec?.item.tiles.find((tile) => tile.key.length > 0)?.key ?? null);
+    setTileKey(firstTileKey(spec));
   }, [collectionKey, spec]);
 
   const item = items[Math.min(itemIndex, Math.max(0, items.length - 1))] ?? null;
@@ -58,7 +82,7 @@ export function RemixPainter(props: {
     if (props.selectedCollectionKey === undefined) setInternalCollectionKey(nextKey);
     props.onCollectionChange?.(nextKey);
     setItemIndex(0);
-    setTileKey(props.content[nextKey].item.tiles.find((tile) => tile.key.length > 0)?.key ?? null);
+    setTileKey(firstTileKey(props.content[nextKey]));
   }
 
   function updateItems(list: EditorItemContent[]) {
@@ -72,7 +96,10 @@ export function RemixPainter(props: {
   }
 
   const problems = item ? itemProblems(spec.item, item, name) : [];
-  const width = item ? (item.rows[0]?.length ?? 0) : 0;
+  const collectionWideProblems = collectionProblems(spec, items);
+  const tilemapItem = item && isTilemapItem(item) ? item : null;
+  const boardSpec = tilemapCollection(spec);
+  const width = tilemapItem ? (tilemapItem.rows[0]?.length ?? 0) : 0;
 
   return (
     <div className="remix-painter">
@@ -135,17 +162,17 @@ export function RemixPainter(props: {
         ) : null}
       </div>
 
-      {item ? (
+      {boardSpec && tilemapItem ? (
         <>
           <div
             className="editor-board"
             role="grid"
-            aria-label={name(spec.itemLabel)}
+            aria-label={name(boardSpec.itemLabel)}
             style={{ gridTemplateColumns: `repeat(${width}, var(--editor-cell))` }}
           >
-            {item.rows.map((rowChars, row) =>
+            {tilemapItem.rows.map((rowChars, row) =>
               Array.from(rowChars).map((char, col) => {
-                const tile = spec.item.tiles.find((entry) => entry.char === char);
+                const tile = boardSpec.item.tiles.find((entry) => entry.char === char);
                 return (
                   <button
                     key={`${row}-${col}`}
@@ -155,8 +182,8 @@ export function RemixPainter(props: {
                     {...(tile?.color ? { style: { background: tile.color } } : {})}
                     aria-label={`${row + 1},${col + 1}: ${tile ? name(tile.label) : char}`}
                     onClick={() => {
-                      const selected = spec.item.tiles.find((entry) => entry.key === tileKey);
-                      if (selected) updateItem(setCell(item, row, col, selected.char));
+                      const selected = boardSpec.item.tiles.find((entry) => entry.key === tileKey);
+                      if (selected) updateItem(setCell(tilemapItem, row, col, selected.char));
                     }}
                   />
                 );
@@ -164,7 +191,7 @@ export function RemixPainter(props: {
             )}
           </div>
           <div className="editor-palette" role="radiogroup" aria-label={t('studioPanel.editor.tiles')}>
-            {spec.item.tiles.map((tile) => (
+            {boardSpec.item.tiles.map((tile) => (
               <button
                 key={tile.key}
                 type="button"
@@ -182,21 +209,100 @@ export function RemixPainter(props: {
               </button>
             ))}
           </div>
-          {/*
-           * Verdicts, not vetoes: nothing here blocks anything (there is no save
-           * to refuse), but a map that breaks its own game's rules should say so
-           * before the player wonders why their level cannot be won.
-           */}
-          {problems.length > 0 ? (
-            <div className="remix-painter-checks" role="status">
-              {problems.slice(0, 3).map((problem) => (
-                <p key={problem} className="editor-check is-bad">
-                  ✕ {problem}
-                </p>
-              ))}
-            </div>
-          ) : null}
         </>
+      ) : null}
+
+      {item && spec ? (
+        <div className="remix-painter-properties">
+          {Object.entries(spec.item.properties).map(([propertyName, propertySpec]) => {
+            const value = item.properties[propertyName];
+            if (propertySpec.type === 'text') {
+              return (
+                <label key={propertyName} className="editor-prop">
+                  <span>{propertyName}</span>
+                  <input
+                    type="text"
+                    maxLength={propertySpec.max}
+                    value={typeof value === 'string' ? value : ''}
+                    onChange={(event) =>
+                      updateItem({ ...item, properties: { ...item.properties, [propertyName]: event.target.value } })
+                    }
+                  />
+                </label>
+              );
+            }
+            if (propertySpec.type === 'int' || propertySpec.type === 'number') {
+              return (
+                <label key={propertyName} className="editor-prop">
+                  <span>
+                    {propertyName}{' '}
+                    <em>
+                      {propertySpec.min}–{propertySpec.max}
+                    </em>
+                  </span>
+                  <input
+                    type="number"
+                    min={propertySpec.min}
+                    max={propertySpec.max}
+                    step={propertySpec.type === 'int' ? 1 : 'any'}
+                    value={typeof value === 'number' ? value : propertySpec.min}
+                    onChange={(event) => {
+                      const parsed = Number(event.target.value);
+                      if (!Number.isFinite(parsed)) return;
+                      updateItem({ ...item, properties: { ...item.properties, [propertyName]: parsed } });
+                    }}
+                  />
+                </label>
+              );
+            }
+            if (propertySpec.type === 'enum') {
+              return (
+                <label key={propertyName} className="editor-prop">
+                  <span>{propertyName}</span>
+                  <select
+                    value={typeof value === 'string' ? value : propertySpec.values[0]}
+                    onChange={(event) =>
+                      updateItem({ ...item, properties: { ...item.properties, [propertyName]: event.target.value } })
+                    }
+                  >
+                    {propertySpec.values.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              );
+            }
+            return (
+              <label key={propertyName} className="editor-prop">
+                <span>{propertyName}</span>
+                <input
+                  type="checkbox"
+                  checked={value === true}
+                  onChange={(event) =>
+                    updateItem({ ...item, properties: { ...item.properties, [propertyName]: event.target.checked } })
+                  }
+                />
+              </label>
+            );
+          })}
+        </div>
+      ) : null}
+
+      {/*
+       * Verdicts, not vetoes: nothing here blocks anything (there is no save
+       * to refuse), but content that breaks its own game's rules should say so
+       * before the player wonders why their level cannot be won.
+       */}
+      {problems.length > 0 || collectionWideProblems.length > 0 ? (
+        <div className="remix-painter-checks" role="status">
+          {[...problems, ...collectionWideProblems].slice(0, 3).map((problem) => (
+            <p key={problem} className="editor-check is-bad">
+              ✕ {problem}
+            </p>
+          ))}
+        </div>
       ) : null}
     </div>
   );

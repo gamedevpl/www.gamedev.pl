@@ -11760,6 +11760,11 @@ button.builder-mode-selector:disabled {
   color: #ff7b72;
 }
 
+.code-surface-live-push {
+  font-size: 0.78rem;
+  color: var(--success, #2e8b57);
+}
+
 .code-surface-discard {
   margin-left: auto;
   border: 1px solid var(--panel-border);
@@ -16657,6 +16662,13 @@ body.remix-entry-open {
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+
+.remix-painter-properties {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 10px 0;
 }
 
 /* A build that compiled and then threw. The tick would be a lie. */

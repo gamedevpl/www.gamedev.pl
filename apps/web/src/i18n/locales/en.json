@@ -320,6 +320,7 @@
       "lockedHint": "Read-only — GameKit and the tooling are shared, never edited here",
       "noFiles": "Nothing to show yet",
       "budget": "{{lines}}/{{maxLines}} lines",
+      "livePush": "Live — running game updated, no rebuild",
       "rebuildError": "Could not update the preview — try again",
       "previewUpdating": "Updating preview…",
       "previewReady": "Preview updated",

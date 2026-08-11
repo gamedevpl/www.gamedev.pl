@@ -46,6 +46,28 @@ const DEFINITION = {
   },
 };
 
+const ENTITIES_DEFINITION = {
+  version: 1,
+  content: {
+    cards: {
+      widget: 'collection',
+      label: { en: 'Cards', pl: 'Karty' },
+      itemLabel: { en: 'Card', pl: 'Karta' },
+      min: 2,
+      max: 4,
+      item: {
+        widget: 'entities',
+        properties: {
+          cost: { type: 'int', min: 0, max: 3 },
+          value: { type: 'number', min: 0, max: 20 },
+        },
+        constraints: [{ uniqueBy: 'cost' }],
+      },
+      defaults: [{ properties: { cost: 1, value: 6 } }, { properties: { cost: 2, value: 9 } }],
+    },
+  },
+};
+
 describe('editor-contract mirror', () => {
   it('accepts a well-formed definition and refuses unknown widgets', () => {
     const { definition, errors } = parseEditorDefinition(JSON.stringify(DEFINITION));
@@ -137,5 +159,36 @@ describe('editor-contract mirror', () => {
     expect(generated).toContain('export interface GardensItemProperties {\n  name: string;\n  parSteps: number;\n}');
     expect(generated).toContain('export const DEFAULT_CONTENT: EditorContent = {');
     expect(generated).toContain('"name": "First Sprouts"');
+  });
+
+  it('accepts the entities widget, enforces uniqueBy across the collection, and omits rows from L1', () => {
+    const { definition, errors } = parseEditorDefinition(JSON.stringify(ENTITIES_DEFINITION));
+    expect(errors).toEqual([]);
+    expect(definition).not.toBeNull();
+    expect(definition?.content.cards.item.widget).toBe('entities');
+
+    // Two items sharing "cost" violates the declared uniqueBy constraint.
+    const duplicate = validateEditorContent(definition!, {
+      cards: [{ properties: { cost: 1, value: 6 } }, { properties: { cost: 1, value: 9 } }],
+    });
+    expect(duplicate.some((message) => message.includes('duplicates item 1'))).toBe(true);
+
+    // Distinct values pass.
+    expect(
+      validateEditorContent(definition!, {
+        cards: [{ properties: { cost: 1, value: 6 } }, { properties: { cost: 2, value: 9 } }],
+      }),
+    ).toEqual([]);
+
+    // An entities item has no grid — a `rows` key on the content is refused.
+    const withRows = validateEditorContent(definition!, {
+      cards: [{ properties: { cost: 1, value: 6 }, rows: ['..'] }, { properties: { cost: 2, value: 9 } }],
+    });
+    expect(withRows.some((message) => message.includes('unknown keys rows'))).toBe(true);
+
+    // L1 must not emit `rows: string[]` for an entities item.
+    const generated = generateEditorContentModule(definition!);
+    expect(generated).toContain('export interface CardsItem {\n  properties: CardsItemProperties;\n}');
+    expect(generated).not.toContain('rows');
   });
 });
