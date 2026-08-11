@@ -1145,6 +1145,72 @@ describe('submission routes', () => {
     await app.close();
   });
 
+  it('drops cached stall=ended when an undelivered round is resumed via retry', async () => {
+    // Same hazard as the delivered case above, but for a game with no candidate yet.
+    // `resumeBuild`'s `undelivered: true` branch (used whenever `deliveredVersion` is
+    // unset — creator feedback, the reconciler's "finished without delivering" nudge,
+    // and operator retry all take it) called `ensureRoundGeneration`, which — unlike
+    // `bumpRoundGeneration` on the delivered path — did not clear a stale
+    // `agentEndedAt` left over from a prior MCP `end`. Studio's foot bar treated that
+    // leftover as "agent not working" and collapsed the build-progress UI even while a
+    // fresh session was actively running underneath.
+    const { githubClient } = createGithubClientStub({ issueNumber: 79 });
+    const { backend } = createBackendStub();
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      adminUids: 'g:boss',
+    });
+    await store.upsertUser({ uid: 'g:boss' });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    const token = mintToken(job.issueNumber, secret);
+    await store.setRoundBuilder(job.issueNumber, 'self');
+    await store.ensureRoundGeneration(job.issueNumber);
+    await store.recordJobTransition(job.issueNumber, {
+      to: 'building',
+      at: new Date().toISOString(),
+      by: 'agent',
+      reason: 'self_signal',
+    });
+    await store.touchLastAgentSignalAt(job.issueNumber, new Date().toISOString());
+    await store.markAgentEnded(job.issueNumber, new Date().toISOString());
+
+    // No deliveredVersion — the job never uploaded a candidate, so this is the
+    // `undelivered: true` path.
+    const before = await store.getSubmission(job.issueNumber);
+    expect(before?.deliveredVersion).toBeFalsy();
+
+    const ended = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
+    expect(ended.statusCode).toBe(200);
+    expect(ended.json()).toMatchObject({ builder: 'self', stall: 'ended' });
+    expect(ended.json().agentEndedAt).toBeTruthy();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/admin/jobs/${job.issueNumber}/retry`,
+      headers: getAuthHeaders('g:boss'),
+    });
+    expect(response.statusCode).toBe(200);
+
+    const after = await store.getSubmission(job.issueNumber);
+    expect(after?.agentEndedAt).toBeUndefined();
+
+    const resumed = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
+    expect(resumed.statusCode).toBe(200);
+    expect(resumed.json().stall).not.toBe('ended');
+    expect(resumed.json().agentEndedAt).toBeUndefined();
+
+    await app.close();
+  });
+
   it('self→platform handoff lands on dispatched and busts the status cache', async () => {
     // Without the cache bust, Studio kept serving the previous self stall
     // (`no_agent_yet` / ended) for up to a minute while Copilot was already queued.
