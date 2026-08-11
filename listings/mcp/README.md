@@ -47,7 +47,7 @@ channel at all. Revisit only if Gemini CLI adoption changes.
 
 ## What the server exposes
 
-Thirty-one tools, advertised to every client that connects. Grouped by where they fall in a
+Every tool advertised to a connecting client, grouped by where it falls in a
 build round; the authoritative list is whatever `tools/list` returns, and
 `plugin-manifests.test.ts` fails if this table drifts from it.
 
