@@ -168,6 +168,12 @@ export async function registerCreatorCodeRoutes(
     return true;
   }
 
+  // Closed round: staging would write into a buffer nothing reads again.
+  function roundIsClosed(record: SubmissionRecord): boolean {
+    const resolvedState = resolveJobState(record) ?? 'queued';
+    return !isActiveBuildRound({ state: resolvedState, transitions: record.transitions });
+  }
+
   /** Owner-resolved round + version, or the exact reply already sent on failure. */
   async function resolveForSlug(
     request: { user?: { uid: string; tier?: string } | null; params: { slug: string } },
@@ -317,6 +323,12 @@ export async function registerCreatorCodeRoutes(
       if (isLiveAgentRound(record)) {
         return reply.status(409).send({ error: 'agent_round', message: 'an agent is actively building this round' });
       }
+      if (roundIsClosed(record)) {
+        return reply.status(409).send({
+          error: 'no_active_round',
+          message: 'this game has no round open to edit — start a new round from the thread first',
+        });
+      }
 
       const parsed = StageInputSchema.safeParse(request.body ?? {});
       if (!parsed.success) {
@@ -401,6 +413,12 @@ export async function registerCreatorCodeRoutes(
 
       if (isLiveAgentRound(record)) {
         return reply.status(409).send({ error: 'agent_round', message: 'an agent is actively building this round' });
+      }
+      if (roundIsClosed(record)) {
+        return reply.status(409).send({
+          error: 'no_active_round',
+          message: 'this game has no round open to edit — start a new round from the thread first',
+        });
       }
 
       const parsed = PatchInputSchema.safeParse(request.body ?? {});

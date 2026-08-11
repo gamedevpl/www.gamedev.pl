@@ -245,6 +245,36 @@ describe('the Code surface routes (creator-code.ts)', () => {
         expect(refused.statusCode).toBe(409);
         expect(refused.json()).toMatchObject({ error: 'agent_round' });
       }));
+
+    it('refuses a write into a round that has already closed — same posture as deliver', async () =>
+      withApp(async (app) => {
+        await store.recordJobTransition(10, { to: 'published', at: new Date().toISOString(), by: 'operator' });
+        const res = await app.inject({
+          method: 'PUT',
+          url: '/api/me/studio/games/sky-dodge/sources/stage',
+          headers: { ...authHeaders('g:creator'), 'content-type': 'application/json' },
+          payload: { path: 'game.ts', content: 'export const boot = 1;', rebuild: false },
+        });
+        expect(res.statusCode).toBe(409);
+        expect(res.json()).toMatchObject({ error: 'no_active_round' });
+        const listed = await games.listStagedSources({ slug: 'sky-dodge', issueNumber: 10, roundGeneration: 1 });
+        expect(listed.files).toEqual([]);
+      }));
+  });
+
+  describe('POST /api/me/studio/games/:slug/sources/stage/patch', () => {
+    it('refuses a write into a round that has already closed — same posture as stage', async () =>
+      withApp(async (app) => {
+        await store.recordJobTransition(10, { to: 'published', at: new Date().toISOString(), by: 'operator' });
+        const res = await app.inject({
+          method: 'POST',
+          url: '/api/me/studio/games/sky-dodge/sources/stage/patch',
+          headers: { ...authHeaders('g:creator'), 'content-type': 'application/json' },
+          payload: { path: 'game.ts', old: 'x', new: 'y' },
+        });
+        expect(res.statusCode).toBe(409);
+        expect(res.json()).toMatchObject({ error: 'no_active_round' });
+      }));
   });
 
   describe('POST /api/me/studio/games/:slug/sources/stage/discard', () => {

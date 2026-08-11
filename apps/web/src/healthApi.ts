@@ -91,6 +91,7 @@ export interface VisitFunnel {
    * added it, and the panel renders an empty block rather than crashing.
    */
   assisting?: Array<{ step: string; visits: number }>;
+  coding?: Array<{ step: string; visits: number }>;
   /** The player-side remix loop. Optional for the same client-outlives-deploy reason. */
   remixing?: Array<{ step: string; visits: number }>;
   /** Which door brought painting visits to the brush. Optional, same reason. */
