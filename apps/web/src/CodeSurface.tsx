@@ -90,9 +90,7 @@ function fileDotClass(file: CodeSurfaceFile): string {
   return file.stagedBy ? ` has-staged-edits is-staged-by-${file.stagedBy}` : '';
 }
 
-/** GA-04: which files the worker's TypeScript project actually knows about — mirrors
- * apps/api/src/type-check.ts's own `.ts`-only filter, so the browser and server never
- * disagree about what's in the program. */
+// GA-04: mirrors type-check.ts's own .ts filter.
 function isTsPath(path: string): boolean {
   return path.endsWith('.ts') || path.endsWith('.tsx');
 }
@@ -123,9 +121,7 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
   const sourcesRef = useRef(sources);
   sourcesRef.current = sources;
 
-  /** GA-04: the worker-backed language service (GA-02/GA-03). A ref, not state — its
-   * identity must survive re-renders untouched; `languageServiceReady` below is the
-   * render-triggering signal that it exists. */
+  // GA-04: a ref, not state — languageServiceReady below signals it exists.
   const languageServiceRef = useRef<CodeSurfaceLanguageService | null>(null);
   const languageServiceInitRef = useRef(false);
   const [languageServiceReady, setLanguageServiceReady] = useState(false);
@@ -218,19 +214,7 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
 
   const editable = sources !== null && !sources.readOnly;
 
-  // GA-04: create the worker-backed language service once the first sources load
-  // lands for an editable surface, seeded with every `.ts`/`.tsx` file plus the kit
-  // declaration (GA-01). Advisory only (§1.1) — a slow or failed init just means
-  // `languageServiceReady` never flips, and CodeMirror stays a plain editor (GA-06).
-  //
-  // Deliberately keyed on `editable`/`slug`, not `sources` itself: `sources` gets a
-  // fresh object identity on every fetch (StrictMode's double-invoked initial load
-  // in dev being the sharpest example, but any future re-fetch has the same shape),
-  // and re-running this effect on every one of those would race its own cleanup —
-  // the `cancelled` flag from the first run would flip before its async work reaches
-  // `createCodeSurfaceLanguageService`, silently dropping the worker with no error to
-  // show for it. Reading `sourcesRef.current` inside instead means this only fires
-  // when *editability itself* changes (surface loads, or an agent round ends).
+  // GA-04: keyed on editable/slug — avoids a re-fetch cleanup race.
   useEffect(() => {
     if (!editable || languageServiceInitRef.current) return undefined;
     const sourcesAtStart = sourcesRef.current;
@@ -258,9 +242,7 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
     };
   }, [editable, slug]);
 
-  // Slug change (switching games without unmounting CodeSurface) tears the old
-  // worker down and lets the effect above rebuild one for the new slug; unmount does
-  // the same.
+  // Slug change or unmount tears the worker down for a rebuild.
   useEffect(() => {
     return () => {
       languageServiceRef.current?.destroy();
@@ -273,10 +255,7 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
   const file = useMemo(() => sources?.files.find((entry) => entry.path === selected) ?? null, [sources, selected]);
   const content = selected !== null ? (drafts[selected] ?? file?.content ?? '') : '';
 
-  /** GA-05: memoized so CodeMirrorEditor's reconfigure effect only fires when the
-   * worker actually becomes ready or the open file changes — not on every keystroke
-   * (an object literal in the JSX below would get a fresh identity on every one of
-   * `content`'s re-renders otherwise). */
+  // GA-05: memoized so a keystroke doesn't re-trigger the editor.
   const languageServiceForEditor = useMemo(() => {
     if (!languageServiceReady || !languageServiceRef.current || !file || !isTsPath(file.path)) return undefined;
     return { worker: languageServiceRef.current.worker, path: toVfsPath(file.path) };
@@ -321,10 +300,7 @@ export function CodeSurface({ slug, onBack }: CodeSurfaceProps) {
         await stageCodeSurfaceFile(slug, path, value, { rebuild: false });
         setSaveState('saved');
         recordCodeStep('edited');
-        // GA-04: keep the worker's vfs current for every saved file, not just the one
-        // open in CodeMirror — tsSync() only covers the currently-focused editor
-        // instance, so a sibling file's cross-file completions/hovers would otherwise
-        // go stale the moment the creator switches away from it.
+        // GA-04: syncs siblings — tsSync() only covers the focused editor.
         if (isTsPath(path)) languageServiceRef.current?.updateFile(path, value);
         return true;
       } catch (error) {

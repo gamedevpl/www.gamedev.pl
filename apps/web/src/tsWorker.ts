@@ -4,15 +4,9 @@ import * as Comlink from 'comlink';
 import ts from 'typescript';
 import { COMPILER_OPTIONS } from './tsCompilerOptions.js';
 
-// GA-02: the language service that backs CE-36's completions/hover (creator-code-
-// gamekit-autocomplete-plan.md in the ops repo). Reached only by a dynamic import from
-// CodeSurface.tsx (Worker constructor + import.meta.url), so nothing outside an open,
-// editable Code surface pays for `typescript` or the lib files below.
+// GA-02: the completions worker — loaded only for an editable Code surface.
 
-// Every lib.*.d.ts in the typescript package, as a lazy raw-text loader per file —
-// Vite splits each into its own chunk, so only the handful `knownLibFilesForCompilerOptions`
-// actually needs (the ES2022 + DOM chain) are ever fetched. No CDN: self-hosted, same
-// origin as everything else this site serves.
+// Lib .d.ts files load lazily via Vite chunks — no CDN.
 const libLoaders = import.meta.glob('../../../node_modules/typescript/lib/lib*.d.ts', {
   query: '?raw',
   import: 'default',
@@ -25,21 +19,14 @@ async function loadLibFiles(): Promise<Map<string, string>> {
     needed.map(async (fileName) => {
       const entry = Object.entries(libLoaders).find(([path]) => path.endsWith(`/${fileName}`));
       if (!entry) return;
-      // @typescript/vfs roots every path at "/" — its own getDefaultLibFileName()
-      // asks the system for "/lib.es2022.d.ts", not the bare name. Keyed any other
-      // way, the default lib silently never resolves and every global (Math, Array,
-      // ...) reads as unknown, which is a much stranger failure than a missing file.
+      // vfs roots paths at "/" — unprefixed keys leave every global unresolved.
       map.set(`/${fileName}`, await entry[1]());
     }),
   );
   return map;
 }
 
-// Starts empty: the main thread seeds every game file (and the kit declaration) via
-// the exposed `updateFile` after `initialize()` resolves — see
-// codeSurfaceLanguageService.ts's `createCodeSurfaceLanguageService`. `createOrUpdateFile`
-// (codemirror-ts's own sync helper) creates a file that doesn't exist yet, so this is
-// the same call for "seed" and "edit", not a separate channel.
+// Starts empty; main thread seeds files via updateFile after initialize() resolves.
 Comlink.expose(
   createWorker({
     env: (async () => {

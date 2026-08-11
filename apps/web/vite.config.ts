@@ -106,9 +106,7 @@ export default defineConfig({
       '/api': { target: apiTarget, changeOrigin: true },
     },
   },
-  // GA-02: tsWorker.ts's `import.meta.glob` over the TypeScript lib files needs its
-  // own code-split chunks — Vite's default IIFE worker format bundles the worker as
-  // one file and can't support that.
+  // GA-02: tsWorker.ts needs code-split chunks; IIFE can't.
   worker: {
     format: 'es',
   },

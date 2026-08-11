@@ -1,11 +1,6 @@
 // @vitest-environment jsdom
 
-// GA-06 (creator-code-gamekit-autocomplete-plan.md in the ops repo): every way GA-04's
-// worker-backed language service can fail to show up — read-only surfaces that must
-// never even try, a kit-declaration fetch that fails, and a worker that never resolves
-// — must degrade to plain CodeMirror rather than crash or block editing. A separate
-// file from CodeSurface.test.tsx because it needs its own mock of
-// codeSurfaceLanguageService.js to observe (and control) the worker lifecycle directly.
+// GA-06: every way the language service can fail to show up.
 
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -44,8 +39,7 @@ vi.mock('./codeSurfaceApi.js', async () => {
 
 vi.mock('./codeSurfaceLanguageService.js', () => ({
   createCodeSurfaceLanguageService: vi.fn(),
-  // Real implementation, not a mock: pure string logic CodeSurface.tsx calls
-  // directly (not through the worker), and the tests assert on its output.
+  // Real toVfsPath, not a mock — CodeSurface.tsx calls it directly.
   toVfsPath: (path: string) => (path.startsWith('/') ? path : `/${path}`),
 }));
 
@@ -130,7 +124,7 @@ describe('CodeSurface language-service degradation (GA-06)', () => {
       { 'game.ts': 'export const boot = () => {};' },
       null,
     );
-    // GAME.json isn't a .ts/.tsx file — the worker's vfs must not be seeded with it.
+    // GAME.json isn't .ts — the vfs must not be seeded.
     expect(mockedLanguageService.createCodeSurfaceLanguageService).not.toHaveBeenCalledWith(
       expect.objectContaining({ 'GAME.json': expect.anything() }),
       expect.anything(),
@@ -164,8 +158,7 @@ describe('CodeSurface language-service degradation (GA-06)', () => {
       { 'game.ts': 'export const boot = () => {};' },
       'declare const x: 1;',
     );
-    // @typescript/vfs roots every path at "/" (codeSurfaceLanguageService.ts's toVfsPath) —
-    // the facet path handed to CodeMirror must match what the worker actually seeded.
+    // vfs roots paths at "/"; facet path must match the worker's seed.
     expect(lastEditorProps?.languageService).toEqual({ worker, path: '/game.ts' });
   });
 

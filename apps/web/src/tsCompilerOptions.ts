@@ -1,10 +1,6 @@
 import ts from 'typescript';
 
-// Mirrors apps/api/src/type-check.ts's COMPILER_OPTIONS exactly — that file's own
-// test suite deep-equals this against it (GA-03). Divergence would let the browser
-// language service suggest members the server's typecheck gate then refuses. Its own
-// module, not declared inside tsWorker.ts: that file calls Comlink.expose() at import
-// time, which would run in the API's Node test process too if it imported from there.
+// Mirrors type-check.ts; own module, so tests skip tsWorker's expose().
 export const COMPILER_OPTIONS: ts.CompilerOptions = {
   noEmit: true,
   strict: true,
