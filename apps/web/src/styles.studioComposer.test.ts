@@ -24,6 +24,7 @@ describe('studio compact composer empty state', () => {
     const input = firstRuleBody('.status-composer.is-compact.is-empty .status-feedback-input');
     expect(input).toMatch(/grid-column:\s*1/);
     expect(input).toMatch(/min-height:\s*34px/);
+    expect(input).toMatch(/padding:\s*6px\s+0/);
 
     const toolbar = firstRuleBody('.status-composer.is-compact.is-empty .status-composer-toolbar');
     expect(toolbar).toMatch(/grid-column:\s*2/);
