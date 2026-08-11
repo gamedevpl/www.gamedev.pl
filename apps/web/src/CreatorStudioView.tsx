@@ -961,7 +961,8 @@ export function CreatorStudioView({
 
                         <StudioChatRail
                           title={activeGame.title}
-                          open={chatVisible}
+                          open={railOpen}
+                          covered={chatCovered}
                           onOpenChange={(next) => {
                             setRailManualOpen(next);
                             if (next) {

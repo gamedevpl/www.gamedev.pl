@@ -14,6 +14,7 @@ export type SheetDetent = 'peek' | 'half' | 'full';
 export type StudioChatRailProps = {
   title: string;
   open: boolean;
+  covered?: boolean;
   onOpenChange: (open: boolean) => void;
   unreadCount: number;
   standaloneHref?: string;
@@ -29,6 +30,7 @@ export type StudioChatRailProps = {
 export function StudioChatRail({
   title,
   open,
+  covered = false,
   onOpenChange,
   unreadCount,
   standaloneHref,
@@ -40,6 +42,7 @@ export function StudioChatRail({
   const [isSheet, setIsSheet] = useState(false);
   const [detent, setDetent] = useState<SheetDetent>('half');
   const asideRef = useRef<HTMLElement | null>(null);
+  const visible = open && !covered;
 
   // A collapsed rail stays mounted but is clipped to 1px via CSS, not
   // display:none — `aria-hidden` alone does not remove its buttons/textarea from the
@@ -48,8 +51,8 @@ export function StudioChatRail({
   // the whole collapsed subtree from both focus and the accessibility tree.
   useEffect(() => {
     const node = asideRef.current as (HTMLElement & { inert: boolean }) | null;
-    if (node) node.inert = !open;
-  }, [open]);
+    if (node) node.inert = !visible;
+  }, [visible]);
 
   useEffect(() => {
     const query =
@@ -68,7 +71,7 @@ export function StudioChatRail({
     if (open && isSheet) setDetent((current) => (current === 'peek' ? 'half' : current));
   }, [open, isSheet]);
 
-  const visiblyOpen = open && !(isSheet && detent === 'peek');
+  const visiblyOpen = visible && !(isSheet && detent === 'peek');
   const popOutLabel = t('studioPanel.rail.popOut', { defaultValue: 'Open as page' });
   const closeLabel = t('studioPanel.rail.closeThread', { defaultValue: 'Close chat' });
   useEffect(() => {
@@ -119,7 +122,7 @@ export function StudioChatRail({
   // be lost). The aside + children remain present and are hidden via CSS.
   return (
     <>
-      {open && isSheet && detent !== 'peek' ? (
+      {visible && isSheet && detent !== 'peek' ? (
         <div
           className="modal-backdrop studio-chat-rail-backdrop"
           role="presentation"
@@ -128,10 +131,10 @@ export function StudioChatRail({
       ) : null}
       <aside
         ref={asideRef}
-        className={`studio-chat-rail${detentClass}${open ? '' : ' is-collapsed'}`}
+        className={`studio-chat-rail${detentClass}${visible ? '' : ' is-collapsed'}`}
         aria-label={title}
-        aria-hidden={open ? undefined : true}
-        {...(open && isSheet && detent !== 'peek' ? { role: 'dialog', 'aria-modal': true } : {})}
+        aria-hidden={visible ? undefined : true}
+        {...(visible && isSheet && detent !== 'peek' ? { role: 'dialog', 'aria-modal': true } : {})}
       >
         <div className="studio-chat-rail-head">
           {open && isSheet ? (
