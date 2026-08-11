@@ -6244,46 +6244,8 @@ a.user-name--profile:focus-visible {
   border-top-color: var(--turquoise);
 }
 
-/* The mini chat agent's escape hatch: armed, the next send skips it and goes straight
-   to the builder. Quiet until pressed — this is a recovery control, not a primary
-   action — then it takes the same accent as the studio voice it is bypassing, so the
-   armed state reads as "talking to the builder directly" rather than as an error. */
-.status-composer-escape {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  padding: 0;
-  border-radius: 50%;
-  border: 1px solid var(--panel-border);
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-}
-
-.status-composer-escape:hover:not(:disabled) {
-  color: var(--text);
-  border-color: var(--muted);
-}
-
-.status-composer-escape.is-armed {
-  color: var(--accent-blue);
-  border-color: var(--accent-blue);
-  background: rgba(56, 189, 248, 0.12);
-}
-
-.status-composer-escape:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* Square again where every button gets a 44px floor for fingers — with a fixed width and
-   a floored height it would have come out an oval. */
 @media (max-width: 768px) {
-  .status-composer.is-compact .status-composer-send,
-  .status-composer.is-compact .status-composer-escape {
+  .status-composer.is-compact .status-composer-send {
     width: 44px;
     height: 44px;
   }

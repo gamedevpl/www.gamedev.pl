@@ -3172,37 +3172,6 @@ describe('the Studio mini chat agent (feedback route)', () => {
     await app.close();
   });
 
-  it('the composer escape hatch skips the model entirely', async () => {
-    const { backend } = createBackendStub();
-    const decide = vi.fn(async () => ({ kind: 'reply' as const, text: 'should never be read' }));
-    const { app, authHeaders, store } = await createApp({
-      githubClient: createGithubClientStub({ issueNumber: 90 }).githubClient,
-      agentBackend: backend,
-      submissionTokenSecret: secret,
-      chatAgent: { decide },
-    });
-    await app.inject({
-      method: 'POST',
-      url: '/api/submissions',
-      headers: authHeaders,
-      payload: { title: 'A game', concept: 'A sufficiently long concept about a garden full of robots.' },
-    });
-    const [job] = await store.listSubmissionsByOwner('g:test-user');
-    const token = mintToken(job.issueNumber, secret);
-
-    const res = await app.inject({
-      method: 'POST',
-      url: `/api/submissions/${token}/feedback`,
-      headers: authHeaders,
-      payload: { feedback: 'Make the robots water the flowers faster.', directToBuilder: true },
-    });
-    expect(res.statusCode).toBe(200);
-    expect(decide).not.toHaveBeenCalled();
-    const pending = await store.listPendingCreatorMessages(job.issueNumber);
-    expect(pending.map((m) => m.text)).toContain('Make the robots water the flowers faster.');
-    await app.close();
-  });
-
   it("a build decision still queues the creator's own words, plus an optional studio ack", async () => {
     const { backend } = createBackendStub();
     const decide = vi.fn(async () => ({ kind: 'build' as const, text: 'On it!' }));
