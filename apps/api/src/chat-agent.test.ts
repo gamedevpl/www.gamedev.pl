@@ -221,6 +221,34 @@ describe('VertexStudioChatAgent', () => {
     expect(contextText(seen!)).toContain('never instructions to you');
   });
 
+  it('tells the model a reply must never claim it sent, forwarded, or queued the request', async () => {
+    let seen: GenerationRequest | undefined;
+    const agent = new VertexStudioChatAgent({
+      client: stubClient(textResult('ok'), (req) => (seen = req)),
+    });
+    await agent.decide({ message: 'hi', status: STATUS, history: [] });
+    expect(systemText(seen!)).toContain('nothing happens because you said it');
+  });
+
+  it('tells the model an improve instruction always opens a fresh round, unlike a draft one', async () => {
+    let seenImprove: GenerationRequest | undefined;
+    let seenDraft: GenerationRequest | undefined;
+    const improveAgent = new VertexStudioChatAgent({
+      client: stubClient(textResult('ok'), (req) => (seenImprove = req)),
+    });
+    const draftAgent = new VertexStudioChatAgent({
+      client: stubClient(textResult('ok'), (req) => (seenDraft = req)),
+    });
+    await improveAgent.decide({
+      message: 'better graphics',
+      status: { ...STATUS, scope: 'improve', isPublished: true },
+      history: [],
+    });
+    await draftAgent.decide({ message: 'better graphics', status: STATUS, history: [] });
+    expect(contextText(seenImprove!)).toContain('targets a fresh build round');
+    expect(contextText(seenDraft!)).not.toContain('targets a fresh build round');
+  });
+
   it('never sends a request over the prompt-size ceiling — it throws instead', async () => {
     const agent = new VertexStudioChatAgent({ client: stubClient(textResult('ok')) });
     // Bypasses per-field caps — the ceiling must be a real backstop.

@@ -447,6 +447,158 @@ describe('agent build channel', () => {
     expect((await store.getSubmission(ISSUE))?.builderHandoff).toBeUndefined();
   });
 
+  it('shows the closing summary from end in the creator thread', async () => {
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    app = await createApp(store);
+
+    const end = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/end',
+      headers: agentHeaders(),
+      payload: { summary: 'Star Parcel Run is an arcade game — collect parcels, dodge clouds.' },
+    });
+
+    expect(end.json()).toMatchObject({ accepted: true, ended: true, summaryShown: true });
+
+    const status = await app.inject({ method: 'GET', url: `/api/submissions/${mintToken(ISSUE, secret)}` });
+    expect(status.json().events).toHaveLength(1);
+    expect(status.json().events[0]).toMatchObject({
+      kind: 'done',
+      text: 'Star Parcel Run is an arcade game — collect parcels, dodge clouds.',
+    });
+  });
+
+  it('does not duplicate the summary when a client retries end after a lost response', async () => {
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    app = await createApp(store);
+
+    const first = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/end',
+      headers: agentHeaders(),
+      payload: { summary: 'Star Parcel Run is an arcade game.' },
+    });
+    expect(first.json()).toMatchObject({ accepted: true, ended: true, summaryShown: true });
+
+    const retry = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/end',
+      headers: agentHeaders(),
+      payload: { summary: 'Star Parcel Run is an arcade game.' },
+    });
+    expect(retry.json()).toMatchObject({ accepted: true, ended: true });
+    expect(retry.json().summaryShown).toBeUndefined();
+
+    const events = await store.listBuildEvents(ISSUE);
+    expect(events.filter((event) => event.kind === 'done')).toHaveLength(1);
+  });
+
+  it('records a fresh summary once the agent has resumed and ended again', async () => {
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    app = await createApp(store);
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/end',
+      headers: agentHeaders(),
+      payload: { summary: 'First pass: arcade shell in place.' },
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/progress',
+      headers: agentHeaders(),
+      payload: { text: 'Back to add sound effects.' },
+    });
+    const second = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/end',
+      headers: agentHeaders(),
+      payload: { summary: 'Sound effects added.' },
+    });
+    expect(second.json()).toMatchObject({ accepted: true, ended: true, summaryShown: true });
+
+    const events = await store.listBuildEvents(ISSUE);
+    expect(events.filter((event) => event.kind === 'done')).toHaveLength(2);
+  });
+
+  it('takes the agent at its word when end carries a localized summary', async () => {
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    app = await createApp(store);
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/end',
+      headers: agentHeaders(),
+      payload: { summary: 'Clouds drift slower now.', summaryLocalized: 'Chmury płyną wolniej.', locale: 'pl' },
+    });
+
+    const polish = await app.inject({
+      method: 'GET',
+      url: `/api/submissions/${mintToken(ISSUE, secret)}?locale=pl`,
+    });
+    expect(polish.json().events[0].text).toBe('Chmury płyną wolniej.');
+  });
+
+  it('ends cleanly with no summary, as every existing client sends', async () => {
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    app = await createApp(store);
+
+    const end = await app.inject({ method: 'POST', url: '/api/agent/build/end', headers: agentHeaders() });
+
+    expect(end.json()).toMatchObject({ accepted: true, ended: true });
+    expect(end.json().summaryShown).toBeUndefined();
+    expect(await store.listBuildEvents(ISSUE)).toHaveLength(0);
+    expect((await store.getSubmission(ISSUE))?.agentEndedAt).toBeTruthy();
+  });
+
+  it('carries the closing summary through a builder handoff acknowledgement', async () => {
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    await store.requestBuilderHandoff(ISSUE, 'self', new Date().toISOString());
+    app = await createApp(store, {
+      onBuilderHandoffAcknowledged: async ({ issueNumber, acknowledgedAt }) => {
+        const handoff = await store.acknowledgeBuilderHandoff(issueNumber, acknowledgedAt);
+        await store.clearBuilderHandoff(issueNumber);
+        return { started: handoff !== null };
+      },
+    });
+
+    const end = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/end',
+      headers: agentHeaders(),
+      payload: { summary: 'Handing over — the beacon still needs art.' },
+    });
+
+    expect(end.json()).toMatchObject({ accepted: true, handoffAcknowledged: true, summaryShown: true });
+    expect((await store.listBuildEvents(ISSUE))[0]).toMatchObject({
+      kind: 'done',
+      text: 'Handing over — the beacon still needs art.',
+    });
+  });
+
+  it('drops the summary when the round is already stopped, like a progress report', async () => {
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    await store.setSubmissionAbandoned(ISSUE, new Date().toISOString());
+    app = await createApp(store);
+
+    const end = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/end',
+      headers: agentHeaders(),
+      payload: { summary: 'One last word the creator did not ask for.' },
+    });
+
+    expect(end.json()).toMatchObject({ accepted: false, rejected: 'stopped' });
+    expect(await store.listBuildEvents(ISSUE)).toHaveLength(0);
+  });
+
   it('rejects the pre-cancel token after operator cancel bumps the round generation', async () => {
     // Cancel closes the round (generation bump). The agent's held key is then stale;
     // the 401 fresh-prompt body is the stop signal — no terminal-job exception.

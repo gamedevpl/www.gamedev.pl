@@ -1425,8 +1425,6 @@ function FeedbackPanel({
   // hours, which is exactly how an exhausted agent allowance reads as a hung game.
   const [notice, setNotice] = useState<string | null>(null);
   const [builder, setBuilder] = useState<BuilderKind>(initialBuilder);
-  // Escape hatch for the chat agent: armed per-message, cleared after send.
-  const [directToBuilder, setDirectToBuilder] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
@@ -1495,21 +1493,17 @@ function FeedbackPanel({
       // server reported rather than by asking the creator which one they meant.
       // Shortest call shape for the ordinary case — tests assert on it.
       if (published) {
-        const improved = directToBuilder
-          ? await submitImprovement(token, trimmed, undefined, roundBuilder, true)
-          : roundBuilder
-            ? await submitImprovement(token, trimmed, undefined, roundBuilder)
-            : await submitImprovement(token, trimmed);
+        const improved = roundBuilder
+          ? await submitImprovement(token, trimmed, undefined, roundBuilder)
+          : await submitImprovement(token, trimmed);
         // Publishing is terminal: the improvement is a new job with its own token. The
         // builder memory is keyed by token in localStorage, so persist the choice under
         // the *new* token as well — the old token's memory dies with its round.
         handoffToken = improved.token;
       } else {
-        const result = directToBuilder
-          ? await submitFeedback(token, trimmed, undefined, roundBuilder, true)
-          : roundBuilder
-            ? await submitFeedback(token, trimmed, undefined, roundBuilder)
-            : await submitFeedback(token, trimmed);
+        const result = roundBuilder
+          ? await submitFeedback(token, trimmed, undefined, roundBuilder)
+          : await submitFeedback(token, trimmed);
         if (result.roundStarted === false) {
           setNotice(
             result.reason === 'no_capacity' ? t('statusView.feedback.noCapacity') : t('statusView.feedback.notStarted'),
@@ -1524,7 +1518,6 @@ function FeedbackPanel({
       }
       setState('sent');
       setText('');
-      setDirectToBuilder(false);
       // Back to the CSS height rather than the height the sent message grew it to: an
       // empty box the size of the last paragraph is a leftover, not a state.
       if (inputRef.current) inputRef.current.style.height = '';
@@ -1612,20 +1605,6 @@ function FeedbackPanel({
     </div>
   );
 
-  // Recovery from any misclassification — always available, not just mid-round.
-  const directToBuilderToggle = (
-    <button
-      type="button"
-      className={`status-composer-escape${directToBuilder ? ' is-armed' : ''}`}
-      onClick={() => setDirectToBuilder((armed) => !armed)}
-      disabled={state === 'sending'}
-      aria-pressed={directToBuilder}
-      title={t('statusView.feedback.directToBuilder')}
-    >
-      <PixelIcon name="send" size={12} />
-    </button>
-  );
-
   // Standalone status page still shows a brief receipt next to Send. The studio
   // composer does not: the message is echoed into the thread immediately, so a
   // second "Sent!" under the box is the same confirmation twice.
@@ -1693,10 +1672,7 @@ function FeedbackPanel({
           disabled={sending}
         />
         <div className="status-composer-toolbar">
-          <div className="status-composer-toolbar-left">
-            {builderControls}
-            {directToBuilderToggle}
-          </div>
+          <div className="status-composer-toolbar-left">{builderControls}</div>
           <div className="status-composer-toolbar-right">
             <button
               type="button"
@@ -1722,8 +1698,8 @@ function FeedbackPanel({
             {error ? (
               <p className="error">{error}</p>
             ) : sending ? (
+              // The send button already animates its own spinner — one is enough.
               <span className="status-feedback-sending" role="status">
-                <span className="status-composer-send-spinner" aria-hidden="true" />
                 {t('statusView.feedback.sending')}
               </span>
             ) : (
@@ -1762,7 +1738,6 @@ function FeedbackPanel({
         >
           {state === 'sending' ? t('statusView.feedback.sending') : t('statusView.feedback.submit')}
         </button>
-        {directToBuilderToggle}
         {sentReceipt}
       </div>
       {error ? <p className="error">{error}</p> : null}
