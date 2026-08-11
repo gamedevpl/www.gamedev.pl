@@ -1722,8 +1722,8 @@ function FeedbackPanel({
             {error ? (
               <p className="error">{error}</p>
             ) : sending ? (
+              // The send button already animates its own spinner — one is enough.
               <span className="status-feedback-sending" role="status">
-                <span className="status-composer-send-spinner" aria-hidden="true" />
                 {t('statusView.feedback.sending')}
               </span>
             ) : (
