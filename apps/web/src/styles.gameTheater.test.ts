@@ -14,14 +14,15 @@ function ruleBody(selector: string): string {
   return match![1]!;
 }
 
-describe('game theater floating bar', () => {
-  it('overlays the full-height game instead of taking a flex row', () => {
+describe('game theater bar', () => {
+  it('reserves a row above the game instead of covering it', () => {
     const bar = ruleBody('.game-theater-bar');
 
-    expect(bar).toMatch(/position:\s*absolute/);
-    expect(bar).toMatch(/top:\s*0/);
-    expect(bar).toMatch(/left:\s*0/);
-    expect(bar).toMatch(/right:\s*0/);
+    expect(bar).toMatch(/position:\s*relative/);
+    expect(bar).toMatch(/flex:\s*none/);
+    expect(bar).not.toMatch(/top:\s*0/);
+    expect(bar).not.toMatch(/left:\s*0/);
+    expect(bar).not.toMatch(/right:\s*0/);
     expect(ruleBody('.game-viewport-container')).toMatch(/flex:\s*1/);
   });
 
@@ -52,5 +53,12 @@ describe('game theater floating bar', () => {
     expect(reveal).toMatch(/width:\s*44px/);
     expect(reveal).toMatch(/height:\s*44px/);
     expect(reveal).toMatch(/background:\s*rgba\(12,\s*18,\s*24,\s*0\.62\)/);
+  });
+
+  it('keeps the native fullscreen exit away from top-edge game HUDs', () => {
+    const exit = ruleBody('.theater-exit-fullscreen');
+
+    expect(exit).toMatch(/top:\s*auto/);
+    expect(exit).toMatch(/bottom:\s*max\(12px,\s*env\(safe-area-inset-bottom\)\)/);
   });
 });

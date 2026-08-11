@@ -1852,14 +1852,9 @@ body.player-open {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* The bar floats over the game instead of taking a flex row away from it. Its safe-area
-   insets keep controls clear of a notch or rounded corner; the game remains full-bleed
-   underneath, with its own side/bottom insets below. */
+/* The bar owns a flex row above the game, so its safe-area insets cannot cover HUDs. */
 .game-theater-bar {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2249,12 +2244,11 @@ body.player-open {
   margin: 0;
 }
 
-/* Immersive fullscreen: the bar is gone; one floating control exits it.
-   High z-index + post-iframe DOM order keep it above the sandboxed game surface,
-   which otherwise paints over low-z siblings in some browsers. */
+/* Immersive fullscreen: keep the exit affordance away from top-edge game HUDs. */
 .theater-exit-fullscreen {
   position: absolute;
-  top: max(12px, env(safe-area-inset-top));
+  top: auto;
+  bottom: max(12px, env(safe-area-inset-bottom));
   left: max(12px, env(safe-area-inset-left));
   z-index: 50;
   display: inline-flex;
@@ -2292,8 +2286,7 @@ body.player-open {
   width: 100%;
   /* Positioning context for the rotate hint / camera backdrop that overlay the game. */
   position: relative;
-  /* The header is absolutely positioned, so this flex child receives the entire
-     theater instead of only the height left below the controls. */
+  /* The bar is a sibling flex row, so this child receives the remaining height. */
   min-height: 0;
   display: flex;
   align-items: center;
@@ -2331,8 +2324,7 @@ body.player-open {
 
 .theater-camera-indicator {
   position: absolute;
-  /* Clear the floating bar while staying attached to the full-height game surface. */
-  top: calc(max(12px, env(safe-area-inset-top)) + 58px);
+  top: max(12px, env(safe-area-inset-top));
   left: max(12px, env(safe-area-inset-left));
   z-index: 2;
   display: inline-flex;
@@ -2429,8 +2421,7 @@ body.player-open {
 /* MOBILE GAME THEATER
    Two independent squeezes. Narrow (portrait phone): the bar can't fit three
    labelled buttons plus a description, so labels and secondary text go. Short
-   (landscape phone, ~380px tall): the overlay shrinks so it obscures less of the
-   game. A landscape phone hits both. */
+   (landscape phone, ~380px tall): the bar shrinks to preserve game space. */
 @media (max-width: 768px) {
   .game-theater-bar {
     padding: 8px 12px;
@@ -2485,7 +2476,7 @@ body.player-open {
   }
 
   .theater-camera-indicator {
-    top: calc(max(8px, env(safe-area-inset-top)) + 57px);
+    top: max(8px, env(safe-area-inset-top));
   }
 
   /* Phone: sound + fullscreen leave the bar and appear as menu rows instead. */
@@ -2527,7 +2518,7 @@ body.player-open {
   }
 
   .theater-camera-indicator {
-    top: calc(max(4px, env(safe-area-inset-top)) + 45px);
+    top: max(4px, env(safe-area-inset-top));
   }
 
   /* Shrink bar chrome only — leave the overflow menu rows at their thumb target. */
