@@ -11488,9 +11488,21 @@ button.builder-mode-selector:disabled {
   overflow: hidden;
 }
 
+/* A definition with no board (tuning params and/or a property sheet only)
+   docks to a side panel instead of covering the stage — the running game
+   stays visible next to the sliders, which is the point of a live tuning UI.
+   A board needs the full canvas, so it keeps the full-cover shape above;
+   switching collections toggles this live since `:has()` tracks the DOM. */
+.studio-edit-overlay:not(:has(.editor-board-col)) {
+  inset: 0 0 0 auto;
+  width: min(360px, 100%);
+  border-left: 1px solid var(--panel-border);
+  box-shadow: -12px 0 32px rgba(0, 0, 0, 0.35);
+}
+
 /* Chat stays reachable while Code is open (owner feedback, 2026-08-11): the rail and
    its pill float over the code overlay exactly as they float over the stage. Scoped to
-   Code — Edit keeps its full-cover behaviour untouched. */
+   Code — a full-cover Edit (a board definition) keeps its own overlay on top instead. */
 .studio-stage-layout:has(.studio-code-overlay) .studio-chat-rail {
   z-index: 60;
 }

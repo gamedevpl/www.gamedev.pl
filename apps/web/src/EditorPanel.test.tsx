@@ -1,0 +1,125 @@
+// @vitest-environment jsdom
+
+import { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import i18n from './i18n/index.js';
+import type { EditorContentDoc, EditorDefinition, GameEditorState, StudioGame } from './studioApi.js';
+
+const fetchGameEditor = vi.hoisted(() => vi.fn());
+const putEditorDraft = vi.hoisted(() => vi.fn());
+const publishEditorContent = vi.hoisted(() => vi.fn());
+
+vi.mock('./studioApi.js', async () => {
+  const actual = await vi.importActual<typeof import('./studioApi.js')>('./studioApi.js');
+  return { ...actual, fetchGameEditor, putEditorDraft, publishEditorContent };
+});
+
+vi.mock('./visitTelemetry.js', () => ({ recordAssistStep: vi.fn(), recordEditorStep: vi.fn() }));
+
+import { EditorPanel } from './EditorPanel.js';
+
+const paramsDefinition: EditorDefinition = {
+  version: 1,
+  params: {
+    width: { type: 'int', min: 80, max: 200, label: { en: 'Width', pl: 'Szerokość' }, default: 140 },
+  },
+  content: {},
+};
+
+const game: StudioGame = {
+  token: 'game-token',
+  title: 'Trampoline Master',
+  createdAt: '2026-08-07T00:00:00.000Z',
+  lastKnownStatus: 'published',
+  slug: 'trampoline-master',
+};
+
+function editorState(overrides: Partial<GameEditorState> = {}): GameEditorState {
+  return {
+    version: 'v1',
+    definition: paramsDefinition,
+    content: { params: { width: 140 } },
+    draft: null,
+    ...overrides,
+  };
+}
+
+let container: HTMLDivElement;
+let root: Root | null = null;
+
+beforeEach(async () => {
+  (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  await i18n.changeLanguage('en');
+  container = document.createElement('div');
+  document.body.appendChild(container);
+  fetchGameEditor.mockResolvedValue(editorState());
+  putEditorDraft.mockResolvedValue({ revision: 1, updatedAt: '2026-08-07T00:00:01.000Z' });
+  publishEditorContent.mockResolvedValue({ version: 'v2-editor', jobId: 42 });
+});
+
+afterEach(() => {
+  act(() => root?.unmount());
+  root = null;
+  container.remove();
+  vi.clearAllMocks();
+});
+
+async function renderEditor(editorPushRef?: { current: ((content: EditorContentDoc) => void) | null }) {
+  root = createRoot(container);
+  await act(async () => {
+    root!.render(<EditorPanel game={game} editorPushRef={editorPushRef} onOpenPlaytest={vi.fn()} onBack={vi.fn()} />);
+    await Promise.resolve();
+  });
+}
+
+function dragSlider(value: string) {
+  const input = container.querySelector<HTMLInputElement>('input[type="range"]');
+  expect(input).not.toBeNull();
+  act(() => {
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!;
+    setter.call(input, value);
+    input!.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+}
+
+describe('EditorPanel live push (§E tier 1)', () => {
+  it('pushes the merged draft to the running stage as soon as it loads, before any edit', async () => {
+    const push = vi.fn();
+    await renderEditor({ current: push });
+
+    expect(push).toHaveBeenCalledWith({ params: { width: 140 } });
+  });
+
+  it('pushes the updated document on every slider drag, alongside the debounced save', async () => {
+    const push = vi.fn();
+    await renderEditor({ current: push });
+    push.mockClear();
+
+    dragSlider('180');
+
+    expect(push).toHaveBeenCalledWith({ params: { width: 180 } });
+    expect(putEditorDraft).not.toHaveBeenCalled(); // still debounced — push is immediate, save is not
+  });
+
+  it('reads editorPushRef.current fresh on every push, so a remount of the stage is picked up', async () => {
+    const first = vi.fn();
+    const ref = { current: first as ((content: EditorContentDoc) => void) | null };
+    await renderEditor(ref);
+
+    const second = vi.fn();
+    ref.current = second;
+    dragSlider('160');
+
+    expect(second).toHaveBeenCalledWith({ params: { width: 160 } });
+    expect(first).not.toHaveBeenCalledWith({ params: { width: 160 } });
+  });
+
+  it('does nothing when no editorPushRef was supplied — a Studio session without a mounted stage must not throw', async () => {
+    await renderEditor(undefined);
+
+    expect(() => dragSlider('165')).not.toThrow();
+    // The ordinary autosave path still ran, proving the drag itself was handled.
+    expect(container.querySelector('.editor-save-state')?.textContent).toBe(i18n.t('studioPanel.editor.saving'));
+  });
+});

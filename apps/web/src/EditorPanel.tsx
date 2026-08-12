@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PixelIcon } from './PixelIcon.js';
 import {
@@ -31,7 +31,8 @@ import {
  * The studio's Edit surface (EditorKit L3): renders a game's own editor
  * definition with the fixed widget vocabulary — collection list, tilemap
  * painter, property sheet, live constraint checks — and keeps the creator's
- * draft saved platform-side as they work.
+ * draft saved platform-side as they work, and pushes each change live (§E
+ * tier 1).
  *
  * The panel renders only what the definition declares. It never invents
  * structure: an unknown widget cannot reach here (the gate refuses the
@@ -107,10 +108,17 @@ function tilemapCollection(
   return spec && spec.item.widget === 'tilemap' ? (spec as EditorCollectionSpec & { item: EditorTilemapSpec }) : null;
 }
 
-export function EditorPanel(props: { game: StudioGame; onOpenPlaytest: () => void; onBack: () => void }) {
+export function EditorPanel(props: {
+  game: StudioGame;
+  /** The stage's live-push channel (§E tier 1). */
+  editorPushRef?: MutableRefObject<((content: EditorContentDoc) => void) | null>;
+  onOpenPlaytest: () => void;
+  onBack: () => void;
+}) {
   const { t, i18n } = useTranslation();
   const name = useLabel();
   const slug = props.game.slug as string;
+  const pushLive = useCallback((next: EditorContentDoc) => props.editorPushRef?.current?.(next), [props.editorPushRef]);
 
   const [state, setState] = useState<'loading' | 'error' | 'ready'>('loading');
   const [editor, setEditor] = useState<GameEditorState | null>(null);
@@ -143,7 +151,9 @@ export function EditorPanel(props: { game: StudioGame; onOpenPlaytest: () => voi
         // The revision funnel's first rung: this creator can edit and did open it.
         recordEditorStep('opened');
         setEditor(loaded);
-        setContent(mergeDraft(loaded));
+        const merged = mergeDraft(loaded);
+        setContent(merged);
+        pushLive(merged);
         setRevision(loaded.draft?.revision ?? 0);
         setSaveState('clean');
         const defaultKey = defaultCollectionKey(loaded.definition.content);
@@ -158,7 +168,7 @@ export function EditorPanel(props: { game: StudioGame; onOpenPlaytest: () => voi
     return () => {
       cancelled = true;
     };
-  }, [slug]);
+  }, [slug, pushLive]);
 
   // Autosave: debounce the whole snapshot. The draft is always a whole document,
   // so a lost timer costs recency, never consistency.
@@ -216,16 +226,22 @@ export function EditorPanel(props: { game: StudioGame; onOpenPlaytest: () => voi
     setContent((current) => {
       const list = itemsOf(current, collectionKey).slice();
       list[itemIndex] = next;
-      return { ...current, [collectionKey]: list };
+      const nextContent = { ...current, [collectionKey]: list };
+      pushLive(nextContent);
+      return nextContent;
     });
     scheduleSave();
   }
 
   function updateParam(paramName: string, value: EditorParamValue) {
-    setContent((current) => ({
-      ...current,
-      params: { ...((current.params ?? {}) as Record<string, EditorParamValue>), [paramName]: value },
-    }));
+    setContent((current) => {
+      const nextContent = {
+        ...current,
+        params: { ...((current.params ?? {}) as Record<string, EditorParamValue>), [paramName]: value },
+      };
+      pushLive(nextContent);
+      return nextContent;
+    });
     scheduleSave();
   }
 
@@ -248,6 +264,7 @@ export function EditorPanel(props: { game: StudioGame; onOpenPlaytest: () => voi
       const message = result.summary ? (i18n.language?.startsWith('pl') ? result.summary.pl : result.summary.en) : '';
       if (result.lane === 'params' && result.content && result.patches && result.patches.length > 0) {
         setContent(result.content);
+        pushLive(result.content);
         scheduleSave();
         setUtterance('');
         recordAssistStep('applied');
@@ -290,6 +307,7 @@ export function EditorPanel(props: { game: StudioGame; onOpenPlaytest: () => voi
   function undoAssist() {
     if (assist.kind !== 'applied') return;
     setContent(assist.undo);
+    pushLive(assist.undo);
     scheduleSave();
     setAssist({ kind: 'idle' });
   }
@@ -298,7 +316,9 @@ export function EditorPanel(props: { game: StudioGame; onOpenPlaytest: () => voi
     try {
       const loaded = await fetchGameEditor(slug);
       setEditor(loaded);
-      setContent(mergeDraft(loaded));
+      const merged = mergeDraft(loaded);
+      setContent(merged);
+      pushLive(merged);
       setRevision(loaded.draft?.revision ?? 0);
       const defaultKey = defaultCollectionKey(loaded.definition.content);
       setSelectedCollectionKey(defaultKey);
@@ -323,6 +343,7 @@ export function EditorPanel(props: { game: StudioGame; onOpenPlaytest: () => voi
       await deleteEditorDraft(slug);
       if (editor) {
         setContent(editor.content);
+        pushLive(editor.content);
         setRevision(0);
         setItemIndex(0);
         setSaveState('clean');
@@ -690,7 +711,9 @@ export function EditorPanel(props: { game: StudioGame; onOpenPlaytest: () => voi
                         onClick={() => {
                           setContent((current) => {
                             const list = itemsOf(current, collectionKey).filter((_, i) => i !== index);
-                            return { ...current, [collectionKey]: list };
+                            const nextContent = { ...current, [collectionKey]: list };
+                            pushLive(nextContent);
+                            return nextContent;
                           });
                           setItemIndex((current) =>
                             Math.max(0, current > index ? current - 1 : Math.min(current, items.length - 2)),
@@ -709,10 +732,14 @@ export function EditorPanel(props: { game: StudioGame; onOpenPlaytest: () => voi
                   type="button"
                   className="editor-add"
                   onClick={() => {
-                    setContent((current) => ({
-                      ...current,
-                      [collectionKey]: [...itemsOf(current, collectionKey), blankItem(spec.item)],
-                    }));
+                    setContent((current) => {
+                      const nextContent = {
+                        ...current,
+                        [collectionKey]: [...itemsOf(current, collectionKey), blankItem(spec.item)],
+                      };
+                      pushLive(nextContent);
+                      return nextContent;
+                    });
                     setItemIndex(items.length);
                     scheduleSave();
                   }}
