@@ -146,6 +146,22 @@ describe('queryKnowledge — mode=answer', () => {
 
     expect(result.chunks).toHaveLength(2);
   });
+
+  it('does not collide two distinct (repoPath, content) pairs that share a delimiter', async () => {
+    const one = answerBody('one', { repoPath: 'a b' });
+    one.answer.references[0].chunkInfo.content = 'c';
+    const two = answerBody('two', { repoPath: 'a' });
+    two.answer.references[0].chunkInfo.content = 'b c';
+    const body = {
+      answer: { ...one.answer, references: [...one.answer.references, ...two.answer.references] },
+    };
+    const fetchImpl = vi.fn(async () => jsonResponse(body));
+    const queryKnowledge = testClient({ engineId: 'gamedevpl-knowledge', fetchImpl });
+
+    const result = await queryKnowledge({ query: 'how do parties work', mode: 'answer' });
+
+    expect(result.chunks).toHaveLength(2);
+  });
 });
 
 describe('queryKnowledge — mode=chunks', () => {

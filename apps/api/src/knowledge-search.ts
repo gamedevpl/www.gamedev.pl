@@ -152,7 +152,7 @@ function sourceCommitOf(structData: Record<string, unknown>): string | undefined
 
 // Dupe only if repoPath and snippet content both match exactly.
 function dedupeChunkKey(repoPath: string, content: string): string {
-  return `${repoPath} ${content}`;
+  return JSON.stringify([repoPath, content]);
 }
 
 // UNVERIFIED against a live call: parsing tolerates several plausible :search shapes.
