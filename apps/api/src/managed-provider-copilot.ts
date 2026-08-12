@@ -2,6 +2,7 @@ import {
   createAgentTasksClient,
   creditsFromUsageAmount,
   resolveTaskBranch,
+  stageAndCleanupSeedBranch,
   type AgentTask,
   type AgentTasksClient,
   type AgentTaskModel,
@@ -45,10 +46,6 @@ function withoutSeedPrompt(prompt: string): string {
   );
 }
 
-function seedBranchName(correlationId: string): string {
-  return `seed/job-${correlationId}`;
-}
-
 async function stageSeed(
   request: ManagedSessionRequest,
   baseRef: string,
@@ -57,19 +54,7 @@ async function stageSeed(
   const files = request.workspaceFiles;
   const slug = seedSlug(files);
   if (!files?.length || !slug) return null;
-  const branch = seedBranchName(request.correlationId);
-  try {
-    await github.deleteBranch(branch).catch(() => undefined);
-    await github.createBranchWithFiles({
-      branch,
-      baseRef,
-      message: `Seed round 0 for ${slug} (job ${request.correlationId})`,
-      files,
-    });
-    return branch;
-  } catch {
-    return null;
-  }
+  return stageAndCleanupSeedBranch({ github, issueNumber: request.correlationId, baseRef, slug, files });
 }
 
 function taskSession(task: AgentTask, model: string): ManagedSession {

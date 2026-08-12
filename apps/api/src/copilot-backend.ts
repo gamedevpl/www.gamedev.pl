@@ -15,11 +15,14 @@ import { buildPrompt } from './build-prompt.js';
 import {
   creditsFromUsageAmount,
   resolveTaskBranch,
+  stageAndCleanupSeedBranch,
   type AgentTaskModel,
   type AgentTasksClient,
 } from './agent-tasks.js';
 import type { GitHubClient } from './github-client.js';
 import type { AgentObservation } from './job-state.js';
+
+export { seedBranchName } from './agent-tasks.js';
 
 export interface CopilotBackendOptions {
   tasks: AgentTasksClient;
@@ -47,49 +50,25 @@ export interface CopilotBackendOptions {
 
 const DEFAULT_MODEL: AgentTaskModel = 'claude-sonnet-4.6';
 
-/**
- * Where a job's generated round 0 is staged.
- *
- * Derived from the job id rather than stored, so the name is knowable from the job alone
- * — a sweep can find a leaked seed branch without reading a record, and a redispatch
- * reuses the same name instead of leaving one branch per attempt behind.
- */
-export function seedBranchName(issueNumber: number): string {
-  return `seed/job-${issueNumber}`;
-}
-
 export function createCopilotBackend(options: CopilotBackendOptions): AgentBackend {
   const baseRef = options.baseRef ?? 'main';
   const model = options.model ?? DEFAULT_MODEL;
   const createPullRequest = options.createPullRequest ?? false;
 
-  /**
-   * Puts the draft on a branch, or returns null and lets the build start unseeded.
-   *
-   * The stale-branch delete is what makes a redispatch of the same job work: the name is
-   * derived from the job id, so a second attempt would otherwise collide with the first
-   * attempt's branch and fail on a ref that already exists. Deleting is safe because a
-   * seed branch is never anything but a starting point — no delivery, no review, and no
-   * history anyone reads.
-   */
+  // Stages the draft on a branch, or returns null to build unseeded.
   async function stageSeed(issueNumber: number, seed: SeedFiles): Promise<string | null> {
-    const branch = seedBranchName(issueNumber);
-    try {
-      await options.github.deleteBranch(branch).catch(() => undefined);
-      await options.github.createBranchWithFiles({
-        branch,
-        baseRef,
-        message: `Seed round 0 for ${seed.slug} (job ${issueNumber})`,
-        files: seed.files.map((file) => ({ path: `games/${seed.slug}/${file.path}`, content: file.content })),
-      });
-      return branch;
-    } catch (error) {
-      options.log?.warn(
-        { err: error, issueNumber, slug: seed.slug },
-        'could not stage the generated seed, dispatching unseeded',
-      );
-      return null;
-    }
+    return stageAndCleanupSeedBranch({
+      github: options.github,
+      issueNumber,
+      baseRef,
+      slug: seed.slug,
+      files: seed.files.map((file) => ({ path: `games/${seed.slug}/${file.path}`, content: file.content })),
+      onStageError: (error) =>
+        options.log?.warn(
+          { err: error, issueNumber, slug: seed.slug },
+          'could not stage the generated seed, dispatching unseeded',
+        ),
+    });
   }
 
   return {
