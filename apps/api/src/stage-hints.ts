@@ -1,18 +1,4 @@
-/**
- * Advisory checks run at stage_source_file / patch_source_file time.
- *
- * submit_sources typechecks and validates the audio catalog once, against the whole
- * delivery (typecheck-preflight.ts, games-repo-contract.ts music validation). An agent
- * that guesses a bad property name or an invented music track only learns that after a
- * full stage → submit → gate-rejection → refix round trip. Both checks below already
- * exist for submit; this module reuses them per staged/patched file so the same mistake
- * surfaces immediately, as a non-blocking hint — never a 400, never round state.
- *
- * Best-effort throughout: any failure to load the kit or read staged sources is
- * swallowed and yields no hint, matching the existing `gameManifestHint`/
- * `largeSourceFileHint` advisory pattern used by the same endpoints.
- */
-
+// Runs submit_sources' typecheck/audio checks per staged file, as hints.
 import type { KitFileStore } from './kit-files.js';
 import type { GamesStore } from './games-store.js';
 import { runTypecheckPreflight, sharedSourcesFromKitTree } from './typecheck-preflight.js';
@@ -24,8 +10,7 @@ import {
   type MusicTracksMap,
 } from './music-tracks.js';
 
-// Stage-time budget is tighter than submit's — this runs on a hot single-file endpoint,
-// possibly several times per round, not once at delivery.
+// Tighter than submit's budget — hot endpoint, runs several times a round.
 const STAGE_TYPECHECK_BUDGET_MS = 4_000;
 
 export type StageAdvisories = {
@@ -65,8 +50,7 @@ export async function computeStageAdvisories(input: {
       for (const file of staged) {
         if (!('deleted' in file) || !file.deleted) sources[file.path] = file.content;
       }
-      // The staged read can race the write it follows — never trust it over the file
-      // this call just wrote.
+      // A staged read can race the write it follows — this content wins.
       sources[normalized] = input.content;
       const check = await runTypecheckPreflight({
         slug: input.slug,
@@ -141,7 +125,7 @@ async function audioCatalogHint(input: {
     });
     if (gameMusicJson) gameTracks = parseGameMusicTracks(gameMusicJson);
   } catch {
-    // An invalid staged music.json is its own problem; do not let it block this hint.
+    // Invalid staged music.json is separate — do not block on it.
     return null;
   }
 
