@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { InteractiveMascot, Mascot, type MascotEmotion } from './Mascot.js';
+import { PixelIcon } from './PixelIcon.js';
 import {
   SNACK_ICONS,
   SPLASH_LIVES,
