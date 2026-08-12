@@ -1165,7 +1165,7 @@ export function SubmissionStatusView({
                 token={token}
                 published={status.status === 'published'}
                 building={!preview && !channelHtml}
-                agentWorking={Boolean(status && isAgentWorkActive(status))}
+                agentWorking={isAgentWorkActive(status)}
                 chooseBuilder={canChooseBuilder(status)}
                 initialBuilder={resolveDefaultBuilder(token, status)}
                 roundBuilder={status.builder && isBuilderKind(status.builder) ? status.builder : undefined}
