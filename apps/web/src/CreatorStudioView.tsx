@@ -1014,6 +1014,7 @@ export function CreatorStudioView({
                             <EditorPanel
                               key={activeGame.token}
                               game={activeGame}
+                              editorPushRef={editorPushRef}
                               onOpenPlaytest={() => changePosture('play')}
                               onBack={() => openTab('thread')}
                             />
