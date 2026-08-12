@@ -528,9 +528,13 @@ describe('managed backend', () => {
       tools: { mcpEndpoints: [{ url: 'https://www.gamedev.pl/api/mcp', name: 'gamedevpl' }] },
     });
 
-    await backend.dispatch(brief({ promptLane: 'mcp' }));
+    await backend.dispatch(brief({ promptLane: 'mcp', mcpOpenerToken: 'opener_xyz' }));
     expect(started[0]?.promptLane).toBe('mcp');
-    expect(started[0]?.prompt).toContain('"key": "token"');
+    // The MCP start() key is the round-scoped opener, never the harness channelToken —
+    // a driver whose bearer is not itself round-scoped (the Copilot connector) has no
+    // other way to receive it, and this was silently wrong in production until fixed.
+    expect(started[0]?.prompt).toContain('"key": "opener_xyz"');
+    expect(started[0]?.prompt).not.toContain('"key": "token"');
     setOutputs([{ path: `games/${SLUG}/game.ts`, content: 'export {};' }]);
     setState('completed');
 

@@ -7,6 +7,7 @@ const BRIEF: BuildBrief = {
   slug: 'comet-courier',
   spec: 'A game where you deliver parcels between comets.',
   channelToken: 'tok_abc',
+  mcpOpenerToken: 'opener_xyz',
   apiBaseUrl: 'https://www.gamedev.pl',
 };
 
@@ -26,10 +27,26 @@ describe('buildPrompt delivery contract', () => {
     expect(prompt).toContain('engine.modules array');
     expect(prompt).toContain('audio.music must be one music id string');
     expect(prompt).toContain('submit_sources');
-    expect(prompt).toContain('"key": "tok_abc"');
+    expect(prompt).toContain('"key": "opener_xyz"');
     expect(prompt).toContain('delivered rough');
     expect(prompt).not.toContain('npm run submit');
     expect(prompt).not.toContain('GAMEDEVPL_BUILD_TOKEN');
+  });
+
+  it('never leaks the harness channel token into the MCP start() key — they authenticate different things', () => {
+    const prompt = buildPrompt(BRIEF, { kind: 'channel', fast: true });
+    // The harness's channelToken authenticates the REST build channel, not an MCP
+    // start() call. A round dispatched to it instead of the round-scoped opener would
+    // fail at the platform connector's very first tool call — see build-prompt.ts.
+    expect(prompt).not.toContain('"key": "tok_abc"');
+    expect(prompt).not.toContain('GAMEDEVPL_BUILD_TOKEN');
+  });
+
+  it('falls back to a visible placeholder rather than the literal string "undefined" when no opener token was minted', () => {
+    const { mcpOpenerToken: _drop, ...withoutOpener } = BRIEF;
+    const prompt = buildPrompt(withoutOpener, { kind: 'channel', fast: true });
+    expect(prompt).toContain('"key": "(no opener token)"');
+    expect(prompt).not.toContain('"key": "undefined"');
   });
 
   it('opens a creation round through create_game before start', () => {

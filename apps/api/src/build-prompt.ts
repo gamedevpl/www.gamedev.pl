@@ -139,7 +139,12 @@ function channelDelivery(brief: BuildBrief, fast: boolean, creating: boolean): s
             'Use the returned slug and jobId; then call `start({ slug })` for that new game.',
           ]
         : [
-            `Call \`start\` with exactly \`{ "slug": "${brief.slug ?? '(slug)'}", "key": "${brief.channelToken}" }\`, then call \`get_brief\`, \`get_seed\` and \`get_kit\`.`,
+            // The round-scoped MCP credential, never the harness's channelToken — that
+            // authenticates the REST build channel, not an MCP start() call, and a driver
+            // whose bearer does not already resolve the round (the Copilot connector) has
+            // no other way to receive it. A driver whose bearer does resolve the round
+            // (Anthropic, Gemini) never reaches the code that reads this argument at all.
+            `Call \`start\` with exactly \`{ "slug": "${brief.slug ?? '(slug)'}", "key": "${brief.mcpOpenerToken ?? '(no opener token)'}" }\`, then call \`get_brief\`, \`get_seed\` and \`get_kit\`.`,
           ]),
       'Copy the exact sessionKey from `start` into every later MCP call.',
       'If get_seed returns available, revise those files instead of scaffolding.',

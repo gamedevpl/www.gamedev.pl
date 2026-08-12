@@ -10,6 +10,7 @@ const BRIEF: BuildBrief = {
   slug: 'comet-courier',
   spec: 'Deliver parcels between comets.',
   channelToken: 'tok_abc',
+  mcpOpenerToken: 'opener_xyz',
   apiBaseUrl: 'https://www.gamedev.pl',
 };
 
@@ -73,7 +74,13 @@ describe('Copilot managed provider', () => {
     });
 
     expect(createBranchWithFiles).not.toHaveBeenCalled();
-    expect(stub.startTask.mock.calls[0]?.[0].prompt).toContain('"key": "tok_abc"');
+    // The connector lane's start() call must carry the round-scoped opener, not the
+    // harness channelToken — the connector's bearer is deliberately generic (one shared
+    // GitHub secret for every Copilot round), so this key argument is the ONLY thing
+    // that scopes the call to one round. The old value made every connector-lane round
+    // fail its very first tool call in production.
+    expect(stub.startTask.mock.calls[0]?.[0].prompt).toContain('"key": "opener_xyz"');
+    expect(stub.startTask.mock.calls[0]?.[0].prompt).not.toContain('"key": "tok_abc"');
   });
 
   it('stages a seed on the same disposable branch as legacy Copilot', async () => {
