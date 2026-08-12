@@ -38,4 +38,10 @@ describe('the Code surface Publish button', () => {
     );
     expect(ruleFor('.studio-stage-layout:has(.studio-code-overlay) .studio-fullbleed')).toMatch(/top:\s*10px/);
   });
+
+  it('gives the global escape its own row on narrow phones', () => {
+    expect(css).toMatch(
+      /@media \(max-width: 600px\)[\s\S]*?\.studio-stage-layout:has\(\.studio-code-overlay\) \.code-surface-head \{\s*padding: 52px 14px 10px;/,
+    );
+  });
 });

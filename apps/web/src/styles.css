@@ -11909,6 +11909,15 @@ button.builder-mode-selector:disabled {
   }
 }
 
+/* On phones the global escape is a separate top row. Keeping it in the same row as
+   Wątek, Kod, and the readonly badge makes the header look like one crowded toolbar and
+   clips the right-hand status on narrow screens. */
+@media (max-width: 600px) {
+  .studio-stage-layout:has(.studio-code-overlay) .code-surface-head {
+    padding: 52px 14px 10px;
+  }
+}
+
 /* ── THE CHAT RAIL ────────────────────────────────────────────────────────────── */
 
 .studio-chat-unread-badge {
