@@ -29,6 +29,8 @@ describe('the beta splash fits a small phone', () => {
     ]) {
       expect(query).toContain(selector);
     }
+    expect(query).toMatch(/\.beta-splash \.splash-game__stage \{[\s\S]*height: 140px;/);
+    expect(query).toMatch(/\.beta-splash \.splash-game__hint \{[\s\S]*font-size: 0\.72rem;/);
   });
 
   it('hides pitch, not legal links, while a snack-catch round is on', () => {

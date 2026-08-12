@@ -4799,11 +4799,11 @@ a.user-name--profile:focus-visible {
     margin-bottom: 10px;
   }
 
-  .splash-game__stage {
+  .beta-splash .splash-game__stage {
     height: 140px;
   }
 
-  .splash-game__hint {
+  .beta-splash .splash-game__hint {
     margin: 6px 0 8px;
     font-size: 0.72rem;
   }
