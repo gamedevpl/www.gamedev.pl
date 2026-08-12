@@ -39,6 +39,13 @@ describe('the Code surface Publish button', () => {
     expect(ruleFor('.studio-stage-layout:has(.studio-code-overlay) .studio-fullbleed')).toMatch(/top:\s*10px/);
   });
 
+  it('keeps Code full-bleed when params-only Edit docks beside the stage', () => {
+    expect(ruleFor('.studio-edit-overlay:not(.studio-code-overlay):not(:has(.editor-board-col))')).toMatch(
+      /width:\s*min\(360px,\s*100%\)/,
+    );
+    expect(css).not.toMatch(/\.studio-edit-overlay:not\(:has\(\.editor-board-col\)\)/);
+  });
+
   it('gives the global escape its own row below desktop widths', () => {
     expect(css).toMatch(
       /@media \(max-width: 1099px\)[\s\S]*?\.studio-stage-layout:has\(\.studio-code-overlay\) \.code-surface-head \{\s*padding: 52px 14px 10px;/,
