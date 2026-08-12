@@ -179,6 +179,12 @@ Two concrete instances of that (observed 2026-07-23):
   in a second worktree and run the same file. Pair it with a control case that must
   pass on both, so a green-everywhere result reads as a broken probe rather than a
   clean bill of health.
+- **A rollback-after-dispatch fix can still fail before the provider returns.** Observed
+  (#770, 2026-08-12): managed providers can launch an MCP session before the awaited
+  `dispatch()` resolves. Moving a builder write after that call fixed vendor rejection
+  recovery but left the session's first tool call reading the old builder. When an
+  awaited vendor call can call back into the app, publish routing state before the call,
+  roll it back only when that call rejects, and have the stub read the store in-flight.
 - **A PR that changes an error's SHAPE has changed agent behaviour even when no test
   turns red.** Observed (BY-18a, 2026-08-02): a tools/call missing its credential used
   to return a JSON-RPC tool error carrying recovery instructions ("pass sessionKey from
