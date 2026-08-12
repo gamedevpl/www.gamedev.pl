@@ -922,6 +922,34 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(body).toMatch(/If a call is refused:/i);
   });
 
+  // Regression: real Gemini agents only read content's last item, never structuredContent.
+  it('keeps sessionKey recoverable from only the last content item (last-item-only MCP clients)', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    app = await createApp(store);
+    const sessionId = await initialize(app);
+
+    const res = await mcpCall(
+      app,
+      'tools/call',
+      { name: 'start', arguments: { key: roundKey() } },
+      { 'mcp-session-id': sessionId },
+    );
+    expect(res.statusCode).toBe(200);
+    const result = res.json().result as {
+      content: Array<{ type: string; text: string }>;
+      structuredContent: { sessionKey: string };
+    };
+
+    expect(result.content.length).toBeGreaterThanOrEqual(2);
+    const lastItem = result.content[result.content.length - 1];
+    expect(lastItem.type).toBe('text');
+    expect(lastItem.text).toContain(result.structuredContent.sessionKey);
+    // content[0]/content[1] stay unchanged for existing clients (ChatGPT, Claude, Studio).
+    expect(JSON.parse(result.content[0].text)).toMatchObject({ sessionKey: result.structuredContent.sessionKey });
+    expect(result.content[1].text).toMatch(/Session workflow/i);
+  });
+
   it('opens a platform round from its vault-injected round capability', async () => {
     const store = new InMemoryStore();
     await seedJob(store);

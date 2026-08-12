@@ -738,6 +738,19 @@ function withoutRepeatedContract(description: string): string {
   return description.endsWith(suffix) ? description.slice(0, -suffix.length).trimEnd() : description;
 }
 
+// Shared `start` success shape — a trailing block repeats sessionKey for last-item-only MCP clients.
+function startToolResult(structured: { sessionKey: string } & Record<string, unknown>): ToolResult {
+  const base = toolOk(structured);
+  return {
+    ...base,
+    content: [
+      ...base.content,
+      { type: 'text', text: SESSION_WORKFLOW_TEXT },
+      { type: 'text', text: `sessionKey: ${structured.sessionKey}` },
+    ],
+  };
+}
+
 /**
  * `BUILD_STEPS` widened to plain strings, for validating input that is `unknown`.
  *
@@ -1529,11 +1542,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             ...seed,
             ...gateField,
           };
-          const base = toolOk(structured);
-          return {
-            ...base,
-            content: [...base.content, { type: 'text' as const, text: SESSION_WORKFLOW_TEXT }],
-          };
+          return startToolResult(structured);
         };
 
         if (!key && bearer && looksLikeCreatorAgentKey(bearer)) {
@@ -1722,13 +1731,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           ...seed,
           ...gateField,
         };
-        // Base shape via toolOk so we do not drift from other tools; append the human-
-        // readable loop so an agent reading either form knows when to stop.
-        const base = toolOk(structured);
-        return {
-          ...base,
-          content: [...base.content, { type: 'text', text: SESSION_WORKFLOW_TEXT }],
-        };
+        return startToolResult(structured);
       },
     },
 
