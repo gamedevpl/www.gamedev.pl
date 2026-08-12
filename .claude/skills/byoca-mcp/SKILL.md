@@ -92,7 +92,7 @@ result. `tools/list` strips the repeated suffix at serialization time and the An
 managed provider defers optional MCP tools; keep the round-start/read/delivery path eager.
 Prompt caching lowers processing cost but does not remove those tokens from the context window.
 When adding or expanding a tool description, measure the serialized `tools/list` payload and
-keep the shared contract single-copy.
+keep the full contract single-copy; a short creator-text safety reminder may stay eager.
 
 **`get_kit_api` — the orientation path that did not exist before 2026-08-09.** `get_kit`
 returns tarball metadata only (engineRef, sha256, unpack one-liner) — it was never the API

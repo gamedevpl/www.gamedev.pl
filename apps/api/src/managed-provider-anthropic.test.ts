@@ -180,6 +180,8 @@ describe('anthropic managed provider', () => {
           get_kit: { defer_loading: false },
           report_progress: { defer_loading: false },
           stage_source_file: { defer_loading: false },
+          patch_source_file: { defer_loading: false },
+          delete_source_file: { defer_loading: false },
           submit_sources: { defer_loading: false },
           end: { defer_loading: false },
         },

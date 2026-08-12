@@ -81,7 +81,7 @@ a second vendor would spell differently belongs in its adapter.
    backend look like it depended on the first.
 4. **The vendor is a variable.** `MANAGED_AGENT_VENDOR` selects a registered adapter.
    Adding one is a `registerManagedProvider` line and a file; replacing one is an
-  environment change and a deploy.
+   environment change and a deploy.
 
 ## Anthropic under the seam
 

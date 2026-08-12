@@ -27,6 +27,8 @@ const MCP_EAGER_TOOLS = [
   'get_kit',
   'report_progress',
   'stage_source_file',
+  'patch_source_file',
+  'delete_source_file',
   'submit_sources',
   'end',
 ] as const;
