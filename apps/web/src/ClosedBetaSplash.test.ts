@@ -19,6 +19,7 @@ describe('ClosedBetaSplash', () => {
   afterEach(() => {
     document.body.innerHTML = '';
     vi.restoreAllMocks();
+    vi.useRealTimers();
     delete (globalThis as { google?: unknown }).google;
     setVisitSessionForTesting(null);
   });
@@ -75,6 +76,42 @@ describe('ClosedBetaSplash', () => {
     const mascot = container.querySelector<HTMLButtonElement>('button.mascot-interactive.beta-splash__mascot');
     expect(mascot).not.toBeNull();
     expect(mascot?.getAttribute('aria-label')).toMatch(/poke|szturchnij/i);
+    expect(container.querySelector('.splash-game__play')).not.toBeNull();
+
+    await act(async () => root.unmount());
+  });
+
+  it('keeps Join waitlist on screen after Feed him starts', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    vi.useFakeTimers();
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith('/api/auth/me')) return new Response(JSON.stringify({}), { status: 401 });
+      if (url.endsWith('/api/health')) {
+        return new Response(JSON.stringify({ status: 'ok', provider: 'mock', privateBeta: true }));
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+
+    await i18n.changeLanguage('en');
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(AuthProvider, null, createElement(ClosedBetaSplash)));
+      await flushEffects();
+    });
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.splash-game__play')?.click();
+      await flushEffects();
+    });
+
+    expect(container.querySelector('.splash-game__stage')).not.toBeNull();
+    expect(container.querySelector('#btn-join-waitlist')).not.toBeNull();
+    expect(container.querySelector('.beta-splash__signin')).not.toBeNull();
+    expect(container.querySelector('.beta-splash__legal')).not.toBeNull();
 
     await act(async () => root.unmount());
   });
@@ -126,6 +163,7 @@ describe('ClosedBetaSplash', () => {
     });
 
     expect(container.querySelector('#btn-accept-beta-invite')).not.toBeNull();
+    expect(container.querySelector('.splash-game__play')).toBeNull();
     await act(async () => {
       capturedCallback!({ credential: 'invite-credential' });
       await flushEffects();

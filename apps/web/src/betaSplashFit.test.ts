@@ -21,9 +21,22 @@ describe('the beta splash fits a small phone', () => {
     const query = css.slice(css.indexOf('@media (max-height: 720px)'));
     expect(query.slice(0, 40)).toContain('@media (max-height: 720px)');
     // Keyed on height, not width — a phone in landscape is short too.
-    for (const selector of ['.beta-splash__card', '.beta-splash__mascot .mascot', '.beta-splash__headline']) {
+    for (const selector of [
+      '.beta-splash__card',
+      '.beta-splash__mascot .mascot',
+      '.beta-splash__headline',
+      '.splash-game__stage',
+    ]) {
       expect(query).toContain(selector);
     }
+  });
+
+  it('hides pitch, not legal links, while a snack-catch round is on', () => {
+    const query = css.slice(css.indexOf('@media (max-height: 720px)'));
+    expect(query).toMatch(/\.beta-splash__card:has\(\.splash-game--playing\) \.beta-splash__headline/);
+    expect(query).toMatch(/\.beta-splash__card:has\(\.splash-game--playing\) \.beta-splash__footer/);
+    const legalBlock = query.slice(query.indexOf('.beta-splash__legal'), query.indexOf('.beta-splash__legal') + 120);
+    expect(legalBlock).not.toMatch(/display:\s*none/);
   });
 
   it('centres the card without making an overflowing one unreachable', () => {

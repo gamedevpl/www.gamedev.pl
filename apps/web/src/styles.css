@@ -4789,13 +4789,37 @@ a.user-name--profile:focus-visible {
 
   /* CSS wins over the SVG's width/height attributes, so the mascot shrinks without
      the component needing to know anything about the viewport. */
-  .beta-splash__mascot .mascot {
+  .beta-splash__mascot .mascot,
+  .splash-game__catcher .mascot {
     width: 68px;
     height: 58px;
   }
 
   .beta-splash__mascot {
     margin-bottom: 10px;
+  }
+
+  .splash-game__play {
+    margin-bottom: 10px;
+    font-size: 0.72rem;
+  }
+
+  .splash-game__stage {
+    height: 140px;
+  }
+
+  .splash-game__hint {
+    margin: 6px 0 8px;
+    font-size: 0.72rem;
+  }
+
+  .beta-splash__card:has(.splash-game--playing) .beta-splash__headline,
+  .beta-splash__card:has(.splash-game--over) .beta-splash__headline,
+  .beta-splash__card:has(.splash-game--playing) .beta-splash__badge,
+  .beta-splash__card:has(.splash-game--over) .beta-splash__badge,
+  .beta-splash__card:has(.splash-game--playing) .beta-splash__footer,
+  .beta-splash__card:has(.splash-game--over) .beta-splash__footer {
+    display: none;
   }
 
   .beta-splash__logo {
@@ -10365,6 +10389,187 @@ button.builder-mode-selector:disabled {
   margin: 0 auto 20px;
 }
 
+.splash-game {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  margin: 0 0 8px;
+}
+
+.splash-game .beta-splash__mascot {
+  margin-bottom: 8px;
+}
+
+.splash-game__play {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 16px;
+  padding: 4px 12px;
+  color: var(--turquoise);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  background: transparent;
+  border: 1px dashed rgba(0, 228, 172, 0.45);
+  border-radius: 999px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.splash-game__play:hover,
+.splash-game__play:focus-visible {
+  color: #08241d;
+  background: var(--turquoise);
+  border-style: solid;
+  outline: none;
+}
+
+.splash-game__hud {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin-bottom: 6px;
+  color: var(--turquoise);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.splash-game__lives {
+  display: flex;
+  gap: 5px;
+}
+
+.splash-game__life {
+  width: 8px;
+  height: 8px;
+  background: var(--turquoise);
+  border-radius: 50%;
+  box-shadow: 0 0 8px var(--turquoise-glow);
+}
+
+.splash-game__life--gone {
+  background: var(--panel-border);
+  box-shadow: none;
+}
+
+.splash-game__stage {
+  position: relative;
+  width: 100%;
+  height: 168px;
+  overflow: hidden;
+  border-radius: 12px;
+  background: radial-gradient(ellipse at 50% 120%, rgba(0, 228, 172, 0.1), transparent 58%);
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.splash-game__stage:focus-visible {
+  outline: 2px solid var(--turquoise);
+  outline-offset: 3px;
+}
+
+.splash-game__snack {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin: -14px 0 0 -14px;
+  pointer-events: none;
+  filter: drop-shadow(0 0 6px currentColor);
+  animation: splash-snack-wobble 0.9s ease-in-out infinite;
+}
+
+.splash-game__snack--0 {
+  color: var(--turquoise);
+}
+
+.splash-game__snack--1 {
+  color: var(--accent-blue);
+}
+
+.splash-game__snack--2 {
+  color: #ffd36a;
+}
+
+.splash-game__catcher {
+  position: absolute;
+  bottom: 2px;
+  transform: translateX(-50%);
+  color: var(--turquoise);
+  filter: drop-shadow(0 0 12px var(--turquoise-glow));
+  pointer-events: none;
+  transition: transform 0.12s ease-out;
+}
+
+.splash-game__catcher--chomp {
+  transform: translateX(-50%) scale(1.08, 0.9);
+  transition: transform 0.08s ease-out;
+}
+
+.splash-game__over {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  padding-top: 18px;
+  background: linear-gradient(180deg, rgba(22, 28, 34, 0.82) 0%, rgba(22, 28, 34, 0.15) 70%, transparent 100%);
+  pointer-events: none;
+}
+
+.splash-game__over-copy {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.splash-game__again {
+  pointer-events: auto;
+  padding: 6px 14px;
+  color: var(--turquoise);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  background: transparent;
+  border: 1px solid var(--turquoise);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.splash-game__again:hover,
+.splash-game__again:focus-visible {
+  color: #08241d;
+  background: var(--turquoise);
+  outline: none;
+}
+
+.splash-game__hint {
+  margin: 8px 0 12px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+@keyframes splash-snack-wobble {
+  0%,
+  100% {
+    transform: rotate(-12deg);
+  }
+  50% {
+    transform: rotate(12deg);
+  }
+}
+
 /* Interactive poke target — used on the closed-beta splash. */
 .mascot-interactive {
   display: inline-flex;
@@ -10554,6 +10759,13 @@ button.builder-mode-selector:disabled {
   .mascot-interactive--pullups {
     transition: none;
     animation: none;
+  }
+
+  .splash-game__snack,
+  .splash-game__catcher,
+  .splash-game__catcher--chomp {
+    animation: none;
+    transition: none;
   }
 
   /* The gesture reactions are motion by definition, so they go entirely — the

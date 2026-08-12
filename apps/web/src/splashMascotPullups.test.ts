@@ -11,8 +11,8 @@ const read = (name: string) => readFileSync(fileURLToPath(new URL(`./${name}`, i
 
 describe('the splash mascot does idle pull-ups', () => {
   it('opts the splash InteractiveMascot into pull-ups', () => {
-    const splash = read('ClosedBetaSplash.tsx');
-    const mascot = splash.match(/<InteractiveMascot[\s\S]*?\/>/);
+    const game = read('SplashMascotGame.tsx');
+    const mascot = game.match(/<InteractiveMascot[\s\S]*?\/>/);
     expect(mascot).not.toBeNull();
     expect(mascot![0]).toMatch(/doesPullUps/);
   });

@@ -935,7 +935,22 @@
     "waitlistApproved": "🎉 Twoja aplikacja została zaakceptowana! Zaloguj się ponownie, aby uzyskać dostęp.",
     "waitlistRejected": "Twoja aplikacja nie została zaakceptowana tym razem. Dziękujemy za zainteresowanie.",
     "waitlistError": "Nie udało się dołączyć do listy. Spróbuj ponownie.",
-    "footer": "W trakcie zamkniętej bety dostęp jest tylko na zaproszenie."
+    "footer": "W trakcie zamkniętej bety dostęp jest tylko na zaproszenie.",
+    "game": {
+      "play": "Nakarm go",
+      "hint": "Przesuwaj, żeby łapać przekąski",
+      "region": "Łapanie przekąsek z maskotką",
+      "score": "Wynik {{count}}",
+      "lives_one": "Została {{count}} szansa",
+      "lives_few": "Zostały {{count}} szanse",
+      "lives_many": "Zostało {{count}} szans",
+      "lives_other": "Zostało {{count}} szans",
+      "over_one": "Zjadł {{count}} przekąskę",
+      "over_few": "Zjadł {{count}} przekąski",
+      "over_many": "Zjadł {{count}} przekąsek",
+      "over_other": "Zjadł {{count}} przekąsek",
+      "again": "Jeszcze raz"
+    }
   },
   "betaInvite": {
     "headline": "Otrzymujesz zaproszenie do zamkniętej bety.",
