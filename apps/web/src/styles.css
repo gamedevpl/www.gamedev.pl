@@ -11515,12 +11515,17 @@ button.builder-mode-selector:disabled {
   align-items: center;
   gap: 10px;
   flex: none;
-  /* Extra top clearance: `.studio-fullbleed` floats over this same top-left corner
-     (position:absolute, top:14px, left:14px, z-index:1150) whenever this panel is
-     open, since opening it is what makes `covered` true. Reserve room below it
-     rather than let the two overlap. */
-  padding: 44px 14px 10px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--panel-border);
+}
+
+/* Keep the global escape and Code's thread action on one row. */
+.studio-stage-layout:has(.studio-code-overlay) .code-surface-head {
+  padding-left: 180px;
+}
+
+.studio-stage-layout:has(.studio-code-overlay) .studio-fullbleed {
+  top: 10px;
 }
 
 .code-surface-head h2 {

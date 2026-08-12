@@ -30,4 +30,12 @@ describe('the Code surface Publish button', () => {
   it('no longer ships a separate Stage-it primary CTA — preview rebuilds on autosave', () => {
     expect(css).not.toMatch(/\.code-surface-stage-it/);
   });
+
+  it('keeps Code navigation beside the global escape', () => {
+    expect(ruleFor('.code-surface-head')).toMatch(/padding:\s*10px 14px/);
+    expect(ruleFor('.studio-stage-layout:has(.studio-code-overlay) .code-surface-head')).toMatch(
+      /padding-left:\s*180px/,
+    );
+    expect(ruleFor('.studio-stage-layout:has(.studio-code-overlay) .studio-fullbleed')).toMatch(/top:\s*10px/);
+  });
 });
