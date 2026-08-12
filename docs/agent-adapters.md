@@ -50,9 +50,11 @@ GitHub Copilot's coding agent is dispatched programmatically through GitHub's Ag
 API (`copilot-backend.ts`, and `managed-provider-copilot.ts` under the managed-backend
 seam) — a prompt in, a branch and session state back, no issue assignment and no PR-relay
 workflow. The games repository is cloned as Copilot's harness — GameKit, tooling and
-published games as context — and the branch it works on is cut fresh per round and deleted
-once the round is done. The agent's output goes out over the build channel, never as a
-merged branch.
+published games as context — and each round gets its own fresh branch. That branch is kept
+until it is spent: released once a follow-up round has a branch of its own, and
+deliberately kept across a round that never delivered, since an undelivered branch may be
+the only copy of that work. Release is best-effort. The agent's output goes out over the
+build channel, never as a merged branch.
 
 Hosted-agent output is still external contributor output, so it is still worth verifying
 before it is trusted: follow the repository's
