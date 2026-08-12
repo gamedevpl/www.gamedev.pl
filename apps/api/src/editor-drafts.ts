@@ -34,10 +34,10 @@ import type { EditingGate } from './creation-limits.js';
  *    exactly as it does on an agent delivery. Promotion to live stays the
  *    existing operator step; nothing here publishes to players.
  *
- * A game is editable iff its delivered version ships an EDITOR.json. Games
- * without one (the entire existing catalog) never reach these routes with
- * anything but 404 — being editable is opt-in per game, decided by the agent
- * run that built it.
+ * A game is editable iff its latest build — preview mid-round, or delivered —
+ * ships an EDITOR.json. Games without one (the entire existing catalog) never
+ * reach these routes with anything but 404 — opt-in per game, decided by the
+ * agent run that built it.
  */
 
 const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
@@ -136,7 +136,8 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
       reply.status(404).send({ error: 'not found' });
       return null;
     }
-    const version = submission.deliveredVersion;
+    // previewVersion first — same order as get_sources; it is always the newest.
+    const version = submission.previewVersion ?? submission.deliveredVersion;
     if (!version) {
       reply.status(404).send({ error: 'this game has no editable content' });
       return null;
@@ -148,11 +149,16 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
     }
     const { definition, errors } = parseEditorDefinition(editorJson);
     if (!definition) {
-      // The gate validated this file before the version could be delivered, so a
-      // parse failure here means contract drift between the repos — a platform
-      // bug, and 500 is the honest status for it.
-      request.log.error({ slug: params.data.slug, version, errors }, 'stored EDITOR.json failed to parse');
-      reply.status(500).send({ error: 'the editor definition could not be read' });
+      if (version === submission.deliveredVersion) {
+        // The gate validated this file before the version could be delivered, so a
+        // parse failure here means contract drift between the repos — a platform
+        // bug, and 500 is the honest status for it.
+        request.log.error({ slug: params.data.slug, version, errors }, 'stored EDITOR.json failed to parse');
+        reply.status(500).send({ error: 'the editor definition could not be read' });
+        return null;
+      }
+      // A preview build is never gate-validated first — this is mid-iteration, not a bug.
+      reply.status(404).send({ error: 'this game has no editable content' });
       return null;
     }
     return { submission, version, definition };

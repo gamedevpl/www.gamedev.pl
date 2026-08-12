@@ -122,6 +122,15 @@ async function seedOwnedGame(store: InMemoryStore, uid: string) {
   await store.setSubmissionDeliveredVersion(sourceJob, 'v1');
 }
 
+/** Mid-round: a preview landed, nothing delivered yet. */
+async function seedPreviewOnlyGame(store: InMemoryStore, uid: string) {
+  await store.upsertUser({ uid });
+  sourceJob = await store.allocateJobId();
+  await store.createSubmission(sourceJob, uid, 'Garden Gather');
+  await store.setSubmissionSlug(sourceJob, 'garden-gather');
+  await store.setSubmissionPreviewVersion(sourceJob, 'v1');
+}
+
 describe('editor draft routes', () => {
   let store: InMemoryStore;
   let app: FastifyInstance | null = null;
@@ -195,6 +204,80 @@ describe('editor draft routes', () => {
       payload: { content: { gardens: [] } },
     });
     expect(put.statusCode).toBe(404);
+  });
+
+  it('is editable off a mode=preview build mid-round, before anything is delivered', async () => {
+    const { app } = await createApp();
+    await seedPreviewOnlyGame(store, 'g:alice');
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/me/games/garden-gather/editor',
+      headers: authHeaders('g:alice'),
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().version).toBe('v1');
+  });
+
+  it('prefers the newer preview build over an older delivered one', async () => {
+    const { app, stored } = await createApp();
+    // seedOwnedGame's beforeEach already delivered v1; layer a newer preview on top
+    // by publishing a draft (which lands as 'v2-editor' per stubGamesStore), then
+    // point previewVersion at it without ever delivering it.
+    await store.setSubmissionPreviewVersion(sourceJob, 'v1');
+    const draft = await app.inject({
+      method: 'PUT',
+      url: '/api/me/games/garden-gather/editor/draft',
+      headers: authHeaders('g:alice'),
+      payload: {
+        content: { gardens: [{ properties: { name: 'Mine' }, rows: ['########', '#..@..*#', '########'] }] },
+      },
+    });
+    expect(draft.statusCode).toBe(200);
+    const publish = await app.inject({
+      method: 'POST',
+      url: '/api/me/games/garden-gather/editor/publish',
+      headers: authHeaders('g:alice'),
+    });
+    expect(publish.statusCode).toBe(200);
+    expect(stored).toHaveLength(1);
+    await store.setSubmissionPreviewVersion(sourceJob, 'v2-editor');
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/me/games/garden-gather/editor',
+      headers: authHeaders('g:alice'),
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().version).toBe('v2-editor');
+  });
+
+  it('refuses quietly (not a 500) when a still-iterating preview build has no valid EDITOR.json yet', async () => {
+    const { gamesStore } = stubGamesStore();
+    const brokenGamesStore = {
+      ...gamesStore,
+      getSourceFile: async (slug: string, version: string, path: string) => {
+        if (version === 'v1' && path === 'EDITOR.json') return '{not valid json';
+        return gamesStore.getSourceFile(slug, version, path);
+      },
+    } as unknown as GamesStore;
+    app = await buildApp({
+      store,
+      sessionSecret,
+      submissionRoutes: {
+        submissionTokenSecret: 'token-secret',
+        agentChannel: { gamesStore: brokenGamesStore, onSourcesDelivered: () => ({ buildId: 'build-1' }) },
+      },
+    });
+    await seedPreviewOnlyGame(store, 'g:alice');
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/me/games/garden-gather/editor',
+      headers: authHeaders('g:alice'),
+    });
+    // Mid-iteration, not gate-checked yet — a 404 ("nothing to edit"), not a 500
+    // ("platform bug"), because it may well not be one.
+    expect(response.statusCode).toBe(404);
   });
 
   it('serves the definition, the shipped defaults, and no draft initially', async () => {
