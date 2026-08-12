@@ -922,6 +922,40 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(body).toMatch(/If a call is refused:/i);
   });
 
+  // A real Gemini antigravity session (job 1000056, 2026-08-12) surfaced only the LAST
+  // item of start's multi-block content to the model, and never read structuredContent
+  // at all — so a client with that behaviour could never learn its own sessionKey and
+  // was stuck after the first call. This locks the fix: the sessionKey must be
+  // recoverable from content's last item alone, with nothing else read.
+  it('keeps sessionKey recoverable from only the last content item (last-item-only MCP clients)', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    app = await createApp(store);
+    const sessionId = await initialize(app);
+
+    const res = await mcpCall(
+      app,
+      'tools/call',
+      { name: 'start', arguments: { key: roundKey() } },
+      { 'mcp-session-id': sessionId },
+    );
+    expect(res.statusCode).toBe(200);
+    const result = res.json().result as {
+      content: Array<{ type: string; text: string }>;
+      structuredContent: { sessionKey: string };
+    };
+
+    expect(result.content.length).toBeGreaterThanOrEqual(2);
+    const lastItem = result.content[result.content.length - 1];
+    expect(lastItem.type).toBe('text');
+    expect(lastItem.text).toContain(result.structuredContent.sessionKey);
+    // The other, pre-existing blocks (content[0]'s JSON, the workflow text) must be
+    // untouched — this is additive only, for ChatGPT Apps / Claude connectors / Studio,
+    // which already parse this shape correctly in production.
+    expect(JSON.parse(result.content[0].text)).toMatchObject({ sessionKey: result.structuredContent.sessionKey });
+    expect(result.content[1].text).toMatch(/Session workflow/i);
+  });
+
   it('opens a platform round from its vault-injected round capability', async () => {
     const store = new InMemoryStore();
     await seedJob(store);

@@ -739,6 +739,34 @@ function withoutRepeatedContract(description: string): string {
 }
 
 /**
+ * `start`'s success shape, shared by both auth paths (creator-key bind and legacy
+ * round-scoped key). `toolOk` puts the machine JSON — including `sessionKey` — in
+ * `content[0]` and in `structuredContent`; the human workflow text is appended after as
+ * `content[1]`.
+ *
+ * Some MCP clients only surface the LAST item of a multi-block `content` array to the
+ * model and never read `structuredContent` at all — confirmed against a real Gemini
+ * antigravity session, 2026-08-12 (job 1000056, and isolated with a throwaway probe MCP
+ * server): both `content[0]` and `structuredContent` were dropped, so the model never
+ * learned its own `sessionKey` and could not call a second tool for the rest of the
+ * round. This appends one more trailing block carrying just the key, so a client that
+ * keeps only the last item still gets it. Additive only — `content[0]` and
+ * `structuredContent` are unchanged, since ChatGPT Apps, Claude connectors and Studio's
+ * connect snippets already parse this shape correctly in production.
+ */
+function startToolResult(structured: { sessionKey: string } & Record<string, unknown>): ToolResult {
+  const base = toolOk(structured);
+  return {
+    ...base,
+    content: [
+      ...base.content,
+      { type: 'text', text: SESSION_WORKFLOW_TEXT },
+      { type: 'text', text: `sessionKey: ${structured.sessionKey}` },
+    ],
+  };
+}
+
+/**
  * `BUILD_STEPS` widened to plain strings, for validating input that is `unknown`.
  *
  * `BUILD_STEPS.includes(x)` only accepts the `BuildStep` union, so checking a raw
@@ -1529,11 +1557,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             ...seed,
             ...gateField,
           };
-          const base = toolOk(structured);
-          return {
-            ...base,
-            content: [...base.content, { type: 'text' as const, text: SESSION_WORKFLOW_TEXT }],
-          };
+          return startToolResult(structured);
         };
 
         if (!key && bearer && looksLikeCreatorAgentKey(bearer)) {
@@ -1722,13 +1746,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           ...seed,
           ...gateField,
         };
-        // Base shape via toolOk so we do not drift from other tools; append the human-
-        // readable loop so an agent reading either form knows when to stop.
-        const base = toolOk(structured);
-        return {
-          ...base,
-          content: [...base.content, { type: 'text', text: SESSION_WORKFLOW_TEXT }],
-        };
+        return startToolResult(structured);
       },
     },
 
