@@ -560,6 +560,7 @@ type InteractiveMascotProps = {
    * a few pull-ups. Opt-in — only the closed-beta splash wants this gag.
    */
   doesPullUps?: boolean;
+  onPoke?: () => void;
 };
 
 /**
@@ -573,6 +574,7 @@ export function InteractiveMascot({
   pokeLabel,
   reactsToTilt = false,
   doesPullUps = false,
+  onPoke,
 }: InteractiveMascotProps) {
   const rootRef = useRef<HTMLButtonElement>(null);
   const pokeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -804,6 +806,7 @@ export function InteractiveMascot({
       setEmotion(settleEmotion());
       pokeTimer.current = null;
     }, POKE_HOLD_MS);
+    onPoke?.();
   };
 
   /*

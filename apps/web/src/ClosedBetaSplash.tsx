@@ -4,6 +4,7 @@ import { AppleSignInButton } from './AppleSignInButton.js';
 import { useAuth } from './AuthContext.js';
 import { GoogleSignInButton } from './GoogleSignInButton.js';
 import { InteractiveMascot } from './Mascot.js';
+import { SplashMascotGame } from './SplashMascotGame.js';
 import { recordBetaInviteStep, recordWaitlistStep } from './visitTelemetry.js';
 
 type WaitlistState = 'idle' | 'joining' | 'joined' | 'error';
@@ -80,14 +81,18 @@ export function ClosedBetaSplash({ inviteCode }: { inviteCode?: string }) {
   return (
     <div className="beta-splash">
       <div className="beta-splash__card">
-        <InteractiveMascot
-          className="beta-splash__mascot"
-          idleEmotion="wave"
-          reactsToTilt
-          doesPullUps
-          size={96}
-          pokeLabel={t('mascot.poke')}
-        />
+        {isInvite ? (
+          <InteractiveMascot
+            className="beta-splash__mascot"
+            idleEmotion="wave"
+            reactsToTilt
+            doesPullUps
+            size={96}
+            pokeLabel={t('mascot.poke')}
+          />
+        ) : (
+          <SplashMascotGame pokeLabel={t('mascot.poke')} />
+        )}
         <div className="beta-splash__logo">
           <span className="beta-splash__logo-main">gamedev</span>
           <span className="beta-splash__logo-tld">.pl</span>

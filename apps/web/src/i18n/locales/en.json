@@ -929,7 +929,17 @@
     "waitlistApproved": "🎉 You've been approved! Please sign in again to access the beta.",
     "waitlistRejected": "Your application wasn't accepted this time. Thanks for your interest.",
     "waitlistError": "Couldn't join the waitlist right now. Please try again.",
-    "footer": "Access is invite-only during the closed beta."
+    "footer": "Access is invite-only during the closed beta.",
+    "game": {
+      "hint": "Slide to catch the snacks",
+      "region": "Snack catch with the mascot",
+      "score": "Score {{count}}",
+      "lives_one": "{{count}} chance left",
+      "lives_other": "{{count}} chances left",
+      "over_one": "He ate {{count}} snack",
+      "over_other": "He ate {{count}} snacks",
+      "again": "Again"
+    }
   },
   "betaInvite": {
     "headline": "You've been invited to the closed beta.",
