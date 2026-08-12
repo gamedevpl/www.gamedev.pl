@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   createAgentTasksClient,
   creditsFromUsageAmount,
@@ -6,6 +6,8 @@ import {
   normalizeModel,
   parseAgentTask,
   resolveTaskBranch,
+  seedBranchName,
+  stageAndCleanupSeedBranch,
 } from './agent-tasks.js';
 
 /** A settled task, shaped exactly as the live API answered on 2026-07-29. */
@@ -268,5 +270,95 @@ describe('listTasks', () => {
     const { impl } = stubFetch(() => ({}));
     const client = createAgentTasksClient({ token: 't', repo: 'o/r', fetchImpl: impl });
     expect(await client.listTasks()).toEqual([]);
+  });
+});
+
+function stubBranchGithub(
+  overrides: Partial<{ deleteBranch: ReturnType<typeof vi.fn>; createBranchWithFiles: ReturnType<typeof vi.fn> }> = {},
+) {
+  return {
+    deleteBranch: overrides.deleteBranch ?? vi.fn(async () => undefined),
+    createBranchWithFiles: overrides.createBranchWithFiles ?? vi.fn(async () => ({ branch: 'x', sha: 'sha' })),
+  };
+}
+
+describe('stageAndCleanupSeedBranch', () => {
+  it('names the branch from the issue and commits the given files', async () => {
+    const github = stubBranchGithub();
+    const files = [{ path: 'games/comet-courier/game.ts', content: 'export {};\n' }];
+
+    const branch = await stageAndCleanupSeedBranch({
+      github,
+      issueNumber: 42,
+      baseRef: 'main',
+      slug: 'comet-courier',
+      files,
+    });
+
+    expect(branch).toBe('seed/job-42');
+    expect(branch).toBe(seedBranchName(42));
+    expect(github.createBranchWithFiles).toHaveBeenCalledWith({
+      branch: 'seed/job-42',
+      baseRef: 'main',
+      message: 'Seed round 0 for comet-courier (job 42)',
+      files,
+    });
+  });
+
+  it('deletes any stale branch before committing the new one', async () => {
+    const github = stubBranchGithub();
+
+    await stageAndCleanupSeedBranch({ github, issueNumber: 42, baseRef: 'main', slug: 'x', files: [] });
+
+    expect(github.deleteBranch).toHaveBeenCalledWith('seed/job-42');
+    expect(github.deleteBranch.mock.invocationCallOrder[0]).toBeLessThan(
+      github.createBranchWithFiles.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('does not let a stale-branch delete failure block staging the new one', async () => {
+    // A first dispatch has no stale branch to delete.
+    const github = stubBranchGithub({
+      deleteBranch: vi.fn(async () => {
+        throw new Error('not found');
+      }),
+    });
+
+    const branch = await stageAndCleanupSeedBranch({ github, issueNumber: 1, baseRef: 'main', slug: 'x', files: [] });
+
+    expect(branch).toBe('seed/job-1');
+  });
+
+  it('fails open to null and reports the error when staging fails', async () => {
+    const onStageError = vi.fn();
+    const github = stubBranchGithub({
+      createBranchWithFiles: vi.fn(async () => {
+        throw new Error('ref already exists');
+      }),
+    });
+
+    const branch = await stageAndCleanupSeedBranch({
+      github,
+      issueNumber: 1,
+      baseRef: 'main',
+      slug: 'x',
+      files: [],
+      onStageError,
+    });
+
+    expect(branch).toBeNull();
+    expect(onStageError).toHaveBeenCalledWith(expect.any(Error));
+  });
+
+  it('fails open to null without a callback when none is given', async () => {
+    const github = stubBranchGithub({
+      createBranchWithFiles: vi.fn(async () => {
+        throw new Error('boom');
+      }),
+    });
+
+    await expect(
+      stageAndCleanupSeedBranch({ github, issueNumber: 1, baseRef: 'main', slug: 'x', files: [] }),
+    ).resolves.toBeNull();
   });
 });
