@@ -937,7 +937,6 @@
     "waitlistError": "Nie udało się dołączyć do listy. Spróbuj ponownie.",
     "footer": "W trakcie zamkniętej bety dostęp jest tylko na zaproszenie.",
     "game": {
-      "play": "Nakarm go",
       "hint": "Przesuwaj, żeby łapać przekąski",
       "region": "Łapanie przekąsek z maskotką",
       "score": "Wynik {{count}}",

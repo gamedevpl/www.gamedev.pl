@@ -76,12 +76,11 @@ describe('ClosedBetaSplash', () => {
     const mascot = container.querySelector<HTMLButtonElement>('button.mascot-interactive.beta-splash__mascot');
     expect(mascot).not.toBeNull();
     expect(mascot?.getAttribute('aria-label')).toMatch(/poke|szturchnij/i);
-    expect(container.querySelector('.splash-game__play')).not.toBeNull();
 
     await act(async () => root.unmount());
   });
 
-  it('keeps Join waitlist on screen after Feed him starts', async () => {
+  it('keeps Join waitlist on screen after the secret game starts', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     vi.useFakeTimers();
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
@@ -103,8 +102,10 @@ describe('ClosedBetaSplash', () => {
       await flushEffects();
     });
 
+    const mascot = container.querySelector<HTMLButtonElement>('button.mascot-interactive.beta-splash__mascot');
+    expect(mascot).not.toBeNull();
     await act(async () => {
-      container.querySelector<HTMLButtonElement>('.splash-game__play')?.click();
+      for (let i = 0; i < 5; i += 1) mascot!.click();
       await flushEffects();
     });
 
@@ -163,7 +164,6 @@ describe('ClosedBetaSplash', () => {
     });
 
     expect(container.querySelector('#btn-accept-beta-invite')).not.toBeNull();
-    expect(container.querySelector('.splash-game__play')).toBeNull();
     await act(async () => {
       capturedCallback!({ credential: 'invite-credential' });
       await flushEffects();

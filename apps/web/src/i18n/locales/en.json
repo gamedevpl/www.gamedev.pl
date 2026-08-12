@@ -931,7 +931,6 @@
     "waitlistError": "Couldn't join the waitlist right now. Please try again.",
     "footer": "Access is invite-only during the closed beta.",
     "game": {
-      "play": "Feed him",
       "hint": "Slide to catch the snacks",
       "region": "Snack catch with the mascot",
       "score": "Score {{count}}",

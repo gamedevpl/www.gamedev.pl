@@ -11,6 +11,15 @@ async function flushEffects() {
   await Promise.resolve();
 }
 
+async function unlockWithMascot(container: HTMLElement) {
+  const mascot = container.querySelector<HTMLButtonElement>('button.mascot-interactive.beta-splash__mascot');
+  expect(mascot).not.toBeNull();
+  await act(async () => {
+    for (let i = 0; i < 5; i += 1) mascot!.click();
+    await flushEffects();
+  });
+}
+
 describe('SplashMascotGame', () => {
   afterEach(() => {
     document.body.innerHTML = '';
@@ -18,7 +27,7 @@ describe('SplashMascotGame', () => {
     vi.useRealTimers();
   });
 
-  it('keeps the poke mascot until Feed him is pressed', async () => {
+  it('keeps the game secret until the mascot is poked five times', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
     const container = document.createElement('div');
@@ -31,10 +40,20 @@ describe('SplashMascotGame', () => {
     });
 
     expect(container.querySelector('button.mascot-interactive.beta-splash__mascot')).not.toBeNull();
-    const play = container.querySelector<HTMLButtonElement>('.splash-game__play');
-    expect(play).not.toBeNull();
-    expect(play?.textContent).toMatch(/feed him/i);
+    const mascot = container.querySelector<HTMLButtonElement>('button.mascot-interactive.beta-splash__mascot')!;
     expect(container.querySelector('.splash-game__stage')).toBeNull();
+
+    await act(async () => {
+      for (let i = 0; i < 4; i += 1) mascot.click();
+      await flushEffects();
+    });
+    expect(container.querySelector('.splash-game__stage')).toBeNull();
+
+    await act(async () => {
+      mascot.click();
+      await flushEffects();
+    });
+    expect(container.querySelector('.splash-game__stage')).not.toBeNull();
 
     await act(async () => root.unmount());
   });
@@ -52,10 +71,7 @@ describe('SplashMascotGame', () => {
       await flushEffects();
     });
 
-    await act(async () => {
-      container.querySelector<HTMLButtonElement>('.splash-game__play')?.click();
-      await flushEffects();
-    });
+    await unlockWithMascot(container);
 
     const stage = container.querySelector<HTMLDivElement>('.splash-game__stage');
     expect(stage).not.toBeNull();
@@ -99,10 +115,7 @@ describe('SplashMascotGame', () => {
       await flushEffects();
     });
 
-    await act(async () => {
-      container.querySelector<HTMLButtonElement>('.splash-game__play')?.click();
-      await flushEffects();
-    });
+    await unlockWithMascot(container);
 
     const stage = container.querySelector<HTMLDivElement>('.splash-game__stage')!;
     await act(async () => {
@@ -139,10 +152,7 @@ describe('SplashMascotGame', () => {
       await flushEffects();
     });
 
-    await act(async () => {
-      container.querySelector<HTMLButtonElement>('.splash-game__play')?.click();
-      await flushEffects();
-    });
+    await unlockWithMascot(container);
 
     await act(async () => {
       vi.advanceTimersByTime(20_000);

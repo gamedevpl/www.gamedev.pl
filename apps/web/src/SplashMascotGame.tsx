@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { InteractiveMascot, Mascot, type MascotEmotion } from './Mascot.js';
-import { PixelIcon } from './PixelIcon.js';
 import {
   SNACK_ICONS,
   SPLASH_LIVES,
@@ -24,6 +23,8 @@ function motionSpeed(): number {
   return matchMedia('(prefers-reduced-motion: reduce)').matches ? 0.45 : 1;
 }
 
+const SECRET_POKES = 5;
+
 export function SplashMascotGame({ pokeLabel }: { pokeLabel: string }) {
   const { t } = useTranslation();
   const [phase, setPhase] = useState<'idle' | 'playing' | 'over'>('idle');
@@ -37,9 +38,11 @@ export function SplashMascotGame({ pokeLabel }: { pokeLabel: string }) {
   const speedRef = useRef(1);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const chompTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pokeCountRef = useRef(0);
 
   const startGame = () => {
     const next = createSplashGame();
+    pokeCountRef.current = 0;
     stateRef.current = next;
     lastTsRef.current = 0;
     speedRef.current = motionSpeed();
@@ -49,6 +52,11 @@ export function SplashMascotGame({ pokeLabel }: { pokeLabel: string }) {
     setEmotion('curious');
     setView(next);
     setPhase('playing');
+  };
+
+  const handleSecretPoke = () => {
+    pokeCountRef.current += 1;
+    if (pokeCountRef.current >= SECRET_POKES) startGame();
   };
 
   useEffect(() => {
@@ -138,11 +146,8 @@ export function SplashMascotGame({ pokeLabel }: { pokeLabel: string }) {
           doesPullUps
           size={96}
           pokeLabel={pokeLabel}
+          onPoke={handleSecretPoke}
         />
-        <button type="button" className="splash-game__play" onClick={startGame}>
-          <PixelIcon name="gamepad" size={14} />
-          {t('betaSplash.game.play')}
-        </button>
       </div>
     );
   }

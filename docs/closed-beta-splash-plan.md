@@ -25,11 +25,12 @@ render a branded closed-beta landing instead of the app UI:
 ## Splash minigame
 
 The signed-out splash (not the invite page) includes a lightweight snack-catch
-around the mascot: **Feed him**. Pointer/touch slides him; snacks fall; three
-misses end the round. It is CSS/React in the shell — not GameKit, not an iframe.
+secret: poke the mascot five times to unlock it. Pointer/touch slides him; snacks
+fall; three misses end the round. It is CSS/React in the shell — not GameKit, not
+an iframe.
 
-- Waitlist and sign-in stay the primary actions. The play chip is a dashed
-  secondary control; the catch stage never covers those buttons.
+- Waitlist and sign-in stay the only visible actions. The mascot's existing poke
+  reactions are the discoverability cue; no second CTA competes with the waitlist.
 - Short screens (`max-height: 720px`) hide the headline, badge, and footer
   while a round is in progress so the legal links and Join CTA still fit.
 - `prefers-reduced-motion` keeps the game, slows the fall, and drops snack
