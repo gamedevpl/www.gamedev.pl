@@ -835,7 +835,6 @@ export function SubmissionStatusView({
                         actions: (
                           <span className="studio-turn-working-actions">
                             {liveHandoff}
-                            <AbandonControl token={token} compact intent="stop" />
                           </span>
                         ),
                       }
@@ -1217,20 +1216,8 @@ export function SubmissionStatusView({
   );
 }
 
-/**
- * Stops the build for good. Two-step by design: the first click only arms it, so a
- * mis-tap can't throw away an hour of agent work. Deliberately understated — it is
- * an escape hatch, not something to invite.
- */
-function AbandonControl({
-  token,
-  compact = false,
-  intent = 'abandon',
-}: {
-  token: string;
-  compact?: boolean;
-  intent?: 'abandon' | 'stop';
-}) {
+/** Stops the build for good after an explicit confirmation. */
+function AbandonControl({ token }: { token: string }) {
   const { t } = useTranslation();
   const [armed, setArmed] = useState(false);
   const [state, setState] = useState<'idle' | 'sending'>('idle');
@@ -1257,39 +1244,32 @@ function AbandonControl({
     return (
       <button
         type="button"
-        className={compact ? 'studio-context-stop' : 'status-abandon'}
+        className="status-abandon"
         onClick={() => setArmed(true)}
-        title={t(`statusView.abandon.${intent === 'stop' ? 'stopStart' : 'start'}`)}
-        aria-label={t(`statusView.abandon.${intent === 'stop' ? 'stopStart' : 'start'}`)}
+        title={t('statusView.abandon.start')}
+        aria-label={t('statusView.abandon.start')}
       >
-        {compact ? (
-          <>
-            <PixelIcon name="close" size={11} />{' '}
-            {t(`statusView.abandon.${intent === 'stop' ? 'stopCompact' : 'compact'}`)}
-          </>
-        ) : (
-          t(`statusView.abandon.${intent === 'stop' ? 'stopStart' : 'start'}`)
-        )}
+        {t('statusView.abandon.start')}
       </button>
     );
   }
 
   return (
-    <span className={`status-abandon-confirm${compact ? ' is-compact' : ''}`}>
-      {compact ? null : t(`statusView.abandon.${intent === 'stop' ? 'stopConfirm' : 'confirm'}`)}
+    <span className="status-abandon-confirm">
+      {t('statusView.abandon.confirm')}
       <button
         type="button"
-        className={compact ? 'studio-context-stop is-danger' : 'status-abandon is-danger'}
+        className="status-abandon is-danger"
         disabled={state === 'sending'}
         onClick={() => void abandon()}
       >
         {state === 'sending'
-          ? t(`statusView.abandon.${intent === 'stop' ? 'stopSending' : 'sending'}`)
-          : t(`statusView.abandon.${intent === 'stop' ? 'stopYes' : 'yes'}`)}
+          ? t('statusView.abandon.sending')
+          : t('statusView.abandon.yes')}
       </button>
       <button
         type="button"
-        className={compact ? 'studio-context-stop' : 'status-abandon'}
+        className="status-abandon"
         onClick={() => setArmed(false)}
       >
         {t('statusView.abandon.no')}

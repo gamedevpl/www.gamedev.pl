@@ -909,11 +909,6 @@
       "yes": "Tak, porzuć",
       "no": "Twórz dalej",
       "sending": "Porzucam…",
-      "stopStart": "Zatrzymaj budowę",
-      "stopCompact": "Zatrzymaj",
-      "stopConfirm": "Zatrzymać budowę? Dotychczasowa praca zostanie odrzucona.",
-      "stopYes": "Zatrzymaj budowę",
-      "stopSending": "Zatrzymuję…",
       "error": "Nie udało się teraz porzucić tego buildu. Spróbuj ponownie za chwilę."
     },
     "playableHint": "Wczesna wersja prosto z warsztatu — surowa, niedokończona i już grywalna. Powiedz, co zmienić, póki to łatwe."
