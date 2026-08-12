@@ -11577,11 +11577,16 @@ button.builder-mode-selector:disabled {
 
 .code-surface-readonly-banner {
   margin-left: auto;
+  min-width: 0;
   font-size: 0.78rem;
   color: var(--muted);
   padding: 4px 10px;
   border-radius: 999px;
   background: rgba(148, 163, 184, 0.12);
+}
+
+.code-surface-readonly-banner-compact {
+  display: none;
 }
 
 .code-surface-loading,
@@ -12051,12 +12056,20 @@ button.builder-mode-selector:disabled {
   }
 }
 
-/* On phones the global escape is a separate top row. Keeping it in the same row as
-   Wątek, Kod, and the readonly badge makes the header look like one crowded toolbar and
-   clips the right-hand status on narrow screens. */
-@media (max-width: 600px) {
+/* Below desktop widths the global escape gets its own top row. The desktop 180px
+   reservation leaves too little room for the Code controls and the live read-only
+   status on phones and narrow tablets. */
+@media (max-width: 1099px) {
   .studio-stage-layout:has(.studio-code-overlay) .code-surface-head {
     padding: 52px 14px 10px;
+  }
+
+  .code-surface-readonly-banner-full {
+    display: none;
+  }
+
+  .code-surface-readonly-banner-compact {
+    display: inline;
   }
 }
 

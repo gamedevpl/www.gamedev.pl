@@ -117,6 +117,8 @@ describe('CodeSurface', () => {
     // Read-only during a live agent round (CE-08): no editable textarea, and the banner shows.
     expect(container.querySelector('textarea')).toBeNull();
     expect(container.querySelector('.code-surface-readonly-banner')).not.toBeNull();
+    expect(container.querySelector('.code-surface-readonly-banner-full')).not.toBeNull();
+    expect(container.querySelector('.code-surface-readonly-banner-compact')).not.toBeNull();
     expect(container.textContent).toContain('export const boot');
   });
 

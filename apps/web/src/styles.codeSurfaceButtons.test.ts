@@ -39,9 +39,13 @@ describe('the Code surface Publish button', () => {
     expect(ruleFor('.studio-stage-layout:has(.studio-code-overlay) .studio-fullbleed')).toMatch(/top:\s*10px/);
   });
 
-  it('gives the global escape its own row on narrow phones', () => {
+  it('gives the global escape its own row below desktop widths', () => {
     expect(css).toMatch(
-      /@media \(max-width: 600px\)[\s\S]*?\.studio-stage-layout:has\(\.studio-code-overlay\) \.code-surface-head \{\s*padding: 52px 14px 10px;/,
+      /@media \(max-width: 1099px\)[\s\S]*?\.studio-stage-layout:has\(\.studio-code-overlay\) \.code-surface-head \{\s*padding: 52px 14px 10px;/,
+    );
+    expect(css).toMatch(/\.code-surface-readonly-banner-compact \{\s*display: none;/);
+    expect(css).toMatch(
+      /@media \(max-width: 1099px\)[\s\S]*?\.code-surface-readonly-banner-full \{\s*display: none;[\s\S]*?\.code-surface-readonly-banner-compact \{\s*display: inline;/,
     );
   });
 

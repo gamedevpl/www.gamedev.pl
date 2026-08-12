@@ -650,8 +650,16 @@ export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
         </button>
         <h2>{t('studioPanel.tabs.code')}</h2>
         {sources.readOnly ? (
-          <span className="code-surface-readonly-banner" role="status">
-            {t('studioPanel.code.agentRound')}
+          <span
+            className="code-surface-readonly-banner"
+            role="status"
+            aria-label={t('studioPanel.code.agentRound')}
+            title={t('studioPanel.code.agentRound')}
+          >
+            <span className="code-surface-readonly-banner-full">{t('studioPanel.code.agentRound')}</span>
+            <span className="code-surface-readonly-banner-compact">
+              {t('studioPanel.code.agentRoundCompact')}
+            </span>
           </span>
         ) : null}
       </header>
