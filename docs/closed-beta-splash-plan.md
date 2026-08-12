@@ -22,6 +22,21 @@ render a branded closed-beta landing instead of the app UI:
 - No data fetches beyond `/api/auth/me` — the catalog is walled anyway;
   don't fire requests that will 401 and log noise.
 
+## Splash minigame
+
+The signed-out splash (not the invite page) includes a lightweight snack-catch
+secret: poke the mascot five times to unlock it. Pointer/touch slides him; snacks
+fall; three misses end the round. It is CSS/React in the shell — not GameKit, not
+an iframe.
+
+- Waitlist and sign-in stay the only visible actions. The mascot's existing poke
+  reactions are the discoverability cue; no second CTA competes with the waitlist.
+- Short screens (`max-height: 720px`) hide the headline, badge, and footer
+  while a round is in progress so the legal links and Join CTA still fit.
+- `prefers-reduced-motion` keeps the game, slows the fall, and drops snack
+  wobble / catch squash.
+- No extra `/api` calls. Score lives in component state for the tab only.
+
 ## Waitlist — sign-in based, consent-explicit
 
 Mechanic: the splash always shows **Join the waitlist** above the sign-in buttons.

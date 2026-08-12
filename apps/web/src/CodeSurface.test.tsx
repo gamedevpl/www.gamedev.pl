@@ -117,6 +117,8 @@ describe('CodeSurface', () => {
     // Read-only during a live agent round (CE-08): no editable textarea, and the banner shows.
     expect(container.querySelector('textarea')).toBeNull();
     expect(container.querySelector('.code-surface-readonly-banner')).not.toBeNull();
+    expect(container.querySelector('.code-surface-readonly-banner-full')).not.toBeNull();
+    expect(container.querySelector('.code-surface-readonly-banner-compact')).not.toBeNull();
     expect(container.textContent).toContain('export const boot');
   });
 
@@ -135,6 +137,42 @@ describe('CodeSurface', () => {
 
     const textarea = container.querySelector<HTMLTextAreaElement>('textarea')!;
     expect(textarea.value).toContain('export const boot');
+  });
+
+  it('uses an on-demand file sheet instead of a scrolling mobile rail', async () => {
+    mocked.fetchCodeSurfaceSources.mockResolvedValue(
+      sourcesFor({
+        files: [
+          { path: 'GAME.json', content: '{"engine":{"modules":[]}}' },
+          { path: 'src/main.ts', content: 'export const boot = () => {};' },
+        ],
+      }),
+    );
+
+    await render();
+
+    const picker = container.querySelector<HTMLButtonElement>('.code-surface-file-trigger');
+    expect(picker).not.toBeNull();
+    expect(picker!.textContent).toContain('GAME.json');
+
+    await act(async () => {
+      picker!.click();
+    });
+
+    const sheet = container.querySelector('[role="dialog"]');
+    expect(sheet).not.toBeNull();
+    expect(sheet?.textContent).toContain('GAME.json');
+    expect(sheet?.textContent).toContain('src/main.ts');
+
+    await act(async () => {
+      [...container.querySelectorAll<HTMLButtonElement>('.code-surface-file-option')]
+        .find((option) => option.textContent?.includes('src/main.ts'))
+        ?.click();
+    });
+
+    expect(container.querySelector('textarea')!.value).toContain('export const boot');
+    expect(container.querySelector('.code-surface-rail-item.is-active')?.textContent).toContain('src/main.ts');
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
   });
 
   it('autosaves an edit into the working copy, marks the rail dirty, and schedules a preview rebuild', async () => {

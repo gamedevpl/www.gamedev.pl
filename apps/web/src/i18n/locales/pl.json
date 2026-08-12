@@ -315,9 +315,12 @@
     },
     "code": {
       "back": "Wątek",
+      "filePicker": "Wybierz plik",
+      "filePickerClose": "Zamknij listę plików",
       "loading": "Wczytywanie plików źródłowych…",
       "loadError": "Nie udało się teraz wczytać plików źródłowych.",
       "agentRound": "Agent aktywnie pracuje — tylko do odczytu, dopóki nie skończy",
+      "agentRoundCompact": "Tylko odczyt",
       "stagedBy": "zmienione · {{who}}",
       "lockedHint": "Tylko do odczytu — GameKit i narzędzia są wspólne, nie edytuje się ich tutaj",
       "noFiles": "Nie ma jeszcze nic do pokazania",
@@ -425,8 +428,8 @@
       "chat": "Czat",
       "collapse": "Zwiń",
       "expand": "Rozwiń",
-      "popOut": "Otwórz jako stronę",
-      "closeThread": "Zamknij czat",
+      "fullScreen": "Pełny ekran",
+      "exitFullScreen": "Zamknij pełny ekran",
       "peekEmpty": "Brak nowości"
     },
     "share": {
@@ -742,6 +745,8 @@
       "titleBuilding": "Chcesz coś podpowiedzieć?",
       "hintBuilding": "Gra wciąż powstaje — nie musisz czekać. Napisz, co zmienić, a agent odbierze wiadomość przy najbliższej aktualizacji.",
       "composerHintBuilding": "Napisz, co zmienić w trakcie budowy",
+      "hintBusy": "Agent buduje tę rundę. Zatrzymaj budowę, aby wysłać nową uwagę.",
+      "busyComposerHint": "Zatrzymaj budowę, aby wysłać uwagę",
       "titlePublished": "Poproś o zmianę",
       "hintPublished": "Twoja gra jest opublikowana. Opisz, co zmienić — agent podejmie to jako ulepszenie.",
       "composerHintPublished": "Opisz ulepszenie",
@@ -758,6 +763,7 @@
       "sentSelfWaiting": "Zapisano — Twój agent dostanie to, gdy go uruchomisz.",
       "noCapacity": "Zapisano — ale nie udało się rozpocząć rundy budowania: agent nie ma teraz wolnych mocy. Twoja wiadomość jest bezpieczna i zostanie odczytana w kolejnej rundzie.",
       "notStarted": "Zapisano — ale nowa runda budowania się nie rozpoczęła. Twoja wiadomość jest bezpieczna; sprawdzamy, co się stało.",
+      "busy": "Agent właśnie buduje grę. Zatrzymaj budowę, aby wysłać nową uwagę.",
       "error": "Nie udało się teraz tego wysłać. Spróbuj ponownie za chwilę.",
       "quota": "Wysłałeś dziś dużo uwag — spróbuj ponownie jutro.",
       "published": "Ta gra jest już opublikowana. Prześlij nowy pomysł, aby stworzyć kolejną wersję."
@@ -903,6 +909,11 @@
       "yes": "Tak, porzuć",
       "no": "Twórz dalej",
       "sending": "Porzucam…",
+      "stopStart": "Zatrzymaj budowę",
+      "stopCompact": "Zatrzymaj",
+      "stopConfirm": "Zatrzymać budowę? Dotychczasowa praca zostanie odrzucona.",
+      "stopYes": "Zatrzymaj budowę",
+      "stopSending": "Zatrzymuję…",
       "error": "Nie udało się teraz porzucić tego buildu. Spróbuj ponownie za chwilę."
     },
     "playableHint": "Wczesna wersja prosto z warsztatu — surowa, niedokończona i już grywalna. Powiedz, co zmienić, póki to łatwe."
@@ -935,7 +946,21 @@
     "waitlistApproved": "🎉 Twoja aplikacja została zaakceptowana! Zaloguj się ponownie, aby uzyskać dostęp.",
     "waitlistRejected": "Twoja aplikacja nie została zaakceptowana tym razem. Dziękujemy za zainteresowanie.",
     "waitlistError": "Nie udało się dołączyć do listy. Spróbuj ponownie.",
-    "footer": "W trakcie zamkniętej bety dostęp jest tylko na zaproszenie."
+    "footer": "W trakcie zamkniętej bety dostęp jest tylko na zaproszenie.",
+    "game": {
+      "hint": "Przesuwaj, żeby łapać przekąski",
+      "region": "Łapanie przekąsek z maskotką",
+      "score": "Wynik {{count}}",
+      "lives_one": "Została {{count}} szansa",
+      "lives_few": "Zostały {{count}} szanse",
+      "lives_many": "Zostało {{count}} szans",
+      "lives_other": "Zostało {{count}} szans",
+      "over_one": "Zjadł {{count}} przekąskę",
+      "over_few": "Zjadł {{count}} przekąski",
+      "over_many": "Zjadł {{count}} przekąsek",
+      "over_other": "Zjadł {{count}} przekąsek",
+      "again": "Jeszcze raz"
+    }
   },
   "betaInvite": {
     "headline": "Otrzymujesz zaproszenie do zamkniętej bety.",

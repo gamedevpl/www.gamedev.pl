@@ -313,9 +313,12 @@
     },
     "code": {
       "back": "Thread",
+      "filePicker": "Choose file",
+      "filePickerClose": "Close file list",
       "loading": "Loading your game's sources…",
       "loadError": "Sources could not be loaded right now.",
       "agentRound": "An agent is actively building — read only until it finishes",
+      "agentRoundCompact": "Read only",
       "stagedBy": "changed · {{who}}",
       "lockedHint": "Read-only — GameKit and the tooling are shared, never edited here",
       "noFiles": "Nothing to show yet",
@@ -421,8 +424,8 @@
       "chat": "Chat",
       "collapse": "Collapse",
       "expand": "Expand",
-      "popOut": "Open as page",
-      "closeThread": "Close chat",
+      "fullScreen": "Full screen",
+      "exitFullScreen": "Exit full screen",
       "peekEmpty": "No updates yet"
     },
     "share": {
@@ -736,6 +739,8 @@
       "titleBuilding": "Want to steer it?",
       "hintBuilding": "It's still being made — you don't have to wait. Say what to change and the agent picks it up on its next update.",
       "composerHintBuilding": "Say what to change as it builds",
+      "hintBusy": "The agent is building this round. Stop it to send another request.",
+      "busyComposerHint": "Stop the build to send a request",
       "titlePublished": "Ask for a change",
       "hintPublished": "Your game is live. Describe what to change and an agent picks it up as an improvement to it.",
       "composerHintPublished": "Describe an improvement",
@@ -752,6 +757,7 @@
       "sentSelfWaiting": "Saved — your agent will get this when you start it.",
       "noCapacity": "Saved — but no build round could start: the build agent is out of capacity right now. Your note is safe and the next round will read it.",
       "notStarted": "Saved — but a new build round didn't start. Your note is safe; we're looking into it.",
+      "busy": "The agent is building now. Stop the build to send a new request.",
       "error": "We couldn't send that right now. Please try again in a moment.",
       "quota": "You've sent a lot of feedback today — please try again tomorrow.",
       "published": "This game is already published. Submit a new idea to make another version."
@@ -897,6 +903,11 @@
       "yes": "Yes, abandon it",
       "no": "Keep building",
       "sending": "Abandoning…",
+      "stopStart": "Stop build",
+      "stopCompact": "Stop",
+      "stopConfirm": "Stop this build? Work so far will be discarded.",
+      "stopYes": "Stop build",
+      "stopSending": "Stopping…",
       "error": "We couldn't abandon this build right now. Please try again in a moment."
     },
     "playableHint": "An early build, straight from the workshop — rough, unfinished, and already playable. Tell them what to change while it is easy."
@@ -929,7 +940,17 @@
     "waitlistApproved": "🎉 You've been approved! Please sign in again to access the beta.",
     "waitlistRejected": "Your application wasn't accepted this time. Thanks for your interest.",
     "waitlistError": "Couldn't join the waitlist right now. Please try again.",
-    "footer": "Access is invite-only during the closed beta."
+    "footer": "Access is invite-only during the closed beta.",
+    "game": {
+      "hint": "Slide to catch the snacks",
+      "region": "Snack catch with the mascot",
+      "score": "Score {{count}}",
+      "lives_one": "{{count}} chance left",
+      "lives_other": "{{count}} chances left",
+      "over_one": "He ate {{count}} snack",
+      "over_other": "He ate {{count}} snacks",
+      "again": "Again"
+    }
   },
   "betaInvite": {
     "headline": "You've been invited to the closed beta.",

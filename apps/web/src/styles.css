@@ -4789,13 +4789,32 @@ a.user-name--profile:focus-visible {
 
   /* CSS wins over the SVG's width/height attributes, so the mascot shrinks without
      the component needing to know anything about the viewport. */
-  .beta-splash__mascot .mascot {
+  .beta-splash__mascot .mascot,
+  .splash-game__catcher .mascot {
     width: 68px;
     height: 58px;
   }
 
   .beta-splash__mascot {
     margin-bottom: 10px;
+  }
+
+  .beta-splash .splash-game__stage {
+    height: 140px;
+  }
+
+  .beta-splash .splash-game__hint {
+    margin: 6px 0 8px;
+    font-size: 0.72rem;
+  }
+
+  .beta-splash__card:has(.splash-game--playing) .beta-splash__headline,
+  .beta-splash__card:has(.splash-game--over) .beta-splash__headline,
+  .beta-splash__card:has(.splash-game--playing) .beta-splash__badge,
+  .beta-splash__card:has(.splash-game--over) .beta-splash__badge,
+  .beta-splash__card:has(.splash-game--playing) .beta-splash__footer,
+  .beta-splash__card:has(.splash-game--over) .beta-splash__footer {
+    display: none;
   }
 
   .beta-splash__logo {
@@ -5901,6 +5920,16 @@ a.user-name--profile:focus-visible {
   line-height: 1.35;
 }
 
+.studio-turn-working-actions {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: auto;
+  align-self: stretch;
+  justify-content: flex-end;
+}
+
 .studio-turn.is-working.is-thought .studio-turn-working-label {
   color: var(--turquoise);
   animation: studio-thought-flash 0.55s ease-out;
@@ -6865,6 +6894,12 @@ button.builder-mode-selector:disabled {
   margin: 4px 0 0;
   font-size: 0.74rem;
 }
+/* Phone chat sheet is z-index 1100; the default .modal-backdrop (1000) would
+   open this picker behind the composer that launched it. */
+.builder-choice-modal-backdrop {
+  z-index: 1300;
+}
+
 .builder-choice-modal {
   background: var(--panel);
   border: 1px solid var(--panel-border);
@@ -10365,6 +10400,161 @@ button.builder-mode-selector:disabled {
   margin: 0 auto 20px;
 }
 
+.splash-game {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  margin: 0 0 8px;
+}
+
+.splash-game .beta-splash__mascot {
+  margin-bottom: 8px;
+}
+
+.splash-game__hud {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin-bottom: 6px;
+  color: var(--turquoise);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.splash-game__lives {
+  display: flex;
+  gap: 5px;
+}
+
+.splash-game__life {
+  width: 8px;
+  height: 8px;
+  background: var(--turquoise);
+  border-radius: 50%;
+  box-shadow: 0 0 8px var(--turquoise-glow);
+}
+
+.splash-game__life--gone {
+  background: var(--panel-border);
+  box-shadow: none;
+}
+
+.splash-game__stage {
+  position: relative;
+  width: 100%;
+  height: 168px;
+  overflow: hidden;
+  border-radius: 12px;
+  background: radial-gradient(ellipse at 50% 120%, rgba(0, 228, 172, 0.1), transparent 58%);
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.splash-game__stage:focus-visible {
+  outline: 2px solid var(--turquoise);
+  outline-offset: 3px;
+}
+
+.splash-game__snack {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin: -14px 0 0 -14px;
+  pointer-events: none;
+  filter: drop-shadow(0 0 6px currentColor);
+  animation: splash-snack-wobble 0.9s ease-in-out infinite;
+}
+
+.splash-game__snack--0 {
+  color: var(--turquoise);
+}
+
+.splash-game__snack--1 {
+  color: var(--accent-blue);
+}
+
+.splash-game__snack--2 {
+  color: #ffd36a;
+}
+
+.splash-game__catcher {
+  position: absolute;
+  bottom: 2px;
+  transform: translateX(-50%);
+  color: var(--turquoise);
+  filter: drop-shadow(0 0 12px var(--turquoise-glow));
+  pointer-events: none;
+  transition: transform 0.12s ease-out;
+}
+
+.splash-game__catcher--chomp {
+  transform: translateX(-50%) scale(1.08, 0.9);
+  transition: transform 0.08s ease-out;
+}
+
+.splash-game__over {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  padding-top: 18px;
+  background: linear-gradient(180deg, rgba(22, 28, 34, 0.82) 0%, rgba(22, 28, 34, 0.15) 70%, transparent 100%);
+  pointer-events: none;
+}
+
+.splash-game__over-copy {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.splash-game__again {
+  pointer-events: auto;
+  padding: 6px 14px;
+  color: var(--turquoise);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  background: transparent;
+  border: 1px solid var(--turquoise);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.splash-game__again:hover,
+.splash-game__again:focus-visible {
+  color: #08241d;
+  background: var(--turquoise);
+  outline: none;
+}
+
+.splash-game__hint {
+  margin: 8px 0 12px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+@keyframes splash-snack-wobble {
+  0%,
+  100% {
+    transform: rotate(-12deg);
+  }
+  50% {
+    transform: rotate(12deg);
+  }
+}
+
 /* Interactive poke target — used on the closed-beta splash. */
 .mascot-interactive {
   display: inline-flex;
@@ -10554,6 +10744,13 @@ button.builder-mode-selector:disabled {
   .mascot-interactive--pullups {
     transition: none;
     animation: none;
+  }
+
+  .splash-game__snack,
+  .splash-game__catcher,
+  .splash-game__catcher--chomp {
+    animation: none;
+    transition: none;
   }
 
   /* The gesture reactions are motion by definition, so they go entirely — the
@@ -11488,9 +11685,21 @@ button.builder-mode-selector:disabled {
   overflow: hidden;
 }
 
+/* A definition with no board (tuning params and/or a property sheet only)
+   docks to a side panel instead of covering the stage — the running game
+   stays visible next to the sliders, which is the point of a live tuning UI.
+   A board needs the full canvas, so it keeps the full-cover shape above;
+   switching collections toggles this live since `:has()` tracks the DOM. */
+.studio-edit-overlay:not(:has(.editor-board-col)) {
+  inset: 0 0 0 auto;
+  width: min(360px, 100%);
+  border-left: 1px solid var(--panel-border);
+  box-shadow: -12px 0 32px rgba(0, 0, 0, 0.35);
+}
+
 /* Chat stays reachable while Code is open (owner feedback, 2026-08-11): the rail and
    its pill float over the code overlay exactly as they float over the stage. Scoped to
-   Code — Edit keeps its full-cover behaviour untouched. */
+   Code — a full-cover Edit (a board definition) keeps its own overlay on top instead. */
 .studio-stage-layout:has(.studio-code-overlay) .studio-chat-rail {
   z-index: 60;
 }
@@ -11504,6 +11713,7 @@ button.builder-mode-selector:disabled {
 /* ── THE CODE SURFACE (creator-code-editing-execution-plan.md) ─────────────────── */
 
 .code-surface {
+  position: relative;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -11515,12 +11725,17 @@ button.builder-mode-selector:disabled {
   align-items: center;
   gap: 10px;
   flex: none;
-  /* Extra top clearance: `.studio-fullbleed` floats over this same top-left corner
-     (position:absolute, top:14px, left:14px, z-index:1150) whenever this panel is
-     open, since opening it is what makes `covered` true. Reserve room below it
-     rather than let the two overlap. */
-  padding: 44px 14px 10px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--panel-border);
+}
+
+/* Keep the global escape and Code's thread action on one row. */
+.studio-stage-layout:has(.studio-code-overlay) .code-surface-head {
+  padding-left: 180px;
+}
+
+.studio-stage-layout:has(.studio-code-overlay) .studio-fullbleed {
+  top: 10px;
 }
 
 .code-surface-head h2 {
@@ -11529,13 +11744,58 @@ button.builder-mode-selector:disabled {
   font-weight: 700;
 }
 
+.code-surface-file-picker {
+  display: none;
+}
+
+.code-surface-file-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.code-surface-file-trigger-path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono-font, monospace);
+  font-size: 0.78rem;
+}
+
+.code-surface-file-trigger:hover:not(:disabled),
+.code-surface-file-trigger:focus-visible {
+  color: var(--turquoise);
+}
+
+.code-surface-file-trigger:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
+.code-surface-file-backdrop,
+.code-surface-file-sheet {
+  display: none;
+}
+
 .code-surface-readonly-banner {
   margin-left: auto;
+  min-width: 0;
   font-size: 0.78rem;
   color: var(--muted);
   padding: 4px 10px;
   border-radius: 999px;
   background: rgba(148, 163, 184, 0.12);
+}
+
+.code-surface-readonly-banner-compact {
+  display: none;
 }
 
 .code-surface-loading,
@@ -11848,28 +12108,129 @@ button.builder-mode-selector:disabled {
 @media (max-width: 1099px) {
   .code-surface-body {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .code-surface-file-picker {
+    display: flex;
+    align-items: center;
+    flex: none;
+    min-width: 0;
+    padding: 5px 12px;
+    border-bottom: 1px solid var(--panel-border);
+  }
+
+  .code-surface-file-trigger {
+    width: 100%;
+    min-height: 34px;
+    padding: 5px 7px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    text-align: left;
+  }
+
+  .code-surface-file-trigger:hover:not(:disabled),
+  .code-surface-file-trigger:focus-visible {
+    border-color: rgba(0, 228, 172, 0.35);
+    background: rgba(0, 228, 172, 0.08);
+  }
+
+  .code-surface-file-backdrop {
+    position: absolute;
+    z-index: 20;
+    inset: 0;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    background: rgba(3, 8, 13, 0.66);
+  }
+
+  .code-surface-file-sheet {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    width: min(100%, 480px);
+    max-height: min(76%, 34rem);
+    border: 1px solid var(--panel-border);
+    border-bottom: 0;
+    border-radius: 16px 16px 0 0;
+    background: var(--panel);
+    box-shadow: 0 -12px 36px rgba(0, 0, 0, 0.42);
+    overflow: hidden;
+  }
+
+  .code-surface-file-sheet-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: none;
+    padding: 12px 12px 10px 16px;
+    border-bottom: 1px solid var(--panel-border);
+  }
+
+  .code-surface-file-sheet-head h3 {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    font-size: 0.86rem;
+  }
+
+  .code-surface-file-options {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 5px 8px max(8px, env(safe-area-inset-bottom));
+  }
+
+  .code-surface-file-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 44px;
+    padding: 8px 9px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text);
+    text-align: left;
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .code-surface-file-option:hover,
+  .code-surface-file-option:focus-visible {
+    border-color: rgba(0, 228, 172, 0.3);
+    background: rgba(0, 228, 172, 0.07);
+  }
+
+  .code-surface-file-option.is-active {
+    color: var(--turquoise);
+    background: rgba(0, 228, 172, 0.12);
+  }
+
+  .code-surface-file-option.is-locked {
+    color: var(--muted);
+    cursor: default;
+  }
+
+  .code-surface-file-option-path {
+    min-width: 0;
+    flex: 1;
+    overflow-wrap: anywhere;
+    font-family: var(--mono-font, monospace);
+    font-size: 0.78rem;
+  }
+
+  .code-surface-file-option-status {
+    flex: none;
+    color: var(--muted);
+    font-size: 0.68rem;
   }
 
   .code-surface-rail {
-    flex-direction: row;
-    overflow-x: auto;
-    border-right: 0;
-    border-bottom: 1px solid var(--panel-border);
-    scroll-snap-type: x proximity;
-  }
-
-  /* Row mode has no bounded width like the desktop rail's own column, so without a
-     cap the ellipsis rule on .code-surface-rail-path never triggers — a handful of
-     `game/`-prefixed files spell out the whole row and the active one scrolls off. */
-  .code-surface-rail-item {
-    flex: 0 0 auto;
-    max-width: 40vw;
-    scroll-snap-align: start;
-  }
-
-  .code-surface-rail-locked {
-    flex: none;
+    display: none;
   }
 }
 
@@ -11901,6 +12262,23 @@ button.builder-mode-selector:disabled {
     border-left: 0;
     border-bottom: 1px solid var(--panel-border);
     padding: 8px 10px;
+  }
+}
+
+/* Below desktop widths the global escape gets its own top row. The desktop 180px
+   reservation leaves too little room for the Code controls and the live read-only
+   status on phones and narrow tablets. */
+@media (max-width: 1099px) {
+  .studio-stage-layout:has(.studio-code-overlay) .code-surface-head {
+    padding: 52px 14px 10px;
+  }
+
+  .code-surface-readonly-banner-full {
+    display: none;
+  }
+
+  .code-surface-readonly-banner-compact {
+    display: inline;
   }
 }
 
@@ -12043,6 +12421,7 @@ button.builder-mode-selector:disabled {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  touch-action: pan-y;
 }
 
 .studio-chat-rail-body .studio-thread {
@@ -12053,6 +12432,16 @@ button.builder-mode-selector:disabled {
   max-width: none;
   margin: 0;
   padding: 8px 12px 12px;
+}
+
+.studio-chat-rail-body .studio-thread-scroll {
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+}
+
+.studio-chat-rail .studio-thread-scroll-pad {
+  pointer-events: auto;
 }
 
 .studio-chat-rail-grab {
@@ -12109,6 +12498,7 @@ button.builder-mode-selector:disabled {
     max-height: 85vh;
     border-radius: 16px 16px 0 0;
     animation: fadeIn 0.2s ease;
+    transition: height 180ms ease;
   }
 
   /* Install / update banners pin to the bottom edge too — lift the sheet above them
@@ -12119,13 +12509,25 @@ button.builder-mode-selector:disabled {
     bottom: var(--studio-chat-rail-overlay-lift, 5.5rem);
   }
 
+  .studio-chat-rail.is-sheet .studio-chat-rail-head {
+    padding-top: 4px;
+  }
+
   .studio-chat-rail.is-sheet .studio-chat-rail-grab {
     display: flex;
     justify-content: center;
-    padding: 8px 0 0;
+    align-items: center;
+    width: 100%;
+    min-height: 28px;
+    padding: 10px 0 2px;
     border: 0;
     background: transparent;
-    cursor: pointer;
+    cursor: grab;
+    touch-action: none;
+  }
+
+  .studio-chat-rail.is-sheet.is-dragging .studio-chat-rail-grab {
+    cursor: grabbing;
   }
 
   .studio-chat-rail.is-sheet .studio-chat-rail-grab-bar {
@@ -12137,6 +12539,7 @@ button.builder-mode-selector:disabled {
 
   .studio-chat-rail.is-peek {
     max-height: none;
+    height: var(--studio-chat-rail-peek-height, 124px);
   }
 
   .studio-chat-rail.is-half {
@@ -12145,6 +12548,13 @@ button.builder-mode-selector:disabled {
 
   .studio-chat-rail.is-full {
     height: 88vh;
+    max-height: none;
+  }
+
+  .studio-chat-rail.is-sheet.is-dragging {
+    height: var(--studio-chat-rail-drag-height);
+    max-height: none;
+    transition: none;
   }
 }
 
@@ -17263,9 +17673,17 @@ body.remix-entry-open {
   top: 0.55rem;
   bottom: auto;
   z-index: 3;
-  background: color-mix(in srgb, var(--panel-card, #1b2229) 88%, transparent);
-  backdrop-filter: blur(8px);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  border-color: var(--turquoise);
+  background: var(--turquoise);
+  color: #08241d;
+  font-weight: 700;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45), 0 0 14px var(--turquoise-glow);
+}
+
+.review-play-btn.is-overlay:hover,
+.review-play-btn.is-overlay:focus-visible {
+  filter: brightness(1.08);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45), 0 0 20px var(--turquoise-glow);
 }
 
 .review-play-btn.is-active {

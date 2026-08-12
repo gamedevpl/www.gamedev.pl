@@ -16,6 +16,13 @@ import type { AgentObservation } from './job-state.js';
 
 export type BuildPromptLane = 'mcp' | 'harness';
 
+export type BuildHistoryEntry = {
+  kind: 'creator_request' | 'agent_note' | 'build_progress';
+  text: string;
+  createdAt: string;
+  round: 'current' | 'earlier';
+};
+
 /** Everything a backend needs to start a build. Deliberately not a GitHub issue. */
 export interface BuildBrief {
   /** Our job identity, for correlating an agent's reports back to the job. */
@@ -36,6 +43,7 @@ export interface BuildBrief {
   apiBaseUrl: string;
   /** Set for a revision round: what the creator asked to change. Untrusted text. */
   feedback?: string;
+  history?: BuildHistoryEntry[];
   /**
    * Set when the previous session ended without delivering.
    *

@@ -136,9 +136,9 @@ function defaultTabFor(): StudioTab {
  * does not yet.
  */
 function tabAvailable(game: StudioGame, tab: StudioTab): boolean {
-  // The Edit surface exists only for games whose delivered version ships an
-  // editor definition. Every other game keeps exactly the three surfaces it
-  // had — an /edit URL for one of those resolves and falls back to the thread.
+  // The Edit surface exists only for games whose latest build ships an editor
+  // definition. Every other game keeps exactly the three surfaces it had — an
+  // /edit URL for one of those resolves and falls back to the thread.
   if (tab === 'edit') return Boolean(game.editable && game.slug);
   // The Code surface (CE-06): every owned game with a slug, once the kill switch is
   // on — no manifest condition, unlike Edit, per the owner decision (all creators
@@ -975,7 +975,6 @@ export function CreatorStudioView({
                             }
                           }}
                           unreadCount={checklistUnread}
-                          standaloneHref={`/status/${encodeURIComponent(threadToken ?? activeGame.token)}`}
                           latestEntryLabel={latestActivityRef.current}
                           onVisiblyOpenChange={setRailVisiblyOpen}
                         >
@@ -1015,6 +1014,7 @@ export function CreatorStudioView({
                             <EditorPanel
                               key={activeGame.token}
                               game={activeGame}
+                              editorPushRef={editorPushRef}
                               onOpenPlaytest={() => changePosture('play')}
                               onBack={() => openTab('thread')}
                             />

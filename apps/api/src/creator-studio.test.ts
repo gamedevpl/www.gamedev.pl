@@ -212,6 +212,88 @@ describe('GET /api/me/studio', () => {
 
     await app.close();
   });
+
+  function stubGamesStore(sourceFilesByVersion: Record<string, string[]>) {
+    return {
+      getManifest: async (_slug: string, version: string) =>
+        sourceFilesByVersion[version]
+          ? {
+              slug: 'sky-dodge',
+              version,
+              createdAt: today,
+              issueNumber: 10,
+              sourceFiles: sourceFilesByVersion[version],
+            }
+          : null,
+    } as unknown as import('./games-store.js').GamesStore;
+  }
+
+  it('is editable off a mode=preview build mid-round, before anything is delivered', async () => {
+    await store.createSubmission(10, 'g:creator', 'Sky Dodge');
+    await store.setSubmissionSlug(10, 'sky-dodge');
+    await store.setSubmissionPreviewVersion(10, 'v1');
+
+    const app = await buildApp({
+      store,
+      sessionSecret,
+      submissionRoutes: {
+        submissionTokenSecret,
+        agentChannel: { gamesStore: stubGamesStore({ v1: ['GAME.json', 'EDITOR.json', 'game.ts'] }) },
+      },
+    });
+    const res = await app.inject({ method: 'GET', url: '/api/me/studio', headers: authHeaders('g:creator') });
+    expect(res.statusCode).toBe(200);
+    const games = (res.json() as { games: CreatorStudioGame[] }).games;
+    expect(games[0]).toMatchObject({ slug: 'sky-dodge', editable: true });
+
+    await app.close();
+  });
+
+  it('prefers the newer preview build over an older delivered one for the editable check', async () => {
+    await store.createSubmission(10, 'g:creator', 'Sky Dodge');
+    await store.setSubmissionSlug(10, 'sky-dodge');
+    await store.setSubmissionDeliveredVersion(10, 'v1'); // no EDITOR.json
+    await store.setSubmissionPreviewVersion(10, 'v2'); // ships one
+
+    const app = await buildApp({
+      store,
+      sessionSecret,
+      submissionRoutes: {
+        submissionTokenSecret,
+        agentChannel: {
+          gamesStore: stubGamesStore({
+            v1: ['GAME.json', 'game.ts'],
+            v2: ['GAME.json', 'EDITOR.json', 'game.ts'],
+          }),
+        },
+      },
+    });
+    const res = await app.inject({ method: 'GET', url: '/api/me/studio', headers: authHeaders('g:creator') });
+    const games = (res.json() as { games: CreatorStudioGame[] }).games;
+    expect(games[0]).toMatchObject({ slug: 'sky-dodge', editable: true });
+
+    await app.close();
+  });
+
+  it('leaves editable unset when neither the preview nor the delivered build ships an editor', async () => {
+    await store.createSubmission(10, 'g:creator', 'Sky Dodge');
+    await store.setSubmissionSlug(10, 'sky-dodge');
+    await store.setSubmissionPreviewVersion(10, 'v1');
+
+    const app = await buildApp({
+      store,
+      sessionSecret,
+      submissionRoutes: {
+        submissionTokenSecret,
+        agentChannel: { gamesStore: stubGamesStore({ v1: ['GAME.json', 'game.ts'] }) },
+      },
+    });
+    const res = await app.inject({ method: 'GET', url: '/api/me/studio', headers: authHeaders('g:creator') });
+    const games = (res.json() as { games: CreatorStudioGame[] }).games;
+    expect(games[0]?.editable).toBeUndefined();
+
+    await app.close();
+  });
 });
 
 describe('GET /api/me/studio/health', () => {

@@ -189,6 +189,14 @@ Two concrete instances of that (observed 2026-07-23):
   deserves the same scrutiny as the source change. For agent-facing surfaces
   specifically, check that any replacement error still tells the agent what to do next;
   a status code is not an instruction.
+- **A green games-repo `check:game` does not prove a puzzle's obstacles obstruct.** Observed
+  (echo-loop / www.gamedev.pl-games#699, 2026-08-12): TRACE, ACCEPTANCE, agency `--strict`,
+  and a scripted capture were green while hold-right + one jump cleared plate/door rooms
+  with `ghostCount: 0`. Capture drives the intended path; agency only fails idle / one
+  held key; ACCEPTANCE that restates the capture floor (`roomsCleared >= 2`) cannot see a
+  skip. For puzzle games, import the pure model in a throwaway clone and prove a
+  no-mechanic control *fails* (walk-only into the door, jump-over) in the same session as
+  the intended solve.
 - **Two writers of one knob, tested in isolation, is not a composition test.** Observed
   (games-repo gfx scale, 2026-08-12, [www.gamedev.pl-games#692](https://github.com/gamedevpl/www.gamedev.pl-games/pull/692)):
   a frame governor stepped the backing-store scale down when fill was slow, and a
@@ -259,6 +267,12 @@ usually closured and unreadable). Prove the three things the spec promises: spaw
 transition (the game-over overlay floods the canvas dark). The definitive proof is still
 playing the _published_ game on the live site, where a foregrounded real-user tab runs rAF
 normally.
+
+For **puzzle** games, also probe the skip, not only the scripted solve. `npm run check:game`
+replays `CAPTURE.json`; it will not notice a two-tile door you can jump, a shard door you
+can clear without the shard, or an ACCEPTANCE bar that is just the capture floor. Drive
+`updateRound` / the pure model with a no-echo / no-key / jump-over control and require that
+control to fail.
 
 ## Verifying behind sign-in (you don't need the owner's Gmail)
 

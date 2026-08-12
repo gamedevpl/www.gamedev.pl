@@ -49,6 +49,9 @@ describe('review desk shell', () => {
     const play = ruleBody('.review-play-btn.is-overlay');
     expect(play).toMatch(/top:\s*0\.55rem/);
     expect(play).not.toMatch(/bottom:\s*0\.55rem/);
+    expect(play).toMatch(/background:\s*var\(--turquoise\)/);
+    expect(play).toMatch(/color:\s*#08241d/);
+    expect(play).toMatch(/border-color:\s*var\(--turquoise\)/);
 
     const keep = ruleBody('.review-stamp.is-keep');
     expect(keep).toMatch(/left:\s*50%/);
