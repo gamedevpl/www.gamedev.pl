@@ -160,6 +160,17 @@ export function createManagedPlatformBackendFromEnv(deps?: ManagedBackendDeps, l
             baseRef: process.env.GAMES_PUBLISHED_REF?.trim() || 'main',
             customAgent: process.env.AGENT_CUSTOM_AGENT?.trim() || 'game-builder',
             createPullRequest: false,
+            // A separate, content-free repo for MCP-lane rounds — unset means today's
+            // harness-only behavior is unchanged. See docs/managed-agent-backend.md.
+            ...(process.env.MANAGED_AGENT_COPILOT_MCP_REPO?.trim()
+              ? { mcpRepo: process.env.MANAGED_AGENT_COPILOT_MCP_REPO.trim() }
+              : {}),
+            ...(process.env.MANAGED_AGENT_COPILOT_MCP_BASE_REF?.trim()
+              ? { mcpBaseRef: process.env.MANAGED_AGENT_COPILOT_MCP_BASE_REF.trim() }
+              : {}),
+            ...(process.env.MANAGED_AGENT_COPILOT_MCP_CUSTOM_AGENT?.trim()
+              ? { mcpCustomAgent: process.env.MANAGED_AGENT_COPILOT_MCP_CUSTOM_AGENT.trim() }
+              : {}),
           }
         : {}),
       ...(!isCopilot && mcpUrl ? { overrideTools: true } : {}),

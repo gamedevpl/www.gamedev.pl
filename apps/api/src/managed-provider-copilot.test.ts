@@ -200,4 +200,75 @@ describe('Copilot managed provider', () => {
 
     expect(deleteBranch).toHaveBeenCalledWith('copilot/spent');
   });
+
+  it('routes an MCP-lane round to the configured mcpRepo, not the games repo', async () => {
+    const stub = tasks();
+    const mcpStub = tasks(task({ id: 'mcp-task-1' }));
+    const provider = createCopilotManagedProvider(
+      {
+        apiKey: apiKey(),
+        model: 'gpt-5.4',
+        repo: 'gamedevpl/www.gamedev.pl-games',
+        mcpRepo: 'gamedevpl/scratchpad',
+        mcpCustomAgent: 'game-builder-mcp',
+      },
+      {
+        tasks: stub.client,
+        github: { deleteBranch: vi.fn(), createBranchWithFiles: vi.fn() },
+        mcpTasks: mcpStub.client,
+      },
+    );
+
+    const session = await provider.startSession({
+      correlationId: '42',
+      prompt: buildPrompt(BRIEF, { kind: 'channel', fast: true }),
+      model: 'gpt-5.4',
+      outputPath: 'outputs',
+      promptLane: 'mcp',
+      tools: { mcpEndpoints: [{ url: 'https://www.gamedev.pl/api/mcp', name: 'gamedevpl' }] },
+    });
+
+    expect(stub.startTask).not.toHaveBeenCalled();
+    expect(mcpStub.startTask).toHaveBeenCalledWith({
+      prompt: buildPrompt(BRIEF, { kind: 'channel', fast: true }),
+      baseRef: 'main',
+      model: 'gpt-5.4',
+      createPullRequest: false,
+      customAgent: 'game-builder-mcp',
+    });
+    expect(session.id).toBe('mcp-task-1');
+
+    // Later polls for that session must hit mcpTasks, not the games repo.
+    await provider.getSession('mcp-task-1');
+    expect(mcpStub.getTask).toHaveBeenCalledWith('mcp-task-1');
+    expect(stub.getTask).not.toHaveBeenCalled();
+  });
+
+  it('keeps the harness lane on the games repo when mcpRepo is configured but unused', async () => {
+    const stub = tasks();
+    const mcpStub = tasks();
+    const provider = createCopilotManagedProvider(
+      {
+        apiKey: apiKey(),
+        model: 'gpt-5.4',
+        repo: 'gamedevpl/www.gamedev.pl-games',
+        mcpRepo: 'gamedevpl/scratchpad',
+      },
+      {
+        tasks: stub.client,
+        github: { deleteBranch: vi.fn(), createBranchWithFiles: vi.fn() },
+        mcpTasks: mcpStub.client,
+      },
+    );
+
+    await provider.startSession({
+      correlationId: '42',
+      prompt: buildPrompt(BRIEF),
+      model: 'gpt-5.4',
+      outputPath: 'outputs',
+    });
+
+    expect(stub.startTask).toHaveBeenCalled();
+    expect(mcpStub.startTask).not.toHaveBeenCalled();
+  });
 });
