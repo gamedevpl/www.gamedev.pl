@@ -2004,8 +2004,8 @@ export async function registerAgentChannelRoutes(
         return reply.send({ accepted: false, rejected: 'stopped', ...(await channelState(issueNumber, record)) });
       }
 
-      // Submit can mark a round ended; `end` still carries the summary.
-      const summarized = record.agentEndedBy === 'end' ? false : await recordSummary();
+      // Submit-ended still records; a prior or legacy end does not.
+      const summarized = record.agentEndedAt && record.agentEndedBy !== 'submit' ? false : await recordSummary();
       await store!.markAgentEnded(issueNumber);
       options.onEvent?.(issueNumber);
       const fresh = (await store!.getSubmission(issueNumber)) ?? record;
