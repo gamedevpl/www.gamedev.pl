@@ -1,6 +1,6 @@
 # Runbook: rotate secrets
 
-The *recipes* for each secret live in [`deployment.md`](../deployment.md). This runbook
+The _recipes_ for each secret live in [`deployment.md`](../deployment.md). This runbook
 adds what that page does not: the **order**, and the **verification step** — because the
 failure mode here is not a bad rotation, it is a token quietly expiring on a Tuesday.
 
@@ -16,24 +16,27 @@ operator and equally useful to an attacker. It lives in the private ops repo
 (`gamedevpl/www.gamedev.pl-ops`, `docs/credential-ledger.md`) along with the risk
 register; see the `internal-ops-repo` skill for access.
 
-What stays here is everything that is *already* public knowledge from
+What stays here is everything that is _already_ public knowledge from
 [`deployment.md`](../deployment.md) — the secret names and how to rotate each one.
 
 Two properties are worth stating in the open, because they constrain how these credentials
 may be scoped and anyone touching the workflows needs them.
 
 **`SITE_DISPATCH_TOKEN` cannot be granted narrowly.** `repository_dispatch` is gated by
-Contents: read+write, so despite its name it is a *write-capable* credential on the
+Contents: read+write, so despite its name it is a _write-capable_ credential on the
 platform repo, held by the games repo. Scope it to that single repository, and treat a leak
 of it as a compromise of the platform repo rather than a nuisance.
 
 **`agent-tasks-token` cannot be a machine identity.** GitHub's agent tasks API accepts only
-*user-to-server* tokens — App installation tokens are explicitly unsupported — so this is
+_user-to-server_ tokens — App installation tokens are explicitly unsupported — so this is
 necessarily a human's fine-grained PAT, carrying a human's expiry. There is no version of
 it a service account can hold, which makes the calendar reminder the only mitigation. It is
 deliberately separate from `github-token` so that a dispatch outage cannot become a serving
-outage: see `createAgentBackendFromEnv` in `apps/api/src/agent-backend-env.ts`, which
-returns `undefined` rather than throwing when the token is absent.
+outage: see `createManagedPlatformBackendFromEnv` in `apps/api/src/agent-backend-env.ts`,
+which returns `undefined` rather than throwing when the token is absent. **Since MP-04**
+(the direct Copilot backend's retirement), this token alone is not sufficient either —
+`MANAGED_AGENT_VENDOR=copilot` must also be selected, or the managed backend never starts
+regardless of the token's presence.
 
 ## 2. Rotation order
 
@@ -45,7 +48,7 @@ rotation should never cascade — but only if you can tell which one broke.
 3. **Make it take effect**: Secret Manager values are read at container start, so a
    rotated GCP secret needs a new revision — redeploy, or
    `gcloud run services update gamedev-app --region europe-west1 --project gamedevpl
-   --update-env-vars ROTATED_AT=$(date -u +%s)` to force one. GitHub Actions secrets take
+--update-env-vars ROTATED_AT=$(date -u +%s)` to force one. GitHub Actions secrets take
    effect on the next workflow run.
 4. **Verify** (§3).
 5. **Only then revoke the old credential.** Reversing steps 4 and 5 is how a rotation
@@ -53,16 +56,16 @@ rotation should never cascade — but only if you can tell which one broke.
 
 ## 3. Verification per secret
 
-| Secret | Verify |
-| --- | --- |
-| `github-token` | Submit a test spec, or `curl -s https://www.gamedev.pl/api/health` then check logs for GitHub auth errors |
-| `agent-tasks-token` | Submit a test spec and confirm it gains a `dispatch` record instead of sitting at `queued`. The `agent dispatch enabled` log line proves only that a token is *present* — it is written at container start, before anything is called |
-| `GAMES_REPO_TOKEN` | Re-run the *Publish games snapshot* workflow — it reads the games repo and must go green |
-| `SITE_DISPATCH_TOKEN` | Merge anything trivial to the games repo `main`; a *Publish games snapshot* run must appear in the platform repo within a minute |
-| `session-secret` | ⚠️ Rotating this **invalidates every session** — every user is signed out. Not a routine rotation; do it deliberately, ideally announced |
-| `submission-token-secret` | ⚠️ Invalidates outstanding submission status links. Same caution |
-| `resend-api-key` | `npm run beta:invite -w @gamedevpl/api -- you@example.com --dry-run`, then a real send to yourself |
-| `vapid-private-key` | ⚠️ Invalidates every existing push subscription; users must re-subscribe |
+| Secret                    | Verify                                                                                                                                                                                                                                                                                                    |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `github-token`            | Submit a test spec, or `curl -s https://www.gamedev.pl/api/health` then check logs for GitHub auth errors                                                                                                                                                                                                 |
+| `agent-tasks-token`       | Submit a test spec and confirm it gains a `dispatch` record instead of sitting at `queued`. Requires `MANAGED_AGENT_VENDOR=copilot` to be set — the `managed agent dispatch enabled` log line proves only that the vendor and token were both _present_ at container start, before anything is dispatched |
+| `GAMES_REPO_TOKEN`        | Re-run the _Publish games snapshot_ workflow — it reads the games repo and must go green                                                                                                                                                                                                                  |
+| `SITE_DISPATCH_TOKEN`     | Merge anything trivial to the games repo `main`; a _Publish games snapshot_ run must appear in the platform repo within a minute                                                                                                                                                                          |
+| `session-secret`          | ⚠️ Rotating this **invalidates every session** — every user is signed out. Not a routine rotation; do it deliberately, ideally announced                                                                                                                                                                  |
+| `submission-token-secret` | ⚠️ Invalidates outstanding submission status links. Same caution                                                                                                                                                                                                                                          |
+| `resend-api-key`          | `npm run beta:invite -w @gamedevpl/api -- you@example.com --dry-run`, then a real send to yourself                                                                                                                                                                                                        |
+| `vapid-private-key`       | ⚠️ Invalidates every existing push subscription; users must re-subscribe                                                                                                                                                                                                                                  |
 
 The three marked ⚠️ are **user-visible** rotations. They are not emergencies to be done
 quickly — they are changes to be scheduled.
@@ -99,7 +102,7 @@ repo. Two things bite here:
   account with only read on the games repo and the token page will show write while every
   call 403s at runtime. The token settings page is not the authority; the account's repo
   access is.
-- It belongs to a *person*, so the dependency is that person's account staying healthy —
+- It belongs to a _person_, so the dependency is that person's account staying healthy —
   not only the expiry date. A 2FA reset, an account recovery, or that person losing repo
   access stops creation exactly the same way an expiry does.
 
@@ -111,7 +114,7 @@ second.** A broken site is recoverable; an attacker with a live token is not bou
 1. Revoke the credential at its source (GitHub token settings, or disable the Secret
    Manager version).
 2. Assess the blast radius using the ledger in the ops repo — `SITE_DISPATCH_TOKEN` and
-   `github-token` both imply *write* access to a repository.
+   `github-token` both imply _write_ access to a repository.
 3. Check what was done with it: the games repo's and platform repo's audit log, recent
    commits, workflow runs, and any issues or PRs created.
 4. Then rotate normally (§2).
