@@ -12167,6 +12167,7 @@ button.builder-mode-selector:disabled {
 
   .studio-chat-rail.is-peek {
     max-height: none;
+    height: var(--studio-chat-rail-peek-height, 124px);
   }
 
   .studio-chat-rail.is-half {

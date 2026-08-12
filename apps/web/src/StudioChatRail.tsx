@@ -7,6 +7,7 @@ import {
   snapSheetDetent,
   type SheetDetent,
   SHEET_DRAG_CLICK_SLOP_PX,
+  SHEET_PEEK_PX,
 } from './studioChatSheet.js';
 
 /**
@@ -156,7 +157,7 @@ export function StudioChatRail({
     }
     if (!drag.moved) return;
     ignoreGrabClickRef.current = true;
-    const height = dragHeight ?? asideRef.current?.getBoundingClientRect().height ?? drag.startH;
+    const height = clampSheetDragHeight(drag.startH + drag.startY - event.clientY, window.innerHeight);
     setDetent(snapSheetDetent(height, window.innerHeight));
     setDragHeight(null);
   };
@@ -171,8 +172,11 @@ export function StudioChatRail({
 
   const dragging = dragHeight != null;
   const detentClass = isSheet ? ` is-sheet is-${detent}${dragging ? ' is-dragging' : ''}` : '';
-  const sheetStyle = dragging
-    ? ({ '--studio-chat-rail-drag-height': `${dragHeight}px` } as CSSProperties)
+  const sheetStyle = isSheet
+    ? ({
+        '--studio-chat-rail-peek-height': `${SHEET_PEEK_PX}px`,
+        ...(dragging ? { '--studio-chat-rail-drag-height': `${dragHeight}px` } : {}),
+      } as CSSProperties)
     : undefined;
 
   // The thread stays mounted whether collapsed, peeking, or fully open — a collapse

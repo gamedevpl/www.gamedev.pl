@@ -33,6 +33,12 @@ describe('Studio chat rail header', () => {
     expect(css).toMatch(/\.studio-chat-rail\.is-sheet\.is-dragging\s*\{[^}]*--studio-chat-rail-drag-height/s);
   });
 
+  it('gives peek a height that fits its mandatory chrome', () => {
+    expect(declarations('.studio-chat-rail.is-peek')).toMatch(
+      /max-height:\s*none[^}]*height:\s*var\(--studio-chat-rail-peek-height,\s*124px\)/s,
+    );
+  });
+
   it('keeps the builder choice modal above the phone chat sheet', () => {
     expect(declarations('.builder-choice-modal-backdrop')).toMatch(/z-index:\s*1300/);
     expect(css).toMatch(/\.studio-chat-rail\.is-sheet\s*\{[^}]*z-index:\s*1100/s);

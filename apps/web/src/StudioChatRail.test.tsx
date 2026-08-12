@@ -156,14 +156,11 @@ describe('StudioChatRail', () => {
     await act(async () => {
       grab?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, clientY: 500, button: 0 }));
       grab?.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, pointerId: 1, clientY: 180 }));
-    });
-    expect(rail.classList.contains('is-dragging')).toBe(true);
-
-    await act(async () => {
       grab?.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 1, clientY: 180 }));
     });
     expect(rail.classList.contains('is-dragging')).toBe(false);
     expect(rail.classList.contains('is-full')).toBe(true);
+    expect(rail.style.getPropertyValue('--studio-chat-rail-peek-height')).toBe('124px');
 
     await act(async () => root.unmount());
   });
