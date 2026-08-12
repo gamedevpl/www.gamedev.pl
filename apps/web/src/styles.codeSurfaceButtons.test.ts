@@ -44,4 +44,13 @@ describe('the Code surface Publish button', () => {
       /@media \(max-width: 600px\)[\s\S]*?\.studio-stage-layout:has\(\.studio-code-overlay\) \.code-surface-head \{\s*padding: 52px 14px 10px;/,
     );
   });
+
+  it('keeps mobile file navigation on demand instead of rendering a tab rail', () => {
+    expect(css).not.toMatch(/\.code-surface-file-select/);
+    expect(css).toMatch(/\.code-surface-file-trigger-path[\s\S]*?text-overflow:\s*ellipsis/);
+    expect(css).toMatch(
+      /@media \(max-width: 1099px\)[\s\S]*?\.code-surface-file-backdrop \{\s*position: absolute;[\s\S]*?\.code-surface-file-sheet \{\s*position: relative;/,
+    );
+    expect(css).toMatch(/\.code-surface-file-option \{[\s\S]*?min-height: 44px/);
+  });
 });

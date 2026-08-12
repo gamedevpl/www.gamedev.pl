@@ -151,11 +151,13 @@ export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
   const [discardState, setDiscardState] = useState<DiscardState>('idle');
   const [deliverState, setDeliverState] = useState<'idle' | 'delivering' | 'delivered'>('idle');
   const [deliverMessage, setDeliverMessage] = useState<string | null>(null);
+  const [filePickerOpen, setFilePickerOpen] = useState(false);
   /** Briefly true after a live param push (§E tier 1) — separate from `saveState`. */
   const [livePush, setLivePush] = useState(false);
 
   const openedRecordedRef = useRef(false);
   const fileOpenedRecordedRef = useRef(new Set<string>());
+  const filePickerTriggerRef = useRef<HTMLButtonElement | null>(null);
   const railRef = useRef<HTMLElement | null>(null);
   /** One autosave timer per dirty path, not one shared timer — editing a second file
    * inside the debounce window must not cancel the first file's pending save. */
@@ -233,6 +235,17 @@ export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
   useEffect(() => {
     setCodeSurfaceSessionState(slug, { selected, drafts });
   }, [slug, selected, drafts]);
+
+  useEffect(() => {
+    if (!filePickerOpen) return undefined;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== 'Escape') return;
+      setFilePickerOpen(false);
+      filePickerTriggerRef.current?.focus();
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [filePickerOpen]);
 
   useEffect(
     () => () => {
@@ -643,21 +656,24 @@ export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
         ) : null}
       </header>
 
-      <label className="code-surface-file-picker">
-        <span>{t('studioPanel.code.filePicker')}</span>
-        <select
-          className="code-surface-file-select"
-          value={selected ?? ''}
+      <div className="code-surface-file-picker">
+        <button
+          ref={filePickerTriggerRef}
+          type="button"
+          className="code-surface-file-trigger"
           disabled={sources.files.length === 0}
-          onChange={(event) => selectFile(event.currentTarget.value)}
+          aria-label={t('studioPanel.code.filePicker')}
+          aria-haspopup="dialog"
+          aria-expanded={filePickerOpen}
+          onClick={() => setFilePickerOpen(true)}
         >
-          {sources.files.map((entry) => (
-            <option key={entry.path} value={entry.path}>
-              {entry.path}
-            </option>
-          ))}
-        </select>
-      </label>
+          <PixelIcon name="code" size={13} />
+          <span className="code-surface-file-trigger-path">
+            {file?.path ?? t('studioPanel.code.noFiles')}
+          </span>
+          <PixelIcon name="chevronDown" size={11} />
+        </button>
+      </div>
 
       <div className="code-surface-body">
         <nav className="code-surface-rail" aria-label={t('studioPanel.tabs.code')} ref={railRef}>
@@ -791,6 +807,76 @@ export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
             </span>
           ) : null}
         </footer>
+      ) : null}
+
+      {filePickerOpen ? (
+        <div
+          className="code-surface-file-backdrop"
+          role="presentation"
+          onClick={() => {
+            setFilePickerOpen(false);
+            filePickerTriggerRef.current?.focus();
+          }}
+        >
+          <section
+            className="code-surface-file-sheet"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="code-surface-file-picker-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="code-surface-file-sheet-head">
+              <h3 id="code-surface-file-picker-title">{t('studioPanel.code.filePicker')}</h3>
+              <button
+                type="button"
+                className="modal-close-btn"
+                onClick={() => {
+                  setFilePickerOpen(false);
+                  filePickerTriggerRef.current?.focus();
+                }}
+                aria-label={t('studioPanel.code.filePickerClose')}
+              >
+                <PixelIcon name="close" size={13} />
+              </button>
+            </header>
+            <div className="code-surface-file-options" role="listbox" aria-label={t('studioPanel.code.filePicker')}>
+              {sources.files.map((entry) => (
+                <button
+                  key={entry.path}
+                  type="button"
+                  className={`code-surface-file-option${entry.path === selected ? ' is-active' : ''}`}
+                  role="option"
+                  aria-selected={entry.path === selected}
+                  onClick={() => {
+                    selectFile(entry.path);
+                    setFilePickerOpen(false);
+                    filePickerTriggerRef.current?.focus();
+                  }}
+                >
+                  <span className="code-surface-file-option-path">{entry.path}</span>
+                  {entry.stagedBy ? (
+                    <span className="code-surface-file-option-status">
+                      {t('studioPanel.code.stagedBy', { who: entry.stagedBy })}
+                    </span>
+                  ) : null}
+                  {entry.path === selected ? <PixelIcon name="check" size={13} /> : null}
+                </button>
+              ))}
+              {LOCKED_DIRS.map((dir) => (
+                <div
+                  key={dir}
+                  className="code-surface-file-option is-locked"
+                  role="option"
+                  aria-selected="false"
+                  aria-disabled="true"
+                >
+                  <PixelIcon name="lock" size={11} />
+                  <span className="code-surface-file-option-path">{dir}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
       ) : null}
     </div>
   );

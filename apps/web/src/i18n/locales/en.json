@@ -313,7 +313,8 @@
     },
     "code": {
       "back": "Thread",
-      "filePicker": "File",
+      "filePicker": "Choose file",
+      "filePickerClose": "Close file list",
       "loading": "Loading your game's sources…",
       "loadError": "Sources could not be loaded right now.",
       "agentRound": "An agent is actively building — read only until it finishes",

@@ -11504,6 +11504,7 @@ button.builder-mode-selector:disabled {
 /* ── THE CODE SURFACE (creator-code-editing-execution-plan.md) ─────────────────── */
 
 .code-surface {
+  position: relative;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -11535,6 +11536,42 @@ button.builder-mode-selector:disabled {
 }
 
 .code-surface-file-picker {
+  display: none;
+}
+
+.code-surface-file-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.code-surface-file-trigger-path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono-font, monospace);
+  font-size: 0.78rem;
+}
+
+.code-surface-file-trigger:hover:not(:disabled),
+.code-surface-file-trigger:focus-visible {
+  color: var(--turquoise);
+}
+
+.code-surface-file-trigger:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
+.code-surface-file-backdrop,
+.code-surface-file-sheet {
   display: none;
 }
 
@@ -11863,24 +11900,119 @@ button.builder-mode-selector:disabled {
   .code-surface-file-picker {
     display: flex;
     align-items: center;
-    gap: 10px;
     flex: none;
-    padding: 8px 12px;
+    min-width: 0;
+    padding: 5px 12px;
     border-bottom: 1px solid var(--panel-border);
-    color: var(--muted);
-    font-size: 0.76rem;
-    font-weight: 600;
   }
 
-  .code-surface-file-select {
+  .code-surface-file-trigger {
+    width: 100%;
+    min-height: 34px;
+    padding: 5px 7px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    text-align: left;
+  }
+
+  .code-surface-file-trigger:hover:not(:disabled),
+  .code-surface-file-trigger:focus-visible {
+    border-color: rgba(0, 228, 172, 0.35);
+    background: rgba(0, 228, 172, 0.08);
+  }
+
+  .code-surface-file-backdrop {
+    position: absolute;
+    z-index: 20;
+    inset: 0;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    background: rgba(3, 8, 13, 0.66);
+  }
+
+  .code-surface-file-sheet {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    width: min(100%, 480px);
+    max-height: min(76%, 34rem);
+    border: 1px solid var(--panel-border);
+    border-bottom: 0;
+    border-radius: 16px 16px 0 0;
+    background: var(--panel);
+    box-shadow: 0 -12px 36px rgba(0, 0, 0, 0.42);
+    overflow: hidden;
+  }
+
+  .code-surface-file-sheet-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: none;
+    padding: 12px 12px 10px 16px;
+    border-bottom: 1px solid var(--panel-border);
+  }
+
+  .code-surface-file-sheet-head h3 {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    font-size: 0.86rem;
+  }
+
+  .code-surface-file-options {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 5px 8px max(8px, env(safe-area-inset-bottom));
+  }
+
+  .code-surface-file-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 44px;
+    padding: 8px 9px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text);
+    text-align: left;
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .code-surface-file-option:hover,
+  .code-surface-file-option:focus-visible {
+    border-color: rgba(0, 228, 172, 0.3);
+    background: rgba(0, 228, 172, 0.07);
+  }
+
+  .code-surface-file-option.is-active {
+    color: var(--turquoise);
+    background: rgba(0, 228, 172, 0.12);
+  }
+
+  .code-surface-file-option.is-locked {
+    color: var(--muted);
+    cursor: default;
+  }
+
+  .code-surface-file-option-path {
     min-width: 0;
     flex: 1;
-    border: 1px solid var(--panel-border);
-    border-radius: 7px;
-    background: var(--panel-card);
-    color: var(--text);
-    padding: 7px 9px;
-    font: inherit;
+    overflow-wrap: anywhere;
+    font-family: var(--mono-font, monospace);
+    font-size: 0.78rem;
+  }
+
+  .code-surface-file-option-status {
+    flex: none;
+    color: var(--muted);
+    font-size: 0.68rem;
   }
 
   .code-surface-rail {

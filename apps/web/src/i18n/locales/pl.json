@@ -315,7 +315,8 @@
     },
     "code": {
       "back": "Wątek",
-      "filePicker": "Plik",
+      "filePicker": "Wybierz plik",
+      "filePickerClose": "Zamknij listę plików",
       "loading": "Wczytywanie plików źródłowych…",
       "loadError": "Nie udało się teraz wczytać plików źródłowych.",
       "agentRound": "Agent aktywnie pracuje — tylko do odczytu, dopóki nie skończy",

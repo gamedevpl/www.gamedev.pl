@@ -137,7 +137,7 @@ describe('CodeSurface', () => {
     expect(textarea.value).toContain('export const boot');
   });
 
-  it('uses a native file picker instead of a scrolling mobile rail', async () => {
+  it('uses an on-demand file sheet instead of a scrolling mobile rail', async () => {
     mocked.fetchCodeSurfaceSources.mockResolvedValue(
       sourcesFor({
         files: [
@@ -149,17 +149,28 @@ describe('CodeSurface', () => {
 
     await render();
 
-    const picker = container.querySelector<HTMLSelectElement>('.code-surface-file-select');
+    const picker = container.querySelector<HTMLButtonElement>('.code-surface-file-trigger');
     expect(picker).not.toBeNull();
-    expect([...picker!.options].map((option) => option.value)).toEqual(['GAME.json', 'src/main.ts']);
+    expect(picker!.textContent).toContain('GAME.json');
 
     await act(async () => {
-      picker!.value = 'src/main.ts';
-      picker!.dispatchEvent(new Event('change', { bubbles: true }));
+      picker!.click();
+    });
+
+    const sheet = container.querySelector('[role="dialog"]');
+    expect(sheet).not.toBeNull();
+    expect(sheet?.textContent).toContain('GAME.json');
+    expect(sheet?.textContent).toContain('src/main.ts');
+
+    await act(async () => {
+      [...container.querySelectorAll<HTMLButtonElement>('.code-surface-file-option')]
+        .find((option) => option.textContent?.includes('src/main.ts'))
+        ?.click();
     });
 
     expect(container.querySelector('textarea')!.value).toContain('export const boot');
     expect(container.querySelector('.code-surface-rail-item.is-active')?.textContent).toContain('src/main.ts');
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
   });
 
   it('autosaves an edit into the working copy, marks the rail dirty, and schedules a preview rebuild', async () => {
