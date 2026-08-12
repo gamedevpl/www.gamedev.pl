@@ -35,17 +35,13 @@ describe('buildPrompt delivery contract', () => {
 
   it('never leaks the harness channel token into the MCP start() key — they authenticate different things', () => {
     const prompt = buildPrompt(BRIEF, { kind: 'channel', fast: true });
-    // The harness's channelToken authenticates the REST build channel, not an MCP
-    // start() call. A round dispatched to it instead of the round-scoped opener would
-    // fail at the platform connector's very first tool call — see build-prompt.ts.
+    // channelToken authenticates the REST channel, not start() — see build-prompt.ts.
     expect(prompt).not.toContain('"key": "tok_abc"');
     expect(prompt).not.toContain('GAMEDEVPL_BUILD_TOKEN');
   });
 
   it('refuses to build an MCP-lane prompt with no opener token, instead of dispatching a round that cannot possibly start()', () => {
-    // A missing opener means the caller composed the brief wrong — the MCP lane always
-    // mints one before dispatch. Throwing here costs nothing; embedding a placeholder for
-    // the agent to notice would cost a live, clocked round that can only fail anyway.
+    // A missing opener is a caller bug — see build-prompt.ts.
     const { mcpOpenerToken: _drop, ...withoutOpener } = BRIEF;
     expect(() => buildPrompt(withoutOpener, { kind: 'channel', fast: true })).toThrow(/mcpOpenerToken/);
   });

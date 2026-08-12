@@ -74,11 +74,7 @@ describe('Copilot managed provider', () => {
     });
 
     expect(createBranchWithFiles).not.toHaveBeenCalled();
-    // The connector lane's start() call must carry the round-scoped opener, not the
-    // harness channelToken — the connector's bearer is deliberately generic (one shared
-    // GitHub secret for every Copilot round), so this key argument is the ONLY thing
-    // that scopes the call to one round. The old value made every connector-lane round
-    // fail its very first tool call in production.
+    // The generic connector bearer needs this key to scope one round.
     expect(stub.startTask.mock.calls[0]?.[0].prompt).toContain('"key": "opener_xyz"');
     expect(stub.startTask.mock.calls[0]?.[0].prompt).not.toContain('"key": "tok_abc"');
   });

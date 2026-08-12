@@ -119,10 +119,7 @@ export function buildPrompt(brief: BuildBrief, delivery: DeliveryContract = { ki
   return finish(lines, brief);
 }
 
-// A round on the MCP lane always has one by the time it is dispatched — the caller mints
-// it before calling dispatch, the same way it mints the channel token for the harness
-// lane. Its absence here means a caller composed the brief wrong, not that the round has
-// nothing to authenticate with, so this fails the dispatch instead of failing the round.
+// Always minted before dispatch; absence means the caller composed the brief wrong.
 function mcpOpenerToken(brief: BuildBrief): string {
   if (!brief.mcpOpenerToken) {
     throw new Error(
@@ -152,17 +149,7 @@ function channelDelivery(brief: BuildBrief, fast: boolean, creating: boolean): s
             'Use the returned slug and jobId; then call `start({ slug })` for that new game.',
           ]
         : [
-            // The round-scoped MCP credential, never the harness's channelToken — that
-            // authenticates the REST build channel, not an MCP start() call, and a driver
-            // whose bearer does not already resolve the round (the Copilot connector) has
-            // no other way to receive it. A driver whose bearer does resolve the round
-            // (Anthropic, Gemini) never reaches the code that reads this argument at all.
-            //
-            // Caught here, not embedded as a placeholder for the agent to notice: a
-            // dispatch missing this is a caller bug (the MCP lane always mints one before
-            // calling dispatch), and a thrown error at prompt-construction time costs
-            // nothing. A placeholder in the prompt costs a live, clocked round that can
-            // only ever discover the same fact, expensively, by trying and failing.
+            // The round-scoped MCP opener, not the harness's channelToken — different credentials.
             `Call \`start\` with exactly \`{ "slug": "${brief.slug ?? '(slug)'}", "key": "${mcpOpenerToken(brief)}" }\`, then call \`get_brief\`, \`get_seed\` and \`get_kit\`.`,
           ]),
       'Copy the exact sessionKey from `start` into every later MCP call.',

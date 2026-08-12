@@ -17,9 +17,7 @@ function brief(overrides: Partial<BuildBrief> = {}): BuildBrief {
     slug: SLUG,
     spec: 'Deliver parcels between comets while dodging debris.',
     channelToken: 'token',
-    // Every fixture carries one so an MCP-lane dispatch never hits buildPrompt's
-    // missing-opener guard by fixture omission — the field is inert for the harness
-    // and outputs lanes, which never read it.
+    // Keeps the MCP lane clear of the missing-opener guard.
     mcpOpenerToken: 'opener_xyz',
     apiBaseUrl: 'https://example.test',
     ...overrides,
@@ -534,9 +532,7 @@ describe('managed backend', () => {
 
     await backend.dispatch(brief({ promptLane: 'mcp', mcpOpenerToken: 'opener_xyz' }));
     expect(started[0]?.promptLane).toBe('mcp');
-    // The MCP start() key is the round-scoped opener, never the harness channelToken —
-    // a driver whose bearer is not itself round-scoped (the Copilot connector) has no
-    // other way to receive it, and this was silently wrong in production until fixed.
+    // start()'s key is the opener, never channelToken — see build-prompt.ts.
     expect(started[0]?.prompt).toContain('"key": "opener_xyz"');
     expect(started[0]?.prompt).not.toContain('"key": "token"');
     setOutputs([{ path: `games/${SLUG}/game.ts`, content: 'export {};' }]);
