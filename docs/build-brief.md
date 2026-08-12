@@ -35,6 +35,14 @@ gets `channel` with `fast: true`. `build-prompt.ts`'s `channelDelivery` function
 the two branches diverge — the fast branch is written for a session with no shell and no
 checkout, so it skips every instruction that assumes either.
 
+**That "no shell" framing only covers `channelDelivery` itself.** The revision block
+(`brief.feedback`) and the undelivered-round block (`brief.previousWorkspace`) run earlier
+in `buildPrompt` and are not gated on `fast` — a fast-lane revision is still told to run
+`npm run restore`, and a fast-lane undelivered round is still told to `git fetch` /
+`git checkout`. A session with no shell has no way to follow either. This is an existing
+prompt/backend mismatch, not something this doc update fixes; noted here so the table
+above isn't read as a guarantee those two round shapes hold on the fast lane today.
+
 **A pull request is not a delivery**, in either mode. Nothing downstream reads pull
 requests: the gate, review and publication all read the store. This has to be said out loud
 because opening a PR is what a coding agent does by default, and an agent that opens one
