@@ -22,8 +22,8 @@ export type StudioGame = {
    */
   draftShared?: boolean;
   /**
-   * Whether this game's delivered version ships an editor definition. Gates the
-   * Edit surface; absent for every game that is not born-editable, and the
+   * Whether the creator's latest build (preview or delivered) ships an editor
+   * definition. Absent for every game that is not born-editable, and the
    * studio must render exactly as before for those.
    */
   editable?: boolean;

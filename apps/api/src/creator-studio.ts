@@ -65,10 +65,9 @@ export interface CreatorStudioGame {
   /** Whether the creator has turned on the shared link for this game's draft. */
   draftShared?: boolean;
   /**
-   * Whether this game's delivered version ships an editor definition
-   * (EDITOR.json) — the gate for the studio's Edit surface. Absent for every
-   * game that is not born-editable; the studio must render exactly as before
-   * for those.
+   * Whether the creator's latest build (preview or delivered) ships an editor
+   * definition. Absent for every game that is not born-editable; the studio
+   * must render exactly as before for those.
    */
   editable?: boolean;
   /**
@@ -229,18 +228,17 @@ export async function registerCreatorStudioRoutes(
       if (addressedGame && !shelf.includes(addressedGame)) shelf.push(addressedGame);
     }
 
-    // Which delivered versions ship an editor definition. One manifest read per
-    // game with a delivery, best-effort: a read that fails only costs the Edit
-    // pill until the next load, never the shelf.
+    // previewVersion first, deliveredVersion as fallback (same order as get_sources)
+    // — not gated on publish or the gate outcome, so mid-round iteration counts too.
+    // One manifest read per game, best-effort: a failed read only costs the Edit pill.
     const editableSlugs = new Set<string>();
     if (options.gamesStore) {
       await Promise.all(
         shelf
-          .filter(({ tip }) => tip.slug && tip.deliveredVersion)
+          .filter(({ tip }) => tip.slug && (tip.previewVersion || tip.deliveredVersion))
           .map(async ({ tip }) => {
-            const manifest = await options
-              .gamesStore!.getManifest(tip.slug as string, tip.deliveredVersion as string)
-              .catch(() => null);
+            const version = (tip.previewVersion ?? tip.deliveredVersion) as string;
+            const manifest = await options.gamesStore!.getManifest(tip.slug as string, version).catch(() => null);
             if (manifest?.sourceFiles.includes('EDITOR.json')) editableSlugs.add(tip.slug as string);
           }),
       );
