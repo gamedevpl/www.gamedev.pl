@@ -137,6 +137,31 @@ describe('CodeSurface', () => {
     expect(textarea.value).toContain('export const boot');
   });
 
+  it('uses a native file picker instead of a scrolling mobile rail', async () => {
+    mocked.fetchCodeSurfaceSources.mockResolvedValue(
+      sourcesFor({
+        files: [
+          { path: 'GAME.json', content: '{"engine":{"modules":[]}}' },
+          { path: 'src/main.ts', content: 'export const boot = () => {};' },
+        ],
+      }),
+    );
+
+    await render();
+
+    const picker = container.querySelector<HTMLSelectElement>('.code-surface-file-select');
+    expect(picker).not.toBeNull();
+    expect([...picker!.options].map((option) => option.value)).toEqual(['GAME.json', 'src/main.ts']);
+
+    await act(async () => {
+      picker!.value = 'src/main.ts';
+      picker!.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    expect(container.querySelector('textarea')!.value).toContain('export const boot');
+    expect(container.querySelector('.code-surface-rail-item.is-active')?.textContent).toContain('src/main.ts');
+  });
+
   it('autosaves an edit into the working copy, marks the rail dirty, and schedules a preview rebuild', async () => {
     mocked.fetchCodeSurfaceSources.mockResolvedValue(sourcesFor());
     mocked.stageCodeSurfaceFile.mockResolvedValue({

@@ -11534,6 +11534,10 @@ button.builder-mode-selector:disabled {
   font-weight: 700;
 }
 
+.code-surface-file-picker {
+  display: none;
+}
+
 .code-surface-readonly-banner {
   margin-left: auto;
   font-size: 0.78rem;
@@ -11853,28 +11857,34 @@ button.builder-mode-selector:disabled {
 @media (max-width: 1099px) {
   .code-surface-body {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .code-surface-file-picker {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: none;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--panel-border);
+    color: var(--muted);
+    font-size: 0.76rem;
+    font-weight: 600;
+  }
+
+  .code-surface-file-select {
+    min-width: 0;
+    flex: 1;
+    border: 1px solid var(--panel-border);
+    border-radius: 7px;
+    background: var(--panel-card);
+    color: var(--text);
+    padding: 7px 9px;
+    font: inherit;
   }
 
   .code-surface-rail {
-    flex-direction: row;
-    overflow-x: auto;
-    border-right: 0;
-    border-bottom: 1px solid var(--panel-border);
-    scroll-snap-type: x proximity;
-  }
-
-  /* Row mode has no bounded width like the desktop rail's own column, so without a
-     cap the ellipsis rule on .code-surface-rail-path never triggers — a handful of
-     `game/`-prefixed files spell out the whole row and the active one scrolls off. */
-  .code-surface-rail-item {
-    flex: 0 0 auto;
-    max-width: 40vw;
-    scroll-snap-align: start;
-  }
-
-  .code-surface-rail-locked {
-    flex: none;
+    display: none;
   }
 }
 

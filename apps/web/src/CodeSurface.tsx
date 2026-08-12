@@ -643,6 +643,22 @@ export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
         ) : null}
       </header>
 
+      <label className="code-surface-file-picker">
+        <span>{t('studioPanel.code.filePicker')}</span>
+        <select
+          className="code-surface-file-select"
+          value={selected ?? ''}
+          disabled={sources.files.length === 0}
+          onChange={(event) => selectFile(event.currentTarget.value)}
+        >
+          {sources.files.map((entry) => (
+            <option key={entry.path} value={entry.path}>
+              {entry.path}
+            </option>
+          ))}
+        </select>
+      </label>
+
       <div className="code-surface-body">
         <nav className="code-surface-rail" aria-label={t('studioPanel.tabs.code')} ref={railRef}>
           {sources.files.map((entry) => (
