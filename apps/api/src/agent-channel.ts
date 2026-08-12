@@ -2004,7 +2004,7 @@ export async function registerAgentChannelRoutes(
         return reply.send({ accepted: false, rejected: 'stopped', ...(await channelState(issueNumber, record)) });
       }
 
-      // Submit marks the round ended optimistically; only a prior `end` is a retry.
+      // Submit can mark a round ended; `end` still carries the summary.
       const summarized = record.agentEndedBy === 'end' ? false : await recordSummary();
       await store!.markAgentEnded(issueNumber);
       options.onEvent?.(issueNumber);
