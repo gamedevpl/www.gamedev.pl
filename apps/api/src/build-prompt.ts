@@ -139,6 +139,7 @@ function channelDelivery(brief: BuildBrief, fast: boolean, creating: boolean): s
             'Use the returned slug and jobId; then call `start({ slug })` for that new game.',
           ]
         : [
+            // channelToken, not mcpOpenerToken: verifyAgentToken checks this key, not verifyManagedMcpOpener.
             `Call \`start\` with exactly \`{ "slug": "${brief.slug ?? '(slug)'}", "key": "${brief.channelToken}" }\`, then call \`get_brief\`, \`get_seed\` and \`get_kit\`.`,
           ]),
       'Copy the exact sessionKey from `start` into every later MCP call.',
