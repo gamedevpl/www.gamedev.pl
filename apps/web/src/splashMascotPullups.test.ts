@@ -55,4 +55,10 @@ describe('the splash mascot does idle pull-ups', () => {
     const reduced = css.slice(css.indexOf('@media (prefers-reduced-motion: reduce)'));
     expect(reduced).toMatch(/\.mascot-interactive--pullups/);
   });
+
+  it('does not let the stage steal the Again click', () => {
+    const src = read('SplashMascotGame.tsx');
+    expect(src).toMatch(/if \(phase !== 'playing'\) return;/);
+    expect(src).toMatch(/onPointerDown=\{\(event\) => event\.stopPropagation\(\)\}/);
+  });
 });

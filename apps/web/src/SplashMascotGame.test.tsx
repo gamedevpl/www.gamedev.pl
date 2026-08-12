@@ -112,4 +112,57 @@ describe('SplashMascotGame', () => {
 
     await act(async () => root.unmount());
   });
+
+  it('lets Again start a new round after three misses', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    vi.useFakeTimers();
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    let now = 0;
+    vi.spyOn(performance, 'now').mockImplementation(() => now);
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+      return setTimeout(() => {
+        now += 16;
+        cb(now);
+      }, 16) as unknown as number;
+    });
+    vi.stubGlobal('cancelAnimationFrame', (id: number) => {
+      clearTimeout(id);
+    });
+
+    await i18n.changeLanguage('en');
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SplashMascotGame, { pokeLabel: 'Poke' }));
+      await flushEffects();
+    });
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.splash-game__play')?.click();
+      await flushEffects();
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(20_000);
+      await flushEffects();
+    });
+
+    expect(container.querySelector('.splash-game--over')).not.toBeNull();
+    const again = container.querySelector<HTMLButtonElement>('.splash-game__again');
+    expect(again).not.toBeNull();
+
+    await act(async () => {
+      again!.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+      again!.click();
+      await flushEffects();
+    });
+
+    expect(container.querySelector('.splash-game--playing')).not.toBeNull();
+    expect(container.querySelector('.splash-game--over')).toBeNull();
+    expect(container.querySelector('.splash-game__score')?.textContent).toMatch(/score 0/i);
+
+    await act(async () => root.unmount());
+  });
 });

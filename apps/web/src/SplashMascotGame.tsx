@@ -169,6 +169,7 @@ export function SplashMascotGame({ pokeLabel }: { pokeLabel: string }) {
         role="group"
         aria-label={t('betaSplash.game.region')}
         onPointerDown={(event) => {
+          if (phase !== 'playing') return;
           event.currentTarget.setPointerCapture(event.pointerId);
           aim(event);
         }}
@@ -193,7 +194,12 @@ export function SplashMascotGame({ pokeLabel }: { pokeLabel: string }) {
         {phase === 'over' ? (
           <div className="splash-game__over">
             <p className="splash-game__over-copy">{t('betaSplash.game.over', { count: view.score })}</p>
-            <button type="button" className="splash-game__again" onClick={startGame}>
+            <button
+              type="button"
+              className="splash-game__again"
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={startGame}
+            >
               {t('betaSplash.game.again')}
             </button>
           </div>
