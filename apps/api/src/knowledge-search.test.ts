@@ -113,6 +113,55 @@ describe('queryKnowledge — mode=answer', () => {
     expect((init.headers as Record<string, string>)['x-goog-user-project']).toBe('gamedevpl');
     expect((init.headers as Record<string, string>).authorization).toBe('Bearer test-token');
   });
+
+  it('dedupes references that cite the same chunk more than once', async () => {
+    const oneRef = answerBody('The party module handles same-screen multiplayer.');
+    const body = {
+      answer: {
+        ...oneRef.answer,
+        // One chunk cited twice, as answer synthesis does for multi-sentence support.
+        references: [...oneRef.answer.references, ...oneRef.answer.references],
+      },
+    };
+    const fetchImpl = vi.fn(async () => jsonResponse(body));
+    const queryKnowledge = testClient({ engineId: 'gamedevpl-knowledge', fetchImpl });
+
+    const result = await queryKnowledge({ query: 'how do parties work', mode: 'answer' });
+
+    expect(result.chunks).toHaveLength(1);
+    expect(result.repoPaths).toEqual(['kits/current/shared/modules/party.d.ts']);
+  });
+
+  it('keeps distinct chunks from the same file when their content differs', async () => {
+    const base = answerBody('one');
+    const other = answerBody('two');
+    other.answer.references[0].chunkInfo.content = 'export interface PartyApi { leave(): void; }';
+    const body = {
+      answer: { ...base.answer, references: [...base.answer.references, ...other.answer.references] },
+    };
+    const fetchImpl = vi.fn(async () => jsonResponse(body));
+    const queryKnowledge = testClient({ engineId: 'gamedevpl-knowledge', fetchImpl });
+
+    const result = await queryKnowledge({ query: 'how do parties work', mode: 'answer' });
+
+    expect(result.chunks).toHaveLength(2);
+  });
+
+  it('does not collide two distinct (repoPath, content) pairs that share a delimiter', async () => {
+    const one = answerBody('one', { repoPath: 'a b' });
+    one.answer.references[0].chunkInfo.content = 'c';
+    const two = answerBody('two', { repoPath: 'a' });
+    two.answer.references[0].chunkInfo.content = 'b c';
+    const body = {
+      answer: { ...one.answer, references: [...one.answer.references, ...two.answer.references] },
+    };
+    const fetchImpl = vi.fn(async () => jsonResponse(body));
+    const queryKnowledge = testClient({ engineId: 'gamedevpl-knowledge', fetchImpl });
+
+    const result = await queryKnowledge({ query: 'how do parties work', mode: 'answer' });
+
+    expect(result.chunks).toHaveLength(2);
+  });
 });
 
 describe('queryKnowledge — mode=chunks', () => {
@@ -126,6 +175,17 @@ describe('queryKnowledge — mode=chunks', () => {
     expect(result.answer).toBeUndefined();
     expect(result.chunks).toHaveLength(3);
     expect(result.repoPaths).toHaveLength(3);
+  });
+
+  it('dedupes search results that return the same chunk twice', async () => {
+    const body = searchBody(1);
+    body.results.push(body.results[0]);
+    const fetchImpl = vi.fn(async () => jsonResponse(body));
+    const queryKnowledge = testClient({ engineId: 'gamedevpl-knowledge', fetchImpl });
+
+    const result = await queryKnowledge({ query: 'party module', mode: 'chunks' });
+
+    expect(result.chunks).toHaveLength(1);
   });
 
   it('applies the scope filter to the search request body', async () => {

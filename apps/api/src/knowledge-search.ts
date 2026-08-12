@@ -150,11 +150,17 @@ function sourceCommitOf(structData: Record<string, unknown>): string | undefined
   return asString(structData.sourceCommit) ?? asString(structData.kitVersion);
 }
 
+// Dupe only if repoPath and snippet content both match exactly.
+function dedupeChunkKey(repoPath: string, content: string): string {
+  return JSON.stringify([repoPath, content]);
+}
+
 // UNVERIFIED against a live call: parsing tolerates several plausible :search shapes.
 function extractChunksFromSearchResponse(json: unknown): ExtractedSource {
   const results = isObject(json) && Array.isArray(json.results) ? json.results : [];
   const chunks: KnowledgeChunk[] = [];
   const repoPaths = new Set<string>();
+  const seen = new Set<string>();
   let indexedCommit: string | undefined;
 
   for (const raw of results) {
@@ -168,6 +174,9 @@ function extractChunksFromSearchResponse(json: unknown): ExtractedSource {
     const sourceCommit = sourceCommitOf(structData);
     if (sourceCommit && !indexedCommit) indexedCommit = sourceCommit;
     if (repoPath) repoPaths.add(repoPath);
+    const key = dedupeChunkKey(repoPath ?? 'unknown', content);
+    if (seen.has(key)) continue;
+    seen.add(key);
     chunks.push({ repoPath: repoPath ?? 'unknown', ...(corpus ? { corpus } : {}), snippet: content });
   }
 
@@ -183,6 +192,7 @@ function extractFromAnswerResponse(json: unknown): ExtractedSource & { answerTex
 
   const chunks: KnowledgeChunk[] = [];
   const repoPaths = new Set<string>();
+  const seen = new Set<string>();
   let indexedCommit: string | undefined;
 
   for (const ref of references) {
@@ -198,7 +208,12 @@ function extractFromAnswerResponse(json: unknown): ExtractedSource & { answerTex
     const sourceCommit = sourceCommitOf(structData);
     if (sourceCommit && !indexedCommit) indexedCommit = sourceCommit;
     if (repoPath) repoPaths.add(repoPath);
-    if (content) chunks.push({ repoPath: repoPath ?? 'unknown', snippet: content });
+    if (!content) continue;
+    // Answer synthesis cites one chunk per supported sentence, so refs repeat chunks.
+    const key = dedupeChunkKey(repoPath ?? 'unknown', content);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    chunks.push({ repoPath: repoPath ?? 'unknown', snippet: content });
   }
 
   return { answerText, state, chunks, repoPaths: [...repoPaths], indexedCommit };
