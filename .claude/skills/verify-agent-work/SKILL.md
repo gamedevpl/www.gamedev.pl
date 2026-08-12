@@ -189,6 +189,16 @@ Two concrete instances of that (observed 2026-07-23):
   deserves the same scrutiny as the source change. For agent-facing surfaces
   specifically, check that any replacement error still tells the agent what to do next;
   a status code is not an instruction.
+- **Two writers of one knob, tested in isolation, is not a composition test.** Observed
+  (games-repo gfx scale, 2026-08-12, [www.gamedev.pl-games#692](https://github.com/gamedevpl/www.gamedev.pl-games/pull/692)):
+  a frame governor stepped the backing-store scale down when fill was slow, and a
+  viewport watcher re-derived that same scale from the CSS box on `resize` /
+  `orientationchange`. Each path had tests; neither test fired the other. Live, a 1px
+  viewport change after a successful step-down restored the high scale, and a session
+  latch then froze it there — the iOS URL-bar / virtual-keyboard path. When two
+  functions write the same piece of state, the sequence (A then B then A) is the test,
+  not A and B separately. A latch that means “stop trying” is only safe if nothing else
+  can raise the value underneath it.
 
 ## Read the diff against the spec
 
