@@ -1392,12 +1392,18 @@ describe('submission routes', () => {
 
   it('does not commit the requested builder when its dispatch fails', async () => {
     const { githubClient } = createGithubClientStub({ issueNumber: 77 });
+    let activeStore: Store | undefined;
+    let builderAtHandoff: string | undefined;
     const backend: AgentBackend = {
       name: 'stub',
-      dispatch: async () => {
+      dispatch: async (brief) => {
+        const record = await activeStore?.getSubmission(brief.issueNumber);
+        if (brief.feedback) builderAtHandoff = record?.builder;
         throw new Error('vendor rejected the session');
       },
-      resume: async () => {
+      resume: async (brief) => {
+        const record = await activeStore?.getSubmission(brief.issueNumber);
+        if (brief.feedback) builderAtHandoff = record?.builder;
         throw new Error('vendor rejected the session');
       },
       observe: async () => null,
@@ -1408,6 +1414,7 @@ describe('submission routes', () => {
       agentBackend: backend,
       submissionTokenSecret: secret,
     });
+    activeStore = store;
 
     await app.inject({
       method: 'POST',
@@ -1439,6 +1446,7 @@ describe('submission routes', () => {
     expect(handoff.statusCode).toBe(200);
     expect(handoff.json()).toMatchObject({ ok: true, roundStarted: false });
 
+    expect(builderAtHandoff).toBe('platform');
     const after = await store.getSubmission(job.issueNumber);
     expect(after?.builder).toBe('self');
     expect(after?.dispatch?.refs.at(-1)).toBe('self:77');
