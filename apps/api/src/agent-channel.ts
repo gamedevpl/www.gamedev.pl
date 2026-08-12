@@ -2004,8 +2004,8 @@ export async function registerAgentChannelRoutes(
         return reply.send({ accepted: false, rejected: 'stopped', ...(await channelState(issueNumber, record)) });
       }
 
-      // Already ended: skip the summary so a retried `end` cannot duplicate it.
-      const summarized = record.agentEndedAt ? false : await recordSummary();
+      // Submit marks the round ended optimistically; only a prior `end` is a retry.
+      const summarized = record.agentEndedBy === 'end' ? false : await recordSummary();
       await store!.markAgentEnded(issueNumber);
       options.onEvent?.(issueNumber);
       const fresh = (await store!.getSubmission(issueNumber)) ?? record;
