@@ -42,11 +42,25 @@ describe('buildPrompt delivery contract', () => {
     expect(prompt).not.toContain('GAMEDEVPL_BUILD_TOKEN');
   });
 
-  it('falls back to a visible placeholder rather than the literal string "undefined" when no opener token was minted', () => {
+  it('refuses to build an MCP-lane prompt with no opener token, instead of dispatching a round that cannot possibly start()', () => {
+    // A missing opener means the caller composed the brief wrong — the MCP lane always
+    // mints one before dispatch. Throwing here costs nothing; embedding a placeholder for
+    // the agent to notice would cost a live, clocked round that can only fail anyway.
     const { mcpOpenerToken: _drop, ...withoutOpener } = BRIEF;
-    const prompt = buildPrompt(withoutOpener, { kind: 'channel', fast: true });
-    expect(prompt).toContain('"key": "(no opener token)"');
-    expect(prompt).not.toContain('"key": "undefined"');
+    expect(() => buildPrompt(withoutOpener, { kind: 'channel', fast: true })).toThrow(/mcpOpenerToken/);
+  });
+
+  it('does not need an opener token for the create_game round, which authenticates by bearer alone', () => {
+    const { mcpOpenerToken: _drop, ...withoutOpener } = BRIEF;
+    const prompt = buildPrompt(
+      {
+        ...withoutOpener,
+        slug: undefined,
+        createGame: { title: 'Star Parcel Run', concept: 'Guide a courier ship across a bright sky.' },
+      },
+      { kind: 'channel', fast: true },
+    );
+    expect(prompt).toContain('Call `create_game` first');
   });
 
   it('opens a creation round through create_game before start', () => {

@@ -17,6 +17,10 @@ function brief(overrides: Partial<BuildBrief> = {}): BuildBrief {
     slug: SLUG,
     spec: 'Deliver parcels between comets while dodging debris.',
     channelToken: 'token',
+    // Every fixture carries one so an MCP-lane dispatch never hits buildPrompt's
+    // missing-opener guard by fixture omission — the field is inert for the harness
+    // and outputs lanes, which never read it.
+    mcpOpenerToken: 'opener_xyz',
     apiBaseUrl: 'https://example.test',
     ...overrides,
   };
