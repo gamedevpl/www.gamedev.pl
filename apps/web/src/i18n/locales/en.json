@@ -313,9 +313,12 @@
     },
     "code": {
       "back": "Thread",
+      "filePicker": "Choose file",
+      "filePickerClose": "Close file list",
       "loading": "Loading your game's sources…",
       "loadError": "Sources could not be loaded right now.",
       "agentRound": "An agent is actively building — read only until it finishes",
+      "agentRoundCompact": "Read only",
       "stagedBy": "changed · {{who}}",
       "lockedHint": "Read-only — GameKit and the tooling are shared, never edited here",
       "noFiles": "Nothing to show yet",

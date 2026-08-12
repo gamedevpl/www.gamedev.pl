@@ -30,4 +30,31 @@ describe('the Code surface Publish button', () => {
   it('no longer ships a separate Stage-it primary CTA — preview rebuilds on autosave', () => {
     expect(css).not.toMatch(/\.code-surface-stage-it/);
   });
+
+  it('keeps Code navigation beside the global escape', () => {
+    expect(ruleFor('.code-surface-head')).toMatch(/padding:\s*10px 14px/);
+    expect(ruleFor('.studio-stage-layout:has(.studio-code-overlay) .code-surface-head')).toMatch(
+      /padding-left:\s*180px/,
+    );
+    expect(ruleFor('.studio-stage-layout:has(.studio-code-overlay) .studio-fullbleed')).toMatch(/top:\s*10px/);
+  });
+
+  it('gives the global escape its own row below desktop widths', () => {
+    expect(css).toMatch(
+      /@media \(max-width: 1099px\)[\s\S]*?\.studio-stage-layout:has\(\.studio-code-overlay\) \.code-surface-head \{\s*padding: 52px 14px 10px;/,
+    );
+    expect(css).toMatch(/\.code-surface-readonly-banner-compact \{\s*display: none;/);
+    expect(css).toMatch(
+      /@media \(max-width: 1099px\)[\s\S]*?\.code-surface-readonly-banner-full \{\s*display: none;[\s\S]*?\.code-surface-readonly-banner-compact \{\s*display: inline;/,
+    );
+  });
+
+  it('keeps mobile file navigation on demand instead of rendering a tab rail', () => {
+    expect(css).not.toMatch(/\.code-surface-file-select/);
+    expect(css).toMatch(/\.code-surface-file-trigger-path[\s\S]*?text-overflow:\s*ellipsis/);
+    expect(css).toMatch(
+      /@media \(max-width: 1099px\)[\s\S]*?\.code-surface-file-backdrop \{\s*position: absolute;[\s\S]*?\.code-surface-file-sheet \{\s*position: relative;/,
+    );
+    expect(css).toMatch(/\.code-surface-file-option \{[\s\S]*?min-height: 44px/);
+  });
 });

@@ -315,9 +315,12 @@
     },
     "code": {
       "back": "Wątek",
+      "filePicker": "Wybierz plik",
+      "filePickerClose": "Zamknij listę plików",
       "loading": "Wczytywanie plików źródłowych…",
       "loadError": "Nie udało się teraz wczytać plików źródłowych.",
       "agentRound": "Agent aktywnie pracuje — tylko do odczytu, dopóki nie skończy",
+      "agentRoundCompact": "Tylko odczyt",
       "stagedBy": "zmienione · {{who}}",
       "lockedHint": "Tylko do odczytu — GameKit i narzędzia są wspólne, nie edytuje się ich tutaj",
       "noFiles": "Nie ma jeszcze nic do pokazania",
