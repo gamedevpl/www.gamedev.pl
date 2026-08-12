@@ -1,6 +1,13 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PixelIcon } from './PixelIcon.js';
+import {
+  clampSheetDragHeight,
+  nextSheetDetent,
+  snapSheetDetent,
+  type SheetDetent,
+  SHEET_DRAG_CLICK_SLOP_PX,
+} from './studioChatSheet.js';
 
 /**
  * B3/B4: a glass shell around the embedded `SubmissionStatusView` thread — the chat
@@ -9,7 +16,7 @@ import { PixelIcon } from './PixelIcon.js';
  */
 
 const SHEET_MAX_WIDTH = 800;
-export type SheetDetent = 'peek' | 'half' | 'full';
+export type { SheetDetent };
 
 export type StudioChatRailProps = {
   title: string;
@@ -17,7 +24,6 @@ export type StudioChatRailProps = {
   covered?: boolean;
   onOpenChange: (open: boolean) => void;
   unreadCount: number;
-  standaloneHref?: string;
   latestEntryLabel?: string | null;
   /** Whether the transcript body is actually visible right now — `open` alone is true
    * even at the phone sheet's `peek` detent, where the body is hidden behind a one-line
@@ -33,7 +39,6 @@ export function StudioChatRail({
   covered = false,
   onOpenChange,
   unreadCount,
-  standaloneHref,
   latestEntryLabel,
   onVisiblyOpenChange,
   children,
@@ -41,8 +46,12 @@ export function StudioChatRail({
   const { t } = useTranslation();
   const [isSheet, setIsSheet] = useState(false);
   const [detent, setDetent] = useState<SheetDetent>('half');
+  const [dragHeight, setDragHeight] = useState<number | null>(null);
   const asideRef = useRef<HTMLElement | null>(null);
+  const dragRef = useRef<{ pointerId: number; startY: number; startH: number; moved: boolean } | null>(null);
+  const ignoreGrabClickRef = useRef(false);
   const visible = open && !covered;
+  const peeking = isSheet && detent === 'peek' && dragHeight == null;
 
   // A collapsed rail stays mounted but is clipped to 1px via CSS, not
   // display:none — `aria-hidden` alone does not remove its buttons/textarea from the
@@ -71,9 +80,10 @@ export function StudioChatRail({
     if (open && isSheet) setDetent((current) => (current === 'peek' ? 'half' : current));
   }, [open, isSheet]);
 
-  const visiblyOpen = visible && !(isSheet && detent === 'peek');
-  const popOutLabel = t('studioPanel.rail.popOut', { defaultValue: 'Open as page' });
+  const visiblyOpen = visible && !peeking;
   const closeLabel = t('studioPanel.rail.closeThread', { defaultValue: 'Close chat' });
+  const expandLabel = t('studioPanel.rail.fullScreen', { defaultValue: 'Full screen' });
+  const exitFullLabel = t('studioPanel.rail.exitFullScreen', { defaultValue: 'Exit full screen' });
   useEffect(() => {
     onVisiblyOpenChange?.(visiblyOpen);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -115,14 +125,62 @@ export function StudioChatRail({
     };
   }, []);
 
-  const detentClass = isSheet ? ` is-sheet is-${detent}` : '';
+  const onGrabPointerDown = (event: PointerEvent<HTMLButtonElement>) => {
+    if (!isSheet || event.button !== 0) return;
+    const rail = asideRef.current;
+    if (!rail) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    dragRef.current = {
+      pointerId: event.pointerId,
+      startY: event.clientY,
+      startH: rail.getBoundingClientRect().height,
+      moved: false,
+    };
+  };
+
+  const onGrabPointerMove = (event: PointerEvent<HTMLButtonElement>) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const dy = drag.startY - event.clientY;
+    if (!drag.moved && Math.abs(dy) < SHEET_DRAG_CLICK_SLOP_PX) return;
+    drag.moved = true;
+    setDragHeight(clampSheetDragHeight(drag.startH + dy, window.innerHeight));
+  };
+
+  const endGrab = (event: PointerEvent<HTMLButtonElement>) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    dragRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    if (!drag.moved) return;
+    ignoreGrabClickRef.current = true;
+    const height = dragHeight ?? asideRef.current?.getBoundingClientRect().height ?? drag.startH;
+    setDetent(snapSheetDetent(height, window.innerHeight));
+    setDragHeight(null);
+  };
+
+  const onGrabClick = () => {
+    if (ignoreGrabClickRef.current) {
+      ignoreGrabClickRef.current = false;
+      return;
+    }
+    setDetent(nextSheetDetent(detent));
+  };
+
+  const dragging = dragHeight != null;
+  const detentClass = isSheet ? ` is-sheet is-${detent}${dragging ? ' is-dragging' : ''}` : '';
+  const sheetStyle = dragging
+    ? ({ '--studio-chat-rail-drag-height': `${dragHeight}px` } as CSSProperties)
+    : undefined;
 
   // The thread stays mounted whether collapsed, peeking, or fully open — a collapse
   // must never unmount `SubmissionStatusView` (its poll and unsent composer text would
   // be lost). The aside + children remain present and are hidden via CSS.
   return (
     <>
-      {visible && isSheet && detent !== 'peek' ? (
+      {visible && isSheet && !peeking ? (
         <div
           className="modal-backdrop studio-chat-rail-backdrop"
           role="presentation"
@@ -132,39 +190,42 @@ export function StudioChatRail({
       <aside
         ref={asideRef}
         className={`studio-chat-rail${detentClass}${visible ? '' : ' is-collapsed'}`}
+        style={sheetStyle}
         aria-label={title}
         aria-hidden={visible ? undefined : true}
-        {...(visible && isSheet && detent !== 'peek' ? { role: 'dialog', 'aria-modal': true } : {})}
+        {...(visible && isSheet && !peeking ? { role: 'dialog', 'aria-modal': true } : {})}
       >
+        {open && isSheet ? (
+          <button
+            type="button"
+            className="studio-chat-rail-grab"
+            onPointerDown={onGrabPointerDown}
+            onPointerMove={onGrabPointerMove}
+            onPointerUp={endGrab}
+            onPointerCancel={endGrab}
+            onClick={onGrabClick}
+            aria-label={
+              detent === 'full'
+                ? t('studioPanel.rail.collapse', { defaultValue: 'Collapse' })
+                : t('studioPanel.rail.expand', { defaultValue: 'Expand' })
+            }
+          >
+            <span className="studio-chat-rail-grab-bar" aria-hidden="true" />
+          </button>
+        ) : null}
         <div className="studio-chat-rail-head">
-          {open && isSheet ? (
-            <button
-              type="button"
-              className="studio-chat-rail-grab"
-              // Cycles peek -> half -> full -> peek — the only way to reach `full`
-              // (and its `.is-full` CSS) short of a drag gesture this sheet doesn't
-              // implement.
-              onClick={() => setDetent(detent === 'peek' ? 'half' : detent === 'half' ? 'full' : 'peek')}
-              aria-label={
-                detent === 'full'
-                  ? t('studioPanel.rail.collapse', { defaultValue: 'Collapse' })
-                  : t('studioPanel.rail.expand', { defaultValue: 'Expand' })
-              }
-            >
-              <span className="studio-chat-rail-grab-bar" aria-hidden="true" />
-            </button>
-          ) : null}
           <h3 className="studio-chat-rail-title">{title}</h3>
           <div className="studio-chat-rail-head-actions">
-            {standaloneHref ? (
-              <a
-                className="studio-chat-rail-head-action studio-chat-rail-popout"
-                href={standaloneHref}
-                aria-label={popOutLabel}
-                data-tooltip={popOutLabel}
+            {open && isSheet ? (
+              <button
+                type="button"
+                className="studio-chat-rail-head-action studio-chat-rail-expand"
+                onClick={() => setDetent(detent === 'full' ? 'half' : 'full')}
+                aria-label={detent === 'full' ? exitFullLabel : expandLabel}
+                data-tooltip={detent === 'full' ? exitFullLabel : expandLabel}
               >
-                <PixelIcon name="expand" size={14} />
-              </a>
+                <PixelIcon name={detent === 'full' ? 'collapse' : 'expand'} size={14} />
+              </button>
             ) : null}
             <button
               type="button"
@@ -178,7 +239,7 @@ export function StudioChatRail({
           </div>
         </div>
 
-        {open && isSheet && detent === 'peek' ? (
+        {open && isSheet && peeking ? (
           <button type="button" className="studio-chat-rail-peek" onClick={() => setDetent('half')}>
             <span className="studio-chat-rail-peek-line">
               {latestEntryLabel ?? t('studioPanel.rail.peekEmpty', { defaultValue: 'No updates yet' })}
@@ -188,7 +249,7 @@ export function StudioChatRail({
             ) : null}
           </button>
         ) : null}
-        <div className="studio-chat-rail-body" hidden={open && isSheet && detent === 'peek'}>
+        <div className="studio-chat-rail-body" hidden={open && isSheet && peeking}>
           {children}
         </div>
       </aside>

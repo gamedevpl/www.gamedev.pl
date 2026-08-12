@@ -6865,6 +6865,12 @@ button.builder-mode-selector:disabled {
   margin: 4px 0 0;
   font-size: 0.74rem;
 }
+/* Phone chat sheet is z-index 1100; the default .modal-backdrop (1000) would
+   open this picker behind the composer that launched it. */
+.builder-choice-modal-backdrop {
+  z-index: 1300;
+}
+
 .builder-choice-modal {
   background: var(--panel);
   border: 1px solid var(--panel-border);
@@ -12043,6 +12049,7 @@ button.builder-mode-selector:disabled {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  touch-action: pan-y;
 }
 
 .studio-chat-rail-body .studio-thread {
@@ -12053,6 +12060,16 @@ button.builder-mode-selector:disabled {
   max-width: none;
   margin: 0;
   padding: 8px 12px 12px;
+}
+
+.studio-chat-rail-body .studio-thread-scroll {
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+}
+
+.studio-chat-rail .studio-thread-scroll-pad {
+  pointer-events: auto;
 }
 
 .studio-chat-rail-grab {
@@ -12109,6 +12126,7 @@ button.builder-mode-selector:disabled {
     max-height: 85vh;
     border-radius: 16px 16px 0 0;
     animation: fadeIn 0.2s ease;
+    transition: height 180ms ease;
   }
 
   /* Install / update banners pin to the bottom edge too — lift the sheet above them
@@ -12119,13 +12137,25 @@ button.builder-mode-selector:disabled {
     bottom: var(--studio-chat-rail-overlay-lift, 5.5rem);
   }
 
+  .studio-chat-rail.is-sheet .studio-chat-rail-head {
+    padding-top: 4px;
+  }
+
   .studio-chat-rail.is-sheet .studio-chat-rail-grab {
     display: flex;
     justify-content: center;
-    padding: 8px 0 0;
+    align-items: center;
+    width: 100%;
+    min-height: 28px;
+    padding: 10px 0 2px;
     border: 0;
     background: transparent;
-    cursor: pointer;
+    cursor: grab;
+    touch-action: none;
+  }
+
+  .studio-chat-rail.is-sheet.is-dragging .studio-chat-rail-grab {
+    cursor: grabbing;
   }
 
   .studio-chat-rail.is-sheet .studio-chat-rail-grab-bar {
@@ -12145,6 +12175,13 @@ button.builder-mode-selector:disabled {
 
   .studio-chat-rail.is-full {
     height: 88vh;
+    max-height: none;
+  }
+
+  .studio-chat-rail.is-sheet.is-dragging {
+    height: var(--studio-chat-rail-drag-height);
+    max-height: none;
+    transition: none;
   }
 }
 

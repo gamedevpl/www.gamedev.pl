@@ -425,8 +425,8 @@
       "chat": "Czat",
       "collapse": "Zwiń",
       "expand": "Rozwiń",
-      "popOut": "Otwórz jako stronę",
-      "closeThread": "Zamknij czat",
+      "fullScreen": "Pełny ekran",
+      "exitFullScreen": "Zamknij pełny ekran",
       "peekEmpty": "Brak nowości"
     },
     "share": {

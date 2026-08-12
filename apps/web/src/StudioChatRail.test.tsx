@@ -6,13 +6,23 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import i18n from './i18n/index.js';
 import { StudioChatRail } from './StudioChatRail.js';
 
+function mockSheetMedia(matches: boolean) {
+  window.matchMedia = vi.fn().mockReturnValue({
+    matches,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  });
+}
+
 describe('StudioChatRail', () => {
   afterEach(() => {
     document.body.innerHTML = '';
+    vi.restoreAllMocks();
   });
 
-  it('separates and names both icon actions', async () => {
+  it('names the close action on desktop without a no-op pop-out link', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    mockSheetMedia(false);
     await i18n.changeLanguage('en');
     const onOpenChange = vi.fn();
     const host = document.createElement('div');
@@ -21,24 +31,16 @@ describe('StudioChatRail', () => {
 
     await act(async () => {
       root.render(
-        <StudioChatRail
-          title="Sky Dodge"
-          open
-          onOpenChange={onOpenChange}
-          unreadCount={0}
-          standaloneHref="/status/sky-dodge"
-        >
+        <StudioChatRail title="Sky Dodge" open onOpenChange={onOpenChange} unreadCount={0}>
           <p>Thread</p>
         </StudioChatRail>,
       );
     });
 
-    const popout = host.querySelector<HTMLAnchorElement>('.studio-chat-rail-popout');
     const close = host.querySelector<HTMLButtonElement>('.studio-chat-rail-close');
-    expect(host.querySelectorAll('.studio-chat-rail-head-action')).toHaveLength(2);
-    expect(popout?.getAttribute('aria-label')).toBe('Open as page');
-    expect(popout?.dataset.tooltip).toBe('Open as page');
-    expect(popout?.querySelector('svg')?.getAttribute('width')).toBe('14');
+    expect(host.querySelector('.studio-chat-rail-popout')).toBeNull();
+    expect(host.querySelector('.studio-chat-rail-expand')).toBeNull();
+    expect(host.querySelectorAll('.studio-chat-rail-head-action')).toHaveLength(1);
     expect(close?.getAttribute('aria-label')).toBe('Close chat');
     expect(close?.dataset.tooltip).toBe('Close chat');
     expect(close?.querySelector('svg')?.getAttribute('width')).toBe('14');
@@ -53,11 +55,7 @@ describe('StudioChatRail', () => {
 
   it('keeps a phone peek detent while another pane temporarily covers chat', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-    window.matchMedia = vi.fn().mockReturnValue({
-      matches: true,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-    });
+    mockSheetMedia(true);
     const host = document.createElement('div');
     document.body.appendChild(host);
     const root = createRoot(host);
@@ -81,6 +79,91 @@ describe('StudioChatRail', () => {
     expect(host.querySelector('.studio-chat-rail')?.classList.contains('is-collapsed')).toBe(true);
     await act(async () => render(false));
     expect(host.querySelector('.studio-chat-rail')?.classList.contains('is-peek')).toBe(true);
+
+    await act(async () => root.unmount());
+  });
+
+  it('expands the phone sheet to full screen from the header control', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    mockSheetMedia(true);
+    await i18n.changeLanguage('en');
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        <StudioChatRail title="Sky Dodge" open onOpenChange={vi.fn()} unreadCount={0}>
+          <p>Thread</p>
+        </StudioChatRail>,
+      );
+    });
+
+    const rail = host.querySelector('.studio-chat-rail');
+    const expand = host.querySelector<HTMLButtonElement>('.studio-chat-rail-expand');
+    expect(rail?.classList.contains('is-half')).toBe(true);
+    expect(expand?.getAttribute('aria-label')).toBe('Full screen');
+    expect(host.querySelector('.studio-chat-rail-popout')).toBeNull();
+
+    await act(async () => {
+      expand?.click();
+    });
+    expect(rail?.classList.contains('is-full')).toBe(true);
+    expect(expand?.getAttribute('aria-label')).toBe('Exit full screen');
+
+    await act(async () => {
+      expand?.click();
+    });
+    expect(rail?.classList.contains('is-half')).toBe(true);
+
+    await act(async () => root.unmount());
+  });
+
+  it('snaps a dragged grab handle to the nearest detent', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    mockSheetMedia(true);
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800 });
+    HTMLElement.prototype.setPointerCapture = vi.fn();
+    HTMLElement.prototype.releasePointerCapture = vi.fn();
+    HTMLElement.prototype.hasPointerCapture = vi.fn().mockReturnValue(true);
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        <StudioChatRail title="Sky Dodge" open onOpenChange={vi.fn()} unreadCount={0}>
+          <p>Thread</p>
+        </StudioChatRail>,
+      );
+    });
+
+    const rail = host.querySelector('.studio-chat-rail') as HTMLElement;
+    const grab = host.querySelector<HTMLButtonElement>('.studio-chat-rail-grab');
+    vi.spyOn(rail, 'getBoundingClientRect').mockReturnValue({
+      height: 384,
+      width: 390,
+      top: 416,
+      left: 0,
+      bottom: 800,
+      right: 390,
+      x: 0,
+      y: 416,
+      toJSON: () => ({}),
+    });
+
+    await act(async () => {
+      grab?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, clientY: 500, button: 0 }));
+      grab?.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, pointerId: 1, clientY: 180 }));
+    });
+    expect(rail.classList.contains('is-dragging')).toBe(true);
+
+    await act(async () => {
+      grab?.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 1, clientY: 180 }));
+    });
+    expect(rail.classList.contains('is-dragging')).toBe(false);
+    expect(rail.classList.contains('is-full')).toBe(true);
 
     await act(async () => root.unmount());
   });

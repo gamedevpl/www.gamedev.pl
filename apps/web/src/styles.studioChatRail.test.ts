@@ -27,4 +27,19 @@ describe('Studio chat rail header', () => {
       /\.studio-chat-rail-head-action:hover::after,\s*\.studio-chat-rail-head-action:focus-visible::after\s*{[^}]*opacity:\s*1[^}]*visibility:\s*visible/s,
     );
   });
+
+  it('gives the phone grab a full-width drag target', () => {
+    expect(css).toMatch(/\.studio-chat-rail\.is-sheet \.studio-chat-rail-grab\s*\{[^}]*width:\s*100%[^}]*touch-action:\s*none/s);
+    expect(css).toMatch(/\.studio-chat-rail\.is-sheet\.is-dragging\s*\{[^}]*--studio-chat-rail-drag-height/s);
+  });
+
+  it('keeps the builder choice modal above the phone chat sheet', () => {
+    expect(declarations('.builder-choice-modal-backdrop')).toMatch(/z-index:\s*1300/);
+    expect(css).toMatch(/\.studio-chat-rail\.is-sheet\s*\{[^}]*z-index:\s*1100/s);
+  });
+
+  it('lets the transcript take vertical pans inside the sheet', () => {
+    expect(declarations('.studio-chat-rail-body')).toMatch(/touch-action:\s*pan-y/);
+    expect(declarations('.studio-chat-rail-body .studio-thread-scroll')).toMatch(/touch-action:\s*pan-y/);
+  });
 });

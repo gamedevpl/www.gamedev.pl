@@ -975,7 +975,6 @@ export function CreatorStudioView({
                             }
                           }}
                           unreadCount={checklistUnread}
-                          standaloneHref={`/status/${encodeURIComponent(threadToken ?? activeGame.token)}`}
                           latestEntryLabel={latestActivityRef.current}
                           onVisiblyOpenChange={setRailVisiblyOpen}
                         >
