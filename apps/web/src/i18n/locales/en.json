@@ -903,11 +903,6 @@
       "yes": "Yes, abandon it",
       "no": "Keep building",
       "sending": "Abandoning…",
-      "stopStart": "Stop build",
-      "stopCompact": "Stop",
-      "stopConfirm": "Stop this build? Work so far will be discarded.",
-      "stopYes": "Stop build",
-      "stopSending": "Stopping…",
       "error": "We couldn't abandon this build right now. Please try again in a moment."
     },
     "playableHint": "An early build, straight from the workshop — rough, unfinished, and already playable. Tell them what to change while it is easy."

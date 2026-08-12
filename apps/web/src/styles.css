@@ -6058,36 +6058,6 @@ a.user-name--profile:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
-/* Quiet stop control on the thread bar — same two-step abandon, sized for the row. */
-.studio-context-stop {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  min-height: 32px;
-  padding: 4px 10px;
-  border: 1px solid var(--panel-border);
-  border-radius: 8px;
-  background: transparent;
-  color: var(--muted);
-  font-size: 0.78rem;
-  cursor: pointer;
-}
-
-.studio-context-stop:hover {
-  color: #f87171;
-  border-color: rgba(248, 113, 113, 0.4);
-}
-
-.studio-context-stop.is-danger {
-  color: #f87171;
-  border-color: rgba(248, 113, 113, 0.45);
-  font-weight: 600;
-}
-
-.status-abandon-confirm.is-compact {
-  gap: 6px;
-}
-
 .studio-thread-context .primary-btn {
   padding: 6px 14px;
   font-size: 0.82rem;

@@ -1017,7 +1017,7 @@ describe('SubmissionStatusView', () => {
       expect(container.querySelector('.studio-turn.is-working')).not.toBeNull();
       expect(container.querySelector<HTMLTextAreaElement>('textarea')?.disabled).toBe(true);
       expect(container.textContent).toContain('The agent is building now');
-      expect(container.querySelector('.studio-turn-working-actions .studio-context-stop')).not.toBeNull();
+      expect(container.querySelector('.studio-turn-working-actions .studio-context-stop')).toBeNull();
 
       await act(async () => {
         control?.querySelector('button')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -1071,7 +1071,7 @@ describe('SubmissionStatusView', () => {
     }
   });
 
-  it('locks the active composer but lets the creator stop the build from the live row', async () => {
+  it('does not expose a destructive stop control from the live row', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     mockedGetSubmissionStatus.mockResolvedValue({
       status: 'building',
@@ -1079,8 +1079,6 @@ describe('SubmissionStatusView', () => {
       builder: 'platform',
       events: [],
     });
-    mockedAbandonSubmission.mockResolvedValue(undefined);
-
     await i18n.changeLanguage('en');
     const container = document.createElement('div');
     document.body.appendChild(container);
@@ -1093,23 +1091,8 @@ describe('SubmissionStatusView', () => {
         await flushEffects();
       });
 
-      const stop = container.querySelector<HTMLButtonElement>('.studio-turn-working-actions .studio-context-stop');
-      expect(stop?.textContent).toContain('Stop');
-
-      await act(async () => {
-        stop?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-        await flushEffects();
-      });
-      expect(mockedAbandonSubmission).not.toHaveBeenCalled();
-
-      const confirm = container.querySelector<HTMLButtonElement>('.studio-turn-working-actions .is-danger');
-      expect(confirm?.textContent).toContain('Stop build');
-      await act(async () => {
-        confirm?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-        await flushEffects();
-        await flushEffects();
-      });
-      expect(mockedAbandonSubmission).toHaveBeenCalledWith('interrupt-token');
+      expect(container.querySelector('.studio-turn-working-actions .studio-context-stop')).toBeNull();
+      expect(container.querySelector<HTMLTextAreaElement>('textarea')?.disabled).toBe(true);
     } finally {
       await act(async () => {
         root.unmount();
@@ -1855,7 +1838,7 @@ describe('SubmissionStatusView', () => {
     // Empty runway under the turns so the last message can scroll to the top of the pane.
     expect(container.querySelector('.studio-thread-scroll-pad')).not.toBeNull();
     expect(container.querySelector('.studio-thread-scroll-body')).not.toBeNull();
-    expect(container.querySelector('.studio-turn-working-actions .studio-context-stop')).not.toBeNull();
+    expect(container.querySelector('.studio-turn-working-actions .studio-context-stop')).toBeNull();
     expect(container.querySelector('.studio-thread-foot .studio-context-stop')).toBeNull();
     expect(container.querySelector('.studio-context-progress')).toBeNull();
     expect(container.querySelector('.status-play-cta')).toBeNull();
