@@ -658,8 +658,7 @@ describe('creator message history', () => {
 
 // Relocated from copilot-backend.test.ts (MP-04) — generic store behavior.
 describe('dispatch records', () => {
-  it('is skipped without a backend, so a submission never fails on missing orchestration', async () => {
-    // A missing dispatch credential must not lose the submission itself.
+  it('leaves a fresh submission with no dispatch record until one is recorded', async () => {
     const store = new InMemoryStore();
     await store.createSubmission(1, 'g:1', 'A game');
 

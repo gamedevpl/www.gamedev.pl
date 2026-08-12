@@ -46,10 +46,9 @@ rotation should never cascade — but only if you can tell which one broke.
 1. **Create the new credential** (do not revoke the old one yet).
 2. **Store it** — Secret Manager version, or GitHub secret.
 3. **Make it take effect**: Secret Manager values are read at container start, so a
-   rotated GCP secret needs a new revision — redeploy, or
-   `gcloud run services update gamedev-app --region europe-west1 --project gamedevpl
---update-env-vars ROTATED_AT=$(date -u +%s)` to force one. GitHub Actions secrets take
-   effect on the next workflow run.
+   rotated GCP secret needs a new revision — redeploy, or force one:
+   `gcloud run services update gamedev-app --region europe-west1 --project gamedevpl --update-env-vars ROTATED_AT=$(date -u +%s)`.
+   GitHub Actions secrets take effect on the next workflow run.
 4. **Verify** (§3).
 5. **Only then revoke the old credential.** Reversing steps 4 and 5 is how a rotation
    becomes an outage.
