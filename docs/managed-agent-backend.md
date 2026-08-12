@@ -81,7 +81,13 @@ a second vendor would spell differently belongs in its adapter.
    backend look like it depended on the first.
 4. **The vendor is a variable.** `MANAGED_AGENT_VENDOR` selects a registered adapter.
    Adding one is a `registerManagedProvider` line and a file; replacing one is an
-   environment change and a deploy.
+  environment change and a deploy.
+
+## Anthropic under the seam
+
+Anthropic rounds defer optional MCP tool definitions at the provider layer so the context starts
+with the round-start, source-read and delivery path. The server's shared MCP behavioural contract
+is carried once in `initialize.instructions`; it must not be repeated in every tool description.
 
 ## Copilot under the seam
 
