@@ -131,7 +131,7 @@ function conversationHistory(history: NonNullable<BuildBrief['history']>): strin
     '```text',
     ...history.map(
       (entry) =>
-        `[${entry.round} · ${entry.kind} · ${entry.createdAt}]\n${entry.text.slice(0, 800)}`,
+        `[${entry.round} · ${entry.kind} · ${entry.createdAt}]\n${entry.text.slice(0, 800).replaceAll('```', "'''")}`,
     ),
     '```',
     '',

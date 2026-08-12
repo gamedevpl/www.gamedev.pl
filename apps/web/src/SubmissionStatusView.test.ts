@@ -1039,6 +1039,38 @@ describe('SubmissionStatusView', () => {
     }
   });
 
+  it('keeps the live handoff control visible while switching to the creator agent', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'building',
+      phase: 'building',
+      builder: 'platform',
+      builderHandoff: { target: 'self', requestedAt: '2026-08-12T20:00:00.000Z' },
+      events: [],
+    });
+
+    await i18n.changeLanguage('en');
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    try {
+      await act(async () => {
+        root.render(createElement(SubmissionStatusView, { token: 'pending-platform-handoff-token', embedded: true }));
+        await flushEffects();
+        await flushEffects();
+      });
+
+      expect(container.querySelector('.studio-turn-working-actions .studio-active-handoff-pending')?.textContent).toMatch(
+        /waiting for the current agent to acknowledge the stop request/i,
+      );
+    } finally {
+      await act(async () => {
+        root.unmount();
+      });
+    }
+  });
+
   it('locks the active composer but lets the creator stop the build from the live row', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     mockedGetSubmissionStatus.mockResolvedValue({

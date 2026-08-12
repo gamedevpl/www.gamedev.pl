@@ -775,7 +775,8 @@ export function SubmissionStatusView({
             : t(`statusView.states.${status.status}.label`)
         : '';
     const liveHandoff =
-      status?.builder === 'platform' && canInterruptPlatformAgent(status) ? (
+      status?.builder === 'platform' &&
+      (canInterruptPlatformAgent(status) || status.builderHandoff?.target === 'self') ? (
         <SwitchToSelfControl
           compact
           active
