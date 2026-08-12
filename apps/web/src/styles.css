@@ -17263,9 +17263,17 @@ body.remix-entry-open {
   top: 0.55rem;
   bottom: auto;
   z-index: 3;
-  background: color-mix(in srgb, var(--panel-card, #1b2229) 88%, transparent);
-  backdrop-filter: blur(8px);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  border-color: var(--turquoise);
+  background: var(--turquoise);
+  color: #08241d;
+  font-weight: 700;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45), 0 0 14px var(--turquoise-glow);
+}
+
+.review-play-btn.is-overlay:hover,
+.review-play-btn.is-overlay:focus-visible {
+  filter: brightness(1.08);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45), 0 0 20px var(--turquoise-glow);
 }
 
 .review-play-btn.is-active {
