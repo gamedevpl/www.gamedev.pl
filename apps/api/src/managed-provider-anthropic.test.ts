@@ -48,7 +48,7 @@ describe('anthropic managed provider', () => {
 
     const [url, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
     expect(url).not.toContain('secret-key');
-    expect(url).toBe('https://api.anthropic.com/v1/sessions');
+    expect(url).toBe('https://api.anthropic.com/v1/sessions?beta=true');
     const headers = init.headers as Record<string, string>;
     expect(headers['x-api-key']).toBe('secret-key');
     expect(headers['anthropic-beta']).toBe('managed-agents-2026-04-01');
@@ -72,7 +72,7 @@ describe('anthropic managed provider', () => {
     const fetchImpl = vi.fn(async (url: string) => {
       if (url.endsWith('/v1/vaults')) return jsonResponse({ id: 'vlt_round' });
       if (url.endsWith('/credentials')) return jsonResponse({ id: 'cred_round' });
-      if (url.endsWith('/v1/sessions')) return jsonResponse({ id: 'sess_round', status: 'queued' });
+      if (url.endsWith('/v1/sessions?beta=true')) return jsonResponse({ id: 'sess_round', status: 'queued' });
       throw new Error(`unexpected request ${url}`);
     });
     const provider = createAnthropicManagedProvider({
