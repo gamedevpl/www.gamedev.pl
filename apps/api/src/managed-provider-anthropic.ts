@@ -234,9 +234,7 @@ export function createAnthropicManagedProvider(config: ManagedProviderConfig): M
                       permission_policy: { type: 'always_allow' },
                       defer_loading: true,
                     },
-                    configs: Object.fromEntries(
-                      MCP_EAGER_TOOLS.map((toolName) => [toolName, { defer_loading: false }]),
-                    ),
+                    configs: MCP_EAGER_TOOLS.map((name) => ({ name, defer_loading: false })),
                   })),
                 ],
               }
