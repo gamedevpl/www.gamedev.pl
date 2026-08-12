@@ -9,10 +9,11 @@ import type { EditorContentDoc, EditorDefinition, GameEditorState, StudioGame } 
 const fetchGameEditor = vi.hoisted(() => vi.fn());
 const putEditorDraft = vi.hoisted(() => vi.fn());
 const publishEditorContent = vi.hoisted(() => vi.fn());
+const requestEditorAssist = vi.hoisted(() => vi.fn());
 
 vi.mock('./studioApi.js', async () => {
   const actual = await vi.importActual<typeof import('./studioApi.js')>('./studioApi.js');
-  return { ...actual, fetchGameEditor, putEditorDraft, publishEditorContent };
+  return { ...actual, fetchGameEditor, putEditorDraft, publishEditorContent, requestEditorAssist };
 });
 
 vi.mock('./visitTelemetry.js', () => ({ recordAssistStep: vi.fn(), recordEditorStep: vi.fn() }));
@@ -121,5 +122,53 @@ describe('EditorPanel live push (§E tier 1)', () => {
     expect(() => dragSlider('165')).not.toThrow();
     // The ordinary autosave path still ran, proving the drag itself was handled.
     expect(container.querySelector('.editor-save-state')?.textContent).toBe(i18n.t('studioPanel.editor.saving'));
+  });
+
+  it("never pushes a stale in-flight assist reply into a different game's stage after switching games", async () => {
+    // editorPushRef is shared and parent-owned — a game switch can reassign .current
+    // before this request resolves.
+    let resolveAssist!: (value: {
+      lane: 'params';
+      content: EditorContentDoc;
+      patches: Array<{ key: string; value: number }>;
+    }) => void;
+    requestEditorAssist.mockReturnValue(
+      new Promise((resolve) => {
+        resolveAssist = resolve;
+      }),
+    );
+
+    const gameA = vi.fn();
+    const ref = { current: gameA as ((content: EditorContentDoc) => void) | null };
+    await renderEditor(ref);
+    gameA.mockClear();
+
+    const input = container.querySelector<HTMLInputElement>('.editor-assist-input')!;
+    const send = container.querySelector<HTMLButtonElement>('.editor-assist-send')!;
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!;
+      setter.call(input, 'make it bouncier');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      send.click();
+    });
+    expect(requestEditorAssist).toHaveBeenCalled();
+
+    // Simulates the game switch: unmount, then the stage reassigns the ref.
+    act(() => root!.unmount());
+    root = null;
+    const gameB = vi.fn();
+    ref.current = gameB;
+
+    // Now the stale request resolves.
+    await act(async () => {
+      resolveAssist({ lane: 'params', content: { params: { width: 999 } }, patches: [{ key: 'width', value: 999 }] });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(gameB).not.toHaveBeenCalled();
+    expect(gameA).not.toHaveBeenCalled();
   });
 });

@@ -178,6 +178,16 @@ export function EditorPanel(props: {
   revisionRef.current = revision;
   const timerRef = useRef<number | null>(null);
 
+  // Guards a stale async reply from pushing into a game switched to since (editorPushRef
+  // is shared, parent-owned).
+  const mountedRef = useRef(true);
+  useEffect(
+    () => () => {
+      mountedRef.current = false;
+    },
+    [],
+  );
+
   /** Returns whether the draft on the server now matches what is on screen. */
   const saveNow = useCallback(
     async (overwrite = false): Promise<boolean> => {
@@ -261,6 +271,7 @@ export function EditorPanel(props: {
     const before = contentRef.current;
     try {
       const result = await requestEditorAssist(slug, text, before);
+      if (!mountedRef.current) return;
       const message = result.summary ? (i18n.language?.startsWith('pl') ? result.summary.pl : result.summary.en) : '';
       if (result.lane === 'params' && result.content && result.patches && result.patches.length > 0) {
         setContent(result.content);
@@ -290,6 +301,7 @@ export function EditorPanel(props: {
               : t('studioPanel.editor.assistRejected')),
       });
     } catch (error) {
+      if (!mountedRef.current) return;
       const status = (error as StudioApiError).status;
       recordAssistStep('rejected');
       setAssist({
@@ -315,6 +327,7 @@ export function EditorPanel(props: {
   async function reloadNewest() {
     try {
       const loaded = await fetchGameEditor(slug);
+      if (!mountedRef.current) return;
       setEditor(loaded);
       const merged = mergeDraft(loaded);
       setContent(merged);
@@ -326,7 +339,7 @@ export function EditorPanel(props: {
       setTileKey(defaultKey ? firstTileKey(loaded.definition.content[defaultKey]) : null);
       setSaveState('clean');
     } catch {
-      setSaveState('error');
+      if (mountedRef.current) setSaveState('error');
     }
   }
 
@@ -341,6 +354,7 @@ export function EditorPanel(props: {
   async function discardDraft() {
     try {
       await deleteEditorDraft(slug);
+      if (!mountedRef.current) return;
       if (editor) {
         setContent(editor.content);
         pushLive(editor.content);
@@ -349,7 +363,7 @@ export function EditorPanel(props: {
         setSaveState('clean');
       }
     } catch {
-      setSaveState('error');
+      if (mountedRef.current) setSaveState('error');
     }
   }
 
