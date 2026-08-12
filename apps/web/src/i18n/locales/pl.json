@@ -742,6 +742,8 @@
       "titleBuilding": "Chcesz coś podpowiedzieć?",
       "hintBuilding": "Gra wciąż powstaje — nie musisz czekać. Napisz, co zmienić, a agent odbierze wiadomość przy najbliższej aktualizacji.",
       "composerHintBuilding": "Napisz, co zmienić w trakcie budowy",
+      "hintBusy": "Agent buduje tę rundę. Zatrzymaj budowę, aby wysłać nową uwagę.",
+      "busyComposerHint": "Zatrzymaj budowę, aby wysłać uwagę",
       "titlePublished": "Poproś o zmianę",
       "hintPublished": "Twoja gra jest opublikowana. Opisz, co zmienić — agent podejmie to jako ulepszenie.",
       "composerHintPublished": "Opisz ulepszenie",
@@ -758,6 +760,7 @@
       "sentSelfWaiting": "Zapisano — Twój agent dostanie to, gdy go uruchomisz.",
       "noCapacity": "Zapisano — ale nie udało się rozpocząć rundy budowania: agent nie ma teraz wolnych mocy. Twoja wiadomość jest bezpieczna i zostanie odczytana w kolejnej rundzie.",
       "notStarted": "Zapisano — ale nowa runda budowania się nie rozpoczęła. Twoja wiadomość jest bezpieczna; sprawdzamy, co się stało.",
+      "busy": "Agent właśnie buduje grę. Zatrzymaj budowę, aby wysłać nową uwagę.",
       "error": "Nie udało się teraz tego wysłać. Spróbuj ponownie za chwilę.",
       "quota": "Wysłałeś dziś dużo uwag — spróbuj ponownie jutro.",
       "published": "Ta gra jest już opublikowana. Prześlij nowy pomysł, aby stworzyć kolejną wersję."
@@ -903,6 +906,11 @@
       "yes": "Tak, porzuć",
       "no": "Twórz dalej",
       "sending": "Porzucam…",
+      "stopStart": "Zatrzymaj budowę",
+      "stopCompact": "Zatrzymaj",
+      "stopConfirm": "Zatrzymać budowę? Dotychczasowa praca zostanie odrzucona.",
+      "stopYes": "Zatrzymaj budowę",
+      "stopSending": "Zatrzymuję…",
       "error": "Nie udało się teraz porzucić tego buildu. Spróbuj ponownie za chwilę."
     },
     "playableHint": "Wczesna wersja prosto z warsztatu — surowa, niedokończona i już grywalna. Powiedz, co zmienić, póki to łatwe."

@@ -1015,6 +1015,9 @@ describe('SubmissionStatusView', () => {
       expect(control?.textContent).toContain('Switch to your agent');
       expect(container.querySelector('.builder-mode-selector')?.textContent).toContain('Gamedev.pl');
       expect(container.querySelector('.studio-turn.is-working')).not.toBeNull();
+      expect(container.querySelector<HTMLTextAreaElement>('textarea')?.disabled).toBe(true);
+      expect(container.textContent).toContain('The agent is building now');
+      expect(container.querySelector('.studio-turn-working-actions .studio-context-stop')).not.toBeNull();
 
       await act(async () => {
         control?.querySelector('button')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -1029,6 +1032,84 @@ describe('SubmissionStatusView', () => {
         await flushEffects();
       });
       expect(mockedHandoffToSelf).toHaveBeenCalledWith('live-platform-token');
+    } finally {
+      await act(async () => {
+        root.unmount();
+      });
+    }
+  });
+
+  it('keeps the live handoff control visible while switching to the creator agent', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'building',
+      phase: 'building',
+      builder: 'platform',
+      builderHandoff: { target: 'self', requestedAt: '2026-08-12T20:00:00.000Z' },
+      events: [],
+    });
+
+    await i18n.changeLanguage('en');
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    try {
+      await act(async () => {
+        root.render(createElement(SubmissionStatusView, { token: 'pending-platform-handoff-token', embedded: true }));
+        await flushEffects();
+        await flushEffects();
+      });
+
+      expect(container.querySelector('.studio-turn-working-actions .studio-active-handoff-pending')?.textContent).toMatch(
+        /waiting for the current agent to acknowledge the stop request/i,
+      );
+    } finally {
+      await act(async () => {
+        root.unmount();
+      });
+    }
+  });
+
+  it('locks the active composer but lets the creator stop the build from the live row', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'building',
+      phase: 'building',
+      builder: 'platform',
+      events: [],
+    });
+    mockedAbandonSubmission.mockResolvedValue(undefined);
+
+    await i18n.changeLanguage('en');
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    try {
+      await act(async () => {
+        root.render(createElement(SubmissionStatusView, { token: 'interrupt-token', embedded: true }));
+        await flushEffects();
+        await flushEffects();
+      });
+
+      const stop = container.querySelector<HTMLButtonElement>('.studio-turn-working-actions .studio-context-stop');
+      expect(stop?.textContent).toContain('Stop');
+
+      await act(async () => {
+        stop?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await flushEffects();
+      });
+      expect(mockedAbandonSubmission).not.toHaveBeenCalled();
+
+      const confirm = container.querySelector<HTMLButtonElement>('.studio-turn-working-actions .is-danger');
+      expect(confirm?.textContent).toContain('Stop build');
+      await act(async () => {
+        confirm?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await flushEffects();
+        await flushEffects();
+      });
+      expect(mockedAbandonSubmission).toHaveBeenCalledWith('interrupt-token');
     } finally {
       await act(async () => {
         root.unmount();
@@ -1420,7 +1501,8 @@ describe('SubmissionStatusView', () => {
   it('relays post-play feedback to the build agent', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     mockedGetSubmissionStatus.mockResolvedValue({
-      status: 'building',
+      status: 'in_review',
+      phase: 'ready_for_review',
       preview: { slug: 'space-runner' },
       progress: { headSha: 'sha-1', commits: [], checklist: [] },
     });
@@ -1773,8 +1855,8 @@ describe('SubmissionStatusView', () => {
     // Empty runway under the turns so the last message can scroll to the top of the pane.
     expect(container.querySelector('.studio-thread-scroll-pad')).not.toBeNull();
     expect(container.querySelector('.studio-thread-scroll-body')).not.toBeNull();
-    // Abandon / checklist / Play stay out of the foot.
-    expect(container.querySelector('.studio-context-stop')).toBeNull();
+    expect(container.querySelector('.studio-turn-working-actions .studio-context-stop')).not.toBeNull();
+    expect(container.querySelector('.studio-thread-foot .studio-context-stop')).toBeNull();
     expect(container.querySelector('.studio-context-progress')).toBeNull();
     expect(container.querySelector('.status-play-cta')).toBeNull();
 
@@ -2080,7 +2162,8 @@ describe('SubmissionStatusView', () => {
     // requests and the API swallowed the 412. "Sent" was true and useless.
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     mockedGetSubmissionStatus.mockResolvedValue({
-      status: 'building',
+      status: 'in_review',
+      phase: 'ready_for_review',
       preview: { slug: 'space-runner' },
       progress: { headSha: 'sha-1', commits: [], checklist: [] },
     });

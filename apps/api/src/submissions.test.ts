@@ -1128,6 +1128,7 @@ describe('submission routes', () => {
       payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
     });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
+    await store.appendCreatorMessage(job.issueNumber, 'The first draft had the right controls; keep them in the revision.');
     await store.setSubmissionDeliveredVersion(job.issueNumber, 'v20260731T153306124Z');
     await store.recordJobTransition(job.issueNumber, {
       to: 'ready_for_review',
@@ -1146,6 +1147,13 @@ describe('submission routes', () => {
     expect(response.statusCode).toBe(200);
     expect(briefs.at(-1)?.undelivered).toBeUndefined();
     expect(briefs.at(-1)?.feedback).toContain('Make the parcels bigger');
+    expect(briefs.at(-1)?.history).toContainEqual(
+      expect.objectContaining({
+        kind: 'creator_request',
+        text: 'The first draft had the right controls; keep them in the revision.',
+        round: 'current',
+      }),
+    );
     // Gate-green closed the round; feedback must reopen the job, not leave it stuck
     // in ready_for_review while a session quietly starts underneath. Land on
     // `dispatched` — Copilot boots before GitHub reports `in_progress`.
