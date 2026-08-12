@@ -495,6 +495,48 @@ describe('agent build channel', () => {
     expect(events.filter((event) => event.kind === 'done')).toHaveLength(1);
   });
 
+  it('still records the summary when submit already marked the round ended', async () => {
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    await store.markAgentEnded(ISSUE, '2026-08-12T12:00:00.000Z', 'submit');
+    app = await createApp(store);
+
+    const end = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/end',
+      headers: agentHeaders(),
+      payload: { summary: 'Preview fixed and resubmitted with the save module enabled.' },
+    });
+
+    expect(end.json()).toMatchObject({ accepted: true, ended: true, summaryShown: true });
+    expect((await store.listBuildEvents(ISSUE))[0]).toMatchObject({
+      kind: 'done',
+      text: 'Preview fixed and resubmitted with the save module enabled.',
+    });
+  });
+
+  it('does not duplicate the summary on a legacy ended record without agentEndedBy', async () => {
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    await store.markAgentEnded(ISSUE, '2026-08-11T12:00:00.000Z');
+    const stored = (
+      store as unknown as { submissions: Map<number, import('./store.js').SubmissionRecord> }
+    ).submissions.get(ISSUE);
+    delete stored!.agentEndedBy;
+    app = await createApp(store);
+
+    const retry = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/end',
+      headers: agentHeaders(),
+      payload: { summary: 'Should not appear on a legacy retry.' },
+    });
+
+    expect(retry.json()).toMatchObject({ accepted: true, ended: true });
+    expect(retry.json().summaryShown).toBeUndefined();
+    expect(await store.listBuildEvents(ISSUE)).toHaveLength(0);
+  });
+
   it('records a fresh summary once the agent has resumed and ended again', async () => {
     const store = new InMemoryStore();
     await seedSubmission(store);

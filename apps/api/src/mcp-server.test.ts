@@ -1494,9 +1494,24 @@ describe('POST /api/mcp (BY-05)', () => {
     expect((await store.getSubmission(ISSUE))?.agentEndedAt).toBeTruthy();
     expect((await store.getSubmission(ISSUE))?.agentEndedBy).toBe('submit');
 
-    const ended = await callTool(app, 'end', { sessionKey }, { 'mcp-session-id': sessionId });
+    const ended = await callTool(
+      app,
+      'end',
+      { sessionKey, summary: 'Preview fixed and resubmitted with the save module enabled.' },
+      { 'mcp-session-id': sessionId },
+    );
     expect(ended.isError).toBe(false);
-    expect(ended.structured).toMatchObject({ ok: true, ended: true, stop: true, reason: 'agent_ended' });
+    expect(ended.structured).toMatchObject({
+      ok: true,
+      ended: true,
+      summaryShown: true,
+      stop: true,
+      reason: 'agent_ended',
+    });
+    expect((await store.listBuildEvents(ISSUE))[0]).toMatchObject({
+      kind: 'done',
+      text: 'Preview fixed and resubmitted with the save module enabled.',
+    });
     expect((await store.getSubmission(ISSUE))?.agentEndedAt).toBeTruthy();
     expect((await store.getSubmission(ISSUE))?.agentEndedBy).toBe('end');
 
