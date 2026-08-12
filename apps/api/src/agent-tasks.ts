@@ -28,6 +28,7 @@ export { AGENT_TASK_STATES, type AgentTaskState } from './agent-state.js';
  * the user's plan and organization policies", so an unknown value is a soft failure at
  * dispatch, not a reason to reject a job before we have tried.
  */
+// Confirmed unchanged against GitHub's REST API spec on 2026-08-12.
 export const AGENT_TASK_MODELS = [
   'claude-sonnet-4.6',
   'claude-opus-4.6',
