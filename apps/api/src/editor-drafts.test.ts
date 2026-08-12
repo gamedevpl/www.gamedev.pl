@@ -51,8 +51,9 @@ const VERSION_SOURCES: Record<string, string> = {
   'ACCEPTANCE.json': '{"objective":"x","achieved":[]}',
 };
 
-function stubGamesStore(options: { hasEditor?: boolean } = {}) {
+function stubGamesStore(options: { hasEditor?: boolean; sealed?: boolean } = {}) {
   const hasEditor = options.hasEditor ?? true;
+  const sealed = options.sealed ?? true;
   const stored: Array<{
     slug: string;
     files: Array<{ path: string; content: string }>;
@@ -79,7 +80,10 @@ function stubGamesStore(options: { hasEditor?: boolean } = {}) {
           createdAt: 'now',
           issueNumber: 1_000_001,
           engineRef: 'abc1234',
-          sourceFiles: Object.keys(VERSION_SOURCES).filter((path) => hasEditor || path !== 'EDITOR.json'),
+          sourceFiles: Object.keys(VERSION_SOURCES).filter(
+            (path) =>
+              (hasEditor || path !== 'EDITOR.json') && (sealed || (path !== 'TRACE.json' && path !== 'PLAYTEST.json')),
+          ),
         };
       }
       const candidate = stored.length > 0 ? stored[stored.length - 1] : null;
@@ -145,7 +149,7 @@ describe('editor draft routes', () => {
     }
   });
 
-  async function createApp(overrides: { hasEditor?: boolean; gateRuns?: string[] } = {}) {
+  async function createApp(overrides: { hasEditor?: boolean; sealed?: boolean; gateRuns?: string[] } = {}) {
     const { gamesStore, stored } = stubGamesStore(overrides);
     app = await buildApp({
       store,
@@ -407,6 +411,50 @@ describe('editor draft routes', () => {
       headers: authHeaders('g:alice'),
     });
     expect(response.statusCode).toBe(409);
+  });
+
+  it('refuses to publish while an agent is actively building the round', async () => {
+    const { app } = await createApp();
+    await store.recordDispatch(sourceJob, { backend: 'claude', ref: 'workspace-1' });
+    await app.inject({
+      method: 'PUT',
+      url: '/api/me/games/garden-gather/editor/draft',
+      headers: authHeaders('g:alice'),
+      payload: {
+        content: { gardens: [{ properties: { name: 'Mine' }, rows: ['########', '#..@..*#', '########'] }] },
+      },
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/me/games/garden-gather/editor/publish',
+      headers: authHeaders('g:alice'),
+    });
+    // A fork here would strand the agent's next delivery behind a newer job.
+    expect(response.statusCode).toBe(409);
+    expect(response.json().error).toBe('agent_round');
+  });
+
+  it('refuses to publish off an unsealed preview instead of throwing once the copy is underway', async () => {
+    const { app } = await createApp({ sealed: false });
+    await seedPreviewOnlyGame(store, 'g:alice');
+    await app.inject({
+      method: 'PUT',
+      url: '/api/me/games/garden-gather/editor/draft',
+      headers: authHeaders('g:alice'),
+      payload: {
+        content: { gardens: [{ properties: { name: 'Mine' }, rows: ['########', '#..@..*#', '########'] }] },
+      },
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/me/games/garden-gather/editor/publish',
+      headers: authHeaders('g:alice'),
+    });
+    // A preview may legitimately lack both seals — publish's default mode requires them.
+    expect(response.statusCode).toBe(409);
+    expect(response.json().error).toBe('not_sealed');
   });
 
   describe('the entities widget', () => {
