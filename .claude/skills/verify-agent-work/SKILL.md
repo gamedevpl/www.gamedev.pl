@@ -107,6 +107,27 @@ Two concrete instances of that (observed 2026-07-23):
   edited dependency ranges in `package.json` without regenerating the lock — every local
   check green, CI dead on arrival at `npm ci` (EUSAGE). After ANY `package.json` edit,
   `npm install --package-lock-only` must produce a zero lockfile diff before committing.
+- **A games-repo PR that adds a GameKit module can 502 play/draft even when its own
+  gate is green.** Observed (www.gamedev.pl-games#690, 2026-08-12): `platformer` was
+  inserted into `GAME_KIT_MODULES` / `shared/assemble-contract.json` with no paired
+  website PR. Website `contract:games-repo` fails when games-repo introduces a name the
+  serve side does not recognize; play/draft then 502s for every game that selects it.
+  Merge order is website first — same rule as a budget raise
+  (`apps/api/src/games-repo-contract.ts`). Diff the module array against *current*
+  `main`, not the PR's merge-base: that branch was ~20 commits behind and its array had
+  dropped `cards` and `ui` that main had added, so a 2-line "add platformer" diff against
+  a stale base is a module deletion against current main.
+- **`validate` does not catch leftover create-template copy.** Observed (same PR):
+  `moon-hopper` playtest emitted `first-ledge` / `halfway` / `moon` and `end=won`, but
+  `SPEC.md` and `GAME.json` still said "Collect five stars in the arena." Check 33 only
+  requires that `howToPlay` *exists*. Read SPEC / description / howToPlay against what
+  the game actually does — especially on a game that started from `npm run create`.
+- **Ambient `declare function` in a tsconfig `include` is a catalog-wide type lie.**
+  Observed (same PR): `shared/genres/platformer.d.ts` is included for every game, so
+  `play()` typechecks in a non-platformer. The claim that `GAME.json` selects the small
+  d.ts was unimplemented (`pack-kit` still digests only `game-kit.d.ts`). A vocabulary
+  that is supposed to be opt-in has to be selected the same way modules are — not
+  dumped into the root tsconfig.
 - **Unit tests for a new route can pass while the route is still 401'd by a wall that
   lives elsewhere.** Observed (self-authored, 2026-07-23): a new `POST /api/waitlist`
   route was added inside `registerAuthPlugin` (`auth.ts`) and its unit tests called
@@ -227,6 +248,9 @@ Check explicitly:
   published output.
 - **Supply chain** — new dependencies, changed lockfiles, modified CI workflows, or altered
   build scripts deserve real scrutiny. A workflow change is a pipeline-privilege change.
+- **Cross-repo contracts** — `GAME_KIT_MODULES` / `assemble-contract.json` is lockstep
+  with the website. Adding a module without a website-first paired PR 502s play/draft.
+  Rebase (or diff against current `main`) before treating the array as additive.
 
 ## Runtime-verify agent-authored games (canvas + requestAnimationFrame)
 
