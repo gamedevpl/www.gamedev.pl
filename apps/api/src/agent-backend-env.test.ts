@@ -61,13 +61,15 @@ describe('createAgentBackendRegistryFromEnv', () => {
     );
   });
 
-  it('falls back to Copilot only when no managed vendor was selected', () => {
+  it('leaves the platform builder unset when no managed vendor is selected', () => {
+    // The direct legacy Copilot fallback was retired (MP-04).
     setEnv({
       MANAGED_AGENT_VENDOR: undefined,
       AGENT_TASKS_TOKEN: randomBytes(32).toString('hex'),
     });
     const registry = createAgentBackendRegistryFromEnv({ info: vi.fn(), warn: vi.fn() });
-    expect(registry.platform?.name).toBe('copilot');
+    expect(registry.platform).toBeUndefined();
+    expect(registry.self.name).toBe('self');
   });
 
   it('selects the managed vendor over Copilot when the managed config is valid', () => {

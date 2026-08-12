@@ -290,10 +290,12 @@ agents that finish without submitting, and for the probe's printing sink.
 
 `registerSubmissionRoutes` builds the platform registry via
 `createAgentBackendRegistryFromEnv`. A managed adapter is selected only when
-`MANAGED_AGENT_VENDOR` and its required configuration are valid. Without a managed vendor,
-Copilot fills the platform slot only when `AGENT_TASKS_TOKEN` is configured; without either,
-platform dispatch is unavailable. An explicit `agentBackends.platform` still wins over the
-environment registry.
+`MANAGED_AGENT_VENDOR` and its required configuration are valid — **since MP-04, that is
+the only way to get a platform backend.** The direct Copilot backend and its unconditional
+`AGENT_TASKS_TOKEN`-alone fallback were retired: `MANAGED_AGENT_VENDOR=copilot` must be set
+explicitly, with `AGENT_TASKS_TOKEN` supplying its credential, or platform dispatch is
+unavailable regardless of which secrets are present. An explicit `agentBackends.platform`
+still wins over the environment registry.
 
 There are four levels of test:
 

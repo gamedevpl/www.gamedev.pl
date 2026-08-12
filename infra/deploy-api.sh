@@ -184,9 +184,11 @@ fi
 # separating them means dispatch and serving fail independently — a dispatch PAT expiring
 # must not take the catalog down with it. Absent means builds are never handed to an
 # agent; submissions are still accepted and sit queued, visibly, in the operator queue.
+# Necessary but not sufficient since MP-04: MANAGED_AGENT_VENDOR=copilot (below) still
+# has to select it, or this token dispatches nothing.
 if gcloud secrets describe agent-tasks-token --project "$PROJECT_ID" >/dev/null 2>&1; then
   SECRET_MAPPINGS+=("AGENT_TASKS_TOKEN=agent-tasks-token:latest")
-  echo "==> agent-tasks-token found; agent dispatch enabled."
+  echo "==> agent-tasks-token found; enables Copilot dispatch once MANAGED_AGENT_VENDOR=copilot is set."
 else
   echo "==> agent-tasks-token not found; submissions will queue without being dispatched."
 fi
