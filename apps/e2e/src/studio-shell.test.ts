@@ -236,8 +236,8 @@ describe.skipIf(!prereq.ok)('the studio thread as an app screen', () => {
           scrollerClientHeight = scroller.clientHeight;
           const turn = document.createElement('div');
           turn.dataset.e2eInjected = 'true';
-          // Probe must fit the scrollport (phone half-sheet is ~150px tall).
-          const turnHeight = Math.min(200, Math.max(48, Math.floor(scrollerClientHeight * 0.3) || 48));
+          // Scale the probe to the available scrollport, including compact phone sheets.
+          const turnHeight = Math.min(200, Math.max(1, Math.floor(scrollerClientHeight * 0.3) || 1));
           turn.style.cssText = `height:${turnHeight}px;flex:none;`;
           const mount = body ?? pad.parentElement;
           if (mount && body) {
