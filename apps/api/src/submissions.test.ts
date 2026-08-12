@@ -1392,7 +1392,7 @@ describe('submission routes', () => {
 
   it('does not commit the requested builder when its dispatch fails', async () => {
     const { githubClient } = createGithubClientStub({ issueNumber: 77 });
-    let activeStore: Store | undefined;
+    const activeStore = new InMemoryStore();
     let builderAtHandoff: string | undefined;
     const backend: AgentBackend = {
       name: 'stub',
@@ -1410,11 +1410,11 @@ describe('submission routes', () => {
       cancel: async () => ({ enforced: false }),
     };
     const { app, authHeaders, store } = await createApp({
+      store: activeStore,
       githubClient,
       agentBackend: backend,
       submissionTokenSecret: secret,
     });
-    activeStore = store;
 
     await app.inject({
       method: 'POST',
