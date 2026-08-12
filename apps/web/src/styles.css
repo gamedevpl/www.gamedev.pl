@@ -11685,12 +11685,8 @@ button.builder-mode-selector:disabled {
   overflow: hidden;
 }
 
-/* A definition with no board (tuning params and/or a property sheet only)
-   docks to a side panel instead of covering the stage — the running game
-   stays visible next to the sliders, which is the point of a live tuning UI.
-   A board needs the full canvas, so it keeps the full-cover shape above;
-   switching collections toggles this live since `:has()` tracks the DOM. */
-.studio-edit-overlay:not(:has(.editor-board-col)) {
+/* Edit definitions without a board dock beside the running game. */
+.studio-edit-overlay:not(.studio-code-overlay):not(:has(.editor-board-col)) {
   inset: 0 0 0 auto;
   width: min(360px, 100%);
   border-left: 1px solid var(--panel-border);
