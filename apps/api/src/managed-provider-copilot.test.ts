@@ -10,7 +10,6 @@ const BRIEF: BuildBrief = {
   slug: 'comet-courier',
   spec: 'Deliver parcels between comets.',
   channelToken: 'tok_abc',
-  mcpOpenerToken: 'opener_xyz',
   apiBaseUrl: 'https://www.gamedev.pl',
 };
 
@@ -74,9 +73,7 @@ describe('Copilot managed provider', () => {
     });
 
     expect(createBranchWithFiles).not.toHaveBeenCalled();
-    // The generic connector bearer needs this key to scope one round.
-    expect(stub.startTask.mock.calls[0]?.[0].prompt).toContain('"key": "opener_xyz"');
-    expect(stub.startTask.mock.calls[0]?.[0].prompt).not.toContain('"key": "tok_abc"');
+    expect(stub.startTask.mock.calls[0]?.[0].prompt).toContain('"key": "tok_abc"');
   });
 
   it('stages a seed on the same disposable branch as legacy Copilot', async () => {

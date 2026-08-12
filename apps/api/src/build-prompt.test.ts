@@ -7,7 +7,6 @@ const BRIEF: BuildBrief = {
   slug: 'comet-courier',
   spec: 'A game where you deliver parcels between comets.',
   channelToken: 'tok_abc',
-  mcpOpenerToken: 'opener_xyz',
   apiBaseUrl: 'https://www.gamedev.pl',
 };
 
@@ -27,36 +26,10 @@ describe('buildPrompt delivery contract', () => {
     expect(prompt).toContain('engine.modules array');
     expect(prompt).toContain('audio.music must be one music id string');
     expect(prompt).toContain('submit_sources');
-    expect(prompt).toContain('"key": "opener_xyz"');
+    expect(prompt).toContain('"key": "tok_abc"');
     expect(prompt).toContain('delivered rough');
     expect(prompt).not.toContain('npm run submit');
     expect(prompt).not.toContain('GAMEDEVPL_BUILD_TOKEN');
-  });
-
-  it('never leaks the harness channel token into the MCP start() key — they authenticate different things', () => {
-    const prompt = buildPrompt(BRIEF, { kind: 'channel', fast: true });
-    // channelToken authenticates the REST channel, not start() — see build-prompt.ts.
-    expect(prompt).not.toContain('"key": "tok_abc"');
-    expect(prompt).not.toContain('GAMEDEVPL_BUILD_TOKEN');
-  });
-
-  it('refuses to build an MCP-lane prompt with no opener token, instead of dispatching a round that cannot possibly start()', () => {
-    // A missing opener is a caller bug — see build-prompt.ts.
-    const { mcpOpenerToken: _drop, ...withoutOpener } = BRIEF;
-    expect(() => buildPrompt(withoutOpener, { kind: 'channel', fast: true })).toThrow(/mcpOpenerToken/);
-  });
-
-  it('does not need an opener token for the create_game round, which authenticates by bearer alone', () => {
-    const { mcpOpenerToken: _drop, ...withoutOpener } = BRIEF;
-    const prompt = buildPrompt(
-      {
-        ...withoutOpener,
-        slug: undefined,
-        createGame: { title: 'Star Parcel Run', concept: 'Guide a courier ship across a bright sky.' },
-      },
-      { kind: 'channel', fast: true },
-    );
-    expect(prompt).toContain('Call `create_game` first');
   });
 
   it('opens a creation round through create_game before start', () => {

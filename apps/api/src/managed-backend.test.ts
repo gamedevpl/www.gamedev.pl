@@ -17,8 +17,6 @@ function brief(overrides: Partial<BuildBrief> = {}): BuildBrief {
     slug: SLUG,
     spec: 'Deliver parcels between comets while dodging debris.',
     channelToken: 'token',
-    // Keeps the MCP lane clear of the missing-opener guard.
-    mcpOpenerToken: 'opener_xyz',
     apiBaseUrl: 'https://example.test',
     ...overrides,
   };
@@ -530,11 +528,9 @@ describe('managed backend', () => {
       tools: { mcpEndpoints: [{ url: 'https://www.gamedev.pl/api/mcp', name: 'gamedevpl' }] },
     });
 
-    await backend.dispatch(brief({ promptLane: 'mcp', mcpOpenerToken: 'opener_xyz' }));
+    await backend.dispatch(brief({ promptLane: 'mcp' }));
     expect(started[0]?.promptLane).toBe('mcp');
-    // start()'s key is the opener, never channelToken — see build-prompt.ts.
-    expect(started[0]?.prompt).toContain('"key": "opener_xyz"');
-    expect(started[0]?.prompt).not.toContain('"key": "token"');
+    expect(started[0]?.prompt).toContain('"key": "token"');
     setOutputs([{ path: `games/${SLUG}/game.ts`, content: 'export {};' }]);
     setState('completed');
 

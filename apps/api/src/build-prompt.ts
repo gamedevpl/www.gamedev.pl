@@ -119,16 +119,6 @@ export function buildPrompt(brief: BuildBrief, delivery: DeliveryContract = { ki
   return finish(lines, brief);
 }
 
-// Always minted before dispatch; absence means the caller composed the brief wrong.
-function mcpOpenerToken(brief: BuildBrief): string {
-  if (!brief.mcpOpenerToken) {
-    throw new Error(
-      'buildPrompt: the MCP lane needs brief.mcpOpenerToken to authenticate start() — dispatch composed the brief without minting one',
-    );
-  }
-  return brief.mcpOpenerToken;
-}
-
 // The push contract: the agent reports and uploads over the build channel.
 function channelDelivery(brief: BuildBrief, fast: boolean, creating: boolean): string[] {
   if (fast) {
@@ -149,8 +139,8 @@ function channelDelivery(brief: BuildBrief, fast: boolean, creating: boolean): s
             'Use the returned slug and jobId; then call `start({ slug })` for that new game.',
           ]
         : [
-            // The round-scoped MCP opener, not the harness's channelToken — different credentials.
-            `Call \`start\` with exactly \`{ "slug": "${brief.slug ?? '(slug)'}", "key": "${mcpOpenerToken(brief)}" }\`, then call \`get_brief\`, \`get_seed\` and \`get_kit\`.`,
+            // channelToken, not mcpOpenerToken: verifyAgentToken checks this key, not verifyManagedMcpOpener.
+            `Call \`start\` with exactly \`{ "slug": "${brief.slug ?? '(slug)'}", "key": "${brief.channelToken}" }\`, then call \`get_brief\`, \`get_seed\` and \`get_kit\`.`,
           ]),
       'Copy the exact sessionKey from `start` into every later MCP call.',
       'If get_seed returns available, revise those files instead of scaffolding.',
