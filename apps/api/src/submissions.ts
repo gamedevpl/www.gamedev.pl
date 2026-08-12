@@ -1328,6 +1328,8 @@ export async function registerSubmissionRoutes(
         return { started: false, reason: 'platform_unavailable', unavailableReason: availability.reason };
       }
     }
+    let builderActivated = false;
+    let dispatchSucceeded = false;
     try {
       // A new round closes the previous one's token. Bump *before* minting so the brief
       // carries the generation that is now active. An undelivered nudge is the same
@@ -1336,11 +1338,6 @@ export async function registerSubmissionRoutes(
       const roundGeneration = input.undelivered
         ? ((await store.ensureRoundGeneration(input.issueNumber)) ?? 1)
         : ((await store.bumpRoundGeneration(input.issueNumber)) ?? (record?.roundGeneration ?? 0) + 1);
-      if (!input.undelivered) {
-        await store.setRoundBuilder(input.issueNumber, builder, {
-          resetRoundBudget: !input.preserveRoundBudget,
-        });
-      }
       const previousBackend = backendFor(previousBuilder);
       if (previous?.refs.length && (!input.undelivered || previousBackend?.name.startsWith('managed:'))) {
         const previousRef = previous.refs[previous.refs.length - 1];
@@ -1389,12 +1386,20 @@ export async function registerSubmissionRoutes(
       // Resume against the *selected* backend. When the builder changes at a round
       // boundary the previous ref belongs to a different backend — start fresh.
       const sameBackend = previous?.backend === selected.name && Boolean(previous?.refs.length);
+      if (!input.undelivered && builder !== previousBuilder) {
+        // Expose target builder before external session can call back through MCP.
+        await store.setRoundBuilder(input.issueNumber, builder, {
+          resetRoundBudget: !input.preserveRoundBudget,
+        });
+        builderActivated = true;
+      }
       const result = sameBackend
         ? await selected.resume(brief, {
             ref: previous!.refs[previous!.refs.length - 1],
             workspace: previous!.workspace,
           })
         : await selected.dispatch(brief);
+      dispatchSucceeded = true;
       if (input.undelivered) {
         await store.clearAgentEnded(input.issueNumber);
       }
@@ -1437,6 +1442,13 @@ export async function registerSubmissionRoutes(
       }
       return { started: true };
     } catch (error) {
+      if (builderActivated && !dispatchSucceeded) {
+        try {
+          await store.setRoundBuilder(input.issueNumber, previousBuilder, { resetRoundBudget: false });
+        } catch (rollbackError) {
+          input.log.error({ err: rollbackError, issueNumber: input.issueNumber }, 'builder rollback failed');
+        }
+      }
       // The creator's request is already queued on the build channel, so a failed
       // resume costs the round its head start, not the request itself.
       const reason = classifyResumeFailure(error);
