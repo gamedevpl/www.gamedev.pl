@@ -83,6 +83,17 @@ remain; `apps/api/src/mcp-server.test.ts` fails if an unadvertised name reappear
 descriptions, the workflow, or a `get_kit` reply. When you remove a tool from
 `MCP_VISIBLE_TOOLS`, grep the prose for its name in the same change.
 
+### Context budget — one contract, not one suffix per tool
+
+The shared behavioural contract belongs in MCP `initialize.instructions`, not in every tool
+description. Repeating it across the advertised schemas made the live 31-tool `tools/list`
+payload about 208 KiB — roughly 50k JSON/code tokens before the creator prompt or any tool
+result. `tools/list` strips the repeated suffix at serialization time and the Anthropic
+managed provider defers optional MCP tools; keep the round-start/read/delivery path eager.
+Prompt caching lowers processing cost but does not remove those tokens from the context window.
+When adding or expanding a tool description, measure the serialized `tools/list` payload and
+keep the full contract single-copy; a short creator-text safety reminder may stay eager.
+
 **`get_kit_api` — the orientation path that did not exist before 2026-08-09.** `get_kit`
 returns tarball metadata only (engineRef, sha256, unpack one-liner) — it was never the API
 reference its own description claimed to be pointing at, because nothing injected a digest

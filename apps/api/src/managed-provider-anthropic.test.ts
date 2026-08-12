@@ -170,7 +170,21 @@ describe('anthropic managed provider', () => {
       {
         type: 'mcp_toolset',
         mcp_server_name: 'gamedevpl',
-        default_config: { permission_policy: { type: 'always_allow' } },
+        default_config: { permission_policy: { type: 'always_allow' }, defer_loading: true },
+        configs: {
+          create_game: { defer_loading: false },
+          start: { defer_loading: false },
+          get_brief: { defer_loading: false },
+          get_seed: { defer_loading: false },
+          get_sources: { defer_loading: false },
+          get_kit: { defer_loading: false },
+          report_progress: { defer_loading: false },
+          stage_source_file: { defer_loading: false },
+          patch_source_file: { defer_loading: false },
+          delete_source_file: { defer_loading: false },
+          submit_sources: { defer_loading: false },
+          end: { defer_loading: false },
+        },
       },
     ]);
   });

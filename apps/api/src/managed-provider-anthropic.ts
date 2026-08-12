@@ -18,6 +18,20 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 const API_VERSION = '2023-06-01';
 
 const BETA_HEADER = 'managed-agents-2026-04-01';
+const MCP_EAGER_TOOLS = [
+  'create_game',
+  'start',
+  'get_brief',
+  'get_seed',
+  'get_sources',
+  'get_kit',
+  'report_progress',
+  'stage_source_file',
+  'patch_source_file',
+  'delete_source_file',
+  'submit_sources',
+  'end',
+] as const;
 
 const UsageSchema = z
   .object({
@@ -217,7 +231,11 @@ export function createAnthropicManagedProvider(config: ManagedProviderConfig): M
                     mcp_server_name: server.name,
                     default_config: {
                       permission_policy: { type: 'always_allow' },
+                      defer_loading: true,
                     },
+                    configs: Object.fromEntries(
+                      MCP_EAGER_TOOLS.map((toolName) => [toolName, { defer_loading: false }]),
+                    ),
                   })),
                 ],
               }
