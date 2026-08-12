@@ -18,6 +18,7 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 const API_VERSION = '2023-06-01';
 
 const BETA_HEADER = 'managed-agents-2026-04-01';
+const BETA_QUERY = '?beta=true';
 const MCP_EAGER_TOOLS = [
   'create_game',
   'start',
@@ -260,7 +261,7 @@ export function createAnthropicManagedProvider(config: ManagedProviderConfig): M
       };
       try {
         const parsed = SessionSchema.safeParse(
-          await call('/v1/sessions', { method: 'POST', body: JSON.stringify(body) }),
+          await call(`/v1/sessions${BETA_QUERY}`, { method: 'POST', body: JSON.stringify(body) }),
         );
         if (!parsed.success) throw new ManagedAgentError('anthropic managed agents returned an unreadable session');
         return { ...toSession(parsed.data), ...(credentialRef ? { credentialRef } : {}) };
@@ -275,7 +276,7 @@ export function createAnthropicManagedProvider(config: ManagedProviderConfig): M
     },
 
     async getSession(sessionId: string): Promise<ManagedSession | null> {
-      const raw = await call(`/v1/sessions/${encodeURIComponent(sessionId)}`);
+      const raw = await call(`/v1/sessions/${encodeURIComponent(sessionId)}${BETA_QUERY}`);
       if (raw === null) return null;
       const parsed = SessionSchema.safeParse(raw);
       if (!parsed.success) throw new ManagedAgentError('anthropic managed agents returned an unreadable session');
@@ -303,7 +304,7 @@ export function createAnthropicManagedProvider(config: ManagedProviderConfig): M
     },
 
     async sendMessage(sessionId: string, message: string): Promise<void> {
-      await call(`/v1/sessions/${encodeURIComponent(sessionId)}/events`, {
+      await call(`/v1/sessions/${encodeURIComponent(sessionId)}/events${BETA_QUERY}`, {
         method: 'POST',
         body: JSON.stringify({
           events: [{ type: 'user.message', content: [{ type: 'text', text: message }] }],
@@ -312,7 +313,7 @@ export function createAnthropicManagedProvider(config: ManagedProviderConfig): M
     },
 
     async cancelSession(sessionId: string): Promise<{ enforced: boolean }> {
-      await call(`/v1/sessions/${encodeURIComponent(sessionId)}/events`, {
+      await call(`/v1/sessions/${encodeURIComponent(sessionId)}/events${BETA_QUERY}`, {
         method: 'POST',
         body: JSON.stringify({ events: [{ type: 'user.interrupt' }] }),
       });
@@ -320,7 +321,9 @@ export function createAnthropicManagedProvider(config: ManagedProviderConfig): M
     },
 
     async deleteSession(sessionId: string): Promise<void> {
-      await call(`/v1/sessions/${encodeURIComponent(sessionId)}`, { method: 'DELETE' }).catch(() => undefined);
+      await call(`/v1/sessions/${encodeURIComponent(sessionId)}${BETA_QUERY}`, { method: 'DELETE' }).catch(
+        () => undefined,
+      );
     },
 
     async releaseCredential(credentialRef: string): Promise<void> {
