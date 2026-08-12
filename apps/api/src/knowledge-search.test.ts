@@ -203,6 +203,84 @@ describe('queryKnowledge — mode=chunks', () => {
   });
 });
 
+describe('live API shape (captured 2026-08-10 against the real gamedevpl-knowledge engine)', () => {
+  it('parses a real :search response verbatim', async () => {
+    const realSearchResponse = {
+      results: [
+        {
+          chunk: {
+            name: 'projects/334141807880/locations/eu/collections/default_collection/dataStores/gamedevpl-knowledge/branches/0/documents/shared-modules-party-ts/chunks/c1',
+            id: 'c1',
+            content: '# shared/modules/party.ts\n\n```ts\nfunction createParty(config) { /* ... */ }\n```',
+            documentMetadata: {
+              uri: 'gs://gamedevpl-games-store/knowledge/fe4d2aa9f46136e56a4d125b17c102475fa6e5bc/shared/modules/party.ts.md',
+              title: 'party.ts',
+              structData: {
+                sourceCommit: 'fe4d2aa9f46136e56a4d125b17c102475fa6e5bc',
+                repoPath: 'shared/modules/party.ts',
+                kitVersion: 'fe4d2aa9f46136e56a4d125b17c102475fa6e5bc',
+                corpus: 'module',
+              },
+            },
+            relevanceScore: 0.7711970806121826,
+          },
+        },
+      ],
+    };
+    const fetchImpl = vi.fn(async () => jsonResponse(realSearchResponse));
+    const queryKnowledge = testClient({ engineId: 'gamedevpl-knowledge', fetchImpl });
+
+    const result = await queryKnowledge({ query: 'how do parties work in gamekit', mode: 'chunks' });
+
+    expect(result.chunks).toEqual([
+      { repoPath: 'shared/modules/party.ts', corpus: 'module', snippet: realSearchResponse.results[0].chunk.content },
+    ]);
+    expect(result.repoPaths).toEqual(['shared/modules/party.ts']);
+    expect(result.indexedCommit).toBe('fe4d2aa9f46136e56a4d125b17c102475fa6e5bc');
+  });
+
+  it('parses a real :answer response verbatim', async () => {
+    const realAnswerResponse = {
+      answer: {
+        state: 'SUCCEEDED',
+        answerText: 'In GameKit, parties are designed for shared-screen multiplayer experiences.',
+        citations: [],
+        references: [
+          {
+            chunkInfo: {
+              content: '## Party (shared-screen + phone controllers)\n\n- Select `party` in `GAME.json` ...',
+              relevanceScore: 0.8,
+              documentMetadata: {
+                document:
+                  'projects/334141807880/locations/eu/collections/default_collection/dataStores/gamedevpl-knowledge/branches/0/documents/github-skills-develop-canvas-game-references-game-kit-md',
+                uri: 'gs://gamedevpl-games-store/knowledge/fe4d2aa9f46136e56a4d125b17c102475fa6e5bc/.github/skills/develop-canvas-game/references/game-kit.md',
+                title: 'game-kit',
+                pageIdentifier: '0',
+                structData: {
+                  kitVersion: 'fe4d2aa9f46136e56a4d125b17c102475fa6e5bc',
+                  corpus: 'skill',
+                  sourceCommit: 'fe4d2aa9f46136e56a4d125b17c102475fa6e5bc',
+                  repoPath: '.github/skills/develop-canvas-game/references/game-kit.md',
+                },
+              },
+            },
+          },
+        ],
+        steps: [],
+      },
+    };
+    const fetchImpl = vi.fn(async () => jsonResponse(realAnswerResponse));
+    const queryKnowledge = testClient({ engineId: 'gamedevpl-knowledge', fetchImpl });
+
+    const result = await queryKnowledge({ query: 'how do parties work in gamekit', mode: 'answer' });
+
+    expect(result.answer).toBe(realAnswerResponse.answer.answerText);
+    expect(result.repoPaths).toEqual(['.github/skills/develop-canvas-game/references/game-kit.md']);
+    expect(result.indexedCommit).toBe('fe4d2aa9f46136e56a4d125b17c102475fa6e5bc');
+    expect(result.chunks[0].snippet).toBe(realAnswerResponse.answer.references[0].chunkInfo.content);
+  });
+});
+
 describe('empty-answer detection and fallback', () => {
   it('falls back to chunks and labels the result, per invariant 2', async () => {
     const fetchImpl = vi
