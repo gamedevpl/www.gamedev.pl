@@ -421,8 +421,8 @@
       "chat": "Chat",
       "collapse": "Collapse",
       "expand": "Expand",
-      "popOut": "Open as page",
-      "closeThread": "Close chat",
+      "fullScreen": "Full screen",
+      "exitFullScreen": "Exit full screen",
       "peekEmpty": "No updates yet"
     },
     "share": {

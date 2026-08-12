@@ -528,7 +528,7 @@
     "apps/web/src/splashMascotPullups.test.ts": 34,
     "apps/web/src/SplitHero.tsx": 10,
     "apps/web/src/studioApi.ts": 835,
-    "apps/web/src/StudioChatRail.tsx": 256,
+    "apps/web/src/StudioChatRail.tsx": 230,
     "apps/web/src/StudioConnectCard.test.tsx": 66,
     "apps/web/src/StudioConnectCard.tsx": 472,
     "apps/web/src/StudioCreatorAgentKeyPanel.tsx": 37,
