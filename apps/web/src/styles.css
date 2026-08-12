@@ -5901,6 +5901,16 @@ a.user-name--profile:focus-visible {
   line-height: 1.35;
 }
 
+.studio-turn-working-actions {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: auto;
+  align-self: stretch;
+  justify-content: flex-end;
+}
+
 .studio-turn.is-working.is-thought .studio-turn-working-label {
   color: var(--turquoise);
   animation: studio-thought-flash 0.55s ease-out;

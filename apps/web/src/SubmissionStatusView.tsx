@@ -774,6 +774,23 @@ export function SubmissionStatusView({
             ? t('statusView.phaseLabels.dispatched')
             : t(`statusView.states.${status.status}.label`)
         : '';
+    const liveHandoff =
+      status?.builder === 'platform' && canInterruptPlatformAgent(status) ? (
+        <SwitchToSelfControl
+          compact
+          active
+          onSwitchToSelf={handoffToSelfFromUi}
+          pending={status?.builderHandoff?.target === 'self'}
+        />
+      ) : status?.builder === 'self' && agentWorking ? (
+        <SwitchToPlatformControl
+          compact
+          active
+          onSwitchToPlatform={handoffToPlatformFromUi}
+          pending={status?.builderHandoff?.target === 'platform'}
+          unavailable={status?.platformBuilder?.available === false ? status.platformBuilder.reason : undefined}
+        />
+      ) : null;
     // Foot bar owns the waiting caption — the card drops it.
     const footBarShowing = Boolean(status && !agentWorking && status.stall !== 'ended' && !status.agentEndedAt);
     return (
@@ -814,6 +831,12 @@ export function SubmissionStatusView({
                         thoughtKey: gateThought?.key ?? workingThought?.key ?? null,
                         thoughtAt: gateThought?.at ?? workingThought?.at ?? null,
                         heartbeatAt: gateThought ? Date.parse(status.gateProgress!.at) || heartbeatAt : heartbeatAt,
+                        actions: (
+                          <span className="studio-turn-working-actions">
+                            {liveHandoff}
+                            <AbandonControl token={token} compact intent="stop" />
+                          </span>
+                        ),
                       }
                     : null
                 }
@@ -925,13 +948,14 @@ export function SubmissionStatusView({
                     failureReason={status.failure?.reason}
                     phase={status.phase}
                     handoffPending={status.builderHandoff?.target}
+                    agentWorking={agentWorking}
                     onSwitchToPlatform={
-                      status.builder === 'self' && (agentWorking || status.builderHandoff?.target === 'platform')
+                      status.builder === 'self' && !agentWorking && status.builderHandoff?.target === 'platform'
                         ? handoffToPlatformFromUi
                         : undefined
                     }
                     onSwitchToSelf={
-                      canInterruptPlatformAgent(status) || status.builderHandoff?.target === 'self'
+                      (!agentWorking && canInterruptPlatformAgent(status)) || status.builderHandoff?.target === 'self'
                         ? handoffToSelfFromUi
                         : undefined
                     }
@@ -1141,6 +1165,7 @@ export function SubmissionStatusView({
                 token={token}
                 published={status.status === 'published'}
                 building={!preview && !channelHtml}
+                agentWorking={Boolean(status && isAgentWorkActive(status))}
                 chooseBuilder={canChooseBuilder(status)}
                 initialBuilder={resolveDefaultBuilder(token, status)}
                 roundBuilder={status.builder && isBuilderKind(status.builder) ? status.builder : undefined}
@@ -1196,7 +1221,15 @@ export function SubmissionStatusView({
  * mis-tap can't throw away an hour of agent work. Deliberately understated — it is
  * an escape hatch, not something to invite.
  */
-function AbandonControl({ token, compact = false }: { token: string; compact?: boolean }) {
+function AbandonControl({
+  token,
+  compact = false,
+  intent = 'abandon',
+}: {
+  token: string;
+  compact?: boolean;
+  intent?: 'abandon' | 'stop';
+}) {
   const { t } = useTranslation();
   const [armed, setArmed] = useState(false);
   const [state, setState] = useState<'idle' | 'sending'>('idle');
@@ -1225,15 +1258,16 @@ function AbandonControl({ token, compact = false }: { token: string; compact?: b
         type="button"
         className={compact ? 'studio-context-stop' : 'status-abandon'}
         onClick={() => setArmed(true)}
-        title={t('statusView.abandon.start')}
-        aria-label={t('statusView.abandon.start')}
+        title={t(`statusView.abandon.${intent === 'stop' ? 'stopStart' : 'start'}`)}
+        aria-label={t(`statusView.abandon.${intent === 'stop' ? 'stopStart' : 'start'}`)}
       >
         {compact ? (
           <>
-            <PixelIcon name="close" size={11} /> {t('statusView.abandon.compact')}
+            <PixelIcon name="close" size={11} />{' '}
+            {t(`statusView.abandon.${intent === 'stop' ? 'stopCompact' : 'compact'}`)}
           </>
         ) : (
-          t('statusView.abandon.start')
+          t(`statusView.abandon.${intent === 'stop' ? 'stopStart' : 'start'}`)
         )}
       </button>
     );
@@ -1241,14 +1275,16 @@ function AbandonControl({ token, compact = false }: { token: string; compact?: b
 
   return (
     <span className={`status-abandon-confirm${compact ? ' is-compact' : ''}`}>
-      {compact ? null : t('statusView.abandon.confirm')}
+      {compact ? null : t(`statusView.abandon.${intent === 'stop' ? 'stopConfirm' : 'confirm'}`)}
       <button
         type="button"
         className={compact ? 'studio-context-stop is-danger' : 'status-abandon is-danger'}
         disabled={state === 'sending'}
         onClick={() => void abandon()}
       >
-        {state === 'sending' ? t('statusView.abandon.sending') : t('statusView.abandon.yes')}
+        {state === 'sending'
+          ? t(`statusView.abandon.${intent === 'stop' ? 'stopSending' : 'sending'}`)
+          : t(`statusView.abandon.${intent === 'stop' ? 'stopYes' : 'yes'}`)}
       </button>
       <button
         type="button"
@@ -1366,6 +1402,7 @@ function FeedbackPanel({
   token,
   published,
   building,
+  agentWorking = false,
   compact = false,
   chooseBuilder = false,
   initialBuilder = 'platform',
@@ -1385,6 +1422,7 @@ function FeedbackPanel({
   /** Routes the message: an improvement on the live game, or a change on the build. */
   published: boolean;
   building: boolean;
+  agentWorking?: boolean;
   /** The thread's reply box rather than a page section — field and send, nothing else. */
   compact?: boolean;
   /** Show builder choice — the next send opens a new round. */
@@ -1481,7 +1519,7 @@ function FeedbackPanel({
 
   const send = async (requestedText: string = trimmed) => {
     const message = requestedText.trim();
-    if (message.length < 10 || state === 'sending') return;
+    if (message.length < 10 || state === 'sending' || agentWorking) return;
     setState('sending');
     setError(null);
     setNotice(null);
@@ -1562,7 +1600,9 @@ function FeedbackPanel({
   const hintKey = published
     ? 'statusView.feedback.hintPublished'
     : building
-      ? 'statusView.feedback.hintBuilding'
+      ? agentWorking
+        ? 'statusView.feedback.hintBusy'
+        : 'statusView.feedback.hintBuilding'
       : 'statusView.feedback.hint';
   const titleKey = published
     ? 'statusView.feedback.titlePublished'
@@ -1576,7 +1616,9 @@ function FeedbackPanel({
   const composerHintKey = published
     ? 'statusView.feedback.composerHintPublished'
     : building
-      ? 'statusView.feedback.composerHintBuilding'
+      ? agentWorking
+        ? 'statusView.feedback.busyComposerHint'
+        : 'statusView.feedback.composerHintBuilding'
       : 'statusView.feedback.composerHint';
 
   // Sticky builder signal in the composer toolbar (Claude/Cursor shape): always when
@@ -1584,13 +1626,14 @@ function FeedbackPanel({
   // visible. Platform mid-round stays chrome-free unless its explicit interruption
   // control is available — no future-round selector until a boundary.
   const effectiveBuilder = chooseBuilder ? builder : (roundBuilder ?? builder);
-  const showBuilderBadge = chooseBuilder || effectiveBuilder === 'self' || Boolean(onSwitchToSelf);
+  const showBuilderBadge =
+    chooseBuilder || effectiveBuilder === 'self' || Boolean(onSwitchToSelf) || (agentWorking && Boolean(roundBuilder));
   const builderSelector = showBuilderBadge ? (
     <BuilderModeBadge
       value={effectiveBuilder}
       onChange={handleBuilderChange}
       canChange={chooseBuilder}
-      disabled={state === 'sending'}
+      disabled={state === 'sending' || agentWorking}
       platformUnavailable={platformUnavailable}
     />
   ) : null;
@@ -1688,7 +1731,7 @@ function FeedbackPanel({
           aria-label={t(titleKey)}
           rows={1}
           maxLength={2000}
-          disabled={sending}
+          disabled={sending || agentWorking}
         />
         <div className="status-composer-toolbar">
           <div className="status-composer-toolbar-left">{builderControls}</div>
@@ -1697,7 +1740,7 @@ function FeedbackPanel({
               type="button"
               className="primary-btn status-composer-send"
               onClick={() => void send()}
-              disabled={sending || trimmed.length < 10}
+              disabled={sending || agentWorking || trimmed.length < 10}
               aria-label={sending ? t('statusView.feedback.sending') : t('statusView.feedback.submit')}
               title={sending ? t('statusView.feedback.sending') : t('statusView.feedback.submit')}
             >
@@ -1712,7 +1755,13 @@ function FeedbackPanel({
         {/* Failures, in-flight, and "kept but nothing started" still need a row — they
             ask the creator to wait or act. A plain Sent receipt does not: the thread
             already shows the message the moment send succeeds. */}
-        {error || sending || notice ? (
+        {agentWorking ? (
+          <div className="status-feedback-actions">
+            <span className="status-feedback-sending" role="status">
+              {t('statusView.feedback.busy')}
+            </span>
+          </div>
+        ) : error || sending || notice ? (
           <div className="status-feedback-actions">
             {error ? (
               <p className="error">{error}</p>
@@ -1761,7 +1810,7 @@ function FeedbackPanel({
         <button
           className="primary-btn"
           onClick={() => void send()}
-          disabled={state === 'sending' || trimmed.length < 10}
+          disabled={state === 'sending' || agentWorking || trimmed.length < 10}
         >
           {state === 'sending' ? t('statusView.feedback.sending') : t('statusView.feedback.submit')}
         </button>
@@ -1795,6 +1844,7 @@ type ThreadWorkingState = {
   thoughtKey: string | null;
   thoughtAt: number | null;
   heartbeatAt: number | null;
+  actions?: ReactNode;
 };
 
 function ThreadStream({
@@ -1947,6 +1997,7 @@ function ThreadStream({
                   <BuildHeartbeat at={working.heartbeatAt} />
                 </span>
               ) : null}
+              {working.actions}
             </li>
           ) : null}
         </ol>
