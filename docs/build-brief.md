@@ -19,14 +19,21 @@ both pin this; it is not a mode, and no delivery contract turns it off.
 `buildPrompt` takes a `DeliveryContract` because a prompt that disagrees with its backend
 is worse than a vague one:
 
-| Contract              | The agent is told                                | Used by                              |
-| --------------------- | ------------------------------------------------ | ------------------------------------ |
-| `{ kind: 'channel' }` | Upload over the build channel, report progress   | Copilot; managed sessions given MCP  |
-| `{ kind: 'outputs' }` | Write the game into the session output directory | Managed sessions delivered by a pull |
+| Contract                          | The agent is told                                                                                    | Used by                                             |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `{ kind: 'channel' }`             | Upload over the build channel, report progress; full repository checkout                             | Copilot on the harness lane                         |
+| `{ kind: 'channel', fast: true }` | Same build-channel upload, but on a clock (~two minutes), MCP-tool-only — no shell, no repo checkout | Anthropic, Gemini, and Copilot's MCP connector lane |
+| `{ kind: 'outputs' }`             | Write the game into the session output directory                                                     | Managed sessions delivered by a pull                |
 
 An agent told to run `npm run submit` inside a sandbox with no route to the API spends the
 round discovering that. An agent told to write files into a directory nobody reads delivers
 nothing at all. The backend knows which is true, so the backend says which.
+
+The `fast` flag follows a managed backend's `promptLane` (`managed-backend.ts`): the
+`harness` lane — Copilot's default — gets the plain `channel` contract, and the `mcp` lane
+gets `channel` with `fast: true`. `build-prompt.ts`'s `channelDelivery` function is where
+the two branches diverge — the fast branch is written for a session with no shell and no
+checkout, so it skips every instruction that assumes either.
 
 **A pull request is not a delivery**, in either mode. Nothing downstream reads pull
 requests: the gate, review and publication all read the store. This has to be said out loud
