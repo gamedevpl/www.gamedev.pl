@@ -164,7 +164,7 @@ export class VertexThemeExtractor implements ThemeExtractor {
   constructor(options: VertexThemeExtractorOptions = {}) {
     this.options = options;
     this.timeoutMs = options.timeoutMs ?? 20_000;
-    this.thinkingLevel = options.thinkingLevel ?? process.env.VERTEX_THINKING_LEVEL ?? 'minimal';
+    this.thinkingLevel = options.thinkingLevel ?? process.env.VERTEX_THINKING_LEVEL ?? 'low';
   }
 
   private getClient(): GenAIClient {

@@ -118,8 +118,8 @@ export interface VertexCheckerOptions {
   projectId?: string;
   region?: string;
   model?: string;
-  // Gemini 3 thinking level ('minimal' | 'low' | 'medium' | 'high'). 'minimal' keeps
-  // latency/cost low — this is a short classification, not a reasoning task.
+  // Gemini 3 thinking level ('low' | 'medium' | 'high'). gemini-3.7-flash dropped
+  // 'minimal' (400 THINKING_LEVEL_MINIMAL unsupported) — 'low' is now the floor.
   thinkingLevel?: string;
   timeoutMs?: number;
   // Custom fetcher/client seam for testing without GCP network calls
@@ -146,7 +146,7 @@ export class VertexChecker implements ContentChecker {
 
   constructor(options: VertexCheckerOptions = {}) {
     this.options = options;
-    this.thinkingLevel = options.thinkingLevel ?? process.env.VERTEX_THINKING_LEVEL ?? 'minimal';
+    this.thinkingLevel = options.thinkingLevel ?? process.env.VERTEX_THINKING_LEVEL ?? 'low';
     this.timeoutMs = options.timeoutMs ?? 5000;
     this.patternChecker = new PatternChecker();
     this.vertexFetcher = options.vertexFetcher;
