@@ -1722,7 +1722,7 @@ function FeedbackPanel({
                 type="button"
                 className="status-composer-stop"
                 onClick={() => void stopAndSwitchToSelf()}
-                aria-label={t('statusView.feedback.stop')}
+                aria-label={t('statusView.feedback.stopTitle')}
                 title={t('statusView.feedback.stopTitle')}
               >
                 {t('statusView.feedback.stop')}
