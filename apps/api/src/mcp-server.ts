@@ -3879,10 +3879,10 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         'Edit ONE existing path in the staging buffer without re-uploading the whole file. ' +
         'Prefer this over stage_source_file whenever the file already exists (from get_sources, a prior stage, or the seed) — ' +
         'especially for large game/render.ts or game/model.ts files. ' +
-        'PREFERRED: pass old + new (exact unique substring replace) — no @@ line numbers, no diff format. ' +
+        'PREFERRED: pass old + new (exact unique substring replace), or patches: [{ old, new }, ...] for multiple replacements in one call — no @@ line numbers, no diff format. ' +
         'ALTERNATE: pass patch as a unified diff for that single file ' +
         '("--- a/game/render.ts\\n+++ b/game/render.ts\\n@@\\n context\\n-old\\n+new\\n context\\n"; bare @@ ok). ' +
-        'old must match exactly once; widen the snippet if it is ambiguous. Do not pass patch together with old/new. ' +
+        'old must match exactly once; widen the snippet if it is ambiguous. Do not pass patch together with old/new or patches. ' +
         'Then submit_sources({ fromStaged: true, mode, kitEngineRef }); fromStaged overlays onto the latest delivery/seed so you only need the patched paths staged. ' +
         BEHAVIOURAL_CONTRACT,
       inputSchema: {
@@ -3901,10 +3901,22 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             type: 'string',
             description: 'Replacement text for old (may be empty to delete). Pass together with old.',
           },
+          patches: {
+            type: 'array',
+            description: 'Array of { old, new } replacement pairs to apply sequentially to this file in one call.',
+            items: {
+              type: 'object',
+              properties: {
+                old: { type: 'string', description: 'Exact text to find.' },
+                new: { type: 'string', description: 'Replacement text.' },
+              },
+              required: ['old', 'new'],
+            },
+          },
           patch: {
             type: 'string',
             description:
-              'Unified diff for this one file only (alternative to old+new). Bare `@@` hunks are fine when context matches.',
+              'Unified diff for this one file only (alternative to old+new or patches). Bare `@@` hunks are fine when context matches.',
           },
           slug: { type: 'string' },
         },
@@ -3918,14 +3930,19 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         const hasPatch = typeof args.patch === 'string' && args.patch.trim().length > 0;
         const hasOld = typeof args.old === 'string';
         const hasNew = typeof args.new === 'string';
-        if (hasPatch && (hasOld || hasNew)) {
-          return toolErr('pass either old+new (exact replace) or patch (unified diff), not both');
+        const hasPatches = Array.isArray(args.patches) && args.patches.length > 0;
+
+        const modes = [hasPatch, hasOld || hasNew, hasPatches].filter(Boolean).length;
+        if (modes > 1) {
+          return toolErr(
+            'pass either old+new (single exact replace), patches[] (multi-replace), or patch (unified diff)',
+          );
         }
         if (hasOld !== hasNew) {
           return toolErr('old and new must be passed together');
         }
-        if (!hasPatch && !hasOld) {
-          return toolErr('pass old+new (preferred) or patch (unified diff)');
+        if (modes === 0) {
+          return toolErr('pass old+new (preferred), patches[] (multi-replace), or patch (unified diff)');
         }
         const slug =
           typeof args.slug === 'string' && args.slug.trim() ? args.slug.trim() : (auth.record.slug ?? undefined);
@@ -3936,7 +3953,11 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           auth.channelToken,
           {
             path,
-            ...(hasPatch ? { patch: args.patch } : { old: args.old, new: args.new }),
+            ...(hasPatches
+              ? { patches: args.patches }
+              : hasPatch
+                ? { patch: args.patch }
+                : { old: args.old, new: args.new }),
             ...(slug ? { slug } : {}),
           },
         );
@@ -4463,6 +4484,12 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             description:
               "Which language summaryLocalized is written in, e.g. 'pl'. Without it summaryLocalized is ignored.",
           },
+          ackInboxIds: {
+            type: 'array',
+            description:
+              'Optional array of creator inbox message IDs to acknowledge simultaneously when ending the round.',
+            items: { type: 'string' },
+          },
         },
       },
       handler: async (args, ctx) => {
@@ -4473,6 +4500,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           ...(typeof args.summary === 'string' ? { summary: args.summary } : {}),
           ...(typeof args.summaryLocalized === 'string' ? { summaryLocalized: args.summaryLocalized } : {}),
           ...(typeof args.locale === 'string' ? { locale: args.locale } : {}),
+          ...(Array.isArray(args.ackInboxIds) ? { ackInboxIds: args.ackInboxIds } : {}),
         };
         const res = await injectChannel(ctx.request, 'POST', '/api/agent/build/end', auth.channelToken, payload);
         const body = res.json() as {

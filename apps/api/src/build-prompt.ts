@@ -61,7 +61,7 @@ export function buildPrompt(brief: BuildBrief, delivery: DeliveryContract = { ki
           '',
         ]
       : []),
-    ...(brief.feedback && !brief.undelivered && channel
+    ...(brief.feedback && !brief.undelivered && channel && !fastLane
       ? [
           '## Before you change anything',
           '',
@@ -77,6 +77,16 @@ export function buildPrompt(brief: BuildBrief, delivery: DeliveryContract = { ki
           'It writes back the exact files that were delivered. Read them, then make the',
           'creator’s changes on top of them. If it reports nothing delivered yet, the earlier',
           'round never finished and you are starting the game rather than revising it.',
+          '',
+        ]
+      : []),
+    ...(brief.feedback && !brief.undelivered && channel && fastLane
+      ? [
+          '## Before you change anything',
+          '',
+          'Fetch the version the creator actually played using the MCP tools below (`start` then `get_sources`).',
+          'Do not run bash exploration commands — this execution environment is an MCP-only sandbox with no local checkout.',
+          'Read the returned files, then make the creator’s changes on top of them.',
           '',
         ]
       : []),

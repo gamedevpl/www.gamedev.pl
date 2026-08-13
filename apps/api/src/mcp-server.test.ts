@@ -785,6 +785,23 @@ declare const GameKit: { defineGame(): unknown };
     expect(audioWarnings.find((w) => w.code === 'audio_catalog_hint')?.message).toMatch(
       /unknown music track "fantasy-adventure"/,
     );
+
+    // Also verify multi-patch via patch_source_file works with patches[]
+    const multiPatch = await callTool(
+      app,
+      'patch_source_file',
+      {
+        sessionKey,
+        path: 'game/render.ts',
+        patches: [
+          { old: "'hi'", new: "'hello'" },
+          { old: "textAlign: 'center'", new: "align: 'center'" },
+        ],
+      },
+      { 'mcp-session-id': sessionId },
+    );
+    expect(multiPatch.isError).toBe(false);
+    expect((multiPatch.structured as { replacements?: number }).replacements).toBe(2);
   });
 
   it('knowledge_query is advertised and callable, and returns the seam result', async () => {

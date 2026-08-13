@@ -62,7 +62,7 @@ import { seedPayload } from './seed-status.js';
 import { largeSourceFileHint } from './module-size.js';
 import { gameManifestHint } from './game-manifest-hint.js';
 import { computeStageAdvisories } from './stage-hints.js';
-import { applyExactReplace, applySourcePatch, SourcePatchError } from './source-patch.js';
+import { applyExactReplace, applyMultipleExactReplaces, applySourcePatch, SourcePatchError } from './source-patch.js';
 import { overlayGameSources } from './staged-preview.js';
 import { SourceDeliveryValidationError, type SourceDeliveryService } from './source-delivery.js';
 import { type BuilderHandoff, type CreatorMessage, type Store, type SubmissionRecord } from './store.js';
@@ -70,24 +70,8 @@ import { BUILD_EVENT_KINDS, BUILD_STEPS, sanitizeCreatorText, type BuildEvent } 
 import { normalizeAtIntake, type IntakeText } from './localize-intake.js';
 import { createTranslatorFromEnv, type Translator } from './translate.js';
 
-/**
- * The build channel (docs/agent-live-channel-plan.md).
- *
- * Before this existed, everything the creator saw about their build had to travel by
- * git: the agent wrote a note, committed it, pushed it, waited for CI, and we read it
- * back through a 60-second-cached contents API. The transport charged a CI run per
- * sentence, so agents batched — which is why the status page sat still for ten minutes
- * at a time. This is the direct route: one authenticated POST, visible in seconds.
- *
- * It is also the *return* path. Every call answers with the creator's queued change
- * requests and a control block, so an agent that reports progress gets its instructions
- * back for free. Note the limit: this makes a *working* agent responsive, but it cannot
- * wake a stopped one — nothing is polling between sessions. Creator feedback therefore
- * still goes out as a PR comment, which is both the durable record and the wake-up.
- *
- * Everything the agent sends is untrusted, prompt-influenced text: sanitized here,
- * escaped on render, and never fed back to any model as instructions.
- */
+// The build channel (docs/agent-live-channel-plan.md).
+// Direct route for progress, staging, submission, and status.
 
 const MAX_EVENT_TEXT = 300;
 
@@ -153,6 +137,7 @@ const EndRequestSchema = z.object({
     .max(10)
     .regex(/^[a-z]{2}(-[A-Za-z0-9]{2,8})?$/, 'invalid locale')
     .optional(),
+  ackInboxIds: z.array(z.string().trim().min(1).max(64)).max(50).optional(),
 });
 
 const MAX_SHOT_LABEL = 120;
@@ -295,19 +280,22 @@ const DeleteSourceInputSchema = z.object({
   path: z.string().trim().min(1).max(120),
 });
 
+const ExactPatchPairSchema = z.object({
+  old: z.string().max(200_000),
+  new: z.string().max(200_000),
+});
+
 const StageSourcePatchInputSchema = z
   .object({
     path: z.string().trim().min(1).max(120),
-    /** Unified diff for this one path (`---` / `+++` + `@@` hunks). */
     patch: z
       .string()
       .transform((value) => value.trim())
       .pipe(z.string().min(1, 'patch must not be empty').max(400_000))
       .optional(),
-    /** Exact unique substring to replace (pair with `new`). Prefer this over `patch` in chat. */
     old: z.string().max(200_000).optional(),
-    /** Replacement for `old` (may be empty to delete). */
     new: z.string().max(200_000).optional(),
+    patches: z.array(ExactPatchPairSchema).min(1).max(50).optional(),
     slug: z
       .string()
       .trim()
@@ -319,10 +307,14 @@ const StageSourcePatchInputSchema = z
     const hasPatch = value.patch !== undefined;
     const hasOld = value.old !== undefined;
     const hasNew = value.new !== undefined;
-    if (hasPatch && (hasOld || hasNew)) {
+    const hasPatches = value.patches !== undefined && value.patches.length > 0;
+
+    const modes = [hasPatch, hasOld || hasNew, hasPatches].filter(Boolean).length;
+    if (modes > 1) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'pass either patch (unified diff) or old+new (exact replace), not both',
+        message:
+          'pass either old+new (single exact replace), patches[] (multiple exact replaces), or patch (unified diff)',
       });
       return;
     }
@@ -333,10 +325,10 @@ const StageSourcePatchInputSchema = z
       });
       return;
     }
-    if (!hasPatch && !hasOld) {
+    if (modes === 0) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'pass old+new (exact replace, preferred) or patch (unified diff)',
+        message: 'pass old+new (exact replace, preferred), patches[] (multi-replace), or patch (unified diff)',
       });
     }
   });
@@ -846,7 +838,7 @@ export async function registerAgentChannelRoutes(
         // a tool that felt like finishing. This rides along with something the agent
         // is already doing, and it is derived from what we actually stored rather than
         // from anything the session believes about itself.
-        delivered: Boolean(record.deliveredVersion),
+        delivered: Boolean(record.deliveredVersion || record.previewVersion),
         // Delivering is not finishing. The gate runs *after* the upload, against our
         // engine, and it is the thing that decides whether any of this can be published
         // — so an agent that delivers and stops has handed over a game nobody can ship
@@ -872,7 +864,7 @@ export async function registerAgentChannelRoutes(
                       'sandbox). Re-delivering without a fix just stores another version that fails the same way.',
             }
           : {}),
-        ...(record.deliveredVersion
+        ...(record.deliveredVersion || record.previewVersion
           ? {}
           : {
               mustDeliver:
@@ -1478,18 +1470,24 @@ export async function registerAgentChannelRoutes(
         }
 
         const patched =
-          parsed.data.old !== undefined && parsed.data.new !== undefined
-            ? applyExactReplace({
+          parsed.data.patches !== undefined
+            ? applyMultipleExactReplaces({
                 content: base,
                 path: parsed.data.path,
-                old: parsed.data.old,
-                new: parsed.data.new,
+                patches: parsed.data.patches,
               })
-            : applySourcePatch({
-                content: base,
-                path: parsed.data.path,
-                patch: parsed.data.patch!,
-              });
+            : parsed.data.old !== undefined && parsed.data.new !== undefined
+              ? applyExactReplace({
+                  content: base,
+                  path: parsed.data.path,
+                  old: parsed.data.old,
+                  new: parsed.data.new,
+                })
+              : applySourcePatch({
+                  content: base,
+                  path: parsed.data.path,
+                  patch: parsed.data.patch!,
+                });
 
         const staged = await options.gamesStore.putStagedSourceFile({
           slug,
@@ -2033,6 +2031,10 @@ export async function registerAgentChannelRoutes(
         await store!.appendBuildEvent(issueNumber, event);
         return true;
       };
+
+      if (parsed.data.ackInboxIds && parsed.data.ackInboxIds.length > 0) {
+        await store!.markCreatorMessagesDelivered(issueNumber, parsed.data.ackInboxIds).catch(() => {});
+      }
 
       if (
         record.builderHandoff &&

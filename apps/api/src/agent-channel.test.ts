@@ -2404,11 +2404,30 @@ describe('the delivery reminder on every channel call', () => {
     await app.close();
   });
 
-  it('stops nagging once the build has actually delivered', async () => {
+  it('stops nagging once the build has actually delivered (deliveredVersion or previewVersion)', async () => {
     // Derived from what we stored, not from anything the session claims about itself.
     const store = new InMemoryStore();
     await seedSubmission(store);
     await store.setSubmissionDeliveredVersion(ISSUE, 'v1');
+    const app = await createApp(store);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/progress',
+      headers: agentHeaders(),
+      payload: { text: 'Polishing.' },
+    });
+
+    expect(response.json().control.delivered).toBe(true);
+    expect(response.json().control.mustDeliver).toBeUndefined();
+
+    await app.close();
+  });
+
+  it('stops nagging when a previewVersion was delivered', async () => {
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    await store.setSubmissionPreviewVersion(ISSUE, 'v1-preview');
     const app = await createApp(store);
 
     const response = await app.inject({
