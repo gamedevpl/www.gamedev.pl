@@ -497,7 +497,10 @@ describe('/api/admin/creation-limits', () => {
       });
 
       expect(res.statusCode).toBe(200);
-      expect((res.json() as CreationLimitsResponse).effective.hasPlatformBackend).toBe(false);
+      const effective = (res.json() as CreationLimitsResponse).effective;
+      // A stray Copilot token builds; the broken default still resolves to nothing.
+      expect(effective.managedAgentVendor.effective).toBeNull();
+      expect(effective.managedAgentVendor.available).toBe(false);
       await app.close();
     } finally {
       for (const [key, value] of previous) {
@@ -526,6 +529,13 @@ describe('/api/admin/creation-limits', () => {
       managedDailyCap: null,
       managedDailyUserCap: null,
       hasPlatformBackend: false,
+      managedAgentVendor: {
+        stored: null,
+        effective: null,
+        available: false,
+        configuredVendors: [],
+        defaultVendor: null,
+      },
     });
     // A pause left on by accident is this feature's own failure mode, so the record of
     // who set it is part of the deliverable.
@@ -553,8 +563,51 @@ describe('/api/admin/creation-limits', () => {
       managedDailyCap: null,
       managedDailyUserCap: null,
       hasPlatformBackend: false,
+      managedAgentVendor: {
+        stored: null,
+        effective: null,
+        available: false,
+        configuredVendors: [],
+        defaultVendor: null,
+      },
     });
     await app.close();
+  });
+
+  it('flips the managed vendor at runtime and reports it as effective and available', async () => {
+    const keys = ['MANAGED_AGENT_VENDOR', 'AGENT_TASKS_TOKEN'] as const;
+    const previous = new Map(keys.map((key) => [key, process.env[key]]));
+    // No default vendor — Copilot builds purely on its own staged credential.
+    delete process.env.MANAGED_AGENT_VENDOR;
+    process.env.AGENT_TASKS_TOKEN = 'test-token';
+
+    try {
+      const app = await appWith(store);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/admin/creation-limits',
+        headers: authHeaders('g:boss'),
+        payload: { managedAgentVendorOverride: 'copilot' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json() as CreationLimitsResponse;
+      expect(body.stored?.managedAgentVendorOverride).toBe('copilot');
+      expect(body.effective.managedAgentVendor).toEqual({
+        stored: 'copilot',
+        effective: 'copilot',
+        available: true,
+        configuredVendors: ['copilot'],
+        defaultVendor: null,
+      });
+      await app.close();
+    } finally {
+      for (const [key, value] of previous) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
   });
 
   it('accepts a chat-breaker patch, same document as the other lanes', async () => {

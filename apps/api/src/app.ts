@@ -588,6 +588,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     publicPlayFallbackSlugs: [...publicPlayFallbackSlugs],
     publicPlayTtlMs,
     hasPlatformBackend: submissionSeams.hasPlatformBackend,
+    configuredVendors: submissionSeams.configuredVendors,
+    defaultVendor: submissionSeams.defaultVendor,
   });
 
   // Review catalog matches /api/catalog; snapshot first in prod.

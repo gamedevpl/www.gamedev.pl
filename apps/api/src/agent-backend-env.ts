@@ -27,14 +27,27 @@ interface Logger {
   warn: (context: object, message: string) => void;
 }
 
-/** Registry keyed by the round's builder. `self` is always present; platform needs creds. */
+// Every managed vendor this file knows how to build a backend for.
+export const MANAGED_AGENT_VENDORS = ['anthropic', 'gemini', 'copilot'] as const;
+export type ManagedAgentVendorName = (typeof MANAGED_AGENT_VENDORS)[number];
+
+// One backend per vendor built at boot — a runtime override selects one.
 export interface AgentBackendRegistry {
-  platform?: AgentBackend;
+  platformByVendor: Map<string, AgentBackend>;
+  defaultVendor?: string;
   self: AgentBackend;
 }
 
-export function resolveBuilderBackend(registry: AgentBackendRegistry, builder: BuilderKind): AgentBackend | undefined {
-  return builder === 'self' ? registry.self : registry.platform;
+// An unconfigured or omitted vendor name falls back to registry.defaultVendor.
+export function resolveBuilderBackend(
+  registry: AgentBackendRegistry,
+  builder: BuilderKind,
+  vendor?: string,
+): AgentBackend | undefined {
+  if (builder === 'self') return registry.self;
+  const named = vendor ? registry.platformByVendor.get(vendor) : undefined;
+  if (named) return named;
+  return registry.defaultVendor ? registry.platformByVendor.get(registry.defaultVendor) : undefined;
 }
 
 // What the managed backend needs that the environment cannot supply.
@@ -51,11 +64,12 @@ export interface ManagedBackendDeps {
   readCredentialRef?: (issueNumber: number, sessionRef: string) => Promise<string | undefined>;
 }
 
-// Vendor is a variable; a delivery sink is required.
-export function createManagedPlatformBackendFromEnv(deps?: ManagedBackendDeps, log?: Logger): AgentBackend | undefined {
-  const vendor = process.env.MANAGED_AGENT_VENDOR?.trim();
-  if (!vendor) return undefined;
-
+// One vendor's backend — a bad Gemini key must not affect Anthropic.
+function buildManagedBackendForVendor(
+  vendor: string,
+  deps: ManagedBackendDeps | undefined,
+  log: Logger | undefined,
+): AgentBackend | undefined {
   const isCopilot = vendor === 'copilot';
   const isGemini = vendor === 'gemini';
   const apiKey = (
@@ -203,26 +217,42 @@ export function createManagedPlatformBackendFromEnv(deps?: ManagedBackendDeps, l
   });
 }
 
-/**
- * Builds the registry. Self is always available (no external credential); platform is
- * whatever {@link createManagedPlatformBackendFromEnv} resolves — the direct Copilot
- * backend (`copilot-backend.ts`) was retired in MP-04, so an unset or invalid
- * `MANAGED_AGENT_VENDOR` now means no platform builder, not a silent Copilot fallback.
- */
+// @deprecated Single-vendor convenience; prefer createManagedPlatformBackendsFromEnv.
+export function createManagedPlatformBackendFromEnv(deps?: ManagedBackendDeps, log?: Logger): AgentBackend | undefined {
+  const vendor = process.env.MANAGED_AGENT_VENDOR?.trim();
+  if (!vendor) return undefined;
+  return buildManagedBackendForVendor(vendor, deps, log);
+}
+
+// One backend per configured vendor; a runtime override selects between them.
+export function createManagedPlatformBackendsFromEnv(
+  deps?: ManagedBackendDeps,
+  log?: Logger,
+): { platformByVendor: Map<string, AgentBackend>; defaultVendor?: string } {
+  const defaultVendor = process.env.MANAGED_AGENT_VENDOR?.trim() || undefined;
+  const platformByVendor = new Map<string, AgentBackend>();
+  for (const vendor of MANAGED_AGENT_VENDORS) {
+    // Only the default vendor's own build warnings are logged.
+    const backend = buildManagedBackendForVendor(vendor, deps, vendor === defaultVendor ? log : undefined);
+    if (backend) platformByVendor.set(vendor, backend);
+  }
+  return { platformByVendor, ...(defaultVendor ? { defaultVendor } : {}) };
+}
+
+// MP-04: an invalid default means no builder, never a silent Copilot fallback.
 export function createAgentBackendRegistryFromEnv(
   log?: Logger,
   selfOptions?: SelfBuildBackendOptions,
   managedDeps?: ManagedBackendDeps,
 ): AgentBackendRegistry {
-  const selectedVendor = process.env.MANAGED_AGENT_VENDOR?.trim();
-  const platform = createManagedPlatformBackendFromEnv(managedDeps, log);
+  const { platformByVendor, defaultVendor } = createManagedPlatformBackendsFromEnv(managedDeps, log);
   const self = createSelfBuildBackend(selfOptions);
-  if (selectedVendor && !platform) {
-    log?.warn({ vendor: selectedVendor }, 'managed agent vendor is set but invalid; platform dispatch stays off');
-  } else if (!platform) {
+  if (defaultVendor && !platformByVendor.has(defaultVendor)) {
+    log?.warn({ vendor: defaultVendor }, 'managed agent vendor is set but invalid; platform dispatch stays off');
+  } else if (platformByVendor.size === 0) {
     log?.info({ backend: 'self' }, 'self-build backend enabled (no platform dispatch credential)');
   }
-  return { ...(platform ? { platform } : {}), self };
+  return { platformByVendor, ...(defaultVendor ? { defaultVendor } : {}), self };
 }
 
 /**

@@ -21,6 +21,10 @@ export interface ManagedAvailabilityOptions {
   // Whether the registry's `platform` backend is actually wired.
   hasPlatformBackend: boolean;
   logWarn?: (payload: Record<string, unknown>, message: string) => void;
+  // Vendors with a real backend built at boot.
+  configuredVendors?: ReadonlySet<string>;
+  // MANAGED_AGENT_VENDOR — what resolveVendor() returns absent a valid override.
+  defaultVendor?: string;
 }
 
 export interface ManagedAvailabilityGate {
@@ -28,6 +32,8 @@ export interface ManagedAvailabilityGate {
   peek(uid: string, dateStr: string): Promise<ManagedAvailability>;
   // Spends the daily slot on success. Call right before a fresh dispatch.
   checkAndSpend(uid: string, dateStr: string): Promise<ManagedAvailability>;
+  // Vendor a fresh dispatch should use: stored override, else defaultVendor.
+  resolveVendor(): Promise<string | undefined>;
 }
 
 function bypassesBreaker(uid: string): boolean {
@@ -35,7 +41,7 @@ function bypassesBreaker(uid: string): boolean {
 }
 
 export function createManagedAvailabilityGate(options: ManagedAvailabilityOptions): ManagedAvailabilityGate {
-  const { store, hasPlatformBackend } = options;
+  const { store, hasPlatformBackend, configuredVendors, defaultVendor } = options;
   const now = options.now ?? Date.now;
   const ttlMs = options.ttlMs ?? DEFAULT_MANAGED_AVAILABILITY_TTL_MS;
   const logWarn = options.logWarn ?? (() => {});
@@ -65,6 +71,8 @@ export function createManagedAvailabilityGate(options: ManagedAvailabilityOption
     if (mode === 'off') return { available: false, reason: 'outage' };
     if (mode === 'coming_soon') return { available: false, reason: 'coming_soon' };
     if (!hasPlatformBackend) return { available: false, reason: 'coming_soon' };
+    // A built backend alone doesn't mean one is actually selected.
+    if (!(await resolveVendor())) return { available: false, reason: 'coming_soon' };
     return { available: true };
   }
 
@@ -116,8 +124,17 @@ export function createManagedAvailabilityGate(options: ManagedAvailabilityOption
     return checkCaps(uid, dateStr, spend);
   }
 
+  async function resolveVendor(): Promise<string | undefined> {
+    const stored = await config();
+    const override = stored?.managedAgentVendorOverride;
+    if (override && configuredVendors?.has(override)) return override;
+    // defaultVendor may not have actually built; verify before returning it.
+    return defaultVendor && configuredVendors?.has(defaultVendor) ? defaultVendor : undefined;
+  }
+
   return {
     peek: (uid, dateStr) => resolve(uid, dateStr, false),
     checkAndSpend: (uid, dateStr) => resolve(uid, dateStr, true),
+    resolveVendor,
   };
 }

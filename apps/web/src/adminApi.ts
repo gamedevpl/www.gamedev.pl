@@ -67,12 +67,14 @@ export async function fetchAdminSummary(): Promise<AdminSummary | null> {
 }
 
 export type ManagedBuilderMode = 'auto' | 'off' | 'coming_soon';
+export type ManagedAgentVendor = 'anthropic' | 'gemini' | 'copilot';
 
 export interface CreationLimits {
   stored: {
     paused?: boolean;
     globalDailySubmissionCap?: number | null;
     managedBuilderMode?: ManagedBuilderMode;
+    managedAgentVendorOverride?: ManagedAgentVendor | null;
     managedDailyCap?: number | null;
     managedDailyUserCap?: number | null;
     updatedAt?: string;
@@ -85,6 +87,13 @@ export interface CreationLimits {
     managedDailyCap: number | null;
     managedDailyUserCap: number | null;
     hasPlatformBackend: boolean;
+    managedAgentVendor: {
+      stored: ManagedAgentVendor | null;
+      effective: ManagedAgentVendor | null;
+      available: boolean;
+      configuredVendors: ManagedAgentVendor[];
+      defaultVendor: ManagedAgentVendor | null;
+    };
   };
   today: { dateStr: string; submissions: number; managedBuilds: number };
   propagationMs: number;
@@ -108,6 +117,7 @@ export async function setCreationLimits(patch: {
   paused?: boolean;
   globalDailySubmissionCap?: number | null;
   managedBuilderMode?: ManagedBuilderMode;
+  managedAgentVendorOverride?: ManagedAgentVendor | null;
   managedDailyCap?: number | null;
   managedDailyUserCap?: number | null;
 }): Promise<CreationLimits | { error: string }> {
