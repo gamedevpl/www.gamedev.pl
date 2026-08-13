@@ -575,11 +575,12 @@ describe('/api/admin/creation-limits', () => {
   });
 
   it('flips the managed vendor at runtime and reports it as effective and available', async () => {
-    const keys = ['MANAGED_AGENT_VENDOR', 'AGENT_TASKS_TOKEN'] as const;
+    const keys = ['MANAGED_AGENT_VENDOR', 'AGENT_TASKS_TOKEN', 'MANAGED_AGENT_MAX_SECONDS'] as const;
     const previous = new Map(keys.map((key) => [key, process.env[key]]));
     // No default vendor — Copilot builds purely on its own staged credential.
     delete process.env.MANAGED_AGENT_VENDOR;
     process.env.AGENT_TASKS_TOKEN = 'test-token';
+    process.env.MANAGED_AGENT_MAX_SECONDS = '900';
 
     try {
       const app = await appWith(store);
