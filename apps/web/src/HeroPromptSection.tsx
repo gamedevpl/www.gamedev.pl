@@ -522,7 +522,7 @@ export function HeroPromptSection({
                 <span className="smart-badge creation-badge">
                   <PixelIcon name="sparkle" size={14} /> {t('hero.smartNoMatchTitle', { query: promptText.trim() })}
                 </span>
-                <p className="creation-sub">{busyLabel ?? t('hero.smartNoMatchSub')}</p>
+                <p className="creation-sub">{t('hero.smartNoMatchSub')}</p>
               </div>
             </div>
           )}

@@ -167,7 +167,8 @@ describe('HeroPromptSection', () => {
     expect(container.querySelector('.build-btn.is-busy')).not.toBeNull();
     expect(container.querySelector('.build-btn-spinner')).not.toBeNull();
     expect(container.querySelector('.prompt-busy-status')?.textContent).toMatch(/Analyzing your idea/i);
-    expect(container.querySelector('.creation-card.is-busy .creation-sub')?.textContent).toMatch(
+    expect(container.querySelector('.creation-card.is-busy .creation-sub')?.textContent).toMatch(/Become the creator/i);
+    expect(container.querySelector('.creation-card.is-busy .creation-sub')?.textContent).not.toMatch(
       /Analyzing your idea/i,
     );
     expect(container.querySelector<HTMLInputElement>('.big-prompt-input')?.disabled).toBe(true);
