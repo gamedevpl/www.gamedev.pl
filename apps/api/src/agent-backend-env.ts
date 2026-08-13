@@ -95,17 +95,15 @@ export function createManagedPlatformBackendFromEnv(deps?: ManagedBackendDeps, l
     log?.warn({ vendor }, 'anthropic managed agent requires MANAGED_AGENT_ID / MANAGED_AGENT_ENVIRONMENT_ID');
     return undefined;
   }
-  if (
-    vendor === 'anthropic' &&
-    (!Number.isInteger(maxDurationSeconds) ||
-      maxDurationSeconds <= 0 ||
-      !Number.isInteger(maxListCostCents) ||
-      maxListCostCents <= 0)
-  ) {
-    log?.warn(
-      { vendor },
-      'anthropic managed agent requires positive MANAGED_AGENT_MAX_SECONDS / MANAGED_AGENT_MAX_LIST_COST_CENTS',
-    );
+  // Every vendor, not just the one that bills us directly: a wall clock is the only
+  // ceiling that applies whatever the round does, and a managed agent left without one
+  // can run for hours on somebody else's meter. Fail closed — no ceiling, no dispatch.
+  if (!Number.isInteger(maxDurationSeconds) || maxDurationSeconds <= 0) {
+    log?.warn({ vendor }, 'managed agent requires a positive MANAGED_AGENT_MAX_SECONDS');
+    return undefined;
+  }
+  if (vendor === 'anthropic' && (!Number.isInteger(maxListCostCents) || maxListCostCents <= 0)) {
+    log?.warn({ vendor }, 'anthropic managed agent requires a positive MANAGED_AGENT_MAX_LIST_COST_CENTS');
     return undefined;
   }
   if (isCopilot && process.env.MANAGED_AGENT_COPILOT_MAX_CREDITS !== undefined) {

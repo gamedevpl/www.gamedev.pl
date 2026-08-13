@@ -3,7 +3,12 @@ import { randomBytes } from 'node:crypto';
 import type { AgentTask, AgentTaskInput, AgentTasksClient } from './agent-tasks.js';
 import { buildPrompt } from './build-prompt.js';
 import type { BuildBrief } from './agent-backend.js';
-import { createCopilotManagedProvider } from './managed-provider-copilot.js';
+import {
+  COPILOT_AGENT_WORKFLOW_PATH,
+  createCopilotManagedProvider,
+  type CopilotGitHubClient as CopilotGitHub,
+} from './managed-provider-copilot.js';
+import type { WorkflowRun } from './github-client.js';
 
 const BRIEF: BuildBrief = {
   issueNumber: 42,
@@ -17,6 +22,20 @@ const apiKey = () => randomBytes(32).toString('hex');
 
 function task(overrides: Partial<AgentTask> = {}): AgentTask {
   return { id: 'task-1', state: 'queued', sessionCount: 0, sessions: [], ...overrides };
+}
+
+function githubStub(overrides: Partial<CopilotGitHub> = {}): CopilotGitHub {
+  return {
+    deleteBranch: vi.fn(async () => undefined),
+    createBranchWithFiles: vi.fn(),
+    listWorkflowRuns: vi.fn(async () => []),
+    cancelWorkflowRun: vi.fn(async () => undefined),
+    ...overrides,
+  } as CopilotGitHub;
+}
+
+function run(overrides: Partial<WorkflowRun> = {}): WorkflowRun {
+  return { id: 1, path: COPILOT_AGENT_WORKFLOW_PATH, status: 'in_progress', ...overrides };
 }
 
 function tasks(result: AgentTask = task()) {
@@ -34,7 +53,7 @@ describe('Copilot managed provider', () => {
     const stub = tasks(task({ branch: { baseRef: 'main', headRef: 'copilot/courier' } }));
     const provider = createCopilotManagedProvider(
       { apiKey: apiKey(), model: 'gpt-5.4', repo: 'gamedevpl/www.gamedev.pl-games' },
-      { tasks: stub.client, github: { deleteBranch: vi.fn(), createBranchWithFiles: vi.fn() } },
+      { tasks: stub.client, github: githubStub() },
     );
 
     await provider.startSession({
@@ -59,7 +78,7 @@ describe('Copilot managed provider', () => {
     const createBranchWithFiles = vi.fn(async () => undefined);
     const provider = createCopilotManagedProvider(
       { apiKey: apiKey(), model: 'gpt-5.4', repo: 'gamedevpl/www.gamedev.pl-games' },
-      { tasks: stub.client, github: { deleteBranch: vi.fn(), createBranchWithFiles } },
+      { tasks: stub.client, github: githubStub({ createBranchWithFiles }) },
     );
 
     await provider.startSession({
@@ -148,7 +167,7 @@ describe('Copilot managed provider', () => {
     );
     const provider = createCopilotManagedProvider(
       { apiKey: apiKey(), model: 'gpt-5.4', repo: 'gamedevpl/www.gamedev.pl-games' },
-      { tasks: stub.client, github: { deleteBranch: vi.fn(), createBranchWithFiles: vi.fn() } },
+      { tasks: stub.client, github: githubStub() },
     );
 
     const session = await provider.getSession('task-1');
@@ -164,7 +183,7 @@ describe('Copilot managed provider', () => {
     const stub = tasks(task({ state: 'in_progress', branch: { headRef: 'copilot/tv-tycoon' } }));
     const provider = createCopilotManagedProvider(
       { apiKey: apiKey(), model: 'gpt-5.4', repo: 'gamedevpl/www.gamedev.pl-games' },
-      { tasks: stub.client, github: { deleteBranch: vi.fn(), createBranchWithFiles: vi.fn() } },
+      { tasks: stub.client, github: githubStub() },
     );
 
     await expect(provider.getSession('task-1')).resolves.toMatchObject({
@@ -177,15 +196,56 @@ describe('Copilot managed provider', () => {
     const stub = tasks();
     const provider = createCopilotManagedProvider(
       { apiKey: apiKey(), model: 'gpt-5.4', repo: 'gamedevpl/www.gamedev.pl-games' },
-      { tasks: stub.client, github: { deleteBranch: vi.fn(), createBranchWithFiles: vi.fn() } },
+      { tasks: stub.client, github: githubStub() },
     );
 
     expect(await provider.listOutputs('task-1')).toEqual([]);
     expect(provider.sendMessage).toBeUndefined();
     await expect(provider.readOutput('task-1', { path: 'game.ts' })).rejects.toThrow(/does not expose session output/);
+    // No branch yet, so nothing to stop.
     expect(await provider.cancelSession('task-1')).toEqual({ enforced: false });
     await expect(provider.deleteSession?.('task-1')).resolves.toBeUndefined();
     await expect(provider.releaseCredential?.(apiKey())).resolves.toBeUndefined();
+  });
+
+  it('interrupts a task by cancelling the agent run on its branch', async () => {
+    const stub = tasks(task({ state: 'in_progress', branch: { headRef: 'copilot/tv-tycoon' } }));
+    const cancelWorkflowRun = vi.fn(async () => undefined);
+    const listWorkflowRuns = vi.fn(async () => [
+      // CI on the same branch and a finished run are not it.
+      run({ id: 10, path: '.github/workflows/validate.yml' }),
+      run({ id: 11, status: 'completed' }),
+      run({ id: 12, status: 'queued' }),
+      run({ id: 13, status: 'in_progress' }),
+    ]);
+    const provider = createCopilotManagedProvider(
+      { apiKey: apiKey(), model: 'gpt-5.4', repo: 'gamedevpl/www.gamedev.pl-games' },
+      { tasks: stub.client, github: githubStub({ listWorkflowRuns, cancelWorkflowRun }) },
+    );
+
+    await expect(provider.cancelSession('task-1')).resolves.toEqual({ enforced: true });
+
+    expect(listWorkflowRuns).toHaveBeenCalledWith({ branch: 'copilot/tv-tycoon' });
+    expect(cancelWorkflowRun.mock.calls.map(([id]) => id)).toEqual([12, 13]);
+  });
+
+  it('reports an unenforced cancel rather than throwing when GitHub refuses', async () => {
+    const stub = tasks(task({ state: 'in_progress', branch: { headRef: 'copilot/tv-tycoon' } }));
+    const provider = createCopilotManagedProvider(
+      { apiKey: apiKey(), model: 'gpt-5.4', repo: 'gamedevpl/www.gamedev.pl-games' },
+      {
+        tasks: stub.client,
+        github: githubStub({
+          listWorkflowRuns: vi.fn(async () => [run({ id: 12 })]),
+          // What a token without `actions: write` looks like.
+          cancelWorkflowRun: vi.fn(async () => {
+            throw new Error('github request failed: 403');
+          }),
+        }),
+      },
+    );
+
+    await expect(provider.cancelSession('task-1')).resolves.toEqual({ enforced: false });
   });
 
   it('deletes the disposable workspace branch during backend cleanup', async () => {
@@ -193,7 +253,7 @@ describe('Copilot managed provider', () => {
     const deleteBranch = vi.fn(async () => undefined);
     const provider = createCopilotManagedProvider(
       { apiKey: apiKey(), model: 'gpt-5.4', repo: 'gamedevpl/www.gamedev.pl-games' },
-      { tasks: stub.client, github: { deleteBranch, createBranchWithFiles: vi.fn() } },
+      { tasks: stub.client, github: githubStub({ deleteBranch }) },
     );
 
     await provider.deleteWorkspace?.('copilot/spent');
