@@ -117,6 +117,7 @@ describe('VertexThemeExtractor', () => {
       capture?.(prompt);
       const chain = {
         temperature: () => chain,
+        thinking: () => chain,
         signal: () => chain,
         json: (parse: (value: unknown) => unknown) => Promise.resolve(parse(json)),
       };

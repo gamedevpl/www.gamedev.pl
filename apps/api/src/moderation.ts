@@ -163,14 +163,12 @@ export class VertexChecker implements ContentChecker {
         defaultRegion: 'global',
         model: this.options.model,
         defaultModel: 'gemini-3.7-flash',
+        // Thinking level goes on the request via `.thinking()` below, not here: genaicode's
+        // Google provider computes its own thinkingConfig from `request.thinking` whenever a
+        // request calls `.json()`, and that computed value — MINIMAL when `.thinking()` was
+        // never called — unconditionally overwrites whatever thinkingConfig is set here.
         generationConfig: {
           responseMimeType: 'application/json',
-          // Gemini 3 defaults to dynamic ("high") thinking; force it low for this
-          // short classification. thinkingLevel and thinkingBudget are mutually
-          // exclusive on Gemini 3 — only send one. The SDK types this as a string
-          // enum (MINIMAL/LOW/...), so the env-provided value is upper-cased and
-          // passed through rather than being constrained at compile time.
-          thinkingConfig: { thinkingLevel: this.thinkingLevel.toUpperCase() },
         } as VertexGenerationConfig,
       });
     return this.client;
@@ -226,6 +224,7 @@ ${text}
     // out of here — and `check()` turns any throw into a fail-closed verdict.
     const verdict = await this.getClient()(promptText)
       .temperature(0)
+      .thinking({ level: this.thinkingLevel as 'minimal' | 'low' | 'medium' | 'high' })
       .signal(AbortSignal.timeout(this.timeoutMs))
       .json((value) => VerdictSchema.parse(value));
 

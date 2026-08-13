@@ -176,9 +176,11 @@ export class VertexThemeExtractor implements ThemeExtractor {
         defaultRegion: 'global',
         model: this.options.model,
         defaultModel: 'gemini-3.7-flash',
+        // Thinking level goes on the request via `.thinking()` below, not here — see
+        // moderation.ts's VertexChecker.getClient for why a provider-level thinkingConfig
+        // is silently overwritten by genaicode whenever a request calls `.json()`.
         generationConfig: {
           responseMimeType: 'application/json',
-          thinkingConfig: { thinkingLevel: this.thinkingLevel.toUpperCase() },
         } as VertexGenerationConfig,
       });
     return this.client;
@@ -190,6 +192,7 @@ export class VertexThemeExtractor implements ThemeExtractor {
 
     const result = await this.getClient()(buildPrompt(considered))
       .temperature(0)
+      .thinking({ level: this.thinkingLevel as 'minimal' | 'low' | 'medium' | 'high' })
       .signal(AbortSignal.timeout(this.timeoutMs))
       .json((value) => ThemesSchema.parse(value));
 
