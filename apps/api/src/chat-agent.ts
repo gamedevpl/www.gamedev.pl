@@ -201,7 +201,7 @@ export class VertexStudioChatAgent implements StudioChatAgent {
 
     const result = await builder
       .tools([BUILD_TOOL], 'auto')
-      .thinking(false)
+      .thinking({ level: 'low' })
       .temperature(0.2)
       .signal(AbortSignal.timeout(this.options.timeoutMs ?? DEFAULT_CHAT_TIMEOUT_MS))
       .run();

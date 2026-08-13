@@ -161,12 +161,8 @@ export class VertexSpecRefiner implements SpecRefiner {
         defaultRegion: 'global',
         model: this.options.model,
         defaultModel: 'gemini-3.7-flash',
-        // Thinking off: the prompt asks for a fixed JSON shape, not reasoning, and
-        // the latency it adds is what pushed this call past its abort budget in
-        // production. Moderation keeps its own config — this one is refine-only.
         generationConfig: {
           responseMimeType: 'application/json',
-          thinkingConfig: { thinkingBudget: 0 },
         } as VertexGenerationConfig,
       });
     return this.client;
@@ -201,7 +197,7 @@ ${concept}
 """`;
       const text = await this.getGroundingClient()(groundingPrompt)
         .temperature(0.2)
-        .thinking(false)
+        .thinking({ level: 'low' })
         .search(true)
         .signal(AbortSignal.timeout(this.groundingTimeoutMs))
         .text();
@@ -264,6 +260,7 @@ ${params.concept}
 
       const parsed = await this.getClient()(promptText)
         .temperature(0.2)
+        .thinking({ level: 'low' })
         .signal(AbortSignal.timeout(this.timeoutMs))
         .json((value) => RefineResultSchema.parse(value));
 

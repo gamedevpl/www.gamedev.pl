@@ -175,11 +175,8 @@ export class VertexEditorAssistant implements EditorAssistant {
         defaultRegion: 'global',
         model: this.options.model,
         defaultModel: DEFAULT_ASSIST_MODEL,
-        // Thinking off, JSON out: the same shape refine.ts settled on, and the
-        // reason this call can land inside a couple of seconds.
         generationConfig: {
           responseMimeType: 'application/json',
-          thinkingConfig: { thinkingBudget: 0 },
         } as VertexGenerationConfig,
       });
     return this.client;
@@ -233,6 +230,7 @@ ${request.utterance}
 
     const response = await this.getClient()(prompt)
       .temperature(0.1)
+      .thinking({ level: 'low' })
       .signal(AbortSignal.timeout(this.options.timeoutMs ?? DEFAULT_ASSIST_TIMEOUT_MS))
       .json((value) => AssistResponseSchema.parse(value));
 

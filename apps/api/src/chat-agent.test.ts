@@ -283,13 +283,13 @@ describe('VertexStudioChatAgent', () => {
     expect(totalChars).toBeLessThan(MAX_PROMPT_CHARS);
   });
 
-  it('disables thinking on every call — Gemini 3 rejects a raw thinkingBudget:0 default', async () => {
+  it('keeps thinking at the cheap floor on every call — gemini-3.7-flash rejects both a raw thinkingBudget:0 and thinking:false (which genaicode maps to the also-rejected MINIMAL level)', async () => {
     let seen: GenerationRequest | undefined;
     const agent = new VertexStudioChatAgent({
       client: stubClient(textResult('ok'), (req) => (seen = req)),
     });
     await agent.decide({ message: 'hi', status: STATUS, history: [] });
-    expect(seen?.thinking).toBe(false);
+    expect(seen?.thinking).toEqual({ level: 'low' });
   });
 
   it('keeps a bounded, validated locale out of reach of free-text injection', async () => {

@@ -191,9 +191,6 @@ export class VertexTranslator implements Translator {
         defaultModel: 'gemini-3.7-flash',
         generationConfig: {
           responseMimeType: 'application/json',
-          // Thinking off: short string translation does not benefit from reasoning,
-          // and this call sits on a polled endpoint with a tight abort budget.
-          thinkingConfig: { thinkingBudget: 0 },
         } as VertexGenerationConfig,
       });
     return this.client;
@@ -238,6 +235,7 @@ export class VertexTranslator implements Translator {
     try {
       const parsed = await this.getClient()(bilingualPrompt(text, locale, kind))
         .temperature(0)
+        .thinking({ level: 'low' })
         .signal(AbortSignal.timeout(kind === 'message' ? this.messageTimeoutMs : this.timeoutMs))
         .json((value) => BilingualSchema.parse(value));
 
