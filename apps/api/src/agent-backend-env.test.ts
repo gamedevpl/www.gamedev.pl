@@ -132,6 +132,7 @@ describe('createAgentBackendRegistryFromEnv', () => {
       AGENT_TASKS_TOKEN: randomBytes(32).toString('hex'),
       MANAGED_AGENT_MCP_URL: 'https://www.gamedev.pl/api/mcp',
       MANAGED_AGENT_PROMPT_LANE: 'mcp',
+      MANAGED_AGENT_MAX_SECONDS: '900',
       GAMES_REPO: 'gamedevpl/www.gamedev.pl-games',
       MANAGED_AGENT_COPILOT_MCP_REPO: 'gamedevpl/scratchpad',
       MANAGED_AGENT_COPILOT_MCP_CUSTOM_AGENT: 'game-builder-mcp',
