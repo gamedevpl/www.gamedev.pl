@@ -554,7 +554,9 @@ export function App() {
 
   // The generation gate: before spending a submission we run the spec refiner. If it
   // returns clarifying questions, generation pauses on the QA panel until they're
-  // answered; a clean spec (or a refiner error — fail-open) submits straight through.
+  // answered; a clean spec submits straight through. A refiner error stops here too
+  // (fail-closed) rather than silently falling through to a truncated title — see
+  // the catch block below.
   async function handleSubmitSpec(concept: string, displayName: string = '') {
     if (!user) {
       // The wall between "wrote an idea" and "made an account". Everything before this
@@ -583,9 +585,13 @@ export function App() {
       questions = refined.questions;
       suggestedTitle = refined.suggestedTitle;
     } catch {
-      // Fail-open: a refiner outage must never block creation. It does not skip the
-      // naming step either — that would put us back to games named by truncation —
-      // so the confirm panel opens on a title derived from the prompt instead.
+      // Fail-closed: a refiner outage used to be invisible — silently falling through
+      // to a name derived from truncating the prompt, indistinguishable from a
+      // successful "concept is already clear" response. Stop here and let the
+      // creator retry instead.
+      setSubmissionError(t('errors.refineFailed'));
+      setSubmissionStatus('idle');
+      return;
     }
 
     if (questions.length > 0) recordCreateStep('qa_shown');

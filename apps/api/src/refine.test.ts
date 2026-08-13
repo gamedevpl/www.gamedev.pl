@@ -98,7 +98,7 @@ describe('POST /api/submissions/refine', () => {
     expect(res.json().error).toBe('content_rejected');
   });
 
-  it('fails open (returns 200 with empty questions) when refiner throws an error', async () => {
+  it('fails closed (returns 502) when refiner throws an error', async () => {
     const store = new InMemoryStore();
     await store.upsertUser({ uid: 'g:test-user' });
     const throwingRefiner = {
@@ -120,11 +120,11 @@ describe('POST /api/submissions/refine', () => {
       headers: { cookie: `${SESSION_COOKIE_NAME}=${token}` },
       payload: {
         title: 'Clean Game',
-        concept: 'A completely clean game concept that should fail open if LLM fails',
+        concept: 'A completely clean game concept that should surface an error if the LLM fails',
       },
     });
-    expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ questions: [] });
+    expect(res.statusCode).toBe(502);
+    expect(res.json()).toEqual({ error: 'refine_unavailable' });
     await testApp.close();
   });
 
@@ -178,12 +178,12 @@ describe('POST /api/submissions/refine', () => {
     await testApp.close();
   });
 
-  it('never caches a fail-open, so one slow call cannot pin an empty panel', async () => {
+  it('never caches a totally empty answer, so one flaky call cannot pin an empty panel', async () => {
     const store = new InMemoryStore();
     await store.upsertUser({ uid: 'g:test-user' });
     let call = 0;
     const flakyRefiner = {
-      // First call times out into the fail-open empty answer; the second succeeds.
+      // First call comes back with nothing usable; the second succeeds.
       refine: async () => {
         call += 1;
         return call === 1
@@ -289,9 +289,10 @@ describe('VertexSpecRefiner over a genaicode client', () => {
     expect(result.questions).toEqual([{ id: 'q_0', question: '', options: [], allowFreeText: false, multiple: false }]);
   });
 
-  it('fails open when the call outruns its abort budget', async () => {
+  it('fails closed when the call outruns its abort budget', async () => {
     // The production failure mode this guards: the model answers, just not within
-    // the budget, so the request aborts and the creator silently gets no questions.
+    // the budget, so the request aborts — and now that must surface as an error
+    // rather than a silent "no questions".
     const refiner = makeRefiner({
       timeoutMs: 20,
       client: genaicode({
@@ -303,7 +304,7 @@ describe('VertexSpecRefiner over a genaicode client', () => {
       }),
     });
 
-    expect(await refiner.refine({ title: 'Game', concept: 'Concept' })).toEqual({ questions: [] });
+    await expect(refiner.refine({ title: 'Game', concept: 'Concept' })).rejects.toThrow();
   });
 
   it('budgets far more time than the one-token moderation call', () => {
@@ -312,10 +313,10 @@ describe('VertexSpecRefiner over a genaicode client', () => {
     expect(DEFAULT_REFINE_TIMEOUT_MS).toBeGreaterThanOrEqual(15_000);
   });
 
-  it('fails open on a malformed or non-conforming response', async () => {
+  it('fails closed on a malformed or non-conforming response', async () => {
     for (const body of ['not json at all', '', '{"questions": "nope"}']) {
       const refiner = makeRefiner({ client: stubClient(body) });
-      expect(await refiner.refine({ title: 'Game', concept: 'Concept' })).toEqual({ questions: [] });
+      await expect(refiner.refine({ title: 'Game', concept: 'Concept' })).rejects.toThrow();
     }
   });
 

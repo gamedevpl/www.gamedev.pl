@@ -994,6 +994,7 @@
     "creationOverCapacity": "Osiągnęliśmy dzisiejszy limit nowych gier w całym serwisie, więc nie możemy teraz zacząć kolejnej. Twój własny limit jest nietknięty i będzie czekał jutro.",
     "nameUnavailable": "Ta nazwa została zajęta, gdy przygotowywaliśmy Twoją grę. Nadaj inną i spróbuj ponownie.",
     "conceptTooShort": "To za mało, żebyśmy wiedzieli, co budować — opisz grę trochę szerzej (co najmniej {{minLength}} znaków): co się w niej robi, jak się wygrywa lub przegrywa, jak wygląda.",
+    "refineFailed": "Nie udało się teraz przeanalizować Twojego pomysłu — nasz asystent AI ma chwilowy problem. Spróbuj ponownie za moment.",
     "contentRejected": {
       "profanity": "To zawiera słownictwo, którego nie możemy opublikować. Popraw treść i spróbuj ponownie.",
       "adult": "To opisuje treści dla dorosłych, których nie możemy wygenerować. Popraw treść i spróbuj ponownie.",
