@@ -166,6 +166,42 @@ export function overlayGameSources(layers: OverlayLayers): Record<string, string
   return overlay;
 }
 
+/**
+ * The delivered sources a round improves, when there are any.
+ *
+ * Reads the same three-step the channel's `GET /sources` does — this round's own
+ * delivery, then the round's preview delivery, then what is actually published — because
+ * an improvement round inherits a slug long before it delivers anything of its own, and
+ * without the base layer a one-file stage would render (or typecheck) a game with holes.
+ */
+export async function readDeliveredSources(input: {
+  gamesStore: Pick<GamesStore, 'getManifest' | 'getSourceFile'>;
+  store: Pick<Store, 'getPublication'>;
+  record: { slug?: string; previewVersion?: string; deliveredVersion?: string };
+}): Promise<SourceFile[]> {
+  const { gamesStore, store, record } = input;
+  const slug = record.slug;
+  if (!slug) return [];
+  let version = record.previewVersion ?? record.deliveredVersion;
+  if (!version) {
+    const publication = await store.getPublication(slug);
+    if (publication?.state === 'published') version = publication.currentVersion;
+  }
+  if (!version) return [];
+
+  const manifest = await gamesStore.getManifest(slug, version);
+  if (!manifest) return [];
+  const files = await Promise.all(
+    manifest.sourceFiles.map(async (path) => ({
+      path,
+      content: await gamesStore.getSourceFile(slug, version!, path),
+    })),
+  );
+  // A hole in the base is not fatal: the staged layer may supply that very file, and
+  // a caller-specific readiness check (or the typecheck itself) reports the rest.
+  return files.filter((file): file is SourceFile => file.content !== null);
+}
+
 /** True when the overlay carries everything an assembly needs from the game's own tree. */
 export function hasPlayableOverlay(overlay: Record<string, string>): boolean {
   // trim(), matching getGameSources: a whitespace-only file is absent, not staged.
@@ -280,42 +316,6 @@ export function createStagedPreviewPublisher(options: StagedPreviewOptions): Sta
   const lastDigest = new Map<string, string>();
   let inFlight = 0;
 
-  /**
-   * The delivered sources this round improves, when there are any.
-   *
-   * Reads the same three-step the channel's `GET /sources` does — this round's own
-   * delivery, then the round's preview delivery, then what is actually published — because
-   * an improvement round inherits a slug long before it delivers anything of its own, and
-   * without the base layer a one-file stage would render a game with three files in it.
-   */
-  async function readDeliveredSources(record: {
-    slug?: string;
-    previewVersion?: string;
-    deliveredVersion?: string;
-  }): Promise<SourceFile[]> {
-    const slug = record.slug;
-    if (!slug) return [];
-    let version = record.previewVersion ?? record.deliveredVersion;
-    if (!version) {
-      const publication = await options.store.getPublication(slug);
-      if (publication?.state === 'published') version = publication.currentVersion;
-    }
-    if (!version) return [];
-
-    const manifest = await options.gamesStore.getManifest(slug, version);
-    if (!manifest) return [];
-    const files = await Promise.all(
-      manifest.sourceFiles.map(async (path) => ({
-        path,
-        content: await options.gamesStore.getSourceFile(slug, version, path),
-      })),
-    );
-    // A hole in the base is not fatal here the way it is for `get_sources`: the staged
-    // layer may well be supplying that very file, and if it is not, the assembly fails
-    // on its own and leaves the last good preview standing.
-    return files.filter((file): file is SourceFile => file.content !== null);
-  }
-
   async function attempt(issueNumber: number): Promise<StagedPreviewOutcome> {
     const record = await options.store.getSubmission(issueNumber);
     if (!record?.slug || record.abandonedAt) return 'skipped';
@@ -327,7 +327,7 @@ export function createStagedPreviewPublisher(options: StagedPreviewOptions): Sta
 
     const overlay = overlayGameSources({
       staged,
-      delivered: await readDeliveredSources(record),
+      delivered: await readDeliveredSources({ gamesStore: options.gamesStore, store: options.store, record }),
       ...(record.seed?.files ? { seed: record.seed.files } : {}),
     });
     if (!hasPlayableOverlay(overlay)) return 'incomplete';

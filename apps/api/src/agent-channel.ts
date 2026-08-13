@@ -61,6 +61,7 @@ import {
 import { seedPayload } from './seed-status.js';
 import { largeSourceFileHint } from './module-size.js';
 import { gameManifestHint } from './game-manifest-hint.js';
+import { computeStageAdvisories } from './stage-hints.js';
 import { applyExactReplace, applySourcePatch, SourcePatchError } from './source-patch.js';
 import { overlayGameSources } from './staged-preview.js';
 import { SourceDeliveryValidationError, type SourceDeliveryService } from './source-delivery.js';
@@ -1224,6 +1225,18 @@ export async function registerAgentChannelRoutes(
         options.onSourcesStaged?.({ issueNumber, slug, roundGeneration });
         const hint = largeSourceFileHint(staged.path, staged.bytes, parsed.data.content);
         const manifestHint = gameManifestHint(staged.path, parsed.data.content);
+        const advisories = await computeStageAdvisories({
+          kitFileStore,
+          gamesStore: options.gamesStore,
+          store: store!,
+          record,
+          slug,
+          issueNumber,
+          roundGeneration,
+          engineRef: record.roundKitEngineRef,
+          path: staged.path,
+          content: parsed.data.content,
+        });
         return reply.send({
           accepted: true,
           path: staged.path,
@@ -1237,6 +1250,8 @@ export async function registerAgentChannelRoutes(
           },
           ...(manifestHint ? { manifestHint } : {}),
           ...(hint ? { hint } : {}),
+          ...(advisories.typecheckHint ? { typecheckHint: advisories.typecheckHint } : {}),
+          ...(advisories.audioHint ? { audioHint: advisories.audioHint } : {}),
           ...(await channelState(issueNumber, (await store!.getSubmission(issueNumber)) ?? record)),
         });
       } catch (error) {
@@ -1315,6 +1330,18 @@ export async function registerAgentChannelRoutes(
         options.onSourcesStaged?.({ issueNumber, slug, roundGeneration });
         const hint = largeSourceFileHint(staged.path, staged.bytes, content);
         const manifestHint = gameManifestHint(staged.path, content);
+        const advisories = await computeStageAdvisories({
+          kitFileStore,
+          gamesStore: options.gamesStore,
+          store: store!,
+          record,
+          slug,
+          issueNumber,
+          roundGeneration,
+          engineRef: record.roundKitEngineRef,
+          path: staged.path,
+          content,
+        });
         return reply.send({
           accepted: true,
           path: staged.path,
@@ -1328,6 +1355,8 @@ export async function registerAgentChannelRoutes(
           },
           ...(manifestHint ? { manifestHint } : {}),
           ...(hint ? { hint } : {}),
+          ...(advisories.typecheckHint ? { typecheckHint: advisories.typecheckHint } : {}),
+          ...(advisories.audioHint ? { audioHint: advisories.audioHint } : {}),
           ...(await channelState(issueNumber, (await store!.getSubmission(issueNumber)) ?? record)),
         });
       } catch (error) {
@@ -1454,6 +1483,18 @@ export async function registerAgentChannelRoutes(
 
         const hint = largeSourceFileHint(staged.path, staged.bytes, patched.content);
         const manifestHint = gameManifestHint(staged.path, patched.content);
+        const advisories = await computeStageAdvisories({
+          kitFileStore,
+          gamesStore: options.gamesStore,
+          store: store!,
+          record,
+          slug,
+          issueNumber,
+          roundGeneration,
+          engineRef: record.roundKitEngineRef,
+          path: staged.path,
+          content: patched.content,
+        });
         return reply.send({
           accepted: true,
           path: staged.path,
@@ -1469,6 +1510,8 @@ export async function registerAgentChannelRoutes(
           },
           ...(manifestHint ? { manifestHint } : {}),
           ...(hint ? { hint } : {}),
+          ...(advisories.typecheckHint ? { typecheckHint: advisories.typecheckHint } : {}),
+          ...(advisories.audioHint ? { audioHint: advisories.audioHint } : {}),
           ...(await channelState(issueNumber, (await store!.getSubmission(issueNumber)) ?? record)),
         });
       } catch (error) {

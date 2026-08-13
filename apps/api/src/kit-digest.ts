@@ -328,7 +328,16 @@ export function compactKitDigestForPrompt(digest: string, maxBytes = DEFAULT_PRO
   const exemplarStart = digest.indexOf('## Exemplar game');
   const rulesStart = digest.indexOf('## File-shape rules');
   const exemplar = exemplarStart >= 0 ? digest.slice(exemplarStart, rulesStart >= 0 ? rulesStart : undefined) : '';
-  const exemplarFiles = ['GAME.json', 'index.html', 'game.ts', 'game/model.ts', 'game/render.ts', 'game/runtime.ts'];
+  // SPEC.md first — required every submit; shows its frontmatter shape.
+  const exemplarFiles = [
+    'SPEC.md',
+    'GAME.json',
+    'index.html',
+    'game.ts',
+    'game/model.ts',
+    'game/render.ts',
+    'game/runtime.ts',
+  ];
   const exemplarSections = exemplarFiles
     .map((file) => {
       const marker = `### games/dodge-the-falling-rocks/${file}`;

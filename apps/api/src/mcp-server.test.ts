@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { randomBytes } from 'node:crypto';
+import { gzipSync } from 'node:zlib';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
@@ -16,11 +17,29 @@ import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } f
 import type { KnowledgeQueryResult, QueryKnowledgeFn } from './knowledge-search.js';
 import { mintMcpSessionKey, verifyMcpSessionKey } from './mcp-session-key.js';
 import { MCP_UNADVERTISED_TOOLS } from './mcp-server.js';
+import { KIT_ROOT_DIR } from './kit-registry.js';
 import { InMemoryStore } from './store.js';
 
 const secret = 'test-secret';
 const ISSUE = 55;
 const ENGINE = 'abcdef0123456789abcdef0123456789abcdef01';
+
+const TAR_BLOCK = 512;
+function tarEntryBlocks(name: string, body: string): Buffer {
+  const payload = Buffer.from(body, 'utf8');
+  const header = Buffer.alloc(TAR_BLOCK);
+  header.write(name, 0, 100, 'utf8');
+  header.write(`${payload.length.toString(8).padStart(11, '0')} `, 124, 12, 'utf8');
+  header.write('0', 156, 1, 'utf8');
+  header.write('ustar\0', 257, 6, 'utf8');
+  const padding = Buffer.alloc((TAR_BLOCK - (payload.length % TAR_BLOCK)) % TAR_BLOCK);
+  return Buffer.concat([header, payload, padding]);
+}
+// A minimal valid gzip'd tar the real kit unpacker accepts.
+function kitTarball(files: Record<string, string>): Buffer {
+  const entries = Object.entries(files).map(([name, body]) => tarEntryBlocks(`${KIT_ROOT_DIR}/${name}`, body));
+  return gzipSync(Buffer.concat([...entries, Buffer.alloc(TAR_BLOCK * 2)]));
+}
 
 /** Minimal valid 1×1 PNG. */
 const TINY_PNG = Buffer.from(
@@ -700,6 +719,72 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(structured.digest).toMatch(/GameKitApi/);
     expect(structured.digest).toMatch(/`party`/);
     expect(structured.digest).toMatch(/`zone`/);
+  });
+
+  it('stage_source_file surfaces the typecheck/audio advisories from the channel as warnings', async () => {
+    // MCP layer must forward these hints, not only the channel route.
+    const store = new InMemoryStore();
+    await seedJob(store);
+    const { gamesStore } = stubGamesStore();
+    const kitDts = `
+interface GameKitDrawStyle { fill?: string; }
+interface GameKitDraw { text(value: string, x: number, y: number, opts?: GameKitDrawStyle): void; }
+interface GameKitGameContext { draw: GameKitDraw; }
+declare const GameKit: { defineGame(): unknown };
+`;
+    const objectStore: GcsObjectStore = {
+      readObject: async (name: string) =>
+        name === 'kits/current.json'
+          ? Buffer.from(JSON.stringify({ current: ENGINE, previous: null, updatedAt: '2026-08-09T00:00:00.000Z' }))
+          : name === `kits/${ENGINE}.json`
+            ? Buffer.from(JSON.stringify({ sha256: 'a'.repeat(64), packedAt: '2026-08-09T00:00:00.000Z' }))
+            : name === `kits/${ENGINE}.tgz`
+              ? kitTarball({
+                  'shared/game-kit.d.ts': kitDts,
+                  'shared/audio/music.json': JSON.stringify({ tracks: { 'poignant-piano': {} } }),
+                })
+              : null,
+      objectExists: async () => true,
+      signReadUrl: async (name: string) => `https://signed.example/${name}?sig=1`,
+    };
+    app = await createApp(store, gamesStore, objectStore);
+    const sessionId = await initialize(app);
+    const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+    // Pins record.roundKitEngineRef, same as a real session calling get_kit before writing.
+    await callTool(app, 'get_kit', { sessionKey }, { 'mcp-session-id': sessionId });
+
+    const badTs = await callTool(
+      app,
+      'stage_source_file',
+      {
+        sessionKey,
+        path: 'game/render.ts',
+        content:
+          "export function paint(kit: GameKitGameContext) { kit.draw.text('hi', 0, 0, { textAlign: 'center' }); }",
+      },
+      { 'mcp-session-id': sessionId },
+    );
+    expect(badTs.isError).toBe(false);
+    const tsWarnings = (badTs.structured as { warnings?: Array<{ code: string; message: string }> }).warnings ?? [];
+    expect(tsWarnings.find((w) => w.code === 'typecheck_hint')?.message).toMatch(/textAlign/);
+
+    const badAudio = await callTool(
+      app,
+      'stage_source_file',
+      {
+        sessionKey,
+        path: 'GAME.json',
+        content: JSON.stringify({ audio: { music: 'fantasy-adventure', sounds: ['win'] } }),
+      },
+      { 'mcp-session-id': sessionId },
+    );
+    expect(badAudio.isError).toBe(false);
+    const audioWarnings =
+      (badAudio.structured as { warnings?: Array<{ code: string; message: string }> }).warnings ?? [];
+    expect(audioWarnings.find((w) => w.code === 'audio_catalog_hint')?.message).toMatch(
+      /unknown music track "fantasy-adventure"/,
+    );
   });
 
   it('knowledge_query is advertised and callable, and returns the seam result', async () => {
