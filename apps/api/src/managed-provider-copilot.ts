@@ -7,7 +7,7 @@ import {
   type AgentTasksClient,
   type AgentTaskModel,
 } from './agent-tasks.js';
-import { createGitHubClient, type GitHubClient } from './github-client.js';
+import { createGitHubClient, IN_FLIGHT_RUN_STATUSES, type GitHubClient } from './github-client.js';
 import {
   ManagedAgentError,
   normalizeManagedState,
@@ -24,9 +24,17 @@ export const COPILOT_VENDOR = 'copilot';
 const DEFAULT_BASE_REF = 'main';
 const DEFAULT_CUSTOM_AGENT = 'game-builder';
 
+// A Copilot session is an Actions run under this synthetic workflow path.
+export const COPILOT_AGENT_WORKFLOW_PATH = 'dynamic/copilot-swe-agent/copilot';
+
+export type CopilotGitHubClient = Pick<
+  GitHubClient,
+  'deleteBranch' | 'createBranchWithFiles' | 'listWorkflowRuns' | 'cancelWorkflowRun'
+>;
+
 export interface CopilotManagedProviderDeps {
   tasks?: AgentTasksClient;
-  github?: Pick<GitHubClient, 'deleteBranch' | 'createBranchWithFiles'>;
+  github?: CopilotGitHubClient;
   // MCP-lane rounds; GitHub scopes Agent Tasks per repo, not per call.
   mcpTasks?: AgentTasksClient;
 }
@@ -183,8 +191,32 @@ export function createCopilotManagedProvider(
       throw new ManagedAgentError(`copilot does not expose session output ${ref.path}`);
     },
 
-    async cancelSession(): Promise<{ enforced: boolean }> {
-      return { enforced: false };
+    // No stop endpoint in agent tasks — cancel the Actions run instead.
+    async cancelSession(sessionId: string): Promise<{ enforced: boolean }> {
+      const branch = await tasks
+        .getTask(sessionId)
+        .then((task) => (task ? resolveTaskBranch(task) : null))
+        .catch(() => null);
+      // No branch yet means no run to stop; the next poll retries.
+      if (!branch) return { enforced: false };
+
+      const runs = await github.listWorkflowRuns({ branch }).catch(() => []);
+      // Validation CI shares the branch, so match the agent workflow path.
+      const inFlight = runs.filter(
+        (run) => run.path === COPILOT_AGENT_WORKFLOW_PATH && IN_FLIGHT_RUN_STATUSES.includes(run.status),
+      );
+
+      // One left running is one still spending, so every match must cancel.
+      let allCancelled = true;
+      for (const run of inFlight) {
+        // Best effort: a token without `actions: write` reports unenforced.
+        const cancelled = await github
+          .cancelWorkflowRun(run.id)
+          .then(() => true)
+          .catch(() => false);
+        allCancelled = allCancelled && cancelled;
+      }
+      return { enforced: inFlight.length > 0 && allCancelled };
     },
 
     async deleteWorkspace(workspace: string): Promise<void> {

@@ -102,19 +102,20 @@ a single `--set-secrets` list.
 The managed backend is selected by these Cloud Run variables; the deploy scripts carry them
 on every revision because `--set-env-vars` replaces the whole map:
 
-| Variable                            | Meaning                                                |
-| ----------------------------------- | ------------------------------------------------------ |
-| `MANAGED_AGENT_VENDOR`              | Provider adapter: `anthropic`, `copilot`, or `gemini`  |
-| `MANAGED_AGENT_MODEL`               | Provider model label                                   |
-| `MANAGED_AGENT_ID`                  | Managed Agent resource                                 |
-| `MANAGED_AGENT_ENVIRONMENT_ID`      | Managed Environment resource                           |
-| `MANAGED_AGENT_MAX_SECONDS`         | Per-session wall-clock limit                           |
-| `MANAGED_AGENT_MAX_LIST_COST_CENTS` | Anthropic budget in whole US cents                     |
-| `MANAGED_AGENT_PROMPT_LANE`         | Optional lane override: `mcp`, `harness`, or `outputs` |
-| `MANAGED_AGENT_MAX_TOTAL_TOKENS`    | Gemini native interaction token ceiling                |
-| `MANAGED_AGENT_VAULT_IDS`           | Optional static vaults for probe-only integrations     |
-| `MANAGED_AGENT_MCP_URL`             | The MCP endpoint the agent calls                       |
-| `MANAGED_AGENT_DELIVERY_MODE`       | `preview` or `publish`                                 |
+| Variable                            | Meaning                                                  |
+| ----------------------------------- | -------------------------------------------------------- |
+| `MANAGED_AGENT_VENDOR`              | Provider adapter: `anthropic`, `copilot`, or `gemini`    |
+| `MANAGED_AGENT_MODEL`               | Provider model label                                     |
+| `MANAGED_AGENT_ID`                  | Managed Agent resource                                   |
+| `MANAGED_AGENT_ENVIRONMENT_ID`      | Managed Environment resource                             |
+| `MANAGED_AGENT_MAX_SECONDS`         | Per-session wall-clock limit — required for every vendor |
+| `MANAGED_AGENT_MAX_LIST_COST_CENTS` | Anthropic budget in whole US cents                       |
+| `MANAGED_AGENT_COPILOT_MAX_CREDITS` | Copilot per-round credit ceiling                         |
+| `MANAGED_AGENT_PROMPT_LANE`         | Optional lane override: `mcp`, `harness`, or `outputs`   |
+| `MANAGED_AGENT_MAX_TOTAL_TOKENS`    | Gemini native interaction token ceiling                  |
+| `MANAGED_AGENT_VAULT_IDS`           | Optional static vaults for probe-only integrations       |
+| `MANAGED_AGENT_MCP_URL`             | The MCP endpoint the agent calls                         |
+| `MANAGED_AGENT_DELIVERY_MODE`       | `preview` or `publish`                                   |
 
 `MANAGED_AGENT_API_KEY` is wired from the `anthropic-api-key` Secret Manager secret, while
 `GEMINI_API_KEY` is wired from `gemini-api-key`. Neither belongs in variables, the repository,

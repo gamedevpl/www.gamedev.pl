@@ -20,4 +20,17 @@ describe('Copilot MCP connector deployment', () => {
     expect(workflow).toContain('MANAGED_AGENT_MAX_TOTAL_TOKENS');
     expect(script).toContain('MANAGED_AGENT_MAX_TOTAL_TOKENS');
   });
+
+  // A ceiling no deploy path forwards does not exist.
+  it('forwards every managed usage ceiling in both deploy paths', () => {
+    for (const ceiling of [
+      'MANAGED_AGENT_MAX_SECONDS',
+      'MANAGED_AGENT_MAX_LIST_COST_CENTS',
+      'MANAGED_AGENT_COPILOT_MAX_CREDITS',
+      'MANAGED_AGENT_MAX_TOTAL_TOKENS',
+    ]) {
+      expect(workflow).toContain(ceiling);
+      expect(script).toContain(ceiling);
+    }
+  });
 });

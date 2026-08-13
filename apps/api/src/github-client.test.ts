@@ -1562,6 +1562,51 @@ describe('createBranchWithFiles', () => {
  * them logged the same eleven words. GitHub says which it is in the response body and in
  * `x-accepted-github-permissions`; the client used to read neither.
  */
+describe('workflow runs', () => {
+  const repo = 'gamedevpl/www.gamedev.pl-games';
+
+  it('reads a branch\u2019s runs and cancels one by id', async () => {
+    const calls: Array<{ url: string; method: string }> = [];
+    const fetchImpl = vi.fn(async (url: string | URL, init?: RequestInit) => {
+      calls.push({ url: String(url), method: init?.method ?? 'GET' });
+      if (String(url).includes('/cancel')) return new Response('', { status: 202 });
+      return new Response(
+        JSON.stringify({
+          workflow_runs: [
+            {
+              id: 31646870010,
+              path: 'dynamic/copilot-swe-agent/copilot',
+              status: 'in_progress',
+              head_branch: 'copilot/tv-tycoon',
+              created_at: '2026-08-12T22:25:15Z',
+            },
+          ],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      );
+    }) as unknown as typeof fetch;
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+
+    const runs = await client.listWorkflowRuns({ branch: 'copilot/tv-tycoon' });
+    await client.cancelWorkflowRun(runs[0]!.id);
+
+    expect(runs).toEqual([
+      {
+        id: 31646870010,
+        path: 'dynamic/copilot-swe-agent/copilot',
+        status: 'in_progress',
+        headBranch: 'copilot/tv-tycoon',
+        createdAt: '2026-08-12T22:25:15Z',
+      },
+    ]);
+    expect(calls[0]!.url).toContain('/actions/runs?branch=copilot%2Ftv-tycoon');
+    expect(calls[1]).toEqual({
+      url: `https://api.github.com/repos/${repo}/actions/runs/31646870010/cancel`,
+      method: 'POST',
+    });
+  });
+});
+
 describe('failed request reporting', () => {
   const repo = 'gamedevpl/www.gamedev.pl-games';
 

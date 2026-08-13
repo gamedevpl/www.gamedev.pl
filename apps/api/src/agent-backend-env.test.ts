@@ -96,6 +96,7 @@ describe('createAgentBackendRegistryFromEnv', () => {
       MANAGED_AGENT_VENDOR: 'copilot',
       AGENT_TASKS_TOKEN: randomBytes(32).toString('hex'),
       AGENT_TASKS_MODEL: undefined,
+      MANAGED_AGENT_MAX_SECONDS: '900',
       MANAGED_AGENT_COPILOT_MAX_CREDITS: '25',
     });
     const info = vi.fn();
@@ -115,6 +116,7 @@ describe('createAgentBackendRegistryFromEnv', () => {
       MANAGED_AGENT_VENDOR: 'copilot',
       AGENT_TASKS_TOKEN: randomBytes(32).toString('hex'),
       MANAGED_AGENT_MCP_URL: 'https://www.gamedev.pl/api/mcp',
+      MANAGED_AGENT_MAX_SECONDS: '900',
       MANAGED_AGENT_PROMPT_LANE: 'mcp',
     });
     const registry = createAgentBackendRegistryFromEnv({ info: vi.fn(), warn: vi.fn() }, undefined, {
@@ -130,6 +132,7 @@ describe('createAgentBackendRegistryFromEnv', () => {
       AGENT_TASKS_TOKEN: randomBytes(32).toString('hex'),
       MANAGED_AGENT_MCP_URL: 'https://www.gamedev.pl/api/mcp',
       MANAGED_AGENT_PROMPT_LANE: 'mcp',
+      MANAGED_AGENT_MAX_SECONDS: '900',
       GAMES_REPO: 'gamedevpl/www.gamedev.pl-games',
       MANAGED_AGENT_COPILOT_MCP_REPO: 'gamedevpl/scratchpad',
       MANAGED_AGENT_COPILOT_MCP_CUSTOM_AGENT: 'game-builder-mcp',
@@ -146,6 +149,7 @@ describe('createAgentBackendRegistryFromEnv', () => {
       MANAGED_AGENT_VENDOR: 'gemini',
       MANAGED_AGENT_API_KEY: `gemini-${randomUUID()}`,
       MANAGED_AGENT_MODEL: undefined,
+      MANAGED_AGENT_MAX_SECONDS: '900',
       MANAGED_AGENT_MAX_TOTAL_TOKENS: '50000',
       MANAGED_AGENT_MCP_URL: 'https://www.gamedev.pl/api/mcp',
       AGENT_TASKS_TOKEN: `copilot-${randomUUID()}`,
@@ -165,6 +169,7 @@ describe('createAgentBackendRegistryFromEnv', () => {
       MANAGED_AGENT_VENDOR: 'gemini',
       MANAGED_AGENT_API_KEY: `gemini-${randomUUID()}`,
       MANAGED_AGENT_MCP_URL: 'https://www.gamedev.pl/api/mcp',
+      MANAGED_AGENT_MAX_SECONDS: '900',
       MANAGED_AGENT_MAX_TOTAL_TOKENS: '0',
     });
     const warn = vi.fn();
@@ -181,6 +186,7 @@ describe('createAgentBackendRegistryFromEnv', () => {
     setEnv({
       MANAGED_AGENT_VENDOR: 'gemini',
       MANAGED_AGENT_API_KEY: `gemini-${randomUUID()}`,
+      MANAGED_AGENT_MAX_SECONDS: '900',
     });
     const warn = vi.fn();
     const registry = createAgentBackendRegistryFromEnv({ info: vi.fn(), warn });
@@ -189,6 +195,25 @@ describe('createAgentBackendRegistryFromEnv', () => {
     expect(warn).toHaveBeenCalledWith(
       expect.objectContaining({ vendor: 'gemini' }),
       expect.stringContaining('MCP lane'),
+    );
+  });
+
+  // Every vendor: an unbilled one can run for hours unnoticed.
+  it.each(['copilot', 'gemini'])('fails closed when %s has no wall-clock ceiling', (vendor) => {
+    setEnv({
+      MANAGED_AGENT_VENDOR: vendor,
+      MANAGED_AGENT_API_KEY: `key-${randomUUID()}`,
+      AGENT_TASKS_TOKEN: randomBytes(32).toString('hex'),
+      MANAGED_AGENT_MCP_URL: 'https://www.gamedev.pl/api/mcp',
+      MANAGED_AGENT_MAX_SECONDS: undefined,
+    });
+    const warn = vi.fn();
+    const registry = createAgentBackendRegistryFromEnv({ info: vi.fn(), warn });
+
+    expect(registry.platform).toBeUndefined();
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({ vendor }),
+      expect.stringContaining('MANAGED_AGENT_MAX_SECONDS'),
     );
   });
 });
