@@ -52,6 +52,7 @@ describe('createAgentBackendRegistryFromEnv', () => {
       MANAGED_AGENT_VENDOR: 'anthropic',
       // Missing key/model/ids — config is invalid.
       AGENT_TASKS_TOKEN: randomBytes(32).toString('hex'),
+      MANAGED_AGENT_MAX_SECONDS: '900',
     });
     const warn = vi.fn();
     const registry = createAgentBackendRegistryFromEnv({ info: vi.fn(), warn });
@@ -73,6 +74,7 @@ describe('createAgentBackendRegistryFromEnv', () => {
     setEnv({
       MANAGED_AGENT_VENDOR: undefined,
       AGENT_TASKS_TOKEN: randomBytes(32).toString('hex'),
+      MANAGED_AGENT_MAX_SECONDS: '900',
     });
     const registry = createAgentBackendRegistryFromEnv({ info: vi.fn(), warn: vi.fn() });
     expect(registry.defaultVendor).toBeUndefined();
