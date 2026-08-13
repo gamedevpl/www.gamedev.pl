@@ -2,27 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { APIRequestContext } from 'playwright-core';
 import { signedInApiContext } from './browser.js';
 
-/**
- * The creation flow's happy path, hit for real on every deploy.
- *
- * `POST /api/submissions/refine` is the first real Vertex call a creator's prompt goes
- * through — content moderation, then the refine model. Every other e2e suite either
- * plays existing games or stubs the network on purpose to stay read-only against
- * production; nothing exercised this path, which is exactly why an incident where
- * gemini-3.7-flash started 400ing on every moderation call (a bad `thinkingConfig`, not
- * a policy change) shipped undetected — CI, unit tests, and the browser gate all stayed
- * green, and the deploy that broke it still promoted. A benign prompt getting rejected
- * is indistinguishable, from the API's perspective, between "the model call crashed and
- * moderation failed closed" and "moderation genuinely doesn't like this text" — this
- * test does not care which; either way a creator hit a wall that should not be there.
- *
- * Cheap and self-contained on purpose: `/refine` only runs moderation + one refine call,
- * no game generation and no agent dispatch (apps/api/src/refine.ts), so this costs a
- * couple of Gemini calls per deploy, not a build. The concept text is nonce'd per run —
- * refine caches by exact (title, concept, locale) and skips moderation entirely on a
- * cache hit (refine.ts's own comment: "no moderation call, no quota, no Vertex"), so a
- * fixed prompt would only ever really test the first run in the cache's lifetime.
- */
+// Real POST to /refine — no other e2e suite exercised this path.
 const hasToken = Boolean(process.env.GAMEDEV_ACCESS_TOKEN);
 if (!hasToken) {
   console.warn('[e2e] SKIPPED creation smoke: GAMEDEV_ACCESS_TOKEN not set (see docs/agent-access-tokens.md)');
@@ -40,8 +20,7 @@ describe.skipIf(!hasToken)('creation happy path', () => {
   });
 
   it('refines an ordinary game idea instead of rejecting it', async () => {
-    // The nonce forces a fresh cache key (and therefore a real moderation + refine
-    // call) on every run; the concept text itself is deliberately unremarkable.
+    // Nonce forces a fresh cache key so moderation actually runs each time.
     const nonce = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const res = await api.post('/api/submissions/refine', {
       data: {
