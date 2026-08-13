@@ -984,6 +984,7 @@
     "creationOverCapacity": "We've hit today's ceiling on new games across the whole site, so we can't start another one right now. Your own allowance is untouched and still there tomorrow.",
     "nameUnavailable": "That name was taken while we were setting your game up. Give it a different one and try again.",
     "conceptTooShort": "We don't have enough to go on yet — tell us a bit more about the game (at least {{minLength}} characters): what you do, how you win or lose, what it looks like.",
+    "refineFailed": "We couldn't analyze your idea just now — our AI assistant is having trouble. Please try again in a moment.",
     "contentRejected": {
       "profanity": "That includes language we can't publish. Please rephrase and try again.",
       "adult": "That describes adult content, which we can't generate. Please rephrase and try again.",

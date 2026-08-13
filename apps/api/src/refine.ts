@@ -39,7 +39,7 @@ export interface RefineResponse {
    * mid-word — and that string became the title everywhere: the studio, the catalog, the
    * agent's brief. The model is already reading the concept to write its questions, so
    * naming it costs nothing extra; the creator confirms or replaces it before anything
-   * is built. Absent when the model declines or the call fails open.
+   * is built. Absent only when the model itself declines — a failed call throws.
    */
   suggestedTitle?: string;
 }
@@ -280,13 +280,13 @@ ${params.concept}
         })),
       };
     } catch (err) {
-      // Fail-open per spec: timeout/error degrades silently to empty questions
+      // Fail-closed: an error must not look like a clean, already-specified concept.
       if (process.env.NODE_ENV !== 'test') {
         // The budget is printed because an AbortError alone doesn't say what it
         // was measured against, and that budget is now env-tunable.
-        console.warn(`Vertex AI spec refinement failed/timed out (budget ${this.timeoutMs}ms), failing open:`, err);
+        console.warn(`Vertex AI spec refinement failed/timed out (budget ${this.timeoutMs}ms):`, err);
       }
-      return { questions: [] };
+      throw err;
     }
   }
 }
@@ -379,10 +379,8 @@ export async function registerRefineRoute(app: FastifyInstance, options: RefineR
   };
 
   const writeCache = (key: string, result: RefineResponse, now: number) => {
-    // Never cache a fail-open: an empty answer is exactly what a timeout produces,
-    // and pinning that for ten minutes would turn one slow call into a dead panel.
-    // A title with no questions is not that — it is a fully-specified concept that the
-    // model still named — so emptiness is only disqualifying when it is total.
+    // A totally empty response is not worth pinning for ten minutes. A title with
+    // no questions is a fully-specified concept, so that alone is still cached.
     if (result.questions.length === 0 && !result.suggestedTitle) return;
     if (refineCache.size >= REFINE_CACHE_MAX_ENTRIES) {
       const oldest = refineCache.keys().next().value;
@@ -442,7 +440,8 @@ export async function registerRefineRoute(app: FastifyInstance, options: RefineR
       }
     }
 
-    // 4. Call spec refiner (fail-open)
+    // 4. Call spec refiner (fail-closed: an outage is reported as an error, not
+    // disguised as a zero-question "already fully specified" success — see refine()).
     const startedAt = Date.now();
     try {
       const result = await specRefiner.refine({
@@ -450,11 +449,6 @@ export async function registerRefineRoute(app: FastifyInstance, options: RefineR
         concept: parseResult.data.concept,
         locale: normalizeLocale(parseResult.data.locale),
       });
-      // Fail-open makes an outage look exactly like a fully-specified concept: both
-      // are zero questions and a 200. Without this line there is no way to tell them
-      // apart in logs, which is how a dead model and then a too-short timeout each
-      // survived unnoticed in production. A zero here with a refiner warning
-      // alongside it is a failure; a zero on its own is a clean spec.
       request.log.info(
         { questionCount: result.questions.length, durationMs: Date.now() - startedAt, cached: false },
         'spec refine complete',
@@ -463,9 +457,9 @@ export async function registerRefineRoute(app: FastifyInstance, options: RefineR
       return result;
     } catch (err) {
       if (process.env.NODE_ENV !== 'test') {
-        request.log.warn({ err }, 'Spec refiner failed, failing open with empty questions');
+        request.log.warn({ err }, 'Spec refiner failed');
       }
-      return { questions: [] };
+      return reply.status(502).send({ error: 'refine_unavailable' });
     }
   });
 }

@@ -286,7 +286,7 @@ describe('the QA gate in App', () => {
     await act(async () => root.unmount());
   });
 
-  it('still asks for a name when the refiner is down, falling back to one from the prompt', async () => {
+  it('fails closed and does not open the naming wizard when the refiner is down', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
     const submitted: Array<{ title: string; concept: string }> = [];
@@ -295,13 +295,11 @@ describe('the QA gate in App', () => {
     const { container, root } = await renderApp();
     await submitIdea(container);
 
-    // Failing open must not mean skipping the step — that is how truncated prompts
-    // became titles in the first place. The suggestion degrades; the gate does not.
+    // An outage must not look like a clean, already-specified concept: no silent
+    // truncated-prompt title, no wizard, just a retry-able error.
     expect(submitted).toHaveLength(0);
-    const name = inWizard<HTMLInputElement>('.qa-name-input');
-    expect(name?.value).toBe('A survival game on a desert island with');
-    // No questions came back, so there are no question stages to walk.
-    expect(stageCount()).toBe(3);
+    expect(inWizard('.qa-wizard')).toBeNull();
+    expect(container.querySelector('.error')?.textContent).toMatch(/couldn't analyze your idea/i);
 
     await act(async () => root.unmount());
   });
