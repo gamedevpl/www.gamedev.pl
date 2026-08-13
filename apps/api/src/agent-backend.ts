@@ -109,17 +109,7 @@ export interface DispatchResult {
    */
   seedWorkspace?: string;
   credentialRef?: string;
-  /**
-   * The prompt lane this round actually dispatched on, when the backend has one.
-   *
-   * A round can request no lane and get the backend's own default, so a caller deciding
-   * whether a missing `seedWorkspace` means "staging failed" must read this back rather
-   * than the brief it sent — `mcp` never stages a branch (the seed goes in as inline
-   * workspace files instead), so an absent `seedWorkspace` there is the normal case, not
-   * a failure. `outputs` is included alongside this file's own two lanes because the
-   * managed backend also dispatches on it (env-configured only, never per-brief) and it
-   * stages a branch the same way `harness` does — only `mcp` skips staging.
-   */
+  // Lane this round actually dispatched on; mcp never stages a branch.
   promptLane?: BuildPromptLane | 'outputs';
 }
 

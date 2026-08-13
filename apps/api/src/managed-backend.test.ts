@@ -197,7 +197,7 @@ describe('managed backend', () => {
 
     expect(started).toHaveLength(1);
     expect(started[0].workspaceFiles).toBeUndefined();
-    // The prompt must not claim a draft is already in the checkout when none was sent.
+    // Must not claim a draft exists when none was sent.
     expect(started[0].prompt).not.toContain('already contains a generated first draft');
   });
 

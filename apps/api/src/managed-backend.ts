@@ -223,11 +223,7 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
       options.kitDigest ? await options.kitDigest.load() : undefined,
     );
     const mcpBearerCredential = options.mcpBearerCredential?.(brief);
-    // A seed the provider cannot accept as workspace files must not reach the prompt
-    // either — buildPrompt tells the agent "a first draft is already in your checkout"
-    // whenever brief.seed is set, and that would be a lie for a dispatch that is about
-    // to start from nothing. Fail open onto the unseeded brief rather than throwing:
-    // a seed is an optimization the round can simply run without.
+    // An unsupported seed must also drop from the brief, not just workspaceFiles.
     const seedSupported =
       typeof options.provider.supportsSeedFiles === 'function'
         ? options.provider.supportsSeedFiles(roundPromptLane)

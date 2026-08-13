@@ -109,20 +109,7 @@ export interface ManagedAgentProvider {
   readonly vendor: string;
   readonly model: string;
   readonly promptLane: ManagedPromptLane;
-  /**
-   * Whether `startSession` accepts a non-empty `workspaceFiles`. Some providers reject it
-   * outright (Anthropic always; Gemini once `environmentId` names a fixed environment) —
-   * a seed is an optimization, not a requirement, so the backend must know this *before*
-   * calling, not learn it by catching a thrown `ManagedAgentError` after already paying
-   * for seed generation. Defaults to `true` when a provider does not set it, matching
-   * every provider that existed before this flag.
-   *
-   * A function when the answer depends on the round rather than the provider's static
-   * config: Copilot's own `startSession` already silently drops the seed on the `mcp`
-   * lane (it stages a branch only outside `mcp`), so a plain `true` there would tell the
-   * backend a seed will be used when this exact provider, on this exact round, is about
-   * to throw it away.
-   */
+  // Whether startSession accepts workspaceFiles; a function if it depends on the lane.
   readonly supportsSeedFiles?: boolean | ((promptLane: ManagedPromptLane) => boolean);
   startSession(request: ManagedSessionRequest): Promise<ManagedSession>;
   getSession(sessionId: string): Promise<ManagedSession | null>;

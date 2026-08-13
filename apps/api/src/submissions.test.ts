@@ -5985,19 +5985,14 @@ describe('seeded dispatch', () => {
   });
 
   it('does not mistake an mcp-lane round’s inline seed delivery for a staging failure', async () => {
-    // The `mcp` prompt lane never stages a seed branch — it delivers the draft as inline
-    // workspace files instead — so an absent seedWorkspace there is the normal case, not
-    // the staging failure the circuit breaker exists for. Before promptLane was threaded
-    // back on DispatchResult, every mcp-lane round tripped the same breaker as a genuine
-    // credential failure, muting seeds for ten minutes after every single managed round.
+    // mcp never stages a branch — a missing seedWorkspace is not a failure.
     const stub = createGithubClientStub({});
     const briefs: BuildBrief[] = [];
     const backend: AgentBackend = {
       name: 'stub',
       dispatch: async (brief) => {
         briefs.push(brief);
-        // No seedWorkspace, same as a staging failure would look — but promptLane says
-        // this backend never attempted to stage a branch in the first place.
+        // No seedWorkspace, but promptLane says mcp never tried to stage one.
         return { ref: 'task-1', promptLane: 'mcp' };
       },
       resume: async () => ({ ref: 'task-2' }),
@@ -6110,10 +6105,7 @@ describe('seeded dispatch', () => {
   });
 
   it('does not let a platform staging failure mute a self (BYOCA) round’s seed', async () => {
-    // A self round never stages a branch — its seed is written straight onto the job —
-    // so a platform backend that cannot place a draft says nothing about whether a self
-    // round's own draft would land. Muting both from one shared failure is exactly the
-    // "no seeds happening" symptom BYOCA creators saw whenever a managed round ran first.
+    // A platform staging failure must not mute a self round.
     const stub = createGithubClientStub({});
     const platformBriefs: BuildBrief[] = [];
     const platformBackend: AgentBackend = {
