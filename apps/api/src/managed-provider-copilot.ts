@@ -104,6 +104,8 @@ export function createCopilotManagedProvider(
     vendor: COPILOT_VENDOR,
     model: config.model,
     promptLane: 'harness',
+    // Mirrors startSession: only stages a seed branch off mcp.
+    supportsSeedFiles: (promptLane) => promptLane !== 'mcp',
 
     async startSession(request: ManagedSessionRequest): Promise<ManagedSession> {
       const promptLane = request.promptLane ?? 'harness';

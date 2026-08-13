@@ -134,6 +134,8 @@ export function createGeminiManagedProvider(config: ManagedProviderConfig): Mana
     vendor: GEMINI_VENDOR,
     model,
     promptLane: 'mcp',
+    // A named environment is fixed; a scratch workspace accepts inline sources.
+    supportsSeedFiles: !config.environmentId,
 
     async startSession(request: ManagedSessionRequest): Promise<ManagedSession> {
       if (request.effort) throw new ManagedAgentError('gemini managed agents does not support effort overrides');

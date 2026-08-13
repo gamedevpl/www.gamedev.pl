@@ -125,6 +125,7 @@ async function createApp(params: {
   contentChecker?: ContentChecker;
   maxCachedDraftPreviews?: number;
   agentBackend?: AgentBackend;
+  agentBackends?: { self?: AgentBackend; platform?: AgentBackend };
   agentChannel?: {
     gamesStore?: GamesStore;
     onSourcesDelivered?: (input: {
@@ -155,6 +156,7 @@ async function createApp(params: {
       gamesRepo: repo,
       githubClient: params.githubClient,
       agentBackend: params.agentBackend,
+      ...(params.agentBackends ? { agentBackends: params.agentBackends } : {}),
       ...(params.gameSeeder ? { gameSeeder: params.gameSeeder } : {}),
       now: params.now,
       dailySubmissionQuota: params.dailySubmissionQuota,
@@ -5982,6 +5984,102 @@ describe('seeded dispatch', () => {
     await app.close();
   });
 
+  it('does not pay for a seed a backend would discard', async () => {
+    // acceptsSeed is read before generation, not after the bill.
+    const stub = createGithubClientStub({});
+    const briefs: BuildBrief[] = [];
+    const backend: AgentBackend = {
+      name: 'stub',
+      acceptsSeed: () => false,
+      dispatch: async (brief) => {
+        briefs.push(brief);
+        return { ref: 'task-1', promptLane: 'mcp' };
+      },
+      resume: async () => ({ ref: 'task-2' }),
+      observe: async () => null,
+      cancel: async () => ({ enforced: false }),
+    };
+    let seedCalls = 0;
+    const { app, authHeaders } = await createApp({
+      githubClient: stub.githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      gameSeeder: seederStub({ compiles: true }, () => seedCalls++),
+    });
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'No Seed Game', concept: 'A game where you deliver parcels between comets, dodging debris.' },
+    });
+    expect(created.statusCode).toBe(200);
+    await vi.waitFor(() => expect(briefs).toHaveLength(1));
+
+    expect(seedCalls).toBe(0);
+    expect(briefs[0].seed).toBeUndefined();
+
+    await app.close();
+  });
+
+  it('does not mistake an mcp-lane round’s inline seed delivery for a staging failure', async () => {
+    // mcp never stages a branch — a missing seedWorkspace is not a failure.
+    const stub = createGithubClientStub({});
+    const briefs: BuildBrief[] = [];
+    const backend: AgentBackend = {
+      name: 'stub',
+      dispatch: async (brief) => {
+        briefs.push(brief);
+        // No seedWorkspace, but promptLane says mcp never tried to stage one.
+        return { ref: 'task-1', promptLane: 'mcp' };
+      },
+      resume: async () => ({ ref: 'task-2' }),
+      observe: async () => null,
+      cancel: async () => ({ enforced: false }),
+    };
+    let seedCalls = 0;
+    const { app, authHeaders } = await createApp({
+      githubClient: stub.githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      gameSeeder: {
+        seed: async ({ slug }) => {
+          seedCalls++;
+          return {
+            slug,
+            files: [{ path: 'game.ts', content: 'export {};\n' }],
+            references: ['apex-sprint'],
+            usage: { inputTokens: 30_000, outputTokens: 9_000, model: 'gemini-3.6-flash' },
+            elapsedMs: 156_000,
+            compiles: true,
+            repaired: false,
+          };
+        },
+      },
+    });
+
+    const submit = (title: string) =>
+      app.inject({
+        method: 'POST',
+        url: '/api/submissions',
+        headers: authHeaders,
+        payload: { title, concept: 'A game where you deliver parcels between comets, dodging debris.' },
+      });
+
+    expect((await submit('First Game')).statusCode).toBe(200);
+    await vi.waitFor(() => expect(briefs).toHaveLength(1));
+    expect(briefs[0].seed).toBeDefined();
+
+    expect((await submit('Second Game')).statusCode).toBe(200);
+    await vi.waitFor(() => expect(briefs).toHaveLength(2));
+
+    // No mute: the second round gets a seed too.
+    expect(briefs[1].seed).toBeDefined();
+    expect(seedCalls).toBe(2);
+
+    await app.close();
+  });
+
   it('stops generating drafts after one cannot be staged', async () => {
     // The money bug this exists for: a mis-scoped dispatch credential fails only after
     // the draft has been generated, so without a circuit breaker every submission pays
@@ -6040,6 +6138,79 @@ describe('seeded dispatch', () => {
     // must never cost a creator their game — it just does not pay for another draft.
     expect(briefs[1].seed).toBeUndefined();
     expect(seedCalls).toBe(1);
+
+    await app.close();
+  });
+
+  it('does not let a platform staging failure mute a self (BYOCA) round’s seed', async () => {
+    // A platform staging failure must not mute a self round.
+    const stub = createGithubClientStub({});
+    const platformBriefs: BuildBrief[] = [];
+    const platformBackend: AgentBackend = {
+      name: 'platform-stub',
+      dispatch: async (brief) => {
+        platformBriefs.push(brief);
+        // Seed accepted, no workspace back — a staging failure.
+        return { ref: 'task-1', workspace: 'copilot/x' };
+      },
+      resume: async () => ({ ref: 'task-2' }),
+      observe: async () => null,
+      cancel: async () => ({ enforced: false }),
+    };
+    const selfBriefs: BuildBrief[] = [];
+    const selfBackend: AgentBackend = {
+      name: 'self-stub',
+      dispatch: async (brief) => {
+        selfBriefs.push(brief);
+        return { ref: 'self:1' };
+      },
+      resume: async () => ({ ref: 'self:2' }),
+      observe: async () => null,
+      cancel: async () => ({ enforced: false }),
+    };
+    let seedCalls = 0;
+    const { app, authHeaders } = await createApp({
+      githubClient: stub.githubClient,
+      agentBackends: { platform: platformBackend, self: selfBackend },
+      submissionTokenSecret: secret,
+      gameSeeder: {
+        seed: async ({ slug }) => {
+          seedCalls++;
+          return {
+            slug,
+            files: [{ path: 'game.ts', content: 'export {};\n' }],
+            references: ['apex-sprint'],
+            usage: { inputTokens: 30_000, outputTokens: 9_000, model: 'gemini-3.6-flash' },
+            elapsedMs: 156_000,
+            compiles: true,
+            repaired: false,
+          };
+        },
+      },
+    });
+
+    const submit = (title: string, builder?: 'self' | 'platform') =>
+      app.inject({
+        method: 'POST',
+        url: '/api/submissions',
+        headers: authHeaders,
+        payload: {
+          title,
+          concept: 'A game where you deliver parcels between comets, dodging debris.',
+          ...(builder ? { builder } : {}),
+        },
+      });
+
+    // Platform round first — its dispatch reports no seedWorkspace, tripping the mute.
+    expect((await submit('Platform Game', 'platform')).statusCode).toBe(200);
+    await vi.waitFor(() => expect(platformBriefs).toHaveLength(1));
+    expect(platformBriefs[0].seed).toBeDefined();
+
+    // A self round submitted right after must still get its own seed.
+    expect((await submit('Self Game', 'self')).statusCode).toBe(200);
+    await vi.waitFor(() => expect(selfBriefs).toHaveLength(1));
+    expect(selfBriefs[0].seed).toBeDefined();
+    expect(seedCalls).toBe(2);
 
     await app.close();
   });
