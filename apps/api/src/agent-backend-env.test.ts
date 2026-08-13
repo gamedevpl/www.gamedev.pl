@@ -144,7 +144,7 @@ describe('createAgentBackendRegistryFromEnv', () => {
       deliver: async () => ({ version: 'v1' }),
     });
 
-    expect(registry.platform?.name).toBe('managed:copilot');
+    expect(registry.platformByVendor.get('copilot')?.name).toBe('managed:copilot');
   });
 
   it('builds Gemini with its native token budget and default model', () => {
