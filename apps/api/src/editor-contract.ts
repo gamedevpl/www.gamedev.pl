@@ -28,6 +28,7 @@ export const MAX_TEXT_LENGTH = 240;
 export const MAX_ENUM_VALUES = 16;
 export const MAX_GRID_COLS = 64;
 export const MAX_GRID_ROWS = 64;
+export const MAX_PATH_POINTS = 256;
 /** Game-wide scalar tunables ("params") — same property vocabulary, one value each. */
 export const MAX_PARAMS = 16;
 /** Reserved content-document key param values ride under; illegal as a collection name. */
@@ -112,7 +113,17 @@ export interface EntitiesItemSpec {
   constraints: EditorConstraint[];
 }
 
-export type CollectionItemSpec = TilemapItemSpec | EntitiesItemSpec;
+export interface PathItemSpec {
+  widget: 'path';
+  gridCols: number;
+  gridRows: number;
+  minPoints: number;
+  maxPoints: number;
+  closed: boolean;
+  properties: Record<string, PropertySpec>;
+}
+
+export type CollectionItemSpec = TilemapItemSpec | EntitiesItemSpec | PathItemSpec;
 
 export interface CollectionSpec {
   widget: 'collection';
@@ -121,7 +132,7 @@ export interface CollectionSpec {
   min: number;
   max: number;
   item: CollectionItemSpec;
-  defaults: Array<TilemapItemContent | EntityItemContent>;
+  defaults: Array<TilemapItemContent | EntityItemContent | PathItemContent>;
 }
 
 export interface TilemapItemContent {
@@ -131,6 +142,16 @@ export interface TilemapItemContent {
 
 export interface EntityItemContent {
   properties: Record<string, unknown>;
+}
+
+export interface PathPoint {
+  x: number;
+  y: number;
+}
+
+export interface PathItemContent {
+  properties: Record<string, unknown>;
+  points: PathPoint[];
 }
 
 export interface EditorDefinition {
@@ -457,11 +478,61 @@ function validateEntitiesSpec(owner: string, raw: unknown, errors: string[]): En
   return { widget: 'entities', properties, constraints };
 }
 
+function validatePathSpec(owner: string, raw: unknown, errors: string[]): PathItemSpec | null {
+  if (!isPlainObject(raw)) {
+    errors.push(`${owner}: "item" must be an object`);
+    return null;
+  }
+  if (
+    !Number.isInteger(raw.gridCols) ||
+    !Number.isInteger(raw.gridRows) ||
+    (raw.gridCols as number) < 1 ||
+    (raw.gridCols as number) > MAX_GRID_COLS ||
+    (raw.gridRows as number) < 1 ||
+    (raw.gridRows as number) > MAX_GRID_ROWS
+  ) {
+    errors.push(`${owner}: path gridCols/gridRows must be integers between 1 and ${MAX_GRID_COLS}`);
+    return null;
+  }
+  const closed = raw.closed ?? false;
+  if (typeof closed !== 'boolean') {
+    errors.push(`${owner}: path "closed" must be a boolean when present`);
+    return null;
+  }
+  if (closed && (raw.gridCols as number) * (raw.gridRows as number) < 3) {
+    errors.push(`${owner}: a closed path grid needs room for at least 3 distinct points`);
+    return null;
+  }
+  const minimum = closed ? 3 : 1;
+  if (
+    !Number.isInteger(raw.minPoints) ||
+    !Number.isInteger(raw.maxPoints) ||
+    (raw.minPoints as number) < minimum ||
+    (raw.maxPoints as number) > MAX_PATH_POINTS ||
+    (raw.minPoints as number) > (raw.maxPoints as number)
+  ) {
+    errors.push(
+      `${owner}: path point bounds must satisfy ${minimum} <= minPoints <= maxPoints <= ${MAX_PATH_POINTS}`,
+    );
+    return null;
+  }
+  return {
+    widget: 'path',
+    gridCols: raw.gridCols as number,
+    gridRows: raw.gridRows as number,
+    minPoints: raw.minPoints as number,
+    maxPoints: raw.maxPoints as number,
+    closed,
+    properties: validateProperties(owner, raw.properties ?? {}, errors),
+  };
+}
+
 function validateCollectionItemSpec(owner: string, raw: unknown, errors: string[]): CollectionItemSpec | null {
   if (isPlainObject(raw) && raw.widget === 'entities') return validateEntitiesSpec(owner, raw, errors);
   if (isPlainObject(raw) && raw.widget === 'tilemap') return validateTilemapSpec(owner, raw, errors);
+  if (isPlainObject(raw) && raw.widget === 'path') return validatePathSpec(owner, raw, errors);
   errors.push(
-    `${owner}: unknown item widget "${String(isPlainObject(raw) ? raw.widget : undefined)}" (vocabulary: tilemap, entities)`,
+    `${owner}: unknown item widget "${String(isPlainObject(raw) ? raw.widget : undefined)}" (vocabulary: tilemap, entities, path)`,
   );
   return null;
 }
@@ -559,7 +630,7 @@ export function parseEditorDefinition(source: string): { definition: EditorDefin
       min: raw.min as number,
       max: raw.max as number,
       item,
-      defaults: raw.defaults as Array<TilemapItemContent | EntityItemContent>,
+      defaults: raw.defaults as Array<TilemapItemContent | EntityItemContent | PathItemContent>,
     };
     // Defaults must satisfy the schema they ship with — the round-trip that
     // proves the pipeline works before a creator ever touches it.
@@ -667,8 +738,67 @@ function validateEntityItemContent(spec: EntitiesItemSpec, item: unknown, where:
   return errors;
 }
 
+function validatePathItemContent(spec: PathItemSpec, item: unknown, where: string): string[] {
+  const errors: string[] = [];
+  if (!isPlainObject(item)) return [`${where}: must be an object`];
+  const unknown = Object.keys(item).filter((key) => key !== 'properties' && key !== 'points');
+  if (unknown.length > 0) errors.push(`${where}: unknown keys ${unknown.join(', ')}`);
+  const points = item.points;
+  if (!Array.isArray(points)) {
+    errors.push(`${where}: "points" must be an array`);
+  } else {
+    if (points.length < spec.minPoints || points.length > spec.maxPoints) {
+      errors.push(`${where}: has ${points.length} points (allowed ${spec.minPoints}-${spec.maxPoints})`);
+    }
+    for (const [index, point] of points.entries()) {
+      if (
+        !isPlainObject(point) ||
+        Object.keys(point).some((key) => key !== 'x' && key !== 'y') ||
+        !Number.isInteger(point.x) ||
+        !Number.isInteger(point.y) ||
+        (point.x as number) < 0 ||
+        (point.x as number) >= spec.gridCols ||
+        (point.y as number) < 0 ||
+        (point.y as number) >= spec.gridRows
+      ) {
+        errors.push(
+          `${where}: point ${index + 1} must contain integer x/y inside 0-${spec.gridCols - 1} by 0-${spec.gridRows - 1}`,
+        );
+      }
+    }
+    if (spec.closed && points.length > 0) {
+      const validPoints = points.filter(
+        (point): point is PathPoint => isPlainObject(point) && Number.isInteger(point.x) && Number.isInteger(point.y),
+      );
+      const distinct = new Set(validPoints.map((point) => `${point.x},${point.y}`));
+      if (distinct.size < 3) errors.push(`${where}: a closed path needs at least 3 distinct points`);
+      const first = validPoints[0];
+      const last = validPoints[validPoints.length - 1];
+      if (first && last && first.x === last.x && first.y === last.y) {
+        errors.push(`${where}: a closed path must not repeat its first point at the end; closure is implicit`);
+      }
+    }
+  }
+  const properties = item.properties;
+  if (!isPlainObject(properties)) return [...errors, `${where}: "properties" must be an object`];
+  for (const name of Object.keys(properties)) {
+    if (!(name in spec.properties)) errors.push(`${where}: undeclared property "${name}"`);
+  }
+  for (const [name, propertySpec] of Object.entries(spec.properties)) {
+    const value = properties[name];
+    if (value === undefined) {
+      errors.push(`${where}: missing property "${name}"`);
+      continue;
+    }
+    const problem = valueProblem(propertySpec, value);
+    if (problem) errors.push(`${where}: property "${name}" ${problem}`);
+  }
+  return errors;
+}
+
 function validateItemContent(spec: CollectionItemSpec, item: unknown, where: string): string[] {
   if (spec.widget === 'entities') return validateEntityItemContent(spec, item, where);
+  if (spec.widget === 'path') return validatePathItemContent(spec, item, where);
   const errors: string[] = [];
   if (!isPlainObject(item)) return [`${where}: must be an object`];
   const unknown = Object.keys(item).filter((key) => key !== 'properties' && key !== 'rows');
@@ -781,7 +911,7 @@ function validateCollectionContent(spec: CollectionSpec, items: unknown): string
 
 /**
  * Validate a full content document (what a Studio draft or a publish carries)
- * against a definition. Shape: `{ <collectionKey>: TilemapItemContent[] }`.
+ * against a definition. Shape: `{ <collectionKey>: EditorItemContent[] }`.
  */
 export function validateEditorContent(definition: EditorDefinition, content: unknown): string[] {
   if (!isPlainObject(content)) return ['content must be an object'];
@@ -866,6 +996,7 @@ export function generateEditorContentModule(definition: EditorDefinition): strin
     lines.push(`export interface ${itemType} {`);
     lines.push(`  properties: ${itemType}Properties;`);
     if (spec.item.widget === 'tilemap') lines.push('  rows: string[];');
+    if (spec.item.widget === 'path') lines.push('  points: Array<{ x: number; y: number }>;');
     lines.push('}', '');
     contentFields.push(`  ${key}: ${itemType}[];`);
   }

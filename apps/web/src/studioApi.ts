@@ -78,7 +78,17 @@ export type EditorEntitiesSpec = {
   constraints: EditorConstraint[];
 };
 
-export type EditorCollectionItemSpec = EditorTilemapSpec | EditorEntitiesSpec;
+export type EditorPathSpec = {
+  widget: 'path';
+  gridCols: number;
+  gridRows: number;
+  minPoints: number;
+  maxPoints: number;
+  closed: boolean;
+  properties: Record<string, EditorPropertySpec>;
+};
+
+export type EditorCollectionItemSpec = EditorTilemapSpec | EditorEntitiesSpec | EditorPathSpec;
 
 export type EditorCollectionSpec = {
   widget: 'collection';
@@ -92,7 +102,9 @@ export type EditorCollectionSpec = {
 
 export type EditorTilemapItemContent = { properties: Record<string, unknown>; rows: string[] };
 export type EditorEntityItemContent = { properties: Record<string, unknown> };
-export type EditorItemContent = EditorTilemapItemContent | EditorEntityItemContent;
+export type EditorPathPoint = { x: number; y: number };
+export type EditorPathItemContent = { properties: Record<string, unknown>; points: EditorPathPoint[] };
+export type EditorItemContent = EditorTilemapItemContent | EditorEntityItemContent | EditorPathItemContent;
 
 export type EditorParamValue = string | number | boolean;
 

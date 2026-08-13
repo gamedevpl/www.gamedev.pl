@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { PathPainter } from './PathPainter.js';
 import {
   blankItem,
   collectionProblems,
   defaultCollectionKey,
+  isPathItem,
   isTilemapItem,
   itemProblems,
   setCell,
@@ -13,6 +15,7 @@ import type {
   EditorContentDoc,
   EditorItemContent,
   EditorLabel,
+  EditorPathSpec,
   EditorTilemapSpec,
 } from './studioApi.js';
 import type { EditorSelection } from './editorBridge.js';
@@ -22,6 +25,10 @@ function tilemapCollection(
   spec: EditorCollectionSpec | null,
 ): (EditorCollectionSpec & { item: EditorTilemapSpec }) | null {
   return spec && spec.item.widget === 'tilemap' ? (spec as EditorCollectionSpec & { item: EditorTilemapSpec }) : null;
+}
+
+function pathCollection(spec: EditorCollectionSpec | null): (EditorCollectionSpec & { item: EditorPathSpec }) | null {
+  return spec && spec.item.widget === 'path' ? (spec as EditorCollectionSpec & { item: EditorPathSpec }) : null;
 }
 
 /** The palette's initial selection — entities have no tiles to paint with. */
@@ -52,6 +59,13 @@ export function RemixPainter(props: {
 }) {
   const { t, i18n } = useTranslation();
   const name = (label: EditorLabel) => (i18n.language?.startsWith('pl') ? label.pl : label.en);
+  const pathMessages = {
+    pointCount: (count: number, min: number, max: number) =>
+      t('studioPanel.editor.pathPointCount', { count, min, max }),
+    outOfBounds: (index: number) => t('studioPanel.editor.pathOutOfBounds', { index }),
+    distinct: () => t('studioPanel.editor.pathDistinct'),
+    repeatedEnd: () => t('studioPanel.editor.pathRepeatedEnd'),
+  };
 
   const collectionKeys = Object.keys(props.content);
   const [internalCollectionKey, setInternalCollectionKey] = useState<string | null>(null);
@@ -104,10 +118,12 @@ export function RemixPainter(props: {
     updateItems(list);
   }
 
-  const problems = item ? itemProblems(spec.item, item, name) : [];
+  const problems = item ? itemProblems(spec.item, item, name, pathMessages) : [];
   const collectionWideProblems = collectionProblems(spec, items);
   const tilemapItem = item && isTilemapItem(item) ? item : null;
+  const pathItem = item && isPathItem(item) ? item : null;
   const boardSpec = tilemapCollection(spec);
+  const pathSpec = pathCollection(spec);
   const width = tilemapItem ? (tilemapItem.rows[0]?.length ?? 0) : 0;
 
   return (
@@ -219,6 +235,17 @@ export function RemixPainter(props: {
             ))}
           </div>
         </>
+      ) : null}
+
+      {pathSpec && pathItem ? (
+        <PathPainter
+          key={`${collectionKey}-${activeIndex}`}
+          spec={pathSpec.item}
+          item={pathItem}
+          ariaLabel={t('studioPanel.editor.pathAria', { name: name(pathSpec.itemLabel) })}
+          instructions={t('studioPanel.editor.pathHelp')}
+          onChange={updateItem}
+        />
       ) : null}
 
       {item && spec ? (

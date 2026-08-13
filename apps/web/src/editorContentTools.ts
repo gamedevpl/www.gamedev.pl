@@ -2,6 +2,8 @@ import type {
   EditorCollectionSpec,
   EditorItemContent,
   EditorLabel,
+  EditorPathItemContent,
+  EditorPathSpec,
   EditorTilemapItemContent,
   EditorTilemapSpec,
 } from './studioApi.js';
@@ -13,6 +15,17 @@ export function defaultCollectionKey(collections: Record<string, unknown>): stri
 export function isTilemapItem(item: EditorItemContent): item is EditorTilemapItemContent {
   return 'rows' in item;
 }
+
+export function isPathItem(item: EditorItemContent): item is EditorPathItemContent {
+  return 'points' in item;
+}
+
+export type PathProblemMessages = {
+  pointCount: (count: number, min: number, max: number) => string;
+  outOfBounds: (index: number) => string;
+  distinct: () => string;
+  repeatedEnd: () => string;
+};
 
 /**
  * The pure half of the content painter, shared by its two surfaces: the
@@ -88,7 +101,9 @@ export function itemProblems(
   spec: EditorCollectionSpec['item'],
   item: EditorItemContent,
   name: (label: EditorLabel) => string,
+  pathMessages?: PathProblemMessages,
 ) {
+  if (spec.widget === 'path' && isPathItem(item)) return pathProblems(spec, item, pathMessages);
   if (spec.widget !== 'tilemap' || !isTilemapItem(item)) return [];
   const counts = new Map<string, number>(spec.tiles.map((tile) => [tile.key, 0]));
   const charToKey = new Map(spec.tiles.map((tile) => [tile.char, tile.key]));
@@ -135,6 +150,36 @@ export function itemProblems(
   return problems;
 }
 
+function pathProblems(
+  spec: EditorPathSpec,
+  item: EditorPathItemContent,
+  messages?: PathProblemMessages,
+): string[] {
+  const fallback: PathProblemMessages = {
+    pointCount: (count, min, max) => `${count} points; expected ${min}-${max}`,
+    outOfBounds: (index) => `Point ${index} is outside the grid`,
+    distinct: () => 'A closed path needs at least 3 distinct points',
+    repeatedEnd: () => 'Do not repeat the first point; closure is automatic',
+  };
+  const text = messages ?? fallback;
+  const problems: string[] = [];
+  if (item.points.length < spec.minPoints || item.points.length > spec.maxPoints) {
+    problems.push(text.pointCount(item.points.length, spec.minPoints, spec.maxPoints));
+  }
+  item.points.forEach((point, index) => {
+    if (!Number.isInteger(point.x) || !Number.isInteger(point.y) || point.x < 0 || point.y < 0 || point.x >= spec.gridCols || point.y >= spec.gridRows) {
+      problems.push(text.outOfBounds(index + 1));
+    }
+  });
+  if (spec.closed && item.points.length > 0) {
+    if (new Set(item.points.map((point) => `${point.x},${point.y}`)).size < 3) problems.push(text.distinct());
+    const first = item.points[0];
+    const last = item.points[item.points.length - 1];
+    if (first.x === last.x && first.y === last.y) problems.push(text.repeatedEnd());
+  }
+  return problems;
+}
+
 /** Entities' one rule (uniqueBy) is collection-wide — checked once, mirroring the server. */
 export function collectionProblems(spec: EditorCollectionSpec, items: EditorItemContent[]): string[] {
   if (spec.item.widget !== 'entities') return [];
@@ -176,8 +221,21 @@ export function blankItem(spec: EditorCollectionSpec['item']): EditorItemContent
     else if (propertySpec.type === 'enum') properties[name] = propertySpec.values[0];
     else properties[name] = false;
   }
+  if (spec.widget === 'path') return { properties, points: blankPathPoints(spec) };
   if (spec.widget !== 'tilemap') return { properties };
   // Smallest legal grid, all first-tile — the creator paints from there.
   const fill = spec.tiles[0]?.char ?? '.';
   return { properties, rows: Array.from({ length: spec.grid.minRows }, () => fill.repeat(spec.grid.minCols)) };
+}
+
+function blankPathPoints(spec: EditorPathSpec) {
+  const cells = Array.from({ length: spec.gridCols * spec.gridRows }, (_, index) => ({
+    x: index % spec.gridCols,
+    y: Math.floor(index / spec.gridCols),
+  }));
+  return Array.from({ length: spec.minPoints }, (_, index) => {
+    if (index < cells.length) return cells[index];
+    if (cells.length === 1) return cells[0];
+    return cells[1 + ((index - cells.length) % (cells.length - 1))];
+  });
 }
