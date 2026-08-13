@@ -35,7 +35,7 @@ import { formatRemixTurns } from './remix-turns.js';
 export const ASSIST_LANES = ['params', 'content', 'code', 'reject'] as const;
 export type AssistLane = (typeof ASSIST_LANES)[number];
 
-export const DEFAULT_ASSIST_MODEL = 'gemini-3.6-flash';
+export const DEFAULT_ASSIST_MODEL = 'gemini-3.7-flash';
 export const DEFAULT_ASSIST_TIMEOUT_MS = 8000;
 /** Utterances are one-liners; a wall of text is a prompt-injection vehicle, not a tweak. */
 export const MAX_UTTERANCE_LENGTH = 240;

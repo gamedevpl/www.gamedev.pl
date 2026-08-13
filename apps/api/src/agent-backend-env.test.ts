@@ -20,6 +20,9 @@ const ENV_KEYS = [
   'GAMES_REPO',
   'GAMES_PUBLISHED_REF',
   'AGENT_CUSTOM_AGENT',
+  'MANAGED_AGENT_COPILOT_MCP_REPO',
+  'MANAGED_AGENT_COPILOT_MCP_BASE_REF',
+  'MANAGED_AGENT_COPILOT_MCP_CUSTOM_AGENT',
 ] as const;
 
 describe('createAgentBackendRegistryFromEnv', () => {
@@ -123,6 +126,23 @@ describe('createAgentBackendRegistryFromEnv', () => {
     expect(registry.platform?.name).toBe('managed:copilot');
   });
 
+  it('accepts a separate MCP-lane repo for Copilot without changing backend selection', () => {
+    setEnv({
+      MANAGED_AGENT_VENDOR: 'copilot',
+      AGENT_TASKS_TOKEN: randomBytes(32).toString('hex'),
+      MANAGED_AGENT_MCP_URL: 'https://www.gamedev.pl/api/mcp',
+      MANAGED_AGENT_PROMPT_LANE: 'mcp',
+      GAMES_REPO: 'gamedevpl/www.gamedev.pl-games',
+      MANAGED_AGENT_COPILOT_MCP_REPO: 'gamedevpl/scratchpad',
+      MANAGED_AGENT_COPILOT_MCP_CUSTOM_AGENT: 'game-builder-mcp',
+    });
+    const registry = createAgentBackendRegistryFromEnv({ info: vi.fn(), warn: vi.fn() }, undefined, {
+      deliver: async () => ({ version: 'v1' }),
+    });
+
+    expect(registry.platform?.name).toBe('managed:copilot');
+  });
+
   it('builds Gemini with its native token budget and default model', () => {
     setEnv({
       MANAGED_AGENT_VENDOR: 'gemini',
@@ -138,7 +158,7 @@ describe('createAgentBackendRegistryFromEnv', () => {
 
     expect(registry.platform?.name).toBe('managed:gemini');
     expect(info).toHaveBeenCalledWith(
-      expect.objectContaining({ vendor: 'gemini', model: 'gemini-3.6-flash' }),
+      expect.objectContaining({ vendor: 'gemini', model: 'gemini-3.7-flash' }),
       'managed agent dispatch enabled',
     );
   });

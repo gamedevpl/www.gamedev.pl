@@ -22,7 +22,7 @@ export function resolveSeedStatus(record: Pick<SubmissionRecord, 'seed' | 'seedS
 export function seedNoticeFor(status: SeedStatus): string | null {
   switch (status) {
     case 'available':
-      return 'Seed draft available: call get_seed now and continue that draft — do not scaffold from scratch.';
+      return 'Seed draft available: call get_seed now and continue that draft — do not scaffold from scratch. The brief wins: delete anything in the draft that contradicts it rather than adapting the spec to the draft.';
     case 'pending':
       return 'Seed draft is still generating. Browse the kit if needed, then call get_seed again before scaffolding from a template.';
     default:

@@ -160,7 +160,7 @@ export class VertexSpecRefiner implements SpecRefiner {
         region: this.options.region,
         defaultRegion: 'global',
         model: this.options.model,
-        defaultModel: 'gemini-3.6-flash',
+        defaultModel: 'gemini-3.7-flash',
         // Thinking off: the prompt asks for a fixed JSON shape, not reasoning, and
         // the latency it adds is what pushed this call past its abort budget in
         // production. Moderation keeps its own config — this one is refine-only.
@@ -180,7 +180,7 @@ export class VertexSpecRefiner implements SpecRefiner {
         region: this.options.region,
         defaultRegion: 'global',
         model: this.options.model,
-        defaultModel: 'gemini-3.6-flash',
+        defaultModel: 'gemini-3.7-flash',
       });
     return this.groundingClient;
   }

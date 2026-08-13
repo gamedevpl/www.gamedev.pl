@@ -175,7 +175,7 @@ export class VertexThemeExtractor implements ThemeExtractor {
         region: this.options.region,
         defaultRegion: 'global',
         model: this.options.model,
-        defaultModel: 'gemini-3.6-flash',
+        defaultModel: 'gemini-3.7-flash',
         generationConfig: {
           responseMimeType: 'application/json',
           thinkingConfig: { thinkingLevel: this.thinkingLevel.toUpperCase() },

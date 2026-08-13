@@ -433,7 +433,7 @@ npm run managed:probe -w @gamedevpl/api -- --vendor gemini --mcp --wait \
   --wait-seconds 120 --budget-tokens 50000
 ```
 
-`--vendor gemini` defaults to `gemini-3.6-flash`; `GEMINI_API_KEY` or
+`--vendor gemini` defaults to `gemini-3.7-flash`; `GEMINI_API_KEY` or
 `MANAGED_AGENT_API_KEY` supplies the credential and `--model` overrides the model label.
 The provider records native interaction usage and does not attempt to pull files from the
 session.
