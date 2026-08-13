@@ -12,7 +12,7 @@ import {
 
 export const GEMINI_VENDOR = 'gemini';
 export const GEMINI_DEFAULT_AGENT = 'antigravity-preview-05-2026';
-export const GEMINI_DEFAULT_MODEL = 'gemini-3.6-flash';
+export const GEMINI_DEFAULT_MODEL = 'gemini-3.7-flash';
 
 const DEFAULT_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
 const DEFAULT_TIMEOUT_MS = 30_000;

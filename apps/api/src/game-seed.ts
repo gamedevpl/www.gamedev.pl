@@ -82,7 +82,7 @@ export const DEFAULT_SEED_GENERATE_TIMEOUT_MS = 180_000;
 export const DEFAULT_SEED_TYPECHECK_TIMEOUT_MS = TYPECHECK_PREFLIGHT_BUDGET_MS;
 
 /** Same model family as the rest of our Vertex call sites; flash is the measured choice. */
-const DEFAULT_SEED_MODEL = 'gemini-3.6-flash';
+const DEFAULT_SEED_MODEL = 'gemini-3.7-flash';
 
 /** Bound the untrusted spec the same way the dispatch prompt does. */
 const MAX_SPEC_CHARS = 8000;
@@ -514,10 +514,7 @@ export class VertexGameSeeder implements GameSeeder {
     }
   }
 
-  private typeCheck(
-    files: SeedFile[],
-    kitDeclaration: string | null,
-  ): { verdict: TypeCheckResult; checked: boolean } {
+  private typeCheck(files: SeedFile[], kitDeclaration: string | null): { verdict: TypeCheckResult; checked: boolean } {
     if (!kitDeclaration) return { verdict: { ok: true }, checked: false };
 
     const startedAt = Date.now();
@@ -630,9 +627,7 @@ export class VertexGameSeeder implements GameSeeder {
         }
         checks = await checkDraft(files);
       }
-      const typeErrors = checks.typeCheckResult.verdict.ok
-        ? 0
-        : checks.typeCheckResult.verdict.errors.length;
+      const typeErrors = checks.typeCheckResult.verdict.ok ? 0 : checks.typeCheckResult.verdict.errors.length;
 
       const draft: SeedDraft = {
         slug,
