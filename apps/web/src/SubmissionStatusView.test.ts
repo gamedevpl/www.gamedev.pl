@@ -989,7 +989,7 @@ describe('SubmissionStatusView', () => {
     }
   });
 
-  it('lets a live platform round stop and switch to the creator agent', async () => {
+  it('keeps the live builder handoff in the composer, not the transcript', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     mockedGetSubmissionStatus.mockResolvedValue({
       status: 'building',
@@ -1016,22 +1016,24 @@ describe('SubmissionStatusView', () => {
       expect(container.querySelector('.builder-mode-selector')?.textContent).toContain('Gamedev.pl');
       expect(container.querySelector('.studio-turn.is-working')).not.toBeNull();
       expect(container.querySelector<HTMLTextAreaElement>('textarea')?.disabled).toBe(true);
+      const stop = container.querySelector<HTMLButtonElement>('.status-composer-stop');
+      expect(stop?.textContent).toBe('STOP');
+      expect(stop?.disabled).toBe(false);
+      expect(stop?.getAttribute('aria-label')).toBe('Stop the current build and switch to your agent');
+      expect(container.querySelector('.status-composer-send')).toBeNull();
       expect(container.textContent).toContain('The agent is building now');
-      expect(container.querySelector('.studio-turn-working-actions .studio-context-stop')).toBeNull();
+      expect(container.querySelector('.studio-turn.is-working [data-testid^="active-switch-builder"]')).toBeNull();
+      expect(control?.closest('.status-composer-toolbar-left')).not.toBeNull();
 
       await act(async () => {
-        control?.querySelector('button')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-        await flushEffects();
-      });
-      expect(control?.textContent).toMatch(/Stop Gamedev\.pl's agent and continue with your agent/i);
-
-      await act(async () => {
-        control
-          ?.querySelector<HTMLButtonElement>('.is-primary')
-          ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        stop?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
         await flushEffects();
       });
       expect(mockedHandoffToSelf).toHaveBeenCalledWith('live-platform-token');
+      expect(container.querySelector('.studio-active-handoff-pending')?.textContent).toMatch(
+        /waiting for the current agent to acknowledge the stop request/i,
+      );
+      expect(mockedHandoffToSelf).toHaveBeenCalledTimes(1);
     } finally {
       await act(async () => {
         root.unmount();
@@ -1039,7 +1041,7 @@ describe('SubmissionStatusView', () => {
     }
   });
 
-  it('keeps the live handoff control visible while switching to the creator agent', async () => {
+  it('keeps a pending builder handoff visible in the composer', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     mockedGetSubmissionStatus.mockResolvedValue({
       status: 'building',
@@ -1061,7 +1063,8 @@ describe('SubmissionStatusView', () => {
         await flushEffects();
       });
 
-      expect(container.querySelector('.studio-turn-working-actions .studio-active-handoff-pending')?.textContent).toMatch(
+      expect(container.querySelector('.studio-turn.is-working [data-testid^="active-switch-builder"]')).toBeNull();
+      expect(container.querySelector('.status-composer .studio-active-handoff-pending')?.textContent).toMatch(
         /waiting for the current agent to acknowledge the stop request/i,
       );
     } finally {
@@ -1091,7 +1094,7 @@ describe('SubmissionStatusView', () => {
         await flushEffects();
       });
 
-      expect(container.querySelector('.studio-turn-working-actions .studio-context-stop')).toBeNull();
+      expect(container.querySelector('.studio-turn.is-working [data-testid^="active-switch-builder"]')).toBeNull();
       expect(container.querySelector<HTMLTextAreaElement>('textarea')?.disabled).toBe(true);
     } finally {
       await act(async () => {
@@ -1838,7 +1841,7 @@ describe('SubmissionStatusView', () => {
     // Empty runway under the turns so the last message can scroll to the top of the pane.
     expect(container.querySelector('.studio-thread-scroll-pad')).not.toBeNull();
     expect(container.querySelector('.studio-thread-scroll-body')).not.toBeNull();
-    expect(container.querySelector('.studio-turn-working-actions .studio-context-stop')).toBeNull();
+    expect(container.querySelector('.studio-turn.is-working [data-testid^="active-switch-builder"]')).toBeNull();
     expect(container.querySelector('.studio-thread-foot .studio-context-stop')).toBeNull();
     expect(container.querySelector('.studio-context-progress')).toBeNull();
     expect(container.querySelector('.status-play-cta')).toBeNull();
