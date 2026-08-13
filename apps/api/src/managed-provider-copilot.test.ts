@@ -271,4 +271,48 @@ describe('Copilot managed provider', () => {
     expect(stub.startTask).toHaveBeenCalled();
     expect(mcpStub.startTask).not.toHaveBeenCalled();
   });
+
+  it('falls back to mcpTasks when polling an untracked session id after a provider restart', async () => {
+    const stub = tasks(task({ id: 'harness-task-1' }));
+    stub.getTask.mockImplementation(async (id: string) => (id === 'harness-task-1' ? task({ id }) : null));
+    const mcpStub = tasks(
+      task({
+        id: 'mcp-task-restart',
+        branch: { headRef: 'copilot/mcp-round-branch' },
+      }),
+    );
+    mcpStub.getTask.mockImplementation(async (id: string) =>
+      id === 'mcp-task-restart' ? task({ id, branch: { headRef: 'copilot/mcp-round-branch' } }) : null,
+    );
+
+    // Fresh provider instance with empty in-memory mcpSessionIds and mcpWorkspaces
+    const provider = createCopilotManagedProvider(
+      {
+        apiKey: apiKey(),
+        model: 'gpt-5.4',
+        repo: 'gamedevpl/www.gamedev.pl-games',
+        mcpRepo: 'gamedevpl/scratchpad',
+      },
+      {
+        tasks: stub.client,
+        github: { deleteBranch: vi.fn(), createBranchWithFiles: vi.fn() },
+        mcpTasks: mcpStub.client,
+      },
+    );
+
+    const session = await provider.getSession('mcp-task-restart');
+    expect(stub.getTask).toHaveBeenCalledWith('mcp-task-restart');
+    expect(mcpStub.getTask).toHaveBeenCalledWith('mcp-task-restart');
+    expect(session).toMatchObject({
+      id: 'mcp-task-restart',
+      workspace: 'copilot/mcp-round-branch',
+    });
+
+    // Cached routing now hits mcpTasks directly without games repo fallback.
+    stub.getTask.mockClear();
+    mcpStub.getTask.mockClear();
+    await provider.getSession('mcp-task-restart');
+    expect(mcpStub.getTask).toHaveBeenCalledWith('mcp-task-restart');
+    expect(stub.getTask).not.toHaveBeenCalled();
+  });
 });

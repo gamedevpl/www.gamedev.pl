@@ -160,7 +160,17 @@ export function createCopilotManagedProvider(
         return session;
       }
       const task = await tasks.getTask(sessionId);
-      return task ? taskSession(task, config.model) : null;
+      if (task) return taskSession(task, config.model);
+      if (mcpTasks) {
+        const mcpTask = await mcpTasks.getTask(sessionId);
+        if (mcpTask) {
+          mcpSessionIds.add(sessionId);
+          const session = taskSession(mcpTask, config.model);
+          if (session.workspace) mcpWorkspaces.add(session.workspace);
+          return session;
+        }
+      }
+      return null;
     },
 
     async listOutputs(): Promise<ManagedOutputRef[]> {
