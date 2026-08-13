@@ -122,6 +122,19 @@ const AckRequestSchema = z.object({
   ids: z.array(z.string().trim().min(1).max(64)).max(50),
 });
 
+// Empty body is ordinary: a steer is optional.
+const RegenerateSeedRequestSchema = z.object({
+  steer: z.string().trim().min(1).max(600, 'steer is too long').optional(),
+});
+
+const REGENERATE_SEED_REFUSALS: Record<string, string> = {
+  not_configured: 'this deployment does not generate seeds',
+  not_found: 'no round to regenerate a seed for',
+  platform_round: 'a platform round’s seed is committed to a branch at dispatch, so it cannot be replaced mid-round',
+  already_delivered: 'this round already delivered — build on what you delivered rather than restarting from a draft',
+  cap_reached: 'this job has used its seed regenerations; continue from the draft you have or scaffold from the kit',
+};
+
 // Empty body stays valid — every existing client sends one.
 const EndRequestSchema = z.object({
   summary: z
@@ -431,6 +444,15 @@ export interface AgentChannelOptions {
    * fire-and-forget: the agent is owed its staging receipt whatever the preview does.
    */
   onSourcesStaged?: (input: { issueNumber: number; slug: string; roundGeneration: number }) => void;
+  // Queues a replacement draft. Absent when nothing seeds.
+  onRegenerateSeed?: (input: {
+    issueNumber: number;
+    steer?: string;
+    log: FastifyRequest['log'];
+  }) => Promise<
+    | { ok: true; status: 'pending'; regenerationsRemaining: number }
+    | { ok: false; reason: 'not_configured' | 'not_found' | 'platform_round' | 'already_delivered' | 'cap_reached' }
+  >;
   onSourcesDelivered?: (input: {
     issueNumber: number;
     slug: string;
@@ -2136,6 +2158,60 @@ export async function registerAgentChannelRoutes(
         files: [],
         references: [],
         notes: null,
+      });
+    },
+  );
+
+  // Replaces an unusable draft; refused once staging has a base.
+  app.post(
+    '/api/agent/build/seed/regenerate',
+    { config: { rateLimit: { max: 10, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      const resolved = await resolveBuild(request, reply);
+      if (!resolved) return reply;
+      const { issueNumber, record } = resolved;
+
+      if (!options.onRegenerateSeed) {
+        return reply.status(503).send({ error: 'seeding_unavailable', message: 'this deployment does not seed' });
+      }
+
+      const parsed = RegenerateSeedRequestSchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        return reply.status(400).send({ error: 'invalid_request', message: parsed.error.issues[0]?.message });
+      }
+
+      if (options.gamesStore && record.slug) {
+        const roundGeneration = store
+          ? ((await store.ensureRoundGeneration(issueNumber)) ?? record.roundGeneration ?? 1)
+          : (record.roundGeneration ?? 1);
+        const staged = await options.gamesStore.listStagedSources({
+          slug: record.slug,
+          issueNumber,
+          roundGeneration,
+        });
+        if (staged.files.length > 0) {
+          return reply.status(409).send({
+            error: 'already_staged',
+            message:
+              'you have staged files this round — a new seed would change the base they overlay. ' +
+              'Continue with what you have staged, or clear the staging buffer first.',
+          });
+        }
+      }
+
+      const result = await options.onRegenerateSeed({
+        issueNumber,
+        ...(parsed.data.steer ? { steer: parsed.data.steer } : {}),
+        log: request.log,
+      });
+      if (!result.ok) {
+        const status = result.reason === 'not_configured' ? 503 : result.reason === 'not_found' ? 404 : 409;
+        return reply.status(status).send({ error: result.reason, message: REGENERATE_SEED_REFUSALS[result.reason] });
+      }
+      return reply.send({
+        status: result.status,
+        regenerationsRemaining: result.regenerationsRemaining,
+        notice: 'A new draft is generating. Call get_seed again in a minute or two; do not wait in a loop.',
       });
     },
   );

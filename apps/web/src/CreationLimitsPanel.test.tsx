@@ -30,6 +30,13 @@ function limits(overrides: Partial<CreationLimits> = {}): CreationLimits {
       managedDailyCap: null,
       managedDailyUserCap: null,
       hasPlatformBackend: true,
+      managedAgentVendor: {
+        stored: null,
+        effective: 'anthropic',
+        available: true,
+        configuredVendors: ['anthropic'],
+        defaultVendor: 'anthropic',
+      },
     },
     today: { dateStr: '2026-07-30', submissions: 12, managedBuilds: 3 },
     propagationMs: 60_000,
@@ -92,6 +99,13 @@ describe('CreationLimitsPanel', () => {
           managedDailyCap: null,
           managedDailyUserCap: null,
           hasPlatformBackend: true,
+          managedAgentVendor: {
+            stored: null,
+            effective: 'anthropic',
+            available: true,
+            configuredVendors: ['anthropic'],
+            defaultVendor: 'anthropic',
+          },
         },
       }),
     );
@@ -121,6 +135,94 @@ describe('CreationLimitsPanel', () => {
     });
 
     expect(mocked.setCreationLimits).toHaveBeenCalledWith({ globalDailySubmissionCap: null });
+
+    await act(async () => root.unmount());
+  });
+
+  it('flips the managed vendor at runtime and reports the effective one', async () => {
+    mocked.fetchCreationLimits.mockResolvedValue(
+      limits({
+        effective: {
+          paused: false,
+          globalDailySubmissionCap: 50,
+          managedBuilderMode: 'auto',
+          managedDailyCap: null,
+          managedDailyUserCap: null,
+          hasPlatformBackend: true,
+          managedAgentVendor: {
+            stored: null,
+            effective: 'anthropic',
+            available: true,
+            configuredVendors: ['anthropic', 'gemini'],
+            defaultVendor: 'anthropic',
+          },
+        },
+      }),
+    );
+    mocked.setCreationLimits.mockResolvedValue(
+      limits({
+        effective: {
+          paused: false,
+          globalDailySubmissionCap: 50,
+          managedBuilderMode: 'auto',
+          managedDailyCap: null,
+          managedDailyUserCap: null,
+          hasPlatformBackend: true,
+          managedAgentVendor: {
+            stored: 'gemini',
+            effective: 'gemini',
+            available: true,
+            configuredVendors: ['anthropic', 'gemini'],
+            defaultVendor: 'anthropic',
+          },
+        },
+      }),
+    );
+
+    const { container, root } = await render();
+    const vendorSelect = Array.from(container.querySelectorAll('label'))
+      .find((label) => label.textContent?.startsWith('Vendor'))
+      ?.querySelector('select');
+    if (!vendorSelect) throw new Error('vendor select not found');
+
+    await act(async () => {
+      vendorSelect.value = 'gemini';
+      vendorSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    expect(mocked.setCreationLimits).toHaveBeenCalledWith({ managedAgentVendorOverride: 'gemini' });
+    expect(container.textContent).toContain('Overridden to gemini (no redeploy needed).');
+
+    await act(async () => root.unmount());
+  });
+
+  it('reports a fallback when the stored override names an unconfigured vendor', async () => {
+    mocked.fetchCreationLimits.mockResolvedValue(
+      limits({
+        stored: { managedAgentVendorOverride: 'copilot' },
+        effective: {
+          paused: false,
+          globalDailySubmissionCap: 50,
+          managedBuilderMode: 'auto',
+          managedDailyCap: null,
+          managedDailyUserCap: null,
+          hasPlatformBackend: true,
+          managedAgentVendor: {
+            stored: 'copilot',
+            effective: 'anthropic',
+            available: true,
+            configuredVendors: ['anthropic'],
+            defaultVendor: 'anthropic',
+          },
+        },
+      }),
+    );
+
+    const { container, root } = await render();
+
+    expect(container.textContent).toContain(
+      'Overridden to copilot, but that vendor has no credentials in this environment — falling back to anthropic.',
+    );
 
     await act(async () => root.unmount());
   });

@@ -187,6 +187,39 @@ describe('managed backend', () => {
     expect(started[0].workspaceFiles).toEqual([{ path: `games/${SLUG}/game.ts`, content: 'export {};' }]);
   });
 
+  it('drops the seed instead of sending it to a provider that cannot accept workspace files', async () => {
+    const { provider, started } = fakeProvider({ supportsSeedFiles: false });
+    const backend = createManagedBackend({ provider, deliver: async () => ({ version: 'v1' }) });
+
+    await backend.dispatch(
+      brief({ seed: { slug: SLUG, files: [{ path: 'game.ts', content: 'export {};' }], references: [] } }),
+    );
+
+    expect(started).toHaveLength(1);
+    expect(started[0].workspaceFiles).toBeUndefined();
+    // Must not claim a draft exists when none was sent.
+    expect(started[0].prompt).not.toContain('already contains a generated first draft');
+  });
+
+  it('resolves a lane-dependent supportsSeedFiles against the round’s actual prompt lane', async () => {
+    const { provider, started } = fakeProvider({ supportsSeedFiles: (lane) => lane !== 'mcp' });
+    const backend = createManagedBackend({
+      provider,
+      deliver: async () => ({ version: 'v1' }),
+      tools: { mcpEndpoints: [{ url: 'https://www.gamedev.pl/api/mcp', name: 'gamedevpl' }] },
+    });
+
+    await backend.dispatch(
+      brief({
+        seed: { slug: SLUG, files: [{ path: 'game.ts', content: 'export {};' }], references: [] },
+        promptLane: 'mcp',
+      }),
+    );
+
+    expect(started).toHaveLength(1);
+    expect(started[0].workspaceFiles).toBeUndefined();
+  });
+
   it('preserves the provider seed workspace separately from the agent workspace', async () => {
     const { provider } = fakeProvider({
       startSession: async () => ({
@@ -202,6 +235,7 @@ describe('managed backend', () => {
       ref: 'session-1',
       workspace: 'copilot/comet-courier',
       seedWorkspace: 'seed/job-42',
+      promptLane: 'outputs',
     });
   });
 

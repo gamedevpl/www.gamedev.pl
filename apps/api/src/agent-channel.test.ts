@@ -6,6 +6,7 @@ import type { AgentChannelOptions } from './agent-channel.js';
 import { buildApp } from './app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './github-client.js';
+import type { GameSeeder } from './game-seed.js';
 import type { GamesStore } from './games-store.js';
 import type { KnowledgeQueryResult } from './knowledge-search.js';
 import { InMemoryStore } from './store.js';
@@ -58,6 +59,7 @@ async function createApp(
     githubClient?: GitHubClient;
     /** Live-preview timings; the real ones are tens of seconds and no test can wait them out. */
     stagedPreview?: { debounceMs?: number; minGapMs?: number; maxBytes?: number };
+    gameSeeder?: GameSeeder;
   },
 ) {
   await store.upsertUser({ uid: 'g:owner' });
@@ -70,6 +72,7 @@ async function createApp(
       submissionTokenSecret: secret,
       ...(agentChannel ? { agentChannel } : {}),
       ...(extra?.stagedPreview ? { stagedPreview: extra.stagedPreview } : {}),
+      ...(extra?.gameSeeder ? { gameSeeder: extra.gameSeeder } : {}),
     },
   });
 }
@@ -2568,5 +2571,175 @@ describe('GET /api/agent/build/knowledge/query', () => {
 
     expect(response.statusCode).toBe(401);
     expect(knowledgeSearch).not.toHaveBeenCalled();
+  });
+});
+
+describe('seed regeneration', () => {
+  let app: FastifyInstance | null = null;
+
+  afterEach(async () => {
+    await app?.close();
+    app = null;
+  });
+
+  function seederStub(onSeed?: (request: { steer?: string }) => void): GameSeeder {
+    return {
+      seed: async (request) => {
+        onSeed?.(request);
+        return {
+          slug: request.slug,
+          files: [{ path: 'game.ts', content: 'export {};\n' }],
+          references: ['apex-sprint'],
+          usage: { inputTokens: 10, outputTokens: 10, model: 'gemini-3.6-flash' },
+          elapsedMs: 1000,
+          compiles: true,
+          repaired: false,
+        };
+      },
+    };
+  }
+
+  async function selfRound(store: InMemoryStore) {
+    await seedSubmission(store);
+    await store.setSubmissionSlug(ISSUE, 'squad-game');
+    await store.setRoundBuilder(ISSUE, 'self');
+  }
+
+  function stagedGamesStore(files: Array<{ path: string; bytes: number }>) {
+    return {
+      listStagedSources: async () => ({
+        files,
+        totalBytes: files.reduce((sum, file) => sum + file.bytes, 0),
+        maxBytes: 2 * 1024 * 1024,
+        maxFiles: 200,
+        updatedAt: files.length ? '2026-08-13T08:00:00.000Z' : null,
+      }),
+    } as unknown as GamesStore;
+  }
+
+  it('queues a replacement draft and reports what is left', async () => {
+    const store = new InMemoryStore();
+    await selfRound(store);
+    const steers: Array<string | undefined> = [];
+    app = await createApp(store, undefined, {
+      gameSeeder: seederStub((request) => steers.push(request.steer)),
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/seed/regenerate',
+      headers: agentHeaders(),
+      payload: { steer: 'the brief asks for co-op; the draft built a single-player runner' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    // Returns immediately: generation is background, so agents recheck get_seed.
+    expect(res.json()).toMatchObject({ status: 'pending', regenerationsRemaining: 1 });
+
+    await vi.waitFor(async () => {
+      expect((await store.getSubmission(ISSUE))?.seed?.files).toHaveLength(1);
+    });
+    expect((await store.getSubmission(ISSUE))?.seedStatus).toBe('available');
+    // The steer reaches the generator, or a retry repeats itself.
+    expect(steers).toEqual(['the brief asks for co-op; the draft built a single-player runner']);
+  });
+
+  it('recovers a round whose first generation failed', async () => {
+    const store = new InMemoryStore();
+    await selfRound(store);
+    await store.setSeedStatus(ISSUE, 'unavailable');
+    app = await createApp(store, undefined, { gameSeeder: seederStub() });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/seed/regenerate',
+      headers: agentHeaders(),
+      payload: {},
+    });
+
+    expect(res.statusCode).toBe(200);
+    await vi.waitFor(async () => {
+      expect((await store.getSubmission(ISSUE))?.seedStatus).toBe('available');
+    });
+  });
+
+  it('refuses once files are staged, because a new seed would move the base they overlay', async () => {
+    const store = new InMemoryStore();
+    await selfRound(store);
+    let seedCalls = 0;
+    app = await createApp(
+      store,
+      { gamesStore: stagedGamesStore([{ path: 'game.ts', bytes: 12 }]) },
+      { gameSeeder: seederStub(() => seedCalls++) },
+    );
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/seed/regenerate',
+      headers: agentHeaders(),
+      payload: {},
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toBe('already_staged');
+    expect(seedCalls).toBe(0);
+  });
+
+  it('refuses a platform round, whose seed is a branch it already forked', async () => {
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    await store.setSubmissionSlug(ISSUE, 'squad-game');
+    await store.setRoundBuilder(ISSUE, 'platform');
+    let seedCalls = 0;
+    app = await createApp(store, undefined, { gameSeeder: seederStub(() => seedCalls++) });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/seed/regenerate',
+      headers: agentHeaders(),
+      payload: {},
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toBe('platform_round');
+    expect(seedCalls).toBe(0);
+  });
+
+  it('caps regenerations so a looping agent cannot bill generations forever', async () => {
+    const store = new InMemoryStore();
+    await selfRound(store);
+    let seedCalls = 0;
+    app = await createApp(store, undefined, { gameSeeder: seederStub(() => seedCalls++) });
+
+    const regenerate = () =>
+      app!.inject({
+        method: 'POST',
+        url: '/api/agent/build/seed/regenerate',
+        headers: agentHeaders(),
+        payload: {},
+      });
+
+    expect((await regenerate()).json()).toMatchObject({ regenerationsRemaining: 1 });
+    expect((await regenerate()).json()).toMatchObject({ regenerationsRemaining: 0 });
+
+    const third = await regenerate();
+    expect(third.statusCode).toBe(409);
+    expect(third.json().error).toBe('cap_reached');
+    await vi.waitFor(() => expect(seedCalls).toBe(2));
+  });
+
+  it('answers 503 rather than pretending, when the deployment does not seed', async () => {
+    const store = new InMemoryStore();
+    await selfRound(store);
+    app = await createApp(store);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/seed/regenerate',
+      headers: agentHeaders(),
+      payload: {},
+    });
+
+    expect(res.statusCode).toBe(503);
   });
 });

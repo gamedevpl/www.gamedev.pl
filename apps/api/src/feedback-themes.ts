@@ -164,7 +164,7 @@ export class VertexThemeExtractor implements ThemeExtractor {
   constructor(options: VertexThemeExtractorOptions = {}) {
     this.options = options;
     this.timeoutMs = options.timeoutMs ?? 20_000;
-    this.thinkingLevel = options.thinkingLevel ?? process.env.VERTEX_THINKING_LEVEL ?? 'minimal';
+    this.thinkingLevel = options.thinkingLevel ?? process.env.VERTEX_THINKING_LEVEL ?? 'low';
   }
 
   private getClient(): GenAIClient {
@@ -175,10 +175,10 @@ export class VertexThemeExtractor implements ThemeExtractor {
         region: this.options.region,
         defaultRegion: 'global',
         model: this.options.model,
-        defaultModel: 'gemini-3.6-flash',
+        defaultModel: 'gemini-3.7-flash',
+        // Thinking level goes via `.thinking()` below — see moderation.ts's VertexChecker.
         generationConfig: {
           responseMimeType: 'application/json',
-          thinkingConfig: { thinkingLevel: this.thinkingLevel.toUpperCase() },
         } as VertexGenerationConfig,
       });
     return this.client;
@@ -190,6 +190,7 @@ export class VertexThemeExtractor implements ThemeExtractor {
 
     const result = await this.getClient()(buildPrompt(considered))
       .temperature(0)
+      .thinking({ level: this.thinkingLevel as 'minimal' | 'low' | 'medium' | 'high' })
       .signal(AbortSignal.timeout(this.timeoutMs))
       .json((value) => ThemesSchema.parse(value));
 

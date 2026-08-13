@@ -118,8 +118,8 @@ export interface VertexCheckerOptions {
   projectId?: string;
   region?: string;
   model?: string;
-  // Gemini 3 thinking level ('minimal' | 'low' | 'medium' | 'high'). 'minimal' keeps
-  // latency/cost low — this is a short classification, not a reasoning task.
+  // Gemini 3 thinking level ('low' | 'medium' | 'high'). gemini-3.7-flash dropped
+  // 'minimal' (400 THINKING_LEVEL_MINIMAL unsupported) — 'low' is now the floor.
   thinkingLevel?: string;
   timeoutMs?: number;
   // Custom fetcher/client seam for testing without GCP network calls
@@ -146,7 +146,7 @@ export class VertexChecker implements ContentChecker {
 
   constructor(options: VertexCheckerOptions = {}) {
     this.options = options;
-    this.thinkingLevel = options.thinkingLevel ?? process.env.VERTEX_THINKING_LEVEL ?? 'minimal';
+    this.thinkingLevel = options.thinkingLevel ?? process.env.VERTEX_THINKING_LEVEL ?? 'low';
     this.timeoutMs = options.timeoutMs ?? 5000;
     this.patternChecker = new PatternChecker();
     this.vertexFetcher = options.vertexFetcher;
@@ -162,15 +162,13 @@ export class VertexChecker implements ContentChecker {
         region: this.options.region,
         defaultRegion: 'global',
         model: this.options.model,
-        defaultModel: 'gemini-3.6-flash',
+        defaultModel: 'gemini-3.7-flash',
+        // Thinking level goes on the request via `.thinking()` below, not here: genaicode's
+        // Google provider computes its own thinkingConfig from `request.thinking` whenever a
+        // request calls `.json()`, and that computed value — MINIMAL when `.thinking()` was
+        // never called — unconditionally overwrites whatever thinkingConfig is set here.
         generationConfig: {
           responseMimeType: 'application/json',
-          // Gemini 3 defaults to dynamic ("high") thinking; force it low for this
-          // short classification. thinkingLevel and thinkingBudget are mutually
-          // exclusive on Gemini 3 — only send one. The SDK types this as a string
-          // enum (MINIMAL/LOW/...), so the env-provided value is upper-cased and
-          // passed through rather than being constrained at compile time.
-          thinkingConfig: { thinkingLevel: this.thinkingLevel.toUpperCase() },
         } as VertexGenerationConfig,
       });
     return this.client;
@@ -226,6 +224,7 @@ ${text}
     // out of here — and `check()` turns any throw into a fail-closed verdict.
     const verdict = await this.getClient()(promptText)
       .temperature(0)
+      .thinking({ level: this.thinkingLevel as 'minimal' | 'low' | 'medium' | 'high' })
       .signal(AbortSignal.timeout(this.timeoutMs))
       .json((value) => VerdictSchema.parse(value));
 

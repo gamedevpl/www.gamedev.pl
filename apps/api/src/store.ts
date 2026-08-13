@@ -373,6 +373,8 @@ export interface SubmissionRecord {
    * land, so `pending` must not look like `unavailable`. Cleared with the seed.
    */
   seedStatus?: 'pending' | 'available' | 'unavailable';
+  // Seed regenerations asked for; each is paid, so it is capped.
+  seedRegenerations?: number;
   /**
    * How many sources deliveries this round has accepted. Self rounds cap this
    * (`SELF_BUILD_DELIVERY_CAP`); resets when a new round opens.
@@ -443,7 +445,7 @@ export interface JobCostEntry {
   at: string;
   /**
    * Who charged for it: an agent backend (`copilot`), a service (`cloud-build`), or —
-   * for a `seed` entry — the model id that billed the tokens (`gemini-3.6-flash`).
+   * for a `seed` entry — the model id that billed the tokens (`gemini-3.7-flash`).
    * A model id here is a well-formed entry, not corrupt data.
    */
   by: string;
@@ -688,6 +690,8 @@ export interface CreationLimits {
   globalDailyChatCap?: number | null;
   // Switches the `platform` option; `auto` defers to whether a backend exists.
   managedBuilderMode?: 'auto' | 'off' | 'coming_soon';
+  // Runtime override; unset defers to MANAGED_AGENT_VENDOR, the env-var default.
+  managedAgentVendorOverride?: 'anthropic' | 'gemini' | 'copilot' | null;
   // Shared daily ceiling on platform rounds started. `null` = no cap.
   managedDailyCap: number | null;
   // Same ceiling, per creator per UTC day.
@@ -1853,6 +1857,8 @@ export interface Store {
   setSubmissionSeed(issueNumber: number, seed: SeedFiles | null): Promise<void>;
   /** Marks seed generation pending / unavailable (available is set via {@link setSubmissionSeed}). */
   setSeedStatus(issueNumber: number, status: 'pending' | 'unavailable'): Promise<void>;
+  // Increments and returns how many seed regenerations this job has asked for.
+  incrementSeedRegenerations(issueNumber: number): Promise<number>;
   /** Increments and returns the per-round sources-delivery count. */
   incrementRoundDeliveryCount(issueNumber: number): Promise<number>;
   // Bump typecheck-preflight refusal count for this round.
@@ -3236,6 +3242,14 @@ export class InMemoryStore implements Store {
     this.submissions.set(issueNumber, { ...sub, seedStatus: status });
   }
 
+  async incrementSeedRegenerations(issueNumber: number): Promise<number> {
+    const sub = this.submissions.get(issueNumber);
+    if (!sub) return 0;
+    const seedRegenerations = (sub.seedRegenerations ?? 0) + 1;
+    this.submissions.set(issueNumber, { ...sub, seedRegenerations });
+    return seedRegenerations;
+  }
+
   async incrementRoundDeliveryCount(issueNumber: number): Promise<number> {
     const sub = this.submissions.get(issueNumber);
     if (!sub) return 0;
@@ -3806,6 +3820,10 @@ export class InMemoryStore implements Store {
           ? patch.globalDailyChatCap
           : (this.creationLimits?.globalDailyChatCap ?? null),
       managedBuilderMode: patch.managedBuilderMode ?? this.creationLimits?.managedBuilderMode ?? 'auto',
+      managedAgentVendorOverride:
+        patch.managedAgentVendorOverride !== undefined
+          ? patch.managedAgentVendorOverride
+          : (this.creationLimits?.managedAgentVendorOverride ?? null),
       managedDailyCap:
         patch.managedDailyCap !== undefined ? patch.managedDailyCap : (this.creationLimits?.managedDailyCap ?? null),
       managedDailyUserCap:
@@ -5634,6 +5652,18 @@ export class FirestoreStore implements Store {
     });
   }
 
+  async incrementSeedRegenerations(issueNumber: number): Promise<number> {
+    const ref = this.db.collection('submissions').doc(String(issueNumber));
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return 0;
+      const current = snap.data() as SubmissionRecord;
+      const seedRegenerations = (current.seedRegenerations ?? 0) + 1;
+      tx.set(ref, { seedRegenerations }, { merge: true });
+      return seedRegenerations;
+    });
+  }
+
   async incrementRoundDeliveryCount(issueNumber: number): Promise<number> {
     const ref = this.db.collection('submissions').doc(String(issueNumber));
     return this.db.runTransaction(async (tx) => {
@@ -6390,6 +6420,12 @@ export class FirestoreStore implements Store {
         data?.managedBuilderMode === 'off' || data?.managedBuilderMode === 'coming_soon'
           ? data.managedBuilderMode
           : 'auto',
+      managedAgentVendorOverride:
+        data?.managedAgentVendorOverride === 'anthropic' ||
+        data?.managedAgentVendorOverride === 'gemini' ||
+        data?.managedAgentVendorOverride === 'copilot'
+          ? data.managedAgentVendorOverride
+          : null,
       managedDailyCap: typeof data?.managedDailyCap === 'number' ? data.managedDailyCap : null,
       managedDailyUserCap: typeof data?.managedDailyUserCap === 'number' ? data.managedDailyUserCap : null,
       ...(data?.updatedAt ? { updatedAt: data.updatedAt } : {}),
@@ -6418,6 +6454,10 @@ export class FirestoreStore implements Store {
         globalDailyChatCap:
           patch.globalDailyChatCap !== undefined ? patch.globalDailyChatCap : (existing.globalDailyChatCap ?? null),
         managedBuilderMode: patch.managedBuilderMode ?? existing.managedBuilderMode ?? 'auto',
+        managedAgentVendorOverride:
+          patch.managedAgentVendorOverride !== undefined
+            ? patch.managedAgentVendorOverride
+            : (existing.managedAgentVendorOverride ?? null),
         managedDailyCap:
           patch.managedDailyCap !== undefined ? patch.managedDailyCap : (existing.managedDailyCap ?? null),
         managedDailyUserCap:

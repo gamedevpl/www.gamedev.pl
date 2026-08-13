@@ -63,11 +63,7 @@ export interface Translator {
    * Returns null when nothing could be produced. Callers must then store the source text
    * unchanged and must not retry — see localize-intake.ts.
    */
-  toBilingual(
-    text: string,
-    targetLocale: string,
-    opts?: { kind?: TranslationKind },
-  ): Promise<BilingualText | null>;
+  toBilingual(text: string, targetLocale: string, opts?: { kind?: TranslationKind }): Promise<BilingualText | null>;
 }
 
 /** Language tag → the language name we ask the model for. */
@@ -192,7 +188,7 @@ export class VertexTranslator implements Translator {
         // Prefer the translate-specific model env, then fall through to the shared
         // VERTEX_MODEL / defaultModel inside createVertexClient.
         model: this.options.model ?? process.env.VERTEX_TRANSLATE_MODEL,
-        defaultModel: 'gemini-3.6-flash',
+        defaultModel: 'gemini-3.7-flash',
         generationConfig: {
           responseMimeType: 'application/json',
           // Thinking off: short string translation does not benefit from reasoning,
@@ -261,7 +257,6 @@ export class VertexTranslator implements Translator {
       return null;
     }
   }
-
 }
 
 /**

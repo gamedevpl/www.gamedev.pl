@@ -7,7 +7,7 @@ import {
   type AgentTasksClient,
   type AgentTaskModel,
 } from './agent-tasks.js';
-import { createGitHubClient, type GitHubClient } from './github-client.js';
+import { createGitHubClient, IN_FLIGHT_RUN_STATUSES, type GitHubClient } from './github-client.js';
 import {
   ManagedAgentError,
   normalizeManagedState,
@@ -24,9 +24,19 @@ export const COPILOT_VENDOR = 'copilot';
 const DEFAULT_BASE_REF = 'main';
 const DEFAULT_CUSTOM_AGENT = 'game-builder';
 
+// A Copilot session is an Actions run under this synthetic workflow path.
+export const COPILOT_AGENT_WORKFLOW_PATH = 'dynamic/copilot-swe-agent/copilot';
+
+export type CopilotGitHubClient = Pick<
+  GitHubClient,
+  'deleteBranch' | 'createBranchWithFiles' | 'listWorkflowRuns' | 'cancelWorkflowRun'
+>;
+
 export interface CopilotManagedProviderDeps {
   tasks?: AgentTasksClient;
-  github?: Pick<GitHubClient, 'deleteBranch' | 'createBranchWithFiles'>;
+  github?: CopilotGitHubClient;
+  // MCP-lane rounds; GitHub scopes Agent Tasks per repo, not per call.
+  mcpTasks?: AgentTasksClient;
 }
 
 function seedSlug(files: ManagedSessionRequest['workspaceFiles']): string | undefined {
@@ -100,15 +110,46 @@ export function createCopilotManagedProvider(
     });
   const github = deps.github ?? createGitHubClient({ token: config.apiKey, repo });
 
+  const mcpRepo = config.mcpRepo?.trim();
+  const mcpBaseRef = config.mcpBaseRef?.trim() || DEFAULT_BASE_REF;
+  const mcpCustomAgent = config.mcpCustomAgent?.trim() || 'game-builder-mcp';
+  const mcpTasks =
+    deps.mcpTasks ??
+    (mcpRepo
+      ? createAgentTasksClient({
+          token: config.apiKey,
+          repo: mcpRepo,
+          ...(config.fetchImpl ? { fetchImpl: config.fetchImpl } : {}),
+          ...(config.timeoutMs ? { timeoutMs: config.timeoutMs } : {}),
+        })
+      : undefined);
+  const mcpGithub = mcpRepo ? createGitHubClient({ token: config.apiKey, repo: mcpRepo }) : undefined;
+  // In-process session-repo tracking, same lifetime as credentialRef bookkeeping.
+  const mcpSessionIds = new Set<string>();
+  const mcpWorkspaces = new Set<string>();
+
   return {
     vendor: COPILOT_VENDOR,
     model: config.model,
     promptLane: 'harness',
+    // Mirrors startSession: only stages a seed branch off mcp.
+    supportsSeedFiles: (promptLane) => promptLane !== 'mcp',
 
     async startSession(request: ManagedSessionRequest): Promise<ManagedSession> {
       const promptLane = request.promptLane ?? 'harness';
       if (promptLane !== 'mcp' && request.tools?.mcpEndpoints?.length) {
         throw new ManagedAgentError('copilot managed provider uses the harness prompt lane, not MCP');
+      }
+      if (promptLane === 'mcp' && mcpTasks) {
+        const task = await mcpTasks.startTask({
+          prompt: withoutSeedPrompt(request.prompt),
+          baseRef: mcpBaseRef,
+          model: request.model as AgentTaskModel,
+          createPullRequest: false,
+          customAgent: mcpCustomAgent,
+        });
+        mcpSessionIds.add(task.id);
+        return taskSession(task, request.model);
       }
       const seedBranch = promptLane === 'mcp' ? null : await stageSeed(request, baseRef, github);
       const task = await tasks.startTask({
@@ -122,8 +163,24 @@ export function createCopilotManagedProvider(
     },
 
     async getSession(sessionId: string): Promise<ManagedSession | null> {
+      if (mcpTasks && mcpSessionIds.has(sessionId)) {
+        const task = await mcpTasks.getTask(sessionId);
+        const session = task ? taskSession(task, config.model) : null;
+        if (session?.workspace) mcpWorkspaces.add(session.workspace);
+        return session;
+      }
       const task = await tasks.getTask(sessionId);
-      return task ? taskSession(task, config.model) : null;
+      if (task) return taskSession(task, config.model);
+      if (mcpTasks) {
+        const mcpTask = await mcpTasks.getTask(sessionId);
+        if (mcpTask) {
+          mcpSessionIds.add(sessionId);
+          const session = taskSession(mcpTask, config.model);
+          if (session.workspace) mcpWorkspaces.add(session.workspace);
+          return session;
+        }
+      }
+      return null;
     },
 
     async listOutputs(): Promise<ManagedOutputRef[]> {
@@ -134,11 +191,39 @@ export function createCopilotManagedProvider(
       throw new ManagedAgentError(`copilot does not expose session output ${ref.path}`);
     },
 
-    async cancelSession(): Promise<{ enforced: boolean }> {
-      return { enforced: false };
+    // No stop endpoint in agent tasks — cancel the Actions run instead.
+    async cancelSession(sessionId: string): Promise<{ enforced: boolean }> {
+      const branch = await tasks
+        .getTask(sessionId)
+        .then((task) => (task ? resolveTaskBranch(task) : null))
+        .catch(() => null);
+      // No branch yet means no run to stop; the next poll retries.
+      if (!branch) return { enforced: false };
+
+      const runs = await github.listWorkflowRuns({ branch }).catch(() => []);
+      // Validation CI shares the branch, so match the agent workflow path.
+      const inFlight = runs.filter(
+        (run) => run.path === COPILOT_AGENT_WORKFLOW_PATH && IN_FLIGHT_RUN_STATUSES.includes(run.status),
+      );
+
+      // One left running is one still spending, so every match must cancel.
+      let allCancelled = true;
+      for (const run of inFlight) {
+        // Best effort: a token without `actions: write` reports unenforced.
+        const cancelled = await github
+          .cancelWorkflowRun(run.id)
+          .then(() => true)
+          .catch(() => false);
+        allCancelled = allCancelled && cancelled;
+      }
+      return { enforced: inFlight.length > 0 && allCancelled };
     },
 
     async deleteWorkspace(workspace: string): Promise<void> {
+      if (mcpGithub && mcpWorkspaces.has(workspace)) {
+        await mcpGithub.deleteBranch(workspace);
+        return;
+      }
       await github.deleteBranch(workspace);
     },
 

@@ -130,8 +130,36 @@ classifier quality ever needs it.
 
 ## Explicitly NOT in the first slice
 
-- Image/audio moderation (games are canvas-drawn; revisit if generated assets appear).
+- Image moderation (games are canvas-drawn; revisit if generated images appear).
 - Appeals/queue UX — beta scale doesn't need it; rejection + rephrase is enough.
+
+### Audio moderation — revisited 2026-08-12, still not needed
+
+The deferral above said "revisit if generated assets appear." They have: vendor-generated
+sound effects are becoming a second audio asset class alongside the synthesized catalog.
+Revisited, and the answer is that **no automated audio moderation is warranted for this
+scope** — not because the risk is small, but because the pipeline has no opening for it:
+
+- **No creator input reaches the vendor.** Generation is owner-run from a machine holding
+  the API key, which is deliberately never a repository or Actions secret. There is no path
+  by which a creator prompt becomes a generation request, so the untrusted-text problem that
+  L1/L1b exist to solve does not arise here.
+- **Every clip is auditioned before it is committed.** The catalog is curated: generate
+  candidates, listen, keep one, commit it with a provenance record. Human review at commit
+  time is the control, and it is a stronger one than a classifier — a person hears what a
+  clip actually sounds like.
+- **Committed audio is fixed and hash-verified.** Assets are byte-pinned in the repo and
+  checked by SHA-256 in the gate. What shipped is what was reviewed; there is no
+  regeneration at build or run time that could drift away from the reviewed bytes.
+
+This closes the deferral for **curated, owner-generated effects only**. Two changes would
+reopen it, and neither is in scope today:
+
+1. **Creator-driven generation** — a creator prompt reaching a metered vendor puts untrusted
+   text in front of a generator, which needs the same treatment as L1/L1b give game prompts.
+2. **Speech** — narration or character voice carries impersonation and read-aloud-slur risk
+   that sound effects do not. Curated review still applies, but the risk profile is
+   different enough to deserve its own decision rather than inheriting this one.
 
 ## Rollout
 

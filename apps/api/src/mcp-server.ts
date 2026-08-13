@@ -126,6 +126,7 @@ export const MCP_VISIBLE_TOOLS = new Set([
   'continue_draft',
   'get_brief',
   'get_seed',
+  'regenerate_seed',
   'get_sources',
   'get_kit',
   // get_kit_api is the orientation path; browse tools are the depth path.
@@ -631,7 +632,7 @@ const BEHAVIOURAL_CONTRACT = [
   'Honour stop immediately — do not continue after stop:true. For reason builder_handoff, call end once to acknowledge the stop request, then exit.',
   'gateStarted true means Cloud Build accepted the gate create; gateStarted false after ok submit means no preview is assembling — honour warnings.code=gate_not_started.',
   'Treat get_gate_verdict as a one-shot check, never a polling loop. Pending with a deliveryId returns stop:true: stop immediately and let Studio show the eventual result. Pending with deliveryId:null means you checked before delivering: stop is false, so continue building and call submit_sources instead of checking again. A later creator-led run may check a delivered gate again. Honour warnings.code=gate_poll_backoff on repeated checks.',
-  'When seedAvailable/seedStatus=available (or warnings.code=seed_unread), call get_seed and revise that seed as the opening move — do not scaffold from scratch. When seedStatus=pending, recheck get_seed before scaffolding. When seedStatus=unavailable, get_seed has confirmed that no seed exists for this round; scaffold from the kit.',
+  'When seedAvailable/seedStatus=available (or warnings.code=seed_unread), call get_seed and revise that seed as the opening move — do not scaffold from scratch. The brief is the authority: delete whatever in the draft contradicts it rather than bending the build toward the draft. When seedStatus=pending, recheck get_seed before scaffolding. When seedStatus=unavailable, get_seed has confirmed that no seed exists for this round; scaffold from the kit, or call regenerate_seed once if a draft would genuinely help. Use regenerate_seed only for an unusable draft (missing, or plainly not the game the brief describes), always with steer saying what was wrong, and keep building rather than waiting on it.',
   'Every write reply carries pendingMessages — when that array is non-empty, read_inbox and apply before continuing.',
   'Do not schedule background or recurring inbox polls; drain pendingMessages from write replies (and kit/browse replies that piggyback them) as you go. Honour warnings.code=inbox_pending.',
   'A green *publish* gate verdict ends the round — END immediately; preview_passed does not end the round. The key retires on green and new work arrives as a fresh kickoff.',
@@ -654,7 +655,7 @@ const SESSION_WORKFLOW: readonly string[] = [
   'Hold the sessionKey start gave you for the whole round and pass it on every call. Do not re-run start to refresh it — it is valid until expiresAt. Re-run start only if a call is refused as unauthenticated.',
   "show_round — once, right after start. In a client that renders MCP Apps views this puts a live status card in the creator's chat that follows the build and the gate on its own, so they can watch without you polling. Calling it again renders a second card.",
   'show_media — whenever the creator asks to see the game. get_gate_media attaches frames for YOU to look at; those attachments do not reach the creator, so describing them is all you can do with it. show_media is what actually puts the pictures in front of them.',
-  'get_brief — read the brief; if seedAvailable or seedStatus=available, call get_seed and revise that seed as the opening move. If seedStatus=pending, browse the kit lightly then recheck get_seed before scaffolding. If seedStatus=unavailable, the response says no seed exists for this round; scaffold from the kit.',
+  'get_brief — read the brief; if seedAvailable or seedStatus=available, call get_seed and revise that seed as the opening move, treating the brief as the authority wherever the draft disagrees. If seedStatus=pending, browse the kit lightly then recheck get_seed before scaffolding. If seedStatus=unavailable, the response says no seed exists for this round; scaffold from the kit, or call regenerate_seed once (with steer) if a draft would genuinely help.',
   // An improvement round has no seed (seeds are a new-game facility) and its brief is
   // the change request alone, so nothing above this told the agent a game already
   // existed. Following the loop literally, it scaffolded a fresh game over a published
@@ -2589,6 +2590,52 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           ...body,
           ...(sizeWarnings.length ? { warnings: sizeWarnings } : {}),
         });
+      },
+    },
+
+    regenerate_seed: {
+      annotations: { title: 'Regenerate the seed draft', ...WRITES },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          status: { type: 'string', enum: ['pending'] },
+          regenerationsRemaining: { type: 'number' },
+          notice: { type: 'string' },
+        },
+        required: ['status'],
+      },
+      description:
+        'Ask for a replacement round-0 draft when the current one is unusable: status=unavailable ' +
+        '(generation failed, and nothing else will retry it this round) or a draft that does not match the brief. ' +
+        'Pass steer to say what was wrong — without it the same references are picked and the same draft comes back. ' +
+        'Not a way to poll: it returns immediately with status=pending, and generation takes a minute or two — ' +
+        'keep building and call get_seed again later. Refused once you have staged files or delivered this round, ' +
+        'and capped per job. If it is refused, continue from what you have rather than asking again. ' +
+        BEHAVIOURAL_CONTRACT,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          steer: {
+            type: 'string',
+            description:
+              'What the current draft got wrong, in one or two sentences (max 600 chars). ' +
+              'e.g. "the brief asks for a co-op party game; the draft built a single-player runner".',
+          },
+          sessionKey: SESSION_KEY_PROP,
+        },
+        required: [],
+      },
+      handler: async (args, ctx) => {
+        const auth = await resolveAuth(ctx, args);
+        if (!('channelToken' in auth)) return auth;
+        const res = await injectChannel(ctx.request, 'POST', '/api/agent/build/seed/regenerate', auth.channelToken, {
+          ...(typeof args.steer === 'string' ? { steer: args.steer } : {}),
+        });
+        const body = res.json() as { error?: string; message?: string; [key: string]: unknown };
+        if (res.statusCode !== 200) {
+          return toolErr(body.message ?? body.error ?? `regenerate_seed failed (${res.statusCode})`);
+        }
+        return toolOk(body);
       },
     },
 

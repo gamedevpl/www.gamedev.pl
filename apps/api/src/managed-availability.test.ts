@@ -4,15 +4,30 @@ import { InMemoryStore } from './store.js';
 
 const today = '2026-08-09';
 
-function gate(params: { store?: InMemoryStore; hasPlatformBackend?: boolean; ttlMs?: number; now?: () => number }) {
+function gate(params: {
+  store?: InMemoryStore;
+  hasPlatformBackend?: boolean;
+  ttlMs?: number;
+  now?: () => number;
+  // The common case: one vendor built and selected as the default.
+  defaultVendor?: string;
+  configuredVendors?: ReadonlySet<string>;
+}) {
   const store = params.store ?? new InMemoryStore();
+  const hasPlatformBackend = params.hasPlatformBackend ?? true;
   return {
     store,
     gate: createManagedAvailabilityGate({
       store,
-      hasPlatformBackend: params.hasPlatformBackend ?? true,
+      hasPlatformBackend,
       ttlMs: params.ttlMs ?? 60_000,
       now: params.now,
+      ...(hasPlatformBackend
+        ? {
+            defaultVendor: params.defaultVendor ?? 'anthropic',
+            configuredVendors: params.configuredVendors ?? new Set(['anthropic']),
+          }
+        : {}),
     }),
   };
 }
@@ -75,7 +90,34 @@ describe('createManagedAvailabilityGate', () => {
   });
 
   it('never enforces caps when none are set, even with no store at all', async () => {
-    const g = createManagedAvailabilityGate({ hasPlatformBackend: true });
+    const g = createManagedAvailabilityGate({
+      hasPlatformBackend: true,
+      defaultVendor: 'anthropic',
+      configuredVendors: new Set(['anthropic']),
+    });
     expect(await g.checkAndSpend('g:creator', today)).toEqual({ available: true });
+  });
+
+  it('reads as coming_soon when a vendor built but none is selected (no default, no override)', async () => {
+    // A built-but-unpicked vendor must not read as available.
+    const g = createManagedAvailabilityGate({ hasPlatformBackend: true });
+    expect(await g.peek('g:creator', today)).toEqual({ available: false, reason: 'coming_soon' });
+  });
+
+  it('resolveVendor prefers a valid stored override over the default', async () => {
+    const { store, gate: g } = gate({
+      defaultVendor: 'anthropic',
+      configuredVendors: new Set(['anthropic', 'gemini']),
+      ttlMs: 0, // two reads in one test — the cache must not shadow the second.
+    });
+    expect(await g.resolveVendor()).toBe('anthropic');
+    await store.setCreationLimits({ managedAgentVendorOverride: 'gemini' }, 'g:boss');
+    expect(await g.resolveVendor()).toBe('gemini');
+  });
+
+  it('resolveVendor falls back to the default when the override names an unconfigured vendor', async () => {
+    const { store, gate: g } = gate({ defaultVendor: 'anthropic', configuredVendors: new Set(['anthropic']) });
+    await store.setCreationLimits({ managedAgentVendorOverride: 'copilot' }, 'g:boss');
+    expect(await g.resolveVendor()).toBe('anthropic');
   });
 });

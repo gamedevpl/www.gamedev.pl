@@ -125,6 +125,7 @@ async function createApp(params: {
   contentChecker?: ContentChecker;
   maxCachedDraftPreviews?: number;
   agentBackend?: AgentBackend;
+  agentBackends?: { self?: AgentBackend; platform?: AgentBackend };
   agentChannel?: {
     gamesStore?: GamesStore;
     onSourcesDelivered?: (input: {
@@ -155,6 +156,7 @@ async function createApp(params: {
       gamesRepo: repo,
       githubClient: params.githubClient,
       agentBackend: params.agentBackend,
+      ...(params.agentBackends ? { agentBackends: params.agentBackends } : {}),
       ...(params.gameSeeder ? { gameSeeder: params.gameSeeder } : {}),
       now: params.now,
       dailySubmissionQuota: params.dailySubmissionQuota,
@@ -1128,7 +1130,10 @@ describe('submission routes', () => {
       payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
     });
     const [job] = await store.listSubmissionsByOwner('g:test-user');
-    await store.appendCreatorMessage(job.issueNumber, 'The first draft had the right controls; keep them in the revision.');
+    await store.appendCreatorMessage(
+      job.issueNumber,
+      'The first draft had the right controls; keep them in the revision.',
+    );
     await store.setSubmissionDeliveredVersion(job.issueNumber, 'v20260731T153306124Z');
     await store.recordJobTransition(job.issueNumber, {
       to: 'ready_for_review',
@@ -3617,7 +3622,7 @@ describe('the Studio mini chat agent (feedback route)', () => {
       kind: 'reply' as const,
       text: 'Still building.',
       tokens: { input: 500, output: 40 },
-      model: 'gemini-3.6-flash',
+      model: 'gemini-3.7-flash',
     }));
     const { app, authHeaders, store } = await createApp({
       githubClient: createGithubClientStub({ issueNumber: 90 }).githubClient,
@@ -3643,7 +3648,7 @@ describe('the Studio mini chat agent (feedback route)', () => {
 
     const record = await store.getSubmission(job.issueNumber);
     const entry = record?.costs?.find((cost) => cost.kind === 'chat');
-    expect(entry).toMatchObject({ by: 'gemini-3.6-flash', tokens: { input: 500, output: 40 } });
+    expect(entry).toMatchObject({ by: 'gemini-3.7-flash', tokens: { input: 500, output: 40 } });
     await app.close();
   });
 
@@ -5719,7 +5724,7 @@ describe('seeded dispatch', () => {
           slug,
           files: [{ path: 'game.ts', content: 'export {};\n' }],
           references: ['apex-sprint'],
-          usage: { inputTokens: 30_000, outputTokens: 9_000, model: 'gemini-3.6-flash' },
+          usage: { inputTokens: 30_000, outputTokens: 9_000, model: 'gemini-3.7-flash' },
           elapsedMs: 41_000,
           compiles: false,
           repaired: false,
@@ -5770,7 +5775,7 @@ describe('seeded dispatch', () => {
     // premium request with no numbers behind it.
     const seedCost = record?.costs?.find((entry) => entry.kind === 'seed');
     expect(seedCost?.tokens).toEqual({ input: 30_000, output: 9_000 });
-    expect(seedCost?.by).toBe('gemini-3.6-flash');
+    expect(seedCost?.by).toBe('gemini-3.7-flash');
 
     await app.close();
   });
@@ -5979,6 +5984,102 @@ describe('seeded dispatch', () => {
     await app.close();
   });
 
+  it('does not pay for a seed a backend would discard', async () => {
+    // acceptsSeed is read before generation, not after the bill.
+    const stub = createGithubClientStub({});
+    const briefs: BuildBrief[] = [];
+    const backend: AgentBackend = {
+      name: 'stub',
+      acceptsSeed: () => false,
+      dispatch: async (brief) => {
+        briefs.push(brief);
+        return { ref: 'task-1', promptLane: 'mcp' };
+      },
+      resume: async () => ({ ref: 'task-2' }),
+      observe: async () => null,
+      cancel: async () => ({ enforced: false }),
+    };
+    let seedCalls = 0;
+    const { app, authHeaders } = await createApp({
+      githubClient: stub.githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      gameSeeder: seederStub({ compiles: true }, () => seedCalls++),
+    });
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'No Seed Game', concept: 'A game where you deliver parcels between comets, dodging debris.' },
+    });
+    expect(created.statusCode).toBe(200);
+    await vi.waitFor(() => expect(briefs).toHaveLength(1));
+
+    expect(seedCalls).toBe(0);
+    expect(briefs[0].seed).toBeUndefined();
+
+    await app.close();
+  });
+
+  it('does not mistake an mcp-lane round’s inline seed delivery for a staging failure', async () => {
+    // mcp never stages a branch — a missing seedWorkspace is not a failure.
+    const stub = createGithubClientStub({});
+    const briefs: BuildBrief[] = [];
+    const backend: AgentBackend = {
+      name: 'stub',
+      dispatch: async (brief) => {
+        briefs.push(brief);
+        // No seedWorkspace, but promptLane says mcp never tried to stage one.
+        return { ref: 'task-1', promptLane: 'mcp' };
+      },
+      resume: async () => ({ ref: 'task-2' }),
+      observe: async () => null,
+      cancel: async () => ({ enforced: false }),
+    };
+    let seedCalls = 0;
+    const { app, authHeaders } = await createApp({
+      githubClient: stub.githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      gameSeeder: {
+        seed: async ({ slug }) => {
+          seedCalls++;
+          return {
+            slug,
+            files: [{ path: 'game.ts', content: 'export {};\n' }],
+            references: ['apex-sprint'],
+            usage: { inputTokens: 30_000, outputTokens: 9_000, model: 'gemini-3.6-flash' },
+            elapsedMs: 156_000,
+            compiles: true,
+            repaired: false,
+          };
+        },
+      },
+    });
+
+    const submit = (title: string) =>
+      app.inject({
+        method: 'POST',
+        url: '/api/submissions',
+        headers: authHeaders,
+        payload: { title, concept: 'A game where you deliver parcels between comets, dodging debris.' },
+      });
+
+    expect((await submit('First Game')).statusCode).toBe(200);
+    await vi.waitFor(() => expect(briefs).toHaveLength(1));
+    expect(briefs[0].seed).toBeDefined();
+
+    expect((await submit('Second Game')).statusCode).toBe(200);
+    await vi.waitFor(() => expect(briefs).toHaveLength(2));
+
+    // No mute: the second round gets a seed too.
+    expect(briefs[1].seed).toBeDefined();
+    expect(seedCalls).toBe(2);
+
+    await app.close();
+  });
+
   it('stops generating drafts after one cannot be staged', async () => {
     // The money bug this exists for: a mis-scoped dispatch credential fails only after
     // the draft has been generated, so without a circuit breaker every submission pays
@@ -6009,7 +6110,7 @@ describe('seeded dispatch', () => {
             slug,
             files: [{ path: 'game.ts', content: 'export {};\n' }],
             references: ['apex-sprint'],
-            usage: { inputTokens: 30_000, outputTokens: 9_000, model: 'gemini-3.6-flash' },
+            usage: { inputTokens: 30_000, outputTokens: 9_000, model: 'gemini-3.7-flash' },
             elapsedMs: 156_000,
             compiles: false,
             repaired: true,
@@ -6037,6 +6138,79 @@ describe('seeded dispatch', () => {
     // must never cost a creator their game — it just does not pay for another draft.
     expect(briefs[1].seed).toBeUndefined();
     expect(seedCalls).toBe(1);
+
+    await app.close();
+  });
+
+  it('does not let a platform staging failure mute a self (BYOCA) round’s seed', async () => {
+    // A platform staging failure must not mute a self round.
+    const stub = createGithubClientStub({});
+    const platformBriefs: BuildBrief[] = [];
+    const platformBackend: AgentBackend = {
+      name: 'platform-stub',
+      dispatch: async (brief) => {
+        platformBriefs.push(brief);
+        // Seed accepted, no workspace back — a staging failure.
+        return { ref: 'task-1', workspace: 'copilot/x' };
+      },
+      resume: async () => ({ ref: 'task-2' }),
+      observe: async () => null,
+      cancel: async () => ({ enforced: false }),
+    };
+    const selfBriefs: BuildBrief[] = [];
+    const selfBackend: AgentBackend = {
+      name: 'self-stub',
+      dispatch: async (brief) => {
+        selfBriefs.push(brief);
+        return { ref: 'self:1' };
+      },
+      resume: async () => ({ ref: 'self:2' }),
+      observe: async () => null,
+      cancel: async () => ({ enforced: false }),
+    };
+    let seedCalls = 0;
+    const { app, authHeaders } = await createApp({
+      githubClient: stub.githubClient,
+      agentBackends: { platform: platformBackend, self: selfBackend },
+      submissionTokenSecret: secret,
+      gameSeeder: {
+        seed: async ({ slug }) => {
+          seedCalls++;
+          return {
+            slug,
+            files: [{ path: 'game.ts', content: 'export {};\n' }],
+            references: ['apex-sprint'],
+            usage: { inputTokens: 30_000, outputTokens: 9_000, model: 'gemini-3.6-flash' },
+            elapsedMs: 156_000,
+            compiles: true,
+            repaired: false,
+          };
+        },
+      },
+    });
+
+    const submit = (title: string, builder?: 'self' | 'platform') =>
+      app.inject({
+        method: 'POST',
+        url: '/api/submissions',
+        headers: authHeaders,
+        payload: {
+          title,
+          concept: 'A game where you deliver parcels between comets, dodging debris.',
+          ...(builder ? { builder } : {}),
+        },
+      });
+
+    // Platform round first — its dispatch reports no seedWorkspace, tripping the mute.
+    expect((await submit('Platform Game', 'platform')).statusCode).toBe(200);
+    await vi.waitFor(() => expect(platformBriefs).toHaveLength(1));
+    expect(platformBriefs[0].seed).toBeDefined();
+
+    // A self round submitted right after must still get its own seed.
+    expect((await submit('Self Game', 'self')).statusCode).toBe(200);
+    await vi.waitFor(() => expect(selfBriefs).toHaveLength(1));
+    expect(selfBriefs[0].seed).toBeDefined();
+    expect(seedCalls).toBe(2);
 
     await app.close();
   });
