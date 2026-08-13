@@ -310,6 +310,10 @@ export interface ManagedProviderConfig {
   repo?: string;
   baseRef?: string;
   customAgent?: string;
+  // Copilot: a scratch repo for MCP-lane rounds; unset keeps current behavior.
+  mcpRepo?: string;
+  mcpBaseRef?: string;
+  mcpCustomAgent?: string;
   createPullRequest?: boolean;
   agentId?: string;
   environmentId?: string;
