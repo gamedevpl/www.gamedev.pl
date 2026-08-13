@@ -5,7 +5,7 @@ import { useCreatorPlaytest, useGamePlayer, postGameHostMessage, type PlaytestIn
 import { useEditorDraftBridge, type EditorContentPush } from './editorBridge.js';
 import { PixelIcon } from './PixelIcon.js';
 import { submitFeedback, type FeedbackContext, type SubmissionApiError } from './submissionApi.js';
-import { submitImprovement, type EditorContentDoc } from './studioApi.js';
+import { submitImprovement } from './studioApi.js';
 import type { StageOrigin, StageSource } from './useStageSource.js';
 
 /**

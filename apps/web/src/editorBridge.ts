@@ -2,11 +2,7 @@ import { useCallback, useEffect, useRef, type MutableRefObject } from 'react';
 import { BRIDGE_NAMESPACE, PROTOCOL_VERSION } from './mp/protocol.js';
 import { fetchGameEditor, type EditorContentDoc } from './studioApi.js';
 
-/**
- * The collection item the painter is showing. Optional on the wire so
- * params-only and single-item games keep working; campaign games use it to
- * open the preview on that item instead of always restarting at index 0.
- */
+// Collection item the painter is showing.
 export type EditorSelection = {
   collection: string;
   index: number;
@@ -44,8 +40,6 @@ export function editorContentMessage(content: EditorContentDoc, selection?: Edit
  * edits): posts straight to the frame regardless of the `active` gate, since
  * the stage stays mounted under every posture. Also updates what the next
  * `editor:hello` gets answered with, so a later restart cannot regress it.
- * A later content-only push (Code surface params) keeps the last selection so
- * a slider does not kick the preview back to item 0.
  */
 export function useEditorDraftBridge(
   frameRef: MutableRefObject<HTMLIFrameElement | null>,

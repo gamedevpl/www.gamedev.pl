@@ -26,7 +26,7 @@ vi.mock('./visitTelemetry.js', () => ({ recordAssistStep: vi.fn(), recordEditorS
 
 import { EditorPanel } from './EditorPanel.js';
 import { RemixPainter } from './RemixPainter.js';
-import type { EditorContentDoc } from './studioApi.js';
+import type { EditorContentPush } from './editorBridge.js';
 
 const mapItem: EditorItemContent = { properties: { name: 'Map 1' }, rows: ['..', '..'] };
 const routeItem: EditorItemContent = { properties: { name: 'Route 1' }, rows: ['##', '##'] };
@@ -174,9 +174,7 @@ describe('selected collection item reaches the preview', () => {
   it('studio item picks push the selected collection index without writing a draft', async () => {
     fetchGameEditor.mockResolvedValue(editorState({ content: twoMaps }));
     const push = vi.fn();
-    const editorPushRef = {
-      current: push as (content: EditorContentDoc, selection?: { collection: string; index: number }) => void,
-    };
+    const editorPushRef = { current: push as EditorContentPush };
     root = createRoot(container);
     await act(async () => {
       root!.render(<EditorPanel game={game} editorPushRef={editorPushRef} onOpenPlaytest={vi.fn()} onBack={vi.fn()} />);
