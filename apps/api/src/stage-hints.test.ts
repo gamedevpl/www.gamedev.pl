@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { KitTree, KitFileStore } from './kit-files.js';
-import type { GamesStore, SourceFile } from './games-store.js';
+import type { GamesStore, SourceFile, VersionManifest } from './games-store.js';
+import type { Store } from './store.js';
 import { KIT_ROOT_DIR } from './kit-registry.js';
 import { computeStageAdvisories } from './stage-hints.js';
 
@@ -37,7 +38,7 @@ function fakeKitFileStore(tree: KitTree | null, error?: Error): KitFileStore {
   };
 }
 
-function fakeGamesStore(staged: Record<string, string>): GamesStore {
+function fakeGamesStore(staged: Record<string, string>, delivered: Record<string, string> = {}): GamesStore {
   const files: SourceFile[] = Object.entries(staged).map(([path, content]) => ({ path, content }));
   return {
     async getStagedSourceFiles() {
@@ -46,14 +47,28 @@ function fakeGamesStore(staged: Record<string, string>): GamesStore {
     async getStagedSourceFile({ path }: { path: string }) {
       return staged[path] ?? null;
     },
+    async getManifest(): Promise<VersionManifest> {
+      return { sourceFiles: Object.keys(delivered) } as VersionManifest;
+    },
+    async getSourceFile(_slug: string, _version: string, path: string) {
+      return delivered[path] ?? null;
+    },
   } as unknown as GamesStore;
 }
+
+const fakeStore: Pick<Store, 'getPublication'> = {
+  async getPublication() {
+    return null;
+  },
+};
 
 const BASE_INPUT = {
   slug: 'my-game',
   issueNumber: 1,
   roundGeneration: 1,
   engineRef: 'engine-1',
+  store: fakeStore,
+  record: {} as { slug?: string; previewVersion?: string; deliveredVersion?: string },
 };
 
 describe('computeStageAdvisories', () => {
@@ -245,5 +260,69 @@ export function tick(state: GameState) {
       content: JSON.stringify({ engine: { modules: ['gfx'] } }),
     });
     expect(result.audioHint).toBeUndefined();
+  });
+
+  it('overlays the delivered version so an untouched sibling file does not false-positive', async () => {
+    const result = await computeStageAdvisories({
+      ...BASE_INPUT,
+      record: { slug: 'my-game', deliveredVersion: 'v1' },
+      kitFileStore: fakeKitFileStore(kitTree({ 'shared/game-kit.d.ts': KIT_DTS })),
+      gamesStore: fakeGamesStore({}, { 'game/model.ts': `export type GameState = { score: number };\n` }),
+      path: 'game/runtime.ts',
+      content: `
+import type { GameState } from './model.ts';
+export function tick(state: GameState) {
+  return state.score;
+}
+`,
+    });
+    expect(result.typecheckHint).toBeUndefined();
+  });
+
+  it('overlays a delivered music.json so an existing custom track does not false-positive', async () => {
+    const result = await computeStageAdvisories({
+      ...BASE_INPUT,
+      record: { slug: 'my-game', deliveredVersion: 'v1' },
+      kitFileStore: fakeKitFileStore(
+        kitTree({
+          'shared/game-kit.d.ts': KIT_DTS,
+          'shared/audio/music.json': JSON.stringify({ tracks: { 'poignant-piano': {} } }),
+        }),
+      ),
+      gamesStore: fakeGamesStore(
+        {},
+        {
+          'music.json': JSON.stringify({
+            version: 1,
+            tracks: {
+              'raid-theme': {
+                bpm: 120,
+                steps: 8,
+                channels: [{ wave: 'square', pattern: ['C4', null, null, null, null, null, null, null] }],
+              },
+            },
+          }),
+        },
+      ),
+      path: 'GAME.json',
+      content: JSON.stringify({ audio: { music: 'raid-theme', sounds: ['win'] } }),
+    });
+    expect(result.audioHint).toBeUndefined();
+  });
+
+  it('skips the typecheck hint above the source-size guard instead of blocking on it', async () => {
+    const huge = `export const pad = ${JSON.stringify('x'.repeat(310_000))};\n`;
+    const result = await computeStageAdvisories({
+      ...BASE_INPUT,
+      kitFileStore: fakeKitFileStore(kitTree({ 'shared/game-kit.d.ts': KIT_DTS })),
+      gamesStore: fakeGamesStore({}),
+      path: 'game/render.ts',
+      content: `
+export function paint(kit: GameKitGameContext) {
+  kit.draw.text('hi', 0, 0, { textAlign: 'center' });
+}
+${huge}`,
+    });
+    expect(result.typecheckHint).toBeUndefined();
   });
 });

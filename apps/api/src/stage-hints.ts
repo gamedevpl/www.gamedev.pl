@@ -1,6 +1,8 @@
 // Runs submit_sources' typecheck/audio checks per staged file, as hints.
 import type { KitFileStore } from './kit-files.js';
 import type { GamesStore } from './games-store.js';
+import type { Store } from './store.js';
+import { overlayGameSources, readDeliveredSources } from './staged-preview.js';
 import { runTypecheckPreflight, sharedSourcesFromKitTree } from './typecheck-preflight.js';
 import { KIT_ROOT_DIR } from './kit-registry.js';
 import {
@@ -12,6 +14,8 @@ import {
 
 // Tighter than submit's budget — hot endpoint, runs several times a round.
 const STAGE_TYPECHECK_BUDGET_MS = 4_000;
+// Bounds sync tsc cost — the budget above only checks after it runs.
+const STAGE_TYPECHECK_MAX_SOURCE_BYTES = 300_000;
 
 export type StageAdvisories = {
   typecheckHint?: string;
@@ -21,6 +25,13 @@ export type StageAdvisories = {
 export async function computeStageAdvisories(input: {
   kitFileStore: KitFileStore | null;
   gamesStore: GamesStore;
+  store: Pick<Store, 'getPublication'>;
+  record: {
+    slug?: string;
+    previewVersion?: string;
+    deliveredVersion?: string;
+    seed?: { files: { path: string; content: string }[] };
+  };
   slug: string;
   issueNumber: number;
   roundGeneration: number;
@@ -39,26 +50,28 @@ export async function computeStageAdvisories(input: {
   const tree = await input.kitFileStore.loadTree(input.engineRef).catch(() => null);
   if (!tree) return result;
 
+  // Same overlay submit_sources uses — one file's edit must not flag siblings.
+  const overlay = await buildOverlay(input);
+  overlay[normalized] = input.content;
+
   if (isTs) {
     try {
-      const staged = await input.gamesStore.getStagedSourceFiles({
-        slug: input.slug,
-        issueNumber: input.issueNumber,
-        roundGeneration: input.roundGeneration,
-      });
       const sources: Record<string, string> = {};
-      for (const file of staged) {
-        if (!('deleted' in file) || !file.deleted) sources[file.path] = file.content;
+      let sourceBytes = 0;
+      for (const [path, content] of Object.entries(overlay)) {
+        if (!path.endsWith('.ts') && !path.endsWith('.tsx')) continue;
+        sources[path] = content;
+        sourceBytes += Buffer.byteLength(content, 'utf8');
       }
-      // A staged read can race the write it follows — this content wins.
-      sources[normalized] = input.content;
-      const check = await runTypecheckPreflight({
-        slug: input.slug,
-        sources,
-        kitShared: sharedSourcesFromKitTree(tree),
-        budgetMs: STAGE_TYPECHECK_BUDGET_MS,
-      });
-      if (!check.ok) result.typecheckHint = check.message;
+      if (sourceBytes <= STAGE_TYPECHECK_MAX_SOURCE_BYTES) {
+        const check = await runTypecheckPreflight({
+          slug: input.slug,
+          sources,
+          kitShared: sharedSourcesFromKitTree(tree),
+          budgetMs: STAGE_TYPECHECK_BUDGET_MS,
+        });
+        if (!check.ok) result.typecheckHint = check.message;
+      }
     } catch {
       // best-effort — never block staging on this
     }
@@ -66,13 +79,11 @@ export async function computeStageAdvisories(input: {
 
   if (isGameJson) {
     try {
-      const hint = await audioCatalogHint({
+      const hint = audioCatalogHint({
         tree,
-        gamesStore: input.gamesStore,
         slug: input.slug,
-        issueNumber: input.issueNumber,
-        roundGeneration: input.roundGeneration,
         content: input.content,
+        gameMusicJson: overlay['music.json'] ?? null,
       });
       if (hint) result.audioHint = hint;
     } catch {
@@ -83,14 +94,42 @@ export async function computeStageAdvisories(input: {
   return result;
 }
 
-async function audioCatalogHint(input: {
-  tree: { files: Map<string, Buffer> };
+async function buildOverlay(input: {
   gamesStore: GamesStore;
+  store: Pick<Store, 'getPublication'>;
+  record: {
+    slug?: string;
+    previewVersion?: string;
+    deliveredVersion?: string;
+    seed?: { files: { path: string; content: string }[] };
+  };
   slug: string;
   issueNumber: number;
   roundGeneration: number;
+}): Promise<Record<string, string>> {
+  const staged = await input.gamesStore.getStagedSourceFiles({
+    slug: input.slug,
+    issueNumber: input.issueNumber,
+    roundGeneration: input.roundGeneration,
+  });
+  const delivered = await readDeliveredSources({
+    gamesStore: input.gamesStore,
+    store: input.store,
+    record: input.record,
+  });
+  return overlayGameSources({
+    staged,
+    delivered,
+    ...(input.record.seed?.files ? { seed: input.record.seed.files } : {}),
+  });
+}
+
+function audioCatalogHint(input: {
+  tree: { files: Map<string, Buffer> };
+  slug: string;
   content: string;
-}): Promise<string | null> {
+  gameMusicJson: string | null;
+}): string | null {
   let manifest: unknown;
   try {
     manifest = JSON.parse(input.content);
@@ -116,17 +155,13 @@ async function audioCatalogHint(input: {
   }
 
   let gameTracks: MusicTracksMap | null = null;
-  try {
-    const gameMusicJson = await input.gamesStore.getStagedSourceFile({
-      slug: input.slug,
-      issueNumber: input.issueNumber,
-      roundGeneration: input.roundGeneration,
-      path: 'music.json',
-    });
-    if (gameMusicJson) gameTracks = parseGameMusicTracks(gameMusicJson);
-  } catch {
-    // Invalid staged music.json is separate — do not block on it.
-    return null;
+  if (input.gameMusicJson) {
+    try {
+      gameTracks = parseGameMusicTracks(input.gameMusicJson);
+    } catch {
+      // Invalid staged/delivered music.json is separate — do not block on it.
+      return null;
+    }
   }
 
   let merged: MusicTracksMap;

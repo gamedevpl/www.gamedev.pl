@@ -1228,6 +1228,8 @@ export async function registerAgentChannelRoutes(
         const advisories = await computeStageAdvisories({
           kitFileStore,
           gamesStore: options.gamesStore,
+          store: store!,
+          record,
           slug,
           issueNumber,
           roundGeneration,
@@ -1331,6 +1333,8 @@ export async function registerAgentChannelRoutes(
         const advisories = await computeStageAdvisories({
           kitFileStore,
           gamesStore: options.gamesStore,
+          store: store!,
+          record,
           slug,
           issueNumber,
           roundGeneration,
@@ -1482,6 +1486,8 @@ export async function registerAgentChannelRoutes(
         const advisories = await computeStageAdvisories({
           kitFileStore,
           gamesStore: options.gamesStore,
+          store: store!,
+          record,
           slug,
           issueNumber,
           roundGeneration,

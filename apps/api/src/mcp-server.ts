@@ -1357,7 +1357,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     warnings: {
       type: 'array',
       description:
-        "Soft session nudges (progress_stale, inbox_pending, call_end, seed_unread, gate_not_started, gate_poll_backoff, module_too_large, game_manifest_invalid, card_unopened, must_fix_gate, must_deliver). Not errors — act on them, then continue the workflow. module_too_large means split that game/*.ts module before adding more behavior. game_manifest_invalid means the just-staged GAME.json has a shape that crashes the gate before typecheck (e.g. missing engine.modules) — fix it in the SAME stage/patch call's target, do not wait for submit_sources to find out. card_unopened means the creator has no status card yet — call show_round once. must_fix_gate means the last delivery was refused — fix and submit_sources again; staging alone does not re-run the gate.",
+        "Soft session nudges (progress_stale, inbox_pending, call_end, seed_unread, gate_not_started, gate_poll_backoff, module_too_large, game_manifest_invalid, typecheck_hint, audio_catalog_hint, card_unopened, must_fix_gate, must_deliver). Not errors — act on them, then continue the workflow. module_too_large means split that game/*.ts module before adding more behavior. game_manifest_invalid means the just-staged GAME.json has a shape that crashes the gate before typecheck (e.g. missing engine.modules) — fix it in the SAME stage/patch call's target, do not wait for submit_sources to find out. typecheck_hint means the file you just staged/patched would fail submit_sources' TypeScript preflight — fix it now, before staging more files on top of it. audio_catalog_hint means GAME.json names a music track id that is not in the shared catalog or a staged music.json — submit_sources will fail smoke with this same error. card_unopened means the creator has no status card yet — call show_round once. must_fix_gate means the last delivery was refused — fix and submit_sources again; staging alone does not re-run the gate.",
       items: {
         type: 'object',
         properties: {
@@ -1372,6 +1372,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
               'gate_poll_backoff',
               'module_too_large',
               'game_manifest_invalid',
+              'typecheck_hint',
+              'audio_catalog_hint',
               'card_unopened',
               'must_fix_gate',
               'must_deliver',
@@ -3757,6 +3759,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           bytes?: number;
           hint?: string;
           manifestHint?: string;
+          typecheckHint?: string;
+          audioHint?: string;
           staged?: {
             files: Array<{ path: string; bytes: number }>;
             totalBytes: number;
@@ -3783,6 +3787,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           ...channelControlFields(body, [
             ...(manifestHint ? [{ code: 'game_manifest_invalid' as const, message: manifestHint }] : []),
             ...(hint ? [{ code: 'module_too_large' as const, message: hint }] : []),
+            ...(body.typecheckHint ? [{ code: 'typecheck_hint' as const, message: body.typecheckHint }] : []),
+            ...(body.audioHint ? [{ code: 'audio_catalog_hint' as const, message: body.audioHint }] : []),
           ]),
           pendingMessages: pendingMessagesFromChannel(body),
         });
@@ -3897,6 +3903,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           baseFrom?: 'staged' | 'delivery' | 'seed';
           hint?: string;
           manifestHint?: string;
+          typecheckHint?: string;
+          audioHint?: string;
           staged?: {
             files: Array<{ path: string; bytes: number }>;
             totalBytes: number;
@@ -3923,6 +3931,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           ...channelControlFields(body, [
             ...(body.manifestHint ? [{ code: 'game_manifest_invalid' as const, message: body.manifestHint }] : []),
             ...(hint ? [{ code: 'module_too_large' as const, message: hint }] : []),
+            ...(body.typecheckHint ? [{ code: 'typecheck_hint' as const, message: body.typecheckHint }] : []),
+            ...(body.audioHint ? [{ code: 'audio_catalog_hint' as const, message: body.audioHint }] : []),
           ]),
           pendingMessages: pendingMessagesFromChannel(body),
         });
