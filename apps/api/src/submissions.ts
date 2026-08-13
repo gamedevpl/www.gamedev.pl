@@ -962,10 +962,14 @@ export async function registerSubmissionRoutes(
     issueNumber: number;
     slug: string;
     spec: string;
+    builder: BuilderKind;
     log: { error: (context: object, message: string) => void };
   }): Promise<SeedDraft | undefined> {
     if (!gameSeeder || !store) return undefined;
-    if (now() < seedStagingMutedUntil) {
+    // The mute exists because a platform round's seed is wasted if its branch cannot be
+    // staged. A self round never stages a branch — its seed is stored on the job — so a
+    // platform staging failure says nothing about whether a self round's seed would land.
+    if (input.builder === 'platform' && now() < seedStagingMutedUntil) {
       input.log.error(
         { issueNumber: input.issueNumber },
         'skipping the seed: a recent draft could not be staged, so generating another would be wasted',
@@ -1141,7 +1145,9 @@ export async function registerSubmissionRoutes(
         await store.setSeedStatus(input.issueNumber, 'unavailable');
       }
       const draft =
-        storedSeed || input.feedback || !input.slug ? undefined : await seedBuild({ ...input, slug: input.slug });
+        storedSeed || input.feedback || !input.slug
+          ? undefined
+          : await seedBuild({ ...input, slug: input.slug, builder });
       const seed: SeedFiles | undefined = storedSeed
         ? storedSeed
         : draft
@@ -1198,8 +1204,14 @@ export async function registerSubmissionRoutes(
       });
       // A seed that went in without a workspace coming back is a *platform* backend that
       // could not place it. Self builds store the seed on the job (no branch), so the
-      // absence of seedWorkspace is expected and must not mute the seeder.
-      if (seed && !result.seedWorkspace && builder === 'platform') {
+      // absence of seedWorkspace is expected and must not mute the seeder. Neither does
+      // the `mcp` prompt lane: it delivers the seed as inline workspace files instead of
+      // a git branch, so no `seedWorkspace` ever comes back for it, on any vendor — that
+      // is the normal case, not a staging failure. `result.promptLane` is what the round
+      // actually dispatched on (a brief can ask for no lane and get the backend's
+      // default), so it — not `builder` alone — is what tells a real failure from an
+      // `mcp`-lane round that was never going to stage a branch in the first place.
+      if (seed && !result.seedWorkspace && builder === 'platform' && result.promptLane !== 'mcp') {
         seedStagingMutedUntil = now() + SEED_STAGING_COOLDOWN_MS;
         // Through seed-metrics rather than inline, because this line is what alert A23
         // counts: the message is a contract with infra/setup-monitoring.sh, and a prose

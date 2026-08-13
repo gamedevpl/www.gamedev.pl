@@ -223,12 +223,19 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
       options.kitDigest ? await options.kitDigest.load() : undefined,
     );
     const mcpBearerCredential = options.mcpBearerCredential?.(brief);
+    // A seed the provider cannot accept as workspace files must not reach the prompt
+    // either — buildPrompt tells the agent "a first draft is already in your checkout"
+    // whenever brief.seed is set, and that would be a lie for a dispatch that is about
+    // to start from nothing. Fail open onto the unseeded brief rather than throwing:
+    // a seed is an optimization the round can simply run without.
+    const seedSupported = options.provider.supportsSeedFiles ?? true;
+    const effectiveBrief = seedSupported || !brief.seed ? brief : { ...brief, seed: undefined };
     const session = await options.provider.startSession({
       correlationId: String(brief.issueNumber),
       ...(systemPrompt ? { systemPrompt } : {}),
       // The prompt has to describe the delivery this backend will actually read.
       prompt: buildPrompt(
-        brief,
+        effectiveBrief,
         roundChannelMode
           ? roundPromptLane === 'mcp'
             ? { kind: 'channel', fast: true }
@@ -240,7 +247,7 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
       model: options.provider.model,
       promptLane: roundPromptLane,
       ...(options.effort ? { effort: options.effort } : {}),
-      ...(brief.seed
+      ...(seedSupported && brief.seed
         ? {
             workspaceFiles: brief.seed.files.map((file) => ({
               path: `games/${brief.seed!.slug}/${file.path}`,
@@ -278,6 +285,7 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
       ...(session.workspace ? { workspace: session.workspace } : {}),
       ...(session.seedWorkspace ? { seedWorkspace: session.seedWorkspace } : {}),
       ...(session.credentialRef ? { credentialRef: session.credentialRef } : {}),
+      promptLane: roundPromptLane,
     };
   }
 

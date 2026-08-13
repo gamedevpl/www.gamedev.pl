@@ -109,6 +109,15 @@ export interface ManagedAgentProvider {
   readonly vendor: string;
   readonly model: string;
   readonly promptLane: ManagedPromptLane;
+  /**
+   * Whether `startSession` accepts a non-empty `workspaceFiles`. Some providers reject it
+   * outright (Anthropic always; Gemini once `environmentId` names a fixed environment) —
+   * a seed is an optimization, not a requirement, so the backend must know this *before*
+   * calling, not learn it by catching a thrown `ManagedAgentError` after already paying
+   * for seed generation. Defaults to `true` when a provider does not set it, matching
+   * every provider that existed before this flag.
+   */
+  readonly supportsSeedFiles?: boolean;
   startSession(request: ManagedSessionRequest): Promise<ManagedSession>;
   getSession(sessionId: string): Promise<ManagedSession | null>;
   // Paths are relative to the request's outputPath.
