@@ -554,9 +554,7 @@ export function App() {
 
   // The generation gate: before spending a submission we run the spec refiner. If it
   // returns clarifying questions, generation pauses on the QA panel until they're
-  // answered; a clean spec submits straight through. A refiner error stops here too
-  // (fail-closed) rather than silently falling through to a truncated title — see
-  // the catch block below.
+  // answered; a clean spec submits straight through. A refiner error stops here too.
   async function handleSubmitSpec(concept: string, displayName: string = '') {
     if (!user) {
       // The wall between "wrote an idea" and "made an account". Everything before this
@@ -578,17 +576,15 @@ export function App() {
     setSubmissionStatus('refining');
     setSubmissionError(null);
 
-    let questions: QAQuestion[] = [];
+    let questions: QAQuestion[];
     let suggestedTitle: string | undefined;
     try {
       const refined = await refineSpec({ concept: trimmedConcept, locale: i18n.language });
       questions = refined.questions;
       suggestedTitle = refined.suggestedTitle;
     } catch {
-      // Fail-closed: a refiner outage used to be invisible — silently falling through
-      // to a name derived from truncating the prompt, indistinguishable from a
-      // successful "concept is already clear" response. Stop here and let the
-      // creator retry instead.
+      // Fail-closed: stop here and let the creator retry, rather than falling
+      // through to a truncated title as if refinement had succeeded.
       setSubmissionError(t('errors.refineFailed'));
       setSubmissionStatus('idle');
       return;

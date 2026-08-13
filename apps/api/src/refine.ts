@@ -39,9 +39,7 @@ export interface RefineResponse {
    * mid-word — and that string became the title everywhere: the studio, the catalog, the
    * agent's brief. The model is already reading the concept to write its questions, so
    * naming it costs nothing extra; the creator confirms or replaces it before anything
-   * is built. Absent only when the model itself declines to propose one — a failed
-   * call throws instead of returning a response, so this is never absent because of
-   * an outage.
+   * is built. Absent only when the model itself declines — a failed call throws.
    */
   suggestedTitle?: string;
 }
@@ -285,12 +283,7 @@ ${params.concept}
         })),
       };
     } catch (err) {
-      // Fail-closed: a fail-open here is indistinguishable from "concept is already
-      // fully specified" (both are a 200 with empty questions and no title), which is
-      // exactly how a dead model and then a too-short timeout each survived unnoticed
-      // in production before (see the comments above). Surface the failure to the
-      // route instead so the creator sees an error and can retry, rather than being
-      // silently walked past the questions step with a locally-truncated title.
+      // Fail-closed: an error must not look like a clean, already-specified concept.
       if (process.env.NODE_ENV !== 'test') {
         // The budget is printed because an AbortError alone doesn't say what it
         // was measured against, and that budget is now env-tunable.
@@ -389,11 +382,8 @@ export async function registerRefineRoute(app: FastifyInstance, options: RefineR
   };
 
   const writeCache = (key: string, result: RefineResponse, now: number) => {
-    // A failed call now throws rather than reaching here, but a totally empty
-    // response (no questions, no title) is still not worth pinning for ten minutes —
-    // it is indistinguishable from the model producing nothing usable. A title with
-    // no questions is not that: it is a fully-specified concept the model still
-    // named, so emptiness is only disqualifying when it is total.
+    // A totally empty response is not worth pinning for ten minutes. A title with
+    // no questions is a fully-specified concept, so that alone is still cached.
     if (result.questions.length === 0 && !result.suggestedTitle) return;
     if (refineCache.size >= REFINE_CACHE_MAX_ENTRIES) {
       const oldest = refineCache.keys().next().value;
