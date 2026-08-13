@@ -34,6 +34,7 @@ import { type CodeLanguage, tokenizeLine } from './codeTokens.js';
 import { declaredParamDefaultChanges, type DeclaredParamChange } from './editorJsonLiveDiff.js';
 import { PixelIcon } from './PixelIcon.js';
 import { fetchGameEditor, type EditorContentDoc, type EditorParamValue } from './studioApi.js';
+import type { EditorContentPush } from './editorBridge.js';
 import { recordCodeStep } from './visitTelemetry.js';
 
 /**
@@ -90,7 +91,7 @@ export type CodeSurfaceProps = {
   slug: string;
   onBack: () => void;
   /** Filled in by `StudioStage`; lets a live param edit reach the running game. */
-  editorPushRef?: MutableRefObject<((content: EditorContentDoc) => void) | null>;
+  editorPushRef?: MutableRefObject<EditorContentPush | null>;
 };
 
 const LOCKED_DIRS = ['shared/', 'tools/'] as const;
@@ -657,9 +658,7 @@ export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
             title={t('studioPanel.code.agentRound')}
           >
             <span className="code-surface-readonly-banner-full">{t('studioPanel.code.agentRound')}</span>
-            <span className="code-surface-readonly-banner-compact">
-              {t('studioPanel.code.agentRoundCompact')}
-            </span>
+            <span className="code-surface-readonly-banner-compact">{t('studioPanel.code.agentRoundCompact')}</span>
           </span>
         ) : null}
       </header>
@@ -676,9 +675,7 @@ export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
           onClick={() => setFilePickerOpen(true)}
         >
           <PixelIcon name="code" size={13} />
-          <span className="code-surface-file-trigger-path">
-            {file?.path ?? t('studioPanel.code.noFiles')}
-          </span>
+          <span className="code-surface-file-trigger-path">{file?.path ?? t('studioPanel.code.noFiles')}</span>
           <PixelIcon name="chevronDown" size={11} />
         </button>
       </div>

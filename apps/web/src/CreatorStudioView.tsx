@@ -56,8 +56,8 @@ import {
   type StudioScorecard,
   type StudioSuggestion,
   type AutonomyMode,
-  type EditorContentDoc,
 } from './studioApi.js';
+import type { EditorContentPush } from './editorBridge.js';
 
 /**
  * Creator control panel (docs/improvement-loop-plan.md IL-2 creator surface).
@@ -215,7 +215,7 @@ export function CreatorStudioView({
   }, [selected]);
   const [tab, setTab] = useState<StudioTab>(selectedTab ?? 'thread');
   // Lets the Code surface push a live param edit into the stage's frame (§E tier 1).
-  const editorPushRef = useRef<((content: EditorContentDoc) => void) | null>(null);
+  const editorPushRef = useRef<EditorContentPush | null>(null);
   const [shelfQuery, setShelfQuery] = useState('');
   const [shelfFilter, setShelfFilter] = useState<StudioShelfFilter>('all');
   /** Desktop rail expand, or mobile drawer open. Closed by default once a game is open. */

@@ -109,6 +109,8 @@ export interface ManagedAgentProvider {
   readonly vendor: string;
   readonly model: string;
   readonly promptLane: ManagedPromptLane;
+  // Whether startSession accepts workspaceFiles; a function if it depends on the lane.
+  readonly supportsSeedFiles?: boolean | ((promptLane: ManagedPromptLane) => boolean);
   startSession(request: ManagedSessionRequest): Promise<ManagedSession>;
   getSession(sessionId: string): Promise<ManagedSession | null>;
   // Paths are relative to the request's outputPath.
@@ -308,6 +310,10 @@ export interface ManagedProviderConfig {
   repo?: string;
   baseRef?: string;
   customAgent?: string;
+  // Copilot: a scratch repo for MCP-lane rounds; unset keeps current behavior.
+  mcpRepo?: string;
+  mcpBaseRef?: string;
+  mcpCustomAgent?: string;
   createPullRequest?: boolean;
   agentId?: string;
   environmentId?: string;
