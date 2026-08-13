@@ -143,4 +143,6 @@ export interface AgentBackend {
   cancel(ref: string, credentialRef?: string): Promise<{ enforced: boolean }>;
   /** Releases workspace state once a job is finished. Best effort. */
   cleanup?(previous: DispatchResult): Promise<void>;
+  // Whether this lane would use brief.seed. Absent means yes.
+  acceptsSeed?(promptLane?: BuildPromptLane): boolean;
 }

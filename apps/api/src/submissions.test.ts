@@ -5984,6 +5984,44 @@ describe('seeded dispatch', () => {
     await app.close();
   });
 
+  it('does not pay for a seed a backend would discard', async () => {
+    // acceptsSeed is read before generation, not after the bill.
+    const stub = createGithubClientStub({});
+    const briefs: BuildBrief[] = [];
+    const backend: AgentBackend = {
+      name: 'stub',
+      acceptsSeed: () => false,
+      dispatch: async (brief) => {
+        briefs.push(brief);
+        return { ref: 'task-1', promptLane: 'mcp' };
+      },
+      resume: async () => ({ ref: 'task-2' }),
+      observe: async () => null,
+      cancel: async () => ({ enforced: false }),
+    };
+    let seedCalls = 0;
+    const { app, authHeaders } = await createApp({
+      githubClient: stub.githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      gameSeeder: seederStub({ compiles: true }, () => seedCalls++),
+    });
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'No Seed Game', concept: 'A game where you deliver parcels between comets, dodging debris.' },
+    });
+    expect(created.statusCode).toBe(200);
+    await vi.waitFor(() => expect(briefs).toHaveLength(1));
+
+    expect(seedCalls).toBe(0);
+    expect(briefs[0].seed).toBeUndefined();
+
+    await app.close();
+  });
+
   it('does not mistake an mcp-lane round’s inline seed delivery for a staging failure', async () => {
     // mcp never stages a branch — a missing seedWorkspace is not a failure.
     const stub = createGithubClientStub({});

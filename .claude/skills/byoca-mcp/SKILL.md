@@ -22,6 +22,9 @@ Source of truth: `SESSION_WORKFLOW` + `BEHAVIOURAL_CONTRACT` in
 `apps/api/src/mcp-server.ts` (returned by `start`, appended to every tool description).
 
 1. `start` → `show_round` (once) → `get_brief` / `get_seed` / `get_sources` / `get_kit` as needed
+   - The seed is a starting point, not an authority: where it and the brief disagree, the
+     brief wins. `regenerate_seed({ steer })` once if the draft is missing or plainly not
+     the game the brief describes — then keep building rather than waiting on it
 2. Build; `report_progress`; screenshot when something draws via
    `screenshot_upload_url` then `curl --upload-file <png> "$url"`. There is **no**
    base64 `send_screenshot` — PNG bytes must never enter the model. Without shell
@@ -69,7 +72,12 @@ itself. Proposal and example browse/read tools remain callable for compatibility
 are not advertised to models; kit browse/read tools (`list_kit_files`,
 `search_kit_files`, `read_kit_file`, `read_kit_files`, `read_kit_file_fragment`) now
 are, alongside `get_kit_api` and, since 2026-08-11, `knowledge_query` for everything
-`get_kit_api` does not cover.
+`get_kit_api` does not cover, plus `regenerate_seed` for a round-0 draft that is missing
+or off-brief.
+
+Adding an advertised tool means adding its row to `listings/mcp/README.md` in the same
+change: `mcp-server.test.ts` asserts the README documents every live tool with the exact
+annotation it reports, so the table cannot silently fall behind the surface.
 
 **Trimming the surface is only half the job — the prose has to follow.** The channel names
 the kit browse tools in every `get_kit` reply, because a REST agent can call them by URL.
@@ -362,6 +370,59 @@ set, almost every time, and got `seedStatus: 'unavailable'`. This was reported a
 seeding mechanism seems very ineffective, no seeds happening" and traced to
 `submissions.ts`'s mute-setting condition and `seedBuild`'s mute check, not to `SEED_DISPATCH`
 or credentials being unset.
+
+### A seed nobody can read is never generated
+
+`supportsSeedFiles` fixed the _delivery_ half — a provider that rejects `workspaceFiles`
+now degrades instead of throwing — but generation still ran first, so an Anthropic round,
+a Gemini round on a named environment, or Copilot on the `mcp` lane paid a full generation
+(two Vertex calls, a couple of minutes) for a draft the dispatch then dropped on the floor.
+
+`AgentBackend.acceptsSeed(promptLane?)` moves that question ahead of the spend. The managed
+backend answers it from the same `seedSupportedOn` helper `start` uses, so the capability
+cannot drift between "would we send it" and "should we make it"; a backend that does not
+implement it is treated as accepting (the self backend stores every seed on the job).
+`dispatchBuild` reads it before `seedBuild`, and it also gates `willAttemptSelfSeed`, so a
+self round on a hypothetical non-accepting backend is marked `unavailable` rather than left
+`pending` forever.
+
+### `regenerate_seed` — the one way out of a dead round-0
+
+Two states used to be terminal for a round. Generation failing (`seedStatus: unavailable`)
+is permanent: nothing retries it, because seeding only ever runs on the first dispatch. And
+a draft that came back off-brief could only be edited or discarded — the picker's three
+reference games are chosen by a sub-second Flash call, and a wrong genre there is baked into
+every file it wrote.
+
+`regenerate_seed({ steer? })` (`POST /api/agent/build/seed/regenerate`) queues one
+replacement. What it is _not_ is a poll: it returns `status: pending` immediately and the
+agent rechecks `get_seed`, the same shape the create_game race already uses — agents cannot
+sleep, so a tool that waited would burn the connector's budget.
+
+- **`steer` is the point.** Same spec + same picker = same draft, so a blind retry mostly
+  buys a second copy of the first mistake. The steer (≤600 chars) rides the _picker_ call as
+  well as the generate call, because a drifted draft usually drifted on its references. It
+  is fenced as data with its own "cannot widen the file scope" preamble, like the spec.
+- **Self only.** A platform round's seed is committed to `seed/job-<id>` and passed as
+  `base_ref`; the workspace is already forked by the time an agent could ask, so there is
+  nothing to replace. Refused as `platform_round`.
+- **Refused once staged** (`already_staged`, checked in the channel where `gamesStore`
+  lives) — the staging buffer overlays _onto_ the seed, so a new seed would move the base
+  of files already written against it — and once delivered (`already_delivered`), whose
+  starting point a gate has already judged.
+- **Capped** at `MAX_SEED_REGENERATIONS` (2) via `store.incrementSeedRegenerations`, which
+  increments _before_ the cap check so a racing pair cannot both pass. Replies carry
+  `regenerationsRemaining`.
+
+### The brief outranks the seed, and the copy has to say so
+
+Every string pointing at the seed told agents to continue it — `seedNoticeFor('available')`
+said "continue that draft — do not scaffold from scratch", and the workflow said the same
+twice. Nothing said what to do when the draft and the brief disagree, which is exactly the
+drift case, and the measured 96–99% seed retention means agents do keep what a draft says.
+`seed-status.ts` and both `mcp-server.ts` workflow lines now add that the brief is the
+authority and contradicting parts get deleted rather than adapted to. Keep that clause when
+editing this copy: a seed that can silently override the creator's spec is worse than none.
 
 ### GAME.json shape is checked at stage/patch time, not just at the gate
 
@@ -656,6 +717,8 @@ queued.
 | Preview-gate reconciliation        | `apps/api/src/submissions.ts` (`reconcileGateVerdict`) — red `previewGate` → `needs_changes`/`gate_red`; green preview never promotes                                                                  |
 | GAME.json staging shape check      | `apps/api/src/game-manifest-hint.ts` (`gameManifestHint`) — wired into the stage/patch routes in `agent-channel.ts`                                                                                    |
 | Round-0 seed generation            | `apps/api/src/game-seed.ts` (`VertexGameSeeder`) + `seedBuild`/`seedStagingMutedUntil` in `submissions.ts` — mute is `builder === 'platform'`-scoped and skips `mcp`-lane rounds (`result.promptLane`) |
+| Seed regeneration                  | `regenerateSeed` in `submissions.ts` + `POST /api/agent/build/seed/regenerate` in `agent-channel.ts` + `regenerate_seed` in `mcp-server.ts`; cap via `store.incrementSeedRegenerations`                |
+| "Would this lane use a seed?"      | `AgentBackend.acceptsSeed` — managed answers from `seedSupportedOn`; read before generating, so an unusable seed is never paid for                                                                     |
 | Seed → managed session wiring      | `apps/api/src/managed-backend.ts` (`start`) — checks `provider.supportsSeedFiles` before attaching `workspaceFiles`; drops `brief.seed` from the prompt too when unsupported                           |
 | Account-session invalidation       | `apps/api/src/agent-session-revocation.ts`                                                                                                                                                             |
 | Channel (`POST …/end`, …)          | `apps/api/src/agent-channel.ts`                                                                                                                                                                        |

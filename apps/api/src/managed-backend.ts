@@ -169,6 +169,11 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
   if (promptLane === 'mcp' && !options.tools?.mcpEndpoints?.length) {
     throw new ManagedAgentError('the MCP prompt lane needs an MCP endpoint');
   }
+  // One reading of the provider capability, shared by dispatch and acceptsSeed.
+  function seedSupportedOn(lane: ManagedPromptLane): boolean {
+    const capability = options.provider.supportsSeedFiles;
+    return typeof capability === 'function' ? capability(lane) : (capability ?? true);
+  }
   const outputPath = options.outputPath ?? DEFAULT_MANAGED_OUTPUT_PATH;
   const deliveryMode = options.deliveryMode ?? 'preview';
   const backendName = `managed:${options.provider.vendor}`;
@@ -224,10 +229,7 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
     );
     const mcpBearerCredential = options.mcpBearerCredential?.(brief);
     // An unsupported seed must also drop from the brief, not just workspaceFiles.
-    const seedSupported =
-      typeof options.provider.supportsSeedFiles === 'function'
-        ? options.provider.supportsSeedFiles(roundPromptLane)
-        : (options.provider.supportsSeedFiles ?? true);
+    const seedSupported = seedSupportedOn(roundPromptLane);
     const effectiveBrief = seedSupported || !brief.seed ? brief : { ...brief, seed: undefined };
     const session = await options.provider.startSession({
       correlationId: String(brief.issueNumber),
@@ -370,6 +372,10 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
 
   return {
     name: backendName,
+
+    acceptsSeed(promptLane): boolean {
+      return seedSupportedOn(promptLane ?? defaultPromptLane);
+    },
 
     async dispatch(brief: BuildBrief): Promise<DispatchResult> {
       return start(brief);

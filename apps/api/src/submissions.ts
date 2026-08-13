@@ -963,6 +963,7 @@ export async function registerSubmissionRoutes(
     slug: string;
     spec: string;
     builder: BuilderKind;
+    steer?: string;
     log: { error: (context: object, message: string) => void };
   }): Promise<SeedDraft | undefined> {
     if (!gameSeeder || !store) return undefined;
@@ -978,7 +979,12 @@ export async function registerSubmissionRoutes(
       const record = await store.getSubmission(input.issueNumber);
       if (!record) return undefined;
 
-      const draft = await gameSeeder.seed({ slug: input.slug, title: record.title, spec: input.spec });
+      const draft = await gameSeeder.seed({
+        slug: input.slug,
+        title: record.title,
+        spec: input.spec,
+        ...(input.steer ? { steer: input.steer } : {}),
+      });
       if (!draft) return undefined;
 
       await recordSeedCost(input.issueNumber, draft, input.log);
@@ -989,6 +995,56 @@ export async function registerSubmissionRoutes(
       input.log.error({ err: error, issueNumber: input.issueNumber }, 'seeding failed, dispatching unseeded');
       return undefined;
     }
+  }
+
+  // Each regeneration is a paid generation, so this is a spend ceiling.
+  const MAX_SEED_REGENERATIONS = 2;
+
+  // Queues a replacement round-0 draft. Self only: a platform seed is a forked branch.
+  async function regenerateSeed(input: {
+    issueNumber: number;
+    steer?: string;
+    log: { error: (context: object, message: string) => void; info?: (context: object, message: string) => void };
+  }): Promise<
+    | { ok: true; status: 'pending'; regenerationsRemaining: number }
+    | { ok: false; reason: 'not_configured' | 'not_found' | 'platform_round' | 'already_delivered' | 'cap_reached' }
+  > {
+    if (!gameSeeder || !store) return { ok: false, reason: 'not_configured' };
+    const record = await store.getSubmission(input.issueNumber);
+    if (!record || !record.slug) return { ok: false, reason: 'not_found' };
+    if (builderOf(record) !== 'self') return { ok: false, reason: 'platform_round' };
+    // A delivered round was already judged; do not move its starting point.
+    if ((record.roundDeliveryCount ?? 0) > 0) return { ok: false, reason: 'already_delivered' };
+
+    const used = await store.incrementSeedRegenerations(input.issueNumber);
+    if (used > MAX_SEED_REGENERATIONS) return { ok: false, reason: 'cap_reached' };
+
+    await store.setSeedStatus(input.issueNumber, 'pending');
+    const slug = record.slug;
+    void (async () => {
+      const draft = await seedBuild({
+        issueNumber: input.issueNumber,
+        slug,
+        spec: record.spec ?? '',
+        builder: 'self',
+        ...(input.steer ? { steer: input.steer } : {}),
+        log: input.log,
+      });
+      if (draft) {
+        await store!.setSubmissionSeed(input.issueNumber, {
+          slug: draft.slug,
+          files: draft.files,
+          references: draft.references,
+          ...(draft.notes ? { notes: draft.notes } : {}),
+        });
+      } else {
+        await store!.setSeedStatus(input.issueNumber, 'unavailable');
+      }
+    })().catch((error) => {
+      input.log.error({ err: error, issueNumber: input.issueNumber }, 'seed regeneration failed');
+    });
+
+    return { ok: true, status: 'pending', regenerationsRemaining: MAX_SEED_REGENERATIONS - used };
   }
 
   /**
@@ -1129,10 +1185,17 @@ export async function registerSubmissionRoutes(
       // Every new submission has one by now; the guard is for the paths that do not.
       // Self rounds reuse a seed already on the job (resume of the same round).
       const storedSeed = builder === 'self' ? existing?.seed : undefined;
+      // Ask before paying: some lanes discard the seed they are handed.
+      const backendAcceptsSeed = selected.acceptsSeed?.(input.promptLane) ?? true;
       // Only self builds expose seed files on the job (`get_seed`). Platform seeds land
       // on a branch the coding agent already has — no pending race for MCP.
       const willAttemptSelfSeed =
-        builder === 'self' && !storedSeed && !input.feedback && Boolean(input.slug) && Boolean(gameSeeder);
+        builder === 'self' &&
+        !storedSeed &&
+        !input.feedback &&
+        Boolean(input.slug) &&
+        Boolean(gameSeeder) &&
+        backendAcceptsSeed;
       if (storedSeed) {
         await store.setSubmissionSeed(input.issueNumber, storedSeed);
       } else if (willAttemptSelfSeed) {
@@ -1143,7 +1206,7 @@ export async function registerSubmissionRoutes(
         await store.setSeedStatus(input.issueNumber, 'unavailable');
       }
       const draft =
-        storedSeed || input.feedback || !input.slug
+        storedSeed || input.feedback || !input.slug || !backendAcceptsSeed
           ? undefined
           : await seedBuild({ ...input, slug: input.slug, builder });
       const seed: SeedFiles | undefined = storedSeed
@@ -5698,6 +5761,7 @@ export async function registerSubmissionRoutes(
     ...(stagedPreviews
       ? { onSourcesStaged: ({ issueNumber }: { issueNumber: number }) => stagedPreviews.schedule(issueNumber) }
       : {}),
+    onRegenerateSeed: regenerateSeed,
   });
 
   // Remote MCP (BY-05): streamable-HTTP tools wrapping the channel above. Same secret
