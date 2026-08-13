@@ -20,8 +20,8 @@ describe.skipIf(!hasToken)('creation happy path', () => {
   });
 
   it('refines an ordinary game idea instead of rejecting it', async () => {
-    // Nonce forces a fresh cache key so moderation actually runs each time.
-    const nonce = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    // base36 — a decimal timestamp trips the L1 PII phone-number regex.
+    const nonce = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
     const res = await api.post('/api/submissions/refine', {
       data: {
         concept: `A short arcade game where you dodge falling rocks and survive as long as possible. E2E smoke ${nonce}.`,
