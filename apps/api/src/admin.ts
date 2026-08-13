@@ -105,6 +105,10 @@ export interface AdminRoutesOptions {
   publicPlayTtlMs?: number;
   // Whether a platform backend is configured. See managed-availability.ts.
   hasPlatformBackend?: boolean;
+  // Vendors with a real backend built at boot; selectable by the override.
+  configuredVendors?: string[];
+  // MANAGED_AGENT_VENDOR — the fallback when no override is stored.
+  defaultVendor?: string;
 }
 
 /**
@@ -128,6 +132,17 @@ export interface CreationLimitsResponse {
     managedDailyUserCap: number | null;
     // Independent of managedBuilderMode above.
     hasPlatformBackend: boolean;
+    managedAgentVendor: {
+      // Stored override, or null when unset.
+      stored: string | null;
+      // Override if it built, else the env default; null if neither.
+      effective: string | null;
+      // Whether `effective` names a vendor with a real backend.
+      available: boolean;
+      configuredVendors: string[];
+      // MANAGED_AGENT_VENDOR, shown next to the override control.
+      defaultVendor: string | null;
+    };
   };
   today: { dateStr: string; submissions: number; managedBuilds: number };
   /** Upper bound, in ms, on how long a change takes to reach every instance. */
@@ -154,6 +169,8 @@ const CreationLimitsPatchSchema = z
     globalDailyChatCap: z.number().int().min(0).max(100_000).nullable().optional(),
     // Same document: whether the platform builder is offered. See managed-availability.ts.
     managedBuilderMode: z.enum(['auto', 'off', 'coming_soon']).optional(),
+    // null clears the override, same as globalDailySubmissionCap above.
+    managedAgentVendorOverride: z.enum(['anthropic', 'gemini', 'copilot']).nullable().optional(),
     managedDailyCap: z.number().int().min(0).max(100_000).nullable().optional(),
     managedDailyUserCap: z.number().int().min(0).max(100_000).nullable().optional(),
   })
@@ -166,9 +183,10 @@ const CreationLimitsPatchSchema = z
       patch.chatPaused !== undefined ||
       patch.globalDailyChatCap !== undefined ||
       patch.managedBuilderMode !== undefined ||
+      patch.managedAgentVendorOverride !== undefined ||
       patch.managedDailyCap !== undefined ||
       patch.managedDailyUserCap !== undefined,
-    'nothing to change: send paused, globalDailySubmissionCap, editingPaused, globalDailyEditCap, chatPaused, globalDailyChatCap, managedBuilderMode, managedDailyCap and/or managedDailyUserCap',
+    'nothing to change: send paused, globalDailySubmissionCap, editingPaused, globalDailyEditCap, chatPaused, globalDailyChatCap, managedBuilderMode, managedAgentVendorOverride, managedDailyCap and/or managedDailyUserCap',
   );
 
 const PublicPlayPatchSchema = z.object({
@@ -357,6 +375,8 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
   const creationLimitsTtlMs = options.creationLimitsTtlMs ?? DEFAULT_CREATION_LIMITS_TTL_MS;
   const publicPlayFallbackSlugs = options.publicPlayFallbackSlugs ?? [];
   const publicPlayTtlMs = options.publicPlayTtlMs ?? DEFAULT_CREATION_LIMITS_TTL_MS;
+  const configuredVendors = new Set(options.configuredVendors ?? []);
+  const defaultVendor = options.defaultVendor ?? null;
 
   /** Reads the stored breaker plus today's spend, uncached — an operator wants truth. */
   async function readCreationLimits(): Promise<CreationLimitsResponse> {
@@ -366,6 +386,10 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
       store.getGlobalSubmissionCount(dateStr),
       store.getGlobalManagedBuildCount(dateStr),
     ]);
+    const storedVendor = stored?.managedAgentVendorOverride ?? null;
+    // An invalid default must not report as effective when nothing overrode it.
+    const validDefaultVendor = defaultVendor && configuredVendors.has(defaultVendor) ? defaultVendor : null;
+    const effectiveVendor = storedVendor && configuredVendors.has(storedVendor) ? storedVendor : validDefaultVendor;
     return {
       stored,
       effective: {
@@ -375,6 +399,13 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
         managedDailyCap: stored?.managedDailyCap ?? null,
         managedDailyUserCap: stored?.managedDailyUserCap ?? null,
         hasPlatformBackend: options.hasPlatformBackend === true,
+        managedAgentVendor: {
+          stored: storedVendor,
+          effective: effectiveVendor,
+          available: effectiveVendor !== null && configuredVendors.has(effectiveVendor),
+          configuredVendors: [...configuredVendors],
+          defaultVendor,
+        },
       },
       today: { dateStr, submissions, managedBuilds },
       propagationMs: creationLimitsTtlMs,

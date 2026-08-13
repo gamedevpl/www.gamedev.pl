@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import { fetchCreationLimits, setCreationLimits, type CreationLimits, type ManagedBuilderMode } from './adminApi.js';
+import {
+  fetchCreationLimits,
+  setCreationLimits,
+  type CreationLimits,
+  type ManagedAgentVendor,
+  type ManagedBuilderMode,
+} from './adminApi.js';
 import { PublicPlayPanel } from './PublicPlayPanel.js';
 
 /**
@@ -58,6 +64,7 @@ export function CreationLimitsPanel({ onChanged }: { onChanged?: () => void }) {
       paused?: boolean;
       globalDailySubmissionCap?: number | null;
       managedBuilderMode?: ManagedBuilderMode;
+      managedAgentVendorOverride?: ManagedAgentVendor | null;
       managedDailyCap?: number | null;
       managedDailyUserCap?: number | null;
     }) => {
@@ -109,6 +116,14 @@ export function CreationLimitsPanel({ onChanged }: { onChanged?: () => void }) {
       : effective.managedBuilderMode === 'coming_soon'
         ? 'Marked coming soon — the platform option shows as not yet launched.'
         : 'Auto — offered normally.';
+
+  const { stored: storedVendor, effective: effectiveVendor, defaultVendor } = effective.managedAgentVendor;
+  const vendorStatusLine =
+    storedVendor === null
+      ? `Using the deployed default (${defaultVendor ?? 'none configured'}).`
+      : storedVendor === effectiveVendor
+        ? `Overridden to ${effectiveVendor} (no redeploy needed).`
+        : `Overridden to ${storedVendor}, but that vendor has no credentials in this environment — falling back to ${effectiveVendor ?? 'none'}.`;
 
   return (
     <>
@@ -176,6 +191,7 @@ export function CreationLimitsPanel({ onChanged }: { onChanged?: () => void }) {
           {managedStatusLine} {today.managedBuilds} platform round{today.managedBuilds === 1 ? '' : 's'} started today (
           {today.dateStr}).
         </p>
+        <p className="health-summary">{vendorStatusLine}</p>
 
         <div className="admin-limits-controls">
           <label className="admin-limits-cap">
@@ -188,6 +204,27 @@ export function CreationLimitsPanel({ onChanged }: { onChanged?: () => void }) {
               <option value="auto">Auto (offer when configured)</option>
               <option value="coming_soon">Coming soon</option>
               <option value="off">Off (incident)</option>
+            </select>
+          </label>
+
+          <label className="admin-limits-cap">
+            Vendor
+            <select
+              value={effective.managedAgentVendor.stored ?? ''}
+              disabled={busy}
+              onChange={(event) =>
+                void apply({
+                  managedAgentVendorOverride:
+                    event.target.value === '' ? null : (event.target.value as ManagedAgentVendor),
+                })
+              }
+            >
+              <option value="">Default ({effective.managedAgentVendor.defaultVendor ?? 'none configured'})</option>
+              {effective.managedAgentVendor.configuredVendors.map((vendor) => (
+                <option key={vendor} value={vendor}>
+                  {vendor}
+                </option>
+              ))}
             </select>
           </label>
 

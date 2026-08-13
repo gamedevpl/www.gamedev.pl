@@ -56,7 +56,11 @@ describe('createAgentBackendRegistryFromEnv', () => {
     const warn = vi.fn();
     const registry = createAgentBackendRegistryFromEnv({ info: vi.fn(), warn });
 
-    expect(registry.platform).toBeUndefined();
+    // The default vendor's own backend failed to build...
+    expect(registry.platformByVendor.has('anthropic')).toBe(false);
+    // ...but a stray AGENT_TASKS_TOKEN still builds Copilot's independently.
+    expect(registry.platformByVendor.has('copilot')).toBe(true);
+    expect(registry.defaultVendor).toBe('anthropic');
     expect(registry.self.name).toBe('self');
     expect(warn).toHaveBeenCalledWith(
       expect.objectContaining({ vendor: 'anthropic' }),
@@ -64,14 +68,15 @@ describe('createAgentBackendRegistryFromEnv', () => {
     );
   });
 
-  it('leaves the platform builder unset when no managed vendor is selected', () => {
-    // The direct legacy Copilot fallback was retired (MP-04).
+  it('builds no default platform backend when no managed vendor is selected', () => {
+    // MP-04: unset MANAGED_AGENT_VENDOR must not silently default to Copilot.
     setEnv({
       MANAGED_AGENT_VENDOR: undefined,
       AGENT_TASKS_TOKEN: randomBytes(32).toString('hex'),
     });
     const registry = createAgentBackendRegistryFromEnv({ info: vi.fn(), warn: vi.fn() });
-    expect(registry.platform).toBeUndefined();
+    expect(registry.defaultVendor).toBeUndefined();
+    expect(registry.platformByVendor.has('copilot')).toBe(true);
     expect(registry.self.name).toBe('self');
   });
 
@@ -88,7 +93,8 @@ describe('createAgentBackendRegistryFromEnv', () => {
       AGENT_TASKS_TOKEN: randomBytes(32).toString('hex'),
     });
     const registry = createAgentBackendRegistryFromEnv({ info: vi.fn(), warn: vi.fn() });
-    expect(registry.platform?.name).toBe('managed:anthropic');
+    expect(registry.platformByVendor.get('anthropic')?.name).toBe('managed:anthropic');
+    expect(registry.platformByVendor.has('gemini')).toBe(false);
   });
 
   it('builds Copilot from its own token and model configuration', () => {
@@ -104,7 +110,7 @@ describe('createAgentBackendRegistryFromEnv', () => {
       deliver: async () => ({ version: 'v1' }),
     });
 
-    expect(registry.platform?.name).toBe('managed:copilot');
+    expect(registry.platformByVendor.get('copilot')?.name).toBe('managed:copilot');
     expect(info).toHaveBeenCalledWith(
       expect.objectContaining({ vendor: 'copilot', model: 'claude-sonnet-4.6' }),
       'managed agent dispatch enabled',
@@ -123,7 +129,7 @@ describe('createAgentBackendRegistryFromEnv', () => {
       deliver: async () => ({ version: 'v1' }),
     });
 
-    expect(registry.platform?.name).toBe('managed:copilot');
+    expect(registry.platformByVendor.get('copilot')?.name).toBe('managed:copilot');
   });
 
   it('accepts a separate MCP-lane repo for Copilot without changing backend selection', () => {
@@ -141,7 +147,7 @@ describe('createAgentBackendRegistryFromEnv', () => {
       deliver: async () => ({ version: 'v1' }),
     });
 
-    expect(registry.platform?.name).toBe('managed:copilot');
+    expect(registry.platformByVendor.get('copilot')?.name).toBe('managed:copilot');
   });
 
   it('builds Gemini with its native token budget and default model', () => {
@@ -157,7 +163,7 @@ describe('createAgentBackendRegistryFromEnv', () => {
     const info = vi.fn();
     const registry = createAgentBackendRegistryFromEnv({ info, warn: vi.fn() });
 
-    expect(registry.platform?.name).toBe('managed:gemini');
+    expect(registry.platformByVendor.get('gemini')?.name).toBe('managed:gemini');
     expect(info).toHaveBeenCalledWith(
       expect.objectContaining({ vendor: 'gemini', model: 'gemini-3.7-flash' }),
       'managed agent dispatch enabled',
@@ -175,7 +181,7 @@ describe('createAgentBackendRegistryFromEnv', () => {
     const warn = vi.fn();
     const registry = createAgentBackendRegistryFromEnv({ info: vi.fn(), warn });
 
-    expect(registry.platform).toBeUndefined();
+    expect(registry.platformByVendor.size).toBe(0);
     expect(warn).toHaveBeenCalledWith(
       expect.objectContaining({ vendor: 'gemini' }),
       expect.stringContaining('token ceiling'),
@@ -191,7 +197,7 @@ describe('createAgentBackendRegistryFromEnv', () => {
     const warn = vi.fn();
     const registry = createAgentBackendRegistryFromEnv({ info: vi.fn(), warn });
 
-    expect(registry.platform).toBeUndefined();
+    expect(registry.platformByVendor.size).toBe(0);
     expect(warn).toHaveBeenCalledWith(
       expect.objectContaining({ vendor: 'gemini' }),
       expect.stringContaining('MCP lane'),
