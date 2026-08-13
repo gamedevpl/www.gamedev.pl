@@ -76,6 +76,22 @@ describe('send button mobile touch target', () => {
   });
 });
 
+describe('stop button mobile touch target', () => {
+  it('keeps the live-build stop action at the 44px floor on phones', () => {
+    const marker = '  .status-composer.is-compact .status-composer-stop {';
+    const mediaStart = css.indexOf(
+      '@media (max-width: 768px) {',
+      css.indexOf('.status-composer.is-compact .status-composer-send {'),
+    );
+    const start = css.indexOf(marker, mediaStart);
+    expect(start, 'stop is not sized in the phone media query').toBeGreaterThan(-1);
+    const bodyStart = start + marker.length;
+    const end = css.indexOf('}', bodyStart);
+    const body = css.slice(bodyStart, end);
+    expect(body).toMatch(/min-height:\s*44px/);
+  });
+});
+
 describe('CI repair quick action', () => {
   it('blends into the compact composer instead of sitting above it', () => {
     const quickActions = firstRuleBody('.status-composer.is-compact .status-feedback-quick-actions');

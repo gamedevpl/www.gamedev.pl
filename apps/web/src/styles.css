@@ -5920,16 +5920,6 @@ a.user-name--profile:focus-visible {
   line-height: 1.35;
 }
 
-.studio-turn-working-actions {
-  display: inline-flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-left: auto;
-  align-self: stretch;
-  justify-content: flex-end;
-}
-
 .studio-turn.is-working.is-thought .studio-turn-working-label {
   color: var(--turquoise);
   animation: studio-thought-flash 0.55s ease-out;
@@ -6290,6 +6280,37 @@ a.user-name--profile:focus-visible {
   border-radius: 50%;
 }
 
+/* A live platform round replaces the inactive send affordance with an explicit
+   stop-and-switch action. It stays compact enough for the builder pill beside it. */
+.status-composer.is-compact .status-composer-stop {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 60px;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid rgba(248, 113, 113, 0.58);
+  border-radius: 999px;
+  background: rgba(248, 113, 113, 0.12);
+  color: #fecaca;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+.status-composer.is-compact .status-composer-stop:hover {
+  border-color: rgba(248, 113, 113, 0.82);
+  background: rgba(248, 113, 113, 0.2);
+}
+
+.status-composer.is-compact .status-composer-stop:focus-visible {
+  outline: 2px solid #f87171;
+  outline-offset: 2px;
+}
+
 /* In-flight: keep the teal so "disabled" does not read as "broken", and swap the
    arrow for a spinner the eye can see without reading the title attribute. */
 .status-composer.is-compact.is-sending .status-composer-send {
@@ -6323,6 +6344,10 @@ a.user-name--profile:focus-visible {
   .status-composer.is-compact .status-composer-send {
     width: 44px;
     height: 44px;
+  }
+
+  .status-composer.is-compact .status-composer-stop {
+    min-height: 44px;
   }
 
   .status-feedback-quick-action {

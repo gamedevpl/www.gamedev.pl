@@ -774,24 +774,6 @@ export function SubmissionStatusView({
             ? t('statusView.phaseLabels.dispatched')
             : t(`statusView.states.${status.status}.label`)
         : '';
-    const liveHandoff =
-      status?.builder === 'platform' &&
-      (canInterruptPlatformAgent(status) || status.builderHandoff?.target === 'self') ? (
-        <SwitchToSelfControl
-          compact
-          active
-          onSwitchToSelf={handoffToSelfFromUi}
-          pending={status?.builderHandoff?.target === 'self'}
-        />
-      ) : status?.builder === 'self' && agentWorking ? (
-        <SwitchToPlatformControl
-          compact
-          active
-          onSwitchToPlatform={handoffToPlatformFromUi}
-          pending={status?.builderHandoff?.target === 'platform'}
-          unavailable={status?.platformBuilder?.available === false ? status.platformBuilder.reason : undefined}
-        />
-      ) : null;
     // Foot bar owns the waiting caption — the card drops it.
     const footBarShowing = Boolean(status && !agentWorking && status.stall !== 'ended' && !status.agentEndedAt);
     return (
@@ -832,11 +814,6 @@ export function SubmissionStatusView({
                         thoughtKey: gateThought?.key ?? workingThought?.key ?? null,
                         thoughtAt: gateThought?.at ?? workingThought?.at ?? null,
                         heartbeatAt: gateThought ? Date.parse(status.gateProgress!.at) || heartbeatAt : heartbeatAt,
-                        actions: (
-                          <span className="studio-turn-working-actions">
-                            {liveHandoff}
-                          </span>
-                        ),
                       }
                     : null
                 }
@@ -950,12 +927,12 @@ export function SubmissionStatusView({
                     handoffPending={status.builderHandoff?.target}
                     agentWorking={agentWorking}
                     onSwitchToPlatform={
-                      status.builder === 'self' && !agentWorking && status.builderHandoff?.target === 'platform'
+                      status.builder === 'self' && (agentWorking || status.builderHandoff?.target === 'platform')
                         ? handoffToPlatformFromUi
                         : undefined
                     }
                     onSwitchToSelf={
-                      (!agentWorking && canInterruptPlatformAgent(status)) || status.builderHandoff?.target === 'self'
+                      canInterruptPlatformAgent(status) || status.builderHandoff?.target === 'self'
                         ? handoffToSelfFromUi
                         : undefined
                     }
@@ -1438,6 +1415,7 @@ function FeedbackPanel({
   const [state, setState] = useState<'idle' | 'sending' | 'sent'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [quickActionDismissed, setQuickActionDismissed] = useState(false);
+  const [stopRequested, setStopRequested] = useState(false);
   // Sent, kept, and *not* acted on: the API took the message but no round started behind
   // it. Its own slot rather than `error`, because nothing failed on the creator's side and
   // there is nothing for them to redo — the note is safe and will be read by the next
@@ -1450,6 +1428,10 @@ function FeedbackPanel({
   useEffect(() => {
     setBuilder(initialBuilder);
   }, [initialBuilder, token]);
+
+  useEffect(() => {
+    setStopRequested(handoffPending === 'self');
+  }, [handoffPending, token]);
 
   useEffect(() => {
     setQuickActionDismissed(false);
@@ -1603,9 +1585,8 @@ function FeedbackPanel({
       : 'statusView.feedback.composerHint';
 
   // Sticky builder signal in the composer toolbar (Claude/Cursor shape): always when
-  // the next send can choose, and while a self round is mid-flight so routing stays
-  // visible. Platform mid-round stays chrome-free unless its explicit interruption
-  // control is available — no future-round selector until a boundary.
+  // the next send can choose, and while a round is mid-flight so routing stays visible.
+  // Handoff controls live here too; the transcript remains status-only.
   const effectiveBuilder = chooseBuilder ? builder : (roundBuilder ?? builder);
   const showBuilderBadge =
     chooseBuilder || effectiveBuilder === 'self' || Boolean(onSwitchToSelf) || (agentWorking && Boolean(roundBuilder));
@@ -1630,8 +1611,27 @@ function FeedbackPanel({
     ) : null;
   const activePlatformHandoff =
     !chooseBuilder && effectiveBuilder === 'platform' && onSwitchToSelf ? (
-      <SwitchToSelfControl compact active onSwitchToSelf={onSwitchToSelf} pending={handoffPending === 'self'} />
+      <SwitchToSelfControl compact active onSwitchToSelf={onSwitchToSelf} pending={stopRequested} />
     ) : null;
+  const showStop =
+    !chooseBuilder &&
+    agentWorking &&
+    effectiveBuilder === 'platform' &&
+    Boolean(onSwitchToSelf) &&
+    !stopRequested;
+  const stopAndSwitchToSelf = async () => {
+    if (!onSwitchToSelf) return;
+    setError(null);
+    setStopRequested(true);
+    try {
+      const result = await onSwitchToSelf();
+      recordStudioStep('builder_chosen', 'self');
+      return result;
+    } catch {
+      setStopRequested(false);
+      setError(t('connect.switchBuilder.error'));
+    }
+  };
   const builderControls = (
     <div className="builder-mode-controls">
       {builderSelector}
@@ -1717,20 +1717,32 @@ function FeedbackPanel({
         <div className="status-composer-toolbar">
           <div className="status-composer-toolbar-left">{builderControls}</div>
           <div className="status-composer-toolbar-right">
-            <button
-              type="button"
-              className="primary-btn status-composer-send"
-              onClick={() => void send()}
-              disabled={sending || agentWorking || trimmed.length < 10}
-              aria-label={sending ? t('statusView.feedback.sending') : t('statusView.feedback.submit')}
-              title={sending ? t('statusView.feedback.sending') : t('statusView.feedback.submit')}
-            >
-              {sending ? (
-                <span className="status-composer-send-spinner" aria-hidden="true" />
-              ) : (
-                <PixelIcon name="arrowRight" size={13} />
-              )}
-            </button>
+            {showStop ? (
+              <button
+                type="button"
+                className="status-composer-stop"
+                onClick={() => void stopAndSwitchToSelf()}
+                aria-label={t('statusView.feedback.stop')}
+                title={t('statusView.feedback.stopTitle')}
+              >
+                {t('statusView.feedback.stop')}
+              </button>
+            ) : stopRequested ? null : (
+              <button
+                type="button"
+                className="primary-btn status-composer-send"
+                onClick={() => void send()}
+                disabled={sending || agentWorking || trimmed.length < 10}
+                aria-label={sending ? t('statusView.feedback.sending') : t('statusView.feedback.submit')}
+                title={sending ? t('statusView.feedback.sending') : t('statusView.feedback.submit')}
+              >
+                {sending ? (
+                  <span className="status-composer-send-spinner" aria-hidden="true" />
+                ) : (
+                  <PixelIcon name="arrowRight" size={13} />
+                )}
+              </button>
+            )}
           </div>
         </div>
         {/* Failures, in-flight, and "kept but nothing started" still need a row — they
@@ -1738,9 +1750,13 @@ function FeedbackPanel({
             already shows the message the moment send succeeds. */}
         {agentWorking ? (
           <div className="status-feedback-actions">
-            <span className="status-feedback-sending" role="status">
-              {t('statusView.feedback.busy')}
-            </span>
+            {error ? (
+              <p className="error">{error}</p>
+            ) : (
+              <span className="status-feedback-sending" role="status">
+                {t('statusView.feedback.busy')}
+              </span>
+            )}
           </div>
         ) : error || sending || notice ? (
           <div className="status-feedback-actions">
@@ -1825,7 +1841,6 @@ type ThreadWorkingState = {
   thoughtKey: string | null;
   thoughtAt: number | null;
   heartbeatAt: number | null;
-  actions?: ReactNode;
 };
 
 function ThreadStream({
@@ -1978,7 +1993,6 @@ function ThreadStream({
                   <BuildHeartbeat at={working.heartbeatAt} />
                 </span>
               ) : null}
-              {working.actions}
             </li>
           ) : null}
         </ol>
