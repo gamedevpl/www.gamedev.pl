@@ -76,6 +76,19 @@ describe('Copilot managed provider', () => {
     expect(stub.startTask.mock.calls[0]?.[0].prompt).toContain('"key": "tok_abc"');
   });
 
+  it('declares seed files unsupported on the mcp lane, supported off it', () => {
+    const provider = createCopilotManagedProvider(
+      { apiKey: apiKey(), model: 'gpt-5.4', repo: 'gamedevpl/www.gamedev.pl-games' },
+      { tasks: tasks().client, github: { deleteBranch: vi.fn(), createBranchWithFiles: vi.fn() } },
+    );
+
+    expect(typeof provider.supportsSeedFiles).toBe('function');
+    const supportsSeedFiles = provider.supportsSeedFiles as (lane: 'mcp' | 'harness' | 'outputs') => boolean;
+    expect(supportsSeedFiles('mcp')).toBe(false);
+    expect(supportsSeedFiles('harness')).toBe(true);
+    expect(supportsSeedFiles('outputs')).toBe(true);
+  });
+
   it('stages a seed on the same disposable branch as legacy Copilot', async () => {
     const stub = tasks();
     const github = { deleteBranch: vi.fn(async () => undefined), createBranchWithFiles: vi.fn(async () => undefined) };

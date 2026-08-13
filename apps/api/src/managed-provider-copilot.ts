@@ -104,6 +104,10 @@ export function createCopilotManagedProvider(
     vendor: COPILOT_VENDOR,
     model: config.model,
     promptLane: 'harness',
+    // startSession below only stages a seed branch outside the mcp lane (it sets
+    // seedBranch to null and strips the seed prompt on mcp) — this mirrors that, so the
+    // backend does not attach workspaceFiles a Copilot mcp-lane round would just drop.
+    supportsSeedFiles: (promptLane) => promptLane !== 'mcp',
 
     async startSession(request: ManagedSessionRequest): Promise<ManagedSession> {
       const promptLane = request.promptLane ?? 'harness';

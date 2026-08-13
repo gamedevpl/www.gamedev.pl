@@ -348,6 +348,13 @@ it:
   attaching `workspaceFiles` and drops the seed from `brief` before building the prompt
   too — `buildPrompt` writes "a first draft is already in your checkout" whenever
   `brief.seed` is set, and that line must not survive an unseeded dispatch.
+  `supportsSeedFiles` can be a plain boolean (Anthropic, Gemini — static per
+  provider config) or a `(promptLane) => boolean` (Copilot — its own
+  `startSession` already silently drops the seed on the `mcp` lane while staging it
+  outside `mcp`, so a plain `true` would misreport a round that is about to throw the
+  seed away; a static answer cannot say "it depends which lane this round dispatches
+  on"). `managed-backend.ts` resolves the function form against `roundPromptLane`
+  before deciding whether to attach `workspaceFiles`.
 
 Net effect before the fix: bouncing between a managed round and a BYOCA round — normal
 creator behaviour — meant BYOCA landed inside the ten-minute mute a managed round had just

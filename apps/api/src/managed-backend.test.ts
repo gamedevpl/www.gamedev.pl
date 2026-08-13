@@ -201,6 +201,25 @@ describe('managed backend', () => {
     expect(started[0].prompt).not.toContain('already contains a generated first draft');
   });
 
+  it('resolves a lane-dependent supportsSeedFiles against the round’s actual prompt lane', async () => {
+    const { provider, started } = fakeProvider({ supportsSeedFiles: (lane) => lane !== 'mcp' });
+    const backend = createManagedBackend({
+      provider,
+      deliver: async () => ({ version: 'v1' }),
+      tools: { mcpEndpoints: [{ url: 'https://www.gamedev.pl/api/mcp', name: 'gamedevpl' }] },
+    });
+
+    await backend.dispatch(
+      brief({
+        seed: { slug: SLUG, files: [{ path: 'game.ts', content: 'export {};' }], references: [] },
+        promptLane: 'mcp',
+      }),
+    );
+
+    expect(started).toHaveLength(1);
+    expect(started[0].workspaceFiles).toBeUndefined();
+  });
+
   it('preserves the provider seed workspace separately from the agent workspace', async () => {
     const { provider } = fakeProvider({
       startSession: async () => ({

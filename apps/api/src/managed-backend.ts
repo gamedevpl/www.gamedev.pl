@@ -228,7 +228,10 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
     // whenever brief.seed is set, and that would be a lie for a dispatch that is about
     // to start from nothing. Fail open onto the unseeded brief rather than throwing:
     // a seed is an optimization the round can simply run without.
-    const seedSupported = options.provider.supportsSeedFiles ?? true;
+    const seedSupported =
+      typeof options.provider.supportsSeedFiles === 'function'
+        ? options.provider.supportsSeedFiles(roundPromptLane)
+        : (options.provider.supportsSeedFiles ?? true);
     const effectiveBrief = seedSupported || !brief.seed ? brief : { ...brief, seed: undefined };
     const session = await options.provider.startSession({
       correlationId: String(brief.issueNumber),

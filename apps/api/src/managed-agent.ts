@@ -116,8 +116,14 @@ export interface ManagedAgentProvider {
    * calling, not learn it by catching a thrown `ManagedAgentError` after already paying
    * for seed generation. Defaults to `true` when a provider does not set it, matching
    * every provider that existed before this flag.
+   *
+   * A function when the answer depends on the round rather than the provider's static
+   * config: Copilot's own `startSession` already silently drops the seed on the `mcp`
+   * lane (it stages a branch only outside `mcp`), so a plain `true` there would tell the
+   * backend a seed will be used when this exact provider, on this exact round, is about
+   * to throw it away.
    */
-  readonly supportsSeedFiles?: boolean;
+  readonly supportsSeedFiles?: boolean | ((promptLane: ManagedPromptLane) => boolean);
   startSession(request: ManagedSessionRequest): Promise<ManagedSession>;
   getSession(sessionId: string): Promise<ManagedSession | null>;
   // Paths are relative to the request's outputPath.
