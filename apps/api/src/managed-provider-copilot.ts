@@ -206,16 +206,17 @@ export function createCopilotManagedProvider(
         (run) => run.path === COPILOT_AGENT_WORKFLOW_PATH && IN_FLIGHT_RUN_STATUSES.includes(run.status),
       );
 
-      let enforced = false;
+      // One left running is one still spending, so every match must cancel.
+      let allCancelled = true;
       for (const run of inFlight) {
         // Best effort: a token without `actions: write` reports unenforced.
         const cancelled = await github
           .cancelWorkflowRun(run.id)
           .then(() => true)
           .catch(() => false);
-        enforced = enforced || cancelled;
+        allCancelled = allCancelled && cancelled;
       }
-      return { enforced };
+      return { enforced: inFlight.length > 0 && allCancelled };
     },
 
     async deleteWorkspace(workspace: string): Promise<void> {

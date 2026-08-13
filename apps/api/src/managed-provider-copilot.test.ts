@@ -261,6 +261,28 @@ describe('Copilot managed provider', () => {
     await expect(provider.cancelSession('task-1')).resolves.toEqual({ enforced: false });
   });
 
+  it('reports unenforced when only some of several in-flight runs cancel', async () => {
+    const stub = tasks(task({ state: 'in_progress', branch: { headRef: 'copilot/tv-tycoon' } }));
+    // A resumed round can leave two runs in flight.
+    const cancelWorkflowRun = vi.fn(async (runId: number) => {
+      if (runId === 13) throw new Error('github request failed: 403');
+    });
+    const provider = createCopilotManagedProvider(
+      { apiKey: apiKey(), model: 'gpt-5.4', repo: 'gamedevpl/www.gamedev.pl-games' },
+      {
+        tasks: stub.client,
+        github: githubStub({
+          listWorkflowRuns: vi.fn(async () => [run({ id: 12 }), run({ id: 13 })]),
+          cancelWorkflowRun,
+        }),
+      },
+    );
+
+    // A partial stop must not read as fully enforced.
+    await expect(provider.cancelSession('task-1')).resolves.toEqual({ enforced: false });
+    expect(cancelWorkflowRun.mock.calls.map(([id]) => id)).toEqual([12, 13]);
+  });
+
   it('deletes the disposable workspace branch during backend cleanup', async () => {
     const stub = tasks();
     const deleteBranch = vi.fn(async () => undefined);
