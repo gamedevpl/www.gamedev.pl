@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 
 import { useTranslation } from 'react-i18next';
 import { GameFrame } from './GameFrame.js';
 import { useCreatorPlaytest, useGamePlayer, postGameHostMessage, type PlaytestInstrumentation } from './gamePlayer.js';
-import { useEditorDraftBridge } from './editorBridge.js';
+import { useEditorDraftBridge, type EditorContentPush } from './editorBridge.js';
 import { PixelIcon } from './PixelIcon.js';
 import { submitFeedback, type FeedbackContext, type SubmissionApiError } from './submissionApi.js';
 import { submitImprovement, type EditorContentDoc } from './studioApi.js';
@@ -78,7 +78,7 @@ export type StudioStageProps = {
    * document on screen, not the one waiting in the wings. */
   onDisplayedOriginChange?: (origin: StageOrigin) => void;
   /** Filled in with the editor bridge's live-push function, for the Code surface (§E tier 1). */
-  editorPushRef?: MutableRefObject<((content: EditorContentDoc) => void) | null>;
+  editorPushRef?: MutableRefObject<EditorContentPush | null>;
 };
 
 export function StudioStage({

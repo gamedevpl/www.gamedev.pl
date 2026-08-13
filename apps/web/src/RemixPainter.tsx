@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   blankItem,
@@ -15,6 +15,7 @@ import type {
   EditorLabel,
   EditorTilemapSpec,
 } from './studioApi.js';
+import type { EditorSelection } from './editorBridge.js';
 
 /** Narrows a collection to its tilemap spec — entities render no board. */
 function tilemapCollection(
@@ -47,6 +48,7 @@ export function RemixPainter(props: {
   onChange: (next: EditorContentDoc) => void;
   selectedCollectionKey?: string | null;
   onCollectionChange?: (key: string) => void;
+  onSelectionChange?: (selection: EditorSelection) => void;
 }) {
   const { t, i18n } = useTranslation();
   const name = (label: EditorLabel) => (i18n.language?.startsWith('pl') ? label.pl : label.en);
@@ -73,6 +75,13 @@ export function RemixPainter(props: {
 
   const item = items[Math.min(itemIndex, Math.max(0, items.length - 1))] ?? null;
   const activeIndex = Math.min(itemIndex, Math.max(0, items.length - 1));
+  const onSelectionChangeRef = useRef(props.onSelectionChange);
+  onSelectionChangeRef.current = props.onSelectionChange;
+
+  useEffect(() => {
+    if (!collectionKey) return;
+    onSelectionChangeRef.current?.({ collection: collectionKey, index: activeIndex });
+  }, [collectionKey, activeIndex]);
 
   if (!spec || !collectionKey) return null;
   const activeCollectionKey = collectionKey;

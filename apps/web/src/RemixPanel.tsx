@@ -9,7 +9,7 @@ import {
 } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PixelIcon } from './PixelIcon.js';
-import { BRIDGE_NAMESPACE, PROTOCOL_VERSION } from './mp/protocol.js';
+import { editorContentMessage, type EditorSelection } from './editorBridge.js';
 import { recordRemixStep } from './visitTelemetry.js';
 import { useAuth } from './AuthContext.js';
 import { AuthModal } from './AuthModal.js';
@@ -329,6 +329,8 @@ export function RemixPanel(props: {
   const contentDocRef = useRef(contentDoc);
   contentDocRef.current = contentDoc;
   const [selectedCollectionKey, setSelectedCollectionKey] = useState<string | null>(null);
+  const [selectedItemIndex, setSelectedItemIndex] = useState(0);
+  const selectionRef = useRef<EditorSelection | null>(null);
   const [painterOpen, setPainterOpen] = useState(false);
   /** After the stage has opened once, Done leaves a door back on the sheet. */
   const [painterSeen, setPainterSeen] = useState(false);
@@ -373,7 +375,7 @@ export function RemixPanel(props: {
     (next: Record<string, EditorParamValue>, contentOverride?: EditorContentDoc) => {
       const collections = contentOverride ?? contentDocRef.current;
       props.frameRef.current?.contentWindow?.postMessage(
-        { ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, t: 'editor:content', content: { ...collections, params: next } },
+        editorContentMessage({ ...collections, params: next }, selectionRef.current),
         '*',
       );
     },
@@ -508,7 +510,10 @@ export function RemixPanel(props: {
           : {};
         contentDocRef.current = contentDefaults;
         setContentDoc(contentDefaults);
-        setSelectedCollectionKey(started.content ? defaultCollectionKey(started.content) : null);
+        const defaultKey = started.content ? defaultCollectionKey(started.content) : null;
+        setSelectedCollectionKey(defaultKey);
+        selectionRef.current = defaultKey ? { collection: defaultKey, index: 0 } : null;
+        setSelectedItemIndex(0);
         onCapabilities?.({ painter: Boolean(started.content) });
         // A shared link's values are live the moment the game is listening.
         if (props.initialParams) window.setTimeout(() => pushToGame(merged), 300);
@@ -792,6 +797,15 @@ export function RemixPanel(props: {
       text: t('remix.changeStanding'),
       canShare: hasShareableValues(session?.params ?? null, next),
     });
+  }
+
+  function rememberSelection(selection: EditorSelection) {
+    const previous = selectionRef.current;
+    selectionRef.current = selection;
+    setSelectedCollectionKey(selection.collection);
+    setSelectedItemIndex(selection.index);
+    if (previous?.collection === selection.collection && previous?.index === selection.index) return;
+    pushToGame(valuesRef.current);
   }
 
   /** The player painted — update the doc, tell the funnel, and land it after the stroke. */
@@ -1309,8 +1323,11 @@ export function RemixPanel(props: {
   if (painterStageActive && session?.content) {
     const collectionKey = activeCollectionKey;
     const items = collectionKey ? ((contentDoc[collectionKey] as EditorItemContent[] | undefined) ?? []) : [];
+    const selectedItem = items[selectedItemIndex] ?? items[0];
     const levelName =
-      typeof items[0]?.properties.name === 'string' && items[0].properties.name ? items[0].properties.name : null;
+      typeof selectedItem?.properties.name === 'string' && selectedItem.properties.name
+        ? selectedItem.properties.name
+        : null;
 
     return (
       <>
@@ -1380,6 +1397,7 @@ export function RemixPanel(props: {
               onChange={paintContent}
               selectedCollectionKey={activeCollectionKey}
               onCollectionChange={setSelectedCollectionKey}
+              onSelectionChange={rememberSelection}
             />
             {editorFocus === 'play' ? <span className="remix-editor-pip-cta">{t('remix.editorFocusEdit')}</span> : null}
           </div>

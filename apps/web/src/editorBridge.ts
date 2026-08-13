@@ -3,6 +3,28 @@ import { BRIDGE_NAMESPACE, PROTOCOL_VERSION } from './mp/protocol.js';
 import { fetchGameEditor, type EditorContentDoc } from './studioApi.js';
 
 /**
+ * The collection item the painter is showing. Optional on the wire so
+ * params-only and single-item games keep working; campaign games use it to
+ * open the preview on that item instead of always restarting at index 0.
+ */
+export type EditorSelection = {
+  collection: string;
+  index: number;
+};
+
+export type EditorContentPush = (content: EditorContentDoc, selection?: EditorSelection | null) => void;
+
+export function editorContentMessage(content: EditorContentDoc, selection?: EditorSelection | null) {
+  return {
+    ns: BRIDGE_NAMESPACE,
+    v: PROTOCOL_VERSION,
+    t: 'editor:content' as const,
+    content,
+    ...(selection ? { selection } : {}),
+  };
+}
+
+/**
  * The shell half of EditorKit's draft hot-apply (the game half is the games
  * repo's `shared/modules/editor.ts`).
  *
@@ -22,15 +44,23 @@ import { fetchGameEditor, type EditorContentDoc } from './studioApi.js';
  * edits): posts straight to the frame regardless of the `active` gate, since
  * the stage stays mounted under every posture. Also updates what the next
  * `editor:hello` gets answered with, so a later restart cannot regress it.
+ * A later content-only push (Code surface params) keeps the last selection so
+ * a slider does not kick the preview back to item 0.
  */
 export function useEditorDraftBridge(
   frameRef: MutableRefObject<HTMLIFrameElement | null>,
   active: boolean,
   slug: string | undefined,
   editable: boolean,
-): { push: (content: EditorContentDoc) => void } {
+): { push: EditorContentPush } {
   /** What the next `editor:hello` gets answered with. */
   const lastContentRef = useRef<EditorContentDoc | null>(null);
+  const lastSelectionRef = useRef<EditorSelection | null>(null);
+
+  useEffect(() => {
+    lastContentRef.current = null;
+    lastSelectionRef.current = null;
+  }, [slug]);
 
   useEffect(() => {
     if (!active || !slug || !editable) return;
@@ -46,6 +76,10 @@ export function useEditorDraftBridge(
       return draftPromise;
     }
 
+    function post(content: EditorContentDoc, selection: EditorSelection | null) {
+      frameRef.current?.contentWindow?.postMessage(editorContentMessage(content, selection), '*');
+    }
+
     function onMessage(event: MessageEvent) {
       // Opaque-origin frame: origin is "null" and the source must be our iframe.
       if (event.origin !== 'null') return;
@@ -57,19 +91,13 @@ export function useEditorDraftBridge(
 
       // A push already sent fresher content than the fetch would — that wins.
       if (lastContentRef.current !== null) {
-        frameRef.current?.contentWindow?.postMessage(
-          { ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, t: 'editor:content', content: lastContentRef.current },
-          '*',
-        );
+        post(lastContentRef.current, lastSelectionRef.current);
         return;
       }
       void loadDraft().then((content) => {
         if (disposed || content === null) return;
         lastContentRef.current = content;
-        frameRef.current?.contentWindow?.postMessage(
-          { ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, t: 'editor:content', content },
-          '*',
-        );
+        post(content, lastSelectionRef.current);
       });
     }
 
@@ -80,13 +108,11 @@ export function useEditorDraftBridge(
     };
   }, [frameRef, active, slug, editable]);
 
-  const push = useCallback(
-    (content: EditorContentDoc) => {
+  const push = useCallback<EditorContentPush>(
+    (content, selection) => {
       lastContentRef.current = content;
-      frameRef.current?.contentWindow?.postMessage(
-        { ns: BRIDGE_NAMESPACE, v: PROTOCOL_VERSION, t: 'editor:content', content },
-        '*',
-      );
+      if (selection !== undefined) lastSelectionRef.current = selection;
+      frameRef.current?.contentWindow?.postMessage(editorContentMessage(content, lastSelectionRef.current), '*');
     },
     [frameRef],
   );

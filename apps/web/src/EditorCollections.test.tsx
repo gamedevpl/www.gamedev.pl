@@ -26,6 +26,7 @@ vi.mock('./visitTelemetry.js', () => ({ recordAssistStep: vi.fn(), recordEditorS
 
 import { EditorPanel } from './EditorPanel.js';
 import { RemixPainter } from './RemixPainter.js';
+import type { EditorContentDoc } from './studioApi.js';
 
 const mapItem: EditorItemContent = { properties: { name: 'Map 1' }, rows: ['..', '..'] };
 const routeItem: EditorItemContent = { properties: { name: 'Route 1' }, rows: ['##', '##'] };
@@ -163,6 +164,61 @@ describe('multi-collection editor surfaces', () => {
       root!.render(<RemixPainter content={single} doc={{ maps: [mapItem] }} onChange={vi.fn()} />);
     });
     expect(container.querySelector('.editor-collection-selector')).toBeNull();
+  });
+});
+
+describe('selected collection item reaches the preview', () => {
+  const mapTwo: EditorItemContent = { properties: { name: 'Map 2' }, rows: ['##', '##'] };
+  const twoMaps = { maps: [mapItem, mapTwo], routes: [routeItem] };
+
+  it('studio item picks push the selected collection index without writing a draft', async () => {
+    fetchGameEditor.mockResolvedValue(editorState({ content: twoMaps }));
+    const push = vi.fn();
+    const editorPushRef = {
+      current: push as (content: EditorContentDoc, selection?: { collection: string; index: number }) => void,
+    };
+    root = createRoot(container);
+    await act(async () => {
+      root!.render(<EditorPanel game={game} editorPushRef={editorPushRef} onOpenPlaytest={vi.fn()} onBack={vi.fn()} />);
+      await Promise.resolve();
+    });
+    push.mockClear();
+
+    const items = container.querySelectorAll('.editor-item-list button');
+    const second = Array.from(items).find((button) => button.textContent === 'Map 2') as HTMLButtonElement;
+    expect(second).not.toBeUndefined();
+    await act(async () => {
+      second.click();
+    });
+
+    expect(push).toHaveBeenCalledWith(twoMaps, { collection: 'maps', index: 1 });
+    expect(putEditorDraft).not.toHaveBeenCalled();
+  });
+
+  it('remix painter reports the selected item when the player switches maps', async () => {
+    const onChange = vi.fn();
+    const onSelectionChange = vi.fn();
+    root = createRoot(container);
+    await act(async () => {
+      root!.render(
+        <RemixPainter
+          content={definition.content}
+          doc={twoMaps}
+          onChange={onChange}
+          onSelectionChange={onSelectionChange}
+        />,
+      );
+    });
+    expect(onSelectionChange).toHaveBeenLastCalledWith({ collection: 'maps', index: 0 });
+
+    const second = Array.from(container.querySelectorAll('.remix-painter-item')).find(
+      (button) => button.textContent === 'Map 2',
+    ) as HTMLButtonElement;
+    await act(async () => {
+      second.click();
+    });
+    expect(onSelectionChange).toHaveBeenLastCalledWith({ collection: 'maps', index: 1 });
+    expect(onChange).not.toHaveBeenCalled();
   });
 });
 

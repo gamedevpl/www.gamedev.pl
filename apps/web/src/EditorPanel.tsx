@@ -10,6 +10,7 @@ import {
   setCell,
 } from './editorContentTools.js';
 import { recordAssistStep, recordEditorStep } from './visitTelemetry.js';
+import type { EditorContentPush, EditorSelection } from './editorBridge.js';
 import {
   deleteEditorDraft,
   fetchGameEditor,
@@ -111,14 +112,22 @@ function tilemapCollection(
 export function EditorPanel(props: {
   game: StudioGame;
   /** The stage's live-push channel (§E tier 1). */
-  editorPushRef?: MutableRefObject<((content: EditorContentDoc) => void) | null>;
+  editorPushRef?: MutableRefObject<EditorContentPush | null>;
   onOpenPlaytest: () => void;
   onBack: () => void;
 }) {
   const { t, i18n } = useTranslation();
   const name = useLabel();
   const slug = props.game.slug as string;
-  const pushLive = useCallback((next: EditorContentDoc) => props.editorPushRef?.current?.(next), [props.editorPushRef]);
+  const pushLive = useCallback(
+    (next: EditorContentDoc, selection?: EditorSelection | null) => {
+      const push = props.editorPushRef?.current;
+      if (!push) return;
+      if (selection) push(next, selection);
+      else push(next);
+    },
+    [props.editorPushRef],
+  );
 
   const [state, setState] = useState<'loading' | 'error' | 'ready'>('loading');
   const [editor, setEditor] = useState<GameEditorState | null>(null);
@@ -153,10 +162,10 @@ export function EditorPanel(props: {
         setEditor(loaded);
         const merged = mergeDraft(loaded);
         setContent(merged);
-        pushLive(merged);
+        const defaultKey = defaultCollectionKey(loaded.definition.content);
+        pushLive(merged, defaultKey ? { collection: defaultKey, index: 0 } : undefined);
         setRevision(loaded.draft?.revision ?? 0);
         setSaveState('clean');
-        const defaultKey = defaultCollectionKey(loaded.definition.content);
         setSelectedCollectionKey(defaultKey);
         setItemIndex(0);
         setTileKey(defaultKey ? firstTileKey(loaded.definition.content[defaultKey]) : null);
@@ -237,7 +246,7 @@ export function EditorPanel(props: {
       const list = itemsOf(current, collectionKey).slice();
       list[itemIndex] = next;
       const nextContent = { ...current, [collectionKey]: list };
-      pushLive(nextContent);
+      pushLive(nextContent, { collection: collectionKey, index: itemIndex });
       return nextContent;
     });
     scheduleSave();
@@ -331,9 +340,9 @@ export function EditorPanel(props: {
       setEditor(loaded);
       const merged = mergeDraft(loaded);
       setContent(merged);
-      pushLive(merged);
-      setRevision(loaded.draft?.revision ?? 0);
       const defaultKey = defaultCollectionKey(loaded.definition.content);
+      pushLive(merged, defaultKey ? { collection: defaultKey, index: 0 } : undefined);
+      setRevision(loaded.draft?.revision ?? 0);
       setSelectedCollectionKey(defaultKey);
       setItemIndex(0);
       setTileKey(defaultKey ? firstTileKey(loaded.definition.content[defaultKey]) : null);
@@ -349,6 +358,7 @@ export function EditorPanel(props: {
     setSelectedCollectionKey(nextKey);
     setItemIndex(0);
     setTileKey(firstTileKey(nextSpec));
+    pushLive(content, { collection: nextKey, index: 0 });
   }
 
   async function discardDraft() {
@@ -357,7 +367,8 @@ export function EditorPanel(props: {
       if (!mountedRef.current) return;
       if (editor) {
         setContent(editor.content);
-        pushLive(editor.content);
+        const defaultKey = defaultCollectionKey(editor.definition.content);
+        pushLive(editor.content, defaultKey ? { collection: defaultKey, index: 0 } : undefined);
         setRevision(0);
         setItemIndex(0);
         setSaveState('clean');
@@ -711,7 +722,11 @@ export function EditorPanel(props: {
                     <button
                       type="button"
                       className={index === itemIndex ? 'is-active' : ''}
-                      onClick={() => setItemIndex(index)}
+                      onClick={() => {
+                        if (index === itemIndex) return;
+                        setItemIndex(index);
+                        pushLive(content, { collection: collectionKey, index });
+                      }}
                     >
                       {typeof entry.properties.name === 'string' && entry.properties.name
                         ? entry.properties.name
@@ -723,15 +738,17 @@ export function EditorPanel(props: {
                         className="editor-item-remove"
                         aria-label={t('studioPanel.editor.removeItem')}
                         onClick={() => {
+                          const nextIndex = Math.max(
+                            0,
+                            itemIndex > index ? itemIndex - 1 : Math.min(itemIndex, items.length - 2),
+                          );
                           setContent((current) => {
                             const list = itemsOf(current, collectionKey).filter((_, i) => i !== index);
                             const nextContent = { ...current, [collectionKey]: list };
-                            pushLive(nextContent);
+                            pushLive(nextContent, { collection: collectionKey, index: nextIndex });
                             return nextContent;
                           });
-                          setItemIndex((current) =>
-                            Math.max(0, current > index ? current - 1 : Math.min(current, items.length - 2)),
-                          );
+                          setItemIndex(nextIndex);
                           scheduleSave();
                         }}
                       >
@@ -746,15 +763,16 @@ export function EditorPanel(props: {
                   type="button"
                   className="editor-add"
                   onClick={() => {
+                    const nextIndex = items.length;
                     setContent((current) => {
                       const nextContent = {
                         ...current,
                         [collectionKey]: [...itemsOf(current, collectionKey), blankItem(spec.item)],
                       };
-                      pushLive(nextContent);
+                      pushLive(nextContent, { collection: collectionKey, index: nextIndex });
                       return nextContent;
                     });
-                    setItemIndex(items.length);
+                    setItemIndex(nextIndex);
                     scheduleSave();
                   }}
                 >
