@@ -443,7 +443,7 @@ export interface JobCostEntry {
   at: string;
   /**
    * Who charged for it: an agent backend (`copilot`), a service (`cloud-build`), or —
-   * for a `seed` entry — the model id that billed the tokens (`gemini-3.6-flash`).
+   * for a `seed` entry — the model id that billed the tokens (`gemini-3.7-flash`).
    * A model id here is a well-formed entry, not corrupt data.
    */
   by: string;

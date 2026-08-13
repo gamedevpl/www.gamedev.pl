@@ -162,7 +162,7 @@ export class VertexChecker implements ContentChecker {
         region: this.options.region,
         defaultRegion: 'global',
         model: this.options.model,
-        defaultModel: 'gemini-3.6-flash',
+        defaultModel: 'gemini-3.7-flash',
         generationConfig: {
           responseMimeType: 'application/json',
           // Gemini 3 defaults to dynamic ("high") thinking; force it low for this

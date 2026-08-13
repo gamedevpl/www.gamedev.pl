@@ -297,7 +297,7 @@ function stubClient(responses: { text: string; inputTokens?: number; outputToken
       signal: () => chain,
       run: async () => ({
         parts: [{ type: 'text' as const, text: response.text }],
-        model: 'gemini-3.6-flash',
+        model: 'gemini-3.7-flash',
         usage: { inputTokens: response.inputTokens ?? 100, outputTokens: response.outputTokens ?? 50 },
       }),
     };
@@ -318,7 +318,7 @@ function stubClientWithPrompts(responses: { text: string }[]) {
       signal: () => chain,
       run: async () => ({
         parts: [{ type: 'text' as const, text: response.text }],
-        model: 'gemini-3.6-flash',
+        model: 'gemini-3.7-flash',
         usage: { inputTokens: 100, outputTokens: 50 },
       }),
     };
@@ -397,14 +397,11 @@ describe('VertexGameSeeder', () => {
     expect(draft!.typeChecked).toBe(false);
     expect(draft!.typeErrors).toBe(0);
     // Both calls are billed to the job, not just the expensive one.
-    expect(draft!.usage).toEqual({ inputTokens: 30_400, outputTokens: 8_010, model: 'gemini-3.6-flash' });
+    expect(draft!.usage).toEqual({ inputTokens: 30_400, outputTokens: 8_010, model: 'gemini-3.7-flash' });
   });
 
   it('combines bundle and GameKit validation errors into one repair round', async () => {
-    const bundleVerdicts = [
-      { ok: false as const, errors: ['bundle: missing game/render.ts'] },
-      { ok: true as const },
-    ];
+    const bundleVerdicts = [{ ok: false as const, errors: ['bundle: missing game/render.ts'] }, { ok: true as const }];
     const typeCheckVerdicts = [
       { ok: false as const, errors: ['game.ts:1: error TS2339: draw.flash'] },
       { ok: true as const },
@@ -585,7 +582,12 @@ describe('VertexGameSeeder', () => {
     expect(draft!.files.some((file) => file.path.includes('shared'))).toBe(false);
   });
 
-  const ENV_KEYS = ['SEED_REFERENCES', 'SEED_PICK_TIMEOUT_MS', 'SEED_GENERATE_TIMEOUT_MS', 'SEED_TYPECHECK_TIMEOUT_MS'] as const;
+  const ENV_KEYS = [
+    'SEED_REFERENCES',
+    'SEED_PICK_TIMEOUT_MS',
+    'SEED_GENERATE_TIMEOUT_MS',
+    'SEED_TYPECHECK_TIMEOUT_MS',
+  ] as const;
   const saved: Record<string, string | undefined> = {};
 
   beforeEach(() => {
@@ -686,7 +688,7 @@ describe('knowledge context injection (KQ-11)', () => {
         signal: () => chain,
         run: async () => ({
           parts: [{ type: 'text' as const, text: response.text }],
-          model: 'gemini-3.6-flash',
+          model: 'gemini-3.7-flash',
           usage: { inputTokens: 100, outputTokens: 50 },
         }),
       };

@@ -185,7 +185,7 @@ const model =
     : vendor === 'copilot'
       ? 'claude-sonnet-4.6'
       : vendor === 'gemini'
-        ? 'gemini-3.6-flash'
+        ? 'gemini-3.7-flash'
         : undefined);
 if (vendor && (!apiKey || !model)) {
   console.error(`--vendor ${vendor} needs an API key and model`);

@@ -135,7 +135,7 @@ describe('createAgentBackendRegistryFromEnv', () => {
 
     expect(registry.platform?.name).toBe('managed:gemini');
     expect(info).toHaveBeenCalledWith(
-      expect.objectContaining({ vendor: 'gemini', model: 'gemini-3.6-flash' }),
+      expect.objectContaining({ vendor: 'gemini', model: 'gemini-3.7-flash' }),
       'managed agent dispatch enabled',
     );
   });
