@@ -21,8 +21,10 @@ Orientation for coding agents working on assets for `gamedev.pl` games.
 Games ship as a **single self-contained HTML document** rendered in a sandboxed iframe with
 `default-src 'none'` CSP and no network access. Graphics are **drawn procedurally in code**
 — there are no bitmap assets in any shipped game. Audio comes from a **shared, pre-rendered
-catalog** that every game selects from; games do not author their own audio. Both rules are
-enforced by `npm run validate` in the games repo, not left to taste.
+catalog** that every game selects from by default; sound effects are always shared-catalog
+only, and a game may ship a custom-scored optional per-game `music.json` beside `GAME.json`
+for its own tracker music. Both rules are enforced by `npm run validate` in the games repo,
+not left to taste.
 
 ## Hard rules
 
@@ -68,6 +70,14 @@ Two data-driven catalogs in the games repo, both rendered/validated by `tools/au
 - **`shared/audio/music.json`** — tracker-style looping tracks (`bpm`, `steps`, up to four
   channels). Data only, no WAV render. All moods together cost under 8 KB, which is why
   music is patterns rather than recordings.
+
+A game that needs a score the shared moods don't cover may ship its own optional
+`music.json` beside `GAME.json` (same `{ version, tracks }` shape). Assemble merges it onto
+the shared catalog; a per-game track name that collides with a shared id is refused. This
+applies to **music only** — sound effects always come from the shared `sounds.json` catalog,
+no per-game exception exists there. Prefer a shared mood when one fits; see
+`develop-game-audio` in the games repo and `byoca-mcp`'s "Custom music" section for the
+self-build-agent path.
 
 Reuse an existing semantic sound before adding a patch. Keep effects under a second, gains
 conservative. Select only the sounds a game uses, always include `ui-toggle`, and pick one
