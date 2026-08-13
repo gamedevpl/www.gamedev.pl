@@ -518,9 +518,13 @@ describe('RemixPanel', () => {
     });
     await send('bigger dog');
 
-    const pushed = postMessage.mock.calls.at(-1)?.[0] as { content: Record<string, unknown> };
+    const pushed = postMessage.mock.calls.at(-1)?.[0] as {
+      content: Record<string, unknown>;
+      selection?: { collection: string; index: number };
+    };
     expect(pushed.content.params).toEqual({ dogScale: 2 });
     expect(pushed.content.maps).toEqual([{ properties: {}, rows: ['...', '...', '...'] }]);
+    expect(pushed.selection).toEqual({ collection: 'maps', index: 0 });
   });
 
   it('flushes a stroke still on the debounce when the sheet closes', async () => {
