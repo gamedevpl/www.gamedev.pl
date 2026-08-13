@@ -91,6 +91,7 @@ describe('createAgentBackendRegistryFromEnv', () => {
     });
     const registry = createAgentBackendRegistryFromEnv({ info: vi.fn(), warn: vi.fn() });
     expect(registry.platformByVendor.get('anthropic')?.name).toBe('managed:anthropic');
+    expect(registry.platformByVendor.has('gemini')).toBe(false);
   });
 
   it('builds Copilot from its own token and model configuration', () => {

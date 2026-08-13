@@ -69,6 +69,7 @@ function buildManagedBackendForVendor(
   vendor: string,
   deps: ManagedBackendDeps | undefined,
   log: Logger | undefined,
+  allowGenericApiKeyFallback = false,
 ): AgentBackend | undefined {
   const isCopilot = vendor === 'copilot';
   const isGemini = vendor === 'gemini';
@@ -76,7 +77,8 @@ function buildManagedBackendForVendor(
     isCopilot
       ? process.env.AGENT_TASKS_TOKEN
       : isGemini
-        ? (process.env.GEMINI_API_KEY ?? process.env.MANAGED_AGENT_API_KEY)
+        ? (process.env.GEMINI_API_KEY ??
+          (allowGenericApiKeyFallback ? process.env.MANAGED_AGENT_API_KEY : undefined))
         : process.env.MANAGED_AGENT_API_KEY
   )?.trim();
   const model = (
@@ -221,7 +223,7 @@ function buildManagedBackendForVendor(
 export function createManagedPlatformBackendFromEnv(deps?: ManagedBackendDeps, log?: Logger): AgentBackend | undefined {
   const vendor = process.env.MANAGED_AGENT_VENDOR?.trim();
   if (!vendor) return undefined;
-  return buildManagedBackendForVendor(vendor, deps, log);
+  return buildManagedBackendForVendor(vendor, deps, log, vendor === 'gemini');
 }
 
 // One backend per configured vendor; a runtime override selects between them.
@@ -233,7 +235,12 @@ export function createManagedPlatformBackendsFromEnv(
   const platformByVendor = new Map<string, AgentBackend>();
   for (const vendor of MANAGED_AGENT_VENDORS) {
     // Only the default vendor's own build warnings are logged.
-    const backend = buildManagedBackendForVendor(vendor, deps, vendor === defaultVendor ? log : undefined);
+    const backend = buildManagedBackendForVendor(
+      vendor,
+      deps,
+      vendor === defaultVendor ? log : undefined,
+      vendor === defaultVendor,
+    );
     if (backend) platformByVendor.set(vendor, backend);
   }
   return { platformByVendor, ...(defaultVendor ? { defaultVendor } : {}) };
