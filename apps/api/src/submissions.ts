@@ -810,6 +810,15 @@ export async function registerSubmissionRoutes(
     return resolveBuilderBackend(agentBackends, resolvedBuilder, vendor);
   }
 
+  function backendByStoredName(name: string | undefined): AgentBackend | undefined {
+    if (!name) return undefined;
+    if (agentBackends.self.name === name) return agentBackends.self;
+    for (const backend of agentBackends.platformByVendor.values()) {
+      if (backend.name === name) return backend;
+    }
+    return undefined;
+  }
+
   function builderOf(record: SubmissionRecord | null | undefined): BuilderKind {
     return record?.builder ?? record?.defaultBuilder ?? 'platform';
   }
@@ -1424,7 +1433,7 @@ export async function registerSubmissionRoutes(
       const roundGeneration = input.undelivered
         ? ((await store.ensureRoundGeneration(input.issueNumber)) ?? 1)
         : ((await store.bumpRoundGeneration(input.issueNumber)) ?? (record?.roundGeneration ?? 0) + 1);
-      const previousBackend = await backendFor(previousBuilder);
+      const previousBackend = backendByStoredName(previous?.backend) ?? (await backendFor(previousBuilder));
       if (previous?.refs.length && (!input.undelivered || previousBackend?.name.startsWith('managed:'))) {
         const previousRef = previous.refs[previous.refs.length - 1];
         if (previousBackend && previousRef) {

@@ -84,7 +84,7 @@ function buildManagedBackendForVendor(
     isCopilot
       ? process.env.AGENT_TASKS_MODEL?.trim() || 'claude-sonnet-4.6'
       : isGemini
-        ? process.env.MANAGED_AGENT_MODEL?.trim() || GEMINI_DEFAULT_MODEL
+        ? process.env.MANAGED_AGENT_GEMINI_MODEL?.trim() || GEMINI_DEFAULT_MODEL
         : process.env.MANAGED_AGENT_MODEL?.trim()
   )?.trim();
   if (!apiKey || !model) {

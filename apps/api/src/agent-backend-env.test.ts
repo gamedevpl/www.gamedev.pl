@@ -8,6 +8,7 @@ const ENV_KEYS = [
   'MANAGED_AGENT_VENDOR',
   'MANAGED_AGENT_API_KEY',
   'MANAGED_AGENT_MODEL',
+  'MANAGED_AGENT_GEMINI_MODEL',
   'MANAGED_AGENT_ID',
   'MANAGED_AGENT_ENVIRONMENT_ID',
   'MANAGED_AGENT_MAX_SECONDS',
@@ -202,6 +203,26 @@ describe('createAgentBackendRegistryFromEnv', () => {
     const registry = createAgentBackendRegistryFromEnv({ info, warn: vi.fn() });
 
     expect(registry.platformByVendor.get('gemini')?.name).toBe('managed:gemini');
+    expect(info).toHaveBeenCalledWith(
+      expect.objectContaining({ vendor: 'gemini', model: 'gemini-3.7-flash' }),
+      'managed agent dispatch enabled',
+    );
+  });
+
+  it('does not let an Anthropic model name leak into Gemini', () => {
+    setEnv({
+      MANAGED_AGENT_VENDOR: 'gemini',
+      MANAGED_AGENT_API_KEY: `gemini-${randomUUID()}`,
+      // The Anthropic default vendor's model — must never reach Gemini's agent_config.
+      MANAGED_AGENT_MODEL: 'claude-sonnet-5',
+      MANAGED_AGENT_MAX_SECONDS: '900',
+      MANAGED_AGENT_MAX_TOTAL_TOKENS: '50000',
+      MANAGED_AGENT_MCP_URL: 'https://www.gamedev.pl/api/mcp',
+      AGENT_TASKS_TOKEN: `copilot-${randomUUID()}`,
+    });
+    const info = vi.fn();
+    createAgentBackendRegistryFromEnv({ info, warn: vi.fn() });
+
     expect(info).toHaveBeenCalledWith(
       expect.objectContaining({ vendor: 'gemini', model: 'gemini-3.7-flash' }),
       'managed agent dispatch enabled',
