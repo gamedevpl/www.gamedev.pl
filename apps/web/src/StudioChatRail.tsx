@@ -247,6 +247,7 @@ export function StudioChatRail({
                 type="button"
                 className="studio-chat-rail-head-action studio-chat-rail-expand"
                 onClick={() => setDetent(detent === 'full' ? 'half' : 'full')}
+                aria-pressed={detent === 'full'}
                 aria-label={detent === 'full' ? exitFullLabel : expandLabel}
                 data-tooltip={detent === 'full' ? exitFullLabel : expandLabel}
               >
