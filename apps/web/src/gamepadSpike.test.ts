@@ -78,7 +78,10 @@ describe('gamepad relay', () => {
       cancelFrame,
       now: () => 10,
       timeOrigin: 1_000,
-      post: (frame) => sent.push(frame),
+      post: (frame) => {
+        sent.push(frame);
+        return true;
+      },
     });
 
     expect(sent).toHaveLength(0);
@@ -105,7 +108,10 @@ describe('gamepad relay', () => {
       cancelFrame: vi.fn(),
       now: () => 10,
       timeOrigin: 1_000,
-      post: (frame) => sent.push(frame),
+      post: (frame) => {
+        sent.push(frame);
+        return true;
+      },
     });
 
     frames.shift()?.(10);
@@ -136,7 +142,10 @@ describe('gamepad relay', () => {
       cancelFrame: vi.fn(),
       now: () => 10,
       timeOrigin: 1_000,
-      post: (frame) => sent.push(frame),
+      post: (frame) => {
+        sent.push(frame);
+        return true;
+      },
     });
 
     frames.shift()?.(10);
@@ -144,5 +153,39 @@ describe('gamepad relay', () => {
 
     expect(sent).toHaveLength(1);
     expect(sent[0]).toMatchObject({ t: 'gamepad:state', gamepad: null });
+  });
+
+  it('replays a held input edge when the iframe becomes ready', () => {
+    const frames: FrameRequestCallback[] = [];
+    const sent: GamepadSpikeFrame[] = [];
+    const buttons = Array.from({ length: 16 }, () => button(false));
+    buttons[0] = button(true);
+    let ready = false;
+    const stop = startGamepadSpikeRelay({
+      getGamepads: () => [gamepad({ buttons })],
+      requestFrame: (callback) => {
+        frames.push(callback);
+        return frames.length;
+      },
+      cancelFrame: vi.fn(),
+      now: () => 10,
+      timeOrigin: 1_000,
+      post: (frame) => {
+        if (!ready) return false;
+        sent.push(frame);
+        return true;
+      },
+    });
+
+    frames.shift()?.(10);
+    expect(sent).toHaveLength(0);
+
+    ready = true;
+    frames.shift()?.(20);
+    stop();
+
+    expect(sent.filter((frame) => frame.t === 'input')).toEqual([
+      { ns: 'gdp', v: 1, t: 'input', slot: 1, k: 'a', d: 1 },
+    ]);
   });
 });

@@ -6,7 +6,7 @@ Status: KC-09 research spike. The checked-in prototype is development-only and d
 
 Use a shell relay. The trusted page should poll `navigator.getGamepads()`, normalize the active controller, and send versioned state to the sandboxed game over the existing `postMessage` bridge.
 
-The Gamepad specification currently gives the `gamepad` Permissions Policy feature a default allowlist of `*`, and Chrome exposed the API in the current sandbox without an iframe `allow="gamepad"` attribute. Direct access is technically possible there. It is still the wrong platform boundary:
+The W3C Gamepad Working Draft published 10 July 2025 and its current editor's draft both give the `gamepad` Permissions Policy feature a default allowlist of `*`. Chrome exposed the API in the current sandbox without an iframe `allow="gamepad"` attribute. Direct access is technically possible there. It is still the wrong platform boundary:
 
 - Games-repo Check 17 deliberately forbids `navigator.*` in untrusted game code.
 - Shell ownership matches the existing sensing and voice bridges.
@@ -17,7 +17,7 @@ The shared `input` module should own the normalized controller as another local 
 
 References:
 
-- [W3C Gamepad Working Draft](https://www.w3.org/TR/gamepad/), especially sections 3, 4.1, 12.1, and 20.
+- [W3C Gamepad Working Draft](https://www.w3.org/TR/gamepad/#permissions-policy), especially sections 3, 4.1, 12.1, and 20, and the [current editor's draft](https://w3c.github.io/gamepad/#permissions-policy).
 - [WebKit Safari 10.1 Gamepad announcement](https://webkit.org/blog/7477/new-web-features-in-safari-10-1/).
 - [WebKit Safari 18.0 notes](https://webkit.org/blog/15865/webkit-features-in-safari-18-0/), including the WKWebView Gamepad fix.
 

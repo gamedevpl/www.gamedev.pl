@@ -46,7 +46,7 @@ type RelayDependencies = {
   cancelFrame: (handle: number) => void;
   now: () => number;
   timeOrigin: number;
-  post: (frame: GamepadSpikeFrame) => void;
+  post: (frame: GamepadSpikeFrame) => boolean;
 };
 
 function clamp(value: number, min: number, max: number): number {
@@ -118,9 +118,10 @@ export function startGamepadSpikeRelay(dependencies: RelayDependencies): () => v
     }
     const sampledAt = dependencies.timeOrigin + dependencies.now();
     const normalized = normalizeGamepad(gamepad, dependencies.timeOrigin);
+    const deliveredParty = { ...previousParty };
     for (const key of INPUT_KEYS) {
       if (normalized.party[key] === previousParty[key]) continue;
-      dependencies.post({
+      const delivered = dependencies.post({
         ns: BRIDGE_NAMESPACE,
         v: PROTOCOL_VERSION,
         t: 'input',
@@ -128,8 +129,9 @@ export function startGamepadSpikeRelay(dependencies: RelayDependencies): () => v
         k: key,
         d: normalized.party[key] ? 1 : 0,
       });
+      if (delivered) deliveredParty[key] = normalized.party[key];
     }
-    previousParty = normalized.party;
+    previousParty = deliveredParty;
     dependencies.post({
       ns: BRIDGE_NAMESPACE,
       v: PROTOCOL_VERSION,
@@ -160,7 +162,12 @@ export function useGamepadSpike(frameRef: MutableRefObject<HTMLIFrameElement | n
       cancelFrame: (handle) => cancelAnimationFrame(handle),
       now: () => performance.now(),
       timeOrigin: Number.isFinite(performance.timeOrigin) ? performance.timeOrigin : Date.now() - performance.now(),
-      post: (frame) => frameRef.current?.contentWindow?.postMessage(frame, '*'),
+      post: (frame) => {
+        const target = frameRef.current?.contentWindow;
+        if (!target) return false;
+        target.postMessage(frame, '*');
+        return true;
+      },
     });
   }, [frameRef]);
 }
