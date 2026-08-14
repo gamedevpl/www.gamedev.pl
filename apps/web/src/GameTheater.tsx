@@ -11,6 +11,7 @@ import { ReportGameButton } from './ReportGameButton.js';
 import { ShareGameButton } from './ShareGameButton.js';
 import { VoteWidget } from './VoteWidget.js';
 import { useGamePlayer } from './gamePlayer.js';
+import { useGamepadSpike } from './gamepadSpike.js';
 import { recordRemixStep, recordVisitEvent } from './visitTelemetry.js';
 import { useGameSaveBridge } from './gameSave.js';
 import { usePresenceBridge } from './presence.js';
@@ -311,6 +312,8 @@ export function GameTheater({
   // orientation readings into the frame, and the readings never leave the browser. On
   // iOS the sensor needs a real gesture on our own chrome, hence the bar control below.
   const sensing = useSensingBridge(frameRef);
+
+  useGamepadSpike(frameRef);
 
   // The game reports its own (localized) title over the bridge. Prefer it: on a
   // direct `/play/<slug>` link there's no catalog entry to take a title from, so
