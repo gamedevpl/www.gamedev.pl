@@ -253,17 +253,32 @@ function failureCopyKey(reason: string): string {
   return FAILURE_COPY_KEYS.has(reason) ? reason : 'generic';
 }
 
-/**
- * Claude-shaped status chip above the composer: one sentence, dismissible with ×.
- * Reappears when the underlying condition changes (`chipKey`).
- */
+const REMEMBERED_STATUS_CHIP = 'stall:ended';
+const STATUS_CHIP_DISMISSAL_PREFIX = 'gamedev_status_chip_dismissed:';
+
+function hasDismissedStatusChip(chipKey: string): boolean {
+  if (chipKey !== REMEMBERED_STATUS_CHIP) return false;
+  try {
+    return window.localStorage.getItem(`${STATUS_CHIP_DISMISSAL_PREFIX}${chipKey}`) === '1';
+  } catch {
+    return false;
+  }
+}
+
+/** Dismissible status chip above the composer. */
 function ThreadStatusChip({ chipKey, children }: { chipKey: string; children: ReactNode }) {
   const { t } = useTranslation();
-  const [dismissed, setDismissed] = useState(false);
+  const [dismissed, setDismissed] = useState(() => hasDismissedStatusChip(chipKey));
 
-  useEffect(() => {
-    setDismissed(false);
-  }, [chipKey]);
+  const dismiss = () => {
+    setDismissed(true);
+    if (chipKey !== REMEMBERED_STATUS_CHIP) return;
+    try {
+      window.localStorage.setItem(`${STATUS_CHIP_DISMISSAL_PREFIX}${chipKey}`, '1');
+    } catch {
+      // Storage unavailable.
+    }
+  };
 
   if (dismissed) return null;
 
@@ -273,7 +288,7 @@ function ThreadStatusChip({ chipKey, children }: { chipKey: string; children: Re
       <button
         type="button"
         className="studio-status-chip-dismiss"
-        onClick={() => setDismissed(true)}
+        onClick={dismiss}
         aria-label={t('notifications.dismiss')}
       >
         <PixelIcon name="close" size={12} />
@@ -849,22 +864,25 @@ export function SubmissionStatusView({
                     Delivery-cap is a failure sentence. When the connect card is up, skip
                     the quiet chip — the card lead already says it. */}
                 {status.failure ? (
-                  <ThreadStatusChip chipKey={`failure:${status.failure.reason}`}>
+                  <ThreadStatusChip
+                    key={`failure:${status.failure.reason}`}
+                    chipKey={`failure:${status.failure.reason}`}
+                  >
                     <PixelIcon name="signal" size={13} />
                     <span>{t(`statusView.failure.${failureCopyKey(status.failure.reason)}`)}</span>
                   </ThreadStatusChip>
                 ) : status.status === 'needs_changes' ? (
-                  <ThreadStatusChip chipKey="needs_changes">
+                  <ThreadStatusChip key="needs_changes" chipKey="needs_changes">
                     <PixelIcon name="signal" size={13} />
                     <span>{t('statusView.states.needs_changes.description')}</span>
                   </ThreadStatusChip>
                 ) : isAwaitingOwnAgent(status) || status.phase === 'ready_for_review' ? null : status.stall ? (
-                  <ThreadStatusChip chipKey={`stall:${status.stall}`}>
+                  <ThreadStatusChip key={`stall:${status.stall}`} chipKey={`stall:${status.stall}`}>
                     <PixelIcon name="signal" size={13} />
                     <span>{t(`statusView.stall.${status.stall}`)}</span>
                   </ThreadStatusChip>
                 ) : status.progress?.checks === 'FAILURE' ? (
-                  <ThreadStatusChip chipKey="checks_failure">
+                  <ThreadStatusChip key="checks_failure" chipKey="checks_failure">
                     <PixelIcon name="signal" size={13} />
                     <span>{t('statusView.checksFailed')}</span>
                   </ThreadStatusChip>
@@ -1240,15 +1258,9 @@ function AbandonControl({ token }: { token: string }) {
         disabled={state === 'sending'}
         onClick={() => void abandon()}
       >
-        {state === 'sending'
-          ? t('statusView.abandon.sending')
-          : t('statusView.abandon.yes')}
+        {state === 'sending' ? t('statusView.abandon.sending') : t('statusView.abandon.yes')}
       </button>
-      <button
-        type="button"
-        className="status-abandon"
-        onClick={() => setArmed(false)}
-      >
+      <button type="button" className="status-abandon" onClick={() => setArmed(false)}>
         {t('statusView.abandon.no')}
       </button>
     </span>
@@ -1614,11 +1626,7 @@ function FeedbackPanel({
       <SwitchToSelfControl compact active onSwitchToSelf={onSwitchToSelf} pending={stopRequested} />
     ) : null;
   const showStop =
-    !chooseBuilder &&
-    agentWorking &&
-    effectiveBuilder === 'platform' &&
-    Boolean(onSwitchToSelf) &&
-    !stopRequested;
+    !chooseBuilder && agentWorking && effectiveBuilder === 'platform' && Boolean(onSwitchToSelf) && !stopRequested;
   const stopAndSwitchToSelf = async () => {
     if (!onSwitchToSelf) return;
     setError(null);
