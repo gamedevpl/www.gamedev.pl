@@ -1621,12 +1621,13 @@ function FeedbackPanel({
         unavailable={platformUnavailable}
       />
     ) : null;
-  const activePlatformHandoff =
-    !chooseBuilder && effectiveBuilder === 'platform' && onSwitchToSelf ? (
-      <SwitchToSelfControl compact active onSwitchToSelf={onSwitchToSelf} pending={stopRequested} />
-    ) : null;
   const showStop =
     !chooseBuilder && agentWorking && effectiveBuilder === 'platform' && Boolean(onSwitchToSelf) && !stopRequested;
+  // Hide the switch-to-self badge while STOP covers the same action.
+  const activePlatformHandoff =
+    !chooseBuilder && effectiveBuilder === 'platform' && onSwitchToSelf && !showStop ? (
+      <SwitchToSelfControl compact active onSwitchToSelf={onSwitchToSelf} pending={stopRequested} />
+    ) : null;
   const stopAndSwitchToSelf = async () => {
     if (!onSwitchToSelf) return;
     setError(null);
@@ -1733,7 +1734,7 @@ function FeedbackPanel({
                 aria-label={t('statusView.feedback.stopTitle')}
                 title={t('statusView.feedback.stopTitle')}
               >
-                {t('statusView.feedback.stop')}
+                <PixelIcon name="stop" size={13} />
               </button>
             ) : stopRequested ? null : (
               <button

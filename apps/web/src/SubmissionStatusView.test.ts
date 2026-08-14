@@ -7,6 +7,7 @@ import i18n from './i18n/index.js';
 import { statusPath } from './router.js';
 import { SubmissionStatusView } from './SubmissionStatusView.js';
 import { ACTIVE_POLL_MS, pollDelayMs } from './studioStatusPoll.js';
+import { HANDOFF_STALE_MS } from './StudioConnectCard.js';
 import {
   abandonSubmission,
   getChannelPlayable,
@@ -1011,29 +1012,94 @@ describe('SubmissionStatusView', () => {
         await flushEffects();
       });
 
-      const control = container.querySelector<HTMLElement>('[data-testid="active-switch-builder-self"]');
-      expect(control?.textContent).toContain('Switch to your agent');
+      // Badge hidden while STOP shows.
+      expect(container.querySelector<HTMLElement>('[data-testid="active-switch-builder-self"]')).toBeNull();
       expect(container.querySelector('.builder-mode-selector')?.textContent).toContain('Gamedev.pl');
       expect(container.querySelector('.studio-turn.is-working')).not.toBeNull();
       expect(container.querySelector<HTMLTextAreaElement>('textarea')?.disabled).toBe(true);
       const stop = container.querySelector<HTMLButtonElement>('.status-composer-stop');
-      expect(stop?.textContent).toBe('STOP');
+      expect(stop?.querySelector('svg')).not.toBeNull();
       expect(stop?.disabled).toBe(false);
       expect(stop?.getAttribute('aria-label')).toBe('Stop the current build and switch to your agent');
       expect(container.querySelector('.status-composer-send')).toBeNull();
       expect(container.textContent).toContain('The agent is building now');
       expect(container.querySelector('.studio-turn.is-working [data-testid^="active-switch-builder"]')).toBeNull();
-      expect(control?.closest('.status-composer-toolbar-left')).not.toBeNull();
 
       await act(async () => {
         stop?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
         await flushEffects();
       });
       expect(mockedHandoffToSelf).toHaveBeenCalledWith('live-platform-token');
+      // Badge reappears while the stop request is pending.
+      const control = container.querySelector<HTMLElement>('[data-testid="active-switch-builder-self"]');
+      expect(control?.closest('.status-composer-toolbar-left')).not.toBeNull();
       expect(container.querySelector('.studio-active-handoff-pending')?.textContent).toMatch(
         /waiting for the current agent to acknowledge the stop request/i,
       );
       expect(mockedHandoffToSelf).toHaveBeenCalledTimes(1);
+    } finally {
+      await act(async () => {
+        root.unmount();
+      });
+    }
+  });
+
+  it('offers a retry once a stop request has been pending too long', async () => {
+    // An unconfirmed stop should not strand the creator forever.
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    vi.useFakeTimers();
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'building',
+      phase: 'building',
+      builder: 'platform',
+      events: [],
+    });
+    mockedHandoffToSelf.mockResolvedValue({});
+
+    await i18n.changeLanguage('en');
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    try {
+      await act(async () => {
+        root.render(createElement(SubmissionStatusView, { token: 'stale-stop-token', embedded: true }));
+        await flushEffects();
+        await flushEffects();
+      });
+
+      const stop = container.querySelector<HTMLButtonElement>('.status-composer-stop');
+      await act(async () => {
+        stop?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await flushEffects();
+      });
+      expect(mockedHandoffToSelf).toHaveBeenCalledTimes(1);
+      expect(container.querySelector('.studio-active-handoff-pending')?.textContent).toMatch(
+        /waiting for the current agent to acknowledge the stop request/i,
+      );
+      // No retry yet — ordinary short wait, not stale.
+      expect(container.querySelector('.studio-active-handoff-pending-group button')).toBeNull();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(HANDOFF_STALE_MS);
+        await flushEffects();
+      });
+
+      expect(container.querySelector('.studio-active-handoff-pending')?.textContent).toMatch(
+        /taking longer than usual/i,
+      );
+      const retry = container.querySelector<HTMLButtonElement>('.studio-active-handoff-pending-group button');
+      expect(retry).not.toBeNull();
+
+      await act(async () => {
+        retry?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await flushEffects();
+      });
+      expect(mockedHandoffToSelf).toHaveBeenCalledTimes(2);
+      // Retrying restarts the clock.
+      expect(container.querySelector('.studio-active-handoff-pending')?.textContent).toMatch(
+        /waiting for the current agent to acknowledge the stop request/i,
+      );
     } finally {
       await act(async () => {
         root.unmount();

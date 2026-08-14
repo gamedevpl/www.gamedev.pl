@@ -26,6 +26,9 @@ const CLIENT_LABEL_KEY: Record<ConnectClient, string> = {
 
 const AUTH_MODE_STORAGE_KEY = 'gamedev_connect_auth_mode';
 
+// Past this many ms unconfirmed, offer a retry.
+export const HANDOFF_STALE_MS = 20_000;
+
 type ConnectAuthMode = 'key' | 'oauth';
 
 /** Reasons the connect endpoint returns 409 that mean "no card belongs here". */
@@ -125,12 +128,26 @@ function SwitchBuilderControl({
   const [busy, setBusy] = useState(false);
   const [handoffPending, setHandoffPending] = useState(pending);
   const [error, setError] = useState<string | null>(null);
+  // Restarts the stale timer on every confirm/retry.
+  const [attempt, setAttempt] = useState(0);
+  const [stale, setStale] = useState(false);
 
   useEffect(() => {
     if (pending) setHandoffPending(true);
   }, [pending]);
 
+  useEffect(() => {
+    if (!handoffPending) {
+      setStale(false);
+      return;
+    }
+    setStale(false);
+    const timer = window.setTimeout(() => setStale(true), HANDOFF_STALE_MS);
+    return () => window.clearTimeout(timer);
+  }, [handoffPending, attempt]);
+
   const confirm = async () => {
+    setAttempt((n) => n + 1);
     setBusy(true);
     setError(null);
     try {
@@ -143,6 +160,20 @@ function SwitchBuilderControl({
       setBusy(false);
       setArmed(false);
       setError(t('connect.switchBuilder.error'));
+    }
+  };
+
+  // `pending` decides if a retried handoff landed.
+  const retry = async () => {
+    setAttempt((n) => n + 1);
+    setBusy(true);
+    setError(null);
+    try {
+      await onSwitch();
+    } catch {
+      setError(t('connect.switchBuilder.error'));
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -170,9 +201,21 @@ function SwitchBuilderControl({
           {t(`builder.platform.unavailable.badge.${unavailable}`)}
         </button>
       ) : handoffPending ? (
-        <p className={compact ? 'studio-active-handoff-pending' : 'studio-connect-switch-pending'} aria-live="polite">
-          {t('connect.switchBuilder.pending')}
-        </p>
+        <div className={compact ? 'studio-active-handoff-pending-group' : 'studio-connect-switch-pending-group'}>
+          <p className={compact ? 'studio-active-handoff-pending' : 'studio-connect-switch-pending'} aria-live="polite">
+            {t(stale ? 'connect.switchBuilder.pendingStale' : 'connect.switchBuilder.pending')}
+          </p>
+          {stale ? (
+            <button
+              type="button"
+              className={compact ? 'studio-active-handoff-button' : 'studio-connect-switch-button'}
+              onClick={() => void retry()}
+              disabled={busy}
+            >
+              {busy ? t('connect.switchBuilder.sending') : t('connect.switchBuilder.retry')}
+            </button>
+          ) : null}
+        </div>
       ) : !armed ? (
         <button
           type="button"

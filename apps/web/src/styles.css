@@ -6281,23 +6281,20 @@ a.user-name--profile:focus-visible {
 }
 
 /* A live platform round replaces the inactive send affordance with an explicit
-   stop-and-switch action. It stays compact enough for the builder pill beside it. */
+   stop-and-switch action. Icon-only, round, same footprint as send — so the eye
+   reads it as "the other thing send became" rather than a whole separate control. */
 .status-composer.is-compact .status-composer-stop {
   flex: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 60px;
-  min-height: 34px;
-  padding: 0 12px;
+  width: 34px;
+  height: 34px;
+  padding: 0;
   border: 1px solid rgba(248, 113, 113, 0.58);
-  border-radius: 999px;
+  border-radius: 50%;
   background: rgba(248, 113, 113, 0.12);
   color: #fecaca;
-  font: inherit;
-  font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
   cursor: pointer;
 }
 
@@ -6347,7 +6344,8 @@ a.user-name--profile:focus-visible {
   }
 
   .status-composer.is-compact .status-composer-stop {
-    min-height: 44px;
+    width: 44px;
+    height: 44px;
   }
 
   .status-feedback-quick-action {
@@ -6885,6 +6883,15 @@ button.builder-mode-selector:disabled {
   font-size: 0.74rem;
 }
 
+/* Pending text plus, once it goes stale, a retry button beneath it — stacked, not
+   inline, so the retry reads as a follow-up action rather than crowding the sentence. */
+.studio-active-handoff-pending-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
 .studio-active-handoff .error {
   margin: 4px 0 0;
   font-size: 0.74rem;
@@ -7358,6 +7365,14 @@ button.builder-mode-selector:disabled {
   font-size: 0.8rem;
   line-height: 1.45;
 }
+
+.studio-connect-switch-pending-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
 .studio-connect-pulse {
   width: 8px;
   height: 8px;
