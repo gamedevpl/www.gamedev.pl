@@ -229,9 +229,6 @@ export function StudioChatRail({
             type="button"
             className="studio-chat-rail-grab"
             onPointerDown={onGrabPointerDown}
-            onPointerMove={onGrabPointerMove}
-            onPointerUp={endGrab}
-            onPointerCancel={endGrab}
             onClick={onGrabClick}
             aria-label={
               detent === 'full'
