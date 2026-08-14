@@ -2893,7 +2893,7 @@ export async function registerSubmissionRoutes(
       // The last ref is the session that owns the job now; earlier ones were
       // superseded by a resume and their fate stopped mattering when it started.
       const observation = await selected.observe(lastRef, {
-        hasCandidate: Boolean(record.deliveredVersion),
+        hasCandidate: Boolean(record.deliveredVersion) || (record.roundDeliveryCount ?? 0) > 0,
         // Pull-delivery backends harvest inside observe.
         issueNumber: record.issueNumber,
         ...(record.slug ? { slug: record.slug } : {}),

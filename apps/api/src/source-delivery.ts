@@ -379,9 +379,7 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
       } else {
         await options.store.setSubmissionDeliveredVersion(input.issueNumber, version);
       }
-      if (record.builder === 'self') {
-        await options.store.incrementRoundDeliveryCount(input.issueNumber);
-      }
+      await options.store.incrementRoundDeliveryCount(input.issueNumber);
 
       if (deliveryLog) {
         const latest = (await options.store.getSubmission(input.issueNumber)) ?? record;

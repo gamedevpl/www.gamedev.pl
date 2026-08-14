@@ -4825,6 +4825,21 @@ describe('a session that finishes without delivering', () => {
     await app.close();
   });
 
+  it('leaves a session that only delivered a preview alone too', async () => {
+    // roundDeliveryCount proves a preview round submitted something.
+    const { app, store, job, briefs, clock, token } = await jobWithFinishedSession();
+    await store.setSubmissionPreviewVersion(job.issueNumber, 'v1');
+    await store.incrementRoundDeliveryCount(job.issueNumber);
+
+    clock.t += 3 * 60 * 1000;
+    await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: getAuthHeaders() });
+
+    expect(briefs.at(-1)?.undelivered).toBeUndefined();
+    expect((await store.getSubmission(job.issueNumber))?.state).not.toBe('failed');
+
+    await app.close();
+  });
+
   it('remints a validating round-scoped token for a legacy job with no generation field', async () => {
     // Pre-migration records have no roundGeneration. Undelivered resume remints a
     // round-scoped key claiming generation 1 — that field must be written, or the
