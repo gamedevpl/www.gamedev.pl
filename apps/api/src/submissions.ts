@@ -2938,6 +2938,8 @@ export async function registerSubmissionRoutes(
       }
       const result = reconcileAgentObservation(stateAfterObserve, observation);
       if (!result) return null;
+      // Stale: a handoff already dispatched a newer ref.
+      if (fresh?.dispatch?.refs.at(-1) !== lastRef) return null;
 
       // A session that ran to completion and uploaded nothing is the one failure worth
       // answering rather than recording. Everything else here is the agent being unable

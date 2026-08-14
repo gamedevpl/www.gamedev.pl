@@ -4850,6 +4850,64 @@ describe('a session that finishes without delivering', () => {
   });
 });
 
+describe('a stale observation racing a handoff', () => {
+  it("does not let a superseded ref's cancellation overwrite the round that replaced it", async () => {
+    const { githubClient } = createGithubClientStub({});
+    const briefs: BuildBrief[] = [];
+    let observed = false;
+    const dispatched = { issueNumber: undefined as number | undefined };
+    const backend: AgentBackend = {
+      name: 'stub',
+      dispatch: async (brief) => {
+        briefs.push(brief);
+        return { ref: 'task-1', workspace: 'copilot/x' };
+      },
+      resume: async (brief) => {
+        briefs.push(brief);
+        return { ref: 'task-2', workspace: 'copilot/y' };
+      },
+      // A handoff dispatches "task-2" mid-observation of "task-1".
+      observe: async (ref) => {
+        if (ref === 'task-1' && !observed && dispatched.issueNumber !== undefined) {
+          observed = true;
+          await store.recordDispatch(dispatched.issueNumber, {
+            backend: 'stub',
+            ref: 'task-2',
+            workspace: 'copilot/y',
+          });
+        }
+        return { state: 'cancelled' as const };
+      },
+      cancel: async () => ({ enforced: false }),
+    };
+    const clock = { t: Date.now() };
+    const { app, store, authHeaders } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      now: () => clock.t,
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about a stale-observation race.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    dispatched.issueNumber = job.issueNumber;
+    const token = mintToken(job.issueNumber, secret);
+
+    clock.t += 3 * 60 * 1000;
+    await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: getAuthHeaders() });
+
+    const after = await store.getSubmission(job.issueNumber);
+    expect(after?.dispatch?.refs).toEqual(['task-1', 'task-2']);
+    expect(after?.state).not.toBe('canceled');
+
+    await app.close();
+  });
+});
+
 /**
  * The cost ledger. The unit here is a session, because that is the unit the backend
  * bills — see `JobCostEntry`.
