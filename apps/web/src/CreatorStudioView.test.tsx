@@ -480,6 +480,7 @@ describe('CreatorStudioView', () => {
     // The drawer has its own edge toggle/backdrop. A second escape chip must not
     // float over the first shelf row and steal its tap target.
     expect(container.querySelector('.studio-fullbleed')).toBeNull();
+    expect(container.querySelector('.studio-chat-rail')?.classList.contains('is-collapsed')).toBe(true);
     await act(async () => {
       container.querySelector<HTMLElement>('.studio-shelf-backdrop')!.dispatchEvent(
         new MouseEvent('click', { bubbles: true }),

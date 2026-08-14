@@ -59,6 +59,12 @@ describe('Studio chat rail header', () => {
     );
   });
 
+  it('keeps a covered sheet from painting over the games drawer', () => {
+    expect(css).toMatch(
+      /\.studio-chat-rail\.is-sheet\.is-collapsed\s*\{[\s\S]*?visibility:\s*hidden[\s\S]*?pointer-events:\s*none/s,
+    );
+  });
+
   it('makes chat full screen fill the work area below the header', () => {
     expect(declarations('.studio-chat-rail.is-full')).toMatch(
       /top:\s*var\(--studio-chat-rail-top-inset,\s*0px\)/,
