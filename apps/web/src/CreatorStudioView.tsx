@@ -800,7 +800,8 @@ export function CreatorStudioView({
               <div className="studio-detail">
                 {(() => {
                   const covered = shelfOpen || tab === 'details' || tab === 'edit' || tab === 'code';
-                  const chatCovered = tab === 'details' || tab === 'edit';
+                  // Drawer covers chat; keep its opener and rows clickable.
+                  const chatCovered = shelfOpen || tab === 'details' || tab === 'edit';
                   const chatVisible = railOpen && !chatCovered;
                   const canClaim = Boolean(
                     !user?.handle &&
@@ -1120,7 +1121,7 @@ export function CreatorStudioView({
                           </>
                         ) : null}
 
-                        <StudioFullBleed visible={covered} onClick={backToFullBleed} />
+                        <StudioFullBleed visible={covered && !shelfOpen} onClick={backToFullBleed} />
                       </div>
                     </>
                   );

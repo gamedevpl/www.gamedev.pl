@@ -11677,7 +11677,10 @@ button.builder-mode-selector:disabled {
   display: flex;
   flex-direction: column;
   background: var(--panel);
-  overflow: hidden;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Edit definitions without a board dock beside the running game. */
@@ -12463,6 +12466,12 @@ button.builder-mode-selector:disabled {
 
 .studio-chat-rail-backdrop {
   z-index: 1090;
+  top: var(--studio-chat-rail-top-inset, 0px);
+}
+
+/* The sheet is modal over the stage, not over the site's navigation. */
+.app:has(.studio-chat-rail.is-sheet:not(.is-collapsed)) .app-header {
+  z-index: 1200;
 }
 
 /* Collapsed to the pill: the thread stays mounted (its poll, and any unsent composer
@@ -12538,14 +12547,47 @@ button.builder-mode-selector:disabled {
   }
 
   .studio-chat-rail.is-full {
-    height: 88vh;
+    top: var(--studio-chat-rail-top-inset, 0px);
+    height: auto;
     max-height: none;
+    border-radius: 0;
   }
 
   .studio-chat-rail.is-sheet.is-dragging {
     height: var(--studio-chat-rail-drag-height);
     max-height: none;
     transition: none;
+  }
+}
+
+@media (max-width: 800px) {
+  /* Keep the Studio strip usable while the sheet is half-open. Full chat still
+     leaves the global header as its escape hatch. */
+  .app:has(.studio-chat-rail.is-sheet.is-peek:not(.is-collapsed)) .studio-strip,
+  .app:has(.studio-chat-rail.is-sheet.is-half:not(.is-collapsed)) .studio-strip {
+    position: relative;
+    z-index: 1200;
+  }
+}
+
+@media (max-width: 800px) {
+  /* The mobile sheet rules above are more specific than the shared collapsed
+     clip. Repeat the clip after them or a covered rail remains painted over a
+     drawer even though it is inert. */
+  .studio-chat-rail.is-sheet.is-collapsed {
+    position: absolute;
+    inset: auto;
+    width: 1px;
+    height: 1px;
+    max-width: 1px;
+    max-height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    visibility: hidden;
+    pointer-events: none;
+    border: 0;
   }
 }
 
@@ -14590,10 +14632,14 @@ button.builder-mode-selector:disabled {
   --editor-cell: clamp(20px, 4.2vw, 40px);
   flex: 1;
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 14px;
   padding: 10px 4px 18px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .editor-panel-note {
@@ -14609,6 +14655,11 @@ button.builder-mode-selector:disabled {
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 4px 0 6px;
+  background: var(--panel);
 }
 
 .editor-save-state {
@@ -14657,6 +14708,7 @@ button.builder-mode-selector:disabled {
   gap: 18px;
   align-items: flex-start;
   min-width: 0;
+  min-height: 0;
 }
 
 .editor-board-col {

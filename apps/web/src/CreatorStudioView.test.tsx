@@ -477,10 +477,12 @@ describe('CreatorStudioView', () => {
       shelfOpen!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(container.querySelector('.studio-layout')?.classList.contains('is-shelf-open')).toBe(true);
-    expect(container.querySelector('.studio-fullbleed')).not.toBeNull();
+    // Drawer controls own dismissal; no extra escape chip should steal taps.
+    expect(container.querySelector('.studio-fullbleed')).toBeNull();
+    expect(container.querySelector('.studio-chat-rail')?.classList.contains('is-collapsed')).toBe(true);
     await act(async () => {
       container
-        .querySelector<HTMLButtonElement>('.studio-fullbleed')!
+        .querySelector<HTMLElement>('.studio-shelf-backdrop')!
         .dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(container.querySelector('.studio-layout')?.classList.contains('is-shelf-open')).toBe(false);

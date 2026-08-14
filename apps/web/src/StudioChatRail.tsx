@@ -95,9 +95,15 @@ export function StudioChatRail({
   // — without this, the viewport-fixed sheet paints over its dismiss/reload controls
   // instead of sitting above them.
   useEffect(() => {
-    if (typeof ResizeObserver === 'undefined') return;
     const root = document.documentElement;
     const measure = () => {
+      const header = document.querySelector('.app-header') as HTMLElement | null;
+      if (header) {
+        const headerBottom = Math.max(0, Math.ceil(header.getBoundingClientRect().bottom));
+        root.style.setProperty('--studio-chat-rail-top-inset', `${headerBottom}px`);
+      } else {
+        root.style.removeProperty('--studio-chat-rail-top-inset');
+      }
       const overlay = document.querySelector('.install-prompt, .app-update') as HTMLElement | null;
       if (!overlay) {
         root.style.removeProperty('--studio-chat-rail-overlay-lift');
@@ -108,21 +114,28 @@ export function StudioChatRail({
       root.style.setProperty('--studio-chat-rail-overlay-lift', `${lift}px`);
     };
     measure();
-    const resizeObserver = new ResizeObserver(measure);
+    let resizeObserver: ResizeObserver | null = null;
     const watchOverlays = () => {
-      resizeObserver.disconnect();
-      document.querySelectorAll('.install-prompt, .app-update').forEach((node) => resizeObserver.observe(node));
+      resizeObserver?.disconnect();
+      document.querySelectorAll('.install-prompt, .app-update, .app-header').forEach((node) => {
+        resizeObserver?.observe(node);
+      });
       measure();
     };
-    watchOverlays();
-    const mutationObserver = new MutationObserver(watchOverlays);
-    mutationObserver.observe(document.body, { childList: true, subtree: true });
+    if (typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(measure);
+      watchOverlays();
+    }
+    const mutationObserver =
+      typeof MutationObserver === 'undefined' ? null : new MutationObserver(watchOverlays);
+    mutationObserver?.observe(document.body, { childList: true, subtree: true });
     window.addEventListener('resize', measure);
     return () => {
-      resizeObserver.disconnect();
-      mutationObserver.disconnect();
+      resizeObserver?.disconnect();
+      mutationObserver?.disconnect();
       window.removeEventListener('resize', measure);
       root.style.removeProperty('--studio-chat-rail-overlay-lift');
+      root.style.removeProperty('--studio-chat-rail-top-inset');
     };
   }, []);
 
@@ -130,7 +143,11 @@ export function StudioChatRail({
     if (!isSheet || event.button !== 0) return;
     const rail = asideRef.current;
     if (!rail) return;
-    event.currentTarget.setPointerCapture(event.pointerId);
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // Some iOS webviews do not implement element pointer capture.
+    }
     dragRef.current = {
       pointerId: event.pointerId,
       startY: event.clientY,
@@ -139,28 +156,36 @@ export function StudioChatRail({
     };
   };
 
-  const onGrabPointerMove = (event: PointerEvent<HTMLButtonElement>) => {
-    const drag = dragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    const dy = drag.startY - event.clientY;
-    if (!drag.moved && Math.abs(dy) < SHEET_DRAG_CLICK_SLOP_PX) return;
-    drag.moved = true;
-    setDragHeight(clampSheetDragHeight(drag.startH + dy, window.innerHeight));
-  };
-
-  const endGrab = (event: PointerEvent<HTMLButtonElement>) => {
-    const drag = dragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    dragRef.current = null;
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-    if (!drag.moved) return;
-    ignoreGrabClickRef.current = true;
-    const height = clampSheetDragHeight(drag.startH + drag.startY - event.clientY, window.innerHeight);
-    setDetent(snapSheetDetent(height, window.innerHeight));
-    setDragHeight(null);
-  };
+  useEffect(() => {
+    if (!isSheet) return;
+    const onMove = (event: globalThis.PointerEvent) => {
+      const drag = dragRef.current;
+      if (!drag || drag.pointerId !== event.pointerId) return;
+      const dy = drag.startY - event.clientY;
+      if (!drag.moved && Math.abs(dy) < SHEET_DRAG_CLICK_SLOP_PX) return;
+      drag.moved = true;
+      setDragHeight(clampSheetDragHeight(drag.startH + dy, window.innerHeight));
+    };
+    const onEnd = (event: globalThis.PointerEvent) => {
+      const drag = dragRef.current;
+      if (!drag || drag.pointerId !== event.pointerId) return;
+      dragRef.current = null;
+      if (!drag.moved) return;
+      ignoreGrabClickRef.current = true;
+      const height = clampSheetDragHeight(drag.startH + drag.startY - event.clientY, window.innerHeight);
+      setDetent(snapSheetDetent(height, window.innerHeight));
+      setDragHeight(null);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onEnd);
+    window.addEventListener('pointercancel', onEnd);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onEnd);
+      window.removeEventListener('pointercancel', onEnd);
+      dragRef.current = null;
+    };
+  }, [isSheet]);
 
   const onGrabClick = () => {
     if (ignoreGrabClickRef.current) {
@@ -204,9 +229,6 @@ export function StudioChatRail({
             type="button"
             className="studio-chat-rail-grab"
             onPointerDown={onGrabPointerDown}
-            onPointerMove={onGrabPointerMove}
-            onPointerUp={endGrab}
-            onPointerCancel={endGrab}
             onClick={onGrabClick}
             aria-label={
               detent === 'full'
@@ -225,6 +247,7 @@ export function StudioChatRail({
                 type="button"
                 className="studio-chat-rail-head-action studio-chat-rail-expand"
                 onClick={() => setDetent(detent === 'full' ? 'half' : 'full')}
+                aria-pressed={detent === 'full'}
                 aria-label={detent === 'full' ? exitFullLabel : expandLabel}
                 data-tooltip={detent === 'full' ? exitFullLabel : expandLabel}
               >
