@@ -149,6 +149,11 @@ function buildManagedBackendForVendor(
     log?.warn({ vendor }, 'managed agent MCP lane is enabled but MANAGED_AGENT_MCP_URL is missing');
     return undefined;
   }
+  // Without the scratch repo an MCP round lands in the games repo.
+  if (isCopilot && needsMcpEndpoint && !process.env.MANAGED_AGENT_COPILOT_MCP_REPO?.trim()) {
+    log?.warn({ vendor }, 'copilot MCP lane is enabled but MANAGED_AGENT_COPILOT_MCP_REPO is missing');
+    return undefined;
+  }
 
   const effort = process.env.MANAGED_AGENT_EFFORT?.trim() as ManagedAgentEffort | undefined;
   const deliveryMode = process.env.MANAGED_AGENT_DELIVERY_MODE?.trim() === 'publish' ? 'publish' : 'preview';

@@ -469,29 +469,39 @@ With `MANAGED_AGENT_DELIVERY_MODE=preview` (the default), a successful delivery 
 
 ## Configuration
 
-| Variable                            | Meaning                                                               |
-| ----------------------------------- | --------------------------------------------------------------------- |
-| `MANAGED_AGENT_VENDOR`              | Registered adapter id; required configuration must also be valid      |
-| `MANAGED_AGENT_API_KEY`             | Anthropic or Gemini credential. Never logged, never persisted         |
-| `GEMINI_API_KEY`                    | Optional Gemini-specific credential fallback                          |
-| `MANAGED_AGENT_MODEL`               | Anthropic or Gemini model label                                       |
-| `AGENT_TASKS_TOKEN`                 | Copilot Agent Tasks credential — needs `actions: write` to interrupt  |
-| `AGENT_TASKS_MODEL`                 | Copilot model label; defaults to the existing Copilot model           |
-| `GAMES_REPO`                        | Games repository targeted by Copilot                                  |
-| `GAMES_PUBLISHED_REF`               | Copilot harness base ref                                              |
-| `AGENT_CUSTOM_AGENT`                | Copilot custom agent name                                             |
-| `MANAGED_AGENT_ID`                  | Anthropic Managed Agent resource id                                   |
-| `MANAGED_AGENT_ENVIRONMENT_ID`      | Anthropic Managed Environment resource id                             |
-| `MANAGED_AGENT_MCP_URL`             | MCP endpoint; triggers per-round vault + `overrideTools`              |
-| `MANAGED_AGENT_VAULT_IDS`           | Optional static vault ids for probe-only MCP integrations             |
-| `MANAGED_AGENT_EFFORT`              | `low` / `medium` / `high`                                             |
-| `MANAGED_AGENT_MAX_SECONDS`         | Hard ceiling on one session's wall clock — **required, every vendor** |
-| `MANAGED_AGENT_MAX_LIST_COST_CENTS` | Anthropic session budget, in whole cents                              |
-| `MANAGED_AGENT_COPILOT_MAX_CREDITS` | Optional Copilot per-round credit ceiling                             |
-| `MANAGED_AGENT_PROMPT_LANE`         | Optional default lane: `mcp`, `harness`, or `outputs`                 |
-| `MANAGED_AGENT_MAX_TOTAL_TOKENS`    | Optional Gemini per-round token ceiling                               |
-| `MANAGED_AGENT_DELIVERY_MODE`       | `preview` (default) or `publish`                                      |
-| `MANAGED_AGENT_BASE_URL`            | Override the API origin — gateways, tests                             |
+| Variable                                 | Meaning                                                               |
+| ---------------------------------------- | --------------------------------------------------------------------- |
+| `MANAGED_AGENT_VENDOR`                   | Registered adapter id; required configuration must also be valid      |
+| `MANAGED_AGENT_API_KEY`                  | Anthropic or Gemini credential. Never logged, never persisted         |
+| `GEMINI_API_KEY`                         | Optional Gemini-specific credential fallback                          |
+| `MANAGED_AGENT_MODEL`                    | Anthropic or Gemini model label                                       |
+| `AGENT_TASKS_TOKEN`                      | Copilot Agent Tasks credential — needs `actions: write` to interrupt  |
+| `AGENT_TASKS_MODEL`                      | Copilot model label; defaults to the existing Copilot model           |
+| `GAMES_REPO`                             | Games repository targeted by Copilot                                  |
+| `GAMES_PUBLISHED_REF`                    | Copilot harness base ref                                              |
+| `AGENT_CUSTOM_AGENT`                     | Copilot custom agent name                                             |
+| `MANAGED_AGENT_ID`                       | Anthropic Managed Agent resource id                                   |
+| `MANAGED_AGENT_ENVIRONMENT_ID`           | Anthropic Managed Environment resource id                             |
+| `MANAGED_AGENT_MCP_URL`                  | MCP endpoint; triggers per-round vault + `overrideTools`              |
+| `MANAGED_AGENT_VAULT_IDS`                | Optional static vault ids for probe-only MCP integrations             |
+| `MANAGED_AGENT_EFFORT`                   | `low` / `medium` / `high`                                             |
+| `MANAGED_AGENT_MAX_SECONDS`              | Hard ceiling on one session's wall clock — **required, every vendor** |
+| `MANAGED_AGENT_MAX_LIST_COST_CENTS`      | Anthropic session budget, in whole cents                              |
+| `MANAGED_AGENT_COPILOT_MAX_CREDITS`      | Optional Copilot per-round credit ceiling                             |
+| `MANAGED_AGENT_PROMPT_LANE`              | Optional default lane: `mcp`, `harness`, or `outputs`                 |
+| `MANAGED_AGENT_COPILOT_MCP_REPO`         | Scratch repo for Copilot MCP-lane rounds — **required for that lane** |
+| `MANAGED_AGENT_COPILOT_MCP_BASE_REF`     | Base ref in the scratch repo; defaults to `main`                      |
+| `MANAGED_AGENT_COPILOT_MCP_CUSTOM_AGENT` | Custom agent there; defaults to `game-builder-mcp`                    |
+| `MANAGED_AGENT_MAX_TOTAL_TOKENS`         | Optional Gemini per-round token ceiling                               |
+| `MANAGED_AGENT_DELIVERY_MODE`            | `preview` (default) or `publish`                                      |
+| `MANAGED_AGENT_BASE_URL`                 | Override the API origin — gateways, tests                             |
+
+Copilot defaults to the `harness` lane, which dispatches into `GAMES_REPO`. Its `mcp` lane
+dispatches somewhere else entirely — a separate, content-free scratch repo holding nothing
+but an MCP-only custom agent doc, so a prompt-injectable session never shares a checkout
+with real source. Turning that lane on therefore takes two variables, not one:
+`MANAGED_AGENT_PROMPT_LANE=mcp` **and** `MANAGED_AGENT_COPILOT_MCP_REPO`. Setting only the
+first is refused at startup rather than quietly served from the games repo.
 
 Selection replaces the _platform_ backend. Builder routing, the job state machine, the
 gate, Studio and self builds are untouched: a managed round is a platform round whose
