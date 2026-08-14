@@ -140,7 +140,11 @@ export function createCopilotManagedProvider(
       if (promptLane !== 'mcp' && request.tools?.mcpEndpoints?.length) {
         throw new ManagedAgentError('copilot managed provider uses the harness prompt lane, not MCP');
       }
-      if (promptLane === 'mcp' && mcpTasks) {
+      if (promptLane === 'mcp') {
+        // Falling back would put an MCP round in the games repo, no MCP.
+        if (!mcpTasks) {
+          throw new ManagedAgentError('copilot MCP lane requires a separate repo; set MANAGED_AGENT_COPILOT_MCP_REPO');
+        }
         const task = await mcpTasks.startTask({
           prompt: withoutSeedPrompt(request.prompt),
           baseRef: mcpBaseRef,
@@ -151,7 +155,7 @@ export function createCopilotManagedProvider(
         mcpSessionIds.add(task.id);
         return taskSession(task, request.model);
       }
-      const seedBranch = promptLane === 'mcp' ? null : await stageSeed(request, baseRef, github);
+      const seedBranch = await stageSeed(request, baseRef, github);
       const task = await tasks.startTask({
         prompt: seedBranch ? request.prompt : withoutSeedPrompt(request.prompt),
         baseRef: seedBranch ?? baseRef,

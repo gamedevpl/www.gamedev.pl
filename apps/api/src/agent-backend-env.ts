@@ -77,8 +77,7 @@ function buildManagedBackendForVendor(
     isCopilot
       ? process.env.AGENT_TASKS_TOKEN
       : isGemini
-        ? (process.env.GEMINI_API_KEY ??
-          (allowGenericApiKeyFallback ? process.env.MANAGED_AGENT_API_KEY : undefined))
+        ? (process.env.GEMINI_API_KEY ?? (allowGenericApiKeyFallback ? process.env.MANAGED_AGENT_API_KEY : undefined))
         : process.env.MANAGED_AGENT_API_KEY
   )?.trim();
   const model = (
@@ -148,6 +147,11 @@ function buildManagedBackendForVendor(
   const needsMcpEndpoint = effectivePromptLane === 'mcp';
   if (needsMcpEndpoint && !mcpUrl) {
     log?.warn({ vendor }, 'managed agent MCP lane is enabled but MANAGED_AGENT_MCP_URL is missing');
+    return undefined;
+  }
+  // Without the scratch repo an MCP round lands in the games repo.
+  if (isCopilot && needsMcpEndpoint && !process.env.MANAGED_AGENT_COPILOT_MCP_REPO?.trim()) {
+    log?.warn({ vendor }, 'copilot MCP lane is enabled but MANAGED_AGENT_COPILOT_MCP_REPO is missing');
     return undefined;
   }
 

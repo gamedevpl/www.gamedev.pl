@@ -73,7 +73,8 @@ describe('Copilot managed provider', () => {
     });
   });
 
-  it('accepts a per-round MCP lane without staging a harness seed branch', async () => {
+  // The old fallback was silent: MCP rounds landed in the games repo.
+  it('refuses a per-round MCP lane when no scratch repo is configured', async () => {
     const stub = tasks();
     const createBranchWithFiles = vi.fn(async () => undefined);
     const provider = createCopilotManagedProvider(
@@ -81,18 +82,20 @@ describe('Copilot managed provider', () => {
       { tasks: stub.client, github: githubStub({ createBranchWithFiles }) },
     );
 
-    await provider.startSession({
-      correlationId: '42',
-      prompt: buildPrompt(BRIEF, { kind: 'channel', fast: true }),
-      model: 'gpt-5.4',
-      outputPath: 'outputs',
-      promptLane: 'mcp',
-      tools: { mcpEndpoints: [{ url: 'https://www.gamedev.pl/api/mcp', name: 'gamedevpl' }] },
-      workspaceFiles: [{ path: 'games/comet-courier/game.ts', content: 'x' }],
-    });
+    await expect(
+      provider.startSession({
+        correlationId: '42',
+        prompt: buildPrompt(BRIEF, { kind: 'channel', fast: true }),
+        model: 'gpt-5.4',
+        outputPath: 'outputs',
+        promptLane: 'mcp',
+        tools: { mcpEndpoints: [{ url: 'https://www.gamedev.pl/api/mcp', name: 'gamedevpl' }] },
+        workspaceFiles: [{ path: 'games/comet-courier/game.ts', content: 'x' }],
+      }),
+    ).rejects.toThrow(/MANAGED_AGENT_COPILOT_MCP_REPO/);
 
+    expect(stub.startTask).not.toHaveBeenCalled();
     expect(createBranchWithFiles).not.toHaveBeenCalled();
-    expect(stub.startTask.mock.calls[0]?.[0].prompt).toContain('"key": "tok_abc"');
   });
 
   it('declares seed files unsupported on the mcp lane, supported off it', () => {

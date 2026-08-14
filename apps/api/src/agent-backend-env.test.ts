@@ -119,7 +119,8 @@ describe('createAgentBackendRegistryFromEnv', () => {
     );
   });
 
-  it('can select the Copilot MCP lane without changing backend selection', () => {
+  // Half-configured is worse than off: the MCP round would hit games.
+  it('fails closed when the Copilot MCP lane has no scratch repo', () => {
     setEnv({
       MANAGED_AGENT_VENDOR: 'copilot',
       AGENT_TASKS_TOKEN: randomBytes(32).toString('hex'),
@@ -127,11 +128,16 @@ describe('createAgentBackendRegistryFromEnv', () => {
       MANAGED_AGENT_MAX_SECONDS: '900',
       MANAGED_AGENT_PROMPT_LANE: 'mcp',
     });
-    const registry = createAgentBackendRegistryFromEnv({ info: vi.fn(), warn: vi.fn() }, undefined, {
+    const warn = vi.fn();
+    const registry = createAgentBackendRegistryFromEnv({ info: vi.fn(), warn }, undefined, {
       deliver: async () => ({ version: 'v1' }),
     });
 
-    expect(registry.platformByVendor.get('copilot')?.name).toBe('managed:copilot');
+    expect(registry.platformByVendor.get('copilot')).toBeUndefined();
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({ vendor: 'copilot' }),
+      'copilot MCP lane is enabled but MANAGED_AGENT_COPILOT_MCP_REPO is missing',
+    );
   });
 
   it('accepts a separate MCP-lane repo for Copilot without changing backend selection', () => {
