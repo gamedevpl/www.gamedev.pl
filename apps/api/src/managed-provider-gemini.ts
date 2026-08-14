@@ -129,11 +129,15 @@ export function createGeminiManagedProvider(config: ManagedProviderConfig): Mana
       },
       signal: AbortSignal.timeout(timeoutMs),
     });
-    if (response.status === 404) return null;
+    if (response.status === 404) {
+      console.warn('gemini call() 404:', path);
+      return null;
+    }
     if (!response.ok) {
       throw new ManagedAgentError(`gemini interactions ${path} failed: ${response.status}`, response.status);
     }
     const text = await response.text();
+    if (!text) console.warn('gemini call() empty 2xx body:', path, response.status);
     return text ? JSON.parse(text) : null;
   }
 
