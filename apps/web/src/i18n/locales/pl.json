@@ -1370,6 +1370,8 @@
       "no": "Czekaj dalej",
       "sending": "Uruchamiamy agenta gamedev.pl…",
       "pending": "Czekamy, aż obecny agent potwierdzi żądanie zatrzymania…",
+      "pendingStale": "To trwa dłużej niż zwykle — agent nie potwierdził jeszcze żądania zatrzymania.",
+      "retry": "Wyślij żądanie zatrzymania ponownie",
       "error": "Nie udało się teraz przełączyć agenta. Spróbuj za chwilę.",
       "activeStart": "Przełącz na agenta gamedev.pl",
       "activeConfirm": "Zatrzymać Twojego agenta i pozwolić gamedev.pl kontynuować tę grę? Dostarczona praca zostanie zachowana.",

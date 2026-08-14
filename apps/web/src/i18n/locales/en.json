@@ -1360,6 +1360,8 @@
       "no": "Keep waiting",
       "sending": "Starting Gamedev.pl agent…",
       "pending": "Waiting for the current agent to acknowledge the stop request…",
+      "pendingStale": "This is taking longer than usual — the agent hasn't acknowledged the stop request yet.",
+      "retry": "Send stop request again",
       "error": "We couldn't switch agents right now. Try again in a moment.",
       "activeStart": "Switch to Gamedev.pl agent",
       "activeConfirm": "Stop your agent and let Gamedev.pl continue this game? Work already delivered will stay with it.",

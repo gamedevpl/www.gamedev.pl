@@ -6883,6 +6883,15 @@ button.builder-mode-selector:disabled {
   font-size: 0.74rem;
 }
 
+/* Pending text plus, once it goes stale, a retry button beneath it — stacked, not
+   inline, so the retry reads as a follow-up action rather than crowding the sentence. */
+.studio-active-handoff-pending-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
 .studio-active-handoff .error {
   margin: 4px 0 0;
   font-size: 0.74rem;
@@ -7356,6 +7365,14 @@ button.builder-mode-selector:disabled {
   font-size: 0.8rem;
   line-height: 1.45;
 }
+
+.studio-connect-switch-pending-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
 .studio-connect-pulse {
   width: 8px;
   height: 8px;

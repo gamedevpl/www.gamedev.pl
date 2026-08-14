@@ -7,6 +7,7 @@ import i18n from './i18n/index.js';
 import { statusPath } from './router.js';
 import { SubmissionStatusView } from './SubmissionStatusView.js';
 import { ACTIVE_POLL_MS, pollDelayMs } from './studioStatusPoll.js';
+import { HANDOFF_STALE_MS } from './StudioConnectCard.js';
 import {
   abandonSubmission,
   getChannelPlayable,
@@ -1038,6 +1039,71 @@ describe('SubmissionStatusView', () => {
         /waiting for the current agent to acknowledge the stop request/i,
       );
       expect(mockedHandoffToSelf).toHaveBeenCalledTimes(1);
+    } finally {
+      await act(async () => {
+        root.unmount();
+      });
+    }
+  });
+
+  it('offers a retry once a stop request has been pending too long', async () => {
+    // Stopping the agent is not instant — it is confirmed by the next status poll,
+    // not by the request that kicked it off. If that confirmation never lands, the
+    // creator should not be stuck watching "waiting…" forever with no way out.
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    vi.useFakeTimers();
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'building',
+      phase: 'building',
+      builder: 'platform',
+      events: [],
+    });
+    mockedHandoffToSelf.mockResolvedValue({});
+
+    await i18n.changeLanguage('en');
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    try {
+      await act(async () => {
+        root.render(createElement(SubmissionStatusView, { token: 'stale-stop-token', embedded: true }));
+        await flushEffects();
+        await flushEffects();
+      });
+
+      const stop = container.querySelector<HTMLButtonElement>('.status-composer-stop');
+      await act(async () => {
+        stop?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await flushEffects();
+      });
+      expect(mockedHandoffToSelf).toHaveBeenCalledTimes(1);
+      expect(container.querySelector('.studio-active-handoff-pending')?.textContent).toMatch(
+        /waiting for the current agent to acknowledge the stop request/i,
+      );
+      // No retry yet — this is the ordinary short wait, not the stale one.
+      expect(container.querySelector('.studio-active-handoff-pending-group button')).toBeNull();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(HANDOFF_STALE_MS);
+        await flushEffects();
+      });
+
+      expect(container.querySelector('.studio-active-handoff-pending')?.textContent).toMatch(
+        /taking longer than usual/i,
+      );
+      const retry = container.querySelector<HTMLButtonElement>('.studio-active-handoff-pending-group button');
+      expect(retry).not.toBeNull();
+
+      await act(async () => {
+        retry?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await flushEffects();
+      });
+      expect(mockedHandoffToSelf).toHaveBeenCalledTimes(2);
+      // Retrying restarts the clock instead of staying stale immediately.
+      expect(container.querySelector('.studio-active-handoff-pending')?.textContent).toMatch(
+        /waiting for the current agent to acknowledge the stop request/i,
+      );
     } finally {
       await act(async () => {
         root.unmount();
