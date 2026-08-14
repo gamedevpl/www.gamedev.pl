@@ -800,8 +800,7 @@ export function CreatorStudioView({
               <div className="studio-detail">
                 {(() => {
                   const covered = shelfOpen || tab === 'details' || tab === 'edit' || tab === 'code';
-                  // The shelf drawer owns the screen while it is open. Keeping the
-                  // chat backdrop mounted here blocks the drawer opener and its rows.
+                  // Drawer covers chat; keep its opener and rows clickable.
                   const chatCovered = shelfOpen || tab === 'details' || tab === 'edit';
                   const chatVisible = railOpen && !chatCovered;
                   const canClaim = Boolean(
