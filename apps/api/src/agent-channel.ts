@@ -114,7 +114,8 @@ const RegenerateSeedRequestSchema = z.object({
 const REGENERATE_SEED_REFUSALS: Record<string, string> = {
   not_configured: 'this deployment does not generate seeds',
   not_found: 'no round to regenerate a seed for',
-  platform_round: 'a platform round’s seed is committed to a branch at dispatch, so it cannot be replaced mid-round',
+  seed_not_readable:
+    'this round was handed its seed as a workspace rather than reading it, so replacing the stored copy would not reach the agent',
   already_delivered: 'this round already delivered — build on what you delivered rather than restarting from a draft',
   cap_reached: 'this job has used its seed regenerations; continue from the draft you have or scaffold from the kit',
 };
@@ -579,7 +580,7 @@ export interface AgentChannelOptions {
     log: FastifyRequest['log'];
   }) => Promise<
     | { ok: true; status: 'pending'; regenerationsRemaining: number }
-    | { ok: false; reason: 'not_configured' | 'not_found' | 'platform_round' | 'already_delivered' | 'cap_reached' }
+    | { ok: false; reason: 'not_configured' | 'not_found' | 'seed_not_readable' | 'already_delivered' | 'cap_reached' }
   >;
   onSourcesDelivered?: (input: {
     issueNumber: number;

@@ -6,6 +6,7 @@ import type { AgentChannelOptions } from './agent-channel.js';
 import { buildApp } from './app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './github-client.js';
+import type { AgentBackend } from './agent-backend.js';
 import type { GameSeeder } from './game-seed.js';
 import { InvalidUploadError, type GamesStore } from './games-store.js';
 import type { KnowledgeQueryResult } from './knowledge-search.js';
@@ -60,6 +61,7 @@ async function createApp(
     /** Live-preview timings; the real ones are tens of seconds and no test can wait them out. */
     stagedPreview?: { debounceMs?: number; minGapMs?: number; maxBytes?: number };
     gameSeeder?: GameSeeder;
+    agentBackend?: AgentBackend;
   },
 ) {
   await store.upsertUser({ uid: 'g:owner' });
@@ -73,6 +75,7 @@ async function createApp(
       ...(agentChannel ? { agentChannel } : {}),
       ...(extra?.stagedPreview ? { stagedPreview: extra.stagedPreview } : {}),
       ...(extra?.gameSeeder ? { gameSeeder: extra.gameSeeder } : {}),
+      ...(extra?.agentBackend ? { agentBackend: extra.agentBackend } : {}),
     },
   });
 }
@@ -3047,7 +3050,39 @@ describe('seed regeneration', () => {
     expect(seedCalls).toBe(0);
   });
 
-  it('refuses a platform round, whose seed is a branch it already forked', async () => {
+  it('lets a managed round that reads its seed regenerate one too', async () => {
+    // The refusal tracks how the seed arrives, not who is building.
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    await store.setSubmissionSlug(ISSUE, 'squad-game');
+    await store.setRoundBuilder(ISSUE, 'platform');
+    const platformBackend: AgentBackend = {
+      name: 'managed:stub',
+      seedDelivery: () => 'channel' as const,
+      dispatch: async () => ({ ref: 'session-1', promptLane: 'mcp' }),
+      resume: async () => ({ ref: 'session-2' }),
+      observe: async () => null,
+      cancel: async () => ({ enforced: false }),
+    };
+    app = await createApp(store, undefined, {
+      gameSeeder: seederStub(),
+      agentBackend: platformBackend,
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/seed/regenerate',
+      headers: agentHeaders(),
+      payload: {},
+    });
+
+    expect(res.statusCode).toBe(200);
+    await vi.waitFor(async () => {
+      expect((await store.getSubmission(ISSUE))?.seedStatus).toBe('available');
+    });
+  });
+
+  it('refuses a round that was handed its seed as a workspace it already forked', async () => {
     const store = new InMemoryStore();
     await seedSubmission(store);
     await store.setSubmissionSlug(ISSUE, 'squad-game');
@@ -3063,7 +3098,7 @@ describe('seed regeneration', () => {
     });
 
     expect(res.statusCode).toBe(409);
-    expect(res.json().error).toBe('platform_round');
+    expect(res.json().error).toBe('seed_not_readable');
     expect(seedCalls).toBe(0);
   });
 

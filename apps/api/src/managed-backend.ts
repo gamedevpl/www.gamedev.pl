@@ -1,5 +1,5 @@
 // AgentBackend over any ManagedAgentProvider; delivery is pulled.
-import type { AgentBackend, BuildBrief, DispatchResult } from './agent-backend.js';
+import type { AgentBackend, BuildBrief, DispatchResult, SeedDelivery } from './agent-backend.js';
 import { buildPrompt } from './build-prompt.js';
 import { forbiddenDeliveryPathReason } from './games-store.js';
 import type { AgentObservation, AgentSessionTokens } from './job-state.js';
@@ -373,8 +373,11 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
   return {
     name: backendName,
 
-    acceptsSeed(promptLane): boolean {
-      return seedSupportedOn(promptLane ?? defaultPromptLane);
+    seedDelivery(promptLane): SeedDelivery {
+      const lane = promptLane ?? defaultPromptLane;
+      if (seedSupportedOn(lane)) return 'workspace';
+      // An mcp round can read what it cannot be handed.
+      return lane === 'mcp' ? 'channel' : 'none';
     },
 
     async dispatch(brief: BuildBrief): Promise<DispatchResult> {

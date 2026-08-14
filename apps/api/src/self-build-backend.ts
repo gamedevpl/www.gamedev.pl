@@ -6,7 +6,7 @@
 // path Copilot uses for upload and inbox — so gate, store and publication stay unaware
 // of who is typing on the other end.
 
-import type { AgentBackend, BuildBrief, DispatchResult, SeedFiles } from './agent-backend.js';
+import type { AgentBackend, BuildBrief, DispatchResult, SeedDelivery, SeedFiles } from './agent-backend.js';
 import type { AgentObservation } from './job-state.js';
 
 export interface SelfBuildSignals {
@@ -56,6 +56,9 @@ export function createSelfBuildBackend(options: SelfBuildBackendOptions = {}): A
 
   return {
     name: 'self',
+
+    // BYOCA has no workspace we can write; get_seed reads it back.
+    seedDelivery: (): SeedDelivery => 'channel',
 
     async dispatch(brief: BuildBrief): Promise<DispatchResult> {
       return openRound(brief);

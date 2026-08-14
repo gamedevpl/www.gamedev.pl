@@ -220,6 +220,32 @@ describe('managed backend', () => {
     expect(started[0].workspaceFiles).toBeUndefined();
   });
 
+  it('reports a seed the mcp lane can read rather than one it cannot be handed', () => {
+    const mcpTools = { mcpEndpoints: [{ url: 'https://www.gamedev.pl/api/mcp', name: 'gamedevpl' }] };
+    const refuses = createManagedBackend({
+      provider: fakeProvider({ supportsSeedFiles: false, promptLane: 'mcp' }).provider,
+      deliver: async () => ({ version: 'v1' }),
+      tools: mcpTools,
+    });
+    // Cannot take files, but holds a key — still worth making.
+    expect(refuses.seedDelivery?.()).toBe('channel');
+    expect(refuses.seedDelivery?.('mcp')).toBe('channel');
+
+    const accepts = createManagedBackend({
+      provider: fakeProvider({ supportsSeedFiles: true, promptLane: 'mcp' }).provider,
+      deliver: async () => ({ version: 'v1' }),
+      tools: mcpTools,
+    });
+    expect(accepts.seedDelivery?.()).toBe('workspace');
+
+    // Off the mcp lane there is no channel, so nothing arrives.
+    const harness = createManagedBackend({
+      provider: fakeProvider({ supportsSeedFiles: false, promptLane: 'harness' }).provider,
+      deliver: async () => ({ version: 'v1' }),
+    });
+    expect(harness.seedDelivery?.()).toBe('none');
+  });
+
   it('preserves the provider seed workspace separately from the agent workspace', async () => {
     const { provider } = fakeProvider({
       startSession: async () => ({

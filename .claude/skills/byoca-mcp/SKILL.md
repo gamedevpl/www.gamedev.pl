@@ -376,20 +376,42 @@ seeding mechanism seems very ineffective, no seeds happening" and traced to
 `submissions.ts`'s mute-setting condition and `seedBuild`'s mute check, not to `SEED_DISPATCH`
 or credentials being unset.
 
-### A seed nobody can read is never generated
+### A seed is delivered two ways, and the round says which
 
-`supportsSeedFiles` fixed the _delivery_ half — a provider that rejects `workspaceFiles`
-now degrades instead of throwing — but generation still ran first, so an Anthropic round,
-a Gemini round on a named environment, or Copilot on the `mcp` lane paid a full generation
-(two Vertex calls, a couple of minutes) for a draft the dispatch then dropped on the floor.
+`AgentBackend.seedDelivery(promptLane?)` answers, before anything is generated, how a seed
+would reach that round's agent:
 
-`AgentBackend.acceptsSeed(promptLane?)` moves that question ahead of the spend. The managed
-backend answers it from the same `seedSupportedOn` helper `start` uses, so the capability
-cannot drift between "would we send it" and "should we make it"; a backend that does not
-implement it is treated as accepting (the self backend stores every seed on the job).
-`dispatchBuild` reads it before `seedBuild`, and it also gates `willAttemptSelfSeed`, so a
-self round on a hypothetical non-accepting backend is marked `unavailable` rather than left
-`pending` forever.
+| Answer      | Means                                                             | Who                                                                              |
+| ----------- | ----------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `workspace` | Files are placed for the agent, so the prompt may say so          | Copilot on `harness` (staged branch); Gemini with a scratch env (inline sources) |
+| `channel`   | Files are stored on the job; the agent reads them with `get_seed` | every self/BYOCA round; managed `mcp` rounds whose vendor refuses inline files   |
+| `none`      | Nothing would arrive, so a generation is only a bill              | a non-`mcp` lane whose provider cannot take files                                |
+
+**`channel` is the entry that made managed rounds seedable at all.** The first pass at this
+only asked whether the provider accepts `workspaceFiles` (`acceptsSeed`), and skipped
+generation when it did not — which was right about the waste and wrong about the
+conclusion. Anthropic _always_ rejects inline files, and it is an `mcp`-lane vendor, so
+"cannot be handed a seed" was being read as "cannot have one" and **every managed round on
+Anthropic built unseeded**. But an `mcp` round holds a round key and talks to this very
+channel; it can fetch a seed perfectly well. The missing piece was never the vendor — it
+was `submissions.ts` persisting the draft to the job only when `builder === 'self'`, so
+`get_seed` had nothing to return for a platform round.
+
+That condition is now `readsSeedFromJob` (i.e. `seedDelivery === 'channel'`), and the same
+predicate gates the `pending` / `unavailable` status writes and the stored-seed reuse. The
+managed backend still decides inline placement separately from `supportsSeedFiles`, so a
+`channel` round's prompt never claims a draft is in a checkout that does not have one.
+
+Two rules worth keeping when touching this:
+
+- **Do not infer delivery from the builder.** `seedDeliveryFor` falls back to `channel` for
+  `self` and `workspace` otherwise, but that is a backstop for a backend that forgot to
+  declare itself, not the source of truth. A self backend that silently defaulted to
+  `workspace` would land its rounds back in the staging mute — which is exactly how the
+  original bug behaved.
+- **The staging mute is about `workspace`, not about `platform`.** `seedBuild` takes the
+  delivery and honours the cooldown only for `workspace`, because that is the only mode
+  where a failed branch write wastes the draft.
 
 ### `regenerate_seed` — the one way out of a dead round-0
 
@@ -408,9 +430,11 @@ sleep, so a tool that waited would burn the connector's budget.
   buys a second copy of the first mistake. The steer (≤600 chars) rides the _picker_ call as
   well as the generate call, because a drifted draft usually drifted on its references. It
   is fenced as data with its own "cannot widen the file scope" preamble, like the spec.
-- **Self only.** A platform round's seed is committed to `seed/job-<id>` and passed as
-  `base_ref`; the workspace is already forked by the time an agent could ask, so there is
-  nothing to replace. Refused as `platform_round`.
+- **`channel` rounds only** — every self round, and managed `mcp` rounds. Refused as
+  `seed_not_readable` for a `workspace` round: its seed is a branch or an inline set the
+  agent forked at dispatch, so rewriting the job's copy would not reach it. Note this
+  tracks the _delivery_, not the builder: a managed `mcp` round can regenerate, and the
+  refusal is not "you are the platform".
 - **Refused once staged** (`already_staged`, checked in the channel where `gamesStore`
   lives) — the staging buffer overlays _onto_ the seed, so a new seed would move the base
   of files already written against it — and once delivered (`already_delivered`), whose
@@ -727,7 +751,7 @@ queued.
 | GAME.json staging shape check      | `apps/api/src/game-manifest-hint.ts` (`gameManifestHint`) — wired into the stage/patch routes in `agent-channel.ts`                                                                                    |
 | Round-0 seed generation            | `apps/api/src/game-seed.ts` (`VertexGameSeeder`) + `seedBuild`/`seedStagingMutedUntil` in `submissions.ts` — mute is `builder === 'platform'`-scoped and skips `mcp`-lane rounds (`result.promptLane`) |
 | Seed regeneration                  | `regenerateSeed` in `submissions.ts` + `POST /api/agent/build/seed/regenerate` in `agent-channel.ts` + `regenerate_seed` in `mcp-server.ts`; cap via `store.incrementSeedRegenerations`                |
-| "Would this lane use a seed?"      | `AgentBackend.acceptsSeed` — managed answers from `seedSupportedOn`; read before generating, so an unusable seed is never paid for                                                                     |
+| "How would this lane get a seed?"  | `AgentBackend.seedDelivery` → `workspace` / `channel` / `none`; read before generating, and `seedDeliveryFor` in `submissions.ts` backstops a backend that does not declare it                         |
 | Seed → managed session wiring      | `apps/api/src/managed-backend.ts` (`start`) — checks `provider.supportsSeedFiles` before attaching `workspaceFiles`; drops `brief.seed` from the prompt too when unsupported                           |
 | Account-session invalidation       | `apps/api/src/agent-session-revocation.ts`                                                                                                                                                             |
 | Channel (`POST …/end`, …)          | `apps/api/src/agent-channel.ts`                                                                                                                                                                        |

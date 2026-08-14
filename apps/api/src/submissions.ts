@@ -39,7 +39,7 @@ import {
 import { startHealthCheck } from './game-health.js';
 import { createStagedPreviewPublisher, type StagedPreviewOptions } from './staged-preview.js';
 import { createInternalAuthVerifierFromEnv, type InternalAuthVerifier } from './internal-auth.js';
-import type { AgentBackend, BuildHistoryEntry, BuildPromptLane, SeedFiles } from './agent-backend.js';
+import type { AgentBackend, BuildHistoryEntry, BuildPromptLane, SeedDelivery, SeedFiles } from './agent-backend.js';
 import {
   createAgentBackendRegistryFromEnv,
   resolveBuilderBackend,
@@ -810,6 +810,15 @@ export async function registerSubmissionRoutes(
     return resolveBuilderBackend(agentBackends, resolvedBuilder, vendor);
   }
 
+  // A self round has no workspace, whatever a backend forgot to declare.
+  function seedDeliveryFor(
+    backend: AgentBackend | undefined,
+    builder: BuilderKind,
+    promptLane?: BuildPromptLane,
+  ): SeedDelivery {
+    return backend?.seedDelivery?.(promptLane) ?? (builder === 'self' ? 'channel' : 'workspace');
+  }
+
   function backendByStoredName(name: string | undefined): AgentBackend | undefined {
     if (!name) return undefined;
     if (agentBackends.self.name === name) return agentBackends.self;
@@ -992,13 +1001,13 @@ export async function registerSubmissionRoutes(
     issueNumber: number;
     slug: string;
     spec: string;
-    builder: BuilderKind;
+    delivery: SeedDelivery;
     steer?: string;
     log: { error: (context: object, message: string) => void };
   }): Promise<SeedDraft | undefined> {
     if (!gameSeeder || !store) return undefined;
-    // Only platform rounds stage branches, so only they risk staging failure.
-    if (input.builder === 'platform' && now() < seedStagingMutedUntil) {
+    // Only a workspace hand-off stages anything, so only it risks staging failure.
+    if (input.delivery === 'workspace' && now() < seedStagingMutedUntil) {
       input.log.error(
         { issueNumber: input.issueNumber },
         'skipping the seed: a recent draft could not be staged, so generating another would be wasted',
@@ -1030,19 +1039,23 @@ export async function registerSubmissionRoutes(
   // Each regeneration is a paid generation, so this is a spend ceiling.
   const MAX_SEED_REGENERATIONS = 2;
 
-  // Queues a replacement round-0 draft. Self only: a platform seed is a forked branch.
+  // Queues a replacement draft, for rounds that read the job's copy.
   async function regenerateSeed(input: {
     issueNumber: number;
     steer?: string;
     log: { error: (context: object, message: string) => void; info?: (context: object, message: string) => void };
   }): Promise<
     | { ok: true; status: 'pending'; regenerationsRemaining: number }
-    | { ok: false; reason: 'not_configured' | 'not_found' | 'platform_round' | 'already_delivered' | 'cap_reached' }
+    | { ok: false; reason: 'not_configured' | 'not_found' | 'seed_not_readable' | 'already_delivered' | 'cap_reached' }
   > {
     if (!gameSeeder || !store) return { ok: false, reason: 'not_configured' };
     const record = await store.getSubmission(input.issueNumber);
     if (!record || !record.slug) return { ok: false, reason: 'not_found' };
-    if (builderOf(record) !== 'self') return { ok: false, reason: 'platform_round' };
+    // A round handed a workspace already forked it; a rewrite cannot catch up.
+    const roundBuilder = builderOf(record);
+    if (seedDeliveryFor(await backendFor(roundBuilder), roundBuilder) !== 'channel') {
+      return { ok: false, reason: 'seed_not_readable' };
+    }
     // A delivered round was already judged; do not move its starting point.
     if ((record.roundDeliveryCount ?? 0) > 0) return { ok: false, reason: 'already_delivered' };
 
@@ -1056,7 +1069,7 @@ export async function registerSubmissionRoutes(
         issueNumber: input.issueNumber,
         slug,
         spec: record.spec ?? '',
-        builder: 'self',
+        delivery: 'channel',
         ...(input.steer ? { steer: input.steer } : {}),
         log: input.log,
       });
@@ -1213,32 +1226,26 @@ export async function registerSubmissionRoutes(
       // really there — and so the slug it mints is on the record the brief reads from.
       // A seed is written into `games/<slug>/`, so a job without a slug cannot have one.
       // Every new submission has one by now; the guard is for the paths that do not.
-      // Self rounds reuse a seed already on the job (resume of the same round).
-      const storedSeed = builder === 'self' ? existing?.seed : undefined;
-      // Ask before paying: some lanes discard the seed they are handed.
-      const backendAcceptsSeed = selected.acceptsSeed?.(input.promptLane) ?? true;
-      // Only self builds expose seed files on the job (`get_seed`). Platform seeds land
-      // on a branch the coding agent already has — no pending race for MCP.
-      const willAttemptSelfSeed =
-        builder === 'self' &&
-        !storedSeed &&
-        !input.feedback &&
-        Boolean(input.slug) &&
-        Boolean(gameSeeder) &&
-        backendAcceptsSeed;
+      // Ask before paying, and ask how the seed would arrive.
+      const seedDelivery = seedDeliveryFor(selected, builder, input.promptLane);
+      // Only these rounds read the job's copy, so only they need one stored.
+      const readsSeedFromJob = seedDelivery === 'channel';
+      const storedSeed = readsSeedFromJob ? existing?.seed : undefined;
+      const willAttemptJobSeed =
+        readsSeedFromJob && !storedSeed && !input.feedback && Boolean(input.slug) && Boolean(gameSeeder);
       if (storedSeed) {
         await store.setSubmissionSeed(input.issueNumber, storedSeed);
-      } else if (willAttemptSelfSeed) {
+      } else if (willAttemptJobSeed) {
         // Seed generation can take minutes; mark pending so MCP agents recheck get_seed
         // instead of treating a race as "no seed, scaffold from scratch".
         await store.setSeedStatus(input.issueNumber, 'pending');
-      } else if (builder === 'self') {
+      } else if (readsSeedFromJob) {
         await store.setSeedStatus(input.issueNumber, 'unavailable');
       }
       const draft =
-        storedSeed || input.feedback || !input.slug || !backendAcceptsSeed
+        storedSeed || input.feedback || !input.slug || seedDelivery === 'none'
           ? undefined
-          : await seedBuild({ ...input, slug: input.slug, builder });
+          : await seedBuild({ ...input, slug: input.slug, delivery: seedDelivery });
       const seed: SeedFiles | undefined = storedSeed
         ? storedSeed
         : draft
@@ -1249,14 +1256,14 @@ export async function registerSubmissionRoutes(
               ...(draft.notes ? { notes: draft.notes } : {}),
             }
           : undefined;
-      if (builder === 'self' && !storedSeed) {
+      if (readsSeedFromJob && !storedSeed) {
         if (seed) {
           // Persist before dispatch so a racing get_brief/get_seed can see the draft even
           // if the self backend's persistSeed races behind the first tool call.
           await store.setSubmissionSeed(input.issueNumber, seed);
-        } else if (willAttemptSelfSeed) {
+        } else if (willAttemptJobSeed) {
           // Downgrade pending→unavailable only when generation was attempted and failed.
-          // The !willAttemptSelfSeed path already wrote unavailable above.
+          // The !willAttemptJobSeed path already wrote unavailable above.
           await store.setSeedStatus(input.issueNumber, 'unavailable');
         }
       }
