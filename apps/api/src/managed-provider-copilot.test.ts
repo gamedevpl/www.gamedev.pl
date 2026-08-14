@@ -38,6 +38,14 @@ function run(overrides: Partial<WorkflowRun> = {}): WorkflowRun {
   return { id: 1, path: COPILOT_AGENT_WORKFLOW_PATH, status: 'in_progress', ...overrides };
 }
 
+function emptyTasks() {
+  const getTask = vi.fn(async () => null);
+  return {
+    client: { startTask: vi.fn(), getTask, listTasks: vi.fn(async () => []) } as unknown as AgentTasksClient,
+    getTask,
+  };
+}
+
 function tasks(result: AgentTask = task()) {
   const startTask = vi.fn(async (_input: AgentTaskInput) => result);
   const getTask = vi.fn(async () => result);
@@ -243,6 +251,70 @@ describe('Copilot managed provider', () => {
 
     expect(listWorkflowRuns).toHaveBeenCalledWith({ branch: 'copilot/tv-tycoon' });
     expect(cancelWorkflowRun.mock.calls.map(([id]) => id)).toEqual([12, 13]);
+  });
+
+  // Agent Tasks are per repo: the games-repo client cannot see this.
+  it('cancels an MCP-lane session on the scratch repo, not the games repo', async () => {
+    const harness = emptyTasks();
+    const harnessGithub = githubStub();
+    const mcpStub = tasks(task({ id: 'mcp-task-1', state: 'in_progress', branch: { headRef: 'copilot/mcp-round' } }));
+    const listWorkflowRuns = vi.fn(async () => [run({ id: 21 })]);
+    const cancelWorkflowRun = vi.fn(async () => undefined);
+    const provider = createCopilotManagedProvider(
+      {
+        apiKey: apiKey(),
+        model: 'gpt-5.4',
+        repo: 'gamedevpl/www.gamedev.pl-games',
+        mcpRepo: 'gamedevpl/scratchpad',
+      },
+      {
+        tasks: harness.client,
+        github: harnessGithub,
+        mcpTasks: mcpStub.client,
+        mcpGithub: githubStub({ listWorkflowRuns, cancelWorkflowRun }),
+      },
+    );
+
+    await provider.startSession({
+      correlationId: '42',
+      prompt: buildPrompt(BRIEF, { kind: 'channel', fast: true }),
+      model: 'gpt-5.4',
+      outputPath: 'outputs',
+      promptLane: 'mcp',
+      tools: { mcpEndpoints: [{ url: 'https://www.gamedev.pl/api/mcp', name: 'gamedevpl' }] },
+    });
+
+    await expect(provider.cancelSession('mcp-task-1')).resolves.toEqual({ enforced: true });
+
+    expect(listWorkflowRuns).toHaveBeenCalledWith({ branch: 'copilot/mcp-round' });
+    expect(cancelWorkflowRun).toHaveBeenCalledWith(21);
+    expect(harnessGithub.listWorkflowRuns).not.toHaveBeenCalled();
+  });
+
+  // A restart loses the session map; cancel must still find it.
+  it('cancels an untracked MCP session after a provider restart', async () => {
+    const harness = emptyTasks();
+    const mcpStub = tasks(task({ id: 'mcp-task-1', state: 'in_progress', branch: { headRef: 'copilot/mcp-round' } }));
+    const cancelWorkflowRun = vi.fn(async () => undefined);
+    const provider = createCopilotManagedProvider(
+      {
+        apiKey: apiKey(),
+        model: 'gpt-5.4',
+        repo: 'gamedevpl/www.gamedev.pl-games',
+        mcpRepo: 'gamedevpl/scratchpad',
+      },
+      {
+        tasks: harness.client,
+        github: githubStub(),
+        mcpTasks: mcpStub.client,
+        mcpGithub: githubStub({ listWorkflowRuns: vi.fn(async () => [run({ id: 21 })]), cancelWorkflowRun }),
+      },
+    );
+
+    await expect(provider.cancelSession('mcp-task-1')).resolves.toEqual({ enforced: true });
+
+    expect(harness.getTask).toHaveBeenCalledWith('mcp-task-1');
+    expect(cancelWorkflowRun).toHaveBeenCalledWith(21);
   });
 
   it('reports an unenforced cancel rather than throwing when GitHub refuses', async () => {
