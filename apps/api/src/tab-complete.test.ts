@@ -1,19 +1,29 @@
 import { describe, expect, it } from 'vitest';
-import { StubTabCompleter, tabCompleteEnabled, VertexTabCompleter } from './tab-complete.js';
+import {
+  MAX_COMPLETION_OUTPUT_TOKENS,
+  StubTabCompleter,
+  tabCompleteEnabled,
+  VertexTabCompleter,
+} from './tab-complete.js';
 
 // Same stub shape as the code lane test uses: real usage included.
 function stubClient(text: string, usage = { inputTokens: 42, outputTokens: 7 }) {
   const prompts: string[] = [];
+  const maxOutputTokensCalls: unknown[] = [];
   const client = ((prompt: string) => {
     prompts.push(prompt);
     const chain = {
       temperature: () => chain,
+      maxOutputTokens: (n: unknown) => {
+        maxOutputTokensCalls.push(n);
+        return chain;
+      },
       signal: () => chain,
       run: () => Promise.resolve({ parts: [{ type: 'text', text }], usage }),
     };
     return chain;
   }) as never;
-  return { client, prompts };
+  return { client, prompts, maxOutputTokensCalls };
 }
 
 describe('VertexTabCompleter', () => {
@@ -32,6 +42,12 @@ describe('VertexTabCompleter', () => {
     expect(prompts[0]).toContain('function startGame() {');
     expect(prompts[0]).toContain('\n}\n');
     expect(prompts[0]).toContain('game/runtime.ts');
+  });
+
+  it('caps output tokens so one proposal cannot blow the daily budget', async () => {
+    const { client, maxOutputTokensCalls } = stubClient('x');
+    await new VertexTabCompleter({ client }).complete({ path: 'a.ts', prefixWindow: '', suffixWindow: '' });
+    expect(maxOutputTokensCalls).toEqual([MAX_COMPLETION_OUTPUT_TOKENS]);
   });
 
   it('strips a stray markdown fence the model added despite the instruction', async () => {

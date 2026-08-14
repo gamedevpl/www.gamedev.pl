@@ -7,6 +7,8 @@ export const DEFAULT_TAB_COMPLETE_TIMEOUT_MS = 4000;
 // continue.dev's shape: ~700 tokens prefix, ~300 suffix, ~4 chars/token.
 export const MAX_PREFIX_CHARS = 3000;
 export const MAX_SUFFIX_CHARS = 1200;
+// A completion is a few lines, not a whole file — floors cost.
+export const MAX_COMPLETION_OUTPUT_TOKENS = 300;
 
 export interface TabCompleteRequest {
   path: string;
@@ -73,6 +75,7 @@ export class VertexTabCompleter implements TabCompleter {
   async complete(request: TabCompleteRequest): Promise<TabCompleteResult> {
     const result: GenerationResult = await this.getClient()(buildPrompt(request))
       .temperature(0.2)
+      .maxOutputTokens(MAX_COMPLETION_OUTPUT_TOKENS)
       .signal(AbortSignal.timeout(this.options.timeoutMs ?? DEFAULT_TAB_COMPLETE_TIMEOUT_MS))
       .run();
     return {
