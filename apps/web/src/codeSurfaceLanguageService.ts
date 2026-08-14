@@ -15,6 +15,14 @@ export function toVfsPath(path: string): string {
   return path.startsWith('/') ? path : `/${path}`;
 }
 
+// Inverse of toVfsPath — GA-09 goto-definition targets come back vfs-rooted.
+export function fromVfsPath(path: string): string {
+  return path.startsWith('/') ? path.slice(1) : path;
+}
+
+// The kit's vfs path — shared with GA-09's hop.
+export const KIT_DECLARATION_PATH = 'shared/game-kit.d.ts';
+
 export async function createCodeSurfaceLanguageService(
   files: Record<string, string>,
   kitDeclaration: string | null,
@@ -27,7 +35,7 @@ export async function createCodeSurfaceLanguageService(
     const worker = Comlink.wrap<WorkerShape>(innerWorker);
     await worker.initialize();
     if (kitDeclaration) {
-      await worker.updateFile({ path: toVfsPath('shared/game-kit.d.ts'), code: kitDeclaration });
+      await worker.updateFile({ path: toVfsPath(KIT_DECLARATION_PATH), code: kitDeclaration });
     }
     await Promise.all(Object.entries(files).map(([path, code]) => worker.updateFile({ path: toVfsPath(path), code })));
     return {

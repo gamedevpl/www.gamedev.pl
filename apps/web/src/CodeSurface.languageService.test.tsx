@@ -11,14 +11,21 @@ import * as codeSurfaceApi from './codeSurfaceApi.js';
 import * as codeSurfaceLanguageService from './codeSurfaceLanguageService.js';
 import i18n from './i18n/index.js';
 
-type CapturedEditorProps = { languageService?: { worker: unknown; path: string } };
+type CapturedEditorProps = {
+  languageService?: { worker: unknown; path: string };
+  onGotoDefinition?: (path: string, from: number, to: number) => void;
+  initialSelection?: { anchor: number; head: number };
+};
 let lastEditorProps: CapturedEditorProps | null = null;
+// GA-09: the mock re-renders after clearing — record every value seen.
+let capturedInitialSelections: unknown[] = [];
 
 vi.mock('./CodeMirrorEditor.js', () => ({
   default: (
     props: { value: string; onChange: (value: string) => void; languageService?: unknown } & CapturedEditorProps,
   ) => {
     lastEditorProps = props;
+    capturedInitialSelections.push(props.initialSelection);
     return createElement('textarea', {
       className: 'code-surface-editor',
       value: props.value,
@@ -39,8 +46,10 @@ vi.mock('./codeSurfaceApi.js', async () => {
 
 vi.mock('./codeSurfaceLanguageService.js', () => ({
   createCodeSurfaceLanguageService: vi.fn(),
-  // Real toVfsPath, not a mock — CodeSurface.tsx calls it directly.
+  // Real toVfsPath/fromVfsPath, not mocks — CodeSurface.tsx calls them directly.
   toVfsPath: (path: string) => (path.startsWith('/') ? path : `/${path}`),
+  fromVfsPath: (path: string) => (path.startsWith('/') ? path.slice(1) : path),
+  KIT_DECLARATION_PATH: 'shared/game-kit.d.ts',
 }));
 
 const mockedApi = vi.mocked(codeSurfaceApi);
@@ -214,5 +223,98 @@ describe('CodeSurface language-service degradation (GA-06)', () => {
     root = createRoot(container);
 
     expect(destroy).toHaveBeenCalled();
+  });
+});
+
+describe('CodeSurface goto-definition (GA-09)', () => {
+  let container: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    resetCodeSurfaceSessionState();
+    lastEditorProps = null;
+    capturedInitialSelections = [];
+    mockedApi.fetchCodeSurfaceSources.mockReset();
+    mockedApi.fetchCodeSurfaceKitDeclaration.mockReset();
+    mockedLanguageService.createCodeSurfaceLanguageService.mockReset();
+    mockedApi.fetchCodeSurfaceSources.mockResolvedValue(
+      sourcesFor({
+        files: [
+          { path: 'game.ts', content: 'export const boot = () => {};' },
+          { path: 'game/render.ts', content: 'export const paint = () => {};' },
+        ],
+      }),
+    );
+    mockedApi.fetchCodeSurfaceKitDeclaration.mockResolvedValue({
+      engineRef: 'v1',
+      declaration: 'interface GameKitGameContext {\n  gfx: unknown;\n}\n',
+    });
+    mockedLanguageService.createCodeSurfaceLanguageService.mockResolvedValue({
+      worker: {} as never,
+      updateFile: vi.fn(),
+      destroy: vi.fn(),
+    });
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+
+  afterEach(async () => {
+    await act(async () => root.unmount());
+    container.remove();
+  });
+
+  async function render(slug = 'sky-dodge') {
+    await act(async () => {
+      root.render(createElement(CodeSurface, { slug, onBack: () => {} }));
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+  }
+
+  it('switches tabs and hands the target editor an initial selection', async () => {
+    await render();
+    expect(container.querySelector('textarea')!.value).toContain('boot');
+
+    await act(async () => {
+      lastEditorProps?.onGotoDefinition?.('/game/render.ts', 7, 12);
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('.code-surface-rail-item.is-active')?.textContent).toContain('game/render.ts');
+    expect(capturedInitialSelections).toContainEqual({ anchor: 7, head: 12 });
+  });
+
+  it('opens a read-only kit viewer for a jump into shared/game-kit.d.ts', async () => {
+    await render();
+
+    await act(async () => {
+      lastEditorProps?.onGotoDefinition?.('/shared/game-kit.d.ts', 34, 37);
+      await Promise.resolve();
+    });
+
+    const dialog = container.querySelector('.code-surface-kit-viewer');
+    expect(dialog).not.toBeNull();
+    expect(dialog?.textContent).toContain('GameKitGameContext');
+    expect(container.querySelector('.is-jump-target')).not.toBeNull();
+    // Still on game.ts — the kit hop leaves it alone.
+    expect(container.querySelector('.code-surface-rail-item.is-active')?.textContent).toContain('game.ts');
+  });
+
+  it('ignores a jump target that matches no known file (e.g. a lib .d.ts)', async () => {
+    await render();
+    const activeBefore = container.querySelector('.code-surface-rail-item.is-active')?.textContent;
+
+    await act(async () => {
+      lastEditorProps?.onGotoDefinition?.('/lib.es2022.d.ts', 0, 4);
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('.code-surface-rail-item.is-active')?.textContent).toBe(activeBefore);
+    expect(container.querySelector('.code-surface-kit-viewer')).toBeNull();
   });
 });

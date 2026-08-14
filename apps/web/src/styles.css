@@ -11938,6 +11938,76 @@ button.builder-mode-selector:disabled {
   overflow-wrap: anywhere;
 }
 
+/* GA-09: the kit's own read-only hop — a fixed overlay, not gated to mobile like
+   .code-surface-file-backdrop, since the jump works at any viewport width. */
+.code-surface-kit-backdrop {
+  position: fixed;
+  z-index: 30;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(3, 8, 13, 0.66);
+}
+
+.code-surface-kit-viewer {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  width: min(100%, 640px);
+  max-height: min(80vh, 40rem);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+.code-surface-kit-viewer-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  padding: 12px 12px 10px 16px;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.code-surface-kit-viewer-head h3 {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 0.86rem;
+  font-family: var(--mono-font, monospace);
+  color: var(--muted);
+}
+
+.code-surface-kit-close {
+  flex: none;
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+}
+
+.code-surface-kit-close:hover,
+.code-surface-kit-close:focus-visible {
+  color: var(--text);
+  background: rgba(148, 163, 184, 0.12);
+}
+
+.code-surface-kit-viewer-body {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.code-surface-kit-viewer-body .is-jump-target {
+  background: rgba(0, 228, 172, 0.14);
+}
+
 .code-tok-comment {
   color: var(--muted);
 }
@@ -17835,13 +17905,17 @@ body.remix-entry-open {
   background: var(--turquoise);
   color: #08241d;
   font-weight: 700;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45), 0 0 14px var(--turquoise-glow);
+  box-shadow:
+    0 4px 14px rgba(0, 0, 0, 0.45),
+    0 0 14px var(--turquoise-glow);
 }
 
 .review-play-btn.is-overlay:hover,
 .review-play-btn.is-overlay:focus-visible {
   filter: brightness(1.08);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45), 0 0 20px var(--turquoise-glow);
+  box-shadow:
+    0 4px 14px rgba(0, 0, 0, 0.45),
+    0 0 20px var(--turquoise-glow);
 }
 
 .review-play-btn.is-active {

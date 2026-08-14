@@ -27,6 +27,8 @@ import {
 import { getCodeSurfaceSessionState, setCodeSurfaceSessionState } from './codeSurfaceSessionState.js';
 import {
   createCodeSurfaceLanguageService,
+  fromVfsPath,
+  KIT_DECLARATION_PATH,
   toVfsPath,
   type CodeSurfaceLanguageService,
 } from './codeSurfaceLanguageService.js';
@@ -160,6 +162,7 @@ export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
   const fileOpenedRecordedRef = useRef(new Set<string>());
   const filePickerTriggerRef = useRef<HTMLButtonElement | null>(null);
   const railRef = useRef<HTMLElement | null>(null);
+  const kitViewerBodyRef = useRef<HTMLPreElement | null>(null);
   /** One autosave timer per dirty path, not one shared timer — editing a second file
    * inside the debounce window must not cancel the first file's pending save. */
   const saveTimersRef = useRef<Map<string, number>>(new Map());
@@ -180,6 +183,10 @@ export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
   const languageServiceRef = useRef<CodeSurfaceLanguageService | null>(null);
   const languageServiceInitRef = useRef(false);
   const [languageServiceReady, setLanguageServiceReady] = useState(false);
+  // GA-09: cached for the kit read-only hop.
+  const kitDeclarationRef = useRef<string | null>(null);
+  const [pendingJump, setPendingJump] = useState<{ path: string; from: number; to: number } | null>(null);
+  const [kitViewerLine, setKitViewerLine] = useState<number | null>(null);
 
   useEffect(() => {
     if (openedRecordedRef.current) return;
@@ -194,6 +201,12 @@ export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
       inline: 'nearest',
     });
   }, [selected]);
+
+  // GA-09: centers the jump target the moment the kit viewer opens.
+  useEffect(() => {
+    if (kitViewerLine === null) return;
+    kitViewerBodyRef.current?.querySelector('.is-jump-target')?.scrollIntoView?.({ block: 'center' });
+  }, [kitViewerLine]);
 
   const load = useCallback(
     (isInitialLoad: boolean) => {
@@ -248,6 +261,16 @@ export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [filePickerOpen]);
 
+  // GA-09: Escape closes the kit viewer, like the file picker.
+  useEffect(() => {
+    if (kitViewerLine === null) return undefined;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') setKitViewerLine(null);
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [kitViewerLine]);
+
   useEffect(
     () => () => {
       // Unmount flushes pending autosaves — direct calls, no setState after unmount.
@@ -298,6 +321,7 @@ export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
     void (async () => {
       const kit = await fetchCodeSurfaceKitDeclaration(slug);
       if (cancelled) return;
+      kitDeclarationRef.current = kit?.declaration ?? null;
       const service = await createCodeSurfaceLanguageService(initialFiles, kit?.declaration ?? null);
       if (cancelled) {
         service?.destroy();
@@ -329,6 +353,17 @@ export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
     if (!languageServiceReady || !languageServiceRef.current || !file || !isTsPath(file.path)) return undefined;
     return { worker: languageServiceRef.current.worker, path: toVfsPath(file.path) };
   }, [languageServiceReady, file]);
+
+  // GA-09: a cross-file jump, consumed once the target mounts.
+  const initialSelectionForEditor = useMemo(() => {
+    if (!pendingJump || pendingJump.path !== selected) return undefined;
+    return { anchor: pendingJump.from, head: pendingJump.to };
+  }, [pendingJump, selected]);
+
+  // GA-09: this render's editor already read initialSelectionForEditor above.
+  useEffect(() => {
+    if (pendingJump && pendingJump.path === selected) setPendingJump(null);
+  }, [pendingJump, selected]);
 
   /** Owner-staged paths plus local drafts that still differ — the working-copy set. */
   const changedPaths = useMemo(() => {
@@ -373,6 +408,20 @@ export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
       fileOpenedRecordedRef.current.add(path);
       recordCodeStep('file_opened');
     }
+  }
+
+  // GA-09: switches tabs for a game file, opens the kit.
+  function handleGotoDefinition(vfsPath: string, from: number, to: number) {
+    const path = fromVfsPath(vfsPath);
+    if (path === KIT_DECLARATION_PATH) {
+      const declaration = kitDeclarationRef.current;
+      if (!declaration) return;
+      setKitViewerLine(declaration.slice(0, from).split('\n').length);
+      return;
+    }
+    if (!sources?.files.some((entry) => entry.path === path)) return;
+    setPendingJump({ path, from, to });
+    selectFile(path);
   }
 
   const schedulePreviewRebuild = useCallback(() => {
@@ -716,6 +765,8 @@ export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
                   onSave={() => void flushPendingSaves()}
                   diagnostics={cmDiagnostics}
                   languageService={languageServiceForEditor}
+                  onGotoDefinition={handleGotoDefinition}
+                  initialSelection={initialSelectionForEditor}
                 />
               </Suspense>
             </CodeMirrorBoundary>
@@ -880,6 +931,44 @@ export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
                 </div>
               ))}
             </div>
+          </section>
+        </div>
+      ) : null}
+
+      {kitViewerLine !== null && kitDeclarationRef.current ? (
+        <div className="code-surface-kit-backdrop" role="presentation" onClick={() => setKitViewerLine(null)}>
+          <section
+            className="code-surface-kit-viewer"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="code-surface-kit-viewer-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="code-surface-kit-viewer-head">
+              <h3 id="code-surface-kit-viewer-title">{t('studioPanel.code.kitViewerTitle')}</h3>
+              <button
+                type="button"
+                className="code-surface-kit-close"
+                onClick={() => setKitViewerLine(null)}
+                aria-label={t('studioPanel.code.kitViewerClose')}
+              >
+                <PixelIcon name="close" size={13} />
+              </button>
+            </header>
+            <pre className="code-surface-readonly-view code-surface-kit-viewer-body" ref={kitViewerBodyRef}>
+              {kitDeclarationRef.current.split('\n').map((line, index) => (
+                <div key={index} className={`code-surface-line${index + 1 === kitViewerLine ? ' is-jump-target' : ''}`}>
+                  <span className="code-surface-line-number">{index + 1}</span>
+                  <span className="code-surface-line-text">
+                    {tokenizeLine(line, 'typescript').map((token, tokenIndex) => (
+                      <span key={tokenIndex} className={`code-tok code-tok-${token.kind}`}>
+                        {token.text}
+                      </span>
+                    ))}
+                  </span>
+                </div>
+              ))}
+            </pre>
           </section>
         </div>
       ) : null}

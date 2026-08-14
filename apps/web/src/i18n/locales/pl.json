@@ -323,6 +323,8 @@
       "agentRoundCompact": "Tylko odczyt",
       "stagedBy": "zmienione · {{who}}",
       "lockedHint": "Tylko do odczytu — GameKit i narzędzia są wspólne, nie edytuje się ich tutaj",
+      "kitViewerTitle": "shared/game-kit.d.ts",
+      "kitViewerClose": "Zamknij deklarację GameKit",
       "noFiles": "Nie ma jeszcze nic do pokazania",
       "budget": "{{lines}}/{{maxLines}} linii",
       "livePush": "Na żywo — gra zaktualizowana, bez przebudowy",
