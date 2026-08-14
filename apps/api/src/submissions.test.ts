@@ -6042,13 +6042,54 @@ describe('seeded dispatch', () => {
     await app.close();
   });
 
+  it('stores the seed on the job for a managed round that can only read it', async () => {
+    // The Anthropic shape: refuses inline files, but can read get_seed.
+    const stub = createGithubClientStub({});
+    const briefs: BuildBrief[] = [];
+    const backend: AgentBackend = {
+      name: 'managed:stub',
+      seedDelivery: () => 'channel' as const,
+      dispatch: async (brief) => {
+        briefs.push(brief);
+        return { ref: 'session-1', promptLane: 'mcp' };
+      },
+      resume: async () => ({ ref: 'session-2' }),
+      observe: async () => null,
+      cancel: async () => ({ enforced: false }),
+    };
+    const { app, store, authHeaders } = await createApp({
+      githubClient: stub.githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      gameSeeder: seederStub({ compiles: true }),
+    });
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'Managed Game', concept: 'A game where you deliver parcels between comets, dodging debris.' },
+    });
+    expect(created.statusCode).toBe(200);
+    await vi.waitFor(() => expect(briefs).toHaveLength(1));
+
+    // The seed is on the job, which is what get_seed reads.
+    const record = await store.getSubmission(briefs[0].issueNumber);
+    expect(record?.seed?.files).toHaveLength(1);
+    expect(record?.seedStatus).toBe('available');
+    // Still offered to the backend, which decides if it can place files.
+    expect(briefs[0].seed).toBeDefined();
+
+    await app.close();
+  });
+
   it('does not pay for a seed a backend would discard', async () => {
-    // acceptsSeed is read before generation, not after the bill.
+    // seedDelivery is read before generation, not after the bill.
     const stub = createGithubClientStub({});
     const briefs: BuildBrief[] = [];
     const backend: AgentBackend = {
       name: 'stub',
-      acceptsSeed: () => false,
+      seedDelivery: () => 'none' as const,
       dispatch: async (brief) => {
         briefs.push(brief);
         return { ref: 'task-1', promptLane: 'mcp' };

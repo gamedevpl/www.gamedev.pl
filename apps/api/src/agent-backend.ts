@@ -76,6 +76,9 @@ export interface BuildBrief {
   seed?: SeedFiles;
 }
 
+// How the agent gets the seed: placed, read, or not at all.
+export type SeedDelivery = 'workspace' | 'channel' | 'none';
+
 /** The subset of a seed draft a backend needs to place it. */
 export interface SeedFiles {
   /** The game directory the files belong in. */
@@ -143,6 +146,6 @@ export interface AgentBackend {
   cancel(ref: string, credentialRef?: string): Promise<{ enforced: boolean }>;
   /** Releases workspace state once a job is finished. Best effort. */
   cleanup?(previous: DispatchResult): Promise<void>;
-  // Whether this lane would use brief.seed. Absent means yes.
-  acceptsSeed?(promptLane?: BuildPromptLane): boolean;
+  // How this lane would receive a seed. Absent means workspace.
+  seedDelivery?(promptLane?: BuildPromptLane): SeedDelivery;
 }
