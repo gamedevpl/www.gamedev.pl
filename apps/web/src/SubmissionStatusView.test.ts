@@ -2012,6 +2012,54 @@ describe('SubmissionStatusView', () => {
     });
   });
 
+  it('remembers dismissing the finished-round chip for later rounds', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'building',
+      stall: 'ended',
+      builder: 'platform',
+      progress: { headSha: 'sha-1', commits: [], checklist: [] },
+    });
+    await i18n.changeLanguage('en');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'ended-chip', embedded: true }));
+      await flushEffects();
+      await flushEffects();
+    });
+
+    const dismiss = container.querySelector<HTMLButtonElement>('.studio-status-chip-dismiss');
+    expect(dismiss).not.toBeNull();
+    await act(async () => {
+      dismiss?.click();
+      await flushEffects();
+    });
+    expect(localStorage.getItem('gamedev_status_chip_dismissed:stall:ended')).toBe('1');
+
+    await act(async () => {
+      root.unmount();
+    });
+
+    const laterContainer = document.createElement('div');
+    document.body.appendChild(laterContainer);
+    const laterRoot = createRoot(laterContainer);
+    await act(async () => {
+      laterRoot.render(createElement(SubmissionStatusView, { token: 'another-round', embedded: true }));
+      await flushEffects();
+      await flushEffects();
+    });
+
+    expect(laterContainer.querySelector('.studio-status-chip')).toBeNull();
+
+    await act(async () => {
+      laterRoot.unmount();
+    });
+  });
+
   it('hides the checklist fraction on the thread bar once every item is done', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     mockedGetSubmissionStatus.mockResolvedValue({
