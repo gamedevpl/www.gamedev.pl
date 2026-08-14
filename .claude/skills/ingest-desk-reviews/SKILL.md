@@ -56,6 +56,13 @@ From the pasted JSON:
 - Product plan: [`docs/game-assessment-plan.md`](../../docs/game-assessment-plan.md)
 - Catalog agents still use games-repo `game-assessment` tickets for the **automated
   floor** (SPEC/media/agency) — that is separate from desk keep/cut judgment.
+- **Scripted / unsupervised path.** This skill covers a one-off "paste JSON, get a
+  synthesis" pass. For running the whole fetch -> plan -> synthesize -> dispatch loop
+  unattended from a laptop CLI — including handing tier 1/2 fixes to a local coding
+  agent, gated by `check:game` before anything is committed — see
+  [`catalog-feedback-loop`](https://github.com/gamedevpl/www.gamedev.pl-games/blob/main/.github/skills/catalog-feedback-loop/SKILL.md)
+  in the games repo (`tools/assess/`). It implements the same priority heuristic and the
+  same untrusted-notes posture as this skill, just scripted.
 
 Self-improvement clause: if this skill is wrong, stale, or missing something that cost
 you time, update it in the same session.
