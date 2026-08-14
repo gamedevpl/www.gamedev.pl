@@ -830,6 +830,32 @@ declare const GameKit: { defineGame(): unknown };
       'game/sim.ts',
     ]);
 
+    const partialOk = await callTool(
+      app,
+      'patch_source_file',
+      {
+        sessionKey,
+        path: 'game/sim.ts',
+        patches: [
+          { old: 'SPEED = 8', new: 'SPEED = 10' },
+          { old: 'does not exist', new: 'x' },
+        ],
+      },
+      { 'mcp-session-id': sessionId },
+    );
+    expect(partialOk.isError).toBe(false);
+    expect(partialOk.structured).toMatchObject({
+      ok: true,
+      incomplete: true,
+      replacements: 1,
+      failed: [{ path: 'game/sim.ts', index: 1 }],
+    });
+    const partialWarnings =
+      (partialOk.structured as { warnings?: Array<{ code: string; message: string }> }).warnings ?? [];
+    expect(partialWarnings.find((warning) => warning.code === 'patch_incomplete')?.message).toMatch(
+      /retry only failed\[\]/,
+    );
+
     // Also verify end with ackInboxIds acknowledges creator messages
     const msg = await store.appendCreatorMessage(ISSUE, 'Fix the UI font');
     const ended = await callTool(

@@ -37,8 +37,9 @@ Source of truth: `SESSION_WORKFLOW` + `BEHAVIOURAL_CONTRACT` in
      replace — no diff format), or `patch_source_file({ path, patches: [{ old, new }, ...] })`
      for multiple sequential replacements in one file, or
      `patch_source_file({ files: [{ path, old, new }, { path, patches: [{ old, new }] }] })`
-     to edit several files in one call (applies every file in memory first; one miss
-     leaves the buffer unchanged). Or `patch_source_file({ path, patch })` with a unified
+     to edit several files in one call. Edits that apply are kept even if later ones
+     miss — retry only `failed[]` (path + index); do not resend ones that landed.
+     Or `patch_source_file({ path, patch })` with a unified
      diff (`---` / `+++` + `@@` hunks; bare `@@` ok). Do not re-emit whole `render.ts` /
      `model.ts` files through `stage_source_file`
    - **Modules:** soft budget ~350 lines / ~12 KiB per `game/*.ts`. Honour
@@ -653,6 +654,7 @@ Merged by `applySessionNudges` / submit handler. Act, then continue:
 | `inbox_pending`         | `read_inbox` → apply → `ack_inbox`                                                                                                                                         |
 | `seed_unread`           | Call `get_seed` before scaffolding from the kit                                                                                                                            |
 | `game_manifest_invalid` | Just-staged/patched `GAME.json` has a shape that crashes the gate before typecheck (e.g. missing `engine.modules`) — fix it now, in the same session, before submitting    |
+| `patch_incomplete`      | Some `patch_source_file` edits landed and some did not — retry only `failed[]` (path + index); do not resend the ones that applied                                         |
 
 ## Builder handoff (Studio)
 

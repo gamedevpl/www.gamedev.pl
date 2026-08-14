@@ -62,7 +62,7 @@ import { seedPayload } from './seed-status.js';
 import { largeSourceFileHint } from './module-size.js';
 import { gameManifestHint } from './game-manifest-hint.js';
 import { computeStageAdvisories } from './stage-hints.js';
-import { applyExactReplace, applyMultipleExactReplaces, applySourcePatch, SourcePatchError } from './source-patch.js';
+import { applyExactReplace, applySourcePatch, SourcePatchError } from './source-patch.js';
 import { overlayGameSources } from './staged-preview.js';
 import { SourceDeliveryValidationError, type SourceDeliveryService } from './source-delivery.js';
 import { type BuilderHandoff, type CreatorMessage, type Store, type SubmissionRecord } from './store.js';
@@ -322,7 +322,7 @@ const StageSourcePatchInputSchema = z
     old: z.string().max(200_000).optional(),
     new: z.string().max(200_000).optional(),
     patches: z.array(ExactPatchPairSchema).min(1).max(50).optional(),
-    files: z.array(FileExactPatchSchema).min(1).max(20).optional(),
+    files: z.array(FileExactPatchSchema).min(1).max(100).optional(),
     slug: z
       .string()
       .trim()
@@ -391,14 +391,44 @@ type PatchFileSpec = {
 
 type PatchBaseFrom = 'staged' | 'delivery' | 'seed';
 
-function applyPatchFile(content: string, file: PatchFileSpec) {
-  if (file.patches !== undefined) {
-    return applyMultipleExactReplaces({ content, path: file.path, patches: file.patches });
+type PatchFailure = {
+  path: string;
+  index: number;
+  error: string;
+};
+
+function applyPatchFileBestEffort(
+  content: string,
+  file: PatchFileSpec,
+): { content: string; replacements: number; failed: PatchFailure[] } {
+  const edits: Array<{ old?: string; new?: string; patch?: string }> =
+    file.patches !== undefined
+      ? file.patches
+      : file.old !== undefined && file.new !== undefined
+        ? [{ old: file.old, new: file.new }]
+        : [{ patch: file.patch }];
+
+  let current = content;
+  let replacements = 0;
+  const failed: PatchFailure[] = [];
+  for (let i = 0; i < edits.length; i++) {
+    const edit = edits[i]!;
+    try {
+      const result =
+        edit.patch !== undefined
+          ? applySourcePatch({ content: current, path: file.path, patch: edit.patch })
+          : applyExactReplace({ content: current, path: file.path, old: edit.old!, new: edit.new! });
+      current = result.content;
+      replacements += result.replacements;
+    } catch (error) {
+      if (error instanceof SourcePatchError) {
+        failed.push({ path: file.path, index: i, error: error.message });
+        continue;
+      }
+      throw error;
+    }
   }
-  if (file.old !== undefined && file.new !== undefined) {
-    return applyExactReplace({ content, path: file.path, old: file.old, new: file.new });
-  }
-  return applySourcePatch({ content, path: file.path, patch: file.patch! });
+  return { content: current, replacements, failed };
 }
 
 async function resolvePatchBase(input: {
@@ -1482,7 +1512,7 @@ export async function registerAgentChannelRoutes(
     },
   );
 
-  // Patch into staging. Base is staged → delivery → seed. Apply all files first; write only if every patch applies.
+  // Patch into staging. Base is staged → delivery → seed. Keep every edit that applies; report failed[] for the rest.
   app.post(
     '/api/agent/build/sources/stage/patch',
     {
@@ -1542,6 +1572,7 @@ export async function registerAgentChannelRoutes(
           replacements: number;
           baseFrom: PatchBaseFrom;
         }> = [];
+        const failed: PatchFailure[] = [];
         for (const spec of specs) {
           const base = await resolvePatchBase({
             gamesStore: options.gamesStore,
@@ -1553,13 +1584,18 @@ export async function registerAgentChannelRoutes(
             path: spec.path,
           });
           if (!base) {
-            return reply.status(400).send({
+            failed.push({
+              path: spec.path,
+              index: 0,
               error:
                 `cannot patch ${spec.path}: no base content in staging, the latest delivery, or the seed — ` +
                 'stage_source_file the full file first (or get_sources / get_seed), then patch',
             });
+            continue;
           }
-          const patched = applyPatchFile(base.content, spec);
+          const patched = applyPatchFileBestEffort(base.content, spec);
+          failed.push(...patched.failed);
+          if (patched.replacements === 0) continue;
           prepared.push({
             path: spec.path,
             content: patched.content,
@@ -1571,18 +1607,35 @@ export async function registerAgentChannelRoutes(
         let staged;
         const files: Array<{ path: string; bytes: number; replacements: number; baseFrom: PatchBaseFrom }> = [];
         for (const item of prepared) {
-          staged = await options.gamesStore.putStagedSourceFile({
-            slug,
-            issueNumber,
-            roundGeneration,
-            path: item.path,
-            content: item.content,
-          });
-          files.push({
-            path: staged.path,
-            bytes: staged.bytes,
-            replacements: item.replacements,
-            baseFrom: item.baseFrom,
+          try {
+            staged = await options.gamesStore.putStagedSourceFile({
+              slug,
+              issueNumber,
+              roundGeneration,
+              path: item.path,
+              content: item.content,
+            });
+            files.push({
+              path: staged.path,
+              bytes: staged.bytes,
+              replacements: item.replacements,
+              baseFrom: item.baseFrom,
+            });
+          } catch (error) {
+            if (error instanceof InvalidUploadError) {
+              failed.push({ path: item.path, index: 0, error: error.message });
+              continue;
+            }
+            throw error;
+          }
+        }
+
+        if (files.length === 0) {
+          return reply.status(400).send({
+            error: failed[0]?.error ?? 'no edits applied',
+            accepted: false,
+            replacements: 0,
+            failed,
           });
         }
         await markBuildingFromChannel(issueNumber, record);
@@ -1639,6 +1692,7 @@ export async function registerAgentChannelRoutes(
           replacements: files.reduce((sum, file) => sum + file.replacements, 0),
           baseFrom: first.baseFrom,
           files,
+          ...(failed.length > 0 ? { incomplete: true, failed } : {}),
           staged: {
             files: staged!.files,
             totalBytes: staged!.totalBytes,

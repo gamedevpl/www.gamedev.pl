@@ -1358,7 +1358,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     warnings: {
       type: 'array',
       description:
-        "Soft session nudges (progress_stale, inbox_pending, call_end, seed_unread, gate_not_started, gate_poll_backoff, module_too_large, game_manifest_invalid, typecheck_hint, audio_catalog_hint, card_unopened, must_fix_gate, must_deliver). Not errors — act on them, then continue the workflow. module_too_large means split that game/*.ts module before adding more behavior. game_manifest_invalid means the just-staged GAME.json has a shape that crashes the gate before typecheck (e.g. missing engine.modules) — fix it in the SAME stage/patch call's target, do not wait for submit_sources to find out. typecheck_hint means the file you just staged/patched would fail submit_sources' TypeScript preflight — fix it now, before staging more files on top of it. audio_catalog_hint means GAME.json names a music track id that is not in the shared catalog or a staged music.json — submit_sources will fail smoke with this same error. card_unopened means the creator has no status card yet — call show_round once. must_fix_gate means the last delivery was refused — fix and submit_sources again; staging alone does not re-run the gate.",
+        "Soft session nudges (progress_stale, inbox_pending, call_end, seed_unread, gate_not_started, gate_poll_backoff, module_too_large, game_manifest_invalid, typecheck_hint, audio_catalog_hint, card_unopened, must_fix_gate, must_deliver, patch_incomplete). Not errors — act on them, then continue the workflow. module_too_large means split that game/*.ts module before adding more behavior. game_manifest_invalid means the just-staged GAME.json has a shape that crashes the gate before typecheck (e.g. missing engine.modules) — fix it in the SAME stage/patch call's target, do not wait for submit_sources to find out. typecheck_hint means the file you just staged/patched would fail submit_sources' TypeScript preflight — fix it now, before staging more files on top of it. audio_catalog_hint means GAME.json names a music track id that is not in the shared catalog or a staged music.json — submit_sources will fail smoke with this same error. card_unopened means the creator has no status card yet — call show_round once. must_fix_gate means the last delivery was refused — fix and submit_sources again; staging alone does not re-run the gate. patch_incomplete means some edits in this patch_source_file call landed and some did not — retry only failed[] (path + index), do not resend the ones that applied.",
       items: {
         type: 'object',
         properties: {
@@ -1378,6 +1378,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
               'card_unopened',
               'must_fix_gate',
               'must_deliver',
+              'patch_incomplete',
             ],
           },
           message: { type: 'string' },
@@ -3866,6 +3867,19 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
               required: ['path', 'bytes', 'replacements', 'baseFrom'],
             },
           },
+          incomplete: { type: 'boolean' },
+          failed: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                path: { type: 'string' },
+                index: { type: 'number' },
+                error: { type: 'string' },
+              },
+              required: ['path', 'index', 'error'],
+            },
+          },
           hint: { type: 'string' },
           staged: {
             type: 'object',
@@ -3895,7 +3909,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         'PREFERRED: pass old + new (exact unique substring replace), or patches: [{ old, new }, ...] for multiple replacements in one file, ' +
         'or files: [{ path, old, new } | { path, patches: [{ old, new }] }, ...] to edit several files in one call — no @@ line numbers, no diff format. ' +
         'With patches[] / files[], replacements apply sequentially per file; ensure earlier replacements do not make a later old snippet ambiguous. ' +
-        'A files[] call applies every file in memory first and writes only if all apply — one miss leaves the buffer unchanged. ' +
+        'Edits that apply are kept even if later ones miss — retry only failed[] (path + index), do not resend the ones that landed. Honour warnings.code=patch_incomplete. ' +
         'ALTERNATE: pass path + patch as a unified diff for that single file ' +
         '("--- a/game/render.ts\\n+++ b/game/render.ts\\n@@\\n context\\n-old\\n+new\\n context\\n"; bare @@ ok). ' +
         'old must match exactly once; widen the snippet if it is ambiguous. Do not mix files[] with top-level path/old/new/patches/patch. ' +
@@ -4023,6 +4037,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             replacements: number;
             baseFrom: 'staged' | 'delivery' | 'seed';
           }>;
+          incomplete?: boolean;
+          failed?: Array<{ path: string; index: number; error: string }>;
           hint?: string;
           manifestHint?: string;
           typecheckHint?: string;
@@ -4049,6 +4065,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           replacements: body.replacements ?? 0,
           baseFrom: body.baseFrom ?? 'staged',
           ...(body.files ? { files: body.files } : {}),
+          ...(body.incomplete ? { incomplete: true } : {}),
+          ...(body.failed && body.failed.length > 0 ? { failed: body.failed } : {}),
           ...(hint ? { hint } : {}),
           staged: body.staged ?? { files: [], totalBytes: 0, maxBytes: 0, maxFiles: 0 },
           ...channelControlFields(body, [
@@ -4056,6 +4074,16 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             ...(hint ? [{ code: 'module_too_large' as const, message: hint }] : []),
             ...(body.typecheckHint ? [{ code: 'typecheck_hint' as const, message: body.typecheckHint }] : []),
             ...(body.audioHint ? [{ code: 'audio_catalog_hint' as const, message: body.audioHint }] : []),
+            ...(body.failed && body.failed.length > 0
+              ? [
+                  {
+                    code: 'patch_incomplete' as const,
+                    message:
+                      `${body.failed.length} edit${body.failed.length === 1 ? '' : 's'} did not apply — ` +
+                      'retry only failed[] (path + index). Do not resend edits that already landed.',
+                  },
+                ]
+              : []),
           ]),
           pendingMessages: pendingMessagesFromChannel(body),
         });

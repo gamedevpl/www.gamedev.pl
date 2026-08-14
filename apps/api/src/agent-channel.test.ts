@@ -2051,7 +2051,7 @@ describe('agent build channel', () => {
       expect(staged.get('game/sim.ts')).toBe('export const SPEED = 6;\nexport const LIVES = 5;\n');
     });
 
-    it('does not write any file when a later files[] entry fails to apply', async () => {
+    it('keeps successful files[] edits and reports the ones that missed', async () => {
       const store = new InMemoryStore();
       await seedSubmission(store);
       const { gamesStore, staged } = stubGamesStore();
@@ -2089,9 +2089,98 @@ describe('agent build channel', () => {
           ],
         },
       });
+      expect(patched.statusCode).toBe(200);
+      expect(patched.json()).toMatchObject({
+        accepted: true,
+        incomplete: true,
+        replacements: 1,
+        files: [{ path: 'game/render.ts', replacements: 1 }],
+        failed: [{ path: 'game/sim.ts', index: 0 }],
+      });
+      expect(patched.json().failed[0].error).toMatch(/not found in game\/sim\.ts/);
+      expect(staged.get('game/render.ts')).toContain('drawHud()');
+      expect(staged.get('game/sim.ts')).toBe('export const SPEED = 4;\n');
+    });
+
+    it('keeps earlier patches[] on a file when a later fragment misses', async () => {
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      const { gamesStore, staged } = stubGamesStore();
+      app = await createApp(store, { gamesStore });
+
+      await app.inject({
+        method: 'PUT',
+        url: '/api/agent/build/sources/stage',
+        headers: agentHeaders(),
+        payload: {
+          slug: 'comet-courier',
+          path: 'game/sim.ts',
+          content: 'export const SPEED = 4;\nexport const LIVES = 3;\nexport const FUEL = 9;\n',
+        },
+      });
+
+      const patched = await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/sources/stage/patch',
+        headers: agentHeaders(),
+        payload: {
+          path: 'game/sim.ts',
+          patches: [
+            { old: 'SPEED = 4', new: 'SPEED = 6' },
+            { old: 'missing snippet', new: 'x' },
+            { old: 'FUEL = 9', new: 'FUEL = 1' },
+          ],
+        },
+      });
+      expect(patched.statusCode).toBe(200);
+      expect(patched.json()).toMatchObject({
+        accepted: true,
+        incomplete: true,
+        replacements: 2,
+        failed: [{ path: 'game/sim.ts', index: 1 }],
+      });
+      expect(staged.get('game/sim.ts')).toBe(
+        'export const SPEED = 6;\nexport const LIVES = 3;\nexport const FUEL = 1;\n',
+      );
+    });
+
+    it('returns 400 with failed[] when no edit in the batch applied', async () => {
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      const { gamesStore, staged } = stubGamesStore();
+      app = await createApp(store, { gamesStore });
+
+      await app.inject({
+        method: 'PUT',
+        url: '/api/agent/build/sources/stage',
+        headers: agentHeaders(),
+        payload: {
+          slug: 'comet-courier',
+          path: 'game/sim.ts',
+          content: 'export const SPEED = 4;\n',
+        },
+      });
+
+      const patched = await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/sources/stage/patch',
+        headers: agentHeaders(),
+        payload: {
+          files: [
+            { path: 'game/sim.ts', old: 'missing one', new: 'x' },
+            { path: 'game/missing.ts', old: 'also missing', new: 'y' },
+          ],
+        },
+      });
       expect(patched.statusCode).toBe(400);
-      expect(patched.json().error).toMatch(/not found in game\/sim\.ts/);
-      expect(staged.get('game/render.ts')).toBe('export function paint() {\n  drawSky();\n}\n');
+      expect(patched.json()).toMatchObject({
+        accepted: false,
+        replacements: 0,
+        failed: [
+          { path: 'game/sim.ts', index: 0 },
+          { path: 'game/missing.ts', index: 0 },
+        ],
+      });
       expect(staged.get('game/sim.ts')).toBe('export const SPEED = 4;\n');
     });
 
