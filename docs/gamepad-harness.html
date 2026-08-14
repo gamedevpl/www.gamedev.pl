@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>KC-09 Gamepad Sandbox Probe</title>
+    <style>
+      body {
+        margin: 24px;
+        font: 16px system-ui;
+      }
+
+      iframe {
+        width: 420px;
+        height: 120px;
+        border: 1px solid #888;
+      }
+
+      pre {
+        padding: 12px;
+        background: #eee;
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>KC-09 Gamepad Sandbox Probe</h1>
+    <p>Connect a controller and press a button, then reload.</p>
+    <div id="frames"></div>
+    <pre id="results">Waiting…</pre>
+    <script>
+      const results = [];
+      const latency = { relay: [], keyboard: [] };
+      const output = document.getElementById('results');
+      const child = (label) => `<!doctype html><meta charset="utf-8"><body>${label}<script>
+        const policy = document.permissionsPolicy || document.featurePolicy;
+        let call = 'missing';
+        let slots = null;
+        let connected = null;
+        try {
+          if (typeof navigator.getGamepads === 'function') {
+            const pads = navigator.getGamepads();
+            call = 'ok';
+            slots = pads.length;
+            connected = Array.from(pads).filter(Boolean).length;
+          }
+        } catch (error) {
+          call = error.name + ': ' + error.message;
+        }
+        parent.postMessage({
+          probe: 'kc09',
+          label: '${label}',
+          userAgent: navigator.userAgent,
+          api: typeof navigator.getGamepads === 'function',
+          policy: policy && typeof policy.allowsFeature === 'function' ? policy.allowsFeature('gamepad') : null,
+          call,
+          slots,
+          connected
+        }, '*');
+        addEventListener('message', (event) => {
+          if (!event.data || event.data.probe !== 'kc09-latency') return;
+          parent.postMessage({ probe: 'kc09-latency-ack', label: '${label}', sentAt: event.data.sentAt, receivedAt: performance.timeOrigin + performance.now() }, '*');
+        });
+        addEventListener('keydown', (event) => {
+          parent.postMessage({ probe: 'kc09-keyboard-ack', label: '${label}', eventAt: performance.timeOrigin + event.timeStamp, receivedAt: performance.timeOrigin + performance.now() }, '*');
+        });
+        document.body.tabIndex = 0;
+        document.body.focus();
+      <\/script>`;
+
+      function percentile(values, fraction) {
+        if (!values.length) return null;
+        const sorted = [...values].sort((a, b) => a - b);
+        return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * fraction))];
+      }
+
+      function summary(values) {
+        if (!values.length) return { count: 0 };
+        return {
+          count: values.length,
+          meanMs: values.reduce((sum, value) => sum + value, 0) / values.length,
+          p50Ms: percentile(values, 0.5),
+          p95Ms: percentile(values, 0.95),
+        };
+      }
+
+      function render() {
+        output.textContent = JSON.stringify(
+          {
+            probes: results,
+            latency: {
+              relay: summary(latency.relay),
+              keyboard: summary(latency.keyboard),
+            },
+          },
+          null,
+          2,
+        );
+      }
+
+      function addFrame(label, allow) {
+        const frame = document.createElement('iframe');
+        frame.sandbox = 'allow-scripts';
+        frame.title = label;
+        if (allow) frame.allow = allow;
+        frame.srcdoc = child(label);
+        document.getElementById('frames').append(frame);
+      }
+
+      window.addEventListener('message', (event) => {
+        if (!event.data) return;
+        if (event.data.probe === 'kc09') {
+          results.push(event.data);
+          render();
+          if (event.data.label === 'sandbox-no-allow') {
+            let count = 0;
+            const relay = () => {
+              event.source.postMessage(
+                { probe: 'kc09-latency', sentAt: performance.timeOrigin + performance.now() },
+                '*',
+              );
+              count += 1;
+              if (count < 240) requestAnimationFrame(relay);
+            };
+            requestAnimationFrame(relay);
+          }
+          return;
+        }
+        if (event.data.probe === 'kc09-latency-ack') {
+          latency.relay.push(event.data.receivedAt - event.data.sentAt);
+          render();
+          return;
+        }
+        if (event.data.probe === 'kc09-keyboard-ack') {
+          latency.keyboard.push(event.data.receivedAt - event.data.eventAt);
+          render();
+        }
+      });
+
+      const topPolicy = document.permissionsPolicy || document.featurePolicy;
+      let topCall = 'missing';
+      let topSlots = null;
+      let topConnected = null;
+      try {
+        if (typeof navigator.getGamepads === 'function') {
+          const pads = navigator.getGamepads();
+          topCall = 'ok';
+          topSlots = pads.length;
+          topConnected = Array.from(pads).filter(Boolean).length;
+        }
+      } catch (error) {
+        topCall = error.name + ': ' + error.message;
+      }
+      results.push({
+        probe: 'kc09',
+        label: 'top-level',
+        userAgent: navigator.userAgent,
+        api: typeof navigator.getGamepads === 'function',
+        policy:
+          topPolicy && typeof topPolicy.allowsFeature === 'function'
+            ? topPolicy.allowsFeature('gamepad')
+            : null,
+        call: topCall,
+        slots: topSlots,
+        connected: topConnected,
+      });
+      render();
+      addFrame('sandbox-no-allow', '');
+      addFrame('sandbox-gamepad-allow', 'gamepad');
+    </script>
+  </body>
+</html>

@@ -110,7 +110,7 @@ export function startGamepadSpikeRelay(dependencies: RelayDependencies): () => v
 
   const poll = () => {
     if (!active) return;
-    let gamepad: Gamepad | null = null;
+    let gamepad: Gamepad | null;
     try {
       gamepad = Array.from(dependencies.getGamepads()).find((candidate) => candidate?.connected) ?? null;
     } catch {

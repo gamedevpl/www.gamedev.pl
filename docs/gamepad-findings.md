@@ -54,11 +54,13 @@ While active, it polls once per animation frame and sends two representations:
 
 The device identifier is intentionally omitted. It is unnecessary for gameplay and increases fingerprinting surface. `sourceTimestamp` and `sampledAt` make end-to-end latency measurable without adding a second clock protocol.
 
-The prototype is intentionally incomplete: it chooses the first connected controller, maps it to party slot 1, and has no player-facing discovery or remapping UI.
+The prototype is intentionally incomplete: it chooses the first connected controller, maps it to party slot 1, and has no player-facing discovery or remapping UI. Slot assignment remains an unsolved ownership decision for the production design, not a recommendation that every pad should drive player 1.
 
 ## Browser experiment
 
-Test harness: a localhost page with two `srcdoc` iframes using `sandbox="allow-scripts"`. One had no `allow` attribute; the other had `allow="gamepad"`. Each frame and the top-level page recorded API exposure, effective policy, whether `getGamepads()` threw, returned slot count, and connected count.
+Test harness: [`gamepad-harness.html`](./gamepad-harness.html), served from localhost, with two `srcdoc` iframes using `sandbox="allow-scripts"`. One had no `allow` attribute; the other had `allow="gamepad"`. Each frame and the top-level page recorded API exposure, whether `document.permissionsPolicy.allowsFeature('gamepad')` (with the legacy `featurePolicy` fallback) returned true, whether `getGamepads()` threw, returned slot count, and connected count.
+
+To repeat it, serve `docs/` over localhost, open `gamepad-harness.html`, connect a controller, press a button, and reload. Focus the no-allow iframe and press ordinary keys to add keyboard samples to the latency result.
 
 Environment: macOS 26.5.2 build 25F84, Apple Silicon. Test date: 2026-08-14.
 
@@ -68,7 +70,7 @@ Environment: macOS 26.5.2 build 25F84, Apple Silicon. Test date: 2026-08-14.
 | Safari                           | 26.5.2 installed | Not run: this environment exposes no controllable Safari session | Not run                                               | Not run                                               | Not run                                                  |
 | Firefox                          | Not installed    | Not run                                                          | Not run                                               | Not run                                               | Not run                                                  |
 
-Chrome therefore did not require a permissions-policy attribute for this sandbox. That matches the specification's current default allowlist of `*`. This is an API/policy result, not a claim that hardware input was exercised.
+Chrome therefore did not require a permissions-policy attribute for this sandbox: `document.permissionsPolicy.allowsFeature('gamepad')` returned true both with and without the iframe `allow` attribute. That matches the specification's current default allowlist of `*`. This is an API/policy result, not a claim that hardware input was exercised.
 
 Safari and Firefox remain a manual verification gap. The spike must not be promoted until the same harness is run in both with a physical standard-layout controller, including a button press to satisfy browsers that expose a connected pad only after user interaction.
 
@@ -95,6 +97,8 @@ That final estimate is modeled because no physical controller was connected. A h
 6. Add remapping and deadzone settings with keyboard, pointer, touch, and accessibility parity.
 7. Treat haptics as a separate capability review; never relay arbitrary device identifiers.
 8. Add browser integration tests once WebDriver implementations can inject gamepad input consistently.
+
+The spike currently emits one disconnected `gamepad:state` frame per animation frame while enabled, roughly 60 null frames per second at 60 Hz. The production edge-semantics work in item 3 should suppress unchanged disconnected state as well as unchanged connected samples.
 
 ## Exit state
 
