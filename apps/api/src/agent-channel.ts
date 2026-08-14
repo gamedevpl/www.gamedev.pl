@@ -70,24 +70,8 @@ import { BUILD_EVENT_KINDS, BUILD_STEPS, sanitizeCreatorText, type BuildEvent } 
 import { normalizeAtIntake, type IntakeText } from './localize-intake.js';
 import { createTranslatorFromEnv, type Translator } from './translate.js';
 
-/**
- * The build channel (docs/agent-live-channel-plan.md).
- *
- * Before this existed, everything the creator saw about their build had to travel by
- * git: the agent wrote a note, committed it, pushed it, waited for CI, and we read it
- * back through a 60-second-cached contents API. The transport charged a CI run per
- * sentence, so agents batched — which is why the status page sat still for ten minutes
- * at a time. This is the direct route: one authenticated POST, visible in seconds.
- *
- * It is also the *return* path. Every call answers with the creator's queued change
- * requests and a control block, so an agent that reports progress gets its instructions
- * back for free. Note the limit: this makes a *working* agent responsive, but it cannot
- * wake a stopped one — nothing is polling between sessions. Creator feedback therefore
- * still goes out as a PR comment, which is both the durable record and the wake-up.
- *
- * Everything the agent sends is untrusted, prompt-influenced text: sanitized here,
- * escaped on render, and never fed back to any model as instructions.
- */
+// The build channel (docs/agent-live-channel-plan.md). Direct route for progress, staging, and status.
+// Invariant: agent input is untrusted, prompt-influenced text — sanitized, escaped on render, never model instructions.
 
 const MAX_EVENT_TEXT = 300;
 
@@ -153,6 +137,7 @@ const EndRequestSchema = z.object({
     .max(10)
     .regex(/^[a-z]{2}(-[A-Za-z0-9]{2,8})?$/, 'invalid locale')
     .optional(),
+  ackInboxIds: z.array(z.string().trim().min(1).max(64)).max(50).optional(),
 });
 
 const MAX_SHOT_LABEL = 120;
@@ -295,19 +280,49 @@ const DeleteSourceInputSchema = z.object({
   path: z.string().trim().min(1).max(120),
 });
 
-const StageSourcePatchInputSchema = z
+const ExactPatchPairSchema = z.object({
+  old: z.string().max(200_000),
+  new: z.string().max(200_000),
+});
+
+const FileExactPatchSchema = z
   .object({
     path: z.string().trim().min(1).max(120),
-    /** Unified diff for this one path (`---` / `+++` + `@@` hunks). */
+    old: z.string().max(200_000).optional(),
+    new: z.string().max(200_000).optional(),
+    patches: z.array(ExactPatchPairSchema).min(1).max(50).optional(),
+  })
+  .superRefine((value, ctx) => {
+    const hasOld = value.old !== undefined;
+    const hasNew = value.new !== undefined;
+    const hasPatches = value.patches !== undefined && value.patches.length > 0;
+    if (hasOld !== hasNew) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'old and new must be passed together for exact replace',
+      });
+      return;
+    }
+    if ([hasOld && hasNew, hasPatches].filter(Boolean).length !== 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'each files[] entry needs old+new or patches[]',
+      });
+    }
+  });
+
+const StageSourcePatchInputSchema = z
+  .object({
+    path: z.string().trim().min(1).max(120).optional(),
     patch: z
       .string()
       .transform((value) => value.trim())
       .pipe(z.string().min(1, 'patch must not be empty').max(400_000))
       .optional(),
-    /** Exact unique substring to replace (pair with `new`). Prefer this over `patch` in chat. */
     old: z.string().max(200_000).optional(),
-    /** Replacement for `old` (may be empty to delete). */
     new: z.string().max(200_000).optional(),
+    patches: z.array(ExactPatchPairSchema).min(1).max(50).optional(),
+    files: z.array(FileExactPatchSchema).min(1).max(100).optional(),
     slug: z
       .string()
       .trim()
@@ -316,13 +331,38 @@ const StageSourcePatchInputSchema = z
       .optional(),
   })
   .superRefine((value, ctx) => {
+    const hasFiles = value.files !== undefined && value.files.length > 0;
     const hasPatch = value.patch !== undefined;
     const hasOld = value.old !== undefined;
     const hasNew = value.new !== undefined;
-    if (hasPatch && (hasOld || hasNew)) {
+    const hasPatches = value.patches !== undefined && value.patches.length > 0;
+    if (hasFiles && (hasPatch || hasOld || hasNew || hasPatches || value.path !== undefined)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'pass either patch (unified diff) or old+new (exact replace), not both',
+        message: 'pass files[] alone, or a single-file path with old+new / patches[] / patch',
+      });
+      return;
+    }
+    if (hasFiles) {
+      const paths = value.files!.map((file) => file.path);
+      if (new Set(paths).size !== paths.length) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'files[] paths must be unique' });
+      }
+      return;
+    }
+    if (!value.path) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'path is required unless files[] is passed',
+      });
+      return;
+    }
+    const modes = [hasPatch, hasOld || hasNew, hasPatches].filter(Boolean).length;
+    if (modes > 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          'pass either old+new (single exact replace), patches[] (multiple exact replaces), or patch (unified diff)',
       });
       return;
     }
@@ -333,13 +373,101 @@ const StageSourcePatchInputSchema = z
       });
       return;
     }
-    if (!hasPatch && !hasOld) {
+    if (modes === 0) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'pass old+new (exact replace, preferred) or patch (unified diff)',
+        message: 'pass old+new (exact replace, preferred), patches[] (multi-replace), files[], or patch (unified diff)',
       });
     }
   });
+
+type PatchFileSpec = {
+  path: string;
+  old?: string;
+  new?: string;
+  patches?: Array<{ old: string; new: string }>;
+  patch?: string;
+};
+
+type PatchBaseFrom = 'staged' | 'delivery' | 'seed';
+
+type PatchFailure = {
+  path: string;
+  index: number;
+  error: string;
+};
+
+function patchEditCount(file: PatchFileSpec): number {
+  return file.patches?.length ?? 1;
+}
+
+function applyPatchFileBestEffort(
+  content: string,
+  file: PatchFileSpec,
+): { content: string; replacements: number; applied: number[]; failed: PatchFailure[] } {
+  const edits: Array<{ old?: string; new?: string; patch?: string }> =
+    file.patches !== undefined
+      ? file.patches
+      : file.old !== undefined && file.new !== undefined
+        ? [{ old: file.old, new: file.new }]
+        : [{ patch: file.patch }];
+
+  let current = content;
+  let replacements = 0;
+  const applied: number[] = [];
+  const failed: PatchFailure[] = [];
+  for (let i = 0; i < edits.length; i++) {
+    const edit = edits[i]!;
+    try {
+      const result =
+        edit.patch !== undefined
+          ? applySourcePatch({ content: current, path: file.path, patch: edit.patch })
+          : applyExactReplace({ content: current, path: file.path, old: edit.old!, new: edit.new! });
+      current = result.content;
+      replacements += result.replacements;
+      applied.push(i);
+    } catch (error) {
+      if (error instanceof SourcePatchError) {
+        failed.push({ path: file.path, index: i, error: error.message });
+        continue;
+      }
+      throw error;
+    }
+  }
+  return { content: current, replacements, applied, failed };
+}
+
+async function resolvePatchBase(input: {
+  gamesStore: GamesStore;
+  store: Store;
+  record: SubmissionRecord;
+  slug: string;
+  issueNumber: number;
+  roundGeneration: number;
+  path: string;
+}): Promise<{ content: string; baseFrom: PatchBaseFrom } | null> {
+  const stagedContent = await input.gamesStore.getStagedSourceFile({
+    slug: input.slug,
+    issueNumber: input.issueNumber,
+    roundGeneration: input.roundGeneration,
+    path: input.path,
+  });
+  if (stagedContent !== null) return { content: stagedContent, baseFrom: 'staged' };
+
+  let version = input.record.previewVersion ?? input.record.deliveredVersion;
+  if (!version) {
+    const publication = await input.store.getPublication(input.slug);
+    if (publication?.state === 'published') version = publication.currentVersion;
+  }
+  if (version) {
+    const delivered = await input.gamesStore.getSourceFile(input.slug, version, input.path);
+    if (delivered !== null) return { content: delivered, baseFrom: 'delivery' };
+  }
+
+  const seedFile = input.record.seed?.files.find((file) => file.path === input.path);
+  if (seedFile) return { content: seedFile.content, baseFrom: 'seed' };
+  return null;
+}
 
 const BuildPreviewInputSchema = z.object({
   html: z
@@ -846,7 +974,7 @@ export async function registerAgentChannelRoutes(
         // a tool that felt like finishing. This rides along with something the agent
         // is already doing, and it is derived from what we actually stored rather than
         // from anything the session believes about itself.
-        delivered: Boolean(record.deliveredVersion),
+        delivered: Boolean(record.deliveredVersion || record.previewVersion),
         // Delivering is not finishing. The gate runs *after* the upload, against our
         // engine, and it is the thing that decides whether any of this can be published
         // — so an agent that delivers and stops has handed over a game nobody can ship
@@ -872,7 +1000,7 @@ export async function registerAgentChannelRoutes(
                       'sandbox). Re-delivering without a fix just stores another version that fails the same way.',
             }
           : {}),
-        ...(record.deliveredVersion
+        ...(record.deliveredVersion || record.previewVersion
           ? {}
           : {
               mustDeliver:
@@ -1390,14 +1518,7 @@ export async function registerAgentChannelRoutes(
     },
   );
 
-  /**
-   * Unified-diff patch into the staging buffer.
-   *
-   * Base content is staged → latest delivery → seed (same overlay order as the live
-   * staged preview). The patched file is then written with putStagedSourceFile, so a
-   * later fromStaged submit (which overlays the same way) only needs the changed paths
-   * in the buffer — chat-thin agents never re-emit a 40 KB render.ts for a one-line fix.
-   */
+  // Patch into staging. Base is staged → delivery → seed. Keep every edit that applies; report failed[] for the rest.
   app.post(
     '/api/agent/build/sources/stage/patch',
     {
@@ -1438,102 +1559,160 @@ export async function registerAgentChannelRoutes(
         ? ((await store.ensureRoundGeneration(issueNumber)) ?? record.roundGeneration ?? 1)
         : (record.roundGeneration ?? 1);
 
+      const specs: PatchFileSpec[] = parsed.data.files
+        ? parsed.data.files
+        : [
+            {
+              path: parsed.data.path!,
+              old: parsed.data.old,
+              new: parsed.data.new,
+              patches: parsed.data.patches,
+              patch: parsed.data.patch,
+            },
+          ];
+
       try {
-        const stagedContent = await options.gamesStore.getStagedSourceFile({
-          slug,
-          issueNumber,
-          roundGeneration,
-          path: parsed.data.path,
-        });
-
-        let base = stagedContent;
-        let baseFrom: 'staged' | 'delivery' | 'seed' | null = stagedContent !== null ? 'staged' : null;
-
-        if (base === null) {
-          let version = record.previewVersion ?? record.deliveredVersion;
-          if (!version) {
-            const publication = await store!.getPublication(slug);
-            if (publication?.state === 'published') version = publication.currentVersion;
+        const prepared: Array<{
+          path: string;
+          content: string;
+          replacements: number;
+          applied: number[];
+          baseFrom: PatchBaseFrom;
+        }> = [];
+        const failed: PatchFailure[] = [];
+        for (const spec of specs) {
+          const base = await resolvePatchBase({
+            gamesStore: options.gamesStore,
+            store: store!,
+            record,
+            slug,
+            issueNumber,
+            roundGeneration,
+            path: spec.path,
+          });
+          if (!base) {
+            const error =
+              `cannot patch ${spec.path}: no base content in staging, the latest delivery, or the seed — ` +
+              'stage_source_file the full file first (or get_sources / get_seed), then patch';
+            for (let i = 0; i < patchEditCount(spec); i++) {
+              failed.push({ path: spec.path, index: i, error });
+            }
+            continue;
           }
-          if (version) {
-            base = await options.gamesStore.getSourceFile(slug, version, parsed.data.path);
-            if (base !== null) baseFrom = 'delivery';
-          }
-        }
-
-        if (base === null && record.seed?.files) {
-          const seedFile = record.seed.files.find((file) => file.path === parsed.data.path);
-          if (seedFile) {
-            base = seedFile.content;
-            baseFrom = 'seed';
-          }
-        }
-
-        if (base === null || baseFrom === null) {
-          return reply.status(400).send({
-            error:
-              `cannot patch ${parsed.data.path}: no base content in staging, the latest delivery, or the seed — ` +
-              'stage_source_file the full file first (or get_sources / get_seed), then patch',
+          const patched = applyPatchFileBestEffort(base.content, spec);
+          failed.push(...patched.failed);
+          if (patched.applied.length === 0) continue;
+          prepared.push({
+            path: spec.path,
+            content: patched.content,
+            replacements: patched.replacements,
+            applied: patched.applied,
+            baseFrom: base.baseFrom,
           });
         }
 
-        const patched =
-          parsed.data.old !== undefined && parsed.data.new !== undefined
-            ? applyExactReplace({
-                content: base,
-                path: parsed.data.path,
-                old: parsed.data.old,
-                new: parsed.data.new,
-              })
-            : applySourcePatch({
-                content: base,
-                path: parsed.data.path,
-                patch: parsed.data.patch!,
-              });
+        let staged;
+        const files: Array<{ path: string; bytes: number; replacements: number; baseFrom: PatchBaseFrom }> = [];
+        for (const item of prepared) {
+          try {
+            staged = await options.gamesStore.putStagedSourceFile({
+              slug,
+              issueNumber,
+              roundGeneration,
+              path: item.path,
+              content: item.content,
+            });
+            files.push({
+              path: staged.path,
+              bytes: staged.bytes,
+              replacements: item.replacements,
+              baseFrom: item.baseFrom,
+            });
+          } catch (error) {
+            if (error instanceof InvalidUploadError) {
+              for (const index of item.applied) {
+                failed.push({ path: item.path, index, error: error.message });
+              }
+              continue;
+            }
+            throw error;
+          }
+        }
 
-        const staged = await options.gamesStore.putStagedSourceFile({
-          slug,
-          issueNumber,
-          roundGeneration,
-          path: parsed.data.path,
-          content: patched.content,
-        });
+        if (files.length === 0) {
+          return reply.status(400).send({
+            error: failed[0]?.error ?? 'no edits applied',
+            accepted: false,
+            replacements: 0,
+            failed,
+          });
+        }
         await markBuildingFromChannel(issueNumber, record);
         await store?.touchLastAgentSignalAt(issueNumber, undefined, { key: 'staging_sources' });
         options.onEvent?.(issueNumber);
         options.onSourcesStaged?.({ issueNumber, slug, roundGeneration });
 
-        const hint = largeSourceFileHint(staged.path, staged.bytes, patched.content);
-        const manifestHint = gameManifestHint(staged.path, patched.content);
-        const advisories = await computeStageAdvisories({
-          kitFileStore,
-          gamesStore: options.gamesStore,
-          store: store!,
-          record,
-          slug,
-          issueNumber,
-          roundGeneration,
-          engineRef: record.roundKitEngineRef,
-          path: staged.path,
-          content: patched.content,
-        });
+        let hint: string | null = null;
+        let manifestHint: string | null = null;
+        for (const item of prepared) {
+          hint ??= largeSourceFileHint(item.path, Buffer.byteLength(item.content, 'utf8'), item.content);
+          manifestHint ??= gameManifestHint(item.path, item.content);
+        }
+        const tsFile = [...prepared].reverse().find((item) => item.path.endsWith('.ts') || item.path.endsWith('.tsx'));
+        const gameJson = prepared.find((item) => item.path === 'GAME.json');
+        const typecheckHint = tsFile
+          ? (
+              await computeStageAdvisories({
+                kitFileStore,
+                gamesStore: options.gamesStore,
+                store: store!,
+                record,
+                slug,
+                issueNumber,
+                roundGeneration,
+                engineRef: record.roundKitEngineRef,
+                path: tsFile.path,
+                content: tsFile.content,
+              })
+            ).typecheckHint
+          : undefined;
+        const audioHint = gameJson
+          ? (
+              await computeStageAdvisories({
+                kitFileStore,
+                gamesStore: options.gamesStore,
+                store: store!,
+                record,
+                slug,
+                issueNumber,
+                roundGeneration,
+                engineRef: record.roundKitEngineRef,
+                path: gameJson.path,
+                content: gameJson.content,
+              })
+            ).audioHint
+          : undefined;
+
+        const first = files[0]!;
         return reply.send({
           accepted: true,
-          path: staged.path,
-          bytes: staged.bytes,
-          replacements: patched.replacements,
-          baseFrom,
+          path: first.path,
+          bytes: first.bytes,
+          replacements: files.reduce((sum, file) => sum + file.replacements, 0),
+          baseFrom: first.baseFrom,
+          files,
+          ...(failed.length > 0 ? { incomplete: true, failed } : {}),
           staged: {
-            files: staged.files,
-            totalBytes: staged.totalBytes,
-            maxBytes: staged.maxBytes,
-            maxFiles: staged.maxFiles,
-            updatedAt: staged.updatedAt,
+            files: staged!.files,
+            totalBytes: staged!.totalBytes,
+            maxBytes: staged!.maxBytes,
+            maxFiles: staged!.maxFiles,
+            updatedAt: staged!.updatedAt,
           },
           ...(manifestHint ? { manifestHint } : {}),
           ...(hint ? { hint } : {}),
-          ...(advisories.typecheckHint ? { typecheckHint: advisories.typecheckHint } : {}),
-          ...(advisories.audioHint ? { audioHint: advisories.audioHint } : {}),
+          ...(typecheckHint ? { typecheckHint } : {}),
+          ...(audioHint ? { audioHint } : {}),
           ...(await channelState(issueNumber, (await store!.getSubmission(issueNumber)) ?? record)),
         });
       } catch (error) {
@@ -2053,6 +2232,9 @@ export async function registerAgentChannelRoutes(
             ...(await channelState(issueNumber, fresh)),
           });
         }
+        if (parsed.data.ackInboxIds && parsed.data.ackInboxIds.length > 0) {
+          await store!.markCreatorMessagesDelivered(issueNumber, parsed.data.ackInboxIds);
+        }
         const summarized = await recordSummary();
         const state = await channelState(issueNumber, fresh);
         return reply.send({
@@ -2067,6 +2249,10 @@ export async function registerAgentChannelRoutes(
 
       if (stopReason(record)) {
         return reply.send({ accepted: false, rejected: 'stopped', ...(await channelState(issueNumber, record)) });
+      }
+
+      if (parsed.data.ackInboxIds && parsed.data.ackInboxIds.length > 0) {
+        await store!.markCreatorMessagesDelivered(issueNumber, parsed.data.ackInboxIds);
       }
 
       // Submit-ended still records; a prior or legacy end does not.

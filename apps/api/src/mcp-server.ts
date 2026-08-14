@@ -623,7 +623,7 @@ const BEHAVIOURAL_CONTRACT = [
   // language they did not choose, which is the whole reason the field exists.
   "Write progress in the creator's language: when get_brief.locales[0] is not 'en', send report_progress with textLocalized and locale as well as the English text.",
   'Send a screenshot as soon as the game draws anything playable via screenshot_upload_url + curl --upload-file. There is no base64 screenshot tool — PNG bytes must never enter the model.',
-  'While iterating, deliver with mode=preview (no TRACE required). Prefer stage_upload_url + curl --upload-file for new/rewritten paths when you have shell; stage_source_file is the no-shell fallback. Prefer patch_source_file for edits — prefer old+new exact replace; patch=unified diff also works (never re-emit a whole large render.ts/model.ts). To retire a path (an old game/*.ts module, or a hand-authored index.html/GAME.json field), call delete_source_file — staging empty content still delivers a live empty file, not a removal. Honour warnings.code=module_too_large by splitting before more feature work. Then submit_sources({ fromStaged:true, mode:"preview", kitEngineRef }) — fromStaged overlays onto the latest delivery/seed so only changed paths need staging. Avoid one giant files[] payload. Only mode=publish needs TRACE/PLAYTEST and can go green.',
+  'While iterating, deliver with mode=preview (no TRACE required). Prefer stage_upload_url + curl --upload-file for new/rewritten paths when you have shell; stage_source_file is the no-shell fallback. Prefer patch_source_file for edits — prefer old+new exact replace, or files: [{ path, old, new }, ...] to edit several files in one call; patch=unified diff also works (never re-emit a whole large render.ts/model.ts). To retire a path (an old game/*.ts module, or a hand-authored index.html/GAME.json field), call delete_source_file — staging empty content still delivers a live empty file, not a removal. Honour warnings.code=module_too_large by splitting before more feature work. Then submit_sources({ fromStaged:true, mode:"preview", kitEngineRef }) — fromStaged overlays onto the latest delivery/seed so only changed paths need staging. Avoid one giant files[] payload. Only mode=publish needs TRACE/PLAYTEST and can go green.',
   'If the last gate was preview_failed / red / kit_outdated (warnings.code=must_fix_gate), fix then submit_sources again — do not stop at stage/patch/show_round. Staging does not re-run the gate; the creator card stays on the refused delivery until you submit.',
   'While iterating, run only npm run typecheck -- <slug> (no browser, npm ci, capture, playtest, or agency), then stage and submit_sources({ fromStaged: true, mode: "preview", kitEngineRef }); the server verifies the preview. If a browser is available and the draft is approaching delivery, optionally run npm run check:game -- <slug> --preview (typecheck → smoke → build). Run the full gate only immediately before a mode:"publish" seal.',
   'After submit_sources, if you will not deliver more this round, call end (required — warnings.code=call_end; submit already unlocks creator handoff). Prefer end over sitting in a get_gate_verdict loop — Studio shows the gate. Do not stop after submit alone without end. If you are fixing a refused gate, ignore call_end until after the next submit_sources.',
@@ -666,7 +666,7 @@ const SESSION_WORKFLOW: readonly string[] = [
   'Capability and "how do I…" questions: check get_kit_api first for exact kit-API surface (signatures, module names). knowledge_query is for everything get_kit_api does not cover — EditorKit internals, example-game patterns, docs/process, and broader capability questions — with citations and an indexedCommit; treat its prose as a pointer to verify via get_kit_api / read_kit_file, not a source of truth for exact signatures.',
   'Build the game — continuing the seed or sources you fetched, otherwise from the kit; report_progress before and after long steps. Soft module budget: keep each game/*.ts under ~350 lines / ~12 KiB. When a file approaches that, split cohesive pieces (render→art/ui/hud/rooms; model→tables/layout/types; runtime→systems) before more feature work. Honour warnings.code=module_too_large the same way you honour call_end — act, then continue.',
   'As soon as the game draws anything playable: screenshot_upload_url then curl --upload-file <png> "$url". There is no base64 send path — PNG bytes must never enter the model. Without shell egress, skip mid-build screenshots; the gate still captures on delivery.',
-  'While iterating: run only npm run typecheck -- <slug> locally, then prefer stage_upload_url({ path }) and curl --upload-file <file> "$url" for new/rewritten paths when you have shell egress (bytes never re-enter the model). Fall back to stage_source_file({ path, content }) without shell. For edits prefer patch_source_file({ path, old, new }) — exact unique substring replace, no unified-diff arithmetic. Or patch_source_file({ path, patch }) with a unified diff (bare @@ ok). Stage only changed paths — never re-upload the whole tree. Then submit_sources({ fromStaged: true, mode: "preview", kitEngineRef }) — fromStaged overlays onto the latest delivery/seed and the server verifies it; no browser, npm ci, capture, playtest, or agency is required for this preview. If a browser is available near delivery, optionally run npm run check:game -- <slug> --preview. Run the full gate only immediately before a mode:"publish" seal. Inline files[] still works for tiny trees.',
+  'While iterating: run only npm run typecheck -- <slug> locally, then prefer stage_upload_url({ path }) and curl --upload-file <file> "$url" for new/rewritten paths when you have shell egress (bytes never re-enter the model). Fall back to stage_source_file({ path, content }) without shell. For edits prefer patch_source_file({ path, old, new }) — exact unique substring replace, no unified-diff arithmetic. Or patch_source_file({ files: [{ path, old, new }, ...] }) to edit several files in one call. Or patch_source_file({ path, patch }) with a unified diff (bare @@ ok). Stage only changed paths — never re-upload the whole tree. Then submit_sources({ fromStaged: true, mode: "preview", kitEngineRef }) — fromStaged overlays onto the latest delivery/seed and the server verifies it; no browser, npm ci, capture, playtest, or agency is required for this preview. If a browser is available near delivery, optionally run npm run check:game -- <slug> --preview. Run the full gate only immediately before a mode:"publish" seal. Inline files[] still works for tiny trees.',
   'Staging is already visible: once game.ts, GAME.json and markup are present across staging + delivery/seed, the platform assembles a live playable preview — without waiting for submit or the gate. Markup means either an index.html or a GAME.json howToPlay carrying goal and hint, from which the body is generated. style.css is optional the same way: a GAME.json theme (accent/canvasBackground/canvasBorderColor/pixelArt) generates it when none is staged. Stage a runnable tree early and keep staging/patching as you work; a buffer that does not compile simply leaves the previous preview up.',
   'After every successful submit_sources: creator handoff is already unlocked; still call end immediately if you will not deliver more (warnings.code=call_end). Prefer end over sitting in a get_gate_verdict loop — Studio shows the gate. submit alone leaves your MCP session open — end sets stop:true. ChatGPT-class agents often stop after submit; end closes the session cleanly.',
   // The thread is the creator's whole view of the round.
@@ -1358,7 +1358,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     warnings: {
       type: 'array',
       description:
-        "Soft session nudges (progress_stale, inbox_pending, call_end, seed_unread, gate_not_started, gate_poll_backoff, module_too_large, game_manifest_invalid, typecheck_hint, audio_catalog_hint, card_unopened, must_fix_gate, must_deliver). Not errors — act on them, then continue the workflow. module_too_large means split that game/*.ts module before adding more behavior. game_manifest_invalid means the just-staged GAME.json has a shape that crashes the gate before typecheck (e.g. missing engine.modules) — fix it in the SAME stage/patch call's target, do not wait for submit_sources to find out. typecheck_hint means the file you just staged/patched would fail submit_sources' TypeScript preflight — fix it now, before staging more files on top of it. audio_catalog_hint means GAME.json names a music track id that is not in the shared catalog or a staged music.json — submit_sources will fail smoke with this same error. card_unopened means the creator has no status card yet — call show_round once. must_fix_gate means the last delivery was refused — fix and submit_sources again; staging alone does not re-run the gate.",
+        "Soft session nudges (progress_stale, inbox_pending, call_end, seed_unread, gate_not_started, gate_poll_backoff, module_too_large, game_manifest_invalid, typecheck_hint, audio_catalog_hint, card_unopened, must_fix_gate, must_deliver, patch_incomplete). Not errors — act on them, then continue the workflow. module_too_large means split that game/*.ts module before adding more behavior. game_manifest_invalid means the just-staged GAME.json has a shape that crashes the gate before typecheck (e.g. missing engine.modules) — fix it in the SAME stage/patch call's target, do not wait for submit_sources to find out. typecheck_hint means the file you just staged/patched would fail submit_sources' TypeScript preflight — fix it now, before staging more files on top of it. audio_catalog_hint means GAME.json names a music track id that is not in the shared catalog or a staged music.json — submit_sources will fail smoke with this same error. card_unopened means the creator has no status card yet — call show_round once. must_fix_gate means the last delivery was refused — fix and submit_sources again; staging alone does not re-run the gate. patch_incomplete means some edits in this patch_source_file call landed and some did not — retry only failed[] (path + index), do not resend the ones that applied.",
       items: {
         type: 'object',
         properties: {
@@ -1378,6 +1378,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
               'card_unopened',
               'must_fix_gate',
               'must_deliver',
+              'patch_incomplete',
             ],
           },
           message: { type: 'string' },
@@ -3844,7 +3845,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
 
     patch_source_file: {
       // Replaces existing staged content, and a patch can remove lines outright.
-      annotations: { title: 'Edit one staged source file', ...CONSUMES },
+      annotations: { title: 'Edit staged source files', ...CONSUMES },
       outputSchema: {
         type: 'object',
         properties: {
@@ -3853,6 +3854,32 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           bytes: { type: 'number' },
           replacements: { type: 'number' },
           baseFrom: { type: 'string', enum: ['staged', 'delivery', 'seed'] },
+          files: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                path: { type: 'string' },
+                bytes: { type: 'number' },
+                replacements: { type: 'number' },
+                baseFrom: { type: 'string', enum: ['staged', 'delivery', 'seed'] },
+              },
+              required: ['path', 'bytes', 'replacements', 'baseFrom'],
+            },
+          },
+          incomplete: { type: 'boolean' },
+          failed: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                path: { type: 'string' },
+                index: { type: 'number' },
+                error: { type: 'string' },
+              },
+              required: ['path', 'index', 'error'],
+            },
+          },
           hint: { type: 'string' },
           staged: {
             type: 'object',
@@ -3876,13 +3903,16 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         required: ['ok', 'path', 'bytes', 'replacements', 'baseFrom', 'staged', 'stop', 'pendingMessages'],
       },
       description:
-        'Edit ONE existing path in the staging buffer without re-uploading the whole file. ' +
+        'Edit existing path(s) in the staging buffer without re-uploading whole files. ' +
         'Prefer this over stage_source_file whenever the file already exists (from get_sources, a prior stage, or the seed) — ' +
         'especially for large game/render.ts or game/model.ts files. ' +
-        'PREFERRED: pass old + new (exact unique substring replace) — no @@ line numbers, no diff format. ' +
-        'ALTERNATE: pass patch as a unified diff for that single file ' +
+        'PREFERRED: pass old + new (exact unique substring replace), or patches: [{ old, new }, ...] for multiple replacements in one file, ' +
+        'or files: [{ path, old, new } | { path, patches: [{ old, new }] }, ...] to edit several files in one call — no @@ line numbers, no diff format. ' +
+        'With patches[] / files[], replacements apply sequentially per file; ensure earlier replacements do not make a later old snippet ambiguous. ' +
+        'Edits that apply are kept even if later ones miss — retry only failed[] (path + index), do not resend the ones that landed. Honour warnings.code=patch_incomplete. ' +
+        'ALTERNATE: pass path + patch as a unified diff for that single file ' +
         '("--- a/game/render.ts\\n+++ b/game/render.ts\\n@@\\n context\\n-old\\n+new\\n context\\n"; bare @@ ok). ' +
-        'old must match exactly once; widen the snippet if it is ambiguous. Do not pass patch together with old/new. ' +
+        'old must match exactly once; widen the snippet if it is ambiguous. Do not mix files[] with top-level path/old/new/patches/patch. ' +
         'Then submit_sources({ fromStaged: true, mode, kitEngineRef }); fromStaged overlays onto the latest delivery/seed so you only need the patched paths staged. ' +
         BEHAVIOURAL_CONTRACT,
       inputSchema: {
@@ -3891,7 +3921,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           sessionKey: SESSION_KEY_PROP,
           path: {
             type: 'string',
-            description: 'Game-relative path (e.g. game/render.ts). For unified diffs, must match the ---/+++ headers.',
+            description:
+              'Game-relative path (e.g. game/render.ts). Required for single-file edits. For unified diffs, must match the ---/+++ headers. Omit when passing files[].',
           },
           old: {
             type: 'string',
@@ -3901,31 +3932,77 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             type: 'string',
             description: 'Replacement text for old (may be empty to delete). Pass together with old.',
           },
+          patches: {
+            type: 'array',
+            description: 'Array of { old, new } replacement pairs to apply sequentially to this file in one call.',
+            items: {
+              type: 'object',
+              properties: {
+                old: { type: 'string', description: 'Exact text to find.' },
+                new: { type: 'string', description: 'Replacement text.' },
+              },
+              required: ['old', 'new'],
+            },
+          },
+          files: {
+            type: 'array',
+            description:
+              'Edit several files in one call. Each entry is { path, old, new } or { path, patches: [{ old, new }, ...] }. Do not pass top-level path/old/new/patches/patch with files[].',
+            items: {
+              type: 'object',
+              properties: {
+                path: { type: 'string', description: 'Game-relative path.' },
+                old: { type: 'string', description: 'Exact text to find (single replace).' },
+                new: { type: 'string', description: 'Replacement text (single replace).' },
+                patches: {
+                  type: 'array',
+                  description: 'Sequential { old, new } pairs for this file.',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      old: { type: 'string' },
+                      new: { type: 'string' },
+                    },
+                    required: ['old', 'new'],
+                  },
+                },
+              },
+              required: ['path'],
+            },
+          },
           patch: {
             type: 'string',
             description:
-              'Unified diff for this one file only (alternative to old+new). Bare `@@` hunks are fine when context matches.',
+              'Unified diff for this one file only (alternative to old+new, patches, or files[]). Bare `@@` hunks are fine when context matches.',
           },
           slug: { type: 'string' },
         },
-        required: ['path'],
       },
       handler: async (args, ctx) => {
         const auth = await resolveAuth(ctx, args);
         if (!('channelToken' in auth)) return auth;
         const path = typeof args.path === 'string' ? args.path.trim() : '';
-        if (!path) return toolErr('path is required');
+        const hasFiles = Array.isArray(args.files) && args.files.length > 0;
         const hasPatch = typeof args.patch === 'string' && args.patch.trim().length > 0;
         const hasOld = typeof args.old === 'string';
         const hasNew = typeof args.new === 'string';
-        if (hasPatch && (hasOld || hasNew)) {
-          return toolErr('pass either old+new (exact replace) or patch (unified diff), not both');
+        const hasPatches = Array.isArray(args.patches) && args.patches.length > 0;
+
+        if (hasFiles && (path || hasPatch || hasOld || hasNew || hasPatches)) {
+          return toolErr('pass files[] alone, or a single-file path with old+new / patches[] / patch');
+        }
+        if (!hasFiles && !path) return toolErr('path is required unless files[] is passed');
+        const modes = [hasPatch, hasOld || hasNew, hasPatches].filter(Boolean).length;
+        if (!hasFiles && modes > 1) {
+          return toolErr(
+            'pass either old+new (single exact replace), patches[] (multi-replace), files[], or patch (unified diff)',
+          );
         }
         if (hasOld !== hasNew) {
           return toolErr('old and new must be passed together');
         }
-        if (!hasPatch && !hasOld) {
-          return toolErr('pass old+new (preferred) or patch (unified diff)');
+        if (!hasFiles && modes === 0) {
+          return toolErr('pass old+new (preferred), patches[] (multi-replace), files[], or patch (unified diff)');
         }
         const slug =
           typeof args.slug === 'string' && args.slug.trim() ? args.slug.trim() : (auth.record.slug ?? undefined);
@@ -3934,11 +4011,17 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           'POST',
           '/api/agent/build/sources/stage/patch',
           auth.channelToken,
-          {
-            path,
-            ...(hasPatch ? { patch: args.patch } : { old: args.old, new: args.new }),
-            ...(slug ? { slug } : {}),
-          },
+          hasFiles
+            ? { files: args.files, ...(slug ? { slug } : {}) }
+            : {
+                path,
+                ...(hasPatches
+                  ? { patches: args.patches }
+                  : hasPatch
+                    ? { patch: args.patch }
+                    : { old: args.old, new: args.new }),
+                ...(slug ? { slug } : {}),
+              },
         );
         const body = res.json() as {
           error?: string;
@@ -3948,6 +4031,14 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           bytes?: number;
           replacements?: number;
           baseFrom?: 'staged' | 'delivery' | 'seed';
+          files?: Array<{
+            path: string;
+            bytes: number;
+            replacements: number;
+            baseFrom: 'staged' | 'delivery' | 'seed';
+          }>;
+          incomplete?: boolean;
+          failed?: Array<{ path: string; index: number; error: string }>;
           hint?: string;
           manifestHint?: string;
           typecheckHint?: string;
@@ -3973,6 +4064,9 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           bytes: body.bytes ?? 0,
           replacements: body.replacements ?? 0,
           baseFrom: body.baseFrom ?? 'staged',
+          ...(body.files ? { files: body.files } : {}),
+          ...(body.incomplete ? { incomplete: true } : {}),
+          ...(body.failed && body.failed.length > 0 ? { failed: body.failed } : {}),
           ...(hint ? { hint } : {}),
           staged: body.staged ?? { files: [], totalBytes: 0, maxBytes: 0, maxFiles: 0 },
           ...channelControlFields(body, [
@@ -3980,6 +4074,16 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             ...(hint ? [{ code: 'module_too_large' as const, message: hint }] : []),
             ...(body.typecheckHint ? [{ code: 'typecheck_hint' as const, message: body.typecheckHint }] : []),
             ...(body.audioHint ? [{ code: 'audio_catalog_hint' as const, message: body.audioHint }] : []),
+            ...(body.failed && body.failed.length > 0
+              ? [
+                  {
+                    code: 'patch_incomplete' as const,
+                    message:
+                      `${body.failed.length} edit${body.failed.length === 1 ? '' : 's'} did not apply — ` +
+                      'retry only failed[] (path + index). Do not resend edits that already landed.',
+                  },
+                ]
+              : []),
           ]),
           pendingMessages: pendingMessagesFromChannel(body),
         });
@@ -4463,6 +4567,12 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             description:
               "Which language summaryLocalized is written in, e.g. 'pl'. Without it summaryLocalized is ignored.",
           },
+          ackInboxIds: {
+            type: 'array',
+            description:
+              'Optional array of creator inbox message IDs to acknowledge simultaneously when ending the round.',
+            items: { type: 'string' },
+          },
         },
       },
       handler: async (args, ctx) => {
@@ -4473,6 +4583,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           ...(typeof args.summary === 'string' ? { summary: args.summary } : {}),
           ...(typeof args.summaryLocalized === 'string' ? { summaryLocalized: args.summaryLocalized } : {}),
           ...(typeof args.locale === 'string' ? { locale: args.locale } : {}),
+          ...(Array.isArray(args.ackInboxIds) ? { ackInboxIds: args.ackInboxIds } : {}),
         };
         const res = await injectChannel(ctx.request, 'POST', '/api/agent/build/end', auth.channelToken, payload);
         const body = res.json() as {

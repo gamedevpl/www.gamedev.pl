@@ -2,6 +2,7 @@ import { createPatch } from 'diff';
 import { describe, expect, it } from 'vitest';
 import {
   applyExactReplace,
+  applyMultipleExactReplaces,
   applySourcePatch,
   normalizePatchPath,
   normalizeUnifiedDiff,
@@ -284,5 +285,45 @@ describe('applyExactReplace', () => {
         new: 'b',
       }),
     ).toThrow(/more than once/);
+  });
+});
+
+describe('applyMultipleExactReplaces', () => {
+  const content = 'line1\nline2\nline3\nline4\n';
+
+  it('applies sequential exact replacements to a file', () => {
+    const result = applyMultipleExactReplaces({
+      content,
+      path: 'game.ts',
+      patches: [
+        { old: 'line2\n', new: 'line2_mod\n' },
+        { old: 'line4\n', new: 'line4_mod\n' },
+      ],
+    });
+    expect(result.content).toBe('line1\nline2_mod\nline3\nline4_mod\n');
+    expect(result.replacements).toBe(2);
+  });
+
+  it('refuses empty patches array', () => {
+    expect(() =>
+      applyMultipleExactReplaces({
+        content,
+        path: 'game.ts',
+        patches: [],
+      }),
+    ).toThrow(/at least one replacement/);
+  });
+
+  it('fails if any replacement in sequence is not found', () => {
+    expect(() =>
+      applyMultipleExactReplaces({
+        content,
+        path: 'game.ts',
+        patches: [
+          { old: 'line1\n', new: 'LINE1\n' },
+          { old: 'not_existing\n', new: 'x\n' },
+        ],
+      }),
+    ).toThrow(/not found in game.ts/);
   });
 });

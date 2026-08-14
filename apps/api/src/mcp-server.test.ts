@@ -785,6 +785,92 @@ declare const GameKit: { defineGame(): unknown };
     expect(audioWarnings.find((w) => w.code === 'audio_catalog_hint')?.message).toMatch(
       /unknown music track "fantasy-adventure"/,
     );
+
+    // Also verify multi-patch via patch_source_file works with patches[]
+    const multiPatch = await callTool(
+      app,
+      'patch_source_file',
+      {
+        sessionKey,
+        path: 'game/render.ts',
+        patches: [
+          { old: "'hi'", new: "'hello'" },
+          { old: "textAlign: 'center'", new: "align: 'center'" },
+        ],
+      },
+      { 'mcp-session-id': sessionId },
+    );
+    expect(multiPatch.isError).toBe(false);
+    expect((multiPatch.structured as { replacements?: number }).replacements).toBe(2);
+
+    const stagedSim = await callTool(
+      app,
+      'stage_source_file',
+      { sessionKey, path: 'game/sim.ts', content: 'export const SPEED = 4;\n' },
+      { 'mcp-session-id': sessionId },
+    );
+    expect(stagedSim.isError).toBe(false);
+
+    const multiFile = await callTool(
+      app,
+      'patch_source_file',
+      {
+        sessionKey,
+        files: [
+          { path: 'game/render.ts', old: "'hello'", new: "'hey'" },
+          { path: 'game/sim.ts', old: 'SPEED = 4', new: 'SPEED = 8' },
+        ],
+      },
+      { 'mcp-session-id': sessionId },
+    );
+    expect(multiFile.isError).toBe(false);
+    expect((multiFile.structured as { replacements?: number }).replacements).toBe(2);
+    expect((multiFile.structured as { files?: Array<{ path: string }> }).files?.map((file) => file.path)).toEqual([
+      'game/render.ts',
+      'game/sim.ts',
+    ]);
+
+    const partialOk = await callTool(
+      app,
+      'patch_source_file',
+      {
+        sessionKey,
+        path: 'game/sim.ts',
+        patches: [
+          { old: 'SPEED = 8', new: 'SPEED = 10' },
+          { old: 'does not exist', new: 'x' },
+        ],
+      },
+      { 'mcp-session-id': sessionId },
+    );
+    expect(partialOk.isError).toBe(false);
+    expect(partialOk.structured).toMatchObject({
+      ok: true,
+      incomplete: true,
+      replacements: 1,
+      failed: [{ path: 'game/sim.ts', index: 1 }],
+    });
+    const partialWarnings =
+      (partialOk.structured as { warnings?: Array<{ code: string; message: string }> }).warnings ?? [];
+    expect(partialWarnings.find((warning) => warning.code === 'patch_incomplete')?.message).toMatch(
+      /retry only failed\[\]/,
+    );
+
+    // Also verify end with ackInboxIds acknowledges creator messages
+    const msg = await store.appendCreatorMessage(ISSUE, 'Fix the UI font');
+    const ended = await callTool(
+      app,
+      'end',
+      {
+        sessionKey,
+        summary: 'All done and acknowledged.',
+        ackInboxIds: [msg.id],
+      },
+      { 'mcp-session-id': sessionId },
+    );
+    expect(ended.isError).toBe(false);
+    expect((ended.structured as { ok?: boolean }).ok).toBe(true);
+    expect(await store.listPendingCreatorMessages(ISSUE)).toHaveLength(0);
   });
 
   it('knowledge_query is advertised and callable, and returns the seam result', async () => {

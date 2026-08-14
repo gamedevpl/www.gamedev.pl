@@ -1,15 +1,4 @@
-/**
- * Unified-diff patches for game source staging (MCP / agent channel).
- *
- * Chat-thin agents (Claude Chat especially) otherwise re-emit entire `render.ts` /
- * `model.ts` files on every tweak via `stage_source_file`. A unified diff keeps the
- * tool payload proportional to the edit — the format models already know well.
- *
- * Models often emit near-unified diffs that stock parsers reject: bare `@@` (no line
- * numbers), approximate `@@ -N,M` counts, or context lines missing the leading space.
- * We normalize those before apply so agents need matching context, not exact line
- * arithmetic from a full-file re-read.
- */
+// Unified-diff patches for game source staging (MCP / agent channel).
 
 import { applyPatch, parsePatch } from 'diff';
 
@@ -22,19 +11,26 @@ export class SourcePatchError extends Error {
 
 export type ApplySourcePatchInput = {
   content: string;
-  /** Target game-relative path (e.g. game/render.ts). Must match the patch headers. */
   path: string;
-  /** Unified diff for this one path (`---/`+++` + `@@` hunks). */
   patch: string;
 };
 
 export type ApplyExactReplaceInput = {
   content: string;
   path: string;
-  /** Exact substring that must appear once in the file. */
   old: string;
-  /** Replacement text (may be empty to delete). */
   new: string;
+};
+
+export type ExactReplacePair = {
+  old: string;
+  new: string;
+};
+
+export type ApplyMultipleExactReplacesInput = {
+  content: string;
+  path: string;
+  patches: ExactReplacePair[];
 };
 
 export type ApplySourcePatchResult = {
@@ -283,6 +279,34 @@ export function applyExactReplace(input: ApplyExactReplaceInput): ApplySourcePat
 
   const content = input.content.replace(input.old, input.new);
   return { content, replacements: 1 };
+}
+
+export function applyMultipleExactReplaces(input: ApplyMultipleExactReplacesInput): ApplySourcePatchResult {
+  const path = input.path.trim();
+  if (!path) throw new SourcePatchError('path is required');
+  if (!Array.isArray(input.patches) || input.patches.length === 0) {
+    throw new SourcePatchError('patches array must contain at least one replacement');
+  }
+
+  let currentContent = input.content;
+  let totalReplacements = 0;
+
+  for (let i = 0; i < input.patches.length; i++) {
+    const p = input.patches[i]!;
+    if (typeof p.old !== 'string' || typeof p.new !== 'string') {
+      throw new SourcePatchError(`patch #${i + 1} must include old and new string properties`);
+    }
+    const res = applyExactReplace({
+      content: currentContent,
+      path,
+      old: p.old,
+      new: p.new,
+    });
+    currentContent = res.content;
+    totalReplacements += res.replacements;
+  }
+
+  return { content: currentContent, replacements: totalReplacements };
 }
 
 /** @deprecated Prefer {@link largeSourceFileHint} from `module-size.js`. Re-exported for callers. */

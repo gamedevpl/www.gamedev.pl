@@ -182,6 +182,14 @@ describe('buildPrompt', () => {
     expect(prompt).toContain('This checkout may not contain it');
   });
 
+  it('points a fastLane MCP revision round at start and get_sources without restore or exploration', () => {
+    const prompt = buildPrompt({ ...BRIEF, feedback: 'make the bubbles bigger' }, { kind: 'channel', fast: true });
+    expect(prompt).not.toContain('npm run restore');
+    expect(prompt).toContain('`start` then `get_sources`');
+    expect(prompt).toContain('Do not run bash exploration commands');
+    expect(prompt).toContain('If get_sources reports nothing delivered yet');
+  });
+
   it('does not send a first build looking for a delivery that cannot exist', () => {
     expect(buildPrompt(BRIEF)).not.toContain('npm run restore');
   });

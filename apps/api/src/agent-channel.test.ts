@@ -7,7 +7,7 @@ import { buildApp } from './app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './github-client.js';
 import type { GameSeeder } from './game-seed.js';
-import type { GamesStore } from './games-store.js';
+import { InvalidUploadError, type GamesStore } from './games-store.js';
 import type { KnowledgeQueryResult } from './knowledge-search.js';
 import { InMemoryStore } from './store.js';
 import { mintToken } from './submission-token.js';
@@ -627,9 +627,10 @@ describe('agent build channel', () => {
     });
   });
 
-  it('drops the summary when the round is already stopped, like a progress report', async () => {
+  it('drops the summary and does not ack the inbox when the round is already stopped', async () => {
     const store = new InMemoryStore();
     await seedSubmission(store);
+    const msg = await store.appendCreatorMessage(ISSUE, 'please make the ship faster');
     await store.setSubmissionAbandoned(ISSUE, new Date().toISOString());
     app = await createApp(store);
 
@@ -637,11 +638,75 @@ describe('agent build channel', () => {
       method: 'POST',
       url: '/api/agent/build/end',
       headers: agentHeaders(),
-      payload: { summary: 'One last word the creator did not ask for.' },
+      payload: { summary: 'One last word the creator did not ask for.', ackInboxIds: [msg.id] },
     });
 
     expect(end.json()).toMatchObject({ accepted: false, rejected: 'stopped' });
     expect(await store.listBuildEvents(ISSUE)).toHaveLength(0);
+    expect(await store.listPendingCreatorMessages(ISSUE)).toHaveLength(1);
+  });
+
+  it('acknowledges inbox messages on a successful end call', async () => {
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    const msg1 = await store.appendCreatorMessage(ISSUE, 'feedback 1');
+    const msg2 = await store.appendCreatorMessage(ISSUE, 'feedback 2');
+    app = await createApp(store);
+
+    const end = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/end',
+      headers: agentHeaders(),
+      payload: { summary: 'Addressed feedback.', ackInboxIds: [msg1.id] },
+    });
+
+    expect(end.json()).toMatchObject({ accepted: true, ended: true });
+    const pending = await store.listPendingCreatorMessages(ISSUE);
+    expect(pending).toHaveLength(1);
+    expect(pending[0]?.id).toBe(msg2.id);
+  });
+
+  it('acknowledges inbox messages on builder handoff ack', async () => {
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    const msg = await store.appendCreatorMessage(ISSUE, 'feedback');
+    await store.requestBuilderHandoff(ISSUE, 'self', new Date().toISOString());
+    app = await createApp(store, {
+      onBuilderHandoffAcknowledged: async ({ issueNumber, acknowledgedAt }) => {
+        const handoff = await store.acknowledgeBuilderHandoff(issueNumber, acknowledgedAt);
+        await store.clearBuilderHandoff(issueNumber);
+        return { started: handoff !== null };
+      },
+    });
+
+    const end = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/end',
+      headers: agentHeaders(),
+      payload: { summary: 'Handing over.', ackInboxIds: [msg.id] },
+    });
+
+    expect(end.json()).toMatchObject({ accepted: true, handoffAcknowledged: true });
+    expect(await store.listPendingCreatorMessages(ISSUE)).toHaveLength(0);
+  });
+
+  it('does not ack the inbox when a builder handoff is already acknowledged', async () => {
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    const msg = await store.appendCreatorMessage(ISSUE, 'please make the ship faster');
+    await store.requestBuilderHandoff(ISSUE, 'self', new Date().toISOString());
+    await store.acknowledgeBuilderHandoff(ISSUE, new Date().toISOString());
+    app = await createApp(store);
+
+    const end = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/end',
+      headers: agentHeaders(),
+      payload: { summary: 'Handing over.', ackInboxIds: [msg.id] },
+    });
+
+    expect(end.json()).toMatchObject({ accepted: false, rejected: 'handoff_already_acknowledged' });
+    expect(await store.listPendingCreatorMessages(ISSUE)).toHaveLength(1);
   });
 
   it('rejects the pre-cancel token after operator cancel bumps the round generation', async () => {
@@ -1928,6 +1993,284 @@ describe('agent build channel', () => {
       expect(staged.get('game/render.ts')).toContain('drawHud()');
     });
 
+    it('patches several files in one call via files[]', async () => {
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      const { gamesStore, staged } = stubGamesStore();
+      app = await createApp(store, { gamesStore });
+
+      await app.inject({
+        method: 'PUT',
+        url: '/api/agent/build/sources/stage',
+        headers: agentHeaders(),
+        payload: {
+          slug: 'comet-courier',
+          path: 'game/render.ts',
+          content: 'export function paint() {\n  drawSky();\n}\n',
+        },
+      });
+      await app.inject({
+        method: 'PUT',
+        url: '/api/agent/build/sources/stage',
+        headers: agentHeaders(),
+        payload: {
+          slug: 'comet-courier',
+          path: 'game/sim.ts',
+          content: 'export const SPEED = 4;\nexport const LIVES = 3;\n',
+        },
+      });
+
+      const patched = await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/sources/stage/patch',
+        headers: agentHeaders(),
+        payload: {
+          files: [
+            { path: 'game/render.ts', old: '  drawSky();\n', new: '  drawSky();\n  drawHud();\n' },
+            {
+              path: 'game/sim.ts',
+              patches: [
+                { old: 'SPEED = 4', new: 'SPEED = 6' },
+                { old: 'LIVES = 3', new: 'LIVES = 5' },
+              ],
+            },
+          ],
+        },
+      });
+      expect(patched.statusCode).toBe(200);
+      expect(patched.json()).toMatchObject({
+        accepted: true,
+        replacements: 3,
+        path: 'game/render.ts',
+        files: [
+          { path: 'game/render.ts', replacements: 1, baseFrom: 'staged' },
+          { path: 'game/sim.ts', replacements: 2, baseFrom: 'staged' },
+        ],
+      });
+      expect(staged.get('game/render.ts')).toContain('drawHud()');
+      expect(staged.get('game/sim.ts')).toBe('export const SPEED = 6;\nexport const LIVES = 5;\n');
+    });
+
+    it('keeps successful files[] edits and reports the ones that missed', async () => {
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      const { gamesStore, staged } = stubGamesStore();
+      app = await createApp(store, { gamesStore });
+
+      await app.inject({
+        method: 'PUT',
+        url: '/api/agent/build/sources/stage',
+        headers: agentHeaders(),
+        payload: {
+          slug: 'comet-courier',
+          path: 'game/render.ts',
+          content: 'export function paint() {\n  drawSky();\n}\n',
+        },
+      });
+      await app.inject({
+        method: 'PUT',
+        url: '/api/agent/build/sources/stage',
+        headers: agentHeaders(),
+        payload: {
+          slug: 'comet-courier',
+          path: 'game/sim.ts',
+          content: 'export const SPEED = 4;\n',
+        },
+      });
+
+      const patched = await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/sources/stage/patch',
+        headers: agentHeaders(),
+        payload: {
+          files: [
+            { path: 'game/render.ts', old: '  drawSky();\n', new: '  drawHud();\n' },
+            { path: 'game/sim.ts', old: 'missing snippet', new: 'x' },
+          ],
+        },
+      });
+      expect(patched.statusCode).toBe(200);
+      expect(patched.json()).toMatchObject({
+        accepted: true,
+        incomplete: true,
+        replacements: 1,
+        files: [{ path: 'game/render.ts', replacements: 1 }],
+        failed: [{ path: 'game/sim.ts', index: 0 }],
+      });
+      expect(patched.json().failed[0].error).toMatch(/not found in game\/sim\.ts/);
+      expect(staged.get('game/render.ts')).toContain('drawHud()');
+      expect(staged.get('game/sim.ts')).toBe('export const SPEED = 4;\n');
+    });
+
+    it('keeps earlier patches[] on a file when a later fragment misses', async () => {
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      const { gamesStore, staged } = stubGamesStore();
+      app = await createApp(store, { gamesStore });
+
+      await app.inject({
+        method: 'PUT',
+        url: '/api/agent/build/sources/stage',
+        headers: agentHeaders(),
+        payload: {
+          slug: 'comet-courier',
+          path: 'game/sim.ts',
+          content: 'export const SPEED = 4;\nexport const LIVES = 3;\nexport const FUEL = 9;\n',
+        },
+      });
+
+      const patched = await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/sources/stage/patch',
+        headers: agentHeaders(),
+        payload: {
+          path: 'game/sim.ts',
+          patches: [
+            { old: 'SPEED = 4', new: 'SPEED = 6' },
+            { old: 'missing snippet', new: 'x' },
+            { old: 'FUEL = 9', new: 'FUEL = 1' },
+          ],
+        },
+      });
+      expect(patched.statusCode).toBe(200);
+      expect(patched.json()).toMatchObject({
+        accepted: true,
+        incomplete: true,
+        replacements: 2,
+        failed: [{ path: 'game/sim.ts', index: 1 }],
+      });
+      expect(staged.get('game/sim.ts')).toBe(
+        'export const SPEED = 6;\nexport const LIVES = 3;\nexport const FUEL = 1;\n',
+      );
+    });
+
+    it('returns 400 with failed[] when no edit in the batch applied', async () => {
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      const { gamesStore, staged } = stubGamesStore();
+      app = await createApp(store, { gamesStore });
+
+      await app.inject({
+        method: 'PUT',
+        url: '/api/agent/build/sources/stage',
+        headers: agentHeaders(),
+        payload: {
+          slug: 'comet-courier',
+          path: 'game/sim.ts',
+          content: 'export const SPEED = 4;\n',
+        },
+      });
+
+      const patched = await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/sources/stage/patch',
+        headers: agentHeaders(),
+        payload: {
+          files: [
+            { path: 'game/sim.ts', old: 'missing one', new: 'x' },
+            { path: 'game/missing.ts', old: 'also missing', new: 'y' },
+          ],
+        },
+      });
+      expect(patched.statusCode).toBe(400);
+      expect(patched.json()).toMatchObject({
+        accepted: false,
+        replacements: 0,
+        failed: [
+          { path: 'game/sim.ts', index: 0 },
+          { path: 'game/missing.ts', index: 0 },
+        ],
+      });
+      expect(staged.get('game/sim.ts')).toBe('export const SPEED = 4;\n');
+    });
+
+    it('reports every applied index when staging a patched file is refused', async () => {
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      const { gamesStore, staged } = stubGamesStore();
+      const put = gamesStore.putStagedSourceFile.bind(gamesStore);
+      gamesStore.putStagedSourceFile = async (input: { path: string; content: string }) => {
+        if (input.path === 'game/sim.ts' && input.content.includes('SPEED = 6')) {
+          throw new InvalidUploadError('game/sim.ts is too large');
+        }
+        return put(input);
+      };
+      app = await createApp(store, { gamesStore });
+
+      await app.inject({
+        method: 'PUT',
+        url: '/api/agent/build/sources/stage',
+        headers: agentHeaders(),
+        payload: {
+          slug: 'comet-courier',
+          path: 'game/render.ts',
+          content: 'export function paint() {\n  drawSky();\n}\n',
+        },
+      });
+      await app.inject({
+        method: 'PUT',
+        url: '/api/agent/build/sources/stage',
+        headers: agentHeaders(),
+        payload: {
+          slug: 'comet-courier',
+          path: 'game/sim.ts',
+          content: 'export const SPEED = 4;\nexport const LIVES = 3;\n',
+        },
+      });
+
+      const patched = await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/sources/stage/patch',
+        headers: agentHeaders(),
+        payload: {
+          files: [
+            { path: 'game/render.ts', old: '  drawSky();\n', new: '  drawHud();\n' },
+            {
+              path: 'game/sim.ts',
+              patches: [
+                { old: 'SPEED = 4', new: 'SPEED = 6' },
+                { old: 'LIVES = 3', new: 'LIVES = 5' },
+              ],
+            },
+          ],
+        },
+      });
+      expect(patched.statusCode).toBe(200);
+      expect(patched.json()).toMatchObject({
+        accepted: true,
+        incomplete: true,
+        replacements: 1,
+        files: [{ path: 'game/render.ts', replacements: 1 }],
+        failed: [
+          { path: 'game/sim.ts', index: 0 },
+          { path: 'game/sim.ts', index: 1 },
+        ],
+      });
+      expect(staged.get('game/render.ts')).toContain('drawHud()');
+      expect(staged.get('game/sim.ts')).toBe('export const SPEED = 4;\nexport const LIVES = 3;\n');
+    });
+
+    it('refuses files[] mixed with a top-level path', async () => {
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      const { gamesStore } = stubGamesStore();
+      app = await createApp(store, { gamesStore });
+
+      const patched = await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/sources/stage/patch',
+        headers: agentHeaders(),
+        payload: {
+          path: 'game/render.ts',
+          old: 'a',
+          new: 'b',
+          files: [{ path: 'game/sim.ts', old: 'c', new: 'd' }],
+        },
+      });
+      expect(patched.statusCode).toBe(400);
+      expect(patched.json().error).toMatch(/files\[\] alone/);
+    });
+
     it('accepts a bare @@ patch (no line numbers) matched by context', async () => {
       const store = new InMemoryStore();
       await seedSubmission(store);
@@ -2404,11 +2747,30 @@ describe('the delivery reminder on every channel call', () => {
     await app.close();
   });
 
-  it('stops nagging once the build has actually delivered', async () => {
+  it('stops nagging once the build has actually delivered (deliveredVersion or previewVersion)', async () => {
     // Derived from what we stored, not from anything the session claims about itself.
     const store = new InMemoryStore();
     await seedSubmission(store);
     await store.setSubmissionDeliveredVersion(ISSUE, 'v1');
+    const app = await createApp(store);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/progress',
+      headers: agentHeaders(),
+      payload: { text: 'Polishing.' },
+    });
+
+    expect(response.json().control.delivered).toBe(true);
+    expect(response.json().control.mustDeliver).toBeUndefined();
+
+    await app.close();
+  });
+
+  it('stops nagging when a previewVersion was delivered', async () => {
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    await store.setSubmissionPreviewVersion(ISSUE, 'v1-preview');
     const app = await createApp(store);
 
     const response = await app.inject({
