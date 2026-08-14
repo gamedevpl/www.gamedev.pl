@@ -12570,6 +12570,27 @@ button.builder-mode-selector:disabled {
   }
 }
 
+@media (max-width: 800px) {
+  /* The mobile sheet rules above are more specific than the shared collapsed
+     clip. Repeat the clip after them or a covered rail remains painted over a
+     drawer even though it is inert. */
+  .studio-chat-rail.is-sheet.is-collapsed {
+    position: absolute;
+    inset: auto;
+    width: 1px;
+    height: 1px;
+    max-width: 1px;
+    max-height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    visibility: hidden;
+    pointer-events: none;
+    border: 0;
+  }
+}
+
 .studio-detail-head {
   display: flex;
   flex-direction: column;
