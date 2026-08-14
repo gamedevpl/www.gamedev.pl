@@ -13,9 +13,11 @@ import { tags } from '@lezer/highlight';
 import { basicSetup } from 'codemirror';
 import { useEffect, useRef } from 'react';
 import {
+  defaultGotoHandler,
   renderDisplayParts,
   tsAutocomplete,
   tsFacet,
+  tsGoto,
   tsHover,
   tsLintSource,
   tsSync,
@@ -41,6 +43,10 @@ export type CodeMirrorEditorProps = {
   readOnly?: boolean;
   // Once set, wires tsSync/tsAutocomplete/tsHover/tsLinter; else plain CodeMirror.
   languageService?: CodeMirrorLanguageService;
+  // GA-09: cmd/ctrl-click target — path is vfs-rooted.
+  onGotoDefinition?: (path: string, from: number, to: number) => void;
+  // GA-09: mount-only selection for a cross-file jump landing.
+  initialSelection?: { anchor: number; head: number };
 };
 
 function languageExtension(language: CodeLanguage): Extension | null {
@@ -137,14 +143,35 @@ function toCmDiagnostics(view: EditorView, diagnostics: CodeMirrorDiagnostic[]):
   return out;
 }
 
+type GotoDefinitionHandler = (path: string, from: number, to: number) => void;
+
+// GA-09: same-file jumps select in place; else bubbles up.
+function makeGotoHandler(onGotoDefinitionRef: { current: GotoDefinitionHandler | undefined }) {
+  return (currentPath: string, hoverData: HoverInfo, view: EditorView) => {
+    if (defaultGotoHandler(currentPath, hoverData, view)) return true;
+    const definition = [...(hoverData.typeDef ?? []), ...(hoverData.def ?? [])].at(0);
+    if (!definition) return undefined;
+    onGotoDefinitionRef.current?.(
+      definition.fileName,
+      definition.textSpan.start,
+      definition.textSpan.start + definition.textSpan.length,
+    );
+    return true;
+  };
+}
+
 // GA-05: ts extensions, or none — worker can turn ready mid-file.
-function languageServiceExtensions(languageService: CodeMirrorLanguageService | undefined): Extension[] {
+function languageServiceExtensions(
+  languageService: CodeMirrorLanguageService | undefined,
+  onGotoDefinitionRef: { current: GotoDefinitionHandler | undefined },
+): Extension[] {
   if (!languageService) return [];
   return [
     tsFacet.of({ worker: languageService.worker, path: languageService.path }),
     tsSync(),
     autocompletion({ override: [tsAutocomplete()] }),
     tsHover({ renderTooltip: renderHoverTooltip }),
+    tsGoto({ gotoHandler: makeGotoHandler(onGotoDefinitionRef) }),
     linter(tsAdvisoryLintSource),
   ];
 }
@@ -157,6 +184,8 @@ export default function CodeMirrorEditor({
   diagnostics,
   readOnly,
   languageService,
+  onGotoDefinition,
+  initialSelection,
 }: CodeMirrorEditorProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -167,6 +196,8 @@ export default function CodeMirrorEditor({
   onSaveRef.current = onSave;
   const diagnosticsRef = useRef(diagnostics);
   diagnosticsRef.current = diagnostics;
+  const onGotoDefinitionRef = useRef(onGotoDefinition);
+  onGotoDefinitionRef.current = onGotoDefinition;
   // GA-05: reconfigured live below — a ready worker never remounts.
   const languageServiceCompartmentRef = useRef(new Compartment());
 
@@ -177,6 +208,7 @@ export default function CodeMirrorEditor({
       parent: containerRef.current,
       state: EditorState.create({
         doc: value,
+        selection: initialSelection,
         extensions: [
           basicSetup,
           keymap.of([
@@ -192,7 +224,7 @@ export default function CodeMirrorEditor({
           ...(langExt ? [langExt] : []),
           lintGutter(),
           linter((v) => toCmDiagnostics(v, diagnosticsRef.current)),
-          languageServiceCompartmentRef.current.of(languageServiceExtensions(languageService)),
+          languageServiceCompartmentRef.current.of(languageServiceExtensions(languageService, onGotoDefinitionRef)),
           EditorView.editable.of(!readOnly),
           EditorView.updateListener.of((update) => {
             if (update.docChanged) onChangeRef.current(update.state.doc.toString());
@@ -204,6 +236,9 @@ export default function CodeMirrorEditor({
       }),
     });
     viewRef.current = view;
+    // GA-09: a cross-file jump lands off-screen without this.
+    if (initialSelection)
+      view.dispatch({ effects: EditorView.scrollIntoView(initialSelection.anchor, { y: 'center' }) });
     return () => {
       view.destroy();
       viewRef.current = null;
@@ -219,7 +254,9 @@ export default function CodeMirrorEditor({
     const view = viewRef.current;
     if (!view) return;
     view.dispatch({
-      effects: languageServiceCompartmentRef.current.reconfigure(languageServiceExtensions(languageService)),
+      effects: languageServiceCompartmentRef.current.reconfigure(
+        languageServiceExtensions(languageService, onGotoDefinitionRef),
+      ),
     });
   }, [languageService]);
 
