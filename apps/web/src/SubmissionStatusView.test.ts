@@ -1011,8 +1011,10 @@ describe('SubmissionStatusView', () => {
         await flushEffects();
       });
 
-      const control = container.querySelector<HTMLElement>('[data-testid="active-switch-builder-self"]');
-      expect(control?.textContent).toContain('Switch to your agent');
+      // While STOP is on screen it is the only way to switch to the creator's own agent —
+      // the slower arm-then-confirm badge would just be a second control for the same
+      // outcome, so it stays hidden until the stop request is in flight.
+      expect(container.querySelector<HTMLElement>('[data-testid="active-switch-builder-self"]')).toBeNull();
       expect(container.querySelector('.builder-mode-selector')?.textContent).toContain('Gamedev.pl');
       expect(container.querySelector('.studio-turn.is-working')).not.toBeNull();
       expect(container.querySelector<HTMLTextAreaElement>('textarea')?.disabled).toBe(true);
@@ -1023,13 +1025,15 @@ describe('SubmissionStatusView', () => {
       expect(container.querySelector('.status-composer-send')).toBeNull();
       expect(container.textContent).toContain('The agent is building now');
       expect(container.querySelector('.studio-turn.is-working [data-testid^="active-switch-builder"]')).toBeNull();
-      expect(control?.closest('.status-composer-toolbar-left')).not.toBeNull();
 
       await act(async () => {
         stop?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
         await flushEffects();
       });
       expect(mockedHandoffToSelf).toHaveBeenCalledWith('live-platform-token');
+      // Stop is in flight: the badge reappears, now showing the pending state.
+      const control = container.querySelector<HTMLElement>('[data-testid="active-switch-builder-self"]');
+      expect(control?.closest('.status-composer-toolbar-left')).not.toBeNull();
       expect(container.querySelector('.studio-active-handoff-pending')?.textContent).toMatch(
         /waiting for the current agent to acknowledge the stop request/i,
       );
