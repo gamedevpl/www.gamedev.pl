@@ -1993,6 +1993,129 @@ describe('agent build channel', () => {
       expect(staged.get('game/render.ts')).toContain('drawHud()');
     });
 
+    it('patches several files in one call via files[]', async () => {
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      const { gamesStore, staged } = stubGamesStore();
+      app = await createApp(store, { gamesStore });
+
+      await app.inject({
+        method: 'PUT',
+        url: '/api/agent/build/sources/stage',
+        headers: agentHeaders(),
+        payload: {
+          slug: 'comet-courier',
+          path: 'game/render.ts',
+          content: 'export function paint() {\n  drawSky();\n}\n',
+        },
+      });
+      await app.inject({
+        method: 'PUT',
+        url: '/api/agent/build/sources/stage',
+        headers: agentHeaders(),
+        payload: {
+          slug: 'comet-courier',
+          path: 'game/sim.ts',
+          content: 'export const SPEED = 4;\nexport const LIVES = 3;\n',
+        },
+      });
+
+      const patched = await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/sources/stage/patch',
+        headers: agentHeaders(),
+        payload: {
+          files: [
+            { path: 'game/render.ts', old: '  drawSky();\n', new: '  drawSky();\n  drawHud();\n' },
+            {
+              path: 'game/sim.ts',
+              patches: [
+                { old: 'SPEED = 4', new: 'SPEED = 6' },
+                { old: 'LIVES = 3', new: 'LIVES = 5' },
+              ],
+            },
+          ],
+        },
+      });
+      expect(patched.statusCode).toBe(200);
+      expect(patched.json()).toMatchObject({
+        accepted: true,
+        replacements: 3,
+        path: 'game/render.ts',
+        files: [
+          { path: 'game/render.ts', replacements: 1, baseFrom: 'staged' },
+          { path: 'game/sim.ts', replacements: 2, baseFrom: 'staged' },
+        ],
+      });
+      expect(staged.get('game/render.ts')).toContain('drawHud()');
+      expect(staged.get('game/sim.ts')).toBe('export const SPEED = 6;\nexport const LIVES = 5;\n');
+    });
+
+    it('does not write any file when a later files[] entry fails to apply', async () => {
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      const { gamesStore, staged } = stubGamesStore();
+      app = await createApp(store, { gamesStore });
+
+      await app.inject({
+        method: 'PUT',
+        url: '/api/agent/build/sources/stage',
+        headers: agentHeaders(),
+        payload: {
+          slug: 'comet-courier',
+          path: 'game/render.ts',
+          content: 'export function paint() {\n  drawSky();\n}\n',
+        },
+      });
+      await app.inject({
+        method: 'PUT',
+        url: '/api/agent/build/sources/stage',
+        headers: agentHeaders(),
+        payload: {
+          slug: 'comet-courier',
+          path: 'game/sim.ts',
+          content: 'export const SPEED = 4;\n',
+        },
+      });
+
+      const patched = await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/sources/stage/patch',
+        headers: agentHeaders(),
+        payload: {
+          files: [
+            { path: 'game/render.ts', old: '  drawSky();\n', new: '  drawHud();\n' },
+            { path: 'game/sim.ts', old: 'missing snippet', new: 'x' },
+          ],
+        },
+      });
+      expect(patched.statusCode).toBe(400);
+      expect(patched.json().error).toMatch(/not found in game\/sim\.ts/);
+      expect(staged.get('game/render.ts')).toBe('export function paint() {\n  drawSky();\n}\n');
+      expect(staged.get('game/sim.ts')).toBe('export const SPEED = 4;\n');
+    });
+
+    it('refuses files[] mixed with a top-level path', async () => {
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      const { gamesStore } = stubGamesStore();
+      app = await createApp(store, { gamesStore });
+
+      const patched = await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/sources/stage/patch',
+        headers: agentHeaders(),
+        payload: {
+          path: 'game/render.ts',
+          old: 'a',
+          new: 'b',
+          files: [{ path: 'game/sim.ts', old: 'c', new: 'd' }],
+        },
+      });
+      expect(patched.statusCode).toBe(400);
+      expect(patched.json().error).toMatch(/files\[\] alone/);
+    });
+
     it('accepts a bare @@ patch (no line numbers) matched by context', async () => {
       const store = new InMemoryStore();
       await seedSubmission(store);

@@ -803,6 +803,33 @@ declare const GameKit: { defineGame(): unknown };
     expect(multiPatch.isError).toBe(false);
     expect((multiPatch.structured as { replacements?: number }).replacements).toBe(2);
 
+    const stagedSim = await callTool(
+      app,
+      'stage_source_file',
+      { sessionKey, path: 'game/sim.ts', content: 'export const SPEED = 4;\n' },
+      { 'mcp-session-id': sessionId },
+    );
+    expect(stagedSim.isError).toBe(false);
+
+    const multiFile = await callTool(
+      app,
+      'patch_source_file',
+      {
+        sessionKey,
+        files: [
+          { path: 'game/render.ts', old: "'hello'", new: "'hey'" },
+          { path: 'game/sim.ts', old: 'SPEED = 4', new: 'SPEED = 8' },
+        ],
+      },
+      { 'mcp-session-id': sessionId },
+    );
+    expect(multiFile.isError).toBe(false);
+    expect((multiFile.structured as { replacements?: number }).replacements).toBe(2);
+    expect((multiFile.structured as { files?: Array<{ path: string }> }).files?.map((file) => file.path)).toEqual([
+      'game/render.ts',
+      'game/sim.ts',
+    ]);
+
     // Also verify end with ackInboxIds acknowledges creator messages
     const msg = await store.appendCreatorMessage(ISSUE, 'Fix the UI font');
     const ended = await callTool(

@@ -70,7 +70,7 @@ build round; the authoritative list is whatever `tools/list` returns, and
 | `read_kit_file_fragment` | Read a Creator Kit file fragment        | read        |
 | `knowledge_query`        | Ask GameKit/EditorKit/docs a question   | read        |
 | `stage_source_file`      | Stage one source file                   | destructive |
-| `patch_source_file`      | Edit one staged source file             | destructive |
+| `patch_source_file`      | Edit one or more staged source files    | destructive |
 | `delete_source_file`     | Delete one staged source file           | destructive |
 | `clear_staged_sources`   | Clear staged source files               | destructive |
 | `list_staged_sources`    | List staged source files                | read        |

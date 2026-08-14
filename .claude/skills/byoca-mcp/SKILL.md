@@ -35,7 +35,10 @@ Source of truth: `SESSION_WORKFLOW` + `BEHAVIOURAL_CONTRACT` in
    - **New/full rewrite without shell:** `stage_source_file({ path, content })`
    - **Edits:** prefer `patch_source_file({ path, old, new })` (exact unique substring
      replace — no diff format), or `patch_source_file({ path, patches: [{ old, new }, ...] })`
-     for multiple sequential replacements in one call. Or `patch_source_file({ path, patch })` with a unified
+     for multiple sequential replacements in one file, or
+     `patch_source_file({ files: [{ path, old, new }, { path, patches: [{ old, new }] }] })`
+     to edit several files in one call (applies every file in memory first; one miss
+     leaves the buffer unchanged). Or `patch_source_file({ path, patch })` with a unified
      diff (`---` / `+++` + `@@` hunks; bare `@@` ok). Do not re-emit whole `render.ts` /
      `model.ts` files through `stage_source_file`
    - **Modules:** soft budget ~350 lines / ~12 KiB per `game/*.ts`. Honour

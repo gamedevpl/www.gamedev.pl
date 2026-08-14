@@ -469,7 +469,7 @@ Marked destructive because staging the same path again overwrites what was previ
 **Read Only: False**
 
 ```
-Edits a file that is already staged, so it writes state.
+Edits one or more files that are already staged, so it writes state.
 ```
 
 **Open World: False**

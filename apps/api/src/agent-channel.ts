@@ -285,9 +285,35 @@ const ExactPatchPairSchema = z.object({
   new: z.string().max(200_000),
 });
 
-const StageSourcePatchInputSchema = z
+const FileExactPatchSchema = z
   .object({
     path: z.string().trim().min(1).max(120),
+    old: z.string().max(200_000).optional(),
+    new: z.string().max(200_000).optional(),
+    patches: z.array(ExactPatchPairSchema).min(1).max(50).optional(),
+  })
+  .superRefine((value, ctx) => {
+    const hasOld = value.old !== undefined;
+    const hasNew = value.new !== undefined;
+    const hasPatches = value.patches !== undefined && value.patches.length > 0;
+    if (hasOld !== hasNew) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'old and new must be passed together for exact replace',
+      });
+      return;
+    }
+    if ([hasOld && hasNew, hasPatches].filter(Boolean).length !== 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'each files[] entry needs old+new or patches[]',
+      });
+    }
+  });
+
+const StageSourcePatchInputSchema = z
+  .object({
+    path: z.string().trim().min(1).max(120).optional(),
     patch: z
       .string()
       .transform((value) => value.trim())
@@ -296,6 +322,7 @@ const StageSourcePatchInputSchema = z
     old: z.string().max(200_000).optional(),
     new: z.string().max(200_000).optional(),
     patches: z.array(ExactPatchPairSchema).min(1).max(50).optional(),
+    files: z.array(FileExactPatchSchema).min(1).max(20).optional(),
     slug: z
       .string()
       .trim()
@@ -304,11 +331,32 @@ const StageSourcePatchInputSchema = z
       .optional(),
   })
   .superRefine((value, ctx) => {
+    const hasFiles = value.files !== undefined && value.files.length > 0;
     const hasPatch = value.patch !== undefined;
     const hasOld = value.old !== undefined;
     const hasNew = value.new !== undefined;
     const hasPatches = value.patches !== undefined && value.patches.length > 0;
-
+    if (hasFiles && (hasPatch || hasOld || hasNew || hasPatches || value.path !== undefined)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'pass files[] alone, or a single-file path with old+new / patches[] / patch',
+      });
+      return;
+    }
+    if (hasFiles) {
+      const paths = value.files!.map((file) => file.path);
+      if (new Set(paths).size !== paths.length) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'files[] paths must be unique' });
+      }
+      return;
+    }
+    if (!value.path) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'path is required unless files[] is passed',
+      });
+      return;
+    }
     const modes = [hasPatch, hasOld || hasNew, hasPatches].filter(Boolean).length;
     if (modes > 1) {
       ctx.addIssue({
@@ -328,10 +376,62 @@ const StageSourcePatchInputSchema = z
     if (modes === 0) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'pass old+new (exact replace, preferred), patches[] (multi-replace), or patch (unified diff)',
+        message: 'pass old+new (exact replace, preferred), patches[] (multi-replace), files[], or patch (unified diff)',
       });
     }
   });
+
+type PatchFileSpec = {
+  path: string;
+  old?: string;
+  new?: string;
+  patches?: Array<{ old: string; new: string }>;
+  patch?: string;
+};
+
+type PatchBaseFrom = 'staged' | 'delivery' | 'seed';
+
+function applyPatchFile(content: string, file: PatchFileSpec) {
+  if (file.patches !== undefined) {
+    return applyMultipleExactReplaces({ content, path: file.path, patches: file.patches });
+  }
+  if (file.old !== undefined && file.new !== undefined) {
+    return applyExactReplace({ content, path: file.path, old: file.old, new: file.new });
+  }
+  return applySourcePatch({ content, path: file.path, patch: file.patch! });
+}
+
+async function resolvePatchBase(input: {
+  gamesStore: GamesStore;
+  store: Store;
+  record: SubmissionRecord;
+  slug: string;
+  issueNumber: number;
+  roundGeneration: number;
+  path: string;
+}): Promise<{ content: string; baseFrom: PatchBaseFrom } | null> {
+  const stagedContent = await input.gamesStore.getStagedSourceFile({
+    slug: input.slug,
+    issueNumber: input.issueNumber,
+    roundGeneration: input.roundGeneration,
+    path: input.path,
+  });
+  if (stagedContent !== null) return { content: stagedContent, baseFrom: 'staged' };
+
+  let version = input.record.previewVersion ?? input.record.deliveredVersion;
+  if (!version) {
+    const publication = await input.store.getPublication(input.slug);
+    if (publication?.state === 'published') version = publication.currentVersion;
+  }
+  if (version) {
+    const delivered = await input.gamesStore.getSourceFile(input.slug, version, input.path);
+    if (delivered !== null) return { content: delivered, baseFrom: 'delivery' };
+  }
+
+  const seedFile = input.record.seed?.files.find((file) => file.path === input.path);
+  if (seedFile) return { content: seedFile.content, baseFrom: 'seed' };
+  return null;
+}
 
 const BuildPreviewInputSchema = z.object({
   html: z
@@ -1382,14 +1482,7 @@ export async function registerAgentChannelRoutes(
     },
   );
 
-  /**
-   * Unified-diff patch into the staging buffer.
-   *
-   * Base content is staged → latest delivery → seed (same overlay order as the live
-   * staged preview). The patched file is then written with putStagedSourceFile, so a
-   * later fromStaged submit (which overlays the same way) only needs the changed paths
-   * in the buffer — chat-thin agents never re-emit a 40 KB render.ts for a one-line fix.
-   */
+  // Patch into staging. Base is staged → delivery → seed. Apply all files first; write only if every patch applies.
   app.post(
     '/api/agent/build/sources/stage/patch',
     {
@@ -1430,108 +1523,133 @@ export async function registerAgentChannelRoutes(
         ? ((await store.ensureRoundGeneration(issueNumber)) ?? record.roundGeneration ?? 1)
         : (record.roundGeneration ?? 1);
 
+      const specs: PatchFileSpec[] = parsed.data.files
+        ? parsed.data.files
+        : [
+            {
+              path: parsed.data.path!,
+              old: parsed.data.old,
+              new: parsed.data.new,
+              patches: parsed.data.patches,
+              patch: parsed.data.patch,
+            },
+          ];
+
       try {
-        const stagedContent = await options.gamesStore.getStagedSourceFile({
-          slug,
-          issueNumber,
-          roundGeneration,
-          path: parsed.data.path,
-        });
-
-        let base = stagedContent;
-        let baseFrom: 'staged' | 'delivery' | 'seed' | null = stagedContent !== null ? 'staged' : null;
-
-        if (base === null) {
-          let version = record.previewVersion ?? record.deliveredVersion;
-          if (!version) {
-            const publication = await store!.getPublication(slug);
-            if (publication?.state === 'published') version = publication.currentVersion;
+        const prepared: Array<{
+          path: string;
+          content: string;
+          replacements: number;
+          baseFrom: PatchBaseFrom;
+        }> = [];
+        for (const spec of specs) {
+          const base = await resolvePatchBase({
+            gamesStore: options.gamesStore,
+            store: store!,
+            record,
+            slug,
+            issueNumber,
+            roundGeneration,
+            path: spec.path,
+          });
+          if (!base) {
+            return reply.status(400).send({
+              error:
+                `cannot patch ${spec.path}: no base content in staging, the latest delivery, or the seed — ` +
+                'stage_source_file the full file first (or get_sources / get_seed), then patch',
+            });
           }
-          if (version) {
-            base = await options.gamesStore.getSourceFile(slug, version, parsed.data.path);
-            if (base !== null) baseFrom = 'delivery';
-          }
-        }
-
-        if (base === null && record.seed?.files) {
-          const seedFile = record.seed.files.find((file) => file.path === parsed.data.path);
-          if (seedFile) {
-            base = seedFile.content;
-            baseFrom = 'seed';
-          }
-        }
-
-        if (base === null || baseFrom === null) {
-          return reply.status(400).send({
-            error:
-              `cannot patch ${parsed.data.path}: no base content in staging, the latest delivery, or the seed — ` +
-              'stage_source_file the full file first (or get_sources / get_seed), then patch',
+          const patched = applyPatchFile(base.content, spec);
+          prepared.push({
+            path: spec.path,
+            content: patched.content,
+            replacements: patched.replacements,
+            baseFrom: base.baseFrom,
           });
         }
 
-        const patched =
-          parsed.data.patches !== undefined
-            ? applyMultipleExactReplaces({
-                content: base,
-                path: parsed.data.path,
-                patches: parsed.data.patches,
-              })
-            : parsed.data.old !== undefined && parsed.data.new !== undefined
-              ? applyExactReplace({
-                  content: base,
-                  path: parsed.data.path,
-                  old: parsed.data.old,
-                  new: parsed.data.new,
-                })
-              : applySourcePatch({
-                  content: base,
-                  path: parsed.data.path,
-                  patch: parsed.data.patch!,
-                });
-
-        const staged = await options.gamesStore.putStagedSourceFile({
-          slug,
-          issueNumber,
-          roundGeneration,
-          path: parsed.data.path,
-          content: patched.content,
-        });
+        let staged;
+        const files: Array<{ path: string; bytes: number; replacements: number; baseFrom: PatchBaseFrom }> = [];
+        for (const item of prepared) {
+          staged = await options.gamesStore.putStagedSourceFile({
+            slug,
+            issueNumber,
+            roundGeneration,
+            path: item.path,
+            content: item.content,
+          });
+          files.push({
+            path: staged.path,
+            bytes: staged.bytes,
+            replacements: item.replacements,
+            baseFrom: item.baseFrom,
+          });
+        }
         await markBuildingFromChannel(issueNumber, record);
         await store?.touchLastAgentSignalAt(issueNumber, undefined, { key: 'staging_sources' });
         options.onEvent?.(issueNumber);
         options.onSourcesStaged?.({ issueNumber, slug, roundGeneration });
 
-        const hint = largeSourceFileHint(staged.path, staged.bytes, patched.content);
-        const manifestHint = gameManifestHint(staged.path, patched.content);
-        const advisories = await computeStageAdvisories({
-          kitFileStore,
-          gamesStore: options.gamesStore,
-          store: store!,
-          record,
-          slug,
-          issueNumber,
-          roundGeneration,
-          engineRef: record.roundKitEngineRef,
-          path: staged.path,
-          content: patched.content,
-        });
+        let hint: string | null = null;
+        let manifestHint: string | null = null;
+        for (const item of prepared) {
+          hint ??= largeSourceFileHint(item.path, Buffer.byteLength(item.content, 'utf8'), item.content);
+          manifestHint ??= gameManifestHint(item.path, item.content);
+        }
+        const tsFile = [...prepared].reverse().find((item) => item.path.endsWith('.ts') || item.path.endsWith('.tsx'));
+        const gameJson = prepared.find((item) => item.path === 'GAME.json');
+        const typecheckHint = tsFile
+          ? (
+              await computeStageAdvisories({
+                kitFileStore,
+                gamesStore: options.gamesStore,
+                store: store!,
+                record,
+                slug,
+                issueNumber,
+                roundGeneration,
+                engineRef: record.roundKitEngineRef,
+                path: tsFile.path,
+                content: tsFile.content,
+              })
+            ).typecheckHint
+          : undefined;
+        const audioHint = gameJson
+          ? (
+              await computeStageAdvisories({
+                kitFileStore,
+                gamesStore: options.gamesStore,
+                store: store!,
+                record,
+                slug,
+                issueNumber,
+                roundGeneration,
+                engineRef: record.roundKitEngineRef,
+                path: gameJson.path,
+                content: gameJson.content,
+              })
+            ).audioHint
+          : undefined;
+
+        const first = files[0]!;
         return reply.send({
           accepted: true,
-          path: staged.path,
-          bytes: staged.bytes,
-          replacements: patched.replacements,
-          baseFrom,
+          path: first.path,
+          bytes: first.bytes,
+          replacements: files.reduce((sum, file) => sum + file.replacements, 0),
+          baseFrom: first.baseFrom,
+          files,
           staged: {
-            files: staged.files,
-            totalBytes: staged.totalBytes,
-            maxBytes: staged.maxBytes,
-            maxFiles: staged.maxFiles,
-            updatedAt: staged.updatedAt,
+            files: staged!.files,
+            totalBytes: staged!.totalBytes,
+            maxBytes: staged!.maxBytes,
+            maxFiles: staged!.maxFiles,
+            updatedAt: staged!.updatedAt,
           },
           ...(manifestHint ? { manifestHint } : {}),
           ...(hint ? { hint } : {}),
-          ...(advisories.typecheckHint ? { typecheckHint: advisories.typecheckHint } : {}),
-          ...(advisories.audioHint ? { audioHint: advisories.audioHint } : {}),
+          ...(typecheckHint ? { typecheckHint } : {}),
+          ...(audioHint ? { audioHint } : {}),
           ...(await channelState(issueNumber, (await store!.getSubmission(issueNumber)) ?? record)),
         });
       } catch (error) {
