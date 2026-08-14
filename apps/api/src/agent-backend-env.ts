@@ -7,16 +7,11 @@
 import type { AgentBackend } from './agent-backend.js';
 import type { BuilderKind } from './builder.js';
 import { VertexGameSeeder, type GameSeeder } from './game-seed.js';
-import { createManagedProvider, type ManagedAgentEffort, type ManagedPromptLane } from './managed-agent.js';
+import { createManagedProvider, type ManagedAgentEffort } from './managed-agent.js';
 import './managed-provider-anthropic.js';
 import './managed-provider-copilot.js';
 import { GEMINI_DEFAULT_MODEL } from './managed-provider-gemini.js';
-import {
-  createManagedBackend,
-  type ManagedDeliveryLock,
-  type ManagedDeliverySink,
-  type ManagedRoundSignals,
-} from './managed-backend.js';
+import { createManagedBackend, type ManagedRoundSignals } from './managed-backend.js';
 import type { KitDigestLoader } from './kit-digest.js';
 import type { QueryKnowledgeFn } from './knowledge-search.js';
 import { createArchiveSeedContextSource } from './seed-context.js';
@@ -55,8 +50,6 @@ export function resolveBuilderBackend(
 // A missing platform backend (undefined) is a supported state, not a failure: local
 // development has no dispatch credential, and submissions asking for it wait in `queued`.
 export interface ManagedBackendDeps {
-  deliver?: ManagedDeliverySink;
-  lock?: ManagedDeliveryLock;
   systemPrompt?: () => Promise<string | undefined>;
   kitDigest?: KitDigestLoader;
   // Channel-side round state; without it a finished round looks stalled.
@@ -127,31 +120,21 @@ function buildManagedBackendForVendor(
       return undefined;
     }
   }
-  const configuredPromptLane = process.env.MANAGED_AGENT_PROMPT_LANE?.trim();
-  const promptLane = configuredPromptLane as ManagedPromptLane | undefined;
-  if (configuredPromptLane && !['mcp', 'harness', 'outputs'].includes(configuredPromptLane)) {
-    log?.warn({ vendor }, 'managed agent prompt lane must be mcp, harness, or outputs');
-    return undefined;
-  }
   if (isGemini && process.env.MANAGED_AGENT_MAX_TOTAL_TOKENS !== undefined) {
     if (!Number.isSafeInteger(maxTotalTokens) || maxTotalTokens <= 0) {
       log?.warn({ vendor }, 'gemini managed agent token ceiling must be a positive safe integer');
       return undefined;
     }
   }
-  // An MCP agent submits for itself, so it needs no sink.
+  // Every managed vendor dispatches over MCP; there is no other lane.
   const mcpUrl = process.env.MANAGED_AGENT_MCP_URL?.trim();
-  // Anthropic and Gemini default to MCP.
-  // Validate before backend construction so startup fails closed.
-  const effectivePromptLane = promptLane ?? (isCopilot ? 'harness' : 'mcp');
-  const needsMcpEndpoint = effectivePromptLane === 'mcp';
-  if (needsMcpEndpoint && !mcpUrl) {
-    log?.warn({ vendor }, 'managed agent MCP lane is enabled but MANAGED_AGENT_MCP_URL is missing');
+  if (!mcpUrl) {
+    log?.warn({ vendor }, 'managed agent requires MANAGED_AGENT_MCP_URL');
     return undefined;
   }
-  // Without the scratch repo an MCP round lands in the games repo.
-  if (isCopilot && needsMcpEndpoint && !process.env.MANAGED_AGENT_COPILOT_MCP_REPO?.trim()) {
-    log?.warn({ vendor }, 'copilot MCP lane is enabled but MANAGED_AGENT_COPILOT_MCP_REPO is missing');
+  // Without the scratch repo an MCP round has nowhere to dispatch.
+  if (isCopilot && !process.env.MANAGED_AGENT_COPILOT_MCP_REPO?.trim()) {
+    log?.warn({ vendor }, 'copilot managed agent requires MANAGED_AGENT_COPILOT_MCP_REPO');
     return undefined;
   }
 
@@ -177,15 +160,7 @@ function buildManagedBackendForVendor(
       ...(vaultIds?.length ? { vaultIds } : {}),
       ...(isCopilot
         ? {
-            repo: process.env.GAMES_REPO?.trim() ?? 'gamedevpl/www.gamedev.pl-games',
-            baseRef: process.env.GAMES_PUBLISHED_REF?.trim() || 'main',
-            customAgent: process.env.AGENT_CUSTOM_AGENT?.trim() || 'game-builder',
-            createPullRequest: false,
-            // A separate, content-free repo for MCP-lane rounds — unset means today's
-            // harness-only behavior is unchanged. See docs/managed-agent-backend.md.
-            ...(process.env.MANAGED_AGENT_COPILOT_MCP_REPO?.trim()
-              ? { mcpRepo: process.env.MANAGED_AGENT_COPILOT_MCP_REPO.trim() }
-              : {}),
+            mcpRepo: process.env.MANAGED_AGENT_COPILOT_MCP_REPO!.trim(),
             ...(process.env.MANAGED_AGENT_COPILOT_MCP_BASE_REF?.trim()
               ? { mcpBaseRef: process.env.MANAGED_AGENT_COPILOT_MCP_BASE_REF.trim() }
               : {}),
@@ -194,7 +169,7 @@ function buildManagedBackendForVendor(
               : {}),
           }
         : {}),
-      ...(!isCopilot && mcpUrl ? { overrideTools: true } : {}),
+      ...(!isCopilot ? { overrideTools: true } : {}),
       ...(process.env.MANAGED_AGENT_BASE_URL?.trim() ? { baseUrl: process.env.MANAGED_AGENT_BASE_URL.trim() } : {}),
     });
   } catch (error) {
@@ -208,12 +183,8 @@ function buildManagedBackendForVendor(
     provider,
     ...(deps?.readSignals ? { readSignals: deps.readSignals } : {}),
     ...(deps?.readCredentialRef ? { readCredentialRef: deps.readCredentialRef } : {}),
-    ...(deps?.deliver ? { deliver: deps.deliver } : {}),
-    ...(deps?.lock ? { lock: deps.lock } : {}),
-    ...(mcpUrl && (needsMcpEndpoint || !isCopilot)
-      ? { tools: { mcpEndpoints: [{ url: mcpUrl, name: 'gamedevpl' }] } }
-      : {}),
-    ...(mcpUrl && !isCopilot
+    tools: { mcpEndpoints: [{ url: mcpUrl, name: 'gamedevpl' }] },
+    ...(!isCopilot
       ? {
           mcpBearerCredential: (brief) =>
             brief.mcpOpenerToken ? { url: mcpUrl, token: brief.mcpOpenerToken } : undefined,
@@ -222,7 +193,6 @@ function buildManagedBackendForVendor(
     ...(deps?.systemPrompt ? { systemPrompt: deps.systemPrompt } : {}),
     ...(deps?.kitDigest ? { kitDigest: deps.kitDigest } : {}),
     ...(effort ? { effort } : {}),
-    ...(promptLane ? { promptLane } : {}),
     ...(Number.isFinite(maxDurationSeconds) && maxDurationSeconds > 0 ? { maxDurationSeconds } : {}),
     ...(isCopilot && Number.isFinite(maxCopilotCredits) && maxCopilotCredits > 0
       ? { budget: { unit: 'credits' as const, max: maxCopilotCredits } }
@@ -230,7 +200,6 @@ function buildManagedBackendForVendor(
     ...(isGemini && Number.isSafeInteger(maxTotalTokens) && maxTotalTokens > 0
       ? { budget: { unit: 'tokens' as const, max: maxTotalTokens } }
       : {}),
-    deliveryMode,
     ...(log ? { log } : {}),
   });
 }

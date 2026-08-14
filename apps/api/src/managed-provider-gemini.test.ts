@@ -16,7 +16,6 @@ describe('gemini managed provider', () => {
     const provider = createManagedProvider(GEMINI_VENDOR, { apiKey: secret('api'), model: '' });
     expect(provider.vendor).toBe(GEMINI_VENDOR);
     expect(provider.model).toBe(GEMINI_DEFAULT_MODEL);
-    expect(provider.promptLane).toBe('mcp');
   });
 
   it('starts a background MCP interaction with per-round auth and a native budget', async () => {
@@ -219,8 +218,6 @@ describe('gemini managed provider', () => {
     });
 
     expect(await provider.cancelSession('interaction-1')).toEqual({ enforced: true });
-    expect(await provider.listOutputs('interaction-1')).toEqual([]);
-    await expect(provider.readOutput('interaction-1', { path: 'game.ts' })).rejects.toThrow(/no session output/);
     expect(fetchImpl.mock.calls[0][0]).toContain('/interactions/interaction-1/cancel');
   });
 

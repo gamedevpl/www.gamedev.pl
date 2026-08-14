@@ -4,7 +4,6 @@ import {
   normalizeManagedState,
   registerManagedProvider,
   type ManagedAgentProvider,
-  type ManagedOutputRef,
   type ManagedProviderConfig,
   type ManagedSession,
   type ManagedSessionRequest,
@@ -144,7 +143,6 @@ export function createGeminiManagedProvider(config: ManagedProviderConfig): Mana
   return {
     vendor: GEMINI_VENDOR,
     model,
-    promptLane: 'mcp',
     // A named environment is fixed; a scratch workspace accepts inline sources.
     supportsSeedFiles: !config.environmentId,
 
@@ -201,14 +199,6 @@ export function createGeminiManagedProvider(config: ManagedProviderConfig): Mana
       const parsed = InteractionSchema.safeParse(raw);
       if (!parsed.success) throw new ManagedAgentError('gemini managed agents returned an unreadable interaction');
       return toSession(parsed.data, model, !config.environmentId);
-    },
-
-    async listOutputs(_sessionId: string): Promise<ManagedOutputRef[]> {
-      return [];
-    },
-
-    async readOutput(_sessionId: string, ref: ManagedOutputRef): Promise<string> {
-      throw new ManagedAgentError(`gemini managed agents has no session output: ${ref.path}`);
     },
 
     async cancelSession(sessionId: string): Promise<{ enforced: boolean }> {

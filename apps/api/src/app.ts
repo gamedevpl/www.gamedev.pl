@@ -10,7 +10,6 @@ import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLar
 import { registerAccessTokenRoutes } from './access-token-routes.js';
 import { registerJobAdminRoutes } from './job-admin-routes.js';
 import { createGameSeederFromEnv } from './agent-backend-env.js';
-import { createManagedDeliveryLock } from './managed-backend.js';
 import { createGcsGamesStore } from './games-store.js';
 import { createGcsObjectStore } from './gcs-sign.js';
 import { createQueryKnowledgeFromEnv } from './knowledge-search.js';
@@ -399,8 +398,6 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
       (options.submissionRoutes?.agentBackend
         ? undefined
         : {
-            // Multi-instance at-most-once harvest; see ManagedDeliveryLock.
-            lock: createManagedDeliveryLock(store),
             readSignals: async (issueNumber) => {
               const record = await store.getSubmission(issueNumber);
               return record

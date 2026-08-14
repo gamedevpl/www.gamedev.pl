@@ -1,9 +1,8 @@
 # Agent Interchangeability
 
 > **Current model:** gamedev.pl dispatches a coding agent for one round and reads the
-> delivery back — over the build channel (`submit_sources`) or a managed backend's own
-> harvest — never through a merged pull request. See [`build-brief.md`](./build-brief.md)
-> for what a round is told and why, and
+> delivery back over the build channel (`submit_sources`) — never through a merged pull
+> request. See [`build-brief.md`](./build-brief.md) for what a round is told and why, and
 > [`managed-agent-backend.md`](./managed-agent-backend.md) for the managed-backend drivers.
 > The games repository is the harness an agent works from (GameKit, tooling, published
 > games as context), not the channel its output travels over.
@@ -19,7 +18,7 @@ repository boundary, not behind a runtime API. Every contributor receives the sa
 - Plain self-contained HTML/CSS/JS, with no runtime network or per-game dependencies.
 - The repository validation command is the definition of mechanically green.
 - Delivery is gated before publish, and a pull request is never the delivery — see
-  `build-brief.md`'s delivery-contract table for the two ways a round actually ships.
+  `build-brief.md` for what a round is actually told to do instead.
 
 This avoids pretending that different agents share invocation flags, credential models, or
 execution environments. Those details belong to the operator of each agent, while the
@@ -47,14 +46,16 @@ that ignores it still builds the game.
 ## Hosted agents
 
 GitHub Copilot's coding agent is dispatched programmatically through GitHub's Agent Tasks
-API (`copilot-backend.ts`, and `managed-provider-copilot.ts` under the managed-backend
-seam) — a prompt in, a branch and session state back, no issue assignment and no PR-relay
-workflow. The games repository is cloned as Copilot's harness — GameKit, tooling and
-published games as context — and each round gets its own fresh branch. That branch is kept
-until it is spent: released once a follow-up round has a branch of its own, and
-deliberately kept across a round that never delivered, since an undelivered branch may be
-the only copy of that work. Release is best-effort. The agent's output goes out over the
-build channel, never as a merged branch.
+API (`managed-provider-copilot.ts`, under the managed-backend seam) — a prompt in, a
+session state back, no issue assignment and no PR-relay workflow. Unlike the interactive
+agents above, a managed Copilot round never checks out the games repository at all: it
+dispatches into a separate, content-free scratch repo (`MANAGED_AGENT_COPILOT_MCP_REPO`)
+holding nothing but an MCP-only custom agent doc, and delivers exclusively through the same
+`stage_source_file` / `submit_sources` MCP contract Anthropic and Gemini use. GitHub's
+Agent Tasks API still creates a git branch there as an implementation detail of every task,
+but the agent has no shell to reach it with and nothing on our side ever reads it as a
+workspace of files; it is released with the round on a best-effort basis. The agent's
+output goes out over MCP, never as a merged branch.
 
 Hosted-agent output is still external contributor output, so it is still worth verifying
 before it is trusted: follow the repository's

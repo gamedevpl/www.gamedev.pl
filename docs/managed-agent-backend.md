@@ -1,10 +1,11 @@
 # Managed agent backend — running the builder ourselves, on a swappable vendor
 
-> Status: ✅ **MCP, Copilot, and Gemini drivers are implemented.** Anthropic and Gemini use
-> the MCP lane; Copilot defaults to the existing repository harness and build channel, with
-> an opt-in MCP lane for selected rounds. All three run through the managed lifecycle and
-> record their native usage units. Production cutover remains gated by the MP-04 owner
-> approval described in the migration brief.
+> Status: ✅ **Anthropic, Gemini, and Copilot drivers are implemented, and all three
+> dispatch over MCP.** Copilot's earlier harness lane — a git branch, a full repository
+> checkout, the build channel's shell-based upload — is retired; every managed round now
+> runs the same MCP-only, no-checkout contract `buildPrompt` produces. All three run
+> through the managed lifecycle and record their native usage units. Production cutover
+> remains gated by the MP-04 owner approval described in the migration brief.
 >
 > **Why this is not the execution model that was removed for legal reasons.** The thing
 > [`games-repo.md`](./games-repo.md) abandoned was agent compute _we operate_ — containers
@@ -45,19 +46,18 @@ and budget-stop record.
 
 ## The seam
 
-[`managed-agent.ts`](../apps/api/src/managed-agent.ts) is four capabilities and nothing
+[`managed-agent.ts`](../apps/api/src/managed-agent.ts) is three capabilities and nothing
 else:
 
-| Capability | Method                       | Why it is the whole surface                           |
-| ---------- | ---------------------------- | ----------------------------------------------------- |
-| Start      | `startSession`               | A prompt, a model, a workspace, an output directory   |
-| Observe    | `getSession`                 | One normalized state plus native usage                |
-| Harvest    | `listOutputs` / `readOutput` | The delivery, pulled — never pushed through the model |
-| Stop       | `cancelSession`              | With an honest `enforced` answer                      |
+| Capability | Method          | Why it is the whole surface            |
+| ---------- | --------------- | -------------------------------------- |
+| Start      | `startSession`  | A prompt, a model, an MCP endpoint     |
+| Observe    | `getSession`    | One normalized state plus native usage |
+| Stop       | `cancelSession` | With an honest `enforced` answer       |
 
-Listing and reading are separate on purpose. A single `listOutputs` that returned content
-would have already spent the bytes by the time any cap could look at them, so the listing
-carries sizes and an opaque handle, and the backend decides what is worth fetching.
+Delivery is not part of the seam: every managed round submits its own work over MCP
+(`submit_sources`), the same way an external agent does. There is nothing to pull, so
+there is nothing here shaped like a harvest.
 
 `deleteSession` is optional, because releasing sandbox state is a courtesy some vendors
 do for you.
@@ -91,23 +91,24 @@ is carried once in `initialize.instructions`; it must not be repeated in every t
 
 ## Copilot under the seam
 
-Copilot now implements `ManagedAgentProvider` while keeping its harness-specific answers:
+Copilot implements `ManagedAgentProvider` like the other two vendors — MCP-only, no
+harness fallback:
 
-| Seam capability          | Copilot's answer                                           |
-| ------------------------ | ---------------------------------------------------------- |
-| `startSession` workspace | A **branch**, staged with git writes — not a list of files |
-| `getSession` usage       | **Credits**, never tokens                                  |
-| `listOutputs`            | Nothing to list. Delivery is a push over the build channel |
-| `cancelSession`          | Cancels the Actions run behind the task — `enforced: true` |
+| Seam capability    | Copilot's answer                                                     |
+| ------------------ | -------------------------------------------------------------------- |
+| `startSession`     | An Agent Task on the scratch repo (`MANAGED_AGENT_COPILOT_MCP_REPO`) |
+| `getSession` usage | **Credits**, never tokens                                            |
+| `cancelSession`    | Cancels the Actions run behind the task — `enforced: true`           |
 
-The driver declares the harness prompt lane by default. A round may override that lane
-through `BuildBrief.promptLane`; vendor names do not choose prompt behavior.
+GitHub's Agent Tasks API still creates a git branch as an implementation detail of every
+task, on that scratch repo — the agent itself has no shell to reach it with, and nothing in
+this seam ever reads it as a workspace of files.
 
 ### Interrupting a Copilot round
 
 The agent tasks API is create/list/get only: `cancelled` is a state it reports, never one it
 accepts, and there is no stop endpoint. That is not the whole picture, though — a Copilot
-session **is** a GitHub Actions run in the games repo, dispatched by the `copilot-swe-agent`
+session **is** a GitHub Actions run on the scratch repo, dispatched by the `copilot-swe-agent`
 app under the synthetic workflow path `dynamic/copilot-swe-agent/copilot`. Cancelling that run
 is what the Stop button in Copilot's own UI does, and it is what `cancelSession` does here:
 
@@ -123,7 +124,7 @@ Two consequences worth knowing before reading a log:
 - **A task with no branch yet cannot be stopped.** The branch artifact appears only once the
   task leaves `queued`, so an interrupt that early answers `enforced: false` — nothing is
   burning yet, and the next poll retries once there is something to stop.
-- **The dispatch token needs `actions: write`** on the games repo (`AGENT_TASKS_TOKEN`).
+- **The dispatch token needs `actions: write`** on the scratch repo (`AGENT_TASKS_TOKEN`).
   Without it dispatch still works and every cancel silently answers `enforced: false` — a
   round that blows its ceiling gets marked stopped here while GitHub keeps billing it.
 
@@ -131,17 +132,19 @@ Because the wall clock is enforced by the backend on observation, a round is onl
 as fast as it is observed: the creator's status poll and the two-minute notification sweep are
 what drive it, so a closed tab does not mean an unbounded run.
 
-### Copilot MCP lane
+### Copilot's MCP dispatch
 
-The Copilot MCP lane replaces the harness lane for the selected round. It is intended for
-fast previews: the prompt uses the same `buildPrompt` fast contract as Anthropic, and the
+Copilot's prompt uses the same `buildPrompt` fast contract as Anthropic and Gemini, and the
 round key travels in `start({ slug, key })`. The static Copilot MCP connector authenticates
 the connection only; the MCP server requires the live round key before it resolves any
 round-scoped tool.
 
-The two lanes are never combined in one round. Publish seals stay on the harness lane
-until a caller explicitly selects MCP for a different round. The connector-only replay
-test enumerates every mutating tool advertised by the MCP server and requires refusal.
+Rounds dispatch into a separate, content-free scratch repo
+(`MANAGED_AGENT_COPILOT_MCP_REPO`) holding nothing but an MCP-only custom agent doc — not
+the games repo. A prompt-injectable session therefore never shares a checkout with real
+proprietary source; the games repo carries no Copilot MCP connector at all. The
+connector-only replay test enumerates every mutating tool advertised by the MCP server and
+requires refusal.
 
 GitHub configures this connector outside the repository, under the repository's Copilot
 MCP settings. The remote-server header must reference an Agents secret named
@@ -181,8 +184,8 @@ additional hosts.
 
 An unnamed remote environment may receive the round's seed files as inline sources. A named
 environment cannot accept those files through this path, so the adapter rejects that mixed
-configuration before dispatch. Gemini has no file-output listing API in this seam; delivery
-is therefore by MCP `submit_sources`, and `listOutputs` remains empty.
+configuration before dispatch. Delivery is by MCP `submit_sources`, same as every other
+managed vendor.
 
 The backend budget is the shared unit-tagged shape:
 
@@ -194,91 +197,25 @@ The provider forwards that same value as Gemini's native `max_total_tokens`. If 
 passes the ceiling, the backend records a `ManagedBudgetStop` and reports the round as
 `cancelled` with `stopReason: 'budget_reached'`; a wall-clock expiry remains `timed_out`.
 
-## Two delivery shapes, and the one guard that covers both
+## Delivery is always the agent's own submit_sources
 
-A managed round can deliver the way every other round does, or by being read out:
+A managed round delivers the way every other round does: give the session our MCP
+endpoint and it runs the same session loop an external agent runs today, ending in
+`submit_sources`. Nothing about delivery, validation or the gate is new, because none of
+it is ours to reinvent — and there is nothing here shaped like a pull, a harvest, or an
+output directory to read back. `createManagedBackend` refuses a configuration with no MCP
+endpoint, because a session with nowhere to submit to can only produce work that is
+discarded.
 
-- **The agent submits (preferred).** Give the session our MCP endpoint and it runs the same
-  session loop an external agent runs today, ending in `submit_sources`. Nothing about
-  delivery, validation or the gate is new, because none of it is ours to reinvent.
-- **We pull.** The agent writes its game into the session's output directory and we read it
-  back. This costs no tokens at all — no staging calls, no re-emitting a tree the sandbox
-  already holds — and it is the only route for an agent that finished without submitting.
-
-`createManagedBackend` refuses a configuration with neither an MCP endpoint nor a delivery
-sink, because that combination can only run agents whose work is discarded.
-
-**The prompt has to agree with the backend.** `buildPrompt` takes a `DeliveryContract`, so
-a pulled round is told to write into the output directory and a channel round is told to
-run `npm run submit`. Getting this wrong is not a cosmetic mismatch: an agent in a sandbox
-with no route to our API would spend the whole round discovering that the upload it was
-instructed to perform cannot work.
-
-What the pull shape gives up is worth stating, because it is the reason the MCP shape goes
-first. There is no progress channel, so the creator watches a blank status page for the
-length of the build; no inbox, so mid-round steering has nowhere to land; and no gate
-verdict the agent can still act on, since the gate runs after the session has ended.
-Revisions are weaker too: a channel round runs `npm run restore` to fetch the exact version
-the creator played, while a pulled round can only revise what was placed in its workspace.
-
-A pull has no ceiling of its own. A push was bounded by what fits in a tool argument; a
-pull is bounded by nothing, so the caps are explicit and enforced **before** the bytes are
-fetched, using the sizes in the listing, and again on arrival for vendors that omit them:
-
-- at most 60 files, 2 MB in total, 1 MB per file (`DEFAULT_MANAGED_OUTPUT_CAPS`)
-- `selectManagedOutputs` rejects traversal, absolute and Windows paths outright, and then
-  takes **only `games/<slug>/`** — the one directory the brief names. Everything else is
-  the sandbox's own business, and what was ignored is logged so a round that delivered
-  nothing can say why
-- a refused harvest is not retried: the same sandbox would produce the same bytes
-
-The harvest then applies `forbiddenDeliveryPathReason` — the same rule `submit_sources`
-enforces, so a pull cannot store what an upload would refuse: no `media/` (our gate
-produces those bytes), no dotfiles, no config or build files.
-
-**It drops those files instead of refusing the delivery, and that is not a weakened
-check.** An upload can reject the request and let the agent fix the path and try again; a
-pull happens after the session is gone, so failing the round over a stray screenshot would
-lose a game the gate would have accepted. The invariant — non-source files never reach the
-store — holds either way, and what was dropped is logged. The brief also tells a pulled
-round that media and dotfiles are not delivered, so the drop is the backstop rather than
-the first line of defence.
-
-Both of those rules exist because the probe below was run: the harvest first delivered a
-`scratch/notes.md` into the game's source tree, then a `media/cover.png` that the real sink
-would have refused. Neither was visible to any unit test, because the fake providers only
-ever returned tidy paths.
-
-Harvest happens inside `observe`, at most once per session, and only when the job has no
-candidate yet. That is why `observe` receives `issueNumber` and `slug`: a pull-delivery
-backend has to know which job and game it is harvesting for, and a vendor session id does
-not say. Push-delivery backends ignore those fields.
-
-`idle` counts as harvestable alongside the terminal states. Hosted runtimes park a
-finished agent rather than completing it, and waiting for a terminal word would leave a
-delivered game unread indefinitely.
-
-### A failed pull must not spend the round
-
-`completed` with no candidate is how the job machine recognises an agent that finished
-without delivering, and it fails the job. So when it is the _pull_ that failed — the files
-API is down, the sink throws, another instance is mid-delivery — the observation reports
-`in_progress` instead of the real state. The work exists; reporting the truth about the
-session would fail the job over our own transient error, and the next poll would have
-nothing left to retry.
-
-Two pollers can also reach the same finished session at once. The process-local guard does
-not survive two instances, so `ManagedDeliveryLock` is the durable one: whoever acquires it
-delivers, the loser reports `in_progress` and sees the candidate on a later poll, and a
-failed attempt releases the lock so the retry is not locked out. Without a lock configured
-the guards are the job's own candidate flag plus a sink that must be idempotent per
-`sessionRef` — which the type says out loud.
+The prompt matches that contract for every vendor: `buildPrompt` always renders the
+no-checkout, MCP-tool-only instructions (`docs/build-brief.md`), because there is no other
+delivery shape left for it to disagree with.
 
 ### An idle session is not necessarily a stalled one
 
 The backend nudges a session that has gone idle without delivering, because a model that
 stops mid-round otherwise burns the whole wall clock doing nothing. The trap is that the
-provider cannot see the build channel at all. In the MCP shape the agent submits and calls
+provider cannot see the build channel at all. The agent submits and calls
 `end` through the channel, so by the time the vendor reports `idle` the round may already be
 finished — and a preview submit sets `previewVersion`, not `deliveredVersion`, so the job's
 own `hasCandidate` flag is still false. A nudge at that moment opens a second round on a job
@@ -288,7 +225,7 @@ So the guard reads the round, not just the session, through an injected `readSig
 is the same seam the self backend takes — a reader handed in by the reconciler rather than a
 store dependency inside the backend — but not the same payload: `ManagedRoundSignals` also
 carries `previewVersion` and `agentEndedAt`, neither of which the self backend consults. Two
-conditions independently suppress the nudge: a delivery of either lane exists, or the agent
+conditions independently suppress the nudge: a delivery exists, or the agent
 called `end`. The second one is the important one. An agent that ended has made a decision,
 and re-entering it is the damage; a round with no delivery at all still must not be restarted
 behind the agent's back.
@@ -301,18 +238,6 @@ The message matters too. It used to assert "You have not delivered a candidate",
 simply false in the case above. It now says what the host can actually see — that no
 delivery is recorded — so a nudge that does fire cannot mislead the agent about its own
 round.
-
-## What is not wired yet
-
-The **MCP shape is wired and proven** — production platform rounds use it when a valid
-managed configuration selects the environment registry. What remains is the **pull shape**:
-`ManagedDeliverySink` is still injected, not shared with the channel.
-The channel's `submit_sources` route already does the whole job — validate,
-`putCandidateSources`, set the preview or delivered version, count the round's deliveries,
-trigger the gate — inline in its handler. The honest cleanup is to **extract that into one
-function and pass it in**, so a managed harvest and an agent upload cannot drift into two
-different definitions of "delivered". Until that lands, prefer MCP; the pull path stays for
-agents that finish without submitting, and for the probe's printing sink.
 
 ## How to exercise it
 
@@ -335,19 +260,16 @@ npx vitest run apps/api/src/managed-agent.test.ts apps/api/src/managed-backend.t
   apps/api/src/build-prompt.test.ts
 ```
 
-**2. The probe.** One whole round through the real backend, real caps and real path
-selection, with a stub vendor and a printing sink:
+**2. The probe.** One whole round through the real backend, over MCP, requires a real
+`--vendor` — there is no stub shape left to run without one:
 
 ```bash
-npm run managed:probe -w @gamedevpl/api                 # pull shape, stub vendor
-npm run managed:probe -w @gamedevpl/api -- --mcp        # MCP shape + vault credential (stub)
-npm run managed:probe -w @gamedevpl/api -- --prompt     # the brief each contract produces
-npm run managed:probe -w @gamedevpl/api -- --out /tmp/harvest
+npm run managed:probe -w @gamedevpl/api -- --vendor anthropic --prompt   # the brief buildPrompt renders
 ```
 
 It polls twice on purpose, because the first poll is a live session and the second is a
-parked one — the difference between "no harvest yet" and "harvest now" is the thing most
-worth watching.
+parked one — the difference between "still working" and "idle" is the thing most worth
+watching.
 
 **3. The vendor's wire format.** The first implementation was a guess. The real-key
 probe then verified the current contract: `POST /v1/sessions`, the
@@ -360,88 +282,68 @@ session body:
 ANTHROPIC_API_KEY=... \
 MANAGED_AGENT_ID=agent_... \
 MANAGED_AGENT_ENVIRONMENT_ID=env_... \
-npm run managed:probe -w @gamedevpl/api -- --vendor anthropic
-```
-
-The probe uses `ANTHROPIC_API_KEY` for this vendor and defaults to
-`claude-sonnet-5`; `MANAGED_AGENT_API_KEY` or `--model` overrides either value.
-`MANAGED_AGENT_ID` and `MANAGED_AGENT_ENVIRONMENT_ID` identify the preconfigured
-Anthropic resources. In production, `MANAGED_AGENT_MCP_URL` makes the adapter create a
-round-scoped vault containing the build capability for that exact URL; the agent never sees the
-capability and the vault is archived when the round ends. `MANAGED_AGENT_VAULT_ID` and
-`MANAGED_AGENT_VAULT_IDS` remain available only for probe-only static integrations.
-
-`--mcp` now follows that production path: it mints a managed MCP opener
-(`mintManagedMcpOpener`), puts it on the brief as `mcpOpenerToken`, passes
-`mcpBearerCredential` into the backend, and sets `overrideTools` so the session's tool list
-is the MCP endpoint. After dispatch the probe prints `credentialRef` (the vault id) and
-archives it on cancel/cleanup. The MCP URL comes from `--mcp-url` or `MANAGED_AGENT_MCP_URL`
-(default `https://www.gamedev.pl/api/mcp`).
-
-```bash
-ANTHROPIC_API_KEY=... \
-MANAGED_AGENT_ID=agent_... \
-MANAGED_AGENT_ENVIRONMENT_ID=env_... \
-npm run managed:probe -w @gamedevpl/api -- --vendor anthropic --mcp --wait \
-  --wait-seconds 120 --budget-usd 1
-```
-
-That proves Anthropic accepted the per-round vault. Authenticating `mcp:start` against the
-live platform MCP still needs a real Firestore job and an opener signed with the same
-`SUBMISSION_TOKEN_SECRET` the API uses — export that secret into the probe environment when
-you have both. Without it the probe uses a local opener secret so vault creation still works
-and the transcript's `mcp:start` line will show an auth error rather than "no credential
-stored for this server URL".
-
-It creates an initial event, polls twice, interrupts and deletes the session. The bare
-(non-`--mcp`) probe verifies session lifecycle and costs a real run; it does not wait for a
-game to finish or prove that the configured Agent writes the expected files. `--base-url`
-aims the same adapter at a local HTTP stub.
-
-For a bounded live run, `--wait` requires both caps explicitly:
-
-```bash
 npm run managed:probe -w @gamedevpl/api -- --vendor anthropic --wait \
   --wait-seconds 120 --budget-usd 1
 ```
 
-`--budget-usd` is converted to whole US cents for Anthropic's session budget. The environment
-variable keeps its explicit cents name for server configuration. The backend interrupts the
-session when the wall-clock cap expires. Omitting either value makes the probe refuse to start
-rather than run unbounded.
+The probe uses `ANTHROPIC_API_KEY` for this vendor and defaults to `claude-sonnet-5`;
+`MANAGED_AGENT_API_KEY` or `--model` overrides either value. `MANAGED_AGENT_ID` and
+`MANAGED_AGENT_ENVIRONMENT_ID` identify the preconfigured Anthropic resources.
+`MANAGED_AGENT_MCP_URL` makes the adapter create a round-scoped vault containing the build
+capability for that exact URL; the agent never sees the capability and the vault is
+archived when the round ends. `MANAGED_AGENT_VAULT_ID` and `MANAGED_AGENT_VAULT_IDS` remain
+available only for probe-only static integrations.
 
-Copilot uses the harness lane and its own Agent Tasks credential:
+Every run follows the production path: the probe mints a managed MCP opener
+(`mintManagedMcpOpener`), puts it on the brief as `mcpOpenerToken`, passes
+`mcpBearerCredential` into the backend, and sets `overrideTools` so the session's tool list
+is the MCP endpoint. After dispatch the probe prints `credentialRef` (the vault id) and
+archives it on cancel/cleanup. The MCP URL comes from `--mcp-url` or `MANAGED_AGENT_MCP_URL`
+(default `https://www.gamedev.pl/api/mcp`). That proves the vendor accepted the per-round
+vault (Anthropic) or bearer header (Gemini). Authenticating `mcp:start` against the live
+platform MCP still needs a real Firestore job and an opener signed with the same
+`SUBMISSION_TOKEN_SECRET` the API uses — export that secret into the probe environment when
+you have both. Without it the probe uses a local opener secret so vault creation still
+works and the transcript's `mcp:start` line will show an auth error rather than "no
+credential stored for this server URL".
+
+It creates an initial event, mints the per-round vault, dispatches, polls twice, interrupts
+and deletes the session. `--base-url` aims the same adapter at a local HTTP stub.
+`--budget-usd` is converted to whole US cents for Anthropic's session budget; the backend
+interrupts the session when the wall-clock cap expires. Omitting either `--wait` value makes
+the probe refuse to start rather than run unbounded.
+
+Copilot dispatches into the scratch repo (`MANAGED_AGENT_COPILOT_MCP_REPO`) and its own
+Agent Tasks credential:
 
 ```bash
 AGENT_TASKS_TOKEN=... \
-npm run managed:probe -w @gamedevpl/api -- --vendor copilot --create --wait \
+MANAGED_AGENT_COPILOT_MCP_REPO=gamedevpl/scratchpad \
+npm run managed:probe -w @gamedevpl/api -- --vendor copilot --wait \
   --wait-seconds 120 --budget-credits 25
 ```
 
-`--vendor copilot --mcp` selects the MCP prompt lane without passing a per-round bearer
-credential to GitHub. The repository's Copilot MCP configuration supplies the static
-connector header. A standalone probe can print task transitions and usage, but the
-production channel signals and gate verdict require the app's configured store and
-delivery wiring.
+The repository's Copilot MCP configuration supplies the static connector header; the probe
+never passes a per-round bearer credential to GitHub for this vendor. A standalone probe
+can print task transitions and usage, but the production channel signals and gate verdict
+require the app's configured store and delivery wiring.
 
-Gemini uses the MCP lane and a native token ceiling:
+Gemini uses a native token ceiling:
 
 ```bash
 GEMINI_API_KEY=... \
 MANAGED_AGENT_MCP_URL=https://www.gamedev.pl/api/mcp \
-npm run managed:probe -w @gamedevpl/api -- --vendor gemini --mcp --wait \
+npm run managed:probe -w @gamedevpl/api -- --vendor gemini --wait \
   --wait-seconds 120 --budget-tokens 50000
 ```
 
 `--vendor gemini` defaults to `gemini-3.7-flash`; `GEMINI_API_KEY` or
 `MANAGED_AGENT_API_KEY` supplies the credential and `--model` overrides the model label.
-The provider records native interaction usage and does not attempt to pull files from the
-session.
 
 The probe can inject a digest file while exercising this path:
 
 ```bash
-npm run managed:probe -w @gamedevpl/api -- --vendor anthropic --mcp --wait \
+npm run managed:probe -w @gamedevpl/api -- --vendor anthropic --wait \
   --wait-seconds 120 --budget-usd 1 --digest-file /path/to/engine.digest.md
 ```
 
@@ -456,7 +358,7 @@ this repository.
 
 - `managed agent dispatch enabled` (once per process, at registry build)
 - `managed round credential minted` — includes `credentialRef` and `mcpUrl`
-- `managed round credential revoked` — on harvest/end/cancel/cleanup
+- `managed round credential revoked` — on submit/end/cancel/cleanup
 
 ```bash
 node infra/gcp-read.mjs logs \
@@ -469,39 +371,34 @@ With `MANAGED_AGENT_DELIVERY_MODE=preview` (the default), a successful delivery 
 
 ## Configuration
 
-| Variable                                 | Meaning                                                               |
-| ---------------------------------------- | --------------------------------------------------------------------- |
-| `MANAGED_AGENT_VENDOR`                   | Registered adapter id; required configuration must also be valid      |
-| `MANAGED_AGENT_API_KEY`                  | Anthropic or Gemini credential. Never logged, never persisted         |
-| `GEMINI_API_KEY`                         | Optional Gemini-specific credential fallback                          |
-| `MANAGED_AGENT_MODEL`                    | Anthropic or Gemini model label                                       |
-| `AGENT_TASKS_TOKEN`                      | Copilot Agent Tasks credential — needs `actions: write` to interrupt  |
-| `AGENT_TASKS_MODEL`                      | Copilot model label; defaults to the existing Copilot model           |
-| `GAMES_REPO`                             | Games repository targeted by Copilot                                  |
-| `GAMES_PUBLISHED_REF`                    | Copilot harness base ref                                              |
-| `AGENT_CUSTOM_AGENT`                     | Copilot custom agent name                                             |
-| `MANAGED_AGENT_ID`                       | Anthropic Managed Agent resource id                                   |
-| `MANAGED_AGENT_ENVIRONMENT_ID`           | Anthropic Managed Environment resource id                             |
-| `MANAGED_AGENT_MCP_URL`                  | MCP endpoint; triggers per-round vault + `overrideTools`              |
-| `MANAGED_AGENT_VAULT_IDS`                | Optional static vault ids for probe-only MCP integrations             |
-| `MANAGED_AGENT_EFFORT`                   | `low` / `medium` / `high`                                             |
-| `MANAGED_AGENT_MAX_SECONDS`              | Hard ceiling on one session's wall clock — **required, every vendor** |
-| `MANAGED_AGENT_MAX_LIST_COST_CENTS`      | Anthropic session budget, in whole cents                              |
-| `MANAGED_AGENT_COPILOT_MAX_CREDITS`      | Optional Copilot per-round credit ceiling                             |
-| `MANAGED_AGENT_PROMPT_LANE`              | Optional default lane: `mcp`, `harness`, or `outputs`                 |
-| `MANAGED_AGENT_COPILOT_MCP_REPO`         | Scratch repo for Copilot MCP-lane rounds — **required for that lane** |
-| `MANAGED_AGENT_COPILOT_MCP_BASE_REF`     | Base ref in the scratch repo; defaults to `main`                      |
-| `MANAGED_AGENT_COPILOT_MCP_CUSTOM_AGENT` | Custom agent there; defaults to `game-builder-mcp`                    |
-| `MANAGED_AGENT_MAX_TOTAL_TOKENS`         | Optional Gemini per-round token ceiling                               |
-| `MANAGED_AGENT_DELIVERY_MODE`            | `preview` (default) or `publish`                                      |
-| `MANAGED_AGENT_BASE_URL`                 | Override the API origin — gateways, tests                             |
+| Variable                                 | Meaning                                                                                                       |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `MANAGED_AGENT_VENDOR`                   | Registered adapter id; required configuration must also be valid                                              |
+| `MANAGED_AGENT_API_KEY`                  | Anthropic or Gemini credential. Never logged, never persisted                                                 |
+| `GEMINI_API_KEY`                         | Optional Gemini-specific credential fallback                                                                  |
+| `MANAGED_AGENT_MODEL`                    | Anthropic or Gemini model label                                                                               |
+| `AGENT_TASKS_TOKEN`                      | Copilot Agent Tasks credential — needs `actions: write` to interrupt                                          |
+| `AGENT_TASKS_MODEL`                      | Copilot model label; defaults to the existing Copilot model                                                   |
+| `MANAGED_AGENT_ID`                       | Anthropic Managed Agent resource id                                                                           |
+| `MANAGED_AGENT_ENVIRONMENT_ID`           | Anthropic Managed Environment resource id                                                                     |
+| `MANAGED_AGENT_MCP_URL`                  | MCP endpoint — **required, every vendor**; triggers the per-round vault + `overrideTools` on Anthropic/Gemini |
+| `MANAGED_AGENT_VAULT_IDS`                | Optional static vault ids for probe-only MCP integrations                                                     |
+| `MANAGED_AGENT_EFFORT`                   | `low` / `medium` / `high`                                                                                     |
+| `MANAGED_AGENT_MAX_SECONDS`              | Hard ceiling on one session's wall clock — **required, every vendor**                                         |
+| `MANAGED_AGENT_MAX_LIST_COST_CENTS`      | Anthropic session budget, in whole cents                                                                      |
+| `MANAGED_AGENT_COPILOT_MAX_CREDITS`      | Optional Copilot per-round credit ceiling                                                                     |
+| `MANAGED_AGENT_COPILOT_MCP_REPO`         | The scratch repo Copilot dispatches into — **required for Copilot**                                           |
+| `MANAGED_AGENT_COPILOT_MCP_BASE_REF`     | Base ref in the scratch repo; defaults to `main`                                                              |
+| `MANAGED_AGENT_COPILOT_MCP_CUSTOM_AGENT` | Custom agent there; defaults to `game-builder-mcp`                                                            |
+| `MANAGED_AGENT_MAX_TOTAL_TOKENS`         | Optional Gemini per-round token ceiling                                                                       |
+| `MANAGED_AGENT_DELIVERY_MODE`            | `preview` (default) or `publish`                                                                              |
+| `MANAGED_AGENT_BASE_URL`                 | Override the API origin — gateways, tests                                                                     |
 
-Copilot defaults to the `harness` lane, which dispatches into `GAMES_REPO`. Its `mcp` lane
-dispatches somewhere else entirely — a separate, content-free scratch repo holding nothing
-but an MCP-only custom agent doc, so a prompt-injectable session never shares a checkout
-with real source. Turning that lane on therefore takes two variables, not one:
-`MANAGED_AGENT_PROMPT_LANE=mcp` **and** `MANAGED_AGENT_COPILOT_MCP_REPO`. Setting only the
-first is refused at startup rather than quietly served from the games repo.
+Copilot dispatches into a separate, content-free scratch repo — never the games repo —
+holding nothing but an MCP-only custom agent doc, so a prompt-injectable session never
+shares a checkout with real source. Both `MANAGED_AGENT_MCP_URL` and
+`MANAGED_AGENT_COPILOT_MCP_REPO` are required for Copilot to build at all; missing either
+one fails startup rather than falling back to anything else.
 
 Selection replaces the _platform_ backend. Builder routing, the job state machine, the
 gate, Studio and self builds are untouched: a managed round is a platform round whose
@@ -511,11 +408,10 @@ agent we happen to run.
 
 1. Write `managed-provider-<vendor>.ts` implementing `ManagedAgentProvider`.
 2. Normalize states; report usage in the vendor's native unit.
-3. Declare the prompt lane (`mcp`, `harness`, or `outputs`).
-4. Return paths relative to the request's `outputPath`.
-5. Answer `cancelSession` honestly — `enforced: false` if the stop is cooperative.
-6. `registerManagedProvider('<vendor>', factory)` at the bottom of the file.
-7. Import it once where adapters are registered.
+3. Declare an MCP endpoint at dispatch — there is no other delivery shape to choose.
+4. Answer `cancelSession` honestly — `enforced: false` if the stop is cooperative.
+5. `registerManagedProvider('<vendor>', factory)` at the bottom of the file.
+6. Import it once where adapters are registered.
 
 The test suite for the Anthropic adapter is the shape to copy: an injected `fetchImpl`,
 no network, and assertions that the credential never reaches a URL.

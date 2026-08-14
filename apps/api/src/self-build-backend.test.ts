@@ -23,7 +23,6 @@ describe('createSelfBuildBackend', () => {
 
     expect(backend.name).toBe('self');
     expect(result).toEqual({ ref: 'self:1001' });
-    expect(result.seedWorkspace).toBeUndefined();
     expect(persistSeed).toHaveBeenCalledWith(1001, seed);
   });
 

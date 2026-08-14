@@ -14,19 +14,17 @@ const ENV_KEYS = [
   'MANAGED_AGENT_MAX_SECONDS',
   'MANAGED_AGENT_MAX_LIST_COST_CENTS',
   'MANAGED_AGENT_MCP_URL',
-  'MANAGED_AGENT_PROMPT_LANE',
   'MANAGED_AGENT_COPILOT_MAX_CREDITS',
   'MANAGED_AGENT_MAX_TOTAL_TOKENS',
   'GEMINI_API_KEY',
   'AGENT_TASKS_TOKEN',
   'AGENT_TASKS_MODEL',
-  'GAMES_REPO',
-  'GAMES_PUBLISHED_REF',
-  'AGENT_CUSTOM_AGENT',
   'MANAGED_AGENT_COPILOT_MCP_REPO',
   'MANAGED_AGENT_COPILOT_MCP_BASE_REF',
   'MANAGED_AGENT_COPILOT_MCP_CUSTOM_AGENT',
 ] as const;
+
+const MCP_URL = 'https://www.gamedev.pl/api/mcp';
 
 describe('createAgentBackendRegistryFromEnv', () => {
   const previous = new Map<string, string | undefined>();
@@ -56,6 +54,8 @@ describe('createAgentBackendRegistryFromEnv', () => {
       // Missing key/model/ids — config is invalid.
       AGENT_TASKS_TOKEN: randomBytes(32).toString('hex'),
       MANAGED_AGENT_MAX_SECONDS: '900',
+      MANAGED_AGENT_MCP_URL: MCP_URL,
+      MANAGED_AGENT_COPILOT_MCP_REPO: 'gamedevpl/scratchpad',
     });
     const warn = vi.fn();
     const registry = createAgentBackendRegistryFromEnv({ info: vi.fn(), warn });
@@ -78,6 +78,8 @@ describe('createAgentBackendRegistryFromEnv', () => {
       MANAGED_AGENT_VENDOR: undefined,
       AGENT_TASKS_TOKEN: randomBytes(32).toString('hex'),
       MANAGED_AGENT_MAX_SECONDS: '900',
+      MANAGED_AGENT_MCP_URL: MCP_URL,
+      MANAGED_AGENT_COPILOT_MCP_REPO: 'gamedevpl/scratchpad',
     });
     const registry = createAgentBackendRegistryFromEnv({ info: vi.fn(), warn: vi.fn() });
     expect(registry.defaultVendor).toBeUndefined();
@@ -94,7 +96,7 @@ describe('createAgentBackendRegistryFromEnv', () => {
       MANAGED_AGENT_ENVIRONMENT_ID: 'env_test',
       MANAGED_AGENT_MAX_SECONDS: '120',
       MANAGED_AGENT_MAX_LIST_COST_CENTS: '100',
-      MANAGED_AGENT_MCP_URL: 'https://www.gamedev.pl/api/mcp',
+      MANAGED_AGENT_MCP_URL: MCP_URL,
       AGENT_TASKS_TOKEN: randomBytes(32).toString('hex'),
     });
     const registry = createAgentBackendRegistryFromEnv({ info: vi.fn(), warn: vi.fn() });
@@ -117,7 +119,7 @@ describe('createAgentBackendRegistryFromEnv', () => {
         MANAGED_AGENT_ENVIRONMENT_ID: 'env_test',
         MANAGED_AGENT_MAX_SECONDS: '120',
         MANAGED_AGENT_MAX_LIST_COST_CENTS: '100',
-        MANAGED_AGENT_MCP_URL: 'https://www.gamedev.pl/api/mcp',
+        MANAGED_AGENT_MCP_URL: MCP_URL,
         GEMINI_API_KEY: `gemini-${randomUUID()}`,
         AGENT_TASKS_TOKEN: randomBytes(32).toString('hex'),
       });
@@ -130,18 +132,19 @@ describe('createAgentBackendRegistryFromEnv', () => {
     }
   });
 
-  it('builds Copilot from its own token and model configuration', () => {
+  it('builds Copilot from its own token, model, and scratch repo configuration', () => {
     setEnv({
       MANAGED_AGENT_VENDOR: 'copilot',
       AGENT_TASKS_TOKEN: randomBytes(32).toString('hex'),
       AGENT_TASKS_MODEL: undefined,
       MANAGED_AGENT_MAX_SECONDS: '900',
       MANAGED_AGENT_COPILOT_MAX_CREDITS: '25',
+      MANAGED_AGENT_MCP_URL: MCP_URL,
+      MANAGED_AGENT_COPILOT_MCP_REPO: 'gamedevpl/scratchpad',
+      MANAGED_AGENT_COPILOT_MCP_CUSTOM_AGENT: 'game-builder-mcp',
     });
     const info = vi.fn();
-    const registry = createAgentBackendRegistryFromEnv({ info, warn: vi.fn() }, undefined, {
-      deliver: async () => ({ version: 'v1' }),
-    });
+    const registry = createAgentBackendRegistryFromEnv({ info, warn: vi.fn() });
 
     expect(registry.platformByVendor.get('copilot')?.name).toBe('managed:copilot');
     expect(info).toHaveBeenCalledWith(
@@ -150,43 +153,40 @@ describe('createAgentBackendRegistryFromEnv', () => {
     );
   });
 
-  // Half-configured is worse than off: the MCP round would hit games.
-  it('fails closed when the Copilot MCP lane has no scratch repo', () => {
+  // Every managed vendor dispatches over MCP; there is no other lane.
+  it('fails closed when Copilot has no MCP endpoint', () => {
     setEnv({
       MANAGED_AGENT_VENDOR: 'copilot',
       AGENT_TASKS_TOKEN: randomBytes(32).toString('hex'),
-      MANAGED_AGENT_MCP_URL: 'https://www.gamedev.pl/api/mcp',
       MANAGED_AGENT_MAX_SECONDS: '900',
-      MANAGED_AGENT_PROMPT_LANE: 'mcp',
+      MANAGED_AGENT_COPILOT_MCP_REPO: 'gamedevpl/scratchpad',
     });
     const warn = vi.fn();
-    const registry = createAgentBackendRegistryFromEnv({ info: vi.fn(), warn }, undefined, {
-      deliver: async () => ({ version: 'v1' }),
-    });
+    const registry = createAgentBackendRegistryFromEnv({ info: vi.fn(), warn });
 
     expect(registry.platformByVendor.get('copilot')).toBeUndefined();
     expect(warn).toHaveBeenCalledWith(
       expect.objectContaining({ vendor: 'copilot' }),
-      'copilot MCP lane is enabled but MANAGED_AGENT_COPILOT_MCP_REPO is missing',
+      expect.stringContaining('MANAGED_AGENT_MCP_URL'),
     );
   });
 
-  it('accepts a separate MCP-lane repo for Copilot without changing backend selection', () => {
+  // Half-configured is worse than off: nowhere to dispatch.
+  it('fails closed when Copilot has no scratch repo configured', () => {
     setEnv({
       MANAGED_AGENT_VENDOR: 'copilot',
       AGENT_TASKS_TOKEN: randomBytes(32).toString('hex'),
-      MANAGED_AGENT_MCP_URL: 'https://www.gamedev.pl/api/mcp',
-      MANAGED_AGENT_PROMPT_LANE: 'mcp',
+      MANAGED_AGENT_MCP_URL: MCP_URL,
       MANAGED_AGENT_MAX_SECONDS: '900',
-      GAMES_REPO: 'gamedevpl/www.gamedev.pl-games',
-      MANAGED_AGENT_COPILOT_MCP_REPO: 'gamedevpl/scratchpad',
-      MANAGED_AGENT_COPILOT_MCP_CUSTOM_AGENT: 'game-builder-mcp',
     });
-    const registry = createAgentBackendRegistryFromEnv({ info: vi.fn(), warn: vi.fn() }, undefined, {
-      deliver: async () => ({ version: 'v1' }),
-    });
+    const warn = vi.fn();
+    const registry = createAgentBackendRegistryFromEnv({ info: vi.fn(), warn });
 
-    expect(registry.platformByVendor.get('copilot')?.name).toBe('managed:copilot');
+    expect(registry.platformByVendor.get('copilot')).toBeUndefined();
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({ vendor: 'copilot' }),
+      expect.stringContaining('MANAGED_AGENT_COPILOT_MCP_REPO'),
+    );
   });
 
   it('builds Gemini with its native token budget and default model', () => {
@@ -196,7 +196,7 @@ describe('createAgentBackendRegistryFromEnv', () => {
       MANAGED_AGENT_MODEL: undefined,
       MANAGED_AGENT_MAX_SECONDS: '900',
       MANAGED_AGENT_MAX_TOTAL_TOKENS: '50000',
-      MANAGED_AGENT_MCP_URL: 'https://www.gamedev.pl/api/mcp',
+      MANAGED_AGENT_MCP_URL: MCP_URL,
       AGENT_TASKS_TOKEN: `copilot-${randomUUID()}`,
     });
     const info = vi.fn();
@@ -217,7 +217,7 @@ describe('createAgentBackendRegistryFromEnv', () => {
       MANAGED_AGENT_MODEL: 'claude-sonnet-5',
       MANAGED_AGENT_MAX_SECONDS: '900',
       MANAGED_AGENT_MAX_TOTAL_TOKENS: '50000',
-      MANAGED_AGENT_MCP_URL: 'https://www.gamedev.pl/api/mcp',
+      MANAGED_AGENT_MCP_URL: MCP_URL,
       AGENT_TASKS_TOKEN: `copilot-${randomUUID()}`,
     });
     const info = vi.fn();
@@ -233,7 +233,7 @@ describe('createAgentBackendRegistryFromEnv', () => {
     setEnv({
       MANAGED_AGENT_VENDOR: 'gemini',
       MANAGED_AGENT_API_KEY: `gemini-${randomUUID()}`,
-      MANAGED_AGENT_MCP_URL: 'https://www.gamedev.pl/api/mcp',
+      MANAGED_AGENT_MCP_URL: MCP_URL,
       MANAGED_AGENT_MAX_SECONDS: '900',
       MANAGED_AGENT_MAX_TOTAL_TOKENS: '0',
     });
@@ -247,7 +247,7 @@ describe('createAgentBackendRegistryFromEnv', () => {
     );
   });
 
-  it('fails closed when an MCP-default provider has no endpoint', () => {
+  it('fails closed when a provider has no MCP endpoint', () => {
     setEnv({
       MANAGED_AGENT_VENDOR: 'gemini',
       MANAGED_AGENT_API_KEY: `gemini-${randomUUID()}`,
@@ -259,7 +259,7 @@ describe('createAgentBackendRegistryFromEnv', () => {
     expect(registry.platformByVendor.size).toBe(0);
     expect(warn).toHaveBeenCalledWith(
       expect.objectContaining({ vendor: 'gemini' }),
-      expect.stringContaining('MCP lane'),
+      expect.stringContaining('MANAGED_AGENT_MCP_URL'),
     );
   });
 
@@ -269,7 +269,8 @@ describe('createAgentBackendRegistryFromEnv', () => {
       MANAGED_AGENT_VENDOR: vendor,
       MANAGED_AGENT_API_KEY: `key-${randomUUID()}`,
       AGENT_TASKS_TOKEN: randomBytes(32).toString('hex'),
-      MANAGED_AGENT_MCP_URL: 'https://www.gamedev.pl/api/mcp',
+      MANAGED_AGENT_MCP_URL: MCP_URL,
+      MANAGED_AGENT_COPILOT_MCP_REPO: 'gamedevpl/scratchpad',
       MANAGED_AGENT_MAX_SECONDS: undefined,
     });
     const warn = vi.fn();

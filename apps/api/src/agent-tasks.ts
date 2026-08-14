@@ -17,7 +17,6 @@
 
 import { isAgentTaskState, type AgentTaskState } from './agent-state.js';
 import { isRateLimitResponse } from './github-rate-limit.js';
-import type { GitHubClient } from './github-client.js';
 
 const AGENT_TASKS_API_VERSION = '2026-03-10';
 
@@ -273,40 +272,6 @@ export function parseAgentTask(raw: Record<string, unknown>): AgentTask {
  */
 export function resolveTaskBranch(task: AgentTask): string | null {
   return task.branch?.headRef ?? task.sessions[task.sessions.length - 1]?.headRef ?? null;
-}
-
-// Derived from the job id — findable without a stored record.
-export function seedBranchName(issueNumber: number | string): string {
-  return `seed/job-${issueNumber}`;
-}
-
-export interface StageSeedBranchOptions {
-  github: Pick<GitHubClient, 'deleteBranch' | 'createBranchWithFiles'>;
-  issueNumber: number | string;
-  baseRef: string;
-  slug: string;
-  // Full repository paths — callers own the `games/<slug>/` prefixing.
-  files: Array<{ path: string; content: string }>;
-  // Called with the staging error before this returns null.
-  onStageError?: (error: unknown) => void;
-}
-
-// Shared staging+cleanup for both Copilot callers; fails open to null.
-export async function stageAndCleanupSeedBranch(options: StageSeedBranchOptions): Promise<string | null> {
-  const branch = seedBranchName(options.issueNumber);
-  try {
-    await options.github.deleteBranch(branch).catch(() => undefined);
-    await options.github.createBranchWithFiles({
-      branch,
-      baseRef: options.baseRef,
-      message: `Seed round 0 for ${options.slug} (job ${options.issueNumber})`,
-      files: options.files,
-    });
-    return branch;
-  } catch (error) {
-    options.onStageError?.(error);
-    return null;
-  }
 }
 
 function resolveTimeoutMs(explicit: number | undefined): number {

@@ -1108,7 +1108,6 @@ describe('submission routes', () => {
 
     expect(response.statusCode).toBe(200);
     expect(briefs.at(-1)?.undelivered).toBe(true);
-    expect(briefs.at(-1)?.previousWorkspace).toBe('copilot/partial-work');
     expect(briefs.at(-1)?.feedback).toContain('Gdzie moja gra');
 
     await app.close();
@@ -4770,8 +4769,6 @@ describe('a session that finishes without delivering', () => {
     expect(status.statusCode).toBe(200);
     const brief = briefs.at(-1);
     expect(brief?.undelivered).toBe(true);
-    // The branch is the only copy of undelivered work, so the round is told where it is.
-    expect(brief?.previousWorkspace).toBe('copilot/has-the-work');
     // Dispatched again, not failed: the creator is not shown an error about a round that
     // is at this moment starting. `building` waits on a real `in_progress` observation.
     expect((await store.getSubmission(job.issueNumber))?.state).toBe('dispatched');
@@ -5444,10 +5441,8 @@ describe('operator cancel and retry', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ ok: true, state: 'dispatched', creditsSpent: 1 });
 
-    // The branch is the only copy of undelivered work; the new round is told where it is.
     const brief = briefs.at(-1);
     expect(brief?.undelivered).toBe(true);
-    expect(brief?.previousWorkspace).toBe('copilot/has-the-work');
 
     const record = await store.getSubmission(job.issueNumber);
     expect(record?.state).toBe('dispatched');
@@ -5892,35 +5887,6 @@ describe('seeded dispatch', () => {
     await app.close();
   });
 
-  it('records a generated draft the backend could not place as unstaged', async () => {
-    // The failure the record exists for: seeding fails open, so from every other angle
-    // this build looks normal — it just quietly paid for a draft nobody can use.
-    const stub = createGithubClientStub({});
-    const { backend, briefs } = createBackendStub();
-    const { app, store, response } = await submitOne('Comet Courier', {
-      githubClient: stub.githubClient,
-      agentBackend: backend,
-      submissionTokenSecret: secret,
-      gameSeeder: seederStub({}),
-    });
-
-    expect(response.statusCode).toBe(200);
-    await vi.waitFor(() => expect(briefs).toHaveLength(1));
-    const outcome = await vi.waitFor(async () => {
-      const record = await store.getSubmission(briefs[0].issueNumber);
-      expect(record?.seedOutcome).toBeDefined();
-      return record!.seedOutcome!;
-    });
-
-    expect(outcome.staged).toBe(false);
-    // And the store can find it again by time, which is what the degradation alert reads.
-    const recent = await store.listSeedOutcomesSince(new Date(Date.now() - 60_000).toISOString());
-    expect(recent).toHaveLength(1);
-    expect(recent[0].staged).toBe(false);
-
-    await app.close();
-  });
-
   it('dispatches unseeded when the seeder declines, and still builds the game', async () => {
     const stub = createGithubClientStub({});
     const { backend, briefs } = createBackendStub();
@@ -5964,7 +5930,7 @@ describe('seeded dispatch', () => {
     await app.close();
   });
 
-  it('publishes a round-0 preview when the seed compiles and a seed branch exists', async () => {
+  it('publishes a round-0 preview from the draft itself when the seed compiles', async () => {
     const stub = createGithubClientStub({
       gameSources: {
         indexHtml: '<main id="game"></main>',
@@ -5978,7 +5944,7 @@ describe('seeded dispatch', () => {
       name: 'stub',
       dispatch: async (brief) => {
         briefs.push(brief);
-        return { ref: 'task-1', workspace: 'copilot/x', seedWorkspace: 'seed/job-9' };
+        return { ref: 'task-1', workspace: 'copilot/x' };
       },
       resume: async (brief) => {
         briefs.push(brief);
@@ -6012,8 +5978,10 @@ describe('seeded dispatch', () => {
     expect(html).toContain('round zero');
     expect(html).toContain('Content-Security-Policy');
     expect(html).toContain('ai-generated');
-    // Assembled from the seed branch — the exact bytes the agent starts from.
-    expect(stub.githubClient.getGameSources).toHaveBeenCalledWith('seed/job-9', 'comet-courier');
+    // Assembled from the draft's own files over the published engine — no branch needed.
+    expect(stub.githubClient.getGameSources).toHaveBeenCalledWith('main', 'comet-courier', {
+      'game.ts': 'export {};\n',
+    });
 
     await app.close();
   });
@@ -6066,7 +6034,7 @@ describe('seeded dispatch', () => {
       seedDelivery: () => 'channel' as const,
       dispatch: async (brief) => {
         briefs.push(brief);
-        return { ref: 'session-1', promptLane: 'mcp' };
+        return { ref: 'session-1' };
       },
       resume: async () => ({ ref: 'session-2' }),
       observe: async () => null,
@@ -6098,237 +6066,6 @@ describe('seeded dispatch', () => {
     await app.close();
   });
 
-  it('does not pay for a seed a backend would discard', async () => {
-    // seedDelivery is read before generation, not after the bill.
-    const stub = createGithubClientStub({});
-    const briefs: BuildBrief[] = [];
-    const backend: AgentBackend = {
-      name: 'stub',
-      seedDelivery: () => 'none' as const,
-      dispatch: async (brief) => {
-        briefs.push(brief);
-        return { ref: 'task-1', promptLane: 'mcp' };
-      },
-      resume: async () => ({ ref: 'task-2' }),
-      observe: async () => null,
-      cancel: async () => ({ enforced: false }),
-    };
-    let seedCalls = 0;
-    const { app, authHeaders } = await createApp({
-      githubClient: stub.githubClient,
-      agentBackend: backend,
-      submissionTokenSecret: secret,
-      gameSeeder: seederStub({ compiles: true }, () => seedCalls++),
-    });
-
-    const created = await app.inject({
-      method: 'POST',
-      url: '/api/submissions',
-      headers: authHeaders,
-      payload: { title: 'No Seed Game', concept: 'A game where you deliver parcels between comets, dodging debris.' },
-    });
-    expect(created.statusCode).toBe(200);
-    await vi.waitFor(() => expect(briefs).toHaveLength(1));
-
-    expect(seedCalls).toBe(0);
-    expect(briefs[0].seed).toBeUndefined();
-
-    await app.close();
-  });
-
-  it('does not mistake an mcp-lane round’s inline seed delivery for a staging failure', async () => {
-    // mcp never stages a branch — a missing seedWorkspace is not a failure.
-    const stub = createGithubClientStub({});
-    const briefs: BuildBrief[] = [];
-    const backend: AgentBackend = {
-      name: 'stub',
-      dispatch: async (brief) => {
-        briefs.push(brief);
-        // No seedWorkspace, but promptLane says mcp never tried to stage one.
-        return { ref: 'task-1', promptLane: 'mcp' };
-      },
-      resume: async () => ({ ref: 'task-2' }),
-      observe: async () => null,
-      cancel: async () => ({ enforced: false }),
-    };
-    let seedCalls = 0;
-    const { app, authHeaders } = await createApp({
-      githubClient: stub.githubClient,
-      agentBackend: backend,
-      submissionTokenSecret: secret,
-      gameSeeder: {
-        seed: async ({ slug }) => {
-          seedCalls++;
-          return {
-            slug,
-            files: [{ path: 'game.ts', content: 'export {};\n' }],
-            references: ['apex-sprint'],
-            usage: { inputTokens: 30_000, outputTokens: 9_000, model: 'gemini-3.6-flash' },
-            elapsedMs: 156_000,
-            compiles: true,
-            repaired: false,
-          };
-        },
-      },
-    });
-
-    const submit = (title: string) =>
-      app.inject({
-        method: 'POST',
-        url: '/api/submissions',
-        headers: authHeaders,
-        payload: { title, concept: 'A game where you deliver parcels between comets, dodging debris.' },
-      });
-
-    expect((await submit('First Game')).statusCode).toBe(200);
-    await vi.waitFor(() => expect(briefs).toHaveLength(1));
-    expect(briefs[0].seed).toBeDefined();
-
-    expect((await submit('Second Game')).statusCode).toBe(200);
-    await vi.waitFor(() => expect(briefs).toHaveLength(2));
-
-    // No mute: the second round gets a seed too.
-    expect(briefs[1].seed).toBeDefined();
-    expect(seedCalls).toBe(2);
-
-    await app.close();
-  });
-
-  it('stops generating drafts after one cannot be staged', async () => {
-    // The money bug this exists for: a mis-scoped dispatch credential fails only after
-    // the draft has been generated, so without a circuit breaker every submission pays
-    // ~2 minutes and tens of thousands of tokens for a draft discarded a second later.
-    const stub = createGithubClientStub({});
-    const briefs: BuildBrief[] = [];
-    const backend: AgentBackend = {
-      name: 'stub',
-      dispatch: async (brief) => {
-        briefs.push(brief);
-        // Seed accepted, no workspace back — exactly what a 403 on the branch write
-        // looks like from here.
-        return { ref: 'task-1', workspace: 'copilot/x' };
-      },
-      resume: async () => ({ ref: 'task-2' }),
-      observe: async () => null,
-      cancel: async () => ({ enforced: false }),
-    };
-    let seedCalls = 0;
-    const { app, authHeaders } = await createApp({
-      githubClient: stub.githubClient,
-      agentBackend: backend,
-      submissionTokenSecret: secret,
-      gameSeeder: {
-        seed: async ({ slug }) => {
-          seedCalls++;
-          return {
-            slug,
-            files: [{ path: 'game.ts', content: 'export {};\n' }],
-            references: ['apex-sprint'],
-            usage: { inputTokens: 30_000, outputTokens: 9_000, model: 'gemini-3.7-flash' },
-            elapsedMs: 156_000,
-            compiles: false,
-            repaired: true,
-          };
-        },
-      },
-    });
-
-    const submit = (title: string) =>
-      app.inject({
-        method: 'POST',
-        url: '/api/submissions',
-        headers: authHeaders,
-        payload: { title, concept: 'A game where you deliver parcels between comets, dodging debris.' },
-      });
-
-    expect((await submit('First Game')).statusCode).toBe(200);
-    await vi.waitFor(() => expect(briefs).toHaveLength(1));
-    expect(briefs[0].seed).toBeDefined();
-
-    expect((await submit('Second Game')).statusCode).toBe(200);
-    await vi.waitFor(() => expect(briefs).toHaveLength(2));
-
-    // The second build still dispatches — seeding is an optimization, and muting it
-    // must never cost a creator their game — it just does not pay for another draft.
-    expect(briefs[1].seed).toBeUndefined();
-    expect(seedCalls).toBe(1);
-
-    await app.close();
-  });
-
-  it('does not let a platform staging failure mute a self (BYOCA) round’s seed', async () => {
-    // A platform staging failure must not mute a self round.
-    const stub = createGithubClientStub({});
-    const platformBriefs: BuildBrief[] = [];
-    const platformBackend: AgentBackend = {
-      name: 'platform-stub',
-      dispatch: async (brief) => {
-        platformBriefs.push(brief);
-        // Seed accepted, no workspace back — a staging failure.
-        return { ref: 'task-1', workspace: 'copilot/x' };
-      },
-      resume: async () => ({ ref: 'task-2' }),
-      observe: async () => null,
-      cancel: async () => ({ enforced: false }),
-    };
-    const selfBriefs: BuildBrief[] = [];
-    const selfBackend: AgentBackend = {
-      name: 'self-stub',
-      dispatch: async (brief) => {
-        selfBriefs.push(brief);
-        return { ref: 'self:1' };
-      },
-      resume: async () => ({ ref: 'self:2' }),
-      observe: async () => null,
-      cancel: async () => ({ enforced: false }),
-    };
-    let seedCalls = 0;
-    const { app, authHeaders } = await createApp({
-      githubClient: stub.githubClient,
-      agentBackends: { platform: platformBackend, self: selfBackend },
-      submissionTokenSecret: secret,
-      gameSeeder: {
-        seed: async ({ slug }) => {
-          seedCalls++;
-          return {
-            slug,
-            files: [{ path: 'game.ts', content: 'export {};\n' }],
-            references: ['apex-sprint'],
-            usage: { inputTokens: 30_000, outputTokens: 9_000, model: 'gemini-3.6-flash' },
-            elapsedMs: 156_000,
-            compiles: true,
-            repaired: false,
-          };
-        },
-      },
-    });
-
-    const submit = (title: string, builder?: 'self' | 'platform') =>
-      app.inject({
-        method: 'POST',
-        url: '/api/submissions',
-        headers: authHeaders,
-        payload: {
-          title,
-          concept: 'A game where you deliver parcels between comets, dodging debris.',
-          ...(builder ? { builder } : {}),
-        },
-      });
-
-    // Platform round first — its dispatch reports no seedWorkspace, tripping the mute.
-    expect((await submit('Platform Game', 'platform')).statusCode).toBe(200);
-    await vi.waitFor(() => expect(platformBriefs).toHaveLength(1));
-    expect(platformBriefs[0].seed).toBeDefined();
-
-    // A self round submitted right after must still get its own seed.
-    expect((await submit('Self Game', 'self')).statusCode).toBe(200);
-    await vi.waitFor(() => expect(selfBriefs).toHaveLength(1));
-    expect(selfBriefs[0].seed).toBeDefined();
-    expect(seedCalls).toBe(2);
-
-    await app.close();
-  });
-
   it('records the seed workspace so the branch is released with the job', async () => {
     const { InMemoryStore } = await import('./store.js');
     const store = new InMemoryStore();
@@ -6346,65 +6083,6 @@ describe('seeded dispatch', () => {
     await store.clearDispatchSeedWorkspace(1);
     expect((await store.getSubmission(1))?.dispatch?.seedWorkspace).toBeUndefined();
     expect((await store.getSubmission(1))?.dispatch?.workspace).toBe('copilot/x');
-  });
-
-  it('forgets the seed branch when abandoning, so it is never deleted twice', async () => {
-    const stub = createGithubClientStub({});
-    const cleaned: string[] = [];
-    const briefs: BuildBrief[] = [];
-    const backend: AgentBackend = {
-      name: 'stub',
-      dispatch: async (brief) => {
-        briefs.push(brief);
-        return { ref: 'task-1', workspace: 'copilot/x', seedWorkspace: 'seed/job-9' };
-      },
-      resume: async () => ({ ref: 'task-2' }),
-      observe: async () => null,
-      cancel: async () => ({ enforced: false }),
-      cleanup: async (previous) => {
-        if (previous.workspace) cleaned.push(previous.workspace);
-      },
-    };
-    const { app, store, authHeaders } = await createApp({
-      githubClient: stub.githubClient,
-      agentBackend: backend,
-      submissionTokenSecret: secret,
-      gameSeeder: seederStub({ compiles: false }),
-    });
-    const created = await app.inject({
-      method: 'POST',
-      url: '/api/submissions',
-      headers: authHeaders,
-      payload: { title: 'Comet Courier', concept: 'A game where you deliver parcels between comets, dodging debris.' },
-    });
-    const { token } = created.json() as { token: string };
-
-    // Dispatch is backgrounded, so the seed branch is only on the record once it has
-    // landed. Abandoning before that would test nothing — there would be no branch to
-    // release — so the wait is on the state this test is about, not on a timer.
-    await vi.waitFor(async () => {
-      const pending = await store.getSubmission(briefs[0]?.issueNumber ?? -1);
-      expect(pending?.dispatch?.seedWorkspace).toBe('seed/job-9');
-    });
-
-    const abandoned = await app.inject({
-      method: 'POST',
-      url: `/api/submissions/${token}/abandon`,
-      headers: authHeaders,
-    });
-
-    // The abandon route awaits both releases, so `cleaned` is complete here — asserting
-    // the exact set rather than waiting for one entry, which would pass just as happily
-    // if the branch were released twice.
-    expect(abandoned.statusCode).toBe(200);
-    expect(cleaned).toEqual(['copilot/x', 'seed/job-9']);
-
-    // And the name is off the record, so a second abandon cannot ask again.
-    const record = await store.getSubmission(briefs[0].issueNumber);
-    expect(record?.dispatch?.seedWorkspace).toBeUndefined();
-    expect(record?.dispatch?.workspace).toBe('copilot/x');
-
-    await app.close();
   });
 });
 

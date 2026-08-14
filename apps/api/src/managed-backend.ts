@@ -1,77 +1,38 @@
-// AgentBackend over any ManagedAgentProvider; delivery is pulled.
+// AgentBackend over any ManagedAgentProvider, dispatched over MCP.
 import type { AgentBackend, BuildBrief, DispatchResult, SeedDelivery } from './agent-backend.js';
 import { buildPrompt } from './build-prompt.js';
-import { forbiddenDeliveryPathReason } from './games-store.js';
 import type { AgentObservation, AgentSessionTokens } from './job-state.js';
 import { appendKitDigest, type KitDigestLoader } from './kit-digest.js';
 import {
-  assertWithinManagedOutputPlan,
-  ManagedAgentError,
-  createManagedOutputBudget,
   isManagedSessionHarvestable,
-  ManagedOutputRejectedError,
-  selectManagedOutputs,
+  ManagedAgentError,
   type ManagedAgentEffort,
-  type ManagedPromptLane,
   type ManagedAgentProvider,
   type ManagedBudgetStop,
   type ManagedSessionUsage,
   type ManagedTokenUsage,
   type ManagedGeminiTokenUsage,
-  type ManagedOutputCaps,
-  type ManagedOutputFile,
-  type ManagedOutputPlan,
   type ManagedMcpBearerCredential,
   type ManagedUsageBudget,
   type ManagedToolAccess,
 } from './managed-agent.js';
 
-export interface ManagedDeliveryInput {
-  issueNumber: number;
-  slug: string;
-  files: ManagedOutputFile[];
-  // The vendor session the files were harvested from.
-  sessionRef: string;
-  // Authority captured at dispatch and checked again immediately before storage.
-  backend: string;
-  roundGeneration: number;
-  mode: 'preview' | 'publish';
-}
-
-export interface ManagedDeliveryResult {
-  version: string;
-}
-
-// Injected, and idempotent per issueNumber and sessionRef.
-export type ManagedDeliverySink = (input: ManagedDeliveryInput) => Promise<ManagedDeliveryResult>;
-
-export interface ManagedDeliveryClaim {
-  issueNumber: number;
-  slug: string;
-  sessionRef: string;
-}
-
-// Durable at-most-once across instances; see the design doc.
-export interface ManagedDeliveryLock {
-  acquire(claim: ManagedDeliveryClaim): Promise<boolean>;
-  // Failed attempt, so a later poll can retry.
-  release(claim: ManagedDeliveryClaim): Promise<void>;
-}
-
-// Store-backed lock for multi-instance harvest.
-export function createManagedDeliveryLock(
-  store: {
-    claimManagedDelivery(
-      claim: { issueNumber: number; sessionRef: string; slug: string },
-      at: string,
-    ): Promise<boolean>;
-    releaseManagedDelivery(claim: { issueNumber: number; sessionRef: string }): Promise<void>;
-  },
-  now: () => string = () => new Date().toISOString(),
-): ManagedDeliveryLock {
-  return {
-    acquire: (claim) => store.claimManagedDelivery(claim, now()),
-    release: (claim) => store.releaseManagedDelivery(claim),
+export interface ManagedBackendOptions {
+  provider: ManagedAgentProvider;
+  readSignals?: (issueNumber: number) => Promise<ManagedRoundSignals | null>;
+  // Cacheable prefix, typically the published Creator Kit digest.
+  systemPrompt?: () => Promise<string | undefined>;
+  kitDigest?: KitDigestLoader;
+  effort?: ManagedAgentEffort;
+  maxDurationSeconds?: number;
+  budget?: ManagedUsageBudget;
+  tools: ManagedToolAccess;
+  mcpBearerCredential?: (brief: BuildBrief) => ManagedMcpBearerCredential | undefined;
+  readCredentialRef?: (issueNumber: number, sessionRef: string) => Promise<string | undefined>;
+  nudgeIdle?: boolean;
+  log?: {
+    warn: (context: object, message: string) => void;
+    info?: (context: object, message: string) => void;
   };
 }
 
@@ -84,35 +45,6 @@ export interface ManagedRoundSignals {
   // The MCP `end` tool; the agent stopped deliberately.
   agentEndedAt?: string;
 }
-
-export interface ManagedBackendOptions {
-  provider: ManagedAgentProvider;
-  readSignals?: (issueNumber: number) => Promise<ManagedRoundSignals | null>;
-  // Omit only when an MCP-connected agent submits for itself.
-  deliver?: ManagedDeliverySink;
-  lock?: ManagedDeliveryLock;
-  // Cacheable prefix, typically the published Creator Kit digest.
-  systemPrompt?: () => Promise<string | undefined>;
-  kitDigest?: KitDigestLoader;
-  outputPath?: string;
-  effort?: ManagedAgentEffort;
-  promptLane?: ManagedPromptLane;
-  maxDurationSeconds?: number;
-  budget?: ManagedUsageBudget;
-  outputCaps?: ManagedOutputCaps;
-  tools?: ManagedToolAccess;
-  mcpBearerCredential?: (brief: BuildBrief) => ManagedMcpBearerCredential | undefined;
-  readCredentialRef?: (issueNumber: number, sessionRef: string) => Promise<string | undefined>;
-  nudgeIdle?: boolean;
-  // Preview keeps the first delivery cheap; publish seals.
-  deliveryMode?: 'preview' | 'publish';
-  log?: {
-    warn: (context: object, message: string) => void;
-    info?: (context: object, message: string) => void;
-  };
-}
-
-export const DEFAULT_MANAGED_OUTPUT_PATH = 'outputs';
 
 function ledgerTokens(usage: ManagedTokenUsage | ManagedGeminiTokenUsage): AgentSessionTokens {
   if ('totalTokens' in usage) {
@@ -159,31 +91,14 @@ export function isUnnudgeableManagedIdleError(error: unknown): boolean {
 }
 
 export function createManagedBackend(options: ManagedBackendOptions): AgentBackend {
-  const deliver = options.deliver;
-  const configuredPromptLane = options.promptLane;
-  const defaultPromptLane = configuredPromptLane ?? options.provider.promptLane;
-  const promptLane = defaultPromptLane;
-  if (promptLane === 'outputs' && !deliver) {
-    throw new ManagedAgentError('a managed backend needs either a delivery sink or an MCP endpoint');
+  if (!options.tools.mcpEndpoints?.length) {
+    throw new ManagedAgentError('a managed backend needs an MCP endpoint');
   }
-  if (promptLane === 'mcp' && !options.tools?.mcpEndpoints?.length) {
-    throw new ManagedAgentError('the MCP prompt lane needs an MCP endpoint');
-  }
-  // One reading of the provider capability, shared by dispatch and acceptsSeed.
-  function seedSupportedOn(lane: ManagedPromptLane): boolean {
-    const capability = options.provider.supportsSeedFiles;
-    return typeof capability === 'function' ? capability(lane) : (capability ?? true);
-  }
-  const outputPath = options.outputPath ?? DEFAULT_MANAGED_OUTPUT_PATH;
-  const deliveryMode = options.deliveryMode ?? 'preview';
+  const seedSupported = options.provider.supportsSeedFiles ?? true;
   const backendName = `managed:${options.provider.vendor}`;
-  // At-most-once per session; a re-poll cannot duplicate.
-  const harvested = new Set<string>();
   const budgetStops = new Map<string, ManagedBudgetStop>();
   const startedAt = new Map<string, number>();
   const idleNudged = new Set<string>();
-  const sessionGenerations = new Map<string, number>();
-  const sessionLanes = new Map<string, ManagedPromptLane>();
   const credentialRefs = new Map<string, string>();
   const releasedCredentials = new Set<string>();
   // So cancel/cleanup can still log issueNumber/slug without a caller hint.
@@ -215,38 +130,18 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
   }
 
   async function start(brief: BuildBrief): Promise<DispatchResult> {
-    const roundPromptLane = brief.promptLane ?? defaultPromptLane;
-    if (roundPromptLane === 'mcp' && !options.tools?.mcpEndpoints?.length) {
-      throw new ManagedAgentError('the MCP prompt lane needs an MCP endpoint');
-    }
-    if (roundPromptLane === 'outputs' && !deliver) {
-      throw new ManagedAgentError('the outputs prompt lane needs a delivery sink');
-    }
-    const roundChannelMode = roundPromptLane === 'mcp' || roundPromptLane === 'harness';
     const systemPrompt = appendKitDigest(
       options.systemPrompt ? await options.systemPrompt() : undefined,
       options.kitDigest ? await options.kitDigest.load() : undefined,
     );
     const mcpBearerCredential = options.mcpBearerCredential?.(brief);
     // An unsupported seed must also drop from the brief, not just workspaceFiles.
-    const seedSupported = seedSupportedOn(roundPromptLane);
     const effectiveBrief = seedSupported || !brief.seed ? brief : { ...brief, seed: undefined };
     const session = await options.provider.startSession({
       correlationId: String(brief.issueNumber),
       ...(systemPrompt ? { systemPrompt } : {}),
-      // The prompt has to describe the delivery this backend will actually read.
-      prompt: buildPrompt(
-        effectiveBrief,
-        roundChannelMode
-          ? roundPromptLane === 'mcp'
-            ? { kind: 'channel', fast: true }
-            : { kind: 'channel' }
-          : deliver
-            ? { kind: 'outputs', path: outputPath }
-            : { kind: 'channel', fast: true },
-      ),
+      prompt: buildPrompt(effectiveBrief),
       model: options.provider.model,
-      promptLane: roundPromptLane,
       ...(options.effort ? { effort: options.effort } : {}),
       ...(seedSupported && brief.seed
         ? {
@@ -256,14 +151,11 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
             })),
           }
         : {}),
-      outputPath,
       ...(options.maxDurationSeconds ? { maxDurationSeconds: options.maxDurationSeconds } : {}),
-      ...(options.tools ? { tools: options.tools } : {}),
+      tools: options.tools,
       ...(mcpBearerCredential ? { mcpBearerCredential } : {}),
     });
     startedAt.set(session.id, Date.now());
-    sessionLanes.set(session.id, roundPromptLane);
-    sessionGenerations.set(session.id, brief.roundGeneration ?? 1);
     sessionJobs.set(session.id, {
       issueNumber: brief.issueNumber,
       ...(brief.slug ? { slug: brief.slug } : {}),
@@ -284,100 +176,15 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
     return {
       ref: session.id,
       ...(session.workspace ? { workspace: session.workspace } : {}),
-      ...(session.seedWorkspace ? { seedWorkspace: session.seedWorkspace } : {}),
       ...(session.credentialRef ? { credentialRef: session.credentialRef } : {}),
-      promptLane: roundPromptLane,
     };
-  }
-
-  // `pending` means ask again, so the round is not spent.
-  type HarvestOutcome = 'delivered' | 'empty' | 'refused' | 'pending';
-
-  async function download(sessionRef: string, plan: ManagedOutputPlan[]): Promise<ManagedOutputFile[]> {
-    const budget = createManagedOutputBudget(options.outputCaps);
-    const files: ManagedOutputFile[] = [];
-    for (const entry of plan) {
-      const content = await options.provider.readOutput(sessionRef, entry.ref);
-      files.push(budget.admit(entry.path, content));
-    }
-    return files;
-  }
-
-  async function harvest(
-    sessionRef: string,
-    issueNumber: number,
-    slug: string,
-    roundGeneration?: number,
-  ): Promise<HarvestOutcome> {
-    if (!deliver || harvested.has(sessionRef)) return 'empty';
-    const claim = { issueNumber, slug, sessionRef };
-    const listed = await options.provider.listOutputs(sessionRef);
-    let plan: ManagedOutputPlan[];
-    try {
-      const selected = selectManagedOutputs(listed, slug);
-      // submit_sources' own rules, dropping not refusing: docs/managed-agent-backend.md.
-      const deliverable: ManagedOutputPlan[] = [];
-      const ignored = [...selected.ignored];
-      for (const entry of selected.plan) {
-        if (forbiddenDeliveryPathReason(entry.path)) ignored.push(entry.ref.path);
-        else deliverable.push(entry);
-      }
-      if (ignored.length > 0) {
-        options.log?.info?.({ ...claim, ignored }, 'ignored managed outputs that are not deliverable sources');
-      }
-      plan = assertWithinManagedOutputPlan(deliverable, options.outputCaps);
-    } catch (error) {
-      if (!(error instanceof ManagedOutputRejectedError)) throw error;
-      // Not retried: the same sandbox repeats the bytes.
-      harvested.add(sessionRef);
-      options.log?.warn({ err: error, ...claim }, 'managed output refused');
-      return 'refused';
-    }
-    if (plan.length === 0) return 'empty';
-
-    // The lock holder delivers; the loser waits for the candidate.
-    if (options.lock && !(await options.lock.acquire(claim))) {
-      options.log?.info?.(claim, 'managed delivery already claimed elsewhere');
-      return 'pending';
-    }
-    try {
-      const files = await download(sessionRef, plan);
-      // Prefer the durable job generation over process memory.
-      const generation = roundGeneration ?? sessionGenerations.get(sessionRef) ?? 1;
-      await deliver({
-        issueNumber,
-        slug,
-        files,
-        sessionRef,
-        backend: backendName,
-        roundGeneration: generation,
-        mode: deliveryMode,
-      });
-      harvested.add(sessionRef);
-      options.log?.info?.(
-        { ...claim, files: files.length, vendor: options.provider.vendor },
-        'delivered managed agent output',
-      );
-      return 'delivered';
-    } catch (error) {
-      if (error instanceof ManagedOutputRejectedError) {
-        harvested.add(sessionRef);
-        options.log?.warn({ err: error, ...claim }, 'managed output refused');
-        return 'refused';
-      }
-      await options.lock?.release(claim).catch(() => undefined);
-      throw error;
-    }
   }
 
   return {
     name: backendName,
 
-    seedDelivery(promptLane): SeedDelivery {
-      const lane = promptLane ?? defaultPromptLane;
-      if (seedSupportedOn(lane)) return 'workspace';
-      // An mcp round can read what it cannot be handed.
-      return lane === 'mcp' ? 'channel' : 'none';
+    seedDelivery(): SeedDelivery {
+      return seedSupported ? 'workspace' : 'channel';
     },
 
     async dispatch(brief: BuildBrief): Promise<DispatchResult> {
@@ -457,30 +264,7 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
         };
       }
 
-      let hasCandidate = observeOptions.hasCandidate;
-      let outcome: HarvestOutcome = 'empty';
-      const canHarvest =
-        Boolean(deliver) &&
-        !(['mcp', 'harness'] as ManagedPromptLane[]).includes(sessionLanes.get(ref) ?? defaultPromptLane) &&
-        !hasCandidate &&
-        isManagedSessionHarvestable(session.state) &&
-        observeOptions.issueNumber !== undefined &&
-        Boolean(observeOptions.slug);
-      if (canHarvest) {
-        try {
-          outcome = await harvest(
-            ref,
-            observeOptions.issueNumber!,
-            observeOptions.slug!,
-            observeOptions.roundGeneration,
-          );
-          hasCandidate = outcome === 'delivered';
-        } catch (error) {
-          // A failed pull retries on the next poll.
-          outcome = 'pending';
-          options.log?.warn({ err: error, ref }, 'could not harvest managed agent output');
-        }
-      }
+      const hasCandidate = observeOptions.hasCandidate;
 
       // Everything a nudge needs except what only the channel knows.
       const nudgeCandidate =
@@ -551,8 +335,7 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
       }
 
       // Spent idle → completed so reconcile leaves building (no "Powstaje kod").
-      const state =
-        outcome === 'pending' || nudged ? 'in_progress' : spentWithoutDelivery ? 'completed' : session.state;
+      const state = nudged ? 'in_progress' : spentWithoutDelivery ? 'completed' : session.state;
 
       return {
         state,
@@ -575,9 +358,6 @@ export function createManagedBackend(options: ManagedBackendOptions): AgentBacke
     async cleanup(previous: DispatchResult): Promise<void> {
       startedAt.delete(previous.ref);
       idleNudged.delete(previous.ref);
-      harvested.delete(previous.ref);
-      sessionGenerations.delete(previous.ref);
-      sessionLanes.delete(previous.ref);
       budgetStops.delete(previous.ref);
       if (previous.credentialRef) credentialRefs.set(previous.ref, previous.credentialRef);
       await releaseCredential(previous.ref);

@@ -3059,7 +3059,7 @@ describe('seed regeneration', () => {
     const platformBackend: AgentBackend = {
       name: 'managed:stub',
       seedDelivery: () => 'channel' as const,
-      dispatch: async () => ({ ref: 'session-1', promptLane: 'mcp' }),
+      dispatch: async () => ({ ref: 'session-1' }),
       resume: async () => ({ ref: 'session-2' }),
       observe: async () => null,
       cancel: async () => ({ enforced: false }),

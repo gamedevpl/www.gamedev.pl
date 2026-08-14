@@ -12,13 +12,17 @@ describe('Copilot MCP connector deployment', () => {
     expect(script).toContain(connectorMapping);
   });
 
-  it('preserves Gemini credentials and managed lane ceilings in both deploy paths', () => {
+  it('preserves Gemini credentials and managed usage ceilings in both deploy paths', () => {
     expect(workflow).toContain(geminiMapping);
     expect(script).toContain(geminiMapping);
-    expect(workflow).toContain('MANAGED_AGENT_PROMPT_LANE');
-    expect(script).toContain('MANAGED_AGENT_PROMPT_LANE');
     expect(workflow).toContain('MANAGED_AGENT_MAX_TOTAL_TOKENS');
     expect(script).toContain('MANAGED_AGENT_MAX_TOTAL_TOKENS');
+  });
+
+  // A lane variable nobody reads is a landmine waiting to be misread.
+  it('does not forward the retired prompt-lane variable', () => {
+    expect(workflow).not.toContain('MANAGED_AGENT_PROMPT_LANE');
+    expect(script).not.toContain('MANAGED_AGENT_PROMPT_LANE');
   });
 
   // A ceiling no deploy path forwards does not exist.
