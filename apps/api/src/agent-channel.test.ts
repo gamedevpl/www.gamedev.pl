@@ -690,14 +690,13 @@ describe('agent build channel', () => {
     expect(await store.listPendingCreatorMessages(ISSUE)).toHaveLength(0);
   });
 
-  it('does not ack the inbox when a builder handoff fails to start', async () => {
+  it('does not ack the inbox when a builder handoff is already acknowledged', async () => {
     const store = new InMemoryStore();
     await seedSubmission(store);
     const msg = await store.appendCreatorMessage(ISSUE, 'please make the ship faster');
     await store.requestBuilderHandoff(ISSUE, 'self', new Date().toISOString());
-    app = await createApp(store, {
-      onBuilderHandoffAcknowledged: async () => ({ started: false, reason: 'handoff_not_started' }),
-    });
+    await store.acknowledgeBuilderHandoff(ISSUE, new Date().toISOString());
+    app = await createApp(store);
 
     const end = await app.inject({
       method: 'POST',
@@ -706,7 +705,7 @@ describe('agent build channel', () => {
       payload: { summary: 'Handing over.', ackInboxIds: [msg.id] },
     });
 
-    expect(end.json()).toMatchObject({ accepted: false, rejected: 'handoff_not_started' });
+    expect(end.json()).toMatchObject({ accepted: false, rejected: 'handoff_already_acknowledged' });
     expect(await store.listPendingCreatorMessages(ISSUE)).toHaveLength(1);
   });
 
