@@ -37,6 +37,7 @@ export interface CopilotManagedProviderDeps {
   github?: CopilotGitHubClient;
   // MCP-lane rounds; GitHub scopes Agent Tasks per repo, not per call.
   mcpTasks?: AgentTasksClient;
+  mcpGithub?: CopilotGitHubClient;
 }
 
 function seedSlug(files: ManagedSessionRequest['workspaceFiles']): string | undefined {
@@ -123,10 +124,25 @@ export function createCopilotManagedProvider(
           ...(config.timeoutMs ? { timeoutMs: config.timeoutMs } : {}),
         })
       : undefined);
-  const mcpGithub = mcpRepo ? createGitHubClient({ token: config.apiKey, repo: mcpRepo }) : undefined;
+  const mcpGithub =
+    deps.mcpGithub ?? (mcpRepo ? createGitHubClient({ token: config.apiKey, repo: mcpRepo }) : undefined);
   // In-process session-repo tracking, same lifetime as credentialRef bookkeeping.
   const mcpSessionIds = new Set<string>();
   const mcpWorkspaces = new Set<string>();
+
+  interface SessionLane {
+    tasks: AgentTasksClient;
+    github: CopilotGitHubClient;
+  }
+
+  // Agent Tasks are scoped per repo, so one lane's client cannot see the other's
+  // session. Ask the tracked lane first, then probe, exactly as getSession does.
+  function sessionLanes(sessionId: string): SessionLane[] {
+    const harness: SessionLane = { tasks, github };
+    if (!mcpTasks || !mcpGithub) return [harness];
+    const mcp: SessionLane = { tasks: mcpTasks, github: mcpGithub };
+    return mcpSessionIds.has(sessionId) ? [mcp] : [harness, mcp];
+  }
 
   return {
     vendor: COPILOT_VENDOR,
@@ -197,30 +213,33 @@ export function createCopilotManagedProvider(
 
     // No stop endpoint in agent tasks — cancel the Actions run instead.
     async cancelSession(sessionId: string): Promise<{ enforced: boolean }> {
-      const branch = await tasks
-        .getTask(sessionId)
-        .then((task) => (task ? resolveTaskBranch(task) : null))
-        .catch(() => null);
-      // No branch yet means no run to stop; the next poll retries.
-      if (!branch) return { enforced: false };
+      for (const lane of sessionLanes(sessionId)) {
+        const branch = await lane.tasks
+          .getTask(sessionId)
+          .then((task) => (task ? resolveTaskBranch(task) : null))
+          .catch(() => null);
+        // Not this lane's session, or no branch yet; the next poll retries.
+        if (!branch) continue;
 
-      const runs = await github.listWorkflowRuns({ branch }).catch(() => []);
-      // Validation CI shares the branch, so match the agent workflow path.
-      const inFlight = runs.filter(
-        (run) => run.path === COPILOT_AGENT_WORKFLOW_PATH && IN_FLIGHT_RUN_STATUSES.includes(run.status),
-      );
+        const runs = await lane.github.listWorkflowRuns({ branch }).catch(() => []);
+        // Validation CI shares the branch, so match the agent workflow path.
+        const inFlight = runs.filter(
+          (run) => run.path === COPILOT_AGENT_WORKFLOW_PATH && IN_FLIGHT_RUN_STATUSES.includes(run.status),
+        );
 
-      // One left running is one still spending, so every match must cancel.
-      let allCancelled = true;
-      for (const run of inFlight) {
-        // Best effort: a token without `actions: write` reports unenforced.
-        const cancelled = await github
-          .cancelWorkflowRun(run.id)
-          .then(() => true)
-          .catch(() => false);
-        allCancelled = allCancelled && cancelled;
+        // One left running is one still spending, so every match must cancel.
+        let allCancelled = true;
+        for (const run of inFlight) {
+          // Best effort: a token without `actions: write` reports unenforced.
+          const cancelled = await lane.github
+            .cancelWorkflowRun(run.id)
+            .then(() => true)
+            .catch(() => false);
+          allCancelled = allCancelled && cancelled;
+        }
+        return { enforced: inFlight.length > 0 && allCancelled };
       }
-      return { enforced: inFlight.length > 0 && allCancelled };
+      return { enforced: false };
     },
 
     async deleteWorkspace(workspace: string): Promise<void> {
