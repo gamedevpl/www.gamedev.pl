@@ -7,7 +7,7 @@ import { buildApp } from './app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './github-client.js';
 import type { GameSeeder } from './game-seed.js';
-import type { GamesStore } from './games-store.js';
+import { InvalidUploadError, type GamesStore } from './games-store.js';
 import type { KnowledgeQueryResult } from './knowledge-search.js';
 import { InMemoryStore } from './store.js';
 import { mintToken } from './submission-token.js';
@@ -2182,6 +2182,72 @@ describe('agent build channel', () => {
         ],
       });
       expect(staged.get('game/sim.ts')).toBe('export const SPEED = 4;\n');
+    });
+
+    it('reports every applied index when staging a patched file is refused', async () => {
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      const { gamesStore, staged } = stubGamesStore();
+      const put = gamesStore.putStagedSourceFile.bind(gamesStore);
+      gamesStore.putStagedSourceFile = async (input: { path: string; content: string }) => {
+        if (input.path === 'game/sim.ts' && input.content.includes('SPEED = 6')) {
+          throw new InvalidUploadError('game/sim.ts is too large');
+        }
+        return put(input);
+      };
+      app = await createApp(store, { gamesStore });
+
+      await app.inject({
+        method: 'PUT',
+        url: '/api/agent/build/sources/stage',
+        headers: agentHeaders(),
+        payload: {
+          slug: 'comet-courier',
+          path: 'game/render.ts',
+          content: 'export function paint() {\n  drawSky();\n}\n',
+        },
+      });
+      await app.inject({
+        method: 'PUT',
+        url: '/api/agent/build/sources/stage',
+        headers: agentHeaders(),
+        payload: {
+          slug: 'comet-courier',
+          path: 'game/sim.ts',
+          content: 'export const SPEED = 4;\nexport const LIVES = 3;\n',
+        },
+      });
+
+      const patched = await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/sources/stage/patch',
+        headers: agentHeaders(),
+        payload: {
+          files: [
+            { path: 'game/render.ts', old: '  drawSky();\n', new: '  drawHud();\n' },
+            {
+              path: 'game/sim.ts',
+              patches: [
+                { old: 'SPEED = 4', new: 'SPEED = 6' },
+                { old: 'LIVES = 3', new: 'LIVES = 5' },
+              ],
+            },
+          ],
+        },
+      });
+      expect(patched.statusCode).toBe(200);
+      expect(patched.json()).toMatchObject({
+        accepted: true,
+        incomplete: true,
+        replacements: 1,
+        files: [{ path: 'game/render.ts', replacements: 1 }],
+        failed: [
+          { path: 'game/sim.ts', index: 0 },
+          { path: 'game/sim.ts', index: 1 },
+        ],
+      });
+      expect(staged.get('game/render.ts')).toContain('drawHud()');
+      expect(staged.get('game/sim.ts')).toBe('export const SPEED = 4;\nexport const LIVES = 3;\n');
     });
 
     it('refuses files[] mixed with a top-level path', async () => {

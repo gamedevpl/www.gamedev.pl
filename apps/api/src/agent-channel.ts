@@ -397,10 +397,14 @@ type PatchFailure = {
   error: string;
 };
 
+function patchEditCount(file: PatchFileSpec): number {
+  return file.patches?.length ?? 1;
+}
+
 function applyPatchFileBestEffort(
   content: string,
   file: PatchFileSpec,
-): { content: string; replacements: number; failed: PatchFailure[] } {
+): { content: string; replacements: number; applied: number[]; failed: PatchFailure[] } {
   const edits: Array<{ old?: string; new?: string; patch?: string }> =
     file.patches !== undefined
       ? file.patches
@@ -410,6 +414,7 @@ function applyPatchFileBestEffort(
 
   let current = content;
   let replacements = 0;
+  const applied: number[] = [];
   const failed: PatchFailure[] = [];
   for (let i = 0; i < edits.length; i++) {
     const edit = edits[i]!;
@@ -420,6 +425,7 @@ function applyPatchFileBestEffort(
           : applyExactReplace({ content: current, path: file.path, old: edit.old!, new: edit.new! });
       current = result.content;
       replacements += result.replacements;
+      applied.push(i);
     } catch (error) {
       if (error instanceof SourcePatchError) {
         failed.push({ path: file.path, index: i, error: error.message });
@@ -428,7 +434,7 @@ function applyPatchFileBestEffort(
       throw error;
     }
   }
-  return { content: current, replacements, failed };
+  return { content: current, replacements, applied, failed };
 }
 
 async function resolvePatchBase(input: {
@@ -1570,6 +1576,7 @@ export async function registerAgentChannelRoutes(
           path: string;
           content: string;
           replacements: number;
+          applied: number[];
           baseFrom: PatchBaseFrom;
         }> = [];
         const failed: PatchFailure[] = [];
@@ -1584,22 +1591,22 @@ export async function registerAgentChannelRoutes(
             path: spec.path,
           });
           if (!base) {
-            failed.push({
-              path: spec.path,
-              index: 0,
-              error:
-                `cannot patch ${spec.path}: no base content in staging, the latest delivery, or the seed — ` +
-                'stage_source_file the full file first (or get_sources / get_seed), then patch',
-            });
+            const error =
+              `cannot patch ${spec.path}: no base content in staging, the latest delivery, or the seed — ` +
+              'stage_source_file the full file first (or get_sources / get_seed), then patch';
+            for (let i = 0; i < patchEditCount(spec); i++) {
+              failed.push({ path: spec.path, index: i, error });
+            }
             continue;
           }
           const patched = applyPatchFileBestEffort(base.content, spec);
           failed.push(...patched.failed);
-          if (patched.replacements === 0) continue;
+          if (patched.applied.length === 0) continue;
           prepared.push({
             path: spec.path,
             content: patched.content,
             replacements: patched.replacements,
+            applied: patched.applied,
             baseFrom: base.baseFrom,
           });
         }
@@ -1623,7 +1630,9 @@ export async function registerAgentChannelRoutes(
             });
           } catch (error) {
             if (error instanceof InvalidUploadError) {
-              failed.push({ path: item.path, index: 0, error: error.message });
+              for (const index of item.applied) {
+                failed.push({ path: item.path, index, error: error.message });
+              }
               continue;
             }
             throw error;
