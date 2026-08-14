@@ -10,6 +10,7 @@ import {
   type SourceFile,
   type StagedSourceEntry,
 } from './games-store.js';
+import type { TabCompleteGate } from './creation-limits.js';
 import { resolveJobState } from './job-state.js';
 import { createKitFileStore, type KitFileStore } from './kit-files.js';
 import { parseKitRegistry } from './kit-registry.js';
@@ -27,6 +28,7 @@ import {
   type SourceDeliveryService,
 } from './source-delivery.js';
 import type { Store, SubmissionRecord } from './store.js';
+import { MAX_PREFIX_CHARS, MAX_SUFFIX_CHARS, tabCompleteEnabled, type TabCompleter } from './tab-complete.js';
 import { sharedSourcesFromKitTree } from './typecheck-preflight.js';
 import { typeCheckGame } from './type-check.js';
 
@@ -58,6 +60,11 @@ export interface CreatorCodeRoutesOptions {
    * owner write has to feed the same assembly an agent write does, or the "stage
    * refreshes" fix on the read side has nothing to read. */
   scheduleStagedPreview?: (issueNumber: number) => void;
+  // TA-01: the ghost-text completer. Built unconditionally; TAB_COMPLETE gates the route.
+  tabCompleter?: TabCompleter;
+  // Shared daily token budget for ghost text — same chassis as editingGate.
+  tabCompleteGate?: TabCompleteGate;
+  dailyTabCompleteQuota?: number;
   /** Starts the gate on a manual delivery — the same trigger the agent channel uses. */
   onSourcesDelivered?: (input: {
     issueNumber: number;
@@ -74,6 +81,9 @@ export interface CreatorCodeRoutesOptions {
 
 /** CE-19: floor between two manual deliveries on the same game, copied from EditorKit. */
 export const DELIVER_COOLDOWN_MS = 10 * 60 * 1000;
+
+// TA-01: per-creator daily ceiling on completion calls, generous for typing.
+export const DEFAULT_DAILY_TAB_COMPLETE_QUOTA = 2000;
 
 /** One entry in the merged "what the next delivery would contain" file list (CE-03). */
 export interface CreatorCodeFile {
@@ -669,6 +679,81 @@ export async function registerCreatorCodeRoutes(
         request.log.warn({ err: error, slug: resolved.slug }, 'code surface: kit declaration load failed');
         return reply.status(404).send({ error: 'no kit published' });
       }
+    },
+  );
+
+  const CompleteInputSchema = z.object({
+    path: z.string().trim().min(1).max(120),
+    prefixWindow: z.string().max(MAX_PREFIX_CHARS),
+    suffixWindow: z.string().max(MAX_SUFFIX_CHARS),
+  });
+
+  // TA-01: ghost-text proposal, off by default unlike every route above.
+  app.post<{ Params: { slug: string } }>(
+    '/api/me/studio/games/:slug/sources/complete',
+    { config: { rateLimit: { max: 600, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      if (notFoundIfDisabled(reply)) return;
+      if (!options.tabCompleter || !tabCompleteEnabled()) {
+        return reply.status(404).send({ error: 'not found' });
+      }
+      const resolved = await resolveForSlug(request, reply);
+      if (!resolved) return;
+
+      const parsed = CompleteInputSchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
+      }
+
+      const nowMs = (options.now ?? Date.now)();
+      const dateStr = new Date(nowMs).toISOString().slice(0, 10);
+      const uid = request.user!.uid;
+
+      const quota = await store.checkAndIncrementQuota(
+        uid,
+        dateStr,
+        options.dailyTabCompleteQuota ??
+          Number(process.env.DAILY_TAB_COMPLETE_QUOTA ?? DEFAULT_DAILY_TAB_COMPLETE_QUOTA),
+        'tabCompletes',
+      );
+      if (!quota.allowed) {
+        return reply.status(429).send({ error: 'daily tab-complete quota exceeded' });
+      }
+
+      // Checked before the paid call, so a refusal costs the creator nothing.
+      if (options.tabCompleteGate) {
+        const gate = await options.tabCompleteGate.peek(uid, dateStr);
+        if (!gate.allowed) {
+          return reply.status(503).send({ error: 'completions are resting right now — try again later' });
+        }
+      }
+
+      let result;
+      try {
+        result = await options.tabCompleter.complete({
+          path: parsed.data.path,
+          prefixWindow: parsed.data.prefixWindow,
+          suffixWindow: parsed.data.suffixWindow,
+        });
+      } catch (error) {
+        request.log.warn({ slug: resolved.slug, err: error }, 'tab-complete call failed');
+        return reply.status(503).send({ error: 'no completion right now — try again' });
+      }
+
+      if (result.tokens) {
+        const spent = result.tokens.input + result.tokens.output;
+        await options.tabCompleteGate?.spend(uid, dateStr, spent);
+        await store
+          .recordJobCost(resolved.record.issueNumber, {
+            kind: 'tab_complete',
+            at: new Date(nowMs).toISOString(),
+            by: result.model ?? 'vertex',
+            tokens: result.tokens,
+          })
+          .catch(() => {});
+      }
+
+      return reply.send({ completion: result.completion });
     },
   );
 

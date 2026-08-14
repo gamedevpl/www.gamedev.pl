@@ -441,7 +441,7 @@ export interface JobSeedOutcome {
  * (docs: architecture B), so that arriving is a writer, not a migration.
  */
 export interface JobCostEntry {
-  kind: 'agent_session' | 'gate_run' | 'seed' | 'assist' | 'chat';
+  kind: 'agent_session' | 'gate_run' | 'seed' | 'assist' | 'chat' | 'tab_complete';
   at: string;
   /**
    * Who charged for it: an agent backend (`copilot`), a service (`cloud-build`), or —
@@ -688,6 +688,10 @@ export interface CreationLimits {
   chatPaused?: boolean;
   // Own daily ceiling on chat-agent calls, separate from the edit cap.
   globalDailyChatCap?: number | null;
+  // Refuse the tab-complete ghost-text lane outright (TA-*); Play/editing untouched.
+  tabCompletePaused?: boolean;
+  // Shared daily token ceiling for ghost-text completion, everyone together.
+  globalDailyTabCompleteTokenCap?: number | null;
   // Switches the `platform` option; `auto` defers to whether a backend exists.
   managedBuilderMode?: 'auto' | 'off' | 'coming_soon';
   // Runtime override; unset defers to MANAGED_AGENT_VENDOR, the env-var default.
@@ -722,6 +726,8 @@ export interface UsageCounters {
   chats: number;
   // Platform rounds this creator started today.
   managedBuilds: number;
+  // Ghost-text completion calls today (TA-01), one per model call.
+  tabCompletes: number;
 }
 
 /**
@@ -2176,6 +2182,12 @@ export interface Store {
   checkAndIncrementGlobalEdits(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }>;
   /** Same shape, for the chat agent's own shared daily allowance. */
   checkAndIncrementGlobalChats(dateStr: string, limit: number): Promise<{ allowed: boolean; current: number }>;
+  // Same shape as chats, but counts tokens for ghost-text completion.
+  checkAndIncrementGlobalTabCompleteTokens(
+    dateStr: string,
+    tokens: number,
+    limit: number,
+  ): Promise<{ allowed: boolean; current: number }>;
   // Platform rounds everyone together has started on `dateStr`.
   getGlobalManagedBuildCount(dateStr: string): Promise<number>;
   // Same shape, for the shared daily ceiling.
@@ -2684,6 +2696,7 @@ function emptyUsageCounters(): UsageCounters {
     assists: 0,
     chats: 0,
     managedBuilds: 0,
+    tabCompletes: 0,
   };
 }
 
@@ -2707,6 +2720,7 @@ export class InMemoryStore implements Store {
   private globalEdits = new Map<string, number>();
   private globalChats = new Map<string, number>();
   private globalManagedBuilds = new Map<string, number>();
+  private globalTabCompleteTokens = new Map<string, number>();
   private creationLimits: CreationLimits | null = null;
   private publicPlayConfig: PublicPlayConfig | null = null;
   private waitlist = new Map<string, WaitlistEntry>();
@@ -3819,6 +3833,11 @@ export class InMemoryStore implements Store {
         patch.globalDailyChatCap !== undefined
           ? patch.globalDailyChatCap
           : (this.creationLimits?.globalDailyChatCap ?? null),
+      tabCompletePaused: patch.tabCompletePaused ?? this.creationLimits?.tabCompletePaused ?? false,
+      globalDailyTabCompleteTokenCap:
+        patch.globalDailyTabCompleteTokenCap !== undefined
+          ? patch.globalDailyTabCompleteTokenCap
+          : (this.creationLimits?.globalDailyTabCompleteTokenCap ?? null),
       managedBuilderMode: patch.managedBuilderMode ?? this.creationLimits?.managedBuilderMode ?? 'auto',
       managedAgentVendorOverride:
         patch.managedAgentVendorOverride !== undefined
@@ -3883,6 +3902,20 @@ export class InMemoryStore implements Store {
     }
     this.globalChats.set(dateStr, current + 1);
     return { allowed: true, current: current + 1 };
+  }
+
+  async checkAndIncrementGlobalTabCompleteTokens(
+    dateStr: string,
+    tokens: number,
+    limit: number,
+  ): Promise<{ allowed: boolean; current: number }> {
+    const current = this.globalTabCompleteTokens.get(dateStr) ?? 0;
+    if (current >= limit) {
+      return { allowed: false, current };
+    }
+    const next = current + tokens;
+    this.globalTabCompleteTokens.set(dateStr, next);
+    return { allowed: true, current: next };
   }
 
   async getGlobalManagedBuildCount(dateStr: string): Promise<number> {
@@ -6416,6 +6449,9 @@ export class FirestoreStore implements Store {
       globalDailyEditCap: typeof data?.globalDailyEditCap === 'number' ? data.globalDailyEditCap : null,
       chatPaused: data?.chatPaused === true,
       globalDailyChatCap: typeof data?.globalDailyChatCap === 'number' ? data.globalDailyChatCap : null,
+      tabCompletePaused: data?.tabCompletePaused === true,
+      globalDailyTabCompleteTokenCap:
+        typeof data?.globalDailyTabCompleteTokenCap === 'number' ? data.globalDailyTabCompleteTokenCap : null,
       managedBuilderMode:
         data?.managedBuilderMode === 'off' || data?.managedBuilderMode === 'coming_soon'
           ? data.managedBuilderMode
@@ -6453,6 +6489,11 @@ export class FirestoreStore implements Store {
         chatPaused: patch.chatPaused ?? existing.chatPaused ?? false,
         globalDailyChatCap:
           patch.globalDailyChatCap !== undefined ? patch.globalDailyChatCap : (existing.globalDailyChatCap ?? null),
+        tabCompletePaused: patch.tabCompletePaused ?? existing.tabCompletePaused ?? false,
+        globalDailyTabCompleteTokenCap:
+          patch.globalDailyTabCompleteTokenCap !== undefined
+            ? patch.globalDailyTabCompleteTokenCap
+            : (existing.globalDailyTabCompleteTokenCap ?? null),
         managedBuilderMode: patch.managedBuilderMode ?? existing.managedBuilderMode ?? 'auto',
         managedAgentVendorOverride:
           patch.managedAgentVendorOverride !== undefined
@@ -6548,6 +6589,27 @@ export class FirestoreStore implements Store {
 
       const nextVal = current + 1;
       transaction.set(ref, { chats: nextVal }, { merge: true });
+      return { allowed: true, current: nextVal };
+    });
+  }
+
+  async checkAndIncrementGlobalTabCompleteTokens(
+    dateStr: string,
+    tokens: number,
+    limit: number,
+  ): Promise<{ allowed: boolean; current: number }> {
+    const ref = this.globalUsageRef(dateStr);
+    return await this.db.runTransaction(async (transaction) => {
+      const snap = await transaction.get(ref);
+      const value = snap.data()?.tabCompleteTokens;
+      const current = typeof value === 'number' ? value : 0;
+
+      if (current >= limit) {
+        return { allowed: false, current };
+      }
+
+      const nextVal = current + tokens;
+      transaction.set(ref, { tabCompleteTokens: nextVal }, { merge: true });
       return { allowed: true, current: nextVal };
     });
   }

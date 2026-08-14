@@ -167,6 +167,9 @@ const CreationLimitsPatchSchema = z
     // The studio chat breaker rides the same document too.
     chatPaused: z.boolean().optional(),
     globalDailyChatCap: z.number().int().min(0).max(100_000).nullable().optional(),
+    // TA-01's own breaker, denominated in tokens rather than calls.
+    tabCompletePaused: z.boolean().optional(),
+    globalDailyTabCompleteTokenCap: z.number().int().min(0).max(50_000_000).nullable().optional(),
     // Same document: whether the platform builder is offered. See managed-availability.ts.
     managedBuilderMode: z.enum(['auto', 'off', 'coming_soon']).optional(),
     // null clears the override, same as globalDailySubmissionCap above.
@@ -182,11 +185,13 @@ const CreationLimitsPatchSchema = z
       patch.globalDailyEditCap !== undefined ||
       patch.chatPaused !== undefined ||
       patch.globalDailyChatCap !== undefined ||
+      patch.tabCompletePaused !== undefined ||
+      patch.globalDailyTabCompleteTokenCap !== undefined ||
       patch.managedBuilderMode !== undefined ||
       patch.managedAgentVendorOverride !== undefined ||
       patch.managedDailyCap !== undefined ||
       patch.managedDailyUserCap !== undefined,
-    'nothing to change: send paused, globalDailySubmissionCap, editingPaused, globalDailyEditCap, chatPaused, globalDailyChatCap, managedBuilderMode, managedAgentVendorOverride, managedDailyCap and/or managedDailyUserCap',
+    'nothing to change: send paused, globalDailySubmissionCap, editingPaused, globalDailyEditCap, chatPaused, globalDailyChatCap, tabCompletePaused, globalDailyTabCompleteTokenCap, managedBuilderMode, managedAgentVendorOverride, managedDailyCap and/or managedDailyUserCap',
   );
 
 const PublicPlayPatchSchema = z.object({
