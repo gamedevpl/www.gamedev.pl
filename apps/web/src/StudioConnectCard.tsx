@@ -26,11 +26,7 @@ const CLIENT_LABEL_KEY: Record<ConnectClient, string> = {
 
 const AUTH_MODE_STORAGE_KEY = 'gamedev_connect_auth_mode';
 
-// A builder handoff (stop-and-switch in either direction) is confirmed by the next
-// status poll, not by the request that kicked it off — the agent may be mid-step and
-// take a few cycles to acknowledge. Past this many ms with no confirmation, stop
-// reading "pending" as "in progress" and offer a retry instead of waiting silently.
-// Exported so tests can advance fake timers by the real threshold.
+// Past this many ms unconfirmed, offer a retry.
 export const HANDOFF_STALE_MS = 20_000;
 
 type ConnectAuthMode = 'key' | 'oauth';
@@ -132,8 +128,7 @@ function SwitchBuilderControl({
   const [busy, setBusy] = useState(false);
   const [handoffPending, setHandoffPending] = useState(pending);
   const [error, setError] = useState<string | null>(null);
-  // Bumped on every confirm() — including a retry — so the stale timer below restarts
-  // instead of firing immediately again on a request that just went out.
+  // Restarts the stale timer on every confirm/retry.
   const [attempt, setAttempt] = useState(0);
   const [stale, setStale] = useState(false);
 
@@ -168,10 +163,7 @@ function SwitchBuilderControl({
     }
   };
 
-  // A stale retry re-sends the same request; it does not touch `handoffPending`.
-  // Whether the handoff actually landed is decided by the next status poll (the
-  // `pending` prop) or by this control unmounting once the builder switch is
-  // visible elsewhere — not by this request's own promise resolving.
+  // `pending` decides if a retried handoff landed.
   const retry = async () => {
     setAttempt((n) => n + 1);
     setBusy(true);

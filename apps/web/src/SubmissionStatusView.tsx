@@ -1623,10 +1623,7 @@ function FeedbackPanel({
     ) : null;
   const showStop =
     !chooseBuilder && agentWorking && effectiveBuilder === 'platform' && Boolean(onSwitchToSelf) && !stopRequested;
-  // STOP already stops the build and switches to the creator's own agent in one click.
-  // Showing the "switch to your own agent" badge alongside it offers the same outcome
-  // through a second, slower (arm-then-confirm) control — two buttons for one action.
-  // Once STOP is on screen it is the only path; the badge returns once the build settles.
+  // Hide the switch-to-self badge while STOP covers the same action.
   const activePlatformHandoff =
     !chooseBuilder && effectiveBuilder === 'platform' && onSwitchToSelf && !showStop ? (
       <SwitchToSelfControl compact active onSwitchToSelf={onSwitchToSelf} pending={stopRequested} />

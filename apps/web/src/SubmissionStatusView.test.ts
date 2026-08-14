@@ -1012,9 +1012,7 @@ describe('SubmissionStatusView', () => {
         await flushEffects();
       });
 
-      // While STOP is on screen it is the only way to switch to the creator's own agent —
-      // the slower arm-then-confirm badge would just be a second control for the same
-      // outcome, so it stays hidden until the stop request is in flight.
+      // Badge hidden while STOP shows.
       expect(container.querySelector<HTMLElement>('[data-testid="active-switch-builder-self"]')).toBeNull();
       expect(container.querySelector('.builder-mode-selector')?.textContent).toContain('Gamedev.pl');
       expect(container.querySelector('.studio-turn.is-working')).not.toBeNull();
@@ -1032,7 +1030,7 @@ describe('SubmissionStatusView', () => {
         await flushEffects();
       });
       expect(mockedHandoffToSelf).toHaveBeenCalledWith('live-platform-token');
-      // Stop is in flight: the badge reappears, now showing the pending state.
+      // Badge reappears while the stop request is pending.
       const control = container.querySelector<HTMLElement>('[data-testid="active-switch-builder-self"]');
       expect(control?.closest('.status-composer-toolbar-left')).not.toBeNull();
       expect(container.querySelector('.studio-active-handoff-pending')?.textContent).toMatch(
@@ -1047,9 +1045,7 @@ describe('SubmissionStatusView', () => {
   });
 
   it('offers a retry once a stop request has been pending too long', async () => {
-    // Stopping the agent is not instant — it is confirmed by the next status poll,
-    // not by the request that kicked it off. If that confirmation never lands, the
-    // creator should not be stuck watching "waiting…" forever with no way out.
+    // An unconfirmed stop should not strand the creator forever.
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     vi.useFakeTimers();
     mockedGetSubmissionStatus.mockResolvedValue({
@@ -1081,7 +1077,7 @@ describe('SubmissionStatusView', () => {
       expect(container.querySelector('.studio-active-handoff-pending')?.textContent).toMatch(
         /waiting for the current agent to acknowledge the stop request/i,
       );
-      // No retry yet — this is the ordinary short wait, not the stale one.
+      // No retry yet — ordinary short wait, not stale.
       expect(container.querySelector('.studio-active-handoff-pending-group button')).toBeNull();
 
       await act(async () => {
@@ -1100,7 +1096,7 @@ describe('SubmissionStatusView', () => {
         await flushEffects();
       });
       expect(mockedHandoffToSelf).toHaveBeenCalledTimes(2);
-      // Retrying restarts the clock instead of staying stale immediately.
+      // Retrying restarts the clock.
       expect(container.querySelector('.studio-active-handoff-pending')?.textContent).toMatch(
         /waiting for the current agent to acknowledge the stop request/i,
       );
