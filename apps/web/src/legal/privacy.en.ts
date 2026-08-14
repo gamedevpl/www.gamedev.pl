@@ -216,6 +216,14 @@ export const privacyEn: LegalDocument = {
             `If you believe a rejection was wrong, write to [${CONTACT_EMAIL}](mailto:${CONTACT_EMAIL}) and a human ` +
             'will look at it.',
         },
+        {
+          kind: 'p',
+          text:
+            'Separately: if you are a game’s owner and use the Code editor’s suggestion feature, the code you are ' +
+            'actively editing is sent to the same AI model (Google Gemini, via Google Cloud Vertex AI) to generate ' +
+            'completion suggestions as you type. This is off unless you choose to use it, applies only to your own ' +
+            'game, and is never used to train models, same as above.',
+        },
       ],
     },
     {
@@ -236,7 +244,7 @@ export const privacyEn: LegalDocument = {
             ['Google (Sign in with Google)', 'Authentication', 'USA — Data Privacy Framework'],
             [
               'Google Cloud Vertex AI (Gemini)',
-              'Moderating and refining your game description',
+              'Moderating and refining your game description; suggesting code completions in the Code editor',
               'USA / global — Standard Contractual Clauses',
             ],
             ['GitHub (Microsoft)', 'Games repository and coding agent', 'USA — Data Privacy Framework'],
