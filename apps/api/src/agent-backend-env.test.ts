@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { createAgentBackendRegistryFromEnv } from './agent-backend-env.js';
+import { registerManagedProvider, type ManagedProviderConfig } from './managed-agent.js';
+import { createGeminiManagedProvider } from './managed-provider-gemini.js';
 
 const ENV_KEYS = [
   'MANAGED_AGENT_VENDOR',
@@ -97,6 +99,34 @@ describe('createAgentBackendRegistryFromEnv', () => {
     const registry = createAgentBackendRegistryFromEnv({ info: vi.fn(), warn: vi.fn() });
     expect(registry.platformByVendor.get('anthropic')?.name).toBe('managed:anthropic');
     expect(registry.platformByVendor.has('gemini')).toBe(false);
+  });
+
+  it("never leaks Anthropic's agent/environment ids into Gemini's config", () => {
+    let seen: ManagedProviderConfig | undefined;
+    registerManagedProvider('gemini', (config) => {
+      seen = config;
+      return createGeminiManagedProvider(config);
+    });
+    try {
+      setEnv({
+        MANAGED_AGENT_VENDOR: 'anthropic',
+        MANAGED_AGENT_API_KEY: randomBytes(32).toString('hex'),
+        MANAGED_AGENT_MODEL: 'claude-sonnet-5',
+        MANAGED_AGENT_ID: 'agent_test',
+        MANAGED_AGENT_ENVIRONMENT_ID: 'env_test',
+        MANAGED_AGENT_MAX_SECONDS: '120',
+        MANAGED_AGENT_MAX_LIST_COST_CENTS: '100',
+        MANAGED_AGENT_MCP_URL: 'https://www.gamedev.pl/api/mcp',
+        GEMINI_API_KEY: `gemini-${randomUUID()}`,
+        AGENT_TASKS_TOKEN: randomBytes(32).toString('hex'),
+      });
+      const registry = createAgentBackendRegistryFromEnv({ info: vi.fn(), warn: vi.fn() });
+      expect(registry.platformByVendor.has('gemini')).toBe(true);
+      expect(seen?.agentId).toBeUndefined();
+      expect(seen?.environmentId).toBeUndefined();
+    } finally {
+      registerManagedProvider('gemini', createGeminiManagedProvider);
+    }
   });
 
   it('builds Copilot from its own token and model configuration', () => {

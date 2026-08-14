@@ -37,6 +37,7 @@ const InteractionSchema = z
     created: z.string().optional(),
     updated: z.string().optional(),
     usage: UsageSchema.optional(),
+    environment_id: z.string().optional(),
   })
   .passthrough();
 
@@ -76,12 +77,18 @@ function mcpTools(request: ManagedSessionRequest): GeminiMcpTool[] {
   });
 }
 
-function toSession(parsed: z.infer<typeof InteractionSchema>, configuredModel: string): ManagedSession {
+// Only for an auto-created environment — never a reused named one.
+function toSession(
+  parsed: z.infer<typeof InteractionSchema>,
+  configuredModel: string,
+  trackEnvironment: boolean,
+): ManagedSession {
   const usage = parsed.usage;
   const budgetStopped = parsed.status === 'incomplete' || parsed.status === 'budget_exceeded';
   return {
     id: parsed.id,
     state: normalizeManagedState(parsed.status),
+    ...(trackEnvironment && parsed.environment_id ? { workspace: parsed.environment_id } : {}),
     ...(parsed.status ? { vendorState: parsed.status } : {}),
     ...(usage
       ? {
@@ -178,7 +185,7 @@ export function createGeminiManagedProvider(config: ManagedProviderConfig): Mana
         await call('/interactions', { method: 'POST', body: JSON.stringify(body) }),
       );
       if (!parsed.success) throw new ManagedAgentError('gemini managed agents returned an unreadable interaction');
-      return toSession(parsed.data, model);
+      return toSession(parsed.data, model, !config.environmentId);
     },
 
     async getSession(sessionId: string): Promise<ManagedSession | null> {
@@ -186,7 +193,7 @@ export function createGeminiManagedProvider(config: ManagedProviderConfig): Mana
       if (raw === null) return null;
       const parsed = InteractionSchema.safeParse(raw);
       if (!parsed.success) throw new ManagedAgentError('gemini managed agents returned an unreadable interaction');
-      return toSession(parsed.data, model);
+      return toSession(parsed.data, model, !config.environmentId);
     },
 
     async listOutputs(_sessionId: string): Promise<ManagedOutputRef[]> {
@@ -204,6 +211,11 @@ export function createGeminiManagedProvider(config: ManagedProviderConfig): Mana
 
     async deleteSession(sessionId: string): Promise<void> {
       await call(`/interactions/${encodeURIComponent(sessionId)}`, { method: 'DELETE' }).catch(() => undefined);
+    },
+
+    // Only called with an auto-created environment id — see toSession above.
+    async deleteWorkspace(workspace: string): Promise<void> {
+      await call(`/environments/${encodeURIComponent(workspace)}`, { method: 'DELETE' }).catch(() => undefined);
     },
   };
 }

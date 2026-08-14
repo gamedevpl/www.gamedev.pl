@@ -95,6 +95,68 @@ describe('gemini managed provider', () => {
     });
   });
 
+  it('tracks an auto-created environment as the session workspace, for later cleanup', async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse({ id: 'interaction-1', status: 'queued', environment_id: 'auto-env-1' }),
+    );
+    const provider = createGeminiManagedProvider({
+      apiKey: secret('api'),
+      model: 'gemini-test-model',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+
+    const session = await provider.startSession({
+      correlationId: '42',
+      prompt: 'build it',
+      model: 'gemini-test-model',
+      outputPath: 'outputs',
+    });
+
+    expect(session.workspace).toBe('auto-env-1');
+  });
+
+  it("never reports a caller-supplied named environment as this round's workspace", async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse({ id: 'interaction-1', status: 'queued', environment_id: 'environment-test' }),
+    );
+    const provider = createGeminiManagedProvider({
+      apiKey: secret('api'),
+      model: 'gemini-test-model',
+      environmentId: 'environment-test',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+
+    const session = await provider.startSession({
+      correlationId: '42',
+      prompt: 'build it',
+      model: 'gemini-test-model',
+      outputPath: 'outputs',
+    });
+
+    expect(session.workspace).toBeUndefined();
+  });
+
+  it('deletes the environment a round auto-created, and swallows a missing one', async () => {
+    const fetchImpl = vi.fn(async () => new Response(null, { status: 204 }));
+    const provider = createGeminiManagedProvider({
+      apiKey: secret('api'),
+      model: 'gemini-test-model',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+
+    await provider.deleteWorkspace?.('auto-env-1');
+    expect(fetchImpl.mock.calls[0][0]).toContain('/environments/auto-env-1');
+    expect(fetchImpl.mock.calls[0][1]).toMatchObject({ method: 'DELETE' });
+
+    const notFound = vi.fn(async () => new Response(null, { status: 404 }));
+    const providerMissing = createGeminiManagedProvider({
+      apiKey: secret('api'),
+      model: 'gemini-test-model',
+      fetchImpl: notFound as unknown as typeof fetch,
+    });
+    await expect(providerMissing.deleteWorkspace?.('already-gone')).resolves.toBeUndefined();
+  });
+
   it('preserves Gemini usage fields and maps every documented interaction state', async () => {
     const statuses = [
       ['queued', 'queued'],

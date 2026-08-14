@@ -77,8 +77,7 @@ function buildManagedBackendForVendor(
     isCopilot
       ? process.env.AGENT_TASKS_TOKEN
       : isGemini
-        ? (process.env.GEMINI_API_KEY ??
-          (allowGenericApiKeyFallback ? process.env.MANAGED_AGENT_API_KEY : undefined))
+        ? (process.env.GEMINI_API_KEY ?? (allowGenericApiKeyFallback ? process.env.MANAGED_AGENT_API_KEY : undefined))
         : process.env.MANAGED_AGENT_API_KEY
   )?.trim();
   const model = (
@@ -159,8 +158,11 @@ function buildManagedBackendForVendor(
     provider = createManagedProvider(vendor, {
       apiKey,
       model,
-      ...(process.env.MANAGED_AGENT_ID?.trim() ? { agentId: process.env.MANAGED_AGENT_ID.trim() } : {}),
-      ...(process.env.MANAGED_AGENT_ENVIRONMENT_ID?.trim()
+      // Anthropic's own resource ids — never another vendor's.
+      ...(vendor === 'anthropic' && process.env.MANAGED_AGENT_ID?.trim()
+        ? { agentId: process.env.MANAGED_AGENT_ID.trim() }
+        : {}),
+      ...(vendor === 'anthropic' && process.env.MANAGED_AGENT_ENVIRONMENT_ID?.trim()
         ? { environmentId: process.env.MANAGED_AGENT_ENVIRONMENT_ID.trim() }
         : {}),
       ...(Number.isInteger(maxListCostCents) && maxListCostCents > 0 ? { maxListCostCents } : {}),
