@@ -44,6 +44,29 @@ describe('Studio chat rail header', () => {
     expect(css).toMatch(/\.studio-chat-rail\.is-sheet\s*\{[^}]*z-index:\s*1100/s);
   });
 
+  it('keeps navigation above the phone sheet and its backdrop', () => {
+    expect(declarations('.studio-chat-rail-backdrop')).toMatch(
+      /top:\s*var\(--studio-chat-rail-top-inset,\s*0px\)/,
+    );
+    expect(css).toMatch(
+      /\.app:has\(\.studio-chat-rail\.is-sheet:not\(\.is-collapsed\)\) \.app-header\s*\{[^}]*z-index:\s*1200/s,
+    );
+  });
+
+  it('keeps the half-open Studio controls reachable', () => {
+    expect(css).toMatch(
+      /\.app:has\(\.studio-chat-rail\.is-sheet\.is-half:not\(\.is-collapsed\)\) \.studio-strip\s*\{[^}]*z-index:\s*1200/s,
+    );
+  });
+
+  it('makes chat full screen fill the work area below the header', () => {
+    expect(declarations('.studio-chat-rail.is-full')).toMatch(
+      /top:\s*var\(--studio-chat-rail-top-inset,\s*0px\)/,
+    );
+    expect(declarations('.studio-chat-rail.is-full')).toMatch(/height:\s*auto/);
+    expect(declarations('.studio-chat-rail.is-full')).toMatch(/border-radius:\s*0/);
+  });
+
   it('lets the transcript take vertical pans inside the sheet', () => {
     expect(declarations('.studio-chat-rail-body')).toMatch(/touch-action:\s*pan-y/);
     expect(declarations('.studio-chat-rail-body .studio-thread-scroll')).toMatch(/touch-action:\s*pan-y/);

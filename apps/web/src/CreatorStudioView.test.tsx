@@ -477,11 +477,13 @@ describe('CreatorStudioView', () => {
       shelfOpen!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(container.querySelector('.studio-layout')?.classList.contains('is-shelf-open')).toBe(true);
-    expect(container.querySelector('.studio-fullbleed')).not.toBeNull();
+    // The drawer has its own edge toggle/backdrop. A second escape chip must not
+    // float over the first shelf row and steal its tap target.
+    expect(container.querySelector('.studio-fullbleed')).toBeNull();
     await act(async () => {
-      container
-        .querySelector<HTMLButtonElement>('.studio-fullbleed')!
-        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      container.querySelector<HTMLElement>('.studio-shelf-backdrop')!.dispatchEvent(
+        new MouseEvent('click', { bubbles: true }),
+      );
     });
     expect(container.querySelector('.studio-layout')?.classList.contains('is-shelf-open')).toBe(false);
     expect(container.querySelector('.studio-stage')).not.toBeNull();

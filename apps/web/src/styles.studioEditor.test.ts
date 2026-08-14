@@ -1,0 +1,27 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { describe, expect, it } from 'vitest';
+
+const css = readFileSync(fileURLToPath(new URL('./styles.css', import.meta.url)), 'utf8');
+
+function declarations(selector: string): string {
+  const start = css.indexOf(`${selector} {`);
+  expect(start, `missing ${selector} rule`).toBeGreaterThan(-1);
+  const end = css.indexOf('}', start);
+  expect(end, `unclosed ${selector} rule`).toBeGreaterThan(start);
+  return css.slice(start, end);
+}
+
+describe('Studio editor layout', () => {
+  it('keeps the editor overlay independently scrollable', () => {
+    expect(declarations('.studio-edit-overlay')).toMatch(/min-height:\s*0/);
+    expect(declarations('.studio-edit-overlay')).toMatch(/overflow:\s*auto/);
+    expect(declarations('.studio-edit-overlay')).toMatch(/overscroll-behavior:\s*contain/);
+  });
+
+  it('keeps long editor content scrollable without losing its toolbar', () => {
+    expect(declarations('.editor-panel')).toMatch(/min-height:\s*0/);
+    expect(declarations('.editor-panel')).toMatch(/overflow-y:\s*auto/);
+    expect(declarations('.editor-panel-head')).toMatch(/position:\s*sticky/);
+  });
+});

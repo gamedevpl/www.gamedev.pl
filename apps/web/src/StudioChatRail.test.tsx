@@ -53,6 +53,41 @@ describe('StudioChatRail', () => {
     await act(async () => root.unmount());
   });
 
+  it('measures the site header so chat does not cover navigation', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    mockSheetMedia(true);
+    const header = document.createElement('header');
+    header.className = 'app-header';
+    vi.spyOn(header, 'getBoundingClientRect').mockReturnValue({
+      height: 71,
+      width: 390,
+      top: 0,
+      left: 0,
+      bottom: 71,
+      right: 390,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+    document.body.appendChild(header);
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    await act(async () => {
+      root.render(
+        <StudioChatRail title="Sky Dodge" open onOpenChange={vi.fn()} unreadCount={0}>
+          <p>Thread</p>
+        </StudioChatRail>,
+      );
+    });
+
+    expect(document.documentElement.style.getPropertyValue('--studio-chat-rail-top-inset')).toBe('71px');
+
+    await act(async () => root.unmount());
+    header.remove();
+  });
+
   it('keeps a phone peek detent while another pane temporarily covers chat', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     mockSheetMedia(true);
@@ -103,6 +138,7 @@ describe('StudioChatRail', () => {
     const expand = host.querySelector<HTMLButtonElement>('.studio-chat-rail-expand');
     expect(rail?.classList.contains('is-half')).toBe(true);
     expect(expand?.getAttribute('aria-label')).toBe('Full screen');
+    expect(expand?.getAttribute('aria-pressed')).toBe('false');
     expect(host.querySelector('.studio-chat-rail-popout')).toBeNull();
 
     await act(async () => {
@@ -110,6 +146,7 @@ describe('StudioChatRail', () => {
     });
     expect(rail?.classList.contains('is-full')).toBe(true);
     expect(expand?.getAttribute('aria-label')).toBe('Exit full screen');
+    expect(expand?.getAttribute('aria-pressed')).toBe('true');
 
     await act(async () => {
       expand?.click();
@@ -155,13 +192,57 @@ describe('StudioChatRail', () => {
 
     await act(async () => {
       grab?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, clientY: 500, button: 0 }));
-      grab?.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, pointerId: 1, clientY: 180 }));
-      grab?.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 1, clientY: 180 }));
+      window.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, pointerId: 1, clientY: 180 }));
+      window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 1, clientY: 180 }));
     });
     expect(rail.classList.contains('is-dragging')).toBe(false);
     expect(rail.classList.contains('is-full')).toBe(true);
     expect(rail.style.getPropertyValue('--studio-chat-rail-peek-height')).toBe('124px');
 
+    await act(async () => root.unmount());
+  });
+
+  it('finishes a drag when pointer capture is unavailable', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    mockSheetMedia(true);
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800 });
+    HTMLElement.prototype.setPointerCapture = vi.fn(() => {
+      throw new Error('capture unavailable');
+    });
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        <StudioChatRail title="Sky Dodge" open onOpenChange={vi.fn()} unreadCount={0}>
+          <p>Thread</p>
+        </StudioChatRail>,
+      );
+    });
+
+    const rail = host.querySelector('.studio-chat-rail') as HTMLElement;
+    const grab = host.querySelector<HTMLButtonElement>('.studio-chat-rail-grab');
+    vi.spyOn(rail, 'getBoundingClientRect').mockReturnValue({
+      height: 384,
+      width: 390,
+      top: 416,
+      left: 0,
+      bottom: 800,
+      right: 390,
+      x: 0,
+      y: 416,
+      toJSON: () => ({}),
+    });
+
+    await act(async () => {
+      grab?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 2, clientY: 500, button: 0 }));
+      window.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, pointerId: 2, clientY: 180 }));
+      window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 2, clientY: 180 }));
+    });
+
+    expect(rail.classList.contains('is-full')).toBe(true);
     await act(async () => root.unmount());
   });
 });
