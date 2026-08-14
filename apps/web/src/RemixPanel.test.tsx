@@ -411,20 +411,22 @@ describe('RemixPanel', () => {
       params: null,
       values: null,
       content: {
-        maps: {
+        routes: {
           widget: 'collection',
-          label: { en: 'Maps', pl: 'Mapy' },
-          itemLabel: { en: 'Map', pl: 'Mapa' },
+          label: { en: 'Routes', pl: 'Trasy' },
+          itemLabel: { en: 'Route', pl: 'Trasa' },
           min: 1,
           max: 1,
           item: {
-            widget: 'tilemap',
-            grid: { minCols: 3, maxCols: 8, minRows: 3, maxRows: 8 },
-            tiles: [{ key: 'path', char: '.', label: { en: 'Path', pl: 'Ścieżka' } }],
-            properties: {},
-            constraints: [],
+            widget: 'path',
+            gridCols: 8,
+            gridRows: 6,
+            minPoints: 2,
+            maxPoints: 8,
+            closed: false,
+            properties: { name: { type: 'text', max: 24 } },
           },
-          defaults: [{ properties: {}, rows: ['...', '...', '...'] }],
+          defaults: [{ properties: { name: 'Opening' }, points: [{ x: 0, y: 1 }, { x: 7, y: 4 }] }],
         },
       },
       canAssist: false,
@@ -450,8 +452,8 @@ describe('RemixPanel', () => {
 
     expect(onEditorStage).toHaveBeenCalledWith({ active: true, focus: 'edit' });
     expect(container.querySelector('.remix-editor-stage.is-focus-edit')).not.toBeNull();
-    const board = container.querySelector('.remix-painter .editor-board');
-    expect(board).not.toBeNull();
+    const path = container.querySelector('.remix-painter .editor-path');
+    expect(path).not.toBeNull();
 
     await act(async () => {
       buttonNamed(container, 'Play')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -459,7 +461,7 @@ describe('RemixPanel', () => {
     expect(container.querySelector('.remix-editor-stage.is-focus-play')).not.toBeNull();
     expect(onEditorStage).toHaveBeenLastCalledWith({ active: true, focus: 'play' });
     // Same painter tree — focus is CSS, not a remount.
-    expect(container.querySelector('.remix-painter .editor-board')).toBe(board);
+    expect(container.querySelector('.remix-painter .editor-path')).toBe(path);
     // Keyboard input must land in the game without an extra click on the iframe.
     expect(frameFocus).toHaveBeenCalled();
     expect(contentFocus).toHaveBeenCalled();

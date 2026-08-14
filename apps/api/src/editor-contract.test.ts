@@ -68,6 +68,28 @@ const ENTITIES_DEFINITION = {
   },
 };
 
+const PATH_DEFINITION = {
+  version: 1,
+  content: {
+    routes: {
+      widget: 'collection',
+      label: { en: 'Routes', pl: 'Trasy' },
+      itemLabel: { en: 'Route', pl: 'Trasa' },
+      min: 1,
+      max: 4,
+      item: {
+        widget: 'path',
+        gridCols: 12,
+        gridRows: 8,
+        minPoints: 2,
+        maxPoints: 24,
+        properties: { name: { type: 'text', max: 24 } },
+      },
+      defaults: [{ properties: { name: 'Opening' }, points: [{ x: 0, y: 1 }, { x: 3, y: 1 }] }],
+    },
+  },
+};
+
 describe('editor-contract mirror', () => {
   it('accepts a well-formed definition and refuses unknown widgets', () => {
     const { definition, errors } = parseEditorDefinition(JSON.stringify(DEFINITION));
@@ -190,5 +212,25 @@ describe('editor-contract mirror', () => {
     const generated = generateEditorContentModule(definition!);
     expect(generated).toContain('export interface CardsItem {\n  properties: CardsItemProperties;\n}');
     expect(generated).not.toContain('rows');
+  });
+
+  it('accepts path points, rejects invalid closed paths, and generates point types', () => {
+    const { definition, errors } = parseEditorDefinition(JSON.stringify(PATH_DEFINITION));
+    expect(errors).toEqual([]);
+    expect(definition?.content.routes.item.widget).toBe('path');
+    expect(generateEditorContentModule(definition!)).toContain('points: Array<{ x: number; y: number }>;');
+
+    const outOfBounds = structuredClone(PATH_DEFINITION);
+    outOfBounds.content.routes.defaults[0].points[1] = { x: 12, y: 1 };
+    expect(parseEditorDefinition(JSON.stringify(outOfBounds)).errors.some((message) => message.includes('inside 0-11'))).toBe(
+      true,
+    );
+
+    const closed = structuredClone(PATH_DEFINITION);
+    Object.assign(closed.content.routes.item, { closed: true, minPoints: 3 });
+    closed.content.routes.defaults[0].points = [{ x: 1, y: 1 }, { x: 4, y: 1 }, { x: 1, y: 1 }];
+    const closedErrors = parseEditorDefinition(JSON.stringify(closed)).errors;
+    expect(closedErrors.some((message) => message.includes('3 distinct points'))).toBe(true);
+    expect(closedErrors.some((message) => message.includes('closure is implicit'))).toBe(true);
   });
 });

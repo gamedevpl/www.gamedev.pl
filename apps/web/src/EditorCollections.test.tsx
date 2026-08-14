@@ -329,3 +329,137 @@ describe('the entities widget', () => {
     expect(container.querySelector('.remix-painter-checks .editor-check.is-bad')?.textContent).toContain('cost');
   });
 });
+
+describe('the path widget', () => {
+  const pathItem: EditorItemContent = {
+    properties: { name: 'Starter' },
+    points: [{ x: 0, y: 1 }, { x: 1, y: 1 }],
+  };
+  const pathDefinition: EditorDefinition = {
+    version: 1,
+    content: {
+      routes: {
+        widget: 'collection',
+        label: { en: 'Routes', pl: 'Trasy' },
+        itemLabel: { en: 'Route', pl: 'Trasa' },
+        min: 1,
+        max: 3,
+        item: {
+          widget: 'path',
+          gridCols: 4,
+          gridRows: 3,
+          minPoints: 2,
+          maxPoints: 8,
+          closed: false,
+          properties: { name: { type: 'text', max: 24 } },
+        },
+        defaults: [pathItem],
+      },
+    },
+  };
+
+  it('edits a Studio path with the required keyboard controls', async () => {
+    fetchGameEditor.mockResolvedValue(
+      editorState({ definition: pathDefinition, content: { routes: [pathItem] } }),
+    );
+    const push = vi.fn();
+    const editorPushRef = { current: push as EditorContentPush };
+    root = createRoot(container);
+    await act(async () => {
+      root!.render(<EditorPanel game={game} editorPushRef={editorPushRef} onOpenPlaytest={vi.fn()} onBack={vi.fn()} />);
+      await Promise.resolve();
+    });
+    push.mockClear();
+
+    const painter = container.querySelector<SVGSVGElement>('.editor-path');
+    expect(painter).not.toBeNull();
+    expect(container.textContent).toContain('arrows move the cursor');
+    act(() => {
+      painter!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+      painter!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    });
+    expect(push.mock.lastCall?.[0].routes[0].points).toEqual([{ x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 }]);
+
+    act(() => {
+      painter!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true }));
+    });
+    expect(push.mock.lastCall?.[0].routes[0].points).toEqual([{ x: 0, y: 1 }, { x: 1, y: 1 }]);
+  });
+
+  it('lets Remix append by click and drag an existing point', async () => {
+    const onChange = vi.fn();
+    root = createRoot(container);
+    await act(async () => {
+      root!.render(<RemixPainter content={pathDefinition.content} doc={{ routes: [pathItem] }} onChange={onChange} />);
+    });
+    let painter = container.querySelector<SVGSVGElement>('.editor-path')!;
+    vi.spyOn(painter, 'getBoundingClientRect').mockReturnValue({
+      x: 0, y: 0, left: 0, top: 0, right: 400, bottom: 300, width: 400, height: 300, toJSON: () => ({}),
+    });
+    act(() => painter.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 250, clientY: 150 })));
+    const appended = onChange.mock.lastCall?.[0] as { routes: EditorItemContent[] };
+    expect(appended.routes[0]).toMatchObject({ points: [{ x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 }] });
+
+    await act(async () => {
+      root!.render(<RemixPainter content={pathDefinition.content} doc={appended} onChange={onChange} />);
+    });
+    painter = container.querySelector<SVGSVGElement>('.editor-path')!;
+    vi.spyOn(painter, 'getBoundingClientRect').mockReturnValue({
+      x: 0, y: 0, left: 0, top: 0, right: 400, bottom: 300, width: 400, height: 300, toJSON: () => ({}),
+    });
+    const firstHit = container.querySelector<SVGCircleElement>(
+      '[data-point-index="0"] .editor-path-point-hit',
+    )!;
+    act(() => {
+      firstHit.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, clientX: 50, clientY: 150 }));
+      painter.dispatchEvent(new MouseEvent('pointermove', { bubbles: true, clientX: 350, clientY: 250 }));
+      painter.dispatchEvent(new MouseEvent('pointerup', { bubbles: true, clientX: 350, clientY: 250 }));
+      painter.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 350, clientY: 250 }));
+    });
+    expect(onChange.mock.lastCall?.[0].routes[0].points).toEqual([
+      { x: 3, y: 2 },
+      { x: 1, y: 1 },
+      { x: 2, y: 1 },
+    ]);
+  });
+
+  it('keeps extreme path grids large enough to edit inside a scrolling viewport', async () => {
+    const extremeDefinition: EditorDefinition = {
+      version: 1,
+      content: {
+        routes: {
+          widget: 'collection',
+          label: { en: 'Routes', pl: 'Trasy' },
+          itemLabel: { en: 'Route', pl: 'Trasa' },
+          min: 1,
+          max: 3,
+          item: {
+            widget: 'path',
+            gridCols: 64,
+            gridRows: 1,
+            minPoints: 2,
+            maxPoints: 8,
+            closed: false,
+            properties: { name: { type: 'text', max: 24 } },
+          },
+          defaults: [pathItem],
+        },
+      },
+    };
+    root = createRoot(container);
+    await act(async () => {
+      root!.render(<RemixPainter content={extremeDefinition.content} doc={{ routes: [pathItem] }} onChange={vi.fn()} />);
+    });
+
+    const viewport = container.querySelector('.editor-path-viewport');
+    const painter = container.querySelector<SVGSVGElement>('.editor-path');
+    expect(viewport).not.toBeNull();
+    expect(painter?.style.getPropertyValue('--editor-path-fit-width')).toBe('620px');
+    expect(painter?.style.getPropertyValue('--editor-path-min-width')).toBe('1536px');
+    expect(painter?.style.getPropertyValue('--editor-path-min-height')).toBe('24px');
+    expect(painter?.style.getPropertyValue('--editor-path-aspect')).toBe('64 / 1');
+    const point = painter?.querySelector('.editor-path-point');
+    expect(point?.querySelector('.editor-path-point-hit')?.getAttribute('r')).toBe('0.6');
+    expect(point?.querySelector('.editor-path-point-dot')?.getAttribute('r')).toBe('0.22');
+  });
+});

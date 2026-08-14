@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PixelIcon } from './PixelIcon.js';
+import { PathPainter } from './PathPainter.js';
 import {
   blankItem,
   collectionProblems,
   defaultCollectionKey,
+  isPathItem,
   isTilemapItem,
   itemProblems,
   setCell,
@@ -22,6 +24,7 @@ import {
   type EditorItemContent,
   type EditorLabel,
   type EditorParamValue,
+  type EditorPathSpec,
   type EditorTilemapSpec,
   type GameEditorState,
   type StudioApiError,
@@ -109,6 +112,10 @@ function tilemapCollection(
   return spec && spec.item.widget === 'tilemap' ? (spec as EditorCollectionSpec & { item: EditorTilemapSpec }) : null;
 }
 
+function pathCollection(spec: EditorCollectionSpec | null): (EditorCollectionSpec & { item: EditorPathSpec }) | null {
+  return spec && spec.item.widget === 'path' ? (spec as EditorCollectionSpec & { item: EditorPathSpec }) : null;
+}
+
 export function EditorPanel(props: {
   game: StudioGame;
   /** The stage's live-push channel (§E tier 1). */
@@ -118,6 +125,13 @@ export function EditorPanel(props: {
 }) {
   const { t, i18n } = useTranslation();
   const name = useLabel();
+  const pathMessages = {
+    pointCount: (count: number, min: number, max: number) =>
+      t('studioPanel.editor.pathPointCount', { count, min, max }),
+    outOfBounds: (index: number) => t('studioPanel.editor.pathOutOfBounds', { index }),
+    distinct: () => t('studioPanel.editor.pathDistinct'),
+    repeatedEnd: () => t('studioPanel.editor.pathRepeatedEnd'),
+  };
   const slug = props.game.slug as string;
   const pushLive = useCallback(
     (next: EditorContentDoc, selection?: EditorSelection | null) => {
@@ -420,14 +434,14 @@ export function EditorPanel(props: {
     );
   }
 
-  const problems = item && spec ? itemProblems(spec.item, item, name) : [];
+  const problems = item && spec ? itemProblems(spec.item, item, name, pathMessages) : [];
   const collectionWideProblems = spec ? collectionProblems(spec, items) : [];
   const allProblems = editor
     ? collectionKeys.flatMap((key) => {
         const collection = editor.definition.content[key];
         const collectionItems = itemsOf(content, key);
         const perItem = collectionItems.flatMap((entry, index) => {
-          const found = itemProblems(collection.item, entry, name);
+          const found = itemProblems(collection.item, entry, name, pathMessages);
           return found.length > 0 ? [`${name(collection.itemLabel)} ${index + 1}`] : [];
         });
         const collectionWide = collectionProblems(collection, collectionItems);
@@ -435,7 +449,9 @@ export function EditorPanel(props: {
       })
     : [];
   const tilemapItem = item && isTilemapItem(item) ? item : null;
+  const pathItem = item && isPathItem(item) ? item : null;
   const boardSpec = tilemapCollection(spec);
+  const pathSpec = pathCollection(spec);
   const width = tilemapItem ? (tilemapItem.rows[0]?.length ?? 0) : 0;
 
   return (
@@ -517,9 +533,9 @@ export function EditorPanel(props: {
       ) : null}
 
       <div className="editor-body">
-        {boardSpec ? (
+        {boardSpec || pathSpec ? (
           <div className="editor-board-col">
-            {tilemapItem ? (
+            {boardSpec && tilemapItem ? (
               <>
                 <div
                   className="editor-board"
@@ -570,6 +586,15 @@ export function EditorPanel(props: {
                   ))}
                 </div>
               </>
+            ) : pathSpec && pathItem ? (
+              <PathPainter
+                key={`${collectionKey}-${itemIndex}`}
+                spec={pathSpec.item}
+                item={pathItem}
+                ariaLabel={t('studioPanel.editor.pathAria', { name: name(pathSpec.itemLabel) })}
+                instructions={t('studioPanel.editor.pathHelp')}
+                onChange={updateItem}
+              />
             ) : (
               <div className="editor-panel-note">{t('studioPanel.editor.empty')}</div>
             )}

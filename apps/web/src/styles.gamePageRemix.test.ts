@@ -51,3 +51,29 @@ describe('game-page Remix entry on phones', () => {
     expect(tracked).toMatch(/transform:\s*translateY\(var\(--remix-entry-viewport-offset,\s*0px\)\)/);
   });
 });
+
+describe('Remix editor Play focus', () => {
+  it('fits the path preview into the PiP and removes editing controls', () => {
+    expect(css).toMatch(
+      /\.remix-editor-stage\.is-focus-play \.remix-painter-properties,[\s\S]*\.editor-path-help\s*\{\s*display:\s*none;/,
+    );
+    expect(css).toMatch(
+      /\.remix-editor-stage\.is-focus-play \.editor-path-wrap\s*\{[^}]*width:\s*100%;[^}]*height:\s*100%;/s,
+    );
+    expect(css).toMatch(
+      /\.remix-editor-stage\.is-focus-play \.editor-path-viewport\s*\{[^}]*width:\s*100%;[^}]*height:\s*100%;[^}]*overflow:\s*hidden;/s,
+    );
+    expect(css).toMatch(
+      /\.remix-editor-stage\.is-focus-play \.editor-path\s*\{[^}]*width:\s*100%;[^}]*height:\s*100%;[^}]*min-width:\s*0;[^}]*min-height:\s*0;/s,
+    );
+  });
+});
+
+describe('Editor path touch interaction', () => {
+  it('lets oversized surfaces scroll while point handles remain draggable', () => {
+    expect(css).toMatch(/\.editor-path\s*\{[^}]*touch-action:\s*pan-x pan-y/s);
+    expect(css).toMatch(/\.editor-path-point\s*\{[^}]*touch-action:\s*none/s);
+    expect(css).toMatch(/\.editor-path-point-hit\s*\{[^}]*fill:\s*transparent[^}]*pointer-events:\s*all/s);
+    expect(css).toMatch(/\.editor-path-point-dot\s*\{[^}]*pointer-events:\s*none/s);
+  });
+});
