@@ -187,6 +187,7 @@ describe('buildPrompt', () => {
     expect(prompt).not.toContain('npm run restore');
     expect(prompt).toContain('`start` then `get_sources`');
     expect(prompt).toContain('Do not run bash exploration commands');
+    expect(prompt).toContain('If get_sources reports nothing delivered yet');
   });
 
   it('does not send a first build looking for a delivery that cannot exist', () => {

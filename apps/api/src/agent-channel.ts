@@ -70,8 +70,8 @@ import { BUILD_EVENT_KINDS, BUILD_STEPS, sanitizeCreatorText, type BuildEvent } 
 import { normalizeAtIntake, type IntakeText } from './localize-intake.js';
 import { createTranslatorFromEnv, type Translator } from './translate.js';
 
-// The build channel (docs/agent-live-channel-plan.md).
-// Direct route for progress, staging, submission, and status.
+// The build channel (docs/agent-live-channel-plan.md). Direct route for progress, staging, and status.
+// Invariant: agent input is untrusted, prompt-influenced text — sanitized, escaped on render, never model instructions.
 
 const MAX_EVENT_TEXT = 300;
 
@@ -2032,10 +2032,6 @@ export async function registerAgentChannelRoutes(
         return true;
       };
 
-      if (parsed.data.ackInboxIds && parsed.data.ackInboxIds.length > 0) {
-        await store!.markCreatorMessagesDelivered(issueNumber, parsed.data.ackInboxIds).catch(() => {});
-      }
-
       if (
         record.builderHandoff &&
         record.builderHandoff.awaitsAgentAck !== false &&
@@ -2055,6 +2051,9 @@ export async function registerAgentChannelRoutes(
             ...(await channelState(issueNumber, fresh)),
           });
         }
+        if (parsed.data.ackInboxIds && parsed.data.ackInboxIds.length > 0) {
+          await store!.markCreatorMessagesDelivered(issueNumber, parsed.data.ackInboxIds);
+        }
         const summarized = await recordSummary();
         const state = await channelState(issueNumber, fresh);
         return reply.send({
@@ -2069,6 +2068,10 @@ export async function registerAgentChannelRoutes(
 
       if (stopReason(record)) {
         return reply.send({ accepted: false, rejected: 'stopped', ...(await channelState(issueNumber, record)) });
+      }
+
+      if (parsed.data.ackInboxIds && parsed.data.ackInboxIds.length > 0) {
+        await store!.markCreatorMessagesDelivered(issueNumber, parsed.data.ackInboxIds);
       }
 
       // Submit-ended still records; a prior or legacy end does not.

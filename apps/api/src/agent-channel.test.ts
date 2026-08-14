@@ -627,9 +627,10 @@ describe('agent build channel', () => {
     });
   });
 
-  it('drops the summary when the round is already stopped, like a progress report', async () => {
+  it('drops the summary and does not ack the inbox when the round is already stopped', async () => {
     const store = new InMemoryStore();
     await seedSubmission(store);
+    const msg = await store.appendCreatorMessage(ISSUE, 'please make the ship faster');
     await store.setSubmissionAbandoned(ISSUE, new Date().toISOString());
     app = await createApp(store);
 
@@ -637,11 +638,76 @@ describe('agent build channel', () => {
       method: 'POST',
       url: '/api/agent/build/end',
       headers: agentHeaders(),
-      payload: { summary: 'One last word the creator did not ask for.' },
+      payload: { summary: 'One last word the creator did not ask for.', ackInboxIds: [msg.id] },
     });
 
     expect(end.json()).toMatchObject({ accepted: false, rejected: 'stopped' });
     expect(await store.listBuildEvents(ISSUE)).toHaveLength(0);
+    expect(await store.listPendingCreatorMessages(ISSUE)).toHaveLength(1);
+  });
+
+  it('acknowledges inbox messages on a successful end call', async () => {
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    const msg1 = await store.appendCreatorMessage(ISSUE, 'feedback 1');
+    const msg2 = await store.appendCreatorMessage(ISSUE, 'feedback 2');
+    app = await createApp(store);
+
+    const end = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/end',
+      headers: agentHeaders(),
+      payload: { summary: 'Addressed feedback.', ackInboxIds: [msg1.id] },
+    });
+
+    expect(end.json()).toMatchObject({ accepted: true, ended: true });
+    const pending = await store.listPendingCreatorMessages(ISSUE);
+    expect(pending).toHaveLength(1);
+    expect(pending[0]?.id).toBe(msg2.id);
+  });
+
+  it('acknowledges inbox messages on builder handoff ack', async () => {
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    const msg = await store.appendCreatorMessage(ISSUE, 'feedback');
+    await store.requestBuilderHandoff(ISSUE, 'self', new Date().toISOString());
+    app = await createApp(store, {
+      onBuilderHandoffAcknowledged: async ({ issueNumber, acknowledgedAt }) => {
+        const handoff = await store.acknowledgeBuilderHandoff(issueNumber, acknowledgedAt);
+        await store.clearBuilderHandoff(issueNumber);
+        return { started: handoff !== null };
+      },
+    });
+
+    const end = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/end',
+      headers: agentHeaders(),
+      payload: { summary: 'Handing over.', ackInboxIds: [msg.id] },
+    });
+
+    expect(end.json()).toMatchObject({ accepted: true, handoffAcknowledged: true });
+    expect(await store.listPendingCreatorMessages(ISSUE)).toHaveLength(0);
+  });
+
+  it('does not ack the inbox when a builder handoff fails to start', async () => {
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    const msg = await store.appendCreatorMessage(ISSUE, 'please make the ship faster');
+    await store.requestBuilderHandoff(ISSUE, 'self', new Date().toISOString());
+    app = await createApp(store, {
+      onBuilderHandoffAcknowledged: async () => ({ started: false, reason: 'handoff_not_started' }),
+    });
+
+    const end = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/end',
+      headers: agentHeaders(),
+      payload: { summary: 'Handing over.', ackInboxIds: [msg.id] },
+    });
+
+    expect(end.json()).toMatchObject({ accepted: false, rejected: 'handoff_not_started' });
+    expect(await store.listPendingCreatorMessages(ISSUE)).toHaveLength(1);
   });
 
   it('rejects the pre-cancel token after operator cancel bumps the round generation', async () => {

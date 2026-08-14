@@ -34,7 +34,8 @@ Source of truth: `SESSION_WORKFLOW` + `BEHAVIOURAL_CONTRACT` in
      `curl --upload-file <file> "$url"` — bytes never re-enter the model
    - **New/full rewrite without shell:** `stage_source_file({ path, content })`
    - **Edits:** prefer `patch_source_file({ path, old, new })` (exact unique substring
-     replace — no diff format). Or `patch_source_file({ path, patch })` with a unified
+     replace — no diff format), or `patch_source_file({ path, patches: [{ old, new }, ...] })`
+     for multiple sequential replacements in one call. Or `patch_source_file({ path, patch })` with a unified
      diff (`---` / `+++` + `@@` hunks; bare `@@` ok). Do not re-emit whole `render.ts` /
      `model.ts` files through `stage_source_file`
    - **Modules:** soft budget ~350 lines / ~12 KiB per `game/*.ts`. Honour
@@ -556,7 +557,7 @@ still be iterating locally and clear it with its next channel write. Feedback ro
 distinguish the submit marker from an explicit `end` (or a confirmed terminal vendor state)
 before superseding a platform session. The API records this as `agentEndedBy: submit | end`.
 
-### `end({ summary })` is the only channel for a closing answer
+### `end({ summary, ackInboxIds })` is the only channel for a closing answer
 
 The platform reads tool calls, never the agent's transcript. An agent that answers
 the creator in ordinary assistant prose — "this is an arcade game", "nothing needed
@@ -566,6 +567,9 @@ model.
 
 - `end` takes optional `summary` (≤300 chars), plus `summaryLocalized` + `locale`
   on the same zero-cost pair contract as `report_progress`
+- `end` also accepts optional `ackInboxIds` (array of message IDs) to acknowledge
+  handled creator inbox messages concurrently when closing the round, saving an
+  extra turn calling `ack_inbox`
 - Stored as a `BuildEvent` with `kind: 'done'` — the same feed Studio already
   renders, so nothing new was needed on the web side
 - Reply carries `summaryShown: true` when it landed. Best-effort by design: a

@@ -802,6 +802,22 @@ declare const GameKit: { defineGame(): unknown };
     );
     expect(multiPatch.isError).toBe(false);
     expect((multiPatch.structured as { replacements?: number }).replacements).toBe(2);
+
+    // Also verify end with ackInboxIds acknowledges creator messages
+    const msg = await store.appendCreatorMessage(ISSUE, 'Fix the UI font');
+    const ended = await callTool(
+      app,
+      'end',
+      {
+        sessionKey,
+        summary: 'All done and acknowledged.',
+        ackInboxIds: [msg.id],
+      },
+      { 'mcp-session-id': sessionId },
+    );
+    expect(ended.isError).toBe(false);
+    expect((ended.structured as { ok?: boolean }).ok).toBe(true);
+    expect(await store.listPendingCreatorMessages(ISSUE)).toHaveLength(0);
   });
 
   it('knowledge_query is advertised and callable, and returns the seam result', async () => {

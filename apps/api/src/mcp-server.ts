@@ -3880,6 +3880,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         'Prefer this over stage_source_file whenever the file already exists (from get_sources, a prior stage, or the seed) — ' +
         'especially for large game/render.ts or game/model.ts files. ' +
         'PREFERRED: pass old + new (exact unique substring replace), or patches: [{ old, new }, ...] for multiple replacements in one call — no @@ line numbers, no diff format. ' +
+        'With patches[], replacements apply sequentially in order; ensure earlier replacements do not make a later old snippet ambiguous. ' +
         'ALTERNATE: pass patch as a unified diff for that single file ' +
         '("--- a/game/render.ts\\n+++ b/game/render.ts\\n@@\\n context\\n-old\\n+new\\n context\\n"; bare @@ ok). ' +
         'old must match exactly once; widen the snippet if it is ambiguous. Do not pass patch together with old/new or patches. ' +
