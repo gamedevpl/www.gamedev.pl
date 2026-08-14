@@ -754,7 +754,6 @@
       "debugCiPrompt": "Fix the failing checks and submit a fixed build.",
       "placeholder": "e.g. make the car faster, add a second track, use brighter colours…",
       "submit": "Send feedback",
-      "stop": "STOP",
       "stopTitle": "Stop the current build and switch to your agent",
       "sending": "Sending…",
       "sent": "Sent! The agent will revise your game — watch the build log above.",

@@ -1719,7 +1719,7 @@ function FeedbackPanel({
                 aria-label={t('statusView.feedback.stopTitle')}
                 title={t('statusView.feedback.stopTitle')}
               >
-                {t('statusView.feedback.stop')}
+                <PixelIcon name="stop" size={13} />
               </button>
             ) : stopRequested ? null : (
               <button

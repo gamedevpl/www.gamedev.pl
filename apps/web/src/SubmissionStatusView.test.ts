@@ -1019,7 +1019,7 @@ describe('SubmissionStatusView', () => {
       expect(container.querySelector('.studio-turn.is-working')).not.toBeNull();
       expect(container.querySelector<HTMLTextAreaElement>('textarea')?.disabled).toBe(true);
       const stop = container.querySelector<HTMLButtonElement>('.status-composer-stop');
-      expect(stop?.textContent).toBe('STOP');
+      expect(stop?.querySelector('svg')).not.toBeNull();
       expect(stop?.disabled).toBe(false);
       expect(stop?.getAttribute('aria-label')).toBe('Stop the current build and switch to your agent');
       expect(container.querySelector('.status-composer-send')).toBeNull();

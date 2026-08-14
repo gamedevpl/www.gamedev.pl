@@ -88,7 +88,8 @@ describe('stop button mobile touch target', () => {
     const bodyStart = start + marker.length;
     const end = css.indexOf('}', bodyStart);
     const body = css.slice(bodyStart, end);
-    expect(body).toMatch(/min-height:\s*44px/);
+    expect(body).toMatch(/width:\s*44px/);
+    expect(body).toMatch(/height:\s*44px/);
   });
 });
 
