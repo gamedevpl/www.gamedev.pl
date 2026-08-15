@@ -487,11 +487,7 @@ class GhostTextWidget extends WidgetType {
   }
 }
 
-// TA-02 follow-up: the ghost text itself stays `pointer-events: none` (a click there
-// must fall through to place the cursor, not swallow it), and acceptance was Tab-only
-// — which means it was flatly unreachable on iOS, where the on-screen keyboard has no
-// Tab key. This is a second, separate, deliberately-clickable widget right after the
-// suggestion so touch has an actual way in.
+// Tab alone was unreachable on iOS; this tappable widget is the fallback.
 class GhostTextAcceptWidget extends WidgetType {
   eq(): boolean {
     return true;

@@ -715,9 +715,7 @@ describe('CreatorStudioView', () => {
     });
     expect(container.querySelector('.studio-head-share-popover')).not.toBeNull();
 
-    // A phone has no Escape key — a tap anywhere outside the popover (the game card,
-    // the strip, the page) must be the way off it, same as the popover has no backdrop
-    // of its own to intercept that tap.
+    // No Escape key on a phone — an outside tap dismisses it too.
     await act(async () => {
       document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
     });

@@ -73,13 +73,7 @@ describe('Studio chat rail header', () => {
     expect(declarations('.studio-chat-rail.is-full')).toMatch(/border-radius:\s*0/);
   });
 
-  /**
-   * The JS-measured inset is real once it lands, but the frame before it does, it falls
-   * back to 0px — which is under the status bar/notch on a standalone iOS PWA, the one
-   * context with no browser chrome to escape a stuck full-screen sheet through. The
-   * env() floor can't ever be stale, so it wins whenever the JS value would place the
-   * sheet's own head (and its close button) under the notch.
-   */
+  // Guards against a stale JS inset landing under the PWA notch.
   it('floors the full-screen sheet at the safe area even if the JS inset is stale', () => {
     expect(declarations('.studio-chat-rail.is-full')).toMatch(/env\(safe-area-inset-top,\s*0px\)/);
   });

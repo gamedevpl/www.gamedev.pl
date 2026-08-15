@@ -654,10 +654,7 @@ export function CreatorStudioView({
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setShareMenuOpen(false);
     };
-    // The popover has no backdrop of its own, so without this a phone (no Escape key)
-    // has no way to dismiss it short of hitting the same toggle again — a tap anywhere
-    // else on the strip (Play, Details, the game card) fires that control's own action
-    // while the popover stays open on top of whatever came next.
+    // No backdrop, no Escape key — a tap outside closes it.
     const onPointerDown = (event: PointerEvent) => {
       if (shareContainerRef.current?.contains(event.target as Node)) return;
       setShareMenuOpen(false);

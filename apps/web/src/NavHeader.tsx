@@ -111,10 +111,7 @@ export function NavHeader({
     };
   }, [isReviewer]);
 
-  // The dropdown has no backdrop of its own — on a phone it floats over whatever the
-  // studio or hero section is showing underneath. Without this, tapping the composer,
-  // a game card, or anywhere else left it open and overlapping content; only another
-  // hamburger tap or a nav item click ever closed it.
+  // No backdrop of its own — only another nav click closed it.
   useEffect(() => {
     if (!isMenuOpen) return;
     const closeIfOutside = (event: Event) => {

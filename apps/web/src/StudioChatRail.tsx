@@ -145,11 +145,7 @@ export function StudioChatRail({
     };
   }, []);
 
-  // No setPointerCapture: every real handler below already lives on `window`, keyed by
-  // pointerId, so capture buys nothing functionally — and iOS WebKit has a documented
-  // history of pointer capture that starts but never cleanly releases, which redirects
-  // *every subsequent touch anywhere in the app* to this element until reload. That
-  // reads exactly like "full-screen chat, and then nothing was tappable at all."
+  // No setPointerCapture — iOS WebKit can leak it and lock touch app-wide.
   const onGrabPointerDown = (event: PointerEvent<HTMLButtonElement>) => {
     if (!isSheet || event.button !== 0) return;
     const rail = asideRef.current;
@@ -190,12 +186,7 @@ export function StudioChatRail({
     window.addEventListener('pointerup', onEnd);
     window.addEventListener('pointercancel', onEnd);
 
-    // Belt-and-suspenders: if a browser ever drops the terminating pointerup/pointercancel
-    // (the exact iOS WebKit failure mode this file already works around above), a stale
-    // `dragRef` would otherwise wedge the sheet mid-drag forever with no way to reach a
-    // resting detent. Poll for a drag that's gone quiet — no pointermove update in a while
-    // — rather than one merely still open, so an actively-moving slow drag is never cut
-    // off mid-gesture; only a drag the platform has actually abandoned gets released.
+    // Backstop for a dropped pointerup: release a drag gone quiet.
     const STUCK_DRAG_IDLE_MS = 4000;
     const watchdog = window.setInterval(() => {
       const drag = dragRef.current;
