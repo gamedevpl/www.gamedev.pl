@@ -6,6 +6,7 @@ import { javascript } from '@codemirror/lang-javascript';
 import { json } from '@codemirror/lang-json';
 import { markdown } from '@codemirror/lang-markdown';
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
+import { search } from '@codemirror/search';
 import { forceLinting, linter, lintGutter, type Diagnostic as CmDiagnostic } from '@codemirror/lint';
 import { Compartment, EditorState, type Extension } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
@@ -25,6 +26,7 @@ import {
 } from '@valtown/codemirror-ts';
 import type { WorkerShape } from '@valtown/codemirror-ts/worker';
 import type { CodeLanguage } from './codeTokens.js';
+import { vsCodeSearchPanel } from './codeMirrorSearchPanel.js';
 
 // CodeMirror 6 (CE-14): lazy chunk; keyed by file path to remount.
 
@@ -94,12 +96,14 @@ const darkChrome = EditorView.theme(
       backgroundColor: 'rgba(0, 228, 172, 0.16)',
     },
     '.cm-selectionMatch': { backgroundColor: 'rgba(0, 228, 172, 0.12)' },
+    '.cm-searchMatch': { backgroundColor: 'rgba(56, 189, 248, 0.22)', borderRadius: '2px' },
+    '.cm-searchMatch.cm-searchMatch-selected': { backgroundColor: 'rgba(0, 228, 172, 0.38)' },
     '&.cm-focused .cm-matchingBracket': { backgroundColor: 'rgba(0, 228, 172, 0.2)', outline: 'none' },
     '&.cm-focused .cm-nonmatchingBracket': { backgroundColor: 'rgba(255, 123, 114, 0.2)' },
     '.cm-gutters': { backgroundColor: 'transparent', color: 'var(--muted, #8b949e)', border: 'none' },
     '.cm-foldGutter, .cm-lineNumbers': { color: 'var(--muted, #8b949e)' },
     '.cm-tooltip': {
-      backgroundColor: 'var(--panel-bg, #0c1218)',
+      backgroundColor: 'var(--panel, #161c22)',
       color: 'var(--text, #e6edf3)',
       border: '1px solid rgba(148, 163, 184, 0.25)',
       borderRadius: '8px',
@@ -108,7 +112,121 @@ const darkChrome = EditorView.theme(
       backgroundColor: 'rgba(0, 228, 172, 0.16)',
       color: 'var(--text, #e6edf3)',
     },
-    '.cm-panels': { backgroundColor: 'var(--panel-bg, #0c1218)', color: 'var(--text, #e6edf3)' },
+    // The search widget floats over the editor, so panels reserve no space.
+    '.cm-panels': { backgroundColor: 'transparent', color: 'var(--text, #e6edf3)' },
+    '.cm-panels.cm-panels-top': {
+      position: 'absolute',
+      top: 0,
+      right: 0,
+      left: 'auto',
+      zIndex: 12,
+      borderBottom: 'none',
+    },
+    '.cm-vs-search': {
+      display: 'flex',
+      alignItems: 'flex-start',
+      gap: '2px',
+      margin: '6px 16px 0 6px',
+      padding: '6px 6px 6px 2px',
+      borderRadius: '10px',
+      border: '1px solid var(--panel-border, rgba(148, 163, 184, 0.25))',
+      backgroundColor: 'var(--panel, #161c22)',
+      boxShadow: '0 10px 30px rgba(0, 0, 0, 0.45)',
+      fontSize: '0.76rem',
+      maxWidth: 'calc(100% - 22px)',
+    },
+    '.cm-vs-body': { display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 },
+    // Wraps rather than overflowing the editor on a narrow viewport.
+    '.cm-vs-row': { display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '2px', minWidth: 0 },
+    // Without this, display:flex beats the hidden attribute and replace never collapses.
+    '.cm-vs-row[hidden]': { display: 'none' },
+    // The chevron spans both rows, as in VS Code.
+    '.cm-vs-expand': { alignSelf: 'stretch', height: 'auto', flex: 'none' },
+    '.cm-vs-expanded .cm-vs-expand svg': { transform: 'rotate(90deg)' },
+    '.cm-vs-expand svg': { transition: 'transform 120ms ease' },
+    '.cm-vs-field-wrap': {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '2px',
+      // Fixed, not growing, so both fields match width.
+      flex: '0 1 15rem',
+      width: '15rem',
+      minWidth: '6rem',
+      padding: '0 3px 0 7px',
+      borderRadius: '6px',
+      border: '1px solid var(--panel-border, rgba(148, 163, 184, 0.25))',
+      backgroundColor: 'rgba(9, 13, 17, 0.7)',
+    },
+    '.cm-vs-field-wrap:focus-within': {
+      borderColor: 'var(--turquoise, #00e4ac)',
+      boxShadow: '0 0 0 1px rgba(0, 228, 172, 0.35)',
+    },
+    '.cm-vs-invalid .cm-vs-field-wrap:first-of-type': { borderColor: 'var(--error, #ff6b6b)' },
+    '.cm-vs-field': {
+      flex: 1,
+      minWidth: 0,
+      border: 'none',
+      outline: 'none',
+      background: 'transparent',
+      color: 'var(--text, #e6edf3)',
+      fontFamily: 'var(--mono-font, monospace)',
+      fontSize: '0.76rem',
+      padding: '5px 0',
+    },
+    '.cm-vs-field::placeholder': { color: 'var(--muted, #8b949e)' },
+    '.cm-vs-toggles': { display: 'flex', alignItems: 'center', gap: '1px', flex: 'none' },
+    '.cm-vs-toggle': {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      width: '20px',
+      height: '20px',
+      padding: 0,
+      border: 'none',
+      borderRadius: '4px',
+      background: 'transparent',
+      color: 'var(--muted, #8b949e)',
+      font: 'inherit',
+      fontSize: '0.68rem',
+      lineHeight: 1,
+      cursor: 'pointer',
+    },
+    '.cm-vs-toggle:hover': { backgroundColor: 'rgba(148, 163, 184, 0.16)', color: 'var(--text, #e6edf3)' },
+    '.cm-vs-toggle[aria-pressed=true]': {
+      backgroundColor: 'rgba(0, 228, 172, 0.18)',
+      color: 'var(--turquoise, #00e4ac)',
+    },
+    '.cm-vs-count': {
+      flex: 'none',
+      minWidth: '4.6rem',
+      padding: '0 4px',
+      color: 'var(--muted, #8b949e)',
+      fontSize: '0.7rem',
+      whiteSpace: 'nowrap',
+      textAlign: 'right',
+    },
+    '.cm-vs-icon-button': {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      flex: 'none',
+      width: '24px',
+      height: '24px',
+      padding: 0,
+      border: 'none',
+      borderRadius: '5px',
+      background: 'transparent',
+      color: 'var(--muted, #8b949e)',
+      font: 'inherit',
+      cursor: 'pointer',
+    },
+    '.cm-vs-text-button': { width: 'auto', padding: '0 7px', fontSize: '0.72rem', fontWeight: 500 },
+    '.cm-vs-icon-button:hover': { backgroundColor: 'rgba(148, 163, 184, 0.16)', color: 'var(--text, #e6edf3)' },
+    '.cm-vs-icon-button:active': { backgroundColor: 'rgba(0, 228, 172, 0.2)' },
+    '.cm-vs-search button:focus-visible': {
+      outline: '1px solid var(--turquoise, #00e4ac)',
+      outlineOffset: '-1px',
+    },
   },
   { dark: true },
 );
@@ -211,6 +329,8 @@ export default function CodeMirrorEditor({
         selection: initialSelection,
         extensions: [
           basicSetup,
+          // After basicSetup, so this createPanel wins over the stock search bar.
+          search({ top: true, createPanel: vsCodeSearchPanel }),
           keymap.of([
             indentWithTab,
             {
