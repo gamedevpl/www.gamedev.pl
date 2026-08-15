@@ -129,10 +129,9 @@ describe('CreatorStudioView — Code actions shortcut reaches beyond the Code ta
     const container = document.createElement('div');
     document.body.appendChild(container);
     const root = createRoot(container);
+    const onNavigate = vi.fn();
     await act(async () => {
-      root.render(
-        createElement(CreatorStudioView, { selectedGame: 'token-coded', onNavigate: vi.fn(), onPlay: vi.fn() }),
-      );
+      root.render(createElement(CreatorStudioView, { selectedGame: 'token-coded', onNavigate, onPlay: vi.fn() }));
     });
     await act(async () => {
       await fetchStudioGames.mock.results[0]?.value;
@@ -141,7 +140,7 @@ describe('CreatorStudioView — Code actions shortcut reaches beyond the Code ta
       await fetchStudioSuggestions.mock.results[0]?.value;
       await flush();
     });
-    return { container, root };
+    return { container, root, onNavigate };
   }
 
   it('Ctrl+P from the thread tab switches to Code and opens quick open once sources load', async () => {
@@ -212,7 +211,7 @@ describe('CreatorStudioView — Code actions shortcut reaches beyond the Code ta
   });
 
   it('Escape without picking anything sends the creator back to where they were', async () => {
-    const { container, root } = await render();
+    const { container, root, onNavigate } = await render();
     expect(container.querySelector('[aria-label="Code"]')?.getAttribute('aria-pressed')).toBe('false');
 
     await pressGlobal('p');
@@ -220,6 +219,7 @@ describe('CreatorStudioView — Code actions shortcut reaches beyond the Code ta
       await flush();
     });
     expect(container.querySelector('[data-testid="code-actions-menu"]')).not.toBeNull();
+    onNavigate.mockClear();
 
     const input = container.querySelector<HTMLInputElement>('.code-surface-palette-input');
     await act(async () => {
@@ -229,6 +229,8 @@ describe('CreatorStudioView — Code actions shortcut reaches beyond the Code ta
     expect(container.querySelector('[data-testid="code-actions-menu"]')).toBeNull();
     expect(container.querySelector('[aria-label="Code"]')?.getAttribute('aria-pressed')).toBe('false');
     expect(container.querySelector('.code-surface')).toBeNull();
+    // Undoes the transient hop — Back must not land on Code.
+    expect(onNavigate).toHaveBeenCalledWith('/studio/sky-dodge/thread', { replace: true });
 
     root.unmount();
   });

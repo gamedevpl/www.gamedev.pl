@@ -585,14 +585,16 @@ export function CreatorStudioView({
     void next;
   });
 
-  function openTab(next: StudioTab) {
+  function openTab(next: StudioTab, options?: NavigateOptions) {
     if (!activeGame || !tabAvailable(activeGame, next)) return;
     setShareMenuOpen(false);
     setTab(next);
     if ((next === 'edit' || next === 'code' || next === 'details') && posture === 'play') {
       setPosture('watch');
     }
-    onNavigate(studioPath(studioAddress(activeGame), next));
+    const path = studioPath(studioAddress(activeGame), next);
+    if (options) onNavigate(path, options);
+    else onNavigate(path);
   }
   openTabRef.current = openTab;
 
@@ -630,7 +632,8 @@ export function CreatorStudioView({
     const restore = forcedCodeReturnRef.current;
     forcedCodeReturnRef.current = null;
     if (!restore) return;
-    openTab(restore.tab);
+    // Replaces the transient Code entry rather than stacking a third history entry.
+    openTab(restore.tab, { replace: true });
     setPosture(restore.posture);
   }
 
