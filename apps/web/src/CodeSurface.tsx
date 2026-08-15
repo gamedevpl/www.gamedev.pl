@@ -112,6 +112,8 @@ export type CodeSurfaceProps = {
   onPendingActionsModeConsumed?: () => void;
   // Track 2: shows a synchronous rebuild the instant it's ready.
   onPreviewReady?: (html: string) => void;
+  // Fires when the menu closes with nothing picked.
+  onActionsMenuCancelled?: () => void;
 };
 
 const LOCKED_DIRS = ['shared/', 'tools/'] as const;
@@ -166,6 +168,7 @@ export function CodeSurface({
   pendingActionsMode,
   onPendingActionsModeConsumed,
   onPreviewReady,
+  onActionsMenuCancelled,
 }: CodeSurfaceProps) {
   const { t, i18n } = useTranslation();
   const [sources, setSources] = useState<CodeSurfaceSources | null>(null);
@@ -297,7 +300,10 @@ export function CodeSurface({
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [filePickerOpen]);
 
-  const openActionsMenu = useCallback((mode: CodeActionsMode) => {
+  const openedViaPendingRef = useRef(false);
+
+  const openActionsMenu = useCallback((mode: CodeActionsMode, viaPending = false) => {
+    openedViaPendingRef.current = viaPending;
     setActionsMenu((current) => {
       if (!current) {
         const focused = document.activeElement;
@@ -307,15 +313,19 @@ export function CodeSurface({
     });
   }, []);
 
-  const closeActionsMenu = useCallback(() => {
+  const closeActionsMenu = useCallback((acted = false) => {
     setActionsMenu(null);
     const previous = actionsReturnFocusRef.current;
     actionsReturnFocusRef.current = null;
     if (previous?.isConnected) previous.focus();
+    if (!acted && openedViaPendingRef.current) onActionsMenuCancelledRef.current?.();
+    openedViaPendingRef.current = false;
   }, []);
 
   const onPendingActionsModeConsumedRef = useRef(onPendingActionsModeConsumed);
   onPendingActionsModeConsumedRef.current = onPendingActionsModeConsumed;
+  const onActionsMenuCancelledRef = useRef(onActionsMenuCancelled);
+  onActionsMenuCancelledRef.current = onActionsMenuCancelled;
   const pendingActionsModeRef = useRef(pendingActionsMode);
   pendingActionsModeRef.current = pendingActionsMode;
   const pendingActionsConsumedRef = useRef(false);
@@ -323,7 +333,7 @@ export function CodeSurface({
   useEffect(() => {
     if (!pendingActionsMode || !sources || pendingActionsConsumedRef.current) return;
     pendingActionsConsumedRef.current = true;
-    openActionsMenu(pendingActionsMode.mode);
+    openActionsMenu(pendingActionsMode.mode, true);
     onPendingActionsModeConsumedRef.current?.();
   }, [pendingActionsMode, sources, openActionsMenu]);
 
@@ -550,14 +560,14 @@ export function CodeSurface({
     // Rides the pendingJump path search matches use — the new editor claims focus.
     if (path !== selected) setPendingJump({ path, from: 0, to: 0 });
     selectFile(path);
-    closeActionsMenu();
+    closeActionsMenu(true);
   }
 
   // A search hit rides GA-09's jump and lands as a selection.
   function handleOpenSearchMatch(match: CodeActionsSearchMatch) {
     setPendingJump({ path: match.path, from: match.from, to: match.to });
     selectFile(match.path);
-    closeActionsMenu();
+    closeActionsMenu(true);
   }
 
   const schedulePreviewRebuild = useCallback(() => {
