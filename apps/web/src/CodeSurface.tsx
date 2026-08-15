@@ -33,7 +33,11 @@ import {
   type CodeSurfaceFile,
   type CodeSurfaceSources,
 } from './codeSurfaceApi.js';
-import { getCodeSurfaceSessionState, setCodeSurfaceSessionState } from './codeSurfaceSessionState.js';
+import {
+  getCodeSurfaceSessionState,
+  setCodeSurfaceEditorState,
+  setCodeSurfaceSessionState,
+} from './codeSurfaceSessionState.js';
 import {
   createCodeSurfaceLanguageService,
   fromVfsPath,
@@ -291,7 +295,11 @@ export function CodeSurface({
   }, [sources?.readOnly, load]);
 
   useEffect(() => {
-    setCodeSurfaceSessionState(slug, { selected, drafts });
+    setCodeSurfaceSessionState(slug, {
+      selected,
+      drafts,
+      editorStates: getCodeSurfaceSessionState(slug)?.editorStates,
+    });
   }, [slug, selected, drafts]);
 
   useEffect(() => {
@@ -1090,6 +1098,10 @@ export function CodeSurface({
                   onGotoDefinition={handleGotoDefinition}
                   initialSelection={initialSelectionForEditor}
                   fetchGhostText={fetchGhostText}
+                  initialEditorState={selected ? getCodeSurfaceSessionState(slug)?.editorStates?.[selected] : undefined}
+                  onEditorStateChange={(state) => {
+                    if (selected) setCodeSurfaceEditorState(slug, selected, state);
+                  }}
                 />
               </Suspense>
             </CodeMirrorBoundary>

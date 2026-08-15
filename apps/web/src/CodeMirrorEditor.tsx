@@ -44,6 +44,11 @@ import {
 import type { WorkerShape } from '@valtown/codemirror-ts/worker';
 import type { CodeLanguage } from './codeTokens.js';
 import { vsCodeSearchPanel } from './codeMirrorSearchPanel.js';
+import {
+  restoreCodeSurfaceEditorState,
+  serializeCodeSurfaceEditorState,
+  type CodeSurfaceEditorState,
+} from './codeSurfaceEditorState.js';
 import { recordCodeCompletion } from './visitTelemetry.js';
 
 // CodeMirror 6 (CE-14): lazy chunk; keyed by file path to remount.
@@ -69,6 +74,9 @@ export type CodeMirrorEditorProps = {
   initialSelection?: { anchor: number; head: number };
   // TA-02: ghost-text proposal for the window around the cursor.
   fetchGhostText?: (prefixWindow: string, suffixWindow: string, signal: AbortSignal) => Promise<string>;
+  // Saved per-file state lets the undo stack survive switching to Play.
+  initialEditorState?: CodeSurfaceEditorState;
+  onEditorStateChange?: (state: CodeSurfaceEditorState) => void;
 };
 
 function languageExtension(language: CodeLanguage): Extension | null {
@@ -741,6 +749,8 @@ export default function CodeMirrorEditor({
   onGotoDefinition,
   initialSelection,
   fetchGhostText,
+  initialEditorState,
+  onEditorStateChange,
 }: CodeMirrorEditorProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -755,6 +765,8 @@ export default function CodeMirrorEditor({
   onGotoDefinitionRef.current = onGotoDefinition;
   const fetchGhostTextRef = useRef(fetchGhostText);
   fetchGhostTextRef.current = fetchGhostText;
+  const onEditorStateChangeRef = useRef(onEditorStateChange);
+  onEditorStateChangeRef.current = onEditorStateChange;
   // GA-05: reconfigured live below — a ready worker never remounts.
   const languageServiceCompartmentRef = useRef(new Compartment());
 
@@ -763,10 +775,10 @@ export default function CodeMirrorEditor({
     const langExt = languageExtension(language);
     const view = new EditorView({
       parent: containerRef.current,
-      state: EditorState.create({
-        doc: value,
-        selection: initialSelection,
-        extensions: [
+      state: restoreCodeSurfaceEditorState(
+        initialEditorState,
+        value,
+        [
           basicSetup,
           // After basicSetup, so this createPanel wins over the stock search bar.
           search({ top: true, createPanel: vsCodeSearchPanel }),
@@ -793,10 +805,12 @@ export default function CodeMirrorEditor({
           syntaxHighlighting(darkHighlight),
           darkChrome,
         ],
-      }),
+        initialSelection,
+      ),
     });
     viewRef.current = view;
     return () => {
+      onEditorStateChangeRef.current?.(serializeCodeSurfaceEditorState(view.state));
       view.destroy();
       viewRef.current = null;
     };
