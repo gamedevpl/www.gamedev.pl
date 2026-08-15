@@ -103,6 +103,9 @@ export type CodeSurfaceProps = {
   onBack: () => void;
   /** Filled in by `StudioStage`; lets a live param edit reach the running game. */
   editorPushRef?: MutableRefObject<EditorContentPush | null>;
+  // Set by CreatorStudioView's own shortcut, fired before this surface existed.
+  pendingActionsMode?: { mode: CodeActionsMode; nonce: number } | null;
+  onPendingActionsModeConsumed?: () => void;
 };
 
 const LOCKED_DIRS = ['shared/', 'tools/'] as const;
@@ -150,7 +153,13 @@ function markFileStaged(sources: CodeSurfaceSources, path: string, content: stri
   };
 }
 
-export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
+export function CodeSurface({
+  slug,
+  onBack,
+  editorPushRef,
+  pendingActionsMode,
+  onPendingActionsModeConsumed,
+}: CodeSurfaceProps) {
   const { t } = useTranslation();
   const [sources, setSources] = useState<CodeSurfaceSources | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -289,6 +298,28 @@ export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
     const previous = actionsReturnFocusRef.current;
     actionsReturnFocusRef.current = null;
     if (previous?.isConnected) previous.focus();
+  }, []);
+
+  const onPendingActionsModeConsumedRef = useRef(onPendingActionsModeConsumed);
+  onPendingActionsModeConsumedRef.current = onPendingActionsModeConsumed;
+  const pendingActionsModeRef = useRef(pendingActionsMode);
+  pendingActionsModeRef.current = pendingActionsMode;
+  const pendingActionsConsumedRef = useRef(false);
+
+  useEffect(() => {
+    if (!pendingActionsMode || !sources || pendingActionsConsumedRef.current) return;
+    pendingActionsConsumedRef.current = true;
+    openActionsMenu(pendingActionsMode.mode);
+    onPendingActionsModeConsumedRef.current?.();
+  }, [pendingActionsMode, sources, openActionsMenu]);
+
+  // Drops an unconsumed request on unmount so it can't replay later.
+  useEffect(() => {
+    return () => {
+      if (pendingActionsModeRef.current && !pendingActionsConsumedRef.current) {
+        onPendingActionsModeConsumedRef.current?.();
+      }
+    };
   }, []);
 
   // VS Code keys; capture phase beats browser print/search and CodeMirror.
