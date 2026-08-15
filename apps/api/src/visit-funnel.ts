@@ -208,7 +208,16 @@ export const BETA_WELCOME_STEPS = ['shown', 'continued', 'dismissed'] as const;
 
 export type BetaWelcomeStep = (typeof BETA_WELCOME_STEPS)[number];
 
-export const EDITOR_STEPS = ['opened', 'draft_saved', 'previewed', 'published'] as const;
+export const EDITOR_STEPS = [
+  'opened',
+  'draft_saved',
+  'previewed',
+  'published',
+  'v2_schema_loaded',
+  'v2_content_loaded',
+  'v2_controller_ready',
+  'v2_controller_failed',
+] as const;
 
 export type EditorStep = (typeof EDITOR_STEPS)[number];
 

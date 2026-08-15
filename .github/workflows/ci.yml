@@ -75,7 +75,7 @@ jobs:
       - name: Check games-repo assemble / Check 4 / music contract
         env:
           GAMES_REPO: gamedevpl/www.gamedev.pl-games
-          GAMES_PUBLISHED_REF: main
+          GAMES_PUBLISHED_REF: ${{ github.event_name == 'pull_request' && github.head_ref || 'main' }}
           GAMES_REPO_TOKEN: ${{ secrets.GAMES_REPO_TOKEN }}
         run: npm run contract:games-repo
 

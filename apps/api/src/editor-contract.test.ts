@@ -85,12 +85,49 @@ const PATH_DEFINITION = {
         maxPoints: 24,
         properties: { name: { type: 'text', max: 24 } },
       },
-      defaults: [{ properties: { name: 'Opening' }, points: [{ x: 0, y: 1 }, { x: 3, y: 1 }] }],
+      defaults: [
+        {
+          properties: { name: 'Opening' },
+          points: [
+            { x: 0, y: 1 },
+            { x: 3, y: 1 },
+          ],
+        },
+      ],
+    },
+  },
+};
+
+const V2_SCHEMA = {
+  version: 2,
+  params: {
+    shipTopSpeed: {
+      type: 'int',
+      min: 120,
+      max: 640,
+      label: { en: 'Ship top speed', pl: 'Prędkość statku' },
     },
   },
 };
 
 describe('editor-contract mirror', () => {
+  it('accepts a schema-only v2 contract without v1 defaults', () => {
+    const { definition, errors } = parseEditorDefinition(JSON.stringify(V2_SCHEMA));
+    expect(errors).toEqual([]);
+    expect(definition?.version).toBe(2);
+    expect(definition?.params?.shipTopSpeed.default).toBeUndefined();
+  });
+
+  it('rejects v2 defaults so schema and content cannot drift', () => {
+    const { errors } = parseEditorDefinition(
+      JSON.stringify({
+        ...V2_SCHEMA,
+        params: { shipTopSpeed: { ...V2_SCHEMA.params.shipTopSpeed, default: 320 } },
+      }),
+    );
+    expect(errors.some((message) => message.includes('v2 schemas cannot contain "default"'))).toBe(true);
+  });
+
   it('accepts a well-formed definition and refuses unknown widgets', () => {
     const { definition, errors } = parseEditorDefinition(JSON.stringify(DEFINITION));
     expect(errors).toEqual([]);
@@ -222,13 +259,17 @@ describe('editor-contract mirror', () => {
 
     const outOfBounds = structuredClone(PATH_DEFINITION);
     outOfBounds.content.routes.defaults[0].points[1] = { x: 12, y: 1 };
-    expect(parseEditorDefinition(JSON.stringify(outOfBounds)).errors.some((message) => message.includes('inside 0-11'))).toBe(
-      true,
-    );
+    expect(
+      parseEditorDefinition(JSON.stringify(outOfBounds)).errors.some((message) => message.includes('inside 0-11')),
+    ).toBe(true);
 
     const closed = structuredClone(PATH_DEFINITION);
     Object.assign(closed.content.routes.item, { closed: true, minPoints: 3 });
-    closed.content.routes.defaults[0].points = [{ x: 1, y: 1 }, { x: 4, y: 1 }, { x: 1, y: 1 }];
+    closed.content.routes.defaults[0].points = [
+      { x: 1, y: 1 },
+      { x: 4, y: 1 },
+      { x: 1, y: 1 },
+    ];
     const closedErrors = parseEditorDefinition(JSON.stringify(closed)).errors;
     expect(closedErrors.some((message) => message.includes('3 distinct points'))).toBe(true);
     expect(closedErrors.some((message) => message.includes('closure is implicit'))).toBe(true);

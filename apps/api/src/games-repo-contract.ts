@@ -314,6 +314,8 @@ export const DELIVERY_FIXED_FILES = [
   // born-editable delivery at upload. The generated `game/editor-content.ts` needs no
   // entry, it matches {@link DELIVERY_EXTRA_MODULE_PATTERN}.
   'EDITOR.json',
+  'EDITOR.ts',
+  'EDITOR.content.json',
   // Optional: generated from GAME.json howToPlay when a game ships none.
   'index.html',
   'game.ts',

@@ -112,7 +112,16 @@ const StudioStepDetailSchema = z.enum([
   'agent',
 ]);
 /** EditorKit's revision funnel. No slug: the visit stream stays unjoinable. */
-const EditorStepSchema = z.enum(['opened', 'draft_saved', 'previewed', 'published']);
+const EditorStepSchema = z.enum([
+  'opened',
+  'draft_saved',
+  'previewed',
+  'published',
+  'v2_schema_loaded',
+  'v2_content_loaded',
+  'v2_controller_ready',
+  'v2_controller_failed',
+]);
 /** The NL tuning lane's outcomes — a dimension beside the editing funnel, not a rung in it. */
 const AssistStepSchema = z.enum(['asked', 'applied', 'handoff', 'rejected']);
 /**

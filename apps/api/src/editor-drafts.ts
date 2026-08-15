@@ -1,14 +1,17 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import {
+  EDITOR_CONTENT_FILE,
   EDITOR_FILE,
   GENERATED_CONTENT_PATH,
   PARAMS_KEY,
   generateEditorContentModule,
   parseEditorDefinition,
   validateEditorContent,
+  type EditorContentDocument,
   type EditorDefinition,
 } from './editor-contract.js';
+import { editorKitV2Enabled } from './editor-kit-env.js';
 import { isLiveAgentRound } from './code-surface.js';
 import type { GamesStore } from './games-store.js';
 import { MAX_EDITOR_DRAFT_BYTES, type Store, type SubmissionRecord } from './store.js';
@@ -122,7 +125,12 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
   async function resolveEditable(
     request: FastifyRequest,
     reply: FastifyReply,
-  ): Promise<{ submission: SubmissionRecord; version: string; definition: EditorDefinition } | null> {
+  ): Promise<{
+    submission: SubmissionRecord;
+    version: string;
+    definition: EditorDefinition;
+    content: Record<string, unknown>;
+  } | null> {
     const params = ParamsSchema.safeParse(request.params);
     if (!params.success) {
       reply.status(400).send({ error: params.error.issues[0]?.message ?? 'invalid slug' });
@@ -162,7 +170,32 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
       reply.status(404).send({ error: 'this game has no editable content' });
       return null;
     }
-    return { submission, version, definition };
+    if (definition.version === 2 && !editorKitV2Enabled()) {
+      reply.status(404).send({ error: 'this editor version is not enabled' });
+      return null;
+    }
+    let content: Record<string, unknown>;
+    if (definition.version === 2) {
+      const contentJson = await options.gamesStore.getSourceFile(params.data.slug, version, EDITOR_CONTENT_FILE);
+      if (!contentJson) {
+        reply.status(404).send({ error: 'this game has no editable content' });
+        return null;
+      }
+      try {
+        content = JSON.parse(contentJson) as Record<string, unknown>;
+      } catch {
+        reply.status(500).send({ error: 'the editor content could not be read' });
+        return null;
+      }
+      const problems = validateEditorContent(definition, content);
+      if (problems.length > 0) {
+        reply.status(500).send({ error: 'the editor content could not be read' });
+        return null;
+      }
+    } else {
+      content = defaultContent(definition);
+    }
+    return { submission, version, definition, content };
   }
 
   /** The definition's own defaults, shaped as a content document. */
@@ -224,7 +257,7 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
     return reply.send({
       version: resolved.version,
       definition: resolved.definition,
-      content: defaultContent(resolved.definition),
+      content: resolved.content,
       draft:
         draft && draftContent ? { content: draftContent, revision: draft.revision, updatedAt: draft.updatedAt } : null,
     });
@@ -424,12 +457,10 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
       // own next delivery would lose "current version" to that fork. Drafting and
       // viewing stay open mid-round; only the job-forking write waits for it to stop.
       if (isLiveAgentRound(resolved.submission)) {
-        return reply
-          .status(409)
-          .send({
-            error: 'agent_round',
-            message: 'an agent is actively building this round — try again once it stops',
-          });
+        return reply.status(409).send({
+          error: 'agent_round',
+          message: 'an agent is actively building this round — try again once it stops',
+        });
       }
 
       const draft = await store.getEditorDraft(request.user!.uid, slug);
@@ -491,34 +522,45 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
       }
 
       const editorFile = files.find((file) => file.path === EDITOR_FILE)!;
-      const raw = JSON.parse(editorFile.content) as {
-        params?: Record<string, { default?: unknown }>;
-        content?: Record<string, { defaults?: unknown }>;
-      };
-      for (const [key, spec] of Object.entries(raw.content ?? {})) {
-        if (content[key] !== undefined) spec.defaults = content[key];
-      }
-      const paramValues = content[PARAMS_KEY];
-      if (raw.params && paramValues && typeof paramValues === 'object') {
-        for (const [key, spec] of Object.entries(raw.params)) {
-          const value = (paramValues as Record<string, unknown>)[key];
-          if (value !== undefined) spec.default = value;
-        }
-      }
-      editorFile.content = `${JSON.stringify(raw, null, 2)}\n`;
-
-      const reparsed = parseEditorDefinition(editorFile.content);
-      if (!reparsed.definition) {
-        return reply.status(422).send({
-          error: 'the draft does not produce a valid editor definition',
-          problems: reparsed.errors.slice(0, 20),
-        });
-      }
       const generatedPath = GENERATED_CONTENT_PATH;
       const generated = files.find((file) => file.path === generatedPath);
-      const generatedContent = generateEditorContentModule(reparsed.definition);
-      if (generated) generated.content = generatedContent;
-      else files.push({ path: generatedPath, content: generatedContent });
+      if (resolved.definition.version === 2) {
+        const contentFile = files.find((file) => file.path === EDITOR_CONTENT_FILE);
+        if (!contentFile) {
+          return reply.status(409).send({ error: `the delivered version is missing ${EDITOR_CONTENT_FILE}` });
+        }
+        contentFile.content = `${JSON.stringify(content, null, 2)}\n`;
+        const generatedContent = generateEditorContentModule(resolved.definition, content as EditorContentDocument);
+        if (generated) generated.content = generatedContent;
+        else files.push({ path: generatedPath, content: generatedContent });
+      } else {
+        const raw = JSON.parse(editorFile.content) as {
+          params?: Record<string, { default?: unknown }>;
+          content?: Record<string, { defaults?: unknown }>;
+        };
+        for (const [key, spec] of Object.entries(raw.content ?? {})) {
+          if (content[key] !== undefined) spec.defaults = content[key];
+        }
+        const paramValues = content[PARAMS_KEY];
+        if (raw.params && paramValues && typeof paramValues === 'object') {
+          for (const [key, spec] of Object.entries(raw.params)) {
+            const value = (paramValues as Record<string, unknown>)[key];
+            if (value !== undefined) spec.default = value;
+          }
+        }
+        editorFile.content = `${JSON.stringify(raw, null, 2)}\n`;
+
+        const reparsed = parseEditorDefinition(editorFile.content);
+        if (!reparsed.definition) {
+          return reply.status(422).send({
+            error: 'the draft does not produce a valid editor definition',
+            problems: reparsed.errors.slice(0, 20),
+          });
+        }
+        const generatedContent = generateEditorContentModule(reparsed.definition);
+        if (generated) generated.content = generatedContent;
+        else files.push({ path: generatedPath, content: generatedContent });
+      }
 
       // A content edit gets its own job, exactly as a post-publish improvement
       // does (`startImprovementRound`), and for the same reason: `published` is a
