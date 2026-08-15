@@ -901,6 +901,16 @@ describe('getGameSources', () => {
     expect(sources?.gameJs).not.toContain(': number');
     expect(sources?.gameJs).not.toContain('): void');
     expect(() => new Function(sources?.gameJs ?? '')).not.toThrow();
+
+    // Track 1: per-phase timings, all non-negative.
+    const timings = sources?.timings;
+    expect(timings).toBeDefined();
+    expect(timings!.totalMs).toBeGreaterThanOrEqual(0);
+    expect(timings!.baseReadMs).toBeGreaterThanOrEqual(0);
+    expect(timings!.kitModulesMs).toBeGreaterThanOrEqual(0);
+    expect(timings!.audioMs).toBeGreaterThanOrEqual(0);
+    expect(timings!.musicMs).toBeGreaterThanOrEqual(0);
+    expect(timings!.bundleMs).toBeGreaterThanOrEqual(0);
   });
 
   it('falls back to the sourced-audio catalog for a sound missing from the synth catalog', async () => {
@@ -1595,7 +1605,8 @@ describe('archive-backed file source', () => {
       files,
     }).getGameSources('main', 'coin-catcher');
 
-    expect(viaArchive).toEqual(viaApi);
+    // Bytes must match; timings is wall-clock noise, not output.
+    expect({ ...viaArchive, timings: undefined }).toEqual({ ...viaApi, timings: undefined });
     expect(archiveFetch).toHaveBeenCalledTimes(1);
   });
 

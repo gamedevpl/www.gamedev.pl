@@ -265,6 +265,8 @@ export interface StagedPreviewOptions {
   log: {
     warn: (context: object, message: string) => void;
     error: (context: object, message: string) => void;
+    // Optional: per-phase timing logged after a successful assembly.
+    info?: (context: object, message: string) => void;
   };
   now?: () => number;
   debounceMs?: number;
@@ -317,6 +319,7 @@ export function createStagedPreviewPublisher(options: StagedPreviewOptions): Sta
   let inFlight = 0;
 
   async function attempt(issueNumber: number): Promise<StagedPreviewOutcome> {
+    const attemptStartedAt = Date.now();
     const record = await options.store.getSubmission(issueNumber);
     if (!record?.slug || record.abandonedAt) return 'skipped';
     const slug = record.slug;
@@ -325,11 +328,13 @@ export function createStagedPreviewPublisher(options: StagedPreviewOptions): Sta
     const staged = await options.gamesStore.getStagedSourceFiles({ slug, issueNumber, roundGeneration });
     if (staged.length === 0) return 'not_staged';
 
+    const overlayStartedAt = Date.now();
     const overlay = overlayGameSources({
       staged,
       delivered: await readDeliveredSources({ gamesStore: options.gamesStore, store: options.store, record }),
       ...(record.seed?.files ? { seed: record.seed.files } : {}),
     });
+    const overlayMs = Date.now() - overlayStartedAt;
     if (!hasPlayableOverlay(overlay)) return 'incomplete';
 
     // Every game file comes from the overlay; the ref supplies `shared/` alone. That is
@@ -338,6 +343,7 @@ export function createStagedPreviewPublisher(options: StagedPreviewOptions): Sta
     const sources = await options.githubClient.getGameSources(options.engineRef, slug, overlay);
     if (!sources) return 'incomplete';
 
+    const assembleStartedAt = Date.now();
     const html = assembleGameHtml(
       {
         title: sources.title ?? slug,
@@ -348,6 +354,7 @@ export function createStagedPreviewPublisher(options: StagedPreviewOptions): Sta
       },
       { restrictNetwork: true },
     );
+    const assembleMs = Date.now() - assembleStartedAt;
     if (Buffer.byteLength(html, 'utf8') > maxBytes) return 'too_large';
 
     // Cheap guard against a thrash the creator would see as a flickering preview: an agent
@@ -357,6 +364,7 @@ export function createStagedPreviewPublisher(options: StagedPreviewOptions): Sta
     const digest = createHash('sha256').update(html).digest('hex');
     if (lastDigest.get(digestKey) === digest) return 'unchanged';
 
+    const storeWriteStartedAt = Date.now();
     const locale = record.locale ?? '';
     await options.store.appendBuildPreview(issueNumber, {
       data: Buffer.from(html, 'utf8').toString('base64'),
@@ -367,8 +375,22 @@ export function createStagedPreviewPublisher(options: StagedPreviewOptions): Sta
     // After the write, like the channel's own preview verb: a push that lands and then
     // fails to tidy up has still delivered the thing the creator was waiting for.
     await options.store.pruneBuildPreviews(issueNumber, keepPreviews).catch(() => 0);
+    const storeWriteMs = Date.now() - storeWriteStartedAt;
     noteJob(lastDigest, digestKey, digest);
     options.onPublished?.(issueNumber);
+    // Per-phase timing — see docs/live-editing-latency.md.
+    options.log.info?.(
+      {
+        issueNumber,
+        totalMs: Date.now() - attemptStartedAt,
+        overlayMs,
+        getGameSourcesMs: sources.timings?.totalMs,
+        getGameSourcesPhases: sources.timings,
+        assembleMs,
+        storeWriteMs,
+      },
+      'staged preview assembled',
+    );
     return 'published';
   }
 
