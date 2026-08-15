@@ -1,43 +1,45 @@
 name: Games catalog gate
 
-# The full-catalog behavioral sweep for gamedevpl/www.gamedev.pl-games — trace,
-# check:webgl, accept, agency --all --strict, agent-play, and playtest --all
-# across every game. This used to run inline in that repo's `validate` workflow
-# on every push/schedule to its main branch and was routinely landing at
-# 24-45 minutes on a single billed runner (private repo => billed Actions
-# minutes). This repo is public, so its Actions minutes are free — the sweep
-# runs here instead, against a checkout of the games repo pulled in with
-# GAMES_REPO_TOKEN (same contents:read PAT the snapshot bake and the
-# games-repo contract check already use).
-#
-# Triggered by a repository_dispatch from the games repo's `publish` job on
-# every push/schedule to its main (see
-# gamedevpl/www.gamedev.pl-games/.github/workflows/validate.yml) — so catalog
-# coverage on main is now roughly per-push instead of the old weekly-only
-# sweep. The schedule below is the safety net for a missed/failed dispatch,
-# same pattern as publish-games.yml.
-#
-# Best effort in one direction only: nothing here can block or fail a push in
-# the games repo (the dispatch step there ignores this workflow's outcome).
-# A red run here is a real finding, but it does not gate anything upstream —
-# watch this repo's Actions tab (or wire up notifications) to see it.
+# Runs the games repository's real post-merge gate on public Actions minutes.
+# publish-games.yml calls this workflow before advancing the snapshot pointer.
 
 on:
-  repository_dispatch:
-    types: [games-catalog-verify]
-  # 08:47 UTC: off the top of the hour, and clear of publish-games.yml's 04:23
-  # nightly bake so the two don't contend for the runner queue.
-  schedule:
-    - cron: '47 8 * * *'
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        required: false
+        default: 'main'
+      sha:
+        type: string
+        required: false
+        default: ''
+      mode:
+        type: string
+        required: false
+        default: 'full'
+      slugs:
+        type: string
+        required: false
+        default: ''
+      need_webkit:
+        type: string
+        required: false
+        default: '1'
+      narrow_conformance:
+        type: string
+        required: false
+        default: '0'
+    secrets:
+      GAMES_REPO_TOKEN:
+        required: true
   workflow_dispatch:
     inputs:
       ref:
-        description: 'Games-repo ref to run the gate against'
+        description: 'Games-repo ref to run the full gate against'
         required: false
         default: 'main'
 
-# Only the newest games-repo SHA is worth verifying; a queued older run proves
-# nothing the newer one does not, and this sweep can take a while.
 concurrency:
   group: games-catalog-gate
   cancel-in-progress: true
@@ -49,40 +51,222 @@ jobs:
   catalog-gate:
     runs-on: ubuntu-latest
     timeout-minutes: 180
+    outputs:
+      games_ref: ${{ steps.resolve.outputs.games_ref }}
+      mode: ${{ steps.resolve.outputs.mode }}
+      slugs: ${{ steps.resolve.outputs.slugs }}
+      need_webkit: ${{ steps.resolve.outputs.need_webkit }}
     env:
       GAMES_REPO: 'gamedevpl/www.gamedev.pl-games'
     steps:
-      - name: Resolve games-repo ref
+      - name: Resolve games gate inputs
+        id: resolve
         env:
-          DISPATCH_REF: ${{ github.event.client_payload.ref }}
-          DISPATCH_SHA: ${{ github.event.client_payload.sha }}
-          INPUT_REF: ${{ github.event.inputs.ref }}
+          INPUT_REF: ${{ inputs.ref }}
+          INPUT_SHA: ${{ inputs.sha }}
+          INPUT_MODE: ${{ inputs.mode }}
+          INPUT_SLUGS: ${{ inputs.slugs }}
+          INPUT_NEED_WEBKIT: ${{ inputs.need_webkit }}
+          INPUT_NARROW_CONFORMANCE: ${{ inputs.narrow_conformance }}
         run: |
-          # Payload values come from another repository's workflow, so they are
-          # treated as data: passed through the environment (never interpolated
-          # into the script) and constrained before use — same discipline as
-          # publish-games.yml's ref handling.
-          REF="${DISPATCH_SHA:-${DISPATCH_REF:-${INPUT_REF:-main}}}"
+          set -euo pipefail
+          REF="${INPUT_SHA:-${INPUT_REF:-main}}"
+          MODE="${INPUT_MODE:-full}"
+          SLUGS="${INPUT_SLUGS:-}"
+          NEED_WEBKIT="${INPUT_NEED_WEBKIT:-1}"
+          NARROW_CONFORMANCE="${INPUT_NARROW_CONFORMANCE:-0}"
+
           case "$REF" in
             *[!A-Za-z0-9._/-]*)
-              echo "Error: refusing to check out a ref with unexpected characters"
+              echo "Error: refusing a games ref with unexpected characters"
               exit 1
               ;;
           esac
-          echo "GAMES_REF=${REF}" >> "$GITHUB_ENV"
+          case "$MODE" in
+            full|static|scoped) ;;
+            *)
+              echo "Error: invalid gate mode: $MODE"
+              exit 1
+              ;;
+          esac
+          case "$NEED_WEBKIT:$NARROW_CONFORMANCE" in
+            0:0|0:1|1:0|1:1) ;;
+            *)
+              echo "Error: gate flags must be 0 or 1"
+              exit 1
+              ;;
+          esac
+          for slug in $SLUGS; do
+            case "$slug" in
+              *[!a-z0-9-]*)
+                echo "Error: invalid game slug: $slug"
+                exit 1
+                ;;
+            esac
+          done
+          if [ "$MODE" = scoped ] && [ -z "${SLUGS// /}" ]; then
+            echo "Error: scoped validation requires at least one game"
+            exit 1
+          fi
+
+          {
+            echo "games_ref=$REF"
+            echo "mode=$MODE"
+            echo "slugs=$SLUGS"
+            echo "need_webkit=$NEED_WEBKIT"
+            echo "narrow_conformance=$NARROW_CONFORMANCE"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Check out games repo
         uses: actions/checkout@v4
         with:
           repository: ${{ env.GAMES_REPO }}
-          ref: ${{ env.GAMES_REF }}
+          ref: ${{ steps.resolve.outputs.games_ref }}
           token: ${{ secrets.GAMES_REPO_TOKEN }}
           path: games-repo
-          # checkout persists the token into games-repo/.git/config by default.
-          # The steps below run npm ci and this repo's own scripts against that
-          # checkout — any of them (postinstall, a compromised dependency, the
-          # gate scripts themselves) could read and exfiltrate the token from
-          # there. It's only needed for the clone itself.
+          persist-credentials: false
+
+      - name: Check Playwright image matches games package
+        working-directory: games-repo
+        env:
+          PLAYWRIGHT_IMAGE: 'mcr.microsoft.com/playwright:v1.56.1-jammy'
+        run: |
+          set -euo pipefail
+          PINNED=$(node -p "require('./package.json').devDependencies['playwright-core'].replace(/^[^0-9]*/, '')")
+          EXPECTED="mcr.microsoft.com/playwright:v${PINNED}-jammy"
+          if [ "$PLAYWRIGHT_IMAGE" != "$EXPECTED" ]; then
+            echo "Error: expected ${EXPECTED}, got ${PLAYWRIGHT_IMAGE}"
+            exit 1
+          fi
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: games-repo/package-lock.json
+
+      - name: Install dependencies
+        working-directory: games-repo
+        run: npm ci
+
+      - name: Install Chrome
+        uses: browser-actions/setup-chrome@v1
+        id: chrome
+        with:
+          chrome-version: stable
+
+      - name: Run the full games gate
+        if: steps.resolve.outputs.mode == 'full'
+        working-directory: games-repo
+        env:
+          GAME_CAPTURE_CHROME: ${{ steps.chrome.outputs.chrome-path }}
+        run: |
+          set -euo pipefail
+          npm run check:no-js
+          npm run check:gfx
+          npm run check:ios
+          npm run audio:check
+          npm run audio:plan-check
+          npm run typecheck
+          npm run test
+          npm run validate
+          npm run smoke
+          npm run trace
+          npm run build
+          npm run check:webgl
+          npm run accept
+          npm run agency -- --all --strict
+          npm run agent-play
+          npm run playtest -- --all
+
+      - name: Run the static games gate
+        if: steps.resolve.outputs.mode == 'static'
+        working-directory: games-repo
+        env:
+          GAME_CAPTURE_CHROME: ${{ steps.chrome.outputs.chrome-path }}
+          SLUGS: ${{ steps.resolve.outputs.slugs }}
+          NARROW_CONFORMANCE: ${{ steps.resolve.outputs.narrow_conformance }}
+        run: |
+          set -euo pipefail
+          npm run check:no-js
+          npm run check:gfx
+          npm run check:ios
+          npm run audio:check
+          npm run audio:plan-check
+          npm run typecheck
+          if [ -n "${SLUGS// /}" ] && [ "$NARROW_CONFORMANCE" = 1 ]; then
+            GAME_TEST_SLUGS="$SLUGS" npm run test
+          else
+            npm run test
+          fi
+          npm run validate
+          if [ -n "${SLUGS// /}" ]; then
+            npm run smoke -- $SLUGS
+            npm run trace -- -j 4 $SLUGS
+            npm run build -- $SLUGS
+            npm run accept -- $SLUGS
+            npm run agent-play -- -j 2 $SLUGS
+            npm run agency -- --strict -j 4 $SLUGS
+            npm run playtest -- $SLUGS
+            need_webgl=$(node --import tsx -e '
+              import { WEBGL_PILOTS } from "./tools/lib/webgl-gate.ts";
+              const touched = process.argv.slice(1);
+              process.stdout.write(WEBGL_PILOTS.some((p) => touched.includes(p.slug)) ? "1" : "0");
+            ' $SLUGS)
+            if [ "$need_webgl" = 1 ]; then npm run check:webgl; fi
+          fi
+
+      - name: Run the scoped games gate
+        if: steps.resolve.outputs.mode == 'scoped'
+        working-directory: games-repo
+        env:
+          GAME_CAPTURE_CHROME: ${{ steps.chrome.outputs.chrome-path }}
+          SLUGS: ${{ steps.resolve.outputs.slugs }}
+        run: |
+          set -euo pipefail
+          npm run check:no-js
+          npm run check:gfx
+          npm run check:ios
+          npm run audio:check
+          npm run audio:plan-check
+          GAME_TEST_SLUGS="$SLUGS" npm run test:conformance
+          npm run typecheck
+          npm run validate -- $SLUGS
+          npm run smoke -- $SLUGS
+          npm run trace -- -j 4 $SLUGS
+          npm run build -- $SLUGS
+          npm run accept -- $SLUGS
+          npm run agent-play -- -j 2 $SLUGS
+          npm run agency -- --strict -j 4 $SLUGS
+          npm run playtest -- $SLUGS
+          need_webgl=$(node --import tsx -e '
+            import { WEBGL_PILOTS } from "./tools/lib/webgl-gate.ts";
+            const touched = process.argv.slice(1);
+            process.stdout.write(WEBGL_PILOTS.some((p) => touched.includes(p.slug)) ? "1" : "0");
+          ' $SLUGS)
+          if [ "$need_webgl" = 1 ]; then npm run check:webgl; fi
+
+  webkit:
+    needs: catalog-gate
+    if: needs.catalog-gate.outputs.need_webkit == '1'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    container: mcr.microsoft.com/playwright:v1.56.1-jammy
+    permissions:
+      contents: read
+    env:
+      GAMES_REPO: 'gamedevpl/www.gamedev.pl-games'
+    steps:
+      - name: Check out games repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.GAMES_REPO }}
+          ref: ${{ needs.catalog-gate.outputs.games_ref }}
+          token: ${{ secrets.GAMES_REPO_TOKEN }}
+          path: games-repo
           persist-credentials: false
 
       - name: Set up Node.js
@@ -96,22 +280,15 @@ jobs:
         working-directory: games-repo
         run: npm ci
 
-      - name: Install Chrome for WebGL / playtest
-        uses: browser-actions/setup-chrome@v1
-        id: chrome
-        with:
-          chrome-version: stable
-
-      - name: Run the full catalog behavioral gate
+      - name: Check games on WebKit
         working-directory: games-repo
         env:
-          GAME_CAPTURE_CHROME: ${{ steps.chrome.outputs.chrome-path }}
+          MODE: ${{ needs.catalog-gate.outputs.mode }}
+          SLUGS: ${{ needs.catalog-gate.outputs.slugs }}
         run: |
           set -euo pipefail
-          npm run trace
-          npm run build
-          npm run check:webgl
-          npm run accept
-          npm run agency -- --all --strict
-          npm run agent-play
-          npm run playtest -- --all
+          if [ "$MODE" = full ]; then
+            npm run check:webkit
+          else
+            npm run check:webkit -- $SLUGS
+          fi
