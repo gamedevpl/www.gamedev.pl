@@ -99,6 +99,15 @@ describe('StudioStage', () => {
     window.dispatchEvent(event);
   }
 
+  // Dispatches the bridge's held message for a pointer press or release.
+  function sendPointerHeld(host: HTMLElement, held: boolean) {
+    const iframe = host.querySelector('iframe')!;
+    const event = new MessageEvent('message', { data: { source: 'gdpl-player', type: 'held', held } });
+    Object.defineProperty(event, 'source', { value: iframe.contentWindow });
+    Object.defineProperty(event, 'origin', { value: 'null' });
+    window.dispatchEvent(event);
+  }
+
   it('holds a new stage during play only while input is active, no toast, and applies it once idle', async () => {
     vi.useFakeTimers();
     const props = baseProps({ posture: 'play' });
@@ -116,6 +125,32 @@ describe('StudioStage', () => {
     expect(host.querySelector('.studio-swap-toast')).toBeNull();
 
     // Once input goes idle, the held build applies on its own.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    expect(host.querySelector('iframe')?.getAttribute('srcdoc')).toContain('>B<');
+    unmount();
+  });
+
+  it('keeps a held stage while a pointer is held past the idle window, and applies it on release', async () => {
+    vi.useFakeTimers();
+    const props = baseProps({ posture: 'play' });
+    const { host, rerender, unmount } = await mount(props);
+
+    await act(async () => sendPointerHeld(host, true));
+    await rerender({
+      ...props,
+      source: { html: GAME_B, rawHtml: GAME_B, origin: { kind: 'staged', at: Date.now(), versionLabel: null } },
+    });
+
+    // Still held past the idle window — a drag must not read idle.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(900);
+    });
+    expect(host.querySelector('iframe')?.getAttribute('srcdoc')).toContain('>A<');
+
+    // Releasing restarts the idle countdown; once it elapses, the held build applies.
+    await act(async () => sendPointerHeld(host, false));
     await act(async () => {
       await vi.advanceTimersByTimeAsync(500);
     });

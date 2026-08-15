@@ -119,6 +119,8 @@ export function StudioStage({
   const [shimmer, setShimmer] = useState(false);
   // Last player input — a ref, so tracking it never re-renders.
   const lastInputAtRef = useRef(0);
+  // True while a pointer or touch is held down.
+  const pointerHeldRef = useRef(false);
   const inputIdleTimerRef = useRef<number | null>(null);
   const lastGoodRef = useRef<string | null>(source.rawHtml);
   const lastGoodOriginRef = useRef<StageOrigin>(source.origin);
@@ -144,7 +146,7 @@ export function StudioStage({
   useEffect(() => {
     const next = source.rawHtml;
     if (next === shownHtml) return;
-    const inputActive = Date.now() - lastInputAtRef.current < INPUT_IDLE_MS;
+    const inputActive = pointerHeldRef.current || Date.now() - lastInputAtRef.current < INPUT_IDLE_MS;
     if (posture === 'play' && shownHtml !== null && inputActive) {
       setPendingHtml(next);
       setPendingOrigin(source.origin);
@@ -167,13 +169,14 @@ export function StudioStage({
     const tryApply = () => {
       if (cancelled) return;
       const idleFor = Date.now() - lastInputAtRef.current;
-      if (idleFor >= INPUT_IDLE_MS) {
+      if (idleFor >= INPUT_IDLE_MS && !pointerHeldRef.current) {
         applySwap(pendingHtml, pendingOrigin ?? source.origin);
         setPendingHtml(null);
         setPendingOrigin(null);
         return;
       }
-      inputIdleTimerRef.current = window.setTimeout(tryApply, INPUT_IDLE_MS - idleFor);
+      const wait = idleFor >= INPUT_IDLE_MS ? INPUT_IDLE_MS : INPUT_IDLE_MS - idleFor;
+      inputIdleTimerRef.current = window.setTimeout(tryApply, wait);
     };
     tryApply();
     return () => {
@@ -349,7 +352,12 @@ export function StudioStage({
   const onGameActivity = useCallback(() => {
     lastInputAtRef.current = Date.now();
   }, []);
-  useGamePlayer(frameRef, active, requestWatch, undefined, onGameActivity);
+  const onPointerHeldChange = useCallback((held: boolean) => {
+    pointerHeldRef.current = held;
+    // A release restarts the idle countdown from now.
+    if (!held) lastInputAtRef.current = Date.now();
+  }, []);
+  useGamePlayer(frameRef, active, requestWatch, undefined, onGameActivity, undefined, onPointerHeldChange);
   const editorBridge = useEditorDraftBridge(frameRef, active, slug, Boolean(editable));
   useEffect(() => {
     if (!editorPushRef) return undefined;

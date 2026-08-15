@@ -326,13 +326,21 @@ const BRIDGE = `(function(){
     if(e.key==='Escape'){post({type:'key',key:'Escape'});}
     else{reportActivity();}
   });
-  function playerPointerDown(){lastActivity=Date.now();post({type:'pointer'});}
+  // held: a separate signal from 'activity' — a joystick or drag held past the
+  // 400ms swap-idle window must not look idle just because nothing new fired.
+  var pointerHeld=false;
+  function playerPointerDown(){lastActivity=Date.now();pointerHeld=true;post({type:'pointer'});post({type:'held',held:true});}
+  function playerPointerUp(){if(!pointerHeld)return;pointerHeld=false;post({type:'held',held:false});}
   if(typeof PointerEvent==='function'){
     addEventListener('pointerdown',playerPointerDown,{passive:true});
+    addEventListener('pointerup',playerPointerUp,{passive:true});
+    addEventListener('pointercancel',playerPointerUp,{passive:true});
   }else{
     // Older/restricted WebViews may expose only the pre-Pointer Events APIs.
     addEventListener('mousedown',playerPointerDown,{passive:true});
     addEventListener('touchstart',playerPointerDown,{passive:true});
+    addEventListener('mouseup',playerPointerUp,{passive:true});
+    addEventListener('touchend',playerPointerUp,{passive:true});
   }
   // iOS Safari: long-press on the canvas opens the callout (Copy / Translate / Look Up)
   // and the text-selection loupe ("mini zoom"). CSS covers most of it; these kill the
@@ -643,6 +651,8 @@ export function useGamePlayer(
   onActivity?: () => void,
   /** Called when the game reports a terminal round state. */
   onEnd?: () => void,
+  // A pointer or touch is held down, or released.
+  onPointerHeldChange?: (held: boolean) => void,
 ) {
   const [meta, setMeta] = useState<GamePlayerMeta | null>(null);
   const [controls, setControls] = useState<ReportedControls | null>(null);
@@ -657,6 +667,8 @@ export function useGamePlayer(
   onActivityRef.current = onActivity;
   const onEndRef = useRef(onEnd);
   onEndRef.current = onEnd;
+  const onPointerHeldChangeRef = useRef(onPointerHeldChange);
+  onPointerHeldChangeRef.current = onPointerHeldChange;
 
   useEffect(() => {
     if (!active) {
@@ -679,6 +691,7 @@ export function useGamePlayer(
         desc?: string;
         muted?: boolean;
         key?: string;
+        held?: boolean;
       };
       if (!data || data.source !== PLAYER) return;
       if (data.type === 'meta') {
@@ -700,6 +713,8 @@ export function useGamePlayer(
         onActivityRef.current?.();
       } else if (data.type === 'activity') {
         onActivityRef.current?.();
+      } else if (data.type === 'held') {
+        onPointerHeldChangeRef.current?.(Boolean(data.held));
       } else if (data.type === 'end') {
         onEndRef.current?.();
       }

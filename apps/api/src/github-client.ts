@@ -1062,31 +1062,28 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
   const coreJsBySha = new Map<string, string>();
   const kitModuleBySha = new Map<string, string | null>();
 
-  async function getCachedGameShellCss(sha: string, ref: string): Promise<string | null> {
+  // A miss reads through `sha`, never the mutable `ref`.
+  async function getCachedGameShellCss(sha: string): Promise<string | null> {
     if (gameShellCssBySha.has(sha)) return gameShellCssBySha.get(sha)!;
-    const value = await readRawFile('shared/game-shell.css', ref);
+    const value = await readRawFile('shared/game-shell.css', sha);
     rememberBounded(gameShellCssBySha, sha, value, ENGINE_CACHE_CAPACITY);
     return value;
   }
 
-  async function getCachedCoreJs(sha: string, ref: string): Promise<string | null> {
+  async function getCachedCoreJs(sha: string): Promise<string | null> {
     const cached = coreJsBySha.get(sha);
     if (cached !== undefined) return cached;
-    const coreTs = await readRawFile('shared/modules/core.ts', ref);
+    const coreTs = await readRawFile('shared/modules/core.ts', sha);
     if (coreTs === null) return null;
     const result = await transform(coreTs, { loader: 'ts', target: 'es2022', format: 'iife', legalComments: 'inline' });
     rememberBounded(coreJsBySha, sha, result.code, ENGINE_CACHE_CAPACITY);
     return result.code;
   }
 
-  async function getCachedGameKitModule(
-    sha: string,
-    moduleName: GameKitModuleName,
-    ref: string,
-  ): Promise<string | null> {
+  async function getCachedGameKitModule(sha: string, moduleName: GameKitModuleName): Promise<string | null> {
     const cacheKey = `${sha}:${moduleName}`;
     if (kitModuleBySha.has(cacheKey)) return kitModuleBySha.get(cacheKey)!;
-    const value = await compileGameKitModule(moduleName, ref);
+    const value = await compileGameKitModule(moduleName, sha);
     rememberBounded(kitModuleBySha, cacheKey, value, ENGINE_CACHE_CAPACITY * GAME_KIT_MODULES.length);
     return value;
   }
@@ -1490,7 +1487,7 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
         gameFile('GAME.json'),
       ]);
       // A cache hit here skips the network entirely.
-      const [gameShellCss, coreJs] = await Promise.all([getCachedGameShellCss(sha, ref), getCachedCoreJs(sha, ref)]);
+      const [gameShellCss, coreJs] = await Promise.all([getCachedGameShellCss(sha), getCachedCoreJs(sha)]);
       const baseReadMs = Date.now() - startedAt;
 
       if (gameTs === null || manifestSource === null || gameShellCss === null || coreJs === null) {
@@ -1515,7 +1512,7 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
       const manifest = parseGameManifest(manifestSource);
       const kitModulesStartedAt = Date.now();
       const moduleSources = await Promise.all(
-        manifest.modules.map((moduleName) => getCachedGameKitModule(sha, moduleName, ref)),
+        manifest.modules.map((moduleName) => getCachedGameKitModule(sha, moduleName)),
       );
       const kitModulesMs = Date.now() - kitModulesStartedAt;
       if (moduleSources.some((source) => source === null)) {

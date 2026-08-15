@@ -150,4 +150,24 @@ describe('useStageSource', () => {
 
     root.unmount();
   });
+
+  it('Track 2: pushPreview shows a synchronous build immediately, no fetch', async () => {
+    mockedGetSubmissionPreview.mockResolvedValue({ slug: 'sky-dodge', title: 'Sky Dodge', html: '<p>gate-built</p>' });
+
+    const { render, latest, root } = probe();
+    await render('token-a', statusFor('sky-dodge', 'sha-a'));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(latest().rawHtml).toBe('<p>gate-built</p>');
+
+    await act(async () => {
+      latest().pushPreview('<p>synchronous</p>');
+    });
+
+    expect(latest().rawHtml).toBe('<p>synchronous</p>');
+    expect(latest().origin.kind).toBe('staged');
+    root.unmount();
+  });
 });
