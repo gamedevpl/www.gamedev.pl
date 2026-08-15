@@ -49,7 +49,14 @@ export function StudioChatRail({
   const [detent, setDetent] = useState<SheetDetent>('half');
   const [dragHeight, setDragHeight] = useState<number | null>(null);
   const asideRef = useRef<HTMLElement | null>(null);
-  const dragRef = useRef<{ pointerId: number; startY: number; startH: number; moved: boolean } | null>(null);
+  const dragRef = useRef<{
+    pointerId: number;
+    startY: number;
+    lastY: number;
+    startH: number;
+    moved: boolean;
+    lastActivityAt: number;
+  } | null>(null);
   const ignoreGrabClickRef = useRef(false);
   const visible = open && !covered;
   const peeking = isSheet && detent === 'peek' && dragHeight == null;
@@ -126,8 +133,7 @@ export function StudioChatRail({
       resizeObserver = new ResizeObserver(measure);
       watchOverlays();
     }
-    const mutationObserver =
-      typeof MutationObserver === 'undefined' ? null : new MutationObserver(watchOverlays);
+    const mutationObserver = typeof MutationObserver === 'undefined' ? null : new MutationObserver(watchOverlays);
     mutationObserver?.observe(document.body, { childList: true, subtree: true });
     window.addEventListener('resize', measure);
     return () => {
@@ -139,20 +145,22 @@ export function StudioChatRail({
     };
   }, []);
 
+  // No setPointerCapture: every real handler below already lives on `window`, keyed by
+  // pointerId, so capture buys nothing functionally — and iOS WebKit has a documented
+  // history of pointer capture that starts but never cleanly releases, which redirects
+  // *every subsequent touch anywhere in the app* to this element until reload. That
+  // reads exactly like "full-screen chat, and then nothing was tappable at all."
   const onGrabPointerDown = (event: PointerEvent<HTMLButtonElement>) => {
     if (!isSheet || event.button !== 0) return;
     const rail = asideRef.current;
     if (!rail) return;
-    try {
-      event.currentTarget.setPointerCapture(event.pointerId);
-    } catch {
-      // Some iOS webviews do not implement element pointer capture.
-    }
     dragRef.current = {
       pointerId: event.pointerId,
       startY: event.clientY,
+      lastY: event.clientY,
       startH: rail.getBoundingClientRect().height,
       moved: false,
+      lastActivityAt: Date.now(),
     };
   };
 
@@ -161,6 +169,8 @@ export function StudioChatRail({
     const onMove = (event: globalThis.PointerEvent) => {
       const drag = dragRef.current;
       if (!drag || drag.pointerId !== event.pointerId) return;
+      drag.lastY = event.clientY;
+      drag.lastActivityAt = Date.now();
       const dy = drag.startY - event.clientY;
       if (!drag.moved && Math.abs(dy) < SHEET_DRAG_CLICK_SLOP_PX) return;
       drag.moved = true;
@@ -179,10 +189,30 @@ export function StudioChatRail({
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onEnd);
     window.addEventListener('pointercancel', onEnd);
+
+    // Belt-and-suspenders: if a browser ever drops the terminating pointerup/pointercancel
+    // (the exact iOS WebKit failure mode this file already works around above), a stale
+    // `dragRef` would otherwise wedge the sheet mid-drag forever with no way to reach a
+    // resting detent. Poll for a drag that's gone quiet — no pointermove update in a while
+    // — rather than one merely still open, so an actively-moving slow drag is never cut
+    // off mid-gesture; only a drag the platform has actually abandoned gets released.
+    const STUCK_DRAG_IDLE_MS = 4000;
+    const watchdog = window.setInterval(() => {
+      const drag = dragRef.current;
+      if (!drag || Date.now() - drag.lastActivityAt < STUCK_DRAG_IDLE_MS) return;
+      dragRef.current = null;
+      if (drag.moved) {
+        const height = clampSheetDragHeight(drag.startH + (drag.startY - drag.lastY), window.innerHeight);
+        setDetent(snapSheetDetent(height, window.innerHeight));
+        setDragHeight(null);
+      }
+    }, 1000);
+
     return () => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onEnd);
       window.removeEventListener('pointercancel', onEnd);
+      window.clearInterval(watchdog);
       dragRef.current = null;
     };
   }, [isSheet]);

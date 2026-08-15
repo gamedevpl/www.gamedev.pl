@@ -12156,6 +12156,34 @@ button.builder-mode-selector:disabled {
   pointer-events: none;
 }
 
+/* TA-02 follow-up: Tab is the primary accept path but iOS has no Tab key, so this is
+   the only way in on touch. Deliberately separate from .cm-ghost-text above — that one
+   must stay click-through, this one must not. */
+.cm-ghost-text-accept {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  margin-left: 2px;
+  padding: 0 4px;
+  border-radius: 5px;
+  border: 1px solid rgba(0, 228, 172, 0.4);
+  background: rgba(0, 228, 172, 0.12);
+  color: var(--turquoise);
+  font-size: 0.72rem;
+  line-height: 1;
+  vertical-align: middle;
+  cursor: pointer;
+  pointer-events: auto;
+  user-select: none;
+}
+
+.cm-ghost-text-accept:hover,
+.cm-ghost-text-accept:active {
+  background: rgba(0, 228, 172, 0.22);
+}
+
 /* GA-09: VS Code-like affordance for modifier-click navigation. */
 .cm-ts-navigable-link {
   color: #58a6ff;
@@ -13049,7 +13077,13 @@ button.builder-mode-selector:disabled {
   }
 
   .studio-chat-rail.is-full {
-    top: var(--studio-chat-rail-top-inset, 0px);
+    /* --studio-chat-rail-top-inset is measured off .app-header by JS (ResizeObserver +
+       MutationObserver) — a real value the day it lands, but the one frame it hasn't
+       fired yet falls back to 0px, and 0px is under the status bar / notch on a
+       standalone iOS PWA, which has no browser chrome to escape through. env() is a
+       CSS-only floor that can never be stale, so it wins whenever the JS value would
+       have placed the sheet's own head — and the close button in it — under the notch. */
+    top: max(var(--studio-chat-rail-top-inset, 0px), env(safe-area-inset-top, 0px));
     height: auto;
     max-height: none;
     border-radius: 0;

@@ -290,9 +290,7 @@ const modifierHoverState = StateField.define<ModifierHoverState>({
   provide: (field) =>
     EditorView.decorations.from(field, (value) =>
       value?.held && value.range
-        ? Decoration.set([
-            Decoration.mark({ class: 'cm-ts-navigable-link' }).range(value.range.from, value.range.to),
-          ])
+        ? Decoration.set([Decoration.mark({ class: 'cm-ts-navigable-link' }).range(value.range.from, value.range.to)])
         : Decoration.none,
     ),
 });
@@ -489,11 +487,49 @@ class GhostTextWidget extends WidgetType {
   }
 }
 
+// TA-02 follow-up: the ghost text itself stays `pointer-events: none` (a click there
+// must fall through to place the cursor, not swallow it), and acceptance was Tab-only
+// — which means it was flatly unreachable on iOS, where the on-screen keyboard has no
+// Tab key. This is a second, separate, deliberately-clickable widget right after the
+// suggestion so touch has an actual way in.
+class GhostTextAcceptWidget extends WidgetType {
+  eq(): boolean {
+    return true;
+  }
+  toDOM(): HTMLElement {
+    const span = document.createElement('span');
+    span.className = 'cm-ghost-text-accept';
+    span.textContent = '⇥';
+    span.setAttribute('role', 'button');
+    span.setAttribute('aria-label', 'Accept suggestion');
+    span.title = 'Accept suggestion';
+    return span;
+  }
+  ignoreEvent(): boolean {
+    return false;
+  }
+}
+
 function ghostTextDecorations(state: EditorState): DecorationSet {
   const value = state.field(ghostTextField, false);
   if (!value) return Decoration.none;
   const pos = state.selection.main.head;
-  return Decoration.set([Decoration.widget({ widget: new GhostTextWidget(value.text), side: 1 }).range(pos)]);
+  return Decoration.set([
+    Decoration.widget({ widget: new GhostTextWidget(value.text), side: 1 }).range(pos),
+    Decoration.widget({ widget: new GhostTextAcceptWidget(), side: 2 }).range(pos),
+  ]);
+}
+
+function acceptGhostText(view: EditorView): boolean {
+  const value = view.state.field(ghostTextField, false);
+  if (!value || completionStatus(view.state) === 'active') return false;
+  const pos = view.state.selection.main.head;
+  view.dispatch({
+    changes: { from: pos, insert: value.text },
+    selection: { anchor: pos + value.text.length },
+    userEvent: 'input.complete',
+  });
+  return true;
 }
 
 // TA-02: debounces on doc change; cancels its own timer and fetch.
@@ -577,22 +613,18 @@ function makeGhostTextExtension(fetchGhostTextRef: { current: FetchGhostText | u
     ghostTextField,
     EditorView.decorations.compute([ghostTextField], ghostTextDecorations),
     fetchPlugin,
+    EditorView.domEventHandlers({
+      mousedown: (event, view) => {
+        if (!(event.target instanceof HTMLElement) || !event.target.closest('.cm-ghost-text-accept')) return false;
+        event.preventDefault();
+        return acceptGhostText(view);
+      },
+    }),
     Prec.highest(
       keymap.of([
         {
           key: 'Tab',
-          run: (view) => {
-            const value = view.state.field(ghostTextField, false);
-            // Defers to the popup's own accept binding once one is active.
-            if (!value || completionStatus(view.state) === 'active') return false;
-            const pos = view.state.selection.main.head;
-            view.dispatch({
-              changes: { from: pos, insert: value.text },
-              selection: { anchor: pos + value.text.length },
-              userEvent: 'input.complete',
-            });
-            return true;
-          },
+          run: (view) => acceptGhostText(view),
         },
         {
           key: 'Escape',
@@ -692,11 +724,7 @@ function measuredTsAutocomplete(tracker: CompletionTracker): CompletionSource {
         settled: false,
       };
       tracker.pending.push(attempt);
-      context.addEventListener(
-        'abort',
-        () => settleCompletionAttempt(tracker, attempt, false),
-        { onDocChange: true },
-      );
+      context.addEventListener('abort', () => settleCompletionAttempt(tracker, attempt, false), { onDocChange: true });
       return result ? { ...result, validFor: result.validFor ?? /^[\w$]*$/ } : null;
     } catch (error) {
       recordCodeCompletion({

@@ -29,7 +29,9 @@ describe('Studio chat rail header', () => {
   });
 
   it('gives the phone grab a full-width drag target', () => {
-    expect(css).toMatch(/\.studio-chat-rail\.is-sheet \.studio-chat-rail-grab\s*\{[^}]*width:\s*100%[^}]*touch-action:\s*none/s);
+    expect(css).toMatch(
+      /\.studio-chat-rail\.is-sheet \.studio-chat-rail-grab\s*\{[^}]*width:\s*100%[^}]*touch-action:\s*none/s,
+    );
     expect(css).toMatch(/\.studio-chat-rail\.is-sheet\.is-dragging\s*\{[^}]*--studio-chat-rail-drag-height/s);
   });
 
@@ -45,9 +47,7 @@ describe('Studio chat rail header', () => {
   });
 
   it('keeps navigation above the phone sheet and its backdrop', () => {
-    expect(declarations('.studio-chat-rail-backdrop')).toMatch(
-      /top:\s*var\(--studio-chat-rail-top-inset,\s*0px\)/,
-    );
+    expect(declarations('.studio-chat-rail-backdrop')).toMatch(/top:\s*var\(--studio-chat-rail-top-inset,\s*0px\)/);
     expect(css).toMatch(
       /\.app:has\(\.studio-chat-rail\.is-sheet:not\(\.is-collapsed\)\) \.app-header\s*\{[^}]*z-index:\s*1200/s,
     );
@@ -67,10 +67,21 @@ describe('Studio chat rail header', () => {
 
   it('makes chat full screen fill the work area below the header', () => {
     expect(declarations('.studio-chat-rail.is-full')).toMatch(
-      /top:\s*var\(--studio-chat-rail-top-inset,\s*0px\)/,
+      /top:\s*max\(var\(--studio-chat-rail-top-inset,\s*0px\),\s*env\(safe-area-inset-top,\s*0px\)\)/,
     );
     expect(declarations('.studio-chat-rail.is-full')).toMatch(/height:\s*auto/);
     expect(declarations('.studio-chat-rail.is-full')).toMatch(/border-radius:\s*0/);
+  });
+
+  /**
+   * The JS-measured inset is real once it lands, but the frame before it does, it falls
+   * back to 0px — which is under the status bar/notch on a standalone iOS PWA, the one
+   * context with no browser chrome to escape a stuck full-screen sheet through. The
+   * env() floor can't ever be stale, so it wins whenever the JS value would place the
+   * sheet's own head (and its close button) under the notch.
+   */
+  it('floors the full-screen sheet at the safe area even if the JS inset is stale', () => {
+    expect(declarations('.studio-chat-rail.is-full')).toMatch(/env\(safe-area-inset-top,\s*0px\)/);
   });
 
   it('lets the transcript take vertical pans inside the sheet', () => {
