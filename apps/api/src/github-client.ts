@@ -1438,13 +1438,14 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
       const availableModuleSources = moduleSources.filter((source): source is string => source !== null);
 
       // Synth `.wav` first, then the sourced `.mp3` catalog as a fallback.
-      let sourcedCatalog: Record<string, { mime?: unknown }> | null = null;
-      const loadSourcedCatalog = async (): Promise<Record<string, { mime?: unknown }>> => {
-        if (sourcedCatalog === null) {
-          const source = await readRawFile('shared/audio/sourced.json', ref);
-          sourcedCatalog = source ? ((JSON.parse(source) as SourcedAudioCatalog).sounds ?? {}) : {};
+      let sourcedCatalogPromise: Promise<Record<string, { mime?: unknown }>> | null = null;
+      const loadSourcedCatalog = (): Promise<Record<string, { mime?: unknown }>> => {
+        if (sourcedCatalogPromise === null) {
+          sourcedCatalogPromise = readRawFile('shared/audio/sourced.json', ref).then((source) =>
+            source ? ((JSON.parse(source) as SourcedAudioCatalog).sounds ?? {}) : {},
+          );
         }
-        return sourcedCatalog;
+        return sourcedCatalogPromise;
       };
       const resolveSoundAsset = async (soundName: string): Promise<[string, string] | null> => {
         const wavBytes = await readRawBytes(`shared/audio/assets/${soundName}.wav`, ref);

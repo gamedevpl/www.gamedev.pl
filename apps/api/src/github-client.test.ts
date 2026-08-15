@@ -913,7 +913,10 @@ describe('getGameSources', () => {
         'games/march/GAME.json',
         JSON.stringify({
           engine: { modules: ['input', 'audio'] },
-          audio: { sounds: ['ui-toggle', 'clockwork-gear-tick'], music: 'clockwork-march' },
+          audio: {
+            sounds: ['ui-toggle', 'clockwork-gear-tick', 'wood-bridge-creak'],
+            music: 'clockwork-march',
+          },
         }),
       ],
       ['shared/game-shell.css', '.shell { display: grid; }'],
@@ -921,8 +924,17 @@ describe('getGameSources', () => {
       ['shared/modules/input.ts', 'GameKit.createInput = function (): void {};'],
       ['shared/modules/audio.ts', 'GameKit.createAudio = function (): void {};'],
       ['shared/audio/assets/ui-toggle.wav', new Uint8Array([1, 2])],
-      ['shared/audio/sourced.json', JSON.stringify({ sounds: { 'clockwork-gear-tick': { mime: 'audio/mpeg' } } })],
+      [
+        'shared/audio/sourced.json',
+        JSON.stringify({
+          sounds: {
+            'clockwork-gear-tick': { mime: 'audio/mpeg' },
+            'wood-bridge-creak': { mime: 'audio/mpeg' },
+          },
+        }),
+      ],
       ['shared/audio/sourced/clockwork-gear-tick.mp3', new Uint8Array([5, 6])],
+      ['shared/audio/sourced/wood-bridge-creak.mp3', new Uint8Array([9, 10])],
       [
         'shared/audio/music.json',
         JSON.stringify({ tracks: { 'clockwork-march': { loop: true, data: 'data:audio/mpeg;base64,AAA=' } } }),
@@ -941,6 +953,12 @@ describe('getGameSources', () => {
 
     expect(sources?.gameJs).toContain('"ui-toggle":"data:audio/wav;base64,AQI="');
     expect(sources?.gameJs).toContain('"clockwork-gear-tick":"data:audio/mpeg;base64,BQY="');
+    expect(sources?.gameJs).toContain('"wood-bridge-creak":"data:audio/mpeg;base64,CQo="');
+    // Concurrent misses must fetch the sourced catalog once.
+    const sourcedCatalogCalls = fetchImpl.mock.calls.filter(([input]) =>
+      String(input).includes('/shared/audio/sourced.json'),
+    );
+    expect(sourcedCatalogCalls).toHaveLength(1);
   });
 
   it('embeds a music track drumKit sample from the sourced catalog', async () => {
