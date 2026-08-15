@@ -991,9 +991,7 @@ describe('SubmissionStatusView', () => {
   });
 
   it('still offers switch-to-self once the platform agent has ended, not just while it is live', async () => {
-    // A platform round whose agent finished (agentEndedAt set) must still let the
-    // creator request self-build — the control used to require the agent to be
-    // actively working, so a finished-but-open round had no switch at all.
+    // Regression: the control used to require the agent still be actively working.
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     mockedGetSubmissionStatus.mockResolvedValue({
       status: 'building',

@@ -108,13 +108,7 @@ function isAgentWorkActive(status: SubmissionStatus | null | undefined): boolean
   return true;
 }
 
-/**
- * Whether the creator may request a platform→self handoff right now — including once
- * the platform agent has finished (`agentEndedAt` / stall `ended`), not only while it is
- * still working. The prior check required `isAgentWorkActive`, so the switch-to-self
- * control disappeared the moment the agent ended, leaving no way to request self-build
- * on a round that is otherwise still open (not published, not mid-review, not publishing).
- */
+// True even once the agent has ended.
 function canOfferSelfHandoff(status: SubmissionStatus | null | undefined): boolean {
   if (!status || status.builder !== 'platform') return false;
   if (status.status === 'publishing') return false;
