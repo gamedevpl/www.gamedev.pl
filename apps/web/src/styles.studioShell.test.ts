@@ -46,4 +46,16 @@ describe('studio shell claim selectors', () => {
   it('keeps the strip reachable while the Details sheet is open', () => {
     expect(css).toMatch(/\.app:has\(\.studio-rail-backdrop\) \.studio-strip\s*\{[^}]*z-index:\s*1200/s);
   });
+
+  /**
+   * The phone games-shelf drawer's backdrop (z-index 1100) spans the full viewport,
+   * including the strip the hamburger sits in above the drawer's own ~90vw width.
+   * Without this the global nav is unreachable — tapping the visibly-drawn hamburger
+   * just closes the drawer instead — for as long as the shelf stays open. Same
+   * "sheet is modal over the stage, not over the site's navigation" rule the
+   * chat-rail sheet already gets for `.app-header`, just missing this one backdrop.
+   */
+  it('keeps the global nav reachable while the games shelf drawer is open', () => {
+    expect(css).toMatch(/\.app:has\(\.studio-shelf-backdrop\) \.app-header\s*\{[^}]*z-index:\s*1200/s);
+  });
 });

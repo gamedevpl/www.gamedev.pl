@@ -12968,6 +12968,14 @@ button.builder-mode-selector:disabled {
   z-index: 1200;
 }
 
+/* Same rule, different backdrop: the phone games-shelf drawer's backdrop also spans
+   the full viewport, so without this the hamburger sitting above the drawer's ~90vw
+   width is unreachable — tapping it just closes the drawer — for as long as the
+   shelf stays open. */
+.app:has(.studio-shelf-backdrop) .app-header {
+  z-index: 1200;
+}
+
 /* Collapsed to the pill: the thread stays mounted (its poll, and any unsent composer
    text, must survive a collapse) but is out of the layout and the accessibility tree. */
 .studio-chat-rail.is-collapsed {
