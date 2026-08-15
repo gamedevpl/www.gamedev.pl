@@ -219,10 +219,10 @@ export const privacyEn: LegalDocument = {
         {
           kind: 'p',
           text:
-            'Separately: if you are a game’s owner and use the Code editor’s suggestion feature, the code you are ' +
-            'actively editing is sent to the same AI model (Google Gemini, via Google Cloud Vertex AI) to generate ' +
-            'completion suggestions as you type. This is off unless you choose to use it, applies only to your own ' +
-            'game, and is never used to train models, same as above.',
+            'Separately: while you are a game’s owner and the Code editor’s suggestion feature is enabled, the code ' +
+            'around your cursor is automatically sent to the same AI model (Google Gemini, via Google Cloud Vertex ' +
+            'AI) a moment after you pause typing, to propose a completion. This applies only inside the Code editor ' +
+            'on your own game, and is never used to train models, same as above.',
         },
       ],
     },

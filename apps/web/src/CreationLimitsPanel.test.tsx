@@ -37,8 +37,10 @@ function limits(overrides: Partial<CreationLimits> = {}): CreationLimits {
         configuredVendors: ['anthropic'],
         defaultVendor: 'anthropic',
       },
+      tabCompletePaused: false,
+      globalDailyTabCompleteTokenCap: 2_000_000,
     },
-    today: { dateStr: '2026-07-30', submissions: 12, managedBuilds: 3 },
+    today: { dateStr: '2026-07-30', submissions: 12, managedBuilds: 3, tabCompleteTokens: 0 },
     propagationMs: 60_000,
     ...overrides,
   };
@@ -106,6 +108,8 @@ describe('CreationLimitsPanel', () => {
             configuredVendors: ['anthropic'],
             defaultVendor: 'anthropic',
           },
+          tabCompletePaused: false,
+          globalDailyTabCompleteTokenCap: 2_000_000,
         },
       }),
     );
@@ -156,6 +160,8 @@ describe('CreationLimitsPanel', () => {
             configuredVendors: ['anthropic', 'gemini'],
             defaultVendor: 'anthropic',
           },
+          tabCompletePaused: false,
+          globalDailyTabCompleteTokenCap: 2_000_000,
         },
       }),
     );
@@ -175,6 +181,8 @@ describe('CreationLimitsPanel', () => {
             configuredVendors: ['anthropic', 'gemini'],
             defaultVendor: 'anthropic',
           },
+          tabCompletePaused: false,
+          globalDailyTabCompleteTokenCap: 2_000_000,
         },
       }),
     );
@@ -214,6 +222,8 @@ describe('CreationLimitsPanel', () => {
             configuredVendors: ['anthropic'],
             defaultVendor: 'anthropic',
           },
+          tabCompletePaused: false,
+          globalDailyTabCompleteTokenCap: 2_000_000,
         },
       }),
     );

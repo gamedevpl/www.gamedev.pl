@@ -377,4 +377,19 @@ describe('CodeSurface ghost text (TA-02)', () => {
     );
     expect(result).toBe('resolve()');
   });
+
+  it('never fetches for a non-TypeScript file — the prompt only knows TypeScript', async () => {
+    await render();
+    const jsonTab = [...container.querySelectorAll('.code-surface-rail-item')].find((button) =>
+      button.textContent?.includes('GAME.json'),
+    ) as HTMLButtonElement;
+    await act(async () => {
+      jsonTab.click();
+    });
+
+    const result = await lastEditorProps?.fetchGhostText?.('{', '}', new AbortController().signal);
+
+    expect(result).toBe('');
+    expect(mockedApi.fetchCodeSurfaceCompletion).not.toHaveBeenCalled();
+  });
 });

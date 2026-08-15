@@ -709,6 +709,14 @@ export async function registerCreatorCodeRoutes(
       const dateStr = new Date(nowMs).toISOString().slice(0, 10);
       const uid = request.user!.uid;
 
+      // Global refusal first — must not spend a creator's own daily slot.
+      if (options.tabCompleteGate) {
+        const gate = await options.tabCompleteGate.peek(uid, dateStr);
+        if (!gate.allowed) {
+          return reply.status(503).send({ error: 'completions are resting right now — try again later' });
+        }
+      }
+
       const quota = await store.checkAndIncrementQuota(
         uid,
         dateStr,
@@ -717,15 +725,9 @@ export async function registerCreatorCodeRoutes(
         'tabCompletes',
       );
       if (!quota.allowed) {
+        // The peek above reserved a slot — a refusal here must free it.
+        await options.tabCompleteGate?.spend(uid, dateStr, 0);
         return reply.status(429).send({ error: 'daily tab-complete quota exceeded' });
-      }
-
-      // Checked before the paid call, so a refusal costs the creator nothing.
-      if (options.tabCompleteGate) {
-        const gate = await options.tabCompleteGate.peek(uid, dateStr);
-        if (!gate.allowed) {
-          return reply.status(503).send({ error: 'completions are resting right now — try again later' });
-        }
       }
 
       let result;
@@ -737,18 +739,19 @@ export async function registerCreatorCodeRoutes(
         });
       } catch (error) {
         request.log.warn({ slug: resolved.slug, err: error }, 'tab-complete call failed');
+        await options.tabCompleteGate?.spend(uid, dateStr, 0);
         return reply.status(503).send({ error: 'no completion right now — try again' });
       }
 
-      if (result.tokens) {
-        const spent = result.tokens.input + result.tokens.output;
-        await options.tabCompleteGate?.spend(uid, dateStr, spent);
+      const tokens = result.tokens;
+      await options.tabCompleteGate?.spend(uid, dateStr, tokens ? tokens.input + tokens.output : 0);
+      if (tokens) {
         await store
           .recordJobCost(resolved.record.issueNumber, {
             kind: 'tab_complete',
             at: new Date(nowMs).toISOString(),
             by: result.model ?? 'vertex',
-            tokens: result.tokens,
+            tokens,
           })
           .catch(() => {});
       }

@@ -61,6 +61,17 @@ describe('VertexTabCompleter', () => {
     expect(result.completion).toBe('const x = 1;');
   });
 
+  it('preserves boundary whitespace an unfenced completion needs', async () => {
+    const { client } = stubClient(' value');
+    const result = await new VertexTabCompleter({ client }).complete({
+      path: 'a.ts',
+      prefixWindow: 'return',
+      suffixWindow: ';',
+    });
+    // A trim() here would corrupt "return" + " value" into "returnvalue".
+    expect(result.completion).toBe(' value');
+  });
+
   it('disables thinking on the real Vertex client — thinking tokens starve the visible answer', async () => {
     await new VertexTabCompleter().complete({ path: 'a.ts', prefixWindow: '', suffixWindow: '' }).catch(() => {});
     expect(createVertexClient).toHaveBeenCalledWith(

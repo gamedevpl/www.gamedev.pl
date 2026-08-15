@@ -656,5 +656,25 @@ describe('the Code surface routes (creator-code.ts)', () => {
         delete process.env.DAILY_TAB_COMPLETE_QUOTA;
       }
     });
+
+    it('refuses on the global pause without spending the per-creator quota', async () =>
+      withTabComplete(() =>
+        withApp(
+          async (app) => {
+            await store.setCreationLimits({ tabCompletePaused: true }, 'operator');
+            const res = await app.inject({
+              method: 'POST',
+              url: '/api/me/studio/games/sky-dodge/sources/complete',
+              headers: { ...authHeaders('g:creator'), 'content-type': 'application/json' },
+              payload: { path: 'game.ts', prefixWindow: 'a', suffixWindow: 'b' },
+            });
+            expect(res.statusCode).toBe(503);
+            // A refused global gate must leave the daily allowance untouched.
+            const dateStr = new Date().toISOString().slice(0, 10);
+            expect((await store.getUsage('g:creator', dateStr)).tabCompletes).toBe(0);
+          },
+          { tabCompleter: new StubTabCompleter({ completion: 'x' }) },
+        ),
+      ));
   });
 });

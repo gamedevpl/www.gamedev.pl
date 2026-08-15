@@ -224,11 +224,11 @@ export const privacyPl: LegalDocument = {
         {
           kind: 'p',
           text:
-            'Osobno: jeśli jesteś właścicielem/właścicielką gry i korzystasz z funkcji podpowiedzi w edytorze kodu, ' +
-            'kod, który aktywnie edytujesz, jest wysyłany do tego samego modelu AI (Google Gemini, przez Google ' +
-            'Cloud Vertex AI), aby wygenerować podpowiedzi uzupełnień podczas pisania. Funkcja jest wyłączona, ' +
-            'dopóki jej nie włączysz, dotyczy wyłącznie Twojej własnej gry i — tak jak powyżej — nigdy nie jest ' +
-            'wykorzystywana do trenowania modeli.',
+            'Osobno: gdy jesteś właścicielem/właścicielką gry i funkcja podpowiedzi w edytorze kodu jest włączona, ' +
+            'kod wokół kursora jest automatycznie wysyłany do tego samego modelu AI (Google Gemini, przez Google ' +
+            'Cloud Vertex AI) chwilę po tym, jak przestajesz pisać, aby zaproponować uzupełnienie. Dotyczy to ' +
+            'wyłącznie edytora kodu w Twojej własnej grze i — tak jak powyżej — nigdy nie jest wykorzystywane do ' +
+            'trenowania modeli.',
         },
       ],
     },

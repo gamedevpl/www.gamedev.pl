@@ -27,10 +27,9 @@ export interface TabCompleter {
 }
 
 function stripFences(text: string): string {
-  const trimmed = text.trim();
-  // A stray ```typescript fence survives sometimes despite the prompt.
-  const fenced = trimmed.match(/^```[^\n]*\n([\s\S]*?)\n?```$/);
-  return fenced ? fenced[1]! : trimmed;
+  // Trimmed only to detect a fence — real whitespace must survive.
+  const fenced = text.trim().match(/^```[^\n]*\n([\s\S]*?)\n?```$/);
+  return fenced ? fenced[1]! : text;
 }
 
 function buildPrompt(request: TabCompleteRequest): string {

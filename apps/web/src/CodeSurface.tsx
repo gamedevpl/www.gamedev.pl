@@ -427,7 +427,8 @@ export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
 
   // TA-02: the editor extension supplies the window, this supplies the call.
   function fetchGhostText(prefixWindow: string, suffixWindow: string, signal: AbortSignal): Promise<string> {
-    if (!file) return Promise.resolve('');
+    // The prompt only knows TypeScript — other file types would get it wrong.
+    if (!file || !isTsPath(file.path)) return Promise.resolve('');
     return fetchCodeSurfaceCompletion(slug, file.path, prefixWindow, suffixWindow, signal);
   }
 

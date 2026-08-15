@@ -28,7 +28,11 @@ import {
   type DailyRetentionPoint,
   type TelemetryTrends,
 } from './telemetry-trends.js';
-import { DEFAULT_CREATION_LIMITS_TTL_MS, resolveDefaultGlobalDailyCap } from './creation-limits.js';
+import {
+  DEFAULT_CREATION_LIMITS_TTL_MS,
+  resolveDefaultGlobalDailyCap,
+  resolveDefaultGlobalDailyTabCompleteTokenCap,
+} from './creation-limits.js';
 import {
   BOT_UID_PREFIX,
   type BetaInvite,
@@ -143,8 +147,11 @@ export interface CreationLimitsResponse {
       // MANAGED_AGENT_VENDOR, shown next to the override control.
       defaultVendor: string | null;
     };
+    // TA-01's own breaker (creator-code-tab-autocomplete-research.md).
+    tabCompletePaused: boolean;
+    globalDailyTabCompleteTokenCap: number;
   };
-  today: { dateStr: string; submissions: number; managedBuilds: number };
+  today: { dateStr: string; submissions: number; managedBuilds: number; tabCompleteTokens: number };
   /** Upper bound, in ms, on how long a change takes to reach every instance. */
   propagationMs: number;
 }
@@ -386,10 +393,11 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
   /** Reads the stored breaker plus today's spend, uncached — an operator wants truth. */
   async function readCreationLimits(): Promise<CreationLimitsResponse> {
     const dateStr = new Date(now()).toISOString().slice(0, 10);
-    const [stored, submissions, managedBuilds] = await Promise.all([
+    const [stored, submissions, managedBuilds, tabCompleteTokens] = await Promise.all([
       store.getCreationLimits(),
       store.getGlobalSubmissionCount(dateStr),
       store.getGlobalManagedBuildCount(dateStr),
+      store.getGlobalTabCompleteTokenCount(dateStr),
     ]);
     const storedVendor = stored?.managedAgentVendorOverride ?? null;
     // An invalid default must not report as effective when nothing overrode it.
@@ -411,8 +419,11 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
           configuredVendors: [...configuredVendors],
           defaultVendor,
         },
+        tabCompletePaused: stored?.tabCompletePaused === true,
+        globalDailyTabCompleteTokenCap:
+          stored?.globalDailyTabCompleteTokenCap ?? resolveDefaultGlobalDailyTabCompleteTokenCap(),
       },
-      today: { dateStr, submissions, managedBuilds },
+      today: { dateStr, submissions, managedBuilds, tabCompleteTokens },
       propagationMs: creationLimitsTtlMs,
     };
   }

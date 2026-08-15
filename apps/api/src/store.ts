@@ -2172,6 +2172,8 @@ export interface Store {
   setPublicPlaySlugs(slugs: string[], updatedBy: string): Promise<PublicPlayConfig>;
   /** How many submissions everyone together has made on `dateStr`. */
   getGlobalSubmissionCount(dateStr: string): Promise<number>;
+  // Tab-complete tokens everyone together has spent on `dateStr`.
+  getGlobalTabCompleteTokenCount(dateStr: string): Promise<number>;
   /**
    * The global counterpart of checkAndIncrementQuota: takes one slot out of the day's
    * shared allowance, or refuses. Transactional for the same reason the per-user
@@ -2188,6 +2190,8 @@ export interface Store {
     tokens: number,
     limit: number,
   ): Promise<{ allowed: boolean; current: number }>;
+  // Reconciles a reservation against real usage — never refused, floors at 0.
+  adjustGlobalTabCompleteTokens(dateStr: string, delta: number): Promise<number>;
   // Platform rounds everyone together has started on `dateStr`.
   getGlobalManagedBuildCount(dateStr: string): Promise<number>;
   // Same shape, for the shared daily ceiling.
@@ -3874,6 +3878,10 @@ export class InMemoryStore implements Store {
     return this.globalSubmissions.get(dateStr) ?? 0;
   }
 
+  async getGlobalTabCompleteTokenCount(dateStr: string): Promise<number> {
+    return this.globalTabCompleteTokens.get(dateStr) ?? 0;
+  }
+
   async checkAndIncrementGlobalSubmissions(
     dateStr: string,
     limit: number,
@@ -3916,6 +3924,13 @@ export class InMemoryStore implements Store {
     const next = current + tokens;
     this.globalTabCompleteTokens.set(dateStr, next);
     return { allowed: true, current: next };
+  }
+
+  async adjustGlobalTabCompleteTokens(dateStr: string, delta: number): Promise<number> {
+    const current = this.globalTabCompleteTokens.get(dateStr) ?? 0;
+    const next = Math.max(0, current + delta);
+    this.globalTabCompleteTokens.set(dateStr, next);
+    return next;
   }
 
   async getGlobalManagedBuildCount(dateStr: string): Promise<number> {
@@ -6539,6 +6554,12 @@ export class FirestoreStore implements Store {
     return typeof value === 'number' ? value : 0;
   }
 
+  async getGlobalTabCompleteTokenCount(dateStr: string): Promise<number> {
+    const snap = await this.globalUsageRef(dateStr).get();
+    const value = snap.data()?.tabCompleteTokens;
+    return typeof value === 'number' ? value : 0;
+  }
+
   async checkAndIncrementGlobalSubmissions(
     dateStr: string,
     limit: number,
@@ -6611,6 +6632,18 @@ export class FirestoreStore implements Store {
       const nextVal = current + tokens;
       transaction.set(ref, { tabCompleteTokens: nextVal }, { merge: true });
       return { allowed: true, current: nextVal };
+    });
+  }
+
+  async adjustGlobalTabCompleteTokens(dateStr: string, delta: number): Promise<number> {
+    const ref = this.globalUsageRef(dateStr);
+    return await this.db.runTransaction(async (transaction) => {
+      const snap = await transaction.get(ref);
+      const value = snap.data()?.tabCompleteTokens;
+      const current = typeof value === 'number' ? value : 0;
+      const next = Math.max(0, current + delta);
+      transaction.set(ref, { tabCompleteTokens: next }, { merge: true });
+      return next;
     });
   }
 

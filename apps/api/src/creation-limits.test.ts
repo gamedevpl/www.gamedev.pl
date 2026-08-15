@@ -3,8 +3,10 @@ import {
   createChatGate,
   createCreationGate,
   createEditingGate,
+  createTabCompleteGate,
   DEFAULT_GLOBAL_DAILY_SUBMISSION_CAP,
   resolveDefaultGlobalDailyCap,
+  TAB_COMPLETE_TOKEN_RESERVATION,
   type CreationGateOptions,
 } from './creation-limits.js';
 import { InMemoryStore, type CreationLimits, type Store } from './store.js';
@@ -271,5 +273,60 @@ describe('chat gate (the studio mini chat agent spend breaker)', () => {
     expect(await gate.checkAndSpend('bot:e2e', '2026-08-02')).toEqual({ allowed: true });
     expect(await gate.checkAndSpend('g:alice', '2026-08-02')).toEqual({ allowed: true });
     expect(await gate.checkAndSpend('g:bob', '2026-08-02')).toEqual({ allowed: false, reason: 'over_capacity' });
+  });
+});
+
+describe('tab-complete gate (the ghost-text token breaker)', () => {
+  it('reserves a worst-case slot on peek, so a burst cannot all pass free', async () => {
+    const store = new InMemoryStore();
+    // Room for exactly one reservation, not two.
+    const gate = createTabCompleteGate({ store, ttlMs: 0, defaultGlobalDailyCap: TAB_COMPLETE_TOKEN_RESERVATION });
+    expect(await gate.peek('g:alice', '2026-08-02')).toEqual({ allowed: true });
+    expect(await gate.peek('g:bob', '2026-08-02')).toEqual({ allowed: false, reason: 'over_capacity' });
+  });
+
+  it('gives back the unused reservation once real usage is known', async () => {
+    const store = new InMemoryStore();
+    const gate = createTabCompleteGate({ store, ttlMs: 0, defaultGlobalDailyCap: TAB_COMPLETE_TOKEN_RESERVATION });
+    expect(await gate.peek('g:alice', '2026-08-02')).toEqual({ allowed: true });
+    await gate.spend('g:alice', '2026-08-02', 100);
+    // Reservation released; a second request has room again.
+    expect(await gate.peek('g:bob', '2026-08-02')).toEqual({ allowed: true });
+  });
+
+  it('tops up the counter when real usage exceeds the reservation', async () => {
+    const store = new InMemoryStore();
+    const gate = createTabCompleteGate({ store, ttlMs: 0, defaultGlobalDailyCap: TAB_COMPLETE_TOKEN_RESERVATION + 10 });
+    expect(await gate.peek('g:alice', '2026-08-02')).toEqual({ allowed: true });
+    await gate.spend('g:alice', '2026-08-02', TAB_COMPLETE_TOKEN_RESERVATION + 10);
+    expect(await gate.peek('g:bob', '2026-08-02')).toEqual({ allowed: false, reason: 'over_capacity' });
+  });
+
+  it('releasing a reservation never drops the counter below zero', async () => {
+    const store = new InMemoryStore();
+    const gate = createTabCompleteGate({ store, ttlMs: 0, defaultGlobalDailyCap: 5_000 });
+    // spend() with no prior peek must not underflow the day's counter.
+    await gate.spend('g:alice', '2026-08-02', 0);
+    expect(await store.getGlobalTabCompleteTokenCount('2026-08-02')).toBe(0);
+  });
+
+  it('honours the stored tabCompletePaused switch without touching other lanes', async () => {
+    const store = new InMemoryStore();
+    await store.setCreationLimits({ tabCompletePaused: true }, 'operator');
+    const gate = createTabCompleteGate({ store, ttlMs: 0 });
+    expect(await gate.peek('g:alice', '2026-08-02')).toEqual({ allowed: false, reason: 'paused' });
+    const editing = createEditingGate({ store, ttlMs: 0, defaultGlobalDailyCap: 5 });
+    expect(await editing.checkAndSpend('g:alice', '2026-08-02')).toEqual({ allowed: true });
+  });
+
+  it('lets bots through uncounted, on both peek and spend', async () => {
+    const store = new InMemoryStore();
+    await store.setCreationLimits({ globalDailyTabCompleteTokenCap: TAB_COMPLETE_TOKEN_RESERVATION }, 'operator');
+    const gate = createTabCompleteGate({ store, ttlMs: 0 });
+    expect(await gate.peek('bot:e2e', '2026-08-02')).toEqual({ allowed: true });
+    await gate.spend('bot:e2e', '2026-08-02', 999_999);
+    expect(await store.getGlobalTabCompleteTokenCount('2026-08-02')).toBe(0);
+    // The real cap stays untouched, so a creator still gets a turn.
+    expect(await gate.peek('g:alice', '2026-08-02')).toEqual({ allowed: true });
   });
 });

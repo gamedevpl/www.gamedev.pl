@@ -407,10 +407,13 @@ export function resolveDefaultGlobalDailyTabCompleteTokenCap(
   return DEFAULT_GLOBAL_DAILY_TAB_COMPLETE_TOKEN_CAP;
 }
 
+// Worst-case request cost: prefix + suffix chars plus the output cap.
+export const TAB_COMPLETE_TOKEN_RESERVATION = 1400;
+
 export interface TabCompleteGate {
-  // Pre-call check that spends nothing — a refusal costs no model call.
+  // Reserves a worst-case slot so concurrent calls cannot all pass free.
   peek(uid: string, dateStr: string): Promise<CreationGateOutcome>;
-  // Post-call: records the tokens the completed request actually used.
+  // Reconciles the reservation. Call once per peek; pass 0 on failure.
   spend(uid: string, dateStr: string, tokens: number): Promise<void>;
 }
 
@@ -458,7 +461,11 @@ export function createTabCompleteGate(options: CreationGateOptions): TabComplete
       const cap = value.globalDailyTabCompleteTokenCap ?? defaultCap;
       if (cap <= 0) return { allowed: false, reason: 'over_capacity' };
       try {
-        const spent = await store.checkAndIncrementGlobalTabCompleteTokens(dateStr, 0, cap);
+        const spent = await store.checkAndIncrementGlobalTabCompleteTokens(
+          dateStr,
+          TAB_COMPLETE_TOKEN_RESERVATION,
+          cap,
+        );
         if (!spent.allowed) {
           logWarn(
             { dateStr, cap, current: spent.current },
@@ -474,13 +481,13 @@ export function createTabCompleteGate(options: CreationGateOptions): TabComplete
     },
 
     async spend(uid, dateStr, tokens) {
-      if (bypassesBreaker(uid) || tokens <= 0) return;
+      if (bypassesBreaker(uid)) return;
       const value = await limits();
       const cap = value.globalDailyTabCompleteTokenCap ?? defaultCap;
       try {
-        const spent = await store.checkAndIncrementGlobalTabCompleteTokens(dateStr, tokens, cap);
-        if (spent.current >= Math.ceil(cap * 0.8)) {
-          logWarn({ dateStr, cap, current: spent.current }, 'global daily tab-complete token cap is over 80% spent');
+        const current = await store.adjustGlobalTabCompleteTokens(dateStr, tokens - TAB_COMPLETE_TOKEN_RESERVATION);
+        if (current >= Math.ceil(cap * 0.8)) {
+          logWarn({ dateStr, cap, current }, 'global daily tab-complete token cap is over 80% spent');
         }
       } catch (error) {
         logWarn({ err: error, dateStr }, 'global tab-complete token counter unreachable; usage not recorded');

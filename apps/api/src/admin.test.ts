@@ -536,6 +536,8 @@ describe('/api/admin/creation-limits', () => {
         configuredVendors: [],
         defaultVendor: null,
       },
+      tabCompletePaused: false,
+      globalDailyTabCompleteTokenCap: 2_000_000,
     });
     // A pause left on by accident is this feature's own failure mode, so the record of
     // who set it is part of the deliverable.
@@ -570,6 +572,30 @@ describe('/api/admin/creation-limits', () => {
         configuredVendors: [],
         defaultVendor: null,
       },
+      tabCompletePaused: false,
+      globalDailyTabCompleteTokenCap: 2_000_000,
+    });
+    await app.close();
+  });
+
+  it('sets the tab-complete pause and cap, independent of the other lanes', async () => {
+    const app = await appWith(store);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/admin/creation-limits',
+      headers: authHeaders('g:boss'),
+      payload: { tabCompletePaused: true, globalDailyTabCompleteTokenCap: 500_000 },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as CreationLimitsResponse;
+    expect(body.effective.tabCompletePaused).toBe(true);
+    expect(body.effective.globalDailyTabCompleteTokenCap).toBe(500_000);
+    expect(body.effective.paused).toBe(false);
+    expect(await store.getCreationLimits()).toMatchObject({
+      tabCompletePaused: true,
+      globalDailyTabCompleteTokenCap: 500_000,
     });
     await app.close();
   });
