@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './assemble.js';
 import { isActiveBuildRound } from './builder.js';
 import { codeSurfaceEnabled, isLiveAgentRound } from './code-surface.js';
 import type { GcsObjectStore } from './gcs-sign.js';
@@ -11,6 +12,7 @@ import {
   type StagedSourceEntry,
 } from './games-store.js';
 import type { TabCompleteGate } from './creation-limits.js';
+import type { GitHubClient } from './github-client.js';
 import { resolveJobState } from './job-state.js';
 import { createKitFileStore, type KitFileStore } from './kit-files.js';
 import { parseKitRegistry } from './kit-registry.js';
@@ -27,6 +29,7 @@ import {
   SourceDeliveryValidationError,
   type SourceDeliveryService,
 } from './source-delivery.js';
+import { hasPlayableOverlay, overlayGameSources, readDeliveredSources } from './staged-preview.js';
 import type { Store, SubmissionRecord } from './store.js';
 import { MAX_PREFIX_CHARS, MAX_SUFFIX_CHARS, tabCompleteEnabled, type TabCompleter } from './tab-complete.js';
 import { sharedSourcesFromKitTree } from './typecheck-preflight.js';
@@ -53,6 +56,8 @@ export interface CreatorCodeRoutesOptions {
   objectStore?: GcsObjectStore;
   /** Test/production kit resolution seam; defaults to a fresh store over `objectStore`. */
   kitFileStore?: KitFileStore | null;
+  // Track 2: the fast-lane synchronous preview route's engine half.
+  githubClient?: Pick<GitHubClient, 'getGameSources'>;
   now?: () => number;
   /** Busts the cached status response after an owner write — see submissions.ts. */
   invalidateStatusCache?: (issueNumber: number) => void;
@@ -671,6 +676,78 @@ export async function registerCreatorCodeRoutes(
 
       const result = typeCheckGame(sources, kitDeclaration);
       return reply.send(result);
+    },
+  );
+
+  // Track 2: builds staged sources, returns the document inline synchronously.
+  app.post<{ Params: { slug: string } }>(
+    '/api/me/studio/games/:slug/sources/preview',
+    { config: { rateLimit: { max: 300, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      if (notFoundIfDisabled(reply)) return;
+      if (!options.gamesStore || !options.githubClient) {
+        return reply.status(503).send({ error: 'the Code surface is not configured on this deployment' });
+      }
+      const resolved = await resolveForSlug(request, reply);
+      if (!resolved) return;
+      const { record, slug } = resolved;
+      const gamesStore = options.gamesStore;
+
+      if (isLiveAgentRound(record)) {
+        return reply.status(409).send({ error: 'agent_round', message: 'an agent is actively building this round' });
+      }
+
+      const roundGeneration = record.roundGeneration ?? 1;
+      const staged = await gamesStore.getStagedSourceFiles({ slug, issueNumber: record.issueNumber, roundGeneration });
+      const delivered = await readDeliveredSources({ gamesStore, store, record });
+      const overlay = overlayGameSources({
+        staged,
+        delivered,
+        ...(record.seed?.files ? { seed: record.seed.files } : {}),
+      });
+      if (!hasPlayableOverlay(overlay)) {
+        return reply.status(409).send({ error: 'incomplete', message: 'not enough staged yet to build a preview' });
+      }
+
+      let engineRef: string | null = null;
+      if (kitFileStore) {
+        try {
+          engineRef = (await kitFileStore.loadTree()).engineRef;
+        } catch (error) {
+          request.log.warn({ err: error, slug }, 'code surface preview: kit load failed');
+        }
+      }
+      if (!engineRef) {
+        return reply.status(503).send({ error: 'no kit published' });
+      }
+
+      try {
+        const sources = await options.githubClient.getGameSources(engineRef, slug, overlay);
+        if (!sources) {
+          return reply.status(409).send({ error: 'incomplete', message: 'sources do not compile yet' });
+        }
+        const html = assembleGameHtml(
+          {
+            title: sources.title ?? slug,
+            description: '',
+            html: sources.indexHtml,
+            js: sources.gameJs,
+            css: sources.styleCss,
+          },
+          { restrictNetwork: true },
+        );
+        return reply.send({ html, engineRef, timings: sources.timings });
+      } catch (error) {
+        if (
+          error instanceof EmptyProjectError ||
+          error instanceof ProjectTooLargeError ||
+          error instanceof CredentialLeakError
+        ) {
+          return reply.status(400).send({ error: error.message });
+        }
+        // esbuild throws on invalid TypeScript — not a server error.
+        return reply.status(409).send({ error: 'incomplete', message: 'sources do not compile yet' });
+      }
     },
   );
 

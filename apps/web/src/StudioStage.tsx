@@ -33,6 +33,8 @@ const SWAP_WATCH_MS = 6_000;
 const DREW_NOTHING_CHECK_MS = 5_500;
 /** Cheap battery honesty for a tab left open overnight. */
 const IDLE_THROTTLE_MS = 10 * 60 * 1000;
+// Idle window before a held swap auto-applies.
+const INPUT_IDLE_MS = 400;
 
 function toContext(
   pngBase64: string | null | undefined,
@@ -114,9 +116,10 @@ export function StudioStage({
   const [shownOrigin, setShownOrigin] = useState<StageOrigin>(source.origin);
   const [pendingHtml, setPendingHtml] = useState<string | null>(null);
   const [pendingOrigin, setPendingOrigin] = useState<StageOrigin | null>(null);
-  const [pendingAt, setPendingAt] = useState<number | null>(null);
-  const [finishFirst, setFinishFirst] = useState(false);
   const [shimmer, setShimmer] = useState(false);
+  // Last player input — a ref, so tracking it never re-renders.
+  const lastInputAtRef = useRef(0);
+  const inputIdleTimerRef = useRef<number | null>(null);
   const lastGoodRef = useRef<string | null>(source.rawHtml);
   const lastGoodOriginRef = useRef<StageOrigin>(source.origin);
   const lastGoodAtRef = useRef<number | null>(source.origin.at);
@@ -137,33 +140,48 @@ export function StudioStage({
   const reducedMotion =
     typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  // Apply (or hold) an incoming stage source.
+  // Reacts only to a new source, not a bare posture change.
   useEffect(() => {
     const next = source.rawHtml;
     if (next === shownHtml) return;
-    if (posture === 'play' && shownHtml !== null) {
-      // A4: never replace srcDoc mid-run. Hold it and let the toast offer the choice.
+    const inputActive = Date.now() - lastInputAtRef.current < INPUT_IDLE_MS;
+    if (posture === 'play' && shownHtml !== null && inputActive) {
       setPendingHtml(next);
       setPendingOrigin(source.origin);
-      setPendingAt(Date.now());
-      setFinishFirst(false);
       return;
     }
     applySwap(next, source.origin);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [source.rawHtml, posture]);
+  }, [source.rawHtml]);
 
-  // Returning to watch posture applies a swap the creator chose to finish first.
+  // Applies a held swap once input idles, or on leaving play.
   useEffect(() => {
-    if (posture === 'watch' && finishFirst && pendingHtml !== null) {
+    if (pendingHtml === null) return;
+    if (posture !== 'play') {
       applySwap(pendingHtml, pendingOrigin ?? source.origin);
       setPendingHtml(null);
       setPendingOrigin(null);
-      setPendingAt(null);
-      setFinishFirst(false);
+      return undefined;
     }
+    let cancelled = false;
+    const tryApply = () => {
+      if (cancelled) return;
+      const idleFor = Date.now() - lastInputAtRef.current;
+      if (idleFor >= INPUT_IDLE_MS) {
+        applySwap(pendingHtml, pendingOrigin ?? source.origin);
+        setPendingHtml(null);
+        setPendingOrigin(null);
+        return;
+      }
+      inputIdleTimerRef.current = window.setTimeout(tryApply, INPUT_IDLE_MS - idleFor);
+    };
+    tryApply();
+    return () => {
+      cancelled = true;
+      if (inputIdleTimerRef.current !== null) window.clearTimeout(inputIdleTimerRef.current);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [posture]);
+  }, [pendingHtml, posture]);
 
   useEffect(() => {
     onDisplayedOriginChange?.(shownOrigin);
@@ -260,23 +278,10 @@ export function StudioStage({
     setStatusAndReport(good ? { kind: 'ready' } : { kind: 'empty' });
   }
 
-  function restartOnPending() {
-    if (pendingHtml === null) return;
-    applySwap(pendingHtml, pendingOrigin ?? source.origin);
-    setPendingHtml(null);
-    setPendingOrigin(null);
-    setPendingAt(null);
-    setFinishFirst(false);
-  }
-
-  function finishThisRunFirst() {
-    setFinishFirst(true);
-  }
-
   useEffect(() => {
-    onNewerStageWaiting?.(finishFirst && pendingHtml !== null);
+    onNewerStageWaiting?.(pendingHtml !== null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [finishFirst, pendingHtml]);
+  }, [pendingHtml]);
 
   // Idle throttle (A5): 10 minutes with no swap and no activity while watching.
   const resetIdle = useCallback(() => {
@@ -341,7 +346,10 @@ export function StudioStage({
   const active = posture === 'play' && Boolean(shownHtml);
   const { paused, snapshot, instrumentation, pause, resume, clearSnapshot } = useCreatorPlaytest(frameRef, active);
   const requestWatch = useCallback(() => onPostureChange('watch'), [onPostureChange]);
-  useGamePlayer(frameRef, active, requestWatch);
+  const onGameActivity = useCallback(() => {
+    lastInputAtRef.current = Date.now();
+  }, []);
+  useGamePlayer(frameRef, active, requestWatch, undefined, onGameActivity);
   const editorBridge = useEditorDraftBridge(frameRef, active, slug, Boolean(editable));
   useEffect(() => {
     if (!editorPushRef) return undefined;
@@ -449,20 +457,6 @@ export function StudioStage({
             >
               <PixelIcon name="undo" size={12} />{' '}
               {t('studioPanel.stage.backTo', { time: formatClock(lastGoodAtRef.current ?? Date.now()) })}
-            </button>
-          </div>
-        </div>
-      ) : null}
-
-      {pendingHtml !== null && posture === 'play' && !finishFirst ? (
-        <div className="studio-swap-toast" role="status">
-          <span>{t('studioPanel.stage.newBuildStaged', { time: formatClock(pendingAt ?? Date.now()) })}</span>
-          <div className="studio-swap-toast-actions">
-            <button type="button" className="secondary-btn" onClick={restartOnPending}>
-              {t('studioPanel.stage.restartOnIt')}
-            </button>
-            <button type="button" className="studio-swap-toast-dismiss" onClick={finishThisRunFirst}>
-              {t('studioPanel.stage.finishThisRun')}
             </button>
           </div>
         </div>

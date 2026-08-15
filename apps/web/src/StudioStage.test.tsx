@@ -90,62 +90,62 @@ describe('StudioStage', () => {
     unmount();
   });
 
-  it('holds a new stage during play instead of yanking it mid-run, and offers a toast', async () => {
+  // Dispatches the bridge's activity message as if the game sent it.
+  function sendGameActivity(host: HTMLElement) {
+    const iframe = host.querySelector('iframe')!;
+    const event = new MessageEvent('message', { data: { source: 'gdpl-player', type: 'activity' } });
+    Object.defineProperty(event, 'source', { value: iframe.contentWindow });
+    Object.defineProperty(event, 'origin', { value: 'null' });
+    window.dispatchEvent(event);
+  }
+
+  it('holds a new stage during play only while input is active, no toast, and applies it once idle', async () => {
+    vi.useFakeTimers();
     const props = baseProps({ posture: 'play' });
     const { host, rerender, unmount } = await mount(props);
     expect(host.querySelector('iframe')?.getAttribute('srcdoc')).toContain('>A<');
 
+    await act(async () => sendGameActivity(host));
     await rerender({
       ...props,
       source: { html: GAME_B, rawHtml: GAME_B, origin: { kind: 'staged', at: Date.now(), versionLabel: null } },
     });
 
-    // A4: never replace srcDoc mid-run — the old run keeps going...
+    // Held while input is still fresh — no toast, no manual choice offered.
     expect(host.querySelector('iframe')?.getAttribute('srcdoc')).toContain('>A<');
-    // ...and the toast offers the choice instead.
-    const toast = host.querySelector('.studio-swap-toast');
-    expect(toast).not.toBeNull();
-    expect(toast!.textContent).toMatch(/new build staged/i);
+    expect(host.querySelector('.studio-swap-toast')).toBeNull();
+
+    // Once input goes idle, the held build applies on its own.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    expect(host.querySelector('iframe')?.getAttribute('srcdoc')).toContain('>B<');
     unmount();
   });
 
-  it('applies the held swap once the creator asks to restart on it', async () => {
+  it('applies a new stage immediately during play when input is already idle', async () => {
     const props = baseProps({ posture: 'play' });
     const { host, rerender, unmount } = await mount(props);
+
     await rerender({
       ...props,
       source: { html: GAME_B, rawHtml: GAME_B, origin: { kind: 'staged', at: Date.now(), versionLabel: null } },
-    });
-
-    const restartBtn = Array.from(host.querySelectorAll('button')).find((btn) =>
-      /restart on it/i.test(btn.textContent ?? ''),
-    );
-    expect(restartBtn).toBeTruthy();
-    await act(async () => {
-      restartBtn!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
     expect(host.querySelector('iframe')?.getAttribute('srcdoc')).toContain('>B<');
-    expect(host.querySelector('.studio-swap-toast')).toBeNull();
     unmount();
   });
 
-  it('applies a held swap automatically once posture returns to watch, if the creator chose to finish first', async () => {
+  it('applies a held swap immediately on leaving play, even mid-input', async () => {
+    vi.useFakeTimers();
     const props = baseProps({ posture: 'play' });
     const { host, rerender, unmount } = await mount(props);
+
+    await act(async () => sendGameActivity(host));
     await rerender({
       ...props,
       source: { html: GAME_B, rawHtml: GAME_B, origin: { kind: 'staged', at: Date.now(), versionLabel: null } },
     });
-
-    const finishBtn = Array.from(host.querySelectorAll('button')).find((btn) =>
-      /finish this run/i.test(btn.textContent ?? ''),
-    );
-    await act(async () => {
-      finishBtn!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-    // Toast collapses; the swap has not applied yet.
-    expect(host.querySelector('.studio-swap-toast')).toBeNull();
     expect(host.querySelector('iframe')?.getAttribute('srcdoc')).toContain('>A<');
 
     await rerender({
@@ -238,12 +238,7 @@ describe('StudioStage', () => {
       ...props,
       source: { html: GAME_B, rawHtml: GAME_B, origin: { kind: 'staged', at: Date.now(), versionLabel: null } },
     });
-    const restartBtn = Array.from(host.querySelectorAll('button')).find((btn) =>
-      /restart on it/i.test(btn.textContent ?? ''),
-    );
-    await act(async () => {
-      restartBtn!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
+    // No input was simulated — the swap applies right away.
     expect(host.querySelector('iframe')?.getAttribute('srcdoc')).toContain('>B<');
 
     // B crashes well inside the watch window — before it could ever have been

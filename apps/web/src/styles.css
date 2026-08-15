@@ -11580,40 +11580,6 @@ button.builder-mode-selector:disabled {
   cursor: default;
 }
 
-/* Swap toast — held during play, per A4's swap policy. */
-.studio-swap-toast {
-  position: absolute;
-  z-index: 35;
-  right: 14px;
-  top: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  width: min(280px, calc(100% - 28px));
-  padding: 10px 12px;
-  border-radius: 12px;
-  border: 1px solid rgba(0, 228, 172, 0.35);
-  background: rgba(10, 14, 20, 0.94);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
-  font-size: 0.8rem;
-  animation: fadeIn 0.2s ease;
-}
-
-.studio-swap-toast-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.studio-swap-toast-dismiss {
-  appearance: none;
-  border: 0;
-  background: transparent;
-  color: var(--muted);
-  font-size: 0.78rem;
-  cursor: pointer;
-  text-decoration: underline;
-}
-
 .studio-stage-play-bar {
   position: absolute;
   z-index: 25;

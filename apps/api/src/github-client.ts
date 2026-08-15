@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { build, transform } from 'esbuild';
+import { rememberBounded } from './bounded-map.js';
 import { classifyTouchSource, type CatalogGameTouch } from './catalog-touch.js';
 import {
   DELIVERY_FIXED_FILES,
@@ -877,13 +878,8 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
   // (`games-repo-archive.ts`) so a whole snapshot costs one download instead of a
   // read per file, and every line of assembly below stays the same either way.
   const readRawFile = options.files ? options.files.readText : readRawFileFromApi;
-  /**
-   * The kit declaration by ref. Immutable for a given ref by definition, ~77KB,
-   * and read on every code edit — so it is held for the process's life rather
-   * than re-fetched per request. `null` is cached too: a ref without one will
-   * not grow one.
-   */
-  const gameKitByRef = new Map<string, string | null>();
+  // Kit declaration cached per resolved SHA, not the mutable ref.
+  const gameKitBySha = new Map<string, string | null>();
   const readRawBytes = options.files ? options.files.readBytes : readRawBytesFromApi;
 
   async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
@@ -1027,6 +1023,72 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
   ): Promise<string> {
     const gameRoot = `/games/${slug}`;
     return bundleTypeScriptGraph(entrySource, ref, gameRoot, `${gameRoot}/game.ts`, 'game', overrides, collect);
+  }
+
+  // Resolves a branch, tag, or SHA to the commit SHA it names.
+  async function resolveRefSha(ref: string): Promise<string | null> {
+    // Same charset guard the catalog read uses, plus no `..`: the ref lands in a URL
+    // path, and a slashed ref like `release/1.x` must stay slashed to resolve — so it
+    // cannot be escaped away, and traversal has to be refused outright instead.
+    if (!/^[A-Za-z0-9._/-]+$/.test(ref) || ref.split('/').includes('..')) return null;
+    try {
+      // The commits endpoint rather than git/refs: it resolves a branch, a tag and a
+      // sha alike, so the caller is not obliged to know which kind of ref it holds.
+      const commit = await requestJson<{ sha?: string }>(`https://api.github.com/repos/${repo}/commits/${ref}`);
+      return typeof commit.sha === 'string' && commit.sha ? commit.sha : null;
+    } catch {
+      return null;
+    }
+  }
+
+  // Warm SHAs kept at once: mirrors kit-files.ts's KIT_TREE_CACHE_CAPACITY.
+  const ENGINE_CACHE_CAPACITY = 2;
+  // Short TTL — a branch's SHA can move.
+  const REF_SHA_CACHE_TTL_MS = 60_000;
+  const refShaCache = new Map<string, { sha: string; expiresAt: number }>();
+
+  // A failed resolution falls back to the raw ref.
+  async function resolveEngineSha(ref: string): Promise<string> {
+    const cached = refShaCache.get(ref);
+    const now = Date.now();
+    if (cached && cached.expiresAt > now) return cached.sha;
+    const sha = (await resolveRefSha(ref)) ?? ref;
+    rememberBounded(refShaCache, ref, { sha, expiresAt: now + REF_SHA_CACHE_TTL_MS }, 64);
+    return sha;
+  }
+
+  // Engine half of getGameSources, cached per SHA, shared by every game.
+  const gameShellCssBySha = new Map<string, string | null>();
+  const coreJsBySha = new Map<string, string>();
+  const kitModuleBySha = new Map<string, string | null>();
+
+  async function getCachedGameShellCss(sha: string, ref: string): Promise<string | null> {
+    if (gameShellCssBySha.has(sha)) return gameShellCssBySha.get(sha)!;
+    const value = await readRawFile('shared/game-shell.css', ref);
+    rememberBounded(gameShellCssBySha, sha, value, ENGINE_CACHE_CAPACITY);
+    return value;
+  }
+
+  async function getCachedCoreJs(sha: string, ref: string): Promise<string | null> {
+    const cached = coreJsBySha.get(sha);
+    if (cached !== undefined) return cached;
+    const coreTs = await readRawFile('shared/modules/core.ts', ref);
+    if (coreTs === null) return null;
+    const result = await transform(coreTs, { loader: 'ts', target: 'es2022', format: 'iife', legalComments: 'inline' });
+    rememberBounded(coreJsBySha, sha, result.code, ENGINE_CACHE_CAPACITY);
+    return result.code;
+  }
+
+  async function getCachedGameKitModule(
+    sha: string,
+    moduleName: GameKitModuleName,
+    ref: string,
+  ): Promise<string | null> {
+    const cacheKey = `${sha}:${moduleName}`;
+    if (kitModuleBySha.has(cacheKey)) return kitModuleBySha.get(cacheKey)!;
+    const value = await compileGameKitModule(moduleName, ref);
+    rememberBounded(kitModuleBySha, cacheKey, value, ENGINE_CACHE_CAPACITY * GAME_KIT_MODULES.length);
+    return value;
   }
 
   async function compileGameKitModule(moduleName: GameKitModuleName, ref: string): Promise<string | null> {
@@ -1384,10 +1446,11 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
     },
 
     async getGameKitDeclaration(ref) {
-      const cached = gameKitByRef.get(ref);
+      const sha = await resolveEngineSha(ref);
+      const cached = gameKitBySha.get(sha);
       if (cached !== undefined) return cached;
-      const source = await readRawFile('shared/game-kit.d.ts', ref);
-      gameKitByRef.set(ref, source);
+      const source = await readRawFile('shared/game-kit.d.ts', sha);
+      rememberBounded(gameKitBySha, sha, source, ENGINE_CACHE_CAPACITY);
       return source;
     },
 
@@ -1417,18 +1480,20 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
           : await readRawFile(`games/${slug}/${relative}`, ref);
 
       const startedAt = Date.now();
-      const [indexHtml, gameTs, styleCss, specMd, manifestSource, gameShellCss, coreTs] = await Promise.all([
+      // The SHA gates the caches below and shares this game's own request.
+      const [sha, indexHtml, gameTs, styleCss, specMd, manifestSource] = await Promise.all([
+        resolveEngineSha(ref),
         gameFile('index.html'),
         gameFile('game.ts'),
         gameFile('style.css'),
         gameFile('SPEC.md'),
         gameFile('GAME.json'),
-        readRawFile('shared/game-shell.css', ref),
-        readRawFile('shared/modules/core.ts', ref),
       ]);
+      // A cache hit here skips the network entirely.
+      const [gameShellCss, coreJs] = await Promise.all([getCachedGameShellCss(sha, ref), getCachedCoreJs(sha, ref)]);
       const baseReadMs = Date.now() - startedAt;
 
-      if (gameTs === null || manifestSource === null || gameShellCss === null || coreTs === null) {
+      if (gameTs === null || manifestSource === null || gameShellCss === null || coreJs === null) {
         return null;
       }
 
@@ -1450,7 +1515,7 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
       const manifest = parseGameManifest(manifestSource);
       const kitModulesStartedAt = Date.now();
       const moduleSources = await Promise.all(
-        manifest.modules.map((moduleName) => compileGameKitModule(moduleName, ref)),
+        manifest.modules.map((moduleName) => getCachedGameKitModule(sha, moduleName, ref)),
       );
       const kitModulesMs = Date.now() - kitModulesStartedAt;
       if (moduleSources.some((source) => source === null)) {
@@ -1551,13 +1616,7 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
 
       const assetsJs = assetChunks.length > 0 ? `${assetChunks.join('\n')}\n` : '';
       const bundleStartedAt = Date.now();
-      const coreResult = await transform(coreTs, {
-        loader: 'ts',
-        target: 'es2022',
-        format: 'iife',
-        legalComments: 'inline',
-      });
-      const transpiledSources = [coreResult.code, ...availableModuleSources];
+      const transpiledSources = [coreJs, ...availableModuleSources];
       const gameJs = await bundleGameTypeScript(gameTs, ref, slug, overrides);
       const bundleMs = Date.now() - bundleStartedAt;
       const bundledJs = `${assetsJs}${transpiledSources.join('\n')}
@@ -1589,18 +1648,7 @@ ${gameJs}`;
     },
 
     async getRefSha(ref) {
-      // Same charset guard the catalog read uses, plus no `..`: the ref lands in a URL
-      // path, and a slashed ref like `release/1.x` must stay slashed to resolve — so it
-      // cannot be escaped away, and traversal has to be refused outright instead.
-      if (!/^[A-Za-z0-9._/-]+$/.test(ref) || ref.split('/').includes('..')) return null;
-      try {
-        // The commits endpoint rather than git/refs: it resolves a branch, a tag and a
-        // sha alike, so the caller is not obliged to know which kind of ref it holds.
-        const commit = await requestJson<{ sha?: string }>(`https://api.github.com/repos/${repo}/commits/${ref}`);
-        return typeof commit.sha === 'string' && commit.sha ? commit.sha : null;
-      } catch {
-        return null;
-      }
+      return resolveRefSha(ref);
     },
 
     async getGameManifest(ref, slug) {

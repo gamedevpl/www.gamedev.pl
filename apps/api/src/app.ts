@@ -757,6 +757,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     invalidateStatusCache: submissionSeams.invalidateStatusCache,
     scheduleStagedPreview: submissionSeams.scheduleStagedPreview ?? undefined,
     onSourcesDelivered: gateTrigger,
+    githubClient: submissionSeams.githubClient ?? undefined,
     log: app.log,
     // TA-01: built unconditionally (the Vertex client is lazy); TAB_COMPLETE gates it.
     tabCompleter: options.tabCompleter ?? new VertexTabCompleter(),
