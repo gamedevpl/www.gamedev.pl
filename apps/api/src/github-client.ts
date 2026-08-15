@@ -84,6 +84,21 @@ export interface LinkedPullRequest {
   checksState?: 'SUCCESS' | 'FAILURE' | 'PENDING' | null;
 }
 
+// Per-phase cost of one getGameSources call, for logging.
+export interface GameSourcesTimings {
+  totalMs: number;
+  // Engine + game file reads run before compilation can start (network-bound).
+  baseReadMs: number;
+  // GameKit module compile/transform for this game's declared modules.
+  kitModulesMs: number;
+  // Sound asset resolution — synth .wav then the sourced .mp3 fallback.
+  audioMs: number;
+  // Music catalog + track selection. 0 when the game declares no music.
+  musicMs: number;
+  // core.ts transform plus the game's own esbuild graph.
+  bundleMs: number;
+}
+
 /** A game's sources, assembled with its selected shared engine modules. */
 export interface GameSources {
   // Shipped index.html, or generated from GAME.json howToPlay
@@ -92,6 +107,8 @@ export interface GameSources {
   styleCss: string;
   /** SPEC.md frontmatter title, when present. */
   title: string | null;
+  // Absent from every mock implementation; only the real client fills this in.
+  timings?: GameSourcesTimings;
 }
 
 // Generation lives here so every assembly path gets it for free.
@@ -1399,6 +1416,7 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
           ? overrides[relative]
           : await readRawFile(`games/${slug}/${relative}`, ref);
 
+      const startedAt = Date.now();
       const [indexHtml, gameTs, styleCss, specMd, manifestSource, gameShellCss, coreTs] = await Promise.all([
         gameFile('index.html'),
         gameFile('game.ts'),
@@ -1408,6 +1426,7 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
         readRawFile('shared/game-shell.css', ref),
         readRawFile('shared/modules/core.ts', ref),
       ]);
+      const baseReadMs = Date.now() - startedAt;
 
       if (gameTs === null || manifestSource === null || gameShellCss === null || coreTs === null) {
         return null;
@@ -1429,9 +1448,11 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
       }
 
       const manifest = parseGameManifest(manifestSource);
+      const kitModulesStartedAt = Date.now();
       const moduleSources = await Promise.all(
         manifest.modules.map((moduleName) => compileGameKitModule(moduleName, ref)),
       );
+      const kitModulesMs = Date.now() - kitModulesStartedAt;
       if (moduleSources.some((source) => source === null)) {
         return null;
       }
@@ -1464,7 +1485,9 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
         return [soundName, `data:${mime};base64,${Buffer.from(mp3Bytes).toString('base64')}`];
       };
 
+      const audioStartedAt = Date.now();
       const audioAssets = await Promise.all(manifest.sounds.map(resolveSoundAsset));
+      const audioMs = Date.now() - audioStartedAt;
       if (audioAssets.some((asset) => asset === null)) {
         return null;
       }
@@ -1478,6 +1501,7 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
       // autoplay name plus every track this game can reach — not the whole catalog.
       // MCP / self-build agents cannot edit `shared/`, so custom scores ship beside
       // the game (MUSIC_CONTRACT.gameMusicPath) and merge here.
+      const musicStartedAt = Date.now();
       if (manifest.music !== null) {
         const musicSource = await readRawFile(MUSIC_CONTRACT.catalogPath, ref);
         if (musicSource === null) {
@@ -1519,12 +1543,14 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
         assetChunks.push(`window.__GAME_AUDIO_MUSIC__ = ${JSON.stringify(manifest.music)};`);
         assetChunks.push(`window.__GAME_MUSIC_TRACKS__ = Object.freeze(${JSON.stringify(selected)});`);
       }
+      const musicMs = Date.now() - musicStartedAt;
 
       if (Object.keys(assets).length > 0) {
         assetChunks.unshift(`window.__GAME_AUDIO_ASSETS__ = Object.freeze(${JSON.stringify(assets)});`);
       }
 
       const assetsJs = assetChunks.length > 0 ? `${assetChunks.join('\n')}\n` : '';
+      const bundleStartedAt = Date.now();
       const coreResult = await transform(coreTs, {
         loader: 'ts',
         target: 'es2022',
@@ -1533,6 +1559,7 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
       });
       const transpiledSources = [coreResult.code, ...availableModuleSources];
       const gameJs = await bundleGameTypeScript(gameTs, ref, slug, overrides);
+      const bundleMs = Date.now() - bundleStartedAt;
       const bundledJs = `${assetsJs}${transpiledSources.join('\n')}
 Object.freeze(window.GameKit);
 ${gameJs}`;
@@ -1543,6 +1570,7 @@ ${gameJs}`;
         gameJs: bundledJs,
         styleCss: bundledCss,
         title,
+        timings: { totalMs: Date.now() - startedAt, baseReadMs, kitModulesMs, audioMs, musicMs, bundleMs },
       };
     },
 
