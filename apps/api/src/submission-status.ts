@@ -33,6 +33,8 @@ export interface CreatorRevision {
   createdAt: string;
   // 'agent': relayed by the agent. 'studio': the chat agent. Else: the creator.
   origin?: 'agent' | 'studio';
+  // Set once the running agent has collected this message from the inbox.
+  delivered?: boolean;
   /**
    * Server-internal, and stripped before this reaches the wire — exactly like the pair on
    * BuildEvent. The translation is stored on the write and resolved against the reader's

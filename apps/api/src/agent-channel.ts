@@ -2174,6 +2174,7 @@ export async function registerAgentChannelRoutes(
       }
 
       await store!.markCreatorMessagesDelivered(issueNumber, parsed.data.ids);
+      options.onEvent?.(issueNumber);
       return reply.send({ ok: true, ...(await channelState(issueNumber, record)) });
     },
   );

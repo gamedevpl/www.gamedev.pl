@@ -5844,6 +5844,21 @@ a.user-name--profile:focus-visible {
   opacity: 0.75;
 }
 
+/* Whether a message sent while the agent is still mid-build has been picked up from
+   its inbox yet — queued is the honest default (the agent may be seconds from reading
+   it), delivered confirms it landed without the creator having to guess or reload. */
+.studio-turn-delivery {
+  font-weight: 600;
+}
+
+.studio-turn-delivery.is-delivered {
+  color: var(--success, #2e8b57);
+}
+
+.studio-turn-delivery.is-queued {
+  color: var(--muted);
+}
+
 /* The creator's own turn: a bubble on the other side, and deliberately the quieter of
    the two. It is there to be recognised as theirs while scrolling past, not to compete
    with the answer it asked for. */
