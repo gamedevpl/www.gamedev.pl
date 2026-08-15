@@ -30,6 +30,7 @@ function stubClient(responses: unknown[], usage = { inputTokens: 100, outputToke
     prompts.push(prompt);
     const payload = responses.shift();
     const chain = {
+      thinking: () => chain,
       temperature: () => chain,
       signal: () => chain,
       run: () => Promise.resolve({ parts: [{ type: 'text', text: JSON.stringify(payload) }], usage }),

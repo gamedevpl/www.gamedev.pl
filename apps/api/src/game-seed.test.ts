@@ -313,6 +313,7 @@ function stubClient(responses: { text: string; inputTokens?: number; outputToken
   const builder = () => {
     const response = responses[Math.min(call++, responses.length - 1)];
     const chain = {
+      thinking: () => chain,
       temperature: () => chain,
       maxOutputTokens: () => chain,
       signal: () => chain,
@@ -334,6 +335,7 @@ function stubClientWithPrompts(responses: { text: string }[]) {
     prompts.push(prompt);
     const response = responses[Math.min(call++, responses.length - 1)];
     const chain = {
+      thinking: () => chain,
       temperature: () => chain,
       maxOutputTokens: () => chain,
       signal: () => chain,
@@ -399,6 +401,30 @@ interface GameKitGameContext {
 
 describe('VertexGameSeeder', () => {
   const request = { slug: 'my-game', title: 'My Game', spec: 'A game about tanks' };
+
+  it('asks for the low thinking floor, not a raw budget gemini-3.7-flash rejects', async () => {
+    const thinkingArgs: unknown[] = [];
+    const chain = {
+      thinking: (arg: unknown) => {
+        thinkingArgs.push(arg);
+        return chain;
+      },
+      temperature: () => chain,
+      maxOutputTokens: () => chain,
+      signal: () => chain,
+      run: async () => ({
+        parts: [{ type: 'text' as const, text: '{"picks":["apex-sprint"]}' }],
+        model: 'gemini-3.7-flash',
+        usage: { inputTokens: 100, outputTokens: 10 },
+      }),
+    };
+    const client = (() => chain) as unknown as ConstructorParameters<typeof VertexGameSeeder>[0]['client'];
+    const seeder = new VertexGameSeeder({ context: stubContext(), client });
+
+    await seeder.seed(request);
+
+    expect(thinkingArgs).toEqual([{ level: 'low' }]);
+  });
 
   it('returns a draft with references, usage summed across both calls, and notes', async () => {
     const seeder = new VertexGameSeeder({
@@ -704,6 +730,7 @@ describe('knowledge context injection (KQ-11)', () => {
       prompts.push(prompt);
       const response = responses[Math.min(call++, responses.length - 1)];
       const chain = {
+        thinking: () => chain,
         temperature: () => chain,
         maxOutputTokens: () => chain,
         signal: () => chain,

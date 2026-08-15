@@ -339,7 +339,6 @@ export class VertexCodeLane {
         defaultModel: DEFAULT_CODE_MODEL,
         generationConfig: {
           responseMimeType: 'application/json',
-          thinkingConfig: { thinkingBudget: 0 },
         } as VertexGenerationConfig,
       });
     return this.client;
@@ -360,6 +359,7 @@ export class VertexCodeLane {
     tokens: { input: number; output: number },
   ): Promise<T> {
     const result: GenerationResult = await this.getClient()(prompt)
+      .thinking({ level: 'low' })
       .temperature(0.1)
       .signal(AbortSignal.timeout(timeoutMs))
       .run();
