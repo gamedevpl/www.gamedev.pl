@@ -33,7 +33,11 @@ import {
   type CodeSurfaceFile,
   type CodeSurfaceSources,
 } from './codeSurfaceApi.js';
-import { getCodeSurfaceSessionState, setCodeSurfaceSessionState } from './codeSurfaceSessionState.js';
+import {
+  getCodeSurfaceSessionState,
+  setCodeSurfaceEditorState,
+  setCodeSurfaceSessionState,
+} from './codeSurfaceSessionState.js';
 import {
   createCodeSurfaceLanguageService,
   fromVfsPath,
@@ -112,8 +116,6 @@ export type CodeSurfaceProps = {
   onPendingActionsModeConsumed?: () => void;
   // Track 2: shows a synchronous rebuild the instant it's ready.
   onPreviewReady?: (html: string) => void;
-  // Fires when the menu closes with nothing picked.
-  onActionsMenuCancelled?: () => void;
 };
 
 const LOCKED_DIRS = ['shared/', 'tools/'] as const;
@@ -168,7 +170,6 @@ export function CodeSurface({
   pendingActionsMode,
   onPendingActionsModeConsumed,
   onPreviewReady,
-  onActionsMenuCancelled,
 }: CodeSurfaceProps) {
   const { t, i18n } = useTranslation();
   const [sources, setSources] = useState<CodeSurfaceSources | null>(null);
@@ -286,7 +287,11 @@ export function CodeSurface({
   }, [sources?.readOnly, load]);
 
   useEffect(() => {
-    setCodeSurfaceSessionState(slug, { selected, drafts });
+    setCodeSurfaceSessionState(slug, {
+      selected,
+      drafts,
+      editorStates: getCodeSurfaceSessionState(slug)?.editorStates,
+    });
   }, [slug, selected, drafts]);
 
   useEffect(() => {
@@ -300,10 +305,7 @@ export function CodeSurface({
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [filePickerOpen]);
 
-  const openedViaPendingRef = useRef(false);
-
-  const openActionsMenu = useCallback((mode: CodeActionsMode, viaPending = false) => {
-    openedViaPendingRef.current = viaPending;
+  const openActionsMenu = useCallback((mode: CodeActionsMode) => {
     setActionsMenu((current) => {
       if (!current) {
         const focused = document.activeElement;
@@ -313,19 +315,15 @@ export function CodeSurface({
     });
   }, []);
 
-  const closeActionsMenu = useCallback((acted = false) => {
+  const closeActionsMenu = useCallback(() => {
     setActionsMenu(null);
     const previous = actionsReturnFocusRef.current;
     actionsReturnFocusRef.current = null;
     if (previous?.isConnected) previous.focus();
-    if (!acted && openedViaPendingRef.current) onActionsMenuCancelledRef.current?.();
-    openedViaPendingRef.current = false;
   }, []);
 
   const onPendingActionsModeConsumedRef = useRef(onPendingActionsModeConsumed);
   onPendingActionsModeConsumedRef.current = onPendingActionsModeConsumed;
-  const onActionsMenuCancelledRef = useRef(onActionsMenuCancelled);
-  onActionsMenuCancelledRef.current = onActionsMenuCancelled;
   const pendingActionsModeRef = useRef(pendingActionsMode);
   pendingActionsModeRef.current = pendingActionsMode;
   const pendingActionsConsumedRef = useRef(false);
@@ -333,7 +331,7 @@ export function CodeSurface({
   useEffect(() => {
     if (!pendingActionsMode || !sources || pendingActionsConsumedRef.current) return;
     pendingActionsConsumedRef.current = true;
-    openActionsMenu(pendingActionsMode.mode, true);
+    openActionsMenu(pendingActionsMode.mode);
     onPendingActionsModeConsumedRef.current?.();
   }, [pendingActionsMode, sources, openActionsMenu]);
 
@@ -560,14 +558,14 @@ export function CodeSurface({
     // Rides the pendingJump path search matches use — the new editor claims focus.
     if (path !== selected) setPendingJump({ path, from: 0, to: 0 });
     selectFile(path);
-    closeActionsMenu(true);
+    closeActionsMenu();
   }
 
   // A search hit rides GA-09's jump and lands as a selection.
   function handleOpenSearchMatch(match: CodeActionsSearchMatch) {
     setPendingJump({ path: match.path, from: match.from, to: match.to });
     selectFile(match.path);
-    closeActionsMenu(true);
+    closeActionsMenu();
   }
 
   const schedulePreviewRebuild = useCallback(() => {
@@ -1075,6 +1073,10 @@ export function CodeSurface({
                   onGotoDefinition={handleGotoDefinition}
                   initialSelection={initialSelectionForEditor}
                   fetchGhostText={fetchGhostText}
+                  initialEditorState={selected ? getCodeSurfaceSessionState(slug)?.editorStates?.[selected] : undefined}
+                  onEditorStateChange={(state) => {
+                    if (selected) setCodeSurfaceEditorState(slug, selected, state);
+                  }}
                 />
               </Suspense>
             </CodeMirrorBoundary>

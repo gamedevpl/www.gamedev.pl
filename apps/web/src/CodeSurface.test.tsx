@@ -4,21 +4,35 @@ import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CodeSurface } from './CodeSurface.js';
-import { resetCodeSurfaceSessionState } from './codeSurfaceSessionState.js';
+import { getCodeSurfaceSessionState, resetCodeSurfaceSessionState } from './codeSurfaceSessionState.js';
 import * as codeSurfaceApi from './codeSurfaceApi.js';
 import i18n from './i18n/index.js';
 import type { EditorContentDoc, GameEditorState } from './studioApi.js';
+
+const codeMirrorMock = vi.hoisted(() => ({
+  current: null as {
+    initialEditorState?: unknown;
+    onEditorStateChange?: (state: unknown) => void;
+  } | null,
+}));
 
 // The real CodeMirror editor needs DOM layout measurement jsdom cannot provide, and
 // its dynamic import races the plain-textarea Suspense fallback these tests rely on —
 // a stand-in with the same value/onChange contract keeps that race out of the picture.
 vi.mock('./CodeMirrorEditor.js', () => ({
-  default: (props: { value: string; onChange: (value: string) => void }) =>
-    createElement('textarea', {
+  default: (props: {
+    value: string;
+    onChange: (value: string) => void;
+    initialEditorState?: unknown;
+    onEditorStateChange?: (state: unknown) => void;
+  }) => {
+    codeMirrorMock.current = props;
+    return createElement('textarea', {
       className: 'code-surface-editor',
       value: props.value,
       onChange: (event: { target: { value: string } }) => props.onChange(event.target.value),
-    }),
+    });
+  },
 }));
 
 vi.mock('./codeSurfaceApi.js', async () => {
@@ -80,6 +94,7 @@ describe('CodeSurface', () => {
     mocked.discardCodeSurfaceEdits.mockReset();
     mocked.deliverCodeSurface.mockReset();
     mockedStudioApi.fetchGameEditor.mockReset();
+    codeMirrorMock.current = null;
     mocked.rebuildCodeSurfaceStage.mockResolvedValue({ scheduled: true });
     mocked.requestCodeSurfacePreview.mockResolvedValue({ html: '<html></html>', engineRef: 'abc123' });
     container = document.createElement('div');
@@ -359,6 +374,25 @@ describe('CodeSurface', () => {
     const active = container.querySelector('.code-surface-rail-item.is-active');
     expect(active?.textContent).toContain('game/render.ts');
     expect(container.querySelector('textarea')!.value).toContain('tweaked');
+  });
+
+  it('restores the per-file undo history after switching to Play and back', async () => {
+    mocked.fetchCodeSurfaceSources.mockResolvedValue(sourcesFor());
+
+    await render();
+    const savedEditorState = {
+      doc: 'export const boot = () => { /* edited */ };',
+      selection: { ranges: [{ anchor: 0, head: 0 }], main: 0 },
+      history: { done: [], undone: [] },
+    };
+    codeMirrorMock.current?.onEditorStateChange?.(savedEditorState);
+    expect(getCodeSurfaceSessionState('sky-dodge')?.editorStates?.['game.ts']).toEqual(savedEditorState);
+
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    await render();
+
+    expect(codeMirrorMock.current?.initialEditorState).toEqual(savedEditorState);
   });
 
   it('shows Discard when the buffer has owner changes, and discard reloads the delivered tree', async () => {
