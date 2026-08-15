@@ -350,6 +350,32 @@
         "saving": "Saving working copy…",
         "saved": "Working copy saved",
         "error": "Could not save — retrying"
+      },
+      "actions": {
+        "title": "Code actions",
+        "trigger": "Actions",
+        "triggerTitle": "Quick open {{quickOpen}} · Commands {{commands}} · Search in files {{search}}",
+        "close": "Close code actions",
+        "tabFiles": "Files",
+        "tabCommands": "Commands",
+        "tabSearch": "Search",
+        "filesPlaceholder": "Search files by name (type > for commands)",
+        "commandsPlaceholder": "Type a command…",
+        "searchPlaceholder": "Search in all files…",
+        "noFiles": "No matching files",
+        "noCommands": "No matching commands",
+        "noMatches": "No matches",
+        "searchHint": "Type at least {{count}} characters to search",
+        "matchCount_one": "1 match",
+        "matchCount_other": "{{count}} matches",
+        "matchCapped": "Showing the first {{count}} matches",
+        "commandGoToFile": "Go to file…",
+        "commandSearchInFiles": "Search in files…",
+        "commandSave": "Save working copy now",
+        "commandPreview": "Update preview",
+        "commandTypecheck": "Check types",
+        "commandKit": "Open GameKit declaration",
+        "commandBack": "Back to thread"
       }
     },
     "editor": {

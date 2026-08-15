@@ -519,15 +519,26 @@ export default function CodeMirrorEditor({
       }),
     });
     viewRef.current = view;
-    // GA-09: a cross-file jump lands off-screen without this.
-    if (initialSelection)
-      view.dispatch({ effects: EditorView.scrollIntoView(initialSelection.anchor, { y: 'center' }) });
     return () => {
       view.destroy();
       viewRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- refs carry live values
   }, []);
+
+  // GA-09 jumps, including same-file search hits; offsets clamped to doc.
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view || !initialSelection) return;
+    const docLength = view.state.doc.length;
+    const anchor = Math.min(initialSelection.anchor, docLength);
+    const head = Math.min(initialSelection.head, docLength);
+    view.dispatch({
+      selection: { anchor, head },
+      effects: EditorView.scrollIntoView(anchor, { y: 'center' }),
+    });
+    view.focus();
+  }, [initialSelection]);
 
   useEffect(() => {
     if (viewRef.current) forceLinting(viewRef.current);
