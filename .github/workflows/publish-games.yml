@@ -4,12 +4,9 @@ name: Publish games snapshot
 # pre-assembled documents instead of rebuilding each game from GitHub + esbuild on
 # the request path (apps/api/src/game-snapshot.ts).
 #
-# Fires on a repository_dispatch from the games repo's validate workflow, right
-# after a merge to main passes the games-repo gate — see
-# gamedevpl/www.gamedev.pl-games/.github/workflows/validate.yml. The bake derives
-# the snapshot catalog from that SHA's archive (no committed catalog.json). The
-# workflow_dispatch entry point is the manual escape hatch: re-baking after an
-# assembler change here, or recovering from a failed publish.
+# The games repo dispatches its exact SHA and gate scope after a main push. This
+# workflow validates that checkout before baking its snapshot; a failed gate
+# leaves the previous snapshot pointer untouched.
 #
 # Nothing needs to be redeployed afterwards. Running instances re-read the pointer
 # on its short TTL, so a publish becomes visible on its own within about a minute.
@@ -25,7 +22,7 @@ name: Publish games snapshot
 
 on:
   repository_dispatch:
-    types: [games-published]
+    types: [games-published, games-validate]
   # 04:23 UTC: off the top of the hour, where GitHub's scheduler is least contended.
   schedule:
     - cron: '23 4 * * *'
@@ -55,7 +52,21 @@ permissions:
   id-token: write
 
 jobs:
+  validate-games:
+    uses: ./.github/workflows/games-catalog-gate.yml
+    with:
+      ref: ${{ github.event.client_payload.ref || github.event.inputs.ref || 'main' }}
+      sha: ${{ github.event.client_payload.sha || '' }}
+      mode: ${{ github.event.client_payload.mode || 'full' }}
+      slugs: ${{ github.event.client_payload.slugs || '' }}
+      need_webkit: ${{ github.event.client_payload.need_webkit || '1' }}
+      narrow_conformance: ${{ github.event.client_payload.narrow_conformance || '0' }}
+    secrets:
+      GAMES_REPO_TOKEN: ${{ secrets.GAMES_REPO_TOKEN }}
+
   publish:
+    needs: validate-games
+    if: github.event_name != 'repository_dispatch' || github.event.action == 'games-published'
     runs-on: ubuntu-latest
     env:
       PROJECT_ID: 'gamedevpl'
