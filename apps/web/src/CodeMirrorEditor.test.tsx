@@ -32,6 +32,7 @@ describe('CodeMirrorEditor color picker', () => {
           language: 'typescript',
           onChange,
           diagnostics: [],
+          colorPickerLabel: 'Choose color',
         }),
       );
     });
@@ -47,5 +48,21 @@ describe('CodeMirrorEditor color picker', () => {
     });
 
     expect(onChange).toHaveBeenCalledWith("const color = '#11223334';");
+
+    await act(async () => {
+      root.render(
+        createElement(CodeMirrorEditor, {
+          value: "const color = '#abcd1234';",
+          language: 'typescript',
+          onChange,
+          diagnostics: [],
+          colorPickerLabel: 'Wybierz kolor',
+        }),
+      );
+    });
+
+    expect(container.querySelector<HTMLInputElement>('.cm-color-picker')?.getAttribute('aria-label')).toBe(
+      'Wybierz kolor #11223334',
+    );
   });
 });

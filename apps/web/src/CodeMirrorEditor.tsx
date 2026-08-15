@@ -111,7 +111,7 @@ class ColorSwatchWidget extends WidgetType {
   }
 
   eq(other: ColorSwatchWidget): boolean {
-    return other.color === this.color && other.from === this.from && other.to === this.to;
+    return other.color === this.color && other.from === this.from && other.to === this.to && other.label === this.label;
   }
 
   toDOM(): HTMLElement {
@@ -130,7 +130,7 @@ class ColorSwatchWidget extends WidgetType {
   }
 }
 
-function colorPickerExtension(label: string): Extension[] {
+function colorPickerExtension(label: string): Extension {
   const plugin = ViewPlugin.fromClass(
     class {
       decorations: DecorationSet;
@@ -833,6 +833,7 @@ export default function CodeMirrorEditor({
   fetchGhostTextRef.current = fetchGhostText;
   // GA-05: reconfigured live below — a ready worker never remounts.
   const languageServiceCompartmentRef = useRef(new Compartment());
+  const colorPickerCompartmentRef = useRef(new Compartment());
 
   useEffect(() => {
     if (!containerRef.current) return undefined;
@@ -861,7 +862,7 @@ export default function CodeMirrorEditor({
           linter((v) => toCmDiagnostics(v, diagnosticsRef.current)),
           languageServiceCompartmentRef.current.of(languageServiceExtensions(languageService, onGotoDefinitionRef)),
           ...(readOnly ? [] : makeGhostTextExtension(fetchGhostTextRef)),
-          ...(readOnly ? [] : colorPickerExtension(colorPickerLabel)),
+          ...(readOnly ? [] : [colorPickerCompartmentRef.current.of(colorPickerExtension(colorPickerLabel))]),
           EditorView.editable.of(!readOnly),
           EditorView.updateListener.of((update) => {
             if (update.docChanged) onChangeRef.current(update.state.doc.toString());
@@ -907,6 +908,14 @@ export default function CodeMirrorEditor({
       ),
     });
   }, [languageService]);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view || readOnly) return;
+    view.dispatch({
+      effects: colorPickerCompartmentRef.current.reconfigure(colorPickerExtension(colorPickerLabel)),
+    });
+  }, [colorPickerLabel, readOnly]);
 
   return <div ref={containerRef} className="code-surface-codemirror" data-testid="codemirror-editor" />;
 }
