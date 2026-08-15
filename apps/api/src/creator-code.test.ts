@@ -133,7 +133,8 @@ describe('the Code surface routes (creator-code.ts)', () => {
       submissionRoutes: {
         submissionTokenSecret,
         agentChannel: { gamesStore: options.games ?? games, objectStore: options.objectStore },
-        ...(options.githubClient ? { githubClient: options.githubClient } : {}),
+        // registerSubmissionRoutes only honors an injected client alongside a token.
+        ...(options.githubClient ? { githubClient: options.githubClient, githubToken: 'test-github-token' } : {}),
       },
       tabCompleter: options.tabCompleter,
     });
