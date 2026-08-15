@@ -1,10 +1,11 @@
 import { createHash } from 'node:crypto';
 import { gzipSync } from 'node:zlib';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from './app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import { createGcsObjectStore, type GcsObjectStore } from './gcs-sign.js';
 import { createGcsGamesStore, type GamesStore } from './games-store.js';
+import type { GitHubClient } from './github-client.js';
 import { KIT_ROOT_DIR } from './kit-registry.js';
 import { InMemoryStore } from './store.js';
 import { StubTabCompleter, type TabCompleter } from './tab-complete.js';
@@ -119,7 +120,12 @@ describe('the Code surface routes (creator-code.ts)', () => {
 
   async function withApp<T>(
     fn: (app: Awaited<ReturnType<typeof buildApp>>) => Promise<T>,
-    options: { objectStore?: GcsObjectStore; games?: GamesStore; tabCompleter?: TabCompleter } = {},
+    options: {
+      objectStore?: GcsObjectStore;
+      games?: GamesStore;
+      tabCompleter?: TabCompleter;
+      githubClient?: GitHubClient;
+    } = {},
   ): Promise<T> {
     const app = await buildApp({
       store,
@@ -127,6 +133,8 @@ describe('the Code surface routes (creator-code.ts)', () => {
       submissionRoutes: {
         submissionTokenSecret,
         agentChannel: { gamesStore: options.games ?? games, objectStore: options.objectStore },
+        // registerSubmissionRoutes only honors an injected client alongside a token.
+        ...(options.githubClient ? { githubClient: options.githubClient, githubToken: 'test-github-token' } : {}),
       },
       tabCompleter: options.tabCompleter,
     });
@@ -445,6 +453,143 @@ describe('the Code surface routes (creator-code.ts)', () => {
           expect(good.json()).toEqual({ ok: true });
         },
         { objectStore, games: withKitGames },
+      );
+    });
+  });
+
+  describe('POST /api/me/studio/games/:slug/sources/preview', () => {
+    // A minimal getGameSources fake — see github-client.test.ts for real assembly.
+    function stubGithubClient(): GitHubClient {
+      return {
+        getGameSources: async (ref, slug, overrides) => ({
+          indexHtml: overrides?.['index.html'] ?? '<div id="game-root"></div>',
+          gameJs: `window.__REF__ = ${JSON.stringify(ref)}; ${overrides?.['game.ts'] ?? ''}`,
+          styleCss: overrides?.['style.css'] ?? '',
+          title: `${slug} preview`,
+          timings: { totalMs: 1, baseReadMs: 0, kitModulesMs: 0, audioMs: 0, musicMs: 0, bundleMs: 1 },
+        }),
+      } as unknown as GitHubClient;
+    }
+
+    it('503s when no githubClient is configured on this deployment', async () => {
+      // Clears GITHUB_TOKEN — app.ts otherwise falls back to it silently.
+      const priorToken = process.env.GITHUB_TOKEN;
+      delete process.env.GITHUB_TOKEN;
+      try {
+        await withApp(async (app) => {
+          const res = await app.inject({
+            method: 'POST',
+            url: '/api/me/studio/games/sky-dodge/sources/preview',
+            headers: authHeaders('g:creator'),
+          });
+          expect(res.statusCode).toBe(503);
+        });
+      } finally {
+        if (priorToken === undefined) delete process.env.GITHUB_TOKEN;
+        else process.env.GITHUB_TOKEN = priorToken;
+      }
+    });
+
+    it('404s for a slug the caller does not own — never 403', async () =>
+      withApp(
+        async (app) => {
+          const res = await app.inject({
+            method: 'POST',
+            url: '/api/me/studio/games/sky-dodge/sources/preview',
+            headers: authHeaders('g:other'),
+          });
+          expect(res.statusCode).toBe(404);
+        },
+        { githubClient: stubGithubClient() },
+      ));
+
+    it('refuses once an agent round goes live — same guard stage and patch already enforce', async () =>
+      withApp(
+        async (app) => {
+          await store.recordDispatch(10, { backend: 'managed', ref: 'session-1' });
+          const res = await app.inject({
+            method: 'POST',
+            url: '/api/me/studio/games/sky-dodge/sources/preview',
+            headers: authHeaders('g:creator'),
+          });
+          expect(res.statusCode).toBe(409);
+          expect(res.json()).toMatchObject({ error: 'agent_round' });
+        },
+        { githubClient: stubGithubClient() },
+      ));
+
+    it('refuses when nothing playable is staged yet, without touching the engine', async () => {
+      const { games: withKitGames, objectStore } = storesWithKit('declare const GameKit: { boot(): void };');
+      const githubClient = stubGithubClient();
+      const spy = vi.spyOn(githubClient, 'getGameSources');
+      await withApp(
+        async (app) => {
+          const res = await app.inject({
+            method: 'POST',
+            url: '/api/me/studio/games/sky-dodge/sources/preview',
+            headers: authHeaders('g:creator'),
+          });
+          expect(res.statusCode).toBe(409);
+          expect(res.json()).toMatchObject({ error: 'incomplete' });
+          expect(spy).not.toHaveBeenCalled();
+        },
+        { objectStore, games: withKitGames, githubClient },
+      );
+    });
+
+    it('builds the staged buffer and returns the document inline, in one round trip — no BuildPreview write', async () => {
+      const { games: withKitGames, objectStore } = storesWithKit('declare const GameKit: { boot(): void };');
+      await withKitGames.putStagedSourceFile({
+        slug: 'sky-dodge',
+        issueNumber: 10,
+        roundGeneration: 1,
+        path: 'game.ts',
+        content: 'export const boot = 1;',
+        stagedBy: 'owner',
+      });
+      await withKitGames.putStagedSourceFile({
+        slug: 'sky-dodge',
+        issueNumber: 10,
+        roundGeneration: 1,
+        path: 'GAME.json',
+        content: '{"engine":{"modules":[]}}',
+        stagedBy: 'owner',
+      });
+      await withKitGames.putStagedSourceFile({
+        slug: 'sky-dodge',
+        issueNumber: 10,
+        roundGeneration: 1,
+        path: 'index.html',
+        content: '<div id="game-root"></div>',
+        stagedBy: 'owner',
+      });
+      await withKitGames.putStagedSourceFile({
+        slug: 'sky-dodge',
+        issueNumber: 10,
+        roundGeneration: 1,
+        path: 'style.css',
+        content: '.game { color: gold; }',
+        stagedBy: 'owner',
+      });
+
+      await withApp(
+        async (app) => {
+          const res = await app.inject({
+            method: 'POST',
+            url: '/api/me/studio/games/sky-dodge/sources/preview',
+            headers: authHeaders('g:creator'),
+          });
+          expect(res.statusCode).toBe(200);
+          const body = res.json() as { html: string; engineRef: string; timings?: { totalMs: number } };
+          expect(body.engineRef).toBe(ENGINE_REF);
+          expect(body.html).toContain('window.__REF__');
+          expect(body.html).toContain('export const boot = 1;');
+          expect(body.timings?.totalMs).toBeGreaterThanOrEqual(0);
+
+          // No BuildPreview artifact landed — this is a synchronous read.
+          expect(await store.listBuildPreviews(10)).toEqual([]);
+        },
+        { objectStore, games: withKitGames, githubClient: stubGithubClient() },
       );
     });
   });

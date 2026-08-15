@@ -1067,6 +1067,7 @@ export function CreatorStudioView({
                               editorPushRef={editorPushRef}
                               pendingActionsMode={pendingCodeActions}
                               onPendingActionsModeConsumed={() => setPendingCodeActions(null)}
+                              onPreviewReady={stageSource.pushPreview}
                             />
                           </div>
                         ) : null}

@@ -27,6 +27,7 @@ import {
   discardCodeSurfaceEdits,
   fetchCodeSurfaceSources,
   rebuildCodeSurfaceStage,
+  requestCodeSurfacePreview,
   stageCodeSurfaceFile,
   typecheckCodeSurface,
   type CodeSurfaceFile,
@@ -107,6 +108,8 @@ export type CodeSurfaceProps = {
   // Set by CreatorStudioView's own shortcut, fired before this surface existed.
   pendingActionsMode?: { mode: CodeActionsMode; nonce: number } | null;
   onPendingActionsModeConsumed?: () => void;
+  // Track 2: shows a synchronous rebuild the instant it's ready.
+  onPreviewReady?: (html: string) => void;
 };
 
 const LOCKED_DIRS = ['shared/', 'tools/'] as const;
@@ -160,6 +163,7 @@ export function CodeSurface({
   editorPushRef,
   pendingActionsMode,
   onPendingActionsModeConsumed,
+  onPreviewReady,
 }: CodeSurfaceProps) {
   const { t } = useTranslation();
   const [sources, setSources] = useState<CodeSurfaceSources | null>(null);
@@ -206,6 +210,8 @@ export function CodeSurface({
   const liveContentPromiseRef = useRef<Promise<EditorContentDoc | null> | null>(null);
   const sourcesRef = useRef(sources);
   sourcesRef.current = sources;
+  const onPreviewReadyRef = useRef(onPreviewReady);
+  onPreviewReadyRef.current = onPreviewReady;
 
   // GA-04: a ref, not state — languageServiceReady below signals it exists.
   const languageServiceRef = useRef<CodeSurfaceLanguageService | null>(null);
@@ -561,6 +567,10 @@ export function CodeSurface({
       }
       setRebuildError(false);
       setRebuildState('pending');
+      // Track 2: shows the synchronous rebuild the instant it lands.
+      void requestCodeSurfacePreview(slug)
+        .then((result) => onPreviewReadyRef.current?.(result.html))
+        .catch(() => {});
       void rebuildCodeSurfaceStage(slug)
         .then(() => {
           recordCodeStep('previewed');

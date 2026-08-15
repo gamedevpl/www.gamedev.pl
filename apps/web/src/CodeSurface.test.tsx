@@ -28,6 +28,7 @@ vi.mock('./codeSurfaceApi.js', async () => {
     fetchCodeSurfaceSources: vi.fn(),
     stageCodeSurfaceFile: vi.fn(),
     rebuildCodeSurfaceStage: vi.fn(),
+    requestCodeSurfacePreview: vi.fn(),
     typecheckCodeSurface: vi.fn(),
     discardCodeSurfaceEdits: vi.fn(),
     deliverCodeSurface: vi.fn(),
@@ -74,11 +75,13 @@ describe('CodeSurface', () => {
     mocked.fetchCodeSurfaceSources.mockReset();
     mocked.stageCodeSurfaceFile.mockReset();
     mocked.rebuildCodeSurfaceStage.mockReset();
+    mocked.requestCodeSurfacePreview.mockReset();
     mocked.typecheckCodeSurface.mockReset();
     mocked.discardCodeSurfaceEdits.mockReset();
     mocked.deliverCodeSurface.mockReset();
     mockedStudioApi.fetchGameEditor.mockReset();
     mocked.rebuildCodeSurfaceStage.mockResolvedValue({ scheduled: true });
+    mocked.requestCodeSurfacePreview.mockResolvedValue({ html: '<html></html>', engineRef: 'abc123' });
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -90,9 +93,13 @@ describe('CodeSurface', () => {
     vi.useRealTimers();
   });
 
-  async function render(slug = 'sky-dodge', editorPushRef?: { current: ((content: EditorContentDoc) => void) | null }) {
+  async function render(
+    slug = 'sky-dodge',
+    editorPushRef?: { current: ((content: EditorContentDoc) => void) | null },
+    onPreviewReady?: (html: string) => void,
+  ) {
     await act(async () => {
-      root.render(createElement(CodeSurface, { slug, onBack: () => {}, editorPushRef }));
+      root.render(createElement(CodeSurface, { slug, onBack: () => {}, editorPushRef, onPreviewReady }));
     });
     await act(async () => {
       await flush();
@@ -213,6 +220,36 @@ describe('CodeSurface', () => {
 
     expect(mocked.rebuildCodeSurfaceStage).toHaveBeenCalledWith('sky-dodge');
     expect([...container.querySelectorAll('button')].some((b) => b.textContent === 'Stage it')).toBe(false);
+  });
+
+  it('Track 2: the same scheduled rebuild also requests a synchronous preview and reports it', async () => {
+    mocked.fetchCodeSurfaceSources.mockResolvedValue(sourcesFor());
+    mocked.stageCodeSurfaceFile.mockResolvedValue({
+      accepted: true,
+      path: 'game.ts',
+      bytes: 40,
+      staged: { totalBytes: 40, maxBytes: 1_000_000, maxFiles: 60, updatedAt: '2026-08-10T00:00:00.000Z' },
+    });
+    mocked.requestCodeSurfacePreview.mockResolvedValue({ html: '<html>fast</html>', engineRef: 'abc123' });
+    const onPreviewReady = vi.fn();
+
+    await render('sky-dodge', undefined, onPreviewReady);
+    const textarea = container.querySelector('textarea')!;
+
+    await act(async () => {
+      typeInto(textarea, 'export const boot = () => { /* edited */ };');
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+      await flush();
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_500);
+      await flush();
+    });
+
+    expect(mocked.requestCodeSurfacePreview).toHaveBeenCalledWith('sky-dodge');
+    expect(onPreviewReady).toHaveBeenCalledWith('<html>fast</html>');
   });
 
   it('CE-17: shows a notice when a staging write reports it opened a fresh round', async () => {

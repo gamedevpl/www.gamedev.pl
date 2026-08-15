@@ -913,6 +913,91 @@ describe('getGameSources', () => {
     expect(timings!.bundleMs).toBeGreaterThanOrEqual(0);
   });
 
+  it('Track 2: caches the engine half per ref, so a second game on the same ref reads no shared/ files again', async () => {
+    const files = new Map<string, string | Uint8Array>([
+      ['games/game-a/index.html', '<canvas id="game"></canvas>'],
+      ['games/game-a/game.ts', 'const game: { update(): void } = { update() {} }; GameKit.mount(game);'],
+      ['games/game-a/style.css', '.game { color: gold; }'],
+      ['games/game-a/SPEC.md', specMd({ title: 'Game A' })],
+      ['games/game-a/GAME.json', JSON.stringify({ engine: { modules: ['input'] } })],
+      ['games/game-b/index.html', '<canvas id="game"></canvas>'],
+      ['games/game-b/game.ts', 'const game: { update(): void } = { update() {} }; GameKit.mount(game);'],
+      ['games/game-b/style.css', '.game { color: blue; }'],
+      ['games/game-b/SPEC.md', specMd({ title: 'Game B' })],
+      ['games/game-b/GAME.json', JSON.stringify({ engine: { modules: ['input'] } })],
+      ['shared/game-shell.css', '.shell { display: grid; }'],
+      ['shared/modules/core.ts', 'const version: number = 1; window.GameKit = { mount() {} };'],
+      ['shared/modules/input.ts', 'GameKit.createInput = function (): void {};'],
+      ['shared/game-kit.d.ts', 'declare const GameKit: { mount(game: unknown): void };'],
+    ]);
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const pathname = new URL(String(input)).pathname;
+      const marker = '/contents/';
+      const path = decodeURIComponent(pathname.slice(pathname.indexOf(marker) + marker.length));
+      const value = files.get(path);
+      return value === undefined ? new Response('not found', { status: 404 }) : new Response(value, { status: 200 });
+    }) as unknown as typeof fetch;
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+
+    await client.getGameSources('main', 'game-a');
+    await client.getGameKitDeclaration('main');
+    fetchImpl.mockClear();
+
+    const sourcesB = await client.getGameSources('main', 'game-b');
+    await client.getGameKitDeclaration('main');
+
+    expect(sourcesB?.gameJs).toContain('GameKit.createInput');
+    const enginePaths = fetchImpl.mock.calls
+      .map((call) => decodeURIComponent(new URL(String(call[0])).pathname))
+      .filter((path) => path.includes('shared/'));
+    expect(enginePaths).toEqual([]);
+  });
+
+  it('Track 2: a branch push is visible again once the ref-SHA cache TTL elapses', async () => {
+    vi.useFakeTimers();
+    try {
+      let commitSha = 'sha-before';
+      const filesBySha: Record<string, Map<string, string | Uint8Array>> = {
+        'sha-before': new Map([['shared/game-shell.css', '.shell { display: grid; }']]),
+        'sha-after': new Map([['shared/game-shell.css', '.shell { display: flex; }']]),
+      };
+      const gameFiles = new Map<string, string | Uint8Array>([
+        ['games/game-a/index.html', '<canvas id="game"></canvas>'],
+        ['games/game-a/game.ts', 'const game: { update(): void } = { update() {} }; GameKit.mount(game);'],
+        ['games/game-a/style.css', '.game { color: gold; }'],
+        ['games/game-a/SPEC.md', specMd({ title: 'Game A' })],
+        ['games/game-a/GAME.json', JSON.stringify({ engine: { modules: [] } })],
+        ['shared/modules/core.ts', 'const version: number = 1; window.GameKit = { mount() {} };'],
+      ]);
+      const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(String(input));
+        if (url.pathname.endsWith('/commits/main')) {
+          return new Response(JSON.stringify({ sha: commitSha }), { status: 200 });
+        }
+        const marker = '/contents/';
+        const path = decodeURIComponent(url.pathname.slice(url.pathname.indexOf(marker) + marker.length));
+        const value = path === 'shared/game-shell.css' ? filesBySha[commitSha]!.get(path) : gameFiles.get(path);
+        return value === undefined ? new Response('not found', { status: 404 }) : new Response(value, { status: 200 });
+      }) as unknown as typeof fetch;
+      const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+
+      const before = await client.getGameSources('main', 'game-a');
+      expect(before?.styleCss).toContain('display: grid');
+
+      // Branch moved; within the TTL, the old engine still serves.
+      commitSha = 'sha-after';
+      const stillCached = await client.getGameSources('main', 'game-a');
+      expect(stillCached?.styleCss).toContain('display: grid');
+
+      // Past the TTL, the new engine is picked up.
+      vi.advanceTimersByTime(61_000);
+      const afterTtl = await client.getGameSources('main', 'game-a');
+      expect(afterTtl?.styleCss).toContain('display: flex');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('falls back to the sourced-audio catalog for a sound missing from the synth catalog', async () => {
     const files = new Map<string, string | Uint8Array>([
       ['games/march/index.html', '<canvas id="game"></canvas>'],

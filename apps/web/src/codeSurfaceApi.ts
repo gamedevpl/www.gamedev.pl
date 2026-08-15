@@ -99,6 +99,18 @@ export async function rebuildCodeSurfaceStage(slug: string): Promise<{ scheduled
   return (await response.json()) as { scheduled: true };
 }
 
+export type CodeSurfacePreviewResult = { html: string; engineRef: string };
+
+// Track 2's fast lane: builds the buffer, returns it inline.
+export async function requestCodeSurfacePreview(slug: string): Promise<CodeSurfacePreviewResult> {
+  const response = await fetch(`${API_BASE}/api/me/studio/games/${encodeURIComponent(slug)}/sources/preview`, {
+    method: 'POST',
+    credentials: 'include',
+  });
+  if (!response.ok) await throwResponseError(response);
+  return (await response.json()) as CodeSurfacePreviewResult;
+}
+
 export type CodeSurfacePatchResult = CodeSurfaceStageResult & { replacements: number; baseFrom: 'staged' | 'delivery' };
 
 export async function patchCodeSurfaceFile(

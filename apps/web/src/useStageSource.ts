@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import i18n from './i18n/index.js';
 import { fetchPublishedGame } from './catalog.js';
 import { embedGameHtml, withGameLocale } from './gamePlayer.js';
@@ -55,7 +55,12 @@ const NONE_ORIGIN: StageOrigin = { kind: 'none', at: null, versionLabel: null };
  * document gets the same `embedGameHtml(withGameLocale(...))` preparation every
  * embedded game gets.
  */
-export function useStageSource(token: string, status: SubmissionStatus | null): StageSource {
+export type UseStageSourceResult = StageSource & {
+  // Track 2 fast lane: shows a synchronous preview immediately, no fetch.
+  pushPreview: (html: string) => void;
+};
+
+export function useStageSource(token: string, status: SubmissionStatus | null): UseStageSourceResult {
   const [preview, setPreview] = useState<{ html: string; at: number } | null>(null);
   const [channel, setChannel] = useState<{ html: string; at: number; label: string | null } | null>(null);
   const [published, setPublished] = useState<{ html: string; slug: string } | null>(null);
@@ -269,5 +274,10 @@ export function useStageSource(token: string, status: SubmissionStatus | null): 
     origin = NONE_ORIGIN;
   }
 
-  return { html, rawHtml, origin };
+  // Track 2: a synchronous preview beats waiting on the next status poll.
+  const pushPreview = useCallback((nextHtml: string) => {
+    setPreview({ html: nextHtml, at: Date.now() });
+  }, []);
+
+  return { html, rawHtml, origin, pushPreview };
 }
