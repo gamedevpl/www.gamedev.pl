@@ -328,6 +328,7 @@
       "noFiles": "Nie ma jeszcze nic do pokazania",
       "showDiff": "Różnice względem wersji na żywo",
       "showCode": "Pokaż kod",
+      "colorPicker": "Wybierz kolor",
       "diffNoBase": "Ten plik nie ma jeszcze wersji na żywo do porównania.",
       "paramsPanel": "Parametry do dostrojenia",
       "budget": "{{lines}}/{{maxLines}} linii",
