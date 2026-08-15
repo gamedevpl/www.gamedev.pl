@@ -1455,14 +1455,17 @@ function FeedbackPanel({
     if (!draft) return;
     setText(draft.text);
     onDraftConsumed?.();
-    const input = inputRef.current;
-    if (input) {
-      input.focus();
-      input.style.height = 'auto';
-      input.style.height = `${Math.min(input.scrollHeight, 220)}px`;
-    }
+    inputRef.current?.focus();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft?.seq]);
+
+  // Runs after `text` commits, so a seeded draft measures its real height.
+  useEffect(() => {
+    const input = inputRef.current;
+    if (!input) return;
+    input.style.height = 'auto';
+    input.style.height = `${Math.min(input.scrollHeight, 220)}px`;
+  }, [text]);
 
   useEffect(() => {
     setStopRequested(handoffPending === 'self');

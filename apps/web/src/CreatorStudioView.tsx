@@ -435,6 +435,7 @@ export function CreatorStudioView({
     setChecklistUnread(0);
     setRailManualOpen(null);
     setTheaterOpen(false);
+    setChatDraft(null);
     seenActivityRef.current = 0;
     latestActivityRef.current = null;
   }, [stageToken]);
