@@ -167,6 +167,16 @@ interface GameManifest {
   audio?: { sounds?: unknown; music?: unknown; musicTracks?: unknown };
 }
 
+/**
+ * `shared/audio/sourced.json` — vendor-generated clips that cannot be re-rendered from
+ * parameters the way the synth catalog (`shared/audio/assets/*.wav`) can. A `GAME.json`
+ * sound name that misses the synth catalog is looked up here before it is treated as
+ * missing. Mirrors games-repo `tools/lib/sourced-audio.ts` / `tools/lib/assemble.ts`.
+ */
+interface SourcedAudioCatalog {
+  sounds?: Record<string, { mime?: unknown }>;
+}
+
 interface ParsedGameManifest {
   modules: GameKitModuleName[];
   sounds: string[];
@@ -1433,23 +1443,44 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
       }
       const availableModuleSources = moduleSources.filter((source): source is string => source !== null);
 
-      const audioAssets = await Promise.all(
-        manifest.sounds.map(async (soundName) => {
-          const bytes = await readRawBytes(`shared/audio/assets/${soundName}.wav`, ref);
-          return bytes ? [soundName, `data:audio/wav;base64,${Buffer.from(bytes).toString('base64')}`] : null;
-        }),
-      );
+      // A sound is either in the synth catalog (rendered on demand, `shared/audio/assets/*.wav`)
+      // or the sourced one (vendor clips that cannot be re-rendered, `shared/audio/sourced/*.mp3`
+      // + `shared/audio/sourced.json` for the mime). Checked in that order and cached so a game
+      // whose whole selection is one or the other only pays for the catalog fetch it needs.
+      let sourcedCatalog: Record<string, { mime?: unknown }> | null = null;
+      const loadSourcedCatalog = async (): Promise<Record<string, { mime?: unknown }>> => {
+        if (sourcedCatalog === null) {
+          const source = await readRawFile('shared/audio/sourced.json', ref);
+          sourcedCatalog = source ? ((JSON.parse(source) as SourcedAudioCatalog).sounds ?? {}) : {};
+        }
+        return sourcedCatalog;
+      };
+      const resolveSoundAsset = async (soundName: string): Promise<[string, string] | null> => {
+        const wavBytes = await readRawBytes(`shared/audio/assets/${soundName}.wav`, ref);
+        if (wavBytes) {
+          return [soundName, `data:audio/wav;base64,${Buffer.from(wavBytes).toString('base64')}`];
+        }
+        const sourced = await loadSourcedCatalog();
+        if (!Object.hasOwn(sourced, soundName)) {
+          return null;
+        }
+        const mp3Bytes = await readRawBytes(`shared/audio/sourced/${soundName}.mp3`, ref);
+        if (!mp3Bytes) {
+          return null;
+        }
+        const mime = typeof sourced[soundName].mime === 'string' ? (sourced[soundName].mime as string) : 'audio/mpeg';
+        return [soundName, `data:${mime};base64,${Buffer.from(mp3Bytes).toString('base64')}`];
+      };
+
+      const audioAssets = await Promise.all(manifest.sounds.map(resolveSoundAsset));
       if (audioAssets.some((asset) => asset === null)) {
         return null;
       }
 
-      const assetEntries = audioAssets.filter((asset): asset is [string, string] => asset !== null);
+      const assets: Record<string, string> = Object.fromEntries(
+        audioAssets.filter((asset): asset is [string, string] => asset !== null),
+      );
       const assetChunks: string[] = [];
-      if (assetEntries.length > 0) {
-        assetChunks.push(
-          `window.__GAME_AUDIO_ASSETS__ = Object.freeze(${JSON.stringify(Object.fromEntries(assetEntries))});`,
-        );
-      }
 
       // Music: shared catalog plus optional per-game music.json, then inject the
       // autoplay name plus every track this game can reach — not the whole catalog.
@@ -1478,8 +1509,30 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
           }
           selected[name] = tracks[name];
         }
+
+        // A drumKit sample is referenced from a track's `drumKit`, not `audio.sounds` — a
+        // game never "selects" it directly — so without embedding it here the engine's
+        // runtime fallback silently masks the miss as a synthesized noise burst instead of
+        // the sample nobody shipped. Mirrors games-repo assemble.ts.
+        for (const track of Object.values(selected) as Array<{ drumKit?: { kick?: unknown; hat?: unknown } }>) {
+          for (const soundName of [track.drumKit?.kick, track.drumKit?.hat]) {
+            if (typeof soundName !== 'string' || Object.hasOwn(assets, soundName)) {
+              continue;
+            }
+            const resolved = await resolveSoundAsset(soundName);
+            if (resolved === null) {
+              return null;
+            }
+            assets[resolved[0]] = resolved[1];
+          }
+        }
+
         assetChunks.push(`window.__GAME_AUDIO_MUSIC__ = ${JSON.stringify(manifest.music)};`);
         assetChunks.push(`window.__GAME_MUSIC_TRACKS__ = Object.freeze(${JSON.stringify(selected)});`);
+      }
+
+      if (Object.keys(assets).length > 0) {
+        assetChunks.unshift(`window.__GAME_AUDIO_ASSETS__ = Object.freeze(${JSON.stringify(assets)});`);
       }
 
       const assetsJs = assetChunks.length > 0 ? `${assetChunks.join('\n')}\n` : '';
