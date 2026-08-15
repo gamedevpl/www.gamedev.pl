@@ -1097,6 +1097,7 @@ export function CodeSurface({
                   onGotoDefinition={handleGotoDefinition}
                   initialSelection={initialSelectionForEditor}
                   fetchGhostText={fetchGhostText}
+                  colorPickerLabel={t('studioPanel.code.colorPicker')}
                   initialEditorState={selected ? getCodeSurfaceSessionState(slug)?.editorStates?.[selected] : undefined}
                   onEditorStateChange={(state) => {
                     if (selected) setCodeSurfaceEditorState(slug, selected, state);
