@@ -110,12 +110,91 @@ const V2_SCHEMA = {
   },
 };
 
+const LAYERED_V2 = {
+  version: 2,
+  layers: {
+    terrain: {
+      widget: 'tilemap',
+      label: { en: 'Terrain', pl: 'Teren' },
+      grid: { minCols: 5, maxCols: 5, minRows: 3, maxRows: 3 },
+      tiles: [
+        { key: 'floor', char: '.', label: { en: 'Floor', pl: 'Podłoże' } },
+        { key: 'start', char: '@', label: { en: 'Start', pl: 'Start' } },
+        { key: 'goal', char: '*', label: { en: 'Goal', pl: 'Meta' } },
+      ],
+      properties: {},
+      constraints: [
+        { tile: 'start', exactly: 1 },
+        { tile: 'goal', exactly: 1 },
+      ],
+    },
+    objects: {
+      widget: 'tilemap',
+      label: { en: 'Objects', pl: 'Obiekty' },
+      grid: { minCols: 5, maxCols: 5, minRows: 3, maxRows: 3 },
+      tiles: [
+        { key: 'empty', char: '.', label: { en: 'Empty', pl: 'Puste' } },
+        { key: 'wall', char: '#', label: { en: 'Wall', pl: 'Ściana' } },
+      ],
+      properties: {},
+      constraints: [],
+    },
+    triggers: {
+      widget: 'entities',
+      label: { en: 'Triggers', pl: 'Wyzwalacze' },
+      min: 0,
+      max: 4,
+      properties: { kind: { type: 'enum', values: ['exit'] } },
+      constraints: [],
+    },
+  },
+  constraints: [
+    {
+      reachable: {
+        from: { layer: 'terrain', tile: 'start' },
+        blockedBy: [{ layer: 'objects', tile: 'wall' }],
+        require: [{ layer: 'terrain', tile: 'goal' }],
+      },
+    },
+  ],
+};
+
+const LAYERED_CONTENT = {
+  layers: {
+    terrain: { properties: {}, rows: ['.....', '.@..*', '.....'] },
+    objects: { properties: {}, rows: ['.....', '.....', '.....'] },
+    triggers: [{ properties: { kind: 'exit' } }],
+  },
+};
+
 describe('editor-contract mirror', () => {
   it('accepts a schema-only v2 contract without v1 defaults', () => {
     const { definition, errors } = parseEditorDefinition(JSON.stringify(V2_SCHEMA));
     expect(errors).toEqual([]);
     expect(definition?.version).toBe(2);
     expect(definition?.params?.shipTopSpeed.default).toBeUndefined();
+  });
+
+  it('accepts and validates layered tilemap/entity content', () => {
+    const { definition, errors } = parseEditorDefinition(JSON.stringify(LAYERED_V2));
+    expect(errors).toEqual([]);
+    expect(definition?.layers?.terrain.widget).toBe('tilemap');
+    expect(definition?.layers?.triggers.widget).toBe('entities');
+    expect(validateEditorContent(definition!, LAYERED_CONTENT)).toEqual([]);
+
+    const blocked = structuredClone(LAYERED_CONTENT);
+    blocked.layers.objects.rows = ['..#..', '..#..', '..#..'];
+    expect(validateEditorContent(definition!, blocked).some((message) => message.includes('walled off'))).toBe(true);
+  });
+
+  it('generates typed layer interfaces and v2 defaults', () => {
+    const { definition } = parseEditorDefinition(JSON.stringify(LAYERED_V2));
+    const generated = generateEditorContentModule(definition!, LAYERED_CONTENT);
+    expect(generated).toContain('export interface TerrainLayer {');
+    expect(generated).toContain('export interface TriggersLayerItem {');
+    expect(generated).toContain('  layers: EditorLayers;');
+    expect(generated).toContain('"terrain": {\n      "properties": {},\n      "rows": [');
+    expect(generateEditorContentModule(definition!)).toContain('"layers": {}');
   });
 
   it('rejects v2 defaults so schema and content cannot drift', () => {

@@ -410,6 +410,7 @@
       "pathDistinct": "A closed path needs at least 3 distinct points",
       "pathRepeatedEnd": "Do not repeat the first point; closure is automatic",
       "collection": "Collection",
+      "readOnlyLayer": "Only the top layer can be edited",
       "tiles": "Tiles",
       "properties": "Properties",
       "checks": "Checks",

@@ -1,18 +1,25 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PathPainter } from './PathPainter.js';
+import { LayeredBoard, LayeredSidebar } from './LayeredEditorSurface.js';
 import {
   blankItem,
   collectionProblems,
   defaultCollectionKey,
+  defaultLayerTileKey,
   isPathItem,
   isTilemapItem,
   itemProblems,
+  layerProblems,
+  layeredProblems,
   setCell,
 } from './editorContentTools.js';
 import type {
   EditorCollectionSpec,
   EditorContentDoc,
+  EditorLayerConstraint,
+  EditorLayerSpec,
+  EditorLayersDoc,
   EditorItemContent,
   EditorLabel,
   EditorPathSpec,
@@ -49,14 +56,20 @@ function firstTileKey(spec: EditorCollectionSpec | null | undefined): string | n
  * reaches the server, which makes the live check the *only* check they see.
  */
 
-export function RemixPainter(props: {
-  content: Record<string, EditorCollectionSpec>;
+type RemixPainterProps = {
+  content?: Record<string, EditorCollectionSpec>;
+  layers?: Record<string, EditorLayerSpec> | null;
+  constraints?: EditorLayerConstraint[] | null;
   doc: EditorContentDoc;
   onChange: (next: EditorContentDoc) => void;
   selectedCollectionKey?: string | null;
   onCollectionChange?: (key: string) => void;
+  selectedLayerKey?: string | null;
+  onLayerChange?: (key: string) => void;
   onSelectionChange?: (selection: EditorSelection) => void;
-}) {
+};
+
+function CollectionRemixPainter(props: RemixPainterProps & { content: Record<string, EditorCollectionSpec> }) {
   const { t, i18n } = useTranslation();
   const name = (label: EditorLabel) => (i18n.language?.startsWith('pl') ? label.pl : label.en);
   const pathMessages = {
@@ -342,4 +355,88 @@ export function RemixPainter(props: {
       ) : null}
     </div>
   );
+}
+
+function LayeredRemixPainter(props: RemixPainterProps & { layers: Record<string, EditorLayerSpec> }) {
+  const { t, i18n } = useTranslation();
+  const name = (label: EditorLabel) => (i18n.language?.startsWith('pl') ? label.pl : label.en);
+  const layerKeys = Object.keys(props.layers);
+  const topLayerKey = layerKeys[layerKeys.length - 1] ?? null;
+  const [internalLayerKey, setInternalLayerKey] = useState<string | null>(null);
+  const requestedLayerKey = props.selectedLayerKey !== undefined ? props.selectedLayerKey : internalLayerKey;
+  const activeLayerKey = requestedLayerKey && props.layers[requestedLayerKey] ? requestedLayerKey : topLayerKey;
+  const [tileKey, setTileKey] = useState<string | null>(defaultLayerTileKey(props.layers, activeLayerKey));
+  const [entityIndex, setEntityIndex] = useState(0);
+  const layersContent = (props.doc.layers ?? {}) as EditorLayersDoc;
+
+  useEffect(() => {
+    setTileKey(defaultLayerTileKey(props.layers, activeLayerKey));
+    setEntityIndex(0);
+  }, [activeLayerKey, props.layers]);
+
+  const onSelectionChangeRef = useRef(props.onSelectionChange);
+  onSelectionChangeRef.current = props.onSelectionChange;
+  useEffect(() => {
+    if (activeLayerKey) onSelectionChangeRef.current?.({ collection: activeLayerKey, index: 0 });
+  }, [activeLayerKey]);
+
+  if (!activeLayerKey) return null;
+  const activeSpec = props.layers[activeLayerKey];
+  const updateLayers = (nextLayers: EditorLayersDoc) => props.onChange({ ...props.doc, layers: nextLayers });
+  const selectLayer = (nextKey: string) => {
+    if (!props.layers[nextKey]) return;
+    if (props.selectedLayerKey === undefined) setInternalLayerKey(nextKey);
+    props.onLayerChange?.(nextKey);
+    setEntityIndex(0);
+    setTileKey(defaultLayerTileKey(props.layers, nextKey));
+  };
+  const problems = layerProblems(activeSpec, layersContent[activeLayerKey], name);
+  const wideProblems = layeredProblems(props.layers, props.constraints ?? undefined, layersContent);
+
+  return (
+    <div className="remix-painter remix-layered-painter">
+      <div className="editor-layered-remix-grid">
+        <LayeredBoard
+          layers={props.layers}
+          content={layersContent}
+          activeLayerKey={activeLayerKey}
+          editableLayerKey={topLayerKey}
+          name={name}
+          tileKey={tileKey}
+          onTileKeyChange={setTileKey}
+          onLayerChange={selectLayer}
+          onChange={updateLayers}
+          readOnlyLabel={t('studioPanel.editor.readOnlyLayer')}
+        />
+        <LayeredSidebar
+          layers={props.layers}
+          content={layersContent}
+          activeLayerKey={activeLayerKey}
+          editableLayerKey={topLayerKey}
+          name={name}
+          entityIndex={entityIndex}
+          onEntityIndexChange={setEntityIndex}
+          onLayerChange={selectLayer}
+          onChange={updateLayers}
+          readOnlyLabel={t('studioPanel.editor.readOnlyLayer')}
+        />
+      </div>
+      {problems.length > 0 || wideProblems.length > 0 ? (
+        <div className="remix-painter-checks" role="status">
+          {[...problems, ...wideProblems].slice(0, 3).map((problem) => (
+            <p key={problem} className="editor-check is-bad">
+              ✕ {problem}
+            </p>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+export function RemixPainter(props: RemixPainterProps) {
+  if (props.layers && Object.keys(props.layers).length > 0)
+    return <LayeredRemixPainter {...props} layers={props.layers} />;
+  if (!props.content || Object.keys(props.content).length === 0) return null;
+  return <CollectionRemixPainter {...props} content={props.content} />;
 }

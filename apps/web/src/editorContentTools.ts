@@ -1,5 +1,10 @@
 import type {
   EditorCollectionSpec,
+  EditorEntityItemContent,
+  EditorEntitiesLayerSpec,
+  EditorLayerConstraint,
+  EditorLayerSpec,
+  EditorLayersDoc,
   EditorItemContent,
   EditorLabel,
   EditorPathItemContent,
@@ -12,12 +17,21 @@ export function defaultCollectionKey(collections: Record<string, unknown>): stri
   return Object.keys(collections).find((key) => key.length > 0) ?? null;
 }
 
-export function isTilemapItem(item: EditorItemContent): item is EditorTilemapItemContent {
-  return 'rows' in item;
+export function defaultLayerKey(layers: Record<string, unknown>): string | null {
+  return Object.keys(layers).find((key) => key.length > 0) ?? null;
 }
 
-export function isPathItem(item: EditorItemContent): item is EditorPathItemContent {
-  return 'points' in item;
+export function defaultLayerTileKey(layers: Record<string, EditorLayerSpec>, key: string | null): string | null {
+  const spec = key ? layers[key] : undefined;
+  return spec?.widget === 'tilemap' ? (spec.tiles[0]?.key ?? null) : null;
+}
+
+export function isTilemapItem(item: unknown): item is EditorTilemapItemContent {
+  return typeof item === 'object' && item !== null && !Array.isArray(item) && 'rows' in item;
+}
+
+export function isPathItem(item: unknown): item is EditorPathItemContent {
+  return typeof item === 'object' && item !== null && !Array.isArray(item) && 'points' in item;
 }
 
 export type PathProblemMessages = {
@@ -150,11 +164,7 @@ export function itemProblems(
   return problems;
 }
 
-function pathProblems(
-  spec: EditorPathSpec,
-  item: EditorPathItemContent,
-  messages?: PathProblemMessages,
-): string[] {
+function pathProblems(spec: EditorPathSpec, item: EditorPathItemContent, messages?: PathProblemMessages): string[] {
   const fallback: PathProblemMessages = {
     pointCount: (count, min, max) => `${count} points; expected ${min}-${max}`,
     outOfBounds: (index) => `Point ${index} is outside the grid`,
@@ -167,7 +177,14 @@ function pathProblems(
     problems.push(text.pointCount(item.points.length, spec.minPoints, spec.maxPoints));
   }
   item.points.forEach((point, index) => {
-    if (!Number.isInteger(point.x) || !Number.isInteger(point.y) || point.x < 0 || point.y < 0 || point.x >= spec.gridCols || point.y >= spec.gridRows) {
+    if (
+      !Number.isInteger(point.x) ||
+      !Number.isInteger(point.y) ||
+      point.x < 0 ||
+      point.y < 0 ||
+      point.x >= spec.gridCols ||
+      point.y >= spec.gridRows
+    ) {
       problems.push(text.outOfBounds(index + 1));
     }
   });
@@ -226,6 +243,135 @@ export function blankItem(spec: EditorCollectionSpec['item']): EditorItemContent
   // Smallest legal grid, all first-tile — the creator paints from there.
   const fill = spec.tiles[0]?.char ?? '.';
   return { properties, rows: Array.from({ length: spec.grid.minRows }, () => fill.repeat(spec.grid.minCols)) };
+}
+
+export function blankLayerEntity(spec: EditorEntitiesLayerSpec): EditorEntityItemContent {
+  const properties: Record<string, unknown> = {};
+  for (const [name, propertySpec] of Object.entries(spec.properties)) {
+    if (propertySpec.type === 'text') properties[name] = '';
+    else if (propertySpec.type === 'int' || propertySpec.type === 'number') properties[name] = propertySpec.min;
+    else if (propertySpec.type === 'enum') properties[name] = propertySpec.values[0];
+    else properties[name] = false;
+  }
+  return { properties };
+}
+
+function layerEntityProblems(spec: EditorEntitiesLayerSpec, items: EditorEntityItemContent[]): string[] {
+  const problems: string[] = [];
+  if (items.length < spec.min || items.length > spec.max) {
+    problems.push(`has ${items.length} items; expected ${spec.min}-${spec.max}`);
+  }
+  for (const rule of spec.constraints) {
+    if (!('uniqueBy' in rule)) continue;
+    const seen = new Map<string, number>();
+    items.forEach((item, index) => {
+      const encoded = JSON.stringify(item.properties[rule.uniqueBy]);
+      if (encoded === undefined) return;
+      const previous = seen.get(encoded);
+      if (previous !== undefined) problems.push(`${previous + 1} & ${index + 1} share the same ${rule.uniqueBy}`);
+      else seen.set(encoded, index);
+    });
+  }
+  return problems;
+}
+
+export function layerProblems(
+  spec: EditorLayerSpec,
+  value: unknown,
+  name: (label: EditorLabel) => string,
+  pathMessages?: PathProblemMessages,
+): string[] {
+  if (spec.widget === 'tilemap') {
+    return isTilemapItem(value as EditorItemContent)
+      ? itemProblems(spec, value as EditorTilemapItemContent, name, pathMessages)
+      : ['Layer needs a tilemap document'];
+  }
+  return Array.isArray(value) && value.every((item) => isPlainEntityItem(item))
+    ? layerEntityProblems(spec, value as EditorEntityItemContent[])
+    : ['Layer needs an entity list'];
+}
+
+function isPlainEntityItem(value: unknown): value is EditorEntityItemContent {
+  return typeof value === 'object' && value !== null && !Array.isArray(value) && 'properties' in value;
+}
+
+function layerRows(layers: Record<string, EditorLayerSpec>, content: EditorLayersDoc, key: string): string[] | null {
+  const spec = layers[key];
+  const value = content[key];
+  if (!spec || spec.widget !== 'tilemap' || !isTilemapItem(value as EditorItemContent)) return null;
+  return (value as EditorTilemapItemContent).rows;
+}
+
+export function layeredProblems(
+  layers: Record<string, EditorLayerSpec>,
+  constraints: EditorLayerConstraint[] | undefined,
+  content: EditorLayersDoc,
+): string[] {
+  const problems: string[] = [];
+  for (const rule of constraints ?? []) {
+    const fromRows = layerRows(layers, content, rule.reachable.from.layer);
+    if (!fromRows) continue;
+    const width = fromRows[0]?.length ?? 0;
+    const height = fromRows.length;
+    const rowsFor = (layer: string) => layerRows(layers, content, layer);
+    const referenced = [rule.reachable.from, ...rule.reachable.blockedBy, ...rule.reachable.require];
+    if (
+      referenced.some((ref) => {
+        const rows = rowsFor(ref.layer);
+        return !rows || rows.length !== height || rows.some((row) => row.length !== width);
+      })
+    ) {
+      problems.push('All layers in a reachability check must share the same grid');
+      continue;
+    }
+    const charFor = (ref: { layer: string; tile: string }) => {
+      const spec = layers[ref.layer];
+      return spec && spec.widget === 'tilemap' ? spec.tiles.find((tile) => tile.key === ref.tile)?.char : undefined;
+    };
+    const positions = (ref: { layer: string; tile: string }) => {
+      const rows = rowsFor(ref.layer);
+      const char = charFor(ref);
+      const result = new Set<number>();
+      if (!rows || !char) return result;
+      rows.forEach((row, y) => {
+        for (let x = 0; x < row.length; x += 1) if (row[x] === char) result.add(y * width + x);
+      });
+      return result;
+    };
+    const blocked = new Set<number>();
+    for (const ref of rule.reachable.blockedBy) for (const position of positions(ref)) blocked.add(position);
+    const seen = new Set<number>();
+    const queue = [...positions(rule.reachable.from)];
+    for (const position of queue) seen.add(position);
+    while (queue.length > 0) {
+      const position = queue.shift() as number;
+      const row = Math.floor(position / width);
+      const col = position % width;
+      for (const [dr, dc] of [
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1],
+      ] as const) {
+        const nextRow = row + dr;
+        const nextCol = col + dc;
+        if (nextRow < 0 || nextCol < 0 || nextRow >= height || nextCol >= width) continue;
+        const next = nextRow * width + nextCol;
+        if (blocked.has(next) || seen.has(next)) continue;
+        seen.add(next);
+        queue.push(next);
+      }
+    }
+    const missed = rule.reachable.require.flatMap((ref) =>
+      [...positions(ref)].filter((position) => !seen.has(position)),
+    );
+    if (missed.length > 0) {
+      problems.push(
+        `${missed.length} required tile${missed.length === 1 ? '' : 's'} walled off from ${rule.reachable.from.layer}`,
+      );
+    }
+  }
+  return problems;
 }
 
 function blankPathPoints(spec: EditorPathSpec) {

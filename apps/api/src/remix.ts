@@ -1,8 +1,15 @@
 import { createHash, randomBytes } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { PARAMS_KEY, parseEditorDefinition, type EditorDefinition } from './editor-contract.js';
-import { EDITOR_FILE } from './editor-contract.js';
+import {
+  EDITOR_CONTENT_FILE,
+  EDITOR_FILE,
+  PARAMS_KEY,
+  parseEditorDefinition,
+  validateEditorContent,
+  type EditorContentDocument,
+  type EditorDefinition,
+} from './editor-contract.js';
 import { applyAssistPatches, assistEnabled, MAX_UTTERANCE_LENGTH, type EditorAssistant } from './editor-assist.js';
 import { rememberRemixTurn, type RemixTurn } from './remix-turns.js';
 import { codeLaneDebugEnabled, codeLaneEnabled, type VertexCodeLane } from './code-lane.js';
@@ -214,8 +221,20 @@ function ownerTag(uid: string): string {
 }
 
 /** The declaration's collections at their defaults — the base every params-only document sits on. */
-function defaultCollections(definition: EditorDefinition | null): Record<string, unknown> {
+function defaultCollections(definition: EditorDefinition | null, rawContent?: string): Record<string, unknown> {
   if (!definition) return {};
+  if (rawContent) {
+    let parsed: unknown = null;
+    try {
+      parsed = JSON.parse(rawContent);
+    } catch {
+      // Invalid JSON falls through to the defaults below.
+    }
+    if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+      const content = parsed as EditorContentDocument;
+      if (validateEditorContent(definition, content).length === 0) return content;
+    }
+  }
   return Object.fromEntries(Object.entries(definition.content).map(([key, spec]) => [key, spec.defaults]));
 }
 
@@ -445,12 +464,18 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
     // file is a real "no such game" rather than a swallowed error.
     const manifest = await options.githubClient.getGameFile(ref, slug, 'GAME.json');
     if (manifest === null) return null;
-    const editorJson = await options.githubClient.getGameFile(ref, slug, EDITOR_FILE);
+    const [editorJson, editorContentJson] = await Promise.all([
+      options.githubClient.getGameFile(ref, slug, EDITOR_FILE),
+      options.githubClient.getGameFile(ref, slug, EDITOR_CONTENT_FILE),
+    ]);
     // Declaration only: a repo game's code stays on the ref (the assembler reads
     // it there), so the code lane has no file list to map and says so, while the
     // params lane works on exactly the games that declare params.
+    const sources: Record<string, string> = {};
+    if (editorJson !== null) sources[EDITOR_FILE] = editorJson;
+    if (editorContentJson !== null) sources[EDITOR_CONTENT_FILE] = editorContentJson;
     return {
-      sources: editorJson === null ? {} : { [EDITOR_FILE]: editorJson },
+      sources,
       ref,
       fromStore: false,
     };
@@ -546,6 +571,9 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
         // to this server: painted content lives in the player's session and
         // reaches the game over the bridge, exactly like params.
         content: definition && Object.keys(definition.content).length > 0 ? definition.content : null,
+        layers: definition && definition.layers && Object.keys(definition.layers).length > 0 ? definition.layers : null,
+        constraints: definition?.constraints ?? null,
+        contentDefaults: defaultCollections(definition, loaded.sources[EDITOR_CONTENT_FILE]),
         canAssist,
         canCode,
         // What is worth saying here, derived from what this game can do.
@@ -588,7 +616,10 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
       // alone: `applyAssistPatches` validates the whole document, and a game
       // that declares maps would otherwise fail that validation on every
       // request — dropping perfectly good tuning patches into the code lane.
-      const content = { ...defaultCollections(session.definition), [PARAMS_KEY]: body.data.params ?? {} };
+      const content = {
+        ...defaultCollections(session.definition, session.sources[EDITOR_CONTENT_FILE]),
+        [PARAMS_KEY]: body.data.params ?? {},
+      };
       try {
         const result = await options.assistant.assist({
           definition: session.definition,
@@ -1081,7 +1112,7 @@ export async function registerRemixRoutes(app: FastifyInstance, options: RemixRo
       const { patches } = applyAssistPatches(
         session.definition!,
         {
-          ...defaultCollections(session.definition),
+          ...defaultCollections(session.definition, session.sources[EDITOR_CONTENT_FILE]),
           [PARAMS_KEY]: Object.fromEntries(Object.entries(specs).map(([key, spec]) => [key, spec.default])),
         },
         Object.entries(values).map(([key, value]) => ({ key, value })),

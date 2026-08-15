@@ -6,11 +6,16 @@ import {
   blankItem,
   collectionProblems,
   defaultCollectionKey,
+  defaultLayerKey,
+  defaultLayerTileKey,
   isPathItem,
   isTilemapItem,
   itemProblems,
+  layerProblems,
+  layeredProblems,
   setCell,
 } from './editorContentTools.js';
+import { LayeredBoard, LayeredSidebar } from './LayeredEditorSurface.js';
 import { recordAssistStep, recordEditorStep } from './visitTelemetry.js';
 import type { EditorContentPush, EditorSelection } from './editorBridge.js';
 import {
@@ -21,11 +26,13 @@ import {
   requestEditorAssist,
   type EditorCollectionSpec,
   type EditorContentDoc,
+  type EditorLayersDoc,
   type EditorItemContent,
   type EditorLabel,
   type EditorParamValue,
   type EditorPathSpec,
   type EditorTilemapSpec,
+  type EditorLayerSpec,
   type GameEditorState,
   type StudioApiError,
   type StudioGame,
@@ -153,6 +160,9 @@ export function EditorPanel(props: {
   const [selectedCollectionKey, setSelectedCollectionKey] = useState<string | null>(null);
   const [itemIndex, setItemIndex] = useState(0);
   const [tileKey, setTileKey] = useState<string | null>(null);
+  const [selectedLayerKey, setSelectedLayerKey] = useState<string | null>(null);
+  const [layerEntityIndex, setLayerEntityIndex] = useState(0);
+  const [layerTileKey, setLayerTileKey] = useState<string | null>(null);
   const [utterance, setUtterance] = useState('');
   const [assist, setAssist] = useState<AssistState>({ kind: 'idle' });
 
@@ -162,6 +172,14 @@ export function EditorPanel(props: {
   const spec = collectionKey ? editor!.definition.content[collectionKey] : null;
   const items = collectionKey ? ((content[collectionKey] ?? []) as EditorItemContent[]) : [];
   const item = items[itemIndex] ?? null;
+  const layerKeys = editor ? Object.keys(editor.definition.layers ?? {}) : [];
+  const layerKey =
+    editor && selectedLayerKey && editor.definition.layers?.[selectedLayerKey]
+      ? selectedLayerKey
+      : defaultLayerKey(editor?.definition.layers ?? {});
+  const layerSpec: EditorLayerSpec | null =
+    layerKey && editor?.definition.layers ? editor.definition.layers[layerKey] : null;
+  const layersContent = (content.layers ?? {}) as EditorLayersDoc;
   const paramSpecs = editor?.definition.params ?? null;
   const paramValues = (content.params ?? {}) as Record<string, EditorParamValue>;
 
@@ -177,12 +195,23 @@ export function EditorPanel(props: {
         const merged = mergeDraft(loaded);
         setContent(merged);
         const defaultKey = defaultCollectionKey(loaded.definition.content);
-        pushLive(merged, defaultKey ? { collection: defaultKey, index: 0 } : undefined);
+        const defaultLayer = defaultLayerKey(loaded.definition.layers ?? {});
+        pushLive(
+          merged,
+          defaultKey
+            ? { collection: defaultKey, index: 0 }
+            : defaultLayer
+              ? { collection: defaultLayer, index: 0 }
+              : undefined,
+        );
         setRevision(loaded.draft?.revision ?? 0);
         setSaveState('clean');
         setSelectedCollectionKey(defaultKey);
         setItemIndex(0);
         setTileKey(defaultKey ? firstTileKey(loaded.definition.content[defaultKey]) : null);
+        setSelectedLayerKey(defaultLayer);
+        setLayerEntityIndex(0);
+        setLayerTileKey(defaultLayer ? defaultLayerTileKey(loaded.definition.layers ?? {}, defaultLayer) : null);
         setState('ready');
       })
       .catch(() => {
@@ -261,6 +290,15 @@ export function EditorPanel(props: {
       list[itemIndex] = next;
       const nextContent = { ...current, [collectionKey]: list };
       pushLive(nextContent, { collection: collectionKey, index: itemIndex });
+      return nextContent;
+    });
+    scheduleSave();
+  }
+
+  function updateLayers(nextLayers: EditorLayersDoc) {
+    setContent((current) => {
+      const nextContent = { ...current, layers: nextLayers };
+      pushLive(nextContent, layerKey ? { collection: layerKey, index: 0 } : undefined);
       return nextContent;
     });
     scheduleSave();
@@ -355,11 +393,22 @@ export function EditorPanel(props: {
       const merged = mergeDraft(loaded);
       setContent(merged);
       const defaultKey = defaultCollectionKey(loaded.definition.content);
-      pushLive(merged, defaultKey ? { collection: defaultKey, index: 0 } : undefined);
+      const defaultLayer = defaultLayerKey(loaded.definition.layers ?? {});
+      pushLive(
+        merged,
+        defaultKey
+          ? { collection: defaultKey, index: 0 }
+          : defaultLayer
+            ? { collection: defaultLayer, index: 0 }
+            : undefined,
+      );
       setRevision(loaded.draft?.revision ?? 0);
       setSelectedCollectionKey(defaultKey);
       setItemIndex(0);
       setTileKey(defaultKey ? firstTileKey(loaded.definition.content[defaultKey]) : null);
+      setSelectedLayerKey(defaultLayer);
+      setLayerEntityIndex(0);
+      setLayerTileKey(defaultLayer ? defaultLayerTileKey(loaded.definition.layers ?? {}, defaultLayer) : null);
       setSaveState('clean');
     } catch {
       if (mountedRef.current) setSaveState('error');
@@ -375,6 +424,14 @@ export function EditorPanel(props: {
     pushLive(content, { collection: nextKey, index: 0 });
   }
 
+  function selectLayer(nextKey: string) {
+    if (!editor?.definition.layers?.[nextKey]) return;
+    setSelectedLayerKey(nextKey);
+    setLayerEntityIndex(0);
+    setLayerTileKey(defaultLayerTileKey(editor.definition.layers, nextKey));
+    pushLive(content, { collection: nextKey, index: 0 });
+  }
+
   async function discardDraft() {
     try {
       await deleteEditorDraft(slug);
@@ -382,9 +439,21 @@ export function EditorPanel(props: {
       if (editor) {
         setContent(editor.content);
         const defaultKey = defaultCollectionKey(editor.definition.content);
-        pushLive(editor.content, defaultKey ? { collection: defaultKey, index: 0 } : undefined);
+        const defaultLayer = defaultLayerKey(editor.definition.layers ?? {});
+        pushLive(
+          editor.content,
+          defaultKey
+            ? { collection: defaultKey, index: 0 }
+            : defaultLayer
+              ? { collection: defaultLayer, index: 0 }
+              : undefined,
+        );
         setRevision(0);
+        setSelectedCollectionKey(defaultKey);
         setItemIndex(0);
+        setSelectedLayerKey(defaultLayer);
+        setLayerEntityIndex(0);
+        setLayerTileKey(defaultLayer ? defaultLayerTileKey(editor.definition.layers ?? {}, defaultLayer) : null);
         setSaveState('clean');
       }
     } catch {
@@ -423,7 +492,7 @@ export function EditorPanel(props: {
   }
   // A definition may declare only tunables (no collections) — that renders as a
   // Tuning-only panel, not an error. Nothing at all to edit is the error case.
-  if (state === 'error' || !editor || (!spec && !paramSpecs)) {
+  if (state === 'error' || !editor || (!spec && !layerSpec && !paramSpecs)) {
     return (
       <div className="editor-panel editor-panel-note">
         {t('studioPanel.editor.loadError')}
@@ -436,17 +505,32 @@ export function EditorPanel(props: {
 
   const problems = item && spec ? itemProblems(spec.item, item, name, pathMessages) : [];
   const collectionWideProblems = spec ? collectionProblems(spec, items) : [];
+  const activeLayerProblems =
+    layerSpec && layerKey ? layerProblems(layerSpec, layersContent[layerKey], name, pathMessages) : [];
+  const layeredWideProblems = editor?.definition.layers
+    ? layeredProblems(editor.definition.layers, editor.definition.constraints, layersContent)
+    : [];
   const allProblems = editor
-    ? collectionKeys.flatMap((key) => {
-        const collection = editor.definition.content[key];
-        const collectionItems = itemsOf(content, key);
-        const perItem = collectionItems.flatMap((entry, index) => {
-          const found = itemProblems(collection.item, entry, name, pathMessages);
-          return found.length > 0 ? [`${name(collection.itemLabel)} ${index + 1}`] : [];
-        });
-        const collectionWide = collectionProblems(collection, collectionItems);
-        return collectionWide.length > 0 ? [...perItem, name(collection.itemLabel)] : perItem;
-      })
+    ? [
+        ...collectionKeys.flatMap((key) => {
+          const collection = editor.definition.content[key];
+          const collectionItems = itemsOf(content, key);
+          const perItem = collectionItems.flatMap((entry, index) => {
+            const found = itemProblems(collection.item, entry, name, pathMessages);
+            return found.length > 0 ? [`${name(collection.itemLabel)} ${index + 1}`] : [];
+          });
+          const collectionWide = collectionProblems(collection, collectionItems);
+          return collectionWide.length > 0 ? [...perItem, name(collection.itemLabel)] : perItem;
+        }),
+        ...layerKeys.flatMap((key) => {
+          const declaredLayer = editor.definition.layers?.[key];
+          if (!declaredLayer) return [];
+          return layerProblems(declaredLayer, layersContent[key], name, pathMessages).length > 0
+            ? [name(declaredLayer.label)]
+            : [];
+        }),
+        ...(layeredWideProblems.length > 0 ? ['Layers'] : []),
+      ]
     : [];
   const tilemapItem = item && isTilemapItem(item) ? item : null;
   const pathItem = item && isPathItem(item) ? item : null;
@@ -533,7 +617,18 @@ export function EditorPanel(props: {
       ) : null}
 
       <div className="editor-body">
-        {boardSpec || pathSpec ? (
+        {layerSpec && layerKey && editor.definition.layers ? (
+          <LayeredBoard
+            layers={editor.definition.layers}
+            content={layersContent}
+            activeLayerKey={layerKey}
+            name={name}
+            tileKey={layerTileKey}
+            onTileKeyChange={setLayerTileKey}
+            onLayerChange={selectLayer}
+            onChange={updateLayers}
+          />
+        ) : boardSpec || pathSpec ? (
           <div className="editor-board-col">
             {boardSpec && tilemapItem ? (
               <>
@@ -717,6 +812,19 @@ export function EditorPanel(props: {
             </div>
           ) : null}
 
+          {layerSpec && editor.definition.layers ? (
+            <LayeredSidebar
+              layers={editor.definition.layers}
+              content={layersContent}
+              activeLayerKey={layerKey}
+              name={name}
+              entityIndex={layerEntityIndex}
+              onEntityIndexChange={setLayerEntityIndex}
+              onLayerChange={selectLayer}
+              onChange={updateLayers}
+            />
+          ) : null}
+
           {spec && collectionKey ? (
             <div className="editor-side-group">
               {collectionKeys.length > 1 ? (
@@ -897,10 +1005,17 @@ export function EditorPanel(props: {
 
           <div className="editor-side-group">
             <h4>{t('studioPanel.editor.checks')}</h4>
-            {problems.length === 0 && collectionWideProblems.length === 0 ? (
+            {(
+              layerSpec
+                ? activeLayerProblems.length === 0 && layeredWideProblems.length === 0
+                : problems.length === 0 && collectionWideProblems.length === 0
+            ) ? (
               <p className="editor-check is-ok">✓ {t('studioPanel.editor.checksOk')}</p>
             ) : (
-              [...problems, ...collectionWideProblems].map((problem) => (
+              (layerSpec
+                ? [...activeLayerProblems, ...layeredWideProblems]
+                : [...problems, ...collectionWideProblems]
+              ).map((problem) => (
                 <p key={problem} className="editor-check is-bad">
                   ✕ {problem}
                 </p>

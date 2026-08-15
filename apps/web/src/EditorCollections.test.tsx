@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from './i18n/index.js';
 import type {
   EditorCollectionSpec,
+  EditorContentDoc,
   EditorConstraint,
   EditorDefinition,
   EditorItemContent,
@@ -67,6 +68,61 @@ const definition: EditorDefinition = {
 };
 
 const content = { maps: [mapItem], routes: [routeItem] };
+
+const layeredDefinition: EditorDefinition = {
+  version: 2,
+  content: {},
+  layers: {
+    terrain: {
+      widget: 'tilemap',
+      label: { en: 'Terrain', pl: 'Teren' },
+      grid: { minCols: 3, maxCols: 3, minRows: 3, maxRows: 3 },
+      tiles: [
+        { key: 'floor', char: '.', label: { en: 'Floor', pl: 'Podłoga' } },
+        { key: 'start', char: '@', label: { en: 'Start', pl: 'Start' } },
+        { key: 'goal', char: '*', label: { en: 'Goal', pl: 'Meta' } },
+      ],
+      properties: {},
+      constraints: [],
+    },
+    objects: {
+      widget: 'tilemap',
+      label: { en: 'Objects', pl: 'Obiekty' },
+      grid: { minCols: 3, maxCols: 3, minRows: 3, maxRows: 3 },
+      tiles: [
+        { key: 'empty', char: '.', label: { en: 'Empty', pl: 'Puste' } },
+        { key: 'wall', char: '#', label: { en: 'Wall', pl: 'Ściana' } },
+      ],
+      properties: {},
+      constraints: [],
+    },
+    triggers: {
+      widget: 'entities',
+      label: { en: 'Triggers', pl: 'Wyzwalacze' },
+      min: 0,
+      max: 2,
+      properties: { kind: { type: 'text', max: 20 } },
+      constraints: [],
+    },
+  },
+  constraints: [
+    {
+      reachable: {
+        from: { layer: 'terrain', tile: 'start' },
+        blockedBy: [{ layer: 'objects', tile: 'wall' }],
+        require: [{ layer: 'terrain', tile: 'goal' }],
+      },
+    },
+  ],
+};
+
+const layeredContent: EditorContentDoc = {
+  layers: {
+    terrain: { properties: {}, rows: ['...', '.@*', '...'] },
+    objects: { properties: {}, rows: ['...', '...', '...'] },
+    triggers: [{ properties: { kind: 'exit' } }],
+  },
+};
 
 const game: StudioGame = {
   token: 'game-token',
@@ -164,6 +220,50 @@ describe('multi-collection editor surfaces', () => {
       root!.render(<RemixPainter content={single} doc={{ maps: [mapItem] }} onChange={vi.fn()} />);
     });
     expect(container.querySelector('.editor-collection-selector')).toBeNull();
+  });
+});
+
+describe('layered editor surfaces', () => {
+  it('renders a stacked Studio board with a declaration-driven layer rail', async () => {
+    fetchGameEditor.mockResolvedValue(editorState({ definition: layeredDefinition, content: layeredContent }));
+    await renderEditor();
+
+    expect(container.querySelectorAll('.editor-layer-board')).toHaveLength(2);
+    expect(container.querySelectorAll('.editor-layer-picker-item')).toHaveLength(3);
+    expect(container.querySelector('.editor-layer-picker-item.is-active')?.textContent).toContain('Terrain');
+    expect(container.querySelector<HTMLButtonElement>('.studio-head-action.is-primary')?.disabled).toBe(false);
+
+    const objects = Array.from(container.querySelectorAll('.editor-layer-picker-item')).find((button) =>
+      button.textContent?.includes('Objects'),
+    ) as HTMLButtonElement;
+    await act(async () => objects.click());
+    expect(container.querySelector('.editor-layer-picker-item.is-active')?.textContent).toContain('Objects');
+    expect(putEditorDraft).not.toHaveBeenCalled();
+  });
+
+  it('renders Remix layers stacked and keeps lower layers read-only', async () => {
+    const onChange = vi.fn();
+    root = createRoot(container);
+    await act(async () => {
+      root!.render(
+        <RemixPainter
+          layers={layeredDefinition.layers}
+          constraints={layeredDefinition.constraints}
+          doc={layeredContent}
+          onChange={onChange}
+        />,
+      );
+    });
+
+    expect(container.querySelectorAll('.editor-layer-board')).toHaveLength(2);
+    expect(container.querySelector('.editor-layer-picker-item.is-active')?.textContent).toContain('Triggers');
+    const terrain = Array.from(container.querySelectorAll('.editor-layer-picker-item')).find((button) =>
+      button.textContent?.includes('Terrain'),
+    ) as HTMLButtonElement;
+    await act(async () => terrain.click());
+    expect(container.textContent).toContain('Only the top layer can be edited');
+    expect(container.querySelector<HTMLButtonElement>('.editor-layer-board.is-active button')?.disabled).toBe(true);
+    expect(onChange).not.toHaveBeenCalled();
   });
 });
 
@@ -333,7 +433,10 @@ describe('the entities widget', () => {
 describe('the path widget', () => {
   const pathItem: EditorItemContent = {
     properties: { name: 'Starter' },
-    points: [{ x: 0, y: 1 }, { x: 1, y: 1 }],
+    points: [
+      { x: 0, y: 1 },
+      { x: 1, y: 1 },
+    ],
   };
   const pathDefinition: EditorDefinition = {
     version: 1,
@@ -359,9 +462,7 @@ describe('the path widget', () => {
   };
 
   it('edits a Studio path with the required keyboard controls', async () => {
-    fetchGameEditor.mockResolvedValue(
-      editorState({ definition: pathDefinition, content: { routes: [pathItem] } }),
-    );
+    fetchGameEditor.mockResolvedValue(editorState({ definition: pathDefinition, content: { routes: [pathItem] } }));
     const push = vi.fn();
     const editorPushRef = { current: push as EditorContentPush };
     root = createRoot(container);
@@ -378,12 +479,19 @@ describe('the path widget', () => {
       painter!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
       painter!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     });
-    expect(push.mock.lastCall?.[0].routes[0].points).toEqual([{ x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 }]);
+    expect(push.mock.lastCall?.[0].routes[0].points).toEqual([
+      { x: 0, y: 1 },
+      { x: 1, y: 1 },
+      { x: 2, y: 1 },
+    ]);
 
     act(() => {
       painter!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true }));
     });
-    expect(push.mock.lastCall?.[0].routes[0].points).toEqual([{ x: 0, y: 1 }, { x: 1, y: 1 }]);
+    expect(push.mock.lastCall?.[0].routes[0].points).toEqual([
+      { x: 0, y: 1 },
+      { x: 1, y: 1 },
+    ]);
   });
 
   it('lets Remix append by click and drag an existing point', async () => {
@@ -394,22 +502,42 @@ describe('the path widget', () => {
     });
     let painter = container.querySelector<SVGSVGElement>('.editor-path')!;
     vi.spyOn(painter, 'getBoundingClientRect').mockReturnValue({
-      x: 0, y: 0, left: 0, top: 0, right: 400, bottom: 300, width: 400, height: 300, toJSON: () => ({}),
+      x: 0,
+      y: 0,
+      left: 0,
+      top: 0,
+      right: 400,
+      bottom: 300,
+      width: 400,
+      height: 300,
+      toJSON: () => ({}),
     });
     act(() => painter.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 250, clientY: 150 })));
     const appended = onChange.mock.lastCall?.[0] as { routes: EditorItemContent[] };
-    expect(appended.routes[0]).toMatchObject({ points: [{ x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 }] });
+    expect(appended.routes[0]).toMatchObject({
+      points: [
+        { x: 0, y: 1 },
+        { x: 1, y: 1 },
+        { x: 2, y: 1 },
+      ],
+    });
 
     await act(async () => {
       root!.render(<RemixPainter content={pathDefinition.content} doc={appended} onChange={onChange} />);
     });
     painter = container.querySelector<SVGSVGElement>('.editor-path')!;
     vi.spyOn(painter, 'getBoundingClientRect').mockReturnValue({
-      x: 0, y: 0, left: 0, top: 0, right: 400, bottom: 300, width: 400, height: 300, toJSON: () => ({}),
+      x: 0,
+      y: 0,
+      left: 0,
+      top: 0,
+      right: 400,
+      bottom: 300,
+      width: 400,
+      height: 300,
+      toJSON: () => ({}),
     });
-    const firstHit = container.querySelector<SVGCircleElement>(
-      '[data-point-index="0"] .editor-path-point-hit',
-    )!;
+    const firstHit = container.querySelector<SVGCircleElement>('[data-point-index="0"] .editor-path-point-hit')!;
     act(() => {
       firstHit.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, clientX: 50, clientY: 150 }));
       painter.dispatchEvent(new MouseEvent('pointermove', { bubbles: true, clientX: 350, clientY: 250 }));
@@ -448,7 +576,9 @@ describe('the path widget', () => {
     };
     root = createRoot(container);
     await act(async () => {
-      root!.render(<RemixPainter content={extremeDefinition.content} doc={{ routes: [pathItem] }} onChange={vi.fn()} />);
+      root!.render(
+        <RemixPainter content={extremeDefinition.content} doc={{ routes: [pathItem] }} onChange={vi.fn()} />,
+      );
     });
 
     const viewport = container.querySelector('.editor-path-viewport');

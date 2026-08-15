@@ -416,6 +416,7 @@
       "pathDistinct": "Zamknięta ścieżka wymaga co najmniej 3 różnych punktów",
       "pathRepeatedEnd": "Nie powtarzaj pierwszego punktu; zamknięcie jest automatyczne",
       "collection": "Kolekcja",
+      "readOnlyLayer": "Tylko najwyższa warstwa może być edytowana",
       "tiles": "Kafelki",
       "properties": "Właściwości",
       "checks": "Kontrole",

@@ -26,7 +26,7 @@ import {
   type RemixSuggestion,
 } from './remixApi.js';
 import { RemixPainter } from './RemixPainter.js';
-import { defaultCollectionKey } from './editorContentTools.js';
+import { defaultCollectionKey, defaultLayerKey } from './editorContentTools.js';
 import { ProposeComposer } from './ProposeComposer.js';
 import { checkContributions } from './proposalsApi.js';
 import type {
@@ -330,6 +330,7 @@ export function RemixPanel(props: {
   contentDocRef.current = contentDoc;
   const [selectedCollectionKey, setSelectedCollectionKey] = useState<string | null>(null);
   const [selectedItemIndex, setSelectedItemIndex] = useState(0);
+  const [selectedLayerKey, setSelectedLayerKey] = useState<string | null>(null);
   const selectionRef = useRef<EditorSelection | null>(null);
   const [painterOpen, setPainterOpen] = useState(false);
   /** After the stage has opened once, Done leaves a door back on the sheet. */
@@ -505,16 +506,24 @@ export function RemixPanel(props: {
         // The painter's starting point is the declaration's own defaults. Set on
         // the ref synchronously as well, so a push scheduled in this same tick
         // (the shared-link one below) already carries the maps.
-        const contentDefaults: EditorContentDoc = started.content
-          ? Object.fromEntries(Object.entries(started.content).map(([key, spec]) => [key, spec.defaults]))
-          : {};
+        const contentDefaults: EditorContentDoc =
+          started.contentDefaults ??
+          (started.content
+            ? Object.fromEntries(Object.entries(started.content).map(([key, spec]) => [key, spec.defaults]))
+            : {});
         contentDocRef.current = contentDefaults;
         setContentDoc(contentDefaults);
         const defaultKey = started.content ? defaultCollectionKey(started.content) : null;
+        const defaultLayer = started.layers ? defaultLayerKey(started.layers) : null;
         setSelectedCollectionKey(defaultKey);
-        selectionRef.current = defaultKey ? { collection: defaultKey, index: 0 } : null;
+        setSelectedLayerKey(defaultLayer);
+        selectionRef.current = defaultKey
+          ? { collection: defaultKey, index: 0 }
+          : defaultLayer
+            ? { collection: defaultLayer, index: 0 }
+            : null;
         setSelectedItemIndex(0);
-        onCapabilities?.({ painter: Boolean(started.content) });
+        onCapabilities?.({ painter: Boolean(started.content || started.layers) });
         // A shared link's values are live the moment the game is listening.
         if (props.initialParams) window.setTimeout(() => pushToGame(merged), 300);
       })
@@ -537,12 +546,18 @@ export function RemixPanel(props: {
     setPainterOpen(true);
   }, []);
 
-  const painterStageActive = Boolean(painterOpen && session?.content && lane !== 'building');
+  const painterStageActive = Boolean(painterOpen && (session?.content || session?.layers) && lane !== 'building');
   const activeCollectionKey =
     session?.content && selectedCollectionKey && session.content[selectedCollectionKey]
       ? selectedCollectionKey
       : session?.content
         ? defaultCollectionKey(session.content)
+        : null;
+  const activeLayerKey =
+    session?.layers && selectedLayerKey && session.layers[selectedLayerKey]
+      ? selectedLayerKey
+      : session?.layers
+        ? defaultLayerKey(session.layers)
         : null;
 
   // Latest callback in a ref — parents may pass a fresh arrow each render; the
@@ -803,6 +818,7 @@ export function RemixPanel(props: {
     const previous = selectionRef.current;
     selectionRef.current = selection;
     setSelectedCollectionKey(selection.collection);
+    if (session?.layers?.[selection.collection]) setSelectedLayerKey(selection.collection);
     setSelectedItemIndex(selection.index);
     if (previous?.collection === selection.collection && previous?.index === selection.index) return;
     pushToGame(valuesRef.current);
@@ -1320,7 +1336,7 @@ export function RemixPanel(props: {
    * Done returns to the sheet (Keep/Share stay earned there). Edit ↔ Play only
    * moves focus; the painter tree and the game iframe both stay mounted.
    */
-  if (painterStageActive && session?.content) {
+  if (painterStageActive && (session?.content || session?.layers)) {
     const collectionKey = activeCollectionKey;
     const items = collectionKey ? ((contentDoc[collectionKey] as EditorItemContent[] | undefined) ?? []) : [];
     const selectedItem = items[selectedItemIndex] ?? items[0];
@@ -1392,11 +1408,15 @@ export function RemixPanel(props: {
               </span>
             ) : null}
             <RemixPainter
-              content={session.content}
+              content={session.content ?? undefined}
+              layers={session.layers ?? undefined}
+              constraints={session.constraints ?? undefined}
               doc={contentDoc}
               onChange={paintContent}
               selectedCollectionKey={activeCollectionKey}
               onCollectionChange={setSelectedCollectionKey}
+              selectedLayerKey={activeLayerKey}
+              onLayerChange={setSelectedLayerKey}
               onSelectionChange={rememberSelection}
             />
             {editorFocus === 'play' ? <span className="remix-editor-pip-cta">{t('remix.editorFocusEdit')}</span> : null}
