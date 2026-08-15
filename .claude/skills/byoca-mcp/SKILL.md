@@ -719,6 +719,15 @@ and an already-pending `builderHandoff`, matching what the server actually refus
 touching either side of this handoff, keep the two in sync: the button's visibility should
 never be stricter than the endpoint's own gate.
 
+Exposing the button surfaced a second bug (caught by review, not by hand): the handoff route
+in `submissions.ts` stored `awaitsAgentAck` as a direct copy of `creatorRequested`, so a
+creator-requested platform→self switch always waited for the outgoing agent to call `end`
+again — even when the round already reported `stall === 'ended'`, i.e. that agent already
+can't. The switch sat in `pending` until the 10-minute stale-handoff sweep force-acknowledged
+it. Fixed by deriving `awaitsAgentAck = creatorRequested && stall !== 'ended'`, so an
+already-ended round resumes immediately, the same way the self→platform silent path already
+skips the ack for a quiet/ended self round.
+
 ### `no_agent_yet` has no composer — so the connect card carries the exits
 
 This is the one Studio state with **no composer**: `selfComposerRoute` returns null before
