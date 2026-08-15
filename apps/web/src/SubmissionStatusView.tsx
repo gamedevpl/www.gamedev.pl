@@ -1995,7 +1995,7 @@ function ThreadStream({
                 <time className="studio-turn-time" dateTime={new Date(entry.at).toISOString()}>
                   {entry.pending ? (
                     t('statusView.progress.yourRequestSending')
-                  ) : mine && (entry.delivered || Boolean(working)) ? (
+                  ) : mine && entry.delivered !== undefined ? (
                     <>
                       <span className={`studio-turn-delivery${entry.delivered ? ' is-delivered' : ' is-queued'}`}>
                         {t(

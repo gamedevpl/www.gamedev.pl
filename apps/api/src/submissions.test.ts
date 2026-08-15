@@ -1402,6 +1402,49 @@ describe('submission routes', () => {
     await app.close();
   });
 
+  it('busts the status cache when the agent acks an inbox message', async () => {
+    const { githubClient } = createGithubClientStub({ issueNumber: 77 });
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      submissionTokenSecret: secret,
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    const token = mintToken(job.issueNumber, secret);
+    await store.setRoundBuilder(job.issueNumber, 'self');
+    await store.ensureRoundGeneration(job.issueNumber);
+    await store.recordJobTransition(job.issueNumber, {
+      to: 'building',
+      at: new Date().toISOString(),
+      by: 'agent',
+      reason: 'self_signal',
+    });
+    const message = await store.appendCreatorMessage(job.issueNumber, 'Make the enemies slower.');
+
+    const before = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
+    expect(before.json().progress.revisions[0]).toMatchObject({ delivered: false });
+
+    const acked = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/inbox/ack',
+      headers: { authorization: `Bearer ${mintAgentToken(job.issueNumber, secret, { roundGeneration: 1 })}` },
+      payload: { ids: [message.id] },
+    });
+    expect(acked.statusCode).toBe(200);
+
+    // Immediate poll must not keep serving the cached undelivered snapshot.
+    const after = await app.inject({ method: 'GET', url: `/api/submissions/${token}`, headers: authHeaders });
+    expect(after.json().progress.revisions[0]).toMatchObject({ delivered: true });
+
+    await app.close();
+  });
+
   it('does not commit the requested builder when its dispatch fails', async () => {
     const { githubClient } = createGithubClientStub({ issueNumber: 77 });
     const activeStore = new InMemoryStore();

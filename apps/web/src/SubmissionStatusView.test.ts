@@ -2147,6 +2147,43 @@ describe('SubmissionStatusView', () => {
     }
   });
 
+  it('keeps a known-undelivered message marked queued even once the agent goes quiet', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'needs_changes',
+      builder: 'self',
+      events: [],
+      progress: {
+        headSha: 'sha',
+        commits: [],
+        checklist: [],
+        revisions: [{ text: 'Never picked up.', createdAt: new Date().toISOString(), delivered: false }],
+      },
+    });
+    await i18n.changeLanguage('en');
+    window.history.pushState(null, '', '/studio/quiet-delivery/thread');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    try {
+      await act(async () => {
+        root.render(createElement(SubmissionStatusView, { token: 'quiet-delivery', embedded: true }));
+        await flushEffects();
+        await flushEffects();
+      });
+
+      const badge = container.querySelector('.studio-turn.is-mine .studio-turn-delivery');
+      expect(badge?.textContent).toBe('Queued for the agent');
+      expect(badge?.classList.contains('is-queued')).toBe(true);
+    } finally {
+      await act(async () => {
+        root.unmount();
+      });
+    }
+  });
+
   it('lets the creator dismiss a stall chip above the composer', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     mockedGetSubmissionStatus.mockResolvedValue({
