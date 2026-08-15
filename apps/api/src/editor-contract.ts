@@ -32,8 +32,12 @@ export const MAX_GRID_ROWS = 64;
 export const MAX_PATH_POINTS = 256;
 /** Game-wide scalar tunables ("params") — same property vocabulary, one value each. */
 export const MAX_PARAMS = 16;
+export const MAX_LAYERS = 8;
+export const MAX_LAYER_ITEMS = 64;
+export const MAX_LAYER_TOTAL_CELLS = 16_384;
 /** Reserved content-document key param values ride under; illegal as a collection name. */
 export const PARAMS_KEY = 'params';
+export const LAYERS_KEY = 'layers';
 
 const KEY_PATTERN = /^[a-z][a-zA-Z0-9]{0,23}$/;
 const TILE_KEY_PATTERN = /^[a-z][a-z0-9-]{0,15}$/;
@@ -136,6 +140,24 @@ export interface CollectionSpec {
   defaults: Array<TilemapItemContent | EntityItemContent | PathItemContent>;
 }
 
+export interface TilemapLayerSpec extends TilemapItemSpec {
+  label: EditorLabel;
+}
+
+export interface EntitiesLayerSpec extends EntitiesItemSpec {
+  label: EditorLabel;
+  min: number;
+  max: number;
+}
+
+export type EditorLayerSpec = TilemapLayerSpec | EntitiesLayerSpec;
+
+export type LayerTileRef = { layer: string; tile: string };
+
+export type EditorLayerConstraint = {
+  reachable: { from: LayerTileRef; blockedBy: LayerTileRef[]; require: LayerTileRef[] };
+};
+
 export interface TilemapItemContent {
   properties: Record<string, unknown>;
   rows: string[];
@@ -155,9 +177,12 @@ export interface PathItemContent {
   points: PathPoint[];
 }
 
+export type EditorLayerContent = TilemapItemContent | EntityItemContent[];
+export type EditorLayersContent = Record<string, EditorLayerContent>;
+
 export type EditorContentDocument = Record<
   string,
-  Array<TilemapItemContent | EntityItemContent | PathItemContent> | Record<string, ParamValue>
+  Array<TilemapItemContent | EntityItemContent | PathItemContent> | Record<string, ParamValue> | EditorLayersContent
 >;
 
 export type EditorVersion = 1 | 2;
@@ -166,6 +191,8 @@ export interface EditorDefinition {
   version: EditorVersion;
   params?: Record<string, ParamSpec>;
   content: Record<string, CollectionSpec>;
+  layers?: Record<string, EditorLayerSpec>;
+  constraints?: EditorLayerConstraint[];
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -547,6 +574,95 @@ function validateCollectionItemSpec(owner: string, raw: unknown, errors: string[
   return null;
 }
 
+function validateLayerSpec(key: string, raw: unknown, errors: string[]): EditorLayerSpec | null {
+  const owner = `layers.${key}`;
+  if (!isPlainObject(raw)) {
+    errors.push(`${owner}: must be an object`);
+    return null;
+  }
+  const label = raw.label === undefined ? { en: key, pl: key } : raw.label;
+  if (!isLabel(label)) {
+    errors.push(`${owner}: "label" needs non-empty "en" and "pl" values (max 32 chars)`);
+    return null;
+  }
+  if (raw.widget === 'tilemap') {
+    const item = validateTilemapSpec(owner, raw, errors);
+    return item ? { ...item, label: { en: label.en, pl: label.pl } } : null;
+  }
+  if (raw.widget === 'entities') {
+    const item = validateEntitiesSpec(owner, raw, errors);
+    if (!item) return null;
+    const min: unknown = raw.min ?? 0;
+    const max: unknown = raw.max ?? MAX_LAYER_ITEMS;
+    if (
+      typeof min !== 'number' ||
+      typeof max !== 'number' ||
+      !Number.isInteger(min) ||
+      !Number.isInteger(max) ||
+      min < 0 ||
+      max > MAX_LAYER_ITEMS ||
+      min > max
+    ) {
+      errors.push(`${owner}: entity bounds must satisfy 0 <= min <= max <= ${MAX_LAYER_ITEMS}`);
+      return null;
+    }
+    return { ...item, label: { en: label.en, pl: label.pl }, min, max };
+  }
+  errors.push(`${owner}: unknown widget "${String(raw.widget)}" (layers support tilemap or entities)`);
+  return null;
+}
+
+function validateLayerConstraints(
+  raw: unknown,
+  layers: Record<string, EditorLayerSpec>,
+  errors: string[],
+): EditorLayerConstraint[] {
+  if (raw === undefined) return [];
+  if (!Array.isArray(raw) || raw.length > MAX_CONSTRAINTS) {
+    errors.push(`layers constraints must be an array of at most ${MAX_CONSTRAINTS} rules`);
+    return [];
+  }
+  const refs = (value: unknown, owner: string): LayerTileRef[] | null => {
+    if (!Array.isArray(value) || value.length === 0) {
+      errors.push(`${owner} must be a non-empty array of layer tile references`);
+      return null;
+    }
+    const result: LayerTileRef[] = [];
+    for (const ref of value) {
+      if (!isPlainObject(ref) || typeof ref.layer !== 'string' || typeof ref.tile !== 'string') {
+        errors.push(`${owner} entries need string "layer" and "tile" keys`);
+        continue;
+      }
+      const layer = layers[ref.layer];
+      if (!layer || layer.widget !== 'tilemap') {
+        errors.push(`${owner} references unknown tilemap layer "${ref.layer}"`);
+        continue;
+      }
+      if (!layer.tiles.some((tile) => tile.key === ref.tile)) {
+        errors.push(`${owner} references unknown tile "${ref.tile}" in layer "${ref.layer}"`);
+        continue;
+      }
+      result.push({ layer: ref.layer, tile: ref.tile });
+    }
+    return result.length === value.length ? result : null;
+  };
+  const result: EditorLayerConstraint[] = [];
+  for (const [index, rule] of raw.entries()) {
+    const owner = `layers constraints[${index}]`;
+    if (!isPlainObject(rule) || !isPlainObject(rule.reachable)) {
+      errors.push(`${owner}: only "reachable" cross-layer rules are supported`);
+      continue;
+    }
+    const reachable = rule.reachable;
+    const from = refs([reachable.from], `${owner}.reachable.from`);
+    const blockedBy = refs(reachable.blockedBy, `${owner}.reachable.blockedBy`);
+    const require = refs(reachable.require, `${owner}.reachable.require`);
+    if (!from || from.length !== 1 || !blockedBy || !require) continue;
+    result.push({ reachable: { from: from[0], blockedBy, require } });
+  }
+  return result;
+}
+
 /**
  * Parse and validate an EDITOR.json source. Returns the typed definition and a
  * list of human-readable problems; a non-empty `errors` means the definition
@@ -573,7 +689,9 @@ export function parseEditorDefinition(source: string): { definition: EditorDefin
     errors.push('EDITOR.json "version" must be 1 or 2');
     return { definition: null, errors };
   }
-  const unknownKeys = Object.keys(parsed).filter((key) => key !== 'version' && key !== 'content' && key !== PARAMS_KEY);
+  const unknownKeys = Object.keys(parsed).filter(
+    (key) => !['version', 'content', PARAMS_KEY, LAYERS_KEY, 'constraints'].includes(key),
+  );
   if (unknownKeys.length > 0) {
     errors.push(`EDITOR.json has unknown top-level keys: ${unknownKeys.join(', ')}`);
   }
@@ -587,9 +705,22 @@ export function parseEditorDefinition(source: string): { definition: EditorDefin
     errors.push('EDITOR.json needs a "content" object of collections');
     return { definition: null, errors };
   }
+  if (parsed.layers !== undefined && !isPlainObject(parsed.layers)) {
+    errors.push('EDITOR.json needs a "layers" object of shared-grid layer declarations');
+    return { definition: null, errors };
+  }
   const contentKeys = isPlainObject(parsed.content) ? Object.keys(parsed.content) : [];
-  if (contentKeys.length > MAX_COLLECTIONS || (contentKeys.length === 0 && !hasParams)) {
-    errors.push(`EDITOR.json "content" needs 1-${MAX_COLLECTIONS} collections`);
+  const layerKeys = isPlainObject(parsed.layers) ? Object.keys(parsed.layers) : [];
+  if (
+    contentKeys.length > MAX_COLLECTIONS ||
+    layerKeys.length > MAX_LAYERS ||
+    (contentKeys.length === 0 && layerKeys.length === 0 && !hasParams)
+  ) {
+    errors.push(`EDITOR.json needs params, content collections, or layers`);
+    return { definition: null, errors };
+  }
+  if (parsed.version === 1 && layerKeys.length > 0) {
+    errors.push('EDITOR.json "layers" requires version 2');
     return { definition: null, errors };
   }
 
@@ -656,8 +787,43 @@ export function parseEditorDefinition(source: string): { definition: EditorDefin
     content[key] = spec;
   }
 
+  const layers: Record<string, EditorLayerSpec> = {};
+  for (const key of layerKeys) {
+    if (!KEY_PATTERN.test(key)) {
+      errors.push(`EDITOR.json layer key "${key}" must be lowerCamelCase, 1-24 characters`);
+      continue;
+    }
+    const layer = validateLayerSpec(key, (parsed.layers as Record<string, unknown>)[key], errors);
+    if (layer) layers[key] = layer;
+  }
+  const tilemapGrids = Object.values(layers)
+    .filter((layer): layer is TilemapLayerSpec => layer.widget === 'tilemap')
+    .map((layer) => JSON.stringify(layer.grid));
+  if (tilemapGrids.some((grid) => grid !== tilemapGrids[0])) {
+    errors.push('EDITOR.json tilemap layers must share the same grid bounds');
+  }
+  const layerCellBudget = Object.values(layers)
+    .filter((layer): layer is TilemapLayerSpec => layer.widget === 'tilemap')
+    .reduce((total, layer) => total + layer.grid.maxCols * layer.grid.maxRows, 0);
+  if (layerCellBudget > MAX_LAYER_TOTAL_CELLS) {
+    errors.push(`EDITOR.json tilemap layers exceed the shared ${MAX_LAYER_TOTAL_CELLS}-cell budget`);
+  }
+  const constraints = validateLayerConstraints(parsed.constraints, layers, errors);
+  if (parsed.constraints !== undefined && parsed.version !== 2) {
+    errors.push('EDITOR.json cross-layer constraints require version 2');
+  }
+
   if (errors.length > 0) return { definition: null, errors };
-  return { definition: { version: parsed.version, ...(hasParams ? { params } : {}), content }, errors };
+  return {
+    definition: {
+      version: parsed.version,
+      ...(hasParams ? { params } : {}),
+      ...(contentKeys.length > 0 ? { content } : { content: {} }),
+      ...(layerKeys.length > 0 ? { layers } : {}),
+      ...(constraints.length > 0 ? { constraints } : {}),
+    },
+    errors,
+  };
 }
 
 /**
@@ -926,6 +1092,111 @@ function validateCollectionContent(spec: CollectionSpec, items: unknown): string
   return errors;
 }
 
+function validateLayerContent(spec: EditorLayerSpec, value: unknown, where: string): string[] {
+  if (spec.widget === 'tilemap') return validateItemContent(spec, value, where);
+  return validateCollectionContent(
+    {
+      widget: 'collection',
+      label: spec.label,
+      itemLabel: spec.label,
+      min: spec.min,
+      max: spec.max,
+      item: spec,
+      defaults: [],
+    },
+    value,
+  ).map((message) => `${where}: ${message}`);
+}
+
+function layerRows(
+  layers: Record<string, EditorLayerSpec>,
+  content: Record<string, unknown>,
+  layer: string,
+): string[] | null {
+  const spec = layers[layer];
+  const value = content[layer];
+  if (!spec || spec.widget !== 'tilemap' || !isPlainObject(value) || !Array.isArray(value.rows)) return null;
+  return value.rows.every((row) => typeof row === 'string') ? (value.rows as string[]) : null;
+}
+
+function validateLayerReachable(
+  rule: EditorLayerConstraint['reachable'],
+  layers: Record<string, EditorLayerSpec>,
+  content: Record<string, unknown>,
+  where: string,
+): string[] {
+  const fromRows = layerRows(layers, content, rule.from.layer);
+  if (!fromRows) return [];
+  const tilemaps = new Map<string, string[]>();
+  for (const ref of [rule.from, ...rule.blockedBy, ...rule.require]) {
+    const rows = layerRows(layers, content, ref.layer);
+    if (rows) tilemaps.set(ref.layer, rows);
+  }
+  const height = fromRows.length;
+  const width = height > 0 ? fromRows[0].length : 0;
+  if (
+    width === 0 ||
+    [...tilemaps.values()].some((rows) => rows.length !== height || rows.some((row) => row.length !== width))
+  ) {
+    return [`${where}: all referenced layers must have the same grid dimensions`];
+  }
+  const tileChar = new Map<string, Map<string, string>>();
+  for (const ref of [rule.from, ...rule.blockedBy, ...rule.require]) {
+    const spec = layers[ref.layer];
+    if (spec?.widget !== 'tilemap') continue;
+    if (!tileChar.has(ref.layer)) tileChar.set(ref.layer, new Map(spec.tiles.map((tile) => [tile.key, tile.char])));
+  }
+  const positions = (ref: LayerTileRef): Set<number> => {
+    const rows = tilemaps.get(ref.layer);
+    const char = tileChar.get(ref.layer)?.get(ref.tile);
+    const result = new Set<number>();
+    if (!rows || !char) return result;
+    rows.forEach((row, y) => {
+      for (let x = 0; x < row.length; x += 1) if (row[x] === char) result.add(y * width + x);
+    });
+    return result;
+  };
+  const blocked = new Set<number>();
+  for (const ref of rule.blockedBy) for (const position of positions(ref)) blocked.add(position);
+  const seen = new Set<number>();
+  const queue = [...positions(rule.from)];
+  for (const position of queue) seen.add(position);
+  while (queue.length > 0) {
+    const position = queue.shift() as number;
+    const row = Math.floor(position / width);
+    const col = position % width;
+    for (const [dr, dc] of [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+    ] as const) {
+      const nextRow = row + dr;
+      const nextCol = col + dc;
+      if (nextRow < 0 || nextCol < 0 || nextRow >= height || nextCol >= width) continue;
+      const next = nextRow * width + nextCol;
+      if (blocked.has(next) || seen.has(next)) continue;
+      seen.add(next);
+      queue.push(next);
+    }
+  }
+  const missed = rule.require.flatMap((ref) =>
+    [...positions(ref)]
+      .filter((position) => !seen.has(position))
+      .map((position) => {
+        const row = Math.floor(position / width) + 1;
+        const col = (position % width) + 1;
+        return `${ref.layer}.${ref.tile} at row ${row}, column ${col}`;
+      }),
+  );
+  return missed.length === 0
+    ? []
+    : [
+        `${where}: walled off from "${rule.from.layer}.${rule.from.tile}" — ${missed.join('; ')}. ` +
+          'Every required tile must be reachable, or the game cannot be finished.',
+      ];
+}
+
 /**
  * Validate a full content document (what a Studio draft or a publish carries)
  * against a definition. Shape: `{ <collectionKey>: EditorItemContent[] }`.
@@ -934,9 +1205,14 @@ export function validateEditorContent(definition: EditorDefinition, content: unk
   if (!isPlainObject(content)) return ['content must be an object'];
   const errors: string[] = [];
   const declared = Object.keys(definition.content);
+  const declaredLayers = Object.keys(definition.layers ?? {});
   for (const key of Object.keys(content)) {
     if (key === PARAMS_KEY) {
       if (!definition.params) errors.push(`undeclared collection "${key}"`);
+      continue;
+    }
+    if (key === LAYERS_KEY) {
+      if (!definition.layers) errors.push(`undeclared content "${key}"`);
       continue;
     }
     if (!declared.includes(key)) errors.push(`undeclared collection "${key}"`);
@@ -969,6 +1245,29 @@ export function validateEditorContent(definition: EditorDefinition, content: unk
       continue;
     }
     errors.push(...validateCollectionContent(definition.content[key], items).map((message) => `${key}: ${message}`));
+  }
+  if (definition.layers) {
+    const layers = content[LAYERS_KEY];
+    if (layers === undefined) {
+      errors.push('missing "layers" values');
+    } else if (!isPlainObject(layers)) {
+      errors.push('layers: must be an object of layer values');
+    } else {
+      for (const key of Object.keys(layers)) {
+        if (!declaredLayers.includes(key)) errors.push(`layers: undeclared layer "${key}"`);
+      }
+      for (const [key, spec] of Object.entries(definition.layers)) {
+        const value = layers[key];
+        if (value === undefined) {
+          errors.push(`layers: missing "${key}"`);
+          continue;
+        }
+        errors.push(...validateLayerContent(spec, value, `layers.${key}`));
+      }
+      for (const rule of definition.constraints ?? []) {
+        errors.push(...validateLayerReachable(rule.reachable, definition.layers, layers, 'layers'));
+      }
+    }
   }
   return errors;
 }
@@ -1021,6 +1320,36 @@ export function generateEditorContentModule(definition: EditorDefinition, conten
     lines.push('}', '');
     contentFields.push(`  ${key}: ${itemType}[];`);
   }
+  if (definition.layers && Object.keys(definition.layers).length > 0) {
+    const layerFields: string[] = [];
+    for (const [key, spec] of Object.entries(definition.layers)) {
+      const layerType = `${typeName(key)}Layer`;
+      if (spec.widget === 'tilemap') {
+        lines.push(`export interface ${layerType} {`);
+        lines.push('  properties: {');
+        for (const [name, propertySpec] of Object.entries(spec.properties)) {
+          lines.push(`    ${name}: ${propertyTsType(propertySpec)};`);
+        }
+        lines.push('  };');
+        lines.push('  rows: string[];');
+        lines.push('}', '');
+      } else {
+        lines.push(`export interface ${layerType}ItemProperties {`);
+        for (const [name, propertySpec] of Object.entries(spec.properties)) {
+          lines.push(`  ${name}: ${propertyTsType(propertySpec)};`);
+        }
+        lines.push('}', '');
+        lines.push(`export interface ${layerType}Item {`);
+        lines.push(`  properties: ${layerType}ItemProperties;`);
+        lines.push('}', '');
+      }
+      layerFields.push(`  ${key}: ${layerType}${spec.widget === 'entities' ? 'Item[]' : ''};`);
+    }
+    lines.push('export interface EditorLayers {');
+    lines.push(...layerFields);
+    lines.push('}', '');
+    contentFields.push(`  ${LAYERS_KEY}: EditorLayers;`);
+  }
   lines.push('export interface EditorContent {');
   lines.push(...contentFields);
   lines.push('}', '');
@@ -1033,6 +1362,10 @@ export function generateEditorContentModule(definition: EditorDefinition, conten
   }
   for (const [key, spec] of Object.entries(definition.content)) {
     defaults[key] = content?.[key] ?? spec.defaults;
+  }
+  if (definition.layers && Object.keys(definition.layers).length > 0) {
+    const supplied = content?.[LAYERS_KEY];
+    defaults[LAYERS_KEY] = supplied && isPlainObject(supplied) ? supplied : {};
   }
   lines.push(`export const DEFAULT_CONTENT: EditorContent = ${JSON.stringify(defaults, null, 2)};`);
   lines.push('');

@@ -100,6 +100,19 @@ export type EditorCollectionSpec = {
   defaults: EditorItemContent[];
 };
 
+export type EditorTilemapLayerSpec = EditorTilemapSpec & { label: EditorLabel };
+export type EditorEntitiesLayerSpec = EditorEntitiesSpec & { label: EditorLabel; min: number; max: number };
+export type EditorLayerSpec = EditorTilemapLayerSpec | EditorEntitiesLayerSpec;
+export type EditorLayerContent = EditorTilemapItemContent | EditorEntityItemContent[];
+export type EditorLayersDoc = Record<string, EditorLayerContent>;
+export type EditorLayerConstraint = {
+  reachable: {
+    from: { layer: string; tile: string };
+    blockedBy: Array<{ layer: string; tile: string }>;
+    require: Array<{ layer: string; tile: string }>;
+  };
+};
+
 export type EditorTilemapItemContent = { properties: Record<string, unknown>; rows: string[] };
 export type EditorEntityItemContent = { properties: Record<string, unknown> };
 export type EditorPathPoint = { x: number; y: number };
@@ -112,16 +125,21 @@ export type EditorParamValue = string | number | boolean;
 export type EditorParamSpec = EditorPropertySpec & { label: EditorLabel; default: EditorParamValue };
 
 export type EditorDefinition = {
-  version: 1;
+  version: 1 | 2;
   params?: Record<string, EditorParamSpec>;
   content: Record<string, EditorCollectionSpec>;
+  layers?: Record<string, EditorLayerSpec>;
+  constraints?: EditorLayerConstraint[];
 };
 
 /**
  * A whole content document: collections keyed by name, plus param values under
  * the reserved `params` key when the game declares tunables.
  */
-export type EditorContentDoc = Record<string, EditorItemContent[] | Record<string, EditorParamValue> | undefined>;
+export type EditorContentDoc = Record<
+  string,
+  EditorItemContent[] | Record<string, EditorParamValue> | EditorLayersDoc | undefined
+>;
 
 export type GameEditorState = {
   version: string;

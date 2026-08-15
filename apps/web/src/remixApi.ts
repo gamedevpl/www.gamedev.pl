@@ -1,6 +1,8 @@
 import type {
   EditorCollectionSpec,
   EditorContentDoc,
+  EditorLayerConstraint,
+  EditorLayerSpec,
   EditorLabel,
   EditorParamSpec,
   EditorParamValue,
@@ -37,6 +39,9 @@ export type RemixSession = {
    * it lives in this session and reaches the game over the bridge like params.
    */
   content?: Record<string, EditorCollectionSpec> | null;
+  layers?: Record<string, EditorLayerSpec> | null;
+  constraints?: EditorLayerConstraint[] | null;
+  contentDefaults?: EditorContentDoc;
   canAssist: boolean;
   canCode: boolean;
   /** Absent from an older server; an empty list is the same as none. */

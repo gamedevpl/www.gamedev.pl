@@ -711,9 +711,8 @@ export function CodeSurface({
       const base = liveContentRef.current ?? fetched;
       if (!base) return;
       const prevParams = base.params;
-      const params: Record<string, EditorParamValue> = {
-        ...(prevParams && !Array.isArray(prevParams) ? prevParams : {}),
-      };
+       const params: Record<string, EditorParamValue> =
+         prevParams && !Array.isArray(prevParams) ? { ...(prevParams as Record<string, EditorParamValue>) } : {};
       for (const change of changes) params[change.key] = change.value as EditorParamValue;
       const merged: EditorContentDoc = { ...base, params };
       liveContentRef.current = merged;
