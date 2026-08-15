@@ -690,6 +690,42 @@ describe('CreatorStudioView', () => {
     root.unmount();
   });
 
+  it('closes the share popover on an outside tap, not just Escape', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
+    fetchStudioGames.mockResolvedValue(
+      studioShelf([
+        {
+          token: 'token-draft',
+          title: 'TV Tycoon',
+          createdAt: '2026-07-30T09:00:00.000Z',
+          lastKnownStatus: 'building',
+          slug: 'tv-tycoon',
+        },
+      ]),
+    );
+    window.history.replaceState(null, '', '/studio/tv-tycoon');
+
+    const { container, root } = await renderStudio({ selectedGame: 'tv-tycoon' });
+
+    const shareBtn = container.querySelector<HTMLButtonElement>('[data-testid="studio-head-share"]');
+    await act(async () => {
+      shareBtn!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(container.querySelector('.studio-head-share-popover')).not.toBeNull();
+
+    // A phone has no Escape key — a tap anywhere outside the popover (the game card,
+    // the strip, the page) must be the way off it, same as the popover has no backdrop
+    // of its own to intercept that tap.
+    await act(async () => {
+      document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    });
+    expect(container.querySelector('.studio-head-share-popover')).toBeNull();
+
+    root.unmount();
+  });
+
   it('lets Play toggle back to watch posture when already playing', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
