@@ -416,7 +416,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
               return record?.dispatch?.credentialRefs?.[sessionRef];
             },
           }),
-    gameSeeder: options.submissionRoutes?.gameSeeder ?? createGameSeederFromEnv(app.log, knowledgeSearch),
+    gameSeeder:
+      options.submissionRoutes?.gameSeeder ?? createGameSeederFromEnv(app.log, knowledgeSearch, snapshotReader),
     agentChannel: {
       ...options.submissionRoutes?.agentChannel,
       // Without a bucket the delivery verb answers 503 rather than accepting an agent's

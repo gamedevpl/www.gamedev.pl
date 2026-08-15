@@ -76,16 +76,21 @@ export interface SeedFileIndex {
   read(path: string): string | null;
 }
 
-export function buildSeedContext(index: SeedFileIndex): SeedContext | null {
-  const catalogRaw = index.read('catalog.json');
-  if (!catalogRaw) return null;
-
+// catalogEntries overrides the archive's dropped catalog.json when given.
+export function buildSeedContext(index: SeedFileIndex, catalogEntries?: CatalogEntry[] | null): SeedContext | null {
   let entries: CatalogEntry[];
-  try {
-    const parsed: unknown = JSON.parse(catalogRaw);
-    entries = Array.isArray(parsed) ? (parsed as CatalogEntry[]) : [];
-  } catch {
-    return null;
+  if (catalogEntries !== undefined) {
+    if (!catalogEntries) return null;
+    entries = catalogEntries;
+  } else {
+    const catalogRaw = index.read('catalog.json');
+    if (!catalogRaw) return null;
+    try {
+      const parsed: unknown = JSON.parse(catalogRaw);
+      entries = Array.isArray(parsed) ? (parsed as CatalogEntry[]) : [];
+    } catch {
+      return null;
+    }
   }
 
   const published = entries.filter(
@@ -149,6 +154,8 @@ export interface ArchiveSeedContextOptions {
   ttlMs?: number;
   fetchImpl?: typeof fetch;
   log?: { warn: (context: object, message: string) => void; info: (context: object, message: string) => void };
+  // Published catalog from the GCS snapshot; the archive no longer has one.
+  getCatalog?: () => Promise<CatalogEntry[] | null>;
 }
 
 export const DEFAULT_SEED_CONTEXT_TTL_MS = 10 * 60_000;
@@ -186,7 +193,8 @@ export function createArchiveSeedContextSource(options: ArchiveSeedContextOption
       if (text !== null) contents.set(path, text);
     }
 
-    const context = buildSeedContext({ paths, read: (path) => contents.get(path) ?? null });
+    const catalogEntries = options.getCatalog ? await options.getCatalog() : undefined;
+    const context = buildSeedContext({ paths, read: (path) => contents.get(path) ?? null }, catalogEntries);
     if (!context) {
       options.log?.warn({ repo: options.repo, ref: options.ref }, 'seed context unusable: no catalog in archive');
       return null;

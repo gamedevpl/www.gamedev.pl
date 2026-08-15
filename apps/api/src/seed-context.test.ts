@@ -83,10 +83,24 @@ describe('buildSeedContext', () => {
     expect(buildSeedContext(indexOf({ 'catalog.json': 'not json' }))).toBeNull();
     expect(buildSeedContext(indexOf({ 'catalog.json': '[]' }))).toBeNull();
   });
+
+  it('uses catalogEntries over the archive when given, for a repo with no catalog.json', () => {
+    const { 'catalog.json': _drop, ...withoutCatalog } = FILES;
+    const entries = [{ slug: 'apex-sprint', title: 'Apex Sprint', genre: 'arcade racing', status: 'published' }];
+
+    const context = buildSeedContext(indexOf(withoutCatalog), entries)!;
+
+    expect(context.catalogIndex).toBe('apex-sprint — Apex Sprint — arcade racing');
+    expect(context.hasGame('apex-sprint')).toBe(true);
+  });
+
+  it('treats a null override as no catalog, not a fall-through to the archive file', () => {
+    expect(buildSeedContext(indexOf(FILES), null)).toBeNull();
+  });
 });
 
-/** A tarball of `FILES`, so the archive path can be exercised without GitHub. */
-async function tarballResponse(): Promise<Response> {
+/** A tarball of `files`, so the archive path can be exercised without GitHub. */
+async function tarballResponse(files: Record<string, string> = FILES): Promise<Response> {
   const { createGzip } = await import('node:zlib');
   const chunks: Buffer[] = [];
 
@@ -116,7 +130,7 @@ async function tarballResponse(): Promise<Response> {
     return block;
   }
 
-  for (const [name, content] of Object.entries(FILES)) {
+  for (const [name, content] of Object.entries(files)) {
     const body = Buffer.from(content, 'utf8');
     chunks.push(header(name, body.byteLength), body);
     const padding = (512 - (body.byteLength % 512)) % 512;
@@ -134,6 +148,8 @@ async function tarballResponse(): Promise<Response> {
 
   return new Response(Buffer.concat(output), { status: 200 });
 }
+
+const { 'catalog.json': _catalogFile, ...FILES_WITHOUT_CATALOG } = FILES;
 
 describe('createArchiveSeedContextSource', () => {
   it('downloads once and serves later loads from cache', async () => {
@@ -214,5 +230,38 @@ describe('createArchiveSeedContextSource', () => {
     await source.load();
 
     expect(downloads).toBe(2);
+  });
+
+  it('reproduces the games-repo#422 incident: getCatalog rescues an archive with no catalog.json', async () => {
+    let downloads = 0;
+    const source = createArchiveSeedContextSource({
+      repo: 'gamedevpl/www.gamedev.pl-games',
+      ref: 'main',
+      token: 'token',
+      fetchImpl: async () => {
+        downloads++;
+        return tarballResponse(FILES_WITHOUT_CATALOG);
+      },
+      getCatalog: async () => [
+        { slug: 'apex-sprint', title: 'Apex Sprint', genre: 'arcade racing', status: 'published' },
+      ],
+    });
+
+    const context = await source.load();
+
+    expect(downloads).toBe(1);
+    expect(context).not.toBeNull();
+    expect(context?.hasGame('apex-sprint')).toBe(true);
+  });
+
+  it('without getCatalog, an archive missing catalog.json still fails open to null', async () => {
+    const source = createArchiveSeedContextSource({
+      repo: 'gamedevpl/www.gamedev.pl-games',
+      ref: 'main',
+      token: 'token',
+      fetchImpl: async () => tarballResponse(FILES_WITHOUT_CATALOG),
+    });
+
+    expect(await source.load()).toBeNull();
   });
 });

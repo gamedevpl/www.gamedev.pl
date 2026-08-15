@@ -15,6 +15,7 @@ import { createManagedBackend, type ManagedRoundSignals } from './managed-backen
 import type { KitDigestLoader } from './kit-digest.js';
 import type { QueryKnowledgeFn } from './knowledge-search.js';
 import { createArchiveSeedContextSource } from './seed-context.js';
+import type { GameSnapshotReader } from './game-snapshot.js';
 import { createSelfBuildBackend, type SelfBuildBackendOptions } from './self-build-backend.js';
 
 interface Logger {
@@ -260,7 +261,11 @@ export function createAgentBackendRegistryFromEnv(
  * serving) rather than the dispatch PAT: assembling context is a read, and giving the
  * dispatch credential another job would widen what one expiry takes down.
  */
-export function createGameSeederFromEnv(log?: Logger, knowledgeSearch?: QueryKnowledgeFn): GameSeeder | undefined {
+export function createGameSeederFromEnv(
+  log?: Logger,
+  knowledgeSearch?: QueryKnowledgeFn,
+  snapshotReader?: GameSnapshotReader | null,
+): GameSeeder | undefined {
   if (process.env.SEED_DISPATCH?.trim() !== 'true') return undefined;
 
   const token = process.env.GAMES_REPO_TOKEN?.trim() ?? process.env.GITHUB_TOKEN?.trim();
@@ -275,7 +280,14 @@ export function createGameSeederFromEnv(log?: Logger, knowledgeSearch?: QueryKno
   log?.info({ repo, ref, ...(model ? { model } : {}) }, 'seeded dispatch enabled');
 
   return new VertexGameSeeder({
-    context: createArchiveSeedContextSource({ repo, ref, token, ...(log ? { log } : {}) }),
+    context: createArchiveSeedContextSource({
+      repo,
+      ref,
+      token,
+      ...(log ? { log } : {}),
+      // Archive dropped catalog.json; snapshot is the source now.
+      ...(snapshotReader ? { getCatalog: () => snapshotReader.getCatalog() } : {}),
+    }),
     ...(model ? { model } : {}),
     ...(log ? { log } : {}),
     ...(knowledgeSearch ? { knowledgeSearch } : {}),
