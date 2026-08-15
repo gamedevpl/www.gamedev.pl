@@ -30,6 +30,8 @@ export type CodeSurfaceFile = {
   content: string;
   /** Present only when the staging buffer overrides the delivered content. */
   stagedBy?: 'agent' | 'owner';
+  // Delivered content this staged edit overrides — see creator-code.ts.
+  base?: string;
   budget?: CodeSurfaceFileBudget;
 };
 
@@ -64,6 +66,8 @@ export type CodeSurfaceStageResult = {
   path: string;
   bytes: number;
   hint?: string;
+  // CE-17: set when this write opened a fresh round implicitly.
+  roundOpened?: number;
   staged: CodeSurfaceStagingSummary;
 };
 

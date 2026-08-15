@@ -91,6 +91,8 @@ export interface CreatorCodeFile {
   content: string;
   /** Present only for a file the staging buffer overrides — absent means "as delivered". */
   stagedBy?: 'agent' | 'owner';
+  // Delivered content this staged edit overrides — lets the client diff live.
+  base?: string;
   /** True when this path is staged for deletion (excluded from `files`, listed separately). */
   budget?: { bytes: number; lines: number; maxBytes: number; maxLines: number; oversize: boolean };
 }
@@ -182,6 +184,21 @@ export async function registerCreatorCodeRoutes(
   function roundIsClosed(record: SubmissionRecord): boolean {
     const resolvedState = resolveJobState(record) ?? 'queued';
     return !isActiveBuildRound({ state: resolvedState, transitions: record.transitions });
+  }
+
+  // CE-17: opens a fresh job, `published` forbids reopening one in place.
+  async function openManualRound(store: Store, source: SubmissionRecord, slug: string): Promise<SubmissionRecord> {
+    const jobId = await store.allocateJobId();
+    await store.createSubmission(jobId, source.ownerUid, source.title);
+    await store.setSubmissionSlug(jobId, slug);
+    await store.setSubmissionLocale(jobId, source.locale ?? 'en');
+    await store.recordJobTransition(jobId, {
+      to: 'queued',
+      at: new Date().toISOString(),
+      by: 'creator',
+      reason: 'code_surface_opened',
+    });
+    return (await store.getSubmission(jobId)) ?? { ...source, issueNumber: jobId, roundGeneration: undefined };
   }
 
   /** Owner-resolved round + version, or the exact reply already sent on failure. */
@@ -277,7 +294,14 @@ export async function registerCreatorCodeRoutes(
         }
         if (stagedEntry) {
           const content = stagedContentByPath.get(path)?.content ?? '';
-          files.push({ path, content, stagedBy: stagedEntry.stagedBy ?? 'agent', budget: budgetFor(path, content) });
+          const base = baseContentByPath.get(path);
+          files.push({
+            path,
+            content,
+            stagedBy: stagedEntry.stagedBy ?? 'agent',
+            ...(base !== undefined ? { base } : {}),
+            budget: budgetFor(path, content),
+          });
           continue;
         }
         const content = baseContentByPath.get(path);
@@ -333,37 +357,34 @@ export async function registerCreatorCodeRoutes(
       if (isLiveAgentRound(record)) {
         return reply.status(409).send({ error: 'agent_round', message: 'an agent is actively building this round' });
       }
-      if (roundIsClosed(record)) {
-        return reply.status(409).send({
-          error: 'no_active_round',
-          message: 'this game has no round open to edit — start a new round from the thread first',
-        });
-      }
+      const activeRecord = roundIsClosed(record) ? await openManualRound(store, record, slug) : record;
 
       const parsed = StageInputSchema.safeParse(request.body ?? {});
       if (!parsed.success) {
         return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
       }
 
-      const roundGeneration = (await store.ensureRoundGeneration(record.issueNumber)) ?? record.roundGeneration ?? 1;
+      const roundGeneration =
+        (await store.ensureRoundGeneration(activeRecord.issueNumber)) ?? activeRecord.roundGeneration ?? 1;
 
       try {
         const staged = await options.gamesStore.putStagedSourceFile({
           slug,
-          issueNumber: record.issueNumber,
+          issueNumber: activeRecord.issueNumber,
           roundGeneration,
           path: parsed.data.path,
           content: parsed.data.content,
           stagedBy: 'owner',
         });
-        options.invalidateStatusCache?.(record.issueNumber);
-        if (parsed.data.rebuild !== false) options.scheduleStagedPreview?.(record.issueNumber);
+        options.invalidateStatusCache?.(activeRecord.issueNumber);
+        if (parsed.data.rebuild !== false) options.scheduleStagedPreview?.(activeRecord.issueNumber);
         const hint = largeSourceFileHint(staged.path, staged.bytes, parsed.data.content);
         return reply.send({
           accepted: true,
           path: staged.path,
           bytes: staged.bytes,
           ...(hint ? { hint } : {}),
+          ...(activeRecord.issueNumber !== record.issueNumber ? { roundOpened: activeRecord.issueNumber } : {}),
           staged: {
             totalBytes: staged.totalBytes,
             maxBytes: staged.maxBytes,
@@ -424,25 +445,21 @@ export async function registerCreatorCodeRoutes(
       if (isLiveAgentRound(record)) {
         return reply.status(409).send({ error: 'agent_round', message: 'an agent is actively building this round' });
       }
-      if (roundIsClosed(record)) {
-        return reply.status(409).send({
-          error: 'no_active_round',
-          message: 'this game has no round open to edit — start a new round from the thread first',
-        });
-      }
+      const activeRecord = roundIsClosed(record) ? await openManualRound(store, record, slug) : record;
 
       const parsed = PatchInputSchema.safeParse(request.body ?? {});
       if (!parsed.success) {
         return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
       }
 
-      const roundGeneration = (await store.ensureRoundGeneration(record.issueNumber)) ?? record.roundGeneration ?? 1;
+      const roundGeneration =
+        (await store.ensureRoundGeneration(activeRecord.issueNumber)) ?? activeRecord.roundGeneration ?? 1;
       const gamesStore = options.gamesStore;
 
       try {
         const stagedContent = await gamesStore.getStagedSourceFile({
           slug,
-          issueNumber: record.issueNumber,
+          issueNumber: activeRecord.issueNumber,
           roundGeneration,
           path: parsed.data.path,
         });
@@ -450,7 +467,7 @@ export async function registerCreatorCodeRoutes(
         let base = stagedContent;
         let baseFrom: 'staged' | 'delivery' | null = stagedContent !== null ? 'staged' : null;
         if (base === null) {
-          const version = await resolveVersion(store, record, slug);
+          const version = await resolveVersion(store, activeRecord, slug);
           if (version) {
             base = await gamesStore.getSourceFile(slug, version, parsed.data.path);
             if (base !== null) baseFrom = 'delivery';
@@ -469,14 +486,14 @@ export async function registerCreatorCodeRoutes(
 
         const staged = await gamesStore.putStagedSourceFile({
           slug,
-          issueNumber: record.issueNumber,
+          issueNumber: activeRecord.issueNumber,
           roundGeneration,
           path: parsed.data.path,
           content: patched.content,
           stagedBy: 'owner',
         });
-        options.invalidateStatusCache?.(record.issueNumber);
-        options.scheduleStagedPreview?.(record.issueNumber);
+        options.invalidateStatusCache?.(activeRecord.issueNumber);
+        options.scheduleStagedPreview?.(activeRecord.issueNumber);
         const hint = largeSourceFileHint(staged.path, staged.bytes, patched.content);
         return reply.send({
           accepted: true,
@@ -485,6 +502,7 @@ export async function registerCreatorCodeRoutes(
           replacements: patched.replacements,
           baseFrom,
           ...(hint ? { hint } : {}),
+          ...(activeRecord.issueNumber !== record.issueNumber ? { roundOpened: activeRecord.issueNumber } : {}),
           staged: {
             totalBytes: staged.totalBytes,
             maxBytes: staged.maxBytes,

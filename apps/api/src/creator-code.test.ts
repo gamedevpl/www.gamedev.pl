@@ -248,7 +248,7 @@ describe('the Code surface routes (creator-code.ts)', () => {
         expect(refused.json()).toMatchObject({ error: 'agent_round' });
       }));
 
-    it('refuses a write into a round that has already closed — same posture as deliver', async () =>
+    it('CE-17: a write into a round that has already closed opens a fresh manual round implicitly', async () =>
       withApp(async (app) => {
         await store.recordJobTransition(10, { to: 'published', at: new Date().toISOString(), by: 'operator' });
         const res = await app.inject({
@@ -257,25 +257,89 @@ describe('the Code surface routes (creator-code.ts)', () => {
           headers: { ...authHeaders('g:creator'), 'content-type': 'application/json' },
           payload: { path: 'game.ts', content: 'export const boot = 1;', rebuild: false },
         });
-        expect(res.statusCode).toBe(409);
-        expect(res.json()).toMatchObject({ error: 'no_active_round' });
+        expect(res.statusCode).toBe(200);
+        const body = res.json();
+        expect(body.accepted).toBe(true);
+        expect(body.roundOpened).toEqual(expect.any(Number));
+        expect(body.roundOpened).not.toBe(10);
+
+        // The closed round's own buffer stays untouched...
+        const oldRoundListed = await games.listStagedSources({
+          slug: 'sky-dodge',
+          issueNumber: 10,
+          roundGeneration: 1,
+        });
+        expect(oldRoundListed.files).toEqual([]);
+        // ...and the write landed in the new round's buffer instead.
+        const newRoundListed = await games.listStagedSources({
+          slug: 'sky-dodge',
+          issueNumber: body.roundOpened,
+          roundGeneration: 1,
+        });
+        expect(newRoundListed.files).toEqual([{ path: 'game.ts', bytes: expect.any(Number), stagedBy: 'owner' }]);
+
+        // The new round is now what owner reads resolve to.
+        const opened = await store.getSubmission(body.roundOpened);
+        expect(opened?.slug).toBe('sky-dodge');
+        expect(opened?.ownerUid).toBe('g:creator');
+        expect(opened?.state).toBe('queued');
+      }));
+
+    it('does not open a second round on a slug that already has an active one', async () =>
+      withApp(async (app) => {
+        const first = await app.inject({
+          method: 'PUT',
+          url: '/api/me/studio/games/sky-dodge/sources/stage',
+          headers: { ...authHeaders('g:creator'), 'content-type': 'application/json' },
+          payload: { path: 'game.ts', content: 'export const boot = 1;', rebuild: false },
+        });
+        expect(first.json().roundOpened).toBeUndefined();
+
+        const second = await app.inject({
+          method: 'PUT',
+          url: '/api/me/studio/games/sky-dodge/sources/stage',
+          headers: { ...authHeaders('g:creator'), 'content-type': 'application/json' },
+          payload: { path: 'game.ts', content: 'export const boot = 2;', rebuild: false },
+        });
+        expect(second.json().roundOpened).toBeUndefined();
         const listed = await games.listStagedSources({ slug: 'sky-dodge', issueNumber: 10, roundGeneration: 1 });
-        expect(listed.files).toEqual([]);
+        expect(listed.files).toEqual([{ path: 'game.ts', bytes: expect.any(Number), stagedBy: 'owner' }]);
       }));
   });
 
   describe('POST /api/me/studio/games/:slug/sources/stage/patch', () => {
-    it('refuses a write into a round that has already closed — same posture as stage', async () =>
+    it('CE-17: a patch into a round that has already closed opens a round against the published base', async () =>
       withApp(async (app) => {
+        await games.putCandidateSources({
+          slug: 'sky-dodge',
+          issueNumber: 10,
+          files: [
+            { path: 'SPEC.md', content: '# Sky Dodge' },
+            { path: 'index.html', content: '<div id="game-root"></div>' },
+            { path: 'game.ts', content: 'export const boot = 1;' },
+          ],
+          mode: 'preview',
+        });
+        const version = (await games.listVersions('sky-dodge'))[0]!.version;
+        await store.setPublication({
+          slug: 'sky-dodge',
+          state: 'published',
+          currentVersion: version,
+          publishedAt: '2026-08-01T00:00:00.000Z',
+        });
         await store.recordJobTransition(10, { to: 'published', at: new Date().toISOString(), by: 'operator' });
+
         const res = await app.inject({
           method: 'POST',
           url: '/api/me/studio/games/sky-dodge/sources/stage/patch',
           headers: { ...authHeaders('g:creator'), 'content-type': 'application/json' },
-          payload: { path: 'game.ts', old: 'x', new: 'y' },
+          payload: { path: 'game.ts', old: 'boot = 1', new: 'boot = 2' },
         });
-        expect(res.statusCode).toBe(409);
-        expect(res.json()).toMatchObject({ error: 'no_active_round' });
+        expect(res.statusCode).toBe(200);
+        const body = res.json();
+        expect(body.accepted).toBe(true);
+        expect(body.baseFrom).toBe('delivery');
+        expect(body.roundOpened).toEqual(expect.any(Number));
       }));
   });
 

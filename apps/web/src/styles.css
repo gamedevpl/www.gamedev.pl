@@ -11803,6 +11803,32 @@ button.builder-mode-selector:disabled {
   background: rgba(148, 163, 184, 0.12);
 }
 
+.code-surface-diff-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--panel-border);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.78rem;
+  padding: 4px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.code-surface-diff-toggle:hover,
+.code-surface-diff-toggle:focus-visible {
+  color: var(--text);
+  border-color: rgba(0, 228, 172, 0.35);
+}
+
+.code-surface-diff-toggle.is-active {
+  color: var(--turquoise);
+  border-color: rgba(0, 228, 172, 0.5);
+  background: rgba(0, 228, 172, 0.08);
+}
+
 .code-surface-readonly-banner-compact {
   display: none;
 }
@@ -11951,6 +11977,47 @@ button.builder-mode-selector:disabled {
   min-width: 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.code-surface-diff-view {
+  margin: 0;
+  padding: 12px 0;
+  font-family: var(--mono-font, monospace);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  overflow-x: auto;
+}
+
+.code-surface-diff-line {
+  display: flex;
+  gap: 10px;
+  padding: 0 14px;
+}
+
+.code-surface-diff-marker {
+  flex: none;
+  width: 1em;
+  text-align: center;
+  user-select: none;
+}
+
+.code-surface-diff-line-added {
+  background: rgba(0, 228, 172, 0.1);
+}
+
+.code-surface-diff-line-added .code-surface-diff-marker {
+  color: var(--turquoise);
+}
+
+.code-surface-diff-line-removed {
+  background: color-mix(in srgb, var(--error) 10%, transparent);
+}
+
+.code-surface-diff-line-removed .code-surface-diff-marker,
+.code-surface-diff-line-removed .code-surface-line-text {
+  color: var(--muted);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--error) 50%, transparent);
 }
 
 /* GA-09: the kit's own read-only hop — a fixed overlay, not gated to mobile like
@@ -12108,6 +12175,11 @@ button.builder-mode-selector:disabled {
 .code-surface-live-push {
   font-size: 0.78rem;
   color: var(--success, #2e8b57);
+}
+
+.code-surface-round-opened {
+  font-size: 0.78rem;
+  color: var(--muted);
 }
 
 .code-surface-discard {

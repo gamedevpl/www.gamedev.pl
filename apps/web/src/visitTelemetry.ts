@@ -254,7 +254,9 @@ export type CodeStep =
   | 'delivered'
   | 'published'
   | 'read_only_agent'
-  | 'conflict_seen';
+  | 'conflict_seen'
+  // CE-17: a staging write opened a fresh round implicitly.
+  | 'round_reopened';
 
 /**
  * Which door was used to open a remix: the game page, the theater chrome bar,
