@@ -188,7 +188,6 @@ describe('summarizeVisitFunnel', () => {
       started('c'),
     ]);
 
-    // Keep the controller/tool rungs explicit even when this fixture has no controller events.
     expect(funnel.editing).toEqual([
       { step: 'opened', visits: 2 },
       { step: 'draft_saved', visits: 2 },
