@@ -34,4 +34,16 @@ describe('studio shell claim selectors', () => {
       /\.app:has\(\.studio-layout\.is-game-open\) \.studio-strip-actions \.studio-head-action\.is-primary\s*\{[\s\S]*?grid-column:\s*span 2;/,
     );
   });
+
+  /**
+   * The Details sheet's `.studio-rail-backdrop` spans the full stage, including the
+   * strip. Without a z-index above it, the strip's own Play/Code/Share buttons sit
+   * visibly on top of the backdrop but the backdrop is what actually receives the
+   * tap — every one of those taps silently closes the sheet back to the thread tab
+   * instead of doing what the visible control promised. Same shape, same z-index, as
+   * the chat-rail sheet's `.studio-strip` fix (styles.studioChatRail.test.ts).
+   */
+  it('keeps the strip reachable while the Details sheet is open', () => {
+    expect(css).toMatch(/\.app:has\(\.studio-rail-backdrop\) \.studio-strip\s*\{[^}]*z-index:\s*1200/s);
+  });
 });

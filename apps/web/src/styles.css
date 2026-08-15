@@ -5494,6 +5494,16 @@ a.user-name--profile:focus-visible {
   z-index: 1090;
 }
 
+/* The backdrop spans the full stage, so without this the strip's own Play/Code/Share
+   buttons sit visibly on top of it but the backdrop — not the button under a finger —
+   is what actually receives the tap, silently bouncing the sheet back to the thread tab
+   no matter which control looked tapped. Same fix, same z-index, as the chat-rail
+   sheet's `.studio-strip` rule further down — this backdrop just never got one. */
+.app:has(.studio-rail-backdrop) .studio-strip {
+  position: relative;
+  z-index: 1200;
+}
+
 /* The phone-sheet shape for `.studio-rail` (position/inset/grid-areas) now lives with
    the rest of the stage-layout overlays — see the "THE STAGE" section above. */
 
