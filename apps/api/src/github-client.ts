@@ -167,12 +167,6 @@ interface GameManifest {
   audio?: { sounds?: unknown; music?: unknown; musicTracks?: unknown };
 }
 
-/**
- * `shared/audio/sourced.json` — vendor-generated clips that cannot be re-rendered from
- * parameters the way the synth catalog (`shared/audio/assets/*.wav`) can. A `GAME.json`
- * sound name that misses the synth catalog is looked up here before it is treated as
- * missing. Mirrors games-repo `tools/lib/sourced-audio.ts` / `tools/lib/assemble.ts`.
- */
 interface SourcedAudioCatalog {
   sounds?: Record<string, { mime?: unknown }>;
 }
@@ -1443,10 +1437,7 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
       }
       const availableModuleSources = moduleSources.filter((source): source is string => source !== null);
 
-      // A sound is either in the synth catalog (rendered on demand, `shared/audio/assets/*.wav`)
-      // or the sourced one (vendor clips that cannot be re-rendered, `shared/audio/sourced/*.mp3`
-      // + `shared/audio/sourced.json` for the mime). Checked in that order and cached so a game
-      // whose whole selection is one or the other only pays for the catalog fetch it needs.
+      // Synth `.wav` first, then the sourced `.mp3` catalog as a fallback.
       let sourcedCatalog: Record<string, { mime?: unknown }> | null = null;
       const loadSourcedCatalog = async (): Promise<Record<string, { mime?: unknown }>> => {
         if (sourcedCatalog === null) {
@@ -1510,10 +1501,7 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
           selected[name] = tracks[name];
         }
 
-        // A drumKit sample is referenced from a track's `drumKit`, not `audio.sounds` — a
-        // game never "selects" it directly — so without embedding it here the engine's
-        // runtime fallback silently masks the miss as a synthesized noise burst instead of
-        // the sample nobody shipped. Mirrors games-repo assemble.ts.
+        // drumKit samples aren't in audio.sounds, so embed them here too.
         for (const track of Object.values(selected) as Array<{ drumKit?: { kick?: unknown; hat?: unknown } }>) {
           for (const soundName of [track.drumKit?.kick, track.drumKit?.hat]) {
             if (typeof soundName !== 'string' || Object.hasOwn(assets, soundName)) {

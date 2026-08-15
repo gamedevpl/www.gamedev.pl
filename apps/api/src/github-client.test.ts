@@ -904,9 +904,6 @@ describe('getGameSources', () => {
   });
 
   it('falls back to the sourced-audio catalog for a sound missing from the synth catalog', async () => {
-    // shared/audio/sourced.json + shared/audio/sourced/*.mp3: vendor clips that cannot be
-    // re-rendered from parameters the way the synth catalog can. A GAME.json sound name that
-    // misses shared/audio/assets/*.wav should resolve here before being treated as missing.
     const files = new Map<string, string | Uint8Array>([
       ['games/march/index.html', '<canvas id="game"></canvas>'],
       ['games/march/game.ts', 'const game: { update(): void } = { update() {} }; GameKit.mount(game);'],
@@ -947,9 +944,6 @@ describe('getGameSources', () => {
   });
 
   it('embeds a music track drumKit sample from the sourced catalog', async () => {
-    // drumKit.kick/hat are referenced from music.json, not audio.sounds — a game never
-    // "selects" them directly — so they still need embedding or the audio module's runtime
-    // fallback silently swaps in a synthesized noise burst.
     const files = new Map<string, string | Uint8Array>([
       ['games/march/index.html', '<canvas id="game"></canvas>'],
       ['games/march/game.ts', 'const game: { update(): void } = { update() {} }; GameKit.mount(game);'],
