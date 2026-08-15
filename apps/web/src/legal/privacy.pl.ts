@@ -221,6 +221,15 @@ export const privacyPl: LegalDocument = {
             `ponownie. Jeśli jednak uważasz, że odrzucenie było błędne, napisz na [${CONTACT_EMAIL}](mailto:${CONTACT_EMAIL}), ` +
             'a sprawę oceni człowiek.',
         },
+        {
+          kind: 'p',
+          text:
+            'Osobno: gdy jesteś właścicielem/właścicielką gry i funkcja podpowiedzi w edytorze kodu jest włączona, ' +
+            'kod wokół kursora jest automatycznie wysyłany do tego samego modelu AI (Google Gemini, przez Google ' +
+            'Cloud Vertex AI) chwilę po tym, jak przestajesz pisać, aby zaproponować uzupełnienie. Dotyczy to ' +
+            'wyłącznie edytora kodu w Twojej własnej grze i — tak jak powyżej — nigdy nie jest wykorzystywane do ' +
+            'trenowania modeli.',
+        },
       ],
     },
     {
@@ -245,7 +254,7 @@ export const privacyPl: LegalDocument = {
             ['Google (logowanie kontem Google)', 'Uwierzytelnianie', 'USA — Data Privacy Framework'],
             [
               'Google Cloud Vertex AI (Gemini)',
-              'Moderacja i doprecyzowanie opisu gry',
+              'Moderacja i doprecyzowanie opisu gry; podpowiedzi uzupełnień kodu w edytorze kodu',
               'USA / globalnie — standardowe klauzule umowne',
             ],
             ['GitHub (Microsoft)', 'Repozytorium gier i agent kodujący', 'USA — Data Privacy Framework'],

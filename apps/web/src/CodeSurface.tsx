@@ -15,6 +15,7 @@ import type { CodeMirrorDiagnostic } from './CodeMirrorEditor.js';
 import {
   CodeSurfaceApiError,
   deliverCodeSurface,
+  fetchCodeSurfaceCompletion,
   fetchCodeSurfaceKitDeclaration,
   discardCodeSurfaceEdits,
   fetchCodeSurfaceSources,
@@ -424,6 +425,13 @@ export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
     selectFile(path);
   }
 
+  // TA-02: the editor extension supplies the window, this supplies the call.
+  function fetchGhostText(prefixWindow: string, suffixWindow: string, signal: AbortSignal): Promise<string> {
+    // The prompt only knows TypeScript — other file types would get it wrong.
+    if (!file || !isTsPath(file.path)) return Promise.resolve('');
+    return fetchCodeSurfaceCompletion(slug, file.path, prefixWindow, suffixWindow, signal);
+  }
+
   const schedulePreviewRebuild = useCallback(() => {
     if (previewTimerRef.current !== null) window.clearTimeout(previewTimerRef.current);
     if (cooldownTimerRef.current !== null) {
@@ -767,6 +775,7 @@ export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
                   languageService={languageServiceForEditor}
                   onGotoDefinition={handleGotoDefinition}
                   initialSelection={initialSelectionForEditor}
+                  fetchGhostText={fetchGhostText}
                 />
               </Suspense>
             </CodeMirrorBoundary>

@@ -28,7 +28,11 @@ import {
   type DailyRetentionPoint,
   type TelemetryTrends,
 } from './telemetry-trends.js';
-import { DEFAULT_CREATION_LIMITS_TTL_MS, resolveDefaultGlobalDailyCap } from './creation-limits.js';
+import {
+  DEFAULT_CREATION_LIMITS_TTL_MS,
+  resolveDefaultGlobalDailyCap,
+  resolveDefaultGlobalDailyTabCompleteTokenCap,
+} from './creation-limits.js';
 import {
   BOT_UID_PREFIX,
   type BetaInvite,
@@ -143,8 +147,11 @@ export interface CreationLimitsResponse {
       // MANAGED_AGENT_VENDOR, shown next to the override control.
       defaultVendor: string | null;
     };
+    // TA-01's own breaker (creator-code-tab-autocomplete-research.md).
+    tabCompletePaused: boolean;
+    globalDailyTabCompleteTokenCap: number;
   };
-  today: { dateStr: string; submissions: number; managedBuilds: number };
+  today: { dateStr: string; submissions: number; managedBuilds: number; tabCompleteTokens: number };
   /** Upper bound, in ms, on how long a change takes to reach every instance. */
   propagationMs: number;
 }
@@ -167,6 +174,9 @@ const CreationLimitsPatchSchema = z
     // The studio chat breaker rides the same document too.
     chatPaused: z.boolean().optional(),
     globalDailyChatCap: z.number().int().min(0).max(100_000).nullable().optional(),
+    // TA-01's own breaker, denominated in tokens rather than calls.
+    tabCompletePaused: z.boolean().optional(),
+    globalDailyTabCompleteTokenCap: z.number().int().min(0).max(50_000_000).nullable().optional(),
     // Same document: whether the platform builder is offered. See managed-availability.ts.
     managedBuilderMode: z.enum(['auto', 'off', 'coming_soon']).optional(),
     // null clears the override, same as globalDailySubmissionCap above.
@@ -182,11 +192,13 @@ const CreationLimitsPatchSchema = z
       patch.globalDailyEditCap !== undefined ||
       patch.chatPaused !== undefined ||
       patch.globalDailyChatCap !== undefined ||
+      patch.tabCompletePaused !== undefined ||
+      patch.globalDailyTabCompleteTokenCap !== undefined ||
       patch.managedBuilderMode !== undefined ||
       patch.managedAgentVendorOverride !== undefined ||
       patch.managedDailyCap !== undefined ||
       patch.managedDailyUserCap !== undefined,
-    'nothing to change: send paused, globalDailySubmissionCap, editingPaused, globalDailyEditCap, chatPaused, globalDailyChatCap, managedBuilderMode, managedAgentVendorOverride, managedDailyCap and/or managedDailyUserCap',
+    'nothing to change: send paused, globalDailySubmissionCap, editingPaused, globalDailyEditCap, chatPaused, globalDailyChatCap, tabCompletePaused, globalDailyTabCompleteTokenCap, managedBuilderMode, managedAgentVendorOverride, managedDailyCap and/or managedDailyUserCap',
   );
 
 const PublicPlayPatchSchema = z.object({
@@ -381,10 +393,11 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
   /** Reads the stored breaker plus today's spend, uncached — an operator wants truth. */
   async function readCreationLimits(): Promise<CreationLimitsResponse> {
     const dateStr = new Date(now()).toISOString().slice(0, 10);
-    const [stored, submissions, managedBuilds] = await Promise.all([
+    const [stored, submissions, managedBuilds, tabCompleteTokens] = await Promise.all([
       store.getCreationLimits(),
       store.getGlobalSubmissionCount(dateStr),
       store.getGlobalManagedBuildCount(dateStr),
+      store.getGlobalTabCompleteTokenCount(dateStr),
     ]);
     const storedVendor = stored?.managedAgentVendorOverride ?? null;
     // An invalid default must not report as effective when nothing overrode it.
@@ -406,8 +419,11 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
           configuredVendors: [...configuredVendors],
           defaultVendor,
         },
+        tabCompletePaused: stored?.tabCompletePaused === true,
+        globalDailyTabCompleteTokenCap:
+          stored?.globalDailyTabCompleteTokenCap ?? resolveDefaultGlobalDailyTabCompleteTokenCap(),
       },
-      today: { dateStr, submissions, managedBuilds },
+      today: { dateStr, submissions, managedBuilds, tabCompleteTokens },
       propagationMs: creationLimitsTtlMs,
     };
   }

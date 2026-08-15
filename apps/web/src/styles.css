@@ -12023,6 +12023,12 @@ button.builder-mode-selector:disabled {
   background: rgba(0, 228, 172, 0.14);
 }
 
+/* TA-02: ghost-text proposal — must never intercept the click meant for it. */
+.cm-ghost-text {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
 .code-tok-comment {
   color: var(--muted);
 }

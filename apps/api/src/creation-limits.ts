@@ -391,6 +391,116 @@ export function createChatGate(options: CreationGateOptions): ChatGate {
   };
 }
 
+// A deliberate cap the owner chose for this lane, not a fallback.
+export const DEFAULT_GLOBAL_DAILY_TAB_COMPLETE_TOKEN_CAP = 2_000_000;
+
+export function resolveDefaultGlobalDailyTabCompleteTokenCap(
+  override?: number,
+  env: NodeJS.ProcessEnv = process.env,
+): number {
+  if (typeof override === 'number' && Number.isFinite(override) && override >= 0) return override;
+  const raw = env.GLOBAL_DAILY_TAB_COMPLETE_TOKEN_CAP?.trim();
+  if (raw) {
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed) && parsed >= 0) return parsed;
+  }
+  return DEFAULT_GLOBAL_DAILY_TAB_COMPLETE_TOKEN_CAP;
+}
+
+// Worst-case request cost: prefix + suffix chars plus the output cap.
+export const TAB_COMPLETE_TOKEN_RESERVATION = 1400;
+
+export type TabCompletePeekOutcome = { allowed: true; reserved: boolean } | { allowed: false; reason: CreationRefusal };
+
+export interface TabCompleteGate {
+  // Reserves a worst-case slot; reserved=false if none was recorded.
+  peek(uid: string, dateStr: string): Promise<TabCompletePeekOutcome>;
+  // Reconciles the reservation. Pass the `reserved` flag peek() returned.
+  spend(uid: string, dateStr: string, tokens: number, reserved: boolean): Promise<void>;
+}
+
+// Same chassis as editing/chat, denominated in tokens rather than calls.
+export function createTabCompleteGate(options: CreationGateOptions): TabCompleteGate {
+  const { store } = options;
+  const now = options.now ?? Date.now;
+  const ttlMs = options.ttlMs ?? DEFAULT_CREATION_LIMITS_TTL_MS;
+  const defaultCap = resolveDefaultGlobalDailyTabCompleteTokenCap(options.defaultGlobalDailyCap);
+  const logWarn = options.logWarn ?? (() => {});
+
+  const defaults: CreationLimits = {
+    paused: false,
+    globalDailySubmissionCap: null,
+    editingPaused: false,
+    globalDailyEditCap: null,
+    tabCompletePaused: false,
+    globalDailyTabCompleteTokenCap: null,
+    managedDailyCap: null,
+    managedDailyUserCap: null,
+  };
+  let cache: { value: CreationLimits; expiresAt: number } | null = null;
+
+  async function limits(): Promise<CreationLimits> {
+    if (cache && cache.expiresAt > now()) return cache.value;
+    try {
+      const stored = (await store.getCreationLimits()) ?? defaults;
+      cache = { value: stored, expiresAt: now() + ttlMs };
+      return stored;
+    } catch (error) {
+      if (cache) {
+        logWarn({ err: error }, 'creation limits unreadable; tab-complete gate using the last known values');
+        return cache.value;
+      }
+      logWarn({ err: error }, 'creation limits unreadable and never read; tab-complete gate using defaults');
+      return defaults;
+    }
+  }
+
+  return {
+    async peek(uid, dateStr) {
+      if (bypassesBreaker(uid)) return { allowed: true, reserved: false };
+      const value = await limits();
+      if (value.tabCompletePaused) return { allowed: false, reason: 'paused' };
+      const cap = value.globalDailyTabCompleteTokenCap ?? defaultCap;
+      if (cap <= 0) return { allowed: false, reason: 'over_capacity' };
+      try {
+        const spent = await store.checkAndIncrementGlobalTabCompleteTokens(
+          dateStr,
+          TAB_COMPLETE_TOKEN_RESERVATION,
+          cap,
+        );
+        if (!spent.allowed) {
+          logWarn(
+            { dateStr, cap, current: spent.current },
+            'global daily tab-complete token cap reached; refusing completions',
+          );
+          return { allowed: false, reason: 'over_capacity' };
+        }
+        return { allowed: true, reserved: true };
+      } catch (error) {
+        // A blip is not over capacity; nothing was reserved to release.
+        logWarn({ err: error, dateStr }, 'global tab-complete token counter unreachable; admitting the request');
+        return { allowed: true, reserved: false };
+      }
+    },
+
+    async spend(uid, dateStr, tokens, reserved) {
+      if (bypassesBreaker(uid)) return;
+      const value = await limits();
+      const cap = value.globalDailyTabCompleteTokenCap ?? defaultCap;
+      // Only release a reservation that peek() actually recorded.
+      const delta = reserved ? tokens - TAB_COMPLETE_TOKEN_RESERVATION : tokens;
+      try {
+        const current = await store.adjustGlobalTabCompleteTokens(dateStr, delta);
+        if (current >= Math.ceil(cap * 0.8)) {
+          logWarn({ dateStr, cap, current }, 'global daily tab-complete token cap is over 80% spent');
+        }
+      } catch (error) {
+        logWarn({ err: error, dateStr }, 'global tab-complete token counter unreachable; usage not recorded');
+      }
+    },
+  };
+}
+
 /** Wire error codes, so the web app can say something true about which limit was hit. */
 export const CREATION_REFUSAL_CODES: Record<CreationRefusal, string> = {
   paused: 'creation_paused',

@@ -77,6 +77,8 @@ export interface CreationLimits {
     managedAgentVendorOverride?: ManagedAgentVendor | null;
     managedDailyCap?: number | null;
     managedDailyUserCap?: number | null;
+    tabCompletePaused?: boolean;
+    globalDailyTabCompleteTokenCap?: number | null;
     updatedAt?: string;
     updatedBy?: string;
   } | null;
@@ -94,8 +96,11 @@ export interface CreationLimits {
       configuredVendors: ManagedAgentVendor[];
       defaultVendor: ManagedAgentVendor | null;
     };
+    // TA-01's breaker — off/on and the shared daily token ceiling.
+    tabCompletePaused: boolean;
+    globalDailyTabCompleteTokenCap: number;
   };
-  today: { dateStr: string; submissions: number; managedBuilds: number };
+  today: { dateStr: string; submissions: number; managedBuilds: number; tabCompleteTokens: number };
   propagationMs: number;
 }
 
@@ -120,6 +125,8 @@ export async function setCreationLimits(patch: {
   managedAgentVendorOverride?: ManagedAgentVendor | null;
   managedDailyCap?: number | null;
   managedDailyUserCap?: number | null;
+  tabCompletePaused?: boolean;
+  globalDailyTabCompleteTokenCap?: number | null;
 }): Promise<CreationLimits | { error: string }> {
   const res = await fetch(`${API_BASE}/api/admin/creation-limits`, {
     method: 'POST',

@@ -15,6 +15,7 @@ type CapturedEditorProps = {
   languageService?: { worker: unknown; path: string };
   onGotoDefinition?: (path: string, from: number, to: number) => void;
   initialSelection?: { anchor: number; head: number };
+  fetchGhostText?: (prefixWindow: string, suffixWindow: string, signal: AbortSignal) => Promise<string>;
 };
 let lastEditorProps: CapturedEditorProps | null = null;
 // GA-09: the mock re-renders after clearing — record every value seen.
@@ -41,6 +42,7 @@ vi.mock('./codeSurfaceApi.js', async () => {
     fetchCodeSurfaceSources: vi.fn(),
     stageCodeSurfaceFile: vi.fn(),
     fetchCodeSurfaceKitDeclaration: vi.fn(),
+    fetchCodeSurfaceCompletion: vi.fn(),
   };
 });
 
@@ -316,5 +318,78 @@ describe('CodeSurface goto-definition (GA-09)', () => {
 
     expect(container.querySelector('.code-surface-rail-item.is-active')?.textContent).toBe(activeBefore);
     expect(container.querySelector('.code-surface-kit-viewer')).toBeNull();
+  });
+});
+
+describe('CodeSurface ghost text (TA-02)', () => {
+  let container: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    resetCodeSurfaceSessionState();
+    lastEditorProps = null;
+    mockedApi.fetchCodeSurfaceSources.mockReset();
+    mockedApi.fetchCodeSurfaceKitDeclaration.mockReset();
+    mockedApi.fetchCodeSurfaceCompletion.mockReset();
+    mockedLanguageService.createCodeSurfaceLanguageService.mockReset();
+    mockedApi.fetchCodeSurfaceSources.mockResolvedValue(sourcesFor());
+    mockedApi.fetchCodeSurfaceKitDeclaration.mockResolvedValue(null);
+    mockedApi.fetchCodeSurfaceCompletion.mockResolvedValue('resolve()');
+    mockedLanguageService.createCodeSurfaceLanguageService.mockResolvedValue({
+      worker: {} as never,
+      updateFile: vi.fn(),
+      destroy: vi.fn(),
+    });
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+
+  afterEach(async () => {
+    await act(async () => root.unmount());
+    container.remove();
+  });
+
+  async function render(slug = 'sky-dodge') {
+    await act(async () => {
+      root.render(createElement(CodeSurface, { slug, onBack: () => {} }));
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+  }
+
+  it('forwards a fetch to the open file, through fetchCodeSurfaceCompletion', async () => {
+    await render();
+    const controller = new AbortController();
+
+    const result = await lastEditorProps?.fetchGhostText?.('const x = ', ';', controller.signal);
+
+    expect(mockedApi.fetchCodeSurfaceCompletion).toHaveBeenCalledWith(
+      'sky-dodge',
+      'game.ts',
+      'const x = ',
+      ';',
+      controller.signal,
+    );
+    expect(result).toBe('resolve()');
+  });
+
+  it('never fetches for a non-TypeScript file — the prompt only knows TypeScript', async () => {
+    await render();
+    const jsonTab = [...container.querySelectorAll('.code-surface-rail-item')].find((button) =>
+      button.textContent?.includes('GAME.json'),
+    ) as HTMLButtonElement;
+    await act(async () => {
+      jsonTab.click();
+    });
+
+    const result = await lastEditorProps?.fetchGhostText?.('{', '}', new AbortController().signal);
+
+    expect(result).toBe('');
+    expect(mockedApi.fetchCodeSurfaceCompletion).not.toHaveBeenCalled();
   });
 });

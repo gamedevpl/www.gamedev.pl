@@ -35,6 +35,7 @@ export function CreationLimitsPanel({ onChanged }: { onChanged?: () => void }) {
   const [capDraft, setCapDraft] = useState('');
   const [managedCapDraft, setManagedCapDraft] = useState('');
   const [managedUserCapDraft, setManagedUserCapDraft] = useState('');
+  const [tabCapDraft, setTabCapDraft] = useState('');
 
   const load = useCallback(async () => {
     try {
@@ -49,6 +50,7 @@ export function CreationLimitsPanel({ onChanged }: { onChanged?: () => void }) {
       setManagedUserCapDraft(
         response.effective.managedDailyUserCap === null ? '' : String(response.effective.managedDailyUserCap),
       );
+      setTabCapDraft(String(response.effective.globalDailyTabCompleteTokenCap));
       setState('ready');
     } catch {
       setState('error');
@@ -67,6 +69,8 @@ export function CreationLimitsPanel({ onChanged }: { onChanged?: () => void }) {
       managedAgentVendorOverride?: ManagedAgentVendor | null;
       managedDailyCap?: number | null;
       managedDailyUserCap?: number | null;
+      tabCompletePaused?: boolean;
+      globalDailyTabCompleteTokenCap?: number | null;
     }) => {
       setBusy(true);
       setMessage(null);
@@ -82,6 +86,7 @@ export function CreationLimitsPanel({ onChanged }: { onChanged?: () => void }) {
         setManagedUserCapDraft(
           result.effective.managedDailyUserCap === null ? '' : String(result.effective.managedDailyUserCap),
         );
+        setTabCapDraft(String(result.effective.globalDailyTabCompleteTokenCap));
         // The change lands in Firestore, and instances read it through a cache — so say
         // when it will be everywhere rather than implying it already is.
         setMessage(`in force everywhere within ${relative(result.propagationMs)}`);
@@ -108,6 +113,9 @@ export function CreationLimitsPanel({ onChanged }: { onChanged?: () => void }) {
   const parsedManagedUserCap = managedUserCapDraft.trim() === '' ? null : Number(managedUserCapDraft);
   const managedUserCapValid =
     parsedManagedUserCap === null || (Number.isInteger(parsedManagedUserCap) && parsedManagedUserCap >= 0);
+
+  const parsedTabCap = Number(tabCapDraft);
+  const tabCapValid = Number.isInteger(parsedTabCap) && parsedTabCap >= 0;
 
   const managedStatusLine = !effective.hasPlatformBackend
     ? 'Not configured in this environment (reads as "coming soon" regardless of the switch below).'
@@ -272,6 +280,59 @@ export function CreationLimitsPanel({ onChanged }: { onChanged?: () => void }) {
         <p className="health-note">
           An in-flight platform round keeps running when this changes — the switch only gates new dispatches. Reaches
           every instance within {relative(limits.propagationMs)}.
+        </p>
+      </section>
+      <section className="admin-limits">
+        <h2 className="health-section-title">Tab completion (ghost text)</h2>
+        <p className="health-summary">
+          {effective.tabCompletePaused ? 'Tab completion is paused.' : 'Tab completion is open.'}{' '}
+          {today.tabCompleteTokens} of {effective.globalDailyTabCompleteTokenCap} tokens used today ({today.dateStr}).
+        </p>
+
+        <div className="admin-limits-controls">
+          <button
+            type="button"
+            className={effective.tabCompletePaused ? 'admin-limits-resume' : 'admin-limits-pause'}
+            disabled={busy}
+            onClick={() => void apply({ tabCompletePaused: !effective.tabCompletePaused })}
+          >
+            {effective.tabCompletePaused ? 'Resume tab completion' : 'Pause tab completion'}
+          </button>
+
+          <label className="admin-limits-cap">
+            Daily token cap
+            <input
+              type="number"
+              min={0}
+              value={tabCapDraft}
+              disabled={busy}
+              onChange={(event) => setTabCapDraft(event.target.value)}
+            />
+          </label>
+          <button
+            type="button"
+            disabled={busy || !tabCapValid || parsedTabCap === effective.globalDailyTabCompleteTokenCap}
+            onClick={() => void apply({ globalDailyTabCompleteTokenCap: parsedTabCap })}
+          >
+            Set cap
+          </button>
+          <button
+            type="button"
+            disabled={
+              busy ||
+              stored?.globalDailyTabCompleteTokenCap === undefined ||
+              stored?.globalDailyTabCompleteTokenCap === null
+            }
+            onClick={() => void apply({ globalDailyTabCompleteTokenCap: null })}
+          >
+            Use the deployed default
+          </button>
+        </div>
+
+        {message && <p className="admin-limits-message">{message}</p>}
+
+        <p className="health-note">
+          Also requires the `TAB_COMPLETE` deploy flag. Reaches every instance within {relative(limits.propagationMs)}.
         </p>
       </section>
       <PublicPlayPanel onChanged={onChanged} />

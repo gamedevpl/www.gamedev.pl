@@ -7,6 +7,7 @@ import { createGcsObjectStore, type GcsObjectStore } from './gcs-sign.js';
 import { createGcsGamesStore, type GamesStore } from './games-store.js';
 import { KIT_ROOT_DIR } from './kit-registry.js';
 import { InMemoryStore } from './store.js';
+import { StubTabCompleter, type TabCompleter } from './tab-complete.js';
 
 const sessionSecret = 'dev-session-secret-change-me';
 const submissionTokenSecret = 'test-submission-secret';
@@ -118,7 +119,7 @@ describe('the Code surface routes (creator-code.ts)', () => {
 
   async function withApp<T>(
     fn: (app: Awaited<ReturnType<typeof buildApp>>) => Promise<T>,
-    options: { objectStore?: GcsObjectStore; games?: GamesStore } = {},
+    options: { objectStore?: GcsObjectStore; games?: GamesStore; tabCompleter?: TabCompleter } = {},
   ): Promise<T> {
     const app = await buildApp({
       store,
@@ -127,6 +128,7 @@ describe('the Code surface routes (creator-code.ts)', () => {
         submissionTokenSecret,
         agentChannel: { gamesStore: options.games ?? games, objectStore: options.objectStore },
       },
+      tabCompleter: options.tabCompleter,
     });
     try {
       return await fn(app);
@@ -570,5 +572,109 @@ describe('the Code surface routes (creator-code.ts)', () => {
         const submitted = record?.transitions?.find((entry) => entry.to === 'submitted');
         expect(submitted?.by).toBe('creator');
       }));
+  });
+
+  describe('POST /api/me/studio/games/:slug/sources/complete', () => {
+    function withTabComplete<T>(fn: () => Promise<T>): Promise<T> {
+      const prior = process.env.TAB_COMPLETE;
+      process.env.TAB_COMPLETE = 'true';
+      return fn().finally(() => {
+        if (prior === undefined) delete process.env.TAB_COMPLETE;
+        else process.env.TAB_COMPLETE = prior;
+      });
+    }
+
+    it('404s when the TAB_COMPLETE kill switch is off, even with CODE_SURFACE on', async () =>
+      withApp(
+        async (app) => {
+          const res = await app.inject({
+            method: 'POST',
+            url: '/api/me/studio/games/sky-dodge/sources/complete',
+            headers: { ...authHeaders('g:creator'), 'content-type': 'application/json' },
+            payload: { path: 'game.ts', prefixWindow: 'const x = ', suffixWindow: ';' },
+          });
+          expect(res.statusCode).toBe(404);
+        },
+        { tabCompleter: new StubTabCompleter({ completion: '1' }) },
+      ));
+
+    it('404s for a slug the caller does not own — never 403', async () =>
+      withTabComplete(() =>
+        withApp(
+          async (app) => {
+            const res = await app.inject({
+              method: 'POST',
+              url: '/api/me/studio/games/sky-dodge/sources/complete',
+              headers: { ...authHeaders('g:other'), 'content-type': 'application/json' },
+              payload: { path: 'game.ts', prefixWindow: 'const x = ', suffixWindow: ';' },
+            });
+            expect(res.statusCode).toBe(404);
+          },
+          { tabCompleter: new StubTabCompleter({ completion: '1' }) },
+        ),
+      ));
+
+    it('returns the proposal from the injected completer', async () =>
+      withTabComplete(() =>
+        withApp(
+          async (app) => {
+            const res = await app.inject({
+              method: 'POST',
+              url: '/api/me/studio/games/sky-dodge/sources/complete',
+              headers: { ...authHeaders('g:creator'), 'content-type': 'application/json' },
+              payload: { path: 'game.ts', prefixWindow: 'const speed = ', suffixWindow: ';' },
+            });
+            expect(res.statusCode).toBe(200);
+            expect(res.json()).toEqual({ completion: '0.16' });
+          },
+          { tabCompleter: new StubTabCompleter({ completion: '0.16' }) },
+        ),
+      ));
+
+    it('429s once the per-creator daily quota is spent', async () => {
+      process.env.DAILY_TAB_COMPLETE_QUOTA = '3';
+      try {
+        await withTabComplete(() =>
+          withApp(
+            async (app) => {
+              const request = () =>
+                app.inject({
+                  method: 'POST',
+                  url: '/api/me/studio/games/sky-dodge/sources/complete',
+                  headers: { ...authHeaders('g:creator'), 'content-type': 'application/json' },
+                  payload: { path: 'game.ts', prefixWindow: 'a', suffixWindow: 'b' },
+                });
+              for (let i = 0; i < 3; i += 1) {
+                expect((await request()).statusCode).toBe(200);
+              }
+              expect((await request()).statusCode).toBe(429);
+            },
+            { tabCompleter: new StubTabCompleter({ completion: 'x' }) },
+          ),
+        );
+      } finally {
+        delete process.env.DAILY_TAB_COMPLETE_QUOTA;
+      }
+    });
+
+    it('refuses on the global pause without spending the per-creator quota', async () =>
+      withTabComplete(() =>
+        withApp(
+          async (app) => {
+            await store.setCreationLimits({ tabCompletePaused: true }, 'operator');
+            const res = await app.inject({
+              method: 'POST',
+              url: '/api/me/studio/games/sky-dodge/sources/complete',
+              headers: { ...authHeaders('g:creator'), 'content-type': 'application/json' },
+              payload: { path: 'game.ts', prefixWindow: 'a', suffixWindow: 'b' },
+            });
+            expect(res.statusCode).toBe(503);
+            // A refused global gate must leave the daily allowance untouched.
+            const dateStr = new Date().toISOString().slice(0, 10);
+            expect((await store.getUsage('g:creator', dateStr)).tabCompletes).toBe(0);
+          },
+          { tabCompleter: new StubTabCompleter({ completion: 'x' }) },
+        ),
+      ));
   });
 });

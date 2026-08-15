@@ -225,6 +225,13 @@ jobs:
             ENV_VARS="${ENV_VARS}|CODE_LANE=${CODE_LANE_VAL}"
           fi
 
+          # TA-01's ghost-text completion route: off unless set, same reasoning as
+          # EDITOR_ASSIST above — a hand-set value would vanish on the next deploy.
+          TAB_COMPLETE_VAL="${{ vars.TAB_COMPLETE }}"
+          if [ -n "$TAB_COMPLETE_VAL" ]; then
+            ENV_VARS="${ENV_VARS}|TAB_COMPLETE=${TAB_COMPLETE_VAL}"
+          fi
+
           # The Code surface (creator-code-editing-execution-plan.md CE-02): manual
           # editing of a game's own sources in the Studio. A kill switch, not a cohort
           # gate — the owner decision is all-creators, so it ships on by default and this

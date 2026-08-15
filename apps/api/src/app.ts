@@ -32,8 +32,9 @@ import { registerCreatorStudioRoutes } from './creator-studio.js';
 import { registerEditorRoutes } from './editor-drafts.js';
 import { VertexEditorAssistant, type EditorAssistant } from './editor-assist.js';
 import { VertexCodeLane } from './code-lane.js';
+import { VertexTabCompleter, type TabCompleter } from './tab-complete.js';
 import { registerRemixRoutes, MAX_REMIX_ID_LENGTH } from './remix.js';
-import { createEditingGate, createCreationGate } from './creation-limits.js';
+import { createEditingGate, createCreationGate, createTabCompleteGate } from './creation-limits.js';
 import { createGenerator } from './generator.js';
 import { createDefaultContentChecker, type ContentChecker } from './moderation.js';
 import { registerContactRoutes, type ContactRoutesOptions } from './contact.js';
@@ -145,6 +146,8 @@ export interface BuildAppOptions {
   specRefiner?: SpecRefiner;
   /** The editor's NL tuning router. Defaults to the Vertex one; stubbed in tests. */
   editorAssistant?: EditorAssistant;
+  // Ghost-text completer (TA-01). Defaults to Vertex; stubbed in tests.
+  tabCompleter?: TabCompleter;
   multiplayerRoutes?: MultiplayerRoutesOptions;
   /** Seams for play-session telemetry; defaults to a live catalog-backed slug gate. */
   telemetryRoutes?: Omit<TelemetryRoutesOptions, 'store'>;
@@ -754,6 +757,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     scheduleStagedPreview: submissionSeams.scheduleStagedPreview ?? undefined,
     onSourcesDelivered: gateTrigger,
     log: app.log,
+    // TA-01: built unconditionally (the Vertex client is lazy); TAB_COMPLETE gates it.
+    tabCompleter: options.tabCompleter ?? new VertexTabCompleter(),
+    tabCompleteGate: createTabCompleteGate({ store, logWarn: (payload, msg) => app.log.warn(payload, msg) }),
   });
 
   // The Creator Studio content editor (EditorKit): drafts in Firestore, publish
