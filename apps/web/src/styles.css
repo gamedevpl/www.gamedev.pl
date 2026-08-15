@@ -5494,11 +5494,7 @@ a.user-name--profile:focus-visible {
   z-index: 1090;
 }
 
-/* The backdrop spans the full stage, so without this the strip's own Play/Code/Share
-   buttons sit visibly on top of it but the backdrop — not the button under a finger —
-   is what actually receives the tap, silently bouncing the sheet back to the thread tab
-   no matter which control looked tapped. Same fix, same z-index, as the chat-rail
-   sheet's `.studio-strip` rule further down — this backdrop just never got one. */
+/* The full-stage backdrop swallowed strip taps below it. */
 .app:has(.studio-rail-backdrop) .studio-strip {
   position: relative;
   z-index: 1200;
@@ -12156,9 +12152,7 @@ button.builder-mode-selector:disabled {
   pointer-events: none;
 }
 
-/* TA-02 follow-up: Tab is the primary accept path but iOS has no Tab key, so this is
-   the only way in on touch. Deliberately separate from .cm-ghost-text above — that one
-   must stay click-through, this one must not. */
+/* The only accept path on iOS — deliberately not click-through. */
 .cm-ghost-text-accept {
   display: inline-flex;
   align-items: center;
@@ -13042,10 +13036,7 @@ button.builder-mode-selector:disabled {
   z-index: 1200;
 }
 
-/* Same rule, different backdrop: the phone games-shelf drawer's backdrop also spans
-   the full viewport, so without this the hamburger sitting above the drawer's ~90vw
-   width is unreachable — tapping it just closes the drawer — for as long as the
-   shelf stays open. */
+/* Same rule: the shelf drawer's backdrop covers the hamburger too. */
 .app:has(.studio-shelf-backdrop) .app-header {
   z-index: 1200;
 }
@@ -13123,12 +13114,7 @@ button.builder-mode-selector:disabled {
   }
 
   .studio-chat-rail.is-full {
-    /* --studio-chat-rail-top-inset is measured off .app-header by JS (ResizeObserver +
-       MutationObserver) — a real value the day it lands, but the one frame it hasn't
-       fired yet falls back to 0px, and 0px is under the status bar / notch on a
-       standalone iOS PWA, which has no browser chrome to escape through. env() is a
-       CSS-only floor that can never be stale, so it wins whenever the JS value would
-       have placed the sheet's own head — and the close button in it — under the notch. */
+    /* Guards a stale JS inset falling back to 0px under the notch. */
     top: max(var(--studio-chat-rail-top-inset, 0px), env(safe-area-inset-top, 0px));
     height: auto;
     max-height: none;

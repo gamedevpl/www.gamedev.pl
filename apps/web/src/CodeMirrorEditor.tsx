@@ -528,6 +528,12 @@ function acceptGhostText(view: EditorView): boolean {
   return true;
 }
 
+function acceptGhostTextFromEvent(event: Event, view: EditorView): boolean {
+  if (!(event.target instanceof HTMLElement) || !event.target.closest('.cm-ghost-text-accept')) return false;
+  event.preventDefault();
+  return acceptGhostText(view);
+}
+
 // TA-02: debounces on doc change; cancels its own timer and fetch.
 function ghostTextFetchPlugin(fetchGhostTextRef: { current: FetchGhostText | undefined }) {
   return ViewPlugin.fromClass(
@@ -610,11 +616,9 @@ function makeGhostTextExtension(fetchGhostTextRef: { current: FetchGhostText | u
     EditorView.decorations.compute([ghostTextField], ghostTextDecorations),
     fetchPlugin,
     EditorView.domEventHandlers({
-      mousedown: (event, view) => {
-        if (!(event.target instanceof HTMLElement) || !event.target.closest('.cm-ghost-text-accept')) return false;
-        event.preventDefault();
-        return acceptGhostText(view);
-      },
+      // click covers AT/automation activation; both firing once is harmless.
+      mousedown: acceptGhostTextFromEvent,
+      click: acceptGhostTextFromEvent,
     }),
     Prec.highest(
       keymap.of([
