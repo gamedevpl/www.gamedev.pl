@@ -11,6 +11,13 @@ import {
   type ReactNode,
 } from 'react';
 import { useTranslation } from 'react-i18next';
+import {
+  CodeActionsMenu,
+  type CodeActionsCommand,
+  type CodeActionsMode,
+  type CodeActionsSearchMatch,
+} from './CodeActionsMenu.js';
+import { formatShortcut } from './codeActionsMatch.js';
 import type { CodeMirrorDiagnostic } from './CodeMirrorEditor.js';
 import {
   CodeSurfaceApiError,
@@ -81,9 +88,10 @@ function parseDiagnostic(raw: string): { path: string; line: number; message: st
 
 const AUTOSAVE_MS = 1500;
 const TYPECHECK_DEBOUNCE_MS = 400;
-/** Wait after the last successful stage write before arming a preview rebuild. */
+// Wait after the last stage write before arming a preview rebuild.
 const PREVIEW_DEBOUNCE_MS = 2_500;
-/** Mirrors staged-preview.ts's STAGED_PREVIEW_MIN_GAP_MS: the floor between rebuilds. */
+
+// Mirrors staged-preview.ts's STAGED_PREVIEW_MIN_GAP_MS: floor between rebuilds.
 const STAGE_REBUILD_COOLDOWN_MS = 25_000;
 
 type SaveState = 'clean' | 'dirty' | 'saving' | 'saved' | 'error';
@@ -156,10 +164,14 @@ export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
   const [deliverState, setDeliverState] = useState<'idle' | 'delivering' | 'delivered'>('idle');
   const [deliverMessage, setDeliverMessage] = useState<string | null>(null);
   const [filePickerOpen, setFilePickerOpen] = useState(false);
+  // Nonce remounts an open palette so a repeat shortcut re-targets it.
+  const [actionsMenu, setActionsMenu] = useState<{ mode: CodeActionsMode; nonce: number } | null>(null);
   /** Briefly true after a live param push (§E tier 1) — separate from `saveState`. */
   const [livePush, setLivePush] = useState(false);
 
   const openedRecordedRef = useRef(false);
+  // Focus holder before the actions menu opened; restored on close.
+  const actionsReturnFocusRef = useRef<HTMLElement | null>(null);
   const fileOpenedRecordedRef = useRef(new Set<string>());
   const filePickerTriggerRef = useRef<HTMLButtonElement | null>(null);
   const railRef = useRef<HTMLElement | null>(null);
@@ -261,6 +273,40 @@ export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [filePickerOpen]);
+
+  const openActionsMenu = useCallback((mode: CodeActionsMode) => {
+    setActionsMenu((current) => {
+      if (!current) {
+        const focused = document.activeElement;
+        actionsReturnFocusRef.current = focused instanceof HTMLElement ? focused : null;
+      }
+      return { mode, nonce: (current?.nonce ?? 0) + 1 };
+    });
+  }, []);
+
+  const closeActionsMenu = useCallback(() => {
+    setActionsMenu(null);
+    const previous = actionsReturnFocusRef.current;
+    actionsReturnFocusRef.current = null;
+    if (previous?.isConnected) previous.focus();
+  }, []);
+
+  // VS Code keys; capture phase beats browser print/search and CodeMirror.
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+      const key = event.key.toLowerCase();
+      if (key === 'p') {
+        event.preventDefault();
+        openActionsMenu(event.shiftKey ? 'commands' : 'files');
+      } else if (key === 'f' && event.shiftKey) {
+        event.preventDefault();
+        openActionsMenu('search');
+      }
+    }
+    document.addEventListener('keydown', onKeyDown, true);
+    return () => document.removeEventListener('keydown', onKeyDown, true);
+  }, [openActionsMenu]);
 
   // GA-09: Escape closes the kit viewer, like the file picker.
   useEffect(() => {
@@ -383,6 +429,17 @@ export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
 
   const hasWorkingCopy = changedPaths.length > 0 || saveState === 'dirty' || saveState === 'saving';
 
+  // Search corpus: drafts overlay, matching what the editor shows.
+  const actionsContents = useMemo(() => {
+    if (!sources) return {};
+    return Object.fromEntries(sources.files.map((entry) => [entry.path, drafts[entry.path] ?? entry.content]));
+  }, [sources, drafts]);
+
+  const actionsFiles = useMemo(() => {
+    if (!sources) return [];
+    return sources.files.map((entry) => ({ path: entry.path, changed: changedPaths.includes(entry.path) }));
+  }, [sources, changedPaths]);
+
   /** The budget meter fed by the live draft, not the last fetch — the counter has to
    * move as the creator types toward the ceiling, not jump on the next reload. */
   const liveBudget = useMemo(() => {
@@ -430,6 +487,18 @@ export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
     // The prompt only knows TypeScript — other file types would get it wrong.
     if (!file || !isTsPath(file.path)) return Promise.resolve('');
     return fetchCodeSurfaceCompletion(slug, file.path, prefixWindow, suffixWindow, signal);
+  }
+
+  function handleOpenFileFromActions(path: string) {
+    selectFile(path);
+    closeActionsMenu();
+  }
+
+  // A search hit rides GA-09's jump and lands as a selection.
+  function handleOpenSearchMatch(match: CodeActionsSearchMatch) {
+    setPendingJump({ path: match.path, from: match.from, to: match.to });
+    selectFile(match.path);
+    closeActionsMenu();
   }
 
   const schedulePreviewRebuild = useCallback(() => {
@@ -700,6 +769,43 @@ export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
     );
   }
 
+  // Only currently-possible actions listed; silent no-op commands read broken.
+  const actionsCommands: CodeActionsCommand[] = [];
+  if (editable) {
+    actionsCommands.push({
+      id: 'save',
+      label: t('studioPanel.code.actions.commandSave'),
+      hint: formatShortcut('S'),
+      run: () => void flushPendingSaves(),
+    });
+    if (hasWorkingCopy && deliverState !== 'delivering' && discardState === 'idle') {
+      actionsCommands.push({ id: 'publish', label: t('studioPanel.code.deliver'), run: () => void deliver() });
+      actionsCommands.push({
+        id: 'discard',
+        label: t('studioPanel.code.discard'),
+        run: () => void discardWorkingCopy(),
+      });
+    }
+    actionsCommands.push({
+      id: 'preview',
+      label: t('studioPanel.code.actions.commandPreview'),
+      run: () => schedulePreviewRebuild(),
+    });
+    actionsCommands.push({
+      id: 'typecheck',
+      label: t('studioPanel.code.actions.commandTypecheck'),
+      run: () => void runTypecheck(),
+    });
+  }
+  if (kitDeclarationRef.current) {
+    actionsCommands.push({
+      id: 'kit',
+      label: t('studioPanel.code.actions.commandKit'),
+      run: () => setKitViewerLine(1),
+    });
+  }
+  actionsCommands.push({ id: 'back', label: t('studioPanel.code.actions.commandBack'), run: onBack });
+
   return (
     <div className="code-surface" data-testid="code-surface">
       <header className="code-surface-head">
@@ -718,6 +824,22 @@ export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
             <span className="code-surface-readonly-banner-compact">{t('studioPanel.code.agentRoundCompact')}</span>
           </span>
         ) : null}
+        <button
+          type="button"
+          className="code-surface-actions-trigger"
+          onClick={() => openActionsMenu('files')}
+          aria-haspopup="dialog"
+          aria-expanded={actionsMenu !== null}
+          title={t('studioPanel.code.actions.triggerTitle', {
+            quickOpen: formatShortcut('P'),
+            commands: formatShortcut('P', { shift: true }),
+            search: formatShortcut('F', { shift: true }),
+          })}
+        >
+          <PixelIcon name="search" size={12} />
+          <span className="code-surface-actions-trigger-label">{t('studioPanel.code.actions.trigger')}</span>
+          <kbd className="code-surface-palette-kbd">{formatShortcut('P')}</kbd>
+        </button>
       </header>
 
       <div className="code-surface-file-picker">
@@ -942,6 +1064,20 @@ export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
             </div>
           </section>
         </div>
+      ) : null}
+
+      {actionsMenu ? (
+        <CodeActionsMenu
+          key={actionsMenu.nonce}
+          initialMode={actionsMenu.mode}
+          files={actionsFiles}
+          contents={actionsContents}
+          commands={actionsCommands}
+          selectedPath={selected}
+          onOpenFile={handleOpenFileFromActions}
+          onOpenMatch={handleOpenSearchMatch}
+          onClose={closeActionsMenu}
+        />
       ) : null}
 
       {kitViewerLine !== null && kitDeclarationRef.current ? (
