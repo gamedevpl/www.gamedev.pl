@@ -341,6 +341,15 @@ type SubmissionStatusViewProps = {
    * text — render it escaped, same as every other transcript row.
    */
   onActivityCount?: (count: number, latest: string | null) => void;
+  /**
+   * Embedded only: a prompt the parent wants sitting in the composer, e.g. the stage
+   * crash card's "Fix it" button. `seq` distinguishes two drafts with identical text so
+   * clicking "Fix it" again after editing the box still overwrites it. `onDraftConsumed`
+   * fires once the composer has applied it, so the parent can clear its own copy and a
+   * later render (or the rail reopening by hand) doesn't repopulate a stale draft.
+   */
+  draft?: { text: string; seq: number } | null;
+  onDraftConsumed?: () => void;
 };
 
 export function SubmissionStatusView({
@@ -355,6 +364,8 @@ export function SubmissionStatusView({
   onImproved,
   justHandedOff = false,
   onActivityCount,
+  draft,
+  onDraftConsumed,
 }: SubmissionStatusViewProps) {
   const { t, i18n } = useTranslation();
   const [status, setStatus] = useState<SubmissionStatus | null>(null);
@@ -944,6 +955,8 @@ export function SubmissionStatusView({
                     phase={status.phase}
                     handoffPending={status.builderHandoff?.target}
                     agentWorking={agentWorking}
+                    draft={draft}
+                    onDraftConsumed={onDraftConsumed}
                     onSwitchToPlatform={
                       status.builder === 'self' && (agentWorking || status.builderHandoff?.target === 'platform')
                         ? handoffToPlatformFromUi
@@ -1387,6 +1400,8 @@ function FeedbackPanel({
   platformUnavailable,
   onSent,
   onPublishedImprove,
+  draft,
+  onDraftConsumed,
 }: {
   token: string;
   /** Routes the message: an improvement on the live game, or a change on the build. */
@@ -1421,6 +1436,9 @@ function FeedbackPanel({
    * path — a draft revision continues the current round and stays on this thread.
    */
   onPublishedImprove?: (token: string) => void;
+  /** A prompt the parent wants seeded into the box — see `SubmissionStatusView`'s doc. */
+  draft?: { text: string; seq: number } | null;
+  onDraftConsumed?: () => void;
 }) {
   const { t } = useTranslation();
   const [text, setText] = useState('');
@@ -1440,6 +1458,23 @@ function FeedbackPanel({
   useEffect(() => {
     setBuilder(initialBuilder);
   }, [initialBuilder, token]);
+
+  // Applies a draft the parent seeded (e.g. the stage crash card's "Fix it" button),
+  // keyed on `seq` so a second click after the box was edited still overwrites it.
+  // Consuming clears the parent's copy so reopening the rail by hand later doesn't
+  // repopulate a stale prompt.
+  useEffect(() => {
+    if (!draft) return;
+    setText(draft.text);
+    onDraftConsumed?.();
+    const input = inputRef.current;
+    if (input) {
+      input.focus();
+      input.style.height = 'auto';
+      input.style.height = `${Math.min(input.scrollHeight, 220)}px`;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft?.seq]);
 
   useEffect(() => {
     setStopRequested(handoffPending === 'self');

@@ -1618,6 +1618,51 @@ describe('SubmissionStatusView', () => {
     });
   });
 
+  it('seeds a parent-supplied draft into the compact composer and reports it consumed', async () => {
+    // The stage crash card's "Fix it" button hands the composer a prompt describing the
+    // crash — the composer must show it immediately and tell the parent it took it, so
+    // the parent's own copy clears instead of repopulating the box on a later render.
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'needs_changes',
+      preview: { slug: 'space-runner' },
+      progress: { headSha: 'sha-1', commits: [], checklist: [] },
+    });
+    mockedGetSubmissionPreview.mockResolvedValue({
+      slug: 'space-runner',
+      title: 'Space Runner',
+      html: '<canvas></canvas>',
+    });
+    await i18n.changeLanguage('en');
+    window.history.pushState(null, '', '/studio/draft-token/thread');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const onDraftConsumed = vi.fn();
+
+    await act(async () => {
+      root.render(
+        createElement(SubmissionStatusView, {
+          token: 'draft-token',
+          embedded: true,
+          draft: { text: 'The game crashed with: Bastion requires gfx3d', seq: 1 },
+          onDraftConsumed,
+        }),
+      );
+      await flushEffects();
+      await flushEffects();
+    });
+
+    const textarea = container.querySelector<HTMLTextAreaElement>('.status-feedback-input');
+    expect(textarea?.value).toBe('The game crashed with: Bastion requires gfx3d');
+    expect(onDraftConsumed).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it('shows a sending indicator on the compact composer while the request is in flight', async () => {
     // The compact send is icon-only. Disabling it without a spinner or "Sending…" left
     // creators staring at a grey arrow with no idea whether anything was happening —

@@ -69,6 +69,9 @@ export type StudioStageProps = {
   /** True whenever a surface (rail/details/edit/shelf) covers the stage. */
   covered: boolean;
   onStatusChange?: (status: StageStatus) => void;
+  /** The crash card's "Fix it" button — called with the crash message so the parent can
+   * open the chat rail with a prefilled prompt describing the failure. */
+  onFixIt?: (message: string) => void;
   /** A staged swap is being held for the ribbon's "newer stage waiting" exception. */
   onNewerStageWaiting?: (waiting: boolean) => void;
   /** A published-game improvement opened a new job; the parent moves the thread onto it. */
@@ -92,6 +95,7 @@ export function StudioStage({
   onPostureChange,
   covered,
   onStatusChange,
+  onFixIt,
   onNewerStageWaiting,
   onImproved,
   onDisplayedOriginChange,
@@ -434,7 +438,17 @@ export function StudioStage({
           </p>
           {status.kind === 'crashed' ? <code className="studio-stage-card-detail">{status.message}</code> : null}
           <div className="studio-stage-card-actions">
-            <button type="button" className="primary-btn" onClick={recoverToLastGood} disabled={!lastGoodRef.current}>
+            {status.kind === 'crashed' && onFixIt ? (
+              <button type="button" className="primary-btn" onClick={() => onFixIt(status.message)}>
+                <PixelIcon name="wrench" size={12} /> {t('studioPanel.stage.fixIt')}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className={status.kind === 'crashed' && onFixIt ? 'secondary-btn' : 'primary-btn'}
+              onClick={recoverToLastGood}
+              disabled={!lastGoodRef.current}
+            >
               <PixelIcon name="undo" size={12} />{' '}
               {t('studioPanel.stage.backTo', { time: formatClock(lastGoodAtRef.current ?? Date.now()) })}
             </button>

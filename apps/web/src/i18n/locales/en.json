@@ -568,6 +568,8 @@
       "idleResume": "Paused — idle. Tap to resume.",
       "crashedTitle": "This build crashed.",
       "drewNothingTitle": "This build didn't draw anything.",
+      "fixIt": "Fix it",
+      "fixItPrompt": "The game crashed with this error:\n\n{{message}}\n\nPlease fix it.",
       "backTo": "Back to {{time}}",
       "newBuildStaged": "New build staged ({{time}})",
       "restartOnIt": "Restart on it",

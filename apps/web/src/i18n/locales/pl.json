@@ -574,6 +574,8 @@
       "idleResume": "Zapauzowano — bezczynność. Stuknij, aby wznowić.",
       "crashedTitle": "Ta wersja się wysypała.",
       "drewNothingTitle": "Ta wersja niczego nie narysowała.",
+      "fixIt": "Napraw to",
+      "fixItPrompt": "Gra wysypała się z tym błędem:\n\n{{message}}\n\nProszę to napraw.",
       "backTo": "Wróć do {{time}}",
       "newBuildStaged": "Nowa wersja gotowa ({{time}})",
       "restartOnIt": "Zrestartuj na niej",
