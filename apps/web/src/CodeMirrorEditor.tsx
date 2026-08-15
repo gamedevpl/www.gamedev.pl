@@ -1,6 +1,7 @@
 import {
   autocompletion,
   completionStatus,
+  currentCompletions,
   type CompletionContext,
   type CompletionResult,
   type CompletionSource,
@@ -608,18 +609,94 @@ function makeGhostTextExtension(fetchGhostTextRef: { current: FetchGhostText | u
   ];
 }
 
-function measuredTsAutocomplete(): CompletionSource {
+type CompletionAttempt = {
+  context: CompletionContext;
+  startedAt: number;
+  candidateCount: number;
+  options: CompletionResult['options'];
+  settled: boolean;
+};
+
+type CompletionTracker = { pending: CompletionAttempt[] };
+
+function settleCompletionAttempt(tracker: CompletionTracker, attempt: CompletionAttempt, shown: boolean): void {
+  if (attempt.settled) return;
+  attempt.settled = true;
+  tracker.pending = tracker.pending.filter((pending) => pending !== attempt);
+  recordCodeCompletion({
+    kind: 'language_service',
+    outcome: shown ? 'shown' : 'empty',
+    latencyMs: performance.now() - attempt.startedAt,
+    candidateCount: attempt.candidateCount,
+  });
+}
+
+function completionVisibilityExtension(tracker: CompletionTracker): Extension {
+  return ViewPlugin.fromClass(
+    class {
+      update(update: ViewUpdate): void {
+        if (tracker.pending.length === 0) return;
+        if (tracker.pending.some((attempt) => attempt.context.aborted)) {
+          for (const attempt of [...tracker.pending]) {
+            if (attempt.context.aborted) settleCompletionAttempt(tracker, attempt, false);
+          }
+        }
+
+        if (tracker.pending.length === 0) return;
+        const status = completionStatus(update.state);
+        if (status === 'pending') return;
+        const visibleOptions = currentCompletions(update.state);
+        for (const attempt of [...tracker.pending]) {
+          const shown = status === 'active' && visibleOptions.some((option) => attempt.options.includes(option));
+          const settledAsEmpty = status !== 'active' || visibleOptions.length === 0;
+          if (shown || settledAsEmpty) settleCompletionAttempt(tracker, attempt, shown);
+        }
+      }
+
+      destroy(): void {
+        for (const attempt of [...tracker.pending]) settleCompletionAttempt(tracker, attempt, false);
+      }
+    },
+  );
+}
+
+function measuredTsAutocomplete(tracker: CompletionTracker): CompletionSource {
   const source = tsAutocomplete();
   return async (context: CompletionContext): Promise<CompletionResult | null> => {
     const startedAt = performance.now();
     try {
       const result = await source(context);
-      recordCodeCompletion({
-        kind: 'language_service',
-        outcome: result?.options.length ? 'shown' : 'empty',
-        latencyMs: performance.now() - startedAt,
-        candidateCount: result?.options.length ?? 0,
-      });
+      if (context.aborted) {
+        recordCodeCompletion({
+          kind: 'language_service',
+          outcome: 'empty',
+          latencyMs: performance.now() - startedAt,
+          candidateCount: result?.options.length ?? 0,
+        });
+        return null;
+      }
+      if (!result?.options.length) {
+        recordCodeCompletion({
+          kind: 'language_service',
+          outcome: 'empty',
+          latencyMs: performance.now() - startedAt,
+          candidateCount: 0,
+        });
+        return result;
+      }
+      const attempt: CompletionAttempt = {
+        context,
+        startedAt,
+        candidateCount: result.options.length,
+        options: result.options,
+        settled: false,
+      };
+      tracker.pending.push(attempt);
+      context.addEventListener(
+        'abort',
+        () => settleCompletionAttempt(tracker, attempt, false),
+        { onDocChange: true },
+      );
       return result ? { ...result, validFor: result.validFor ?? /^[\w$]*$/ } : null;
     } catch (error) {
       recordCodeCompletion({
@@ -639,11 +716,13 @@ function languageServiceExtensions(
 ): Extension[] {
   if (!languageService) return [];
   const hover = modifierAwareHover();
+  const completionTracker: CompletionTracker = { pending: [] };
   return [
     tsFacet.of({ worker: languageService.worker, path: languageService.path }),
     tsSync(),
     modifierHoverState,
-    autocompletion({ override: [measuredTsAutocomplete()] }),
+    autocompletion({ override: [measuredTsAutocomplete(completionTracker)] }),
+    completionVisibilityExtension(completionTracker),
     hover,
     modifierHoverExtension(hover),
     tsGoto({ gotoHandler: makeGotoHandler(onGotoDefinitionRef) }),

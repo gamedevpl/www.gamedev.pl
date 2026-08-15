@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import { FieldValue, Firestore, type DocumentData } from '@google-cloud/firestore';
+import { FieldValue, Firestore, type DocumentData, type Query } from '@google-cloud/firestore';
 import type { AgentTaskState } from './agent-state.js';
 import type { SeedFiles } from './agent-backend.js';
 import type { BuilderKind } from './builder.js';
@@ -2098,7 +2098,10 @@ export interface Store {
   /** Appends visit-level events to one day's partition. */
   appendVisitEvents(dateStr: string, events: VisitEvent[]): Promise<void>;
   /** One day's visit events — funnel, depth, and acquisition reads. */
-  listVisitEvents(dateStr: string, opts?: { visitId?: string; limit?: number }): Promise<VisitEvent[]>;
+  listVisitEvents(
+    dateStr: string,
+    opts?: { visitId?: string; limit?: number; type?: VisitEvent['type']; excludeType?: VisitEvent['type'] },
+  ): Promise<VisitEvent[]>;
   /** Today's usage counters for a user, without incrementing anything. */
   getUsage(uid: string, dateStr: string): Promise<UsageCounters>;
   /** Most recently published submissions, newest first — the build-time sample. */
@@ -3737,9 +3740,14 @@ export class InMemoryStore implements Store {
     this.visits.set(dateStr, existing);
   }
 
-  async listVisitEvents(dateStr: string, opts?: { visitId?: string; limit?: number }): Promise<VisitEvent[]> {
+  async listVisitEvents(
+    dateStr: string,
+    opts?: { visitId?: string; limit?: number; type?: VisitEvent['type']; excludeType?: VisitEvent['type'] },
+  ): Promise<VisitEvent[]> {
     return (this.visits.get(dateStr) ?? [])
       .filter((event) => opts?.visitId === undefined || event.visitId === opts.visitId)
+      .filter((event) => opts?.type === undefined || event.type === opts.type)
+      .filter((event) => opts?.excludeType === undefined || event.type !== opts.excludeType)
       .slice(0, opts?.limit ?? 1000)
       .map((event) => ({ ...event }));
   }
@@ -6285,9 +6293,15 @@ export class FirestoreStore implements Store {
     await batch.commit();
   }
 
-  async listVisitEvents(dateStr: string, opts?: { visitId?: string; limit?: number }): Promise<VisitEvent[]> {
+  async listVisitEvents(
+    dateStr: string,
+    opts?: { visitId?: string; limit?: number; type?: VisitEvent['type']; excludeType?: VisitEvent['type'] },
+  ): Promise<VisitEvent[]> {
     const base = this.visitCollection(dateStr);
-    const query = opts?.visitId === undefined ? base : base.where('visitId', '==', opts.visitId);
+    let query: Query<DocumentData> = base;
+    if (opts?.visitId !== undefined) query = query.where('visitId', '==', opts.visitId);
+    if (opts?.type !== undefined) query = query.where('type', '==', opts.type);
+    if (opts?.excludeType !== undefined) query = query.where('type', '!=', opts.excludeType);
     const snap = await query.limit(opts?.limit ?? 1000).get();
     return snap.docs.map((doc) => {
       const event = doc.data();

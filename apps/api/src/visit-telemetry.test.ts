@@ -497,6 +497,39 @@ describe('POST /api/telemetry/visit', () => {
     expect(overflow.json()).toEqual({ accepted: 0 });
   });
 
+  it('keeps completion diagnostics in a separate per-visit lane', async () => {
+    const completion = {
+      type: 'code_completion' as const,
+      kind: 'language_service' as const,
+      outcome: 'empty' as const,
+      latencyMs: 1,
+      msSinceStart: 0,
+    };
+    for (let batch = 0; batch < 2; batch += 1) {
+      const response = await post(app, {
+        visitId,
+        flushMsSinceStart: 0,
+        events: Array.from({ length: 25 }, () => completion),
+      });
+      expect(response.json()).toEqual({ accepted: 25 });
+    }
+
+    const completionOverflow = await post(app, {
+      visitId,
+      flushMsSinceStart: 0,
+      events: [completion],
+    });
+    expect(completionOverflow.json()).toEqual({ accepted: 0 });
+
+    const core = await post(app, {
+      visitId,
+      flushMsSinceStart: 0,
+      events: [{ type: 'play_started', msSinceStart: 0 }],
+    });
+    expect(core.json()).toEqual({ accepted: 1 });
+    expect(await store.listVisitEvents(today(), { visitId })).toHaveLength(51);
+  });
+
   it('never fails a visit when the store is unhappy', async () => {
     const failing = new InMemoryStore();
     await failing.upsertUser({ uid: 'g:me' });

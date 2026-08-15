@@ -224,6 +224,30 @@ describe('VisitSession', () => {
     expect(session.record({ type: 'play_started' })).toBe(false);
   });
 
+  it('keeps completion diagnostics in a separate lane from core visit events', () => {
+    const { send } = capture();
+    const session = new VisitSession('v1', 0, send, () => 0);
+    for (let i = 0; i < 50; i += 1) {
+      session.record({
+        type: 'code_completion',
+        kind: 'language_service',
+        outcome: 'empty',
+        latencyMs: 1,
+      });
+    }
+
+    expect(
+      session.record({
+        type: 'code_completion',
+        kind: 'language_service',
+        outcome: 'empty',
+        latencyMs: 1,
+      }),
+    ).toBe(false);
+    expect(session.record({ type: 'play_started' })).toBe(true);
+    expect(session.count).toBe(51);
+  });
+
   it('ignores events after close', () => {
     const { batches, send } = capture();
     const session = new VisitSession('v1', 0, send, () => 0);

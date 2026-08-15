@@ -283,8 +283,8 @@ export type RemixControl = 'bar' | 'more' | 'page';
 
 const FLUSH_AT = 5;
 const MAX_BATCH = 25;
-/** A tab that exceeds this is looping, not browsing. */
 const MAX_EVENTS_PER_VISIT = 200;
+const MAX_COMPLETION_EVENTS_PER_VISIT = 50;
 const MAX_UTM_LENGTH = 40;
 const MAX_REFERRER_LENGTH = 80;
 /** Ceiling on a reported offset. Beyond this a visit is not a visit. */
@@ -473,6 +473,8 @@ export function readVisitIdentity(
 export class VisitSession {
   private queue: WireVisitEvent[] = [];
   private accepted = 0;
+  private acceptedCompletionEvents = 0;
+  private acceptedCoreEvents = 0;
   private closed = false;
 
   constructor(
@@ -491,9 +493,15 @@ export class VisitSession {
   }
 
   record(event: VisitEvent): boolean {
-    if (this.closed || this.accepted >= MAX_EVENTS_PER_VISIT) return false;
+    if (this.closed) return false;
+    const isCompletion = event.type === 'code_completion';
+    const laneCount = isCompletion ? this.acceptedCompletionEvents : this.acceptedCoreEvents;
+    const laneLimit = isCompletion ? MAX_COMPLETION_EVENTS_PER_VISIT : MAX_EVENTS_PER_VISIT;
+    if (laneCount >= laneLimit) return false;
     this.queue.push({ ...event, msSinceStart: this.elapsed() });
     this.accepted += 1;
+    if (isCompletion) this.acceptedCompletionEvents += 1;
+    else this.acceptedCoreEvents += 1;
     if (this.queue.length >= FLUSH_AT) this.flush();
     return true;
   }

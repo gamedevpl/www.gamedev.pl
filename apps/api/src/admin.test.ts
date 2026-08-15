@@ -244,6 +244,35 @@ describe('GET /api/admin/telemetry/visits', () => {
     expect(body.days).toContain(today);
   });
 
+  it('keeps completion diagnostics out of the core event read budget', async () => {
+    const coreEvents = Array.from({ length: 1000 }, (_, index) =>
+      visitEvent({ visitId: `core-${index}`, type: 'play_started' }),
+    );
+    await store.appendVisitEvents(today, [
+      ...coreEvents,
+      visitEvent({
+        visitId: 'completion-visit',
+        type: 'code_completion',
+        kind: 'language_service',
+        outcome: 'shown',
+        latencyMs: 120,
+      }),
+    ]);
+
+    const app = await appWith(store);
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/admin/telemetry/visits?days=1',
+      headers: authHeaders('g:boss'),
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as VisitsResponse;
+    expect(body.funnel.completion.requests).toBe(1);
+    expect(body.funnel.completion.shown).toBe(1);
+    expect(body.truncated).toBe(true);
+  });
+
   it('is invisible to a signed-in non-admin', async () => {
     const app = await appWith(store);
     const response = await app.inject({
