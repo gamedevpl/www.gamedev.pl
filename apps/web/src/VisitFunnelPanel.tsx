@@ -473,6 +473,42 @@ export function VisitFunnelPanel({ data }: { data: VisitsResponse }) {
           )}
         </div>
 
+        {funnel.completion?.requests ? (
+          <div className="funnel-block">
+            <h3>Code completion</h3>
+            <p className="health-summary">
+              {funnel.completion.requests} requests · {funnel.completion.shown} shown · {funnel.completion.empty}{' '}
+              empty · {funnel.completion.failed} failed
+            </p>
+            <table className="health-table">
+              <thead>
+                <tr>
+                  <th scope="col">Lane</th>
+                  <th scope="col" className="num">
+                    Requests
+                  </th>
+                  <th scope="col" className="num">
+                    Median
+                  </th>
+                  <th scope="col" className="num">
+                    P90
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {funnel.completion.byKind.map((row) => (
+                  <tr key={row.kind}>
+                    <td>{row.kind === 'language_service' ? 'TypeScript' : 'Ghost text'}</td>
+                    <td className="num">{row.requests}</td>
+                    <td className="num">{row.medianLatencyMs === null ? '—' : `${row.medianLatencyMs} ms`}</td>
+                    <td className="num">{row.p90LatencyMs === null ? '—' : `${row.p90LatencyMs} ms`}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
+
         <div className="funnel-block">
           <h3>How to play</h3>
           {funnel.howToPlay.opens === 0 ? (

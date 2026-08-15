@@ -72,6 +72,7 @@ const MAX_TREND_DAYS = 90;
 const DEFAULT_TREND_DAYS = 30;
 /** Per-partition read cap, matching the store's own default. */
 const MAX_EVENTS_PER_DAY = 1000;
+const MAX_COMPLETION_EVENTS_PER_DAY = 500;
 /**
  * Documents one request may read in total, across every partition it touches.
  *
@@ -82,6 +83,7 @@ const MAX_EVENTS_PER_DAY = 1000;
  * degrade by narrowing the window rather than by silently costing thirty times more.
  */
 const MAX_EVENTS_PER_REQUEST = 5_000;
+const MAX_COMPLETION_EVENTS_PER_REQUEST = 2_000;
 /** Trends walk every day in the window and discard events after summarizing, so the
  *  total can be wider than the funnel reads without holding them all in memory. */
 const MAX_TREND_EVENTS_PER_REQUEST = 20_000;
@@ -732,11 +734,19 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
     }
 
     const requested = recentPartitions(parsed.data.days ?? DEFAULT_DAYS, now());
-    const { events, scanned, truncated } = await scanPartitions<VisitEvent>(
+    const core = await scanPartitions<VisitEvent>(
       requested,
       REQUEST_BUDGET,
-      (dateStr, limit) => store.listVisitEvents(dateStr, { limit }),
+      (dateStr, limit) => store.listVisitEvents(dateStr, { limit, excludeType: 'code_completion' }),
     );
+    const completion = await scanPartitions<VisitEvent>(
+      requested,
+      { perDay: MAX_COMPLETION_EVENTS_PER_DAY, total: MAX_COMPLETION_EVENTS_PER_REQUEST },
+      (dateStr, limit) => store.listVisitEvents(dateStr, { limit, type: 'code_completion' }),
+    );
+    const events = [...core.events, ...completion.events];
+    const scanned = [...new Set([...core.scanned, ...completion.scanned])];
+    const truncated = core.truncated || completion.truncated;
 
     const body: VisitsResponse = { days: scanned, truncated, funnel: summarizeVisitFunnel(events) };
     return reply.status(200).send(body);

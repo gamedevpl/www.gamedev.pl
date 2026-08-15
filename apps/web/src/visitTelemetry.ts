@@ -73,7 +73,15 @@ export type VisitEvent =
   | { type: 'editor_step'; step: EditorStep }
   | { type: 'assist_step'; step: AssistStep }
   | { type: 'remix_step'; step: RemixStep; via?: RemixPaintedVia; control?: RemixControl }
-  | { type: 'code_step'; step: CodeStep };
+  | { type: 'code_step'; step: CodeStep }
+  | {
+      type: 'code_completion';
+      kind: CodeCompletionKind;
+      outcome: CodeCompletionOutcome;
+      latencyMs: number;
+      candidateCount?: number;
+      completionChars?: number;
+    };
 
 /**
  * The creation funnel, in the order a creator meets it.
@@ -258,6 +266,9 @@ export type CodeStep =
   // CE-17: a staging write opened a fresh round implicitly.
   | 'round_reopened';
 
+export type CodeCompletionKind = 'language_service' | 'ghost_text';
+export type CodeCompletionOutcome = 'shown' | 'empty' | 'failed';
+
 /**
  * Which door was used to open a remix: the game page, the theater chrome bar,
  * or the overflow menu it sheds into on narrow screens. Recorded on `offered`
@@ -272,8 +283,8 @@ export type RemixControl = 'bar' | 'more' | 'page';
 
 const FLUSH_AT = 5;
 const MAX_BATCH = 25;
-/** A tab that exceeds this is looping, not browsing. */
 const MAX_EVENTS_PER_VISIT = 200;
+const MAX_COMPLETION_EVENTS_PER_VISIT = 50;
 const MAX_UTM_LENGTH = 40;
 const MAX_REFERRER_LENGTH = 80;
 /** Ceiling on a reported offset. Beyond this a visit is not a visit. */
@@ -462,6 +473,8 @@ export function readVisitIdentity(
 export class VisitSession {
   private queue: WireVisitEvent[] = [];
   private accepted = 0;
+  private acceptedCompletionEvents = 0;
+  private acceptedCoreEvents = 0;
   private closed = false;
 
   constructor(
@@ -480,9 +493,15 @@ export class VisitSession {
   }
 
   record(event: VisitEvent): boolean {
-    if (this.closed || this.accepted >= MAX_EVENTS_PER_VISIT) return false;
+    if (this.closed) return false;
+    const isCompletion = event.type === 'code_completion';
+    const laneCount = isCompletion ? this.acceptedCompletionEvents : this.acceptedCoreEvents;
+    const laneLimit = isCompletion ? MAX_COMPLETION_EVENTS_PER_VISIT : MAX_EVENTS_PER_VISIT;
+    if (laneCount >= laneLimit) return false;
     this.queue.push({ ...event, msSinceStart: this.elapsed() });
     this.accepted += 1;
+    if (isCompletion) this.acceptedCompletionEvents += 1;
+    else this.acceptedCoreEvents += 1;
     if (this.queue.length >= FLUSH_AT) this.flush();
     return true;
   }
@@ -633,6 +652,41 @@ export function recordCodeStep(step: CodeStep): void {
   if (!currentSession || recordedCodeSteps.has(step)) return;
   recordedCodeSteps.add(step);
   currentSession.record({ type: 'code_step', step });
+}
+
+const MAX_COMPLETION_LATENCY_MS = 30_000;
+const MAX_COMPLETION_CANDIDATES = 5_000;
+const MAX_COMPLETION_CHARS = 4_000;
+
+function boundedCompletionMetric(value: number, maximum: number): number {
+  return Number.isFinite(value) ? Math.min(maximum, Math.max(0, Math.round(value))) : 0;
+}
+
+export function recordCodeCompletion(input: {
+  kind: CodeCompletionKind;
+  outcome: CodeCompletionOutcome;
+  latencyMs: number;
+  candidateCount?: number;
+  completionChars?: number;
+}): void {
+  if (!currentSession) return;
+  const latencyMs = boundedCompletionMetric(input.latencyMs, MAX_COMPLETION_LATENCY_MS);
+  const candidateCount =
+    input.candidateCount === undefined
+      ? undefined
+      : boundedCompletionMetric(input.candidateCount, MAX_COMPLETION_CANDIDATES);
+  const completionChars =
+    input.completionChars === undefined
+      ? undefined
+      : boundedCompletionMetric(input.completionChars, MAX_COMPLETION_CHARS);
+  currentSession.record({
+    type: 'code_completion',
+    kind: input.kind,
+    outcome: input.outcome,
+    latencyMs,
+    ...(candidateCount === undefined ? {} : { candidateCount }),
+    ...(completionChars === undefined ? {} : { completionChars }),
+  });
 }
 
 let recordedRemixSteps = new Set<string>();

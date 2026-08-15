@@ -12131,6 +12131,36 @@ button.builder-mode-selector:disabled {
   pointer-events: none;
 }
 
+/* GA-09: VS Code-like affordance for modifier-click navigation. */
+.cm-ts-navigable-link {
+  color: #58a6ff;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+.cm-ts-hover {
+  padding: 2px;
+  font-family: var(--mono-font, monospace);
+  white-space: pre-wrap;
+}
+
+.cm-ts-hover-compact {
+  max-width: 28rem;
+}
+
+.cm-ts-hover-expanded {
+  max-width: min(52rem, calc(100vw - 32px));
+}
+
+.cm-ts-hover-doc {
+  margin-top: 0.5rem;
+  color: var(--muted);
+  font-family: inherit;
+  white-space: pre-wrap;
+}
+
 .code-tok-comment {
   color: var(--muted);
 }

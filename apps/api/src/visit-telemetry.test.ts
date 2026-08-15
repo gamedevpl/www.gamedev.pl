@@ -225,6 +225,52 @@ describe('POST /api/telemetry/visit', () => {
     expect(bad.statusCode).toBe(400);
   });
 
+  it('records bounded completion health without source identity', async () => {
+    const response = await post(app, {
+      visitId,
+      flushMsSinceStart: 900,
+      events: [
+        {
+          type: 'code_completion',
+          kind: 'language_service',
+          outcome: 'shown',
+          latencyMs: 123,
+          candidateCount: 8,
+          msSinceStart: 800,
+        },
+        {
+          type: 'code_completion',
+          kind: 'ghost_text',
+          outcome: 'empty',
+          latencyMs: 456,
+          completionChars: 0,
+          msSinceStart: 900,
+        },
+      ],
+    });
+
+    expect(response.statusCode).toBe(202);
+    const events = await store.listVisitEvents(today(), { visitId });
+    expect(events).toEqual([
+      expect.objectContaining({
+        type: 'code_completion',
+        kind: 'language_service',
+        outcome: 'shown',
+        latencyMs: 123,
+        candidateCount: 8,
+      }),
+      expect.objectContaining({
+        type: 'code_completion',
+        kind: 'ghost_text',
+        outcome: 'empty',
+        latencyMs: 456,
+        completionChars: 0,
+      }),
+    ]);
+    expect(JSON.stringify(events)).not.toContain('path');
+    expect(JSON.stringify(events)).not.toContain('slug');
+  });
+
   it('records a waitlist step and rejects one outside the enum', async () => {
     const ok = await post(app, {
       visitId,
@@ -449,6 +495,39 @@ describe('POST /api/telemetry/visit', () => {
       events: [{ type: 'play_started', msSinceStart: 0 }],
     });
     expect(overflow.json()).toEqual({ accepted: 0 });
+  });
+
+  it('keeps completion diagnostics in a separate per-visit lane', async () => {
+    const completion = {
+      type: 'code_completion' as const,
+      kind: 'language_service' as const,
+      outcome: 'empty' as const,
+      latencyMs: 1,
+      msSinceStart: 0,
+    };
+    for (let batch = 0; batch < 2; batch += 1) {
+      const response = await post(app, {
+        visitId,
+        flushMsSinceStart: 0,
+        events: Array.from({ length: 25 }, () => completion),
+      });
+      expect(response.json()).toEqual({ accepted: 25 });
+    }
+
+    const completionOverflow = await post(app, {
+      visitId,
+      flushMsSinceStart: 0,
+      events: [completion],
+    });
+    expect(completionOverflow.json()).toEqual({ accepted: 0 });
+
+    const core = await post(app, {
+      visitId,
+      flushMsSinceStart: 0,
+      events: [{ type: 'play_started', msSinceStart: 0 }],
+    });
+    expect(core.json()).toEqual({ accepted: 1 });
+    expect(await store.listVisitEvents(today(), { visitId })).toHaveLength(51);
   });
 
   it('never fails a visit when the store is unhappy', async () => {

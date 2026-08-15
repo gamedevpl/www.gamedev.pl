@@ -11,6 +11,7 @@ import {
   readVisitIdentity,
   recordBetaInviteStep,
   recordBetaWelcomeStep,
+  recordCodeCompletion,
   recordCreateStep,
   recordStudioStep,
   recordVisitEvent,
@@ -223,6 +224,30 @@ describe('VisitSession', () => {
     expect(session.record({ type: 'play_started' })).toBe(false);
   });
 
+  it('keeps completion diagnostics in a separate lane from core visit events', () => {
+    const { send } = capture();
+    const session = new VisitSession('v1', 0, send, () => 0);
+    for (let i = 0; i < 50; i += 1) {
+      session.record({
+        type: 'code_completion',
+        kind: 'language_service',
+        outcome: 'empty',
+        latencyMs: 1,
+      });
+    }
+
+    expect(
+      session.record({
+        type: 'code_completion',
+        kind: 'language_service',
+        outcome: 'empty',
+        latencyMs: 1,
+      }),
+    ).toBe(false);
+    expect(session.record({ type: 'play_started' })).toBe(true);
+    expect(session.count).toBe(51);
+  });
+
   it('ignores events after close', () => {
     const { batches, send } = capture();
     const session = new VisitSession('v1', 0, send, () => 0);
@@ -305,6 +330,36 @@ describe('recordCreateStep', () => {
 
     // The second visit must record its own start; dedupe is per visit, not global.
     expect(second.batches[0].events).toHaveLength(1);
+  });
+});
+
+describe('recordCodeCompletion', () => {
+  it('clamps timing and optional counts before sending', () => {
+    const { batches, send } = capture();
+    const session = new VisitSession('v1', 0, send, () => 0);
+    setVisitSessionForTesting(session);
+
+    recordCodeCompletion({
+      kind: 'language_service',
+      outcome: 'shown',
+      latencyMs: 30_001.4,
+      candidateCount: 5_001.4,
+      completionChars: -4,
+    });
+    session.flush();
+    setVisitSessionForTesting(null);
+
+    expect(batches[0].events).toEqual([
+      {
+        type: 'code_completion',
+        kind: 'language_service',
+        outcome: 'shown',
+        latencyMs: 30_000,
+        candidateCount: 5_000,
+        completionChars: 0,
+        msSinceStart: 0,
+      },
+    ]);
   });
 });
 

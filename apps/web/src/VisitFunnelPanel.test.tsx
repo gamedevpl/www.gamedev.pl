@@ -205,6 +205,46 @@ describe('VisitFunnelPanel', () => {
     expect(text).toContain('Nobody opened a game editor');
   });
 
+  it('renders completion health and latency by lane', () => {
+    const text = render(
+      response({
+        visits: 3,
+        completion: {
+          requests: 4,
+          shown: 2,
+          empty: 1,
+          failed: 1,
+          byKind: [
+            {
+              kind: 'language_service',
+              requests: 2,
+              shown: 1,
+              empty: 1,
+              failed: 0,
+              medianLatencyMs: 150,
+              p90LatencyMs: 200,
+            },
+            {
+              kind: 'ghost_text',
+              requests: 2,
+              shown: 1,
+              empty: 0,
+              failed: 1,
+              medianLatencyMs: 700,
+              p90LatencyMs: 900,
+            },
+          ],
+        },
+      }),
+    );
+    expect(text).toContain('Code completion');
+    expect(text).toContain('2 shown');
+    expect(text).toContain('TypeScript');
+    expect(text).toContain('150 ms');
+    expect(text).toContain('Ghost text');
+    expect(text).toContain('900 ms');
+  });
+
   it('reports how-to-play open rate against playing visits, not against all visits', () => {
     // 2 of 4 playing visits opened. Dividing by all visits (10) would show 20% and
     // misread the question the block exists to answer.

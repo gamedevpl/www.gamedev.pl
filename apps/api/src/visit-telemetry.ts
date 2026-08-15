@@ -23,8 +23,8 @@ import type { Store, VisitEvent } from './store.js';
  */
 
 const MAX_EVENTS_PER_REQUEST = 25;
-/** Ceiling per visit. A tab past this is looping, not browsing. */
 const MAX_EVENTS_PER_VISIT = 200;
+const MAX_COMPLETION_EVENTS_PER_VISIT = 50;
 const MAX_REQUESTS_PER_WINDOW = 60;
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const MAX_VISIT_MS = 24 * 60 * 60 * 1000;
@@ -134,6 +134,8 @@ const CodeStepSchema = z.enum([
   'conflict_seen',
   'round_reopened',
 ]);
+const CodeCompletionKindSchema = z.enum(['language_service', 'ghost_text']);
+const CodeCompletionOutcomeSchema = z.enum(['shown', 'empty', 'failed']);
 /** The player-side remix funnel — see visit-funnel's REMIX_STEPS for the order's meaning. */
 const RemixStepSchema = z.enum([
   'offered',
@@ -232,6 +234,15 @@ const EventSchema = z.discriminatedUnion('type', [
     ...offsetField,
   }),
   z.object({ type: z.literal('code_step'), step: CodeStepSchema, ...offsetField }),
+  z.object({
+    type: z.literal('code_completion'),
+    kind: CodeCompletionKindSchema,
+    outcome: CodeCompletionOutcomeSchema,
+    latencyMs: z.number().int().min(0).max(30_000),
+    candidateCount: z.number().int().min(0).max(5_000).optional(),
+    completionChars: z.number().int().min(0).max(4_000).optional(),
+    ...offsetField,
+  }),
 ]);
 
 const RequestSchema = z.object({
@@ -264,8 +275,8 @@ export async function registerVisitTelemetryRoutes(
   const now = options.now ?? Date.now;
 
   const requestsByIp = new Map<string, number[]>();
-  /** visitId -> { count, lastSeen }. Capped and LRU-evicted — see bounded-map.ts. */
-  const visitCounts = new Map<string, { count: number; lastSeen: number }>();
+  /** visitId -> lane counts. Capped and LRU-evicted — see bounded-map.ts. */
+  const visitCounts = new Map<string, { coreCount: number; completionCount: number; lastSeen: number }>();
 
   app.post('/api/telemetry/visit', async (request, reply) => {
     const currentTime = now();
@@ -279,13 +290,18 @@ export async function registerVisitTelemetryRoutes(
       return reply.status(429).send({ error: 'too many telemetry requests' });
     }
 
-    const visit = visitCounts.get(parsed.data.visitId) ?? { count: 0, lastSeen: currentTime };
-    const room = MAX_EVENTS_PER_VISIT - visit.count;
-    if (room <= 0) {
+    const visit =
+      visitCounts.get(parsed.data.visitId) ??
+      ({ coreCount: 0, completionCount: 0, lastSeen: currentTime } satisfies {
+        coreCount: number;
+        completionCount: number;
+        lastSeen: number;
+      });
+    if (visit.coreCount >= MAX_EVENTS_PER_VISIT && visit.completionCount >= MAX_COMPLETION_EVENTS_PER_VISIT) {
       rememberBounded(
         visitCounts,
         parsed.data.visitId,
-        { count: visit.count, lastSeen: currentTime },
+        { ...visit, lastSeen: currentTime },
         MAX_TRACKED_VISITS,
       );
       return reply.status(202).send({ accepted: 0 });
@@ -302,7 +318,25 @@ export async function registerVisitTelemetryRoutes(
       return new Date(currentTime - backdateMs).toISOString();
     }
 
-    const events: VisitEvent[] = parsed.data.events.slice(0, room).map((event) => {
+    let coreCount = visit.coreCount;
+    let completionCount = visit.completionCount;
+    const acceptedInput = parsed.data.events.filter((event) => {
+      if (event.type === 'code_completion') {
+        if (completionCount >= MAX_COMPLETION_EVENTS_PER_VISIT) return false;
+        completionCount += 1;
+        return true;
+      }
+      if (coreCount >= MAX_EVENTS_PER_VISIT) return false;
+      coreCount += 1;
+      return true;
+    });
+
+    if (acceptedInput.length === 0) {
+      rememberBounded(visitCounts, parsed.data.visitId, { ...visit, lastSeen: currentTime }, MAX_TRACKED_VISITS);
+      return reply.status(202).send({ accepted: 0 });
+    }
+
+    const events: VisitEvent[] = acceptedInput.map((event) => {
       const base = {
         visitId: parsed.data.visitId,
         at: eventTimeIso(event.msSinceStart),
@@ -348,6 +382,16 @@ export async function registerVisitTelemetryRoutes(
           return { ...base, type: event.type, step: event.step };
         case 'code_step':
           return { ...base, type: event.type, step: event.step };
+        case 'code_completion':
+          return {
+            ...base,
+            type: event.type,
+            kind: event.kind,
+            outcome: event.outcome,
+            latencyMs: event.latencyMs,
+            ...(event.candidateCount === undefined ? {} : { candidateCount: event.candidateCount }),
+            ...(event.completionChars === undefined ? {} : { completionChars: event.completionChars }),
+          };
         case 'remix_step':
           return {
             ...base,
@@ -371,7 +415,7 @@ export async function registerVisitTelemetryRoutes(
     rememberBounded(
       visitCounts,
       parsed.data.visitId,
-      { count: visit.count + events.length, lastSeen: currentTime },
+      { coreCount, completionCount, lastSeen: currentTime },
       MAX_TRACKED_VISITS,
     );
 

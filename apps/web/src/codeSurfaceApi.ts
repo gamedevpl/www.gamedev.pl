@@ -171,7 +171,7 @@ export async function fetchCodeSurfaceKitDeclaration(slug: string): Promise<Code
   }
 }
 
-// TA-01: advisory-only, like the kit declaration fetch — never throws.
+// TA-01: advisory-only; callers classify failures without surfacing them to users.
 export async function fetchCodeSurfaceCompletion(
   slug: string,
   path: string,
@@ -187,11 +187,12 @@ export async function fetchCodeSurfaceCompletion(
       body: JSON.stringify({ path, prefixWindow, suffixWindow }),
       signal,
     });
-    if (!response.ok) return '';
+    if (!response.ok) await throwResponseError(response);
     const body = (await response.json()) as { completion?: string };
     return body.completion ?? '';
-  } catch {
-    return '';
+  } catch (error) {
+    if (signal.aborted) return '';
+    throw error;
   }
 }
 

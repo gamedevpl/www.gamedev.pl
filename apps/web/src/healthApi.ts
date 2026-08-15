@@ -92,6 +92,21 @@ export interface VisitFunnel {
    */
   assisting?: Array<{ step: string; visits: number }>;
   coding?: Array<{ step: string; visits: number }>;
+  completion?: {
+    requests: number;
+    shown: number;
+    empty: number;
+    failed: number;
+    byKind: Array<{
+      kind: string;
+      requests: number;
+      shown: number;
+      empty: number;
+      failed: number;
+      medianLatencyMs: number | null;
+      p90LatencyMs: number | null;
+    }>;
+  };
   /** The player-side remix loop. Optional for the same client-outlives-deploy reason. */
   remixing?: Array<{ step: string; visits: number }>;
   /** Which door brought painting visits to the brush. Optional, same reason. */
