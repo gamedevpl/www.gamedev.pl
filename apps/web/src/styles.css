@@ -11946,11 +11946,34 @@ button.builder-mode-selector:disabled {
   cursor: default;
 }
 
-.code-surface-agent-console-output {
+.code-surface-agent-console-history {
   margin: 10px 0 0;
-  padding: 8px;
-  max-height: 220px;
+  padding: 0;
+  max-height: 320px;
   overflow: auto;
+  list-style: none;
+}
+
+.code-surface-agent-console-entry {
+  margin-bottom: 8px;
+}
+
+.code-surface-agent-console-entry-command {
+  padding: 2px 4px;
+  font-family: var(--mono, monospace);
+  font-size: 0.7rem;
+  color: var(--muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.code-surface-agent-console-entry.is-error .code-surface-agent-console-entry-command {
+  color: var(--error);
+}
+
+.code-surface-agent-console-output {
+  margin: 2px 0 0;
+  padding: 8px;
   font-family: var(--mono, monospace);
   font-size: 0.74rem;
   white-space: pre-wrap;

@@ -114,6 +114,10 @@ const PREVIEW_DEBOUNCE_MS = 2_500;
 // Mirrors staged-preview.ts's STAGED_PREVIEW_MIN_GAP_MS: floor between rebuilds.
 const STAGE_REBUILD_COOLDOWN_MS = 25_000;
 
+// Agent console: how many past command/result pairs stay visible on the page.
+const AGENT_CONSOLE_HISTORY_LIMIT = 20;
+type AgentConsoleHistoryEntry = { n: number; command: string; output: string; ok: boolean };
+
 type SaveState = 'clean' | 'dirty' | 'saving' | 'saved' | 'error';
 type RebuildState = 'idle' | 'pending' | 'cooling';
 type DiscardState = 'idle' | 'discarding';
@@ -219,7 +223,7 @@ export function CodeSurface({
   const [agentModeEnabled, setAgentModeEnabledState] = useState(() => isAgentModeEnabled(slug));
   // DOM console for browser agents that can type but not call tools.
   const [agentConsoleInput, setAgentConsoleInput] = useState('{"tool":"get_sources","input":{}}');
-  const [agentConsoleOutput, setAgentConsoleOutput] = useState<string | null>(null);
+  const [agentConsoleHistory, setAgentConsoleHistory] = useState<AgentConsoleHistoryEntry[]>([]);
   const [agentConsoleBusy, setAgentConsoleBusy] = useState(false);
 
   const openedRecordedRef = useRef(false);
@@ -474,9 +478,14 @@ export function CodeSurface({
     if (agentConsoleBusy) return;
     setAgentConsoleBusy(true);
     recordCodeStep('agent_console_run');
+    const command = agentConsoleInput;
     try {
-      const result = await runAgentConsoleCommand(slug, agentConsoleInput);
-      setAgentConsoleOutput(result.output);
+      const result = await runAgentConsoleCommand(slug, command);
+      setAgentConsoleHistory((prev) => {
+        const n = (prev[0]?.n ?? 0) + 1;
+        const entry: AgentConsoleHistoryEntry = { n, command, output: result.output, ok: result.ok };
+        return [entry, ...prev].slice(0, AGENT_CONSOLE_HISTORY_LIMIT);
+      });
     } finally {
       setAgentConsoleBusy(false);
     }
@@ -1519,10 +1528,19 @@ export function CodeSurface({
                   ? t('studioPanel.code.agentMode.consoleRunning')
                   : t('studioPanel.code.agentMode.consoleRun')}
               </button>
-              {agentConsoleOutput !== null ? (
-                <pre className="code-surface-agent-console-output" aria-live="polite" tabIndex={0}>
-                  {agentConsoleOutput}
-                </pre>
+              {agentConsoleHistory.length > 0 ? (
+                <ol className="code-surface-agent-console-history" aria-live="polite">
+                  {agentConsoleHistory.map((entry) => (
+                    <li key={entry.n} className={`code-surface-agent-console-entry${entry.ok ? '' : ' is-error'}`}>
+                      <div className="code-surface-agent-console-entry-command">
+                        #{entry.n} {entry.command}
+                      </div>
+                      <pre className="code-surface-agent-console-output" tabIndex={0}>
+                        {entry.output}
+                      </pre>
+                    </li>
+                  ))}
+                </ol>
               ) : null}
               <details className="code-surface-agent-console-guide">
                 <summary>{t('studioPanel.code.agentMode.consoleGuide')}</summary>

@@ -111,7 +111,8 @@ export const AGENT_GUIDE = [
   '',
   'If you reached this page as a browser agent that cannot call tools directly, use the ' +
     'agent console in the Agent mode dialog: type one JSON command per run, ' +
-    'shaped {"tool":"get_sources","input":{}}, press Run, then read the result box.',
+    'shaped {"tool":"get_sources","input":{}}, press Run, then read the newest result at the ' +
+    'top of the list below — every past command and result stays visible there too.',
   '',
   'shared/ and tools/ are read-only — shared engine code, never edited from a single game round.',
   'submit_sources only ever builds a PREVIEW here. Publishing is a deliberate action the creator',

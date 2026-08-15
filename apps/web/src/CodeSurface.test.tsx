@@ -1099,5 +1099,45 @@ describe('CodeSurface', () => {
       const output = container.querySelector('.code-surface-agent-console-output')!;
       expect(JSON.parse(output.textContent!).error).toContain('invalid JSON');
     });
+
+    it('keeps every past console command and result — not just the latest one', async () => {
+      mocked.fetchCodeSurfaceSources.mockResolvedValue(sourcesFor());
+
+      await render();
+      const trigger = container.querySelector<HTMLButtonElement>('.code-surface-agent-mode-trigger')!;
+      await act(async () => {
+        trigger.click();
+      });
+
+      const input = container.querySelector<HTMLTextAreaElement>('.code-surface-agent-console-input')!;
+      const run = container.querySelector<HTMLButtonElement>('.code-surface-agent-console-run')!;
+
+      await act(async () => {
+        typeInto(input, JSON.stringify({ tool: 'get_sources', input: {} }));
+      });
+      await act(async () => {
+        run.click();
+      });
+      await act(async () => {
+        typeInto(input, '{"tool":"unknown_tool","input":{}}');
+      });
+      await act(async () => {
+        run.click();
+      });
+
+      const entries = container.querySelectorAll('.code-surface-agent-console-entry');
+      expect(entries.length).toBe(2);
+      // Newest first — the failed unknown-tool call is entry #2, on top.
+      expect(entries[0]!.className).toContain('is-error');
+      expect(entries[0]!.textContent).toContain('#2');
+      expect(JSON.parse(entries[0]!.querySelector('.code-surface-agent-console-output')!.textContent!).error).toContain(
+        'unknown tool',
+      );
+      expect(entries[1]!.className).not.toContain('is-error');
+      expect(entries[1]!.textContent).toContain('#1');
+      expect(JSON.parse(entries[1]!.querySelector('.code-surface-agent-console-output')!.textContent!)).toMatchObject({
+        available: true,
+      });
+    });
   });
 });
