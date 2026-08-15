@@ -192,6 +192,49 @@ describe('NavHeader menu', () => {
     await act(async () => root.unmount());
   });
 
+  it('closes the dropdown when tapping outside it', async () => {
+    const { container, root } = await renderSignedIn();
+    expect(container.querySelector('.dropdown-menu')).not.toBeNull();
+
+    await act(async () => {
+      document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('.dropdown-menu')).toBeNull();
+    expect(container.querySelector('.hamburger-container.is-open')).toBeNull();
+
+    await act(async () => root.unmount());
+  });
+
+  it('leaves the dropdown open when the tap lands inside it', async () => {
+    const { container, root } = await renderSignedIn();
+    const menu = container.querySelector('.dropdown-menu') as HTMLElement;
+
+    await act(async () => {
+      menu.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('.dropdown-menu')).not.toBeNull();
+
+    await act(async () => root.unmount());
+  });
+
+  it('closes the dropdown on Escape', async () => {
+    const { container, root } = await renderSignedIn();
+    expect(container.querySelector('.dropdown-menu')).not.toBeNull();
+
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('.dropdown-menu')).toBeNull();
+
+    await act(async () => root.unmount());
+  });
+
   it('asks to navigate to the hero prompt when Create Game is clicked', async () => {
     const onNavigate = vi.fn();
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;

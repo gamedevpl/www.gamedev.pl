@@ -1,4 +1,4 @@
-import { useEffect, useState, type MouseEvent } from 'react';
+import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from './AuthContext.js';
 import { AccountSettingsModal } from './AccountSettingsModal.js';
@@ -47,6 +47,7 @@ export function NavHeader({
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isAccountSettingsOpen, setIsAccountSettingsOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const menuContainerRef = useRef<HTMLDivElement>(null);
   // Header mark mimes the visitor: pull a phone and scroll a tiny feed while the page moves.
   const pageScrolling = usePageScrolling();
   /**
@@ -109,6 +110,27 @@ export function NavHeader({
       clearInterval(timer);
     };
   }, [isReviewer]);
+
+  // The dropdown has no backdrop of its own — on a phone it floats over whatever the
+  // studio or hero section is showing underneath. Without this, tapping the composer,
+  // a game card, or anywhere else left it open and overlapping content; only another
+  // hamburger tap or a nav item click ever closed it.
+  useEffect(() => {
+    if (!isMenuOpen) return;
+    const closeIfOutside = (event: Event) => {
+      if (menuContainerRef.current?.contains(event.target as Node)) return;
+      setIsMenuOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsMenuOpen(false);
+    };
+    document.addEventListener('pointerdown', closeIfOutside);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeIfOutside);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [isMenuOpen]);
 
   const handleNavClick = (sectionId: string) => {
     onNavigate(sectionId);
@@ -217,7 +239,7 @@ export function NavHeader({
 
         <LanguageSwitcher />
 
-        <div className={`hamburger-container${isMenuOpen ? ' is-open' : ''}`}>
+        <div ref={menuContainerRef} className={`hamburger-container${isMenuOpen ? ' is-open' : ''}`}>
           <button
             type="button"
             className="hamburger-btn"
