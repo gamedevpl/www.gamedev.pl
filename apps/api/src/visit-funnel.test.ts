@@ -226,6 +226,7 @@ describe('summarizeVisitFunnel', () => {
       { step: 'published', visits: 0 },
       { step: 'read_only_agent', visits: 0 },
       { step: 'conflict_seen', visits: 0 },
+      { step: 'round_reopened', visits: 0 },
     ]);
   });
 

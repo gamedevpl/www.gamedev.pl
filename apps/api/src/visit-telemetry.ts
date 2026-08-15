@@ -132,6 +132,7 @@ const CodeStepSchema = z.enum([
   'published',
   'read_only_agent',
   'conflict_seen',
+  'round_reopened',
 ]);
 /** The player-side remix funnel — see visit-funnel's REMIX_STEPS for the order's meaning. */
 const RemixStepSchema = z.enum([

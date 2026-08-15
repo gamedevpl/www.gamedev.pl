@@ -215,6 +215,78 @@ describe('CodeSurface', () => {
     expect([...container.querySelectorAll('button')].some((b) => b.textContent === 'Stage it')).toBe(false);
   });
 
+  it('CE-17: shows a notice when a staging write reports it opened a fresh round', async () => {
+    mocked.fetchCodeSurfaceSources.mockResolvedValue(sourcesFor());
+    mocked.stageCodeSurfaceFile.mockResolvedValue({
+      accepted: true,
+      path: 'game.ts',
+      bytes: 40,
+      roundOpened: 42,
+      staged: { totalBytes: 40, maxBytes: 1_000_000, maxFiles: 60, updatedAt: '2026-08-15T00:00:00.000Z' },
+    });
+
+    await render();
+    const textarea = container.querySelector('textarea')!;
+    expect(container.querySelector('.code-surface-round-opened')).toBeNull();
+
+    await act(async () => {
+      typeInto(textarea, 'export const boot = () => { /* reopened */ };');
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+      await flush();
+    });
+
+    expect(container.querySelector('.code-surface-round-opened')).not.toBeNull();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(6_000);
+      await flush();
+    });
+    expect(container.querySelector('.code-surface-round-opened')).toBeNull();
+  });
+
+  it('offers a diff toggle only for a staged file with a live base, and renders +/- lines', async () => {
+    mocked.fetchCodeSurfaceSources.mockResolvedValue(
+      sourcesFor({
+        files: [
+          {
+            path: 'game.ts',
+            content: 'export const boot = () => 2;',
+            stagedBy: 'owner',
+            base: 'export const boot = () => 1;',
+          },
+          { path: 'game/render.ts', content: 'export const paint = () => {};' },
+        ],
+      }),
+    );
+
+    await render();
+
+    // game.ts is staged with a base — the toggle appears.
+    expect(container.querySelector('.code-surface-diff-toggle')).not.toBeNull();
+    expect(container.querySelector('.code-surface-diff-view')).toBeNull();
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.code-surface-diff-toggle')!.click();
+    });
+
+    const diffView = container.querySelector('.code-surface-diff-view');
+    expect(diffView).not.toBeNull();
+    expect(container.querySelector('.code-surface-diff-line-removed')?.textContent).toContain('boot = () => 1');
+    expect(container.querySelector('.code-surface-diff-line-added')?.textContent).toContain('boot = () => 2');
+    // No editor while the diff is showing.
+    expect(container.querySelector('textarea')).toBeNull();
+
+    // Switching files hides the diff — render.ts has no base.
+    const railButtons = [...container.querySelectorAll<HTMLButtonElement>('.code-surface-rail-item')];
+    const renderTab = railButtons.find((button) => button.textContent?.includes('render.ts'))!;
+    await act(async () => {
+      renderTab.click();
+    });
+    expect(container.querySelector('.code-surface-diff-toggle')).toBeNull();
+  });
+
   it('restores the selected file and draft after close/reopen, flushing the pending save on unmount', async () => {
     mocked.fetchCodeSurfaceSources.mockResolvedValue(sourcesFor());
     mocked.stageCodeSurfaceFile.mockResolvedValue({

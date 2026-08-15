@@ -41,6 +41,7 @@ import {
   type CodeSurfaceLanguageService,
 } from './codeSurfaceLanguageService.js';
 import { type CodeLanguage, tokenizeLine } from './codeTokens.js';
+import { diffLines } from './diffLines.js';
 import { declaredParamDefaultChanges, type DeclaredParamChange } from './editorJsonLiveDiff.js';
 import { PixelIcon } from './PixelIcon.js';
 import { fetchGameEditor, type EditorContentDoc, type EditorParamValue } from './studioApi.js';
@@ -177,6 +178,11 @@ export function CodeSurface({
   const [actionsMenu, setActionsMenu] = useState<{ mode: CodeActionsMode; nonce: number } | null>(null);
   /** Briefly true after a live param push (§E tier 1) — separate from `saveState`. */
   const [livePush, setLivePush] = useState(false);
+  // True while the current file shows its diff, not the editor.
+  const [showDiff, setShowDiff] = useState(false);
+  // CE-17: briefly true right after staging opened a fresh round.
+  const [roundOpenedNotice, setRoundOpenedNotice] = useState(false);
+  const roundOpenedNoticeTimerRef = useRef<number | null>(null);
 
   const openedRecordedRef = useRef(false);
   // Focus holder before the actions menu opened; restored on close.
@@ -364,6 +370,7 @@ export function CodeSurface({
       if (livePushTimerRef.current !== null) window.clearTimeout(livePushTimerRef.current);
       if (previewTimerRef.current !== null) window.clearTimeout(previewTimerRef.current);
       if (cooldownTimerRef.current !== null) window.clearTimeout(cooldownTimerRef.current);
+      if (roundOpenedNoticeTimerRef.current !== null) window.clearTimeout(roundOpenedNoticeTimerRef.current);
     },
     [slug],
   );
@@ -425,6 +432,10 @@ export function CodeSurface({
 
   const file = useMemo(() => sources?.files.find((entry) => entry.path === selected) ?? null, [sources, selected]);
   const content = selected !== null ? (drafts[selected] ?? file?.content ?? '') : '';
+  const diff = useMemo(() => {
+    if (file?.base === undefined) return null;
+    return diffLines(file.base, content);
+  }, [file, content]);
 
   // GA-05: memoized so a keystroke doesn't re-trigger the editor.
   const languageServiceForEditor = useMemo(() => {
@@ -493,6 +504,7 @@ export function CodeSurface({
   function selectFile(path: string) {
     setSelected(path);
     setDiagnostics(null);
+    setShowDiff(false);
     if (!fileOpenedRecordedRef.current.has(path)) {
       fileOpenedRecordedRef.current.add(path);
       recordCodeStep('file_opened');
@@ -582,6 +594,12 @@ export function CodeSurface({
         });
         setSaveState('saved');
         recordCodeStep('edited');
+        if (result.roundOpened !== undefined) {
+          recordCodeStep('round_reopened');
+          setRoundOpenedNotice(true);
+          if (roundOpenedNoticeTimerRef.current !== null) window.clearTimeout(roundOpenedNoticeTimerRef.current);
+          roundOpenedNoticeTimerRef.current = window.setTimeout(() => setRoundOpenedNotice(false), 6_000);
+        }
         // GA-04: syncs siblings — tsSync() only covers the focused editor.
         if (isTsPath(path)) languageServiceRef.current?.updateFile(path, value);
         schedulePreviewRebuild();
@@ -735,7 +753,11 @@ export function CodeSurface({
       }
     } catch (error) {
       setDeliverState('idle');
-      setDeliverMessage(error instanceof CodeSurfaceApiError ? error.message : t('studioPanel.code.deliverError'));
+      if (error instanceof CodeSurfaceApiError && error.code === 'no_active_round') {
+        setDeliverMessage(t('studioPanel.code.deliverNoActiveRound'));
+      } else {
+        setDeliverMessage(error instanceof CodeSurfaceApiError ? error.message : t('studioPanel.code.deliverError'));
+      }
     }
   }
 
@@ -846,6 +868,17 @@ export function CodeSurface({
           {'←'} {t('studioPanel.code.back')}
         </button>
         <h2>{t('studioPanel.tabs.code')}</h2>
+        {file?.base !== undefined ? (
+          <button
+            type="button"
+            className={`code-surface-diff-toggle${showDiff ? ' is-active' : ''}`}
+            onClick={() => setShowDiff((current) => !current)}
+            aria-pressed={showDiff}
+          >
+            <PixelIcon name="eye" size={12} />
+            {showDiff ? t('studioPanel.code.showCode') : t('studioPanel.code.showDiff')}
+          </button>
+        ) : null}
         {sources.readOnly ? (
           <span
             className="code-surface-readonly-banner"
@@ -917,6 +950,27 @@ export function CodeSurface({
         <div className="code-surface-viewer">
           {!file ? (
             <p className="code-surface-empty">{t('studioPanel.code.noFiles')}</p>
+          ) : showDiff ? (
+            diff ? (
+              <pre className="code-surface-diff-view" aria-label={`${file.path} — ${t('studioPanel.code.showDiff')}`}>
+                {diff.map((line, index) => (
+                  <div key={index} className={`code-surface-diff-line code-surface-diff-line-${line.kind}`}>
+                    <span className="code-surface-diff-marker" aria-hidden="true">
+                      {line.kind === 'added' ? '+' : line.kind === 'removed' ? '−' : ' '}
+                    </span>
+                    <span className="code-surface-line-text">
+                      {tokenizeLine(line.text, languageFor(file.path)).map((token, tokenIndex) => (
+                        <span key={tokenIndex} className={`code-tok code-tok-${token.kind}`}>
+                          {token.text}
+                        </span>
+                      ))}
+                    </span>
+                  </div>
+                ))}
+              </pre>
+            ) : (
+              <p className="code-surface-empty">{t('studioPanel.code.diffNoBase')}</p>
+            )
           ) : editable ? (
             <CodeMirrorBoundary fallback={plainTextarea(file)}>
               <Suspense fallback={plainTextarea(file)}>
@@ -980,6 +1034,11 @@ export function CodeSurface({
             {livePush ? (
               <span className="code-surface-live-push" aria-live="polite">
                 {t('studioPanel.code.livePush')}
+              </span>
+            ) : null}
+            {roundOpenedNotice ? (
+              <span className="code-surface-round-opened" aria-live="polite">
+                {t('studioPanel.code.roundOpened')}
               </span>
             ) : null}
             {rebuildError ? (

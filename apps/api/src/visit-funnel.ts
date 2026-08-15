@@ -274,6 +274,7 @@ export const CODE_STEPS = [
   'published',
   'read_only_agent',
   'conflict_seen',
+  'round_reopened',
 ] as const;
 
 export type CodeStep = (typeof CODE_STEPS)[number];

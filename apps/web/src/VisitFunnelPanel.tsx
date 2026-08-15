@@ -87,6 +87,7 @@ const CODE_LABELS: Record<string, string> = {
   published: 'published from Code',
   read_only_agent: 'hit the agent-round lock',
   conflict_seen: 'saw a staging conflict',
+  round_reopened: 'opened a fresh round via staging (CE-17)',
 };
 
 const ASSIST_LABELS: Record<string, string> = {
