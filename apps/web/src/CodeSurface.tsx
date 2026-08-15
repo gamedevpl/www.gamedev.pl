@@ -302,12 +302,25 @@ export function CodeSurface({
 
   const onPendingActionsModeConsumedRef = useRef(onPendingActionsModeConsumed);
   onPendingActionsModeConsumedRef.current = onPendingActionsModeConsumed;
+  const pendingActionsModeRef = useRef(pendingActionsMode);
+  pendingActionsModeRef.current = pendingActionsMode;
+  const pendingActionsConsumedRef = useRef(false);
 
   useEffect(() => {
-    if (!pendingActionsMode || !sources) return;
+    if (!pendingActionsMode || !sources || pendingActionsConsumedRef.current) return;
+    pendingActionsConsumedRef.current = true;
     openActionsMenu(pendingActionsMode.mode);
     onPendingActionsModeConsumedRef.current?.();
   }, [pendingActionsMode, sources, openActionsMenu]);
+
+  // Drops an unconsumed request on unmount so it can't replay later.
+  useEffect(() => {
+    return () => {
+      if (pendingActionsModeRef.current && !pendingActionsConsumedRef.current) {
+        onPendingActionsModeConsumedRef.current?.();
+      }
+    };
+  }, []);
 
   // VS Code keys; capture phase beats browser print/search and CodeMirror.
   useEffect(() => {

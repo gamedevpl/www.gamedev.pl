@@ -182,6 +182,35 @@ describe('CreatorStudioView — Code actions shortcut reaches beyond the Code ta
     root.unmount();
   });
 
+  it('a failed load drops the queued request instead of replaying it on the next successful open', async () => {
+    mockedFetchCodeSurfaceSources.mockRejectedValueOnce(new Error('network blip'));
+    const { container, root } = await render();
+
+    await pressGlobal('p');
+    await act(async () => {
+      await flush();
+    });
+    expect(container.querySelector('[data-testid="code-actions-menu"]')).toBeNull();
+    expect(container.querySelector('.code-surface-error')).not.toBeNull();
+
+    const back = container.querySelector<HTMLButtonElement>('.code-surface .studio-head-action');
+    await act(async () => {
+      back!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(container.querySelector('.code-surface')).toBeNull();
+
+    const codeButton = container.querySelector<HTMLButtonElement>('[aria-label="Code"]');
+    await act(async () => {
+      codeButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flush();
+    });
+
+    expect(container.querySelector('.code-surface-rail-item')?.textContent).toContain('game.ts');
+    expect(container.querySelector('[data-testid="code-actions-menu"]')).toBeNull();
+
+    root.unmount();
+  });
+
   it('does nothing when the active game has no Code surface — no tab switch, no preventDefault', async () => {
     const { container, root } = await render({ codeSurface: false });
     expect(container.querySelector('[aria-label="Code"]')).toBeNull();
