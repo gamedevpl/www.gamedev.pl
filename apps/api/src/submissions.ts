@@ -2651,6 +2651,7 @@ export async function registerSubmissionRoutes(
             text: stripPlaytestContext(message.text),
             createdAt: message.createdAt,
             ...(revisionOriginOf(message) ? { origin: revisionOriginOf(message) } : {}),
+            delivered: Boolean(message.deliveredAt),
             ...(message.textLocalized && message.locale
               ? { textLocalized: stripPlaytestContext(message.textLocalized), locale: message.locale }
               : {}),

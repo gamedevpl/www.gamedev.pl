@@ -1016,13 +1016,14 @@ describe('SubmissionStatusView', () => {
       expect(container.querySelector<HTMLElement>('[data-testid="active-switch-builder-self"]')).toBeNull();
       expect(container.querySelector('.builder-mode-selector')?.textContent).toContain('Gamedev.pl');
       expect(container.querySelector('.studio-turn.is-working')).not.toBeNull();
-      expect(container.querySelector<HTMLTextAreaElement>('textarea')?.disabled).toBe(true);
+      // A message sent while the agent is mid-build goes to its inbox rather than
+      // waiting on a stop — the composer stays open, not disabled.
+      expect(container.querySelector<HTMLTextAreaElement>('textarea')?.disabled).toBe(false);
       const stop = container.querySelector<HTMLButtonElement>('.status-composer-stop');
       expect(stop?.querySelector('svg')).not.toBeNull();
       expect(stop?.disabled).toBe(false);
       expect(stop?.getAttribute('aria-label')).toBe('Stop the current build and switch to your agent');
       expect(container.querySelector('.status-composer-send')).toBeNull();
-      expect(container.textContent).toContain('The agent is building now');
       expect(container.querySelector('.studio-turn.is-working [data-testid^="active-switch-builder"]')).toBeNull();
 
       await act(async () => {
@@ -1161,7 +1162,9 @@ describe('SubmissionStatusView', () => {
       });
 
       expect(container.querySelector('.studio-turn.is-working [data-testid^="active-switch-builder"]')).toBeNull();
-      expect(container.querySelector<HTMLTextAreaElement>('textarea')?.disabled).toBe(true);
+      // A message sent while the agent is mid-build goes to its inbox rather than
+      // waiting on a stop — the composer stays open, not disabled.
+      expect(container.querySelector<HTMLTextAreaElement>('textarea')?.disabled).toBe(false);
     } finally {
       await act(async () => {
         root.unmount();
@@ -2084,6 +2087,70 @@ describe('SubmissionStatusView', () => {
     await act(async () => {
       root.unmount();
     });
+  });
+
+  it('shows whether a message sent mid-build has been picked up from the agent inbox yet, and still allows sending', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    const at = new Date().toISOString();
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'building',
+      builder: 'self',
+      events: [],
+      progress: {
+        headSha: 'sha',
+        commits: [],
+        checklist: [],
+        revisions: [
+          { text: 'Still waiting on the agent.', createdAt: at, delivered: false },
+          {
+            text: 'The agent already read this one.',
+            createdAt: new Date(Date.parse(at) + 1000).toISOString(),
+            delivered: true,
+          },
+        ],
+      },
+    });
+    await i18n.changeLanguage('en');
+    window.history.pushState(null, '', '/studio/delivery/thread');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    try {
+      await act(async () => {
+        root.render(createElement(SubmissionStatusView, { token: 'delivery', embedded: true }));
+        await flushEffects();
+        await flushEffects();
+      });
+
+      const turns = [...container.querySelectorAll('.studio-turn.is-mine')];
+      expect(turns).toHaveLength(2);
+      const queuedBadge = turns[0].querySelector('.studio-turn-delivery');
+      expect(queuedBadge?.textContent).toBe('Queued for the agent');
+      expect(queuedBadge?.classList.contains('is-queued')).toBe(true);
+      const deliveredBadge = turns[1].querySelector('.studio-turn-delivery');
+      expect(deliveredBadge?.textContent).toBe('Delivered to the agent');
+      expect(deliveredBadge?.classList.contains('is-delivered')).toBe(true);
+
+      // A message can still be sent while the agent is mid-build — it queues to the
+      // inbox instead of waiting for the build to stop.
+      const textarea = container.querySelector<HTMLTextAreaElement>('textarea');
+      expect(textarea?.disabled).toBe(false);
+      const sendButton = container.querySelector<HTMLButtonElement>('.status-composer-send');
+      expect(sendButton?.disabled).toBe(true); // empty composer
+
+      const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
+      await act(async () => {
+        nativeSetter?.call(textarea, 'Please make the enemies slower too.');
+        textarea?.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      expect(container.querySelector<HTMLButtonElement>('.status-composer-send')?.disabled).toBe(false);
+    } finally {
+      await act(async () => {
+        root.unmount();
+      });
+    }
   });
 
   it('lets the creator dismiss a stall chip above the composer', async () => {

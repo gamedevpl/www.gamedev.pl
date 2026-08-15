@@ -34,6 +34,13 @@ export interface CreatorRevision {
   // 'agent': relayed by the agent. 'studio': the chat agent. Else: the creator.
   origin?: 'agent' | 'studio';
   /**
+   * Whether the running agent has collected this message from the inbox yet
+   * (`CreatorMessage.deliveredAt`). Lets the composer show "queued" vs "delivered"
+   * for a creator note sent while a round is mid-build, instead of leaving them to
+   * guess whether it landed.
+   */
+  delivered?: boolean;
+  /**
    * Server-internal, and stripped before this reaches the wire — exactly like the pair on
    * BuildEvent. The translation is stored on the write and resolved against the reader's
    * locale per request, so the client is handed one sentence rather than a choice, and no

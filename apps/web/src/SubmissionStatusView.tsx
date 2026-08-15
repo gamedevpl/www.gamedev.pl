@@ -1524,7 +1524,7 @@ function FeedbackPanel({
 
   const send = async (requestedText: string = trimmed) => {
     const message = requestedText.trim();
-    if (message.length < 10 || state === 'sending' || agentWorking) return;
+    if (message.length < 10 || state === 'sending') return;
     setState('sending');
     setError(null);
     setNotice(null);
@@ -1602,12 +1602,13 @@ function FeedbackPanel({
 
   // Three states, one box. The copy is the only thing that changes, and it changes so
   // the creator can see where their message is about to go without having chosen.
+  // Sending while the agent is mid-build no longer waits for it to stop — the message
+  // goes to its inbox and the thread shows queued/delivered per message — so building
+  // and agentWorking share the same copy; there is nothing left to say differently.
   const hintKey = published
     ? 'statusView.feedback.hintPublished'
     : building
-      ? agentWorking
-        ? 'statusView.feedback.hintBusy'
-        : 'statusView.feedback.hintBuilding'
+      ? 'statusView.feedback.hintBuilding'
       : 'statusView.feedback.hint';
   const titleKey = published
     ? 'statusView.feedback.titlePublished'
@@ -1621,9 +1622,7 @@ function FeedbackPanel({
   const composerHintKey = published
     ? 'statusView.feedback.composerHintPublished'
     : building
-      ? agentWorking
-        ? 'statusView.feedback.busyComposerHint'
-        : 'statusView.feedback.composerHintBuilding'
+      ? 'statusView.feedback.composerHintBuilding'
       : 'statusView.feedback.composerHint';
 
   // Sticky builder signal in the composer toolbar (Claude/Cursor shape): always when
@@ -1751,7 +1750,7 @@ function FeedbackPanel({
           aria-label={t(titleKey)}
           rows={1}
           maxLength={2000}
-          disabled={sending || agentWorking}
+          disabled={sending}
         />
         <div className="status-composer-toolbar">
           <div className="status-composer-toolbar-left">{builderControls}</div>
@@ -1771,7 +1770,7 @@ function FeedbackPanel({
                 type="button"
                 className="primary-btn status-composer-send"
                 onClick={() => void send()}
-                disabled={sending || agentWorking || trimmed.length < 10}
+                disabled={sending || trimmed.length < 10}
                 aria-label={sending ? t('statusView.feedback.sending') : t('statusView.feedback.submit')}
                 title={sending ? t('statusView.feedback.sending') : t('statusView.feedback.submit')}
               >
@@ -1786,18 +1785,9 @@ function FeedbackPanel({
         </div>
         {/* Failures, in-flight, and "kept but nothing started" still need a row — they
             ask the creator to wait or act. A plain Sent receipt does not: the thread
-            already shows the message the moment send succeeds. */}
-        {agentWorking ? (
-          <div className="status-feedback-actions">
-            {error ? (
-              <p className="error">{error}</p>
-            ) : (
-              <span className="status-feedback-sending" role="status">
-                {t('statusView.feedback.busy')}
-              </span>
-            )}
-          </div>
-        ) : error || sending || notice ? (
+            already shows the message the moment send succeeds, and its delivery status
+            (queued/delivered) is shown right there rather than as a separate banner. */}
+        {error || sending || notice ? (
           <div className="status-feedback-actions">
             {error ? (
               <p className="error">{error}</p>
@@ -1846,7 +1836,7 @@ function FeedbackPanel({
         <button
           className="primary-btn"
           onClick={() => void send()}
-          disabled={state === 'sending' || agentWorking || trimmed.length < 10}
+          disabled={state === 'sending' || trimmed.length < 10}
         >
           {state === 'sending' ? t('statusView.feedback.sending') : t('statusView.feedback.submit')}
         </button>
@@ -2007,9 +1997,23 @@ function ThreadStream({
                   ) : null}
                 </div>
                 <time className="studio-turn-time" dateTime={new Date(entry.at).toISOString()}>
-                  {entry.pending
-                    ? t('statusView.progress.yourRequestSending')
-                    : formatRelativeTime(entry.at, i18n.language)}
+                  {entry.pending ? (
+                    t('statusView.progress.yourRequestSending')
+                  ) : mine && (entry.delivered || Boolean(working)) ? (
+                    <>
+                      <span className={`studio-turn-delivery${entry.delivered ? ' is-delivered' : ' is-queued'}`}>
+                        {t(
+                          entry.delivered
+                            ? 'statusView.progress.yourRequestDelivered'
+                            : 'statusView.progress.yourRequestQueued',
+                        )}
+                      </span>
+                      {' · '}
+                      {formatRelativeTime(entry.at, i18n.language)}
+                    </>
+                  ) : (
+                    formatRelativeTime(entry.at, i18n.language)
+                  )}
                 </time>
               </li>
             );
@@ -2152,6 +2156,12 @@ type ActivityEntry = {
    * rather than passing an agent's summary off as something the creator typed.
    */
   relayed?: boolean;
+  /**
+   * For a creator's own message (kind 'revision' or 'studio'): whether the running
+   * agent has picked it up from its inbox yet. Undefined when the API is too old to
+   * say, or the message predates delivery tracking — render as "sent", not "queued".
+   */
+  delivered?: boolean;
   /** Pictures shown as thumbnails on this row, expandable to full size. */
   media?: BuildMediaItem[];
 };
@@ -2225,6 +2235,7 @@ function buildActivityFeed(
             kind: 'revision' as const,
             text: revision.text,
             at: Date.parse(revision.createdAt),
+            delivered: revision.delivered,
             ...(revision.origin === 'agent' ? { relayed: true } : {}),
           },
     ),
