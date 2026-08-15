@@ -336,6 +336,8 @@
       "rebuildError": "Nie udało się zaktualizować podglądu — spróbuj ponownie",
       "previewUpdating": "Aktualizowanie podglądu…",
       "previewReady": "Podgląd zaktualizowany",
+      "previewSyncing": "Aktualizowanie…",
+      "previewSyncReady": "Podgląd gotowy — zobacz",
       "deliver": "Opublikuj",
       "delivering": "Publikowanie…",
       "deliverSuccess": "Opublikowano — bramka właśnie to sprawdza.",
@@ -345,7 +347,7 @@
       "discard": "Odrzuć zmiany",
       "discarding": "Odrzucanie…",
       "discardError": "Nie udało się odrzucić — spróbuj ponownie",
-      "publishHint": "Zmiany zapisują się i widać je na żywo w podglądzie. Publikacja potwierdza Twoje prawo do użycia tej pracy.",
+      "publishHint": "Potwierdzasz prawo do użycia tej pracy.",
       "publishHintTitle": "Zmiany zapisują się automatycznie i widać je na żywo w podglądzie — nie trzeba publikować po każdej zmianie. Publikacja potwierdza, że to Twoja własna praca (lub masz prawo jej używać), uruchamia bramkę, a operator zatwierdza wejście tej wersji na żywo.",
       "workingCopy": {
         "clean": "Brak lokalnych zmian",

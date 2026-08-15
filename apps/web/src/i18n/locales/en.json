@@ -334,6 +334,8 @@
       "rebuildError": "Could not update the preview — try again",
       "previewUpdating": "Updating preview…",
       "previewReady": "Preview updated",
+      "previewSyncing": "Updating…",
+      "previewSyncReady": "Preview ready — view",
       "deliver": "Publish",
       "delivering": "Publishing…",
       "deliverSuccess": "Published — the gate is checking it now.",
@@ -343,7 +345,7 @@
       "discard": "Discard changes",
       "discarding": "Discarding…",
       "discardError": "Could not discard — try again",
-      "publishHint": "Edits already save and preview live. Confirms your right to use this work when you publish.",
+      "publishHint": "Confirms your right to use this work.",
       "publishHintTitle": "Edits already save automatically and preview live as you work — you don't need to publish after every change. Publishing confirms this is your own work (or you have the right to use it), runs the game gate, and an operator reviews it before this version replaces what's live.",
       "workingCopy": {
         "clean": "No local changes",

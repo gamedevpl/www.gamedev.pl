@@ -17,13 +17,13 @@ function ruleFor(selector: string): string {
 
 describe('the Code surface Publish button', () => {
   it('is a filled turquoise CTA, not the unstyled native default', () => {
-    const rule = ruleFor('.code-surface-deliver-btn.is-primary');
+    const rule = ruleFor('.code-surface-deliver-btn');
     expect(rule).toMatch(/background:\s*var\(--turquoise\)/);
     expect(rule).toMatch(/color:\s*#08241d/);
   });
 
   it('has an explicit disabled treatment distinct from the enabled fill', () => {
-    const rule = ruleFor('.code-surface-deliver-btn.is-primary:disabled');
+    const rule = ruleFor('.code-surface-deliver-btn:disabled');
     expect(rule).toMatch(/color:\s*var\(--muted\)/);
   });
 
