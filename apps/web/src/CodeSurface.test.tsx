@@ -41,6 +41,7 @@ vi.mock('./codeSurfaceApi.js', async () => {
     ...actual,
     fetchCodeSurfaceSources: vi.fn(),
     stageCodeSurfaceFile: vi.fn(),
+    patchCodeSurfaceFile: vi.fn(),
     rebuildCodeSurfaceStage: vi.fn(),
     requestCodeSurfacePreview: vi.fn(),
     typecheckCodeSurface: vi.fn(),
@@ -54,8 +55,21 @@ vi.mock('./studioApi.js', async () => {
   return { ...actual, fetchGameEditor: vi.fn() };
 });
 
+vi.mock('./webmcp.js', async () => {
+  const actual = await vi.importActual<typeof import('./webmcp.js')>('./webmcp.js');
+  return { ...actual, registerCodeSurfaceWebMcpTools: vi.fn(() => () => {}) };
+});
+
+// Stub the agent-mode modal's key panel fetch.
+vi.mock('./connectApi.js', async () => {
+  const actual = await vi.importActual<typeof import('./connectApi.js')>('./connectApi.js');
+  return { ...actual, getCreatorAgentKey: vi.fn() };
+});
+
 const mocked = vi.mocked(codeSurfaceApi);
 const mockedStudioApi = vi.mocked(await import('./studioApi.js'));
+const mockedWebmcp = vi.mocked(await import('./webmcp.js'));
+const mockedConnectApi = vi.mocked(await import('./connectApi.js'));
 
 async function flush() {
   await Promise.resolve();
@@ -95,6 +109,11 @@ describe('CodeSurface', () => {
     mocked.deliverCodeSurface.mockReset();
     mockedStudioApi.fetchGameEditor.mockReset();
     codeMirrorMock.current = null;
+    mockedWebmcp.registerCodeSurfaceWebMcpTools.mockClear();
+    mockedConnectApi.getCreatorAgentKey.mockReset();
+    mockedConnectApi.getCreatorAgentKey.mockResolvedValue({ revoked: true, keyGeneration: 1 });
+    window.localStorage.clear();
+    window.sessionStorage.clear();
     mocked.rebuildCodeSurfaceStage.mockResolvedValue({ scheduled: true });
     mocked.requestCodeSurfacePreview.mockResolvedValue({ html: '<html></html>', engineRef: 'abc123' });
     container = document.createElement('div');
@@ -961,6 +980,164 @@ describe('CodeSurface', () => {
       expect(container.querySelector('.code-surface-param-select[aria-label="Color"]')).not.toBeNull();
       expect(container.querySelector('input[type="checkbox"][aria-label="Loud"]')).not.toBeNull();
       expect(container.querySelector('.code-surface-param-text[aria-label="Title"]')).not.toBeNull();
+    });
+  });
+
+  describe('agent mode', () => {
+    it('is off by default: no WebMCP registration until the creator opts in', async () => {
+      mocked.fetchCodeSurfaceSources.mockResolvedValue(sourcesFor());
+
+      await render();
+
+      expect(mockedWebmcp.registerCodeSurfaceWebMcpTools).not.toHaveBeenCalled();
+    });
+
+    it('opens the Agent mode modal, and its WebMCP toggle registers the tool set', async () => {
+      mocked.fetchCodeSurfaceSources.mockResolvedValue(sourcesFor());
+
+      await render();
+
+      const trigger = container.querySelector<HTMLButtonElement>('.code-surface-agent-mode-trigger')!;
+      await act(async () => {
+        trigger.click();
+      });
+
+      const dialog = container.querySelector('.code-surface-agent-mode-dialog');
+      expect(dialog).not.toBeNull();
+      // The coding-agent bridge reuses the creator's real MCP key panel.
+      expect(container.querySelector('.studio-creator-key')).not.toBeNull();
+
+      const toggle = container.querySelector<HTMLInputElement>('.code-surface-agent-mode-toggle input')!;
+      expect(toggle.checked).toBe(false);
+      await act(async () => {
+        toggle.click();
+      });
+
+      expect(mockedWebmcp.registerCodeSurfaceWebMcpTools).toHaveBeenCalledWith('sky-dodge');
+      expect(toggle.checked).toBe(true);
+    });
+
+    it('remembers the opt-in across a remount of the same round', async () => {
+      mocked.fetchCodeSurfaceSources.mockResolvedValue(sourcesFor());
+      await render();
+
+      const trigger = container.querySelector<HTMLButtonElement>('.code-surface-agent-mode-trigger')!;
+      await act(async () => {
+        trigger.click();
+      });
+      const toggle = container.querySelector<HTMLInputElement>('.code-surface-agent-mode-toggle input')!;
+      await act(async () => {
+        toggle.click();
+      });
+
+      mockedWebmcp.registerCodeSurfaceWebMcpTools.mockClear();
+      await act(async () => root.unmount());
+      root = createRoot(container);
+      await render();
+
+      expect(mockedWebmcp.registerCodeSurfaceWebMcpTools).toHaveBeenCalledWith('sky-dodge');
+    });
+
+    it('runs a typed JSON command through the console and shows the tool result', async () => {
+      mocked.fetchCodeSurfaceSources.mockResolvedValue(sourcesFor());
+      mocked.patchCodeSurfaceFile.mockResolvedValue({
+        accepted: true,
+        path: 'game.ts',
+        bytes: 12,
+        staged: { totalBytes: 12, maxBytes: 100, maxFiles: 10, updatedAt: null },
+        replacements: 1,
+        baseFrom: 'delivery',
+      });
+
+      await render();
+      const trigger = container.querySelector<HTMLButtonElement>('.code-surface-agent-mode-trigger')!;
+      await act(async () => {
+        trigger.click();
+      });
+
+      const input = container.querySelector<HTMLTextAreaElement>('.code-surface-agent-console-input')!;
+      await act(async () => {
+        typeInto(input, JSON.stringify({ tool: 'patch_source_file', input: { path: 'game.ts', old: 'a', new: 'b' } }));
+      });
+      const run = container.querySelector<HTMLButtonElement>('.code-surface-agent-console-run')!;
+      await act(async () => {
+        run.click();
+      });
+
+      expect(mocked.patchCodeSurfaceFile).toHaveBeenCalledWith(
+        'sky-dodge',
+        'game.ts',
+        { old: 'a', new: 'b' },
+        {
+          agentAuthored: true,
+        },
+      );
+      // The agent rewrote the working copy, so the editor must reload it.
+      expect(mocked.fetchCodeSurfaceSources.mock.calls.length).toBeGreaterThan(1);
+      const output = container.querySelector('.code-surface-agent-console-output')!;
+      expect(JSON.parse(output.textContent!)).toMatchObject({ ok: true, path: 'game.ts', replacements: 1 });
+    });
+
+    it('surfaces a bad command as a readable error instead of failing silently', async () => {
+      mocked.fetchCodeSurfaceSources.mockResolvedValue(sourcesFor());
+
+      await render();
+      const trigger = container.querySelector<HTMLButtonElement>('.code-surface-agent-mode-trigger')!;
+      await act(async () => {
+        trigger.click();
+      });
+
+      const input = container.querySelector<HTMLTextAreaElement>('.code-surface-agent-console-input')!;
+      await act(async () => {
+        typeInto(input, 'please open game.ts');
+      });
+      const run = container.querySelector<HTMLButtonElement>('.code-surface-agent-console-run')!;
+      await act(async () => {
+        run.click();
+      });
+
+      const output = container.querySelector('.code-surface-agent-console-output')!;
+      expect(JSON.parse(output.textContent!).error).toContain('invalid JSON');
+    });
+
+    it('keeps every past console command and result — not just the latest one', async () => {
+      mocked.fetchCodeSurfaceSources.mockResolvedValue(sourcesFor());
+
+      await render();
+      const trigger = container.querySelector<HTMLButtonElement>('.code-surface-agent-mode-trigger')!;
+      await act(async () => {
+        trigger.click();
+      });
+
+      const input = container.querySelector<HTMLTextAreaElement>('.code-surface-agent-console-input')!;
+      const run = container.querySelector<HTMLButtonElement>('.code-surface-agent-console-run')!;
+
+      await act(async () => {
+        typeInto(input, JSON.stringify({ tool: 'get_sources', input: {} }));
+      });
+      await act(async () => {
+        run.click();
+      });
+      await act(async () => {
+        typeInto(input, '{"tool":"unknown_tool","input":{}}');
+      });
+      await act(async () => {
+        run.click();
+      });
+
+      const entries = container.querySelectorAll('.code-surface-agent-console-entry');
+      expect(entries.length).toBe(2);
+      // Newest first — the failed unknown-tool call is entry #2, on top.
+      expect(entries[0]!.className).toContain('is-error');
+      expect(entries[0]!.textContent).toContain('#2');
+      expect(JSON.parse(entries[0]!.querySelector('.code-surface-agent-console-output')!.textContent!).error).toContain(
+        'unknown tool',
+      );
+      expect(entries[1]!.className).not.toContain('is-error');
+      expect(entries[1]!.textContent).toContain('#1');
+      expect(JSON.parse(entries[1]!.querySelector('.code-surface-agent-console-output')!.textContent!)).toMatchObject({
+        available: true,
+      });
     });
   });
 });

@@ -309,6 +309,9 @@ export const CODE_STEPS = [
   'read_only_agent',
   'conflict_seen',
   'round_reopened',
+  'agent_mode_enabled',
+  'agent_mode_disabled',
+  'agent_console_run',
 ] as const;
 
 export type CodeStep = (typeof CODE_STEPS)[number];

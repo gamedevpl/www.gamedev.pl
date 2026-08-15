@@ -344,6 +344,8 @@ export async function registerCreatorCodeRoutes(
      * rebuild only from the explicit "Stage it" route below.
      */
     rebuild: z.boolean().optional(),
+    // CE-20: tool-written, not typed.
+    agentAuthored: z.boolean().optional(),
   });
 
   /** PUT /api/me/studio/games/:slug/sources/stage (CE-10) — the owner twin of the agent channel's stage route. */
@@ -380,6 +382,7 @@ export async function registerCreatorCodeRoutes(
           path: parsed.data.path,
           content: parsed.data.content,
           stagedBy: 'owner',
+          agentAssisted: parsed.data.agentAuthored === true,
         });
         options.invalidateStatusCache?.(activeRecord.issueNumber);
         if (parsed.data.rebuild !== false) options.scheduleStagedPreview?.(activeRecord.issueNumber);
@@ -416,6 +419,8 @@ export async function registerCreatorCodeRoutes(
         .optional(),
       old: z.string().max(200_000).optional(),
       new: z.string().max(200_000).optional(),
+      // CE-20: tool-written, not typed.
+      agentAuthored: z.boolean().optional(),
     })
     .superRefine((value, ctx) => {
       const hasPatch = value.patch !== undefined;
@@ -496,6 +501,7 @@ export async function registerCreatorCodeRoutes(
           path: parsed.data.path,
           content: patched.content,
           stagedBy: 'owner',
+          agentAssisted: parsed.data.agentAuthored === true,
         });
         options.invalidateStatusCache?.(activeRecord.issueNumber);
         options.scheduleStagedPreview?.(activeRecord.issueNumber);
@@ -952,7 +958,9 @@ export async function registerCreatorCodeRoutes(
       // base version byte-for-byte — that content's authorship is whoever wrote *it*
       // (the base manifest's own stamp), not a default of 'owner' just because this
       // click happened to come from the owner-only Code surface route.
-      const stagedByValues = new Set(stagedEntries.files.map((entry) => entry.stagedBy ?? 'agent'));
+      const stagedByValues = new Set(
+        stagedEntries.files.map((entry) => (entry.agentAssisted ? 'agent' : (entry.stagedBy ?? 'agent'))),
+      );
       const authorship: 'agent' | 'owner' | 'mixed' =
         stagedByValues.size === 0
           ? (baseManifest?.authorship ?? 'owner')

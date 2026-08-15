@@ -39,6 +39,16 @@ import {
   setCodeSurfaceSessionState,
 } from './codeSurfaceSessionState.js';
 import {
+  AGENT_GUIDE,
+  codeSurfaceToolNames,
+  isAgentModeEnabled,
+  registerCodeSurfaceWebMcpTools,
+  runAgentConsoleCommand,
+  setAgentModeEnabled,
+  subscribeAgentActivity,
+} from './webmcp.js';
+import { StudioCreatorAgentKeyPanel } from './StudioCreatorAgentKeyPanel.js';
+import {
   createCodeSurfaceLanguageService,
   fromVfsPath,
   KIT_DECLARATION_PATH,
@@ -95,12 +105,18 @@ function parseDiagnostic(raw: string): { path: string; line: number; message: st
 }
 
 const AUTOSAVE_MS = 1500;
+// "Agent is editing" banner duration after the last WebMCP tool call.
+const AGENT_ACTIVITY_BANNER_MS = 4_000;
 const TYPECHECK_DEBOUNCE_MS = 400;
 // Wait after the last stage write before arming a preview rebuild.
 const PREVIEW_DEBOUNCE_MS = 2_500;
 
 // Mirrors staged-preview.ts's STAGED_PREVIEW_MIN_GAP_MS: floor between rebuilds.
 const STAGE_REBUILD_COOLDOWN_MS = 25_000;
+
+// Agent console: how many past command/result pairs stay visible on the page.
+const AGENT_CONSOLE_HISTORY_LIMIT = 20;
+type AgentConsoleHistoryEntry = { n: number; command: string; output: string; ok: boolean };
 
 type SaveState = 'clean' | 'dirty' | 'saving' | 'saved' | 'error';
 type RebuildState = 'idle' | 'pending' | 'cooling';
@@ -199,6 +215,16 @@ export function CodeSurface({
   // CE-17: briefly true right after staging opened a fresh round.
   const [roundOpenedNotice, setRoundOpenedNotice] = useState(false);
   const roundOpenedNoticeTimerRef = useRef<number | null>(null);
+  // True while a WebMCP tool call landed recently.
+  const [agentActive, setAgentActive] = useState(false);
+  const agentActiveTimerRef = useRef<number | null>(null);
+  // Creator opt-in for WebMCP; modal also offers a real-MCP path.
+  const [agentModeOpen, setAgentModeOpen] = useState(false);
+  const [agentModeEnabled, setAgentModeEnabledState] = useState(() => isAgentModeEnabled(slug));
+  // DOM console for browser agents that can type but not call tools.
+  const [agentConsoleInput, setAgentConsoleInput] = useState('{"tool":"get_sources","input":{}}');
+  const [agentConsoleHistory, setAgentConsoleHistory] = useState<AgentConsoleHistoryEntry[]>([]);
+  const [agentConsoleBusy, setAgentConsoleBusy] = useState(false);
 
   const openedRecordedRef = useRef(false);
   // Focus holder before the actions menu opened; restored on close.
@@ -386,6 +412,15 @@ export function CodeSurface({
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [kitViewerLine]);
 
+  useEffect(() => {
+    if (!agentModeOpen) return undefined;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') setAgentModeOpen(false);
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [agentModeOpen]);
+
   useEffect(
     () => () => {
       // Unmount flushes pending autosaves — direct calls, no setState after unmount.
@@ -421,6 +456,75 @@ export function CodeSurface({
   }, [slug]);
 
   const editable = sources !== null && !sources.readOnly;
+
+  // Re-reads the creator's stored opt-in whenever the round changes.
+  useEffect(() => {
+    setAgentModeEnabledState(isAgentModeEnabled(slug));
+  }, [slug]);
+
+  // No-op without modelContext; locked or opted-out rounds get none.
+  useEffect(() => {
+    if (!editable || !agentModeEnabled) return undefined;
+    return registerCodeSurfaceWebMcpTools(slug);
+  }, [editable, agentModeEnabled, slug]);
+
+  function toggleAgentMode(next: boolean) {
+    setAgentModeEnabledState(next);
+    setAgentModeEnabled(slug, next);
+    recordCodeStep(next ? 'agent_mode_enabled' : 'agent_mode_disabled');
+  }
+
+  async function runAgentConsole() {
+    if (agentConsoleBusy) return;
+    setAgentConsoleBusy(true);
+    recordCodeStep('agent_console_run');
+    const command = agentConsoleInput;
+    try {
+      const result = await runAgentConsoleCommand(slug, command);
+      setAgentConsoleHistory((prev) => {
+        const n = (prev[0]?.n ?? 0) + 1;
+        const entry: AgentConsoleHistoryEntry = { n, command, output: result.output, ok: result.ok };
+        return [entry, ...prev].slice(0, AGENT_CONSOLE_HISTORY_LIMIT);
+      });
+    } finally {
+      setAgentConsoleBusy(false);
+    }
+  }
+
+  useEffect(() => {
+    const unsubscribe = subscribeAgentActivity((event) => {
+      setAgentActive(true);
+      if (agentActiveTimerRef.current !== null) window.clearTimeout(agentActiveTimerRef.current);
+      agentActiveTimerRef.current = window.setTimeout(() => setAgentActive(false), AGENT_ACTIVITY_BANNER_MS);
+      if (event.phase !== 'done' || !event.mutates) return;
+      // An agent rewrote the working copy — reload before the next autosave.
+      load(false);
+      const { affectedPaths } = event;
+      if (!affectedPaths) return;
+      // Drop the stale draft and pending save for what the agent wrote.
+      const isAffected = (path: string) => affectedPaths === 'all' || affectedPaths.includes(path);
+      for (const [path, timer] of saveTimersRef.current) {
+        if (!isAffected(path)) continue;
+        window.clearTimeout(timer);
+        saveTimersRef.current.delete(path);
+      }
+      setDrafts((prev) => {
+        const next = { ...prev };
+        let changed = false;
+        for (const path of Object.keys(next)) {
+          if (!isAffected(path)) continue;
+          delete next[path];
+          changed = true;
+        }
+        return changed ? next : prev;
+      });
+      if (selected !== null && isAffected(selected)) setSaveState('clean');
+    });
+    return () => {
+      unsubscribe();
+      if (agentActiveTimerRef.current !== null) window.clearTimeout(agentActiveTimerRef.current);
+    };
+  }, [load, selected]);
 
   // GA-04: keyed on editable/slug — avoids a re-fetch cleanup race.
   useEffect(() => {
@@ -947,6 +1051,23 @@ export function CodeSurface({
             <span className="code-surface-readonly-banner-compact">{t('studioPanel.code.agentRoundCompact')}</span>
           </span>
         ) : null}
+        {agentActive ? (
+          <span className="code-surface-agent-active-banner" role="status" aria-live="polite">
+            {t('studioPanel.code.agentActive')}
+          </span>
+        ) : null}
+        {editable ? (
+          <button
+            type="button"
+            className={`code-surface-agent-mode-trigger${agentModeEnabled ? ' is-active' : ''}`}
+            onClick={() => setAgentModeOpen(true)}
+            aria-haspopup="dialog"
+            aria-pressed={agentModeEnabled}
+          >
+            <PixelIcon name="sparkle" size={12} />
+            {t('studioPanel.code.agentMode.trigger')}
+          </button>
+        ) : null}
         <button
           type="button"
           className="code-surface-actions-trigger"
@@ -1342,6 +1463,90 @@ export function CodeSurface({
                 </div>
               ))}
             </pre>
+          </section>
+        </div>
+      ) : null}
+
+      {agentModeOpen ? (
+        <div className="code-surface-agent-mode-backdrop" role="presentation" onClick={() => setAgentModeOpen(false)}>
+          <section
+            className="code-surface-agent-mode-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="code-surface-agent-mode-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="code-surface-agent-mode-head">
+              <h3 id="code-surface-agent-mode-title">{t('studioPanel.code.agentMode.title')}</h3>
+              <button
+                type="button"
+                className="modal-close-btn"
+                onClick={() => setAgentModeOpen(false)}
+                aria-label={t('studioPanel.code.agentMode.close')}
+              >
+                <PixelIcon name="close" size={13} />
+              </button>
+            </header>
+
+            <div className="code-surface-agent-mode-section">
+              <label className="code-surface-agent-mode-toggle">
+                <input
+                  type="checkbox"
+                  checked={agentModeEnabled}
+                  onChange={(event) => toggleAgentMode(event.target.checked)}
+                />
+                {t('studioPanel.code.agentMode.webmcpToggle')}
+              </label>
+              <p className="code-surface-agent-mode-hint">{t('studioPanel.code.agentMode.webmcpHint')}</p>
+            </div>
+
+            <div className="code-surface-agent-mode-section">
+              <h4>{t('studioPanel.code.agentMode.bridgeTitle')}</h4>
+              <p className="code-surface-agent-mode-hint">{t('studioPanel.code.agentMode.bridgeHint', { slug })}</p>
+              <StudioCreatorAgentKeyPanel />
+            </div>
+
+            <div className="code-surface-agent-mode-section">
+              <h4>{t('studioPanel.code.agentMode.consoleTitle')}</h4>
+              <p className="code-surface-agent-mode-hint">{t('studioPanel.code.agentMode.consoleHint')}</p>
+              <p className="code-surface-agent-console-tools">{codeSurfaceToolNames().join(' · ')}</p>
+              <textarea
+                className="code-surface-agent-console-input"
+                value={agentConsoleInput}
+                onChange={(event) => setAgentConsoleInput(event.target.value)}
+                spellCheck={false}
+                rows={4}
+                aria-label={t('studioPanel.code.agentMode.consoleInputLabel')}
+              />
+              <button
+                type="button"
+                className="code-surface-agent-console-run"
+                onClick={() => void runAgentConsole()}
+                disabled={agentConsoleBusy}
+              >
+                {agentConsoleBusy
+                  ? t('studioPanel.code.agentMode.consoleRunning')
+                  : t('studioPanel.code.agentMode.consoleRun')}
+              </button>
+              {agentConsoleHistory.length > 0 ? (
+                <ol className="code-surface-agent-console-history" aria-live="polite">
+                  {agentConsoleHistory.map((entry) => (
+                    <li key={entry.n} className={`code-surface-agent-console-entry${entry.ok ? '' : ' is-error'}`}>
+                      <div className="code-surface-agent-console-entry-command">
+                        #{entry.n} {entry.command}
+                      </div>
+                      <pre className="code-surface-agent-console-output" tabIndex={0}>
+                        {entry.output}
+                      </pre>
+                    </li>
+                  ))}
+                </ol>
+              ) : null}
+              <details className="code-surface-agent-console-guide">
+                <summary>{t('studioPanel.code.agentMode.consoleGuide')}</summary>
+                <pre>{AGENT_GUIDE}</pre>
+              </details>
+            </div>
           </section>
         </div>
       ) : null}

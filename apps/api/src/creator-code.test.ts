@@ -389,6 +389,44 @@ describe('the Code surface routes (creator-code.ts)', () => {
         expect(remaining.files.map((f) => f.path)).toEqual(['game/agent-file.ts']);
       }));
 
+    it("clears a WebMCP/console-authored write too — it is still stagedBy 'owner', agentAssisted is a separate signal", async () =>
+      withApp(async () => {
+        await games.putStagedSourceFile({
+          slug: 'sky-dodge',
+          issueNumber: 10,
+          roundGeneration: 1,
+          path: 'game/agent-file.ts',
+          content: 'round-key agent wrote this',
+          stagedBy: 'agent',
+        });
+        await games.putStagedSourceFile({
+          slug: 'sky-dodge',
+          issueNumber: 10,
+          roundGeneration: 1,
+          path: 'game/console-file.ts',
+          content: 'the owner ran the agent console',
+          stagedBy: 'owner',
+          agentAssisted: true,
+        });
+
+        const app = await buildApp({
+          store,
+          sessionSecret,
+          submissionRoutes: { submissionTokenSecret, agentChannel: { gamesStore: games } },
+        });
+        const res = await app.inject({
+          method: 'POST',
+          url: '/api/me/studio/games/sky-dodge/sources/stage/discard',
+          headers: authHeaders('g:creator'),
+        });
+        await app.close();
+
+        expect(res.statusCode).toBe(200);
+        expect(res.json()).toEqual({ cleared: 1 });
+        const remaining = await games.listStagedSources({ slug: 'sky-dodge', issueNumber: 10, roundGeneration: 1 });
+        expect(remaining.files.map((f) => f.path)).toEqual(['game/agent-file.ts']);
+      }));
+
     it('refuses once an agent round goes live — same guard stage and patch already enforce', async () =>
       withApp(async (app) => {
         await games.putStagedSourceFile({
@@ -701,6 +739,52 @@ describe('the Code surface routes (creator-code.ts)', () => {
           payload: { mode: 'preview', attestation: true },
         });
         expect(again.statusCode).toBe(429);
+      }));
+
+    it('WebMCP/console-authored owner writes (agentAuthored) roll up to agent authorship, not owner', async () =>
+      withApp(async (app) => {
+        const stage = (path: string, content: string, agentAssisted?: boolean) =>
+          games.putStagedSourceFile({
+            slug: 'sky-dodge',
+            issueNumber: 10,
+            roundGeneration: 1,
+            path,
+            content,
+            stagedBy: 'owner',
+            ...(agentAssisted ? { agentAssisted: true } : {}),
+          });
+        await stage('SPEC.md', '# Sky Dodge', true);
+        await stage('index.html', '<div id="game-root"></div>', true);
+        await stage('GAME.json', '{"engine":{"modules":[]}}', true);
+        await stage('game.ts', 'export const boot = () => {};', true);
+
+        const res = await app.inject({
+          method: 'POST',
+          url: '/api/me/studio/games/sky-dodge/sources/deliver',
+          headers: { ...authHeaders('g:creator'), 'content-type': 'application/json' },
+          payload: { mode: 'preview', attestation: true },
+        });
+        expect(res.statusCode).toBe(200);
+        const body = res.json() as { accepted: boolean; version?: string };
+        expect(body.accepted).toBe(true);
+        const manifest = await games.getManifest('sky-dodge', body.version!);
+        expect(manifest?.authorship).toBe('agent');
+      }));
+
+    it('the stage and patch routes stamp an agentAuthored write as owner-staged (agentAssisted, not agent)', async () =>
+      withApp(async (app) => {
+        const staged = await app.inject({
+          method: 'PUT',
+          url: '/api/me/studio/games/sky-dodge/sources/stage',
+          headers: { ...authHeaders('g:creator'), 'content-type': 'application/json' },
+          payload: { path: 'game.ts', content: 'export const boot = () => {};', agentAuthored: true },
+        });
+        expect(staged.statusCode).toBe(200);
+
+        const summary = await games.listStagedSources({ slug: 'sky-dodge', issueNumber: 10, roundGeneration: 1 });
+        const entry = summary.files.find((f) => f.path === 'game.ts');
+        expect(entry?.stagedBy).toBe('owner');
+        expect(entry?.agentAssisted).toBe(true);
       }));
 
     it("an empty staging buffer inherits the base version's authorship, not a default of owner", async () => {

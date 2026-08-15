@@ -526,6 +526,8 @@ export type StagedSourceEntry = {
    * channel's own writes, which do not pass it explicitly.
    */
   stagedBy?: 'agent' | 'owner';
+  // CE-20: tool-authored 'owner' write; authorship only, not discard.
+  agentAssisted?: boolean;
 };
 
 /** Summary of a job's staging buffer — paths only, no contents. */
@@ -599,6 +601,7 @@ export interface GamesStore {
     content: string;
     /** Who is writing this file (CE-04). Defaults to `'agent'` when omitted. */
     stagedBy?: 'agent' | 'owner';
+    agentAssisted?: boolean;
   }): Promise<StagedSourcesSummary & { path: string; bytes: number }>;
   deleteStagedSourceFile(input: {
     slug: string;
@@ -918,7 +921,12 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
         const generation = existing?.generation ?? 0;
 
         const previous = base.files.find((file) => file.path === path);
-        const entry: StagedSourceEntry = { path, bytes, stagedBy: input.stagedBy ?? 'agent' };
+        const entry: StagedSourceEntry = {
+          path,
+          bytes,
+          stagedBy: input.stagedBy ?? 'agent',
+          ...(input.agentAssisted ? { agentAssisted: true } : {}),
+        };
         const nextFiles = previous
           ? base.files.map((file) => (file.path === path ? entry : file))
           : [...base.files, entry];
