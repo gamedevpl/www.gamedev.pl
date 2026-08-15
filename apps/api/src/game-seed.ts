@@ -445,11 +445,9 @@ export interface VertexGameSeederOptions {
 /**
  * The production seeder: two Vertex calls, both bounded, all failures swallowed.
  *
- * The picker runs with thinking disabled — it is a classification over a few hundred
- * tokens of catalog, and the latency of reasoning about it costs more than the choice is
- * worth. Note that is a *flash-only* configuration: pro-tier models reject a zero
- * thinking budget outright with a 400, so the knob is applied by model family rather
- * than unconditionally.
+ * The picker runs at the cheap `'low'` thinking floor — it is a classification over
+ * a few hundred tokens of catalog, and the latency of reasoning about it costs more
+ * than the choice is worth.
  */
 export class VertexGameSeeder implements GameSeeder {
   private readonly references: number;
@@ -481,12 +479,7 @@ export class VertexGameSeeder implements GameSeeder {
   private client(kind: 'pick' | 'generate'): GenAIClient {
     if (this.options.client) return this.options.client;
     const generationConfig: Record<string, unknown> = {};
-    if (kind === 'pick') {
-      generationConfig.responseMimeType = 'application/json';
-      // Flash-only: a pro-tier model 400s on a zero thinking budget rather than
-      // ignoring it, which would turn the cheap call into the failing one.
-      if (this.model.includes('flash')) generationConfig.thinkingConfig = { thinkingBudget: 0 };
-    }
+    if (kind === 'pick') generationConfig.responseMimeType = 'application/json';
     const build = () =>
       createVertexClient({
         projectId: this.options.projectId,
@@ -501,7 +494,9 @@ export class VertexGameSeeder implements GameSeeder {
   }
 
   private async pickReferences(context: SeedContext, spec: string): Promise<{ picks: string[]; usage: SeedUsage }> {
+    // Raw thinkingBudget:0 also 400s on gemini-3.7-flash; 'low' is the floor.
     const result = await this.client('pick')(buildPickPrompt(context, spec, this.references))
+      .thinking({ level: 'low' })
       .temperature(0)
       .maxOutputTokens(512)
       .signal(AbortSignal.timeout(this.pickTimeoutMs))
