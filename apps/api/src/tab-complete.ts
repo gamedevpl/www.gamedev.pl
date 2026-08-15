@@ -1,5 +1,5 @@
 import { resultText, type GenAIClient, type GenerationResult } from 'genaicode';
-import { createVertexClient } from './genai.js';
+import { createVertexClient, type VertexGenerationConfig } from './genai.js';
 
 // TA-01: prompt-based FIM — Vertex Gemini has no suffix field.
 export const DEFAULT_TAB_COMPLETE_MODEL = 'gemini-3.7-flash';
@@ -68,6 +68,8 @@ export class VertexTabCompleter implements TabCompleter {
         defaultRegion: 'global',
         model: this.options.model,
         defaultModel: DEFAULT_TAB_COMPLETE_MODEL,
+        // Thinking eats the same output budget and leaves nothing for the code.
+        generationConfig: { thinkingConfig: { thinkingBudget: 0 } } as VertexGenerationConfig,
       });
     return this.client;
   }

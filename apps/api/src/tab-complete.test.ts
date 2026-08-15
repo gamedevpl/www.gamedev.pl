@@ -1,10 +1,11 @@
-import { describe, expect, it } from 'vitest';
-import {
-  MAX_COMPLETION_OUTPUT_TOKENS,
-  StubTabCompleter,
-  tabCompleteEnabled,
-  VertexTabCompleter,
-} from './tab-complete.js';
+import { describe, expect, it, vi } from 'vitest';
+
+// A real call once burned the output cap on invisible thinking tokens.
+const createVertexClient = vi.fn(() => vi.fn());
+vi.mock('./genai.js', () => ({ createVertexClient }));
+
+const { MAX_COMPLETION_OUTPUT_TOKENS, StubTabCompleter, tabCompleteEnabled, VertexTabCompleter } =
+  await import('./tab-complete.js');
 
 // Same stub shape as the code lane test uses: real usage included.
 function stubClient(text: string, usage = { inputTokens: 42, outputTokens: 7 }) {
@@ -58,6 +59,13 @@ describe('VertexTabCompleter', () => {
       suffixWindow: '',
     });
     expect(result.completion).toBe('const x = 1;');
+  });
+
+  it('disables thinking on the real Vertex client — thinking tokens starve the visible answer', async () => {
+    await new VertexTabCompleter().complete({ path: 'a.ts', prefixWindow: '', suffixWindow: '' }).catch(() => {});
+    expect(createVertexClient).toHaveBeenCalledWith(
+      expect.objectContaining({ generationConfig: { thinkingConfig: { thinkingBudget: 0 } } }),
+    );
   });
 });
 
