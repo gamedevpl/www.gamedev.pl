@@ -1602,9 +1602,6 @@ function FeedbackPanel({
 
   // Three states, one box. The copy is the only thing that changes, and it changes so
   // the creator can see where their message is about to go without having chosen.
-  // Sending while the agent is mid-build no longer waits for it to stop — the message
-  // goes to its inbox and the thread shows queued/delivered per message — so building
-  // and agentWorking share the same copy; there is nothing left to say differently.
   const hintKey = published
     ? 'statusView.feedback.hintPublished'
     : building
@@ -1785,8 +1782,7 @@ function FeedbackPanel({
         </div>
         {/* Failures, in-flight, and "kept but nothing started" still need a row — they
             ask the creator to wait or act. A plain Sent receipt does not: the thread
-            already shows the message the moment send succeeds, and its delivery status
-            (queued/delivered) is shown right there rather than as a separate banner. */}
+            already shows the message the moment send succeeds. */}
         {error || sending || notice ? (
           <div className="status-feedback-actions">
             {error ? (
@@ -2156,11 +2152,7 @@ type ActivityEntry = {
    * rather than passing an agent's summary off as something the creator typed.
    */
   relayed?: boolean;
-  /**
-   * For a creator's own message (kind 'revision' or 'studio'): whether the running
-   * agent has picked it up from its inbox yet. Undefined when the API is too old to
-   * say, or the message predates delivery tracking — render as "sent", not "queued".
-   */
+  // Whether the agent has picked this message up from its inbox yet.
   delivered?: boolean;
   /** Pictures shown as thumbnails on this row, expandable to full size. */
   media?: BuildMediaItem[];

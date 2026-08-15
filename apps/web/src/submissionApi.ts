@@ -35,7 +35,6 @@ export type BuildProgress = {
     createdAt: string;
     // 'agent': relayed by the agent. 'studio': the chat agent. Else: the creator.
     origin?: 'agent' | 'studio';
-    /** Whether the running agent has collected this message from its inbox yet. */
     delivered?: boolean;
   }>;
 };

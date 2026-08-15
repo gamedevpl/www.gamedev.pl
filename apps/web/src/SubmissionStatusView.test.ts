@@ -1016,8 +1016,6 @@ describe('SubmissionStatusView', () => {
       expect(container.querySelector<HTMLElement>('[data-testid="active-switch-builder-self"]')).toBeNull();
       expect(container.querySelector('.builder-mode-selector')?.textContent).toContain('Gamedev.pl');
       expect(container.querySelector('.studio-turn.is-working')).not.toBeNull();
-      // A message sent while the agent is mid-build goes to its inbox rather than
-      // waiting on a stop — the composer stays open, not disabled.
       expect(container.querySelector<HTMLTextAreaElement>('textarea')?.disabled).toBe(false);
       const stop = container.querySelector<HTMLButtonElement>('.status-composer-stop');
       expect(stop?.querySelector('svg')).not.toBeNull();
@@ -1162,8 +1160,6 @@ describe('SubmissionStatusView', () => {
       });
 
       expect(container.querySelector('.studio-turn.is-working [data-testid^="active-switch-builder"]')).toBeNull();
-      // A message sent while the agent is mid-build goes to its inbox rather than
-      // waiting on a stop — the composer stays open, not disabled.
       expect(container.querySelector<HTMLTextAreaElement>('textarea')?.disabled).toBe(false);
     } finally {
       await act(async () => {
@@ -2133,12 +2129,10 @@ describe('SubmissionStatusView', () => {
       expect(deliveredBadge?.textContent).toBe('Delivered to the agent');
       expect(deliveredBadge?.classList.contains('is-delivered')).toBe(true);
 
-      // A message can still be sent while the agent is mid-build — it queues to the
-      // inbox instead of waiting for the build to stop.
       const textarea = container.querySelector<HTMLTextAreaElement>('textarea');
       expect(textarea?.disabled).toBe(false);
       const sendButton = container.querySelector<HTMLButtonElement>('.status-composer-send');
-      expect(sendButton?.disabled).toBe(true); // empty composer
+      expect(sendButton?.disabled).toBe(true);
 
       const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
       await act(async () => {
