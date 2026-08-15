@@ -5,7 +5,6 @@ import {
   normalizeManagedState,
   registerManagedProvider,
   type ManagedAgentProvider,
-  type ManagedOutputRef,
   type ManagedProviderConfig,
   type ManagedSession,
   type ManagedSessionRequest,
@@ -45,18 +44,6 @@ const VaultSchema = z.object({
 
 const VaultCredentialSchema = z.object({
   id: z.string().min(1),
-});
-
-const FileListSchema = z.object({
-  data: z
-    .array(
-      z.object({
-        id: z.string().min(1),
-        filename: z.string().optional(),
-        size_bytes: z.number().nonnegative().optional(),
-      }),
-    )
-    .default([]),
 });
 
 function toSession(parsed: z.infer<typeof SessionSchema>): ManagedSession {
@@ -120,21 +107,6 @@ export function createAnthropicManagedProvider(config: ManagedProviderConfig): M
     return response.json();
   }
 
-  async function download(fileId: string): Promise<string> {
-    const response = await fetchImpl(`${baseUrl}/v1/files/${encodeURIComponent(fileId)}/content`, {
-      headers: {
-        'x-api-key': config.apiKey,
-        'anthropic-version': API_VERSION,
-        'anthropic-beta': BETA_HEADER,
-      },
-      signal: AbortSignal.timeout(timeoutMs),
-    });
-    if (!response.ok) {
-      throw new ManagedAgentError(`anthropic file ${fileId} download failed: ${response.status}`, response.status);
-    }
-    return response.text();
-  }
-
   async function createMcpCredentialVault(url: string, token: string, correlationId: string): Promise<string> {
     const vault = VaultSchema.safeParse(
       await call('/v1/vaults', {
@@ -168,7 +140,6 @@ export function createAnthropicManagedProvider(config: ManagedProviderConfig): M
   return {
     vendor: ANTHROPIC_VENDOR,
     model: config.model,
-    promptLane: 'mcp',
     supportsSeedFiles: false,
 
     async startSession(request: ManagedSessionRequest): Promise<ManagedSession> {
@@ -262,26 +233,6 @@ export function createAnthropicManagedProvider(config: ManagedProviderConfig): M
       const parsed = SessionSchema.safeParse(raw);
       if (!parsed.success) throw new ManagedAgentError('anthropic managed agents returned an unreadable session');
       return toSession(parsed.data);
-    },
-
-    async listOutputs(sessionId: string): Promise<ManagedOutputRef[]> {
-      const raw = await call(`/v1/files?scope_id=${encodeURIComponent(sessionId)}`);
-      if (raw === null) return [];
-      const parsed = FileListSchema.safeParse(raw);
-      if (!parsed.success) throw new ManagedAgentError('anthropic files API returned an unreadable listing');
-      return parsed.data.data
-        .filter((file) => Boolean(file.filename))
-        .map((file) => ({
-          path: file.filename!,
-          handle: file.id,
-          ...(file.size_bytes === undefined ? {} : { sizeBytes: file.size_bytes }),
-        }));
-    },
-
-    // Files are addressed by id, so the session is not needed here.
-    async readOutput(_sessionId: string, ref: ManagedOutputRef): Promise<string> {
-      if (!ref.handle) throw new ManagedAgentError(`anthropic output ${ref.path} has no file id`);
-      return download(ref.handle);
     },
 
     async sendMessage(sessionId: string, message: string): Promise<void> {

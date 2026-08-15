@@ -37,9 +37,9 @@ import {
   type GameSnapshotReader,
 } from './game-snapshot.js';
 import { startHealthCheck } from './game-health.js';
-import { createStagedPreviewPublisher, type StagedPreviewOptions } from './staged-preview.js';
+import { createStagedPreviewPublisher, overlayGameSources, type StagedPreviewOptions } from './staged-preview.js';
 import { createInternalAuthVerifierFromEnv, type InternalAuthVerifier } from './internal-auth.js';
-import type { AgentBackend, BuildHistoryEntry, BuildPromptLane, SeedDelivery, SeedFiles } from './agent-backend.js';
+import type { AgentBackend, BuildHistoryEntry, SeedDelivery, SeedFiles } from './agent-backend.js';
 import {
   createAgentBackendRegistryFromEnv,
   resolveBuilderBackend,
@@ -57,12 +57,10 @@ import {
   type BuilderKind,
 } from './builder.js';
 import { codeSurfaceEnabled, isLiveAgentRound } from './code-surface.js';
-import type { GameSeeder, SeedDraft } from './game-seed.js';
-import { ManagedOutputRejectedError } from './managed-agent.js';
-import { createManagedDeliveryLock } from './managed-backend.js';
-import { createSourceDeliveryService, SourceDeliveryAuthorityError } from './source-delivery.js';
+import type { GameSeeder, SeedDraft, SeedFile } from './game-seed.js';
+import { createSourceDeliveryService } from './source-delivery.js';
 import { createKitFileStore } from './kit-files.js';
-import { InvalidUploadError, type GamesStore } from './games-store.js';
+import type { GamesStore } from './games-store.js';
 import {
   canTransition,
   detectStall,
@@ -76,7 +74,6 @@ import {
   type JobTransition,
 } from './job-state.js';
 import { isMcpPresenceEventText } from './mcp-presence.js';
-import { logSeedStagingFailure } from './seed-metrics.js';
 import {
   builderLabelFromRecord,
   failedStageFromProgress,
@@ -723,42 +720,10 @@ export async function registerSubmissionRoutes(
         }
       : undefined;
     const configuredManagedDeps = options.managedBackendDeps;
-    const managedDeliver =
-      sourceDelivery && !configuredManagedDeps?.deliver
-        ? async (input: Parameters<NonNullable<ManagedBackendDeps['deliver']>>[0]) => {
-            try {
-              const outcome = await sourceDelivery.deliver({
-                issueNumber: input.issueNumber,
-                slug: input.slug,
-                files: input.files,
-                backend: input.backend,
-                mode: input.mode,
-                authority: {
-                  backend: input.backend,
-                  sessionRef: input.sessionRef,
-                  roundGeneration: input.roundGeneration,
-                },
-              });
-              if (!outcome.accepted) {
-                throw new ManagedOutputRejectedError(`source delivery rejected: ${outcome.rejected}`);
-              }
-              return { version: outcome.version };
-            } catch (error) {
-              if (error instanceof SourceDeliveryAuthorityError || error instanceof InvalidUploadError) {
-                throw new ManagedOutputRejectedError(error.message);
-              }
-              throw error;
-            }
-          }
-        : undefined;
-    // Durable across Cloud Run instances; process-local harvested is not enough.
-    const managedLock = configuredManagedDeps?.lock ?? (store ? createManagedDeliveryLock(store) : undefined);
     const managedDeps =
-      managedDeliver || configuredManagedDeps || managedLock
+      configuredManagedDeps || store
         ? {
             ...configuredManagedDeps,
-            ...(managedDeliver ? { deliver: managedDeliver } : {}),
-            ...(managedLock ? { lock: managedLock } : {}),
             ...(store
               ? {
                   readCredentialRef: async (issueNumber: number, sessionRef: string) => {
@@ -811,12 +776,8 @@ export async function registerSubmissionRoutes(
   }
 
   // A self round has no workspace, whatever a backend forgot to declare.
-  function seedDeliveryFor(
-    backend: AgentBackend | undefined,
-    builder: BuilderKind,
-    promptLane?: BuildPromptLane,
-  ): SeedDelivery {
-    return backend?.seedDelivery?.(promptLane) ?? (builder === 'self' ? 'channel' : 'workspace');
+  function seedDeliveryFor(backend: AgentBackend | undefined, builder: BuilderKind): SeedDelivery {
+    return backend?.seedDelivery?.() ?? (builder === 'self' ? 'channel' : 'workspace');
   }
 
   function backendByStoredName(name: string | undefined): AgentBackend | undefined {
@@ -831,22 +792,6 @@ export async function registerSubmissionRoutes(
   function builderOf(record: SubmissionRecord | null | undefined): BuilderKind {
     return record?.builder ?? record?.defaultBuilder ?? 'platform';
   }
-  /**
-   * When to stop generating seeds nobody can place.
-   *
-   * A backend that cannot stage a draft — a mis-scoped dispatch credential is the way
-   * this happens, and did — fails *after* the draft has been generated, because that is
-   * the first moment there is anything to write. Without this, every submission pays a
-   * couple of minutes and tens of thousands of tokens for a draft that is discarded a
-   * second later, and the only symptom is a warning line nobody is reading.
-   *
-   * So a staging failure mutes seeding for a while rather than forever: long enough that
-   * a broken credential costs one seed instead of one per submission, short enough that
-   * a transient failure heals without a deploy.
-   */
-  const SEED_STAGING_COOLDOWN_MS = 10 * 60_000;
-  let seedStagingMutedUntil = 0;
-
   // Shared deps for notification emission (in-app + best-effort email). The mailer
   // degrades to a no-op without RESEND_API_KEY, and email is skipped entirely
   // unless an unsubscribe secret is available — so this is safe when unconfigured.
@@ -1006,14 +951,6 @@ export async function registerSubmissionRoutes(
     log: { error: (context: object, message: string) => void };
   }): Promise<SeedDraft | undefined> {
     if (!gameSeeder || !store) return undefined;
-    // Only a workspace hand-off stages anything, so only it risks staging failure.
-    if (input.delivery === 'workspace' && now() < seedStagingMutedUntil) {
-      input.log.error(
-        { issueNumber: input.issueNumber },
-        'skipping the seed: a recent draft could not be staged, so generating another would be wasted',
-      );
-      return undefined;
-    }
     try {
       const record = await store.getSubmission(input.issueNumber);
       if (!record) return undefined;
@@ -1102,24 +1039,27 @@ export async function registerSubmissionRoutes(
   const SEED_PREVIEW_MAX_BYTES = 320 * 1024;
 
   /**
-   * Assembles the seed branch into a playable preview on the creator's status page.
+   * Assembles the draft's own files into a playable preview on the creator's status page.
    *
-   * Reuses the entire published-game serve path — `getGameSources` bundles the game
-   * against the engine on that ref, `assembleGameHtml` applies the CSP, the AI Act
-   * provenance marking and the credential scan — so the round-0 preview passes exactly
-   * the hygiene a published game does, not a weaker preview-only variant. The result
-   * lands in the same `BuildPreview` slot the agent's own pushes use, so the status
-   * page needs no new rendering: the agent's first real preview simply supersedes this
-   * one on the same rail.
+   * Reuses the entire published-game serve path — `getGameSources` bundles the overlay
+   * against the engine on the published ref, `assembleGameHtml` applies the CSP, the AI
+   * Act provenance marking and the credential scan — so the round-0 preview passes
+   * exactly the hygiene a published game does, not a weaker preview-only variant. Takes
+   * the draft's files directly rather than a git ref: nothing about a round-0 draft is
+   * ever staged as a branch, so this is the only copy of it there is. The result lands
+   * in the same `BuildPreview` slot the agent's own pushes use, so the status page needs
+   * no new rendering: the agent's first real preview simply supersedes this one on the
+   * same rail.
    */
   async function publishSeedPreview(input: {
     issueNumber: number;
     slug: string;
-    seedRef: string;
+    files: SeedFile[];
     locale: string;
   }): Promise<void> {
     if (!store || !githubClient) return;
-    const sources = await githubClient.getGameSources(input.seedRef, input.slug);
+    const overlay = overlayGameSources({ seed: input.files });
+    const sources = await githubClient.getGameSources(publishedRef, input.slug, overlay);
     if (!sources) return;
     const html = assembleGameHtml(
       {
@@ -1210,7 +1150,6 @@ export async function registerSubmissionRoutes(
     feedback?: string;
     /** Who builds this round. Defaults to the game's last builder, then `platform`. */
     builder?: BuilderKind;
-    promptLane?: BuildPromptLane;
   }): Promise<boolean> {
     // Without the signing secret there is no per-job channel credential to give the
     // agent, and an agent that cannot report or deliver is worse than one never started.
@@ -1227,7 +1166,7 @@ export async function registerSubmissionRoutes(
       // A seed is written into `games/<slug>/`, so a job without a slug cannot have one.
       // Every new submission has one by now; the guard is for the paths that do not.
       // Ask before paying, and ask how the seed would arrive.
-      const seedDelivery = seedDeliveryFor(selected, builder, input.promptLane);
+      const seedDelivery = seedDeliveryFor(selected, builder);
       // Only these rounds read the job's copy, so only they need one stored.
       const readsSeedFromJob = seedDelivery === 'channel';
       const storedSeed = readsSeedFromJob ? existing?.seed : undefined;
@@ -1243,7 +1182,7 @@ export async function registerSubmissionRoutes(
         await store.setSeedStatus(input.issueNumber, 'unavailable');
       }
       const draft =
-        storedSeed || input.feedback || !input.slug || seedDelivery === 'none'
+        storedSeed || input.feedback || !input.slug
           ? undefined
           : await seedBuild({ ...input, slug: input.slug, delivery: seedDelivery });
       const seed: SeedFiles | undefined = storedSeed
@@ -1297,26 +1236,11 @@ export async function registerSubmissionRoutes(
         ...(input.slug ? { slug: input.slug } : {}),
         ...(input.feedback ? { feedback: input.feedback } : {}),
         ...(history.length > 0 ? { history } : {}),
-        ...(input.promptLane ? { promptLane: input.promptLane } : {}),
         ...(seed ? { seed } : {}),
       });
-      // seedWorkspace is normally absent for self builds and the mcp lane.
-      if (seed && !result.seedWorkspace && builder === 'platform' && result.promptLane !== 'mcp') {
-        seedStagingMutedUntil = now() + SEED_STAGING_COOLDOWN_MS;
-        // Through seed-metrics rather than inline, because this line is what alert A23
-        // counts: the message is a contract with infra/setup-monitoring.sh, and a prose
-        // error message is exactly the kind of thing that gets reworded.
-        logSeedStagingFailure(input.log, {
-          issueNumber: input.issueNumber,
-          compiles: draft?.compiles ?? false,
-          ms: draft?.elapsedMs ?? 0,
-          mutedForMs: SEED_STAGING_COOLDOWN_MS,
-        });
-      }
       // Both halves of the seed's story are known here — what generation produced, and
-      // whether dispatch could place it — so the record is written once, from the one
-      // place that has both. Without this the only trace a seed ever left was a log line,
-      // which is exactly why the first live failure could only be diagnosed by hand.
+      // whether it was placed as a workspace hand-off — so the record is written once,
+      // from the one place that has both.
       if (draft) {
         try {
           await store.recordSeedOutcome(input.issueNumber, {
@@ -1325,7 +1249,7 @@ export async function registerSubmissionRoutes(
             ms: draft.elapsedMs,
             compiles: draft.compiles,
             repaired: draft.repaired,
-            staged: Boolean(result.seedWorkspace),
+            staged: seedDelivery === 'workspace',
           });
         } catch (error) {
           input.log.error({ err: error, issueNumber: input.issueNumber }, 'could not record the seed outcome');
@@ -1335,20 +1259,20 @@ export async function registerSubmissionRoutes(
         backend: selected.name,
         ref: result.ref,
         workspace: result.workspace,
-        seedWorkspace: result.seedWorkspace,
         credentialRef: result.credentialRef,
       });
       // The round-0 preview: the creator sees a playable rough draft minutes after
       // submitting instead of waiting out the agent's first push. Off the response path
       // (nobody's submit should wait on an esbuild pass and a handful of repo reads),
-      // gated on the draft actually bundling, and reading from the seed branch so what
-      // is shown is exactly what the agent starts from. Every failure inside is its own
-      // problem: the build is already dispatched and owes this nothing.
-      if (draft?.compiles && result.seedWorkspace) {
+      // gated on the draft actually bundling, and assembled from the draft's own files
+      // over the published engine so what is shown is exactly what the agent starts
+      // from. Every failure inside is its own problem: the build is already dispatched
+      // and owes this nothing.
+      if (draft?.compiles) {
         void publishSeedPreview({
           issueNumber: input.issueNumber,
           slug: draft.slug,
-          seedRef: result.seedWorkspace,
+          files: draft.files,
           locale: input.locale,
         }).catch((error: unknown) => {
           input.log.error({ err: error, issueNumber: input.issueNumber }, 'seed preview failed');
@@ -1411,7 +1335,6 @@ export async function registerSubmissionRoutes(
     transition?: { by: JobTransition['by']; reason: string };
     /** Builder for the new round. Ignored on undelivered nudges (same round). */
     builder?: BuilderKind;
-    promptLane?: BuildPromptLane;
     /** Handoffs keep the per-job delivery budget across builder changes. */
     preserveRoundBudget?: boolean;
   }): Promise<ResumeOutcome> {
@@ -1468,7 +1391,6 @@ export async function registerSubmissionRoutes(
         spec: input.feedback,
         feedback: input.feedback,
         locale: input.locale,
-        ...(input.promptLane ? { promptLane: input.promptLane } : {}),
         channelToken: mintAgentToken(input.issueNumber, submissionTokenSecret, {
           roundGeneration,
           now: now(),
@@ -1479,9 +1401,7 @@ export async function registerSubmissionRoutes(
         }),
         apiBaseUrl: notifyAppBaseUrl,
         ...(history.length > 0 ? { history } : {}),
-        ...(input.undelivered
-          ? { undelivered: true, ...(previous?.workspace ? { previousWorkspace: previous.workspace } : {}) }
-          : {}),
+        ...(input.undelivered ? { undelivered: true } : {}),
         ...(switchSeed ? { seed: switchSeed } : preservedSeed ? { seed: preservedSeed } : {}),
         ...(reusedSelfSeed ? { seed: reusedSelfSeed } : {}),
       };
@@ -4936,12 +4856,11 @@ export async function registerSubmissionRoutes(
       // observable. Idempotent per job and kind, so re-running it does not re-notify.
       let alerted = 0;
       const alerts = detectOperatorAlerts(active, now(), pendingFeedback);
-      // Seeding degradation is deliberately NOT emitted here. It is watched by Cloud
-      // Monitoring instead (alert A23, over the log line seed-metrics.ts emits), because
-      // an alert about the platform's own plumbing that travels through this sweep, the
-      // store, the notification table and the mail provider shares a fate with the thing
-      // it is watching. It still reaches the console badge through /api/admin/summary,
-      // which is where an operator would act on it.
+      // Seeding degradation is deliberately NOT emitted here, so an alert about the
+      // platform's own plumbing never shares a fate with the sweep, the store, the
+      // notification table and the mail provider it would otherwise travel through. It
+      // still reaches the console badge through /api/admin/summary (detectSeedingDegraded
+      // in operator-alerts.ts), which is where an operator would act on it.
       if (adminUids && adminUids.size > 0) {
         for (const alert of alerts) {
           try {

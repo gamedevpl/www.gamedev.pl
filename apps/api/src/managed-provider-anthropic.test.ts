@@ -211,49 +211,6 @@ describe('anthropic managed provider', () => {
     expect(await provider.getSession('gone')).toBeNull();
   });
 
-  it('lists named output files with their sizes, and downloads none of them yet', async () => {
-    const fetchImpl = vi.fn(async () =>
-      jsonResponse({
-        data: [{ id: 'file_1', filename: 'games/comet-courier/game.ts', size_bytes: 10 }, { id: 'file_2' }],
-      }),
-    );
-    const provider = createAnthropicManagedProvider({
-      apiKey: 'k',
-      model: 'm',
-      fetchImpl: fetchImpl as unknown as typeof fetch,
-    });
-
-    const refs = await provider.listOutputs('sess_1');
-
-    expect(refs).toEqual([{ path: 'games/comet-courier/game.ts', handle: 'file_1', sizeBytes: 10 }]);
-    expect(fetchImpl.mock.calls[0][0]).toContain('scope_id=sess_1');
-    // One call: the listing. The caps decide what is worth fetching.
-    expect(fetchImpl).toHaveBeenCalledTimes(1);
-  });
-
-  it('reads one output by its handle, not by its path', async () => {
-    const fetchImpl = vi.fn(async () => new Response('export {};', { status: 200 }));
-    const provider = createAnthropicManagedProvider({
-      apiKey: 'k',
-      model: 'm',
-      fetchImpl: fetchImpl as unknown as typeof fetch,
-    });
-
-    const content = await provider.readOutput('sess_1', { path: 'games/comet-courier/game.ts', handle: 'file_1' });
-
-    expect(content).toBe('export {};');
-    expect(fetchImpl.mock.calls[0][0]).toContain('/v1/files/file_1/content');
-  });
-
-  it('refuses to read an output the listing gave no handle for', async () => {
-    const provider = createAnthropicManagedProvider({
-      apiKey: 'k',
-      model: 'm',
-      fetchImpl: vi.fn() as unknown as typeof fetch,
-    });
-    await expect(provider.readOutput('sess_1', { path: 'game.ts' })).rejects.toThrow(ManagedAgentError);
-  });
-
   it('raises a typed error carrying the status when the vendor refuses', async () => {
     const fetchImpl = vi.fn(async () => new Response('over quota', { status: 429 }));
     const provider = createAnthropicManagedProvider({

@@ -18,6 +18,8 @@ const BRIEF: BuildBrief = {
   apiBaseUrl: 'https://www.gamedev.pl',
 };
 
+const MCP_ENDPOINTS = { mcpEndpoints: [{ url: 'https://www.gamedev.pl/api/mcp', name: 'gamedevpl' }] };
+
 const apiKey = () => randomBytes(32).toString('hex');
 
 function task(overrides: Partial<AgentTask> = {}): AgentTask {
@@ -27,7 +29,6 @@ function task(overrides: Partial<AgentTask> = {}): AgentTask {
 function githubStub(overrides: Partial<CopilotGitHub> = {}): CopilotGitHub {
   return {
     deleteBranch: vi.fn(async () => undefined),
-    createBranchWithFiles: vi.fn(),
     listWorkflowRuns: vi.fn(async () => []),
     cancelWorkflowRun: vi.fn(async () => undefined),
     ...overrides,
@@ -36,14 +37,6 @@ function githubStub(overrides: Partial<CopilotGitHub> = {}): CopilotGitHub {
 
 function run(overrides: Partial<WorkflowRun> = {}): WorkflowRun {
   return { id: 1, path: COPILOT_AGENT_WORKFLOW_PATH, status: 'in_progress', ...overrides };
-}
-
-function emptyTasks() {
-  const getTask = vi.fn(async () => null);
-  return {
-    client: { startTask: vi.fn(), getTask, listTasks: vi.fn(async () => []) } as unknown as AgentTasksClient,
-    getTask,
-  };
 }
 
 function tasks(result: AgentTask = task()) {
@@ -57,10 +50,16 @@ function tasks(result: AgentTask = task()) {
 }
 
 describe('Copilot managed provider', () => {
-  it('declares the harness lane and preserves the legacy task payload', async () => {
+  it('requires the scratch repo to construct at all', () => {
+    expect(() => createCopilotManagedProvider({ apiKey: apiKey(), model: 'gpt-5.4' })).toThrow(
+      /MANAGED_AGENT_COPILOT_MCP_REPO/,
+    );
+  });
+
+  it('dispatches into the configured scratch repo with the mcp custom agent', async () => {
     const stub = tasks(task({ branch: { baseRef: 'main', headRef: 'copilot/courier' } }));
     const provider = createCopilotManagedProvider(
-      { apiKey: apiKey(), model: 'gpt-5.4', repo: 'gamedevpl/www.gamedev.pl-games' },
+      { apiKey: apiKey(), model: 'gpt-5.4', mcpRepo: 'gamedevpl/scratchpad' },
       { tasks: stub.client, github: githubStub() },
     );
 
@@ -68,115 +67,63 @@ describe('Copilot managed provider', () => {
       correlationId: '42',
       prompt: buildPrompt(BRIEF),
       model: 'gpt-5.4',
-      outputPath: 'outputs',
+      tools: MCP_ENDPOINTS,
     });
 
-    expect(provider.promptLane).toBe('harness');
     expect(stub.startTask).toHaveBeenCalledWith({
       prompt: buildPrompt(BRIEF),
       baseRef: 'main',
       model: 'gpt-5.4',
       createPullRequest: false,
-      customAgent: 'game-builder',
+      customAgent: 'game-builder-mcp',
     });
   });
 
-  // The old fallback was silent: MCP rounds landed in the games repo.
-  it('refuses a per-round MCP lane when no scratch repo is configured', async () => {
+  it('refuses a round with no MCP endpoint', async () => {
     const stub = tasks();
-    const createBranchWithFiles = vi.fn(async () => undefined);
     const provider = createCopilotManagedProvider(
-      { apiKey: apiKey(), model: 'gpt-5.4', repo: 'gamedevpl/www.gamedev.pl-games' },
-      { tasks: stub.client, github: githubStub({ createBranchWithFiles }) },
+      { apiKey: apiKey(), model: 'gpt-5.4', mcpRepo: 'gamedevpl/scratchpad' },
+      { tasks: stub.client, github: githubStub() },
     );
 
     await expect(
-      provider.startSession({
-        correlationId: '42',
-        prompt: buildPrompt(BRIEF, { kind: 'channel', fast: true }),
-        model: 'gpt-5.4',
-        outputPath: 'outputs',
-        promptLane: 'mcp',
-        tools: { mcpEndpoints: [{ url: 'https://www.gamedev.pl/api/mcp', name: 'gamedevpl' }] },
-        workspaceFiles: [{ path: 'games/comet-courier/game.ts', content: 'x' }],
-      }),
-    ).rejects.toThrow(/MANAGED_AGENT_COPILOT_MCP_REPO/);
-
+      provider.startSession({ correlationId: '42', prompt: buildPrompt(BRIEF), model: 'gpt-5.4' }),
+    ).rejects.toThrow(/requires an MCP endpoint/);
     expect(stub.startTask).not.toHaveBeenCalled();
-    expect(createBranchWithFiles).not.toHaveBeenCalled();
   });
 
-  it('declares seed files unsupported on the mcp lane, supported off it', () => {
-    const provider = createCopilotManagedProvider(
-      { apiKey: apiKey(), model: 'gpt-5.4', repo: 'gamedevpl/www.gamedev.pl-games' },
-      { tasks: tasks().client, github: { deleteBranch: vi.fn(), createBranchWithFiles: vi.fn() } },
-    );
-
-    expect(typeof provider.supportsSeedFiles).toBe('function');
-    const supportsSeedFiles = provider.supportsSeedFiles as (lane: 'mcp' | 'harness' | 'outputs') => boolean;
-    expect(supportsSeedFiles('mcp')).toBe(false);
-    expect(supportsSeedFiles('harness')).toBe(true);
-    expect(supportsSeedFiles('outputs')).toBe(true);
-  });
-
-  it('stages a seed on the same disposable branch as legacy Copilot', async () => {
+  it('honors a configured base ref and custom agent', async () => {
     const stub = tasks();
-    const github = { deleteBranch: vi.fn(async () => undefined), createBranchWithFiles: vi.fn(async () => undefined) };
     const provider = createCopilotManagedProvider(
-      { apiKey: apiKey(), model: 'gpt-5.4', repo: 'gamedevpl/www.gamedev.pl-games' },
-      { tasks: stub.client, github },
+      {
+        apiKey: apiKey(),
+        model: 'gpt-5.4',
+        mcpRepo: 'gamedevpl/scratchpad',
+        mcpBaseRef: 'develop',
+        mcpCustomAgent: 'custom-agent',
+      },
+      { tasks: stub.client, github: githubStub() },
     );
-
-    const session = await provider.startSession({
-      correlationId: '42',
-      prompt: buildPrompt({
-        ...BRIEF,
-        seed: { slug: 'comet-courier', files: [{ path: 'game.ts', content: 'x' }], references: [] },
-      }),
-      model: 'gpt-5.4',
-      outputPath: 'outputs',
-      workspaceFiles: [{ path: 'games/comet-courier/game.ts', content: 'x' }],
-    });
-
-    expect(github.deleteBranch).toHaveBeenCalledWith('seed/job-42');
-    expect(github.createBranchWithFiles).toHaveBeenCalledWith({
-      branch: 'seed/job-42',
-      baseRef: 'main',
-      message: 'Seed round 0 for comet-courier (job 42)',
-      files: [{ path: 'games/comet-courier/game.ts', content: 'x' }],
-    });
-    expect(stub.startTask.mock.calls[0]?.[0].baseRef).toBe('seed/job-42');
-    expect(session.workspace).toBeUndefined();
-    expect(session.seedWorkspace).toBe('seed/job-42');
-  });
-
-  it('fails open to an unseeded prompt when the seed branch cannot be written', async () => {
-    const stub = tasks();
-    const github = {
-      deleteBranch: vi.fn(async () => undefined),
-      createBranchWithFiles: vi.fn(async () => {
-        throw new Error('branch unavailable');
-      }),
-    };
-    const provider = createCopilotManagedProvider(
-      { apiKey: apiKey(), model: 'gpt-5.4', repo: 'gamedevpl/www.gamedev.pl-games' },
-      { tasks: stub.client, github },
-    );
-    const prompt = buildPrompt({
-      ...BRIEF,
-      seed: { slug: 'comet-courier', files: [{ path: 'game.ts', content: 'x' }], references: [] },
-    });
 
     await provider.startSession({
       correlationId: '42',
-      prompt,
+      prompt: buildPrompt(BRIEF),
       model: 'gpt-5.4',
-      outputPath: 'outputs',
-      workspaceFiles: [{ path: 'games/comet-courier/game.ts', content: 'x' }],
+      tools: MCP_ENDPOINTS,
     });
 
-    expect(stub.startTask.mock.calls[0]?.[0].baseRef).toBe('main');
-    expect(stub.startTask.mock.calls[0]?.[0].prompt).not.toContain('already contains a generated first draft');
+    expect(stub.startTask).toHaveBeenCalledWith(
+      expect.objectContaining({ baseRef: 'develop', customAgent: 'custom-agent' }),
+    );
+  });
+
+  it('never supports seed files — this lane has no shell to place them with', () => {
+    const provider = createCopilotManagedProvider(
+      { apiKey: apiKey(), model: 'gpt-5.4', mcpRepo: 'gamedevpl/scratchpad' },
+      { tasks: tasks().client, github: githubStub() },
+    );
+
+    expect(provider.supportsSeedFiles).toBe(false);
   });
 
   it('sums every Copilot session into credits without inventing tokens', async () => {
@@ -190,7 +137,7 @@ describe('Copilot managed provider', () => {
       }),
     );
     const provider = createCopilotManagedProvider(
-      { apiKey: apiKey(), model: 'gpt-5.4', repo: 'gamedevpl/www.gamedev.pl-games' },
+      { apiKey: apiKey(), model: 'gpt-5.4', mcpRepo: 'gamedevpl/scratchpad' },
       { tasks: stub.client, github: githubStub() },
     );
 
@@ -206,7 +153,7 @@ describe('Copilot managed provider', () => {
   it('maps the task branch into the managed workspace field', async () => {
     const stub = tasks(task({ state: 'in_progress', branch: { headRef: 'copilot/tv-tycoon' } }));
     const provider = createCopilotManagedProvider(
-      { apiKey: apiKey(), model: 'gpt-5.4', repo: 'gamedevpl/www.gamedev.pl-games' },
+      { apiKey: apiKey(), model: 'gpt-5.4', mcpRepo: 'gamedevpl/scratchpad' },
       { tasks: stub.client, github: githubStub() },
     );
 
@@ -216,16 +163,16 @@ describe('Copilot managed provider', () => {
     });
   });
 
-  it('does not expose outputs or a message channel', async () => {
+  it('answers null for a session the vendor has forgotten, and has no message channel', async () => {
     const stub = tasks();
+    stub.getTask.mockResolvedValue(null as unknown as AgentTask);
     const provider = createCopilotManagedProvider(
-      { apiKey: apiKey(), model: 'gpt-5.4', repo: 'gamedevpl/www.gamedev.pl-games' },
+      { apiKey: apiKey(), model: 'gpt-5.4', mcpRepo: 'gamedevpl/scratchpad' },
       { tasks: stub.client, github: githubStub() },
     );
 
-    expect(await provider.listOutputs('task-1')).toEqual([]);
+    expect(await provider.getSession('task-1')).toBeNull();
     expect(provider.sendMessage).toBeUndefined();
-    await expect(provider.readOutput('task-1', { path: 'game.ts' })).rejects.toThrow(/does not expose session output/);
     // No branch yet, so nothing to stop.
     expect(await provider.cancelSession('task-1')).toEqual({ enforced: false });
     await expect(provider.deleteSession?.('task-1')).resolves.toBeUndefined();
@@ -243,7 +190,7 @@ describe('Copilot managed provider', () => {
       run({ id: 13, status: 'in_progress' }),
     ]);
     const provider = createCopilotManagedProvider(
-      { apiKey: apiKey(), model: 'gpt-5.4', repo: 'gamedevpl/www.gamedev.pl-games' },
+      { apiKey: apiKey(), model: 'gpt-5.4', mcpRepo: 'gamedevpl/scratchpad' },
       { tasks: stub.client, github: githubStub({ listWorkflowRuns, cancelWorkflowRun }) },
     );
 
@@ -253,74 +200,10 @@ describe('Copilot managed provider', () => {
     expect(cancelWorkflowRun.mock.calls.map(([id]) => id)).toEqual([12, 13]);
   });
 
-  // Agent Tasks are per repo: the games-repo client cannot see this.
-  it('cancels an MCP-lane session on the scratch repo, not the games repo', async () => {
-    const harness = emptyTasks();
-    const harnessGithub = githubStub();
-    const mcpStub = tasks(task({ id: 'mcp-task-1', state: 'in_progress', branch: { headRef: 'copilot/mcp-round' } }));
-    const listWorkflowRuns = vi.fn(async () => [run({ id: 21 })]);
-    const cancelWorkflowRun = vi.fn(async () => undefined);
-    const provider = createCopilotManagedProvider(
-      {
-        apiKey: apiKey(),
-        model: 'gpt-5.4',
-        repo: 'gamedevpl/www.gamedev.pl-games',
-        mcpRepo: 'gamedevpl/scratchpad',
-      },
-      {
-        tasks: harness.client,
-        github: harnessGithub,
-        mcpTasks: mcpStub.client,
-        mcpGithub: githubStub({ listWorkflowRuns, cancelWorkflowRun }),
-      },
-    );
-
-    await provider.startSession({
-      correlationId: '42',
-      prompt: buildPrompt(BRIEF, { kind: 'channel', fast: true }),
-      model: 'gpt-5.4',
-      outputPath: 'outputs',
-      promptLane: 'mcp',
-      tools: { mcpEndpoints: [{ url: 'https://www.gamedev.pl/api/mcp', name: 'gamedevpl' }] },
-    });
-
-    await expect(provider.cancelSession('mcp-task-1')).resolves.toEqual({ enforced: true });
-
-    expect(listWorkflowRuns).toHaveBeenCalledWith({ branch: 'copilot/mcp-round' });
-    expect(cancelWorkflowRun).toHaveBeenCalledWith(21);
-    expect(harnessGithub.listWorkflowRuns).not.toHaveBeenCalled();
-  });
-
-  // A restart loses the session map; cancel must still find it.
-  it('cancels an untracked MCP session after a provider restart', async () => {
-    const harness = emptyTasks();
-    const mcpStub = tasks(task({ id: 'mcp-task-1', state: 'in_progress', branch: { headRef: 'copilot/mcp-round' } }));
-    const cancelWorkflowRun = vi.fn(async () => undefined);
-    const provider = createCopilotManagedProvider(
-      {
-        apiKey: apiKey(),
-        model: 'gpt-5.4',
-        repo: 'gamedevpl/www.gamedev.pl-games',
-        mcpRepo: 'gamedevpl/scratchpad',
-      },
-      {
-        tasks: harness.client,
-        github: githubStub(),
-        mcpTasks: mcpStub.client,
-        mcpGithub: githubStub({ listWorkflowRuns: vi.fn(async () => [run({ id: 21 })]), cancelWorkflowRun }),
-      },
-    );
-
-    await expect(provider.cancelSession('mcp-task-1')).resolves.toEqual({ enforced: true });
-
-    expect(harness.getTask).toHaveBeenCalledWith('mcp-task-1');
-    expect(cancelWorkflowRun).toHaveBeenCalledWith(21);
-  });
-
   it('reports an unenforced cancel rather than throwing when GitHub refuses', async () => {
     const stub = tasks(task({ state: 'in_progress', branch: { headRef: 'copilot/tv-tycoon' } }));
     const provider = createCopilotManagedProvider(
-      { apiKey: apiKey(), model: 'gpt-5.4', repo: 'gamedevpl/www.gamedev.pl-games' },
+      { apiKey: apiKey(), model: 'gpt-5.4', mcpRepo: 'gamedevpl/scratchpad' },
       {
         tasks: stub.client,
         github: githubStub({
@@ -343,7 +226,7 @@ describe('Copilot managed provider', () => {
       if (runId === 13) throw new Error('github request failed: 403');
     });
     const provider = createCopilotManagedProvider(
-      { apiKey: apiKey(), model: 'gpt-5.4', repo: 'gamedevpl/www.gamedev.pl-games' },
+      { apiKey: apiKey(), model: 'gpt-5.4', mcpRepo: 'gamedevpl/scratchpad' },
       {
         tasks: stub.client,
         github: githubStub({
@@ -362,127 +245,12 @@ describe('Copilot managed provider', () => {
     const stub = tasks();
     const deleteBranch = vi.fn(async () => undefined);
     const provider = createCopilotManagedProvider(
-      { apiKey: apiKey(), model: 'gpt-5.4', repo: 'gamedevpl/www.gamedev.pl-games' },
+      { apiKey: apiKey(), model: 'gpt-5.4', mcpRepo: 'gamedevpl/scratchpad' },
       { tasks: stub.client, github: githubStub({ deleteBranch }) },
     );
 
     await provider.deleteWorkspace?.('copilot/spent');
 
     expect(deleteBranch).toHaveBeenCalledWith('copilot/spent');
-  });
-
-  it('routes an MCP-lane round to the configured mcpRepo, not the games repo', async () => {
-    const stub = tasks();
-    const mcpStub = tasks(task({ id: 'mcp-task-1' }));
-    const provider = createCopilotManagedProvider(
-      {
-        apiKey: apiKey(),
-        model: 'gpt-5.4',
-        repo: 'gamedevpl/www.gamedev.pl-games',
-        mcpRepo: 'gamedevpl/scratchpad',
-        mcpCustomAgent: 'game-builder-mcp',
-      },
-      {
-        tasks: stub.client,
-        github: { deleteBranch: vi.fn(), createBranchWithFiles: vi.fn() },
-        mcpTasks: mcpStub.client,
-      },
-    );
-
-    const session = await provider.startSession({
-      correlationId: '42',
-      prompt: buildPrompt(BRIEF, { kind: 'channel', fast: true }),
-      model: 'gpt-5.4',
-      outputPath: 'outputs',
-      promptLane: 'mcp',
-      tools: { mcpEndpoints: [{ url: 'https://www.gamedev.pl/api/mcp', name: 'gamedevpl' }] },
-    });
-
-    expect(stub.startTask).not.toHaveBeenCalled();
-    expect(mcpStub.startTask).toHaveBeenCalledWith({
-      prompt: buildPrompt(BRIEF, { kind: 'channel', fast: true }),
-      baseRef: 'main',
-      model: 'gpt-5.4',
-      createPullRequest: false,
-      customAgent: 'game-builder-mcp',
-    });
-    expect(session.id).toBe('mcp-task-1');
-
-    // Later polls for that session must hit mcpTasks, not the games repo.
-    await provider.getSession('mcp-task-1');
-    expect(mcpStub.getTask).toHaveBeenCalledWith('mcp-task-1');
-    expect(stub.getTask).not.toHaveBeenCalled();
-  });
-
-  it('keeps the harness lane on the games repo when mcpRepo is configured but unused', async () => {
-    const stub = tasks();
-    const mcpStub = tasks();
-    const provider = createCopilotManagedProvider(
-      {
-        apiKey: apiKey(),
-        model: 'gpt-5.4',
-        repo: 'gamedevpl/www.gamedev.pl-games',
-        mcpRepo: 'gamedevpl/scratchpad',
-      },
-      {
-        tasks: stub.client,
-        github: { deleteBranch: vi.fn(), createBranchWithFiles: vi.fn() },
-        mcpTasks: mcpStub.client,
-      },
-    );
-
-    await provider.startSession({
-      correlationId: '42',
-      prompt: buildPrompt(BRIEF),
-      model: 'gpt-5.4',
-      outputPath: 'outputs',
-    });
-
-    expect(stub.startTask).toHaveBeenCalled();
-    expect(mcpStub.startTask).not.toHaveBeenCalled();
-  });
-
-  it('falls back to mcpTasks when polling an untracked session id after a provider restart', async () => {
-    const stub = tasks(task({ id: 'harness-task-1' }));
-    stub.getTask.mockImplementation(async (id: string) => (id === 'harness-task-1' ? task({ id }) : null));
-    const mcpStub = tasks(
-      task({
-        id: 'mcp-task-restart',
-        branch: { headRef: 'copilot/mcp-round-branch' },
-      }),
-    );
-    mcpStub.getTask.mockImplementation(async (id: string) =>
-      id === 'mcp-task-restart' ? task({ id, branch: { headRef: 'copilot/mcp-round-branch' } }) : null,
-    );
-
-    // Fresh provider instance with empty in-memory mcpSessionIds and mcpWorkspaces
-    const provider = createCopilotManagedProvider(
-      {
-        apiKey: apiKey(),
-        model: 'gpt-5.4',
-        repo: 'gamedevpl/www.gamedev.pl-games',
-        mcpRepo: 'gamedevpl/scratchpad',
-      },
-      {
-        tasks: stub.client,
-        github: { deleteBranch: vi.fn(), createBranchWithFiles: vi.fn() },
-        mcpTasks: mcpStub.client,
-      },
-    );
-
-    const session = await provider.getSession('mcp-task-restart');
-    expect(stub.getTask).toHaveBeenCalledWith('mcp-task-restart');
-    expect(mcpStub.getTask).toHaveBeenCalledWith('mcp-task-restart');
-    expect(session).toMatchObject({
-      id: 'mcp-task-restart',
-      workspace: 'copilot/mcp-round-branch',
-    });
-
-    // Cached routing now hits mcpTasks directly without games repo fallback.
-    stub.getTask.mockClear();
-    mcpStub.getTask.mockClear();
-    await provider.getSession('mcp-task-restart');
-    expect(mcpStub.getTask).toHaveBeenCalledWith('mcp-task-restart');
-    expect(stub.getTask).not.toHaveBeenCalled();
   });
 });

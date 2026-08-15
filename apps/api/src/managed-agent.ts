@@ -4,24 +4,9 @@ import type { AgentTaskState } from './agent-state.js';
 // Coarse reasoning budget; vendors name it differently.
 export type ManagedAgentEffort = 'low' | 'medium' | 'high';
 
-export type ManagedPromptLane = 'mcp' | 'harness' | 'outputs';
-
 export interface ManagedWorkspaceFile {
   path: string;
   content: string;
-}
-
-export interface ManagedOutputFile {
-  path: string;
-  content: string;
-}
-
-// Listed before anything is downloaded, so caps can refuse first.
-export interface ManagedOutputRef {
-  path: string;
-  sizeBytes?: number;
-  // Opaque vendor handle; nothing outside the provider reads it.
-  handle?: string;
 }
 
 export interface ManagedTokenUsageBase {
@@ -68,7 +53,6 @@ export interface ManagedSession {
   state: AgentTaskState;
   credentialRef?: string;
   workspace?: string;
-  seedWorkspace?: string;
   // The vendor's own word, kept for operator views.
   vendorState?: string;
   usage?: ManagedSessionUsage;
@@ -98,8 +82,6 @@ export interface ManagedSessionRequest {
   model: string;
   effort?: ManagedAgentEffort;
   workspaceFiles?: ManagedWorkspaceFile[];
-  outputPath: string;
-  promptLane?: ManagedPromptLane;
   maxDurationSeconds?: number;
   tools?: ManagedToolAccess;
   mcpBearerCredential?: ManagedMcpBearerCredential;
@@ -108,15 +90,10 @@ export interface ManagedSessionRequest {
 export interface ManagedAgentProvider {
   readonly vendor: string;
   readonly model: string;
-  readonly promptLane: ManagedPromptLane;
-  // Whether startSession accepts workspaceFiles; a function if it depends on the lane.
-  readonly supportsSeedFiles?: boolean | ((promptLane: ManagedPromptLane) => boolean);
+  // Whether startSession accepts workspaceFiles.
+  readonly supportsSeedFiles?: boolean;
   startSession(request: ManagedSessionRequest): Promise<ManagedSession>;
   getSession(sessionId: string): Promise<ManagedSession | null>;
-  // Paths are relative to the request's outputPath.
-  listOutputs(sessionId: string): Promise<ManagedOutputRef[]>;
-  // One at a time; the caller decides how many.
-  readOutput(sessionId: string, ref: ManagedOutputRef): Promise<string>;
   sendMessage?(sessionId: string, message: string): Promise<void>;
   cancelSession(sessionId: string): Promise<{ enforced: boolean }>;
   deleteSession?(sessionId: string): Promise<void>;
@@ -131,13 +108,6 @@ export class ManagedAgentError extends Error {
   ) {
     super(message);
     this.name = 'ManagedAgentError';
-  }
-}
-
-export class ManagedOutputRejectedError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'ManagedOutputRejectedError';
   }
 }
 
@@ -194,127 +164,14 @@ export function isManagedSessionHarvestable(state: AgentTaskState): boolean {
   return state === 'idle' || isManagedSessionSettled(state);
 }
 
-export interface ManagedOutputCaps {
-  maxFiles: number;
-  maxTotalBytes: number;
-  maxFileBytes: number;
-}
-
-// Sized to one game, not a sandbox.
-export const DEFAULT_MANAGED_OUTPUT_CAPS: ManagedOutputCaps = {
-  maxFiles: 60,
-  maxTotalBytes: 2_000_000,
-  maxFileBytes: 1_000_000,
-};
-
-// Spends the byte budget per file, so a download loop stops early.
-export function createManagedOutputBudget(caps: ManagedOutputCaps = DEFAULT_MANAGED_OUTPUT_CAPS) {
-  let total = 0;
-  let count = 0;
-  return {
-    admit(path: string, content: string): ManagedOutputFile {
-      count += 1;
-      if (count > caps.maxFiles) {
-        throw new ManagedOutputRejectedError(`too many output files: ${count} > ${caps.maxFiles}`);
-      }
-      const bytes = Buffer.byteLength(content, 'utf8');
-      if (bytes > caps.maxFileBytes) {
-        throw new ManagedOutputRejectedError(`output file too large: ${path} is ${bytes} bytes`);
-      }
-      total += bytes;
-      if (total > caps.maxTotalBytes) {
-        throw new ManagedOutputRejectedError(`output too large: over ${caps.maxTotalBytes} bytes`);
-      }
-      return { path, content };
-    },
-  };
-}
-
-// A pull has no ceiling; this is it.
-export function assertWithinManagedOutputCaps(
-  files: ManagedOutputFile[],
-  caps: ManagedOutputCaps = DEFAULT_MANAGED_OUTPUT_CAPS,
-): ManagedOutputFile[] {
-  if (files.length > caps.maxFiles) {
-    throw new ManagedOutputRejectedError(`too many output files: ${files.length} > ${caps.maxFiles}`);
-  }
-  const budget = createManagedOutputBudget(caps);
-  for (const file of files) budget.admit(file.path, file.content);
-  return files;
-}
-
-// What to download, and where it lands in the game.
-export interface ManagedOutputPlan {
-  ref: ManagedOutputRef;
-  path: string;
-}
-
-// Refused on the listing, before a byte is fetched.
-export function assertWithinManagedOutputPlan(
-  plan: ManagedOutputPlan[],
-  caps: ManagedOutputCaps = DEFAULT_MANAGED_OUTPUT_CAPS,
-): ManagedOutputPlan[] {
-  if (plan.length > caps.maxFiles) {
-    throw new ManagedOutputRejectedError(`too many output files: ${plan.length} > ${caps.maxFiles}`);
-  }
-  let known = 0;
-  for (const entry of plan) {
-    const bytes = entry.ref.sizeBytes;
-    if (bytes === undefined) continue;
-    if (bytes > caps.maxFileBytes) {
-      throw new ManagedOutputRejectedError(`output file too large: ${entry.path} is ${bytes} bytes`);
-    }
-    known += bytes;
-    if (known > caps.maxTotalBytes) {
-      throw new ManagedOutputRejectedError(`output too large: over ${caps.maxTotalBytes} bytes`);
-    }
-  }
-  return plan;
-}
-
-// What the harvest ignored, so an empty round can explain itself.
-export interface ManagedOutputSelection {
-  plan: ManagedOutputPlan[];
-  ignored: string[];
-}
-
-// Only games/<slug>/ is a delivery; see docs/build-brief.md.
-export function selectManagedOutputs(refs: readonly ManagedOutputRef[], slug: string): ManagedOutputSelection {
-  const prefix = `games/${slug}/`;
-  const plan: ManagedOutputPlan[] = [];
-  const ignored: string[] = [];
-  for (const ref of refs) {
-    const path = ref.path.replace(/^\.\//, '');
-    if (
-      !path ||
-      path.includes('\0') ||
-      path.includes('\\') ||
-      path.startsWith('/') ||
-      /^[A-Za-z]:\//.test(path) ||
-      path.split('/').includes('..')
-    ) {
-      throw new ManagedOutputRejectedError(`unsafe output path: ${ref.path}`);
-    }
-    // The brief names one directory; the rest is the sandbox's business.
-    const relative = path.startsWith(prefix) ? path.slice(prefix.length) : '';
-    if (relative) plan.push({ ref, path: relative });
-    else ignored.push(path);
-  }
-  return { plan, ignored };
-}
-
 export interface ManagedProviderConfig {
   apiKey: string;
   model: string;
   budget?: ManagedUsageBudget;
-  repo?: string;
-  baseRef?: string;
-  customAgent?: string;
-  // Copilot: a scratch repo for MCP-lane rounds; unset keeps current behavior.
+  // Copilot: the scratch repo MCP-lane rounds dispatch into.
   mcpRepo?: string;
   mcpBaseRef?: string;
   mcpCustomAgent?: string;
-  createPullRequest?: boolean;
   agentId?: string;
   environmentId?: string;
   maxListCostCents?: number;

@@ -575,12 +575,25 @@ describe('/api/admin/creation-limits', () => {
   });
 
   it('flips the managed vendor at runtime and reports it as effective and available', async () => {
-    const keys = ['MANAGED_AGENT_VENDOR', 'AGENT_TASKS_TOKEN', 'MANAGED_AGENT_MAX_SECONDS'] as const;
+    const keys = [
+      'MANAGED_AGENT_VENDOR',
+      'AGENT_TASKS_TOKEN',
+      'MANAGED_AGENT_MAX_SECONDS',
+      'MANAGED_AGENT_MCP_URL',
+      'MANAGED_AGENT_COPILOT_MCP_REPO',
+      // An ambient key must not make Gemini configurable here too.
+      'GEMINI_API_KEY',
+      'MANAGED_AGENT_API_KEY',
+    ] as const;
     const previous = new Map(keys.map((key) => [key, process.env[key]]));
     // No default vendor — Copilot builds purely on its own staged credential.
     delete process.env.MANAGED_AGENT_VENDOR;
     process.env.AGENT_TASKS_TOKEN = 'test-token';
     process.env.MANAGED_AGENT_MAX_SECONDS = '900';
+    process.env.MANAGED_AGENT_MCP_URL = 'https://www.gamedev.pl/api/mcp';
+    process.env.MANAGED_AGENT_COPILOT_MCP_REPO = 'gamedevpl/scratchpad';
+    delete process.env.GEMINI_API_KEY;
+    delete process.env.MANAGED_AGENT_API_KEY;
 
     try {
       const app = await appWith(store);

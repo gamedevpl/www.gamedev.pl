@@ -14,8 +14,6 @@
 
 import type { AgentObservation } from './job-state.js';
 
-export type BuildPromptLane = 'mcp' | 'harness';
-
 export type BuildHistoryEntry = {
   kind: 'creator_request' | 'agent_note' | 'build_progress';
   text: string;
@@ -37,7 +35,6 @@ export interface BuildBrief {
   locale?: string;
   /** Per-job build-channel credential. Scoped to this job and this slug. */
   channelToken: string;
-  promptLane?: BuildPromptLane;
   mcpOpenerToken?: string;
   /** Where the agent reports progress and delivers its work. */
   apiBaseUrl: string;
@@ -54,14 +51,6 @@ export interface BuildBrief {
    */
   undelivered?: boolean;
   /**
-   * The workspace the previous session worked in, when this round needs to find it.
-   *
-   * Only meaningful alongside `undelivered`. Every other round reads its starting point
-   * from the store, which is the whole reason workspaces are disposable — but work that
-   * was never uploaded is not in the store, and that branch is the only copy of it.
-   */
-  previousWorkspace?: string;
-  /**
    * A generated first draft of the game the workspace should already contain.
    *
    * Round 0, written by a model instead of by the agent (see `game-seed.ts`). It travels
@@ -76,8 +65,8 @@ export interface BuildBrief {
   seed?: SeedFiles;
 }
 
-// How the agent gets the seed: placed, read, or not at all.
-export type SeedDelivery = 'workspace' | 'channel' | 'none';
+// How the agent gets the seed: placed, or read over the channel.
+export type SeedDelivery = 'workspace' | 'channel';
 
 /** The subset of a seed draft a backend needs to place it. */
 export interface SeedFiles {
@@ -101,19 +90,7 @@ export interface DispatchResult {
    * requested branch is not always the one used.
    */
   workspace?: string;
-  /**
-   * A second, disposable workspace holding the generated draft this build started from.
-   *
-   * Tracked separately from `workspace` because it has a different owner and a different
-   * end: the agent's workspace is where the work happens, while this one existed only so
-   * the work could begin somewhere. Recorded so it is released with the job rather than
-   * left behind — a seeded build that leaked one branch per attempt would litter the
-   * games repo faster than the builds themselves do.
-   */
-  seedWorkspace?: string;
   credentialRef?: string;
-  // Lane this round actually dispatched on; mcp never stages a branch.
-  promptLane?: BuildPromptLane | 'outputs';
 }
 
 export interface AgentBackend {
@@ -146,6 +123,6 @@ export interface AgentBackend {
   cancel(ref: string, credentialRef?: string): Promise<{ enforced: boolean }>;
   /** Releases workspace state once a job is finished. Best effort. */
   cleanup?(previous: DispatchResult): Promise<void>;
-  // How this lane would receive a seed. Absent means workspace.
-  seedDelivery?(promptLane?: BuildPromptLane): SeedDelivery;
+  // How this backend receives a seed. Absent means workspace.
+  seedDelivery?(): SeedDelivery;
 }

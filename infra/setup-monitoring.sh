@@ -317,25 +317,6 @@ ensure_log_metric moderation_rejections \
   'Content rejected by moderation, any surface. Backs alert A14.' \
   "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"${PRIMARY_SERVICE}\" AND jsonPayload.msg=\"moderation rejected\""
 
-# Seeded builds that generated a draft nobody could commit (docs: llm-seed-spike.md).
-#
-# The failure this exists for is invisible by construction. Seeding fails open at every
-# level — correctly, because a creator's build must never die for an optimization — so a
-# broken write scope produces builds that still succeed, a Vertex bill that is quietly
-# larger, and nothing red anywhere. That is not a hypothetical: it is what the first live
-# seeded build did on 2026-08-01, and it was found by the owner noticing a slow button.
-#
-# Scoped to the app service for the same reason A14 is: the relay and the zone host run
-# the same image and seed nothing, and a filter whose scope is wider than its meaning is
-# how a metric starts counting something else.
-#
-# The message string is the contract with apps/api/src/seed-metrics.ts, asserted from both
-# sides by seed-metrics.test.ts. A filter that matches nothing yields a metric that is
-# always zero, which reads exactly like "seeding is fine".
-ensure_log_metric seed_staging_failures \
-  'Generated seeds a backend could not commit. Backs alert A23.' \
-  "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"${PRIMARY_SERVICE}\" AND jsonPayload.msg=\"seed staging failed\""
-
 # knowledge_query calls (KQ-10). The message string is the contract with
 # apps/api/src/knowledge-metrics.ts, asserted from both sides by knowledge-metrics.test.ts.
 # Backs A26 below: a cost-runaway guard on the SEARCH_ADD_ON_LLM generative add-on, which is
@@ -549,53 +530,6 @@ cat > "${POLICY_DIR}/a14.json" <<EOF
   "alertStrategy": { "autoClose": "86400s" },
   "documentation": {
     "content": "Content moderation is rejecting far more than organic traffic explains — someone is probing the walls, or a checker regression is rejecting valid input. Both matter and they look identical from here, so check which: Logs Explorer, jsonPayload.msg=\"moderation rejected\", group by jsonPayload.moderation.uid and .category. One uid across many categories is a person testing limits; many uids in one category is a false-positive regression in the deny-list. Triage: docs/runbooks/moderation-burst.md",
-    "mimeType": "text/markdown"
-  }
-}
-EOF
-
-# A23 — seeding is paying for drafts that never land.
-#
-# Threshold is 1 in an hour rather than "any", and the difference matters less than it
-# looks: the app mutes seeding for ten minutes after a staging failure, so a genuinely
-# broken credential produces roughly six of these an hour and clears the bar within
-# twenty minutes, while a single GitHub hiccup does not. Two in an hour is a
-# configuration fact; one is a bad minute, and an alert on a bad minute is how the
-# operator learns to filter the channel.
-#
-# Deliberately watched here rather than by the app's own operator-alert sweep. Seeding
-# breaking is a *platform* failure, and an alert that travels through the platform's
-# sweep, its Firestore reads, its notification table and its mail provider shares a fate
-# with the thing it is watching. The console badge still shows it (detectSeedingDegraded
-# in apps/api/src/operator-alerts.ts) because that is where an operator would act; what
-# has to reach an inbox when the app is unwell does not run in the app.
-#
-# autoClose is a day rather than the usual: nothing here self-heals. A mis-scoped PAT
-# stays mis-scoped until somebody edits it, and an alert that closes itself after an hour
-# of quiet would report recovery that is really just the ten-minute mute.
-cat > "${POLICY_DIR}/a23.json" <<EOF
-{
-  "displayName": "A23 seeded builds cannot place their drafts",
-  "combiner": "OR",
-  "conditions": [{
-    "displayName": "generated seeds are not being committed",
-    "conditionThreshold": {
-      "filter": "metric.type=\"logging.googleapis.com/user/seed_staging_failures\" AND resource.type=\"cloud_run_revision\" AND resource.label.\"service_name\"=\"${PRIMARY_SERVICE}\"",
-      "aggregations": [{
-        "alignmentPeriod": "3600s",
-        "perSeriesAligner": "ALIGN_SUM",
-        "crossSeriesReducer": "REDUCE_SUM"
-      }],
-      "comparison": "COMPARISON_GT",
-      "thresholdValue": 1,
-      "duration": "0s",
-      "trigger": { "count": 1 }
-    }
-  }],
-  "notificationChannels": ["${CHANNEL_NAME}"],
-  "alertStrategy": { "autoClose": "86400s" },
-  "documentation": {
-    "content": "Seeded dispatch is generating first drafts and failing to commit them, so every seeded build is paying Vertex for a draft the agent never sees. Builds themselves are fine — seeding fails open — which is why nothing else is red. Most likely cause, and the cause of the first occurrence: the agent-tasks PAT lost 'Contents: read and write' on the games repo. Check: Logs Explorer, jsonPayload.msg=\"seed staging failed\", and look at the 403 that precedes it. Then the PAT's repository permissions (docs/credential-ledger.md). To stop paying while it is being fixed, set SEED_DISPATCH=false on the service.",
     "mimeType": "text/markdown"
   }
 }
@@ -856,16 +790,6 @@ echo "    That same query is the standing answer to 'is anyone probing us'. Grou
 echo "    jsonPayload.moderation.uid and .category: one uid across many categories is a"
 echo "    person testing the walls; many uids in one category is the deny-list rejecting"
 echo "    something legitimate, which is the more expensive of the two to leave alone."
-echo ""
-echo "    A23 (seeding) is the same shape again, and is the one alert whose subject can be"
-echo "    switched off without anybody noticing. Confirm the metric has a filter that"
-echo "    matches something before trusting it — and note that no rows here is genuinely"
-echo "    good news only if seeding is on (SEED_DISPATCH=true on the service):"
-echo "      gcloud logging read \\"
-echo "        'resource.labels.service_name=\"${PRIMARY_SERVICE}\" AND jsonPayload.msg=\"seed staging failed\"' \\"
-echo "        --project ${PROJECT_ID} --limit 20 --freshness 30d"
-echo "      gcloud run services describe ${PRIMARY_SERVICE} --region ${REGION} --project ${PROJECT_ID} \\"
-echo "        --format='value(spec.template.spec.containers[0].env)' | tr ',' '\\n' | grep SEED_DISPATCH"
 echo ""
 echo "    A24/A25 (Vertex volume) watch Google-published metrics rather than our logs, so"
 echo "    there is no filter to typo — but there is a threshold to calibrate, and a"

@@ -2,17 +2,8 @@
 
 import type { BuildBrief } from './agent-backend.js';
 
-// A prompt that disagrees with its backend burns the round.
-export type DeliveryContract =
-  // Copilot, and any agent given our MCP endpoint.
-  | { kind: 'channel'; fast?: boolean }
-  // Pulled back from the session's output directory.
-  | { kind: 'outputs'; path: string };
-
 // Untrusted spec, fenced; delivery stated exactly once.
-export function buildPrompt(brief: BuildBrief, delivery: DeliveryContract = { kind: 'channel' }): string {
-  const channel = delivery.kind === 'channel';
-  const fastLane = delivery.kind === 'channel' && delivery.fast === true;
+export function buildPrompt(brief: BuildBrief): string {
   const slug = brief.slug ?? '(the slug named in your first progress report)';
   const creating = Boolean(brief.createGame);
   const lines = [
@@ -21,29 +12,11 @@ export function buildPrompt(brief: BuildBrief, delivery: DeliveryContract = { ki
       : brief.seed
         ? `Build a new browser game in \`games/${slug}/\`. **A first draft of it is already in your checkout** — see below.`
         : brief.undelivered
-          ? `Your previous session on \`${slug}\` ended without delivering it. The work may well be finished — that is not the problem. Nothing downstream reads the branch, so a game that was not uploaded does not exist as far as the site or the creator can tell. Check what is there, then deliver it.`
+          ? `Your previous session on \`${slug}\` ended without delivering it. Nothing from that session is recoverable through the tools you have — the work, if any existed, is gone as far as the site or the creator can tell. Build it as you would a fresh round.`
           : brief.feedback
             ? `The creator played the draft of \`${slug}\` and asked for changes. Continue that game — revise it, do not rebuild it.`
             : `Build a new browser game in \`games/${slug}/\`.`,
     '',
-    // The one round where the branch is the only copy.
-    ...(brief.undelivered && brief.previousWorkspace
-      ? [
-          '## Where your previous work is',
-          '',
-          `It is on \`${brief.previousWorkspace}\`, which was never uploaded. Recover it before`,
-          'you redo any of it:',
-          '',
-          '```bash',
-          `git fetch origin ${brief.previousWorkspace}`,
-          `git checkout origin/${brief.previousWorkspace} -- games/${slug}`,
-          '```',
-          '',
-          'Check it over — run the game’s checks — and if it is good, deliver it. If that',
-          'branch turns out to be empty or broken, build the game as you normally would.',
-          '',
-        ]
-      : []),
     // Disposable on purpose: a defended bad draft is the failure.
     ...(brief.seed
       ? [
@@ -61,26 +34,7 @@ export function buildPrompt(brief: BuildBrief, delivery: DeliveryContract = { ki
           '',
         ]
       : []),
-    ...(brief.feedback && !brief.undelivered && channel && !fastLane
-      ? [
-          '## Before you change anything',
-          '',
-          'Fetch the version the creator actually played. This checkout may not contain it —',
-          'the game lives in the site’s store, not in a branch:',
-          '',
-          '```bash',
-          `export GAMEDEVPL_API=${brief.apiBaseUrl}`,
-          `export GAMEDEVPL_BUILD_TOKEN=${brief.channelToken}`,
-          `npm run restore -- ${slug}`,
-          '```',
-          '',
-          'It writes back the exact files that were delivered. Read them, then make the',
-          'creator’s changes on top of them. If it reports nothing delivered yet, the earlier',
-          'round never finished and you are starting the game rather than revising it.',
-          '',
-        ]
-      : []),
-    ...(brief.feedback && !brief.undelivered && channel && fastLane
+    ...(brief.feedback && !brief.undelivered
       ? [
           '## Before you change anything',
           '',
@@ -88,17 +42,6 @@ export function buildPrompt(brief: BuildBrief, delivery: DeliveryContract = { ki
           'Do not run bash exploration commands — this execution environment is an MCP-only sandbox with no local checkout.',
           'Read the returned files, then make the creator’s changes on top of them.',
           'If get_sources reports nothing delivered yet, the earlier round never finished and you are starting the game rather than revising it.',
-          '',
-        ]
-      : []),
-    // No channel, so no restore: the workspace is the prior version.
-    ...(brief.feedback && !brief.undelivered && !channel
-      ? [
-          '## Before you change anything',
-          '',
-          `The version the creator played is already in \`games/${slug}/\`. Read it first and`,
-          'change it — this is a revision, not a fresh build. If that directory is empty, say so',
-          'in your final message rather than quietly starting a different game.',
           '',
         ]
       : []),
@@ -113,14 +56,12 @@ export function buildPrompt(brief: BuildBrief, delivery: DeliveryContract = { ki
     '  directory cannot be delivered — delivery drops them — so editing them only',
     '  wastes your session.',
     // Measured: 15s of a two-minute round spent finding nothing.
-    ...(fastLane
-      ? ['- There is no repository checkout here. The kit you unpack is the only copy of any of it.']
-      : ['- Follow `.github/copilot-instructions.md` and the repository skills for everything else.']),
+    '- There is no repository checkout here. The kit you unpack is the only copy of any of it.',
     '',
-    ...(channel ? channelDelivery(brief, fastLane, creating) : outputsDelivery(slug, delivery.path)),
+    ...channelDelivery(brief, creating),
   ];
 
-  if (brief.locale && brief.locale !== 'en' && channel) {
+  if (brief.locale && brief.locale !== 'en') {
     lines.push(
       '',
       `Write your progress reports in \`${brief.locale}\` (use \`--lang ${brief.locale}\`). The game`,
@@ -149,127 +90,51 @@ function conversationHistory(history: NonNullable<BuildBrief['history']>): strin
   ];
 }
 
-// The push contract: the agent reports and uploads over the build channel.
-function channelDelivery(brief: BuildBrief, fast: boolean, creating: boolean): string[] {
-  if (fast) {
-    return [
-      '## This round is on a clock',
-      '',
-      'You have roughly two minutes of wall clock. The session is cancelled when it runs out,',
-      'and a round that has not called `submit_sources` by then delivers nothing at all.',
-      '',
-      'Do not reply with a plan. Execute tools immediately.',
-      ...(creating
-        ? [
-            `Call \`create_game\` first with ${JSON.stringify({
-              title: brief.createGame!.title,
-              concept: brief.createGame!.concept,
-              ...(brief.createGame!.locale ? { locale: brief.createGame!.locale } : {}),
-            })}. Do not invent a title or concept.`,
-            'Use the returned slug and jobId; then call `start({ slug })` for that new game.',
-          ]
-        : [
-            // channelToken, not mcpOpenerToken: verifyAgentToken checks this key, not verifyManagedMcpOpener.
-            `Call \`start\` with exactly \`{ "slug": "${brief.slug ?? '(slug)'}", "key": "${brief.channelToken}" }\`, then call \`get_brief\`, \`get_seed\` and \`get_kit\`.`,
-          ]),
-      'Copy the exact sessionKey from `start` into every later MCP call.',
-      'If get_seed returns available, revise those files instead of scaffolding.',
-      'If get_seed returns pending, do not browse or wait; build the smallest preview now.',
-      'Call `get_kit` only to obtain kitEngineRef; do not download or browse the kit in this lane.',
-      'Use the injected digest and its template slice as your API and file-shape reference.',
-      'Do not use bash or the write tool. Stage source content directly with `stage_source_file`.',
-      'MCP paths are relative to the slug: pass `GAME.json`, never `games/<slug>/GAME.json`.',
-      'Stage calls sequentially; never parallelize mutating calls.',
-      'After staging `game.ts` and `GAME.json`, submit immediately.',
-      'A `howToPlay` (goal + hint) in `GAME.json` can stand in for `index.html` — the body is generated.',
-      'A `theme` in `GAME.json` can stand in for `style.css` the same way — never stage that file.',
-      'Do not stage metadata files before the first preview delivery.',
-      '',
-      '- Skip optional polish. One screen, one loop, readable visuals.',
-      '- Always call `.audio()` in GameKit.defineGame; set audio.sounds and audio.music in GAME.json.',
-      "- Audio ids are a fixed catalog: copy from the digest's Audio catalog and never invent one.",
-      '- GAME.json must include an engine.modules array copied from the kit template; never omit it.',
-      '- audio.sounds must be an array of catalog ids; audio.music must be one music id string.',
-      '- The publish gate requires the audio module, so removing it only defers the failure.',
-      '- Stage and `submit_sources({ fromStaged: true, mode: "preview", kitEngineRef })` as soon as the',
-      '  game is playable, even if you can see things you would rather improve. A delivered rough',
-      '  draft beats a better one that never arrived.',
-      '- `end` straight after the submit returns. Do not wait on the gate.',
-    ];
-  }
+// The push contract: report and upload over the build channel, clocked.
+function channelDelivery(brief: BuildBrief, creating: boolean): string[] {
   return [
-    '## Delivering your work',
+    '## This round is on a clock',
     '',
-    '**A pull request is not a delivery.** Nothing downstream reads pull requests. Upload your',
-    'game sources over the build channel instead:',
+    'You have roughly two minutes of wall clock. The session is cancelled when it runs out,',
+    'and a round that has not called `submit_sources` by then delivers nothing at all.',
     '',
-    '```bash',
-    `export GAMEDEVPL_API=${brief.apiBaseUrl}`,
-    `export GAMEDEVPL_BUILD_TOKEN=${brief.channelToken}`,
-    'npm run progress -- --step planning "Sketching the loop."       # as you go',
-    'npm run preview:watch -- <slug> &                               # playable draft, early',
-    'npm run submit -- <slug> --no-wait                              # deliver, when it is good',
-    'npm run progress -- --check                                     # gate verdict + inbox',
-    '```',
+    'Do not reply with a plan. Execute tools immediately.',
+    ...(creating
+      ? [
+          `Call \`create_game\` first with ${JSON.stringify({
+            title: brief.createGame!.title,
+            concept: brief.createGame!.concept,
+            ...(brief.createGame!.locale ? { locale: brief.createGame!.locale } : {}),
+          })}. Do not invent a title or concept.`,
+          'Use the returned slug and jobId; then call `start({ slug })` for that new game.',
+        ]
+      : [
+          // channelToken, not mcpOpenerToken: verifyAgentToken checks this key, not verifyManagedMcpOpener.
+          `Call \`start\` with exactly \`{ "slug": "${brief.slug ?? '(slug)'}", "key": "${brief.channelToken}" }\`, then call \`get_brief\`, \`get_seed\` and \`get_kit\`.`,
+        ]),
+    'Copy the exact sessionKey from `start` into every later MCP call.',
+    'If get_seed returns available, revise those files instead of scaffolding.',
+    'If get_seed returns pending, do not browse or wait; build the smallest preview now.',
+    'Call `get_kit` only to obtain kitEngineRef; do not download or browse the kit in this lane.',
+    'Use the injected digest and its template slice as your API and file-shape reference.',
+    'Do not use bash or the write tool. Stage source content directly with `stage_source_file`.',
+    'MCP paths are relative to the slug: pass `GAME.json`, never `games/<slug>/GAME.json`.',
+    'Stage calls sequentially; never parallelize mutating calls.',
+    'After staging `game.ts` and `GAME.json`, submit immediately.',
+    'A `howToPlay` (goal + hint) in `GAME.json` can stand in for `index.html` — the body is generated.',
+    'A `theme` in `GAME.json` can stand in for `style.css` the same way — never stage that file.',
+    'Do not stage metadata files before the first preview delivery.',
     '',
-    'Report progress as you work — the creator is watching a live page, and silence reads as a',
-    'failure. A build that says nothing for fifteen minutes is reported to them as stalled.',
-    '',
-    '- `--step` is one of `planning`, `art`, `mechanics`, `audio`, `balancing`, `fixing`,',
-    '  `testing`, `polishing`. It is rendered in the creator’s own language, so use it.',
-    '- The sentence itself is plain English about the *game*, in words a player would use.',
-    '- `--done N --total N` draws the progress bar; without it there is nothing to draw one from.',
-    '- `--kind blocked` when you are stuck, `--kind done` when the game is playable.',
-    '',
-    'Nothing you write as ordinary prose reaches the creator — they read this thread, not your',
-    'transcript. A progress sentence, or the `summary` on the end call below, is the only way an',
-    'answer gets to them. If they asked a question and no code needs to change, that answer is',
-    'the whole round: send it rather than finishing silently.',
-    '',
-    '**Creator steering lands in the inbox while you work — there will not be a second session.',
-    'Every progress reply already carries their pending messages** (plus a `stop` flag if they',
-    'abandoned the build). Read that reply every time you report. Also run',
-    '`npm run progress -- --check` before and after every long command, whenever five commands',
-    'have gone by without a progress call, and whenever you finish a step a player would notice',
-    '— silence here is how their note sits unread until you finish the wrong thing.',
-    '`--ack <id>` only after you have actually acted on a message. Stop immediately when `stop` is set.',
-    'If `stop` is true with reason `builder_handoff`, acknowledge the request once, then exit:',
-    '```bash',
-    'curl -sS -X POST "$GAMEDEVPL_API/api/agent/build/end" -H "Authorization: Bearer $GAMEDEVPL_BUILD_TOKEN" \\',
-    '  -H "Content-Type: application/json" -d \'{"summary":"Your closing sentence for the creator."}\'',
-    '```',
-    'That same call ends any round: `summary` is optional, but it is your last chance to tell the',
-    'creator what changed or answer what they asked.',
-    '',
-    '**Always deliver with `--no-wait`.** After upload the site gate can take many minutes;',
-    'blocking `submit` on that wait parks you in a silent bash session while Studio looks stuck',
-    'and creator notes go unacked. You are not done until `npm run progress -- --check` shows',
-    'GATE PASSED (or you fix a GATE FAILED, re-check locally, and submit again). Do not open a',
-    'pull request for delivery — nothing downstream reads PRs.',
-  ];
-}
-
-// The pull contract, honest about what it cannot offer.
-function outputsDelivery(slug: string, path: string): string[] {
-  return [
-    '## Delivering your work',
-    '',
-    `**Write the finished game to \`${path}/games/${slug}/\`.** That directory is read back when`,
-    'your session ends, and it is the only thing that is: a commit, a pull request or a file',
-    'left anywhere else is not a delivery.',
-    '',
-    '- Mirror the game directory exactly — `game.ts`, `SPEC.md` and the rest, at the paths they',
-    `  would have in the repository, under \`${path}/games/${slug}/\`.`,
-    '- Nothing outside your own game directory is read, so do not copy GameKit or tooling into it.',
-    '- **Sources only.** `media/` is produced by the platform gate and is never uploaded; dotfiles,',
-    '  config and build files are refused. Anything of that shape is dropped from the delivery,',
-    '  so writing it there only wastes your session.',
-    '- Copy the files rather than moving them if you also keep a working checkout; what matters',
-    '  is that the final state of that directory is the game you want delivered.',
-    '',
-    'There is no progress channel and no gate verdict in this mode. Check the game yourself',
-    'before you finish — the site gate runs after your session has ended, and you will not get',
-    'a chance to answer it.',
+    '- Skip optional polish. One screen, one loop, readable visuals.',
+    '- Always call `.audio()` in GameKit.defineGame; set audio.sounds and audio.music in GAME.json.',
+    "- Audio ids are a fixed catalog: copy from the digest's Audio catalog and never invent one.",
+    '- GAME.json must include an engine.modules array copied from the kit template; never omit it.',
+    '- audio.sounds must be an array of catalog ids; audio.music must be one music id string.',
+    '- The publish gate requires the audio module, so removing it only defers the failure.',
+    '- Stage and `submit_sources({ fromStaged: true, mode: "preview", kitEngineRef })` as soon as the',
+    '  game is playable, even if you can see things you would rather improve. A delivered rough',
+    '  draft beats a better one that never arrived.',
+    '- `end` straight after the submit returns. Do not wait on the gate.',
   ];
 }
 
