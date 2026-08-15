@@ -121,6 +121,11 @@ const EditorStepSchema = z.enum([
   'v2_content_loaded',
   'v2_controller_ready',
   'v2_controller_failed',
+  'controller_loaded',
+  'controller_failed',
+  'tool_used',
+  'undo_used',
+  'selection_from_game',
 ]);
 /** The NL tuning lane's outcomes — a dimension beside the editing funnel, not a rung in it. */
 const AssistStepSchema = z.enum(['asked', 'applied', 'handoff', 'rejected']);

@@ -1,5 +1,6 @@
 import type {
   EditorCollectionSpec,
+  EditorContentDoc,
   EditorEntityItemContent,
   EditorEntitiesLayerSpec,
   EditorLayerConstraint,
@@ -12,6 +13,63 @@ import type {
   EditorTilemapItemContent,
   EditorTilemapSpec,
 } from './studioApi.js';
+
+export type EditorPatchOperation = { path: Array<string | number>; value: unknown };
+
+export function applyEditorPatch(
+  document: EditorContentDoc,
+  patch: unknown,
+): { content: EditorContentDoc; error?: string } {
+  if (patch && typeof patch === 'object' && !Array.isArray(patch) && 'content' in patch) {
+    const replacement = (patch as { content?: unknown }).content;
+    if (!replacement || typeof replacement !== 'object' || Array.isArray(replacement))
+      return { content: document, error: 'replacement content must be an object' };
+    return { content: replacement as EditorContentDoc };
+  }
+  const operations = Array.isArray(patch)
+    ? patch
+    : patch && typeof patch === 'object' && Array.isArray((patch as { ops?: unknown }).ops)
+      ? (patch as { ops: unknown[] }).ops
+      : [patch];
+  if (operations.length > 64) return { content: document, error: 'too many patch operations' };
+  let next: EditorContentDoc;
+  try {
+    next = JSON.parse(JSON.stringify(document)) as EditorContentDoc;
+  } catch {
+    return { content: document, error: 'content could not be copied' };
+  }
+  for (const operation of operations) {
+    if (!operation || typeof operation !== 'object' || Array.isArray(operation))
+      return { content: document, error: 'invalid patch operation' };
+    const raw = operation as Partial<EditorPatchOperation>;
+    if (!Array.isArray(raw.path) || raw.path.length === 0 || raw.path.length > 24 || !('value' in raw))
+      return { content: document, error: 'invalid patch path' };
+    let target: unknown = next;
+    for (let index = 0; index < raw.path.length - 1; index += 1) {
+      const key = raw.path[index];
+      if (
+        (typeof key !== 'string' && typeof key !== 'number') ||
+        key === '__proto__' ||
+        key === 'constructor' ||
+        key === 'prototype'
+      )
+        return { content: document, error: 'invalid patch key' };
+      if (!target || typeof target !== 'object') return { content: document, error: 'patch path does not exist' };
+      target = (target as Record<string | number, unknown>)[key];
+    }
+    const last = raw.path[raw.path.length - 1];
+    if (
+      (typeof last !== 'string' && typeof last !== 'number') ||
+      last === '__proto__' ||
+      last === 'constructor' ||
+      last === 'prototype'
+    )
+      return { content: document, error: 'invalid patch key' };
+    if (!target || typeof target !== 'object') return { content: document, error: 'patch target does not exist' };
+    (target as Record<string | number, unknown>)[last] = raw.value;
+  }
+  return { content: next };
+}
 
 export function defaultCollectionKey(collections: Record<string, unknown>): string | null {
   return Object.keys(collections).find((key) => key.length > 0) ?? null;

@@ -188,6 +188,7 @@ describe('summarizeVisitFunnel', () => {
       started('c'),
     ]);
 
+    // Keep the controller/tool rungs explicit even when this fixture has no controller events.
     expect(funnel.editing).toEqual([
       { step: 'opened', visits: 2 },
       { step: 'draft_saved', visits: 2 },
@@ -197,6 +198,11 @@ describe('summarizeVisitFunnel', () => {
       { step: 'v2_content_loaded', visits: 0 },
       { step: 'v2_controller_ready', visits: 0 },
       { step: 'v2_controller_failed', visits: 0 },
+      { step: 'controller_loaded', visits: 0 },
+      { step: 'controller_failed', visits: 0 },
+      { step: 'tool_used', visits: 0 },
+      { step: 'undo_used', visits: 0 },
+      { step: 'selection_from_game', visits: 0 },
     ]);
   });
 

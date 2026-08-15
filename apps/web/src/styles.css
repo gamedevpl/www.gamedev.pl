@@ -11686,11 +11686,92 @@ button.builder-mode-selector:disabled {
 }
 
 /* Edit definitions without a board dock beside the running game. */
-.studio-edit-overlay:not(.studio-code-overlay):not(:has(.editor-board-col)) {
+.studio-edit-overlay:not(.studio-code-overlay)[data-surface="docked"] {
   inset: 0 0 0 auto;
   width: min(360px, 100%);
   border-left: 1px solid var(--panel-border);
   box-shadow: -12px 0 32px rgba(0, 0, 0, 0.35);
+}
+
+.editor-controller-surface {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  padding: 12px;
+  overflow: auto;
+}
+
+.editor-controller-surface > .editor-controller-rail,
+.editor-controller-surface > .editor-controller-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.editor-controller-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-soft);
+}
+
+.editor-controller-toolbar,
+.editor-controller-tabs,
+.editor-controller-layer-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.editor-controller-toolbar button,
+.editor-controller-tabs button,
+.editor-controller-layer-tabs button {
+  border: 1px solid var(--panel-border);
+  background: var(--panel);
+  color: var(--text);
+  padding: 6px 9px;
+}
+
+.editor-controller-toolbar button.is-active,
+.editor-controller-tabs button.is-active,
+.editor-controller-layer-tabs button.is-active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.editor-controller-board {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.editor-controller-grid {
+  align-self: flex-start;
+  max-width: 100%;
+  overflow: auto;
+}
+
+.editor-controller-list small {
+  display: block;
+  color: var(--muted);
+}
+
+.editor-controller-modal {
+  position: fixed;
+  z-index: 100;
+  inset: 50% auto auto 50%;
+  width: min(420px, calc(100% - 32px));
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.45);
 }
 
 /* Chat stays reachable while Code is open (owner feedback, 2026-08-11): the rail and

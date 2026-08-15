@@ -4,6 +4,7 @@ import { PixelIcon } from './PixelIcon.js';
 import { PathPainter } from './PathPainter.js';
 import {
   blankItem,
+  applyEditorPatch,
   collectionProblems,
   defaultCollectionKey,
   defaultLayerKey,
@@ -16,13 +17,14 @@ import {
   setCell,
 } from './editorContentTools.js';
 import { LayeredBoard, LayeredSidebar } from './LayeredEditorSurface.js';
+import { EditorSurface } from './EditorSurface.js';
+import { useEditorDocument } from './useEditorDocument.js';
 import { recordAssistStep, recordEditorStep } from './visitTelemetry.js';
-import type { EditorContentPush, EditorSelection } from './editorBridge.js';
+import type { EditorContentPush, EditorControllerState, EditorSelection } from './editorBridge.js';
 import {
   deleteEditorDraft,
   fetchGameEditor,
   publishEditorContent,
-  putEditorDraft,
   requestEditorAssist,
   type EditorCollectionSpec,
   type EditorContentDoc,
@@ -54,9 +56,6 @@ import {
  * still promotes.
  */
 
-const AUTOSAVE_MS = 1500;
-
-type SaveState = 'clean' | 'dirty' | 'saving' | 'saved' | 'conflict' | 'error';
 /**
  * What the composer is doing, and what it last said.
  *
@@ -127,11 +126,14 @@ export function EditorPanel(props: {
   game: StudioGame;
   /** The stage's live-push channel (§E tier 1). */
   editorPushRef?: MutableRefObject<EditorContentPush | null>;
+  controller?: EditorControllerState | null;
+  onSurfaceModeChange?: (mode: 'docked' | 'full') => void;
   onOpenPlaytest: () => void;
   onBack: () => void;
 }) {
   const { t, i18n } = useTranslation();
   const name = useLabel();
+  const onSurfaceModeChange = props.onSurfaceModeChange;
   const pathMessages = {
     pointCount: (count: number, min: number, max: number) =>
       t('studioPanel.editor.pathPointCount', { count, min, max }),
@@ -152,10 +154,6 @@ export function EditorPanel(props: {
 
   const [state, setState] = useState<'loading' | 'error' | 'ready'>('loading');
   const [editor, setEditor] = useState<GameEditorState | null>(null);
-  const [content, setContent] = useState<EditorContentDoc>({});
-  const [revision, setRevision] = useState(0);
-  const [saveState, setSaveState] = useState<SaveState>('clean');
-  const [saveProblems, setSaveProblems] = useState<string[]>([]);
   const [publish, setPublish] = useState<PublishState>({ kind: 'idle' });
   const [selectedCollectionKey, setSelectedCollectionKey] = useState<string | null>(null);
   const [itemIndex, setItemIndex] = useState(0);
@@ -165,6 +163,24 @@ export function EditorPanel(props: {
   const [layerTileKey, setLayerTileKey] = useState<string | null>(null);
   const [utterance, setUtterance] = useState('');
   const [assist, setAssist] = useState<AssistState>({ kind: 'idle' });
+  const [controllerDisabled, setControllerDisabled] = useState(false);
+  const lastControllerChangeRef = useRef<string | null>(null);
+  const document = useEditorDocument({ slug, onPush: (next) => pushLive(next) });
+  const {
+    content,
+    setContent,
+    contentRef,
+    saveState,
+    saveProblems,
+    saveNow,
+    scheduleSave: scheduleDocumentSave,
+    reset: resetDocument,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+    markError,
+  } = document;
 
   const collectionKeys = editor ? Object.keys(editor.definition.content) : [];
   const collectionKey =
@@ -192,8 +208,14 @@ export function EditorPanel(props: {
         // The revision funnel's first rung: this creator can edit and did open it.
         recordEditorStep('opened');
         setEditor(loaded);
+        const needsFullSurface =
+          Object.keys(loaded.definition.layers ?? {}).length > 0 ||
+          Object.values(loaded.definition.content).some(
+            (collection) => collection.item.widget === 'tilemap' || collection.item.widget === 'path',
+          );
+        onSurfaceModeChange?.(needsFullSurface ? 'full' : 'docked');
         const merged = mergeDraft(loaded);
-        setContent(merged);
+        resetDocument(merged, loaded.draft?.revision ?? 0);
         const defaultKey = defaultCollectionKey(loaded.definition.content);
         const defaultLayer = defaultLayerKey(loaded.definition.layers ?? {});
         pushLive(
@@ -204,8 +226,6 @@ export function EditorPanel(props: {
               ? { collection: defaultLayer, index: 0 }
               : undefined,
         );
-        setRevision(loaded.draft?.revision ?? 0);
-        setSaveState('clean');
         setSelectedCollectionKey(defaultKey);
         setItemIndex(0);
         setTileKey(defaultKey ? firstTileKey(loaded.definition.content[defaultKey]) : null);
@@ -220,15 +240,7 @@ export function EditorPanel(props: {
     return () => {
       cancelled = true;
     };
-  }, [slug, pushLive]);
-
-  // Autosave: debounce the whole snapshot. The draft is always a whole document,
-  // so a lost timer costs recency, never consistency.
-  const contentRef = useRef(content);
-  contentRef.current = content;
-  const revisionRef = useRef(revision);
-  revisionRef.current = revision;
-  const timerRef = useRef<number | null>(null);
+  }, [onSurfaceModeChange, pushLive, resetDocument, slug]);
 
   // Guards a stale async reply from pushing into a game switched to since (editorPushRef
   // is shared, parent-owned).
@@ -240,48 +252,55 @@ export function EditorPanel(props: {
     [],
   );
 
-  /** Returns whether the draft on the server now matches what is on screen. */
-  const saveNow = useCallback(
-    async (overwrite = false): Promise<boolean> => {
-      setSaveState('saving');
-      setSaveProblems([]);
-      try {
-        const saved = await putEditorDraft(slug, contentRef.current, overwrite ? undefined : revisionRef.current);
-        setRevision(saved.revision);
-        setSaveState('saved');
-        recordEditorStep('draft_saved');
-        return true;
-      } catch (error) {
-        const status = (error as StudioApiError).status;
-        if (status === 409) {
-          setSaveState('conflict');
-        } else {
-          setSaveState('error');
-          const problems = (error as StudioApiError).problems;
-          setSaveProblems(problems && problems.length > 0 ? problems : [(error as Error).message]);
-        }
-        return false;
-      }
-    },
-    [slug],
-  );
-
-  const scheduleSave = useCallback(() => {
-    setSaveState('dirty');
+  const scheduleSaveWithPublishReset = useCallback(() => {
     setPublish((current) => (current.kind === 'published' ? { kind: 'idle' } : current));
-    if (timerRef.current !== null) window.clearTimeout(timerRef.current);
-    timerRef.current = window.setTimeout(() => {
-      timerRef.current = null;
-      void saveNow();
-    }, AUTOSAVE_MS);
-  }, [saveNow]);
+    scheduleDocumentSave();
+  }, [scheduleDocumentSave]);
+  const scheduleSave = scheduleSaveWithPublishReset;
 
-  useEffect(
-    () => () => {
-      if (timerRef.current !== null) window.clearTimeout(timerRef.current);
-    },
-    [],
-  );
+  useEffect(() => {
+    if (props.controller?.status === 'failed') setControllerDisabled(true);
+    else if (props.controller?.status === 'ready') setControllerDisabled(false);
+  }, [props.controller?.status]);
+
+  useEffect(() => {
+    const selected = props.controller?.selected;
+    if (!selected) return;
+    setSelectedLayerKey(selected.layer);
+    setLayerEntityIndex(selected.index ?? 0);
+    recordEditorStep('selection_from_game');
+  }, [props.controller?.selected]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 'z') return;
+      const target = event.target as HTMLElement | null;
+      if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA' || target?.tagName === 'SELECT') return;
+      event.preventDefault();
+      if (event.shiftKey) redo();
+      else undo();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [redo, undo]);
+
+  useEffect(() => {
+    const change = props.controller?.pendingChange;
+    if (!change || lastControllerChangeRef.current === change.id) return;
+    lastControllerChangeRef.current = change.id;
+    const result = applyEditorPatch(contentRef.current, change.patch);
+    if (result.error) {
+      props.controller?.acknowledgeChange(change.id, false, result.error);
+      props.controller?.useFallback(result.error);
+      setControllerDisabled(true);
+      return;
+    }
+    setContent(result.content);
+    pushLive(result.content);
+    scheduleSave();
+    props.controller?.acknowledgeChange(change.id, true);
+    recordEditorStep('tool_used');
+  }, [contentRef, props.controller, pushLive, scheduleSave, setContent]);
 
   function updateItem(next: EditorItemContent) {
     if (!collectionKey) return;
@@ -379,9 +398,10 @@ export function EditorPanel(props: {
 
   function undoAssist() {
     if (assist.kind !== 'applied') return;
-    setContent(assist.undo);
-    pushLive(assist.undo);
-    scheduleSave();
+    const snapshot = assist.undo;
+    setContent(snapshot);
+    pushLive(snapshot);
+    scheduleDocumentSave();
     setAssist({ kind: 'idle' });
   }
 
@@ -391,7 +411,7 @@ export function EditorPanel(props: {
       if (!mountedRef.current) return;
       setEditor(loaded);
       const merged = mergeDraft(loaded);
-      setContent(merged);
+      resetDocument(merged, loaded.draft?.revision ?? 0);
       const defaultKey = defaultCollectionKey(loaded.definition.content);
       const defaultLayer = defaultLayerKey(loaded.definition.layers ?? {});
       pushLive(
@@ -402,16 +422,14 @@ export function EditorPanel(props: {
             ? { collection: defaultLayer, index: 0 }
             : undefined,
       );
-      setRevision(loaded.draft?.revision ?? 0);
       setSelectedCollectionKey(defaultKey);
       setItemIndex(0);
       setTileKey(defaultKey ? firstTileKey(loaded.definition.content[defaultKey]) : null);
       setSelectedLayerKey(defaultLayer);
       setLayerEntityIndex(0);
       setLayerTileKey(defaultLayer ? defaultLayerTileKey(loaded.definition.layers ?? {}, defaultLayer) : null);
-      setSaveState('clean');
-    } catch {
-      if (mountedRef.current) setSaveState('error');
+    } catch (error) {
+      if (mountedRef.current) markError(error);
     }
   }
 
@@ -437,7 +455,7 @@ export function EditorPanel(props: {
       await deleteEditorDraft(slug);
       if (!mountedRef.current) return;
       if (editor) {
-        setContent(editor.content);
+        resetDocument(editor.content, 0);
         const defaultKey = defaultCollectionKey(editor.definition.content);
         const defaultLayer = defaultLayerKey(editor.definition.layers ?? {});
         pushLive(
@@ -448,16 +466,14 @@ export function EditorPanel(props: {
               ? { collection: defaultLayer, index: 0 }
               : undefined,
         );
-        setRevision(0);
         setSelectedCollectionKey(defaultKey);
         setItemIndex(0);
         setSelectedLayerKey(defaultLayer);
         setLayerEntityIndex(0);
         setLayerTileKey(defaultLayer ? defaultLayerTileKey(editor.definition.layers ?? {}, defaultLayer) : null);
-        setSaveState('clean');
       }
-    } catch {
-      if (mountedRef.current) setSaveState('error');
+    } catch (error) {
+      if (mountedRef.current) markError(error);
     }
   }
 
@@ -468,11 +484,7 @@ export function EditorPanel(props: {
     // server holding an older draft, and publishing it anyway would report
     // success for content the creator is not looking at. The save's own banner
     // already says what went wrong.
-    if (timerRef.current !== null || saveState === 'dirty') {
-      if (timerRef.current !== null) {
-        window.clearTimeout(timerRef.current);
-        timerRef.current = null;
-      }
+    if (saveState === 'dirty') {
       if (!(await saveNow())) return;
     }
     setPublish({ kind: 'publishing' });
@@ -537,6 +549,9 @@ export function EditorPanel(props: {
   const boardSpec = tilemapCollection(spec);
   const pathSpec = pathCollection(spec);
   const width = tilemapItem ? (tilemapItem.rows[0]?.length ?? 0) : 0;
+  const controllerActive = Boolean(
+    props.controller?.status === 'ready' && !controllerDisabled && props.controller.view,
+  );
 
   return (
     <div className="editor-panel">
@@ -554,6 +569,12 @@ export function EditorPanel(props: {
                 : ''}
         </span>
         <div className="editor-panel-actions">
+          <button type="button" className="studio-head-action" disabled={!canUndo} onClick={() => undo()}>
+            ↶
+          </button>
+          <button type="button" className="studio-head-action" disabled={!canRedo} onClick={() => redo()}>
+            ↷
+          </button>
           <button
             type="button"
             className="studio-head-action"
@@ -562,9 +583,7 @@ export function EditorPanel(props: {
             // creator to a playtest of the draft *before* their last edit.
             onClick={() => {
               recordEditorStep('previewed');
-              if (timerRef.current !== null) {
-                window.clearTimeout(timerRef.current);
-                timerRef.current = null;
+              if (saveState === 'dirty') {
                 void saveNow().then(() => props.onOpenPlaytest());
                 return;
               }
@@ -615,9 +634,16 @@ export function EditorPanel(props: {
           {publish.message}
         </div>
       ) : null}
+      {props.controller?.status === 'failed' || controllerDisabled ? (
+        <div className="editor-banner" role="alert">
+          {props.controller?.reason ?? t('studioPanel.editor.controllerFallback')}
+        </div>
+      ) : null}
 
       <div className="editor-body">
-        {layerSpec && layerKey && editor.definition.layers ? (
+        {controllerActive && props.controller ? (
+          <EditorSurface controller={props.controller} />
+        ) : layerSpec && layerKey && editor.definition.layers ? (
           <LayeredBoard
             layers={editor.definition.layers}
             content={layersContent}

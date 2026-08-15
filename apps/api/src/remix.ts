@@ -224,15 +224,14 @@ function ownerTag(uid: string): string {
 function defaultCollections(definition: EditorDefinition | null, rawContent?: string): Record<string, unknown> {
   if (!definition) return {};
   if (rawContent) {
-    let parsed: unknown = null;
     try {
-      parsed = JSON.parse(rawContent);
+      const parsed: unknown = JSON.parse(rawContent);
+      if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+        const content = parsed as EditorContentDocument;
+        if (validateEditorContent(definition, content).length === 0) return content;
+      }
     } catch {
-      // Invalid JSON falls through to the defaults below.
-    }
-    if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
-      const content = parsed as EditorContentDocument;
-      if (validateEditorContent(definition, content).length === 0) return content;
+      // Malformed content falls back to the declaration defaults below.
     }
   }
   return Object.fromEntries(Object.entries(definition.content).map(([key, spec]) => [key, spec.defaults]));
