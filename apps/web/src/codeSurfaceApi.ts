@@ -155,6 +155,30 @@ export async function fetchCodeSurfaceKitDeclaration(slug: string): Promise<Code
   }
 }
 
+// TA-01: advisory-only, like the kit declaration fetch — never throws.
+export async function fetchCodeSurfaceCompletion(
+  slug: string,
+  path: string,
+  prefixWindow: string,
+  suffixWindow: string,
+  signal: AbortSignal,
+): Promise<string> {
+  try {
+    const response = await fetch(`${API_BASE}/api/me/studio/games/${encodeURIComponent(slug)}/sources/complete`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ path, prefixWindow, suffixWindow }),
+      signal,
+    });
+    if (!response.ok) return '';
+    const body = (await response.json()) as { completion?: string };
+    return body.completion ?? '';
+  } catch {
+    return '';
+  }
+}
+
 export type CodeSurfaceDeliverOutcome =
   | {
       accepted: true;
