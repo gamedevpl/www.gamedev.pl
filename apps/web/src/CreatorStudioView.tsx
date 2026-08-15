@@ -598,8 +598,10 @@ export function CreatorStudioView({
 
   // Queued so the Code actions shortcut survives a switch from another tab.
   const [pendingCodeActions, setPendingCodeActions] = useState<{ mode: CodeActionsMode; nonce: number } | null>(null);
-  const codeShortcutStateRef = useRef({ tab, activeGame });
-  codeShortcutStateRef.current = { tab, activeGame };
+  const codeShortcutStateRef = useRef({ tab, activeGame, posture });
+  codeShortcutStateRef.current = { tab, activeGame, posture };
+  // Tab/posture to restore if the shortcut-opened menu gets cancelled.
+  const forcedCodeReturnRef = useRef<{ tab: StudioTab; posture: StagePosture } | null>(null);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -608,10 +610,11 @@ export function CreatorStudioView({
       const isQuickOpen = key === 'p';
       const isSearch = key === 'f' && event.shiftKey;
       if (!isQuickOpen && !isSearch) return;
-      const { tab: currentTab, activeGame: currentGame } = codeShortcutStateRef.current;
+      const { tab: currentTab, activeGame: currentGame, posture: currentPosture } = codeShortcutStateRef.current;
       // CodeSurface owns the shortcut itself once Code is the open tab.
       if (currentTab === 'code' || !currentGame || !tabAvailable(currentGame, 'code')) return;
       event.preventDefault();
+      forcedCodeReturnRef.current = { tab: currentTab, posture: currentPosture };
       setPendingCodeActions((current) => ({
         mode: isQuickOpen ? (event.shiftKey ? 'commands' : 'files') : 'search',
         nonce: (current?.nonce ?? 0) + 1,
@@ -621,6 +624,15 @@ export function CreatorStudioView({
     document.addEventListener('keydown', onKeyDown, true);
     return () => document.removeEventListener('keydown', onKeyDown, true);
   }, []);
+
+  // Nothing was picked — undo the forced hop into Code.
+  function handleCodeActionsMenuCancelled() {
+    const restore = forcedCodeReturnRef.current;
+    forcedCodeReturnRef.current = null;
+    if (!restore) return;
+    openTab(restore.tab);
+    setPosture(restore.posture);
+  }
 
   // Share is about the permalink, not about the draft switch: a game already live in
   // the catalog has nothing to toggle, but it still needs a way to hand the link out.
@@ -1068,6 +1080,7 @@ export function CreatorStudioView({
                               pendingActionsMode={pendingCodeActions}
                               onPendingActionsModeConsumed={() => setPendingCodeActions(null)}
                               onPreviewReady={stageSource.pushPreview}
+                              onActionsMenuCancelled={handleCodeActionsMenuCancelled}
                             />
                           </div>
                         ) : null}

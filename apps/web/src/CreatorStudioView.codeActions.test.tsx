@@ -211,6 +211,48 @@ describe('CreatorStudioView — Code actions shortcut reaches beyond the Code ta
     root.unmount();
   });
 
+  it('Escape without picking anything sends the creator back to where they were', async () => {
+    const { container, root } = await render();
+    expect(container.querySelector('[aria-label="Code"]')?.getAttribute('aria-pressed')).toBe('false');
+
+    await pressGlobal('p');
+    await act(async () => {
+      await flush();
+    });
+    expect(container.querySelector('[data-testid="code-actions-menu"]')).not.toBeNull();
+
+    const input = container.querySelector<HTMLInputElement>('.code-surface-palette-input');
+    await act(async () => {
+      input!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    });
+
+    expect(container.querySelector('[data-testid="code-actions-menu"]')).toBeNull();
+    expect(container.querySelector('[aria-label="Code"]')?.getAttribute('aria-pressed')).toBe('false');
+    expect(container.querySelector('.code-surface')).toBeNull();
+
+    root.unmount();
+  });
+
+  it('picking a file from the shortcut-opened menu stays on Code, no snap back', async () => {
+    const { container, root } = await render();
+
+    await pressGlobal('p');
+    await act(async () => {
+      await flush();
+    });
+    const fileOption = Array.from(container.querySelectorAll<HTMLButtonElement>('.code-surface-palette-option')).find(
+      (el) => el.textContent?.includes('game.ts'),
+    );
+    await act(async () => {
+      fileOption!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(container.querySelector('[data-testid="code-actions-menu"]')).toBeNull();
+    expect(container.querySelector('[aria-label="Code"]')?.getAttribute('aria-pressed')).toBe('true');
+
+    root.unmount();
+  });
+
   it('does nothing when the active game has no Code surface — no tab switch, no preventDefault', async () => {
     const { container, root } = await render({ codeSurface: false });
     expect(container.querySelector('[aria-label="Code"]')).toBeNull();
