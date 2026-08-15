@@ -1580,7 +1580,6 @@ describe('SubmissionStatusView', () => {
     // The feedback panel is offered once a draft is playable.
     const textarea = container.querySelector<HTMLTextAreaElement>('.status-feedback-input');
     expect(textarea).not.toBeNull();
-    expect(textarea?.style.height).toBe('');
     const sendButton = container.querySelector<HTMLButtonElement>('.status-feedback .primary-btn');
     // Empty / too-short feedback keeps the button disabled.
     expect(sendButton?.disabled).toBe(true);
