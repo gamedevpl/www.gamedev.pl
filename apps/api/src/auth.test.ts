@@ -1,11 +1,14 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  DEFAULT_SESSION_DURATION_SECONDS,
   InvalidSessionError,
   mintSessionToken,
   registerAuthPlugin,
   SESSION_COOKIE_NAME,
+  TOKEN_SESSION_DURATION_SECONDS,
   readSessionToken,
+  sessionDurationSeconds,
   type GoogleAuthVerifier,
 } from './auth.js';
 import { InMemoryStore } from './store.js';
@@ -733,6 +736,80 @@ describe('Local development sign-in', () => {
     const res = await app.inject({ method: 'POST', url: '/api/auth/dev', payload: { uid: 'Not A Handle!' } });
 
     expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+});
+
+describe('Session lifetime', () => {
+  const setupServer = async () => {
+    const store = new InMemoryStore();
+    const app: FastifyInstance = Fastify({ logger: false });
+    await registerAuthPlugin(app, {
+      store,
+      sessionSecret: 'test-secret-key',
+      googleAuthVerifier: new MockGoogleVerifier({ 'gap-token': { sub: '20001' } }),
+    });
+    const login = await app.inject({ method: 'POST', url: '/api/auth/google', payload: { idToken: 'gap-token' } });
+    return { app, store, uid: 'g:20001', loginCookie: login.headers['set-cookie'] as string };
+  };
+
+  const meWith = (app: FastifyInstance, token: string) =>
+    app.inject({ method: 'GET', url: '/api/auth/me', headers: { cookie: `${SESSION_COOKIE_NAME}=${token}` } });
+
+  const agedToken = (uid: string, ageSeconds: number, source?: 'token') =>
+    mintSessionToken(
+      uid,
+      'test-secret-key',
+      sessionDurationSeconds(source),
+      Math.floor(Date.now() / 1000) - ageSeconds,
+      source,
+    );
+
+  it('signs a person in for 30 days, not for an afternoon', async () => {
+    // The regression this fixes: 12h expired between ordinary visits.
+    const { app, loginCookie } = await setupServer();
+
+    expect(loginCookie).toContain(`Max-Age=${DEFAULT_SESSION_DURATION_SECONDS}`);
+    expect(DEFAULT_SESSION_DURATION_SECONDS).toBe(30 * 24 * 60 * 60);
+
+    await app.close();
+  });
+
+  it('still knows a session that went five days untouched', async () => {
+    const { app, uid } = await setupServer();
+
+    const res = await meWith(app, agedToken(uid, 5 * 24 * 60 * 60));
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).user.uid).toBe(uid);
+    // Nowhere near half spent, so nothing to reissue.
+    expect(res.headers['set-cookie']).toBeUndefined();
+
+    await app.close();
+  });
+
+  it('slides the expiry once the session is past half its life', async () => {
+    const { app, uid } = await setupServer();
+
+    const res = await meWith(app, agedToken(uid, 20 * 24 * 60 * 60));
+
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['set-cookie'] as string).toContain(`Max-Age=${DEFAULT_SESSION_DURATION_SECONDS}`);
+
+    await app.close();
+  });
+
+  it('keeps a token-derived cookie on the short 12h clock, renewal included', async () => {
+    // Renewal must not promote a token cookie to a month.
+    const { app, uid } = await setupServer();
+
+    const res = await meWith(app, agedToken(uid, 7 * 60 * 60, 'token'));
+
+    expect(res.statusCode).toBe(200);
+    const renewed = res.headers['set-cookie'] as string;
+    expect(renewed).toContain(`Max-Age=${TOKEN_SESSION_DURATION_SECONDS}`);
+    expect(readSessionToken(renewed.split(';')[0]!.split('=')[1]!, 'test-secret-key').src).toBe('token');
+
     await app.close();
   });
 });

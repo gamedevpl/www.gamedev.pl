@@ -2,7 +2,7 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { resolveAccessTokenUser } from './access-token-service.js';
 import { canonicalAppBaseUrl } from './canonical-app-url.js';
-import { DEFAULT_SESSION_DURATION_SECONDS, mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
+import { mintSessionToken, SESSION_COOKIE_NAME, TOKEN_SESSION_DURATION_SECONDS } from './auth.js';
 import { escapeHtml, MASCOT_SVG, OAUTH_PAGE_STYLES } from './oauth-page-chrome.js';
 import type { Store } from './store.js';
 
@@ -108,7 +108,7 @@ function tokenLoginHtml(input: { oauthReturn: string | null; formToken: string; 
     <h1>Sign in with an access token</h1>
     <p class="lead">
       Paste the personal access token you were given. It signs you in as the account the
-      token belongs to, for ${DEFAULT_SESSION_DURATION_SECONDS / 3600} hours.
+      token belongs to, for ${TOKEN_SESSION_DURATION_SECONDS / 3600} hours.
     </p>
     ${input.error ? `<p class="waiting">${escapeHtml(input.error)}</p>` : ''}
 
@@ -250,13 +250,13 @@ export function registerTokenLoginRoutes(app: FastifyInstance, options: TokenLog
       // must carry the token's authority and not a grain more.
       reply.setCookie(
         SESSION_COOKIE_NAME,
-        mintSessionToken(user.uid, sessionSecret, DEFAULT_SESSION_DURATION_SECONDS, undefined, 'token'),
+        mintSessionToken(user.uid, sessionSecret, TOKEN_SESSION_DURATION_SECONDS, undefined, 'token'),
         {
           path: '/',
           httpOnly: true,
           secure: isProd,
           sameSite: 'lax',
-          maxAge: DEFAULT_SESSION_DURATION_SECONDS,
+          maxAge: TOKEN_SESSION_DURATION_SECONDS,
         },
       );
 

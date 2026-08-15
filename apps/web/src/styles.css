@@ -12230,18 +12230,6 @@ button.builder-mode-selector:disabled {
   color: #d2a8ff;
 }
 
-.code-surface-budget {
-  flex: none;
-  padding: 4px 14px;
-  font-size: 0.74rem;
-  color: var(--muted);
-  border-top: 1px solid var(--panel-border);
-}
-
-.code-surface-budget.is-oversize {
-  color: #f0b429;
-}
-
 .code-surface-diagnostics {
   flex: none;
   margin: 0;
@@ -12255,24 +12243,57 @@ button.builder-mode-selector:disabled {
   overflow-y: auto;
 }
 
-.code-surface-foot {
+/* A thin, single-row status bar (VS Code's bottom bar) instead of a padded footer:
+   status segments on the left, actions on the right, everything the same small size. */
+.code-surface-statusbar {
   flex: none;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 8px 14px;
+  gap: 4px;
+  min-height: 28px;
+  padding: 3px 10px;
   border-top: 1px solid var(--panel-border);
+  background: rgba(148, 163, 184, 0.05);
 }
 
-.code-surface-working-copy {
+.code-surface-statusbar-row {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.code-surface-statusbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.code-surface-statusbar-left::-webkit-scrollbar {
+  display: none;
+}
+
+.code-surface-statusbar-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  white-space: nowrap;
+  font-size: 0.72rem;
+}
+
+.code-surface-budget {
+  color: var(--muted);
+}
+
+.code-surface-budget.is-oversize {
+  color: #f0b429;
 }
 
 .code-surface-save-state {
-  font-size: 0.78rem;
   color: var(--muted);
 }
 
@@ -12286,28 +12307,55 @@ button.builder-mode-selector:disabled {
 }
 
 .code-surface-rebuild-error {
-  font-size: 0.78rem;
   color: #ff7b72;
 }
 
 .code-surface-live-push {
-  font-size: 0.78rem;
   color: var(--success, #2e8b57);
 }
 
 .code-surface-round-opened {
-  font-size: 0.78rem;
   color: var(--muted);
 }
 
+.code-surface-preview-status.is-pending {
+  color: var(--muted);
+}
+
+.code-surface-preview-status.is-pending .status-preview-spinner {
+  width: 10px;
+  height: 10px;
+  border-width: 2px;
+}
+
+.code-surface-preview-status.is-ready {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--turquoise);
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.code-surface-preview-status.is-ready:hover {
+  color: var(--text);
+}
+
+.code-surface-deliver {
+  display: flex;
+  align-items: center;
+  flex: none;
+  gap: 8px;
+}
+
 .code-surface-discard {
-  margin-left: auto;
   border: 1px solid var(--panel-border);
   background: transparent;
   color: var(--muted);
-  font-size: 0.78rem;
-  padding: 6px 10px;
-  border-radius: 8px;
+  padding: 3px 8px;
+  border-radius: 4px;
   cursor: pointer;
 }
 
@@ -12321,39 +12369,26 @@ button.builder-mode-selector:disabled {
   cursor: default;
 }
 
-/* Belt and braces with the `studio-head-action is-primary` class the Publish button
-   also carries (pill shape, hover glow — Play's exact look): this self-contained
-   rule keeps the fill guaranteed even if that pairing drifts, and the regression
-   test reads it. */
-.code-surface-deliver-btn.is-primary {
+.code-surface-deliver-btn {
   border: 1px solid var(--turquoise);
   background: var(--turquoise);
   color: #08241d;
   font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 4px;
+  cursor: pointer;
 }
 
-.code-surface-deliver-btn.is-primary:disabled {
+.code-surface-deliver-btn:disabled {
   border-color: var(--panel-border);
   background: rgba(148, 163, 184, 0.12);
   color: var(--muted);
   cursor: default;
-  filter: none;
-  box-shadow: none;
-}
-
-.code-surface-deliver {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.code-surface-deliver-btn {
-  margin-left: auto;
 }
 
 .code-surface-deliver-message {
-  font-size: 0.76rem;
+  display: block;
+  font-size: 0.72rem;
   color: var(--muted);
 }
 
@@ -12364,20 +12399,31 @@ button.builder-mode-selector:disabled {
 }
 
 .code-surface-publish-hint {
-  flex: 1 1 auto;
-  min-width: 0;
+  display: inline-block;
+  max-width: 160px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.68rem;
   color: var(--muted);
-  line-height: 1.25;
   cursor: help;
+  vertical-align: middle;
 }
 
 .code-surface-publish-hint:focus-visible {
   outline: 2px solid rgba(0, 228, 172, 0.5);
   outline-offset: 2px;
+}
+
+/* Narrow phones: let the bar wrap into two lines rather than clip actions. */
+@media (max-width: 640px) {
+  .code-surface-statusbar-row {
+    flex-wrap: wrap;
+    height: auto;
+  }
+
+  .code-surface-publish-hint {
+    display: none;
+  }
 }
 
 /* Actions menu (quick open / commands / project search): one top-anchored palette,

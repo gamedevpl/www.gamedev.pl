@@ -49,7 +49,8 @@ export type CodeActionsMenuProps = {
   selectedPath: string | null;
   onOpenFile: (path: string) => void;
   onOpenMatch: (match: CodeActionsSearchMatch) => void;
-  onClose: () => void;
+  // acted=true for a command run; omitted (falsy) for a plain dismiss.
+  onClose: (acted?: boolean) => void;
 };
 
 const SEARCH_MIN_CHARS = 2;
@@ -219,7 +220,7 @@ export function CodeActionsMenu({
       inputRef.current?.focus();
       return;
     }
-    onClose();
+    onClose(true);
     item.command.run();
   }
 
@@ -281,7 +282,7 @@ export function CodeActionsMenu({
   ];
 
   return (
-    <div className="code-surface-palette-backdrop" role="presentation" onClick={onClose}>
+    <div className="code-surface-palette-backdrop" role="presentation" onClick={() => onClose()}>
       <section
         className="code-surface-palette"
         role="dialog"
@@ -307,7 +308,7 @@ export function CodeActionsMenu({
           <button
             type="button"
             className="modal-close-btn"
-            onClick={onClose}
+            onClick={() => onClose()}
             aria-label={t('studioPanel.code.actions.close')}
           >
             <PixelIcon name="close" size={13} />

@@ -35,8 +35,22 @@ function localeFromRequest(request: FastifyRequest): string | undefined {
 }
 
 export const SESSION_COOKIE_NAME = 'gamedev_session';
-export const DEFAULT_SESSION_DURATION_SECONDS = 12 * 60 * 60; // 12 hours
-export const HALF_LIFE_SECONDS = 6 * 60 * 60; // 6 hours (sliding renewal threshold)
+
+// Renewal fires only on requests, so this bounds absence between visits.
+export const DEFAULT_SESSION_DURATION_SECONDS = 30 * 24 * 60 * 60; // 30 days
+
+// Short on purpose: minted unattended, carries a token's authority.
+export const TOKEN_SESSION_DURATION_SECONDS = 12 * 60 * 60; // 12 hours
+
+export function sessionDurationSeconds(source?: 'token'): number {
+  return source === 'token' ? TOKEN_SESSION_DURATION_SECONDS : DEFAULT_SESSION_DURATION_SECONDS;
+}
+
+// Proportional, or 12h sessions renew on nearly every request.
+export function sessionRenewalThresholdSeconds(source?: 'token'): number {
+  return Math.floor(sessionDurationSeconds(source) / 2);
+}
+
 export const BETA_INVITE_CODE_PATTERN = /^[A-Za-z0-9_-]{32}$/;
 
 export interface SessionPayload {
@@ -59,7 +73,7 @@ export interface SessionPayload {
    * Absent on every cookie minted before this field existed, and those all read as
    * ordinary sessions. Right for the Google ones; briefly wrong for any the exchange
    * handed out beforehand, which keep satisfying the session-only checks until they
-   * expire. That window is one session lifetime (12h) and closes on its own; rotating
+   * expire. That window is one token lifetime (12h) and closes on its own; rotating
    * SESSION_SECRET at deploy closes it immediately, which is worth doing if a PAT for
    * an admin account was ever exchanged.
    */
@@ -344,7 +358,7 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
       }
 
       const now = Math.floor(Date.now() / 1000);
-      const needsRenewal = exp - now < HALF_LIFE_SECONDS;
+      const needsRenewal = exp - now < sessionRenewalThresholdSeconds(src);
 
       return { user, needsRenewal, fromToken: src === 'token' };
     } catch {
@@ -422,19 +436,21 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
       // genuine one after six hours and regain exactly the authority it was denied.
       // `needsSessionRenewal` is only ever set on the cookie path, so 'token' here
       // means a token-derived session rather than a bare Bearer request.
+      const source = request.authMethod === 'token' ? 'token' : undefined;
+      const durationSeconds = sessionDurationSeconds(source);
       const renewedToken = mintSessionToken(
         request.user.uid,
         effectiveSessionSecret,
-        DEFAULT_SESSION_DURATION_SECONDS,
+        durationSeconds,
         undefined,
-        request.authMethod === 'token' ? 'token' : undefined,
+        source,
       );
       reply.setCookie(SESSION_COOKIE_NAME, renewedToken, {
         path: '/',
         httpOnly: true,
         secure: isProd,
         sameSite: 'lax',
-        maxAge: DEFAULT_SESSION_DURATION_SECONDS,
+        maxAge: durationSeconds,
       });
     }
   });
@@ -827,13 +843,13 @@ export async function registerAuthPlugin(app: FastifyInstance, options: AuthPlug
       // for — which is the whole point of this route — works unchanged.
       reply.setCookie(
         SESSION_COOKIE_NAME,
-        mintSessionToken(tokenUser.uid, effectiveSessionSecret, DEFAULT_SESSION_DURATION_SECONDS, undefined, 'token'),
+        mintSessionToken(tokenUser.uid, effectiveSessionSecret, TOKEN_SESSION_DURATION_SECONDS, undefined, 'token'),
         {
           path: '/',
           httpOnly: true,
           secure: isProd,
           sameSite: 'lax',
-          maxAge: DEFAULT_SESSION_DURATION_SECONDS,
+          maxAge: TOKEN_SESSION_DURATION_SECONDS,
         },
       );
 
