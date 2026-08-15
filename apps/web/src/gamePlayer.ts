@@ -305,6 +305,19 @@ const BRIDGE = `(function(){
       post({type:'resumed'});
     }
   }
+  // Track 4: __GAME_HARNESS__ is the same versioned surface the gate's capture
+  // tooling already calls directly (screenshot()) — snapshotState/restoreState are
+  // absent on a game built against an older kit, hence the typeof guards.
+  function sendStateSnapshot(){
+    var h=window.__GAME_HARNESS__;
+    var data=(h&&typeof h.snapshotState==='function')?h.snapshotState():null;
+    post({type:'stateSnapshot',data:data});
+  }
+  function applyStateRestore(data){
+    var h=window.__GAME_HARNESS__;
+    var ok=(h&&typeof h.restoreState==='function')?!!h.restoreState(data):false;
+    post({type:'stateRestored',ok:ok});
+  }
   addEventListener('message',function(e){
     var m=e.data||{};
     if(m.source!=='${HOST}')return;
@@ -313,6 +326,8 @@ const BRIDGE = `(function(){
     else if(m.type==='pause'){setPaused(true);}
     else if(m.type==='resume'){setPaused(false);}
     else if(m.type==='capture'){sendSnapshot('capture');}
+    else if(m.type==='snapshotState'){sendStateSnapshot();}
+    else if(m.type==='restoreState'){applyStateRestore(m.data);}
   });
   var lastActivity=0;
   function reportActivity(){
@@ -445,13 +460,55 @@ export function embedGameHtml(html: string): string {
 /**
  * Sends one host message into an embedded game frame.
  *
- * The bridge's message contract (`pause`, `resume`, `setSound`, `capture`, `hello`) is
- * useful to callers that want none of the state the hooks below keep — the floating live
- * preview wants to mute and freeze a frame it never subscribes to. Exported so the
- * envelope tag stays in this file, which is the only place that knows it.
+ * The bridge's contract (`pause`, `resume`, `setSound`, `capture`, `hello`,
+ * `snapshotState`, `restoreState`) is useful to callers that want none of the state the
+ * hooks below keep — the floating live preview wants to mute and freeze a frame it never
+ * subscribes to. Exported because the envelope tag lives only in this file.
  */
 export function postGameHostMessage(frame: HTMLIFrameElement | null, message: Record<string, unknown>): void {
   frame?.contentWindow?.postMessage({ source: HOST, ...message }, '*');
+}
+
+// Awaits one reply of `type` from `frame`, or null/false after `timeoutMs`.
+function awaitBridgeReply<T>(
+  frame: HTMLIFrameElement | null,
+  type: string,
+  extract: (data: Record<string, unknown>) => T,
+  fallback: T,
+  timeoutMs: number,
+): Promise<T> {
+  const contentWindow = frame?.contentWindow;
+  if (!contentWindow) return Promise.resolve(fallback);
+  return new Promise((resolve) => {
+    const timer = window.setTimeout(() => {
+      window.removeEventListener('message', onMessage);
+      resolve(fallback);
+    }, timeoutMs);
+    function onMessage(event: MessageEvent) {
+      if (event.origin !== 'null') return;
+      if (event.source !== null && event.source !== contentWindow) return;
+      const data = event.data as { source?: string; type?: string } | null;
+      if (!data || data.source !== PLAYER || data.type !== type) return;
+      window.clearTimeout(timer);
+      window.removeEventListener('message', onMessage);
+      resolve(extract(data as Record<string, unknown>));
+    }
+    window.addEventListener('message', onMessage);
+  });
+}
+
+// Null on a game with no `.persist(...)` declared, or on timeout.
+export function requestStateSnapshot(frame: HTMLIFrameElement | null, timeoutMs = 400): Promise<unknown | null> {
+  const reply = awaitBridgeReply(frame, 'stateSnapshot', (data) => data.data ?? null, null, timeoutMs);
+  postGameHostMessage(frame, { type: 'snapshotState' });
+  return reply;
+}
+
+// False means the game declined or the request timed out.
+export function requestStateRestore(frame: HTMLIFrameElement | null, data: unknown, timeoutMs = 400): Promise<boolean> {
+  const reply = awaitBridgeReply(frame, 'stateRestored', (msg) => Boolean(msg.ok), false, timeoutMs);
+  postGameHostMessage(frame, { type: 'restoreState', data });
+  return reply;
 }
 
 /** en/pl are the only locales games ship strings for; anything else maps to en. */

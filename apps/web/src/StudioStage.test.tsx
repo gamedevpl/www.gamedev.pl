@@ -4,7 +4,13 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import i18n from './i18n/index.js';
-import { embedGameHtml, postGameHostMessage, withGameLocale } from './gamePlayer.js';
+import {
+  embedGameHtml,
+  postGameHostMessage,
+  requestStateRestore,
+  requestStateSnapshot,
+  withGameLocale,
+} from './gamePlayer.js';
 import { StudioStage, type StudioStageProps } from './StudioStage.js';
 
 vi.mock('./submissionApi.js', async () => {
@@ -17,13 +23,26 @@ vi.mock('./studioApi.js', async () => {
 });
 vi.mock('./gamePlayer.js', async () => {
   const actual = await vi.importActual<typeof import('./gamePlayer.js')>('./gamePlayer.js');
-  return { ...actual, postGameHostMessage: vi.fn(actual.postGameHostMessage) };
+  return {
+    ...actual,
+    postGameHostMessage: vi.fn(actual.postGameHostMessage),
+    requestStateSnapshot: vi.fn(actual.requestStateSnapshot),
+    requestStateRestore: vi.fn(actual.requestStateRestore),
+  };
 });
 
 const mockedPostGameHostMessage = vi.mocked(postGameHostMessage);
+const mockedRequestStateSnapshot = vi.mocked(requestStateSnapshot);
+const mockedRequestStateRestore = vi.mocked(requestStateRestore);
 
 const GAME_A = '<!doctype html><html><head></head><body><canvas id="game">A</canvas></body></html>';
 const GAME_B = '<!doctype html><html><head></head><body><canvas id="game">B</canvas></body></html>';
+const GAME_C = '<!doctype html><html><head></head><body><canvas id="game">C</canvas></body></html>';
+
+async function flushPromises() {
+  await Promise.resolve();
+  await Promise.resolve();
+}
 
 function baseProps(overrides: Partial<StudioStageProps> = {}): StudioStageProps {
   return {
@@ -66,6 +85,8 @@ describe('StudioStage', () => {
   afterEach(() => {
     document.body.innerHTML = '';
     vi.useRealTimers();
+    mockedRequestStateSnapshot.mockClear();
+    mockedRequestStateRestore.mockClear();
   });
 
   it('is pointer-inert in watch posture — a window, not a place to play', async () => {
@@ -124,11 +145,98 @@ describe('StudioStage', () => {
     expect(host.querySelector('iframe')?.getAttribute('srcdoc')).toContain('>A<');
     expect(host.querySelector('.studio-swap-toast')).toBeNull();
 
-    // Once input goes idle, the held build applies on its own.
+    // Once idle, the held build applies after its snapshot request times out.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(900);
+    });
+    expect(host.querySelector('iframe')?.getAttribute('srcdoc')).toContain('>B<');
+    // Nothing to restore without a snapshot.
+    expect(mockedRequestStateRestore).not.toHaveBeenCalled();
+    unmount();
+  });
+
+  it('snapshots state before an idle-triggered swap applies, then restores it on the new frame', async () => {
+    vi.useFakeTimers();
+    mockedRequestStateSnapshot.mockResolvedValueOnce({ score: 7 });
+    mockedRequestStateRestore.mockResolvedValueOnce(true);
+    const props = baseProps({ posture: 'play' });
+    const { host, rerender, unmount } = await mount(props);
+
+    await act(async () => sendGameActivity(host));
+    const oldFrame = host.querySelector('iframe');
+    await rerender({
+      ...props,
+      source: { html: GAME_B, rawHtml: GAME_B, origin: { kind: 'staged', at: Date.now(), versionLabel: null } },
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(700);
+    });
+
+    expect(mockedRequestStateSnapshot).toHaveBeenCalledExactlyOnceWith(oldFrame);
+    expect(host.querySelector('iframe')?.getAttribute('srcdoc')).toContain('>B<');
+    // Restores against the now-swapped frame, which is the same DOM node.
+    expect(mockedRequestStateRestore).toHaveBeenCalledExactlyOnceWith(host.querySelector('iframe'), { score: 7 });
+    unmount();
+  });
+
+  it('retries a restore that the new frame is not ready for yet, up to the retry schedule', async () => {
+    vi.useFakeTimers();
+    mockedRequestStateSnapshot.mockResolvedValueOnce({ score: 7 });
+    mockedRequestStateRestore.mockResolvedValueOnce(false).mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    const props = baseProps({ posture: 'play' });
+    const { host, rerender, unmount } = await mount(props);
+
+    await act(async () => sendGameActivity(host));
+    await rerender({
+      ...props,
+      source: { html: GAME_B, rawHtml: GAME_B, origin: { kind: 'staged', at: Date.now(), versionLabel: null } },
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+
+    expect(mockedRequestStateRestore).toHaveBeenCalledTimes(3);
+    unmount();
+  });
+
+  it('never re-applies a stale build once a newer one lands while its snapshot is in flight', async () => {
+    vi.useFakeTimers();
+    let resolveSnapshot: ((value: unknown) => void) | null = null;
+    mockedRequestStateSnapshot.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveSnapshot = resolve;
+      }),
+    );
+    const props = baseProps({ posture: 'play' });
+    const { host, rerender, unmount } = await mount(props);
+
+    await act(async () => sendGameActivity(host));
+    await rerender({
+      ...props,
+      source: { html: GAME_B, rawHtml: GAME_B, origin: { kind: 'staged', at: Date.now(), versionLabel: null } },
+    });
+    // Idle triggers the swap to B, which stalls snapshotting A.
     await act(async () => {
       await vi.advanceTimersByTimeAsync(500);
     });
-    expect(host.querySelector('iframe')?.getAttribute('srcdoc')).toContain('>B<');
+    expect(mockedRequestStateSnapshot).toHaveBeenCalledTimes(1);
+    expect(host.querySelector('iframe')?.getAttribute('srcdoc')).toContain('>A<');
+
+    // Build C arrives while idle — applies immediately, superseding B.
+    await act(async () => {
+      await rerender({
+        ...props,
+        source: { html: GAME_C, rawHtml: GAME_C, origin: { kind: 'staged', at: Date.now(), versionLabel: null } },
+      });
+    });
+    expect(host.querySelector('iframe')?.getAttribute('srcdoc')).toContain('>C<');
+
+    // B's stalled snapshot resolves — must not overwrite C.
+    await act(async () => {
+      resolveSnapshot!(null);
+      await flushPromises();
+    });
+    expect(host.querySelector('iframe')?.getAttribute('srcdoc')).toContain('>C<');
     unmount();
   });
 
@@ -149,10 +257,10 @@ describe('StudioStage', () => {
     });
     expect(host.querySelector('iframe')?.getAttribute('srcdoc')).toContain('>A<');
 
-    // Releasing restarts the idle countdown; once it elapses, the held build applies.
+    // Release restarts the countdown; the build applies once idle and snapshotted.
     await act(async () => sendPointerHeld(host, false));
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(500);
+      await vi.advanceTimersByTimeAsync(900);
     });
     expect(host.querySelector('iframe')?.getAttribute('srcdoc')).toContain('>B<');
     unmount();
