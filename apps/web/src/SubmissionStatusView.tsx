@@ -341,6 +341,8 @@ type SubmissionStatusViewProps = {
    * text — render it escaped, same as every other transcript row.
    */
   onActivityCount?: (count: number, latest: string | null) => void;
+  draft?: { text: string; seq: number } | null;
+  onDraftConsumed?: () => void;
 };
 
 export function SubmissionStatusView({
@@ -355,6 +357,8 @@ export function SubmissionStatusView({
   onImproved,
   justHandedOff = false,
   onActivityCount,
+  draft,
+  onDraftConsumed,
 }: SubmissionStatusViewProps) {
   const { t, i18n } = useTranslation();
   const [status, setStatus] = useState<SubmissionStatus | null>(null);
@@ -944,6 +948,8 @@ export function SubmissionStatusView({
                     phase={status.phase}
                     handoffPending={status.builderHandoff?.target}
                     agentWorking={agentWorking}
+                    draft={draft}
+                    onDraftConsumed={onDraftConsumed}
                     onSwitchToPlatform={
                       status.builder === 'self' && (agentWorking || status.builderHandoff?.target === 'platform')
                         ? handoffToPlatformFromUi
@@ -1387,6 +1393,8 @@ function FeedbackPanel({
   platformUnavailable,
   onSent,
   onPublishedImprove,
+  draft,
+  onDraftConsumed,
 }: {
   token: string;
   /** Routes the message: an improvement on the live game, or a change on the build. */
@@ -1421,6 +1429,8 @@ function FeedbackPanel({
    * path — a draft revision continues the current round and stays on this thread.
    */
   onPublishedImprove?: (token: string) => void;
+  draft?: { text: string; seq: number } | null;
+  onDraftConsumed?: () => void;
 }) {
   const { t } = useTranslation();
   const [text, setText] = useState('');
@@ -1440,6 +1450,22 @@ function FeedbackPanel({
   useEffect(() => {
     setBuilder(initialBuilder);
   }, [initialBuilder, token]);
+
+  useEffect(() => {
+    if (!draft) return;
+    setText(draft.text);
+    onDraftConsumed?.();
+    inputRef.current?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft?.seq]);
+
+  // Runs after `text` commits, so a seeded draft measures its real height.
+  useEffect(() => {
+    const input = inputRef.current;
+    if (!input) return;
+    input.style.height = 'auto';
+    input.style.height = `${Math.min(input.scrollHeight, 220)}px`;
+  }, [text]);
 
   useEffect(() => {
     setStopRequested(handoffPending === 'self');

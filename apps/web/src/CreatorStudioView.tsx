@@ -390,6 +390,8 @@ export function CreatorStudioView({
   const studioStatus = useStudioStatusPoll(stageToken);
   const stageSource = useStageSource(stageToken ?? '', studioStatus);
   const [stageStatus, setStageStatus] = useState<StageStatus>({ kind: 'empty' });
+  // "Fix it" seeds this; the composer consumes it once, then clears it.
+  const [chatDraft, setChatDraft] = useState<{ text: string; seq: number } | null>(null);
   // What the ribbon should describe — the *displayed* document's origin, reported back
   // by the stage. Distinct from `stageSource.origin` (the latest fetched one) while a
   // swap is held during play: the ribbon must not claim a not-yet-applied build's
@@ -433,6 +435,7 @@ export function CreatorStudioView({
     setChecklistUnread(0);
     setRailManualOpen(null);
     setTheaterOpen(false);
+    setChatDraft(null);
     seenActivityRef.current = 0;
     latestActivityRef.current = null;
   }, [stageToken]);
@@ -929,6 +932,10 @@ export function CreatorStudioView({
                           onPostureChange={setPosture}
                           covered={covered}
                           onStatusChange={setStageStatus}
+                          onFixIt={(message) => {
+                            setChatDraft({ text: t('studioPanel.stage.fixItPrompt', { message }), seq: Date.now() });
+                            setRailManualOpen(true);
+                          }}
                           onNewerStageWaiting={setNewerStageWaiting}
                           onImproved={(newToken) => setHandoffToken(newToken)}
                           onDisplayedOriginChange={setDisplayedOrigin}
@@ -983,6 +990,8 @@ export function CreatorStudioView({
                             key={threadToken ?? activeGame.token}
                             token={threadToken ?? activeGame.token}
                             embedded
+                            draft={chatDraft}
+                            onDraftConsumed={() => setChatDraft(null)}
                             justHandedOff={handoffToken != null}
                             onImproved={(newToken) => setHandoffToken(newToken)}
                             onPlaytest={() => changePosture('play')}

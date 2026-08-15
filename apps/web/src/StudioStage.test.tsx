@@ -264,6 +264,62 @@ describe('StudioStage', () => {
     unmount();
   });
 
+  it('crash card surfaces a Fix it button that reports the crash message', async () => {
+    vi.useFakeTimers();
+    const onFixIt = vi.fn();
+    const props = baseProps({ posture: 'watch', onFixIt });
+    const { host, rerender, unmount } = await mount(props);
+    // Swap sources so the crash listener attaches (mount alone skips it).
+    await rerender({
+      ...props,
+      source: { html: GAME_B, rawHtml: GAME_B, origin: { kind: 'staged', at: Date.now(), versionLabel: null } },
+    });
+
+    const iframe = host.querySelector('iframe')!;
+    await act(async () => {
+      const event = new MessageEvent('message', {
+        data: { source: 'gdpl-player', type: 'error', message: 'Bastion requires gfx3d' },
+      });
+      Object.defineProperty(event, 'source', { value: iframe.contentWindow });
+      Object.defineProperty(event, 'origin', { value: 'null' });
+      window.dispatchEvent(event);
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    const fixItBtn = Array.from(host.querySelectorAll('button')).find((btn) => /fix it/i.test(btn.textContent ?? ''));
+    expect(fixItBtn).not.toBeUndefined();
+    await act(async () => {
+      fixItBtn!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(onFixIt).toHaveBeenCalledWith('Bastion requires gfx3d');
+    unmount();
+  });
+
+  it('omits the Fix it button when no handler is wired', async () => {
+    vi.useFakeTimers();
+    const props = baseProps({ posture: 'watch' });
+    const { host, rerender, unmount } = await mount(props);
+    await rerender({
+      ...props,
+      source: { html: GAME_B, rawHtml: GAME_B, origin: { kind: 'staged', at: Date.now(), versionLabel: null } },
+    });
+
+    const iframe = host.querySelector('iframe')!;
+    await act(async () => {
+      const event = new MessageEvent('message', {
+        data: { source: 'gdpl-player', type: 'error', message: 'boom' },
+      });
+      Object.defineProperty(event, 'source', { value: iframe.contentWindow });
+      Object.defineProperty(event, 'origin', { value: 'null' });
+      window.dispatchEvent(event);
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    const fixItBtn = Array.from(host.querySelectorAll('button')).find((btn) => /fix it/i.test(btn.textContent ?? ''));
+    expect(fixItBtn).toBeUndefined();
+    unmount();
+  });
+
   it('unmutes and resumes the frame on entering play — watching must not leave a game silent forever', async () => {
     vi.useFakeTimers();
     const props = baseProps({ posture: 'watch' });
