@@ -710,11 +710,13 @@ export async function registerCreatorCodeRoutes(
       const uid = request.user!.uid;
 
       // Global refusal first — must not spend a creator's own daily slot.
+      let reserved = false;
       if (options.tabCompleteGate) {
         const gate = await options.tabCompleteGate.peek(uid, dateStr);
         if (!gate.allowed) {
           return reply.status(503).send({ error: 'completions are resting right now — try again later' });
         }
+        reserved = gate.reserved;
       }
 
       const quota = await store.checkAndIncrementQuota(
@@ -725,8 +727,8 @@ export async function registerCreatorCodeRoutes(
         'tabCompletes',
       );
       if (!quota.allowed) {
-        // The peek above reserved a slot — a refusal here must free it.
-        await options.tabCompleteGate?.spend(uid, dateStr, 0);
+        // The peek above may reserve a slot — free it on refusal.
+        await options.tabCompleteGate?.spend(uid, dateStr, 0, reserved);
         return reply.status(429).send({ error: 'daily tab-complete quota exceeded' });
       }
 
@@ -739,12 +741,12 @@ export async function registerCreatorCodeRoutes(
         });
       } catch (error) {
         request.log.warn({ slug: resolved.slug, err: error }, 'tab-complete call failed');
-        await options.tabCompleteGate?.spend(uid, dateStr, 0);
+        await options.tabCompleteGate?.spend(uid, dateStr, 0, reserved);
         return reply.status(503).send({ error: 'no completion right now — try again' });
       }
 
       const tokens = result.tokens;
-      await options.tabCompleteGate?.spend(uid, dateStr, tokens ? tokens.input + tokens.output : 0);
+      await options.tabCompleteGate?.spend(uid, dateStr, tokens ? tokens.input + tokens.output : 0, reserved);
       if (tokens) {
         await store
           .recordJobCost(resolved.record.issueNumber, {

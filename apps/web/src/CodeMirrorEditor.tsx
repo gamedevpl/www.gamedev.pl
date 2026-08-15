@@ -200,6 +200,8 @@ const ghostTextField = StateField.define<GhostTextValue>({
     }
     // A cursor move with no edit makes a pinned proposal stale.
     if (tr.selection) return null;
+    // Clears ghost text once the popup takes over — its Tab wins.
+    if (completionStatus(tr.state) === 'active') return null;
     return value;
   },
 });
@@ -291,7 +293,8 @@ function makeGhostTextExtension(fetchGhostTextRef: { current: FetchGhostText | u
           key: 'Tab',
           run: (view) => {
             const value = view.state.field(ghostTextField, false);
-            if (!value) return false;
+            // Defers to the popup's own accept binding once one is active.
+            if (!value || completionStatus(view.state) === 'active') return false;
             const pos = view.state.selection.main.head;
             view.dispatch({
               changes: { from: pos, insert: value.text },

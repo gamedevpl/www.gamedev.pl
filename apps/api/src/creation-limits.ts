@@ -410,11 +410,13 @@ export function resolveDefaultGlobalDailyTabCompleteTokenCap(
 // Worst-case request cost: prefix + suffix chars plus the output cap.
 export const TAB_COMPLETE_TOKEN_RESERVATION = 1400;
 
+export type TabCompletePeekOutcome = { allowed: true; reserved: boolean } | { allowed: false; reason: CreationRefusal };
+
 export interface TabCompleteGate {
-  // Reserves a worst-case slot so concurrent calls cannot all pass free.
-  peek(uid: string, dateStr: string): Promise<CreationGateOutcome>;
-  // Reconciles the reservation. Call once per peek; pass 0 on failure.
-  spend(uid: string, dateStr: string, tokens: number): Promise<void>;
+  // Reserves a worst-case slot; reserved=false if none was recorded.
+  peek(uid: string, dateStr: string): Promise<TabCompletePeekOutcome>;
+  // Reconciles the reservation. Pass the `reserved` flag peek() returned.
+  spend(uid: string, dateStr: string, tokens: number, reserved: boolean): Promise<void>;
 }
 
 // Same chassis as editing/chat, denominated in tokens rather than calls.
@@ -455,7 +457,7 @@ export function createTabCompleteGate(options: CreationGateOptions): TabComplete
 
   return {
     async peek(uid, dateStr) {
-      if (bypassesBreaker(uid)) return { allowed: true };
+      if (bypassesBreaker(uid)) return { allowed: true, reserved: false };
       const value = await limits();
       if (value.tabCompletePaused) return { allowed: false, reason: 'paused' };
       const cap = value.globalDailyTabCompleteTokenCap ?? defaultCap;
@@ -473,19 +475,22 @@ export function createTabCompleteGate(options: CreationGateOptions): TabComplete
           );
           return { allowed: false, reason: 'over_capacity' };
         }
+        return { allowed: true, reserved: true };
       } catch (error) {
-        // A blip is not "over capacity" — same reasoning as the other breakers.
+        // A blip is not over capacity; nothing was reserved to release.
         logWarn({ err: error, dateStr }, 'global tab-complete token counter unreachable; admitting the request');
+        return { allowed: true, reserved: false };
       }
-      return { allowed: true };
     },
 
-    async spend(uid, dateStr, tokens) {
+    async spend(uid, dateStr, tokens, reserved) {
       if (bypassesBreaker(uid)) return;
       const value = await limits();
       const cap = value.globalDailyTabCompleteTokenCap ?? defaultCap;
+      // Only release a reservation that peek() actually recorded.
+      const delta = reserved ? tokens - TAB_COMPLETE_TOKEN_RESERVATION : tokens;
       try {
-        const current = await store.adjustGlobalTabCompleteTokens(dateStr, tokens - TAB_COMPLETE_TOKEN_RESERVATION);
+        const current = await store.adjustGlobalTabCompleteTokens(dateStr, delta);
         if (current >= Math.ceil(cap * 0.8)) {
           logWarn({ dateStr, cap, current }, 'global daily tab-complete token cap is over 80% spent');
         }

@@ -3918,10 +3918,11 @@ export class InMemoryStore implements Store {
     limit: number,
   ): Promise<{ allowed: boolean; current: number }> {
     const current = this.globalTabCompleteTokens.get(dateStr) ?? 0;
-    if (current >= limit) {
+    const next = current + tokens;
+    // Refuse a reservation that would itself cross the cap.
+    if (next > limit) {
       return { allowed: false, current };
     }
-    const next = current + tokens;
     this.globalTabCompleteTokens.set(dateStr, next);
     return { allowed: true, current: next };
   }
@@ -6624,12 +6625,13 @@ export class FirestoreStore implements Store {
       const snap = await transaction.get(ref);
       const value = snap.data()?.tabCompleteTokens;
       const current = typeof value === 'number' ? value : 0;
+      const nextVal = current + tokens;
 
-      if (current >= limit) {
+      // Refuse a reservation that would itself cross the cap.
+      if (nextVal > limit) {
         return { allowed: false, current };
       }
 
-      const nextVal = current + tokens;
       transaction.set(ref, { tabCompleteTokens: nextVal }, { merge: true });
       return { allowed: true, current: nextVal };
     });

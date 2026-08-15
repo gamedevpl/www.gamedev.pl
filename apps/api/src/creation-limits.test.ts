@@ -281,24 +281,35 @@ describe('tab-complete gate (the ghost-text token breaker)', () => {
     const store = new InMemoryStore();
     // Room for exactly one reservation, not two.
     const gate = createTabCompleteGate({ store, ttlMs: 0, defaultGlobalDailyCap: TAB_COMPLETE_TOKEN_RESERVATION });
-    expect(await gate.peek('g:alice', '2026-08-02')).toEqual({ allowed: true });
+    expect(await gate.peek('g:alice', '2026-08-02')).toEqual({ allowed: true, reserved: true });
     expect(await gate.peek('g:bob', '2026-08-02')).toEqual({ allowed: false, reason: 'over_capacity' });
+  });
+
+  it('refuses a reservation that would itself cross a cap smaller than one reservation', async () => {
+    const store = new InMemoryStore();
+    // A cap below one reservation must still refuse.
+    const gate = createTabCompleteGate({ store, ttlMs: 0, defaultGlobalDailyCap: 100 });
+    expect(await gate.peek('g:alice', '2026-08-02')).toEqual({ allowed: false, reason: 'over_capacity' });
+    expect(await store.getGlobalTabCompleteTokenCount('2026-08-02')).toBe(0);
   });
 
   it('gives back the unused reservation once real usage is known', async () => {
     const store = new InMemoryStore();
-    const gate = createTabCompleteGate({ store, ttlMs: 0, defaultGlobalDailyCap: TAB_COMPLETE_TOKEN_RESERVATION });
-    expect(await gate.peek('g:alice', '2026-08-02')).toEqual({ allowed: true });
-    await gate.spend('g:alice', '2026-08-02', 100);
-    // Reservation released; a second request has room again.
-    expect(await gate.peek('g:bob', '2026-08-02')).toEqual({ allowed: true });
+    // Room for one reservation plus headroom for the next.
+    const cap = TAB_COMPLETE_TOKEN_RESERVATION + 500;
+    const gate = createTabCompleteGate({ store, ttlMs: 0, defaultGlobalDailyCap: cap });
+    const peeked = await gate.peek('g:alice', '2026-08-02');
+    expect(peeked).toEqual({ allowed: true, reserved: true });
+    await gate.spend('g:alice', '2026-08-02', 100, peeked.allowed && peeked.reserved);
+    // Reservation released down to real usage; a second request has room again.
+    expect(await gate.peek('g:bob', '2026-08-02')).toEqual({ allowed: true, reserved: true });
   });
 
   it('tops up the counter when real usage exceeds the reservation', async () => {
     const store = new InMemoryStore();
     const gate = createTabCompleteGate({ store, ttlMs: 0, defaultGlobalDailyCap: TAB_COMPLETE_TOKEN_RESERVATION + 10 });
-    expect(await gate.peek('g:alice', '2026-08-02')).toEqual({ allowed: true });
-    await gate.spend('g:alice', '2026-08-02', TAB_COMPLETE_TOKEN_RESERVATION + 10);
+    expect(await gate.peek('g:alice', '2026-08-02')).toEqual({ allowed: true, reserved: true });
+    await gate.spend('g:alice', '2026-08-02', TAB_COMPLETE_TOKEN_RESERVATION + 10, true);
     expect(await gate.peek('g:bob', '2026-08-02')).toEqual({ allowed: false, reason: 'over_capacity' });
   });
 
@@ -306,8 +317,29 @@ describe('tab-complete gate (the ghost-text token breaker)', () => {
     const store = new InMemoryStore();
     const gate = createTabCompleteGate({ store, ttlMs: 0, defaultGlobalDailyCap: 5_000 });
     // spend() with no prior peek must not underflow the day's counter.
-    await gate.spend('g:alice', '2026-08-02', 0);
+    await gate.spend('g:alice', '2026-08-02', 0, false);
     expect(await store.getGlobalTabCompleteTokenCount('2026-08-02')).toBe(0);
+  });
+
+  it('does not release a reservation that was never actually recorded', async () => {
+    const store = new InMemoryStore();
+    let failNextIncrement = true;
+    const originalIncrement = store.checkAndIncrementGlobalTabCompleteTokens.bind(store);
+    store.checkAndIncrementGlobalTabCompleteTokens = async (dateStr, tokens, limit) => {
+      if (failNextIncrement) {
+        failNextIncrement = false;
+        throw new Error('firestore unavailable');
+      }
+      return originalIncrement(dateStr, tokens, limit);
+    };
+    const gate = createTabCompleteGate({ store, ttlMs: 0, defaultGlobalDailyCap: 500, logWarn: () => {} });
+
+    // The reservation write failed, so peek() admits without reserving.
+    const peeked = await gate.peek('g:alice', '2026-08-02');
+    expect(peeked).toEqual({ allowed: true, reserved: false });
+    // A naive spend() would underflow to 0 instead of keeping usage.
+    await gate.spend('g:alice', '2026-08-02', 200, peeked.allowed && peeked.reserved);
+    expect(await store.getGlobalTabCompleteTokenCount('2026-08-02')).toBe(200);
   });
 
   it('honours the stored tabCompletePaused switch without touching other lanes', async () => {
@@ -323,10 +355,10 @@ describe('tab-complete gate (the ghost-text token breaker)', () => {
     const store = new InMemoryStore();
     await store.setCreationLimits({ globalDailyTabCompleteTokenCap: TAB_COMPLETE_TOKEN_RESERVATION }, 'operator');
     const gate = createTabCompleteGate({ store, ttlMs: 0 });
-    expect(await gate.peek('bot:e2e', '2026-08-02')).toEqual({ allowed: true });
-    await gate.spend('bot:e2e', '2026-08-02', 999_999);
+    expect(await gate.peek('bot:e2e', '2026-08-02')).toEqual({ allowed: true, reserved: false });
+    await gate.spend('bot:e2e', '2026-08-02', 999_999, false);
     expect(await store.getGlobalTabCompleteTokenCount('2026-08-02')).toBe(0);
     // The real cap stays untouched, so a creator still gets a turn.
-    expect(await gate.peek('g:alice', '2026-08-02')).toEqual({ allowed: true });
+    expect(await gate.peek('g:alice', '2026-08-02')).toEqual({ allowed: true, reserved: true });
   });
 });
