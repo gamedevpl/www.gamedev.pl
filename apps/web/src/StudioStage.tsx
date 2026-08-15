@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import { GameFrame } from './GameFrame.js';
-import { useCreatorPlaytest, useGamePlayer, postGameHostMessage, type PlaytestInstrumentation } from './gamePlayer.js';
+import {
+  useCreatorPlaytest,
+  useGamePlayer,
+  postGameHostMessage,
+  requestStateSnapshot,
+  requestStateRestore,
+  type PlaytestInstrumentation,
+} from './gamePlayer.js';
 import { useEditorDraftBridge, type EditorContentPush } from './editorBridge.js';
 import { PixelIcon } from './PixelIcon.js';
 import { submitFeedback, type FeedbackContext, type SubmissionApiError } from './submissionApi.js';
@@ -35,6 +42,8 @@ const DREW_NOTHING_CHECK_MS = 5_500;
 const IDLE_THROTTLE_MS = 10 * 60 * 1000;
 // Idle window before a held swap auto-applies.
 const INPUT_IDLE_MS = 400;
+// Spaced retries for a frame whose harness hasn't mounted yet.
+const STATE_RESTORE_RETRY_DELAYS_MS = [150, 350, 600];
 
 function toContext(
   pngBase64: string | null | undefined,
@@ -170,7 +179,7 @@ export function StudioStage({
       if (cancelled) return;
       const idleFor = Date.now() - lastInputAtRef.current;
       if (idleFor >= INPUT_IDLE_MS && !pointerHeldRef.current) {
-        applySwap(pendingHtml, pendingOrigin ?? source.origin);
+        void applySwapPreservingState(pendingHtml, pendingOrigin ?? source.origin);
         setPendingHtml(null);
         setPendingOrigin(null);
         return;
@@ -201,6 +210,17 @@ export function StudioStage({
     if (next) watchSwappedDocument(next, origin);
     if (showShimmer) {
       window.setTimeout(() => setShimmer(false), 400);
+    }
+  }
+
+  // Snapshots, swaps, then retries restoring — a no-op without .persist().
+  async function applySwapPreservingState(next: string, origin: StageOrigin) {
+    const snapshot = await requestStateSnapshot(frameRef.current);
+    applySwap(next, origin);
+    if (snapshot === null) return;
+    for (const delay of STATE_RESTORE_RETRY_DELAYS_MS) {
+      await new Promise((resolve) => window.setTimeout(resolve, delay));
+      if (await requestStateRestore(frameRef.current, snapshot)) return;
     }
   }
 
