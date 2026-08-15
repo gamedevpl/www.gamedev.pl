@@ -327,6 +327,7 @@
       "showDiff": "Diff vs live",
       "showCode": "Show code",
       "diffNoBase": "This file has no live version to compare against yet.",
+      "paramsPanel": "Tunable parameters",
       "budget": "{{lines}}/{{maxLines}} lines",
       "livePush": "Live — running game updated, no rebuild",
       "roundOpened": "Opened a new round for this edit — this game had already published",

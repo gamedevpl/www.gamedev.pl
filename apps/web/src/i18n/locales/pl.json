@@ -329,6 +329,7 @@
       "showDiff": "Różnice względem wersji na żywo",
       "showCode": "Pokaż kod",
       "diffNoBase": "Ten plik nie ma jeszcze wersji na żywo do porównania.",
+      "paramsPanel": "Parametry do dostrojenia",
       "budget": "{{lines}}/{{maxLines}} linii",
       "livePush": "Na żywo — gra zaktualizowana, bez przebudowy",
       "roundOpened": "Otwarto nową rundę dla tej zmiany — ta gra była już opublikowana",

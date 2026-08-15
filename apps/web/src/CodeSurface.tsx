@@ -44,6 +44,8 @@ import {
 import { type CodeLanguage, tokenizeLine } from './codeTokens.js';
 import { diffLines } from './diffLines.js';
 import { declaredParamDefaultChanges, type DeclaredParamChange } from './editorJsonLiveDiff.js';
+import { clampParamValue, parseEditorParams, scrubStep, withParamDefault } from './editorParamsScrub.js';
+import { NumberScrubber } from './NumberScrubber.js';
 import { PixelIcon } from './PixelIcon.js';
 import { fetchGameEditor, type EditorContentDoc, type EditorParamValue } from './studioApi.js';
 import type { EditorContentPush } from './editorBridge.js';
@@ -165,7 +167,7 @@ export function CodeSurface({
   onPendingActionsModeConsumed,
   onPreviewReady,
 }: CodeSurfaceProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [sources, setSources] = useState<CodeSurfaceSources | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(() => getCodeSurfaceSessionState(slug)?.selected ?? null);
@@ -442,6 +444,12 @@ export function CodeSurface({
     if (file?.base === undefined) return null;
     return diffLines(file.base, content);
   }, [file, content]);
+  // Track 3: EDITOR.json's declared params, shown above the raw text.
+  const editorParams = useMemo(() => {
+    if (file?.path !== 'EDITOR.json') return null;
+    const parsed = parseEditorParams(content);
+    return parsed && Object.keys(parsed.params).length > 0 ? parsed.params : null;
+  }, [file, content]);
 
   // GA-05: memoized so a keystroke doesn't re-trigger the editor.
   const languageServiceForEditor = useMemo(() => {
@@ -710,6 +718,13 @@ export function CodeSurface({
     }, TYPECHECK_DEBOUNCE_MS);
   }
 
+  // A scrub drives the same path a typed edit would.
+  function scrubParamDefault(key: string, value: EditorParamValue) {
+    if (selected !== 'EDITOR.json') return;
+    const next = withParamDefault(content, key, value);
+    if (next !== null) onEdit(next);
+  }
+
   async function discardWorkingCopy() {
     if (discardState === 'discarding') return;
     setDiscardState('discarding');
@@ -958,6 +973,61 @@ export function CodeSurface({
         </nav>
 
         <div className="code-surface-viewer">
+          {editorParams && !showDiff ? (
+            <div className="code-surface-params" role="group" aria-label={t('studioPanel.code.paramsPanel')}>
+              {Object.entries(editorParams).map(([key, spec]) => {
+                const label = i18n.language?.startsWith('pl') ? spec.label.pl : spec.label.en;
+                return (
+                  <div key={key} className="code-surface-param-row">
+                    <span className="code-surface-param-label">{label}</span>
+                    {spec.type === 'int' || spec.type === 'number' ? (
+                      <NumberScrubber
+                        value={spec.default as number}
+                        min={spec.min}
+                        max={spec.max}
+                        step={scrubStep(spec)}
+                        ariaLabel={label}
+                        disabled={!editable}
+                        onChange={(next) => scrubParamDefault(key, clampParamValue(spec, next))}
+                      />
+                    ) : spec.type === 'enum' ? (
+                      <select
+                        className="code-surface-param-select"
+                        value={spec.default as string}
+                        disabled={!editable}
+                        aria-label={label}
+                        onChange={(event) => scrubParamDefault(key, event.target.value)}
+                      >
+                        {spec.values.map((option) => (
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </select>
+                    ) : spec.type === 'bool' ? (
+                      <input
+                        type="checkbox"
+                        checked={spec.default as boolean}
+                        disabled={!editable}
+                        aria-label={label}
+                        onChange={(event) => scrubParamDefault(key, event.target.checked)}
+                      />
+                    ) : (
+                      <input
+                        type="text"
+                        className="code-surface-param-text"
+                        value={spec.default as string}
+                        disabled={!editable}
+                        maxLength={spec.max}
+                        aria-label={label}
+                        onChange={(event) => scrubParamDefault(key, event.target.value)}
+                      />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
           {!file ? (
             <p className="code-surface-empty">{t('studioPanel.code.noFiles')}</p>
           ) : showDiff ? (
