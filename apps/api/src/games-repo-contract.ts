@@ -62,9 +62,7 @@ export const GAME_KIT_MODULES = [
   // Genre verticals: the GitHub client bundles their private shared/verticals graphs.
   'racing',
   'football',
-  // Genre vertical: platformer physics + pluggable level sources + recipe vocabulary
-  // (games-repo #690). Website-first — see WEBSITE_AHEAD_EXPIRY in
-  // games-repo-contract-check.ts.
+  // Genre vertical: platformer physics/levels/recipes (games-repo #690, website-first).
   'platformer',
   'effects',
   'audio',
