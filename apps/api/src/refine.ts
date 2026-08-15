@@ -6,7 +6,7 @@ import { checkUserAccess } from './auth.js';
 import { createVertexClient, type VertexGenerationConfig } from './genai.js';
 import type { ContentChecker } from './moderation.js';
 import { sanitizeCreatorText } from './submission-status.js';
-import type { Store } from './store.js';
+import { BOT_UID_PREFIX, type Store } from './store.js';
 import { logModerationRejection } from './moderation-metrics.js';
 import { normalizeLocale } from './translate.js';
 
@@ -321,6 +321,11 @@ export interface RefineRouteOptions {
   contentChecker: ContentChecker;
   specRefiner?: SpecRefiner;
   dailyRefineQuota?: number;
+  botDailyRefineQuota?: number;
+}
+
+function refineQuotaFor(uid: string, humanQuota: number, botQuota: number): number {
+  return uid.startsWith(BOT_UID_PREFIX) ? botQuota : humanQuota;
 }
 
 function isRateLimited(
@@ -346,6 +351,7 @@ export async function registerRefineRoute(app: FastifyInstance, options: RefineR
   const contentChecker = options.contentChecker;
   const specRefiner = options.specRefiner ?? new VertexSpecRefiner();
   const dailyRefineQuota = options.dailyRefineQuota ?? Number(process.env.DAILY_REFINE_QUOTA ?? '20');
+  const botDailyRefineQuota = options.botDailyRefineQuota ?? Number(process.env.DAILY_REFINE_QUOTA_BOT ?? '200');
 
   const refinesByIp = new Map<string, number[]>();
   const rateLimitWindowMs = 60 * 60 * 1000;
@@ -431,7 +437,9 @@ export async function registerRefineRoute(app: FastifyInstance, options: RefineR
     // 3. Daily refine quota check
     const dateStr = new Date(currentTime).toISOString().slice(0, 10);
     if (store) {
-      const quota = await store.checkAndIncrementQuota(request.user!.uid, dateStr, dailyRefineQuota, 'refines');
+      const uid = request.user!.uid;
+      const limit = refineQuotaFor(uid, dailyRefineQuota, botDailyRefineQuota);
+      const quota = await store.checkAndIncrementQuota(uid, dateStr, limit, 'refines');
       if (!quota.allowed) {
         if (quota.tier === 'blocked') {
           return reply.status(403).send({ error: 'account is blocked' });

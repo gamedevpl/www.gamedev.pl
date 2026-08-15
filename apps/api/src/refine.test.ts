@@ -178,6 +178,54 @@ describe('POST /api/submissions/refine', () => {
     await testApp.close();
   });
 
+  it('gives a bot account the automation ceiling, so the deploy gate cannot lock the pipeline out', async () => {
+    const previous = {
+      human: process.env.DAILY_REFINE_QUOTA,
+      bot: process.env.DAILY_REFINE_QUOTA_BOT,
+    };
+    process.env.DAILY_REFINE_QUOTA = '1';
+    process.env.DAILY_REFINE_QUOTA_BOT = '3';
+
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:test-user' });
+    await store.upsertUser({ uid: 'bot:e2e' });
+    const testApp = await buildApp({
+      store,
+      sessionSecret,
+      specRefiner: new StubSpecRefiner({
+        questions: [{ id: 'style', question: 'Which style?', options: [{ label: 'Pixel' }] }],
+      }),
+      contentChecker: new PatternChecker(),
+    });
+
+    // Distinct concepts: a repeat is cache-served and proves nothing.
+    const refine = (uid: string, concept: string) =>
+      testApp.inject({
+        method: 'POST',
+        url: '/api/submissions/refine',
+        headers: { cookie: `${SESSION_COOKIE_NAME}=${mintSessionToken(uid, sessionSecret)}` },
+        payload: { concept },
+      });
+
+    expect((await refine('g:test-user', 'A human creator asking about a first arcade idea')).statusCode).toBe(200);
+    const humanSecond = await refine('g:test-user', 'A human creator asking about a second arcade idea');
+    expect(humanSecond.statusCode).toBe(429);
+    expect(humanSecond.json().error).toBe('daily refine quota exceeded');
+
+    expect((await refine('bot:e2e', 'The deploy gate probing refine on the first deploy')).statusCode).toBe(200);
+    expect((await refine('bot:e2e', 'The deploy gate probing refine on the second deploy')).statusCode).toBe(200);
+    expect((await refine('bot:e2e', 'The deploy gate probing refine on the third deploy')).statusCode).toBe(200);
+
+    // Higher, not unlimited.
+    expect((await refine('bot:e2e', 'The deploy gate probing refine on the fourth deploy')).statusCode).toBe(429);
+
+    await testApp.close();
+    process.env.DAILY_REFINE_QUOTA = previous.human;
+    process.env.DAILY_REFINE_QUOTA_BOT = previous.bot;
+    if (previous.human === undefined) delete process.env.DAILY_REFINE_QUOTA;
+    if (previous.bot === undefined) delete process.env.DAILY_REFINE_QUOTA_BOT;
+  });
+
   it('never caches a totally empty answer, so one flaky call cannot pin an empty panel', async () => {
     const store = new InMemoryStore();
     await store.upsertUser({ uid: 'g:test-user' });

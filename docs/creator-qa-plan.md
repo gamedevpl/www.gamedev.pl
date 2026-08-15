@@ -80,7 +80,9 @@ prompt → L1 moderation (422 on reject)
 
 `POST /api/submissions/refine` — session + quota-free (does NOT consume the
 daily submission quota; it has its own cheaper rate limit, e.g. 20/day/uid,
-env-tunable `DAILY_REFINE_QUOTA`), body `{ title, spec }`:
+env-tunable `DAILY_REFINE_QUOTA`; `bot:` accounts get the higher automation
+ceiling `DAILY_REFINE_QUOTA_BOT`, default 200, so the deploy gate's own smoke
+cannot spend the pipeline out of the ability to ship), body `{ title, spec }`:
 
 - Runs L1 moderation first (same 422 contract as submit — reject early, spend
   nothing).
