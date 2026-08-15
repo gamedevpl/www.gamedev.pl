@@ -832,7 +832,8 @@ export interface VisitEvent {
     | 'editor_step'
     | 'assist_step'
     | 'remix_step'
-    | 'code_step';
+    | 'code_step'
+    | 'code_completion';
   /** Server-anchored instant, derived like `TelemetryEvent.at`. */
   at: string;
   /** Milliseconds from visit start — the trustworthy measure of within-visit timing. */
@@ -877,6 +878,11 @@ export interface VisitEvent {
    * ambiguous. Absent on events recorded before it existed; never a game identity.
    */
   control?: string;
+  kind?: string;
+  outcome?: string;
+  latencyMs?: number;
+  candidateCount?: number;
+  completionChars?: number;
   /**
    * `how_to_play_opened`: true when this open is a second-or-later open of the *same*
    * theater card (same published play). Absent means first open — or a legacy event

@@ -73,7 +73,15 @@ export type VisitEvent =
   | { type: 'editor_step'; step: EditorStep }
   | { type: 'assist_step'; step: AssistStep }
   | { type: 'remix_step'; step: RemixStep; via?: RemixPaintedVia; control?: RemixControl }
-  | { type: 'code_step'; step: CodeStep };
+  | { type: 'code_step'; step: CodeStep }
+  | {
+      type: 'code_completion';
+      kind: CodeCompletionKind;
+      outcome: CodeCompletionOutcome;
+      latencyMs: number;
+      candidateCount?: number;
+      completionChars?: number;
+    };
 
 /**
  * The creation funnel, in the order a creator meets it.
@@ -257,6 +265,9 @@ export type CodeStep =
   | 'conflict_seen'
   // CE-17: a staging write opened a fresh round implicitly.
   | 'round_reopened';
+
+export type CodeCompletionKind = 'language_service' | 'ghost_text';
+export type CodeCompletionOutcome = 'shown' | 'empty' | 'failed';
 
 /**
  * Which door was used to open a remix: the game page, the theater chrome bar,
@@ -633,6 +644,41 @@ export function recordCodeStep(step: CodeStep): void {
   if (!currentSession || recordedCodeSteps.has(step)) return;
   recordedCodeSteps.add(step);
   currentSession.record({ type: 'code_step', step });
+}
+
+const MAX_COMPLETION_LATENCY_MS = 30_000;
+const MAX_COMPLETION_CANDIDATES = 5_000;
+const MAX_COMPLETION_CHARS = 4_000;
+
+function boundedCompletionMetric(value: number, maximum: number): number {
+  return Number.isFinite(value) ? Math.min(maximum, Math.max(0, Math.round(value))) : 0;
+}
+
+export function recordCodeCompletion(input: {
+  kind: CodeCompletionKind;
+  outcome: CodeCompletionOutcome;
+  latencyMs: number;
+  candidateCount?: number;
+  completionChars?: number;
+}): void {
+  if (!currentSession) return;
+  const latencyMs = boundedCompletionMetric(input.latencyMs, MAX_COMPLETION_LATENCY_MS);
+  const candidateCount =
+    input.candidateCount === undefined
+      ? undefined
+      : boundedCompletionMetric(input.candidateCount, MAX_COMPLETION_CANDIDATES);
+  const completionChars =
+    input.completionChars === undefined
+      ? undefined
+      : boundedCompletionMetric(input.completionChars, MAX_COMPLETION_CHARS);
+  currentSession.record({
+    type: 'code_completion',
+    kind: input.kind,
+    outcome: input.outcome,
+    latencyMs,
+    ...(candidateCount === undefined ? {} : { candidateCount }),
+    ...(completionChars === undefined ? {} : { completionChars }),
+  });
 }
 
 let recordedRemixSteps = new Set<string>();

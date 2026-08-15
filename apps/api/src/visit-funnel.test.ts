@@ -230,6 +230,58 @@ describe('summarizeVisitFunnel', () => {
     ]);
   });
 
+  it('reports completion health and latency separately for each lane', () => {
+    const completion = (
+      visitId: string,
+      kind: 'language_service' | 'ghost_text',
+      outcome: 'shown' | 'empty' | 'failed',
+      latencyMs: number,
+    ): VisitEvent =>
+      ({
+        visitId,
+        type: 'code_completion',
+        at: '2026-08-15T10:00:00.000Z',
+        msSinceStart: latencyMs,
+        kind,
+        outcome,
+        latencyMs,
+      }) as VisitEvent;
+
+    const funnel = summarizeVisitFunnel([
+      completion('a', 'language_service', 'shown', 100),
+      completion('a', 'language_service', 'empty', 200),
+      completion('b', 'ghost_text', 'shown', 500),
+      completion('b', 'ghost_text', 'failed', 900),
+    ]);
+
+    expect(funnel.completion).toEqual({
+      requests: 4,
+      shown: 2,
+      empty: 1,
+      failed: 1,
+      byKind: [
+        {
+          kind: 'language_service',
+          requests: 2,
+          shown: 1,
+          empty: 1,
+          failed: 0,
+          medianLatencyMs: 150,
+          p90LatencyMs: 200,
+        },
+        {
+          kind: 'ghost_text',
+          requests: 2,
+          shown: 1,
+          empty: 0,
+          failed: 1,
+          medianLatencyMs: 700,
+          p90LatencyMs: 900,
+        },
+      ],
+    });
+  });
+
   it('keeps editor steps out of the create and waitlist funnels', () => {
     // All three event types share the `step` field on the wire; separate Sets are what
     // stop an editor save from ever reading as a create or waitlist rung.

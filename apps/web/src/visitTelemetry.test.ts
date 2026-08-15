@@ -11,6 +11,7 @@ import {
   readVisitIdentity,
   recordBetaInviteStep,
   recordBetaWelcomeStep,
+  recordCodeCompletion,
   recordCreateStep,
   recordStudioStep,
   recordVisitEvent,
@@ -305,6 +306,36 @@ describe('recordCreateStep', () => {
 
     // The second visit must record its own start; dedupe is per visit, not global.
     expect(second.batches[0].events).toHaveLength(1);
+  });
+});
+
+describe('recordCodeCompletion', () => {
+  it('clamps timing and optional counts before sending', () => {
+    const { batches, send } = capture();
+    const session = new VisitSession('v1', 0, send, () => 0);
+    setVisitSessionForTesting(session);
+
+    recordCodeCompletion({
+      kind: 'language_service',
+      outcome: 'shown',
+      latencyMs: 30_001.4,
+      candidateCount: 5_001.4,
+      completionChars: -4,
+    });
+    session.flush();
+    setVisitSessionForTesting(null);
+
+    expect(batches[0].events).toEqual([
+      {
+        type: 'code_completion',
+        kind: 'language_service',
+        outcome: 'shown',
+        latencyMs: 30_000,
+        candidateCount: 5_000,
+        completionChars: 0,
+        msSinceStart: 0,
+      },
+    ]);
   });
 });
 

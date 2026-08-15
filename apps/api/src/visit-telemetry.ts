@@ -134,6 +134,8 @@ const CodeStepSchema = z.enum([
   'conflict_seen',
   'round_reopened',
 ]);
+const CodeCompletionKindSchema = z.enum(['language_service', 'ghost_text']);
+const CodeCompletionOutcomeSchema = z.enum(['shown', 'empty', 'failed']);
 /** The player-side remix funnel — see visit-funnel's REMIX_STEPS for the order's meaning. */
 const RemixStepSchema = z.enum([
   'offered',
@@ -232,6 +234,15 @@ const EventSchema = z.discriminatedUnion('type', [
     ...offsetField,
   }),
   z.object({ type: z.literal('code_step'), step: CodeStepSchema, ...offsetField }),
+  z.object({
+    type: z.literal('code_completion'),
+    kind: CodeCompletionKindSchema,
+    outcome: CodeCompletionOutcomeSchema,
+    latencyMs: z.number().int().min(0).max(30_000),
+    candidateCount: z.number().int().min(0).max(5_000).optional(),
+    completionChars: z.number().int().min(0).max(4_000).optional(),
+    ...offsetField,
+  }),
 ]);
 
 const RequestSchema = z.object({
@@ -348,6 +359,16 @@ export async function registerVisitTelemetryRoutes(
           return { ...base, type: event.type, step: event.step };
         case 'code_step':
           return { ...base, type: event.type, step: event.step };
+        case 'code_completion':
+          return {
+            ...base,
+            type: event.type,
+            kind: event.kind,
+            outcome: event.outcome,
+            latencyMs: event.latencyMs,
+            ...(event.candidateCount === undefined ? {} : { candidateCount: event.candidateCount }),
+            ...(event.completionChars === undefined ? {} : { completionChars: event.completionChars }),
+          };
         case 'remix_step':
           return {
             ...base,

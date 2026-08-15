@@ -80,6 +80,7 @@ export interface VisitFunnel {
    */
   editing: Array<{ step: EditorStep; visits: number }>;
   coding: Array<{ step: CodeStep; visits: number }>;
+  completion: CodeCompletionFunnel;
   /**
    * The NL tuning lane, against `asked` as its denominator: of the sittings that
    * typed a request, how many got a patch, were told honestly that it needs code,
@@ -157,6 +158,25 @@ export interface HowToPlayFunnel {
    */
   byEntry: Array<{ entry: string; playingVisits: number; visits: number; opens: number }>;
 }
+
+export interface CodeCompletionFunnel {
+  requests: number;
+  shown: number;
+  empty: number;
+  failed: number;
+  byKind: Array<{
+    kind: CodeCompletionKind;
+    requests: number;
+    shown: number;
+    empty: number;
+    failed: number;
+    medianLatencyMs: number | null;
+    p90LatencyMs: number | null;
+  }>;
+}
+
+export const CODE_COMPLETION_KINDS = ['language_service', 'ghost_text'] as const;
+export type CodeCompletionKind = (typeof CODE_COMPLETION_KINDS)[number];
 
 export const HOW_TO_PLAY_VIAS = ['bar', 'more'] as const;
 
@@ -321,6 +341,12 @@ function median(values: number[]): number {
   return sorted.length % 2 === 0 ? (sorted[middle - 1] + sorted[middle]) / 2 : sorted[middle];
 }
 
+function percentile(values: number[], fraction: number): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * fraction) - 1)] ?? null;
+}
+
 /** Sorts a count map into rows, busiest first, with a stable tiebreak on the row. */
 function rank<T, R extends { visits: number }>(entries: Map<string, T>, toRow: (key: string, value: T) => R): R[] {
   return Array.from(entries, ([key, value]) => toRow(key, value)).sort(
@@ -330,6 +356,10 @@ function rank<T, R extends { visits: number }>(entries: Map<string, T>, toRow: (
 
 export function summarizeVisitFunnel(events: VisitEvent[]): VisitFunnel {
   const visits = new Map<string, VisitRollup>();
+  const completion = new Map<
+    CodeCompletionKind,
+    { requests: number; shown: number; empty: number; failed: number; latencies: number[] }
+  >();
 
   for (const event of events) {
     const rollup = visits.get(event.visitId) ?? {
@@ -371,6 +401,17 @@ export function summarizeVisitFunnel(events: VisitEvent[]): VisitFunnel {
       if (event.step) rollup.assistSteps.add(event.step);
     } else if (event.type === 'code_step') {
       if (event.step) rollup.codeSteps.add(event.step);
+    } else if (event.type === 'code_completion') {
+      const kind = event.kind as CodeCompletionKind;
+      if (!CODE_COMPLETION_KINDS.includes(kind)) continue;
+      if (event.outcome !== 'shown' && event.outcome !== 'empty' && event.outcome !== 'failed') continue;
+      const stats = completion.get(kind) ?? { requests: 0, shown: 0, empty: 0, failed: 0, latencies: [] };
+      stats.requests += 1;
+      if (event.outcome === 'shown') stats.shown += 1;
+      else if (event.outcome === 'empty') stats.empty += 1;
+      else stats.failed += 1;
+      stats.latencies.push(event.latencyMs ?? 0);
+      completion.set(kind, stats);
     } else if (event.type === 'remix_step') {
       if (event.step) rollup.remixSteps.add(event.step);
       if (event.step === 'painted' && rollup.paintedVia === undefined) {
@@ -408,6 +449,18 @@ export function summarizeVisitFunnel(events: VisitEvent[]): VisitFunnel {
 
   const rollups = Array.from(visits.values());
   const playing = rollups.filter((rollup) => rollup.plays > 0);
+  const completionRows = CODE_COMPLETION_KINDS.map((kind) => {
+    const stats = completion.get(kind) ?? { requests: 0, shown: 0, empty: 0, failed: 0, latencies: [] };
+    return {
+      kind,
+      requests: stats.requests,
+      shown: stats.shown,
+      empty: stats.empty,
+      failed: stats.failed,
+      medianLatencyMs: stats.latencies.length ? median(stats.latencies) : null,
+      p90LatencyMs: percentile(stats.latencies, 0.9),
+    };
+  });
 
   const depthCounts = new Map<number, number>();
   playing.forEach((rollup) => depthCounts.set(rollup.plays, (depthCounts.get(rollup.plays) ?? 0) + 1));
@@ -555,6 +608,13 @@ export function summarizeVisitFunnel(events: VisitEvent[]): VisitFunnel {
       step,
       visits: rollups.filter((rollup) => rollup.codeSteps.has(step)).length,
     })),
+    completion: {
+      requests: completionRows.reduce((total, row) => total + row.requests, 0),
+      shown: completionRows.reduce((total, row) => total + row.shown, 0),
+      empty: completionRows.reduce((total, row) => total + row.empty, 0),
+      failed: completionRows.reduce((total, row) => total + row.failed, 0),
+      byKind: completionRows,
+    },
     assisting: ASSIST_STEPS.map((step) => ({
       step,
       visits: rollups.filter((rollup) => rollup.assistSteps.has(step)).length,

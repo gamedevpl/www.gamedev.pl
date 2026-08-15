@@ -1,4 +1,10 @@
-import { autocompletion, completionStatus } from '@codemirror/autocomplete';
+import {
+  autocompletion,
+  completionStatus,
+  type CompletionContext,
+  type CompletionResult,
+  type CompletionSource,
+} from '@codemirror/autocomplete';
 import { indentWithTab } from '@codemirror/commands';
 import { css } from '@codemirror/lang-css';
 import { html } from '@codemirror/lang-html';
@@ -13,6 +19,9 @@ import {
   Decoration,
   type DecorationSet,
   EditorView,
+  activateHover,
+  closeHoverTooltips,
+  hoverTooltip,
   keymap,
   ViewPlugin,
   type ViewUpdate,
@@ -27,7 +36,6 @@ import {
   tsAutocomplete,
   tsFacet,
   tsGoto,
-  tsHover,
   tsLintSource,
   tsSync,
   type HoverInfo,
@@ -35,6 +43,7 @@ import {
 import type { WorkerShape } from '@valtown/codemirror-ts/worker';
 import type { CodeLanguage } from './codeTokens.js';
 import { vsCodeSearchPanel } from './codeMirrorSearchPanel.js';
+import { recordCodeCompletion } from './visitTelemetry.js';
 
 // CodeMirror 6 (CE-14): lazy chunk; keyed by file path to remount.
 
@@ -247,17 +256,157 @@ const tsAdvisoryLintSource = async (view: EditorView): Promise<CmDiagnostic[]> =
   return found.map((d) => (d.severity === 'error' ? { ...d, severity: 'warning' as const } : d));
 };
 
-// GA-07: default tsHover() drops documentation — this renderer adds it back.
-function renderHoverTooltip(info: HoverInfo) {
+// GA-07: compact by default, expanded while the modifier is held.
+function renderHoverTooltip(info: HoverInfo, expanded: boolean) {
   const dom = document.createElement('div');
+  dom.className = expanded ? 'cm-ts-hover cm-ts-hover-expanded' : 'cm-ts-hover cm-ts-hover-compact';
   if (info.quickInfo?.displayParts) dom.appendChild(renderDisplayParts(info.quickInfo.displayParts));
-  if (info.quickInfo?.documentation?.length) {
+  if (expanded && info.quickInfo?.documentation?.length) {
     const doc = document.createElement('div');
     doc.className = 'cm-ts-hover-doc';
     doc.textContent = info.quickInfo.documentation.map((part) => part.text).join('');
     dom.appendChild(doc);
   }
   return { dom };
+}
+
+type ModifierHoverState = {
+  held: boolean;
+  range: { from: number; to: number } | null;
+} | null;
+
+const setModifierHover = StateEffect.define<ModifierHoverState>();
+
+const modifierHoverState = StateField.define<ModifierHoverState>({
+  create: () => null,
+  update(value, transaction) {
+    if (transaction.docChanged) return null;
+    for (const effect of transaction.effects) {
+      if (effect.is(setModifierHover)) return effect.value;
+    }
+    return value;
+  },
+  provide: (field) =>
+    EditorView.decorations.from(field, (value) =>
+      value?.held && value.range
+        ? Decoration.set([
+            Decoration.mark({ class: 'cm-ts-navigable-link' }).range(value.range.from, value.range.to),
+          ])
+        : Decoration.none,
+    ),
+});
+
+function definitionRange(info: HoverInfo): { from: number; to: number } | null {
+  const definition = [...(info.typeDef ?? []), ...(info.def ?? [])].at(0);
+  if (!definition || !info.quickInfo) return null;
+  return { from: info.start, to: info.start + info.quickInfo.textSpan.length };
+}
+
+function modifierHeld(event: KeyboardEvent): boolean {
+  return event.metaKey || event.ctrlKey;
+}
+
+function modifierHoverExtension(hover: ReturnType<typeof hoverTooltip>): Extension {
+  return ViewPlugin.fromClass(
+    class {
+      private pointer: { x: number; y: number } | null = null;
+      private held = false;
+      private requestId = 0;
+      private lastPosition: number | null = null;
+
+      private readonly onKeyDown = (event: KeyboardEvent) => {
+        if (!modifierHeld(event)) return;
+        this.setHeld(true);
+      };
+
+      private readonly onKeyUp = (event: KeyboardEvent) => {
+        if (event.key === 'Meta' || event.key === 'Control' || !modifierHeld(event)) this.setHeld(false);
+      };
+
+      private readonly onBlur = () => this.setHeld(false);
+
+      private readonly onMouseMove = (event: MouseEvent) => {
+        this.pointer = { x: event.clientX, y: event.clientY };
+        if (!this.held) return;
+        const position = this.view.posAtCoords(this.pointer);
+        if (position === null || position === this.lastPosition) return;
+        this.lastPosition = position;
+        void this.refresh(true);
+      };
+
+      private readonly onMouseLeave = () => {
+        this.pointer = null;
+        this.requestId += 1;
+        this.lastPosition = null;
+        this.view.dispatch({ effects: [setModifierHover.of(null), closeHoverTooltips] });
+      };
+
+      constructor(private readonly view: EditorView) {
+        window.addEventListener('keydown', this.onKeyDown);
+        window.addEventListener('keyup', this.onKeyUp);
+        window.addEventListener('blur', this.onBlur);
+        view.dom.addEventListener('mousemove', this.onMouseMove);
+        view.dom.addEventListener('mouseleave', this.onMouseLeave);
+      }
+
+      private setHeld(held: boolean): void {
+        if (this.held === held) return;
+        this.held = held;
+        this.requestId += 1;
+        this.lastPosition = null;
+        this.view.dispatch({ effects: [setModifierHover.of(held ? { held, range: null } : null), closeHoverTooltips] });
+        if (!held || !this.pointer) return;
+        void this.refresh(true);
+      }
+
+      private async refresh(reopenTooltip = false): Promise<void> {
+        const pointer = this.pointer;
+        if (!this.held || !pointer) return;
+        const config = this.view.state.facet(tsFacet);
+        const pos = this.view.posAtCoords(pointer);
+        if (!config?.worker || pos === null) return;
+        this.lastPosition = pos;
+        const requestId = ++this.requestId;
+        try {
+          const info = await config.worker.getHover({ path: config.path, pos });
+          if (requestId !== this.requestId || !this.held || !info) return;
+          const range = definitionRange(info);
+          this.view.dispatch({ effects: setModifierHover.of({ held: true, range }) });
+          if (reopenTooltip) {
+            activateHover(this.view, pos, 1, {
+              tooltip: hover,
+              until: (transaction) => transaction.effects.some((effect) => effect.is(setModifierHover)),
+            });
+          }
+        } catch {
+          if (requestId === this.requestId) this.view.dispatch({ effects: setModifierHover.of(null) });
+        }
+      }
+
+      destroy(): void {
+        window.removeEventListener('keydown', this.onKeyDown);
+        window.removeEventListener('keyup', this.onKeyUp);
+        window.removeEventListener('blur', this.onBlur);
+        this.view.dom.removeEventListener('mousemove', this.onMouseMove);
+        this.view.dom.removeEventListener('mouseleave', this.onMouseLeave);
+      }
+    },
+  );
+}
+
+function modifierAwareHover(): ReturnType<typeof hoverTooltip> {
+  return hoverTooltip(async (view, pos) => {
+    const config = view.state.facet(tsFacet);
+    if (!config?.worker) return null;
+    const info = await config.worker.getHover({ path: config.path, pos });
+    if (!info || !info.quickInfo) return null;
+    const expanded = view.state.field(modifierHoverState, false)?.held === true;
+    return {
+      pos: info.start,
+      end: info.end,
+      create: () => renderHoverTooltip(info, expanded),
+    };
+  });
 }
 
 function toCmDiagnostics(view: EditorView, diagnostics: CodeMirrorDiagnostic[]): CmDiagnostic[] {
@@ -371,15 +520,37 @@ function ghostTextFetchPlugin(fetchGhostTextRef: { current: FetchGhostText | und
         const suffixWindow = state.sliceDoc(pos, Math.min(state.doc.length, pos + GHOST_TEXT_MAX_SUFFIX_CHARS));
         const controller = new AbortController();
         this.abortController = controller;
+        const startedAt = performance.now();
         let text: string;
         try {
           text = await fetchGhostTextRef.current(prefixWindow, suffixWindow, controller.signal);
         } catch {
+          if (!controller.signal.aborted) {
+            recordCodeCompletion({
+              kind: 'ghost_text',
+              outcome: 'failed',
+              latencyMs: performance.now() - startedAt,
+            });
+          }
           return;
         }
-        if (controller.signal.aborted || !text) return;
+        if (controller.signal.aborted) return;
+        if (!text) {
+          recordCodeCompletion({
+            kind: 'ghost_text',
+            outcome: 'empty',
+            latencyMs: performance.now() - startedAt,
+          });
+          return;
+        }
         // Nothing may have moved on while the network call was in flight.
         if (!view.state.doc.eq(state.doc) || view.state.selection.main.head !== pos) return;
+        recordCodeCompletion({
+          kind: 'ghost_text',
+          outcome: 'shown',
+          latencyMs: performance.now() - startedAt,
+          completionChars: text.length,
+        });
         view.dispatch({ effects: setGhostText.of({ text, forDoc: view.state.doc }) });
       }
 
@@ -437,17 +608,44 @@ function makeGhostTextExtension(fetchGhostTextRef: { current: FetchGhostText | u
   ];
 }
 
+function measuredTsAutocomplete(): CompletionSource {
+  const source = tsAutocomplete();
+  return async (context: CompletionContext): Promise<CompletionResult | null> => {
+    const startedAt = performance.now();
+    try {
+      const result = await source(context);
+      recordCodeCompletion({
+        kind: 'language_service',
+        outcome: result?.options.length ? 'shown' : 'empty',
+        latencyMs: performance.now() - startedAt,
+        candidateCount: result?.options.length ?? 0,
+      });
+      return result ? { ...result, validFor: result.validFor ?? /^[\w$]*$/ } : null;
+    } catch (error) {
+      recordCodeCompletion({
+        kind: 'language_service',
+        outcome: 'failed',
+        latencyMs: performance.now() - startedAt,
+      });
+      throw error;
+    }
+  };
+}
+
 // GA-05: ts extensions, or none — worker can turn ready mid-file.
 function languageServiceExtensions(
   languageService: CodeMirrorLanguageService | undefined,
   onGotoDefinitionRef: { current: GotoDefinitionHandler | undefined },
 ): Extension[] {
   if (!languageService) return [];
+  const hover = modifierAwareHover();
   return [
     tsFacet.of({ worker: languageService.worker, path: languageService.path }),
     tsSync(),
-    autocompletion({ override: [tsAutocomplete()] }),
-    tsHover({ renderTooltip: renderHoverTooltip }),
+    modifierHoverState,
+    autocompletion({ override: [measuredTsAutocomplete()] }),
+    hover,
+    modifierHoverExtension(hover),
     tsGoto({ gotoHandler: makeGotoHandler(onGotoDefinitionRef) }),
     linter(tsAdvisoryLintSource),
   ];

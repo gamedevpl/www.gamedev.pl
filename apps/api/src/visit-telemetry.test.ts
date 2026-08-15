@@ -225,6 +225,52 @@ describe('POST /api/telemetry/visit', () => {
     expect(bad.statusCode).toBe(400);
   });
 
+  it('records bounded completion health without source identity', async () => {
+    const response = await post(app, {
+      visitId,
+      flushMsSinceStart: 900,
+      events: [
+        {
+          type: 'code_completion',
+          kind: 'language_service',
+          outcome: 'shown',
+          latencyMs: 123,
+          candidateCount: 8,
+          msSinceStart: 800,
+        },
+        {
+          type: 'code_completion',
+          kind: 'ghost_text',
+          outcome: 'empty',
+          latencyMs: 456,
+          completionChars: 0,
+          msSinceStart: 900,
+        },
+      ],
+    });
+
+    expect(response.statusCode).toBe(202);
+    const events = await store.listVisitEvents(today(), { visitId });
+    expect(events).toEqual([
+      expect.objectContaining({
+        type: 'code_completion',
+        kind: 'language_service',
+        outcome: 'shown',
+        latencyMs: 123,
+        candidateCount: 8,
+      }),
+      expect.objectContaining({
+        type: 'code_completion',
+        kind: 'ghost_text',
+        outcome: 'empty',
+        latencyMs: 456,
+        completionChars: 0,
+      }),
+    ]);
+    expect(JSON.stringify(events)).not.toContain('path');
+    expect(JSON.stringify(events)).not.toContain('slug');
+  });
+
   it('records a waitlist step and rejects one outside the enum', async () => {
     const ok = await post(app, {
       visitId,
