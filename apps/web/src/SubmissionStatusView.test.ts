@@ -1619,9 +1619,6 @@ describe('SubmissionStatusView', () => {
   });
 
   it('seeds a parent-supplied draft into the compact composer and reports it consumed', async () => {
-    // The stage crash card's "Fix it" button hands the composer a prompt describing the
-    // crash — the composer must show it immediately and tell the parent it took it, so
-    // the parent's own copy clears instead of repopulating the box on a later render.
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     mockedGetSubmissionStatus.mockResolvedValue({
       status: 'needs_changes',

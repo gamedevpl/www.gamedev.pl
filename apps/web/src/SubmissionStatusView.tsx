@@ -341,13 +341,6 @@ type SubmissionStatusViewProps = {
    * text — render it escaped, same as every other transcript row.
    */
   onActivityCount?: (count: number, latest: string | null) => void;
-  /**
-   * Embedded only: a prompt the parent wants sitting in the composer, e.g. the stage
-   * crash card's "Fix it" button. `seq` distinguishes two drafts with identical text so
-   * clicking "Fix it" again after editing the box still overwrites it. `onDraftConsumed`
-   * fires once the composer has applied it, so the parent can clear its own copy and a
-   * later render (or the rail reopening by hand) doesn't repopulate a stale draft.
-   */
   draft?: { text: string; seq: number } | null;
   onDraftConsumed?: () => void;
 };
@@ -1436,7 +1429,6 @@ function FeedbackPanel({
    * path — a draft revision continues the current round and stays on this thread.
    */
   onPublishedImprove?: (token: string) => void;
-  /** A prompt the parent wants seeded into the box — see `SubmissionStatusView`'s doc. */
   draft?: { text: string; seq: number } | null;
   onDraftConsumed?: () => void;
 }) {
@@ -1459,10 +1451,6 @@ function FeedbackPanel({
     setBuilder(initialBuilder);
   }, [initialBuilder, token]);
 
-  // Applies a draft the parent seeded (e.g. the stage crash card's "Fix it" button),
-  // keyed on `seq` so a second click after the box was edited still overwrites it.
-  // Consuming clears the parent's copy so reopening the rail by hand later doesn't
-  // repopulate a stale prompt.
   useEffect(() => {
     if (!draft) return;
     setText(draft.text);

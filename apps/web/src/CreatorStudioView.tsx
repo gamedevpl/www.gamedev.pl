@@ -390,9 +390,7 @@ export function CreatorStudioView({
   const studioStatus = useStudioStatusPoll(stageToken);
   const stageSource = useStageSource(stageToken ?? '', studioStatus);
   const [stageStatus, setStageStatus] = useState<StageStatus>({ kind: 'empty' });
-  // The crash card's "Fix it" button seeds this with a prompt describing the failure and
-  // opens the rail; the composer consumes it once and clears it back to null so a later
-  // re-render (or reopening the rail by hand) doesn't repopulate a stale draft.
+  // "Fix it" seeds this; the composer consumes it once, then clears it.
   const [chatDraft, setChatDraft] = useState<{ text: string; seq: number } | null>(null);
   // What the ribbon should describe — the *displayed* document's origin, reported back
   // by the stage. Distinct from `stageSource.origin` (the latest fetched one) while a

@@ -269,8 +269,7 @@ describe('StudioStage', () => {
     const onFixIt = vi.fn();
     const props = baseProps({ posture: 'watch', onFixIt });
     const { host, rerender, unmount } = await mount(props);
-    // The initial document never runs through `watchSwappedDocument` (it's already
-    // `shownHtml` on mount) — swap to a new source so the crash listener attaches.
+    // Swap sources so the crash listener attaches (mount alone skips it).
     await rerender({
       ...props,
       source: { html: GAME_B, rawHtml: GAME_B, origin: { kind: 'staged', at: Date.now(), versionLabel: null } },

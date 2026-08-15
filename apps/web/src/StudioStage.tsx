@@ -69,8 +69,6 @@ export type StudioStageProps = {
   /** True whenever a surface (rail/details/edit/shelf) covers the stage. */
   covered: boolean;
   onStatusChange?: (status: StageStatus) => void;
-  /** The crash card's "Fix it" button — called with the crash message so the parent can
-   * open the chat rail with a prefilled prompt describing the failure. */
   onFixIt?: (message: string) => void;
   /** A staged swap is being held for the ribbon's "newer stage waiting" exception. */
   onNewerStageWaiting?: (waiting: boolean) => void;
