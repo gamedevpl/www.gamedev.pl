@@ -11934,6 +11934,36 @@ button.builder-mode-selector:disabled {
   color: var(--muted);
 }
 
+.cm-color-picker {
+  width: 0.85rem;
+  height: 0.85rem;
+  margin: 0 0.25rem;
+  padding: 0;
+  border: 1px solid rgba(148, 163, 184, 0.5);
+  border-radius: 3px;
+  vertical-align: -0.12rem;
+  cursor: pointer;
+}
+
+.cm-color-picker::-webkit-color-swatch-wrapper {
+  padding: 1px;
+}
+
+.cm-color-picker::-webkit-color-swatch {
+  border: 0;
+  border-radius: 2px;
+}
+
+.cm-color-picker::-moz-color-swatch {
+  border: 0;
+  border-radius: 2px;
+}
+
+.cm-color-picker:focus-visible {
+  outline: 1px solid var(--turquoise);
+  outline-offset: 2px;
+}
+
 .code-surface-readonly-view {
   margin: 0;
   padding: 12px 0;

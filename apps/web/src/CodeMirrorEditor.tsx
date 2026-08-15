@@ -15,7 +15,16 @@ import { markdown } from '@codemirror/lang-markdown';
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { search } from '@codemirror/search';
 import { forceLinting, linter, lintGutter, type Diagnostic as CmDiagnostic } from '@codemirror/lint';
-import { Compartment, EditorState, Prec, StateEffect, StateField, type Extension, type Text } from '@codemirror/state';
+import {
+  Compartment,
+  EditorState,
+  Prec,
+  RangeSetBuilder,
+  StateEffect,
+  StateField,
+  type Extension,
+  type Text,
+} from '@codemirror/state';
 import {
   Decoration,
   type DecorationSet,
@@ -44,6 +53,7 @@ import {
 import type { WorkerShape } from '@valtown/codemirror-ts/worker';
 import type { CodeLanguage } from './codeTokens.js';
 import { vsCodeSearchPanel } from './codeMirrorSearchPanel.js';
+import { colorForPicker, colorFromPicker, findHexColors } from './codeMirrorColors.js';
 import {
   restoreCodeSurfaceEditorState,
   serializeCodeSurfaceEditorState,
@@ -74,6 +84,7 @@ export type CodeMirrorEditorProps = {
   initialSelection?: { anchor: number; head: number };
   // TA-02: ghost-text proposal for the window around the cursor.
   fetchGhostText?: (prefixWindow: string, suffixWindow: string, signal: AbortSignal) => Promise<string>;
+  colorPickerLabel?: string;
   // Saved per-file state lets the undo stack survive switching to Play.
   initialEditorState?: CodeSurfaceEditorState;
   onEditorStateChange?: (state: CodeSurfaceEditorState) => void;
@@ -94,6 +105,76 @@ function languageExtension(language: CodeLanguage): Extension | null {
     default:
       return null;
   }
+}
+
+class ColorSwatchWidget extends WidgetType {
+  constructor(
+    readonly color: string,
+    readonly from: number,
+    readonly to: number,
+    readonly label: string,
+    readonly onChange: (from: number, to: number, color: string) => void,
+  ) {
+    super();
+  }
+
+  eq(other: ColorSwatchWidget): boolean {
+    return other.color === this.color && other.from === this.from && other.to === this.to && other.label === this.label;
+  }
+
+  toDOM(): HTMLElement {
+    const input = document.createElement('input');
+    input.type = 'color';
+    input.value = colorForPicker(this.color);
+    input.className = 'cm-color-picker';
+    input.title = `${this.label} ${this.color}`;
+    input.setAttribute('aria-label', `${this.label} ${this.color}`);
+    input.addEventListener('change', () => this.onChange(this.from, this.to, colorFromPicker(this.color, input.value)));
+    return input;
+  }
+
+  ignoreEvent(): boolean {
+    return true;
+  }
+}
+
+function colorPickerExtension(label: string): Extension {
+  const plugin = ViewPlugin.fromClass(
+    class {
+      decorations: DecorationSet;
+
+      constructor(readonly view: EditorView) {
+        this.decorations = this.buildDecorations();
+      }
+
+      update(update: ViewUpdate): void {
+        if (update.docChanged || update.viewportChanged) this.decorations = this.buildDecorations();
+      }
+
+      private buildDecorations(): DecorationSet {
+        const builder = new RangeSetBuilder<Decoration>();
+        for (const match of findHexColors(this.view.state.doc.toString())) {
+          builder.add(
+            match.to,
+            match.to,
+            Decoration.widget({
+              widget: new ColorSwatchWidget(match.color, match.from, match.to, label, this.replaceColor),
+              side: 1,
+            }),
+          );
+        }
+        return builder.finish();
+      }
+
+      private replaceColor = (from: number, to: number, color: string): void => {
+        const current = this.view.state.doc.sliceString(from, to);
+        if (!/^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(current)) return;
+        this.view.dispatch({ changes: { from, to, insert: color }, userEvent: 'input' });
+        this.view.focus();
+      };
+    },
+  );
+  return [plugin, EditorView.decorations.of((view) => view.plugin(plugin)?.decorations ?? Decoration.none)];
 }
 
 // Palette matches the read-only viewer's .code-tok-* colors.
@@ -777,6 +858,7 @@ export default function CodeMirrorEditor({
   onGotoDefinition,
   initialSelection,
   fetchGhostText,
+  colorPickerLabel = 'Choose color',
   initialEditorState,
   onEditorStateChange,
 }: CodeMirrorEditorProps) {
@@ -797,6 +879,7 @@ export default function CodeMirrorEditor({
   onEditorStateChangeRef.current = onEditorStateChange;
   // GA-05: reconfigured live below — a ready worker never remounts.
   const languageServiceCompartmentRef = useRef(new Compartment());
+  const colorPickerCompartmentRef = useRef(new Compartment());
 
   useEffect(() => {
     if (!containerRef.current) return undefined;
@@ -825,6 +908,7 @@ export default function CodeMirrorEditor({
           linter((v) => toCmDiagnostics(v, diagnosticsRef.current)),
           languageServiceCompartmentRef.current.of(languageServiceExtensions(languageService, onGotoDefinitionRef)),
           ...(readOnly ? [] : makeGhostTextExtension(fetchGhostTextRef)),
+          ...(readOnly ? [] : [colorPickerCompartmentRef.current.of(colorPickerExtension(colorPickerLabel))]),
           EditorView.editable.of(!readOnly),
           EditorView.updateListener.of((update) => {
             if (update.docChanged) onChangeRef.current(update.state.doc.toString());
@@ -872,6 +956,14 @@ export default function CodeMirrorEditor({
       ),
     });
   }, [languageService]);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view || readOnly) return;
+    view.dispatch({
+      effects: colorPickerCompartmentRef.current.reconfigure(colorPickerExtension(colorPickerLabel)),
+    });
+  }, [colorPickerLabel, readOnly]);
 
   return <div ref={containerRef} className="code-surface-codemirror" data-testid="codemirror-editor" />;
 }

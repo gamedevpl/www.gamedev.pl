@@ -326,6 +326,7 @@
       "noFiles": "Nothing to show yet",
       "showDiff": "Diff vs live",
       "showCode": "Show code",
+      "colorPicker": "Choose color",
       "diffNoBase": "This file has no live version to compare against yet.",
       "paramsPanel": "Tunable parameters",
       "budget": "{{lines}}/{{maxLines}} lines",
