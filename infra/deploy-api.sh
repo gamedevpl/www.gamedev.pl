@@ -58,6 +58,10 @@
 #                               /api/internal/health-sweep, the daily re-check of the
 #                               published shelf against today's engine. Its own audience
 #                               for the same reason.)
+#   DISPATCH_REAPER_AUDIENCE=... (dispatch-reaper endpoint URL; enables OIDC auth on
+#                               /api/internal/dispatch-reaper, the retry for a job whose
+#                               dispatch died before it recorded a session. Its own
+#                               audience for the same reason.)
 #   HEALTH_SWEEP_BATCH=...     (how many health re-gates one sweep run may start;
 #                               defaults to 3. Each one is a Cloud Build run, so this is
 #                               the knob that decides what the loop costs per day. Set it
@@ -131,6 +135,7 @@ DIGEST_SWEEP_AUDIENCE="${DIGEST_SWEEP_AUDIENCE:-}"
 SUGGESTION_SWEEP_AUDIENCE="${SUGGESTION_SWEEP_AUDIENCE:-}"
 HEALTH_SWEEP_AUDIENCE="${HEALTH_SWEEP_AUDIENCE:-}"
 ACCOUNT_DELETION_SWEEP_AUDIENCE="${ACCOUNT_DELETION_SWEEP_AUDIENCE:-}"
+DISPATCH_REAPER_AUDIENCE="${DISPATCH_REAPER_AUDIENCE:-}"
 HEALTH_SWEEP_BATCH="${HEALTH_SWEEP_BATCH:-}"
 # Web Push (docs/notifications-plan.md M2). Public key is public by design (env var);
 # the private key is a Secret Manager secret wired in below. Push is off without them.
@@ -376,6 +381,9 @@ if [ -n "$HEALTH_SWEEP_BATCH" ]; then
 fi
 if [ -n "$SUGGESTION_SWEEP_AUDIENCE" ]; then
   ENV_VARS="${ENV_VARS}|SUGGESTION_SWEEP_AUDIENCE=${SUGGESTION_SWEEP_AUDIENCE}"
+fi
+if [ -n "$DISPATCH_REAPER_AUDIENCE" ]; then
+  ENV_VARS="${ENV_VARS}|DISPATCH_REAPER_AUDIENCE=${DISPATCH_REAPER_AUDIENCE}"
 fi
 if [ -n "$VAPID_PUBLIC_KEY" ]; then
   ENV_VARS="${ENV_VARS}|VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}"

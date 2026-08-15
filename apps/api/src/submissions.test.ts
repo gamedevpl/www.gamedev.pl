@@ -16,6 +16,7 @@ import { JOB_ID_FLOOR } from './store.js';
 import { createManagedAvailabilityGate, type ManagedAvailabilityGate } from './managed-availability.js';
 import { StubStudioChatAgent, type ChatAgentRequest, type StudioChatAgent } from './chat-agent.js';
 import type { ChatGate } from './creation-limits.js';
+import type { InternalAuthVerifier } from './internal-auth.js';
 
 const secret = 'submission-secret';
 const repo = 'gamedevpl/www.gamedev.pl-games';
@@ -5639,6 +5640,131 @@ describe('operator cancel and retry', () => {
 
     expect(response.statusCode).toBe(502);
     expect(response.json()).toMatchObject({ error: 'no_capacity' });
+
+    await app.close();
+  });
+});
+
+describe('dispatch reaper', () => {
+  const body = { title: 'Game idea', concept: 'A concept long enough to pass validation rules.' };
+  const allowAll: InternalAuthVerifier = { verify: async () => true };
+  const denyAll: InternalAuthVerifier = { verify: async () => false };
+
+  // A job whose create-time dispatch had no backend to run on.
+  async function stuckJob(store: Store) {
+    const stub = createGithubClientStub({});
+    const first = await createApp({ githubClient: stub.githubClient, submissionTokenSecret: secret, store });
+    const res = await first.app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: first.authHeaders,
+      payload: body,
+    });
+    await first.app.close();
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    expect(res.statusCode).toBe(200);
+    expect(job.state).toBe('queued');
+    expect(job.dispatch).toBeUndefined();
+    return job;
+  }
+
+  async function reaperApp(params: {
+    store: Store;
+    agentBackend?: AgentBackend;
+    internalAuthVerifier?: InternalAuthVerifier;
+    now?: () => number;
+  }) {
+    const stub = createGithubClientStub({});
+    return buildApp({
+      store: params.store,
+      sessionSecret,
+      submissionRoutes: {
+        githubToken: 'token',
+        submissionTokenSecret: secret,
+        gamesRepo: repo,
+        githubClient: stub.githubClient,
+        agentBackend: params.agentBackend,
+        managedAvailabilityGate: null,
+        chatAgent: new StubStudioChatAgent({ kind: 'build' }),
+      },
+      dispatchReaperRoutes: {
+        internalAuthVerifier: params.internalAuthVerifier ?? allowAll,
+        ...(params.now ? { now: params.now } : {}),
+      },
+    });
+  }
+
+  it('is closed by default, so an unconfigured deploy cannot be swept by anyone', async () => {
+    const app = await buildApp({ store: new InMemoryStore(), sessionSecret });
+    const res = await app.inject({ method: 'POST', url: '/api/internal/dispatch-reaper' });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it('rejects a caller without a valid scheduler token', async () => {
+    const store = new InMemoryStore();
+    const app = await reaperApp({ store, internalAuthVerifier: denyAll });
+    const res = await app.inject({ method: 'POST', url: '/api/internal/dispatch-reaper' });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it('leaves a job alone while it is still within the dispatch window', async () => {
+    const store = new InMemoryStore();
+    const job = await stuckJob(store);
+    const { backend, briefs } = createBackendStub();
+    const app = await reaperApp({ store, agentBackend: backend });
+
+    const res = await app.inject({ method: 'POST', url: '/api/internal/dispatch-reaper' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ checked: 1, retried: 0, exhausted: 0, skipped: 1 });
+    expect(briefs).toHaveLength(0);
+    expect((await store.getSubmission(job.issueNumber))?.state).toBe('queued');
+    await app.close();
+  });
+
+  it('redispatches a job stuck past the window, with a spec rebuilt from what was stored', async () => {
+    const store = new InMemoryStore();
+    const job = await stuckJob(store);
+    const { backend, briefs } = createBackendStub();
+    const farFuture = () => Date.now() + 60 * 60 * 1000;
+    const app = await reaperApp({ store, agentBackend: backend, now: farFuture });
+
+    const res = await app.inject({ method: 'POST', url: '/api/internal/dispatch-reaper' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ checked: 1, retried: 1, exhausted: 0 });
+    expect(briefs).toHaveLength(1);
+    expect(briefs[0]?.spec).toContain('Game idea');
+    const record = await store.getSubmission(job.issueNumber);
+    expect(record?.state).toBe('dispatched');
+    expect(record?.dispatch?.refs).toHaveLength(1);
+    expect(record?.dispatchReaperAttemptedAt).toBeDefined();
+    await app.close();
+  });
+
+  it('does not redispatch twice: a second stall after the one retry ends the round', async () => {
+    const store = new InMemoryStore();
+    const job = await stuckJob(store);
+    const dead: AgentBackend = {
+      ...createBackendStub().backend,
+      dispatch: async () => {
+        throw new Error('backend down');
+      },
+    };
+    const farFuture = () => Date.now() + 60 * 60 * 1000;
+    const app = await reaperApp({ store, agentBackend: dead, now: farFuture });
+
+    const first = await app.inject({ method: 'POST', url: '/api/internal/dispatch-reaper' });
+    expect(first.json()).toMatchObject({ retried: 1, exhausted: 0 });
+    expect((await store.getSubmission(job.issueNumber))?.state).toBe('queued');
+
+    const second = await app.inject({ method: 'POST', url: '/api/internal/dispatch-reaper' });
+    expect(second.json()).toMatchObject({ retried: 0, exhausted: 1 });
+    const record = await store.getSubmission(job.issueNumber);
+    expect(record?.state).toBe('failed');
+    expect(record?.transitions?.at(-1)).toMatchObject({ by: 'system', reason: 'dispatch_reaper_exhausted' });
 
     await app.close();
   });

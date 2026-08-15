@@ -56,6 +56,7 @@ import { registerPushRoutes } from './push-routes.js';
 import { registerDigestRoutes, type DigestRoutesOptions } from './digest.js';
 import { parseBatchSize, registerHealthSweepRoutes, type HealthSweepRoutesOptions } from './game-health.js';
 import { registerSuggestionSweepRoutes, type SuggestionSweepRoutesOptions } from './suggestion-sweep.js';
+import { registerDispatchReaperRoutes, type DispatchReaperRoutesOptions } from './dispatch-reaper.js';
 import {
   buildImprovementBrief,
   registerSuggestionInboxRoutes,
@@ -168,6 +169,7 @@ export interface BuildAppOptions {
   scorecardRoutes?: Partial<Omit<ScorecardRoutesOptions, 'store'>>;
   digestRoutes?: Partial<Omit<DigestRoutesOptions, 'store'>>;
   suggestionSweepRoutes?: Partial<Omit<SuggestionSweepRoutesOptions, 'store'>>;
+  dispatchReaperRoutes?: Partial<Omit<DispatchReaperRoutesOptions, 'store' | 'redispatchQueuedJob'>>;
   /** Seams for the published-shelf health sweep; defaults to OIDC-or-deny-all from env. */
   healthSweepRoutes?: Partial<HealthSweepRoutesOptions>;
   /** Seams for the creator suggestion inbox; the GitHub client is shared with submissions. */
@@ -664,6 +666,13 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     startImprovementRound: submissionSeams.startImprovementRound,
     buildBrief: buildImprovementBrief,
     ...options.suggestionSweepRoutes,
+  });
+
+  await registerDispatchReaperRoutes(app, {
+    store,
+    redispatchQueuedJob: submissionSeams.redispatchQueuedJob,
+    internalAuthVerifier: createInternalAuthVerifierFromEnv(process.env, 'dispatchReaper'),
+    ...options.dispatchReaperRoutes,
   });
 
   // The break-and-nudge loop's own clock (game-health.ts). A published game serves from a

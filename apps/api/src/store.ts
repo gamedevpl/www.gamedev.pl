@@ -406,6 +406,8 @@ export interface SubmissionRecord {
    * Empty when the creator skipped the panel or it had nothing to ask.
    */
   qa?: string[];
+  // Set before the reaper's one retry of a job stuck queued.
+  dispatchReaperAttemptedAt?: string;
 }
 
 /**
@@ -2167,6 +2169,8 @@ export interface Store {
    * games before applying their own ceiling — a raw job limit is not a game limit.
    */
   listSubmissionsByOwner(ownerUid: string, opts?: { limit?: number }): Promise<SubmissionRecord[]>;
+  listQueuedSubmissions(): Promise<SubmissionRecord[]>;
+  claimDispatchReaperAttempt(issueNumber: number, at: string): Promise<boolean>;
   checkAndIncrementQuota(
     uid: string,
     dateStr: string,
@@ -3790,6 +3794,22 @@ export class InMemoryStore implements Store {
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
       .map((s) => ({ ...s }));
     return opts?.limit !== undefined ? sorted.slice(0, opts.limit) : sorted;
+  }
+
+  async listQueuedSubmissions(): Promise<SubmissionRecord[]> {
+    return Array.from(this.submissions.values())
+      .filter((s) => s.state === 'queued')
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .map((s) => ({ ...s }));
+  }
+
+  async claimDispatchReaperAttempt(issueNumber: number, at: string): Promise<boolean> {
+    const sub = this.submissions.get(issueNumber);
+    if (!sub || sub.state !== 'queued' || sub.dispatchReaperAttemptedAt || (sub.dispatch?.refs?.length ?? 0) > 0) {
+      return false;
+    }
+    this.submissions.set(issueNumber, { ...sub, dispatchReaperAttemptedAt: at });
+    return true;
   }
 
   async checkAndIncrementQuota(
@@ -6415,6 +6435,29 @@ export class FirestoreStore implements Store {
       .map((d) => d.data() as SubmissionRecord)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     return opts?.limit !== undefined ? sorted.slice(0, opts.limit) : sorted;
+  }
+
+  async listQueuedSubmissions(): Promise<SubmissionRecord[]> {
+    const snap = await this.db.collection('submissions').where('state', '==', 'queued').get();
+    return snap.docs.map((d) => d.data() as SubmissionRecord).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  }
+
+  async claimDispatchReaperAttempt(issueNumber: number, at: string): Promise<boolean> {
+    const ref = this.db.collection('submissions').doc(String(issueNumber));
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return false;
+      const current = snap.data() as SubmissionRecord;
+      if (
+        current.state !== 'queued' ||
+        current.dispatchReaperAttemptedAt ||
+        (current.dispatch?.refs?.length ?? 0) > 0
+      ) {
+        return false;
+      }
+      tx.set(ref, { dispatchReaperAttemptedAt: at }, { merge: true });
+      return true;
+    });
   }
 
   async checkAndIncrementQuota(

@@ -463,6 +463,41 @@ describe('InMemoryStore', () => {
     expect(approved).toMatchObject({ uid: 'g:mix', status: 'approved' });
     expect(store.waitlistEntries()).toHaveLength(1);
   });
+
+  it('lists only queued jobs, for the dispatch reaper', async () => {
+    const store = new InMemoryStore();
+    await store.createSubmission(1, 'g:a', 'Queued game');
+    await store.recordJobTransition(1, { to: 'queued', at: '2026-08-15T00:00:00Z', by: 'system' });
+    await store.createSubmission(2, 'g:a', 'Dispatched game');
+    await store.recordJobTransition(2, { to: 'dispatched', at: '2026-08-15T00:00:00Z', by: 'system' });
+
+    const queued = await store.listQueuedSubmissions();
+
+    expect(queued.map((s) => s.issueNumber)).toEqual([1]);
+  });
+
+  it('claims a job stuck queued exactly once', async () => {
+    const store = new InMemoryStore();
+    await store.createSubmission(1, 'g:a', 'Queued game');
+    await store.recordJobTransition(1, { to: 'queued', at: '2026-08-15T00:00:00Z', by: 'system' });
+
+    expect(await store.claimDispatchReaperAttempt(1, '2026-08-15T00:00:00Z')).toBe(true);
+    expect((await store.getSubmission(1))?.dispatchReaperAttemptedAt).toBe('2026-08-15T00:00:00Z');
+    expect(await store.claimDispatchReaperAttempt(1, '2026-08-15T00:05:00Z')).toBe(false);
+  });
+
+  it('refuses to claim a job that already left queued or already has a dispatch ref', async () => {
+    const store = new InMemoryStore();
+    await store.createSubmission(1, 'g:a', 'Dispatched game');
+    await store.recordJobTransition(1, { to: 'queued', at: '2026-08-15T00:00:00Z', by: 'system' });
+    await store.recordJobTransition(1, { to: 'dispatched', at: '2026-08-15T00:00:01Z', by: 'system' });
+    await store.createSubmission(2, 'g:a', 'Refs but still queued');
+    await store.recordJobTransition(2, { to: 'queued', at: '2026-08-15T00:00:00Z', by: 'system' });
+    await store.recordDispatch(2, { backend: 'stub', ref: 'task-1' });
+
+    expect(await store.claimDispatchReaperAttempt(1, '2026-08-15T00:00:00Z')).toBe(false);
+    expect(await store.claimDispatchReaperAttempt(2, '2026-08-15T00:00:00Z')).toBe(false);
+  });
 });
 
 /**
