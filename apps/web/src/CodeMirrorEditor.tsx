@@ -298,9 +298,7 @@ const modifierHoverState = StateField.define<ModifierHoverState>({
   provide: (field) =>
     EditorView.decorations.from(field, (value) =>
       value?.held && value.range
-        ? Decoration.set([
-            Decoration.mark({ class: 'cm-ts-navigable-link' }).range(value.range.from, value.range.to),
-          ])
+        ? Decoration.set([Decoration.mark({ class: 'cm-ts-navigable-link' }).range(value.range.from, value.range.to)])
         : Decoration.none,
     ),
 });
@@ -497,11 +495,51 @@ class GhostTextWidget extends WidgetType {
   }
 }
 
+// Tab alone was unreachable on iOS; this tappable widget is the fallback.
+class GhostTextAcceptWidget extends WidgetType {
+  eq(): boolean {
+    return true;
+  }
+  toDOM(): HTMLElement {
+    const span = document.createElement('span');
+    span.className = 'cm-ghost-text-accept';
+    span.textContent = '⇥';
+    span.setAttribute('role', 'button');
+    span.setAttribute('aria-label', 'Accept suggestion');
+    span.title = 'Accept suggestion';
+    return span;
+  }
+  ignoreEvent(): boolean {
+    return false;
+  }
+}
+
 function ghostTextDecorations(state: EditorState): DecorationSet {
   const value = state.field(ghostTextField, false);
   if (!value) return Decoration.none;
   const pos = state.selection.main.head;
-  return Decoration.set([Decoration.widget({ widget: new GhostTextWidget(value.text), side: 1 }).range(pos)]);
+  return Decoration.set([
+    Decoration.widget({ widget: new GhostTextWidget(value.text), side: 1 }).range(pos),
+    Decoration.widget({ widget: new GhostTextAcceptWidget(), side: 2 }).range(pos),
+  ]);
+}
+
+function acceptGhostText(view: EditorView): boolean {
+  const value = view.state.field(ghostTextField, false);
+  if (!value || completionStatus(view.state) === 'active') return false;
+  const pos = view.state.selection.main.head;
+  view.dispatch({
+    changes: { from: pos, insert: value.text },
+    selection: { anchor: pos + value.text.length },
+    userEvent: 'input.complete',
+  });
+  return true;
+}
+
+function acceptGhostTextFromEvent(event: Event, view: EditorView): boolean {
+  if (!(event.target instanceof HTMLElement) || !event.target.closest('.cm-ghost-text-accept')) return false;
+  event.preventDefault();
+  return acceptGhostText(view);
 }
 
 // TA-02: debounces on doc change; cancels its own timer and fetch.
@@ -585,22 +623,16 @@ function makeGhostTextExtension(fetchGhostTextRef: { current: FetchGhostText | u
     ghostTextField,
     EditorView.decorations.compute([ghostTextField], ghostTextDecorations),
     fetchPlugin,
+    EditorView.domEventHandlers({
+      // click covers AT/automation activation; both firing once is harmless.
+      mousedown: acceptGhostTextFromEvent,
+      click: acceptGhostTextFromEvent,
+    }),
     Prec.highest(
       keymap.of([
         {
           key: 'Tab',
-          run: (view) => {
-            const value = view.state.field(ghostTextField, false);
-            // Defers to the popup's own accept binding once one is active.
-            if (!value || completionStatus(view.state) === 'active') return false;
-            const pos = view.state.selection.main.head;
-            view.dispatch({
-              changes: { from: pos, insert: value.text },
-              selection: { anchor: pos + value.text.length },
-              userEvent: 'input.complete',
-            });
-            return true;
-          },
+          run: (view) => acceptGhostText(view),
         },
         {
           key: 'Escape',
@@ -700,11 +732,7 @@ function measuredTsAutocomplete(tracker: CompletionTracker): CompletionSource {
         settled: false,
       };
       tracker.pending.push(attempt);
-      context.addEventListener(
-        'abort',
-        () => settleCompletionAttempt(tracker, attempt, false),
-        { onDocChange: true },
-      );
+      context.addEventListener('abort', () => settleCompletionAttempt(tracker, attempt, false), { onDocChange: true });
       return result ? { ...result, validFor: result.validFor ?? /^[\w$]*$/ } : null;
     } catch (error) {
       recordCodeCompletion({

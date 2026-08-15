@@ -5494,6 +5494,12 @@ a.user-name--profile:focus-visible {
   z-index: 1090;
 }
 
+/* The full-stage backdrop swallowed strip taps below it. */
+.app:has(.studio-rail-backdrop) .studio-strip {
+  position: relative;
+  z-index: 1200;
+}
+
 /* The phone-sheet shape for `.studio-rail` (position/inset/grid-areas) now lives with
    the rest of the stage-layout overlays — see the "THE STAGE" section above. */
 
@@ -12146,6 +12152,32 @@ button.builder-mode-selector:disabled {
   pointer-events: none;
 }
 
+/* The only accept path on iOS — deliberately not click-through. */
+.cm-ghost-text-accept {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  margin-left: 2px;
+  padding: 0 4px;
+  border-radius: 5px;
+  border: 1px solid rgba(0, 228, 172, 0.4);
+  background: rgba(0, 228, 172, 0.12);
+  color: var(--turquoise);
+  font-size: 0.72rem;
+  line-height: 1;
+  vertical-align: middle;
+  cursor: pointer;
+  pointer-events: auto;
+  user-select: none;
+}
+
+.cm-ghost-text-accept:hover,
+.cm-ghost-text-accept:active {
+  background: rgba(0, 228, 172, 0.22);
+}
+
 /* GA-09: VS Code-like affordance for modifier-click navigation. */
 .cm-ts-navigable-link {
   color: #58a6ff;
@@ -13004,6 +13036,11 @@ button.builder-mode-selector:disabled {
   z-index: 1200;
 }
 
+/* Same rule: the shelf drawer's backdrop covers the hamburger too. */
+.app:has(.studio-shelf-backdrop) .app-header {
+  z-index: 1200;
+}
+
 /* Collapsed to the pill: the thread stays mounted (its poll, and any unsent composer
    text, must survive a collapse) but is out of the layout and the accessibility tree. */
 .studio-chat-rail.is-collapsed {
@@ -13077,7 +13114,8 @@ button.builder-mode-selector:disabled {
   }
 
   .studio-chat-rail.is-full {
-    top: var(--studio-chat-rail-top-inset, 0px);
+    /* Guards a stale JS inset falling back to 0px under the notch. */
+    top: max(var(--studio-chat-rail-top-inset, 0px), env(safe-area-inset-top, 0px));
     height: auto;
     max-height: none;
     border-radius: 0;

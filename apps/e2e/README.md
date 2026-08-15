@@ -100,6 +100,28 @@ while the deploy still went green (#392). The loading-state cases hold the shelf
 deliberately. The real React tree and stylesheet still run; only the JSON is replaced,
 so the suite stays read-only against production.
 
+## This suite cannot see WebKit-only bugs
+
+Everything here runs on the pre-installed Playwright **Chromium**, with `isMobile`/
+`hasTouch`/a phone `viewport` used to approximate an iPhone. That approximation has a
+real ceiling: Chromium does not implement `env(safe-area-inset-*)` (always resolves to
+`0px`, notch or not) and cannot enter `display-mode: standalone` the way an installed iOS
+PWA does — no browser chrome, no back gesture, no way out of a stuck screen except
+whatever the page itself offers.
+
+This was not a theoretical gap. A session ran an extensive phone-viewport sweep of
+Studio — hit-tests, drag gestures, a full state-transition map — and it all passed,
+while the actual failure a real iPhone PWA user hit (a full-screen chat sheet with no
+way back out) was invisible to every one of those checks: the bug lived specifically in
+how the sheet's top offset falls back to `0px` under the status bar, and in an iOS
+WebKit pointer-capture quirk Chromium doesn't reproduce. It only surfaced once someone
+described what happened on their actual device.
+
+Treat a green run here as "the DOM, layout, and JS are sound in Chromium" — not as "this
+works on an iPhone." For anything touching `env(safe-area-inset-*)`, PWA standalone
+behavior, or WebKit-specific touch/pointer quirks, the only real check is a real device
+(or asking someone who has one), not a wider sweep of this suite.
+
 ## Adding a test
 
 Two rules, both learned the hard way:

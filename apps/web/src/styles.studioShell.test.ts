@@ -34,4 +34,14 @@ describe('studio shell claim selectors', () => {
       /\.app:has\(\.studio-layout\.is-game-open\) \.studio-strip-actions \.studio-head-action\.is-primary\s*\{[\s\S]*?grid-column:\s*span 2;/,
     );
   });
+
+  // The Details backdrop covers the strip — buttons must stay above it.
+  it('keeps the strip reachable while the Details sheet is open', () => {
+    expect(css).toMatch(/\.app:has\(\.studio-rail-backdrop\) \.studio-strip\s*\{[^}]*z-index:\s*1200/s);
+  });
+
+  // Same shape: the shelf drawer's backdrop covers the hamburger beside it.
+  it('keeps the global nav reachable while the games shelf drawer is open', () => {
+    expect(css).toMatch(/\.app:has\(\.studio-shelf-backdrop\) \.app-header\s*\{[^}]*z-index:\s*1200/s);
+  });
 });

@@ -49,7 +49,14 @@ export function StudioChatRail({
   const [detent, setDetent] = useState<SheetDetent>('half');
   const [dragHeight, setDragHeight] = useState<number | null>(null);
   const asideRef = useRef<HTMLElement | null>(null);
-  const dragRef = useRef<{ pointerId: number; startY: number; startH: number; moved: boolean } | null>(null);
+  const dragRef = useRef<{
+    pointerId: number;
+    startY: number;
+    lastY: number;
+    startH: number;
+    moved: boolean;
+    lastActivityAt: number;
+  } | null>(null);
   const ignoreGrabClickRef = useRef(false);
   const visible = open && !covered;
   const peeking = isSheet && detent === 'peek' && dragHeight == null;
@@ -126,8 +133,7 @@ export function StudioChatRail({
       resizeObserver = new ResizeObserver(measure);
       watchOverlays();
     }
-    const mutationObserver =
-      typeof MutationObserver === 'undefined' ? null : new MutationObserver(watchOverlays);
+    const mutationObserver = typeof MutationObserver === 'undefined' ? null : new MutationObserver(watchOverlays);
     mutationObserver?.observe(document.body, { childList: true, subtree: true });
     window.addEventListener('resize', measure);
     return () => {
@@ -139,20 +145,18 @@ export function StudioChatRail({
     };
   }, []);
 
+  // No setPointerCapture — iOS WebKit can leak it and lock touch app-wide.
   const onGrabPointerDown = (event: PointerEvent<HTMLButtonElement>) => {
     if (!isSheet || event.button !== 0) return;
     const rail = asideRef.current;
     if (!rail) return;
-    try {
-      event.currentTarget.setPointerCapture(event.pointerId);
-    } catch {
-      // Some iOS webviews do not implement element pointer capture.
-    }
     dragRef.current = {
       pointerId: event.pointerId,
       startY: event.clientY,
+      lastY: event.clientY,
       startH: rail.getBoundingClientRect().height,
       moved: false,
+      lastActivityAt: Date.now(),
     };
   };
 
@@ -161,6 +165,8 @@ export function StudioChatRail({
     const onMove = (event: globalThis.PointerEvent) => {
       const drag = dragRef.current;
       if (!drag || drag.pointerId !== event.pointerId) return;
+      drag.lastY = event.clientY;
+      drag.lastActivityAt = Date.now();
       const dy = drag.startY - event.clientY;
       if (!drag.moved && Math.abs(dy) < SHEET_DRAG_CLICK_SLOP_PX) return;
       drag.moved = true;
@@ -179,10 +185,25 @@ export function StudioChatRail({
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onEnd);
     window.addEventListener('pointercancel', onEnd);
+
+    // Backstop for a dropped pointerup: release a drag gone quiet.
+    const STUCK_DRAG_IDLE_MS = 4000;
+    const watchdog = window.setInterval(() => {
+      const drag = dragRef.current;
+      if (!drag || Date.now() - drag.lastActivityAt < STUCK_DRAG_IDLE_MS) return;
+      dragRef.current = null;
+      if (drag.moved) {
+        const height = clampSheetDragHeight(drag.startH + (drag.startY - drag.lastY), window.innerHeight);
+        setDetent(snapSheetDetent(height, window.innerHeight));
+        setDragHeight(null);
+      }
+    }, 1000);
+
     return () => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onEnd);
       window.removeEventListener('pointercancel', onEnd);
+      window.clearInterval(watchdog);
       dragRef.current = null;
     };
   }, [isSheet]);

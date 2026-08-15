@@ -234,6 +234,7 @@ export function CreatorStudioView({
   const shelfSearchId = useId();
   const shelfSearchRef = useRef<HTMLInputElement>(null!);
   const shelfOpenRef = useRef<HTMLButtonElement>(null!);
+  const shareContainerRef = useRef<HTMLDivElement>(null);
 
   // What the URL is asking for, readable from inside the shelf fetch below without
   // making that fetch re-run every time the address changes. Seeded rather than
@@ -653,8 +654,17 @@ export function CreatorStudioView({
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setShareMenuOpen(false);
     };
+    // No backdrop, no Escape key — a tap outside closes it.
+    const onPointerDown = (event: PointerEvent) => {
+      if (shareContainerRef.current?.contains(event.target as Node)) return;
+      setShareMenuOpen(false);
+    };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.removeEventListener('pointerdown', onPointerDown);
+    };
   }, [shareMenuOpen]);
 
   if (!user) {
@@ -861,7 +871,7 @@ export function CreatorStudioView({
                     setPosture(next);
                   };
                   const shareSlot = canShare ? (
-                    <div className="studio-head-share">
+                    <div className="studio-head-share" ref={shareContainerRef}>
                       <button
                         type="button"
                         className={`studio-head-action is-icon-only${shareMenuOpen ? ' is-active' : ''}`}
