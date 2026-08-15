@@ -990,6 +990,54 @@ describe('SubmissionStatusView', () => {
     }
   });
 
+  it('still offers switch-to-self once the platform agent has ended, not just while it is live', async () => {
+    // A platform round whose agent finished (agentEndedAt set) must still let the
+    // creator request self-build — the control used to require the agent to be
+    // actively working, so a finished-but-open round had no switch at all.
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'building',
+      phase: 'building',
+      builder: 'platform',
+      stall: 'ended',
+      agentEndedAt: '2026-08-12T20:00:00.000Z',
+      events: [],
+    });
+    mockedHandoffToSelf.mockResolvedValue({});
+
+    await i18n.changeLanguage('en');
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    try {
+      await act(async () => {
+        root.render(createElement(SubmissionStatusView, { token: 'ended-platform-token', embedded: true }));
+        await flushEffects();
+        await flushEffects();
+      });
+
+      const control = container.querySelector<HTMLElement>('[data-testid="active-switch-builder-self"]');
+      expect(control).not.toBeNull();
+
+      await act(async () => {
+        control?.querySelector('button')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await flushEffects();
+      });
+      await act(async () => {
+        control
+          ?.querySelector<HTMLButtonElement>('.is-primary')
+          ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await flushEffects();
+      });
+      expect(mockedHandoffToSelf).toHaveBeenCalledWith('ended-platform-token');
+    } finally {
+      await act(async () => {
+        root.unmount();
+      });
+    }
+  });
+
   it('keeps the live builder handoff in the composer, not the transcript', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     mockedGetSubmissionStatus.mockResolvedValue({
