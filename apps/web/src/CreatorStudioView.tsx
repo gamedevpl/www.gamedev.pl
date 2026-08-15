@@ -10,6 +10,7 @@ import { formatRelativeTime } from './relativeTime.js';
 import { playPath, studioPath, type StudioTab } from './router.js';
 import { abandonSubmission, handoffToPlatform } from './submissionApi.js';
 import { StudioShotToasts } from './StudioShotToasts.js';
+import { type CodeActionsMode } from './CodeActionsMenu.js';
 import { CodeSurface } from './CodeSurface.js';
 import { EditorPanel } from './EditorPanel.js';
 import { StudioStage, type StagePosture, type StageStatus } from './StudioStage.js';
@@ -595,6 +596,32 @@ export function CreatorStudioView({
   }
   openTabRef.current = openTab;
 
+  // Queued so the Code actions shortcut survives a switch from another tab.
+  const [pendingCodeActions, setPendingCodeActions] = useState<{ mode: CodeActionsMode; nonce: number } | null>(null);
+  const codeShortcutStateRef = useRef({ tab, activeGame });
+  codeShortcutStateRef.current = { tab, activeGame };
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+      const key = event.key.toLowerCase();
+      const isQuickOpen = key === 'p';
+      const isSearch = key === 'f' && event.shiftKey;
+      if (!isQuickOpen && !isSearch) return;
+      const { tab: currentTab, activeGame: currentGame } = codeShortcutStateRef.current;
+      // CodeSurface owns the shortcut itself once Code is the open tab.
+      if (currentTab === 'code' || !currentGame || !tabAvailable(currentGame, 'code')) return;
+      event.preventDefault();
+      setPendingCodeActions((current) => ({
+        mode: isQuickOpen ? (event.shiftKey ? 'commands' : 'files') : 'search',
+        nonce: (current?.nonce ?? 0) + 1,
+      }));
+      openTabRef.current('code');
+    }
+    document.addEventListener('keydown', onKeyDown, true);
+    return () => document.removeEventListener('keydown', onKeyDown, true);
+  }, []);
+
   // Share is about the permalink, not about the draft switch: a game already live in
   // the catalog has nothing to toggle, but it still needs a way to hand the link out.
   // Hiding the control there left published games with no share affordance anywhere.
@@ -1038,6 +1065,8 @@ export function CreatorStudioView({
                               slug={activeGame.slug}
                               onBack={() => openTab('thread')}
                               editorPushRef={editorPushRef}
+                              pendingActionsMode={pendingCodeActions}
+                              onPendingActionsModeConsumed={() => setPendingCodeActions(null)}
                             />
                           </div>
                         ) : null}
