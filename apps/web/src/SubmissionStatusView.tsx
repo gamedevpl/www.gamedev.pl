@@ -108,14 +108,14 @@ function isAgentWorkActive(status: SubmissionStatus | null | undefined): boolean
   return true;
 }
 
-function canInterruptPlatformAgent(status: SubmissionStatus | null | undefined): boolean {
-  return Boolean(
-    status?.builder === 'platform' &&
-    status.status !== 'publishing' &&
-    isAgentWorkActive(status) &&
-    !canChooseBuilder(status) &&
-    !status.builderHandoff,
-  );
+// True even once the agent has ended.
+function canOfferSelfHandoff(status: SubmissionStatus | null | undefined): boolean {
+  if (!status || status.builder !== 'platform') return false;
+  if (status.status === 'publishing') return false;
+  if (status.status === 'in_review' || status.phase === 'ready_for_review') return false;
+  if (TERMINAL_STATUSES.has(status.status)) return false;
+  if (status.builderHandoff) return false;
+  return true;
 }
 
 const STATUS_ICONS: Record<SubmissionStatus['status'], PixelIconName> = {
@@ -956,7 +956,7 @@ export function SubmissionStatusView({
                         : undefined
                     }
                     onSwitchToSelf={
-                      canInterruptPlatformAgent(status) || status.builderHandoff?.target === 'self'
+                      canOfferSelfHandoff(status) || status.builderHandoff?.target === 'self'
                         ? handoffToSelfFromUi
                         : undefined
                     }
@@ -1181,7 +1181,7 @@ export function SubmissionStatusView({
                     : undefined
                 }
                 onSwitchToSelf={
-                  canInterruptPlatformAgent(status) || status.builderHandoff?.target === 'self'
+                  canOfferSelfHandoff(status) || status.builderHandoff?.target === 'self'
                     ? handoffToSelfFromUi
                     : undefined
                 }
