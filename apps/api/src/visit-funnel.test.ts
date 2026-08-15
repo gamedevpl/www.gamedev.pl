@@ -193,6 +193,10 @@ describe('summarizeVisitFunnel', () => {
       { step: 'draft_saved', visits: 2 },
       { step: 'previewed', visits: 1 },
       { step: 'published', visits: 1 },
+      { step: 'v2_schema_loaded', visits: 0 },
+      { step: 'v2_content_loaded', visits: 0 },
+      { step: 'v2_controller_ready', visits: 0 },
+      { step: 'v2_controller_failed', visits: 0 },
     ]);
   });
 

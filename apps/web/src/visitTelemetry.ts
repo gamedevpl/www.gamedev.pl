@@ -182,7 +182,15 @@ export type StudioStepDetail =
  * stream, so this answers "how far did this sitting get" and never "which game
  * did they edit".
  */
-export type EditorStep = 'opened' | 'draft_saved' | 'previewed' | 'published';
+export type EditorStep =
+  | 'opened'
+  | 'draft_saved'
+  | 'previewed'
+  | 'published'
+  | 'v2_schema_loaded'
+  | 'v2_content_loaded'
+  | 'v2_controller_ready'
+  | 'v2_controller_failed';
 
 /**
  * The natural-language tuning lane, as a dimension beside the editing funnel

@@ -10,6 +10,7 @@
  */
 
 export const EDITOR_FILE = 'EDITOR.json';
+export const EDITOR_CONTENT_FILE = 'EDITOR.content.json';
 /** Where the generated L1 module lands inside a game dir. */
 export const GENERATED_CONTENT_PATH = 'game/editor-content.ts';
 /** SPEC.md frontmatter key that declares an editable game (rides the catalog). */
@@ -154,8 +155,15 @@ export interface PathItemContent {
   points: PathPoint[];
 }
 
+export type EditorContentDocument = Record<
+  string,
+  Array<TilemapItemContent | EntityItemContent | PathItemContent> | Record<string, ParamValue>
+>;
+
+export type EditorVersion = 1 | 2;
+
 export interface EditorDefinition {
-  version: 1;
+  version: EditorVersion;
   params?: Record<string, ParamSpec>;
   content: Record<string, CollectionSpec>;
 }
@@ -266,7 +274,7 @@ function valueProblem(spec: PropertySpec, value: unknown): string | null {
   return null;
 }
 
-function validateParams(raw: unknown, errors: string[]): Record<string, ParamSpec> {
+function validateParams(raw: unknown, errors: string[], requireDefaults: boolean): Record<string, ParamSpec> {
   const out: Record<string, ParamSpec> = {};
   if (!isPlainObject(raw)) {
     errors.push('"params" must be an object mapping param names to declarations');
@@ -287,11 +295,15 @@ function validateParams(raw: unknown, errors: string[]): Record<string, ParamSpe
       errors.push(`params: "${name}" needs a label with non-empty "en" and "pl" (max 32 chars)`);
       continue;
     }
-    if (declared.default === undefined) {
+    if (requireDefaults && declared.default === undefined) {
       errors.push(`params: "${name}" needs a "default" — the value players get`);
       continue;
     }
-    const problem = valueProblem(spec, declared.default);
+    if (!requireDefaults && declared.default !== undefined) {
+      errors.push(`params: "${name}" v2 schemas cannot contain "default"; use ${EDITOR_CONTENT_FILE}`);
+      continue;
+    }
+    const problem = declared.default === undefined ? null : valueProblem(spec, declared.default);
     if (problem) {
       errors.push(`params: "${name}" default ${problem}`);
       continue;
@@ -511,9 +523,7 @@ function validatePathSpec(owner: string, raw: unknown, errors: string[]): PathIt
     (raw.maxPoints as number) > MAX_PATH_POINTS ||
     (raw.minPoints as number) > (raw.maxPoints as number)
   ) {
-    errors.push(
-      `${owner}: path point bounds must satisfy ${minimum} <= minPoints <= maxPoints <= ${MAX_PATH_POINTS}`,
-    );
+    errors.push(`${owner}: path point bounds must satisfy ${minimum} <= minPoints <= maxPoints <= ${MAX_PATH_POINTS}`);
     return null;
   }
   return {
@@ -559,15 +569,16 @@ export function parseEditorDefinition(source: string): { definition: EditorDefin
     errors.push('EDITOR.json must be a JSON object');
     return { definition: null, errors };
   }
-  if (parsed.version !== 1) {
-    errors.push('EDITOR.json "version" must be 1');
+  if (parsed.version !== 1 && parsed.version !== 2) {
+    errors.push('EDITOR.json "version" must be 1 or 2');
     return { definition: null, errors };
   }
   const unknownKeys = Object.keys(parsed).filter((key) => key !== 'version' && key !== 'content' && key !== PARAMS_KEY);
   if (unknownKeys.length > 0) {
     errors.push(`EDITOR.json has unknown top-level keys: ${unknownKeys.join(', ')}`);
   }
-  const params = parsed[PARAMS_KEY] === undefined ? {} : validateParams(parsed[PARAMS_KEY], errors);
+  const params =
+    parsed[PARAMS_KEY] === undefined ? {} : validateParams(parsed[PARAMS_KEY], errors, parsed.version === 1);
   const hasParams = Object.keys(params).length > 0;
   // A tunables-only game (an arcade retrofit with no editable maps) may declare
   // an empty or absent "content" — but a definition with neither params nor
@@ -619,8 +630,12 @@ export function parseEditorDefinition(source: string): { definition: EditorDefin
     const item = validateCollectionItemSpec(owner, raw.item, errors);
     if (!item) continue;
 
-    if (!Array.isArray(raw.defaults)) {
+    if (parsed.version === 1 && !Array.isArray(raw.defaults)) {
       errors.push(`${owner}: needs a "defaults" array — the content the game ships with`);
+      continue;
+    }
+    if (parsed.version === 2 && raw.defaults !== undefined) {
+      errors.push(`${owner}: v2 schemas cannot contain "defaults"; use ${EDITOR_CONTENT_FILE}`);
       continue;
     }
     const spec: CollectionSpec = {
@@ -630,17 +645,19 @@ export function parseEditorDefinition(source: string): { definition: EditorDefin
       min: raw.min as number,
       max: raw.max as number,
       item,
-      defaults: raw.defaults as Array<TilemapItemContent | EntityItemContent | PathItemContent>,
+      defaults: (raw.defaults ?? []) as Array<TilemapItemContent | EntityItemContent | PathItemContent>,
     };
     // Defaults must satisfy the schema they ship with — the round-trip that
     // proves the pipeline works before a creator ever touches it.
-    const defaultErrors = validateCollectionContent(spec, raw.defaults);
-    errors.push(...defaultErrors.map((message) => `${owner} defaults: ${message}`));
+    if (parsed.version === 1) {
+      const defaultErrors = validateCollectionContent(spec, raw.defaults);
+      errors.push(...defaultErrors.map((message) => `${owner} defaults: ${message}`));
+    }
     content[key] = spec;
   }
 
   if (errors.length > 0) return { definition: null, errors };
-  return { definition: { version: 1, ...(hasParams ? { params } : {}), content }, errors };
+  return { definition: { version: parsed.version, ...(hasParams ? { params } : {}), content }, errors };
 }
 
 /**
@@ -974,14 +991,18 @@ function propertyTsType(spec: PropertySpec): string {
  * path regenerates it with new defaults. A `.d.ts` would not do — declarations
  * are erased at compile time and the assembler only inlines `.ts`.
  */
-export function generateEditorContentModule(definition: EditorDefinition): string {
+export function generateEditorContentModule(definition: EditorDefinition, content?: EditorContentDocument): string {
   const lines: string[] = ['// Generated from EDITOR.json by npm run editor:gen.', ''];
   const contentFields: string[] = [];
   const params = definition.params ?? {};
+  const paramNames =
+    content?.[PARAMS_KEY] && !Array.isArray(content[PARAMS_KEY])
+      ? Object.keys(content[PARAMS_KEY]).filter((name) => name in params)
+      : Object.keys(params);
   if (Object.keys(params).length > 0) {
     lines.push('export interface EditorParams {');
-    for (const [name, spec] of Object.entries(params)) {
-      lines.push(`  ${name}: ${propertyTsType(spec)};`);
+    for (const name of paramNames) {
+      lines.push(`  ${name}: ${propertyTsType(params[name])};`);
     }
     lines.push('}', '');
     contentFields.push(`  ${PARAMS_KEY}: EditorParams;`);
@@ -1005,10 +1026,13 @@ export function generateEditorContentModule(definition: EditorDefinition): strin
   lines.push('}', '');
   const defaults: Record<string, unknown> = {};
   if (Object.keys(params).length > 0) {
-    defaults[PARAMS_KEY] = Object.fromEntries(Object.entries(params).map(([name, spec]) => [name, spec.default]));
+    defaults[PARAMS_KEY] =
+      content?.[PARAMS_KEY] && !Array.isArray(content[PARAMS_KEY])
+        ? content[PARAMS_KEY]
+        : Object.fromEntries(Object.entries(params).map(([name, spec]) => [name, spec.default]));
   }
   for (const [key, spec] of Object.entries(definition.content)) {
-    defaults[key] = spec.defaults;
+    defaults[key] = content?.[key] ?? spec.defaults;
   }
   lines.push(`export const DEFAULT_CONTENT: EditorContent = ${JSON.stringify(defaults, null, 2)};`);
   lines.push('');
