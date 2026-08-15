@@ -319,6 +319,16 @@
       "loadError": "Sources could not be loaded right now.",
       "agentRound": "An agent is actively building — read only until it finishes",
       "agentRoundCompact": "Read only",
+      "agentActive": "Agent is editing this game",
+      "agentMode": {
+        "trigger": "Agent mode",
+        "title": "Agent mode",
+        "close": "Close agent mode",
+        "webmcpToggle": "Enable WebMCP in this browser tab",
+        "webmcpHint": "Lets a browser agent with WebMCP support edit this game live. No browser ships one yet — this is here for when they do.",
+        "claudeTitle": "Claude doesn't support WebMCP yet — connect it directly",
+        "claudeHint": "Use gamedev.pl's regular MCP connection instead, then call start with slug \"{{slug}}\"."
+      },
       "stagedBy": "changed · {{who}}",
       "lockedHint": "Read-only — GameKit and the tooling are shared, never edited here",
       "kitViewerTitle": "shared/game-kit.d.ts",

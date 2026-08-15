@@ -264,7 +264,9 @@ export type CodeStep =
   | 'read_only_agent'
   | 'conflict_seen'
   // CE-17: a staging write opened a fresh round implicitly.
-  | 'round_reopened';
+  | 'round_reopened'
+  | 'agent_mode_enabled'
+  | 'agent_mode_disabled';
 
 export type CodeCompletionKind = 'language_service' | 'ghost_text';
 export type CodeCompletionOutcome = 'shown' | 'empty' | 'failed';

@@ -54,8 +54,21 @@ vi.mock('./studioApi.js', async () => {
   return { ...actual, fetchGameEditor: vi.fn() };
 });
 
+vi.mock('./webmcp.js', async () => {
+  const actual = await vi.importActual<typeof import('./webmcp.js')>('./webmcp.js');
+  return { ...actual, registerCodeSurfaceWebMcpTools: vi.fn(() => () => {}) };
+});
+
+// Stub the agent-mode modal's key panel fetch.
+vi.mock('./connectApi.js', async () => {
+  const actual = await vi.importActual<typeof import('./connectApi.js')>('./connectApi.js');
+  return { ...actual, getCreatorAgentKey: vi.fn() };
+});
+
 const mocked = vi.mocked(codeSurfaceApi);
 const mockedStudioApi = vi.mocked(await import('./studioApi.js'));
+const mockedWebmcp = vi.mocked(await import('./webmcp.js'));
+const mockedConnectApi = vi.mocked(await import('./connectApi.js'));
 
 async function flush() {
   await Promise.resolve();
@@ -95,6 +108,10 @@ describe('CodeSurface', () => {
     mocked.deliverCodeSurface.mockReset();
     mockedStudioApi.fetchGameEditor.mockReset();
     codeMirrorMock.current = null;
+    mockedWebmcp.registerCodeSurfaceWebMcpTools.mockClear();
+    mockedConnectApi.getCreatorAgentKey.mockReset();
+    mockedConnectApi.getCreatorAgentKey.mockResolvedValue({ revoked: true, keyGeneration: 1 });
+    window.localStorage.clear();
     mocked.rebuildCodeSurfaceStage.mockResolvedValue({ scheduled: true });
     mocked.requestCodeSurfacePreview.mockResolvedValue({ html: '<html></html>', engineRef: 'abc123' });
     container = document.createElement('div');
@@ -961,6 +978,62 @@ describe('CodeSurface', () => {
       expect(container.querySelector('.code-surface-param-select[aria-label="Color"]')).not.toBeNull();
       expect(container.querySelector('input[type="checkbox"][aria-label="Loud"]')).not.toBeNull();
       expect(container.querySelector('.code-surface-param-text[aria-label="Title"]')).not.toBeNull();
+    });
+  });
+
+  describe('agent mode', () => {
+    it('is off by default: no WebMCP registration until the creator opts in', async () => {
+      mocked.fetchCodeSurfaceSources.mockResolvedValue(sourcesFor());
+
+      await render();
+
+      expect(mockedWebmcp.registerCodeSurfaceWebMcpTools).not.toHaveBeenCalled();
+    });
+
+    it('opens the Agent mode modal, and its WebMCP toggle registers the tool set', async () => {
+      mocked.fetchCodeSurfaceSources.mockResolvedValue(sourcesFor());
+
+      await render();
+
+      const trigger = container.querySelector<HTMLButtonElement>('.code-surface-agent-mode-trigger')!;
+      await act(async () => {
+        trigger.click();
+      });
+
+      const dialog = container.querySelector('.code-surface-agent-mode-dialog');
+      expect(dialog).not.toBeNull();
+      // The Claude bridge reuses the creator's real MCP key panel.
+      expect(container.querySelector('.studio-creator-key')).not.toBeNull();
+
+      const toggle = container.querySelector<HTMLInputElement>('.code-surface-agent-mode-toggle input')!;
+      expect(toggle.checked).toBe(false);
+      await act(async () => {
+        toggle.click();
+      });
+
+      expect(mockedWebmcp.registerCodeSurfaceWebMcpTools).toHaveBeenCalledWith('sky-dodge');
+      expect(toggle.checked).toBe(true);
+    });
+
+    it('remembers the opt-in across a remount of the same round', async () => {
+      mocked.fetchCodeSurfaceSources.mockResolvedValue(sourcesFor());
+      await render();
+
+      const trigger = container.querySelector<HTMLButtonElement>('.code-surface-agent-mode-trigger')!;
+      await act(async () => {
+        trigger.click();
+      });
+      const toggle = container.querySelector<HTMLInputElement>('.code-surface-agent-mode-toggle input')!;
+      await act(async () => {
+        toggle.click();
+      });
+
+      mockedWebmcp.registerCodeSurfaceWebMcpTools.mockClear();
+      await act(async () => root.unmount());
+      root = createRoot(container);
+      await render();
+
+      expect(mockedWebmcp.registerCodeSurfaceWebMcpTools).toHaveBeenCalledWith('sky-dodge');
     });
   });
 });
