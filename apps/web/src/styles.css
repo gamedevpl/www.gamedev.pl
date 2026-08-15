@@ -12210,13 +12210,19 @@ button.builder-mode-selector:disabled {
 .code-surface-statusbar {
   flex: none;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  flex-direction: column;
+  gap: 4px;
   min-height: 28px;
   padding: 3px 10px;
   border-top: 1px solid var(--panel-border);
   background: rgba(148, 163, 184, 0.05);
+}
+
+.code-surface-statusbar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .code-surface-statusbar-left {
@@ -12343,6 +12349,8 @@ button.builder-mode-selector:disabled {
 }
 
 .code-surface-deliver-message {
+  display: block;
+  font-size: 0.72rem;
   color: var(--muted);
 }
 
@@ -12370,7 +12378,7 @@ button.builder-mode-selector:disabled {
 
 /* Narrow phones: let the bar wrap into two lines rather than clip actions. */
 @media (max-width: 640px) {
-  .code-surface-statusbar {
+  .code-surface-statusbar-row {
     flex-wrap: wrap;
     height: auto;
   }

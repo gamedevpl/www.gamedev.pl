@@ -302,6 +302,46 @@ describe('CodeSurface', () => {
     expect(onBack).toHaveBeenCalled();
   });
 
+  it('clears a stale "preview ready" link the moment a new edit is saved, not when the next request starts', async () => {
+    mocked.fetchCodeSurfaceSources.mockResolvedValue(sourcesFor());
+    mocked.stageCodeSurfaceFile.mockResolvedValue({
+      accepted: true,
+      path: 'game.ts',
+      bytes: 40,
+      staged: { totalBytes: 40, maxBytes: 1_000_000, maxFiles: 60, updatedAt: '2026-08-10T00:00:00.000Z' },
+    });
+    mocked.requestCodeSurfacePreview.mockResolvedValue({ html: '<html>first</html>', engineRef: 'abc123' });
+
+    await render();
+    const textarea = container.querySelector('textarea')!;
+
+    await act(async () => {
+      typeInto(textarea, 'export const boot = () => { /* first edit */ };');
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+      await flush();
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_500);
+      await flush();
+    });
+
+    expect(container.querySelector('.code-surface-preview-status.is-ready')).not.toBeNull();
+
+    // The second edit's own preview debounce hasn't even started yet.
+    await act(async () => {
+      typeInto(textarea, 'export const boot = () => { /* second edit */ };');
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+      await flush();
+    });
+
+    expect(container.querySelector('.code-surface-preview-status.is-ready')).toBeNull();
+    expect(container.querySelector('.code-surface-preview-status.is-pending')).toBeNull();
+  });
+
   it('CE-17: shows a notice when a staging write reports it opened a fresh round', async () => {
     mocked.fetchCodeSurfaceSources.mockResolvedValue(sourcesFor());
     mocked.stageCodeSurfaceFile.mockResolvedValue({

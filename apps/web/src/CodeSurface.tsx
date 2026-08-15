@@ -211,6 +211,8 @@ export function CodeSurface({
   const previewTimerRef = useRef<number | null>(null);
   const cooldownTimerRef = useRef<number | null>(null);
   const lastRebuildAtRef = useRef(0);
+  // Bumped by every edit, to detect a superseded sync preview.
+  const syncPreviewGenerationRef = useRef(0);
   const draftsRef = useRef(drafts);
   draftsRef.current = drafts;
   /** The content doc believed live in the game now — lazy-fetched, kept current by pushes. */
@@ -579,6 +581,9 @@ export function CodeSurface({
       window.clearTimeout(cooldownTimerRef.current);
       cooldownTimerRef.current = null;
     }
+    // A new edit invalidates any earlier in-flight or ready preview.
+    syncPreviewGenerationRef.current += 1;
+    setSyncPreviewState('idle');
     const arm = () => {
       previewTimerRef.current = null;
       const since = Date.now() - lastRebuildAtRef.current;
@@ -589,13 +594,16 @@ export function CodeSurface({
       setRebuildError(false);
       setRebuildState('pending');
       // Track 2: shows the synchronous rebuild the instant it lands.
+      const generation = syncPreviewGenerationRef.current;
       setSyncPreviewState('pending');
       void requestCodeSurfacePreview(slug)
         .then((result) => {
           onPreviewReadyRef.current?.(result.html);
-          setSyncPreviewState('ready');
+          if (syncPreviewGenerationRef.current === generation) setSyncPreviewState('ready');
         })
-        .catch(() => setSyncPreviewState('idle'));
+        .catch(() => {
+          if (syncPreviewGenerationRef.current === generation) setSyncPreviewState('idle');
+        });
       void rebuildCodeSurfaceStage(slug)
         .then(() => {
           recordCodeStep('previewed');
@@ -1115,90 +1123,92 @@ export function CodeSurface({
       {editable ? (
         // A thin VS Code-style status bar, not a padded footer.
         <footer className="code-surface-statusbar">
-          <div className="code-surface-statusbar-left">
-            {liveBudget ? (
+          <div className="code-surface-statusbar-row">
+            <div className="code-surface-statusbar-left">
+              {liveBudget ? (
+                <span
+                  className={`code-surface-statusbar-item code-surface-budget${liveBudget.oversize ? ' is-oversize' : ''}`}
+                >
+                  {t('studioPanel.code.budget', { lines: liveBudget.lines, maxLines: liveBudget.maxLines })}
+                </span>
+              ) : null}
               <span
-                className={`code-surface-statusbar-item code-surface-budget${liveBudget.oversize ? ' is-oversize' : ''}`}
+                className={`code-surface-statusbar-item code-surface-save-state is-${saveState}${hasWorkingCopy ? ' has-changes' : ''}`}
+                aria-live="polite"
+                data-testid="code-working-copy-status"
               >
-                {t('studioPanel.code.budget', { lines: liveBudget.lines, maxLines: liveBudget.maxLines })}
+                {workingCopyLabel}
               </span>
-            ) : null}
-            <span
-              className={`code-surface-statusbar-item code-surface-save-state is-${saveState}${hasWorkingCopy ? ' has-changes' : ''}`}
-              aria-live="polite"
-              data-testid="code-working-copy-status"
-            >
-              {workingCopyLabel}
-            </span>
-            {syncPreviewState === 'pending' ? (
-              <span className="code-surface-statusbar-item code-surface-preview-status is-pending" aria-live="polite">
-                <span className="status-preview-spinner" aria-hidden="true" /> {t('studioPanel.code.previewSyncing')}
+              {syncPreviewState === 'pending' ? (
+                <span className="code-surface-statusbar-item code-surface-preview-status is-pending" aria-live="polite">
+                  <span className="status-preview-spinner" aria-hidden="true" /> {t('studioPanel.code.previewSyncing')}
+                </span>
+              ) : null}
+              {syncPreviewState === 'ready' ? (
+                <button
+                  type="button"
+                  className="code-surface-statusbar-item code-surface-preview-status is-ready"
+                  onClick={onBack}
+                >
+                  {t('studioPanel.code.previewSyncReady')}
+                </button>
+              ) : null}
+              {livePush ? (
+                <span className="code-surface-statusbar-item code-surface-live-push" aria-live="polite">
+                  {t('studioPanel.code.livePush')}
+                </span>
+              ) : null}
+              {roundOpenedNotice ? (
+                <span className="code-surface-statusbar-item code-surface-round-opened" aria-live="polite">
+                  {t('studioPanel.code.roundOpened')}
+                </span>
+              ) : null}
+              {rebuildError ? (
+                <span className="code-surface-statusbar-item code-surface-rebuild-error">
+                  {t('studioPanel.code.rebuildError')}
+                </span>
+              ) : null}
+            </div>
+
+            <div className="code-surface-deliver">
+              {hasWorkingCopy ? (
+                <button
+                  type="button"
+                  className="code-surface-statusbar-item code-surface-discard"
+                  disabled={discardState === 'discarding' || deliverState === 'delivering'}
+                  onClick={() => void discardWorkingCopy()}
+                >
+                  {discardState === 'discarding' ? t('studioPanel.code.discarding') : t('studioPanel.code.discard')}
+                </button>
+              ) : null}
+              <span
+                className="code-surface-statusbar-item code-surface-publish-hint"
+                aria-label={t('studioPanel.code.publishHintTitle')}
+                tabIndex={0}
+                title={t('studioPanel.code.publishHintTitle')}
+              >
+                {t('studioPanel.code.publishHint')}
               </span>
-            ) : null}
-            {syncPreviewState === 'ready' ? (
               <button
                 type="button"
-                className="code-surface-statusbar-item code-surface-preview-status is-ready"
-                onClick={onBack}
+                className="code-surface-statusbar-item code-surface-deliver-btn"
+                disabled={!hasWorkingCopy || deliverState === 'delivering' || discardState === 'discarding'}
+                onClick={() => void deliver()}
               >
-                {t('studioPanel.code.previewSyncReady')}
+                {deliverState === 'delivering' ? t('studioPanel.code.delivering') : t('studioPanel.code.deliver')}
               </button>
-            ) : null}
-            {livePush ? (
-              <span className="code-surface-statusbar-item code-surface-live-push" aria-live="polite">
-                {t('studioPanel.code.livePush')}
-              </span>
-            ) : null}
-            {roundOpenedNotice ? (
-              <span className="code-surface-statusbar-item code-surface-round-opened" aria-live="polite">
-                {t('studioPanel.code.roundOpened')}
-              </span>
-            ) : null}
-            {rebuildError ? (
-              <span className="code-surface-statusbar-item code-surface-rebuild-error">
-                {t('studioPanel.code.rebuildError')}
-              </span>
-            ) : null}
-            {deliverMessage ? (
-              // Anything short of a delivered outcome is a problem report — muted grey
-              // buries the one line telling the creator why nothing shipped.
-              <span
-                className={`code-surface-statusbar-item code-surface-deliver-message${deliverState === 'delivered' ? '' : ' is-error'}`}
-                role="status"
-              >
-                {deliverMessage}
-              </span>
-            ) : null}
+            </div>
           </div>
 
-          <div className="code-surface-deliver">
-            {hasWorkingCopy ? (
-              <button
-                type="button"
-                className="code-surface-statusbar-item code-surface-discard"
-                disabled={discardState === 'discarding' || deliverState === 'delivering'}
-                onClick={() => void discardWorkingCopy()}
-              >
-                {discardState === 'discarding' ? t('studioPanel.code.discarding') : t('studioPanel.code.discard')}
-              </button>
-            ) : null}
+          {deliverMessage ? (
+            // Outside the scroller — a failure must stay visible, not hide.
             <span
-              className="code-surface-statusbar-item code-surface-publish-hint"
-              aria-label={t('studioPanel.code.publishHintTitle')}
-              tabIndex={0}
-              title={t('studioPanel.code.publishHintTitle')}
+              className={`code-surface-deliver-message${deliverState === 'delivered' ? '' : ' is-error'}`}
+              role="status"
             >
-              {t('studioPanel.code.publishHint')}
+              {deliverMessage}
             </span>
-            <button
-              type="button"
-              className="code-surface-statusbar-item code-surface-deliver-btn"
-              disabled={!hasWorkingCopy || deliverState === 'delivering' || discardState === 'discarding'}
-              onClick={() => void deliver()}
-            >
-              {deliverState === 'delivering' ? t('studioPanel.code.delivering') : t('studioPanel.code.deliver')}
-            </button>
-          </div>
+          ) : null}
         </footer>
       ) : null}
 
