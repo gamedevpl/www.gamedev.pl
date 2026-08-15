@@ -1695,6 +1695,9 @@ describe('SubmissionStatusView', () => {
     });
 
     const textarea = container.querySelector<HTMLTextAreaElement>('.status-feedback-input');
+    // Compact Studio composer must preserve CSS height while empty.
+    expect(textarea).not.toBeNull();
+    expect(textarea?.style.height).toBe('');
     await act(async () => {
       if (textarea) {
         const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;

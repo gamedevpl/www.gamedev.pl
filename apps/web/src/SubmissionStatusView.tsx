@@ -1463,6 +1463,10 @@ function FeedbackPanel({
   useEffect(() => {
     const input = inputRef.current;
     if (!input) return;
+    if (text.length === 0) {
+      input.style.height = '';
+      return;
+    }
     input.style.height = 'auto';
     input.style.height = `${Math.min(input.scrollHeight, 220)}px`;
   }, [text]);
