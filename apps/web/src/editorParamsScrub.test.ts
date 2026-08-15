@@ -42,6 +42,20 @@ describe('parseEditorParams', () => {
     const result = parseEditorParams(JSON.stringify({ params: { ok: EDITOR_JSON, broken: { foo: 'bar' } } }));
     expect(result).toEqual({ params: {}, rest: {} });
   });
+
+  it('skips a param missing its label, even with type and default present', () => {
+    const result = parseEditorParams(
+      JSON.stringify({ params: { speed: { type: 'number', min: 1, max: 10, default: 4 } } }),
+    );
+    expect(result).toEqual({ params: {}, rest: {} });
+  });
+
+  it('skips an enum param missing its values array', () => {
+    const result = parseEditorParams(
+      JSON.stringify({ params: { color: { type: 'enum', default: 'red', label: { en: 'Color', pl: 'Kolor' } } } }),
+    );
+    expect(result).toEqual({ params: {}, rest: {} });
+  });
 });
 
 describe('withParamDefault', () => {

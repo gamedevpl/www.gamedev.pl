@@ -799,5 +799,44 @@ describe('CodeSurface', () => {
       expect(pushRef.current).toHaveBeenCalledWith({ params: { speed: 5.09 } });
       expect(container.textContent).toContain('Live');
     });
+
+    it('gives every param control an accessible name, not just the scrubber', async () => {
+      mocked.fetchCodeSurfaceSources.mockResolvedValue(
+        sourcesFor({
+          files: [
+            { path: 'game.ts', content: 'export const boot = () => {};' },
+            {
+              path: 'EDITOR.json',
+              content: JSON.stringify({
+                content: {},
+                params: {
+                  color: { type: 'enum', label: { en: 'Color', pl: 'Kolor' }, values: ['red', 'blue'], default: 'red' },
+                  loud: { type: 'bool', label: { en: 'Loud', pl: 'Głośno' }, default: false },
+                  title: { type: 'text', label: { en: 'Title', pl: 'Tytuł' }, max: 20, default: 'Hi' },
+                },
+              }),
+            },
+          ],
+        }),
+      );
+      mockedStudioApi.fetchGameEditor.mockResolvedValue({
+        version: 'v1',
+        definition: { version: 1, content: {} },
+        content: { params: {} },
+        draft: null,
+      });
+
+      await render();
+      const editorTab = [...container.querySelectorAll('.code-surface-rail-item')].find((b) =>
+        b.textContent?.includes('EDITOR.json'),
+      ) as HTMLButtonElement;
+      await act(async () => {
+        editorTab.click();
+      });
+
+      expect(container.querySelector('.code-surface-param-select[aria-label="Color"]')).not.toBeNull();
+      expect(container.querySelector('input[type="checkbox"][aria-label="Loud"]')).not.toBeNull();
+      expect(container.querySelector('.code-surface-param-text[aria-label="Title"]')).not.toBeNull();
+    });
   });
 });

@@ -995,6 +995,7 @@ export function CodeSurface({
                         className="code-surface-param-select"
                         value={spec.default as string}
                         disabled={!editable}
+                        aria-label={label}
                         onChange={(event) => scrubParamDefault(key, event.target.value)}
                       >
                         {spec.values.map((option) => (
@@ -1008,6 +1009,7 @@ export function CodeSurface({
                         type="checkbox"
                         checked={spec.default as boolean}
                         disabled={!editable}
+                        aria-label={label}
                         onChange={(event) => scrubParamDefault(key, event.target.checked)}
                       />
                     ) : (
@@ -1017,6 +1019,7 @@ export function CodeSurface({
                         value={spec.default as string}
                         disabled={!editable}
                         maxLength={spec.max}
+                        aria-label={label}
                         onChange={(event) => scrubParamDefault(key, event.target.value)}
                       />
                     )}

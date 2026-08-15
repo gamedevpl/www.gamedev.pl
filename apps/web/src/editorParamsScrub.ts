@@ -1,6 +1,6 @@
 // Produces new EDITOR.json text for a scrub.
 
-import type { EditorParamSpec, EditorParamValue } from './studioApi.js';
+import type { EditorLabel, EditorParamSpec, EditorParamValue } from './studioApi.js';
 
 export type ParsedEditorJson = { params: Record<string, EditorParamSpec>; rest: Record<string, unknown> } | null;
 
@@ -8,11 +8,26 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-// A param failing this shape just gets no control, not an error.
+function isEditorLabel(value: unknown): value is EditorLabel {
+  return isPlainObject(value) && typeof value.en === 'string' && typeof value.pl === 'string';
+}
+
+// A param failing this shape gets no control, not a crash.
 function isParamSpec(value: unknown): value is EditorParamSpec {
-  if (!isPlainObject(value) || !('type' in value) || !('default' in value)) return false;
-  const type = value.type;
-  return type === 'text' || type === 'int' || type === 'number' || type === 'enum' || type === 'bool';
+  if (!isPlainObject(value) || !('default' in value) || !isEditorLabel(value.label)) return false;
+  switch (value.type) {
+    case 'text':
+      return typeof value.max === 'number';
+    case 'int':
+    case 'number':
+      return typeof value.min === 'number' && typeof value.max === 'number';
+    case 'enum':
+      return Array.isArray(value.values) && value.values.length > 0 && value.values.every((v) => typeof v === 'string');
+    case 'bool':
+      return true;
+    default:
+      return false;
+  }
 }
 
 // Parses EDITOR.json text into its declared params, or null if unparseable.
