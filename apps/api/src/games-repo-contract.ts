@@ -62,6 +62,10 @@ export const GAME_KIT_MODULES = [
   // Genre verticals: the GitHub client bundles their private shared/verticals graphs.
   'racing',
   'football',
+  // Genre vertical: platformer physics + pluggable level sources + recipe vocabulary
+  // (games-repo #690). Website-first — see WEBSITE_AHEAD_EXPIRY in
+  // games-repo-contract-check.ts.
+  'platformer',
   'effects',
   'audio',
   'party',
@@ -191,6 +195,7 @@ export const GAME_KIT_VERTICAL_ENTRIES: Partial<Record<GameKitModuleName, string
   urban: 'shared/verticals/urban/index.ts',
   racing: 'shared/verticals/racing/index.ts',
   football: 'shared/verticals/football/index.ts',
+  platformer: 'shared/verticals/platformer/index.ts',
 };
 
 /** Pull the `GAME_KIT_VERTICALS = { ... }` object literal out of games-repo assemble source. */

@@ -109,6 +109,7 @@ describe('games-repo-contract (website half)', () => {
       'gfx3d',
       'racing',
       'football',
+      'platformer',
       'effects',
       'audio',
       'party',
@@ -232,7 +233,7 @@ describe('games-repo source extractors', () => {
       // Canonical order
       export const GAME_KIT_MODULES = [
         'input', 'collision', 'world', 'grid', 'path', 'ai', 'gameplay', 'rng', 'cards', 'vehicles', 'urban',
-        'drawing', 'actors', 'gfx', 'ui', 'gfx3d', 'racing', 'football', 'effects', 'audio', 'party', 'save', 'commons', 'presence', 'mascot', 'zone',
+        'drawing', 'actors', 'gfx', 'ui', 'gfx3d', 'racing', 'football', 'platformer', 'effects', 'audio', 'party', 'save', 'commons', 'presence', 'mascot', 'zone',
         'sensing', 'voice', 'editor',
       ] as const;
     `;
@@ -246,6 +247,7 @@ describe('games-repo source extractors', () => {
         urban: 'shared/verticals/urban/index.ts',
         racing: 'shared/verticals/racing/index.ts',
         football: 'shared/verticals/football/index.ts',
+        platformer: 'shared/verticals/platformer/index.ts',
       });
     `;
     expect(extractGameKitVerticals(source)).toEqual(GAME_KIT_VERTICAL_ENTRIES);
