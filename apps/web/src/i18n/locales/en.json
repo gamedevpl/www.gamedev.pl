@@ -327,7 +327,13 @@
         "webmcpToggle": "Enable WebMCP in this browser tab",
         "webmcpHint": "Lets a browser agent with WebMCP support edit this game live. No browser ships one yet — this is here for when they do.",
         "claudeTitle": "Claude doesn't support WebMCP yet — connect it directly",
-        "claudeHint": "Use gamedev.pl's regular MCP connection instead, then call start with slug \"{{slug}}\"."
+        "claudeHint": "Use gamedev.pl's regular MCP connection instead, then call start with slug \"{{slug}}\".",
+        "consoleTitle": "Agent console — for browser agents that can only click and type",
+        "consoleHint": "Claude for Chrome can read this page and type, but can't call tools or run scripts. Paste one JSON command, press Run, read the result. Same tools, same limits — it still can't publish.",
+        "consoleInputLabel": "Agent command (JSON)",
+        "consoleRun": "Run",
+        "consoleRunning": "Running…",
+        "consoleGuide": "Guide for the agent"
       },
       "stagedBy": "changed · {{who}}",
       "lockedHint": "Read-only — GameKit and the tooling are shared, never edited here",

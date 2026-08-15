@@ -2,6 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as codeSurfaceApi from './codeSurfaceApi.js';
+import type { AgentActivityEvent } from './webmcp.js';
 
 vi.mock('./codeSurfaceApi.js', async () => {
   const actual = await vi.importActual<typeof import('./codeSurfaceApi.js')>('./codeSurfaceApi.js');
@@ -49,6 +50,7 @@ let webmcp: typeof import('./webmcp.js');
 beforeEach(async () => {
   vi.resetModules();
   window.localStorage.clear();
+  window.sessionStorage.clear();
   webmcp = await import('./webmcp.js');
 });
 
@@ -152,15 +154,124 @@ describe('registerCodeSurfaceWebMcpTools', () => {
       readOnly: false,
       staged: { totalBytes: 0, maxBytes: 1, maxFiles: 1, updatedAt: null },
     });
-    const events: string[] = [];
-    const unsubscribe = webmcp.subscribeAgentActivity((event) => events.push(event.tool));
+    const events: AgentActivityEvent[] = [];
+    const unsubscribe = webmcp.subscribeAgentActivity((event) => events.push(event));
     webmcp.registerCodeSurfaceWebMcpTools('astro-tanks');
     await flush();
 
     const tool = registered.find((entry) => entry.name === 'get_sources')!;
     await tool.execute({});
-    expect(events).toEqual(['get_sources']);
+    expect(events.map((event) => [event.tool, event.phase])).toEqual([
+      ['get_sources', 'start'],
+      ['get_sources', 'done'],
+    ]);
+    // A read never asks the editor to reload itself.
+    expect(events.every((event) => event.mutates === false)).toBe(true);
     unsubscribe();
+  });
+
+  it('flags mutating tools, so the editor knows to reload the working copy', async () => {
+    const { registered } = installFakeModelContext();
+    mocked.stageCodeSurfaceFile.mockResolvedValue({
+      accepted: true,
+      path: 'game.ts',
+      bytes: 4,
+      staged: { totalBytes: 4, maxBytes: 100, maxFiles: 10, updatedAt: null },
+    });
+    const events: AgentActivityEvent[] = [];
+    const unsubscribe = webmcp.subscribeAgentActivity((event) => events.push(event));
+    webmcp.registerCodeSurfaceWebMcpTools('astro-tanks');
+    await flush();
+
+    const tool = registered.find((entry) => entry.name === 'stage_source_file')!;
+    await tool.execute({ path: 'game.ts', content: 'main' });
+    expect(events.map((event) => event.phase)).toEqual(['start', 'done']);
+    expect(events.every((event) => event.mutates)).toBe(true);
+    unsubscribe();
+  });
+});
+
+describe('runAgentConsoleCommand', () => {
+  it('dispatches a JSON command to the matching tool and returns its output', async () => {
+    mocked.fetchCodeSurfaceSources.mockResolvedValue({
+      slug: 'astro-tanks',
+      version: '1',
+      files: [{ path: 'game.ts', content: 'export {}', stagedBy: 'owner' }],
+      deleted: [],
+      readOnly: false,
+      staged: { totalBytes: 0, maxBytes: 1, maxFiles: 1, updatedAt: null },
+    });
+
+    const result = await webmcp.runAgentConsoleCommand('astro-tanks', '{"tool":"get_sources","input":{}}');
+    expect(result.ok).toBe(true);
+    expect(result.tool).toBe('get_sources');
+    expect(JSON.parse(result.output)).toEqual({ available: true, files: [{ path: 'game.ts', content: 'export {}' }] });
+  });
+
+  it('works without any modelContext, since it is the fallback for agents that lack one', async () => {
+    removeFakeModelContext();
+    mocked.patchCodeSurfaceFile.mockResolvedValue({
+      accepted: true,
+      path: 'game.ts',
+      bytes: 10,
+      staged: { totalBytes: 10, maxBytes: 100, maxFiles: 10, updatedAt: null },
+      replacements: 1,
+      baseFrom: 'delivery',
+    });
+
+    const command = JSON.stringify({ tool: 'patch_source_file', input: { path: 'game.ts', old: 'a', new: 'b' } });
+    const result = await webmcp.runAgentConsoleCommand('astro-tanks', command);
+    expect(mocked.patchCodeSurfaceFile).toHaveBeenCalledWith('astro-tanks', 'game.ts', { old: 'a', new: 'b' });
+    expect(result.ok).toBe(true);
+  });
+
+  it('cannot publish — submit_sources stays pinned to preview here too', async () => {
+    mocked.deliverCodeSurface.mockResolvedValue({
+      accepted: true,
+      slug: 'astro-tanks',
+      version: '2',
+      mode: 'preview',
+      gateStarted: true,
+    });
+
+    await webmcp.runAgentConsoleCommand('astro-tanks', '{"tool":"submit_sources","input":{"mode":"publish"}}');
+    expect(mocked.deliverCodeSurface).toHaveBeenCalledWith('astro-tanks', 'preview');
+  });
+
+  it('reports malformed JSON and unknown tools without throwing', async () => {
+    const badJson = await webmcp.runAgentConsoleCommand('astro-tanks', 'get_sources please');
+    expect(badJson.ok).toBe(false);
+    expect(JSON.parse(badJson.output).error).toContain('invalid JSON');
+
+    const unknown = await webmcp.runAgentConsoleCommand('astro-tanks', '{"tool":"rm_rf","input":{}}');
+    expect(unknown.ok).toBe(false);
+    expect(JSON.parse(unknown.output).error).toContain('unknown tool');
+    // The error lists the real contract so the agent can retry correctly.
+    expect(JSON.parse(unknown.output).error).toContain('get_sources');
+  });
+
+  it('notifies agent-activity subscribers, so the banner lights up for console calls', async () => {
+    mocked.fetchCodeSurfaceSources.mockResolvedValue({
+      slug: 'astro-tanks',
+      version: null,
+      files: [],
+      deleted: [],
+      readOnly: false,
+      staged: { totalBytes: 0, maxBytes: 1, maxFiles: 1, updatedAt: null },
+    });
+    const events: string[] = [];
+    const unsubscribe = webmcp.subscribeAgentActivity((event) => events.push(`${event.tool}:${event.phase}`));
+
+    await webmcp.runAgentConsoleCommand('astro-tanks', '{"tool":"get_sources","input":{}}');
+    expect(events).toEqual(['get_sources:start', 'get_sources:done']);
+    unsubscribe();
+  });
+
+  it('exposes the same tool names the WebMCP registration uses', async () => {
+    const { registered } = installFakeModelContext();
+    webmcp.registerCodeSurfaceWebMcpTools('astro-tanks');
+    await flush();
+    expect(webmcp.codeSurfaceToolNames()).toEqual(registered.map((tool) => tool.name));
   });
 });
 

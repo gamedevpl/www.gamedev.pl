@@ -11905,6 +11905,72 @@ button.builder-mode-selector:disabled {
   color: var(--muted);
 }
 
+.code-surface-agent-console-tools {
+  margin: 8px 0 0;
+  font-family: var(--mono, monospace);
+  font-size: 0.72rem;
+  color: var(--muted);
+  word-break: break-word;
+}
+
+.code-surface-agent-console-input {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px;
+  box-sizing: border-box;
+  resize: vertical;
+  font-family: var(--mono, monospace);
+  font-size: 0.78rem;
+  color: inherit;
+  background: rgba(3, 8, 13, 0.4);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.code-surface-agent-console-run {
+  margin-top: 8px;
+  padding: 6px 14px;
+  font: inherit;
+  font-size: 0.8rem;
+  color: inherit;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.code-surface-agent-console-run:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.code-surface-agent-console-output {
+  margin: 10px 0 0;
+  padding: 8px;
+  max-height: 220px;
+  overflow: auto;
+  font-family: var(--mono, monospace);
+  font-size: 0.74rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: rgba(3, 8, 13, 0.4);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.code-surface-agent-console-guide {
+  margin-top: 10px;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.code-surface-agent-console-guide pre {
+  margin: 6px 0 0;
+  font-size: 0.72rem;
+  white-space: pre-wrap;
+}
+
 .code-surface-loading,
 .code-surface-error,
 .code-surface-empty {

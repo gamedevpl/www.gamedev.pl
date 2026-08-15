@@ -39,8 +39,11 @@ import {
   setCodeSurfaceSessionState,
 } from './codeSurfaceSessionState.js';
 import {
+  AGENT_GUIDE,
+  codeSurfaceToolNames,
   isAgentModeEnabled,
   registerCodeSurfaceWebMcpTools,
+  runAgentConsoleCommand,
   setAgentModeEnabled,
   subscribeAgentActivity,
 } from './webmcp.js';
@@ -214,6 +217,10 @@ export function CodeSurface({
   // Creator opt-in for WebMCP; modal also offers a real-MCP path.
   const [agentModeOpen, setAgentModeOpen] = useState(false);
   const [agentModeEnabled, setAgentModeEnabledState] = useState(() => isAgentModeEnabled(slug));
+  // DOM console for browser agents that can type but not call tools.
+  const [agentConsoleInput, setAgentConsoleInput] = useState('{"tool":"get_sources","input":{}}');
+  const [agentConsoleOutput, setAgentConsoleOutput] = useState<string | null>(null);
+  const [agentConsoleBusy, setAgentConsoleBusy] = useState(false);
 
   const openedRecordedRef = useRef(false);
   // Focus holder before the actions menu opened; restored on close.
@@ -463,17 +470,31 @@ export function CodeSurface({
     recordCodeStep(next ? 'agent_mode_enabled' : 'agent_mode_disabled');
   }
 
+  async function runAgentConsole() {
+    if (agentConsoleBusy) return;
+    setAgentConsoleBusy(true);
+    recordCodeStep('agent_console_run');
+    try {
+      const result = await runAgentConsoleCommand(slug, agentConsoleInput);
+      setAgentConsoleOutput(result.output);
+    } finally {
+      setAgentConsoleBusy(false);
+    }
+  }
+
   useEffect(() => {
-    const unsubscribe = subscribeAgentActivity(() => {
+    const unsubscribe = subscribeAgentActivity((event) => {
       setAgentActive(true);
       if (agentActiveTimerRef.current !== null) window.clearTimeout(agentActiveTimerRef.current);
       agentActiveTimerRef.current = window.setTimeout(() => setAgentActive(false), AGENT_ACTIVITY_BANNER_MS);
+      // An agent just rewrote the working copy — reload before the creator's next autosave.
+      if (event.phase === 'done' && event.mutates) load(false);
     });
     return () => {
       unsubscribe();
       if (agentActiveTimerRef.current !== null) window.clearTimeout(agentActiveTimerRef.current);
     };
-  }, []);
+  }, [load]);
 
   // GA-04: keyed on editable/slug — avoids a re-fetch cleanup race.
   useEffect(() => {
@@ -1453,6 +1474,39 @@ export function CodeSurface({
               <h4>{t('studioPanel.code.agentMode.claudeTitle')}</h4>
               <p className="code-surface-agent-mode-hint">{t('studioPanel.code.agentMode.claudeHint', { slug })}</p>
               <StudioCreatorAgentKeyPanel />
+            </div>
+
+            <div className="code-surface-agent-mode-section">
+              <h4>{t('studioPanel.code.agentMode.consoleTitle')}</h4>
+              <p className="code-surface-agent-mode-hint">{t('studioPanel.code.agentMode.consoleHint')}</p>
+              <p className="code-surface-agent-console-tools">{codeSurfaceToolNames().join(' · ')}</p>
+              <textarea
+                className="code-surface-agent-console-input"
+                value={agentConsoleInput}
+                onChange={(event) => setAgentConsoleInput(event.target.value)}
+                spellCheck={false}
+                rows={4}
+                aria-label={t('studioPanel.code.agentMode.consoleInputLabel')}
+              />
+              <button
+                type="button"
+                className="code-surface-agent-console-run"
+                onClick={() => void runAgentConsole()}
+                disabled={agentConsoleBusy}
+              >
+                {agentConsoleBusy
+                  ? t('studioPanel.code.agentMode.consoleRunning')
+                  : t('studioPanel.code.agentMode.consoleRun')}
+              </button>
+              {agentConsoleOutput !== null ? (
+                <pre className="code-surface-agent-console-output" aria-live="polite" tabIndex={0}>
+                  {agentConsoleOutput}
+                </pre>
+              ) : null}
+              <details className="code-surface-agent-console-guide">
+                <summary>{t('studioPanel.code.agentMode.consoleGuide')}</summary>
+                <pre>{AGENT_GUIDE}</pre>
+              </details>
             </div>
           </section>
         </div>

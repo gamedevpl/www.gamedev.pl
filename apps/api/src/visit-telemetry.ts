@@ -133,6 +133,9 @@ const CodeStepSchema = z.enum([
   'read_only_agent',
   'conflict_seen',
   'round_reopened',
+  'agent_mode_enabled',
+  'agent_mode_disabled',
+  'agent_console_run',
 ]);
 const CodeCompletionKindSchema = z.enum(['language_service', 'ghost_text']);
 const CodeCompletionOutcomeSchema = z.enum(['shown', 'empty', 'failed']);
@@ -298,12 +301,7 @@ export async function registerVisitTelemetryRoutes(
         lastSeen: number;
       });
     if (visit.coreCount >= MAX_EVENTS_PER_VISIT && visit.completionCount >= MAX_COMPLETION_EVENTS_PER_VISIT) {
-      rememberBounded(
-        visitCounts,
-        parsed.data.visitId,
-        { ...visit, lastSeen: currentTime },
-        MAX_TRACKED_VISITS,
-      );
+      rememberBounded(visitCounts, parsed.data.visitId, { ...visit, lastSeen: currentTime }, MAX_TRACKED_VISITS);
       return reply.status(202).send({ accepted: 0 });
     }
 

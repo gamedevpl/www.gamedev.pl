@@ -329,7 +329,13 @@
         "webmcpToggle": "Włącz WebMCP w tej karcie przeglądarki",
         "webmcpHint": "Pozwala agentowi w przeglądarce ze wsparciem WebMCP edytować tę grę na żywo. Żadna przeglądarka jeszcze tego nie obsługuje — to na przyszłość.",
         "claudeTitle": "Claude nie obsługuje jeszcze WebMCP — połącz go bezpośrednio",
-        "claudeHint": "Użyj zwykłego połączenia MCP gamedev.pl, a potem wywołaj start ze slugiem \"{{slug}}\"."
+        "claudeHint": "Użyj zwykłego połączenia MCP gamedev.pl, a potem wywołaj start ze slugiem \"{{slug}}\".",
+        "consoleTitle": "Konsola agenta — dla agentów, którzy potrafią tylko klikać i pisać",
+        "consoleHint": "Claude for Chrome czyta tę stronę i pisze, ale nie wywoła narzędzi ani nie uruchomi skryptów. Wklej jedną komendę JSON, kliknij Uruchom, odczytaj wynik. Te same narzędzia i te same ograniczenia — publikować nadal nie może.",
+        "consoleInputLabel": "Komenda agenta (JSON)",
+        "consoleRun": "Uruchom",
+        "consoleRunning": "Uruchamiam…",
+        "consoleGuide": "Instrukcja dla agenta"
       },
       "stagedBy": "zmienione · {{who}}",
       "lockedHint": "Tylko do odczytu — GameKit i narzędzia są wspólne, nie edytuje się ich tutaj",

@@ -41,6 +41,7 @@ vi.mock('./codeSurfaceApi.js', async () => {
     ...actual,
     fetchCodeSurfaceSources: vi.fn(),
     stageCodeSurfaceFile: vi.fn(),
+    patchCodeSurfaceFile: vi.fn(),
     rebuildCodeSurfaceStage: vi.fn(),
     requestCodeSurfacePreview: vi.fn(),
     typecheckCodeSurface: vi.fn(),
@@ -112,6 +113,7 @@ describe('CodeSurface', () => {
     mockedConnectApi.getCreatorAgentKey.mockReset();
     mockedConnectApi.getCreatorAgentKey.mockResolvedValue({ revoked: true, keyGeneration: 1 });
     window.localStorage.clear();
+    window.sessionStorage.clear();
     mocked.rebuildCodeSurfaceStage.mockResolvedValue({ scheduled: true });
     mocked.requestCodeSurfacePreview.mockResolvedValue({ html: '<html></html>', engineRef: 'abc123' });
     container = document.createElement('div');
@@ -1034,6 +1036,61 @@ describe('CodeSurface', () => {
       await render();
 
       expect(mockedWebmcp.registerCodeSurfaceWebMcpTools).toHaveBeenCalledWith('sky-dodge');
+    });
+
+    it('runs a typed JSON command through the console and shows the tool result', async () => {
+      mocked.fetchCodeSurfaceSources.mockResolvedValue(sourcesFor());
+      mocked.patchCodeSurfaceFile.mockResolvedValue({
+        accepted: true,
+        path: 'game.ts',
+        bytes: 12,
+        staged: { totalBytes: 12, maxBytes: 100, maxFiles: 10, updatedAt: null },
+        replacements: 1,
+        baseFrom: 'delivery',
+      });
+
+      await render();
+      const trigger = container.querySelector<HTMLButtonElement>('.code-surface-agent-mode-trigger')!;
+      await act(async () => {
+        trigger.click();
+      });
+
+      const input = container.querySelector<HTMLTextAreaElement>('.code-surface-agent-console-input')!;
+      await act(async () => {
+        typeInto(input, JSON.stringify({ tool: 'patch_source_file', input: { path: 'game.ts', old: 'a', new: 'b' } }));
+      });
+      const run = container.querySelector<HTMLButtonElement>('.code-surface-agent-console-run')!;
+      await act(async () => {
+        run.click();
+      });
+
+      expect(mocked.patchCodeSurfaceFile).toHaveBeenCalledWith('sky-dodge', 'game.ts', { old: 'a', new: 'b' });
+      // The agent rewrote the working copy, so the editor must reload it.
+      expect(mocked.fetchCodeSurfaceSources.mock.calls.length).toBeGreaterThan(1);
+      const output = container.querySelector('.code-surface-agent-console-output')!;
+      expect(JSON.parse(output.textContent!)).toMatchObject({ ok: true, path: 'game.ts', replacements: 1 });
+    });
+
+    it('surfaces a bad command as a readable error instead of failing silently', async () => {
+      mocked.fetchCodeSurfaceSources.mockResolvedValue(sourcesFor());
+
+      await render();
+      const trigger = container.querySelector<HTMLButtonElement>('.code-surface-agent-mode-trigger')!;
+      await act(async () => {
+        trigger.click();
+      });
+
+      const input = container.querySelector<HTMLTextAreaElement>('.code-surface-agent-console-input')!;
+      await act(async () => {
+        typeInto(input, 'please open game.ts');
+      });
+      const run = container.querySelector<HTMLButtonElement>('.code-surface-agent-console-run')!;
+      await act(async () => {
+        run.click();
+      });
+
+      const output = container.querySelector('.code-surface-agent-console-output')!;
+      expect(JSON.parse(output.textContent!).error).toContain('invalid JSON');
     });
   });
 });
