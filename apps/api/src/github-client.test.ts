@@ -903,6 +903,149 @@ describe('getGameSources', () => {
     expect(() => new Function(sources?.gameJs ?? '')).not.toThrow();
   });
 
+  it('falls back to the sourced-audio catalog for a sound missing from the synth catalog', async () => {
+    const files = new Map<string, string | Uint8Array>([
+      ['games/march/index.html', '<canvas id="game"></canvas>'],
+      ['games/march/game.ts', 'const game: { update(): void } = { update() {} }; GameKit.mount(game);'],
+      ['games/march/style.css', '.game { color: brass; }'],
+      ['games/march/SPEC.md', specMd({ title: 'March' })],
+      [
+        'games/march/GAME.json',
+        JSON.stringify({
+          engine: { modules: ['input', 'audio'] },
+          audio: {
+            sounds: ['ui-toggle', 'clockwork-gear-tick', 'wood-bridge-creak'],
+            music: 'clockwork-march',
+          },
+        }),
+      ],
+      ['shared/game-shell.css', '.shell { display: grid; }'],
+      ['shared/modules/core.ts', 'window.GameKit = { mount() {} };'],
+      ['shared/modules/input.ts', 'GameKit.createInput = function (): void {};'],
+      ['shared/modules/audio.ts', 'GameKit.createAudio = function (): void {};'],
+      ['shared/audio/assets/ui-toggle.wav', new Uint8Array([1, 2])],
+      [
+        'shared/audio/sourced.json',
+        JSON.stringify({
+          sounds: {
+            'clockwork-gear-tick': { mime: 'audio/mpeg' },
+            'wood-bridge-creak': { mime: 'audio/mpeg' },
+          },
+        }),
+      ],
+      ['shared/audio/sourced/clockwork-gear-tick.mp3', new Uint8Array([5, 6])],
+      ['shared/audio/sourced/wood-bridge-creak.mp3', new Uint8Array([9, 10])],
+      [
+        'shared/audio/music.json',
+        JSON.stringify({ tracks: { 'clockwork-march': { loop: true, data: 'data:audio/mpeg;base64,AAA=' } } }),
+      ],
+    ]);
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const pathname = new URL(String(input)).pathname;
+      const marker = '/contents/';
+      const path = decodeURIComponent(pathname.slice(pathname.indexOf(marker) + marker.length));
+      const value = files.get(path);
+      return value === undefined ? new Response('not found', { status: 404 }) : new Response(value, { status: 200 });
+    }) as unknown as typeof fetch;
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+
+    const sources = await client.getGameSources('main', 'march');
+
+    expect(sources?.gameJs).toContain('"ui-toggle":"data:audio/wav;base64,AQI="');
+    expect(sources?.gameJs).toContain('"clockwork-gear-tick":"data:audio/mpeg;base64,BQY="');
+    expect(sources?.gameJs).toContain('"wood-bridge-creak":"data:audio/mpeg;base64,CQo="');
+    // Concurrent misses must fetch the sourced catalog once.
+    const sourcedCatalogCalls = fetchImpl.mock.calls.filter(([input]) =>
+      String(input).includes('/shared/audio/sourced.json'),
+    );
+    expect(sourcedCatalogCalls).toHaveLength(1);
+  });
+
+  it('embeds a music track drumKit sample from the sourced catalog', async () => {
+    const files = new Map<string, string | Uint8Array>([
+      ['games/march/index.html', '<canvas id="game"></canvas>'],
+      ['games/march/game.ts', 'const game: { update(): void } = { update() {} }; GameKit.mount(game);'],
+      ['games/march/style.css', '.game { color: brass; }'],
+      ['games/march/SPEC.md', specMd({ title: 'March' })],
+      [
+        'games/march/GAME.json',
+        JSON.stringify({
+          engine: { modules: ['input', 'audio'] },
+          audio: { sounds: ['ui-toggle'], music: 'clockwork-march' },
+        }),
+      ],
+      ['shared/game-shell.css', '.shell { display: grid; }'],
+      ['shared/modules/core.ts', 'window.GameKit = { mount() {} };'],
+      ['shared/modules/input.ts', 'GameKit.createInput = function (): void {};'],
+      ['shared/modules/audio.ts', 'GameKit.createAudio = function (): void {};'],
+      ['shared/audio/assets/ui-toggle.wav', new Uint8Array([1, 2])],
+      ['shared/audio/sourced.json', JSON.stringify({ sounds: { 'clockwork-kick': { mime: 'audio/mpeg' } } })],
+      ['shared/audio/sourced/clockwork-kick.mp3', new Uint8Array([7, 8])],
+      [
+        'shared/audio/music.json',
+        JSON.stringify({
+          tracks: {
+            'clockwork-march': {
+              loop: true,
+              data: 'data:audio/mpeg;base64,AAA=',
+              drumKit: { kick: 'clockwork-kick' },
+            },
+          },
+        }),
+      ],
+    ]);
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const pathname = new URL(String(input)).pathname;
+      const marker = '/contents/';
+      const path = decodeURIComponent(pathname.slice(pathname.indexOf(marker) + marker.length));
+      const value = files.get(path);
+      return value === undefined ? new Response('not found', { status: 404 }) : new Response(value, { status: 200 });
+    }) as unknown as typeof fetch;
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+
+    const sources = await client.getGameSources('main', 'march');
+
+    expect(sources?.gameJs).toContain('"clockwork-kick":"data:audio/mpeg;base64,Bwg="');
+  });
+
+  it('treats a sound missing from both the synth and sourced catalogs as missing sources', async () => {
+    const files = new Map<string, string | Uint8Array>([
+      ['games/march/index.html', '<canvas id="game"></canvas>'],
+      ['games/march/game.ts', 'const game: { update(): void } = { update() {} }; GameKit.mount(game);'],
+      ['games/march/style.css', '.game { color: brass; }'],
+      ['games/march/SPEC.md', specMd({ title: 'March' })],
+      [
+        'games/march/GAME.json',
+        JSON.stringify({
+          engine: { modules: ['input', 'audio'] },
+          audio: { sounds: ['ui-toggle', 'clockwork-gear-tick'], music: 'clockwork-march' },
+        }),
+      ],
+      ['shared/game-shell.css', '.shell { display: grid; }'],
+      ['shared/modules/core.ts', 'window.GameKit = { mount() {} };'],
+      ['shared/modules/input.ts', 'GameKit.createInput = function (): void {};'],
+      ['shared/modules/audio.ts', 'GameKit.createAudio = function (): void {};'],
+      ['shared/audio/assets/ui-toggle.wav', new Uint8Array([1, 2])],
+      ['shared/audio/sourced.json', JSON.stringify({ sounds: {} })],
+      [
+        'shared/audio/music.json',
+        JSON.stringify({ tracks: { 'clockwork-march': { loop: true, data: 'data:audio/mpeg;base64,AAA=' } } }),
+      ],
+    ]);
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const pathname = new URL(String(input)).pathname;
+      const marker = '/contents/';
+      const path = decodeURIComponent(pathname.slice(pathname.indexOf(marker) + marker.length));
+      const value = files.get(path);
+      return value === undefined ? new Response('not found', { status: 404 }) : new Response(value, { status: 200 });
+    }) as unknown as typeof fetch;
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+
+    const sources = await client.getGameSources('main', 'march');
+
+    expect(sources).toBeNull();
+  });
+
   it('generates style.css from GAME.json theme when the games repo ships none', async () => {
     // Mirrors how index.html already falls back to howToPlay.
     const files = new Map<string, string | Uint8Array>([
