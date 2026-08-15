@@ -343,8 +343,8 @@
       "discard": "Discard changes",
       "discarding": "Discarding…",
       "discardError": "Could not discard — try again",
-      "publishHint": "Confirms your right to use this work.",
-      "publishHintTitle": "Publishing confirms this is your own work (or you have the right to use it), runs the game gate, and an operator reviews it before anything goes live.",
+      "publishHint": "Edits already save and preview live. Confirms your right to use this work when you publish.",
+      "publishHintTitle": "Edits already save automatically and preview live as you work — you don't need to publish after every change. Publishing confirms this is your own work (or you have the right to use it), runs the game gate, and an operator reviews it before this version replaces what's live.",
       "workingCopy": {
         "clean": "No local changes",
         "changed_one": "1 file changed · not published",
