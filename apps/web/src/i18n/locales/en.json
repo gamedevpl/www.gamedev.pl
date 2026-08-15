@@ -1267,6 +1267,7 @@
     "available": "Available",
     "accountHeading": "Account",
     "accountSettings": "Account settings",
+    "accountCredentials": "Keys and connected agents",
     "deleteAccountSummary": "Schedule your account and personal data for deletion after a 14-day recovery window.",
     "deleteAccount": "Schedule account deletion",
     "deleteDialogTitle": "Schedule account deletion?",

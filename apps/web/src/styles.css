@@ -11686,7 +11686,7 @@ button.builder-mode-selector:disabled {
 }
 
 /* Edit definitions without a board dock beside the running game. */
-.studio-edit-overlay:not(.studio-code-overlay)[data-surface="docked"] {
+.studio-edit-overlay:not(.studio-code-overlay)[data-surface='docked'] {
   inset: 0 0 0 auto;
   width: min(360px, 100%);
   border-left: 1px solid var(--panel-border);
@@ -17658,6 +17658,15 @@ body.remix-entry-open {
 
 .account-settings-modal-card {
   width: min(92vw, 520px);
+}
+
+.account-settings-credentials {
+  margin-top: 0.75rem;
+}
+
+.account-settings-section-title {
+  margin: 0 0 0.35rem;
+  font-size: 0.9rem;
 }
 
 .creator-profile-danger {
