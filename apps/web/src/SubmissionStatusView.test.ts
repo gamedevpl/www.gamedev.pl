@@ -1696,6 +1696,9 @@ describe('SubmissionStatusView', () => {
     });
 
     const textarea = container.querySelector<HTMLTextAreaElement>('.status-feedback-input');
+    // Embedded Studio uses the compact composer, whose empty state must keep the CSS height.
+    expect(textarea).not.toBeNull();
+    expect(textarea?.style.height).toBe('');
     await act(async () => {
       if (textarea) {
         const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
