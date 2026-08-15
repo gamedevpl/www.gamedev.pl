@@ -253,7 +253,7 @@ the sweep is the backstop for closed tabs. Both paths converge on the same idemp
 2. **Notification fatigue**: taxonomy starts minimal on purpose; any new event type needs
    the same "would the user thank us?" test, and broadcast categories stay opt-in.
 3. **Multi-browser push**: one user, several subscriptions — fan out to all, prune dead
-   ones. Sliding 12h sessions don't invalidate push subscriptions; a **blocked** user's
+   ones. Session expiry doesn't invalidate push subscriptions; a **blocked** user's
    subscriptions must be dropped at the same re-read point that blocks their spends.
 4. **Closed-beta interaction**: while Basic-Auth is the outer wall, email and push link
    clicks land on the Basic-Auth prompt in a fresh browser profile — and email makes this
