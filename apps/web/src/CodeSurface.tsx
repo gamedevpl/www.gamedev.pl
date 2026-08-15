@@ -490,6 +490,8 @@ export function CodeSurface({ slug, onBack, editorPushRef }: CodeSurfaceProps) {
   }
 
   function handleOpenFileFromActions(path: string) {
+    // Rides the pendingJump path search matches use — the new editor claims focus.
+    if (path !== selected) setPendingJump({ path, from: 0, to: 0 });
     selectFile(path);
     closeActionsMenu();
   }

@@ -12235,7 +12235,8 @@ button.builder-mode-selector:disabled {
 .code-surface-palette-backdrop {
   position: absolute;
   inset: 0;
-  z-index: 30;
+  /* Above .studio-chat-rail-pill's z-index: 61 — the rail floats over Code. */
+  z-index: 70;
   display: flex;
   align-items: flex-start;
   justify-content: center;

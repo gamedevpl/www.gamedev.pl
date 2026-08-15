@@ -9,13 +9,22 @@ import * as codeSurfaceApi from './codeSurfaceApi.js';
 import i18n from './i18n/index.js';
 
 // CodeMirror stand-in: jsdom cannot lay it out; palette never needs it.
+
+// Records initialSelection to check a quick-open switch triggers a focus jump.
+let capturedInitialSelections: unknown[] = [];
 vi.mock('./CodeMirrorEditor.js', () => ({
-  default: (props: { value: string; onChange: (value: string) => void }) =>
-    createElement('textarea', {
+  default: (props: {
+    value: string;
+    onChange: (value: string) => void;
+    initialSelection?: { anchor: number; head: number };
+  }) => {
+    capturedInitialSelections.push(props.initialSelection);
+    return createElement('textarea', {
       className: 'code-surface-editor',
       value: props.value,
       onChange: (event: { target: { value: string } }) => props.onChange(event.target.value),
-    }),
+    });
+  },
 }));
 
 vi.mock('./codeSurfaceApi.js', async () => {
@@ -61,6 +70,7 @@ describe('CodeSurface actions menu (VS Code-style palette)', () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');
     resetCodeSurfaceSessionState();
+    capturedInitialSelections = [];
     vi.useFakeTimers({ shouldAdvanceTime: true });
     mocked.fetchCodeSurfaceSources.mockReset();
     mocked.stageCodeSurfaceFile.mockReset();
@@ -147,6 +157,33 @@ describe('CodeSurface actions menu (VS Code-style palette)', () => {
     expect(menu()).toBeNull();
     expect(container.querySelector('.code-surface-rail-item.is-active')?.textContent).toContain('game/render.ts');
     expect(container.querySelector('textarea')!.value).toContain('export const paint');
+  });
+
+  it('a quick-open switch to a different file rides the same jump the editor uses to claim focus', async () => {
+    mocked.fetchCodeSurfaceSources.mockResolvedValue(sourcesFor());
+    await render();
+
+    await pressGlobal('p');
+    await typeIntoPalette('render');
+    await pressOnPalette('Enter');
+
+    // pendingJump clears itself once consumed — a prior render carried it.
+    expect(capturedInitialSelections).toContainEqual({ anchor: 0, head: 0 });
+  });
+
+  it('re-selecting the file already open is not treated as a jump — no selection reset', async () => {
+    mocked.fetchCodeSurfaceSources.mockResolvedValue(sourcesFor());
+    await render();
+    capturedInitialSelections = [];
+
+    await pressGlobal('p');
+    await act(async () => {
+      options()
+        .find((option) => option.textContent?.includes('game.ts'))!
+        .click();
+    });
+
+    expect(capturedInitialSelections.every((selection) => selection === undefined)).toBe(true);
   });
 
   it("typing `>` in quick open switches to commands, VS Code's own prefix", async () => {
