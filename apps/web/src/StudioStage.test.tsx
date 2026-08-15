@@ -37,6 +37,12 @@ const mockedRequestStateRestore = vi.mocked(requestStateRestore);
 
 const GAME_A = '<!doctype html><html><head></head><body><canvas id="game">A</canvas></body></html>';
 const GAME_B = '<!doctype html><html><head></head><body><canvas id="game">B</canvas></body></html>';
+const GAME_C = '<!doctype html><html><head></head><body><canvas id="game">C</canvas></body></html>';
+
+async function flushPromises() {
+  await Promise.resolve();
+  await Promise.resolve();
+}
 
 function baseProps(overrides: Partial<StudioStageProps> = {}): StudioStageProps {
   return {
@@ -193,6 +199,47 @@ describe('StudioStage', () => {
     unmount();
   });
 
+  it('never re-applies a stale build once a newer one lands while its snapshot is in flight', async () => {
+    vi.useFakeTimers();
+    let resolveSnapshot: ((value: unknown) => void) | null = null;
+    mockedRequestStateSnapshot.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveSnapshot = resolve;
+      }),
+    );
+    const props = baseProps({ posture: 'play' });
+    const { host, rerender, unmount } = await mount(props);
+
+    await act(async () => sendGameActivity(host));
+    await rerender({
+      ...props,
+      source: { html: GAME_B, rawHtml: GAME_B, origin: { kind: 'staged', at: Date.now(), versionLabel: null } },
+    });
+    // Idle triggers the swap to B, which stalls snapshotting A.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    expect(mockedRequestStateSnapshot).toHaveBeenCalledTimes(1);
+    expect(host.querySelector('iframe')?.getAttribute('srcdoc')).toContain('>A<');
+
+    // Build C arrives while idle — applies immediately, superseding B.
+    await act(async () => {
+      await rerender({
+        ...props,
+        source: { html: GAME_C, rawHtml: GAME_C, origin: { kind: 'staged', at: Date.now(), versionLabel: null } },
+      });
+    });
+    expect(host.querySelector('iframe')?.getAttribute('srcdoc')).toContain('>C<');
+
+    // B's stalled snapshot resolves — must not overwrite C.
+    await act(async () => {
+      resolveSnapshot!(null);
+      await flushPromises();
+    });
+    expect(host.querySelector('iframe')?.getAttribute('srcdoc')).toContain('>C<');
+    unmount();
+  });
+
   it('keeps a held stage while a pointer is held past the idle window, and applies it on release', async () => {
     vi.useFakeTimers();
     const props = baseProps({ posture: 'play' });
@@ -210,10 +257,10 @@ describe('StudioStage', () => {
     });
     expect(host.querySelector('iframe')?.getAttribute('srcdoc')).toContain('>A<');
 
-    // Releasing restarts the idle countdown; once it elapses, the held build applies.
+    // Release restarts the countdown; the build applies once idle and snapshotted.
     await act(async () => sendPointerHeld(host, false));
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(500);
+      await vi.advanceTimersByTimeAsync(900);
     });
     expect(host.querySelector('iframe')?.getAttribute('srcdoc')).toContain('>B<');
     unmount();

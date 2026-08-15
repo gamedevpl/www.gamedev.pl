@@ -131,6 +131,8 @@ export function StudioStage({
   // True while a pointer or touch is held down.
   const pointerHeldRef = useRef(false);
   const inputIdleTimerRef = useRef<number | null>(null);
+  // Bumped by every applySwap, to detect a swap superseded mid-flight.
+  const swapGenerationRef = useRef(0);
   const lastGoodRef = useRef<string | null>(source.rawHtml);
   const lastGoodOriginRef = useRef<StageOrigin>(source.origin);
   const lastGoodAtRef = useRef<number | null>(source.origin.at);
@@ -201,6 +203,7 @@ export function StudioStage({
   }, [shownOrigin]);
 
   function applySwap(next: string | null, origin: StageOrigin) {
+    swapGenerationRef.current += 1;
     swapWatchRef.current?.stop();
     const showShimmer = !reducedMotion && next != null && shownHtml != null;
     setShimmer(showShimmer);
@@ -215,11 +218,16 @@ export function StudioStage({
 
   // Snapshots, swaps, then retries restoring — a no-op without .persist().
   async function applySwapPreservingState(next: string, origin: StageOrigin) {
+    const generation = swapGenerationRef.current;
     const snapshot = await requestStateSnapshot(frameRef.current);
+    // A newer swap already landed while snapshotting — this one is stale.
+    if (swapGenerationRef.current !== generation) return;
     applySwap(next, origin);
     if (snapshot === null) return;
+    const myGeneration = swapGenerationRef.current;
     for (const delay of STATE_RESTORE_RETRY_DELAYS_MS) {
       await new Promise((resolve) => window.setTimeout(resolve, delay));
+      if (swapGenerationRef.current !== myGeneration) return;
       if (await requestStateRestore(frameRef.current, snapshot)) return;
     }
   }
