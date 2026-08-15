@@ -40,6 +40,7 @@ describe('CodeMirrorEditor color picker', () => {
     const picker = container.querySelector<HTMLInputElement>('.cm-color-picker');
     expect(picker).not.toBeNull();
     expect(picker?.value).toBe('#abcd12');
+    expect(picker?.title).toBe('Choose color #abcd1234');
 
     await act(async () => {
       const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!;
