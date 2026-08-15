@@ -4,6 +4,7 @@ import {
   EDITOR_CONTENT_FILE,
   EDITOR_FILE,
   GENERATED_CONTENT_PATH,
+  LAYERS_KEY,
   PARAMS_KEY,
   generateEditorContentModule,
   parseEditorDefinition,
@@ -235,6 +236,25 @@ export async function registerEditorRoutes(app: FastifyInstance, options: Editor
         for (const name of textProps) {
           const value = properties[name];
           if (typeof value === 'string' && value.trim().length > 0) texts.push(value);
+        }
+      }
+    }
+    const layerValues = content[LAYERS_KEY];
+    if (definition.layers && layerValues && typeof layerValues === 'object' && !Array.isArray(layerValues)) {
+      for (const [key, spec] of Object.entries(definition.layers)) {
+        const textProps = Object.entries(spec.properties)
+          .filter(([, propertySpec]) => propertySpec.type === 'text')
+          .map(([name]) => name);
+        if (textProps.length === 0) continue;
+        const values = (layerValues as Record<string, unknown>)[key];
+        const items = spec.widget === 'entities' && Array.isArray(values) ? values : [values];
+        for (const item of items) {
+          const properties = (item as { properties?: Record<string, unknown> } | null)?.properties;
+          if (!properties) continue;
+          for (const name of textProps) {
+            const value = properties[name];
+            if (typeof value === 'string' && value.trim().length > 0) texts.push(value);
+          }
         }
       }
     }

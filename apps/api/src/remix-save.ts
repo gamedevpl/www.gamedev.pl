@@ -1,21 +1,13 @@
-/**
- * Remix → private Studio draft ("save as yours").
- *
- * A remix never publishes. This is the durable exit that keeps that promise:
- * copy the remixed sources into a *new* slug the player owns, as a preview-lane
- * draft — playable in Studio, shareable via the existing draft toggle, never a
- * catalog entry. Derivative catalog publish stays a later, legal-gated track.
- *
- * Works for both catalog eras: store-era sessions already hold the full file
- * set; repo-era sessions load it via {@link GitHubClient.getGameDeliverySources}
- * at save time (declaration-only until then).
- */
+/** Persist remixed sources as a private Studio draft. */
 
 import {
+  EDITOR_CONTENT_FILE,
   EDITOR_FILE,
   GENERATED_CONTENT_PATH,
   generateEditorContentModule,
   parseEditorDefinition,
+  validateEditorContent,
+  type EditorContentDocument,
   type EditorDefinition,
 } from './editor-contract.js';
 import type { GamesStore, SourceFile, VersionManifest } from './games-store.js';
@@ -30,6 +22,55 @@ import { CREATION_REFUSAL_CODES, type CreationGate } from './creation-limits.js'
 
 export type RemixSaveParams = Record<string, string | number | boolean>;
 export type RemixSaveContent = Record<string, unknown>;
+
+export function collectEditorTextFields(
+  definition: EditorDefinition | null,
+  content?: Record<string, unknown>,
+  params?: RemixSaveParams,
+): string[] {
+  if (!definition) return [];
+  const fields: string[] = [];
+  const values: Record<string, unknown> = {
+    ...(content ?? {}),
+    ...(params ? { params: { ...((content?.params as Record<string, unknown> | undefined) ?? {}), ...params } } : {}),
+  };
+  if (definition.params) {
+    const paramValues = values.params;
+    if (paramValues && typeof paramValues === 'object' && !Array.isArray(paramValues)) {
+      for (const [name, spec] of Object.entries(definition.params)) {
+        const value = (paramValues as Record<string, unknown>)[name];
+        if (spec.type === 'text' && typeof value === 'string' && value.trim()) fields.push(value);
+      }
+    }
+  }
+  const addProperties = (spec: { properties: Record<string, { type: string }> }, value: unknown) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return;
+    const properties = (value as { properties?: Record<string, unknown> }).properties;
+    if (!properties) return;
+    for (const [name, propertySpec] of Object.entries(spec.properties)) {
+      const candidate = properties[name];
+      if (propertySpec.type === 'text' && typeof candidate === 'string' && candidate.trim()) fields.push(candidate);
+    }
+  };
+  for (const [key, spec] of Object.entries(definition.content)) {
+    const items = values[key];
+    if (Array.isArray(items)) for (const item of items) addProperties(spec.item, item);
+  }
+  if (definition.layers) {
+    const layers = values.layers;
+    if (layers && typeof layers === 'object' && !Array.isArray(layers)) {
+      for (const [key, spec] of Object.entries(definition.layers)) {
+        const value = (layers as Record<string, unknown>)[key];
+        if (spec.widget === 'entities' && Array.isArray(value)) {
+          for (const item of value) addProperties(spec, item);
+        } else {
+          addProperties(spec, value);
+        }
+      }
+    }
+  }
+  return fields;
+}
 
 export type RemixSaveInput = {
   uid: string;
@@ -113,6 +154,35 @@ export function bakeRemixEditorDefaults(
 ): SourceFile[] {
   const editor = files.find((file) => file.path === EDITOR_FILE);
   if (!editor || !definition) return files;
+
+  if (definition.version === 2) {
+    const contentFile = files.find((file) => file.path === EDITOR_CONTENT_FILE);
+    if (!contentFile) return files;
+    let current: Record<string, unknown>;
+    try {
+      const parsed = JSON.parse(contentFile.content) as unknown;
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return files;
+      current = parsed as Record<string, unknown>;
+    } catch {
+      return files;
+    }
+
+    const next: Record<string, unknown> = { ...current, ...(content ?? {}) };
+    const currentParams =
+      current.params && typeof current.params === 'object' && !Array.isArray(current.params)
+        ? (current.params as Record<string, unknown>)
+        : {};
+    const nextParams = { ...currentParams, ...(params ?? {}) };
+    if (definition.params) next.params = nextParams;
+    if (validateEditorContent(definition, next).length > 0) return files;
+
+    contentFile.content = `${JSON.stringify(next, null, 2)}\n`;
+    const generatedContent = generateEditorContentModule(definition, next as EditorContentDocument);
+    const generated = files.find((file) => file.path === GENERATED_CONTENT_PATH);
+    if (generated) generated.content = generatedContent;
+    else files.push({ path: GENERATED_CONTENT_PATH, content: generatedContent });
+    return files;
+  }
 
   const raw = JSON.parse(editor.content) as {
     params?: Record<string, { default?: unknown }>;
