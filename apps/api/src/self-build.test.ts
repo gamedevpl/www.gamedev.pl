@@ -840,6 +840,52 @@ describe('self builder (BY-02)', () => {
     expect(staleReport.json().error).toBe(STALE_AGENT_TOKEN_REASON);
   });
 
+  it('hands an already-ended platform round to self immediately, without waiting for an ack', async () => {
+    const { backend } = platformStub();
+    const { gamesStore } = stubGamesStore();
+    const created = await createApp({ platform: backend, gamesStore });
+    app = created.app;
+    const { store } = created;
+
+    const submit = await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders(),
+      payload: { title: 'Ended Platform Handoff', concept: CONCEPT, builder: 'platform' },
+    });
+    expect(submit.statusCode).toBe(200);
+    let issueNumber = 0;
+    await vi.waitFor(async () => {
+      issueNumber = (await store.listSubmissionsByOwner('g:creator'))[0]!.issueNumber;
+      expect((await store.getSubmission(issueNumber))?.state).toBe('dispatched');
+    });
+    await store.touchLastAgentSignalAt(issueNumber, new Date().toISOString());
+
+    const generationBefore = (await store.getSubmission(issueNumber))?.roundGeneration ?? 1;
+    const endRes = await app.inject({
+      method: 'POST',
+      url: '/api/agent/build/end',
+      headers: agentHeaders(issueNumber, generationBefore),
+      payload: {},
+    });
+    expect(endRes.statusCode).toBe(200);
+    expect((await store.getSubmission(issueNumber))?.agentEndedAt).toBeTruthy();
+
+    const token = mintToken(issueNumber, secret);
+    const handoff = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${token}/handoff`,
+      headers: authHeaders(),
+      payload: { builder: 'self', stopActivePlatformAgent: true },
+    });
+    // No `pending: true`, no second `/end` call needed.
+    expect(handoff.statusCode).toBe(200);
+    const after = await store.getSubmission(issueNumber);
+    expect(after?.builder).toBe('self');
+    expect(after?.builderHandoff).toBeUndefined();
+    expect(after?.roundGeneration).toBeGreaterThan(generationBefore);
+  });
+
   it('force-acknowledges a builder handoff nobody ever acked once it goes stale', async () => {
     const { backend } = platformStub();
     const { gamesStore } = stubGamesStore();

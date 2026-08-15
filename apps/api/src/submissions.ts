@@ -3794,12 +3794,14 @@ export async function registerSubmissionRoutes(
         });
       }
 
+      // An already-`ended` agent cannot ack again — resume immediately instead.
+      const awaitsAgentAck = creatorRequested && stall !== 'ended';
       const requestedAt = new Date(now()).toISOString();
-      const accepted = await store.requestBuilderHandoff(issueNumber, requestedBuilder, requestedAt, creatorRequested);
+      const accepted = await store.requestBuilderHandoff(issueNumber, requestedBuilder, requestedAt, awaitsAgentAck);
       if (!accepted) {
         return reply.status(409).send({ error: 'builder_handoff_in_progress', builder: currentBuilder });
       }
-      if (creatorRequested) {
+      if (awaitsAgentAck) {
         invalidateStatusCache(issueNumber);
         return reply.status(202).send({
           ok: true,
