@@ -11945,6 +11945,75 @@ button.builder-mode-selector:disabled {
   overflow-wrap: anywhere;
 }
 
+.code-surface-params {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.code-surface-param-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 0;
+}
+
+.code-surface-param-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8rem;
+  color: var(--text);
+}
+
+.code-surface-param-select,
+.code-surface-param-text {
+  flex: none;
+  width: 140px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--panel-border);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.8rem;
+}
+
+.number-scrubber {
+  flex: none;
+  width: 80px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--panel-border);
+  background: rgba(148, 163, 184, 0.08);
+  color: var(--text);
+  font-family: var(--mono-font, monospace);
+  font-size: 0.8rem;
+  text-align: center;
+  cursor: ew-resize;
+  user-select: none;
+  touch-action: none;
+}
+
+.number-scrubber:hover,
+.number-scrubber:focus-visible {
+  border-color: rgba(0, 228, 172, 0.5);
+}
+
+.number-scrubber.is-dragging {
+  border-color: var(--turquoise);
+  background: rgba(0, 228, 172, 0.12);
+}
+
+.number-scrubber.is-disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
 .code-surface-diff-view {
   margin: 0;
   padding: 12px 0;

@@ -761,5 +761,43 @@ describe('CodeSurface', () => {
 
       expect(container.textContent).not.toContain('Live');
     });
+
+    it('Track 3: scrubbing a declared param pushes live through the same tier-1 path', async () => {
+      mocked.fetchCodeSurfaceSources.mockResolvedValue(sourcesWithEditorJson());
+      mocked.stageCodeSurfaceFile.mockResolvedValue({
+        accepted: true,
+        path: 'EDITOR.json',
+        bytes: 10,
+        staged: { totalBytes: 10, maxBytes: 1_000_000, maxFiles: 60, updatedAt: null },
+      });
+      mockedStudioApi.fetchGameEditor.mockResolvedValue({
+        version: 'v1',
+        definition: { version: 1, content: {} },
+        content: { params: { speed: 5 } },
+        draft: null,
+      });
+      const pushRef: { current: ((content: EditorContentDoc) => void) | null } = { current: vi.fn() };
+
+      await render('sky-dodge', pushRef);
+      const editorTab = [...container.querySelectorAll('.code-surface-rail-item')].find((b) =>
+        b.textContent?.includes('EDITOR.json'),
+      ) as HTMLButtonElement;
+      await act(async () => {
+        editorTab.click();
+      });
+
+      const scrubber = container.querySelector('.number-scrubber[aria-label="Speed"]') as HTMLElement;
+      expect(scrubber).not.toBeNull();
+      expect(scrubber.getAttribute('aria-valuenow')).toBe('5');
+
+      await act(async () => {
+        scrubber.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+        await flush();
+      });
+
+      // A 1-10 range's step is (10-1)/100 = 0.09.
+      expect(pushRef.current).toHaveBeenCalledWith({ params: { speed: 5.09 } });
+      expect(container.textContent).toContain('Live');
+    });
   });
 });
