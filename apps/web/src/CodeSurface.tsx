@@ -487,14 +487,35 @@ export function CodeSurface({
       setAgentActive(true);
       if (agentActiveTimerRef.current !== null) window.clearTimeout(agentActiveTimerRef.current);
       agentActiveTimerRef.current = window.setTimeout(() => setAgentActive(false), AGENT_ACTIVITY_BANNER_MS);
-      // An agent just rewrote the working copy — reload before the creator's next autosave.
-      if (event.phase === 'done' && event.mutates) load(false);
+      if (event.phase !== 'done' || !event.mutates) return;
+      // An agent rewrote the working copy — reload before the next autosave.
+      load(false);
+      const { affectedPaths } = event;
+      if (!affectedPaths) return;
+      // Drop the stale draft and pending save for what the agent wrote.
+      const isAffected = (path: string) => affectedPaths === 'all' || affectedPaths.includes(path);
+      for (const [path, timer] of saveTimersRef.current) {
+        if (!isAffected(path)) continue;
+        window.clearTimeout(timer);
+        saveTimersRef.current.delete(path);
+      }
+      setDrafts((prev) => {
+        const next = { ...prev };
+        let changed = false;
+        for (const path of Object.keys(next)) {
+          if (!isAffected(path)) continue;
+          delete next[path];
+          changed = true;
+        }
+        return changed ? next : prev;
+      });
+      if (selected !== null && isAffected(selected)) setSaveState('clean');
     });
     return () => {
       unsubscribe();
       if (agentActiveTimerRef.current !== null) window.clearTimeout(agentActiveTimerRef.current);
     };
-  }, [load]);
+  }, [load, selected]);
 
   // GA-04: keyed on editable/slug — avoids a re-fetch cleanup race.
   useEffect(() => {
@@ -1471,8 +1492,8 @@ export function CodeSurface({
             </div>
 
             <div className="code-surface-agent-mode-section">
-              <h4>{t('studioPanel.code.agentMode.claudeTitle')}</h4>
-              <p className="code-surface-agent-mode-hint">{t('studioPanel.code.agentMode.claudeHint', { slug })}</p>
+              <h4>{t('studioPanel.code.agentMode.bridgeTitle')}</h4>
+              <p className="code-surface-agent-mode-hint">{t('studioPanel.code.agentMode.bridgeHint', { slug })}</p>
               <StudioCreatorAgentKeyPanel />
             </div>
 

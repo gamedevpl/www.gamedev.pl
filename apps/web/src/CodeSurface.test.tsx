@@ -1004,7 +1004,7 @@ describe('CodeSurface', () => {
 
       const dialog = container.querySelector('.code-surface-agent-mode-dialog');
       expect(dialog).not.toBeNull();
-      // The Claude bridge reuses the creator's real MCP key panel.
+      // The coding-agent bridge reuses the creator's real MCP key panel.
       expect(container.querySelector('.studio-creator-key')).not.toBeNull();
 
       const toggle = container.querySelector<HTMLInputElement>('.code-surface-agent-mode-toggle input')!;
@@ -1064,7 +1064,14 @@ describe('CodeSurface', () => {
         run.click();
       });
 
-      expect(mocked.patchCodeSurfaceFile).toHaveBeenCalledWith('sky-dodge', 'game.ts', { old: 'a', new: 'b' });
+      expect(mocked.patchCodeSurfaceFile).toHaveBeenCalledWith(
+        'sky-dodge',
+        'game.ts',
+        { old: 'a', new: 'b' },
+        {
+          agentAuthored: true,
+        },
+      );
       // The agent rewrote the working copy, so the editor must reload it.
       expect(mocked.fetchCodeSurfaceSources.mock.calls.length).toBeGreaterThan(1);
       const output = container.querySelector('.code-surface-agent-console-output')!;

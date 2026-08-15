@@ -75,7 +75,7 @@ export async function stageCodeSurfaceFile(
   slug: string,
   path: string,
   content: string,
-  options?: { rebuild?: boolean; keepalive?: boolean },
+  options?: { rebuild?: boolean; keepalive?: boolean; agentAuthored?: boolean },
 ): Promise<CodeSurfaceStageResult> {
   const response = await fetch(`${API_BASE}/api/me/studio/games/${encodeURIComponent(slug)}/sources/stage`, {
     method: 'PUT',
@@ -83,7 +83,12 @@ export async function stageCodeSurfaceFile(
     headers: { 'content-type': 'application/json' },
     // Same keepalive technique telemetry.ts uses for its own final flush.
     ...(options?.keepalive ? { keepalive: true } : {}),
-    body: JSON.stringify({ path, content, ...(options?.rebuild === false ? { rebuild: false } : {}) }),
+    body: JSON.stringify({
+      path,
+      content,
+      ...(options?.rebuild === false ? { rebuild: false } : {}),
+      ...(options?.agentAuthored ? { agentAuthored: true } : {}),
+    }),
   });
   if (!response.ok) await throwResponseError(response);
   return (await response.json()) as CodeSurfaceStageResult;
@@ -117,12 +122,13 @@ export async function patchCodeSurfaceFile(
   slug: string,
   path: string,
   edit: { old: string; new: string } | { patch: string },
+  options?: { agentAuthored?: boolean },
 ): Promise<CodeSurfacePatchResult> {
   const response = await fetch(`${API_BASE}/api/me/studio/games/${encodeURIComponent(slug)}/sources/stage/patch`, {
     method: 'POST',
     credentials: 'include',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ path, ...edit }),
+    body: JSON.stringify({ path, ...edit, ...(options?.agentAuthored ? { agentAuthored: true } : {}) }),
   });
   if (!response.ok) await throwResponseError(response);
   return (await response.json()) as CodeSurfacePatchResult;

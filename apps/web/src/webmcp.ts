@@ -47,8 +47,19 @@ function failure(error: unknown): string {
   return JSON.stringify({ ok: false, error: message });
 }
 
+function invalid(message: string): string {
+  return JSON.stringify({ ok: false, error: message });
+}
+
 export type AgentActivityPhase = 'start' | 'done';
-export type AgentActivityEvent = { tool: string; at: number; phase: AgentActivityPhase; mutates: boolean };
+export type AgentActivityEvent = {
+  tool: string;
+  at: number;
+  phase: AgentActivityPhase;
+  mutates: boolean;
+  // Paths whose content changed — 'all' for a bufferwide clear, undefined if none.
+  affectedPaths?: string[] | 'all';
+};
 type AgentActivityListener = (event: AgentActivityEvent) => void;
 
 const activityListeners = new Set<AgentActivityListener>();
@@ -56,14 +67,21 @@ const activityListeners = new Set<AgentActivityListener>();
 // Tools that change the working copy; the editor must reload after these.
 const MUTATING_TOOLS = new Set(['stage_source_file', 'patch_source_file', 'clear_staged_sources', 'submit_sources']);
 
+// Paths a call touches — lets the editor drop their stale drafts.
+const AFFECTED_PATHS: Record<string, (input: Record<string, unknown>) => string[] | 'all' | undefined> = {
+  stage_source_file: (input) => (typeof input.path === 'string' ? [input.path] : undefined),
+  patch_source_file: (input) => (typeof input.path === 'string' ? [input.path] : undefined),
+  clear_staged_sources: (input) => (Array.isArray(input.paths) ? input.paths.map(String) : 'all'),
+};
+
 // Studio's banner and its post-mutation source reload subscribe here.
 export function subscribeAgentActivity(listener: AgentActivityListener): () => void {
   activityListeners.add(listener);
   return () => activityListeners.delete(listener);
 }
 
-function notifyAgentActivity(tool: string, phase: AgentActivityPhase): void {
-  const event: AgentActivityEvent = { tool, at: Date.now(), phase, mutates: MUTATING_TOOLS.has(tool) };
+function notifyAgentActivity(tool: string, phase: AgentActivityPhase, affectedPaths?: string[] | 'all'): void {
+  const event: AgentActivityEvent = { tool, at: Date.now(), phase, mutates: MUTATING_TOOLS.has(tool), affectedPaths };
   for (const listener of activityListeners) listener(event);
 }
 
@@ -76,7 +94,7 @@ function withActivity(tool: ModelContextTool): ModelContextTool {
       try {
         return await tool.execute(input);
       } finally {
-        notifyAgentActivity(tool.name, 'done');
+        notifyAgentActivity(tool.name, 'done', AFFECTED_PATHS[tool.name]?.(input));
       }
     },
   };
@@ -86,7 +104,7 @@ export const AGENT_GUIDE = [
   'You are editing a browser game through the gamedev.pl Studio Code surface.',
   'These tools mirror the get_sources / stage_source_file / patch_source_file / ' +
     "clear_staged_sources / submit_sources contract used by gamedev.pl's regular MCP server " +
-    '(the one Claude Desktop, Claude Code, Cursor etc. connect to) — same names, same shapes.',
+    '(the one MCP-capable coding agents connect to) — same names, same shapes.',
   '',
   'Loop: get_sources -> edit with patch_source_file (old/new or a unified diff) or ' +
     'stage_source_file (full rewrite) -> submit_sources to build a preview.',
@@ -155,10 +173,10 @@ function buildCodeSurfaceTools(slug: string): ModelContextTool[] {
         required: ['path', 'content'],
       },
       execute: async (input) => {
-        const path = String(input.path ?? '');
-        const content = String(input.content ?? '');
+        if (typeof input.path !== 'string' || !input.path) return invalid('path is required');
+        if (typeof input.content !== 'string') return invalid('content is required');
         try {
-          const result = await stageCodeSurfaceFile(slug, path, content);
+          const result = await stageCodeSurfaceFile(slug, input.path, input.content, { agentAuthored: true });
           return ok({ ok: true, path: result.path, bytes: result.bytes });
         } catch (error) {
           return failure(error);
@@ -181,13 +199,16 @@ function buildCodeSurfaceTools(slug: string): ModelContextTool[] {
         required: ['path'],
       },
       execute: async (input) => {
-        const path = String(input.path ?? '');
+        if (typeof input.path !== 'string' || !input.path) return invalid('path is required');
+        if (typeof input.patch !== 'string' && (typeof input.old !== 'string' || typeof input.new !== 'string')) {
+          return invalid('pass old+new or patch');
+        }
         try {
           const edit =
             typeof input.patch === 'string'
               ? { patch: input.patch }
-              : { old: String(input.old ?? ''), new: String(input.new ?? '') };
-          const result = await patchCodeSurfaceFile(slug, path, edit);
+              : { old: input.old as string, new: input.new as string };
+          const result = await patchCodeSurfaceFile(slug, input.path, edit, { agentAuthored: true });
           return ok({ ok: true, path: result.path, bytes: result.bytes, replacements: result.replacements });
         } catch (error) {
           return failure(error);

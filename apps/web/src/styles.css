@@ -11853,7 +11853,8 @@ button.builder-mode-selector:disabled {
 
 .code-surface-agent-mode-backdrop {
   position: fixed;
-  z-index: 30;
+  /* Above install/update banners (900) — the same 1000+ tier as .modal-backdrop. */
+  z-index: 1000;
   inset: 0;
   display: flex;
   align-items: center;

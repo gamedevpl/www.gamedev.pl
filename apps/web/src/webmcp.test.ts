@@ -123,7 +123,14 @@ describe('registerCodeSurfaceWebMcpTools', () => {
 
     const tool = registered.find((entry) => entry.name === 'patch_source_file')!;
     const result = JSON.parse(await tool.execute({ path: 'game.ts', old: 'foo', new: 'bar' }));
-    expect(mocked.patchCodeSurfaceFile).toHaveBeenCalledWith('astro-tanks', 'game.ts', { old: 'foo', new: 'bar' });
+    expect(mocked.patchCodeSurfaceFile).toHaveBeenCalledWith(
+      'astro-tanks',
+      'game.ts',
+      { old: 'foo', new: 'bar' },
+      {
+        agentAuthored: true,
+      },
+    );
     expect(result).toEqual({ ok: true, path: 'game.ts', bytes: 10, replacements: 1 });
   });
 
@@ -221,7 +228,14 @@ describe('runAgentConsoleCommand', () => {
 
     const command = JSON.stringify({ tool: 'patch_source_file', input: { path: 'game.ts', old: 'a', new: 'b' } });
     const result = await webmcp.runAgentConsoleCommand('astro-tanks', command);
-    expect(mocked.patchCodeSurfaceFile).toHaveBeenCalledWith('astro-tanks', 'game.ts', { old: 'a', new: 'b' });
+    expect(mocked.patchCodeSurfaceFile).toHaveBeenCalledWith(
+      'astro-tanks',
+      'game.ts',
+      { old: 'a', new: 'b' },
+      {
+        agentAuthored: true,
+      },
+    );
     expect(result.ok).toBe(true);
   });
 
