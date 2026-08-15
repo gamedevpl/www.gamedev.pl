@@ -130,6 +130,8 @@ export type EditorDefinition = {
   content: Record<string, EditorCollectionSpec>;
   layers?: Record<string, EditorLayerSpec>;
   constraints?: EditorLayerConstraint[];
+  controller?: true;
+  validate?: true;
 };
 
 /**

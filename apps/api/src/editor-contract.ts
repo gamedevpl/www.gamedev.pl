@@ -193,6 +193,8 @@ export interface EditorDefinition {
   content: Record<string, CollectionSpec>;
   layers?: Record<string, EditorLayerSpec>;
   constraints?: EditorLayerConstraint[];
+  controller?: true;
+  validate?: true;
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -690,7 +692,7 @@ export function parseEditorDefinition(source: string): { definition: EditorDefin
     return { definition: null, errors };
   }
   const unknownKeys = Object.keys(parsed).filter(
-    (key) => !['version', 'content', PARAMS_KEY, LAYERS_KEY, 'constraints'].includes(key),
+    (key) => !['version', 'content', PARAMS_KEY, LAYERS_KEY, 'constraints', 'controller', 'validate'].includes(key),
   );
   if (unknownKeys.length > 0) {
     errors.push(`EDITOR.json has unknown top-level keys: ${unknownKeys.join(', ')}`);
@@ -722,6 +724,21 @@ export function parseEditorDefinition(source: string): { definition: EditorDefin
   if (parsed.version === 1 && layerKeys.length > 0) {
     errors.push('EDITOR.json "layers" requires version 2');
     return { definition: null, errors };
+  }
+  if (parsed.controller !== undefined && parsed.controller !== true) {
+    errors.push('EDITOR.json "controller" must be true when present');
+  }
+  if (parsed.controller === true && parsed.version !== 2) {
+    errors.push('EDITOR.json "controller" requires version 2');
+  }
+  if (parsed.validate !== undefined && parsed.validate !== true) {
+    errors.push('EDITOR.json "validate" must be true when present');
+  }
+  if (parsed.validate === true && parsed.version !== 2) {
+    errors.push('EDITOR.json "validate" requires version 2');
+  }
+  if (parsed.validate === true && parsed.controller !== true) {
+    errors.push('EDITOR.json "validate" requires controller: true');
   }
 
   const content: Record<string, CollectionSpec> = {};
@@ -821,6 +838,8 @@ export function parseEditorDefinition(source: string): { definition: EditorDefin
       ...(contentKeys.length > 0 ? { content } : { content: {} }),
       ...(layerKeys.length > 0 ? { layers } : {}),
       ...(constraints.length > 0 ? { constraints } : {}),
+      ...(parsed.controller === true ? { controller: true as const } : {}),
+      ...(parsed.validate === true ? { validate: true as const } : {}),
     },
     errors,
   };

@@ -217,6 +217,11 @@ export const EDITOR_STEPS = [
   'v2_content_loaded',
   'v2_controller_ready',
   'v2_controller_failed',
+  'controller_loaded',
+  'controller_failed',
+  'tool_used',
+  'undo_used',
+  'selection_from_game',
 ] as const;
 
 export type EditorStep = (typeof EDITOR_STEPS)[number];

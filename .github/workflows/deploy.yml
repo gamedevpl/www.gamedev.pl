@@ -131,7 +131,7 @@ jobs:
           BETA_ALLOWED_EMAILS_VAL="${{ vars.BETA_ALLOWED_EMAILS }}"
           PUBLIC_PLAY_SLUGS_VAL="${{ vars.PUBLIC_PLAY_SLUGS }}"
            EDITORKIT_V2_VAL="${{ vars.EDITORKIT_V2 }}"
-           EDITORKIT_V2_VAL="${EDITORKIT_V2_VAL:-false}"
+           EDITORKIT_V2_VAL="${EDITORKIT_V2_VAL:-true}"
           if [ "true" = "true" ] && [ -z "$BETA_ALLOWED_UIDS_VAL" ] && [ -z "$BETA_ALLOWED_EMAILS_VAL" ]; then
             echo "Error: PRIVATE_BETA=true but both BETA_ALLOWED_UIDS and BETA_ALLOWED_EMAILS are empty. Set at least one allowlist variable."
             exit 1

@@ -27,7 +27,7 @@ describe('layered editor surface CSS contract', () => {
   });
 
   it('pins the edit overlay dock posture used by layered definitions', () => {
-    const dock = '.studio-edit-overlay:not(.studio-code-overlay):not(:has(.editor-board-col))';
+    const dock = '.studio-edit-overlay:not(.studio-code-overlay)[data-surface="docked"]';
     expect(declarations(dock)).toMatch(/inset:\s*0 0 0 auto/);
     expect(declarations(dock)).toMatch(/width:\s*min\(360px, 100%\)/);
   });

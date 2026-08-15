@@ -396,6 +396,7 @@
     "editor": {
       "loading": "Wczytywanie edytora…",
       "loadError": "Nie udało się teraz wczytać edytora tej gry.",
+      "controllerFallback": "Interaktywny edytor tej gry jest niedostępny; standardowy edytor nadal działa.",
       "back": "Wątek",
       "tryDraft": "Wypróbuj szkic",
       "tuning": "Strojenie",

@@ -190,7 +190,12 @@ export type EditorStep =
   | 'v2_schema_loaded'
   | 'v2_content_loaded'
   | 'v2_controller_ready'
-  | 'v2_controller_failed';
+  | 'v2_controller_failed'
+  | 'controller_loaded'
+  | 'controller_failed'
+  | 'tool_used'
+  | 'undo_used'
+  | 'selection_from_game';
 
 /**
  * The natural-language tuning lane, as a dimension beside the editing funnel

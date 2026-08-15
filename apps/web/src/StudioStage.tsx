@@ -9,7 +9,7 @@ import {
   requestStateRestore,
   type PlaytestInstrumentation,
 } from './gamePlayer.js';
-import { useEditorDraftBridge, type EditorContentPush } from './editorBridge.js';
+import { useEditorDraftBridge, type EditorContentPush, type EditorControllerState } from './editorBridge.js';
 import { PixelIcon } from './PixelIcon.js';
 import { submitFeedback, type FeedbackContext, type SubmissionApiError } from './submissionApi.js';
 import { submitImprovement } from './studioApi.js';
@@ -91,6 +91,7 @@ export type StudioStageProps = {
   onDisplayedOriginChange?: (origin: StageOrigin) => void;
   /** Filled in with the editor bridge's live-push function, for the Code surface (§E tier 1). */
   editorPushRef?: MutableRefObject<EditorContentPush | null>;
+  onEditorControllerChange?: (controller: EditorControllerState | null) => void;
 };
 
 export function StudioStage({
@@ -109,6 +110,7 @@ export function StudioStage({
   onImproved,
   onDisplayedOriginChange,
   editorPushRef,
+  onEditorControllerChange,
 }: StudioStageProps) {
   const { t } = useTranslation();
   const frameRef = useRef<HTMLIFrameElement | null>(null);
@@ -386,7 +388,8 @@ export function StudioStage({
     if (!held) lastInputAtRef.current = Date.now();
   }, []);
   useGamePlayer(frameRef, active, requestWatch, undefined, onGameActivity, undefined, onPointerHeldChange);
-  const editorBridge = useEditorDraftBridge(frameRef, active, slug, Boolean(editable));
+  const editorBridgeActive = Boolean(shownHtml) && Boolean(editable) && (posture === 'play' || covered);
+  const editorBridge = useEditorDraftBridge(frameRef, editorBridgeActive, slug, Boolean(editable));
   useEffect(() => {
     if (!editorPushRef) return undefined;
     editorPushRef.current = editorBridge.push;
@@ -394,6 +397,10 @@ export function StudioStage({
       if (editorPushRef.current === editorBridge.push) editorPushRef.current = null;
     };
   }, [editorPushRef, editorBridge.push]);
+  useEffect(() => {
+    onEditorControllerChange?.(editorBridge.controller);
+    return () => onEditorControllerChange?.(null);
+  }, [editorBridge.controller, onEditorControllerChange]);
 
   // Escape closes the topmost layer first (Workstream C's ground-state rule test):
   // while a surface covers the stage (shelf, Details, Edit), that surface owns Escape

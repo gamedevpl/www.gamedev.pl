@@ -58,7 +58,7 @@ import {
   type StudioSuggestion,
   type AutonomyMode,
 } from './studioApi.js';
-import type { EditorContentPush } from './editorBridge.js';
+import type { EditorContentPush, EditorControllerState } from './editorBridge.js';
 
 /**
  * Creator control panel (docs/improvement-loop-plan.md IL-2 creator surface).
@@ -217,6 +217,8 @@ export function CreatorStudioView({
   const [tab, setTab] = useState<StudioTab>(selectedTab ?? 'thread');
   // Lets the Code surface push a live param edit into the stage's frame (§E tier 1).
   const editorPushRef = useRef<EditorContentPush | null>(null);
+  const [editorController, setEditorController] = useState<EditorControllerState | null>(null);
+  const [editorSurfaceMode, setEditorSurfaceMode] = useState<'docked' | 'full'>('docked');
   const [shelfQuery, setShelfQuery] = useState('');
   const [shelfFilter, setShelfFilter] = useState<StudioShelfFilter>('all');
   /** Desktop rail expand, or mobile drawer open. Closed by default once a game is open. */
@@ -359,6 +361,10 @@ export function CreatorStudioView({
   }, [selected]);
 
   const activeGame = useMemo(() => shelfGames.find((game) => game.token === selected) ?? null, [shelfGames, selected]);
+  useEffect(() => {
+    setEditorSurfaceMode('docked');
+    setEditorController(null);
+  }, [activeGame?.token]);
   // The token the thread is actually showing: the new job's after an improvement handoff,
   // otherwise the selected game's own.
   const threadToken = handoffToken ?? activeGame?.token ?? null;
@@ -992,7 +998,7 @@ export function CreatorStudioView({
                           onImproved={(newToken) => setHandoffToken(newToken)}
                           onDisplayedOriginChange={setDisplayedOrigin}
                           editorPushRef={editorPushRef}
-                        />
+                           onEditorControllerChange={setEditorController}                        />
 
                         {stageStatus.kind === 'empty' &&
                         !stageSource.html &&
@@ -1072,11 +1078,16 @@ export function CreatorStudioView({
                         </StudioChatRail>
 
                         {tab === 'edit' ? (
-                          <div className="studio-edit-overlay">
+                          <div
+                            className="studio-edit-overlay"
+                            data-surface={editorController?.status === 'ready' ? 'full' : editorSurfaceMode}
+                          >
                             <EditorPanel
                               key={activeGame.token}
                               game={activeGame}
                               editorPushRef={editorPushRef}
+                              controller={editorController}
+                              onSurfaceModeChange={setEditorSurfaceMode}
                               onOpenPlaytest={() => changePosture('play')}
                               onBack={() => openTab('thread')}
                             />

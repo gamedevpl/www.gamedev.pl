@@ -390,6 +390,7 @@
     "editor": {
       "loading": "Loading the editor…",
       "loadError": "This game's editor could not be loaded right now.",
+      "controllerFallback": "This game's interactive editor is unavailable; the standard editor remains available.",
       "back": "Thread",
       "tryDraft": "Try this draft",
       "tuning": "Tuning",

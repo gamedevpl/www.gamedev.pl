@@ -197,6 +197,11 @@ describe('summarizeVisitFunnel', () => {
       { step: 'v2_content_loaded', visits: 0 },
       { step: 'v2_controller_ready', visits: 0 },
       { step: 'v2_controller_failed', visits: 0 },
+      { step: 'controller_loaded', visits: 0 },
+      { step: 'controller_failed', visits: 0 },
+      { step: 'tool_used', visits: 0 },
+      { step: 'undo_used', visits: 0 },
+      { step: 'selection_from_game', visits: 0 },
     ]);
   });
 

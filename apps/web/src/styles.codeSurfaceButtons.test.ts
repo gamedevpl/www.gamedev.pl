@@ -40,7 +40,7 @@ describe('the Code surface Publish button', () => {
   });
 
   it('keeps Code full-bleed when params-only Edit docks beside the stage', () => {
-    expect(ruleFor('.studio-edit-overlay:not(.studio-code-overlay):not(:has(.editor-board-col))')).toMatch(
+    expect(ruleFor('.studio-edit-overlay:not(.studio-code-overlay)[data-surface="docked"]')).toMatch(
       /width:\s*min\(360px,\s*100%\)/,
     );
     expect(css).not.toMatch(/\.studio-edit-overlay:not\(:has\(\.editor-board-col\)\)/);
