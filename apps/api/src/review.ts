@@ -1,8 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { isAdmin, isAdminSession } from './admin.js';
-import type { ContentChecker } from './moderation.js';
-import { logModerationRejection } from './moderation-metrics.js';
 import { emitReviewSweep, type EmitDeps } from './notify.js';
 import { ASSESSMENT_CHECKLIST_KEYS, isAssessmentChecklist } from './review-checklist.js';
 import {
@@ -69,7 +67,6 @@ export interface ReviewRoutesOptions {
   store: Store;
   reviewerUids?: Set<string>;
   adminUids?: Set<string>;
-  contentChecker: ContentChecker;
   listCatalog?: () => Promise<ReviewCatalogEntry[]>;
   now?: () => number;
   emitDeps?: EmitDeps;
@@ -157,7 +154,7 @@ function reviewerAudience(reviewerUids: Set<string>, adminUids: Set<string>): Se
 }
 
 export async function registerReviewRoutes(app: FastifyInstance, options: ReviewRoutesOptions): Promise<void> {
-  const { store, contentChecker } = options;
+  const { store } = options;
   const reviewerUids = options.reviewerUids ?? new Set<string>();
   const adminUids = options.adminUids ?? new Set<string>();
   const listCatalog = options.listCatalog ?? (async () => []);
@@ -359,16 +356,6 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
     const sanitized = sanitizeCreatorText(rawNote, { singleLine: false }).slice(0, MAX_NOTE);
     if (!sanitized) {
       return reply.status(400).send({ error: 'note is required' });
-    }
-    const fieldsToModerate = sanitized === rawNote ? [rawNote] : [rawNote, sanitized];
-    const moderation = await contentChecker.checkFields(fieldsToModerate);
-    if (!moderation.allowed) {
-      logModerationRejection(request.log, {
-        surface: 'review_assessment',
-        uid: request.user!.uid,
-        category: moderation.category,
-      });
-      return reply.status(422).send({ error: 'content_rejected', category: moderation.category ?? 'other' });
     }
 
     const checklist: AssessmentChecklist = body.data.checklist;

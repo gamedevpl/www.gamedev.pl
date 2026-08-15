@@ -12,15 +12,6 @@ const allowAll: ContentChecker = {
   },
 };
 
-const rejectAll: ContentChecker = {
-  async check() {
-    return { allowed: false, category: 'other' };
-  },
-  async checkFields() {
-    return { allowed: false, category: 'other' };
-  },
-};
-
 async function sessionCookie(app: Awaited<ReturnType<typeof buildApp>>, uid = 'local'): Promise<string> {
   const res = await app.inject({
     method: 'POST',
@@ -101,7 +92,6 @@ describe('reviewer assessment desk', () => {
     opts: {
       reviewerUids?: string;
       adminUids?: string;
-      contentChecker?: ContentChecker;
       catalog?: typeof defaultCatalog;
       seedSweep?: boolean;
     } = {},
@@ -110,7 +100,7 @@ describe('reviewer assessment desk', () => {
     const catalog = opts.catalog ?? defaultCatalog;
     const app = await buildApp({
       store,
-      contentChecker: opts.contentChecker ?? allowAll,
+      contentChecker: allowAll,
       reviewerUids: opts.reviewerUids ?? 'dev:reviewer',
       adminUids: opts.adminUids ?? 'dev:boss',
       reviewRoutes: {
@@ -418,8 +408,8 @@ describe('reviewer assessment desk', () => {
     );
   });
 
-  it('requires note and checklist, and rejects moderated notes', async () => {
-    const { app } = await makeApp({ contentChecker: rejectAll });
+  it('requires note and checklist', async () => {
+    const { app } = await makeApp();
     const cookie = await sessionCookie(app, 'reviewer');
 
     const missing = await app.inject({
@@ -442,20 +432,6 @@ describe('reviewer assessment desk', () => {
       },
     });
     expect(noChecklist.statusCode).toBe(400);
-
-    const blocked = await app.inject({
-      method: 'POST',
-      url: '/api/review/assessments',
-      headers: { cookie },
-      payload: {
-        slug: 'neon-courier',
-        source: 'catalog',
-        verdict: 'cut',
-        note: 'this would be rejected',
-        checklist: sampleChecklist,
-      },
-    });
-    expect(blocked.statusCode).toBe(422);
   });
 
   it('includes shared creator drafts and exposes an admin aggregate', async () => {

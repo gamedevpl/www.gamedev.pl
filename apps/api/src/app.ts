@@ -194,7 +194,7 @@ export interface BuildAppOptions {
   adminUids?: string;
   reviewerUids?: string;
   // Seams for reviewer desk; defaults to snapshot/GitHub catalog.
-  reviewRoutes?: Omit<ReviewRoutesOptions, 'store' | 'contentChecker' | 'adminUids' | 'reviewerUids'>;
+  reviewRoutes?: Omit<ReviewRoutesOptions, 'store' | 'adminUids' | 'reviewerUids'>;
 }
 
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
@@ -625,7 +625,6 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   };
   await registerReviewRoutes(app, {
     store,
-    contentChecker,
     reviewerUids,
     adminUids,
     listCatalog: defaultReviewCatalog,

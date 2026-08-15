@@ -52,7 +52,6 @@ export type ModerationSurface =
   | 'remix_save' // title / text params baked into a private Studio fork
   | 'contact' // the public contact form, no session required
   | 'proposal' // a proposed change to somebody else's game: title, description, review replies
-  | 'review_assessment' // reviewer keep/cut note on the assessment desk
   | 'mock_prompt'; // the dev-only mock generator route
 
 /** The stable message every rejection logs. The alert's log filter matches on this. */
