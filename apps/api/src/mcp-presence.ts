@@ -97,8 +97,8 @@ export function mcpPresenceText(toolName: string): string | null {
   return Object.hasOwn(PRESENCE_BY_TOOL, toolName) ? PRESENCE_BY_TOOL[toolName]!.text : null;
 }
 
-// Presence pulses stopped writing chat rows once this landed (#661).
-const PRESENCE_CHAT_LEFTOVER_CUTOFF_MS = Date.parse('2026-08-08T00:00:00.000Z');
+// Exact #661 merge instant — presence pulses stopped writing chat rows here.
+const PRESENCE_CHAT_LEFTOVER_CUTOFF_MS = Date.parse('2026-08-07T13:01:20.000Z');
 
 // True for a leftover presence row written before the cutoff.
 export function isMcpPresenceEventText(text: string, createdAt?: string): boolean {
