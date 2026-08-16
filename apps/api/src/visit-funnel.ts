@@ -194,6 +194,8 @@ export const PLAY_VIAS = [
   'grid',
   'composer_match',
   'create_showcase',
+  'shelf',
+  'featured_similar',
 ] as const;
 
 export type PlayVia = (typeof PLAY_VIAS)[number];

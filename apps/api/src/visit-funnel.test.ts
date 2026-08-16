@@ -419,6 +419,8 @@ describe('summarizeVisitFunnel', () => {
       { via: 'grid', plays: 1 },
       { via: 'composer_match', plays: 0 },
       { via: 'create_showcase', plays: 0 },
+      { via: 'shelf', plays: 0 },
+      { via: 'featured_similar', plays: 0 },
       { via: 'unknown', plays: 1 },
     ]);
   });

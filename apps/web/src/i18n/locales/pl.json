@@ -206,6 +206,28 @@
       "party": "Tryb imprezowy",
       "recentlyAdded": "Ostatnio dodane"
     },
+    "categories": {
+      "arcade_racing": "Zręcznościowe i wyścigi",
+      "rpg_adventure": "RPG i przygodowe",
+      "strategy_sim": "Strategie i symulacje",
+      "puzzle_story": "Łamigłówki i fabuła",
+      "multiplayer_party": "Wieloosobowe i imprezowe",
+      "more_to_explore": "Więcej do odkrycia"
+    },
+    "jumpBarLabel": "Przejdź do kategorii",
+    "jumpAll": "Wszystkie",
+    "seeAll": "Zobacz wszystkie",
+    "browseEverything": "Przeglądaj wszystko",
+    "categoryFilterActive": "Wyświetlane: {{category}}",
+    "emptyCategory": "Żadna gra z kategorii {{category}} nie pasuje jeszcze do filtrów.",
+    "moreLikeThis": "Podobne gry",
+    "openGame": "Otwórz grę",
+    "pagination": {
+      "label": "Strony",
+      "prev": "Poprzednia strona",
+      "next": "Następna strona",
+      "page": "Strona {{page}}"
+    },
     "loading": "Wczytywanie gier…",
     "gameLoading": "Wczytywanie gry…",
     "gameLoadError": "Nie udało się wczytać tej gry.",

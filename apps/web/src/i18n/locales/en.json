@@ -206,6 +206,28 @@
       "party": "Party mode",
       "recentlyAdded": "Recently added"
     },
+    "categories": {
+      "arcade_racing": "Arcade & Racing",
+      "rpg_adventure": "RPG & Adventure",
+      "strategy_sim": "Strategy & Sim",
+      "puzzle_story": "Puzzle & Story",
+      "multiplayer_party": "Multiplayer & Party",
+      "more_to_explore": "More to explore"
+    },
+    "jumpBarLabel": "Jump to a shelf",
+    "jumpAll": "All",
+    "seeAll": "See all",
+    "browseEverything": "Browse everything",
+    "categoryFilterActive": "Showing: {{category}}",
+    "emptyCategory": "No {{category}} games match your filters yet.",
+    "moreLikeThis": "More like this",
+    "openGame": "Open game",
+    "pagination": {
+      "label": "Pages",
+      "prev": "Previous page",
+      "next": "Next page",
+      "page": "Page {{page}}"
+    },
     "loading": "Loading games…",
     "gameLoading": "Loading game…",
     "gameLoadError": "Could not load this game.",

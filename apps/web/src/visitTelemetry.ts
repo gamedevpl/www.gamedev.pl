@@ -160,6 +160,8 @@ export const PLAY_VIA_VALUES = [
   'grid',
   'composer_match',
   'create_showcase',
+  'shelf',
+  'featured_similar',
 ] as const;
 export type PlayVia = (typeof PLAY_VIA_VALUES)[number];
 

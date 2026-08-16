@@ -40,6 +40,14 @@
   --turquoise-glow: rgba(0, 228, 172, 0.35);
   --accent-blue: #38bdf8;
   --error: #ff6b6b;
+
+  /* Shelf identity dots only — never a CTA color, that stays turquoise. */
+  --cat-arcade-racing: #f2b84b;
+  --cat-rpg-adventure: #a78bfa;
+  --cat-strategy-sim: #4ade80;
+  --cat-puzzle-story: #38bdf8;
+  --cat-multiplayer-party: #fb923c;
+  --cat-more-to-explore: #94a3b8;
 }
 
 * {
@@ -1216,6 +1224,60 @@ button:disabled {
   margin-top: 4px;
 }
 
+.more-like-this {
+  width: 100%;
+  margin-top: auto;
+  padding-top: 16px;
+}
+
+.more-like-this-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.more-like-this-thumbs {
+  display: flex;
+  gap: 8px;
+}
+
+.more-like-this-thumb {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--text);
+}
+
+.more-like-this-thumb img,
+.more-like-this-thumb-fallback {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  border-radius: 6px;
+  object-fit: cover;
+  display: block;
+}
+
+.more-like-this-thumb-fallback {
+  display: grid;
+  place-items: center;
+  background: var(--panel);
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.more-like-this-thumb span {
+  font-size: 0.72rem;
+  font-weight: 600;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 @media (max-width: 768px) {
   .featured-game {
     grid-template-columns: 1fr;
@@ -1254,6 +1316,27 @@ button:disabled {
 .catalog-rail-aside {
   font-size: 0.8rem;
   color: var(--muted);
+}
+
+.catalog-rail-see-all {
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+.catalog-rail-see-all:hover,
+.catalog-rail-see-all:focus-visible {
+  color: var(--turquoise);
+}
+
+.catalog-shelf {
+  /* Clears the sticky header when a jump-bar chip scrolls a shelf into view. */
+  scroll-margin-top: 88px;
 }
 
 .catalog-rail-track {
@@ -1427,6 +1510,143 @@ button:disabled {
   margin: 0;
   letter-spacing: -0.3px;
   min-width: 0;
+}
+
+#browse-everything {
+  /* Clears the sticky header when a "See all" link scrolls this into view. */
+  scroll-margin-top: 88px;
+}
+
+.catalog-jumpbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0 30px;
+}
+
+.jump-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-card);
+  border-radius: 999px;
+  padding: 7px 14px 7px 10px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.jump-chip:hover,
+.jump-chip:focus-visible {
+  border-color: var(--turquoise);
+}
+
+.jump-chip.is-all {
+  color: var(--turquoise);
+  border-color: rgba(0, 228, 172, 0.35);
+}
+
+.jump-chip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.jump-chip-dot.cat-arcade_racing {
+  background: var(--cat-arcade-racing);
+}
+
+.jump-chip-dot.cat-rpg_adventure {
+  background: var(--cat-rpg-adventure);
+}
+
+.jump-chip-dot.cat-strategy_sim {
+  background: var(--cat-strategy-sim);
+}
+
+.jump-chip-dot.cat-puzzle_story {
+  background: var(--cat-puzzle-story);
+}
+
+.jump-chip-dot.cat-multiplayer_party {
+  background: var(--cat-multiplayer-party);
+}
+
+.jump-chip-dot.cat-more_to_explore {
+  background: var(--cat-more-to-explore);
+}
+
+.catalog-category-active {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.catalog-category-clear {
+  background: transparent;
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  padding: 4px 12px;
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.catalog-category-clear:hover,
+.catalog-category-clear:focus-visible {
+  border-color: var(--turquoise);
+  color: var(--turquoise);
+}
+
+.catalog-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 26px;
+}
+
+.catalog-pager button {
+  min-width: 34px;
+  height: 34px;
+  padding: 0 8px;
+  border-radius: 8px;
+  border: 1px solid var(--panel-border);
+  background: transparent;
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.catalog-pager button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.catalog-pager button:not(:disabled):hover,
+.catalog-pager button:not(:disabled):focus-visible {
+  border-color: var(--turquoise);
+  color: var(--turquoise);
+}
+
+.catalog-pager button.is-active {
+  background: var(--panel-card);
+  border-color: var(--turquoise);
+  color: var(--turquoise);
+}
+
+.catalog-pager-ellipsis {
+  color: var(--muted);
+  padding: 0 2px;
 }
 
 /* Compact Studio entry in the top nav — live count + wrench in one control so

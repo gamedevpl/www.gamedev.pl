@@ -688,6 +688,217 @@ describe('ArcadeCatalog curated surfaces', () => {
   });
 });
 
+describe('ArcadeCatalog shelves', () => {
+  beforeEach(async () => {
+    installIntersectionObserverMock();
+    mockSignedOutAuth();
+    sessionStorage.setItem(
+      'gdpl.catalogSortSignals',
+      JSON.stringify({ viewer: '', items: [], popularity: [], lastPlayed: [], newest: [] }),
+    );
+    // jsdom has no scrollIntoView; stub it first so spyOn can restore it.
+    Object.defineProperty(Element.prototype, 'scrollIntoView', {
+      configurable: true,
+      writable: true,
+      value: () => undefined,
+    });
+    vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(() => undefined);
+    await i18n.changeLanguage('en');
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = '';
+    sessionStorage.clear();
+    localStorage.clear();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  function stubHomeFetches(overrides?: { featuredSlugs?: string[] }) {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('/api/featured')) {
+        return new Response(JSON.stringify({ slugs: overrides?.featuredSlugs ?? [] }));
+      }
+      if (url.includes('/api/recommendations')) {
+        return new Response(JSON.stringify({ items: [], popularity: [], lastPlayed: [], newest: [] }));
+      }
+      return new Response(JSON.stringify({ items: [] }));
+    });
+  }
+
+  function makeEntry(partial: Partial<CatalogEntry> & Pick<CatalogEntry, 'slug' | 'title' | 'genre'>): CatalogEntry {
+    return {
+      controls: 'Arrow keys',
+      status: 'published',
+      media: null,
+      multiplayer: null,
+      saves: null,
+      world: null,
+      sensing: null,
+      orientation: 'any',
+      touch: null,
+      submittedBy: null,
+      ...partial,
+    };
+  }
+
+  const shelfEntries: CatalogEntry[] = [
+    makeEntry({ slug: 'rpg-1', title: 'Roam Quest', genre: 'Roguelike' }),
+    makeEntry({ slug: 'sim-1', title: 'Sim City Life', genre: 'City builder' }),
+    makeEntry({ slug: 'puzzle-1', title: 'Gem Match', genre: 'Match-3 puzzle' }),
+    makeEntry({ slug: 'arcade-1', title: 'Pixel Dash', genre: 'Arcade' }),
+    makeEntry({
+      slug: 'arcade-mp',
+      title: 'Kart Brawl',
+      genre: 'Arcade racing (3D)',
+      multiplayer: { mode: 'controllers', minPlayers: 2, maxPlayers: 4 },
+    }),
+  ];
+
+  async function renderShelves(entriesToRender: CatalogEntry[], overrides?: { featuredSlugs?: string[] }) {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    stubHomeFetches(overrides);
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const onPlayGame = vi.fn();
+    const onPlayTogether = vi.fn();
+
+    await act(async () => {
+      root.render(
+        createElement(ArcadeCatalog, {
+          catalogStatus: 'ready',
+          catalogError: null,
+          catalogEntries: entriesToRender,
+          onPlayGame,
+          onPlayTogether,
+          onRetryCatalog: vi.fn(),
+        }),
+      );
+      await flushEffects();
+      await flushEffects();
+    });
+
+    return { container, root, onPlayGame, onPlayTogether };
+  }
+
+  it('groups the catalog into shelves by category, with a jump bar chip per shelf', async () => {
+    const { container, root } = await renderShelves(shelfEntries);
+
+    const shelfHeadings = [...container.querySelectorAll('.catalog-shelf .catalog-rail-heading')].map(
+      (el) => el.textContent,
+    );
+    expect(shelfHeadings).toEqual(
+      expect.arrayContaining([
+        'Arcade & Racing',
+        'RPG & Adventure',
+        'Strategy & Sim',
+        'Puzzle & Story',
+        'Multiplayer & Party',
+      ]),
+    );
+
+    const jumpChips = [...container.querySelectorAll('.jump-chip')].map((el) => el.textContent);
+    expect(jumpChips[0]).toBe('All');
+    expect(jumpChips).toEqual(expect.arrayContaining(['Arcade & Racing', 'Multiplayer & Party']));
+
+    // A multiplayer racer sits in both its genre shelf and party.
+    const arcadeShelf = [...container.querySelectorAll('.catalog-shelf')].find((section) =>
+      section.textContent?.includes('Arcade & Racing'),
+    );
+    const partyShelf = [...container.querySelectorAll('.catalog-shelf')].find((section) =>
+      section.textContent?.includes('Multiplayer & Party'),
+    );
+    expect(arcadeShelf?.textContent).toContain('Kart Brawl');
+    expect(partyShelf?.textContent).toContain('Kart Brawl');
+
+    await act(async () => root.unmount());
+  });
+
+  it('plays a shelf card tagged via=shelf', async () => {
+    const { container, onPlayGame, root } = await renderShelves(shelfEntries);
+
+    const arcadeShelf = [...container.querySelectorAll('.catalog-shelf')].find((section) =>
+      section.textContent?.includes('Arcade & Racing'),
+    );
+    const playButton = arcadeShelf?.querySelector<HTMLButtonElement>('.rail-card-play');
+    await act(async () => {
+      playButton?.click();
+    });
+    expect(onPlayGame).toHaveBeenCalledWith(expect.objectContaining({ slug: 'arcade-1' }), 'shelf');
+
+    await act(async () => root.unmount());
+  });
+
+  it('"See all" filters Browse everything to that shelf, with a chip to clear it', async () => {
+    const { container, root } = await renderShelves(shelfEntries);
+
+    const rpgShelf = [...container.querySelectorAll('.catalog-shelf')].find((section) =>
+      section.textContent?.includes('RPG & Adventure'),
+    );
+    await act(async () => {
+      rpgShelf?.querySelector<HTMLButtonElement>('.catalog-rail-see-all')?.click();
+    });
+
+    expect(container.querySelector('.catalog-category-active')?.textContent).toContain('RPG & Adventure');
+    const browseTitles = [...container.querySelectorAll('#browse-everything ~ .catalog-grid .card-title')].map(
+      (el) => el.textContent,
+    );
+    expect(browseTitles).toEqual(['Roam Quest']);
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.catalog-category-clear')?.click();
+    });
+    expect(container.querySelector('.catalog-category-active')).toBeNull();
+
+    await act(async () => root.unmount());
+  });
+
+  it('fills the featured card with More like this picks from its own shelf', async () => {
+    const { container, root } = await renderShelves(shelfEntries, { featuredSlugs: ['arcade-1'] });
+
+    expect(container.querySelector('.featured-game-title')?.textContent).toBe('Pixel Dash');
+    const thumbTitles = [...container.querySelectorAll('.more-like-this-thumb span')].map((el) => el.textContent);
+    expect(thumbTitles).toEqual(['Kart Brawl']);
+
+    await act(async () => root.unmount());
+  });
+
+  it('paginates Browse everything instead of listing every game on one page', async () => {
+    const manyEntries = Array.from({ length: 30 }, (_, i) =>
+      makeEntry({ slug: `page-game-${i}`, title: `Page Game ${i}`, genre: 'Arcade' }),
+    );
+    const { container, root } = await renderShelves(manyEntries);
+
+    const gridSelector = '#browse-everything ~ .catalog-grid';
+    expect(container.querySelectorAll(`${gridSelector} .catalog-card`)).toHaveLength(24);
+    const pager = container.querySelector('.catalog-pager');
+    expect(pager).not.toBeNull();
+
+    await act(async () => {
+      [...container.querySelectorAll<HTMLButtonElement>('.catalog-pager button')]
+        .find((btn) => btn.textContent === '2')
+        ?.click();
+    });
+    expect(container.querySelectorAll(`${gridSelector} .catalog-card`)).toHaveLength(6);
+
+    // Sort changes reset the page instead of stranding the reader.
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.catalog-sort-trigger')?.click();
+    });
+    await act(async () => {
+      [...container.querySelectorAll<HTMLButtonElement>('.catalog-sort-option')]
+        .find((btn) => btn.textContent?.includes('A–Z'))
+        ?.click();
+    });
+    expect(container.querySelectorAll(`${gridSelector} .catalog-card`)).toHaveLength(24);
+    expect(container.querySelector('.catalog-pager button.is-active')?.textContent).toBe('1');
+
+    await act(async () => root.unmount());
+  });
+});
+
 describe('ArcadeCatalog soft-refresh failure', () => {
   beforeEach(async () => {
     installIntersectionObserverMock();

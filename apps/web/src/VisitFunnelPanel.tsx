@@ -112,6 +112,8 @@ const PLAY_VIA_LABELS: Record<string, string> = {
   grid: 'catalog grid',
   composer_match: 'composer match card',
   create_showcase: '/create showcase',
+  shelf: 'catalog shelf',
+  featured_similar: 'featured "more like this"',
   unknown: 'unknown (direct link, party, etc.)',
 };
 
