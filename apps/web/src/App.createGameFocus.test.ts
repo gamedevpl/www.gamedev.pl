@@ -84,9 +84,9 @@ describe('Create Game menu focus', () => {
     });
   }
 
-  it('focuses the hero prompt when Create Game is chosen from the hamburger', async () => {
+  it('navigates to /create and focuses its prompt when chosen from the hamburger', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-    const scrollIntoView = stubAppFetches();
+    stubAppFetches();
 
     await i18n.changeLanguage('en');
     window.history.pushState(null, '', '/');
@@ -103,19 +103,20 @@ describe('Create Game menu focus', () => {
       await flushEffects();
     });
 
-    const prompt = container.querySelector<HTMLTextAreaElement>('.big-prompt-input');
-    expect(prompt).not.toBeNull();
-    expect(document.activeElement).not.toBe(prompt);
+    expect(window.location.pathname).toBe('/');
 
     await openCreateGame(container);
 
+    expect(window.location.pathname).toBe('/create');
+    const prompt = container.querySelector<HTMLTextAreaElement>('.big-prompt-input');
+    expect(prompt).not.toBeNull();
+    // A deliberate tap focuses even on this forced-narrow viewport.
     expect(document.activeElement).toBe(prompt);
-    expect(scrollIntoView).toHaveBeenCalled();
 
     await act(async () => root.unmount());
   });
 
-  it('focuses the hero prompt after Create Game from Studio (off-home path)', async () => {
+  it('navigates to /create from Studio too (off-home path)', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     stubAppFetches();
 
@@ -141,7 +142,7 @@ describe('Create Game menu focus', () => {
     const prompt = container.querySelector<HTMLTextAreaElement>('.big-prompt-input');
     expect(prompt).not.toBeNull();
     expect(document.activeElement).toBe(prompt);
-    expect(window.location.pathname).toBe('/');
+    expect(window.location.pathname).toBe('/create');
 
     await act(async () => root.unmount());
   });

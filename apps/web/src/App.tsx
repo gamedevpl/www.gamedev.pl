@@ -18,6 +18,7 @@ import { MIN_CONCEPT_LENGTH } from './conceptLength.js';
 import {
   adminPath,
   canonicalPath,
+  createPath,
   creatorPath,
   gamePath,
   NAVIGATE_EVENT,
@@ -111,7 +112,7 @@ export function App() {
   // Bumped after a new submission so in-progress cards in the Games gallery appear.
   const [myGamesRefreshKey, setMyGamesRefreshKey] = useState(0);
   const [recommendationsRefreshKey, setRecommendationsRefreshKey] = useState(0);
-  // Section to scroll to once the home route has rendered it (see handleNavigateSection).
+  // Set by Studio's retry-concept flow; scrolled once home renders it.
   const [pendingScrollTarget, setPendingScrollTarget] = useState<string | null>(null);
   // Idea loaded into the hero prompt by "try this again" on a failed/abandoned build.
   // A failed build usually needs an edit before it is worth another submission, so
@@ -466,38 +467,6 @@ export function App() {
   // Menu navigation is scroll-to-section, but the sections only exist on the home
   // route — from a status page we have to go home first and scroll once the target
   // has mounted (the Games gallery may still be loading).
-  // Create Game also focuses the prompt so the visitor can type immediately — that
-  // is intentional on phones too (unlike page-load autofocus, which would pop the
-  // keyboard before they asked for it). Focus must happen inside the click (or a
-  // flushSync mount still in that gesture); a later timer will not open the
-  // keyboard on iOS Safari.
-  const focusHeroPromptInput = () => {
-    const input = document.querySelector<HTMLTextAreaElement>('#hero-prompt .big-prompt-input');
-    input?.focus({ preventScroll: true });
-  };
-
-  const scrollAndFocusSection = (sectionId: string): boolean => {
-    const element = document.getElementById(sectionId);
-    if (!element) return false;
-    element.scrollIntoView?.({ behavior: 'smooth' });
-    if (sectionId === 'hero-prompt') focusHeroPromptInput();
-    return true;
-  };
-
-  const handleNavigateSection = (sectionId: string) => {
-    if (scrollAndFocusSection(sectionId)) return;
-
-    // Mount home inside this click so focus still counts as a user gesture.
-    flushSync(() => {
-      navigate('/');
-    });
-    if (scrollAndFocusSection(sectionId)) return;
-
-    // Node still missing (unusual for hero-prompt) — scroll when it appears.
-    // Do not focus from the timer: that is outside the gesture window.
-    setPendingScrollTarget(sectionId);
-  };
-
   useEffect(() => {
     if (!pendingScrollTarget || route.view !== 'home') return;
 
@@ -821,6 +790,15 @@ export function App() {
     return { path: target.path, ariaLabel: t(`header.${target.labelKey}`) };
   }, [route, stageContent, unpublishedPlayTheater, t]);
 
+  // Deliberate click focuses even on phones, unlike page-load autofocus.
+  function handleCreateNav() {
+    flushSync(() => {
+      navigate(createPath());
+    });
+    const input = document.querySelector<HTMLTextAreaElement>('#hero-prompt .big-prompt-input');
+    input?.focus({ preventScroll: true });
+  }
+
   function handlePlayGame(game: CatalogEntry, via?: PlayVia) {
     // In-place Play from home/profile/game page; `/play/<slug>` auto-opens itself.
     setStageContent({ type: 'catalog', game, ...(via === undefined ? {} : { via }) });
@@ -956,11 +934,11 @@ export function App() {
       <div className="app app--legal">
         <NavHeader
           activeBuildCount={activeBuildCount}
-          onNavigate={handleNavigateSection}
           onHome={() => navigate('/')}
           onStudio={() => navigate(studioPath())}
           onAdmin={() => navigate(adminPath())}
           onReview={() => navigate(reviewPath())}
+          onCreate={handleCreateNav}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -978,11 +956,11 @@ export function App() {
       <div className="app app--contact">
         <NavHeader
           activeBuildCount={activeBuildCount}
-          onNavigate={handleNavigateSection}
           onHome={() => navigate('/')}
           onStudio={() => navigate(studioPath())}
           onAdmin={() => navigate(adminPath())}
           onReview={() => navigate(reviewPath())}
+          onCreate={handleCreateNav}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -1000,11 +978,11 @@ export function App() {
       <div className="app app--creator">
         <NavHeader
           activeBuildCount={activeBuildCount}
-          onNavigate={handleNavigateSection}
           onHome={() => navigate('/')}
           onStudio={() => navigate(studioPath())}
           onAdmin={() => navigate(adminPath())}
           onReview={() => navigate(reviewPath())}
+          onCreate={handleCreateNav}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -1035,11 +1013,11 @@ export function App() {
       <div className="app app--game">
         <NavHeader
           activeBuildCount={activeBuildCount}
-          onNavigate={handleNavigateSection}
           onHome={() => navigate('/')}
           onStudio={() => navigate(studioPath())}
           onAdmin={() => navigate(adminPath())}
           onReview={() => navigate(reviewPath())}
+          onCreate={handleCreateNav}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -1071,11 +1049,11 @@ export function App() {
       <div className="app app--proposals">
         <NavHeader
           activeBuildCount={activeBuildCount}
-          onNavigate={handleNavigateSection}
           onHome={() => navigate('/')}
           onStudio={() => navigate(studioPath())}
           onAdmin={() => navigate(adminPath())}
           onReview={() => navigate(reviewPath())}
+          onCreate={handleCreateNav}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -1094,11 +1072,11 @@ export function App() {
       <div className="app app--not-found">
         <NavHeader
           activeBuildCount={activeBuildCount}
-          onNavigate={handleNavigateSection}
           onHome={() => navigate('/')}
           onStudio={() => navigate(studioPath())}
           onAdmin={() => navigate(adminPath())}
           onReview={() => navigate(reviewPath())}
+          onCreate={handleCreateNav}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -1152,11 +1130,12 @@ export function App() {
     <div className="app">
       <NavHeader
         activeBuildCount={activeBuildCount}
-        onNavigate={handleNavigateSection}
         onHome={() => navigate('/')}
         onStudio={() => navigate(studioPath())}
         onAdmin={() => navigate(adminPath())}
         onReview={() => navigate(reviewPath())}
+        onCreate={handleCreateNav}
+        isOnCreate={route.view === 'create'}
         upTarget={headerUp}
         onUp={navigate}
       />

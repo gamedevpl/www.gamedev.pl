@@ -15,7 +15,6 @@ import { usePageScrolling } from './usePageScrolling.js';
 type NavHeaderProps = {
   /** Builds currently in flight for the signed-in creator. Server-derived, not a local tally. */
   activeBuildCount: number;
-  onNavigate: (sectionId: string) => void;
   /** In-app home navigation (avoids a full reload / beforeunload while a game is open). */
   onHome: () => void;
   /** Opens the creator control panel. */
@@ -23,6 +22,10 @@ type NavHeaderProps = {
   /** Opens the operator console. Only ever called from a link only operators are shown. */
   onAdmin: () => void;
   onReview: () => void;
+  // The creation landing page — a real destination, same as Studio.
+  onCreate: () => void;
+  // Highlights the Create Game item when already on /create.
+  isOnCreate?: boolean;
   /**
    * Android-style Up target for non-home surfaces. Null on home, join, play, and
    * while an immersive theater owns escape. Never history.back() — deep links
@@ -34,11 +37,12 @@ type NavHeaderProps = {
 
 export function NavHeader({
   activeBuildCount,
-  onNavigate,
   onHome,
   onStudio,
   onAdmin,
   onReview,
+  onCreate,
+  isOnCreate = false,
   upTarget = null,
   onUp,
 }: NavHeaderProps) {
@@ -128,11 +132,6 @@ export function NavHeader({
       document.removeEventListener('keydown', closeOnEscape);
     };
   }, [isMenuOpen]);
-
-  const handleNavClick = (sectionId: string) => {
-    onNavigate(sectionId);
-    setIsMenuOpen(false);
-  };
 
   const handleLogoClick = (event: MouseEvent<HTMLAnchorElement>) => {
     // Preserve modified clicks (new tab / new window) and non-primary buttons.
@@ -259,7 +258,13 @@ export function NavHeader({
 
           {isMenuOpen && (
             <nav className="dropdown-menu">
-              <button className="nav-link" onClick={() => handleNavClick('hero-prompt')}>
+              <button
+                className={`nav-link${isOnCreate ? ' is-active' : ''}`}
+                onClick={() => {
+                  setIsMenuOpen(false);
+                  onCreate();
+                }}
+              >
                 <PixelIcon name="sparkle" size={14} /> {t('header.navPrompt')}
               </button>
               <button

@@ -209,6 +209,11 @@ a {
   border-color: var(--panel-border);
 }
 
+.nav-link.is-active {
+  color: var(--turquoise);
+  border-color: var(--turquoise);
+}
+
 .header-actions {
   display: flex;
   align-items: center;
@@ -9529,7 +9534,16 @@ button.builder-mode-selector:disabled {
   padding: 0;
   display: grid;
   gap: 1rem;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: 1fr;
+}
+
+/* Deliberate 2x2, not auto-fit: the 832px column only fits 4-across by
+   cramming, and auto-fit's leftover-item wrap (3 then 1 alone) reads as a
+   layout bug rather than a design choice. */
+@media (min-width: 640px) {
+  .create-steps-list {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 .create-step {
