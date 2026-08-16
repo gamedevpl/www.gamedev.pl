@@ -84,8 +84,10 @@ export const GAME_KIT_MODULES = [
   // Voice loudness meter (games-repo voice-on-phones Layer 0). Opt-in reserve like zone.
   'voice',
   // Studio-editable content (EditorKit L2, games-repo Check 31). Opt-in, receive-only
-  // bridge module; the Studio pushes drafts, the game re-enters play. Appended last.
+  // bridge module; the Studio pushes drafts, the game re-enters play.
   'editor',
+  // Studio scene inspection; the shell owns the inspector UI.
+  'inspect',
 ] as const;
 
 export type GameKitModuleName = (typeof GAME_KIT_MODULES)[number];

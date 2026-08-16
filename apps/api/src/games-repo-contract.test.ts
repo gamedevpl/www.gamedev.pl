@@ -121,6 +121,7 @@ describe('games-repo-contract (website half)', () => {
       'sensing',
       'voice',
       'editor',
+      'inspect',
     ]);
   });
 
@@ -236,7 +237,7 @@ describe('games-repo source extractors', () => {
       export const GAME_KIT_MODULES = [
         'input', 'collision', 'world', 'grid', 'path', 'ai', 'gameplay', 'rng', 'cards', 'vehicles', 'urban',
         'drawing', 'actors', 'gfx', 'ui', 'gfx3d', 'racing', 'football', 'platformer', 'effects', 'audio', 'party', 'save', 'commons', 'presence', 'mascot', 'zone',
-        'sensing', 'voice', 'editor',
+        'sensing', 'voice', 'editor', 'inspect',
       ] as const;
     `;
     expect(extractGameKitModules(source)).toEqual([...GAME_KIT_MODULES]);

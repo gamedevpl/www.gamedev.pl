@@ -31,7 +31,8 @@
     "zone",
     "sensing",
     "voice",
-    "editor"
+    "editor",
+    "inspect"
   ],
   "authorBudgetBytes": 258048,
   "platformCeilingBytes": 410000,
