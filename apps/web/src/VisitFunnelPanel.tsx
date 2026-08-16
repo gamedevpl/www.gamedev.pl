@@ -103,6 +103,17 @@ const HOW_TO_VIA_LABELS: Record<string, string> = {
   unknown: 'unknown (pre-via clients)',
 };
 
+const PLAY_VIA_LABELS: Record<string, string> = {
+  featured: 'featured slot',
+  rail_start_here: 'Start here rail',
+  rail_continue: 'Continue playing rail',
+  rail_party: 'Party mode rail',
+  rail_new: 'Recently added rail',
+  grid: 'catalog grid',
+  composer_match: 'composer match card',
+  unknown: 'unknown (direct link, party, etc.)',
+};
+
 const HOW_TO_ENTRY_LABELS: Record<string, string> = {
   play: 'deep link (/play)',
   home: 'arcade (home)',
@@ -174,6 +185,36 @@ export function VisitFunnelPanel({ data }: { data: VisitsResponse }) {
       </ul>
 
       <div className="funnel-grid">
+        <div className="funnel-block">
+          <h3>Plays by surface</h3>
+          {(funnel.playVia ?? []).every((row) => row.plays === 0) ? (
+            <p className="health-empty">Nobody played a game in this window.</p>
+          ) : (
+            <table className="health-table">
+              <thead>
+                <tr>
+                  <th scope="col">Surface</th>
+                  <th scope="col" className="num">
+                    Plays
+                  </th>
+                  <th scope="col" className="num">
+                    Of plays
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {(funnel.playVia ?? []).map((row) => (
+                  <tr key={row.via}>
+                    <td>{PLAY_VIA_LABELS[row.via] ?? row.via}</td>
+                    <td className="num">{row.plays}</td>
+                    <td className="num">{percent(row.plays, funnel.plays)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
         <div className="funnel-block">
           <h3>Creating</h3>
           {funnel.creating.every((row) => row.visits === 0) ? (
@@ -477,8 +518,8 @@ export function VisitFunnelPanel({ data }: { data: VisitsResponse }) {
           <div className="funnel-block">
             <h3>Code completion</h3>
             <p className="health-summary">
-              {funnel.completion.requests} requests · {funnel.completion.shown} shown · {funnel.completion.empty}{' '}
-              empty · {funnel.completion.failed} failed
+              {funnel.completion.requests} requests · {funnel.completion.shown} shown · {funnel.completion.empty} empty
+              · {funnel.completion.failed} failed
             </p>
             <table className="health-table">
               <thead>

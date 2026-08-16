@@ -42,6 +42,9 @@ import type { PlayVia } from './visitTelemetry.js';
 // Rail length before it scrolls, same for every rail.
 const RAIL_CARD_LIMIT = 12;
 
+// Caps the featured-pool wait; a stall must not block the grid.
+const FEATURED_POOL_TIMEOUT_MS = 1200;
+
 type ArcadeCatalogProps = {
   catalogStatus: 'loading' | 'ready' | 'error';
   catalogError: string | null;
@@ -649,14 +652,18 @@ export function ArcadeCatalog({
   // Gates showCurated; fetchFeaturedSlugs fails open, so this always resolves.
   const [featuredPoolReady, setFeaturedPoolReady] = useState(false);
   useEffect(() => {
-    let cancelled = false;
-    void fetchFeaturedSlugs().then((slugs) => {
-      if (cancelled) return;
+    let settled = false;
+    const settle = (slugs: string[]) => {
+      if (settled) return;
+      settled = true;
       setFeaturedPool(slugs);
       setFeaturedPoolReady(true);
-    });
+    };
+    void fetchFeaturedSlugs().then(settle);
+    const timer = window.setTimeout(() => settle([]), FEATURED_POOL_TIMEOUT_MS);
     return () => {
-      cancelled = true;
+      settled = true;
+      window.clearTimeout(timer);
     };
   }, []);
 
@@ -896,7 +903,7 @@ export function ArcadeCatalog({
           </div>
         ) : null}
 
-        {catalogStatus === 'loading' || awaitingSignals || awaitingCreatorShelf ? (
+        {catalogStatus === 'loading' || awaitingSignals || awaitingCreatorShelf || !featuredPoolReady ? (
           <MascotMoment className="catalog-state" emotion="busy" size={56} title={t('mascot.busyAlt')}>
             <p>{t('catalog.loading')}</p>
           </MascotMoment>

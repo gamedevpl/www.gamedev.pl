@@ -404,6 +404,8 @@ describe('ArcadeCatalog lazy media', () => {
           /* leave hanging — cache must be enough for first paint */
         }),
     );
+    // Also cap the wait here — a hung fetch must not block forever.
+    vi.useFakeTimers();
     const container = document.createElement('div');
     document.body.appendChild(container);
     const root = createRoot(container);
@@ -419,7 +421,9 @@ describe('ArcadeCatalog lazy media', () => {
           onRetryCatalog: vi.fn(),
         }),
       );
-      await flushEffects();
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1200);
     });
 
     expect(container.querySelectorAll('.catalog-card')).toHaveLength(2);
@@ -427,6 +431,7 @@ describe('ArcadeCatalog lazy media', () => {
     await act(async () => {
       root.unmount();
     });
+    vi.useRealTimers();
   });
 
   it('paints the grid with catalog order when the signals fetch rejects', async () => {
