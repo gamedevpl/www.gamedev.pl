@@ -12,6 +12,7 @@ import {
   type ManagedSessionUsage,
   type ManagedTokenUsage,
   type ManagedGeminiTokenUsage,
+  type ManagedOpenAiTokenUsage,
   type ManagedMcpBearerCredential,
   type ManagedUsageBudget,
   type ManagedToolAccess,
@@ -46,8 +47,12 @@ export interface ManagedRoundSignals {
   agentEndedAt?: string;
 }
 
-function ledgerTokens(usage: ManagedTokenUsage | ManagedGeminiTokenUsage): AgentSessionTokens {
-  if ('totalTokens' in usage) {
+// Discriminated by shape, not the vendor word — a flat ManagedTokenUsage's `vendor` is
+// just `string`, so an equality check on it wouldn't narrow the type.
+function ledgerTokens(
+  usage: ManagedTokenUsage | ManagedGeminiTokenUsage | ManagedOpenAiTokenUsage,
+): AgentSessionTokens {
+  if ('toolUseTokens' in usage) {
     return {
       vendor: 'gemini',
       model: usage.model,
@@ -57,6 +62,17 @@ function ledgerTokens(usage: ManagedTokenUsage | ManagedGeminiTokenUsage): Agent
       thought: usage.thoughtTokens,
       cached: usage.cachedTokens,
       toolUse: usage.toolUseTokens,
+    };
+  }
+  if ('reasoningTokens' in usage) {
+    return {
+      vendor: 'openai',
+      model: usage.model,
+      input: usage.inputTokens,
+      output: usage.outputTokens,
+      total: usage.totalTokens,
+      reasoning: usage.reasoningTokens,
+      cached: usage.cachedTokens,
     };
   }
   return {

@@ -10,6 +10,7 @@ import { VertexGameSeeder, type GameSeeder } from './game-seed.js';
 import { createManagedProvider, type ManagedAgentEffort } from './managed-agent.js';
 import './managed-provider-anthropic.js';
 import './managed-provider-copilot.js';
+import './managed-provider-openai.js';
 import { GEMINI_DEFAULT_MODEL } from './managed-provider-gemini.js';
 import { createManagedBackend, type ManagedRoundSignals } from './managed-backend.js';
 import type { KitDigestLoader } from './kit-digest.js';
@@ -24,7 +25,7 @@ interface Logger {
 }
 
 // Every managed vendor this file knows how to build a backend for.
-export const MANAGED_AGENT_VENDORS = ['anthropic', 'gemini', 'copilot'] as const;
+export const MANAGED_AGENT_VENDORS = ['anthropic', 'gemini', 'copilot', 'openai'] as const;
 export type ManagedAgentVendorName = (typeof MANAGED_AGENT_VENDORS)[number];
 
 // One backend per vendor built at boot — a runtime override selects one.
@@ -67,19 +68,24 @@ function buildManagedBackendForVendor(
 ): AgentBackend | undefined {
   const isCopilot = vendor === 'copilot';
   const isGemini = vendor === 'gemini';
+  const isOpenAi = vendor === 'openai';
   const apiKey = (
     isCopilot
       ? process.env.AGENT_TASKS_TOKEN
       : isGemini
         ? (process.env.GEMINI_API_KEY ?? (allowGenericApiKeyFallback ? process.env.MANAGED_AGENT_API_KEY : undefined))
-        : process.env.MANAGED_AGENT_API_KEY
+        : isOpenAi
+          ? (process.env.OPENAI_API_KEY ?? (allowGenericApiKeyFallback ? process.env.MANAGED_AGENT_API_KEY : undefined))
+          : process.env.MANAGED_AGENT_API_KEY
   )?.trim();
   const model = (
     isCopilot
       ? process.env.AGENT_TASKS_MODEL?.trim() || 'claude-sonnet-4.6'
       : isGemini
         ? process.env.MANAGED_AGENT_GEMINI_MODEL?.trim() || GEMINI_DEFAULT_MODEL
-        : process.env.MANAGED_AGENT_MODEL?.trim()
+        : isOpenAi
+          ? process.env.MANAGED_AGENT_OPENAI_MODEL?.trim()
+          : process.env.MANAGED_AGENT_MODEL?.trim()
   )?.trim();
   if (!apiKey || !model) {
     log?.warn(
@@ -121,9 +127,9 @@ function buildManagedBackendForVendor(
       return undefined;
     }
   }
-  if (isGemini && process.env.MANAGED_AGENT_MAX_TOTAL_TOKENS !== undefined) {
+  if ((isGemini || isOpenAi) && process.env.MANAGED_AGENT_MAX_TOTAL_TOKENS !== undefined) {
     if (!Number.isSafeInteger(maxTotalTokens) || maxTotalTokens <= 0) {
-      log?.warn({ vendor }, 'gemini managed agent token ceiling must be a positive safe integer');
+      log?.warn({ vendor }, 'managed agent token ceiling must be a positive safe integer');
       return undefined;
     }
   }
@@ -155,7 +161,7 @@ function buildManagedBackendForVendor(
         ? { environmentId: process.env.MANAGED_AGENT_ENVIRONMENT_ID.trim() }
         : {}),
       ...(Number.isInteger(maxListCostCents) && maxListCostCents > 0 ? { maxListCostCents } : {}),
-      ...(isGemini && Number.isSafeInteger(maxTotalTokens) && maxTotalTokens > 0
+      ...((isGemini || isOpenAi) && Number.isSafeInteger(maxTotalTokens) && maxTotalTokens > 0
         ? { budget: { unit: 'tokens' as const, max: maxTotalTokens } }
         : {}),
       ...(vaultIds?.length ? { vaultIds } : {}),
@@ -198,7 +204,7 @@ function buildManagedBackendForVendor(
     ...(isCopilot && Number.isFinite(maxCopilotCredits) && maxCopilotCredits > 0
       ? { budget: { unit: 'credits' as const, max: maxCopilotCredits } }
       : {}),
-    ...(isGemini && Number.isSafeInteger(maxTotalTokens) && maxTotalTokens > 0
+    ...((isGemini || isOpenAi) && Number.isSafeInteger(maxTotalTokens) && maxTotalTokens > 0
       ? { budget: { unit: 'tokens' as const, max: maxTotalTokens } }
       : {}),
     ...(log ? { log } : {}),

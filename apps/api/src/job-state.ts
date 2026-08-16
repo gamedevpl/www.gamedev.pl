@@ -358,6 +358,15 @@ export type AgentSessionTokens =
       thought: number;
       cached: number;
       toolUse: number;
+    }
+  | {
+      vendor: 'openai';
+      model: string;
+      input: number;
+      output: number;
+      total: number;
+      reasoning: number;
+      cached: number;
     };
 
 export interface ReconcileResult {

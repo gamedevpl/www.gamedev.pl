@@ -9,6 +9,7 @@ const ENV_KEYS = [
   'MANAGED_AGENT_API_KEY',
   'MANAGED_AGENT_MODEL',
   'MANAGED_AGENT_GEMINI_MODEL',
+  'MANAGED_AGENT_OPENAI_MODEL',
   'MANAGED_AGENT_ID',
   'MANAGED_AGENT_ENVIRONMENT_ID',
   'MANAGED_AGENT_MAX_SECONDS',
@@ -17,6 +18,7 @@ const ENV_KEYS = [
   'MANAGED_AGENT_COPILOT_MAX_CREDITS',
   'MANAGED_AGENT_MAX_TOTAL_TOKENS',
   'GEMINI_API_KEY',
+  'OPENAI_API_KEY',
   'AGENT_TASKS_TOKEN',
   'AGENT_TASKS_MODEL',
   'MANAGED_AGENT_COPILOT_MCP_REPO',
@@ -263,12 +265,64 @@ describe('createAgentBackendRegistryFromEnv', () => {
     );
   });
 
+  it('builds openai with its own key, model and native token ceiling — never MANAGED_AGENT_API_KEY alone unless it is default', () => {
+    setEnv({
+      MANAGED_AGENT_VENDOR: 'openai',
+      OPENAI_API_KEY: `openai-${randomUUID()}`,
+      MANAGED_AGENT_OPENAI_MODEL: 'gpt-openai-test',
+      MANAGED_AGENT_MAX_SECONDS: '900',
+      MANAGED_AGENT_MAX_TOTAL_TOKENS: '50000',
+      MANAGED_AGENT_MCP_URL: MCP_URL,
+    });
+    const info = vi.fn();
+    const registry = createAgentBackendRegistryFromEnv({ info, warn: vi.fn() });
+
+    expect(registry.platformByVendor.get('openai')?.name).toBe('managed:openai');
+    expect(info).toHaveBeenCalledWith(
+      expect.objectContaining({ vendor: 'openai', model: 'gpt-openai-test' }),
+      'managed agent dispatch enabled',
+    );
+  });
+
+  it('fails closed when openai has no model configured — it is never defaulted', () => {
+    setEnv({
+      MANAGED_AGENT_VENDOR: 'openai',
+      OPENAI_API_KEY: `openai-${randomUUID()}`,
+      MANAGED_AGENT_MAX_SECONDS: '900',
+      MANAGED_AGENT_MCP_URL: MCP_URL,
+    });
+    const warn = vi.fn();
+    const registry = createAgentBackendRegistryFromEnv({ info: vi.fn(), warn });
+
+    expect(registry.platformByVendor.has('openai')).toBe(false);
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({ vendor: 'openai' }),
+      expect.stringContaining('MANAGED_AGENT_API_KEY / MANAGED_AGENT_MODEL'),
+    );
+  });
+
+  it('does not let an unconfigured Anthropic bring down a separately configured openai backend', () => {
+    setEnv({
+      MANAGED_AGENT_VENDOR: 'anthropic',
+      // Anthropic itself is left invalid (no agentId/environmentId).
+      OPENAI_API_KEY: `openai-${randomUUID()}`,
+      MANAGED_AGENT_OPENAI_MODEL: 'gpt-openai-test',
+      MANAGED_AGENT_MAX_SECONDS: '900',
+      MANAGED_AGENT_MCP_URL: MCP_URL,
+    });
+    const registry = createAgentBackendRegistryFromEnv({ info: vi.fn(), warn: vi.fn() });
+
+    expect(registry.platformByVendor.has('anthropic')).toBe(false);
+    expect(registry.platformByVendor.get('openai')?.name).toBe('managed:openai');
+  });
+
   // Every vendor: an unbilled one can run for hours unnoticed.
-  it.each(['copilot', 'gemini'])('fails closed when %s has no wall-clock ceiling', (vendor) => {
+  it.each(['copilot', 'gemini', 'openai'])('fails closed when %s has no wall-clock ceiling', (vendor) => {
     setEnv({
       MANAGED_AGENT_VENDOR: vendor,
       MANAGED_AGENT_API_KEY: `key-${randomUUID()}`,
       AGENT_TASKS_TOKEN: randomBytes(32).toString('hex'),
+      MANAGED_AGENT_OPENAI_MODEL: vendor === 'openai' ? `model-${randomUUID()}` : undefined,
       MANAGED_AGENT_MCP_URL: MCP_URL,
       MANAGED_AGENT_COPILOT_MCP_REPO: 'gamedevpl/scratchpad',
       MANAGED_AGENT_MAX_SECONDS: undefined,

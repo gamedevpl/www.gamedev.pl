@@ -214,6 +214,11 @@ if gcloud secrets describe gemini-api-key --project "$PROJECT_ID" >/dev/null 2>&
   echo "==> gemini-api-key found; Gemini managed agent access enabled."
 fi
 
+if gcloud secrets describe openai-api-key --project "$PROJECT_ID" >/dev/null 2>&1; then
+  SECRET_MAPPINGS+=("OPENAI_API_KEY=openai-api-key:latest")
+  echo "==> openai-api-key found; OpenAI managed agent access enabled."
+fi
+
 if gcloud secrets describe session-secret --project "$PROJECT_ID" >/dev/null 2>&1; then
   SECRET_MAPPINGS+=("SESSION_SECRET=session-secret:latest")
   echo "==> session-secret found; session authentication enabled."
@@ -311,6 +316,8 @@ done
 for MANAGED_VAR in \
   MANAGED_AGENT_VENDOR \
   MANAGED_AGENT_MODEL \
+  MANAGED_AGENT_GEMINI_MODEL \
+  MANAGED_AGENT_OPENAI_MODEL \
   MANAGED_AGENT_ID \
   MANAGED_AGENT_ENVIRONMENT_ID \
   MANAGED_AGENT_MAX_SECONDS \

@@ -1,11 +1,18 @@
 # Managed agent backend — running the builder ourselves, on a swappable vendor
 
-> Status: ✅ **Anthropic, Gemini, and Copilot drivers are implemented, and all three
-> dispatch over MCP.** Copilot's earlier harness lane — a git branch, a full repository
-> checkout, the build channel's shell-based upload — is retired; every managed round now
-> runs the same MCP-only, no-checkout contract `buildPrompt` produces. All three run
-> through the managed lifecycle and record their native usage units. Production cutover
-> remains gated by the MP-04 owner approval described in the migration brief.
+> Status: ✅ **Anthropic, Gemini, Copilot, and OpenAI drivers are implemented, and all
+> four dispatch over MCP.** Copilot's earlier harness lane — a git branch, a full
+> repository checkout, the build channel's shell-based upload — is retired; every managed
+> round now runs the same MCP-only, no-checkout contract `buildPrompt` produces. All four
+> run through the managed lifecycle and record their native usage units. Production
+> cutover remains gated by the MP-04 owner approval described in the migration brief.
+>
+> OpenAI is wired for side-by-side evaluation, not as the default: `MANAGED_AGENT_VENDOR`
+> stays on its existing value after deploy, and a fresh dispatch reaches OpenAI only
+> through the admin panel's per-runtime vendor override (`managedAgentVendorOverride`,
+> `docs/managed-agent-backend.md#how-to-exercise-it`). That override is global, not
+> per-job — flipping it changes the vendor for every fresh dispatch from that moment on,
+> not a random split.
 >
 > **Why this is not the execution model that was removed for legal reasons.** The thing
 > [`games-repo.md`](./games-repo.md) abandoned was agent compute _we operate_ — containers
@@ -197,6 +204,42 @@ The provider forwards that same value as Gemini's native `max_total_tokens`. If 
 passes the ceiling, the backend records a `ManagedBudgetStop` and reports the round as
 `cancelled` with `stopReason: 'budget_reached'`; a wall-clock expiry remains `timed_out`.
 
+## OpenAI under the seam
+
+OpenAI dispatches on the Responses API's background lane
+(`POST /v1/responses`, `background: true, store: true`), not a dedicated agent-platform
+resource — there is no environment or agent id to preconfigure, which is why
+`supportsSeedFiles` is `false`: there is no checkout for a seed to land in, matching
+Anthropic's own no-seed answer.
+
+The MCP endpoint is declared as a `type: 'mcp'` tool with `server_url` and the round's
+bearer on that tool's `Authorization` header, the same per-round pattern as Gemini — no
+static connector secret is copied into the environment. `require_approval: 'never'` is
+set on every MCP tool and is never omitted: the API's default requires a human to approve
+each tool call, which a background, unattended round has nobody to grant. Without it a
+round would sit stuck on the first `stage_source_file` call until the wall clock killed
+it.
+
+`effort` maps straight to `reasoning.effort` — unlike Gemini, which throws on any effort
+override, and unlike Anthropic, which configures effort on the Agent resource instead of
+per-session.
+
+**The budget is a partial belt, not the ceiling Gemini gets.** `max_output_tokens` caps
+one response's output tokens; it is not a running total across the whole agent loop the
+way Gemini's `max_total_tokens` is. The provider forwards
+`{ unit: 'tokens', max }` as `max_output_tokens` when a token budget is configured, but
+the real enforcement is still the backend's own observed-usage `ManagedBudgetStop` —
+comparing the response's reported `usage.total_tokens` against the ceiling on each poll,
+same as Gemini. Both layers matter here more than they do for Gemini, because only one of
+them is native.
+
+Usage is a distinct shape (`ManagedOpenAiTokenUsage`) carrying `reasoningTokens` and
+`cachedTokens` rather than Gemini's `thoughtTokens`/`toolUseTokens` — the vendor's own
+units are kept, not converted to look like Gemini's. `incomplete_details.reason` decides
+whether an `incomplete` status is a budget stop: only `max_output_tokens` (or the legacy
+alias `max_tokens`) is treated as one, so a content-filter stop is reported plainly and
+never misread as the round running out of budget.
+
 ## Delivery is always the agent's own submit_sources
 
 A managed round delivers the way every other round does: give the session our MCP
@@ -257,7 +300,7 @@ There are four levels of test:
 ```bash
 npx vitest run apps/api/src/managed-agent.test.ts apps/api/src/managed-backend.test.ts \
   apps/api/src/managed-provider-anthropic.test.ts apps/api/src/managed-provider-gemini.test.ts \
-  apps/api/src/build-prompt.test.ts
+  apps/api/src/managed-provider-openai.test.ts apps/api/src/build-prompt.test.ts
 ```
 
 **2. The probe.** One whole round through the real backend, over MCP, requires a real
@@ -340,6 +383,23 @@ npm run managed:probe -w @gamedevpl/api -- --vendor gemini --wait \
 `--vendor gemini` defaults to `gemini-3.7-flash`; `GEMINI_API_KEY` or
 `MANAGED_AGENT_API_KEY` supplies the credential and `--model` overrides the model label.
 
+OpenAI also uses a native token ceiling, forwarded as `max_output_tokens` — a partial
+guard, not the running total Gemini's `max_total_tokens` gives natively (see "OpenAI
+under the seam" above):
+
+```bash
+OPENAI_API_KEY=... \
+MANAGED_AGENT_MCP_URL=https://www.gamedev.pl/api/mcp \
+npm run managed:probe -w @gamedevpl/api -- --vendor openai --wait \
+  --wait-seconds 120 --budget-tokens 50000 --model <the confirmed Luna model id>
+```
+
+Unlike every other vendor, OpenAI has **no built-in default model** — `--model` or
+`MANAGED_AGENT_OPENAI_MODEL` is required every time. That is deliberate: the model id was
+confirmed once against a live round rather than sourced from documentation, so a silent
+fallback would risk quietly dispatching a different model than the one actually verified.
+`OPENAI_API_KEY` or `MANAGED_AGENT_API_KEY` supplies the credential.
+
 The probe can inject a digest file while exercising this path:
 
 ```bash
@@ -371,28 +431,31 @@ With `MANAGED_AGENT_DELIVERY_MODE=preview` (the default), a successful delivery 
 
 ## Configuration
 
-| Variable                                 | Meaning                                                                                                       |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `MANAGED_AGENT_VENDOR`                   | Registered adapter id; required configuration must also be valid                                              |
-| `MANAGED_AGENT_API_KEY`                  | Anthropic or Gemini credential. Never logged, never persisted                                                 |
-| `GEMINI_API_KEY`                         | Optional Gemini-specific credential fallback                                                                  |
-| `MANAGED_AGENT_MODEL`                    | Anthropic or Gemini model label                                                                               |
-| `AGENT_TASKS_TOKEN`                      | Copilot Agent Tasks credential — needs `actions: write` to interrupt                                          |
-| `AGENT_TASKS_MODEL`                      | Copilot model label; defaults to the existing Copilot model                                                   |
-| `MANAGED_AGENT_ID`                       | Anthropic Managed Agent resource id                                                                           |
-| `MANAGED_AGENT_ENVIRONMENT_ID`           | Anthropic Managed Environment resource id                                                                     |
-| `MANAGED_AGENT_MCP_URL`                  | MCP endpoint — **required, every vendor**; triggers the per-round vault + `overrideTools` on Anthropic/Gemini |
-| `MANAGED_AGENT_VAULT_IDS`                | Optional static vault ids for probe-only MCP integrations                                                     |
-| `MANAGED_AGENT_EFFORT`                   | `low` / `medium` / `high`                                                                                     |
-| `MANAGED_AGENT_MAX_SECONDS`              | Hard ceiling on one session's wall clock — **required, every vendor**                                         |
-| `MANAGED_AGENT_MAX_LIST_COST_CENTS`      | Anthropic session budget, in whole cents                                                                      |
-| `MANAGED_AGENT_COPILOT_MAX_CREDITS`      | Optional Copilot per-round credit ceiling                                                                     |
-| `MANAGED_AGENT_COPILOT_MCP_REPO`         | The scratch repo Copilot dispatches into — **required for Copilot**                                           |
-| `MANAGED_AGENT_COPILOT_MCP_BASE_REF`     | Base ref in the scratch repo; defaults to `main`                                                              |
-| `MANAGED_AGENT_COPILOT_MCP_CUSTOM_AGENT` | Custom agent there; defaults to `game-builder-mcp`                                                            |
-| `MANAGED_AGENT_MAX_TOTAL_TOKENS`         | Optional Gemini per-round token ceiling                                                                       |
-| `MANAGED_AGENT_DELIVERY_MODE`            | `preview` (default) or `publish`                                                                              |
-| `MANAGED_AGENT_BASE_URL`                 | Override the API origin — gateways, tests                                                                     |
+| Variable                                 | Meaning                                                                                                              |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `MANAGED_AGENT_VENDOR`                   | Registered adapter id; required configuration must also be valid                                                     |
+| `MANAGED_AGENT_API_KEY`                  | Anthropic credential, or a generic fallback for the default vendor's Gemini/OpenAI key                               |
+| `GEMINI_API_KEY`                         | Gemini-specific credential; takes priority over the generic fallback                                                 |
+| `OPENAI_API_KEY`                         | OpenAI-specific credential; takes priority over the generic fallback                                                 |
+| `MANAGED_AGENT_MODEL`                    | Anthropic model label                                                                                                |
+| `MANAGED_AGENT_GEMINI_MODEL`             | Gemini model label; falls back to the adapter's built-in default                                                     |
+| `MANAGED_AGENT_OPENAI_MODEL`             | OpenAI model label — **required for OpenAI; never defaulted**, see "How to exercise it"                              |
+| `AGENT_TASKS_TOKEN`                      | Copilot Agent Tasks credential — needs `actions: write` to interrupt                                                 |
+| `AGENT_TASKS_MODEL`                      | Copilot model label; defaults to the existing Copilot model                                                          |
+| `MANAGED_AGENT_ID`                       | Anthropic Managed Agent resource id                                                                                  |
+| `MANAGED_AGENT_ENVIRONMENT_ID`           | Anthropic Managed Environment resource id                                                                            |
+| `MANAGED_AGENT_MCP_URL`                  | MCP endpoint — **required, every vendor**; triggers the per-round vault + `overrideTools` on Anthropic/Gemini/OpenAI |
+| `MANAGED_AGENT_VAULT_IDS`                | Optional static vault ids for probe-only MCP integrations                                                            |
+| `MANAGED_AGENT_EFFORT`                   | `low` / `medium` / `high`                                                                                            |
+| `MANAGED_AGENT_MAX_SECONDS`              | Hard ceiling on one session's wall clock — **required, every vendor**                                                |
+| `MANAGED_AGENT_MAX_LIST_COST_CENTS`      | Anthropic session budget, in whole cents                                                                             |
+| `MANAGED_AGENT_COPILOT_MAX_CREDITS`      | Optional Copilot per-round credit ceiling                                                                            |
+| `MANAGED_AGENT_COPILOT_MCP_REPO`         | The scratch repo Copilot dispatches into — **required for Copilot**                                                  |
+| `MANAGED_AGENT_COPILOT_MCP_BASE_REF`     | Base ref in the scratch repo; defaults to `main`                                                                     |
+| `MANAGED_AGENT_COPILOT_MCP_CUSTOM_AGENT` | Custom agent there; defaults to `game-builder-mcp`                                                                   |
+| `MANAGED_AGENT_MAX_TOTAL_TOKENS`         | Optional Gemini or OpenAI per-round token ceiling — shared variable, whichever vendor is selected                    |
+| `MANAGED_AGENT_DELIVERY_MODE`            | `preview` (default) or `publish`                                                                                     |
+| `MANAGED_AGENT_BASE_URL`                 | Override the API origin — gateways, tests                                                                            |
 
 Copilot dispatches into a separate, content-free scratch repo — never the games repo —
 holding nothing but an MCP-only custom agent doc, so a prompt-injectable session never
