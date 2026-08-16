@@ -427,14 +427,17 @@ a {
   height: auto;
   min-height: 0;
   box-sizing: border-box;
-  background: rgba(22, 28, 34, 0.92);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(32, 42, 51, 0.97);
+  border: 1px solid rgba(0, 228, 172, 0.22);
   border-radius: 999px;
   padding: 4px 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.32),
+    0 0 0 1px rgba(0, 0, 0, 0.2);
   transition:
     border-color 0.25s ease,
-    box-shadow 0.25s ease;
+    box-shadow 0.25s ease,
+    background-color 0.25s ease;
 }
 
 .hero-prompt-card:focus-within .prompt-composer-bar {
