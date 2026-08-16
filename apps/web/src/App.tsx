@@ -801,6 +801,16 @@ export function App() {
     input?.focus({ preventScroll: true });
   }
 
+  // Play/Party live on home only. Elsewhere, go there — the anchor
+  // itself waits on data the target page has not fetched yet.
+  function handleHomeAnchorNav(anchorId: string) {
+    if (route.view === 'home') {
+      document.getElementById(anchorId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+    navigate('/');
+  }
+
   function handlePlayGame(game: CatalogEntry, via?: PlayVia) {
     // In-place Play from home/profile/game page; `/play/<slug>` auto-opens itself.
     setStageContent({ type: 'catalog', game, ...(via === undefined ? {} : { via }) });
@@ -941,6 +951,8 @@ export function App() {
           onAdmin={() => navigate(adminPath())}
           onReview={() => navigate(reviewPath())}
           onCreate={handleCreateNav}
+          onPlay={() => handleHomeAnchorNav('play-anchor')}
+          onParty={() => handleHomeAnchorNav('party-rail')}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -963,6 +975,8 @@ export function App() {
           onAdmin={() => navigate(adminPath())}
           onReview={() => navigate(reviewPath())}
           onCreate={handleCreateNav}
+          onPlay={() => handleHomeAnchorNav('play-anchor')}
+          onParty={() => handleHomeAnchorNav('party-rail')}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -985,6 +999,8 @@ export function App() {
           onAdmin={() => navigate(adminPath())}
           onReview={() => navigate(reviewPath())}
           onCreate={handleCreateNav}
+          onPlay={() => handleHomeAnchorNav('play-anchor')}
+          onParty={() => handleHomeAnchorNav('party-rail')}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -1020,6 +1036,8 @@ export function App() {
           onAdmin={() => navigate(adminPath())}
           onReview={() => navigate(reviewPath())}
           onCreate={handleCreateNav}
+          onPlay={() => handleHomeAnchorNav('play-anchor')}
+          onParty={() => handleHomeAnchorNav('party-rail')}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -1056,6 +1074,8 @@ export function App() {
           onAdmin={() => navigate(adminPath())}
           onReview={() => navigate(reviewPath())}
           onCreate={handleCreateNav}
+          onPlay={() => handleHomeAnchorNav('play-anchor')}
+          onParty={() => handleHomeAnchorNav('party-rail')}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -1079,6 +1099,8 @@ export function App() {
           onAdmin={() => navigate(adminPath())}
           onReview={() => navigate(reviewPath())}
           onCreate={handleCreateNav}
+          onPlay={() => handleHomeAnchorNav('play-anchor')}
+          onParty={() => handleHomeAnchorNav('party-rail')}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -1137,7 +1159,10 @@ export function App() {
         onAdmin={() => navigate(adminPath())}
         onReview={() => navigate(reviewPath())}
         onCreate={handleCreateNav}
+        onPlay={() => handleHomeAnchorNav('play-anchor')}
+        onParty={() => handleHomeAnchorNav('party-rail')}
         isOnCreate={route.view === 'create'}
+        isOnStudio={route.view === 'studio' || route.view === 'studioWelcome' || route.view === 'studioConnect'}
         upTarget={headerUp}
         onUp={navigate}
       />

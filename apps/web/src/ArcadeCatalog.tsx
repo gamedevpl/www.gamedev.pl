@@ -869,12 +869,14 @@ export function ArcadeCatalog({
   return (
     <>
       {showCurated && featuredEntry && (
-        <FeaturedGame
-          entry={featuredEntry}
-          onPlayGame={onPlayGame}
-          onPlayTogether={onPlayTogether}
-          moreLikeThis={featuredMoreLikeThis}
-        />
+        <div id="play-anchor">
+          <FeaturedGame
+            entry={featuredEntry}
+            onPlayGame={onPlayGame}
+            onPlayTogether={onPlayTogether}
+            moreLikeThis={featuredMoreLikeThis}
+          />
+        </div>
       )}
       {showCurated && (
         <>
@@ -891,6 +893,7 @@ export function ArcadeCatalog({
             onPlayGame={onPlayGame}
           />
           <CatalogRail
+            id="party-rail"
             heading={t('catalog.rails.party')}
             entries={partyEntries}
             via="rail_party"

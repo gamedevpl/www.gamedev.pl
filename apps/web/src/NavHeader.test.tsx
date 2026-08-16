@@ -46,6 +46,8 @@ describe('NavHeader Up chevron', () => {
             onStudio: vi.fn(),
             onAdmin: vi.fn(),
             onReview: vi.fn(),
+            onPlay: vi.fn(),
+            onParty: vi.fn(),
             upTarget: { path: '/studio', ariaLabel: 'Back to Studio' },
             onUp,
           }),
@@ -85,6 +87,8 @@ describe('NavHeader Up chevron', () => {
             onStudio: vi.fn(),
             onAdmin: vi.fn(),
             onReview: vi.fn(),
+            onPlay: vi.fn(),
+            onParty: vi.fn(),
             upTarget: null,
           }),
         ),
@@ -141,6 +145,8 @@ describe('NavHeader menu', () => {
             onStudio: vi.fn(),
             onAdmin: vi.fn(),
             onReview: vi.fn(),
+            onPlay: vi.fn(),
+            onParty: vi.fn(),
             upTarget: null,
           }),
         ),
@@ -265,6 +271,8 @@ describe('NavHeader menu', () => {
             onStudio: vi.fn(),
             onAdmin: vi.fn(),
             onReview: vi.fn(),
+            onPlay: vi.fn(),
+            onParty: vi.fn(),
             upTarget: null,
           }),
         ),
@@ -295,8 +303,11 @@ describe('NavHeader menu', () => {
     await act(async () => root.unmount());
   });
 
-  it('also offers Create Game in the always-visible header nav', async () => {
+  it('offers Play, Create, Studio and Party as plain links in the always-visible header nav', async () => {
     const onCreate = vi.fn();
+    const onPlay = vi.fn();
+    const onStudio = vi.fn();
+    const onParty = vi.fn();
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = String(input);
@@ -321,10 +332,13 @@ describe('NavHeader menu', () => {
             activeBuildCount: 0,
             onCreate,
             isOnCreate: true,
+            isOnStudio: false,
             onHome: vi.fn(),
-            onStudio: vi.fn(),
+            onStudio,
             onAdmin: vi.fn(),
             onReview: vi.fn(),
+            onPlay,
+            onParty,
             upTarget: null,
           }),
         ),
@@ -333,16 +347,29 @@ describe('NavHeader menu', () => {
       await Promise.resolve();
     });
 
-    const headerNavCreate = Array.from(container.querySelectorAll<HTMLButtonElement>('.header-nav .nav-link')).find(
-      (btn) => /Create Game/i.test(btn.textContent ?? ''),
-    );
-    expect(headerNavCreate).toBeDefined();
-    expect(headerNavCreate?.className).toContain('is-active');
+    const links = Array.from(container.querySelectorAll<HTMLButtonElement>('.header-nav .header-nav-link'));
+    const labels = links.map((btn) => btn.textContent?.trim());
+    expect(labels).toEqual(['Play', 'Create', 'Studio', 'Party']);
+
+    // Plain text links, not the dropdown's boxed rows.
+    const findByLabel = (label: string) => links.find((btn) => btn.textContent?.trim() === label);
+    expect(findByLabel('Create')?.className).toContain('is-active');
+    expect(findByLabel('Studio')?.className).not.toContain('is-active');
+
     await act(async () => {
-      headerNavCreate?.click();
-      await Promise.resolve();
+      findByLabel('Play')?.click();
     });
-    expect(onCreate).toHaveBeenCalled();
+    expect(onPlay).toHaveBeenCalled();
+
+    await act(async () => {
+      findByLabel('Studio')?.click();
+    });
+    expect(onStudio).toHaveBeenCalled();
+
+    await act(async () => {
+      findByLabel('Party')?.click();
+    });
+    expect(onParty).toHaveBeenCalled();
 
     await act(async () => root.unmount());
   });
@@ -388,6 +415,8 @@ describe('NavHeader menu', () => {
             onStudio: vi.fn(),
             onAdmin: vi.fn(),
             onReview,
+            onPlay: vi.fn(),
+            onParty: vi.fn(),
             upTarget: null,
           }),
         ),
@@ -457,6 +486,8 @@ describe('NavHeader menu', () => {
             onStudio: vi.fn(),
             onAdmin: vi.fn(),
             onReview: vi.fn(),
+            onPlay: vi.fn(),
+            onParty: vi.fn(),
             upTarget: null,
           }),
         ),
@@ -515,6 +546,8 @@ describe('NavHeader menu', () => {
             onStudio: vi.fn(),
             onAdmin: vi.fn(),
             onReview: vi.fn(),
+            onPlay: vi.fn(),
+            onParty: vi.fn(),
             upTarget: null,
           }),
         ),
@@ -604,6 +637,8 @@ describe('NavHeader operator link', () => {
             onStudio: vi.fn(),
             onAdmin,
             onReview,
+            onPlay: vi.fn(),
+            onParty: vi.fn(),
             upTarget: null,
           }),
         ),
@@ -721,6 +756,8 @@ describe('NavHeader Studio chip', () => {
             onStudio,
             onAdmin: vi.fn(),
             onReview: vi.fn(),
+            onPlay: vi.fn(),
+            onParty: vi.fn(),
             upTarget: null,
           }),
         ),
@@ -796,6 +833,8 @@ describe('NavHeader profile link', () => {
             onStudio: vi.fn(),
             onAdmin: vi.fn(),
             onReview: vi.fn(),
+            onPlay: vi.fn(),
+            onParty: vi.fn(),
             upTarget: null,
           }),
         ),
@@ -841,6 +880,8 @@ describe('NavHeader profile link', () => {
             onStudio: vi.fn(),
             onAdmin: vi.fn(),
             onReview: vi.fn(),
+            onPlay: vi.fn(),
+            onParty: vi.fn(),
             upTarget: null,
           }),
         ),
@@ -896,6 +937,8 @@ describe('LanguageSwitcher in header', () => {
             onStudio: vi.fn(),
             onAdmin: vi.fn(),
             onReview: vi.fn(),
+            onPlay: vi.fn(),
+            onParty: vi.fn(),
             upTarget: null,
           }),
         ),

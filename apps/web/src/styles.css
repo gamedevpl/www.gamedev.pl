@@ -197,7 +197,28 @@ a {
 .header-nav {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 24px;
+}
+
+.header-nav-link {
+  background: transparent;
+  border: none;
+  padding: 8px 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.header-nav-link:hover,
+.header-nav-link:focus-visible {
+  color: var(--text);
+}
+
+.header-nav-link.is-active {
+  color: var(--text);
+  font-weight: 700;
 }
 
 @media (max-width: 1099px) {
@@ -1520,8 +1541,10 @@ button:disabled {
   min-width: 0;
 }
 
-#browse-everything {
-  /* Clears the sticky header when a "See all" link scrolls this into view. */
+#browse-everything,
+#play-anchor,
+#party-rail {
+  /* Clears the sticky header when a nav link scrolls this into view. */
   scroll-margin-top: 88px;
 }
 

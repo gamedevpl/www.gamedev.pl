@@ -26,6 +26,12 @@ type NavHeaderProps = {
   onCreate: () => void;
   // Highlights the Create Game item when already on /create.
   isOnCreate?: boolean;
+  // Highlights the Studio item when already there.
+  isOnStudio?: boolean;
+  // Scrolls to the curated picks on home; navigates home first if elsewhere.
+  onPlay: () => void;
+  // Scrolls to the party rail on home; navigates home first if elsewhere.
+  onParty: () => void;
   /**
    * Android-style Up target for non-home surfaces. Null on home, join, play, and
    * while an immersive theater owns escape. Never history.back() — deep links
@@ -43,6 +49,9 @@ export function NavHeader({
   onReview,
   onCreate,
   isOnCreate = false,
+  isOnStudio = false,
+  onPlay,
+  onParty,
   upTarget = null,
   onUp,
 }: NavHeaderProps) {
@@ -173,8 +182,17 @@ export function NavHeader({
       </div>
 
       <nav className="header-nav">
-        <button type="button" className={`nav-link${isOnCreate ? ' is-active' : ''}`} onClick={onCreate}>
-          <PixelIcon name="sparkle" size={14} /> {t('header.navPrompt')}
+        <button type="button" className="header-nav-link" onClick={onPlay}>
+          {t('header.navPlay')}
+        </button>
+        <button type="button" className={`header-nav-link${isOnCreate ? ' is-active' : ''}`} onClick={onCreate}>
+          {t('header.navCreate')}
+        </button>
+        <button type="button" className={`header-nav-link${isOnStudio ? ' is-active' : ''}`} onClick={onStudio}>
+          {t('header.navStudio')}
+        </button>
+        <button type="button" className="header-nav-link" onClick={onParty}>
+          {t('header.navParty')}
         </button>
       </nav>
 
