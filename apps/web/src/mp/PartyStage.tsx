@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { CatalogEntry } from '../catalog.js';
 import { PublishedGameFrame } from '../PublishedGameFrame.js';
+import type { PlayVia } from '../visitTelemetry.js';
 import { joinUrl, type PartySession } from './mpApi.js';
 import { QrCode } from './QrCode.js';
 import { RoomClient, type RoomStatus } from './roomClient.js';
@@ -10,6 +11,8 @@ import { BRIDGE_NAMESPACE, parseGameBridgeMessage, PROTOCOL_VERSION, type Roster
 type PartyStageProps = {
   game: CatalogEntry;
   session: PartySession;
+  // Which home page surface launched Play Together, if it did.
+  via?: PlayVia;
   onExit: () => void;
 };
 
@@ -21,7 +24,7 @@ type PartyStageProps = {
  * round the moment they load, so mounting early would burn the first minute of
  * play while everyone is still scanning.
  */
-export function PartyStage({ game, session, onExit }: PartyStageProps) {
+export function PartyStage({ game, session, via, onExit }: PartyStageProps) {
   const { t } = useTranslation();
   const [roster, setRoster] = useState<RosterSlot[]>([]);
   const [status, setStatus] = useState<RoomStatus>('connecting');
@@ -138,6 +141,7 @@ export function PartyStage({ game, session, onExit }: PartyStageProps) {
           title={game.title}
           frameRef={frameRef}
           slots={roster.filter((slot) => slot.connected).length}
+          via={via}
         />
       </div>
     );

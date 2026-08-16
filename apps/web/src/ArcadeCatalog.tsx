@@ -47,7 +47,7 @@ type ArcadeCatalogProps = {
   catalogError: string | null;
   catalogEntries: CatalogEntry[];
   onPlayGame: (game: CatalogEntry, via?: PlayVia) => void;
-  onPlayTogether: (game: CatalogEntry) => void;
+  onPlayTogether: (game: CatalogEntry, via?: PlayVia) => void;
   onRetryCatalog: () => void;
   /** Bump after a play so the grid can re-sort from fresh affinity. */
   recommendationsRefreshKey?: number;
@@ -646,10 +646,14 @@ export function ArcadeCatalog({
 
   // Curated pool for the featured slot; fetched once, not personalized.
   const [featuredPool, setFeaturedPool] = useState<string[]>([]);
+  // Gates showCurated; fetchFeaturedSlugs fails open, so this always resolves.
+  const [featuredPoolReady, setFeaturedPoolReady] = useState(false);
   useEffect(() => {
     let cancelled = false;
     void fetchFeaturedSlugs().then((slugs) => {
-      if (!cancelled) setFeaturedPool(slugs);
+      if (cancelled) return;
+      setFeaturedPool(slugs);
+      setFeaturedPoolReady(true);
     });
     return () => {
       cancelled = true;
@@ -733,7 +737,8 @@ export function ArcadeCatalog({
       .slice(0, RAIL_CARD_LIMIT);
   }, [catalogEntries, signals.newest]);
 
-  const showCurated = layoutReady && hasCatalog;
+  // Also wait for the pool, or the rail shifts after it loads.
+  const showCurated = layoutReady && hasCatalog && featuredPoolReady;
 
   // Commit order once per sort/filter/viewer (and when the shelf/signals first land).
   // A later recommendations refresh that differs from the sessionStorage cache must
@@ -921,7 +926,7 @@ export function ArcadeCatalog({
                 entry={entry}
                 isYours={mySlugs.has(entry.slug)}
                 onPlayGame={(game) => onPlayGame(game, 'grid')}
-                onPlayTogether={onPlayTogether}
+                onPlayTogether={(game) => onPlayTogether(game, 'grid')}
               />
             ))}
           </div>

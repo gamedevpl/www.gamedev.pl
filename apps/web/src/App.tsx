@@ -88,7 +88,7 @@ type StageContent =
       via?: PlayVia;
     }
   | { type: 'generated'; game: GeneratedGame; prompt: string }
-  | { type: 'party'; game: CatalogEntry; session: PartySession };
+  | { type: 'party'; game: CatalogEntry; session: PartySession; via?: PlayVia };
 
 export function App() {
   const { t, i18n } = useTranslation();
@@ -843,7 +843,7 @@ export function App() {
     setStageContent(null);
   }
 
-  async function handlePlayTogether(game: CatalogEntry) {
+  async function handlePlayTogether(game: CatalogEntry, via?: PlayVia) {
     if (!user) {
       setIsAuthModalOpen(true);
       return;
@@ -853,7 +853,7 @@ export function App() {
     setPartyError(null);
     try {
       const session = await createPartySession(game.slug, game.multiplayer.maxPlayers);
-      setStageContent({ type: 'party', game, session });
+      setStageContent({ type: 'party', game, session, ...(via === undefined ? {} : { via }) });
       document.getElementById('stage')?.scrollIntoView?.({ behavior: 'smooth' });
     } catch (error) {
       setPartyError(error instanceof Error ? error.message : t('errors.generic'));
@@ -892,6 +892,7 @@ export function App() {
               key={stageContent.session.code}
               game={stageContent.game}
               session={stageContent.session}
+              via={stageContent.via}
               onExit={() => setStageContent(null)}
             />
           </div>
@@ -1249,7 +1250,7 @@ export function App() {
                 catalogError={catalogError}
                 catalogEntries={catalogEntries}
                 onPlayGame={handlePlayGame}
-                onPlayTogether={(game) => void handlePlayTogether(game)}
+                onPlayTogether={(game, via) => void handlePlayTogether(game, via)}
                 onRetryCatalog={handleRetryCatalog}
                 recommendationsRefreshKey={recommendationsRefreshKey}
                 creatorGamesRefreshKey={myGamesRefreshKey}

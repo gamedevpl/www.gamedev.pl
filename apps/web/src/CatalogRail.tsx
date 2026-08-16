@@ -88,7 +88,7 @@ export function CatalogRail({ heading, entries, via, onPlayGame, headingAside }:
 type FeaturedGameProps = {
   entry: CatalogEntry;
   onPlayGame: (game: CatalogEntry, via?: PlayVia) => void;
-  onPlayTogether: (game: CatalogEntry) => void;
+  onPlayTogether: (game: CatalogEntry, via?: PlayVia) => void;
 };
 
 // The curated, daily rotating hero pick above the rails.
@@ -128,7 +128,11 @@ export function FeaturedGame({ entry, onPlayGame, onPlayTogether }: FeaturedGame
             <PixelIcon name="play" size={13} /> {t('catalog.play')}
           </button>
           {entry.multiplayer && (
-            <button type="button" className="secondary-btn inline-btn party-btn" onClick={() => onPlayTogether(entry)}>
+            <button
+              type="button"
+              className="secondary-btn inline-btn party-btn"
+              onClick={() => onPlayTogether(entry, 'featured')}
+            >
               <PixelIcon name="phone" size={13} /> {t('party.playTogether')}
             </button>
           )}
