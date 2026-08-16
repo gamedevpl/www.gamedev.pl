@@ -97,9 +97,15 @@ export function mcpPresenceText(toolName: string): string | null {
   return Object.hasOwn(PRESENCE_BY_TOOL, toolName) ? PRESENCE_BY_TOOL[toolName]!.text : null;
 }
 
-/** True when a durable step text is a leftover synthetic presence row. */
-export function isMcpPresenceEventText(text: string): boolean {
-  return PRESENCE_EVENT_TEXTS.has(text);
+// Exact #661 merge instant — presence pulses stopped writing chat rows here.
+const PRESENCE_CHAT_LEFTOVER_CUTOFF_MS = Date.parse('2026-08-07T13:01:20.000Z');
+
+// True for a leftover presence row written before the cutoff.
+export function isMcpPresenceEventText(text: string, createdAt?: string): boolean {
+  if (!PRESENCE_EVENT_TEXTS.has(text)) return false;
+  if (createdAt === undefined) return true;
+  const createdAtMs = Date.parse(createdAt);
+  return Number.isNaN(createdAtMs) || createdAtMs < PRESENCE_CHAT_LEFTOVER_CUTOFF_MS;
 }
 
 /** Cap for the in-process last-pulse map — oldest entries drop first. */

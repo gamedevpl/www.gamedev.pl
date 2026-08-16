@@ -1145,7 +1145,7 @@ export async function registerSubmissionRoutes(
             round,
           }));
         const eventEntries: BuildHistoryEntry[] = events
-          .filter((event) => !isMcpPresenceEventText(event.text))
+          .filter((event) => !isMcpPresenceEventText(event.text, event.createdAt))
           .map((event) => ({
             kind: 'build_progress' as const,
             text: event.text.slice(0, MAX_BUILD_HISTORY_ENTRY_CHARS),
@@ -1636,7 +1636,7 @@ export async function registerSubmissionRoutes(
       pendingCount: pending.length,
       // listBuildEvents is newest-first; describeStatus labels these oldest-first.
       recentEvents: events
-        .filter((event) => !isMcpPresenceEventText(event.text))
+        .filter((event) => !isMcpPresenceEventText(event.text, event.createdAt))
         .map((event) => event.text)
         .reverse(),
       minutesSinceLastSignal: record.lastAgentSignalAt
@@ -2255,7 +2255,7 @@ export async function registerSubmissionRoutes(
           store!.listCreatorMessages(sibling.issueNumber, { limit: maxPriorEntriesPerRound }),
           store!.listBuildEvents(sibling.issueNumber, { limit: maxPriorEntriesPerRound }),
         ]);
-        const events = rawEvents.filter((event) => !isMcpPresenceEventText(event.text));
+        const events = rawEvents.filter((event) => !isMcpPresenceEventText(event.text, event.createdAt));
         const revisionEntries: PriorRoundEntry[] = localizeRevisions(
           messages.map((message) => ({
             text: stripPlaytestContext(message.text),
@@ -2311,7 +2311,7 @@ export async function registerSubmissionRoutes(
       store ? store.getSubmission(issueNumber).catch(() => null) : Promise.resolve(null),
     ]);
     // Drop leftover synthetic presence steps from before heartbeats stopped writing chat.
-    const events = loadedEvents.filter((event) => !isMcpPresenceEventText(event.text));
+    const events = loadedEvents.filter((event) => !isMcpPresenceEventText(event.text, event.createdAt));
     const next: SubmissionStatusResponse = {
       ...status,
       ...(events.length > 0 ? { events: localizeEvents(events, locale) } : {}),

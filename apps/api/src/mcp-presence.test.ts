@@ -51,6 +51,21 @@ describe('mcp presence pulses', () => {
     expect(isMcpPresenceEventText('Getting the squad moving.')).toBe(false);
   });
 
+  it('only treats matching text as a leftover row when it predates the presence cutover', () => {
+    // Pre-cutover match: a real leftover presence row — hide it.
+    expect(isMcpPresenceEventText('Reading Creator Kit files…', '2026-08-06T12:00:00.000Z')).toBe(true);
+    // Post-cutover match: a genuine report_progress reusing the phrasing — keep it.
+    expect(isMcpPresenceEventText('Reading Creator Kit files…', '2026-08-10T12:00:00.000Z')).toBe(false);
+    // Non-matching text is never a leftover row, any time.
+    expect(isMcpPresenceEventText('Getting the squad moving.', '2026-08-06T12:00:00.000Z')).toBe(false);
+    // Unparseable createdAt fails safe (treated as pre-cutover, i.e. filtered).
+    expect(isMcpPresenceEventText('Reading Creator Kit files…', 'not-a-date')).toBe(true);
+    // An hour before #661: still pre-cutover.
+    expect(isMcpPresenceEventText('Reading Creator Kit files…', '2026-08-07T12:00:00.000Z')).toBe(true);
+    // An hour after #661: already post-cutover.
+    expect(isMcpPresenceEventText('Reading Creator Kit files…', '2026-08-07T14:00:00.000Z')).toBe(false);
+  });
+
   it('rate-limits same-key pulses per job but allows a new thought key immediately', () => {
     const t0 = 1_000_000;
     expect(shouldEmitMcpPresencePulse(undefined, t0)).toBe(true);
