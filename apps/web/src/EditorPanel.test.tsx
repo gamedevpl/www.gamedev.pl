@@ -213,4 +213,73 @@ describe('EditorPanel publish (not_sealed retry)', () => {
     expect(publishEditorContent).toHaveBeenCalledTimes(2);
     expect(container.querySelector('.editor-banner.is-ok')?.textContent).toBe(i18n.t('studioPanel.editor.published'));
   });
+
+  it('flushes an edit made mid-wait before the auto-retry, instead of publishing a stale draft', async () => {
+    vi.useFakeTimers();
+    const order: string[] = [];
+    const notSealed = Object.assign(new Error('not_sealed'), { status: 409, code: 'not_sealed' });
+    publishEditorContent
+      .mockImplementationOnce(async () => {
+        order.push('publish1');
+        throw notSealed;
+      })
+      .mockImplementationOnce(async () => {
+        order.push('publish2');
+        return { version: 'v2-editor', jobId: 44 };
+      });
+    putEditorDraft.mockImplementation(async () => {
+      order.push('save');
+      return { revision: 2, updatedAt: '2026-08-07T00:00:02.000Z' };
+    });
+    listMySubmissions.mockResolvedValue([
+      { token: 'round-1', slug: game.slug, title: game.title, createdAt: '', lastKnownStatus: 'building' },
+    ]);
+    let resolveStatus!: (value: { status: string; phase: string }) => void;
+    getSubmissionStatus.mockReturnValue(
+      new Promise((resolve) => {
+        resolveStatus = resolve;
+      }),
+    );
+
+    await renderEditor();
+    const publishButton = container.querySelector<HTMLButtonElement>('.studio-head-action.is-primary')!;
+    await act(async () => {
+      publishButton.click();
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(container.querySelector('.editor-banner')?.textContent).toBe(i18n.t('studioPanel.editor.notSealed'));
+
+    // Edit while the first sealing check is still in flight.
+    dragSlider('180');
+
+    await act(async () => {
+      resolveStatus({ status: 'in_review', phase: 'ready_for_review' });
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(order).toEqual(['publish1', 'save', 'publish2']);
+  });
+
+  it('stops and shows an error if the round drops off the shelf, instead of retrying publish forever', async () => {
+    vi.useFakeTimers();
+    const notSealed = Object.assign(new Error('not_sealed'), { status: 409, code: 'not_sealed' });
+    publishEditorContent.mockRejectedValueOnce(notSealed);
+    // Abandoned rounds are dropped from `/api/submissions/mine`.
+    listMySubmissions.mockResolvedValue([]);
+
+    await renderEditor();
+    const publishButton = container.querySelector<HTMLButtonElement>('.studio-head-action.is-primary')!;
+    await act(async () => {
+      publishButton.click();
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(container.querySelector('.editor-banner')?.textContent).toBe(i18n.t('studioPanel.editor.notSealedUnknown'));
+    expect(publishButton.disabled).toBe(false);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+    expect(publishEditorContent).toHaveBeenCalledTimes(1); // no runaway retries burning the rate limit
+  });
 });

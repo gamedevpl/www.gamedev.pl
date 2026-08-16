@@ -504,6 +504,12 @@ export function EditorPanel(props: {
     }
   }
 
+  // Latest publishNow, so the poll loop below never uses a stale saveState.
+  const publishNowRef = useRef(publishNow);
+  useEffect(() => {
+    publishNowRef.current = publishNow;
+  });
+
   // Poll the round's status, retry publish once sealed (see StudioWelcomeView.isReady).
   useEffect(() => {
     if (publish.kind !== 'waiting') return undefined;
@@ -515,8 +521,8 @@ export function EditorPanel(props: {
         const submissions = await listMySubmissions();
         const mine = submissions.find((submission) => submission.slug === slug);
         if (!mine) {
-          // Nothing to poll — retry the publish itself shortly.
-          timer = window.setTimeout(() => void publishNow(), 15_000);
+          // Dropped off the shelf (abandoned/canceled) — stop instead of retrying forever.
+          if (!cancelled) setPublish({ kind: 'error', message: t('studioPanel.editor.notSealedUnknown') });
           return;
         }
         const detail = await getSubmissionStatus(mine.token);
@@ -527,7 +533,7 @@ export function EditorPanel(props: {
           detail.phase === 'ready_for_review' ||
           detail.phase === 'published';
         if (sealed) {
-          void publishNow();
+          void publishNowRef.current();
           return;
         }
         timer = window.setTimeout(() => void tick(), pollDelayMs(detail.status, detail.stall, detail.phase) ?? 10_000);
