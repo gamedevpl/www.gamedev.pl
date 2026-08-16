@@ -414,6 +414,8 @@
       "publishing": "Publishing…",
       "published": "Your changes are being checked — they go live after review.",
       "cooldown": "A publish is already checking. Try again in a few minutes.",
+      "notSealed": "The current build round is still finishing up. Publish will retry automatically once it's ready.",
+      "notSealedUnknown": "Couldn't confirm the build round finished. Try publishing again.",
       "saving": "Saving…",
       "saved": "Draft saved",
       "saveError": "Could not save the draft",

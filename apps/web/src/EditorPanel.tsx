@@ -39,6 +39,8 @@ import {
   type StudioApiError,
   type StudioGame,
 } from './studioApi.js';
+import { getSubmissionStatus, listMySubmissions } from './submissionApi.js';
+import { pollDelayMs } from './studioStatusPoll.js';
 
 /**
  * The studio's Edit surface (EditorKit L3): renders a game's own editor
@@ -75,6 +77,8 @@ type PublishState =
   | { kind: 'publishing' }
   | { kind: 'published'; version: string }
   | { kind: 'cooldown'; retryAfterMs?: number }
+  /** 409 not_sealed: polling the round's status, will retry publish once it seals. */
+  | { kind: 'waiting' }
   | { kind: 'error'; message: string };
 
 function useLabel(): (label: EditorLabel) => string {
@@ -493,11 +497,59 @@ export function EditorPanel(props: {
       recordEditorStep('published');
       setPublish({ kind: 'published', version: result.version });
     } catch (error) {
-      const status = (error as StudioApiError).status;
-      if (status === 429) setPublish({ kind: 'cooldown', retryAfterMs: (error as StudioApiError).retryAfterMs });
-      else setPublish({ kind: 'error', message: (error as Error).message });
+      const apiError = error as StudioApiError;
+      if (apiError.status === 429) setPublish({ kind: 'cooldown', retryAfterMs: apiError.retryAfterMs });
+      else if (apiError.status === 409 && apiError.code === 'not_sealed') setPublish({ kind: 'waiting' });
+      else setPublish({ kind: 'error', message: apiError.detail ?? apiError.message });
     }
   }
+
+  // Latest publishNow, so the poll loop below never uses a stale saveState.
+  const publishNowRef = useRef(publishNow);
+  useEffect(() => {
+    publishNowRef.current = publishNow;
+  });
+
+  // Poll the round's status, retry publish once sealed (see StudioWelcomeView.isReady).
+  useEffect(() => {
+    if (publish.kind !== 'waiting') return undefined;
+    let cancelled = false;
+    let timer: number | undefined;
+
+    async function tick() {
+      try {
+        const submissions = await listMySubmissions();
+        const mine = submissions.find((submission) => submission.slug === slug);
+        if (!mine) {
+          // Dropped off the shelf (abandoned/canceled) — stop instead of retrying forever.
+          if (!cancelled) setPublish({ kind: 'error', message: t('studioPanel.editor.notSealedUnknown') });
+          return;
+        }
+        const detail = await getSubmissionStatus(mine.token);
+        if (cancelled) return;
+        const sealed =
+          detail.status === 'in_review' ||
+          detail.status === 'published' ||
+          detail.phase === 'ready_for_review' ||
+          detail.phase === 'published';
+        if (sealed) {
+          void publishNowRef.current();
+          return;
+        }
+        timer = window.setTimeout(() => void tick(), pollDelayMs(detail.status, detail.stall, detail.phase) ?? 10_000);
+      } catch {
+        if (!cancelled) timer = window.setTimeout(() => void tick(), 10_000);
+      }
+    }
+
+    void tick();
+    return () => {
+      cancelled = true;
+      if (timer != null) window.clearTimeout(timer);
+    };
+    // Only restart on entering/leaving 'waiting' — not every publishNow closure change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [publish.kind, slug]);
 
   if (state === 'loading') {
     return <div className="editor-panel editor-panel-note">{t('studioPanel.editor.loading')}</div>;
@@ -595,10 +647,12 @@ export function EditorPanel(props: {
           <button
             type="button"
             className="studio-head-action is-primary"
-            disabled={publish.kind === 'publishing' || allProblems.length > 0}
+            disabled={publish.kind === 'publishing' || publish.kind === 'waiting' || allProblems.length > 0}
             onClick={() => void publishNow()}
           >
-            {publish.kind === 'publishing' ? t('studioPanel.editor.publishing') : t('studioPanel.editor.publish')}
+            {publish.kind === 'publishing' || publish.kind === 'waiting'
+              ? t('studioPanel.editor.publishing')
+              : t('studioPanel.editor.publish')}
           </button>
         </div>
       </div>
@@ -627,6 +681,11 @@ export function EditorPanel(props: {
       {publish.kind === 'cooldown' ? (
         <div className="editor-banner" role="status">
           {t('studioPanel.editor.cooldown')}
+        </div>
+      ) : null}
+      {publish.kind === 'waiting' ? (
+        <div className="editor-banner" role="status">
+          {t('studioPanel.editor.notSealed')}
         </div>
       ) : null}
       {publish.kind === 'error' ? (
