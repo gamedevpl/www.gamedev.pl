@@ -274,6 +274,15 @@ export function NavHeader({
           {isMenuOpen && (
             <nav className="dropdown-menu">
               <button
+                className="nav-link"
+                onClick={() => {
+                  setIsMenuOpen(false);
+                  onPlay();
+                }}
+              >
+                <PixelIcon name="play" size={14} /> {t('header.navPlay')}
+              </button>
+              <button
                 className={`nav-link${isOnCreate ? ' is-active' : ''}`}
                 onClick={() => {
                   setIsMenuOpen(false);
@@ -283,7 +292,7 @@ export function NavHeader({
                 <PixelIcon name="sparkle" size={14} /> {t('header.navPrompt')}
               </button>
               <button
-                className="nav-link"
+                className={`nav-link${isOnStudio ? ' is-active' : ''}`}
                 onClick={() => {
                   setIsMenuOpen(false);
                   onStudio();
@@ -298,6 +307,15 @@ export function NavHeader({
                     {activeBuildCount}
                   </span>
                 ) : null}
+              </button>
+              <button
+                className="nav-link"
+                onClick={() => {
+                  setIsMenuOpen(false);
+                  onParty();
+                }}
+              >
+                <PixelIcon name="phone" size={14} /> {t('header.navParty')}
               </button>
 
               {/* Operators only — everyone else never learns this exists, which is the

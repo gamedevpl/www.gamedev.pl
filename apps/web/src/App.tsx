@@ -801,13 +801,15 @@ export function App() {
     input?.focus({ preventScroll: true });
   }
 
-  // Play/Party live on home only. Elsewhere, go there — the anchor
-  // itself waits on data the target page has not fetched yet.
+  // Play/Party live on home only. Elsewhere, queue the anchor and go
+  // there — the existing pending-scroll effect resolves it once the
+  // target (which may still be loading) has actually mounted.
   function handleHomeAnchorNav(anchorId: string) {
     if (route.view === 'home') {
       document.getElementById(anchorId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       return;
     }
+    setPendingScrollTarget(anchorId);
     navigate('/');
   }
 

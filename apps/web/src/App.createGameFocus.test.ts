@@ -150,3 +150,114 @@ describe('Create Game menu focus', () => {
     await act(async () => root.unmount());
   });
 });
+
+describe('Play/Party home anchors from elsewhere', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+    localStorage.clear();
+    window.history.pushState(null, '', '/');
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  // A multiplayer game so the featured slot and party rail mount.
+  const partyGame = {
+    slug: 'party-karts',
+    title: 'Party Karts',
+    genre: 'Arcade racing (3D)',
+    controls: 'Arrow keys',
+    status: 'published',
+    media: null,
+    multiplayer: { mode: 'controllers', minPlayers: 2, maxPlayers: 4 },
+    saves: null,
+    world: null,
+    sensing: null,
+    orientation: 'any',
+    touch: null,
+    submittedBy: null,
+  };
+
+  function stubAppFetchesWithCatalog() {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith('/api/auth/me')) {
+        return new Response(JSON.stringify({ user: { uid: 'g:test', tier: 'standard', name: 'Tester' } }));
+      }
+      if (url.endsWith('/api/health')) {
+        return new Response(JSON.stringify({ status: 'ok', provider: 'mock', privateBeta: false }));
+      }
+      if (url.endsWith('/api/catalog')) {
+        return new Response(JSON.stringify([partyGame]));
+      }
+      if (url.includes('/api/recommendations')) {
+        return new Response(JSON.stringify({ items: [] }));
+      }
+      if (url.includes('/api/featured')) {
+        return new Response(JSON.stringify({ slugs: [] }));
+      }
+      if (url.endsWith('/api/quota')) {
+        return new Response(JSON.stringify({ submissions: { used: 0, limit: 10 } }));
+      }
+      if (url.includes('/api/my/games') || url.includes('/api/studio')) {
+        return new Response(JSON.stringify({ games: [] }));
+      }
+      return new Response('{}', { status: 404 });
+    });
+
+    Object.defineProperty(Element.prototype, 'scrollIntoView', {
+      configurable: true,
+      writable: true,
+      value: () => undefined,
+    });
+    return vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(() => undefined);
+  }
+
+  it('queues the party anchor and resolves it once home mounts, from Studio', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    const scrollIntoView = stubAppFetchesWithCatalog();
+
+    await i18n.changeLanguage('en');
+    window.history.pushState(null, '', '/studio');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(AuthProvider, null, createElement(App)));
+      await flushEffects();
+      await flushEffects();
+      await flushEffects();
+      await flushEffects();
+    });
+
+    const hamburger = container.querySelector<HTMLButtonElement>('.hamburger-btn');
+    await act(async () => {
+      hamburger?.click();
+      await flushEffects();
+    });
+    const partyItem = Array.from(container.querySelectorAll<HTMLButtonElement>('.nav-link')).find(
+      (btn) => btn.textContent?.trim() === 'Party',
+    );
+    expect(partyItem).toBeDefined();
+
+    await act(async () => {
+      partyItem?.click();
+      await flushEffects();
+    });
+
+    expect(window.location.pathname).toBe('/');
+
+    // The pending-scroll effect polls every 100ms until the target mounts.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 150));
+    });
+
+    const partyRail = container.querySelector('#party-rail');
+    expect(partyRail).not.toBeNull();
+    expect(scrollIntoView).toHaveBeenCalled();
+    expect(scrollIntoView.mock.instances).toContain(partyRail);
+
+    await act(async () => root.unmount());
+  });
+});

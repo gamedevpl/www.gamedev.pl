@@ -169,6 +169,9 @@ describe('NavHeader menu', () => {
 
     expect(labels.some((text) => /Create Game/i.test(text))).toBe(true);
     expect(labels.some((text) => /Studio/i.test(text))).toBe(true);
+    // Play and Party live only here — the flat nav hides below 1099px.
+    expect(labels.some((text) => text.trim() === 'Play')).toBe(true);
+    expect(labels.some((text) => text.trim() === 'Party')).toBe(true);
     expect(labels.some((text) => /Operator/i.test(text))).toBe(true);
     expect(labels.some((text) => /^Review$|Review/.test(text))).toBe(true);
     expect(labels.some((text) => /Arcade/i.test(text))).toBe(false);
@@ -368,6 +371,72 @@ describe('NavHeader menu', () => {
 
     await act(async () => {
       findByLabel('Party')?.click();
+    });
+    expect(onParty).toHaveBeenCalled();
+
+    await act(async () => root.unmount());
+  });
+
+  it('also reaches Play and Party from the dropdown, where the flat nav is hidden', async () => {
+    const onPlay = vi.fn();
+    const onParty = vi.fn();
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith('/api/auth/me')) return new Response(JSON.stringify({ user: null }));
+      if (url.endsWith('/api/health')) {
+        return new Response(JSON.stringify({ status: 'ok', provider: 'mock', privateBeta: false }));
+      }
+      return new Response('{}', { status: 404 });
+    });
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        createElement(
+          AuthProvider,
+          null,
+          createElement(NavHeader, {
+            activeBuildCount: 0,
+            onCreate: vi.fn(),
+            onHome: vi.fn(),
+            onStudio: vi.fn(),
+            onAdmin: vi.fn(),
+            onReview: vi.fn(),
+            onPlay,
+            onParty,
+            upTarget: null,
+          }),
+        ),
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.hamburger-btn')?.click();
+    });
+
+    const dropdownLinks = Array.from(container.querySelectorAll<HTMLButtonElement>('.dropdown-menu .nav-link'));
+    const playItem = dropdownLinks.find((btn) => btn.textContent?.trim() === 'Play');
+    const partyItem = dropdownLinks.find((btn) => btn.textContent?.trim() === 'Party');
+    expect(playItem).toBeDefined();
+    expect(partyItem).toBeDefined();
+
+    await act(async () => {
+      playItem?.click();
+    });
+    expect(onPlay).toHaveBeenCalled();
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.hamburger-btn')?.click();
+    });
+    await act(async () => {
+      Array.from(container.querySelectorAll<HTMLButtonElement>('.dropdown-menu .nav-link'))
+        .find((btn) => btn.textContent?.trim() === 'Party')
+        ?.click();
     });
     expect(onParty).toHaveBeenCalled();
 
