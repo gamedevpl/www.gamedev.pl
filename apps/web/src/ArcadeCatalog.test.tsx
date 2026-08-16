@@ -230,7 +230,8 @@ describe('ArcadeCatalog lazy media', () => {
     await act(async () => {
       container.querySelector<HTMLButtonElement>('.card-actions .primary-btn')?.click();
     });
-    expect(onPlayGame).toHaveBeenCalledWith(entries[0]);
+    // 'grid' tags plays from the full catalog grid, not a rail.
+    expect(onPlayGame).toHaveBeenCalledWith(entries[0], 'grid');
 
     await act(async () => root.unmount());
   });
@@ -344,12 +345,19 @@ describe('ArcadeCatalog lazy media', () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     sessionStorage.clear();
     let resolveSignals: ((value: Response) => void) | undefined;
-    vi.spyOn(globalThis, 'fetch').mockImplementation(
-      () =>
-        new Promise<Response>((resolve) => {
+    // Only recommendations hangs — featured pool must resolve immediately.
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('/api/recommendations')) {
+        return new Promise<Response>((resolve) => {
           resolveSignals = resolve;
-        }),
-    );
+        });
+      }
+      return new Response(JSON.stringify({ items: [] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
     const container = document.createElement('div');
     document.body.appendChild(container);
     const root = createRoot(container);
@@ -396,6 +404,8 @@ describe('ArcadeCatalog lazy media', () => {
           /* leave hanging — cache must be enough for first paint */
         }),
     );
+    // Also cap the wait here — a hung fetch must not block forever.
+    vi.useFakeTimers();
     const container = document.createElement('div');
     document.body.appendChild(container);
     const root = createRoot(container);
@@ -411,7 +421,9 @@ describe('ArcadeCatalog lazy media', () => {
           onRetryCatalog: vi.fn(),
         }),
       );
-      await flushEffects();
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1200);
     });
 
     expect(container.querySelectorAll('.catalog-card')).toHaveLength(2);
@@ -419,6 +431,7 @@ describe('ArcadeCatalog lazy media', () => {
     await act(async () => {
       root.unmount();
     });
+    vi.useRealTimers();
   });
 
   it('paints the grid with catalog order when the signals fetch rejects', async () => {
@@ -509,6 +522,166 @@ describe('ArcadeCatalog shared-world badge', () => {
     await act(async () => {
       root.unmount();
     });
+  });
+});
+
+describe('ArcadeCatalog curated surfaces', () => {
+  beforeEach(async () => {
+    installIntersectionObserverMock();
+    mockSignedOutAuth();
+    sessionStorage.setItem(
+      'gdpl.catalogSortSignals',
+      JSON.stringify({ viewer: '', items: [], popularity: [], lastPlayed: [], newest: [] }),
+    );
+    await i18n.changeLanguage('en');
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = '';
+    sessionStorage.clear();
+    localStorage.clear();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  // Defaults empty unless a case below overrides.
+  function stubHomeFetches(overrides?: { featuredSlugs?: string[]; newest?: string[] }) {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('/api/featured')) {
+        return new Response(JSON.stringify({ slugs: overrides?.featuredSlugs ?? [] }));
+      }
+      if (url.includes('/api/recommendations')) {
+        return new Response(
+          JSON.stringify({ items: [], popularity: [], lastPlayed: [], newest: overrides?.newest ?? [] }),
+        );
+      }
+      return new Response(JSON.stringify({ items: [] }));
+    });
+  }
+
+  it('shows the party rail for multiplayer games and the continue-playing rail from recent plays, each tagging its play', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    stubHomeFetches();
+    localStorage.setItem('gdpl.recentPlays', JSON.stringify(['below-fold']));
+    const onPlayGame = vi.fn();
+    const onPlayTogether = vi.fn();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    const withParty = { ...entries[0]!, multiplayer: { mode: 'controllers' as const, minPlayers: 1, maxPlayers: 4 } };
+
+    await act(async () => {
+      root.render(
+        createElement(ArcadeCatalog, {
+          catalogStatus: 'ready',
+          catalogError: null,
+          catalogEntries: [withParty, entries[1]!],
+          onPlayGame,
+          onPlayTogether,
+          onRetryCatalog: vi.fn(),
+        }),
+      );
+      await flushEffects();
+      await flushEffects();
+    });
+
+    const partySection = [...container.querySelectorAll('.catalog-rail-section')].find((section) =>
+      section.textContent?.includes('Party mode'),
+    );
+    expect(partySection?.querySelector('.rail-card-title')?.textContent).toBe(withParty.title);
+
+    // The rail's Play button also carries via, for solo players.
+    const hitArea = partySection?.querySelector<HTMLAnchorElement>('.rail-card-hit-area');
+    expect(hitArea?.getAttribute('href')).toContain('?via=rail_party');
+
+    await act(async () => {
+      partySection?.querySelector<HTMLButtonElement>('.rail-card-party')?.click();
+    });
+    expect(onPlayTogether).toHaveBeenCalledWith(withParty, 'rail_party');
+
+    const continueSection = [...container.querySelectorAll('.catalog-rail-section')].find((section) =>
+      section.textContent?.includes('Continue playing'),
+    );
+    expect(continueSection?.querySelector('.rail-card-title')?.textContent).toBe(entries[1]!.title);
+    // Continue playing is single-player only — no Play Together button.
+    expect(continueSection?.querySelector('.rail-card-party')).toBeNull();
+
+    await act(async () => {
+      continueSection?.querySelector<HTMLButtonElement>('.rail-card-play')?.click();
+    });
+    expect(onPlayGame).toHaveBeenCalledWith(entries[1], 'rail_continue');
+
+    await act(async () => root.unmount());
+  });
+
+  it('falls back the featured slot to the top of recommended order when the pool is empty', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    stubHomeFetches({ featuredSlugs: [] });
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(ArcadeCatalog, {
+          catalogStatus: 'ready',
+          catalogError: null,
+          catalogEntries: entries,
+          onPlayGame: vi.fn(),
+          onPlayTogether: vi.fn(),
+          onRetryCatalog: vi.fn(),
+        }),
+      );
+      await flushEffects();
+      await flushEffects();
+    });
+
+    // No pool: falls back to catalog order's first entry.
+    expect(container.querySelector('.featured-game-title')?.textContent).toBe(entries[0]!.title);
+    // Nothing left over for Start here.
+    expect(
+      [...container.querySelectorAll('.catalog-rail-section')].some((s) => s.textContent?.includes('Start here')),
+    ).toBe(false);
+
+    await act(async () => root.unmount());
+  });
+
+  it('features one pool entry and shows the rest on the Start here rail, excluding it', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    stubHomeFetches({ featuredSlugs: ['below-fold', 'above-fold'] });
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(ArcadeCatalog, {
+          catalogStatus: 'ready',
+          catalogError: null,
+          catalogEntries: entries,
+          onPlayGame: vi.fn(),
+          onPlayTogether: vi.fn(),
+          onRetryCatalog: vi.fn(),
+        }),
+      );
+      await flushEffects();
+      await flushEffects();
+    });
+
+    const featuredTitle = container.querySelector('.featured-game-title')?.textContent;
+    expect(['Above Fold', 'Below Fold']).toContain(featuredTitle);
+
+    const startHere = [...container.querySelectorAll('.catalog-rail-section')].find((section) =>
+      section.textContent?.includes('Start here'),
+    );
+    const startHereTitles = [...(startHere?.querySelectorAll('.rail-card-title') ?? [])].map((el) => el.textContent);
+    // Start here is the leftover, not the whole pool.
+    expect(startHereTitles).toHaveLength(1);
+    expect(startHereTitles).not.toContain(featuredTitle);
+
+    await act(async () => root.unmount());
   });
 });
 

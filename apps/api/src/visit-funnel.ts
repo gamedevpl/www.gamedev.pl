@@ -30,6 +30,8 @@ export interface VisitFunnel {
   visitsWithPlay: number;
   /** Total plays across all visits — the numerator for depth. */
   plays: number;
+  // Plays per home page surface, all PLAY_VIAS present, zeroes included.
+  playVia: Array<{ via: PlayVia | 'unknown'; plays: number }>;
   /**
    * Visits by how many games they played: `depth[2]` is visits that played exactly two.
    * Key `0` is deliberately absent — that is `bounces`.
@@ -181,6 +183,20 @@ export type CodeCompletionKind = (typeof CODE_COMPLETION_KINDS)[number];
 export const HOW_TO_PLAY_VIAS = ['bar', 'more'] as const;
 
 export type HowToPlayVia = (typeof HOW_TO_PLAY_VIAS)[number];
+
+// Not every play entry point yet — direct links land as unknown.
+export const PLAY_VIAS = [
+  'featured',
+  'rail_start_here',
+  'rail_continue',
+  'rail_party',
+  'rail_new',
+  'grid',
+  'composer_match',
+  'create_showcase',
+] as const;
+
+export type PlayVia = (typeof PLAY_VIAS)[number];
 
 /** Step order is the funnel's meaning, so it is declared once and reused. */
 export const CREATE_STEPS = [
@@ -571,6 +587,21 @@ export function summarizeVisitFunnel(events: VisitEvent[]): VisitFunnel {
     viaRows.push({ via: 'unknown', opens: unknownOpens, visits: unknownVisits });
   }
 
+  // No playing-visit gate here — play_started already is the play.
+  const playViaCounts = new Map<string, number>();
+  for (const via of PLAY_VIAS) playViaCounts.set(via, 0);
+  for (const event of events) {
+    if (event.type !== 'play_started') continue;
+    const via = event.via ?? 'unknown';
+    playViaCounts.set(via, (playViaCounts.get(via) ?? 0) + 1);
+  }
+  const playViaRows: Array<{ via: PlayVia | 'unknown'; plays: number }> = PLAY_VIAS.map((via) => ({
+    via,
+    plays: playViaCounts.get(via) ?? 0,
+  }));
+  const unknownPlays = playViaCounts.get('unknown') ?? 0;
+  if (unknownPlays > 0) playViaRows.push({ via: 'unknown', plays: unknownPlays });
+
   // Every entry that has a playing visit appears, including zero openers — otherwise
   // 10 of 1,000 home players and 5 of 10 deep-link players both render as raw counts
   // with no denominator and look like "home wins".
@@ -591,6 +622,7 @@ export function summarizeVisitFunnel(events: VisitEvent[]): VisitFunnel {
     bounces: rollups.length - playing.length,
     visitsWithPlay: playing.length,
     plays: rollups.reduce((total, rollup) => total + rollup.plays, 0),
+    playVia: playViaRows,
     depth: Array.from(depthCounts, ([plays, count]) => ({ plays, visits: count })).sort((a, b) => a.plays - b.plays),
     medianPlaysPerPlayingVisit: median(playing.map((rollup) => rollup.plays)),
     timeToFirstPlay: Array.from(timeBuckets, ([upToSeconds, count]) => ({ upToSeconds, visits: count })).sort(

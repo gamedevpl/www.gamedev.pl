@@ -38,6 +38,7 @@ export const RESERVED_HANDLES: ReadonlySet<string> = new Set([
   'api',
   'auth',
   'contact',
+  'create',
   'creator',
   'creators',
   'dev',

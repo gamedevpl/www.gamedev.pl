@@ -18,6 +18,7 @@ import { MIN_CONCEPT_LENGTH } from './conceptLength.js';
 import {
   adminPath,
   canonicalPath,
+  createPath,
   creatorPath,
   gamePath,
   NAVIGATE_EVENT,
@@ -35,6 +36,7 @@ import { StudioConnectWizard } from './StudioConnectWizard.js';
 import type { PublicCreatorProfile } from './creatorProfileApi.js';
 import { LegalPage } from './LegalPage.js';
 import { ContactPage } from './ContactPage.js';
+import { CreatePage } from './CreatePage.js';
 import { ProposalsPage } from './ProposalsPage.js';
 import { CreatorProfilePage } from './CreatorProfilePage.js';
 import { GamePage } from './GamePage.js';
@@ -68,7 +70,7 @@ import { saveLastBuilder, type BuilderKind } from './builderKind.js';
 import { clearPendingQa, loadPendingQa, savePendingQa, type PendingQaAnswers } from './pendingQa.js';
 import { useAuth } from './AuthContext.js';
 import { AuthModal } from './AuthModal.js';
-import { recordCreateStep, recordStudioStep } from './visitTelemetry.js';
+import { recordCreateStep, recordStudioStep, type PlayVia } from './visitTelemetry.js';
 import { ClosedBetaSplash } from './ClosedBetaSplash.js';
 import { BetaInvitePage } from './BetaInvitePage.js';
 import { BetaWelcomeSplash } from './BetaWelcomeSplash.js';
@@ -79,9 +81,16 @@ import { createPartySession, type PartySession } from './mp/mpApi.js';
 import { parseOAuthReturnParam } from './oauthReturn.js';
 
 type StageContent =
-  | { type: 'catalog'; game: CatalogEntry; initialRemixOpen?: boolean; initialRemixRequest?: string }
+  | {
+      type: 'catalog';
+      game: CatalogEntry;
+      initialRemixOpen?: boolean;
+      initialRemixRequest?: string;
+      // Which home page surface launched this play, if it did.
+      via?: PlayVia;
+    }
   | { type: 'generated'; game: GeneratedGame; prompt: string }
-  | { type: 'party'; game: CatalogEntry; session: PartySession };
+  | { type: 'party'; game: CatalogEntry; session: PartySession; via?: PlayVia };
 
 export function App() {
   const { t, i18n } = useTranslation();
@@ -103,7 +112,7 @@ export function App() {
   // Bumped after a new submission so in-progress cards in the Games gallery appear.
   const [myGamesRefreshKey, setMyGamesRefreshKey] = useState(0);
   const [recommendationsRefreshKey, setRecommendationsRefreshKey] = useState(0);
-  // Section to scroll to once the home route has rendered it (see handleNavigateSection).
+  // Set by Studio's retry-concept flow; scrolled once home renders it.
   const [pendingScrollTarget, setPendingScrollTarget] = useState<string | null>(null);
   // Idea loaded into the hero prompt by "try this again" on a failed/abandoned build.
   // A failed build usually needs an edit before it is worth another submission, so
@@ -192,6 +201,7 @@ export function App() {
         privacy: t('legal.privacy'),
         terms: t('legal.terms'),
         contact: t('pageTitle.contact'),
+        create: t('pageTitle.create'),
         proposals: t('pageTitle.proposals'),
         notFound: t('pageTitle.notFound'),
         playNamed: t('pageTitle.playNamed'),
@@ -300,8 +310,8 @@ export function App() {
     // would just 401. Don't fetch (and don't render an error) until signed in.
     // Outside private beta, catalog reads stay public (owner decision).
     if (privateBeta && !user) return;
-    // Home needs the gallery; `/play/<slug>` needs catalog to auto-open theater.
-    if (route.view !== 'home' && route.view !== 'play') return;
+    // Home, /play, and /create all need the catalog loaded.
+    if (route.view !== 'home' && route.view !== 'play' && route.view !== 'create') return;
 
     let cancelled = false;
     // Soft refreshes (Retry, pull-to-refresh) keep the last-good grid on screen —
@@ -457,38 +467,6 @@ export function App() {
   // Menu navigation is scroll-to-section, but the sections only exist on the home
   // route — from a status page we have to go home first and scroll once the target
   // has mounted (the Games gallery may still be loading).
-  // Create Game also focuses the prompt so the visitor can type immediately — that
-  // is intentional on phones too (unlike page-load autofocus, which would pop the
-  // keyboard before they asked for it). Focus must happen inside the click (or a
-  // flushSync mount still in that gesture); a later timer will not open the
-  // keyboard on iOS Safari.
-  const focusHeroPromptInput = () => {
-    const input = document.querySelector<HTMLTextAreaElement>('#hero-prompt .big-prompt-input');
-    input?.focus({ preventScroll: true });
-  };
-
-  const scrollAndFocusSection = (sectionId: string): boolean => {
-    const element = document.getElementById(sectionId);
-    if (!element) return false;
-    element.scrollIntoView?.({ behavior: 'smooth' });
-    if (sectionId === 'hero-prompt') focusHeroPromptInput();
-    return true;
-  };
-
-  const handleNavigateSection = (sectionId: string) => {
-    if (scrollAndFocusSection(sectionId)) return;
-
-    // Mount home inside this click so focus still counts as a user gesture.
-    flushSync(() => {
-      navigate('/');
-    });
-    if (scrollAndFocusSection(sectionId)) return;
-
-    // Node still missing (unusual for hero-prompt) — scroll when it appears.
-    // Do not focus from the timer: that is outside the gesture window.
-    setPendingScrollTarget(sectionId);
-  };
-
   useEffect(() => {
     if (!pendingScrollTarget || route.view !== 'home') return;
 
@@ -812,9 +790,18 @@ export function App() {
     return { path: target.path, ariaLabel: t(`header.${target.labelKey}`) };
   }, [route, stageContent, unpublishedPlayTheater, t]);
 
-  function handlePlayGame(game: CatalogEntry) {
+  // Deliberate click focuses even on phones, unlike page-load autofocus.
+  function handleCreateNav() {
+    flushSync(() => {
+      navigate(createPath());
+    });
+    const input = document.querySelector<HTMLTextAreaElement>('#hero-prompt .big-prompt-input');
+    input?.focus({ preventScroll: true });
+  }
+
+  function handlePlayGame(game: CatalogEntry, via?: PlayVia) {
     // In-place Play from home/profile/game page; `/play/<slug>` auto-opens itself.
-    setStageContent({ type: 'catalog', game });
+    setStageContent({ type: 'catalog', game, ...(via === undefined ? {} : { via }) });
     // Soft refresh so "continue" / genre picks update after the next home visit.
     setRecommendationsRefreshKey((n) => n + 1);
   }
@@ -836,7 +823,7 @@ export function App() {
     setStageContent(null);
   }
 
-  async function handlePlayTogether(game: CatalogEntry) {
+  async function handlePlayTogether(game: CatalogEntry, via?: PlayVia) {
     if (!user) {
       setIsAuthModalOpen(true);
       return;
@@ -846,7 +833,7 @@ export function App() {
     setPartyError(null);
     try {
       const session = await createPartySession(game.slug, game.multiplayer.maxPlayers);
-      setStageContent({ type: 'party', game, session });
+      setStageContent({ type: 'party', game, session, ...(via === undefined ? {} : { via }) });
       document.getElementById('stage')?.scrollIntoView?.({ behavior: 'smooth' });
     } catch (error) {
       setPartyError(error instanceof Error ? error.message : t('errors.generic'));
@@ -885,6 +872,7 @@ export function App() {
               key={stageContent.session.code}
               game={stageContent.game}
               session={stageContent.session}
+              via={stageContent.via}
               onExit={() => setStageContent(null)}
             />
           </div>
@@ -906,6 +894,7 @@ export function App() {
           creatorHandle={stageContent.game.creatorHandle}
           controls={stageContent.game.controls}
           touch={stageContent.game.touch}
+          via={stageContent.via}
           initialRemixOpen={stageContent.initialRemixOpen}
           initialRemixRequest={stageContent.initialRemixRequest}
         />
@@ -945,11 +934,11 @@ export function App() {
       <div className="app app--legal">
         <NavHeader
           activeBuildCount={activeBuildCount}
-          onNavigate={handleNavigateSection}
           onHome={() => navigate('/')}
           onStudio={() => navigate(studioPath())}
           onAdmin={() => navigate(adminPath())}
           onReview={() => navigate(reviewPath())}
+          onCreate={handleCreateNav}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -967,11 +956,11 @@ export function App() {
       <div className="app app--contact">
         <NavHeader
           activeBuildCount={activeBuildCount}
-          onNavigate={handleNavigateSection}
           onHome={() => navigate('/')}
           onStudio={() => navigate(studioPath())}
           onAdmin={() => navigate(adminPath())}
           onReview={() => navigate(reviewPath())}
+          onCreate={handleCreateNav}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -989,11 +978,11 @@ export function App() {
       <div className="app app--creator">
         <NavHeader
           activeBuildCount={activeBuildCount}
-          onNavigate={handleNavigateSection}
           onHome={() => navigate('/')}
           onStudio={() => navigate(studioPath())}
           onAdmin={() => navigate(adminPath())}
           onReview={() => navigate(reviewPath())}
+          onCreate={handleCreateNav}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -1024,11 +1013,11 @@ export function App() {
       <div className="app app--game">
         <NavHeader
           activeBuildCount={activeBuildCount}
-          onNavigate={handleNavigateSection}
           onHome={() => navigate('/')}
           onStudio={() => navigate(studioPath())}
           onAdmin={() => navigate(adminPath())}
           onReview={() => navigate(reviewPath())}
+          onCreate={handleCreateNav}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -1060,11 +1049,11 @@ export function App() {
       <div className="app app--proposals">
         <NavHeader
           activeBuildCount={activeBuildCount}
-          onNavigate={handleNavigateSection}
           onHome={() => navigate('/')}
           onStudio={() => navigate(studioPath())}
           onAdmin={() => navigate(adminPath())}
           onReview={() => navigate(reviewPath())}
+          onCreate={handleCreateNav}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -1083,11 +1072,11 @@ export function App() {
       <div className="app app--not-found">
         <NavHeader
           activeBuildCount={activeBuildCount}
-          onNavigate={handleNavigateSection}
           onHome={() => navigate('/')}
           onStudio={() => navigate(studioPath())}
           onAdmin={() => navigate(adminPath())}
           onReview={() => navigate(reviewPath())}
+          onCreate={handleCreateNav}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -1141,11 +1130,12 @@ export function App() {
     <div className="app">
       <NavHeader
         activeBuildCount={activeBuildCount}
-        onNavigate={handleNavigateSection}
         onHome={() => navigate('/')}
         onStudio={() => navigate(studioPath())}
         onAdmin={() => navigate(adminPath())}
         onReview={() => navigate(reviewPath())}
+        onCreate={handleCreateNav}
+        isOnCreate={route.view === 'create'}
         upTarget={headerUp}
         onUp={navigate}
       />
@@ -1185,49 +1175,60 @@ export function App() {
                 onRemix={handleRemixGame}
                 onRetry={handleRetryCatalog}
               />
+            ) : route.view === 'create' ? (
+              <CreatePage
+                // Remount when a retry loads a new idea, so the prompt box picks it up.
+                retryKey={retryPrompt ?? 'blank'}
+                initialPrompt={retryPrompt ?? ''}
+                catalogEntries={catalogEntries}
+                onPlayGame={handlePlayGame}
+                submissionStatus={submissionStatus}
+                submissionError={submissionError}
+                onSubmitSpec={(concept) => void handleSubmitSpec(concept)}
+                mockStatus={mockStatus}
+                mockError={mockError}
+                onGenerateMock={(prompt) => void handleGenerateMock(prompt)}
+                onPlatformBuilderAvailability={setPlatformBuilderAvailability}
+              />
             ) : (
-              <>
-                <div id="hero-prompt">
-                  <HeroPromptSection
-                    // Remount when a retry loads a new idea, so the prompt box picks it up.
-                    key={retryPrompt ?? 'blank'}
-                    initialPrompt={retryPrompt ?? ''}
-                    catalogEntries={catalogEntries}
-                    onPlayGame={handlePlayGame}
-                    submissionStatus={submissionStatus}
-                    submissionError={submissionError}
-                    onSubmitSpec={(concept) => void handleSubmitSpec(concept)}
-                    mockStatus={mockStatus}
-                    mockError={mockError}
-                    onGenerateMock={(prompt) => void handleGenerateMock(prompt)}
-                    onPlatformBuilderAvailability={setPlatformBuilderAvailability}
-                  />
-                </div>
+              <div id="hero-prompt">
+                <HeroPromptSection
+                  // Remount when a retry loads a new idea, so the prompt box picks it up.
+                  key={retryPrompt ?? 'blank'}
+                  initialPrompt={retryPrompt ?? ''}
+                  catalogEntries={catalogEntries}
+                  onPlayGame={handlePlayGame}
+                  submissionStatus={submissionStatus}
+                  submissionError={submissionError}
+                  onSubmitSpec={(concept) => void handleSubmitSpec(concept)}
+                  mockStatus={mockStatus}
+                  mockError={mockError}
+                  onGenerateMock={(prompt) => void handleGenerateMock(prompt)}
+                  onPlatformBuilderAvailability={setPlatformBuilderAvailability}
+                />
+              </div>
+            )}
 
-                {/* Gated on the pending spec alone: the wizard is the naming step, which
-                always happens, and the questions are the part that is sometimes empty.
-                It portals itself to a full-screen overlay, so nothing here positions it. */}
-                {pendingSpec && (
-                  <CreatorQA
-                    key={qaFormKey}
-                    questions={qaQuestions}
-                    initialConcept={pendingSpec.concept}
-                    initialTitle={pendingSpec.title}
-                    onSubmitWithConcept={handleQaComplete}
-                    onTitleChange={handleQaTitleChange}
-                    onCancel={handleQaCancel}
-                    submitting={submissionStatus === 'loading' || submissionStatus === 'refining'}
-                    error={submissionError}
-                    initialAnswers={latestAnswersRef.current}
-                    onAnswersChange={handleQaAnswersChange}
-                    initialBuilder={qaBuilder}
-                    onBuilderChange={handleQaBuilderChange}
-                    platformUnavailable={
-                      platformBuilderAvailability?.available === false ? platformBuilderAvailability.reason : undefined
-                    }
-                  />
-                )}
-              </>
+            {/* Gated on the pending spec, same as before /create existed; portals itself. */}
+            {route.view !== 'play' && pendingSpec && (
+              <CreatorQA
+                key={qaFormKey}
+                questions={qaQuestions}
+                initialConcept={pendingSpec.concept}
+                initialTitle={pendingSpec.title}
+                onSubmitWithConcept={handleQaComplete}
+                onTitleChange={handleQaTitleChange}
+                onCancel={handleQaCancel}
+                submitting={submissionStatus === 'loading' || submissionStatus === 'refining'}
+                error={submissionError}
+                initialAnswers={latestAnswersRef.current}
+                onAnswersChange={handleQaAnswersChange}
+                initialBuilder={qaBuilder}
+                onBuilderChange={handleQaBuilderChange}
+                platformUnavailable={
+                  platformBuilderAvailability?.available === false ? platformBuilderAvailability.reason : undefined
+                }
+              />
             )}
 
             {stageOverlay}
@@ -1241,7 +1242,7 @@ export function App() {
                 catalogError={catalogError}
                 catalogEntries={catalogEntries}
                 onPlayGame={handlePlayGame}
-                onPlayTogether={(game) => void handlePlayTogether(game)}
+                onPlayTogether={(game, via) => void handlePlayTogether(game, via)}
                 onRetryCatalog={handleRetryCatalog}
                 recommendationsRefreshKey={recommendationsRefreshKey}
                 creatorGamesRefreshKey={myGamesRefreshKey}

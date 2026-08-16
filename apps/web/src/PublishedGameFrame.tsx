@@ -9,6 +9,7 @@ import { recordGamePlayed } from './recommendationsApi.js';
 import { RemixPanel, type RemixEditorStage } from './RemixPanel.js';
 import type { RemixSession } from './remixApi.js';
 import { readSharedParams } from './remixApi.js';
+import type { PlayVia } from './visitTelemetry.js';
 
 type PublishedGameFrameProps = {
   slug: string;
@@ -17,6 +18,8 @@ type PublishedGameFrameProps = {
   embed?: boolean;
   /** Connected controller slots, when this game was opened as a party session. */
   slots?: number;
+  // Which home page surface launched this play, if it did.
+  via?: PlayVia;
   /**
    * Whether this frame is currently on screen. The game page keeps it mounted behind
    * another tab so a run is not restarted; play time must not accrue while it is
@@ -55,6 +58,7 @@ export function PublishedGameFrame({
   frameRef,
   embed,
   slots,
+  via,
   active = true,
   trackPlay = true,
   remixable,
@@ -106,7 +110,7 @@ export function PublishedGameFrame({
   // Starts only once the document is in hand, so a session means "a game was handed
   // to a player" rather than "a card was clicked". A fetch that never resolves is a
   // catalog problem, and this is not the place that would report it.
-  useGameTelemetry(slug, trackPlay && html !== null, slots, active);
+  useGameTelemetry(slug, trackPlay && html !== null, slots, active, via);
 
   // Account play affinity (signed-in) + device-local recent list (everyone). Both are
   // best-effort and separate from anonymous play telemetry — see docs/recommendations.md.

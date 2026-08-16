@@ -125,6 +125,8 @@ export interface VisitFunnel {
   };
   /** How to play card usage — open rate, repeats, and where it was opened. */
   howToPlay: HowToPlayFunnel;
+  // Which surface started each play; optional, same client-outlives-deploy reason.
+  playVia?: Array<{ via: string; plays: number }>;
 }
 
 export interface VisitsResponse {

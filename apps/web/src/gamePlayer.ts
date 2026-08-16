@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { isPlayTimeAccruing, TelemetrySession, type TelemetryEvent } from './telemetry.js';
 import { readReportedControls, type ReportedControls } from './howToPlay.js';
-import { recordVisitEvent } from './visitTelemetry.js';
+import { recordVisitEvent, type PlayVia } from './visitTelemetry.js';
 
 // Message envelope tags. The host is the app; the player is the bridge script
 // that runs inside the sandboxed game iframe.
@@ -585,7 +585,7 @@ export function bindPlayRecorder(): (event: TelemetryEvent) => void {
  *   `game_opened` and `play_started` every time, inflating the denominators instead.
  *   Read through a ref so toggling it never re-runs the effect.
  */
-export function useGameTelemetry(slug: string, enabled: boolean, slots?: number, active = true) {
+export function useGameTelemetry(slug: string, enabled: boolean, slots?: number, active = true, via?: PlayVia) {
   const activeRef = useRef(active);
   useEffect(() => {
     activeRef.current = active;
@@ -600,7 +600,7 @@ export function useGameTelemetry(slug: string, enabled: boolean, slots?: number,
     // The same moment, counted in the visit stream — deliberately without the slug, so
     // depth ("did this sitting play a second game") is answerable while "which games did
     // this tab play" stays unanswerable.
-    recordVisitEvent({ type: 'play_started' });
+    recordVisitEvent({ type: 'play_started', ...(via === undefined ? {} : { via }) });
     // Sent immediately rather than batched. Every other event can afford to wait, but
     // a tab that is killed outright runs no cleanup and flushes nothing — and an open
     // we never hear about is a hole in the denominator of every ratio downstream.
@@ -686,6 +686,7 @@ export function useGameTelemetry(slug: string, enabled: boolean, slots?: number,
       session.close();
       if (openSession === session) openSession = null;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- via read via closure
   }, [slug, enabled, slots]);
 }
 

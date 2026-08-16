@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from './AuthContext.js';
-import { catalogMediaUrl } from './catalog.js';
+import { catalogMediaUrl, defaultScreenshotIndex } from './catalog.js';
 import { GameTheater } from './GameTheater.js';
 import {
   ASSESSMENT_CHECKLIST_KEYS,
@@ -56,11 +56,6 @@ type SourceFilter = 'all' | 'catalog' | 'creator';
 type LoadState = 'loading' | 'ready' | 'empty' | 'denied' | 'error';
 
 const SWIPE_THRESHOLD_PX = 80;
-
-function defaultScreenshotIndex(screenshots: Array<{ name: string }>): number {
-  const idx = screenshots.findIndex((shot) => shot.name !== 'opening');
-  return idx >= 0 ? idx : 0;
-}
 
 function hasPreviewMedia(item: ReviewQueueItem): boolean {
   return Boolean(item.media?.video || (item.media?.screenshots.length ?? 0) > 0);

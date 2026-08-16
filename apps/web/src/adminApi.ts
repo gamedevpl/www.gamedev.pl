@@ -164,6 +164,31 @@ export async function setPublicPlaySlugs(slugs: string[]): Promise<PublicPlay | 
   return { error: body.error ?? `request failed (${res.status})` };
 }
 
+// The home page's curated flagship pool; order matters.
+export interface FeaturedPool {
+  stored: { slugs: string[]; updatedAt?: string; updatedBy?: string } | null;
+  slugs: string[];
+}
+
+export async function fetchFeaturedPool(): Promise<FeaturedPool | null> {
+  const res = await fetch(`${API_BASE}/api/admin/featured-pool`, { credentials: 'include' });
+  if (res.status === 404 || res.status === 401) return null;
+  if (!res.ok) throw new Error(`featured pool failed (${res.status})`);
+  return (await res.json()) as FeaturedPool;
+}
+
+export async function setFeaturedPoolSlugs(slugs: string[]): Promise<FeaturedPool | { error: string }> {
+  const res = await fetch(`${API_BASE}/api/admin/featured-pool`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ slugs }),
+  });
+  if (res.ok) return (await res.json()) as FeaturedPool;
+  const body = (await res.json().catch(() => ({}))) as { error?: string };
+  return { error: body.error ?? `request failed (${res.status})` };
+}
+
 export type ReviewSweepStatus = 'active' | 'paused' | 'completed' | 'cancelled';
 export type ReviewSweepSource = 'catalog' | 'creator' | 'all';
 

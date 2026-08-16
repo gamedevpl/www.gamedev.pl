@@ -41,7 +41,7 @@ describe('NavHeader Up chevron', () => {
           null,
           createElement(NavHeader, {
             activeBuildCount: 0,
-            onNavigate: vi.fn(),
+            onCreate: vi.fn(),
             onHome: vi.fn(),
             onStudio: vi.fn(),
             onAdmin: vi.fn(),
@@ -80,7 +80,7 @@ describe('NavHeader Up chevron', () => {
           null,
           createElement(NavHeader, {
             activeBuildCount: 0,
-            onNavigate: vi.fn(),
+            onCreate: vi.fn(),
             onHome: vi.fn(),
             onStudio: vi.fn(),
             onAdmin: vi.fn(),
@@ -136,7 +136,7 @@ describe('NavHeader menu', () => {
           null,
           createElement(NavHeader, {
             activeBuildCount: 2,
-            onNavigate: vi.fn(),
+            onCreate: vi.fn(),
             onHome: vi.fn(),
             onStudio: vi.fn(),
             onAdmin: vi.fn(),
@@ -235,8 +235,8 @@ describe('NavHeader menu', () => {
     await act(async () => root.unmount());
   });
 
-  it('asks to navigate to the hero prompt when Create Game is clicked', async () => {
-    const onNavigate = vi.fn();
+  it('calls onCreate when Create Game is clicked, and highlights it on /create', async () => {
+    const onCreate = vi.fn();
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = String(input);
@@ -259,7 +259,8 @@ describe('NavHeader menu', () => {
           null,
           createElement(NavHeader, {
             activeBuildCount: 0,
-            onNavigate,
+            onCreate,
+            isOnCreate: true,
             onHome: vi.fn(),
             onStudio: vi.fn(),
             onAdmin: vi.fn(),
@@ -282,12 +283,13 @@ describe('NavHeader menu', () => {
       /Create Game/i.test(btn.textContent ?? ''),
     );
     expect(createGame).toBeDefined();
+    expect(createGame?.className).toContain('is-active');
     await act(async () => {
       createGame?.click();
       await Promise.resolve();
     });
 
-    expect(onNavigate).toHaveBeenCalledWith('hero-prompt');
+    expect(onCreate).toHaveBeenCalled();
     expect(container.querySelector('.dropdown-menu')).toBeNull();
 
     await act(async () => root.unmount());
@@ -329,7 +331,7 @@ describe('NavHeader menu', () => {
           null,
           createElement(NavHeader, {
             activeBuildCount: 0,
-            onNavigate: vi.fn(),
+            onCreate: vi.fn(),
             onHome: vi.fn(),
             onStudio: vi.fn(),
             onAdmin: vi.fn(),
@@ -398,7 +400,7 @@ describe('NavHeader menu', () => {
           null,
           createElement(NavHeader, {
             activeBuildCount: 0,
-            onNavigate: vi.fn(),
+            onCreate: vi.fn(),
             onHome: vi.fn(),
             onStudio: vi.fn(),
             onAdmin: vi.fn(),
@@ -456,7 +458,7 @@ describe('NavHeader menu', () => {
           null,
           createElement(NavHeader, {
             activeBuildCount: 0,
-            onNavigate: vi.fn(),
+            onCreate: vi.fn(),
             onHome: vi.fn(),
             onStudio: vi.fn(),
             onAdmin: vi.fn(),
@@ -545,7 +547,7 @@ describe('NavHeader operator link', () => {
           null,
           createElement(NavHeader, {
             activeBuildCount: 0,
-            onNavigate: vi.fn(),
+            onCreate: vi.fn(),
             onHome: vi.fn(),
             onStudio: vi.fn(),
             onAdmin,
@@ -662,7 +664,7 @@ describe('NavHeader Studio chip', () => {
           null,
           createElement(NavHeader, {
             activeBuildCount: 9,
-            onNavigate: vi.fn(),
+            onCreate: vi.fn(),
             onHome: vi.fn(),
             onStudio,
             onAdmin: vi.fn(),
@@ -737,7 +739,7 @@ describe('NavHeader profile link', () => {
           null,
           createElement(NavHeader, {
             activeBuildCount: 0,
-            onNavigate: vi.fn(),
+            onCreate: vi.fn(),
             onHome: vi.fn(),
             onStudio: vi.fn(),
             onAdmin: vi.fn(),
@@ -782,7 +784,7 @@ describe('NavHeader profile link', () => {
           null,
           createElement(NavHeader, {
             activeBuildCount: 0,
-            onNavigate: vi.fn(),
+            onCreate: vi.fn(),
             onHome: vi.fn(),
             onStudio: vi.fn(),
             onAdmin: vi.fn(),
@@ -837,7 +839,7 @@ describe('LanguageSwitcher in header', () => {
           null,
           createElement(NavHeader, {
             activeBuildCount: 0,
-            onNavigate: vi.fn(),
+            onCreate: vi.fn(),
             onHome: vi.fn(),
             onStudio: vi.fn(),
             onAdmin: vi.fn(),

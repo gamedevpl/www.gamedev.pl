@@ -285,4 +285,32 @@ describe('VisitFunnelPanel', () => {
     const text = render(response({ visits: 3, visitsWithPlay: 2, plays: 2 }));
     expect(text).toContain('Nobody opened How to play');
   });
+
+  it('renders plays by surface with each row against total plays', () => {
+    // 3 of 10 plays came from the grid, not the total.
+    const text = render(
+      response({
+        visits: 10,
+        visitsWithPlay: 8,
+        plays: 10,
+        playVia: [
+          { via: 'featured', plays: 4 },
+          { via: 'rail_start_here', plays: 3 },
+          { via: 'grid', plays: 3 },
+        ],
+      }),
+    );
+    expect(text).toContain('Plays by surface');
+    expect(text).toContain('featured slot');
+    expect(text).toContain('Start here rail');
+    expect(text).toContain('catalog grid');
+    expect(text).toContain('40%');
+    expect(text).toContain('30%');
+  });
+
+  it('says so when nobody played, and tolerates a client that predates playVia', () => {
+    const base = { visits: 5, visitsWithPlay: 0 };
+    expect(render(response({ ...base, playVia: [] }))).toContain('Nobody played a game');
+    expect(render(response({ ...base, playVia: undefined }))).toContain('Nobody played a game');
+  });
 });

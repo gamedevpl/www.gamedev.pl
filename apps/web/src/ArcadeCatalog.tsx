@@ -1,7 +1,13 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from './AuthContext.js';
-import { catalogMediaUrl, gamePageHandle, isPlatformAuthor, type CatalogEntry } from './catalog.js';
+import {
+  catalogMediaUrl,
+  defaultScreenshotIndex,
+  gamePageHandle,
+  isPlatformAuthor,
+  type CatalogEntry,
+} from './catalog.js';
 import {
   applyCatalogFilters,
   CATALOG_SORT_MODES,
@@ -17,7 +23,9 @@ import {
   type CatalogSortMode,
   type CatalogSortSignals,
 } from './catalogSort.js';
+import { CatalogRail, FeaturedGame } from './CatalogRail.js';
 import { loadCreatorGames, publishedCreatorSlugs, type CreatorGameItem } from './creatorGames.js';
+import { fetchFeaturedSlugs } from './featuredApi.js';
 import { MascotMoment } from './Mascot.js';
 import { PixelIcon } from './PixelIcon.js';
 import { getRecentPlays } from './recentPlays.js';
@@ -29,13 +37,20 @@ import {
 } from './recommendationsApi.js';
 import { useInView } from './useInView.js';
 import { isCatalogScrolling, watchCatalogScrollIdle, whenCatalogScrollIdle } from './catalogScrollIdle.js';
+import type { PlayVia } from './visitTelemetry.js';
+
+// Rail length before it scrolls, same for every rail.
+const RAIL_CARD_LIMIT = 12;
+
+// Caps the featured-pool wait; a stall must not block the grid.
+const FEATURED_POOL_TIMEOUT_MS = 1200;
 
 type ArcadeCatalogProps = {
   catalogStatus: 'loading' | 'ready' | 'error';
   catalogError: string | null;
   catalogEntries: CatalogEntry[];
-  onPlayGame: (game: CatalogEntry) => void;
-  onPlayTogether: (game: CatalogEntry) => void;
+  onPlayGame: (game: CatalogEntry, via?: PlayVia) => void;
+  onPlayTogether: (game: CatalogEntry, via?: PlayVia) => void;
   onRetryCatalog: () => void;
   /** Bump after a play so the grid can re-sort from fresh affinity. */
   recommendationsRefreshKey?: number;
@@ -48,12 +63,6 @@ function humanizeMoment(name: string): string {
     .split('-')
     .map((word) => `${word.charAt(0).toUpperCase()}${word.slice(1)}`)
     .join(' ');
-}
-
-/** Prefer a mid-capture still — `opening` is often an empty ready/title frame. */
-function defaultScreenshotIndex(screenshots: Array<{ name: string }>): number {
-  const idx = screenshots.findIndex((shot) => shot.name !== 'opening');
-  return idx >= 0 ? idx : 0;
 }
 
 /** Hover must dwell this long before we fetch moments / arm video — scroll sweeps skip it. */
@@ -638,6 +647,26 @@ export function ArcadeCatalog({
 
   const mySlugs = useMemo(() => publishedCreatorSlugs(creatorItems), [creatorItems]);
 
+  // Curated pool for the featured slot; fetched once, not personalized.
+  const [featuredPool, setFeaturedPool] = useState<string[]>([]);
+  // Gates showCurated; fetchFeaturedSlugs fails open, so this always resolves.
+  const [featuredPoolReady, setFeaturedPoolReady] = useState(false);
+  useEffect(() => {
+    let settled = false;
+    const settle = (slugs: string[]) => {
+      if (settled) return;
+      settled = true;
+      setFeaturedPool(slugs);
+      setFeaturedPoolReady(true);
+    };
+    void fetchFeaturedSlugs().then(settle);
+    const timer = window.setTimeout(() => settle([]), FEATURED_POOL_TIMEOUT_MS);
+    return () => {
+      settled = true;
+      window.clearTimeout(timer);
+    };
+  }, []);
+
   const hasCatalog = catalogStatus === 'ready' && catalogEntries.length > 0;
   // My games only makes sense when signed in and you have a published game of yours.
   const canFilterYourGames = Boolean(user) && mySlugs.size > 0;
@@ -664,6 +693,59 @@ export function ArcadeCatalog({
   // Hold the grid while auth is unknown, and while a signed-in shelf is still loading.
   const awaitingCreatorShelf = authLoading || (Boolean(viewerUid) && !creatorGamesReady);
   const layoutReady = catalogStatus === 'ready' && !awaitingSignals && !awaitingCreatorShelf;
+
+  // Curated surfaces above the grid, gated on layoutReady like the grid.
+
+  const flagshipEntries = useMemo(() => {
+    const bySlug = new Map(catalogEntries.map((entry) => [entry.slug, entry]));
+    // Order preserved; an unpublished slug is silently dropped.
+    return featuredPool.flatMap((slug) => {
+      const entry = bySlug.get(slug);
+      return entry ? [entry] : [];
+    });
+  }, [catalogEntries, featuredPool]);
+
+  // Rotates daily, never two variants; falls back to top recommended.
+  const featuredEntry = useMemo(() => {
+    if (flagshipEntries.length > 0) {
+      const dayIndex = Math.floor(Date.now() / 86_400_000) % flagshipEntries.length;
+      return flagshipEntries[dayIndex];
+    }
+    return desiredOrder[0] ?? null;
+  }, [flagshipEntries, desiredOrder]);
+
+  const startHereEntries = useMemo(
+    () => flagshipEntries.filter((entry) => entry.slug !== featuredEntry?.slug).slice(0, RAIL_CARD_LIMIT),
+    [flagshipEntries, featuredEntry],
+  );
+
+  // Not memoized — recomputes every render, cheap and always fresh.
+  const continuePlayingBySlug = new Map(catalogEntries.map((entry) => [entry.slug, entry]));
+  const continuePlayingEntries = getRecentPlays()
+    .flatMap((slug) => {
+      const entry = continuePlayingBySlug.get(slug);
+      return entry ? [entry] : [];
+    })
+    .slice(0, RAIL_CARD_LIMIT);
+
+  const partyEntries = useMemo(
+    () => catalogEntries.filter((entry) => entry.multiplayer).slice(0, RAIL_CARD_LIMIT),
+    [catalogEntries],
+  );
+
+  // No recency window; "this week" reads empty on a thin catalog.
+  const recentlyAddedEntries = useMemo(() => {
+    const bySlug = new Map(catalogEntries.map((entry) => [entry.slug, entry]));
+    return signals.newest
+      .flatMap((slug) => {
+        const entry = bySlug.get(slug);
+        return entry ? [entry] : [];
+      })
+      .slice(0, RAIL_CARD_LIMIT);
+  }, [catalogEntries, signals.newest]);
+
+  // Also wait for the pool, or the rail shifts after it loads.
+  const showCurated = layoutReady && hasCatalog && featuredPoolReady;
 
   // Commit order once per sort/filter/viewer (and when the shelf/signals first land).
   // A later recommendations refresh that differs from the sessionStorage cache must
@@ -713,116 +795,151 @@ export function ArcadeCatalog({
   const showEmpty = layoutReady && displayedEntries.length === 0;
 
   return (
-    <section id="arcade" className="arcade-section">
-      <div className="arcade-header">
-        <div className="arcade-title-row">
-          <h2 className="arcade-title">{t('catalog.title')}</h2>
-        </div>
-        {showControls ? (
-          <div className="catalog-toolbar" role="group" aria-label={t('catalog.toolbarLabel')}>
-            {canFilterYourGames ? (
-              <button
-                type="button"
-                className={`catalog-filter-trigger${yourGamesOnly ? ' is-active' : ''}`}
-                aria-pressed={yourGamesOnly}
-                onClick={() => toggleFilter('your_games')}
-              >
-                {t('catalog.filter.your_games')}
-              </button>
-            ) : null}
-            <button
-              type="button"
-              className={`catalog-filter-trigger${notPlayedOnly ? ' is-active' : ''}`}
-              aria-pressed={notPlayedOnly}
-              onClick={() => toggleFilter('not_played')}
-            >
-              {t('catalog.filter.not_played')}
-            </button>
-            <div className={`catalog-sort-menu${sortMenuOpen ? ' is-open' : ''}`} ref={sortMenuRef}>
-              <button
-                type="button"
-                className="catalog-sort-trigger"
-                aria-expanded={sortMenuOpen}
-                aria-haspopup="menu"
-                aria-label={t('catalog.sortLabel')}
-                onClick={() => setSortMenuOpen((open) => !open)}
-              >
-                <span className="catalog-sort-trigger-label">{t(`catalog.sort.${sortMode}`)}</span>
-                <span className="catalog-sort-caret" aria-hidden="true">
-                  ▾
-                </span>
-              </button>
-              {sortMenuOpen ? (
-                <ul className="catalog-sort-panel" role="menu" aria-label={t('catalog.sortLabel')}>
-                  {CATALOG_SORT_MODES.map((mode) => (
-                    <li key={mode} role="none">
-                      <button
-                        type="button"
-                        role="menuitemradio"
-                        className={`catalog-sort-option${sortMode === mode ? ' is-active' : ''}`}
-                        aria-checked={sortMode === mode}
-                        onClick={() => handleSortChange(mode)}
-                      >
-                        {sortMode === mode ? (
-                          <PixelIcon name="check" size={12} />
-                        ) : (
-                          <span className="catalog-sort-check-spacer" />
-                        )}
-                        <span className="catalog-sort-option-label">{t(`catalog.sort.${mode}`)}</span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+    <>
+      {showCurated && featuredEntry && (
+        <FeaturedGame entry={featuredEntry} onPlayGame={onPlayGame} onPlayTogether={onPlayTogether} />
+      )}
+      {showCurated && (
+        <>
+          <CatalogRail
+            heading={t('catalog.rails.startHere')}
+            entries={startHereEntries}
+            via="rail_start_here"
+            onPlayGame={onPlayGame}
+          />
+          <CatalogRail
+            heading={t('catalog.rails.continuePlaying')}
+            entries={continuePlayingEntries}
+            via="rail_continue"
+            onPlayGame={onPlayGame}
+          />
+          <CatalogRail
+            heading={t('catalog.rails.party')}
+            entries={partyEntries}
+            via="rail_party"
+            onPlayGame={onPlayGame}
+            onPlayTogether={onPlayTogether}
+            headingAside={partyEntries.length > 0 ? String(partyEntries.length) : undefined}
+          />
+          <CatalogRail
+            heading={t('catalog.rails.recentlyAdded')}
+            entries={recentlyAddedEntries}
+            via="rail_new"
+            onPlayGame={onPlayGame}
+          />
+        </>
+      )}
+      <section id="arcade" className="arcade-section">
+        <div className="arcade-header">
+          <div className="arcade-title-row">
+            <h2 className="arcade-title">{t('catalog.title')}</h2>
+          </div>
+          {showControls ? (
+            <div className="catalog-toolbar" role="group" aria-label={t('catalog.toolbarLabel')}>
+              {canFilterYourGames ? (
+                <button
+                  type="button"
+                  className={`catalog-filter-trigger${yourGamesOnly ? ' is-active' : ''}`}
+                  aria-pressed={yourGamesOnly}
+                  onClick={() => toggleFilter('your_games')}
+                >
+                  {t('catalog.filter.your_games')}
+                </button>
               ) : null}
+              <button
+                type="button"
+                className={`catalog-filter-trigger${notPlayedOnly ? ' is-active' : ''}`}
+                aria-pressed={notPlayedOnly}
+                onClick={() => toggleFilter('not_played')}
+              >
+                {t('catalog.filter.not_played')}
+              </button>
+              <div className={`catalog-sort-menu${sortMenuOpen ? ' is-open' : ''}`} ref={sortMenuRef}>
+                <button
+                  type="button"
+                  className="catalog-sort-trigger"
+                  aria-expanded={sortMenuOpen}
+                  aria-haspopup="menu"
+                  aria-label={t('catalog.sortLabel')}
+                  onClick={() => setSortMenuOpen((open) => !open)}
+                >
+                  <span className="catalog-sort-trigger-label">{t(`catalog.sort.${sortMode}`)}</span>
+                  <span className="catalog-sort-caret" aria-hidden="true">
+                    ▾
+                  </span>
+                </button>
+                {sortMenuOpen ? (
+                  <ul className="catalog-sort-panel" role="menu" aria-label={t('catalog.sortLabel')}>
+                    {CATALOG_SORT_MODES.map((mode) => (
+                      <li key={mode} role="none">
+                        <button
+                          type="button"
+                          role="menuitemradio"
+                          className={`catalog-sort-option${sortMode === mode ? ' is-active' : ''}`}
+                          aria-checked={sortMode === mode}
+                          onClick={() => handleSortChange(mode)}
+                        >
+                          {sortMode === mode ? (
+                            <PixelIcon name="check" size={12} />
+                          ) : (
+                            <span className="catalog-sort-check-spacer" />
+                          )}
+                          <span className="catalog-sort-option-label">{t(`catalog.sort.${mode}`)}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
             </div>
+          ) : null}
+        </div>
+
+        {catalogStatus === 'ready' && catalogError ? (
+          <div className="catalog-refresh-error" role="status">
+            <p className="catalog-refresh-error__text">{t('catalog.refreshError', { message: catalogError })}</p>
+            <button type="button" className="secondary-btn catalog-refresh-error__retry" onClick={onRetryCatalog}>
+              <PixelIcon name="undo" size={13} /> {t('catalog.retry')}
+            </button>
           </div>
         ) : null}
-      </div>
 
-      {catalogStatus === 'ready' && catalogError ? (
-        <div className="catalog-refresh-error" role="status">
-          <p className="catalog-refresh-error__text">{t('catalog.refreshError', { message: catalogError })}</p>
-          <button type="button" className="secondary-btn catalog-refresh-error__retry" onClick={onRetryCatalog}>
-            <PixelIcon name="undo" size={13} /> {t('catalog.retry')}
-          </button>
-        </div>
-      ) : null}
-
-      {catalogStatus === 'loading' || awaitingSignals || awaitingCreatorShelf ? (
-        <MascotMoment className="catalog-state" emotion="busy" size={56} title={t('mascot.busyAlt')}>
-          <p>{t('catalog.loading')}</p>
-        </MascotMoment>
-      ) : catalogStatus === 'error' ? (
-        <MascotMoment className="load-error" emotion="sad" size={64} title={t('mascot.sadAlt')}>
-          <p className="error" role="alert">
-            {t('catalog.error', { message: catalogError ?? t('errors.generic') })}
-          </p>
-          <button type="button" className="secondary-btn" onClick={onRetryCatalog}>
-            <PixelIcon name="undo" size={13} /> {t('catalog.retry')}
-          </button>
-        </MascotMoment>
-      ) : showEmpty ? (
-        <MascotMoment className="catalog-state" emotion="curious" size={64} title={t('mascot.curiousAlt')}>
-          <p>{emptyMessage}</p>
-          {filtersActive && (catalogEntries.length > 0 || mySlugs.size > 0) ? (
-            <button type="button" className="secondary-btn" onClick={clearFilters}>
-              {t('catalog.clearFilters')}
+        {catalogStatus === 'loading' || awaitingSignals || awaitingCreatorShelf || !featuredPoolReady ? (
+          <MascotMoment className="catalog-state" emotion="busy" size={56} title={t('mascot.busyAlt')}>
+            <p>{t('catalog.loading')}</p>
+          </MascotMoment>
+        ) : catalogStatus === 'error' ? (
+          <MascotMoment className="load-error" emotion="sad" size={64} title={t('mascot.sadAlt')}>
+            <p className="error" role="alert">
+              {t('catalog.error', { message: catalogError ?? t('errors.generic') })}
+            </p>
+            <button type="button" className="secondary-btn" onClick={onRetryCatalog}>
+              <PixelIcon name="undo" size={13} /> {t('catalog.retry')}
             </button>
-          ) : null}
-        </MascotMoment>
-      ) : (
-        <div className="catalog-grid">
-          {displayedEntries.map((entry) => (
-            <CatalogCard
-              key={entry.slug}
-              entry={entry}
-              isYours={mySlugs.has(entry.slug)}
-              onPlayGame={onPlayGame}
-              onPlayTogether={onPlayTogether}
-            />
-          ))}
-        </div>
-      )}
-    </section>
+          </MascotMoment>
+        ) : showEmpty ? (
+          <MascotMoment className="catalog-state" emotion="curious" size={64} title={t('mascot.curiousAlt')}>
+            <p>{emptyMessage}</p>
+            {filtersActive && (catalogEntries.length > 0 || mySlugs.size > 0) ? (
+              <button type="button" className="secondary-btn" onClick={clearFilters}>
+                {t('catalog.clearFilters')}
+              </button>
+            ) : null}
+          </MascotMoment>
+        ) : (
+          <div className="catalog-grid">
+            {displayedEntries.map((entry) => (
+              <CatalogCard
+                key={entry.slug}
+                entry={entry}
+                isYours={mySlugs.has(entry.slug)}
+                onPlayGame={(game) => onPlayGame(game, 'grid')}
+                onPlayTogether={(game) => onPlayTogether(game, 'grid')}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+    </>
   );
 }

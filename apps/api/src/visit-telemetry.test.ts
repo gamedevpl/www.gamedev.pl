@@ -72,9 +72,7 @@ describe('POST /api/telemetry/visit', () => {
   });
 
   it('records how_to_play_opened as itself, with via, and without a game identity', async () => {
-    // The mapper ends in a `default` branch that relabels anything unmatched as
-    // `play_started`, so a member with no case of its own is silently mislabelled
-    // rather than rejected — which no schema error would ever reveal.
+    // Proves how_to_play_opened survives rather than collapsing into play_started.
     await post(app, {
       visitId,
       flushMsSinceStart: 400,
@@ -131,6 +129,39 @@ describe('POST /api/telemetry/visit', () => {
     const events = await store.listVisitEvents(today());
     expect(events).toHaveLength(1);
     expect(events[0]).not.toHaveProperty('slug');
+  });
+
+  it('records which home-page surface produced a play, and rejects one outside the enum', async () => {
+    const ok = await post(app, {
+      visitId,
+      flushMsSinceStart: 0,
+      events: [{ type: 'play_started', via: 'rail_continue', msSinceStart: 0 }],
+    });
+    expect(ok.statusCode).toBe(202);
+    expect((await store.listVisitEvents(today()))[0]).toMatchObject({
+      type: 'play_started',
+      via: 'rail_continue',
+    });
+
+    const bad = await post(app, {
+      visitId,
+      flushMsSinceStart: 0,
+      events: [{ type: 'play_started', via: 'not_a_real_surface', msSinceStart: 0 }],
+    });
+    expect(bad.statusCode).toBe(400);
+  });
+
+  it('accepts a play_started without via — every play entry point this dimension does not cover yet', async () => {
+    const ok = await post(app, {
+      visitId,
+      flushMsSinceStart: 0,
+      events: [{ type: 'play_started', msSinceStart: 0 }],
+    });
+    expect(ok.statusCode).toBe(202);
+
+    const events = await store.listVisitEvents(today());
+    expect(events).toHaveLength(1);
+    expect(events[0]).not.toHaveProperty('via');
   });
 
   it('dates events from their own offsets rather than collapsing onto the flush', async () => {

@@ -50,6 +50,7 @@ const RouteKindSchema = z.enum([
   'health',
   'studio',
   'game',
+  'create',
   'notFound',
 ]);
 /**
@@ -188,6 +189,17 @@ const RemixControlSchema = z.enum(['bar', 'more', 'page']);
  * rather than dropping the event. Closed enum: the value reaches a grouping key.
  */
 const HowToPlayViaSchema = z.enum(['bar', 'more']);
+// Home page surface for play_started; not every entry point yet.
+const PlayViaSchema = z.enum([
+  'featured',
+  'rail_start_here',
+  'rail_continue',
+  'rail_party',
+  'rail_new',
+  'grid',
+  'composer_match',
+  'create_showcase',
+]);
 /**
  * Acquisition strings are re-validated here rather than trusted from the client. The
  * browser filters them for cleanliness; this filters them because a value that reaches a
@@ -217,7 +229,7 @@ const EventSchema = z.discriminatedUnion('type', [
     ...offsetField,
   }),
   z.object({ type: z.literal('route_viewed'), route: RouteKindSchema, ...offsetField }),
-  z.object({ type: z.literal('play_started'), ...offsetField }),
+  z.object({ type: z.literal('play_started'), via: PlayViaSchema.optional(), ...offsetField }),
   z.object({
     type: z.literal('how_to_play_opened'),
     via: HowToPlayViaSchema.optional(),
@@ -419,8 +431,11 @@ export async function registerVisitTelemetryRoutes(
             ...(event.via === undefined ? {} : { via: event.via }),
             ...(event.reopen === true ? { reopen: true } : {}),
           };
+        case 'play_started':
+          return { ...base, type: event.type, ...(event.via === undefined ? {} : { via: event.via }) };
         default:
-          return { ...base, type: 'play_started' };
+          // Unreachable: every EventSchema member has its own case above.
+          return event satisfies never;
       }
     });
 

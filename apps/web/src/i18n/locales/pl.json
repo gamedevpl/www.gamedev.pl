@@ -108,8 +108,6 @@
     "upCreator": "Wróć do strony twórcy"
   },
   "hero": {
-    "mainTitle": "Zamień dowolny pomysł w grywalną grę",
-    "mainSubtitle": "Wpisz w co chcesz zagrać lub co stworzyć. Agenty AI napiszą kod, przetestują i opublikują grę na żywo.",
     "bigPromptPlaceholder": "Opisz grę…",
     "buildGameButton": "Stwórz Moją Grę",
     "attachMenu": "Dodaj",
@@ -201,6 +199,13 @@
   "catalog": {
     "title": "Gry",
     "subtitle": "Odkrywaj i graj w gry open source stworzone przez agenty AI.",
+    "featuredKicker": "Wyróżnione",
+    "rails": {
+      "startHere": "Zacznij tutaj",
+      "continuePlaying": "Kontynuuj granie",
+      "party": "Tryb imprezowy",
+      "recentlyAdded": "Ostatnio dodane"
+    },
     "loading": "Wczytywanie gier…",
     "gameLoading": "Wczytywanie gry…",
     "gameLoadError": "Nie udało się wczytać tej gry.",
@@ -1112,6 +1117,33 @@
     "privacyNote": "Twoje imię i e-mail wykorzystamy tylko do odczytania i odpowiedzi na tę wiadomość. Szczegóły w",
     "orEmail": "Albo napisz bezpośrednio na"
   },
+  "create": {
+    "headline": "Opisz grę. Agent AI zbuduje ją naprawdę.",
+    "subhead": "To nie szablon ani zabawka — prawdziwy HTML, CSS i JavaScript, napisane przez agenta kodującego, sprawdzone przez człowieka, a potem grywalne w przeglądarce dla każdego.",
+    "example1": "gra jak Cannon Fodder, ale z oddziałami kotów",
+    "example2": "labirynt z żyroskopem dla mojego młodszego brata",
+    "example3": "strategia 4X, którą skończę w 20 minut",
+    "stepsHeading": "Co dzieje się po kliknięciu Build",
+    "step1Title": "Kilka szybkich pytań",
+    "step1Detail": "Nadajemy nazwę i, jeśli trzeba, dopytujemy o klimat — albo pomiń, a AI zdecyduje. Zajmuje minutę.",
+    "step2Title": "Agent pisze kod",
+    "step2Detail": "Możesz obserwować pracę w Studio i mówić, co zmienić, w trakcie budowy.",
+    "step3Title": "Najpierw zagrasz w szkic",
+    "step3Detail": "Grywalny podgląd pojawia się, zanim gra jest ukończona. Wypróbuj ją, poproś o zmiany.",
+    "step4Title": "Człowiek sprawdza, potem gra jest na żywo",
+    "step4Detail": "Gdy przejdzie ocenę, trafia do katalogu i każdy może w nią zagrać.",
+    "notifyNote": "Możesz zamknąć kartę. Budowa trwa tyle, ile trzeba — powiadomimy Cię, gdy będzie szkic do zagrania, a wątek zostaje w Studio.",
+    "buildersHeading": "Kto to zbuduje?",
+    "buildersSub": "Wybierasz w ostatnim kroku — i możesz zmienić przy każdej rundzie.",
+    "defaultBadge": "Domyślne",
+    "freeBadge": "Bezpłatne",
+    "platformPoint1": "Nic do instalowania ani konfigurowania",
+    "platformPoint2": "Liczy się do Twojego dziennego limitu",
+    "selfPoint1": "Instalacja jednym kliknięciem albo wklej konfigurację",
+    "selfPoint2": "Twój agent, Twoje tokeny — bez naszego dziennego limitu",
+    "anyMcpClient": "dowolny klient MCP",
+    "showcaseHeading": "Zrobione dokładnie tak"
+  },
   "ai": {
     "generatedBadge": "Gra wygenerowana przez AI",
     "generatedShort": "AI",
@@ -1203,6 +1235,7 @@
     "studio": "Studio Twórcy",
     "notFound": "Nie znaleziono strony",
     "contact": "Kontakt",
+    "create": "Zbuduj grę",
     "playNamed": "Graj: {{title}}",
     "statusNamed": "Status · {{title}}",
     "studioNamed": "Studio · {{title}}",

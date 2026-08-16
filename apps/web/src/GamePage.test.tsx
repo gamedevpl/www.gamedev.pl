@@ -91,6 +91,7 @@ afterEach(() => {
   });
   root = null;
   container.remove();
+  window.history.pushState(null, '', window.location.pathname);
   if (originalVisualViewport === undefined) {
     Reflect.deleteProperty(window, 'visualViewport');
   } else {
@@ -171,8 +172,33 @@ describe('GamePage', () => {
       preview!.click();
     });
 
-    expect(playAction).toHaveBeenCalledWith(expect.objectContaining({ slug: 'neon-courier' }));
+    // No via param here, so the second arg is undefined.
+    expect(playAction).toHaveBeenCalledWith(expect.objectContaining({ slug: 'neon-courier' }), undefined);
     expect(container.querySelector('iframe')).toBeNull();
+  });
+
+  it('carries a rail-attributed via from the URL into the Play call', async () => {
+    window.history.pushState(null, '', `${window.location.pathname}?via=rail_party`);
+    await renderPage();
+
+    const preview = container.querySelector<HTMLButtonElement>('.game-page-preview');
+    await act(async () => {
+      preview!.click();
+    });
+
+    expect(playAction).toHaveBeenCalledWith(expect.objectContaining({ slug: 'neon-courier' }), 'rail_party');
+  });
+
+  it('ignores an unrecognized via value from the URL', async () => {
+    window.history.pushState(null, '', `${window.location.pathname}?via=totally-made-up`);
+    await renderPage();
+
+    const preview = container.querySelector<HTMLButtonElement>('.game-page-preview');
+    await act(async () => {
+      preview!.click();
+    });
+
+    expect(playAction).toHaveBeenCalledWith(expect.objectContaining({ slug: 'neon-courier' }), undefined);
   });
 
   it('lets visitors choose another screenshot without starting the game', async () => {

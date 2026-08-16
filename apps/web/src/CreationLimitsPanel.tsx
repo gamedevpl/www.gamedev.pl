@@ -6,6 +6,7 @@ import {
   type ManagedAgentVendor,
   type ManagedBuilderMode,
 } from './adminApi.js';
+import { FeaturedPoolPanel } from './FeaturedPoolPanel.js';
 import { PublicPlayPanel } from './PublicPlayPanel.js';
 
 /**
@@ -336,6 +337,7 @@ export function CreationLimitsPanel({ onChanged }: { onChanged?: () => void }) {
         </p>
       </section>
       <PublicPlayPanel onChanged={onChanged} />
+      <FeaturedPoolPanel onChanged={onChanged} />
     </>
   );
 }

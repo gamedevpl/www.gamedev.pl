@@ -76,7 +76,13 @@ export function isKnownSpaShellPath(urlOrPath: string): boolean {
   const pathname = normalizePathname(urlOrPath);
 
   if (pathname === '/') return true;
-  if (pathname === '/privacy' || pathname === '/terms' || pathname === '/health' || pathname === '/contact') {
+  if (
+    pathname === '/privacy' ||
+    pathname === '/terms' ||
+    pathname === '/health' ||
+    pathname === '/contact' ||
+    pathname === '/create'
+  ) {
     return true;
   }
   // The proposer's tracker. A real page, so a refresh on it boots 200 rather than 404 —
