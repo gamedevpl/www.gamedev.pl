@@ -1680,62 +1680,13 @@ button:disabled {
   padding: 0 2px;
 }
 
-/* Compact Studio entry in the top nav — live count + wrench in one control so
-   in-progress work stays in chrome rather than owning a catalog grid cell.
-   Phones hide this chip: Studio + the count live in the hamburger instead. */
-.studio-chip {
-  position: relative;
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: 7px;
-  min-height: 36px;
-  padding: 0.35rem 0.75rem;
-  border: 1px solid var(--panel-border);
-  border-radius: 999px;
-  background: var(--panel-card);
-  color: var(--text);
-  font-size: 0.8rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.studio-chip:hover,
-.studio-chip:focus-visible {
-  border-color: var(--turquoise);
-  color: var(--turquoise);
-}
-
-.studio-chip.is-live {
-  border-color: rgba(56, 189, 248, 0.35);
-  background: rgba(56, 189, 248, 0.1);
-  color: var(--accent-blue);
-}
-
-.studio-chip.is-live:hover,
-.studio-chip.is-live:focus-visible {
-  border-color: var(--turquoise);
-  color: var(--turquoise);
-}
-
-.studio-chip-count {
-  font-weight: 700;
-}
-
-.studio-chip .live-dot {
-  background: var(--accent-blue);
-}
-
 .hamburger-live-badge {
   display: none;
 }
 
-@media (max-width: 768px) {
-  .studio-chip {
-    display: none;
-  }
-
-  /* Glance count while the menu is closed — the Studio row repeats it once open. */
+@media (max-width: 1099px) {
+  /* Glance count while the menu is closed and the flat Studio link is
+     hidden — the Studio row repeats it once the dropdown is open. */
   .hamburger-live-badge {
     display: block;
     position: absolute;

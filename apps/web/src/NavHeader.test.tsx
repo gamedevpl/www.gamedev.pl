@@ -720,13 +720,13 @@ describe('NavHeader operator link', () => {
   });
 });
 
-describe('NavHeader Studio chip', () => {
+describe('NavHeader Studio live count', () => {
   afterEach(() => {
     document.body.innerHTML = '';
     vi.restoreAllMocks();
   });
 
-  it('shows the rich live chip in the header and opens Studio', async () => {
+  it('badges the flat Studio link, the hamburger, and the dropdown row alike', async () => {
     await i18n.changeLanguage('en');
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = String(input);
@@ -766,23 +766,25 @@ describe('NavHeader Studio chip', () => {
       await Promise.resolve();
     });
 
-    const chip = container.querySelector<HTMLButtonElement>('button.studio-chip');
-    expect(chip).not.toBeNull();
-    expect(chip?.classList.contains('is-live')).toBe(true);
-    expect(chip?.textContent).toMatch(/9 in progress/i);
-    expect(chip?.textContent).toMatch(/Studio/i);
+    expect(container.querySelector('.studio-chip')).toBeNull();
 
-    await act(async () => chip?.click());
+    const flatStudioLink = Array.from(
+      container.querySelectorAll<HTMLButtonElement>('.header-nav .header-nav-link'),
+    ).find((el) => el.textContent?.includes('Studio'));
+    expect(flatStudioLink).toBeDefined();
+    expect(flatStudioLink?.querySelector('.specs-count-badge')?.textContent).toBe('9');
+
+    await act(async () => flatStudioLink?.click());
     expect(onStudio).toHaveBeenCalledOnce();
 
-    // Menu carries the same count for phones (where the chip is CSS-hidden).
+    // The hamburger carries the same count once the flat nav hides.
     const hamburger = container.querySelector<HTMLButtonElement>('.hamburger-btn');
     expect(hamburger?.querySelector('.hamburger-live-badge')?.textContent).toBe('9');
     await act(async () => hamburger?.click());
-    const studioLink = Array.from(container.querySelectorAll<HTMLButtonElement>('.nav-link')).find((el) =>
-      /Studio/i.test(el.textContent ?? ''),
-    );
-    expect(studioLink?.querySelector('.specs-count-badge')?.textContent).toBe('9');
+    const dropdownStudioLink = Array.from(
+      container.querySelectorAll<HTMLButtonElement>('.dropdown-menu .nav-link'),
+    ).find((el) => /Studio/i.test(el.textContent ?? ''));
+    expect(dropdownStudioLink?.querySelector('.specs-count-badge')?.textContent).toBe('9');
 
     await act(async () => root.unmount());
   });
