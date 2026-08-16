@@ -747,7 +747,7 @@
     "runningFor": "Trwa {{time}}",
     "completedIn": "Ukończono w {{time}}",
     "statusReadyLabel": "Draft Gotowy",
-    "readyBanner": "Draft gotowy — kliknij poniżej, aby zagrać w podgląd gry!",
+    "readyBanner": "Draft gotowy — kliknij „Zagraj w Studio”, aby zagrać w podgląd gry!",
     "playDraft": "Zagraj w Studio",
     "primerTitle": "Jak sterować agentem",
     "primerSteer": "W Studio napisz, co zmienić, podczas gdy gra powstaje — agent podejmie to przy następnej aktualizacji.",
