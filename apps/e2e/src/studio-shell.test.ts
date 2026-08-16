@@ -83,16 +83,12 @@ function fixtureGames() {
     lastKnownStatus: 'published' as const,
     slug: i === 0 ? FIXTURE_SLUG : `${FIXTURE_SLUG}-${i}`,
     publishedAt: '2026-01-02T00:00:00.000Z',
-    // Only the fixture game needs the Code tab open-able; the rest just pad the shelf.
+    // Only game 0 exposes Code; the rest pad the shelf.
     codeSurface: i === 0,
   }));
 }
 
-/**
- * Serve the Code surface's own sources route with a read-only fixture — the state that
- * motivated the header wrap/touch-target fix below (#862) and the one a gate skipped if
- * it never opened Code at all.
- */
+// Code surface sources route, stubbed read-only (#862).
 async function stubCodeSurfaceData(page: Page) {
   await page.route(`**/api/me/studio/games/${FIXTURE_SLUG}/sources**`, async (route) => {
     const request = route.request();
@@ -111,7 +107,7 @@ async function stubCodeSurfaceData(page: Page) {
         version: '1',
         files: [{ path: 'game.ts', content: "import { startGame } from './game/runtime.ts';\n\nstartGame();\n" }],
         deleted: [],
-        // agent_round: the exact state whose banner made the header row overflow.
+        // agent_round: the banner state that crowded Akcje (#862).
         readOnly: true,
         reason: 'agent_round',
         staged: { totalBytes: 0, maxBytes: 200_000, maxFiles: 50, updatedAt: null },
@@ -376,9 +372,7 @@ describe.skipIf(!prereq.ok)('the studio thread as an app screen', () => {
         expect(sendIsHittable, `.${bar} covers the composer's send button at ${viewport.width}px`).toBe(true);
       }
 
-      // Below 801px the strip's actions collapse into the 4-column icon grid (#862):
-      // padding alone left each pill ~24px tall, well under the touch target a phone
-      // needs. Every pill in the grid must clear it, not just the primary Play button.
+      // #862: padding alone left each strip pill ~24px tall below 801px.
       if (viewport.width <= 800) {
         const pillHeights = await page.evaluate(() =>
           Array.from(document.querySelectorAll('.studio-strip-actions .studio-head-action')).map(
@@ -515,14 +509,7 @@ describe.skipIf(!prereq.ok)('the studio thread as an app screen', () => {
     });
   }
 
-  /**
-   * The Code surface's header (back / Kod / diff-toggle / read-only banner / Akcje) had
-   * no `flex-wrap` at all below 1099px (#862): with the read-only banner an agent round
-   * puts on screen, Akcje's right-pinned `margin-left: auto` had nowhere to go but off
-   * the edge or hard against the banner. Cover the band the fix actually changed (≤1099)
-   * against the band it deliberately left alone (desktop), with the exact banner state
-   * that motivated the patch — not an empty header nothing would crowd.
-   */
+  // #862: no flex-wrap below 1099px let Akcje crowd the banner.
   const CODE_HEADER_VIEWPORTS = [
     { label: 'phone', width: 390, height: 844, wraps: true },
     { label: 'wide tablet', width: 850, height: 900, wraps: true },
@@ -564,8 +551,7 @@ describe.skipIf(!prereq.ok)('the studio thread as an app screen', () => {
           headClientWidth: head.clientWidth,
           pageScrollWidth: document.documentElement.scrollWidth,
           viewportWidth: window.innerWidth,
-          // A dropped-to-its-own-line Akcje sits meaningfully below the back button;
-          // sharing the row keeps their tops within a couple of px of each other.
+          // A wrapped Akcje sits well below the back button's row.
           akcjeWrapped: actionsRect.top - backRect.top > 8,
           actionsRight: actionsRect.right,
           headRight: headRect.right,
@@ -577,8 +563,6 @@ describe.skipIf(!prereq.ok)('the studio thread as an app screen', () => {
         return;
       }
 
-      // No horizontal scroll anywhere the fix touches — the header row itself and the
-      // page, since the header sits inside the same window the studio otherwise owns.
       expect(
         geometry.headScrollWidth,
         `code-surface-head overflows horizontally at ${viewport.width}px (${geometry.headScrollWidth} > ${geometry.headClientWidth})`,
@@ -586,8 +570,7 @@ describe.skipIf(!prereq.ok)('the studio thread as an app screen', () => {
       expect(geometry.pageScrollWidth, `the page scrolls horizontally at ${viewport.width}px`).toBeLessThanOrEqual(
         geometry.viewportWidth + 1,
       );
-      // Whatever line Akcje lands on, it must end inside the viewport — not clipped
-      // past the right edge, which is exactly what the un-wrapped row used to do.
+      // Akcje's right edge must stay inside the header, wrapped or not.
       expect(
         geometry.actionsRight,
         `Akcje's right edge (${geometry.actionsRight}) sits past the head's own bound (${geometry.headRight}) at ${viewport.width}px`,
