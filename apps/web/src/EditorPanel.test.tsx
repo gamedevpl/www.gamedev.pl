@@ -10,10 +10,17 @@ const fetchGameEditor = vi.hoisted(() => vi.fn());
 const putEditorDraft = vi.hoisted(() => vi.fn());
 const publishEditorContent = vi.hoisted(() => vi.fn());
 const requestEditorAssist = vi.hoisted(() => vi.fn());
+const listMySubmissions = vi.hoisted(() => vi.fn());
+const getSubmissionStatus = vi.hoisted(() => vi.fn());
 
 vi.mock('./studioApi.js', async () => {
   const actual = await vi.importActual<typeof import('./studioApi.js')>('./studioApi.js');
   return { ...actual, fetchGameEditor, putEditorDraft, publishEditorContent, requestEditorAssist };
+});
+
+vi.mock('./submissionApi.js', async () => {
+  const actual = await vi.importActual<typeof import('./submissionApi.js')>('./submissionApi.js');
+  return { ...actual, listMySubmissions, getSubmissionStatus };
 });
 
 vi.mock('./visitTelemetry.js', () => ({ recordAssistStep: vi.fn(), recordEditorStep: vi.fn() }));
@@ -170,5 +177,40 @@ describe('EditorPanel live push (§E tier 1)', () => {
 
     expect(gameB).not.toHaveBeenCalled();
     expect(gameA).not.toHaveBeenCalled();
+  });
+});
+
+describe('EditorPanel publish (not_sealed retry)', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('shows a live status instead of a dead-end error, then retries publish once the round seals', async () => {
+    vi.useFakeTimers();
+    const notSealed = Object.assign(new Error('not_sealed'), { status: 409, code: 'not_sealed' });
+    publishEditorContent.mockRejectedValueOnce(notSealed).mockResolvedValueOnce({ version: 'v2-editor', jobId: 43 });
+    listMySubmissions.mockResolvedValue([
+      { token: 'round-1', slug: game.slug, title: game.title, createdAt: '', lastKnownStatus: 'building' },
+    ]);
+    getSubmissionStatus.mockResolvedValue({ status: 'building', phase: 'gating' });
+
+    await renderEditor();
+    const publishButton = container.querySelector<HTMLButtonElement>('.studio-head-action.is-primary')!;
+    await act(async () => {
+      publishButton.click();
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    // No raw "not_sealed" code, and no spam-clicking while it polls.
+    expect(container.querySelector('.editor-banner')?.textContent).toBe(i18n.t('studioPanel.editor.notSealed'));
+    expect(publishButton.disabled).toBe(true);
+
+    getSubmissionStatus.mockResolvedValue({ status: 'in_review', phase: 'ready_for_review' });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000);
+    });
+
+    expect(publishEditorContent).toHaveBeenCalledTimes(2);
+    expect(container.querySelector('.editor-banner.is-ok')?.textContent).toBe(i18n.t('studioPanel.editor.published'));
   });
 });

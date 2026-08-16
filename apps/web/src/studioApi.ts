@@ -263,11 +263,9 @@ export type StudioApiError = Error & {
   revision?: number;
   /** How long the publish cooldown has left (429). */
   retryAfterMs?: number;
-  /**
-   * The server's human-readable `message`, where a route sends one alongside `error`.
-   * Only surfaced where the wording is meant for the creator (see the workspace
-   * checkout's 409) — `error` itself is a machine code and never reaches the UI.
-   */
+  /** The server's machine-readable `error` code, e.g. `'not_sealed'`. */
+  code?: string;
+  /** The server's human-readable `message`, where a route sends one alongside `error`. */
   detail?: string;
 };
 
@@ -287,6 +285,7 @@ async function throwResponseError(response: Response): Promise<never> {
   const error = new Error(body?.error ?? `Request failed (${response.status})`) as StudioApiError;
   error.status = response.status;
   error.category = body?.category;
+  if (typeof body?.error === 'string' && body.error.trim().length > 0) error.code = body.error;
   if (typeof body?.message === 'string' && body.message.trim().length > 0) error.detail = body.message;
   // Structured detail the editor routes send alongside `error`. Dropping it made
   // the panel's per-problem feedback dead code and cost the cooldown its number.

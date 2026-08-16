@@ -420,6 +420,7 @@
       "publishing": "Publikowanie…",
       "published": "Twoje zmiany są sprawdzane — po zatwierdzeniu trafią na stronę.",
       "cooldown": "Poprzednia publikacja wciąż się sprawdza. Spróbuj za kilka minut.",
+      "notSealed": "Bieżąca runda budowy jeszcze się kończy. Publikacja spróbuje ponownie automatycznie, gdy runda będzie gotowa.",
       "saving": "Zapisywanie…",
       "saved": "Szkic zapisany",
       "saveError": "Nie udało się zapisać szkicu",
