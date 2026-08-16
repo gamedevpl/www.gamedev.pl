@@ -6591,7 +6591,7 @@ a.user-name--profile:focus-visible {
     grid-template-columns: repeat(4, minmax(0, 1fr));
     width: 100%;
     flex: 1 0 100%;
-    gap: 6px;
+    gap: 8px;
   }
 
   .app:has(.studio-layout.is-game-open) .studio-strip-actions > *,
@@ -6605,8 +6605,12 @@ a.user-name--profile:focus-visible {
     grid-column: span 2;
   }
 
+  /* 24px tall icon pills read as cramped and undershoot the ~44px touch target
+     phones need — min-height keeps the row compact while making each pill
+     actually easy to tap. */
   .app:has(.studio-layout.is-game-open) .studio-head-action {
     padding: 6px 10px;
+    min-height: 44px;
   }
 
   /* Icon-only peers in the title row — Share / Details / Edit / Claim were enough to
@@ -13127,6 +13131,24 @@ button.builder-mode-selector:disabled {
 
   .code-surface-readonly-banner-compact {
     display: inline;
+  }
+
+  /* Back / Kod / diff-toggle / banners had no wrap at all, so a read-only or
+     agent-active banner could shove Akcje hard against — or past — the right
+     edge on a phone. Let the row wrap, and always give Akcje its own full-width
+     line: a right-pinned button on a wrapped line lands in an unpredictable spot
+     otherwise. */
+  .code-surface-head {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+
+  .code-surface-actions-trigger,
+  .code-surface-readonly-banner ~ .code-surface-actions-trigger {
+    flex: 1 1 100%;
+    margin-left: 0;
+    justify-content: center;
+    padding: 8px;
   }
 }
 
