@@ -97,16 +97,10 @@ export function mcpPresenceText(toolName: string): string | null {
   return Object.hasOwn(PRESENCE_BY_TOOL, toolName) ? PRESENCE_BY_TOOL[toolName]!.text : null;
 }
 
-/**
- * Presence pulses stopped writing durable chat rows once this landed (#661, 2026-08-07).
- * Only events stored before that are candidates for the leftover-row filter below —
- * a real `report_progress` call today can legitimately reuse this same English phrasing
- * (it mirrors the tool's own description), and must not be dropped just because it
- * matches a string this closed vocabulary also happens to use.
- */
+// Presence pulses stopped writing chat rows once this landed (#661).
 const PRESENCE_CHAT_LEFTOVER_CUTOFF_MS = Date.parse('2026-08-08T00:00:00.000Z');
 
-/** True when a durable step text/time is a leftover synthetic presence row (pre-cutoff only). */
+// True for a leftover presence row written before the cutoff.
 export function isMcpPresenceEventText(text: string, createdAt?: string): boolean {
   if (!PRESENCE_EVENT_TEXTS.has(text)) return false;
   if (createdAt === undefined) return true;

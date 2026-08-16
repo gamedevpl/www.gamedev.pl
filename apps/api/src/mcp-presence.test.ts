@@ -52,12 +52,11 @@ describe('mcp presence pulses', () => {
   });
 
   it('only treats matching text as a leftover row when it predates the presence cutover', () => {
-    // Pre-cutover: presence pulses used to write these as real chat rows — hide them.
+    // Pre-cutover match: a real leftover presence row — hide it.
     expect(isMcpPresenceEventText('Reading Creator Kit files…', '2026-08-06T12:00:00.000Z')).toBe(true);
-    // Post-cutover: presence pulses no longer write chat rows, so this is a genuine
-    // report_progress call that happens to reuse the same English phrasing — keep it.
+    // Post-cutover match: a genuine report_progress reusing the phrasing — keep it.
     expect(isMcpPresenceEventText('Reading Creator Kit files…', '2026-08-10T12:00:00.000Z')).toBe(false);
-    // A non-matching text is never a leftover row, regardless of when it was written.
+    // Non-matching text is never a leftover row, any time.
     expect(isMcpPresenceEventText('Getting the squad moving.', '2026-08-06T12:00:00.000Z')).toBe(false);
     // Unparseable createdAt fails safe (treated as pre-cutover, i.e. filtered).
     expect(isMcpPresenceEventText('Reading Creator Kit files…', 'not-a-date')).toBe(true);
