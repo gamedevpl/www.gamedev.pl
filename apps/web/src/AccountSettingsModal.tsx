@@ -2,6 +2,8 @@ import { useEffect, useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { AccountDeletionControl } from './AccountDeletionControl.js';
+import { StudioCreatorAgentKeyPanel } from './StudioCreatorAgentKeyPanel.js';
+import { StudioOAuthClientsPanel } from './StudioOAuthClientsPanel.js';
 
 /** Account settings remain reachable even before a creator claims a public handle. */
 export function AccountSettingsModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
@@ -45,6 +47,17 @@ export function AccountSettingsModal({ isOpen, onClose }: { isOpen: boolean; onC
         <header className="claim-handle-modal-head">
           <h2 id={headingId}>{t('creatorProfile.accountSettings')}</h2>
         </header>
+        <section className="account-settings-credentials" aria-labelledby={`${headingId}-credentials`}>
+          <h3 id={`${headingId}-credentials`} className="account-settings-section-title">
+            {t('creatorProfile.accountCredentials')}
+          </h3>
+          <p className="studio-rail-credentials-hint">{t('studioPanel.rail.credentialsHint')}</p>
+          <div className="studio-rail-credentials-body">
+            <StudioCreatorAgentKeyPanel />
+            <StudioOAuthClientsPanel />
+          </div>
+        </section>
+
         <AccountDeletionControl labelledBy={`${headingId}-danger`} />
       </div>
     </div>,
