@@ -585,6 +585,25 @@ still be iterating locally and clear it with its next channel write. Feedback ro
 distinguish the submit marker from an explicit `end` (or a confirmed terminal vendor state)
 before superseding a platform session. The API records this as `agentEndedBy: submit | end`.
 
+### A real `report_progress` can collide with the presence closed vocabulary
+
+`isMcpPresenceEventText` (`mcp-presence.ts`) exists to hide _leftover_ chat rows from
+before #661 (2026-08-07), when presence pulses still wrote durable `BuildEvent`s instead
+of only touching `lastAgentSignalAt`. It matches on `text` content alone, against the same
+English strings the tool descriptions themselves echo (`"Reading Creator Kit files…"`,
+`"Checking staged sources…"`, …). Left unbounded, that match also caught a _live_
+`report_progress` call whose text happened to reuse the identical phrasing — plausible,
+since an agent narrating its own action tends to echo the tool's own description — and
+silently dropped it from every timeline read (`attachBuildEvents`, `describeStatus`,
+prior-round history), with the MCP call itself still succeeding. Reported 2026-08-16 as
+"reported progress, not visible in chat".
+
+Fixed by scoping the match to `createdAt`: `isMcpPresenceEventText(text, createdAt)` only
+treats a match as a leftover row when `createdAt` predates the #661 cutover (or is
+missing/unparseable — fails safe toward filtering). A matching string written after the
+cutover is, by construction, a genuine `report_progress` call and is kept. All four read
+sites in `submissions.ts` now pass `event.createdAt`.
+
 ### `end({ summary, ackInboxIds })` is the only channel for a closing answer
 
 The platform reads tool calls, never the agent's transcript. An agent that answers
