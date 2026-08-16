@@ -199,6 +199,8 @@ const PlayViaSchema = z.enum([
   'grid',
   'composer_match',
   'create_showcase',
+  'shelf',
+  'featured_similar',
 ]);
 /**
  * Acquisition strings are re-validated here rather than trusted from the client. The

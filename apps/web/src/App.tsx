@@ -795,6 +795,8 @@ export function App() {
     flushSync(() => {
       navigate(createPath());
     });
+    // A new page starts at the top, not the old offset.
+    window.scrollTo(0, 0);
     const input = document.querySelector<HTMLTextAreaElement>('#hero-prompt .big-prompt-input');
     input?.focus({ preventScroll: true });
   }

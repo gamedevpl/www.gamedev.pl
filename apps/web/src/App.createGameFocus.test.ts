@@ -105,9 +105,12 @@ describe('Create Game menu focus', () => {
 
     expect(window.location.pathname).toBe('/');
 
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => undefined);
     await openCreateGame(container);
 
     expect(window.location.pathname).toBe('/create');
+    // A scrolled home page must not land /create mid-page too.
+    expect(scrollTo).toHaveBeenCalledWith(0, 0);
     const prompt = container.querySelector<HTMLTextAreaElement>('.big-prompt-input');
     expect(prompt).not.toBeNull();
     // A deliberate tap focuses even on this forced-narrow viewport.

@@ -77,16 +77,32 @@ type CatalogRailProps = {
   onPlayTogether?: (game: CatalogEntry, via?: PlayVia) => void;
   // Right-aligned count/link next to the heading.
   headingAside?: string;
+  // Only shelves pass this — curated rails have nowhere to send it.
+  onSeeAll?: () => void;
 };
 
 // Hides itself when empty — no empty-rail state to design.
-export function CatalogRail({ heading, entries, via, onPlayGame, onPlayTogether, headingAside }: CatalogRailProps) {
+export function CatalogRail({
+  heading,
+  entries,
+  via,
+  onPlayGame,
+  onPlayTogether,
+  headingAside,
+  onSeeAll,
+}: CatalogRailProps) {
+  const { t } = useTranslation();
   if (entries.length === 0) return null;
   return (
     <section className="catalog-rail-section">
       <div className="catalog-rail-head">
         <h3 className="catalog-rail-heading">{heading}</h3>
         {headingAside ? <span className="catalog-rail-aside">{headingAside}</span> : null}
+        {onSeeAll ? (
+          <button type="button" className="catalog-rail-see-all" onClick={onSeeAll}>
+            {t('catalog.seeAll')} &rarr;
+          </button>
+        ) : null}
       </div>
       <div className="catalog-rail-track">
         {entries.map((entry) => (
@@ -101,10 +117,30 @@ type FeaturedGameProps = {
   entry: CatalogEntry;
   onPlayGame: (game: CatalogEntry, via?: PlayVia) => void;
   onPlayTogether: (game: CatalogEntry, via?: PlayVia) => void;
+  // Same shelf as the featured pick, minus itself.
+  moreLikeThis?: CatalogEntry[];
 };
 
+function MoreLikeThisThumb({ entry }: { entry: CatalogEntry }) {
+  const screenshots = entry.media?.screenshots ?? [];
+  const selected = screenshots[defaultScreenshotIndex(screenshots)];
+  const posterUrl = selected ? catalogMediaUrl(entry.slug, selected.file, 160) : undefined;
+  return (
+    <a className="more-like-this-thumb" href={`${gamePath(gamePageHandle(entry), entry.slug)}?via=featured_similar`}>
+      {posterUrl ? (
+        <img src={posterUrl} alt="" loading="lazy" decoding="async" />
+      ) : (
+        <div className="more-like-this-thumb-fallback" aria-hidden="true">
+          {entry.title.charAt(0)}
+        </div>
+      )}
+      <span>{entry.title}</span>
+    </a>
+  );
+}
+
 // The curated, daily rotating hero pick above the rails.
-export function FeaturedGame({ entry, onPlayGame, onPlayTogether }: FeaturedGameProps) {
+export function FeaturedGame({ entry, onPlayGame, onPlayTogether, moreLikeThis = [] }: FeaturedGameProps) {
   const { t } = useTranslation();
   const screenshots = entry.media?.screenshots ?? [];
   const selected = screenshots[defaultScreenshotIndex(screenshots)];
@@ -113,6 +149,11 @@ export function FeaturedGame({ entry, onPlayGame, onPlayTogether }: FeaturedGame
   return (
     <article className="featured-game">
       <div className="featured-game-media">
+        <a
+          className="featured-game-hit-area"
+          href={`${gamePath(gamePageHandle(entry), entry.slug)}?via=featured`}
+          aria-label={`${entry.title} — ${t('catalog.openGame')}`}
+        />
         {posterUrl ? <img src={posterUrl} alt="" loading="eager" decoding="async" /> : null}
       </div>
       <div className="featured-game-body">
@@ -149,6 +190,16 @@ export function FeaturedGame({ entry, onPlayGame, onPlayTogether }: FeaturedGame
             </button>
           )}
         </div>
+        {moreLikeThis.length > 0 ? (
+          <div className="more-like-this">
+            <div className="more-like-this-label">{t('catalog.moreLikeThis')}</div>
+            <div className="more-like-this-thumbs">
+              {moreLikeThis.map((similar) => (
+                <MoreLikeThisThumb key={similar.slug} entry={similar} />
+              ))}
+            </div>
+          </div>
+        ) : null}
       </div>
     </article>
   );
