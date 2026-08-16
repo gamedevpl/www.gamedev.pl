@@ -826,6 +826,12 @@ export function ArcadeCatalog({
     scrollToBrowseEverything();
   }
 
+  // A shorter destination page must not leave the reader stranded past its end.
+  function changeBrowsePage(next: number) {
+    setBrowsePage(next);
+    scrollToBrowseEverything();
+  }
+
   // Shelves below the fold, same order as the grid, grouped by category.
   const shelfCategories = useMemo(
     () =>
@@ -1059,7 +1065,7 @@ export function ArcadeCatalog({
                   type="button"
                   disabled={clampedBrowsePage === 1}
                   aria-label={t('catalog.pagination.prev')}
-                  onClick={() => setBrowsePage((p) => Math.max(1, p - 1))}
+                  onClick={() => changeBrowsePage(Math.max(1, clampedBrowsePage - 1))}
                 >
                   &larr;
                 </button>
@@ -1075,7 +1081,7 @@ export function ArcadeCatalog({
                       className={token === clampedBrowsePage ? 'is-active' : undefined}
                       aria-current={token === clampedBrowsePage ? 'page' : undefined}
                       aria-label={t('catalog.pagination.page', { page: token })}
-                      onClick={() => setBrowsePage(token)}
+                      onClick={() => changeBrowsePage(token)}
                     >
                       {token}
                     </button>
@@ -1085,7 +1091,7 @@ export function ArcadeCatalog({
                   type="button"
                   disabled={clampedBrowsePage === browsePageCount}
                   aria-label={t('catalog.pagination.next')}
-                  onClick={() => setBrowsePage((p) => Math.min(browsePageCount, p + 1))}
+                  onClick={() => changeBrowsePage(Math.min(browsePageCount, clampedBrowsePage + 1))}
                 >
                   &rarr;
                 </button>

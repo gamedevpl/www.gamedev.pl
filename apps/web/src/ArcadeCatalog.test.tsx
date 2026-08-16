@@ -876,12 +876,15 @@ describe('ArcadeCatalog shelves', () => {
     const pager = container.querySelector('.catalog-pager');
     expect(pager).not.toBeNull();
 
+    const scrollSpy = vi.spyOn(Element.prototype, 'scrollIntoView');
     await act(async () => {
       [...container.querySelectorAll<HTMLButtonElement>('.catalog-pager button')]
         .find((btn) => btn.textContent === '2')
         ?.click();
     });
     expect(container.querySelectorAll(`${gridSelector} .catalog-card`)).toHaveLength(6);
+    // A page change must not strand the reader down at the pager.
+    expect(scrollSpy).toHaveBeenCalled();
 
     // Sort changes reset the page instead of stranding the reader.
     await act(async () => {

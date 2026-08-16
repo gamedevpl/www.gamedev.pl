@@ -200,6 +200,14 @@ a {
   gap: 8px;
 }
 
+@media (max-width: 1099px) {
+  /* Signed-in chrome (name, bell, Studio chip, language) is already tight in this
+     range — the hamburger's own Create Game row covers it, same as on a phone. */
+  .header-nav {
+    display: none;
+  }
+}
+
 .nav-link {
   background: transparent;
   border: 1px solid transparent;
@@ -3651,11 +3659,6 @@ body.player-open {
     width: 28px;
     height: 28px;
     margin-right: 8px;
-  }
-
-  /* The hamburger owns navigation on a phone — this row would be a second one. */
-  .header-nav {
-    display: none;
   }
 
   .nav-link {
