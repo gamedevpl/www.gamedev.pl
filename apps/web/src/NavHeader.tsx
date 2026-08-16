@@ -172,6 +172,12 @@ export function NavHeader({
         </a>
       </div>
 
+      <nav className="header-nav">
+        <button type="button" className={`nav-link${isOnCreate ? ' is-active' : ''}`} onClick={onCreate}>
+          <PixelIcon name="sparkle" size={14} /> {t('header.navPrompt')}
+        </button>
+      </nav>
+
       <div className="header-actions">
         {user ? (
           <div className="user-profile-badge">

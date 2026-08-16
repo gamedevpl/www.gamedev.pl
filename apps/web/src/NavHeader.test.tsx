@@ -279,8 +279,8 @@ describe('NavHeader menu', () => {
       await Promise.resolve();
     });
 
-    const createGame = Array.from(container.querySelectorAll<HTMLButtonElement>('.nav-link')).find((btn) =>
-      /Create Game/i.test(btn.textContent ?? ''),
+    const createGame = Array.from(container.querySelectorAll<HTMLButtonElement>('.dropdown-menu .nav-link')).find(
+      (btn) => /Create Game/i.test(btn.textContent ?? ''),
     );
     expect(createGame).toBeDefined();
     expect(createGame?.className).toContain('is-active');
@@ -291,6 +291,58 @@ describe('NavHeader menu', () => {
 
     expect(onCreate).toHaveBeenCalled();
     expect(container.querySelector('.dropdown-menu')).toBeNull();
+
+    await act(async () => root.unmount());
+  });
+
+  it('also offers Create Game in the always-visible header nav', async () => {
+    const onCreate = vi.fn();
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith('/api/auth/me')) {
+        return new Response(JSON.stringify({ user: null }));
+      }
+      if (url.endsWith('/api/health')) {
+        return new Response(JSON.stringify({ status: 'ok', provider: 'mock', privateBeta: false }));
+      }
+      return new Response('{}', { status: 404 });
+    });
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        createElement(
+          AuthProvider,
+          null,
+          createElement(NavHeader, {
+            activeBuildCount: 0,
+            onCreate,
+            isOnCreate: true,
+            onHome: vi.fn(),
+            onStudio: vi.fn(),
+            onAdmin: vi.fn(),
+            onReview: vi.fn(),
+            upTarget: null,
+          }),
+        ),
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const headerNavCreate = Array.from(container.querySelectorAll<HTMLButtonElement>('.header-nav .nav-link')).find(
+      (btn) => /Create Game/i.test(btn.textContent ?? ''),
+    );
+    expect(headerNavCreate).toBeDefined();
+    expect(headerNavCreate?.className).toContain('is-active');
+    await act(async () => {
+      headerNavCreate?.click();
+      await Promise.resolve();
+    });
+    expect(onCreate).toHaveBeenCalled();
 
     await act(async () => root.unmount());
   });

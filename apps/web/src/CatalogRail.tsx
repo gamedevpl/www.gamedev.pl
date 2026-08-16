@@ -113,6 +113,11 @@ export function FeaturedGame({ entry, onPlayGame, onPlayTogether }: FeaturedGame
   return (
     <article className="featured-game">
       <div className="featured-game-media">
+        <a
+          className="featured-game-hit-area"
+          href={`${gamePath(gamePageHandle(entry), entry.slug)}?via=featured`}
+          aria-label={`${entry.title} — ${t('catalog.openGame')}`}
+        />
         {posterUrl ? <img src={posterUrl} alt="" loading="eager" decoding="async" /> : null}
       </div>
       <div className="featured-game-body">

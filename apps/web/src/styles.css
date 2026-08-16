@@ -1152,6 +1152,17 @@ button:disabled {
   display: block;
 }
 
+.featured-game-hit-area {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.featured-game-hit-area:focus-visible {
+  outline: 3px solid var(--turquoise);
+  outline-offset: -3px;
+}
+
 .featured-game-body {
   display: flex;
   flex-direction: column;
@@ -3419,9 +3430,9 @@ body.player-open {
     margin-right: 8px;
   }
 
+  /* The hamburger owns navigation on a phone — this row would be a second one. */
   .header-nav {
-    flex-wrap: wrap;
-    justify-content: center;
+    display: none;
   }
 
   .nav-link {
