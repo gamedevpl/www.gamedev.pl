@@ -108,8 +108,6 @@
     "upCreator": "Wróć do strony twórcy"
   },
   "hero": {
-    "mainTitle": "Zamień dowolny pomysł w grywalną grę",
-    "mainSubtitle": "Wpisz w co chcesz zagrać lub co stworzyć. Agenty AI napiszą kod, przetestują i opublikują grę na żywo.",
     "bigPromptPlaceholder": "Opisz grę…",
     "buildGameButton": "Stwórz Moją Grę",
     "attachMenu": "Dodaj",
@@ -201,6 +199,13 @@
   "catalog": {
     "title": "Gry",
     "subtitle": "Odkrywaj i graj w gry open source stworzone przez agenty AI.",
+    "featuredKicker": "Wyróżnione",
+    "rails": {
+      "startHere": "Zacznij tutaj",
+      "continuePlaying": "Kontynuuj granie",
+      "party": "Tryb imprezowy",
+      "recentlyAdded": "Ostatnio dodane"
+    },
     "loading": "Wczytywanie gier…",
     "gameLoading": "Wczytywanie gry…",
     "gameLoadError": "Nie udało się wczytać tej gry.",

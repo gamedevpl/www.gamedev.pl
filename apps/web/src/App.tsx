@@ -68,7 +68,7 @@ import { saveLastBuilder, type BuilderKind } from './builderKind.js';
 import { clearPendingQa, loadPendingQa, savePendingQa, type PendingQaAnswers } from './pendingQa.js';
 import { useAuth } from './AuthContext.js';
 import { AuthModal } from './AuthModal.js';
-import { recordCreateStep, recordStudioStep } from './visitTelemetry.js';
+import { recordCreateStep, recordStudioStep, type PlayVia } from './visitTelemetry.js';
 import { ClosedBetaSplash } from './ClosedBetaSplash.js';
 import { BetaInvitePage } from './BetaInvitePage.js';
 import { BetaWelcomeSplash } from './BetaWelcomeSplash.js';
@@ -79,7 +79,14 @@ import { createPartySession, type PartySession } from './mp/mpApi.js';
 import { parseOAuthReturnParam } from './oauthReturn.js';
 
 type StageContent =
-  | { type: 'catalog'; game: CatalogEntry; initialRemixOpen?: boolean; initialRemixRequest?: string }
+  | {
+      type: 'catalog';
+      game: CatalogEntry;
+      initialRemixOpen?: boolean;
+      initialRemixRequest?: string;
+      // Which home page surface launched this play, if it did.
+      via?: PlayVia;
+    }
   | { type: 'generated'; game: GeneratedGame; prompt: string }
   | { type: 'party'; game: CatalogEntry; session: PartySession };
 
@@ -812,9 +819,9 @@ export function App() {
     return { path: target.path, ariaLabel: t(`header.${target.labelKey}`) };
   }, [route, stageContent, unpublishedPlayTheater, t]);
 
-  function handlePlayGame(game: CatalogEntry) {
+  function handlePlayGame(game: CatalogEntry, via?: PlayVia) {
     // In-place Play from home/profile/game page; `/play/<slug>` auto-opens itself.
-    setStageContent({ type: 'catalog', game });
+    setStageContent({ type: 'catalog', game, ...(via === undefined ? {} : { via }) });
     // Soft refresh so "continue" / genre picks update after the next home visit.
     setRecommendationsRefreshKey((n) => n + 1);
   }
@@ -906,6 +913,7 @@ export function App() {
           creatorHandle={stageContent.game.creatorHandle}
           controls={stageContent.game.controls}
           touch={stageContent.game.touch}
+          via={stageContent.via}
           initialRemixOpen={stageContent.initialRemixOpen}
           initialRemixRequest={stageContent.initialRemixRequest}
         />

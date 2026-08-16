@@ -132,6 +132,12 @@ export function catalogMediaUrl(slug: string, filename: string, width?: number):
   return width === undefined ? base : `${base}?w=${width}`;
 }
 
+// Prefer a mid-capture still; opening is often an empty frame.
+export function defaultScreenshotIndex(screenshots: Array<{ name: string }>): number {
+  const idx = screenshots.findIndex((shot) => shot.name !== 'opening');
+  return idx >= 0 ? idx : 0;
+}
+
 function parseCatalogMedia(value: unknown): CatalogMedia | null {
   if (typeof value !== 'object' || value === null) {
     return null;

@@ -3119,6 +3119,28 @@ describe('catalog route', () => {
   });
 });
 
+describe('featured pool route', () => {
+  it('returns an empty pool when nothing is configured', async () => {
+    const { app } = await createApp({ submissionTokenSecret: secret });
+
+    const res = await app.inject({ method: 'GET', url: '/api/featured' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ slugs: [] });
+    await app.close();
+  });
+
+  it('serves the operator-curated order, unauthenticated, no catalog join', async () => {
+    const { app, store } = await createApp({ submissionTokenSecret: secret });
+    await store.setFeaturedPoolSlugs(['hearthvale', 'apex-sprint', 'arena-tag'], 'g:boss');
+
+    const res = await app.inject({ method: 'GET', url: '/api/featured' });
+    expect(res.statusCode).toBe(200);
+    // Order preserved, not sorted.
+    expect(res.json()).toEqual({ slugs: ['hearthvale', 'apex-sprint', 'arena-tag'] });
+    await app.close();
+  });
+});
+
 describe('published game media route', () => {
   const media = {
     screenshots: [{ name: 'opening', file: 'opening.png' }],

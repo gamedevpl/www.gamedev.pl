@@ -12,7 +12,7 @@ import { ShareGameButton } from './ShareGameButton.js';
 import { VoteWidget } from './VoteWidget.js';
 import { useGamePlayer } from './gamePlayer.js';
 import { useGamepadSpike } from './gamepadSpike.js';
-import { recordRemixStep, recordVisitEvent } from './visitTelemetry.js';
+import { recordRemixStep, recordVisitEvent, type PlayVia } from './visitTelemetry.js';
 import { useGameSaveBridge } from './gameSave.js';
 import { usePresenceBridge } from './presence.js';
 import { useSensingBridge, type BackdropFacing } from './sensing.js';
@@ -92,6 +92,8 @@ type GameTheaterProps = {
   controls?: string;
   /** Catalog touch support; `none` adds the keyboard-only line to the panel. */
   touch?: CatalogTouch | null;
+  // Which home page surface launched this play, if it did.
+  via?: PlayVia;
   /** Open the remix sheet on the first frame (the game-page Remix entry). */
   initialRemixOpen?: boolean;
   /** A request written before theater entry; RemixPanel starts it once safely ready. */
@@ -153,6 +155,7 @@ export function GameTheater({
   creatorHandle = null,
   controls,
   touch = null,
+  via,
   initialRemixOpen = false,
   initialRemixRequest,
   trackPlay = true,
@@ -781,6 +784,7 @@ export function GameTheater({
             title={title}
             frameRef={frameRef}
             embed
+            via={via}
             remixable={remixable}
             trackPlay={trackPlay}
             remixOpenNonce={remixOpenNonce}

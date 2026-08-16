@@ -385,6 +385,58 @@ describe('summarizeVisitFunnel', () => {
     ]);
   });
 
+  it('counts every play by the home-page surface that produced it, not deduped per visit', () => {
+    const playedVia = (visitId: string, via?: string, msSinceStart = 0): VisitEvent =>
+      ({
+        visitId,
+        type: 'play_started',
+        at: '2026-07-26T10:00:00.000Z',
+        msSinceStart,
+        ...(via ? { via } : {}),
+      }) as VisitEvent;
+
+    const funnel = summarizeVisitFunnel([
+      started('a'),
+      // One visit, two surfaces — both plays must count.
+      playedVia('a', 'featured'),
+      playedVia('a', 'rail_continue', 1_000),
+      started('b'),
+      playedVia('b', 'rail_continue'),
+      started('c'),
+      playedVia('c', 'grid'),
+      started('d'),
+      // Outside every covered surface — rolls up as unknown.
+      playedVia('d'),
+    ]);
+
+    expect(funnel.plays).toBe(5);
+    expect(funnel.playVia).toEqual([
+      { via: 'featured', plays: 1 },
+      { via: 'rail_start_here', plays: 0 },
+      { via: 'rail_continue', plays: 2 },
+      { via: 'rail_party', plays: 0 },
+      { via: 'rail_new', plays: 0 },
+      { via: 'grid', plays: 1 },
+      { via: 'composer_match', plays: 0 },
+      { via: 'unknown', plays: 1 },
+    ]);
+  });
+
+  it('omits the unknown playVia row when every play in the window carried one', () => {
+    const funnel = summarizeVisitFunnel([
+      started('a'),
+      {
+        visitId: 'a',
+        type: 'play_started',
+        at: '2026-07-26T10:00:00.000Z',
+        msSinceStart: 0,
+        via: 'featured',
+      } as VisitEvent,
+    ]);
+
+    expect(funnel.playVia.find((row) => row.via === 'unknown')).toBeUndefined();
+  });
+
   it('reads the remix entry against everyone who was shown it, split by control and by when', () => {
     const remix = (visitId: string, step: string, options?: { control?: string; msSinceStart?: number }): VisitEvent =>
       ({

@@ -5,6 +5,7 @@ import { InMemoryStore, type Scorecard, type TelemetryEvent, type VisitEvent } f
 import type {
   AdminSummaryResponse,
   CreationLimitsResponse,
+  FeaturedPoolResponse,
   HealthResponse,
   PublicPlayResponse,
   ScorecardsResponse,
@@ -794,6 +795,84 @@ describe('/api/admin/public-play', () => {
       expect(write.statusCode).toBe(404);
     }
     expect(await store.getPublicPlayConfig()).toBeNull();
+    await app.close();
+  });
+});
+
+describe('/api/admin/featured-pool', () => {
+  let store: InMemoryStore;
+
+  beforeEach(async () => {
+    store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:boss' });
+    await store.upsertUser({ uid: 'g:player' });
+  });
+
+  it('reports an empty pool before an operator saves a list — no deployed fallback here', async () => {
+    const app = await appWith(store);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/admin/featured-pool',
+      headers: authHeaders('g:boss'),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as FeaturedPoolResponse;
+    expect(body.stored).toBeNull();
+    expect(body.slugs).toEqual([]);
+    await app.close();
+  });
+
+  it('replaces the list, deduplicates slugs, keeps their order, and records the operator', async () => {
+    const app = await appWith(store);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/admin/featured-pool',
+      headers: authHeaders('g:boss'),
+      payload: { slugs: ['hearthvale', 'apex-sprint', 'Apex-Sprint', 'arena-tag'] },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as FeaturedPoolResponse;
+    // Order preserved as typed, not alphabetized.
+    expect(body.slugs).toEqual(['hearthvale', 'apex-sprint', 'arena-tag']);
+    expect(body.stored).toMatchObject({ slugs: ['hearthvale', 'apex-sprint', 'arena-tag'], updatedBy: 'g:boss' });
+    await app.close();
+  });
+
+  it('rejects invalid slugs, caps the pool below the public-play list size, and hides the surface from non-operators', async () => {
+    const app = await appWith(store);
+
+    const invalid = await app.inject({
+      method: 'POST',
+      url: '/api/admin/featured-pool',
+      headers: authHeaders('g:boss'),
+      payload: { slugs: ['not valid'] },
+    });
+    expect(invalid.statusCode).toBe(400);
+
+    const tooMany = await app.inject({
+      method: 'POST',
+      url: '/api/admin/featured-pool',
+      headers: authHeaders('g:boss'),
+      payload: { slugs: Array.from({ length: 31 }, (_, i) => `game-${i}`) },
+    });
+    expect(tooMany.statusCode).toBe(400);
+
+    for (const headers of [authHeaders('g:player'), {}]) {
+      const read = await app.inject({ method: 'GET', url: '/api/admin/featured-pool', headers });
+      expect(read.statusCode).toBe(404);
+      const write = await app.inject({
+        method: 'POST',
+        url: '/api/admin/featured-pool',
+        headers,
+        payload: { slugs: ['apex-sprint'] },
+      });
+      expect(write.statusCode).toBe(404);
+    }
+    expect(await store.getFeaturedPoolConfig()).toBeNull();
     await app.close();
   });
 });

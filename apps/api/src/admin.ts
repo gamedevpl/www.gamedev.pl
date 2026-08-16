@@ -38,6 +38,7 @@ import {
   type BetaInvite,
   type BetaInviteStatus,
   type CreationLimits,
+  type FeaturedPoolConfig,
   type PublicPlayConfig,
   type Scorecard,
   type Store,
@@ -164,6 +165,12 @@ export interface PublicPlayResponse {
   propagationMs: number;
 }
 
+// No fallback here — an empty pool is legitimate; the client falls back.
+export interface FeaturedPoolResponse {
+  stored: FeaturedPoolConfig | null;
+  slugs: string[];
+}
+
 const CreationLimitsPatchSchema = z
   .object({
     paused: z.boolean().optional(),
@@ -213,6 +220,19 @@ const PublicPlayPatchSchema = z.object({
         .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'invalid game slug'),
     )
     .max(100),
+});
+
+// Smaller cap than public play — a curated showcase, not an allowlist.
+const FeaturedPoolPatchSchema = z.object({
+  slugs: z
+    .array(
+      z
+        .string()
+        .trim()
+        .toLowerCase()
+        .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'invalid game slug'),
+    )
+    .max(30),
 });
 
 export interface HealthResponse {
@@ -437,6 +457,11 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
       effective: { slugs: stored?.slugs ?? publicPlayFallbackSlugs },
       propagationMs: publicPlayTtlMs,
     };
+  }
+
+  async function readFeaturedPool(): Promise<FeaturedPoolResponse> {
+    const stored = await store.getFeaturedPoolConfig();
+    return { stored, slugs: stored?.slugs ?? [] };
   }
 
   /**
@@ -689,6 +714,31 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
     return reply.status(200).send(await readPublicPlay());
   });
 
+  app.get('/api/admin/featured-pool', async (request, reply) => {
+    if (!isAdminSession(request, adminUids)) {
+      return reply.status(404).send({ error: 'not found' });
+    }
+    return reply.status(200).send(await readFeaturedPool());
+  });
+
+  // A stale (unpublished) slug fails safe on the public read, not here.
+  app.post('/api/admin/featured-pool', async (request, reply) => {
+    if (!isAdminSession(request, adminUids)) {
+      return reply.status(404).send({ error: 'not found' });
+    }
+
+    const parsed = FeaturedPoolPatchSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
+    }
+
+    // Order preserved, duplicates dropped.
+    const slugs = [...new Set(parsed.data.slugs)];
+    await store.setFeaturedPoolSlugs(slugs, request.user!.uid);
+    app.log.info({ slugs, by: request.user!.uid }, 'featured pool changed by operator');
+    return reply.status(200).send(await readFeaturedPool());
+  });
+
   app.get('/api/admin/telemetry/health', async (request, reply) => {
     // 404 rather than 403 for a signed-in non-admin: the existence of an operator
     // surface is not something a beta tester needs confirmed. An unauthenticated
@@ -734,10 +784,8 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
     }
 
     const requested = recentPartitions(parsed.data.days ?? DEFAULT_DAYS, now());
-    const core = await scanPartitions<VisitEvent>(
-      requested,
-      REQUEST_BUDGET,
-      (dateStr, limit) => store.listVisitEvents(dateStr, { limit, excludeType: 'code_completion' }),
+    const core = await scanPartitions<VisitEvent>(requested, REQUEST_BUDGET, (dateStr, limit) =>
+      store.listVisitEvents(dateStr, { limit, excludeType: 'code_completion' }),
     );
     const completion = await scanPartitions<VisitEvent>(
       requested,

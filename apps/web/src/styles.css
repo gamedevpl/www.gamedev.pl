@@ -382,26 +382,6 @@ a {
   text-align: center;
 }
 
-.hero-text-container {
-  margin-bottom: 28px;
-}
-
-.hero-headline {
-  font-size: 2.75rem;
-  font-weight: 700;
-  color: #fff;
-  margin: 0 0 12px;
-  letter-spacing: -0.5px;
-  white-space: nowrap;
-}
-
-@media (max-width: 768px) {
-  .hero-headline {
-    font-size: 1.9rem;
-    white-space: normal;
-  }
-}
-
 .hero-subheadline {
   font-size: 1.15rem;
   color: var(--muted);
@@ -1138,6 +1118,254 @@ button:disabled {
   margin: 0;
   font-size: 0.95rem;
   line-height: 1.4;
+}
+
+/* CURATED HOME SURFACES (home-page-plan.md) — featured slot + rails above the grid */
+
+.featured-game {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(260px, 1fr);
+  border: 1px solid var(--panel-border);
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--panel-card);
+  margin-top: 24px;
+  margin-bottom: 36px;
+}
+
+.featured-game-media {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  background: radial-gradient(circle at 50% 20%, rgba(56, 189, 248, 0.14), transparent 55%), #0a0e12;
+  overflow: hidden;
+}
+
+.featured-game-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.featured-game-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 24px 28px;
+}
+
+.featured-game-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--turquoise);
+}
+
+.featured-game-title {
+  margin: 0;
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.3px;
+}
+
+.featured-game-meta {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.featured-game-author {
+  margin: 0 0 4px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.featured-game-author-link {
+  color: var(--turquoise);
+}
+
+.featured-game-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+@media (max-width: 768px) {
+  .featured-game {
+    grid-template-columns: 1fr;
+    margin-top: 16px;
+    margin-bottom: 28px;
+  }
+
+  .featured-game-body {
+    padding: 18px 18px 22px;
+  }
+
+  .featured-game-title {
+    font-size: 1.3rem;
+  }
+}
+
+.catalog-rail-section {
+  margin-bottom: 32px;
+}
+
+.catalog-rail-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.catalog-rail-heading {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.2px;
+}
+
+.catalog-rail-aside {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.catalog-rail-track {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  /* Scrolls exactly like the grid page does — same idle detection consumes this
+     container's native scroll event, since `catalogScrollIdle.ts` listens in the
+     capture phase and any descendant's scroll bubbles up to it. */
+  scrollbar-width: thin;
+}
+
+.rail-card {
+  flex: 0 0 200px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  background: var(--panel-card);
+  overflow: hidden;
+  transition: border-color 0.15s;
+}
+
+.rail-card:hover {
+  border-color: var(--turquoise);
+}
+
+.rail-card-media {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  background: radial-gradient(circle at 50% 20%, rgba(56, 189, 248, 0.14), transparent 55%), #0a0e12;
+  overflow: hidden;
+}
+
+.rail-card-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.rail-card-fallback {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+
+.rail-card-hit-area {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.rail-card-hit-area:focus-visible {
+  outline: 3px solid var(--turquoise);
+  outline-offset: -3px;
+}
+
+.rail-card-genre {
+  position: absolute;
+  z-index: 1;
+  top: 8px;
+  right: 8px;
+  max-width: 60%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: #fff;
+  background: rgba(6, 10, 14, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 2px 7px;
+  border-radius: 999px;
+  text-transform: uppercase;
+}
+
+.rail-card-party-badge {
+  position: absolute;
+  z-index: 1;
+  bottom: 8px;
+  left: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border: 1px solid var(--turquoise);
+  border-radius: 999px;
+  background: rgba(6, 10, 14, 0.8);
+  color: var(--turquoise);
+  font-size: 0.65rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.rail-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px 12px;
+}
+
+.rail-card-title {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.rail-card-play {
+  align-self: flex-start;
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+@media (max-width: 768px) {
+  .rail-card {
+    flex-basis: 156px;
+  }
 }
 
 /* UNBOXED ARCADE CATALOG */
@@ -3388,10 +3616,6 @@ body.player-open {
     width: 100%;
   }
 
-  .hero-headline {
-    font-size: 2.1rem;
-  }
-
   .hero-subheadline {
     font-size: 1rem;
   }
@@ -3509,10 +3733,6 @@ body.player-open {
     width: 24px;
     height: 24px;
     margin-right: 6px;
-  }
-
-  .hero-headline {
-    font-size: 1.8rem;
   }
 }
 

@@ -108,8 +108,6 @@
     "upCreator": "Back to the creator's page"
   },
   "hero": {
-    "mainTitle": "Turn any idea into a playable web game",
-    "mainSubtitle": "Type what you want to play or build. AI agents code, test, and host it live.",
     "bigPromptPlaceholder": "Describe a game…",
     "buildGameButton": "Build My Game",
     "attachMenu": "Add",
@@ -201,6 +199,13 @@
   "catalog": {
     "title": "Games",
     "subtitle": "Discover and play open source games built by AI agents.",
+    "featuredKicker": "Featured",
+    "rails": {
+      "startHere": "Start here",
+      "continuePlaying": "Continue playing",
+      "party": "Party mode",
+      "recentlyAdded": "Recently added"
+    },
     "loading": "Loading games…",
     "gameLoading": "Loading game…",
     "gameLoadError": "Could not load this game.",

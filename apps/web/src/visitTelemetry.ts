@@ -41,8 +41,8 @@ export type VisitEvent =
       utmCampaign?: string;
     }
   | { type: 'route_viewed'; route: VisitRouteKind }
-  /** A published game began playing. Intentionally carries no slug. */
-  | { type: 'play_started' }
+  // A published game began playing. Intentionally carries no slug.
+  | { type: 'play_started'; via?: PlayVia }
   /**
    * The player opened the "How to play" card. No slug, for the same reason
    * `play_started` carries none: the visit stream must stay unjoinable with the play
@@ -138,6 +138,10 @@ export type BetaWelcomeStep = 'shown' | 'continued' | 'dismissed';
  * Deep-link vs arcade is *not* here — that is visit `entry`, already on `visit_started`.
  */
 export type HowToPlayVia = 'bar' | 'more';
+
+// Which home page surface produced a play; extends via, not a new field.
+export type PlayVia =
+  'featured' | 'rail_start_here' | 'rail_continue' | 'rail_party' | 'rail_new' | 'grid' | 'composer_match';
 
 /** Who builds the round — closed enum; reaches a grouping key. */
 export type BuilderDimension = 'platform' | 'self';

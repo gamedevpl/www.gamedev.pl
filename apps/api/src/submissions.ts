@@ -5561,6 +5561,15 @@ export async function registerSubmissionRoutes(
     }
   });
 
+  // Curated flagship pool, public like the catalog itself; no join.
+  app.get('/api/featured', async (_request, reply) => {
+    if (!store) {
+      return reply.send({ slugs: [] });
+    }
+    const config = await store.getFeaturedPoolConfig();
+    return reply.send({ slugs: config?.slugs ?? [] });
+  });
+
   // Gallery media is committed alongside each published game. Only filenames
   // declared by the validated media metadata are proxyable; this keeps the
   // private repository and arbitrary repository files behind the API boundary.

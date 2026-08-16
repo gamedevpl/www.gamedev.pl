@@ -32,6 +32,20 @@ function hashBetaInviteCode(code: string): string {
   return createHash('sha256').update(code).digest('hex');
 }
 
+// Set preserves insertion order — this list is a rotation, not a set.
+function normalizeFeaturedPoolSlugs(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return [
+    ...new Set(
+      value.flatMap((entry) => {
+        if (typeof entry !== 'string') return [];
+        const slug = entry.trim().toLowerCase();
+        return PUBLIC_PLAY_SLUG_PATTERN.test(slug) ? [slug] : [];
+      }),
+    ),
+  ];
+}
+
 function normalizePublicPlaySlugs(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return [
@@ -708,6 +722,13 @@ export interface CreationLimits {
 }
 
 export interface PublicPlayConfig {
+  slugs: string[];
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
+// Never derive this from isPlatformAuthor — true for erased accounts too.
+export interface FeaturedPoolConfig {
   slugs: string[];
   updatedAt?: string;
   updatedBy?: string;
@@ -2183,6 +2204,9 @@ export interface Store {
   setCreationLimits(patch: Partial<Omit<CreationLimits, 'updatedAt'>>, updatedBy: string): Promise<CreationLimits>;
   getPublicPlayConfig(): Promise<PublicPlayConfig | null>;
   setPublicPlaySlugs(slugs: string[], updatedBy: string): Promise<PublicPlayConfig>;
+  // Stored curated pool, or null when nobody has set one.
+  getFeaturedPoolConfig(): Promise<FeaturedPoolConfig | null>;
+  setFeaturedPoolSlugs(slugs: string[], updatedBy: string): Promise<FeaturedPoolConfig>;
   /** How many submissions everyone together has made on `dateStr`. */
   getGlobalSubmissionCount(dateStr: string): Promise<number>;
   // Tab-complete tokens everyone together has spent on `dateStr`.
@@ -2740,6 +2764,7 @@ export class InMemoryStore implements Store {
   private globalTabCompleteTokens = new Map<string, number>();
   private creationLimits: CreationLimits | null = null;
   private publicPlayConfig: PublicPlayConfig | null = null;
+  private featuredPoolConfig: FeaturedPoolConfig | null = null;
   private waitlist = new Map<string, WaitlistEntry>();
   private betaInvites = new Map<string, BetaInvite>();
   // yyyymmdd -> events recorded that day
@@ -3905,6 +3930,20 @@ export class InMemoryStore implements Store {
       updatedBy,
     };
     this.publicPlayConfig = config;
+    return { ...config, slugs: [...config.slugs] };
+  }
+
+  async getFeaturedPoolConfig(): Promise<FeaturedPoolConfig | null> {
+    return this.featuredPoolConfig ? { ...this.featuredPoolConfig, slugs: [...this.featuredPoolConfig.slugs] } : null;
+  }
+
+  async setFeaturedPoolSlugs(slugs: string[], updatedBy: string): Promise<FeaturedPoolConfig> {
+    const config: FeaturedPoolConfig = {
+      slugs: [...slugs],
+      updatedAt: new Date().toISOString(),
+      updatedBy,
+    };
+    this.featuredPoolConfig = config;
     return { ...config, slugs: [...config.slugs] };
   }
 
@@ -6510,6 +6549,10 @@ export class FirestoreStore implements Store {
     return this.db.collection('opsConfig').doc('publicPlay');
   }
 
+  private featuredPoolConfigRef() {
+    return this.db.collection('opsConfig').doc('featuredPool');
+  }
+
   /** The day's shared allowance. One document per UTC day, so history is free. */
   private globalUsageRef(dateStr: string) {
     return this.db.collection('globalUsage').doc(dateStr);
@@ -6609,6 +6652,28 @@ export class FirestoreStore implements Store {
       updatedBy,
     };
     await this.publicPlayConfigRef().set(config);
+    return { ...config, slugs: [...config.slugs] };
+  }
+
+  async getFeaturedPoolConfig(): Promise<FeaturedPoolConfig | null> {
+    const snap = await this.featuredPoolConfigRef().get();
+    if (!snap.exists) return null;
+    const data = snap.data() as Partial<FeaturedPoolConfig> | undefined;
+    const slugs = normalizeFeaturedPoolSlugs(data?.slugs);
+    return {
+      slugs,
+      ...(data?.updatedAt ? { updatedAt: data.updatedAt } : {}),
+      ...(data?.updatedBy ? { updatedBy: data.updatedBy } : {}),
+    };
+  }
+
+  async setFeaturedPoolSlugs(slugs: string[], updatedBy: string): Promise<FeaturedPoolConfig> {
+    const config: FeaturedPoolConfig = {
+      slugs: [...slugs],
+      updatedAt: new Date().toISOString(),
+      updatedBy,
+    };
+    await this.featuredPoolConfigRef().set(config);
     return { ...config, slugs: [...config.slugs] };
   }
 

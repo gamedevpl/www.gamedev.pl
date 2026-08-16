@@ -1,19 +1,17 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { recordCreateStep } from './visitTelemetry.js';
+import { recordCreateStep, type PlayVia } from './visitTelemetry.js';
 import type { CatalogEntry } from './catalog.js';
 import { SketchModal } from './SketchModal.js';
 import { PixelIcon } from './PixelIcon.js';
 import { getQuota, type PlatformBuilderAvailability } from './submissionApi.js';
 
-/**
- * Gemini-style composer: attach / prompt / mic / build in one pill.
- */
+// Gemini-style composer: attach, prompt, mic, build in one pill.
 
 type HeroPromptSectionProps = {
   initialPrompt?: string;
   catalogEntries?: CatalogEntry[];
-  onPlayGame?: (entry: CatalogEntry) => void;
+  onPlayGame?: (entry: CatalogEntry, via?: PlayVia) => void;
   // refining = pre-submit spec refiner; nothing sent yet
   submissionStatus: 'idle' | 'refining' | 'loading';
   submissionError: string | null;
@@ -351,11 +349,6 @@ export function HeroPromptSection({
 
   return (
     <section className="hero-prompt-section">
-      {/* No mascot: header already has him; keep headline above the fold. */}
-      <div className="hero-text-container">
-        <h1 className="hero-headline">{t('hero.mainTitle')}</h1>
-      </div>
-
       <div
         className={`hero-prompt-card ${isDragging && !isBusy ? 'drag-over' : ''}`}
         onDragOver={handleDragOver}
@@ -507,7 +500,7 @@ export function HeroPromptSection({
                 <button
                   type="button"
                   className="primary-btn play-match-btn"
-                  onClick={() => onPlayGame?.(matchedGame)}
+                  onClick={() => onPlayGame?.(matchedGame, 'composer_match')}
                   disabled={isBusy}
                 >
                   <PixelIcon name="play" size={14} /> {t('hero.smartPlayBtn', { title: matchedGame.title })}
