@@ -565,6 +565,7 @@ describe('ArcadeCatalog curated surfaces', () => {
     stubHomeFetches();
     localStorage.setItem('gdpl.recentPlays', JSON.stringify(['below-fold']));
     const onPlayGame = vi.fn();
+    const onPlayTogether = vi.fn();
     const container = document.createElement('div');
     document.body.appendChild(container);
     const root = createRoot(container);
@@ -578,7 +579,7 @@ describe('ArcadeCatalog curated surfaces', () => {
           catalogError: null,
           catalogEntries: [withParty, entries[1]!],
           onPlayGame,
-          onPlayTogether: vi.fn(),
+          onPlayTogether,
           onRetryCatalog: vi.fn(),
         }),
       );
@@ -591,10 +592,21 @@ describe('ArcadeCatalog curated surfaces', () => {
     );
     expect(partySection?.querySelector('.rail-card-title')?.textContent).toBe(withParty.title);
 
+    // The rail's Play button also carries via, for solo players.
+    const hitArea = partySection?.querySelector<HTMLAnchorElement>('.rail-card-hit-area');
+    expect(hitArea?.getAttribute('href')).toContain('?via=rail_party');
+
+    await act(async () => {
+      partySection?.querySelector<HTMLButtonElement>('.rail-card-party')?.click();
+    });
+    expect(onPlayTogether).toHaveBeenCalledWith(withParty, 'rail_party');
+
     const continueSection = [...container.querySelectorAll('.catalog-rail-section')].find((section) =>
       section.textContent?.includes('Continue playing'),
     );
     expect(continueSection?.querySelector('.rail-card-title')?.textContent).toBe(entries[1]!.title);
+    // Continue playing is single-player only — no Play Together button.
+    expect(continueSection?.querySelector('.rail-card-party')).toBeNull();
 
     await act(async () => {
       continueSection?.querySelector<HTMLButtonElement>('.rail-card-play')?.click();

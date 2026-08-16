@@ -7,7 +7,7 @@ import { fetchGamePage, type GamePage as GamePageData } from './gamePageApi.js';
 import { PixelIcon } from './PixelIcon.js';
 import { ShareGameButton } from './ShareGameButton.js';
 import { creatorPath, gamePath, playPath, studioPath } from './router.js';
-import { recordRemixStep } from './visitTelemetry.js';
+import { isPlayVia, recordRemixStep, type PlayVia } from './visitTelemetry.js';
 import { VoteWidget } from './VoteWidget.js';
 
 type LoadState = 'loading' | 'ready' | 'missing' | 'error';
@@ -39,11 +39,16 @@ export function GamePage({
   onNavigate: (path: string) => void;
   onCanonicalPath?: (path: string) => void;
   onGameLoaded?: (title: string) => void;
-  onPlay?: (game: CatalogEntry) => void;
+  onPlay?: (game: CatalogEntry, via?: PlayVia) => void;
   onRemix: (game: CatalogEntry, request: string) => void;
 }) {
   const { t } = useTranslation();
   const { user, privateBeta } = useAuth();
+  // Only the image link needs this; buttons don't navigate away.
+  const [arrivalVia] = useState(() => {
+    const raw = new URLSearchParams(window.location.search).get('via');
+    return isPlayVia(raw) ? raw : undefined;
+  });
   const [page, setPage] = useState<GamePageData | null>(null);
   const [state, setState] = useState<LoadState>('loading');
   const [authOpen, setAuthOpen] = useState(false);
@@ -188,7 +193,7 @@ export function GamePage({
       setAuthOpen(true);
       return;
     }
-    onPlay?.(entry);
+    onPlay?.(entry, arrivalVia);
     if (!onPlay) onNavigate(playPath(slug));
   };
 

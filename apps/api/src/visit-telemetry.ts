@@ -50,6 +50,7 @@ const RouteKindSchema = z.enum([
   'health',
   'studio',
   'game',
+  'create',
   'notFound',
 ]);
 /**

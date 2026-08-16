@@ -818,6 +818,7 @@ export function ArcadeCatalog({
             entries={partyEntries}
             via="rail_party"
             onPlayGame={onPlayGame}
+            onPlayTogether={onPlayTogether}
             headingAside={partyEntries.length > 0 ? String(partyEntries.length) : undefined}
           />
           <CatalogRail

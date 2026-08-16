@@ -16,10 +16,13 @@ function RailCard({
   entry,
   via,
   onPlayGame,
+  onPlayTogether,
 }: {
   entry: CatalogEntry;
   via: PlayVia;
   onPlayGame: (game: CatalogEntry, via?: PlayVia) => void;
+  // Only the party rail passes this — other rails stay single-CTA.
+  onPlayTogether?: (game: CatalogEntry, via?: PlayVia) => void;
 }) {
   const { t } = useTranslation();
   const screenshots = entry.media?.screenshots ?? [];
@@ -31,7 +34,7 @@ function RailCard({
       <div className="rail-card-media">
         <a
           className="rail-card-hit-area"
-          href={gamePath(gamePageHandle(entry), entry.slug)}
+          href={`${gamePath(gamePageHandle(entry), entry.slug)}?via=${via}`}
           aria-label={`${entry.title} — ${t('catalog.openGame')}`}
         />
         {posterUrl ? (
@@ -50,9 +53,16 @@ function RailCard({
       </div>
       <div className="rail-card-body">
         <h4 className="rail-card-title">{entry.title}</h4>
-        <button type="button" className="primary-btn rail-card-play" onClick={() => onPlayGame(entry, via)}>
-          <PixelIcon name="play" size={12} /> {t('catalog.play')}
-        </button>
+        <div className="rail-card-actions">
+          <button type="button" className="primary-btn rail-card-play" onClick={() => onPlayGame(entry, via)}>
+            <PixelIcon name="play" size={12} /> {t('catalog.play')}
+          </button>
+          {entry.multiplayer && onPlayTogether && (
+            <button type="button" className="secondary-btn rail-card-party" onClick={() => onPlayTogether(entry, via)}>
+              <PixelIcon name="phone" size={12} /> {t('party.playTogether')}
+            </button>
+          )}
+        </div>
       </div>
     </article>
   );
@@ -63,12 +73,14 @@ type CatalogRailProps = {
   entries: CatalogEntry[];
   via: PlayVia;
   onPlayGame: (game: CatalogEntry, via?: PlayVia) => void;
+  // Only the party rail passes this — other rails stay single-CTA.
+  onPlayTogether?: (game: CatalogEntry, via?: PlayVia) => void;
   // Right-aligned count/link next to the heading.
   headingAside?: string;
 };
 
 // Hides itself when empty — no empty-rail state to design.
-export function CatalogRail({ heading, entries, via, onPlayGame, headingAside }: CatalogRailProps) {
+export function CatalogRail({ heading, entries, via, onPlayGame, onPlayTogether, headingAside }: CatalogRailProps) {
   if (entries.length === 0) return null;
   return (
     <section className="catalog-rail-section">
@@ -78,7 +90,7 @@ export function CatalogRail({ heading, entries, via, onPlayGame, headingAside }:
       </div>
       <div className="catalog-rail-track">
         {entries.map((entry) => (
-          <RailCard key={entry.slug} entry={entry} via={via} onPlayGame={onPlayGame} />
+          <RailCard key={entry.slug} entry={entry} via={via} onPlayGame={onPlayGame} onPlayTogether={onPlayTogether} />
         ))}
       </div>
     </section>

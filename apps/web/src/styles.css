@@ -1358,8 +1358,14 @@ button:disabled {
   text-overflow: ellipsis;
 }
 
-.rail-card-play {
-  align-self: flex-start;
+.rail-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.rail-card-play,
+.rail-card-party {
   border-radius: 8px;
   padding: 6px 14px;
   font-size: 0.75rem;

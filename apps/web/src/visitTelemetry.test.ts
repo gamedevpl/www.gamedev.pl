@@ -8,6 +8,7 @@ import { parsePathRoute } from './router.js';
 // production code assuming the real, always-present browser global.
 vi.stubGlobal('crypto', webcrypto);
 import {
+  isPlayVia,
   readVisitIdentity,
   recordBetaInviteStep,
   recordBetaWelcomeStep,
@@ -93,6 +94,20 @@ describe('utmFields', () => {
   });
 });
 
+describe('isPlayVia', () => {
+  it('accepts only the closed set of known values', () => {
+    expect(isPlayVia('rail_party')).toBe(true);
+    expect(isPlayVia('featured')).toBe(true);
+  });
+
+  it('rejects anything else, including URL-shaped noise', () => {
+    expect(isPlayVia('unknown')).toBe(false);
+    expect(isPlayVia('rail_party; DROP TABLE')).toBe(false);
+    expect(isPlayVia(undefined)).toBe(false);
+    expect(isPlayVia(42)).toBe(false);
+  });
+});
+
 describe('routeKind', () => {
   it('maps known views to themselves', () => {
     expect(routeKind('play')).toBe('play');
@@ -122,6 +137,7 @@ describe('route kinds follow the real router', () => {
     ['/studio', 'studio'],
     ['/studio/some-token', 'studio'],
     ['/gtanczyk', 'legal'],
+    ['/create', 'create'],
     // The public game page is its own acquisition bucket (funnel question 2). A
     // handle-shaped pair parses as one whether or not the game exists — same as a
     // profile URL for a handle nobody claimed reporting `legal`.

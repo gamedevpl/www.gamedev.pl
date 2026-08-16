@@ -28,7 +28,18 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 /** Where a visit is, coarsely. Route parameters (tokens, slugs) never travel. */
 export type VisitRouteKind =
   // `draft` is historical only — new visits on `/draft/<slug>` emit `play`.
-  'home' | 'play' | 'draft' | 'status' | 'join' | 'invite' | 'legal' | 'health' | 'studio' | 'game' | 'notFound';
+  | 'home'
+  | 'play'
+  | 'draft'
+  | 'status'
+  | 'join'
+  | 'invite'
+  | 'legal'
+  | 'health'
+  | 'studio'
+  | 'game'
+  | 'create'
+  | 'notFound';
 
 export type VisitEvent =
   | {
@@ -140,15 +151,22 @@ export type BetaWelcomeStep = 'shown' | 'continued' | 'dismissed';
 export type HowToPlayVia = 'bar' | 'more';
 
 // Which home page surface produced a play; extends via, not a new field.
-export type PlayVia =
-  | 'featured'
-  | 'rail_start_here'
-  | 'rail_continue'
-  | 'rail_party'
-  | 'rail_new'
-  | 'grid'
-  | 'composer_match'
-  | 'create_showcase';
+export const PLAY_VIA_VALUES = [
+  'featured',
+  'rail_start_here',
+  'rail_continue',
+  'rail_party',
+  'rail_new',
+  'grid',
+  'composer_match',
+  'create_showcase',
+] as const;
+export type PlayVia = (typeof PLAY_VIA_VALUES)[number];
+
+// Untrusted input from a URL — the runtime check, not just the type.
+export function isPlayVia(value: unknown): value is PlayVia {
+  return typeof value === 'string' && (PLAY_VIA_VALUES as readonly string[]).includes(value);
+}
 
 /** Who builds the round — closed enum; reaches a grouping key. */
 export type BuilderDimension = 'platform' | 'self';
@@ -422,6 +440,9 @@ export function routeKind(view: string): VisitRouteKind {
     // distinguishable from a direct /play deep link, so it does not fold into `play`.
     case 'game':
       return 'game';
+    // Its own surface — cold traffic can land here, not just via home.
+    case 'create':
+      return 'create';
     // The console reports as `health`, the name it had when the funnel started
     // recording it. Renaming the bucket would split one surface's history in two.
     case 'admin':
