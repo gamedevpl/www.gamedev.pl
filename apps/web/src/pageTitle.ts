@@ -34,6 +34,7 @@ export type DocumentTitleCopy = {
   privacy: string;
   terms: string;
   contact: string;
+  create: string;
   proposals: string;
   notFound: string;
   /** Prefixed template for a playable game name, e.g. "Play {{title}}". */
@@ -88,6 +89,8 @@ export function resolveDocumentTitle(route: AppRoute, ctx: DocumentTitleContext)
       return brandedPageTitle(route.doc === 'privacy' ? ctx.copy.privacy : ctx.copy.terms);
     case 'contact':
       return brandedPageTitle(ctx.copy.contact);
+    case 'create':
+      return brandedPageTitle(ctx.copy.create);
     case 'proposals':
       return brandedPageTitle(ctx.copy.proposals);
     case 'creator':

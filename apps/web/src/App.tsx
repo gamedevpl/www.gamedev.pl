@@ -35,6 +35,7 @@ import { StudioConnectWizard } from './StudioConnectWizard.js';
 import type { PublicCreatorProfile } from './creatorProfileApi.js';
 import { LegalPage } from './LegalPage.js';
 import { ContactPage } from './ContactPage.js';
+import { CreatePage } from './CreatePage.js';
 import { ProposalsPage } from './ProposalsPage.js';
 import { CreatorProfilePage } from './CreatorProfilePage.js';
 import { GamePage } from './GamePage.js';
@@ -199,6 +200,7 @@ export function App() {
         privacy: t('legal.privacy'),
         terms: t('legal.terms'),
         contact: t('pageTitle.contact'),
+        create: t('pageTitle.create'),
         proposals: t('pageTitle.proposals'),
         notFound: t('pageTitle.notFound'),
         playNamed: t('pageTitle.playNamed'),
@@ -307,8 +309,8 @@ export function App() {
     // would just 401. Don't fetch (and don't render an error) until signed in.
     // Outside private beta, catalog reads stay public (owner decision).
     if (privateBeta && !user) return;
-    // Home needs the gallery; `/play/<slug>` needs catalog to auto-open theater.
-    if (route.view !== 'home' && route.view !== 'play') return;
+    // Home, /play, and /create all need the catalog loaded.
+    if (route.view !== 'home' && route.view !== 'play' && route.view !== 'create') return;
 
     let cancelled = false;
     // Soft refreshes (Retry, pull-to-refresh) keep the last-good grid on screen —
@@ -1194,49 +1196,60 @@ export function App() {
                 onRemix={handleRemixGame}
                 onRetry={handleRetryCatalog}
               />
+            ) : route.view === 'create' ? (
+              <CreatePage
+                // Remount when a retry loads a new idea, so the prompt box picks it up.
+                retryKey={retryPrompt ?? 'blank'}
+                initialPrompt={retryPrompt ?? ''}
+                catalogEntries={catalogEntries}
+                onPlayGame={handlePlayGame}
+                submissionStatus={submissionStatus}
+                submissionError={submissionError}
+                onSubmitSpec={(concept) => void handleSubmitSpec(concept)}
+                mockStatus={mockStatus}
+                mockError={mockError}
+                onGenerateMock={(prompt) => void handleGenerateMock(prompt)}
+                onPlatformBuilderAvailability={setPlatformBuilderAvailability}
+              />
             ) : (
-              <>
-                <div id="hero-prompt">
-                  <HeroPromptSection
-                    // Remount when a retry loads a new idea, so the prompt box picks it up.
-                    key={retryPrompt ?? 'blank'}
-                    initialPrompt={retryPrompt ?? ''}
-                    catalogEntries={catalogEntries}
-                    onPlayGame={handlePlayGame}
-                    submissionStatus={submissionStatus}
-                    submissionError={submissionError}
-                    onSubmitSpec={(concept) => void handleSubmitSpec(concept)}
-                    mockStatus={mockStatus}
-                    mockError={mockError}
-                    onGenerateMock={(prompt) => void handleGenerateMock(prompt)}
-                    onPlatformBuilderAvailability={setPlatformBuilderAvailability}
-                  />
-                </div>
+              <div id="hero-prompt">
+                <HeroPromptSection
+                  // Remount when a retry loads a new idea, so the prompt box picks it up.
+                  key={retryPrompt ?? 'blank'}
+                  initialPrompt={retryPrompt ?? ''}
+                  catalogEntries={catalogEntries}
+                  onPlayGame={handlePlayGame}
+                  submissionStatus={submissionStatus}
+                  submissionError={submissionError}
+                  onSubmitSpec={(concept) => void handleSubmitSpec(concept)}
+                  mockStatus={mockStatus}
+                  mockError={mockError}
+                  onGenerateMock={(prompt) => void handleGenerateMock(prompt)}
+                  onPlatformBuilderAvailability={setPlatformBuilderAvailability}
+                />
+              </div>
+            )}
 
-                {/* Gated on the pending spec alone: the wizard is the naming step, which
-                always happens, and the questions are the part that is sometimes empty.
-                It portals itself to a full-screen overlay, so nothing here positions it. */}
-                {pendingSpec && (
-                  <CreatorQA
-                    key={qaFormKey}
-                    questions={qaQuestions}
-                    initialConcept={pendingSpec.concept}
-                    initialTitle={pendingSpec.title}
-                    onSubmitWithConcept={handleQaComplete}
-                    onTitleChange={handleQaTitleChange}
-                    onCancel={handleQaCancel}
-                    submitting={submissionStatus === 'loading' || submissionStatus === 'refining'}
-                    error={submissionError}
-                    initialAnswers={latestAnswersRef.current}
-                    onAnswersChange={handleQaAnswersChange}
-                    initialBuilder={qaBuilder}
-                    onBuilderChange={handleQaBuilderChange}
-                    platformUnavailable={
-                      platformBuilderAvailability?.available === false ? platformBuilderAvailability.reason : undefined
-                    }
-                  />
-                )}
-              </>
+            {/* Gated on the pending spec, same as before /create existed; portals itself. */}
+            {route.view !== 'play' && pendingSpec && (
+              <CreatorQA
+                key={qaFormKey}
+                questions={qaQuestions}
+                initialConcept={pendingSpec.concept}
+                initialTitle={pendingSpec.title}
+                onSubmitWithConcept={handleQaComplete}
+                onTitleChange={handleQaTitleChange}
+                onCancel={handleQaCancel}
+                submitting={submissionStatus === 'loading' || submissionStatus === 'refining'}
+                error={submissionError}
+                initialAnswers={latestAnswersRef.current}
+                onAnswersChange={handleQaAnswersChange}
+                initialBuilder={qaBuilder}
+                onBuilderChange={handleQaBuilderChange}
+                platformUnavailable={
+                  platformBuilderAvailability?.available === false ? platformBuilderAvailability.reason : undefined
+                }
+              />
             )}
 
             {stageOverlay}

@@ -136,6 +136,8 @@ export type AppRoute =
   // Public contact form. Same early-exit posture as legal: a contact point behind
   // sign-in is not a published contact point.
   | { view: 'contact' }
+  // /create landing page; same closed-beta gate as home, not open-chrome.
+  | { view: 'create' }
   // The proposer's tracker: changes this person has proposed to other people's games,
   // and what happened to them. Signed-in only, and deliberately its own address rather
   // than a Studio tab — a proposal is not one of your games, and the shelf is.
@@ -179,6 +181,7 @@ const RESERVED_HANDLE_SEGMENTS = new Set([
   'api',
   'auth',
   'contact',
+  'create',
   'creator',
   'creators',
   'dev',
@@ -254,6 +257,10 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
 
   if (normalizedPath === '/contact') {
     return { view: 'contact' };
+  }
+
+  if (normalizedPath === '/create') {
+    return { view: 'create' };
   }
 
   const inviteMatch = normalizedPath.match(/^\/invite\/([^/]+)$/);
@@ -560,6 +567,7 @@ export function navUpTarget(route: AppRoute): NavUpTarget | null {
     case 'review':
     case 'legal':
     case 'contact':
+    case 'create':
     case 'creator':
     case 'proposals':
     case 'notFound':
@@ -613,6 +621,11 @@ export function legalPath(doc: LegalDocId, sectionId?: string): string {
 /** URL for the public contact form. */
 export function contactPath(): string {
   return '/contact';
+}
+
+// URL for the creation landing page.
+export function createPath(): string {
+  return '/create';
 }
 
 /** URL for a public creator profile. */
