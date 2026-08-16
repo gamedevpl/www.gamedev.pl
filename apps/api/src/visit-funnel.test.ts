@@ -418,6 +418,7 @@ describe('summarizeVisitFunnel', () => {
       { via: 'rail_new', plays: 0 },
       { via: 'grid', plays: 1 },
       { via: 'composer_match', plays: 0 },
+      { via: 'create_showcase', plays: 0 },
       { via: 'unknown', plays: 1 },
     ]);
   });

@@ -193,6 +193,7 @@ export const PLAY_VIAS = [
   'rail_new',
   'grid',
   'composer_match',
+  'create_showcase',
 ] as const;
 
 export type PlayVia = (typeof PLAY_VIAS)[number];

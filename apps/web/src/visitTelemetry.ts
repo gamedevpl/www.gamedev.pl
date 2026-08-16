@@ -141,7 +141,14 @@ export type HowToPlayVia = 'bar' | 'more';
 
 // Which home page surface produced a play; extends via, not a new field.
 export type PlayVia =
-  'featured' | 'rail_start_here' | 'rail_continue' | 'rail_party' | 'rail_new' | 'grid' | 'composer_match';
+  | 'featured'
+  | 'rail_start_here'
+  | 'rail_continue'
+  | 'rail_party'
+  | 'rail_new'
+  | 'grid'
+  | 'composer_match'
+  | 'create_showcase';
 
 /** Who builds the round — closed enum; reaches a grouping key. */
 export type BuilderDimension = 'platform' | 'self';

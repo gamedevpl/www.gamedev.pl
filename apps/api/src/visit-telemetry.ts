@@ -197,6 +197,7 @@ const PlayViaSchema = z.enum([
   'rail_new',
   'grid',
   'composer_match',
+  'create_showcase',
 ]);
 /**
  * Acquisition strings are re-validated here rather than trusted from the client. The

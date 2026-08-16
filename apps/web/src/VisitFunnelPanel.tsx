@@ -111,6 +111,7 @@ const PLAY_VIA_LABELS: Record<string, string> = {
   rail_new: 'Recently added rail',
   grid: 'catalog grid',
   composer_match: 'composer match card',
+  create_showcase: '/create showcase',
   unknown: 'unknown (direct link, party, etc.)',
 };
 

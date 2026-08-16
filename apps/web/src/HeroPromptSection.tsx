@@ -22,6 +22,8 @@ type HeroPromptSectionProps = {
   onGenerateMock?: (prompt: string) => void;
   // Fires once the quota poll resolves.
   onPlatformBuilderAvailability?: (availability: PlatformBuilderAvailability | undefined) => void;
+  // Click-to-fill prompt starters; unused on home, /create shows a few.
+  exampleChips?: string[];
 };
 
 export type VisualAttachment = {
@@ -115,6 +117,7 @@ export function HeroPromptSection({
   mockStatus,
   mockError,
   onPlatformBuilderAvailability,
+  exampleChips,
 }: HeroPromptSectionProps) {
   const { t } = useTranslation();
   // Skip autofocus on phone — keyboard would hide the composer.
@@ -448,6 +451,24 @@ export function HeroPromptSection({
               <span className="build-btn-label">{busyLabel ?? t('hero.buildGameButton')}</span>
             </button>
           </div>
+
+          {exampleChips && exampleChips.length > 0 && !isBusy && (
+            <div className="prompt-examples">
+              {exampleChips.map((example) => (
+                <button
+                  type="button"
+                  key={example}
+                  className="prompt-example-chip"
+                  onClick={() => {
+                    setPromptText(example);
+                    recordCreateStep('prompt_started');
+                  }}
+                >
+                  {example}
+                </button>
+              ))}
+            </div>
+          )}
 
           {busyLabel ? (
             <p className="prompt-busy-status" role="status" aria-live="polite">
