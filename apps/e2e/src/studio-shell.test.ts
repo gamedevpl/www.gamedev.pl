@@ -83,7 +83,39 @@ function fixtureGames() {
     lastKnownStatus: 'published' as const,
     slug: i === 0 ? FIXTURE_SLUG : `${FIXTURE_SLUG}-${i}`,
     publishedAt: '2026-01-02T00:00:00.000Z',
+    // Only game 0 exposes Code; the rest pad the shelf.
+    codeSurface: i === 0,
   }));
+}
+
+// Code surface sources route, stubbed read-only (#862).
+async function stubCodeSurfaceData(page: Page) {
+  await page.route(`**/api/me/studio/games/${FIXTURE_SLUG}/sources**`, async (route) => {
+    const request = route.request();
+    if (request.method() !== 'GET') {
+      await route.fulfill({ status: 405, contentType: 'application/json', body: '{"error":"method not allowed"}' });
+      return;
+    }
+    const path = new URL(request.url()).pathname.replace(/\/$/, '');
+    if (path.endsWith('/sources/kit-declaration')) {
+      await route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"not found"}' });
+      return;
+    }
+    if (path.endsWith('/sources')) {
+      await fulfillJson(route, {
+        slug: FIXTURE_SLUG,
+        version: '1',
+        files: [{ path: 'game.ts', content: "import { startGame } from './game/runtime.ts';\n\nstartGame();\n" }],
+        deleted: [],
+        // agent_round: the banner state that crowded Akcje (#862).
+        readOnly: true,
+        reason: 'agent_round',
+        staged: { totalBytes: 0, maxBytes: 200_000, maxFiles: 50, updatedAt: null },
+      });
+      return;
+    }
+    await route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"not found"}' });
+  });
 }
 
 /**
@@ -140,6 +172,7 @@ describe.skipIf(!prereq.ok)('the studio thread as an app screen', () => {
     const context = await signedInContext(browser, api);
     page = await context.newPage();
     await stubStudioThreadData(page);
+    await stubCodeSurfaceData(page);
   });
 
   afterAll(async () => {
@@ -339,6 +372,21 @@ describe.skipIf(!prereq.ok)('the studio thread as an app screen', () => {
         expect(sendIsHittable, `.${bar} covers the composer's send button at ${viewport.width}px`).toBe(true);
       }
 
+      // #862: padding alone left each strip pill ~24px tall below 801px.
+      if (viewport.width <= 800) {
+        const pillHeights = await page.evaluate(() =>
+          Array.from(document.querySelectorAll('.studio-strip-actions .studio-head-action')).map(
+            (el) => el.getBoundingClientRect().height,
+          ),
+        );
+        expect(pillHeights.length, 'the strip should still render its action pills').toBeGreaterThan(0);
+        for (const height of pillHeights) {
+          expect(height, `a strip action pill is only ${height}px tall at ${viewport.width}px`).toBeGreaterThanOrEqual(
+            44,
+          );
+        }
+      }
+
       expect(describeProblems(watcher.drain())).toBe('');
     });
   }
@@ -458,6 +506,84 @@ describe.skipIf(!prereq.ok)('the studio thread as an app screen', () => {
         release();
         await page.unroute('**/api/me/studio**', holdShelf);
       }
+    });
+  }
+
+  // #862: no flex-wrap below 1099px let Akcje crowd the banner.
+  const CODE_HEADER_VIEWPORTS = [
+    { label: 'phone', width: 390, height: 844, wraps: true },
+    { label: 'wide tablet', width: 850, height: 900, wraps: true },
+    { label: 'desktop', width: 1440, height: 900, wraps: false },
+  ] as const;
+
+  for (const viewport of CODE_HEADER_VIEWPORTS) {
+    it(`keeps the Code header wrapped and on-screen on a ${viewport.label}`, async () => {
+      const watcher = collectProblems(page);
+
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      await visit(page, '/studio', 4_000);
+      await page.waitForSelector('.status-composer.is-compact', { state: 'visible', timeout: 15_000 });
+
+      const codeToggle = page.locator('.studio-strip-actions button[aria-label="Code"]');
+      try {
+        await codeToggle.waitFor({ state: 'visible', timeout: 15_000 });
+      } catch {
+        expect.fail('the Code tab toggle never appeared — the fixture game must expose codeSurface');
+      }
+      await codeToggle.click();
+
+      try {
+        await page.waitForSelector('.code-surface-readonly-banner', { state: 'visible', timeout: 15_000 });
+      } catch {
+        expect.fail('the read-only banner never rendered — the exact header state #862 fixed would go unchecked');
+      }
+
+      const geometry = await page.evaluate(() => {
+        const head = document.querySelector('.code-surface-head');
+        const back = document.querySelector('.code-surface-head .studio-head-action');
+        const actions = document.querySelector('.code-surface-actions-trigger');
+        if (!head || !back || !actions) return null;
+        const headRect = head.getBoundingClientRect();
+        const backRect = back.getBoundingClientRect();
+        const actionsRect = actions.getBoundingClientRect();
+        return {
+          headScrollWidth: head.scrollWidth,
+          headClientWidth: head.clientWidth,
+          pageScrollWidth: document.documentElement.scrollWidth,
+          viewportWidth: window.innerWidth,
+          // A wrapped Akcje sits well below the back button's row.
+          akcjeWrapped: actionsRect.top - backRect.top > 8,
+          actionsRight: actionsRect.right,
+          headRight: headRect.right,
+        };
+      });
+
+      if (!geometry) {
+        expect.fail('the Code header, back button, or Akcje trigger did not mount');
+        return;
+      }
+
+      expect(
+        geometry.headScrollWidth,
+        `code-surface-head overflows horizontally at ${viewport.width}px (${geometry.headScrollWidth} > ${geometry.headClientWidth})`,
+      ).toBeLessThanOrEqual(geometry.headClientWidth + 1);
+      expect(geometry.pageScrollWidth, `the page scrolls horizontally at ${viewport.width}px`).toBeLessThanOrEqual(
+        geometry.viewportWidth + 1,
+      );
+      // Akcje's right edge must stay inside the header, wrapped or not.
+      expect(
+        geometry.actionsRight,
+        `Akcje's right edge (${geometry.actionsRight}) sits past the head's own bound (${geometry.headRight}) at ${viewport.width}px`,
+      ).toBeLessThanOrEqual(geometry.headRight + 1);
+
+      expect(
+        geometry.akcjeWrapped,
+        viewport.wraps
+          ? `Akcje should have dropped to its own line below ${1100}px but stayed on the back button's row`
+          : `Akcje should share the back button's row above 1099px but wrapped instead`,
+      ).toBe(viewport.wraps);
+
+      expect(describeProblems(watcher.drain())).toBe('');
     });
   }
 });
