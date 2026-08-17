@@ -410,4 +410,42 @@ describe('Party navigation from elsewhere', () => {
 
     await act(async () => root.unmount());
   });
+
+  it('does not leak the party starter into Home once the visitor leaves /create', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    stubAppFetchesWithCatalog();
+
+    await i18n.changeLanguage('en');
+    window.history.pushState(null, '', '/party');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(AuthProvider, null, createElement(App)));
+      await flushEffects();
+      await flushEffects();
+      await flushEffects();
+      await flushEffects();
+    });
+
+    const buildButton = container.querySelector<HTMLButtonElement>('.party-custom-btn');
+    await act(async () => {
+      buildButton?.click();
+    });
+    expect(window.location.pathname).toBe('/create');
+    expect(container.querySelector<HTMLTextAreaElement>('.big-prompt-input')?.value).toContain('party game');
+
+    const logo = container.querySelector<HTMLAnchorElement>('.logo');
+    await act(async () => {
+      logo?.click();
+      await flushEffects();
+    });
+
+    expect(window.location.pathname).toBe('/');
+    expect(container.querySelector<HTMLTextAreaElement>('.big-prompt-input')?.value ?? '').toBe('');
+
+    await act(async () => root.unmount());
+  });
 });

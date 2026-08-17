@@ -797,12 +797,20 @@ export function App() {
   // Deliberate click focuses even on phones, unlike page-load autofocus.
   function handleCreateNav() {
     flushSync(() => {
+      // A generic Create always starts blank, not mid a leftover seed.
+      setRetryPrompt(null);
       navigate(createPath());
     });
     // A new page starts at the top, not the old offset.
     window.scrollTo(0, 0);
     const input = document.querySelector<HTMLTextAreaElement>('#hero-prompt .big-prompt-input');
     input?.focus({ preventScroll: true });
+  }
+
+  // Home should not keep showing a seed from an abandoned create flow.
+  function handleHomeNav() {
+    setRetryPrompt(null);
+    navigate('/');
   }
 
   // Same handoff as Create, concept pre-loaded with party framing.
@@ -974,7 +982,7 @@ export function App() {
       <div className="app app--legal">
         <NavHeader
           activeBuildCount={activeBuildCount}
-          onHome={() => navigate('/')}
+          onHome={handleHomeNav}
           onStudio={() => navigate(studioPath())}
           onAdmin={() => navigate(adminPath())}
           onReview={() => navigate(reviewPath())}
@@ -998,7 +1006,7 @@ export function App() {
       <div className="app app--contact">
         <NavHeader
           activeBuildCount={activeBuildCount}
-          onHome={() => navigate('/')}
+          onHome={handleHomeNav}
           onStudio={() => navigate(studioPath())}
           onAdmin={() => navigate(adminPath())}
           onReview={() => navigate(reviewPath())}
@@ -1022,7 +1030,7 @@ export function App() {
       <div className="app app--creator">
         <NavHeader
           activeBuildCount={activeBuildCount}
-          onHome={() => navigate('/')}
+          onHome={handleHomeNav}
           onStudio={() => navigate(studioPath())}
           onAdmin={() => navigate(adminPath())}
           onReview={() => navigate(reviewPath())}
@@ -1059,7 +1067,7 @@ export function App() {
       <div className="app app--game">
         <NavHeader
           activeBuildCount={activeBuildCount}
-          onHome={() => navigate('/')}
+          onHome={handleHomeNav}
           onStudio={() => navigate(studioPath())}
           onAdmin={() => navigate(adminPath())}
           onReview={() => navigate(reviewPath())}
@@ -1100,7 +1108,7 @@ export function App() {
       <div className="app app--proposals">
         <NavHeader
           activeBuildCount={activeBuildCount}
-          onHome={() => navigate('/')}
+          onHome={handleHomeNav}
           onStudio={() => navigate(studioPath())}
           onAdmin={() => navigate(adminPath())}
           onReview={() => navigate(reviewPath())}
@@ -1125,7 +1133,7 @@ export function App() {
       <div className="app app--not-found">
         <NavHeader
           activeBuildCount={activeBuildCount}
-          onHome={() => navigate('/')}
+          onHome={handleHomeNav}
           onStudio={() => navigate(studioPath())}
           onAdmin={() => navigate(adminPath())}
           onReview={() => navigate(reviewPath())}
@@ -1136,7 +1144,7 @@ export function App() {
           onUp={navigate}
         />
         <main className="content">
-          <NotFoundPage onHome={() => navigate('/')} />
+          <NotFoundPage onHome={handleHomeNav} />
         </main>
         <SiteFooter />
       </div>
@@ -1178,7 +1186,7 @@ export function App() {
       <div className="app app--unpublished-play">
         <NavHeader
           activeBuildCount={activeBuildCount}
-          onHome={() => navigate('/')}
+          onHome={handleHomeNav}
           onStudio={() => navigate(studioPath())}
           onAdmin={() => navigate(adminPath())}
           onReview={() => navigate(reviewPath())}
@@ -1206,7 +1214,7 @@ export function App() {
     <div className="app">
       <NavHeader
         activeBuildCount={activeBuildCount}
-        onHome={() => navigate('/')}
+        onHome={handleHomeNav}
         onStudio={() => navigate(studioPath())}
         onAdmin={() => navigate(adminPath())}
         onReview={() => navigate(reviewPath())}
