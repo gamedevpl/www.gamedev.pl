@@ -1196,7 +1196,6 @@
     "pageSubhead": "Wybierz grę, udostępnij kod, a każdy telefon w pokoju staje się kontrolerem — bez instalowania aplikacji, bez zakładania konta.",
     "diagramAlt": "Jeden wspólny ekran prowadzi grę; każdy telefon wysyła do niego wejście swojego gracza.",
     "diagramCaption": "Ekran prowadzi grę. Telefony tego nie robią — każdy tylko wysyła do niej dotknięcia swojego gracza.",
-    "diagramScreenLabel": "Wspólny ekran",
     "diagramPhonesLabel": "Wasze telefony",
     "diagramInputLabel": "wejście",
     "howHeading": "Jak to działa",

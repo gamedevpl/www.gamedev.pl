@@ -1184,7 +1184,6 @@
     "pageSubhead": "Pick a game, share the code, and every phone in the room becomes a controller — no app to install, no account to make.",
     "diagramAlt": "One shared screen runs the game; each phone sends its player's input to it.",
     "diagramCaption": "The screen runs the game. Phones don't — each just sends its player's taps to it.",
-    "diagramScreenLabel": "The shared screen",
     "diagramPhonesLabel": "Your phones",
     "diagramInputLabel": "input",
     "howHeading": "How it works",

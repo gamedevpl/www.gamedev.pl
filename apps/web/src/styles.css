@@ -10112,9 +10112,129 @@ button.builder-mode-selector:disabled {
 .party-diagram svg {
   display: block;
   width: 100%;
-  max-width: 480px;
+  max-width: 540px;
   height: auto;
   margin: 0 auto;
+}
+
+.party-diagram-ripple {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .party-diagram-glow {
+    animation: party-diagram-pulse-glow 3.2s ease-in-out infinite;
+  }
+
+  .party-diagram-cam {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: party-diagram-cam-pulse 1.6s ease-in-out infinite;
+  }
+
+  .party-diagram-character {
+    transform-box: fill-box;
+    transform-origin: bottom center;
+    animation: party-diagram-hop 0.9s ease-in-out infinite;
+  }
+
+  .party-diagram-collect {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: party-diagram-bob 1.4s ease-in-out infinite;
+  }
+
+  .party-diagram-collect-a {
+    animation-delay: 0s;
+  }
+
+  .party-diagram-collect-b {
+    animation-delay: 0.5s;
+  }
+
+  .party-diagram-flow {
+    animation: party-diagram-flow 0.9s linear infinite;
+  }
+
+  .party-diagram-ripple {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: party-diagram-ripple 2.4s ease-out infinite;
+  }
+
+  .party-diagram-dpad {
+    animation: party-diagram-dpad-press 2s ease-in-out infinite;
+  }
+}
+
+@keyframes party-diagram-pulse-glow {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes party-diagram-cam-pulse {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.2);
+  }
+}
+
+@keyframes party-diagram-hop {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes party-diagram-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes party-diagram-flow {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+
+@keyframes party-diagram-ripple {
+  0% {
+    transform: scale(0.4);
+    opacity: 0.55;
+  }
+  100% {
+    transform: scale(1.35);
+    opacity: 0;
+  }
+}
+
+@keyframes party-diagram-dpad-press {
+  0%,
+  80%,
+  100% {
+    opacity: 0.35;
+  }
+  90% {
+    opacity: 1;
+  }
 }
 
 .party-diagram figcaption {
