@@ -346,7 +346,8 @@
       "code": "Code"
     },
     "strip": {
-      "moreActions": "More"
+      "moreActions": "More",
+      "exit": "Leave Studio"
     },
     "code": {
       "back": "Thread",

@@ -96,9 +96,10 @@ const WINDOWS = [1, 7, 30];
  */
 const SHEET_MAX_WIDTH = 1099;
 const SHEET_QUERY = `(max-width: ${SHEET_MAX_WIDTH}px)`;
-/** Matches the phone drawer breakpoint in styles.css — shelf off-canvas when a game is open. */
+// Matches styles.css. Height too: a landscape phone clears the width alone.
 const SHELF_DRAWER_MAX_WIDTH = 800;
-const SHELF_DRAWER_QUERY = `(max-width: ${SHELF_DRAWER_MAX_WIDTH}px)`;
+const SHELF_DRAWER_MAX_HEIGHT = 500;
+const SHELF_DRAWER_QUERY = `(max-width: ${SHELF_DRAWER_MAX_WIDTH}px), (max-height: ${SHELF_DRAWER_MAX_HEIGHT}px)`;
 
 type NavigateOptions = { replace?: boolean };
 
@@ -536,7 +537,12 @@ export function CreatorStudioView({
 
   useEffect(() => {
     const query = typeof window.matchMedia === 'function' ? window.matchMedia(SHELF_DRAWER_QUERY) : null;
-    const sync = () => setShelfIsDrawer(query ? query.matches : window.innerWidth <= SHELF_DRAWER_MAX_WIDTH);
+    const sync = () =>
+      setShelfIsDrawer(
+        query
+          ? query.matches
+          : window.innerWidth <= SHELF_DRAWER_MAX_WIDTH || window.innerHeight <= SHELF_DRAWER_MAX_HEIGHT,
+      );
     sync();
     query?.addEventListener('change', sync);
     window.addEventListener('resize', sync);
@@ -952,6 +958,7 @@ export function CreatorStudioView({
                         shareSlot={shareSlot}
                         onOpenTheater={() => setTheaterOpen(true)}
                         isCompact={shelfIsDrawer}
+                        onExit={() => onNavigate('/')}
                       />
 
                       {theaterOpen ? (

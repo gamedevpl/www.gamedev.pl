@@ -348,7 +348,8 @@
       "code": "Kod"
     },
     "strip": {
-      "moreActions": "Więcej"
+      "moreActions": "Więcej",
+      "exit": "Opuść Studio"
     },
     "code": {
       "back": "Wątek",

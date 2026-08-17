@@ -58,6 +58,8 @@ export type StudioStripProps = {
   onOpenTheater?: () => void;
   // ≤800px (shelfIsDrawer): fold secondary actions behind a ⋯ menu.
   isCompact?: boolean;
+  // Replaces the global header's back arrow, hidden below 800px.
+  onExit?: () => void;
 };
 
 export function StudioStrip({
@@ -86,6 +88,7 @@ export function StudioStrip({
   shareSlot,
   onOpenTheater,
   isCompact = false,
+  onExit,
 }: StudioStripProps) {
   const { t, i18n } = useTranslation();
   const [overflowOpen, setOverflowOpen] = useState(false);
@@ -134,6 +137,12 @@ export function StudioStrip({
 
   return (
     <header className="studio-strip">
+      {isCompact && onExit ? (
+        <button type="button" className="studio-strip-exit" onClick={onExit} aria-label={t('studioPanel.strip.exit')}>
+          <PixelIcon name="arrowLeft" size={16} />
+        </button>
+      ) : null}
+
       <button
         type="button"
         className="studio-shelf-open"

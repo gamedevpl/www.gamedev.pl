@@ -7181,8 +7181,14 @@ a.user-name--profile:focus-visible {
 
    800px, not 900, because that is where the studio itself changes shape: below it the
    shelf becomes a drawer and the open-shelf control joins the title row. Between 801 and
-   900 the shelf is still a column beside the thread. */
-@media (max-width: 800px) {
+   900 the shelf is still a column beside the thread.
+
+   Height joins width for the same reason a landscape phone joins portrait: 844×390 clears
+   800px but has no more room than 390×844 turned sideways — the desktop shell (sidebar +
+   inline strip) doesn't fit either way and just wraps everywhere instead. The min-width
+   companion block below stays the exact complement (801px AND 501px) so the two can never
+   both match the same viewport. */
+@media (max-width: 800px), (max-height: 500px) {
   /* Every wrapper between the shell and the transcript has to give up its height, or the
      scroller at the bottom of the chain has nothing to measure itself against. */
   .app:has(.studio-layout.is-game-open) .studio-panel,
@@ -7377,8 +7383,12 @@ a.user-name--profile:focus-visible {
    scroller, composer pinned above the bottom. Turn prose keeps its own 68ch measure.
 
    The shell itself — the window-owning, footer-hiding, banner-reflowing part — is
-   above, outside any media query, and shared with the phone. */
-@media (min-width: 801px) {
+   above, outside any media query, and shared with the phone.
+
+   min-height 501px joins min-width 801px so this stays the exact complement of the
+   phone block's `(max-width: 800px), (max-height: 500px)` — a short landscape phone
+   must never match both. */
+@media (min-width: 801px) and (min-height: 501px) {
   .app:has(.studio-layout.is-game-open) > .content {
     max-width: none;
     padding: 0;
@@ -14445,6 +14455,34 @@ button.builder-mode-selector:disabled {
   font-weight: 700;
 }
 
+/* The strip's own back arrow — only rendered (see StudioStrip.tsx) once the
+   global header's is hidden below 800px/500px, so there is no toggle to pair
+   with a shown/hidden state here, just a fixed-size peer for the folder icon. */
+.studio-strip-exit {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.studio-strip-exit:hover {
+  color: var(--turquoise);
+  background: rgba(0, 228, 172, 0.08);
+}
+
+.studio-strip-exit:focus-visible {
+  outline: 2px solid var(--turquoise);
+  outline-offset: 2px;
+}
+
 /* Expand/collapse on the shelf itself (desktop rail ↔ full list, phone drawer close). */
 .studio-shelf-edge-toggle {
   display: none;
@@ -14511,27 +14549,31 @@ button.builder-mode-selector:disabled {
   box-shadow: 0 0 0 2px var(--panel);
 }
 
-/* A game open in Studio on a phone already has its own back-arrow-equivalent
-   (the strip's folder button, for switching games) and its own action row —
-   the site chrome above it was a second, redundant nav bar competing for the
-   same few hundred px. Collapse it to just the "leave Studio" back arrow;
-   logo, nav links, avatar, bell, and hamburger all wait behind that tap. */
-@media (max-width: 800px) {
+/* A game open in Studio on a phone already has its own back-arrow-equivalent —
+   the strip's folder button opens the same shelf `navUpTarget` sends "Up" to for
+   a selected game (see router.ts), just as an in-page drawer instead of a URL
+   change. The site chrome above it was a second, fully redundant nav bar eating
+   a whole row for a control the strip already offers. Drop the bar entirely
+   rather than shrink it to a lone arrow — a one-row header beats a two-row one
+   with an empty second row. The strip picks up the safe-area inset this bar
+   used to pay. */
+@media (max-width: 800px), (max-height: 500px) {
   .app:has(.studio-layout.is-game-open) .app-header {
-    gap: 0;
+    display: none;
   }
 
-  .app:has(.studio-layout.is-game-open) .app-header .logo,
-  .app:has(.studio-layout.is-game-open) .app-header .header-nav,
-  .app:has(.studio-layout.is-game-open) .app-header .header-actions {
-    display: none;
+  .app:has(.studio-layout.is-game-open) .studio-strip {
+    padding-top: max(8px, env(safe-area-inset-top));
   }
 }
 
 /* 5+ games on a desktop: collapse to a left-edge folder+badge after selection.
    Width matches the header mascot column, so the rail and the logo share one vertical
-   band instead of a skinny strip floating left of the face. */
-@media (min-width: 801px) {
+   band instead of a skinny strip floating left of the face. min-height 501px keeps
+   this the exact complement of the phone/landscape-phone block above — otherwise a
+   short-but-wide viewport gets this collapsed-rail grid *and* the drawer grid from
+   the shelf-becomes-drawer block below, fighting over the same grid-template-columns. */
+@media (min-width: 801px) and (min-height: 501px) {
   /* Variable on `.app` (ancestor of both header and shelf) — children inherit it. */
   .app:has(.studio-layout.is-game-open.is-compact-shelf:not(.is-shelf-open)) {
     --studio-shelf-collapsed-width: 80px;
@@ -15411,14 +15453,15 @@ button.builder-mode-selector:disabled {
   font-size: 0.8rem;
 }
 
-@media (max-width: 800px) {
+@media (max-width: 800px), (max-height: 500px) {
   .studio-layout {
     grid-template-columns: 1fr;
   }
 
   /* Phone + game open: the shelf is a drawer, never a permanent column. Closed it sits
      off the left edge; open it covers ~90% of the width over a backdrop — the usual
-     mobile nav pattern, not a second page of cards above the thread. */
+     mobile nav pattern, not a second page of cards above the thread. Height joins
+     width here too — see the matching note on the shell's own phone block above. */
   .studio-layout.is-game-open > .studio-shelf {
     position: fixed;
     top: 0;
