@@ -628,6 +628,44 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(secondStructured.entries.map((e) => e.text)).toEqual(['message-1', 'message-2']);
   });
 
+  it('nudges transcript_unread on a resumed round until get_transcript runs, never on round 1', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    app = await createApp(store);
+    const sessionId = await initialize(app);
+
+    // Round 1: fresh round, nothing to catch up on.
+    const firstStarted = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
+    expect((firstStarted.structured as { round: number }).round).toBe(1);
+    const freshBrief = await callTool(
+      app,
+      'get_brief',
+      { sessionKey: (firstStarted.structured as { sessionKey: string }).sessionKey },
+      { 'mcp-session-id': sessionId },
+    );
+    expect((freshBrief.structured as { warnings?: Array<{ code: string }> }).warnings ?? []).not.toContainEqual(
+      expect.objectContaining({ code: 'transcript_unread' }),
+    );
+
+    // Bump to round 2 the way a revision round does, then reconnect.
+    await store.bumpRoundGeneration(ISSUE);
+    const secondSessionId = await initialize(app);
+    const started = await callTool(app, 'start', { key: roundKey(2) }, { 'mcp-session-id': secondSessionId });
+    expect((started.structured as { round: number }).round).toBe(2);
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    const brief = await callTool(app, 'get_brief', { sessionKey }, { 'mcp-session-id': secondSessionId });
+    expect((brief.structured as { warnings?: Array<{ code: string }> }).warnings).toContainEqual(
+      expect.objectContaining({ code: 'transcript_unread' }),
+    );
+
+    await callTool(app, 'get_transcript', { sessionKey }, { 'mcp-session-id': secondSessionId });
+    const afterRead = await callTool(app, 'get_brief', { sessionKey }, { 'mcp-session-id': secondSessionId });
+    expect((afterRead.structured as { warnings?: Array<{ code: string }> }).warnings ?? []).not.toContainEqual(
+      expect.objectContaining({ code: 'transcript_unread' }),
+    );
+  });
+
   it('keeps the Copilot MCP connector inert without a round key', async () => {
     const store = new InMemoryStore();
     await seedJob(store);

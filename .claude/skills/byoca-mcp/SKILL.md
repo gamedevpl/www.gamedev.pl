@@ -128,6 +128,49 @@ further back with `cursor` when that window genuinely does not answer what is ne
 not speculatively. The latest message is the tail of a conversation, not the whole of
 it, but neither is `get_transcript`'s reply the whole of it either — that is the point.
 
+**Prose in a prompt is advice; MCP has no way to force a tool call.** So the round also
+carries a soft nudge, `transcript_unread` (`mcp-session-nudges.ts`): once `start`
+returns `round > 1` — a revision, a resumed undelivered round, or a builder handoff —
+every reply other than `get_transcript`/`start` itself carries the warning until the
+agent calls `get_transcript` once, capped at `TRANSCRIPT_REMINDER_LIMIT` (3) the same
+way `card_unopened` is capped, so it cannot become noise once the round is well
+underway. `noteRoundGeneration` is wired off `start`'s own `round` field in
+`applySessionNudges`, the same in-process, best-effort tracker every other soft nudge
+uses — it does not survive a request landing on a different Cloud Run instance
+mid-session, which is an accepted characteristic of every nudge here, not new to this
+one. Round 1 (a fresh game, whose spec is inlined in full) never gets the nudge — there
+is nothing yet to catch up on.
+
+**Why a tool and not a seeded conversation.** The obvious alternative — hand the
+managed vendor prior turns directly, so the agent's context already contains the
+conversation without a tool round-trip — does not exist across the three managed
+backends today. `ManagedSessionRequest` (`managed-agent.ts`) has exactly one `prompt`
+string plus an optional `systemPrompt`; none of the three vendor adapters take an
+array of prior turns:
+
+- **Anthropic** (`managed-provider-anthropic.ts`) posts `initial_events: [{ type:
+'user.message', ... }]` — a single event, always. The Managed Agents API shape is an
+  array, so it may be _structurally_ capable of carrying more, but nothing here has
+  tried seeding multiple pre-agent turns through it, and there is no reason to expect
+  the vendor treats a synthetic multi-turn preamble as genuine history rather than,
+  say, concatenating it into one turn or rejecting mixed roles before the agent's own
+  first turn. `sendMessage` posts a _follow-up_ `user.message` to a session already
+  running — that is continuation, not history seeding.
+- **Gemini** (`managed-provider-gemini.ts`) takes `input: string` — one prompt, no
+  turn array. `environment.sources` seeds _files_ (used only for the round-0 draft on
+  a scratch environment), not conversation turns.
+- **Copilot** (`managed-provider-copilot.ts` → `agent-tasks.ts`, GitHub's Agent Tasks
+  API) takes `prompt: string` — one problem statement, nothing else.
+
+So a tool call is not a workaround for a missing feature we could otherwise use —
+it is the only mechanism that exists today across all three vendors. If a vendor adds
+real multi-turn seeding later, that would let a _fresh_ round open with more context
+already loaded, but it still would not replace `get_transcript`: the whole reason this
+tool pages instead of dumping everything (see above) is that a conversation has no
+natural size ceiling, and seeding a session's initial context has exactly the same
+problem a single prompt string has — something has to decide what fits, and today nothing
+_(else)_ does. The status quo answer is a tool, not a prompt.
+
 Adding an advertised tool means adding its row to `listings/mcp/README.md` in the same
 change: `mcp-server.test.ts` asserts the README documents every live tool with the exact
 annotation it reports, so the table cannot silently fall behind the surface.
@@ -744,6 +787,7 @@ Merged by `applySessionNudges` / submit handler. Act, then continue:
 | `progress_stale`        | Call `report_progress`                                                                                                                                                     |
 | `inbox_pending`         | `read_inbox` → apply → `ack_inbox`                                                                                                                                         |
 | `seed_unread`           | Call `get_seed` before scaffolding from the kit                                                                                                                            |
+| `transcript_unread`     | Round > 1 (earlier conversation exists) and `get_transcript` has not been called yet — call it before deciding what to build                                               |
 | `game_manifest_invalid` | Just-staged/patched `GAME.json` has a shape that crashes the gate before typecheck (e.g. missing `engine.modules`) — fix it now, in the same session, before submitting    |
 | `patch_incomplete`      | Some `patch_source_file` edits landed and some did not — retry only `failed[]` (path + index); do not resend the ones that applied                                         |
 

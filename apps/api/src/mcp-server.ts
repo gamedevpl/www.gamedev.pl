@@ -657,7 +657,7 @@ const SESSION_WORKFLOW: readonly string[] = [
   'Hold the sessionKey start gave you for the whole round and pass it on every call. Do not re-run start to refresh it — it is valid until expiresAt. Re-run start only if a call is refused as unauthenticated.',
   "show_round — once, right after start. In a client that renders MCP Apps views this puts a live status card in the creator's chat that follows the build and the gate on its own, so they can watch without you polling. Calling it again renders a second card.",
   'show_media — whenever the creator asks to see the game. get_gate_media attaches frames for YOU to look at; those attachments do not reach the creator, so describing them is all you can do with it. show_media is what actually puts the pictures in front of them.',
-  'get_brief — read the brief; if seedAvailable or seedStatus=available, call get_seed and revise that seed as the opening move, treating the brief as the authority wherever the draft disagrees. If seedStatus=pending, browse the kit lightly then recheck get_seed before scaffolding. If seedStatus=unavailable, the response says no seed exists for this round; scaffold from the kit, or call regenerate_seed once (with steer) if a draft would genuinely help. When the brief or the latest creator message is terse ("continue", "build my game") or refers to anything you have not seen, call get_transcript before deciding what to build — it returns the most recent window of the creator conversation (never the whole thing); pass cursor: nextCursor only if that window still does not answer what you need. The latest message is the tail of a conversation, not the whole of it.',
+  'get_brief — read the brief; if seedAvailable or seedStatus=available, call get_seed and revise that seed as the opening move, treating the brief as the authority wherever the draft disagrees. If seedStatus=pending, browse the kit lightly then recheck get_seed before scaffolding. If seedStatus=unavailable, the response says no seed exists for this round; scaffold from the kit, or call regenerate_seed once (with steer) if a draft would genuinely help. If start returned round > 1 (or a later reply carries warnings.code=transcript_unread), this game has earlier conversation: call get_transcript before deciding what to build — it returns the most recent window of the creator conversation (never the whole thing); pass cursor: nextCursor only if that window still does not answer what you need. The latest message is the tail of a conversation, not the whole of it.',
   // An improvement round has no seed (seeds are a new-game facility) and its brief is
   // the change request alone, so nothing above this told the agent a game already
   // existed. Following the loop literally, it scaffolded a fresh game over a published
@@ -1234,6 +1234,9 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       }
     }
 
+    if (toolName === 'start' && typeof data.round === 'number') {
+      nudgeTracker.noteRoundGeneration(jobId, data.round, nowMs);
+    }
     nudgeTracker.noteToolSuccess(jobId, toolName, nowMs);
     if (toolName === 'submit_sources' && data.ok === true) {
       nudgeTracker.noteSubmitSuccess(jobId, nowMs);
@@ -1360,7 +1363,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     warnings: {
       type: 'array',
       description:
-        "Soft session nudges (progress_stale, inbox_pending, call_end, seed_unread, gate_not_started, gate_poll_backoff, module_too_large, game_manifest_invalid, typecheck_hint, audio_catalog_hint, card_unopened, must_fix_gate, must_deliver, patch_incomplete). Not errors — act on them, then continue the workflow. module_too_large means split that game/*.ts module before adding more behavior. game_manifest_invalid means the just-staged GAME.json has a shape that crashes the gate before typecheck (e.g. missing engine.modules) — fix it in the SAME stage/patch call's target, do not wait for submit_sources to find out. typecheck_hint means the file you just staged/patched would fail submit_sources' TypeScript preflight — fix it now, before staging more files on top of it. audio_catalog_hint means GAME.json names a music track id that is not in the shared catalog or a staged music.json — submit_sources will fail smoke with this same error. card_unopened means the creator has no status card yet — call show_round once. must_fix_gate means the last delivery was refused — fix and submit_sources again; staging alone does not re-run the gate. patch_incomplete means some edits in this patch_source_file call landed and some did not — retry only failed[] (path + index), do not resend the ones that applied.",
+        "Soft session nudges (progress_stale, inbox_pending, call_end, seed_unread, transcript_unread, gate_not_started, gate_poll_backoff, module_too_large, game_manifest_invalid, typecheck_hint, audio_catalog_hint, card_unopened, must_fix_gate, must_deliver, patch_incomplete). Not errors — act on them, then continue the workflow. module_too_large means split that game/*.ts module before adding more behavior. game_manifest_invalid means the just-staged GAME.json has a shape that crashes the gate before typecheck (e.g. missing engine.modules) — fix it in the SAME stage/patch call's target, do not wait for submit_sources to find out. typecheck_hint means the file you just staged/patched would fail submit_sources' TypeScript preflight — fix it now, before staging more files on top of it. audio_catalog_hint means GAME.json names a music track id that is not in the shared catalog or a staged music.json — submit_sources will fail smoke with this same error. card_unopened means the creator has no status card yet — call show_round once. transcript_unread means this round has earlier conversation (round > 1) and you have not called get_transcript yet — call it before deciding what to build; it returns the most recent window, not the whole thing. must_fix_gate means the last delivery was refused — fix and submit_sources again; staging alone does not re-run the gate. patch_incomplete means some edits in this patch_source_file call landed and some did not — retry only failed[] (path + index), do not resend the ones that applied.",
       items: {
         type: 'object',
         properties: {
@@ -1370,6 +1373,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
               'progress_stale',
               'inbox_pending',
               'seed_unread',
+              'transcript_unread',
               'call_end',
               'gate_not_started',
               'gate_poll_backoff',

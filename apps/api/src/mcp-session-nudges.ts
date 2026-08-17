@@ -11,6 +11,7 @@ export type NudgeCode =
   | 'progress_stale'
   | 'inbox_pending'
   | 'seed_unread'
+  | 'transcript_unread'
   | 'call_end'
   | 'gate_not_started'
   | 'gate_poll_backoff'
@@ -33,6 +34,12 @@ export interface JobNudgeState {
   seedFetched: boolean;
   /** Last known seedStatus from brief/seed payloads. */
   seedStatus: 'pending' | 'available' | 'unavailable' | null;
+  /** The round number `start` returned — round > 1 means earlier conversation exists. */
+  roundGeneration: number | null;
+  /** True after a successful get_transcript in this MCP session tracker. */
+  transcriptFetched: boolean;
+  /** How many times we have asked for it, so the reminder cannot become noise. */
+  transcriptRemindersSent: number;
   /**
    * True after a successful submit_sources until `end` — subsequent tools re-emit
    * `call_end` so ChatGPT-class agents that keep chatting without ending still see it.
@@ -60,6 +67,14 @@ export const GATE_POLL_RETRY_AFTER_SECONDS = 30;
  * the step.
  */
 export const CARD_REMINDER_LIMIT = 3;
+
+/**
+ * How many times to ask an agent to read the transcript on a round with earlier
+ * conversation before letting it go, same reasoning as `CARD_REMINDER_LIMIT`: a
+ * bounded nudge catches an agent that did not notice, without crowding out warnings
+ * that matter more once it is well into the round.
+ */
+export const TRANSCRIPT_REMINDER_LIMIT = 3;
 
 /** No progress for this long (wall clock) → `progress_stale`. */
 export const PROGRESS_STALE_MS = 90_000;
@@ -117,6 +132,8 @@ export interface McpNudgeTracker {
   noteInboxCheck(jobId: number, nowMs: number): void;
   noteSeedFetch(jobId: number, nowMs: number): void;
   noteSeedStatus(jobId: number, status: 'pending' | 'available' | 'unavailable' | null, nowMs: number): void;
+  /** Called with the round number `start` returned. */
+  noteRoundGeneration(jobId: number, round: number, nowMs: number): void;
   /** Successful submit_sources — creator handoff may already be unlocked; still need `end`. */
   noteSubmitSuccess(jobId: number, nowMs: number): void;
   /** Successful MCP `end` — clear the post-submit call_end loop. */
@@ -149,6 +166,9 @@ export function createMcpNudgeTracker(
         lastInboxCheckAt: null,
         seedFetched: false,
         seedStatus: null,
+        roundGeneration: null,
+        transcriptFetched: false,
+        transcriptRemindersSent: 0,
         awaitingEnd: false,
         lastGatePollAt: null,
         cardOpened: false,
@@ -184,6 +204,16 @@ export function createMcpNudgeTracker(
     state.seedStatus = status;
   }
 
+  function noteRoundGeneration(jobId: number, round: number, nowMs: number): void {
+    const state = ensure(jobId, nowMs);
+    state.roundGeneration = round;
+  }
+
+  function noteTranscriptFetch(jobId: number, nowMs: number): void {
+    const state = ensure(jobId, nowMs);
+    state.transcriptFetched = true;
+  }
+
   function noteSubmitSuccess(jobId: number, nowMs: number): void {
     const state = ensure(jobId, nowMs);
     state.awaitingEnd = true;
@@ -210,6 +240,9 @@ export function createMcpNudgeTracker(
     }
     if (toolName === 'get_seed') {
       noteSeedFetch(jobId, nowMs);
+    }
+    if (toolName === 'get_transcript') {
+      noteTranscriptFetch(jobId, nowMs);
     }
     if (toolName === 'end') {
       noteEnded(jobId, nowMs);
@@ -283,6 +316,27 @@ export function createMcpNudgeTracker(
       });
     }
 
+    // Round > 1 means this game has earlier conversation — a revision, a resumed
+    // undelivered round, or a builder handoff. The brief no longer inlines the last
+    // creator message (it can be the terse tail of a much longer conversation), so
+    // this is the one nudge standing in for what used to be automatic.
+    if (
+      state.roundGeneration !== null &&
+      state.roundGeneration > 1 &&
+      !state.transcriptFetched &&
+      state.transcriptRemindersSent < TRANSCRIPT_REMINDER_LIMIT &&
+      toolName !== 'get_transcript' &&
+      toolName !== 'start'
+    ) {
+      state.transcriptRemindersSent += 1;
+      warnings.push({
+        code: 'transcript_unread',
+        message:
+          `This is round ${state.roundGeneration} of this game — earlier conversation exists. Call get_transcript ` +
+          'before deciding what to build; the latest message is the tail of a conversation, not the whole of it.',
+      });
+    }
+
     // Re-emit after submit until end — ChatGPT often stops on the submit reply itself,
     // but when it keeps chatting this keeps call_end in every subsequent tool result.
     if (state.awaitingEnd && toolName !== 'end' && toolName !== 'submit_sources') {
@@ -316,6 +370,7 @@ export function createMcpNudgeTracker(
     noteInboxCheck,
     noteSeedFetch,
     noteSeedStatus,
+    noteRoundGeneration,
     noteSubmitSuccess,
     noteEnded,
     notePendingCount,
