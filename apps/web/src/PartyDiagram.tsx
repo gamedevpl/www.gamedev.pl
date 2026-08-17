@@ -1,10 +1,101 @@
 import { useTranslation } from 'react-i18next';
 
-const PHONES = [
-  { cx: 116, delay: '0s', curve: 'M116,192 C116,148 214,138 296,130' },
-  { cx: 320, delay: '0.35s', curve: 'M320,192 L320,134' },
-  { cx: 524, delay: '0.7s', curve: 'M524,192 C524,148 426,138 344,130' },
-];
+// Each phone drives one character: same color, same pressed direction.
+const PLAYERS = [
+  {
+    id: 'a',
+    phoneCx: 116,
+    color: 'var(--turquoise)',
+    markerId: 'pdArrowA',
+    curve: 'M116,192 C116,148 214,138 296,130',
+    delay: '0s',
+    direction: 'left',
+    charX: 245,
+  },
+  {
+    id: 'b',
+    phoneCx: 320,
+    color: 'var(--accent-blue)',
+    markerId: 'pdArrowB',
+    curve: 'M320,192 L320,134',
+    delay: '0.45s',
+    direction: 'up',
+    charX: 320,
+  },
+  {
+    id: 'c',
+    phoneCx: 524,
+    color: 'var(--cat-multiplayer-party)',
+    markerId: 'pdArrowC',
+    curve: 'M524,192 C524,148 426,138 344,130',
+    delay: '0.9s',
+    direction: 'right',
+    charX: 390,
+  },
+] as const;
+
+const GROUND_Y = 118;
+
+function Character({ player }: { player: (typeof PLAYERS)[number] }) {
+  const { charX, color, direction } = player;
+  if (direction === 'up') {
+    return (
+      <circle
+        className={`party-diagram-character party-diagram-move-${direction}`}
+        style={{ animationDelay: player.delay }}
+        cx={charX}
+        cy={GROUND_Y - 8}
+        r="8"
+        fill={color}
+      />
+    );
+  }
+  if (direction === 'right') {
+    return (
+      <polygon
+        className={`party-diagram-character party-diagram-move-${direction}`}
+        style={{ animationDelay: player.delay }}
+        points={`${charX},${GROUND_Y - 14} ${charX + 7},${GROUND_Y - 7} ${charX},${GROUND_Y} ${charX - 7},${GROUND_Y - 7}`}
+        fill={color}
+      />
+    );
+  }
+  return (
+    <rect
+      className={`party-diagram-character party-diagram-move-${direction}`}
+      style={{ animationDelay: player.delay }}
+      x={charX - 7}
+      y={GROUND_Y - 14}
+      width="14"
+      height="14"
+      rx="3"
+      fill={color}
+    />
+  );
+}
+
+function DpadGlyph({ player }: { player: (typeof PLAYERS)[number] }) {
+  const { phoneCx: cx, color, direction, delay } = player;
+  const up = `${cx},212 ${cx - 5},221 ${cx + 5},221`;
+  const down = `${cx},250 ${cx - 5},241 ${cx + 5},241`;
+  const left = `${cx - 9},231 ${cx},226 ${cx},236`;
+  const right = `${cx + 9},231 ${cx},226 ${cx},236`;
+  const shapes: Record<string, string> = { up, down, left, right };
+  return (
+    <>
+      {Object.entries(shapes).map(([dir, points]) => (
+        <polygon
+          key={dir}
+          points={points}
+          fill={dir === direction ? color : 'var(--muted)'}
+          opacity={dir === direction ? undefined : 0.3}
+          className={dir === direction ? 'party-diagram-dpad-active' : undefined}
+          style={dir === direction ? { animationDelay: delay } : undefined}
+        />
+      ))}
+    </>
+  );
+}
 
 // The screen runs the game; phones only ever send it input.
 export function PartyDiagram() {
@@ -22,17 +113,20 @@ export function PartyDiagram() {
             <stop offset="0%" stopColor="var(--panel-card)" />
             <stop offset="100%" stopColor="var(--panel)" />
           </linearGradient>
-          <marker
-            id="partyDiagramArrow"
-            viewBox="0 0 10 10"
-            refX="8"
-            refY="5"
-            markerWidth="6"
-            markerHeight="6"
-            orient="auto-start-reverse"
-          >
-            <path d="M0,0 L10,5 L0,10 Z" fill="var(--turquoise)" />
-          </marker>
+          {PLAYERS.map((player) => (
+            <marker
+              key={player.markerId}
+              id={player.markerId}
+              viewBox="0 0 10 10"
+              refX="8"
+              refY="5"
+              markerWidth="6"
+              markerHeight="6"
+              orient="auto-start-reverse"
+            >
+              <path d="M0,0 L10,5 L0,10 Z" fill={player.color} />
+            </marker>
+          ))}
         </defs>
 
         <ellipse className="party-diagram-glow" cx="320" cy="80" rx="150" ry="90" fill="url(#pdGlow)" />
@@ -70,53 +164,37 @@ export function PartyDiagram() {
         <rect x="209" y="38" width="222" height="102" rx="5" fill="#05070a" />
 
         <g className="party-diagram-scene">
-          <line x1="219" y1="118" x2="431" y2="118" stroke="var(--panel-border)" strokeWidth="2" />
-          <g className="party-diagram-character">
-            <rect x="243" y="98" width="12" height="12" fill="var(--turquoise)" />
-            <rect x="243" y="86" width="12" height="12" fill="var(--turquoise)" />
-            <rect x="231" y="98" width="12" height="12" fill="var(--turquoise)" />
-          </g>
-          <circle
-            className="party-diagram-collect party-diagram-collect-a"
-            cx="330"
-            cy="104"
-            r="5"
-            fill="var(--accent-blue)"
-          />
-          <circle
-            className="party-diagram-collect party-diagram-collect-b"
-            cx="372"
-            cy="112"
-            r="5"
-            fill="var(--accent-blue)"
-          />
+          <line x1="219" y1={GROUND_Y} x2="431" y2={GROUND_Y} stroke="var(--panel-border)" strokeWidth="2" />
+          {PLAYERS.map((player) => (
+            <Character key={player.id} player={player} />
+          ))}
         </g>
 
-        {PHONES.map((phone, i) => (
-          <g key={phone.cx}>
+        {PLAYERS.map((player) => (
+          <g key={player.id}>
             <path
               className="party-diagram-flow"
-              d={phone.curve}
+              d={player.curve}
               fill="none"
-              stroke="var(--turquoise)"
+              stroke={player.color}
               strokeWidth="2.5"
               strokeLinecap="round"
               strokeDasharray="1 9"
-              markerEnd="url(#partyDiagramArrow)"
-              style={{ animationDelay: phone.delay }}
+              markerEnd={`url(#${player.markerId})`}
+              style={{ animationDelay: player.delay }}
             />
             <circle
               className="party-diagram-ripple"
-              cx={phone.cx}
+              cx={player.phoneCx}
               cy="227"
               r="16"
               fill="none"
-              stroke="var(--turquoise)"
+              stroke={player.color}
               strokeWidth="1.5"
-              style={{ animationDelay: phone.delay }}
+              style={{ animationDelay: player.delay }}
             />
             <rect
-              x={phone.cx - 23}
+              x={player.phoneCx - 23}
               y="192"
               width="46"
               height="86"
@@ -125,37 +203,9 @@ export function PartyDiagram() {
               stroke="var(--panel-border)"
               strokeWidth="2"
             />
-            <rect x={phone.cx - 15} y="202" width="30" height="56" rx="3" fill="#05070a" />
-            <polygon
-              className="party-diagram-dpad"
-              points={`${phone.cx},212 ${phone.cx - 5},221 ${phone.cx + 5},221`}
-              fill="var(--turquoise)"
-              style={{ animationDelay: phone.delay }}
-            />
-            <polygon
-              className="party-diagram-dpad"
-              points={`${phone.cx},250 ${phone.cx - 5},241 ${phone.cx + 5},241`}
-              fill="var(--turquoise)"
-              style={{ animationDelay: `calc(${phone.delay} + 0.5s)` }}
-            />
-            <polygon
-              className="party-diagram-dpad"
-              points={`${phone.cx - 9},231 ${phone.cx},226 ${phone.cx},236`}
-              fill="var(--turquoise)"
-              style={{ animationDelay: `calc(${phone.delay} + 1s)` }}
-            />
-            <polygon
-              className="party-diagram-dpad"
-              points={`${phone.cx + 9},231 ${phone.cx},226 ${phone.cx},236`}
-              fill="var(--turquoise)"
-              style={{ animationDelay: `calc(${phone.delay} + 1.5s)` }}
-            />
-            <circle cx={phone.cx} cy="266" r="2" fill="var(--panel-border)" />
-            {i === 1 ? (
-              <text x={phone.cx + 34} y="176" fontSize="10.5" fontWeight="700" fill="var(--turquoise)">
-                {t('party.diagramInputLabel')}
-              </text>
-            ) : null}
+            <rect x={player.phoneCx - 15} y="202" width="30" height="56" rx="3" fill="#05070a" />
+            <DpadGlyph player={player} />
+            <circle cx={player.phoneCx} cy="266" r="2" fill="var(--panel-border)" />
           </g>
         ))}
 
