@@ -281,6 +281,11 @@
     "about": "About",
     "withContributions": "with contributions from"
   },
+  "bottomCta": {
+    "headline": "Have your own idea?",
+    "sub": "Describe it above and an AI agent builds it for real — live for everyone to play.",
+    "action": "Describe your idea"
+  },
   "recommendations": {
     "reasonContinue": "Continue playing",
     "reasonForYou": "Matches what you play",
