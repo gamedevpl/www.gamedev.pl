@@ -7293,6 +7293,13 @@ a.user-name--profile:focus-visible {
     min-height: 44px;
   }
 
+  /* Same 44px box as its neighbors, but the desktop glow (halo radius 14px)
+     read as taller/heavier than the flat icon pills beside it in this tight
+     row — trimmed, not removed, so Play still reads as the filled CTA. */
+  .app:has(.studio-layout.is-game-open) .studio-head-action.is-primary.is-play {
+    box-shadow: 0 0 6px var(--turquoise-glow);
+  }
+
   /* Icon-only peers in the title row — Share / Details / Edit / Claim were enough to
      shove the trailing control past the right edge on a 390px phone with a long title.
      Play keeps its word: clipping it made the primary CTA a tiny icon twin of Details. */
