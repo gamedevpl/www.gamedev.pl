@@ -252,9 +252,26 @@ function MoreLikeThisThumb({ entry }: { entry: CatalogEntry }) {
 // The curated, daily rotating hero pick above the rails.
 export function FeaturedGame({ entry, onPlayGame, onPlayTogether, moreLikeThis = [] }: FeaturedGameProps) {
   const { t } = useTranslation();
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [previewPlaying, setPreviewPlaying] = useState(false);
   const screenshots = entry.media?.screenshots ?? [];
   const selected = screenshots[defaultScreenshotIndex(screenshots)];
   const posterUrl = selected ? catalogMediaUrl(entry.slug, selected.file, 960) : undefined;
+  const videoUrl = entry.media?.video ? catalogMediaUrl(entry.slug, entry.media.video) : null;
+
+  // Tap-to-play, not autoplay — this is the page's heaviest asset.
+  useEffect(() => setPreviewPlaying(false), [entry.slug]);
+
+  function togglePreview() {
+    if (!videoUrl) return;
+    if (previewPlaying) {
+      videoRef.current?.pause();
+      setPreviewPlaying(false);
+      return;
+    }
+    setPreviewPlaying(true);
+    void Promise.resolve(videoRef.current?.play()).catch(() => setPreviewPlaying(false));
+  }
 
   return (
     <article className="featured-game">
@@ -264,7 +281,34 @@ export function FeaturedGame({ entry, onPlayGame, onPlayTogether, moreLikeThis =
           href={`${gamePath(gamePageHandle(entry), entry.slug)}?via=featured`}
           aria-label={`${entry.title} — ${t('catalog.openGame')}`}
         />
-        {posterUrl ? <img src={posterUrl} alt="" loading="eager" decoding="async" /> : null}
+        {previewPlaying && videoUrl ? (
+          <video
+            ref={videoRef}
+            className="featured-game-preview"
+            src={videoUrl}
+            poster={posterUrl}
+            muted
+            loop
+            playsInline
+            preload="auto"
+            aria-label={t('catalog.previewVideo', { title: entry.title })}
+            onPlay={() => setPreviewPlaying(true)}
+            onPause={() => setPreviewPlaying(false)}
+          />
+        ) : posterUrl ? (
+          <img src={posterUrl} alt="" loading="eager" decoding="async" />
+        ) : null}
+        {videoUrl && (
+          <button
+            type="button"
+            className={`featured-game-preview-toggle${previewPlaying ? ' is-playing' : ''}`}
+            aria-pressed={previewPlaying}
+            aria-label={previewPlaying ? t('catalog.pausePreview') : t('catalog.watchPreview')}
+            onClick={togglePreview}
+          >
+            <PixelIcon name={previewPlaying ? 'pause' : 'play'} size={previewPlaying ? 14 : 22} />
+          </button>
+        )}
       </div>
       <div className="featured-game-body">
         <span className="featured-game-kicker">

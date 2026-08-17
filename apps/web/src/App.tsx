@@ -70,6 +70,7 @@ import { saveLastBuilder, type BuilderKind } from './builderKind.js';
 import { clearPendingQa, loadPendingQa, savePendingQa, type PendingQaAnswers } from './pendingQa.js';
 import { useAuth } from './AuthContext.js';
 import { AuthModal } from './AuthModal.js';
+import { BottomCta } from './BottomCta.js';
 import { recordCreateStep, recordStudioStep, type PlayVia } from './visitTelemetry.js';
 import { ClosedBetaSplash } from './ClosedBetaSplash.js';
 import { BetaInvitePage } from './BetaInvitePage.js';
@@ -1294,6 +1295,10 @@ export function App() {
                 creatorGamesRefreshKey={myGamesRefreshKey}
               />
             )}
+
+            {/* Both pages' real content can run shorter than the viewport, leaving a
+                bare gap above the sticky footer — fill it with a reason to scroll back up. */}
+            {(route.view === 'home' || route.view === 'create') && <BottomCta />}
           </>
         )}
       </main>

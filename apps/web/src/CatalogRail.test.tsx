@@ -3,7 +3,7 @@
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { CatalogRail } from './CatalogRail.js';
+import { CatalogRail, FeaturedGame } from './CatalogRail.js';
 import type { CatalogEntry } from './catalog.js';
 import i18n from './i18n/index.js';
 
@@ -123,5 +123,58 @@ describe('RailCard hover video preview', () => {
       media.blur();
     });
     expect(container.querySelector('video')).toBeNull();
+  });
+});
+
+describe('FeaturedGame hero preview', () => {
+  function renderHero(entry: CatalogEntry) {
+    root = createRoot(container);
+    act(() => {
+      root!.render(
+        createElement(FeaturedGame, {
+          entry,
+          onPlayGame: vi.fn(),
+          onPlayTogether: vi.fn(),
+        }),
+      );
+    });
+  }
+
+  it('starts on the poster and swaps in the trailer on tap, without autoplaying', () => {
+    renderHero(withVideo);
+
+    expect(container.querySelector('img')).not.toBeNull();
+    expect(container.querySelector('video')).toBeNull();
+
+    const toggle = container.querySelector<HTMLButtonElement>('.featured-game-preview-toggle');
+    expect(toggle).not.toBeNull();
+    expect(toggle?.getAttribute('aria-pressed')).toBe('false');
+
+    act(() => toggle?.click());
+
+    const video = container.querySelector<HTMLVideoElement>('video');
+    expect(video?.getAttribute('src')).toBe('/api/games/neon-courier/media/trailer.mp4');
+    expect(container.querySelector('img')).toBeNull();
+    expect(container.querySelector('.featured-game-preview-toggle')?.getAttribute('aria-pressed')).toBe('true');
+    expect(container.querySelector('.featured-game-preview-toggle')?.classList.contains('is-playing')).toBe(true);
+  });
+
+  it('pauses back to the poster on a second tap', () => {
+    renderHero(withVideo);
+
+    const toggle = () => container.querySelector<HTMLButtonElement>('.featured-game-preview-toggle')!;
+    act(() => toggle().click());
+    expect(container.querySelector('video')).not.toBeNull();
+
+    act(() => toggle().click());
+    expect(container.querySelector('video')).toBeNull();
+    expect(container.querySelector('img')).not.toBeNull();
+    expect(toggle().getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('has no preview toggle for a game with no video', () => {
+    renderHero(withoutVideo);
+    expect(container.querySelector('.featured-game-preview-toggle')).toBeNull();
+    expect(container.querySelector('img')).not.toBeNull();
   });
 });

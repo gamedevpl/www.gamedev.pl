@@ -1193,7 +1193,8 @@ button:disabled {
   overflow: hidden;
 }
 
-.featured-game-media img {
+.featured-game-media img,
+.featured-game-media video {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -1209,6 +1210,42 @@ button:disabled {
 .featured-game-hit-area:focus-visible {
   outline: 3px solid var(--turquoise);
   outline-offset: -3px;
+}
+
+/* Idle: a big centered affordance over the poster, same shape a video thumbnail
+   uses everywhere else. Playing: shrinks to a small corner pause control so it
+   stops competing with the trailer it is now sitting on top of. */
+.featured-game-preview-toggle {
+  position: absolute;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+  color: #fff;
+  background: rgba(6, 10, 14, 0.72);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 64px;
+  height: 64px;
+}
+
+.featured-game-preview-toggle:hover,
+.featured-game-preview-toggle:focus-visible {
+  border-color: var(--turquoise);
+  color: var(--turquoise);
+}
+
+.featured-game-preview-toggle.is-playing {
+  top: 12px;
+  left: 12px;
+  transform: none;
+  width: 36px;
+  height: 36px;
+  background: rgba(6, 10, 14, 0.92);
 }
 
 .featured-game-body {
@@ -1512,6 +1549,43 @@ button:disabled {
   .rail-card {
     flex-basis: 156px;
   }
+}
+
+/* Fills the gap the sticky footer leaves above it when a page's real content
+   runs shorter than the viewport — see App.tsx for where this mounts. */
+.bottom-cta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-top: 48px;
+  padding: 28px 32px;
+  border: 1px solid var(--panel-border);
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(0, 228, 172, 0.08) 0%, var(--panel-card) 100%);
+}
+
+.bottom-cta-copy {
+  min-width: 0;
+}
+
+.bottom-cta-headline {
+  margin: 0 0 4px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.bottom-cta-sub {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  max-width: 46ch;
+}
+
+.bottom-cta-action {
+  flex: none;
 }
 
 /* UNBOXED ARCADE CATALOG */

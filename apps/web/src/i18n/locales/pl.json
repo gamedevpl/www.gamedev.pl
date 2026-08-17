@@ -281,6 +281,11 @@
     "about": "O grze",
     "withContributions": "ze zmianami od"
   },
+  "bottomCta": {
+    "headline": "Masz własny pomysł?",
+    "sub": "Opisz go powyżej, a agent AI zbuduje go naprawdę — gotowego do gry dla wszystkich.",
+    "action": "Opisz swój pomysł"
+  },
   "recommendations": {
     "reasonContinue": "Kontynuuj grę",
     "reasonForYou": "Pasuje do Twoich gier",
