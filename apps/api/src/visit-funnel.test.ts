@@ -421,6 +421,7 @@ describe('summarizeVisitFunnel', () => {
       { via: 'create_showcase', plays: 0 },
       { via: 'shelf', plays: 0 },
       { via: 'featured_similar', plays: 0 },
+      { via: 'party_page', plays: 0 },
       { via: 'unknown', plays: 1 },
     ]);
   });

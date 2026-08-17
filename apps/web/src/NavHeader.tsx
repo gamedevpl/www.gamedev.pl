@@ -30,6 +30,10 @@ type NavHeaderProps = {
   isOnStudio?: boolean;
   // Scrolls to the curated picks on home; navigates home first if elsewhere.
   onPlay: () => void;
+  // Opens the /party destination — a real page, same as Studio and Create.
+  onParty: () => void;
+  // Highlights the Party item when already on /party.
+  isOnParty?: boolean;
   /**
    * Android-style Up target for non-home surfaces. Null on home, join, play, and
    * while an immersive theater owns escape. Never history.back() — deep links
@@ -49,6 +53,8 @@ export function NavHeader({
   isOnCreate = false,
   isOnStudio = false,
   onPlay,
+  onParty,
+  isOnParty = false,
   upTarget = null,
   onUp,
 }: NavHeaderProps) {
@@ -202,6 +208,9 @@ export function NavHeader({
             </span>
           ) : null}
         </button>
+        <button type="button" className={`header-nav-link${isOnParty ? ' is-active' : ''}`} onClick={onParty}>
+          {t('header.navParty')}
+        </button>
       </nav>
 
       <div className="header-actions">
@@ -303,6 +312,15 @@ export function NavHeader({
                     {activeBuildCount}
                   </span>
                 ) : null}
+              </button>
+              <button
+                className={`nav-link nav-link--flat-mirror${isOnParty ? ' is-active' : ''}`}
+                onClick={() => {
+                  setIsMenuOpen(false);
+                  onParty();
+                }}
+              >
+                <PixelIcon name="phone" size={14} /> {t('header.navParty')}
               </button>
 
               {/* Operators only — everyone else never learns this exists, which is the

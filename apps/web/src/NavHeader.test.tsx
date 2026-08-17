@@ -47,6 +47,7 @@ describe('NavHeader Up chevron', () => {
             onAdmin: vi.fn(),
             onReview: vi.fn(),
             onPlay: vi.fn(),
+            onParty: vi.fn(),
             upTarget: { path: '/studio', ariaLabel: 'Back to Studio' },
             onUp,
           }),
@@ -87,6 +88,7 @@ describe('NavHeader Up chevron', () => {
             onAdmin: vi.fn(),
             onReview: vi.fn(),
             onPlay: vi.fn(),
+            onParty: vi.fn(),
             upTarget: null,
           }),
         ),
@@ -144,6 +146,7 @@ describe('NavHeader menu', () => {
             onAdmin: vi.fn(),
             onReview: vi.fn(),
             onPlay: vi.fn(),
+            onParty: vi.fn(),
             upTarget: null,
           }),
         ),
@@ -271,6 +274,7 @@ describe('NavHeader menu', () => {
             onAdmin: vi.fn(),
             onReview: vi.fn(),
             onPlay: vi.fn(),
+            onParty: vi.fn(),
             upTarget: null,
           }),
         ),
@@ -301,7 +305,7 @@ describe('NavHeader menu', () => {
     await act(async () => root.unmount());
   });
 
-  it('offers Play, Create and Studio as plain links in the always-visible header nav', async () => {
+  it('offers Play, Create, Studio and Party as plain links in the always-visible header nav', async () => {
     const onCreate = vi.fn();
     const onPlay = vi.fn();
     const onStudio = vi.fn();
@@ -335,6 +339,7 @@ describe('NavHeader menu', () => {
             onAdmin: vi.fn(),
             onReview: vi.fn(),
             onPlay,
+            onParty: vi.fn(),
             upTarget: null,
           }),
         ),
@@ -345,7 +350,7 @@ describe('NavHeader menu', () => {
 
     const links = Array.from(container.querySelectorAll<HTMLButtonElement>('.header-nav .header-nav-link'));
     const labels = links.map((btn) => btn.textContent?.trim());
-    expect(labels).toEqual(['Play', 'Create', 'Studio']);
+    expect(labels).toEqual(['Play', 'Create', 'Studio', 'Party']);
 
     // Plain text links, not the dropdown's boxed rows.
     const findByLabel = (label: string) => links.find((btn) => btn.textContent?.trim() === label);
@@ -393,6 +398,7 @@ describe('NavHeader menu', () => {
             onAdmin: vi.fn(),
             onReview: vi.fn(),
             onPlay,
+            onParty: vi.fn(),
             upTarget: null,
           }),
         ),
@@ -459,6 +465,7 @@ describe('NavHeader menu', () => {
             onAdmin: vi.fn(),
             onReview,
             onPlay: vi.fn(),
+            onParty: vi.fn(),
             upTarget: null,
           }),
         ),
@@ -529,6 +536,7 @@ describe('NavHeader menu', () => {
             onAdmin: vi.fn(),
             onReview: vi.fn(),
             onPlay: vi.fn(),
+            onParty: vi.fn(),
             upTarget: null,
           }),
         ),
@@ -588,6 +596,7 @@ describe('NavHeader menu', () => {
             onAdmin: vi.fn(),
             onReview: vi.fn(),
             onPlay: vi.fn(),
+            onParty: vi.fn(),
             upTarget: null,
           }),
         ),
@@ -678,6 +687,7 @@ describe('NavHeader operator link', () => {
             onAdmin,
             onReview,
             onPlay: vi.fn(),
+            onParty: vi.fn(),
             upTarget: null,
           }),
         ),
@@ -796,6 +806,7 @@ describe('NavHeader Studio live count', () => {
             onAdmin: vi.fn(),
             onReview: vi.fn(),
             onPlay: vi.fn(),
+            onParty: vi.fn(),
             upTarget: null,
           }),
         ),
@@ -874,6 +885,7 @@ describe('NavHeader profile link', () => {
             onAdmin: vi.fn(),
             onReview: vi.fn(),
             onPlay: vi.fn(),
+            onParty: vi.fn(),
             upTarget: null,
           }),
         ),
@@ -920,6 +932,7 @@ describe('NavHeader profile link', () => {
             onAdmin: vi.fn(),
             onReview: vi.fn(),
             onPlay: vi.fn(),
+            onParty: vi.fn(),
             upTarget: null,
           }),
         ),
@@ -976,6 +989,7 @@ describe('LanguageSwitcher in header', () => {
             onAdmin: vi.fn(),
             onReview: vi.fn(),
             onPlay: vi.fn(),
+            onParty: vi.fn(),
             upTarget: null,
           }),
         ),

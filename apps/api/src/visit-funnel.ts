@@ -196,6 +196,7 @@ export const PLAY_VIAS = [
   'create_showcase',
   'shelf',
   'featured_similar',
+  'party_page',
 ] as const;
 
 export type PlayVia = (typeof PLAY_VIAS)[number];

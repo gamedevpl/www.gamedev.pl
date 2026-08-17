@@ -19,6 +19,7 @@ const copy: DocumentTitleCopy = {
   terms: 'Terms of Service',
   contact: 'Contact',
   create: 'Build a game',
+  party: 'Party mode',
   proposals: 'My proposals',
   notFound: 'Page not found',
   playNamed: 'Play {{title}}',
@@ -106,6 +107,7 @@ describe('resolveDocumentTitle', () => {
     expect(resolveDocumentTitle({ view: 'legal', doc: 'terms' }, { copy })).toBe('Terms of Service — Gamedev.pl');
     expect(resolveDocumentTitle({ view: 'contact' }, { copy })).toBe('Contact — Gamedev.pl');
     expect(resolveDocumentTitle({ view: 'create' }, { copy })).toBe('Build a game — Gamedev.pl');
+    expect(resolveDocumentTitle({ view: 'party' }, { copy })).toBe('Party mode — Gamedev.pl');
     expect(resolveDocumentTitle({ view: 'creator', handle: 'ada' }, { copy, creatorName: 'Ada Lovelace' })).toBe(
       'Ada Lovelace — Gamedev.pl',
     );

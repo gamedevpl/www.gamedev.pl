@@ -39,6 +39,7 @@ export type VisitRouteKind =
   | 'studio'
   | 'game'
   | 'create'
+  | 'party'
   | 'notFound';
 
 export type VisitEvent =
@@ -162,6 +163,7 @@ export const PLAY_VIA_VALUES = [
   'create_showcase',
   'shelf',
   'featured_similar',
+  'party_page',
 ] as const;
 export type PlayVia = (typeof PLAY_VIA_VALUES)[number];
 
@@ -445,6 +447,9 @@ export function routeKind(view: string): VisitRouteKind {
     // Its own surface — cold traffic can land here, not just via home.
     case 'create':
       return 'create';
+    // Its own surface too, same reasoning as `create`.
+    case 'party':
+      return 'party';
     // The console reports as `health`, the name it had when the funnel started
     // recording it. Renaming the bucket would split one surface's history in two.
     case 'admin':

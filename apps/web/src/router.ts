@@ -138,6 +138,8 @@ export type AppRoute =
   | { view: 'contact' }
   // /create landing page; same closed-beta gate as home, not open-chrome.
   | { view: 'create' }
+  // /party: the multiplayer destination. Same closed-beta gate as create.
+  | { view: 'party' }
   // The proposer's tracker: changes this person has proposed to other people's games,
   // and what happened to them. Signed-in only, and deliberately its own address rather
   // than a Studio tab — a proposal is not one of your games, and the shelf is.
@@ -195,6 +197,7 @@ const RESERVED_HANDLE_SEGMENTS = new Set([
   'me',
   'null',
   'official',
+  'party',
   'play',
   'platform',
   'privacy',
@@ -261,6 +264,10 @@ export function parsePathRoute(pathname: string, hash = ''): AppRoute {
 
   if (normalizedPath === '/create') {
     return { view: 'create' };
+  }
+
+  if (normalizedPath === '/party') {
+    return { view: 'party' };
   }
 
   const inviteMatch = normalizedPath.match(/^\/invite\/([^/]+)$/);
@@ -568,6 +575,7 @@ export function navUpTarget(route: AppRoute): NavUpTarget | null {
     case 'legal':
     case 'contact':
     case 'create':
+    case 'party':
     case 'creator':
     case 'proposals':
     case 'notFound':
@@ -626,6 +634,11 @@ export function contactPath(): string {
 // URL for the creation landing page.
 export function createPath(): string {
   return '/create';
+}
+
+// URL for the party (multiplayer) destination.
+export function partyPath(): string {
+  return '/party';
 }
 
 /** URL for a public creator profile. */

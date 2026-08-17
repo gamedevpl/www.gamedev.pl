@@ -15,6 +15,7 @@ import { PixelIcon } from './PixelIcon.js';
 import { CreatorQA, type QAQuestion } from './CreatorQA.js';
 import { deriveTitleFromConcept } from './gameTitle.js';
 import { MIN_CONCEPT_LENGTH } from './conceptLength.js';
+import { resolveCreateInitialPrompt } from './createInitialPrompt.js';
 import {
   adminPath,
   canonicalPath,
@@ -24,6 +25,7 @@ import {
   NAVIGATE_EVENT,
   navUpTarget,
   parsePathRoute,
+  partyPath,
   playPath,
   reviewPath,
   studioPath,
@@ -37,6 +39,7 @@ import type { PublicCreatorProfile } from './creatorProfileApi.js';
 import { LegalPage } from './LegalPage.js';
 import { ContactPage } from './ContactPage.js';
 import { CreatePage } from './CreatePage.js';
+import { PartyPage } from './PartyPage.js';
 import { ProposalsPage } from './ProposalsPage.js';
 import { CreatorProfilePage } from './CreatorProfilePage.js';
 import { GamePage } from './GamePage.js';
@@ -119,6 +122,12 @@ export function App() {
   // A failed build usually needs an edit before it is worth another submission, so
   // this prefills rather than resubmitting.
   const [retryPrompt, setRetryPrompt] = useState<string | null>(null);
+  // /party's Build-a-game seed — a ref, read by exactly one mount.
+  const partySeedRef = useRef<string | null>(null);
+  // Consumed by the render above; gone before any second read reaches it.
+  useEffect(() => {
+    partySeedRef.current = null;
+  });
 
   // Stage content
   const [stageContent, setStageContent] = useState<StageContent | null>(null);
@@ -203,6 +212,7 @@ export function App() {
         terms: t('legal.terms'),
         contact: t('pageTitle.contact'),
         create: t('pageTitle.create'),
+        party: t('pageTitle.party'),
         proposals: t('pageTitle.proposals'),
         notFound: t('pageTitle.notFound'),
         playNamed: t('pageTitle.playNamed'),
@@ -311,8 +321,8 @@ export function App() {
     // would just 401. Don't fetch (and don't render an error) until signed in.
     // Outside private beta, catalog reads stay public (owner decision).
     if (privateBeta && !user) return;
-    // Home, /play, and /create all need the catalog loaded.
-    if (route.view !== 'home' && route.view !== 'play' && route.view !== 'create') return;
+    // Home, /play, /create, and /party all need the catalog loaded.
+    if (route.view !== 'home' && route.view !== 'play' && route.view !== 'create' && route.view !== 'party') return;
 
     let cancelled = false;
     // Soft refreshes (Retry, pull-to-refresh) keep the last-good grid on screen —
@@ -802,9 +812,31 @@ export function App() {
     input?.focus({ preventScroll: true });
   }
 
-  // Play/Party live on home only. Elsewhere, queue the anchor and go
-  // there — the existing pending-scroll effect resolves it once the
-  // target (which may still be loading) has actually mounted.
+  // Same handoff as Create, concept pre-loaded with party framing.
+  function handlePartyCreateNav() {
+    partySeedRef.current = t('party.customStarterPrompt');
+    flushSync(() => {
+      navigate(createPath());
+    });
+    window.scrollTo(0, 0);
+    const input = document.querySelector<HTMLTextAreaElement>('#hero-prompt .big-prompt-input');
+    if (input) {
+      input.focus({ preventScroll: true });
+      // Cursor at the end so typing continues the sentence, not overwrites it.
+      input.setSelectionRange(input.value.length, input.value.length);
+    }
+  }
+
+  // A real destination now, not a scroll to the home rail.
+  function handlePartyNav() {
+    navigate(partyPath());
+    // A new page starts at the top, not mid-scroll.
+    window.scrollTo(0, 0);
+  }
+
+  // Play lives on home only. Elsewhere, queue the anchor and go there — the
+  // existing pending-scroll effect resolves it once the target (which may still be
+  // loading) has actually mounted.
   function handleHomeAnchorNav(anchorId: string) {
     if (route.view === 'home') {
       document.getElementById(anchorId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -955,6 +987,7 @@ export function App() {
           onReview={() => navigate(reviewPath())}
           onCreate={handleCreateNav}
           onPlay={() => handleHomeAnchorNav('play-anchor')}
+          onParty={handlePartyNav}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -978,6 +1011,7 @@ export function App() {
           onReview={() => navigate(reviewPath())}
           onCreate={handleCreateNav}
           onPlay={() => handleHomeAnchorNav('play-anchor')}
+          onParty={handlePartyNav}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -1001,6 +1035,7 @@ export function App() {
           onReview={() => navigate(reviewPath())}
           onCreate={handleCreateNav}
           onPlay={() => handleHomeAnchorNav('play-anchor')}
+          onParty={handlePartyNav}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -1037,6 +1072,7 @@ export function App() {
           onReview={() => navigate(reviewPath())}
           onCreate={handleCreateNav}
           onPlay={() => handleHomeAnchorNav('play-anchor')}
+          onParty={handlePartyNav}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -1077,6 +1113,7 @@ export function App() {
           onReview={() => navigate(reviewPath())}
           onCreate={handleCreateNav}
           onPlay={() => handleHomeAnchorNav('play-anchor')}
+          onParty={handlePartyNav}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -1101,6 +1138,7 @@ export function App() {
           onReview={() => navigate(reviewPath())}
           onCreate={handleCreateNav}
           onPlay={() => handleHomeAnchorNav('play-anchor')}
+          onParty={handlePartyNav}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -1153,6 +1191,7 @@ export function App() {
           onReview={() => navigate(reviewPath())}
           onCreate={handleCreateNav}
           onPlay={() => handleHomeAnchorNav('play-anchor')}
+          onParty={handlePartyNav}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -1180,7 +1219,9 @@ export function App() {
         onReview={() => navigate(reviewPath())}
         onCreate={handleCreateNav}
         onPlay={() => handleHomeAnchorNav('play-anchor')}
+        onParty={handlePartyNav}
         isOnCreate={route.view === 'create'}
+        isOnParty={route.view === 'party'}
         isOnStudio={route.view === 'studio' || route.view === 'studioWelcome' || route.view === 'studioConnect'}
         upTarget={headerUp}
         onUp={navigate}
@@ -1226,7 +1267,7 @@ export function App() {
               <CreatePage
                 // Remount when a retry loads a new idea, so the prompt box picks it up.
                 retryKey={retryPrompt ?? 'blank'}
-                initialPrompt={retryPrompt ?? ''}
+                initialPrompt={resolveCreateInitialPrompt(partySeedRef.current, retryPrompt)}
                 catalogEntries={catalogEntries}
                 onPlayGame={handlePlayGame}
                 submissionStatus={submissionStatus}
@@ -1236,6 +1277,17 @@ export function App() {
                 mockError={mockError}
                 onGenerateMock={(prompt) => void handleGenerateMock(prompt)}
                 onPlatformBuilderAvailability={setPlatformBuilderAvailability}
+              />
+            ) : route.view === 'party' ? (
+              <PartyPage
+                catalogStatus={catalogStatus}
+                catalogError={catalogError}
+                catalogEntries={catalogEntries}
+                onPlayGame={handlePlayGame}
+                onPlayTogether={(game, via) => void handlePlayTogether(game, via)}
+                onRetryCatalog={handleRetryCatalog}
+                onCreateCustom={handlePartyCreateNav}
+                partyError={partyError}
               />
             ) : (
               <div id="hero-prompt">
@@ -1280,7 +1332,7 @@ export function App() {
 
             {stageOverlay}
 
-            {partyError && <p className="error party-error">{partyError}</p>}
+            {partyError && route.view !== 'party' && <p className="error party-error">{partyError}</p>}
 
             {/* The gallery is home content; game pages have their own compact surface. */}
             {route.view === 'home' && (
