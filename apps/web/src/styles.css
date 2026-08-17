@@ -14511,6 +14511,23 @@ button.builder-mode-selector:disabled {
   box-shadow: 0 0 0 2px var(--panel);
 }
 
+/* A game open in Studio on a phone already has its own back-arrow-equivalent
+   (the strip's folder button, for switching games) and its own action row —
+   the site chrome above it was a second, redundant nav bar competing for the
+   same few hundred px. Collapse it to just the "leave Studio" back arrow;
+   logo, nav links, avatar, bell, and hamburger all wait behind that tap. */
+@media (max-width: 800px) {
+  .app:has(.studio-layout.is-game-open) .app-header {
+    gap: 0;
+  }
+
+  .app:has(.studio-layout.is-game-open) .app-header .logo,
+  .app:has(.studio-layout.is-game-open) .app-header .header-nav,
+  .app:has(.studio-layout.is-game-open) .app-header .header-actions {
+    display: none;
+  }
+}
+
 /* 5+ games on a desktop: collapse to a left-edge folder+badge after selection.
    Width matches the header mascot column, so the rail and the logo share one vertical
    band instead of a skinny strip floating left of the face. */
