@@ -348,6 +348,10 @@
       "edit": "Edytuj",
       "code": "Kod"
     },
+    "strip": {
+      "moreActions": "Więcej",
+      "exit": "Opuść Studio"
+    },
     "code": {
       "back": "Wątek",
       "filePicker": "Wybierz plik",

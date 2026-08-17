@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode, type RefObject } from 'react';
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PixelIcon } from './PixelIcon.js';
 import { formatRelativeTime } from './relativeTime.js';
@@ -56,6 +56,10 @@ export type StudioStripProps = {
    * studio-game-first-implementation-plan.md's follow-up: the stage's own play posture
    * is Studio's lighter theater, and this is the way to the site's fuller one. */
   onOpenTheater?: () => void;
+  // ≤800px (shelfIsDrawer): fold secondary actions behind a ⋯ menu.
+  isCompact?: boolean;
+  // Replaces the global header's back arrow, hidden below 800px.
+  onExit?: () => void;
 };
 
 export function StudioStrip({
@@ -83,8 +87,13 @@ export function StudioStrip({
   onClaim,
   shareSlot,
   onOpenTheater,
+  isCompact = false,
+  onExit,
 }: StudioStripProps) {
   const { t, i18n } = useTranslation();
+  const [overflowOpen, setOverflowOpen] = useState(false);
+  const overflowRef = useRef<HTMLDivElement>(null);
+  const overflowTriggerRef = useRef<HTMLButtonElement>(null);
 
   // The D.15 denominator (CE-01): recorded where the door itself renders, not where
   // the surface behind it mounts — otherwise "offered" only ever fires alongside
@@ -92,6 +101,31 @@ export function StudioStrip({
   useEffect(() => {
     if (codeAvailable) recordCodeStep('offered');
   }, [codeAvailable]);
+
+  useEffect(() => {
+    if (!isCompact) setOverflowOpen(false);
+  }, [isCompact]);
+
+  useEffect(() => {
+    if (!overflowOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOverflowOpen(false);
+        overflowTriggerRef.current?.focus();
+      }
+    };
+    // Same idiom as the share popover: outside tap closes it.
+    const onPointerDown = (event: PointerEvent) => {
+      if (overflowRef.current?.contains(event.target as Node)) return;
+      setOverflowOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.removeEventListener('pointerdown', onPointerDown);
+    };
+  }, [overflowOpen]);
 
   const heartbeatAt = latestAgentActivityAt(status);
   const showPhasePill = Boolean(status && HEARTBEAT_STATES.has(status.status));
@@ -103,6 +137,12 @@ export function StudioStrip({
 
   return (
     <header className="studio-strip">
+      {isCompact && onExit ? (
+        <button type="button" className="studio-strip-exit" onClick={onExit} aria-label={t('studioPanel.strip.exit')}>
+          <PixelIcon name="arrowLeft" size={16} />
+        </button>
+      ) : null}
+
       <button
         type="button"
         className="studio-shelf-open"
@@ -129,7 +169,7 @@ export function StudioStrip({
       <div className="studio-strip-spacer" />
 
       <div className="studio-strip-actions">
-        {editAvailable ? (
+        {editAvailable && !isCompact ? (
           <button
             type="button"
             className={`studio-head-action is-icon-only${editActive ? ' is-active' : ''}`}
@@ -142,7 +182,7 @@ export function StudioStrip({
           </button>
         ) : null}
 
-        {codeAvailable ? (
+        {codeAvailable && !isCompact ? (
           // Visible label like Play's: the bare glyph read as decoration.
           <button
             type="button"
@@ -156,7 +196,7 @@ export function StudioStrip({
           </button>
         ) : null}
 
-        {canClaim ? (
+        {canClaim && !isCompact ? (
           <button
             type="button"
             className="studio-head-action is-icon-only studio-head-action--claim"
@@ -181,7 +221,7 @@ export function StudioStrip({
           </span>
         </button>
 
-        {onOpenTheater ? (
+        {onOpenTheater && !isCompact ? (
           <button
             type="button"
             className="studio-head-action is-icon-only"
@@ -195,35 +235,157 @@ export function StudioStrip({
           </button>
         ) : null}
 
-        {shareSlot}
+        {!isCompact ? shareSlot : null}
 
-        <button
-          type="button"
-          className={`studio-head-action is-icon-only${detailsActive ? ' is-active' : ''}`}
-          aria-pressed={detailsActive}
-          aria-label={t('studioPanel.tabs.details')}
-          onClick={onToggleDetails}
-        >
-          <PixelIcon name="panel" size={12} />{' '}
-          <span className="studio-head-action-label">{t('studioPanel.tabs.details')}</span>
-        </button>
+        {!isCompact ? (
+          <button
+            type="button"
+            className={`studio-head-action is-icon-only${detailsActive ? ' is-active' : ''}`}
+            aria-pressed={detailsActive}
+            aria-label={t('studioPanel.tabs.details')}
+            onClick={onToggleDetails}
+          >
+            <PixelIcon name="panel" size={12} />{' '}
+            <span className="studio-head-action-label">{t('studioPanel.tabs.details')}</span>
+          </button>
+        ) : null}
 
-        <button
-          type="button"
-          className={`studio-head-action studio-head-action--chat${threadOpen ? ' is-active' : ''}`}
-          aria-pressed={threadOpen}
-          aria-label={t(threadOpen ? 'studioPanel.rail.closeThread' : 'studioPanel.rail.openThread')}
-          title={t(threadOpen ? 'studioPanel.rail.closeThread' : 'studioPanel.rail.openThread')}
-          onClick={onToggleThread}
-        >
-          <PixelIcon name="chat" size={12} />
-          <span className="studio-head-action-label">{t('studioPanel.rail.chat')}</span>
-          {threadUnreadCount > 0 ? (
-            <span className="studio-chat-unread-badge" aria-hidden="true">
-              {threadUnreadCount > 99 ? '99+' : threadUnreadCount}
-            </span>
-          ) : null}
-        </button>
+        {!isCompact ? (
+          <button
+            type="button"
+            className={`studio-head-action studio-head-action--chat${threadOpen ? ' is-active' : ''}`}
+            aria-pressed={threadOpen}
+            aria-label={t(threadOpen ? 'studioPanel.rail.closeThread' : 'studioPanel.rail.openThread')}
+            title={t(threadOpen ? 'studioPanel.rail.closeThread' : 'studioPanel.rail.openThread')}
+            onClick={onToggleThread}
+          >
+            <PixelIcon name="chat" size={12} />
+            <span className="studio-head-action-label">{t('studioPanel.rail.chat')}</span>
+            {threadUnreadCount > 0 ? (
+              <span className="studio-chat-unread-badge" aria-hidden="true">
+                {threadUnreadCount > 99 ? '99+' : threadUnreadCount}
+              </span>
+            ) : null}
+          </button>
+        ) : null}
+
+        {isCompact ? (
+          <div className="studio-head-menu" ref={overflowRef}>
+            <button
+              type="button"
+              ref={overflowTriggerRef}
+              className={`studio-head-action is-icon-only${overflowOpen ? ' is-active' : ''}`}
+              aria-haspopup="menu"
+              aria-expanded={overflowOpen}
+              aria-label={t('studioPanel.strip.moreActions')}
+              onClick={() => setOverflowOpen((open) => !open)}
+            >
+              <PixelIcon name="menu" size={12} />{' '}
+              <span className="studio-head-action-label">{t('studioPanel.strip.moreActions')}</span>
+            </button>
+            {overflowOpen ? (
+              <div className="studio-head-menu-popover" role="menu" aria-label={t('studioPanel.strip.moreActions')}>
+                {codeAvailable ? (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={`studio-head-menu-item${codeActive ? ' is-active' : ''}`}
+                    aria-pressed={codeActive}
+                    onClick={() => {
+                      setOverflowOpen(false);
+                      onToggleCode();
+                    }}
+                  >
+                    <PixelIcon name="code" size={14} />
+                    <span>{t('studioPanel.tabs.code')}</span>
+                  </button>
+                ) : null}
+
+                {editAvailable ? (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={`studio-head-menu-item${editActive ? ' is-active' : ''}`}
+                    aria-pressed={editActive}
+                    onClick={() => {
+                      setOverflowOpen(false);
+                      onToggleEdit();
+                    }}
+                  >
+                    <PixelIcon name="pencil" size={14} />
+                    <span>{t('studioPanel.tabs.edit')}</span>
+                  </button>
+                ) : null}
+
+                {canClaim ? (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="studio-head-menu-item"
+                    onClick={() => {
+                      setOverflowOpen(false);
+                      onClaim();
+                    }}
+                  >
+                    <PixelIcon name="sparkle" size={14} />
+                    <span>{t('creatorProfile.publishGateTitle')}</span>
+                  </button>
+                ) : null}
+
+                {onOpenTheater ? (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="studio-head-menu-item"
+                    disabled={stageEmpty}
+                    onClick={() => {
+                      setOverflowOpen(false);
+                      onOpenTheater();
+                    }}
+                  >
+                    <PixelIcon name="gamepad" size={14} />
+                    <span>{t('studioPanel.stage.openTheater')}</span>
+                  </button>
+                ) : null}
+
+                {shareSlot}
+
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={`studio-head-menu-item${detailsActive ? ' is-active' : ''}`}
+                  aria-pressed={detailsActive}
+                  onClick={() => {
+                    setOverflowOpen(false);
+                    onToggleDetails();
+                  }}
+                >
+                  <PixelIcon name="panel" size={14} />
+                  <span>{t('studioPanel.tabs.details')}</span>
+                </button>
+
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={`studio-head-menu-item${threadOpen ? ' is-active' : ''}`}
+                  aria-pressed={threadOpen}
+                  onClick={() => {
+                    setOverflowOpen(false);
+                    onToggleThread();
+                  }}
+                >
+                  <PixelIcon name="chat" size={14} />
+                  <span>{t('studioPanel.rail.chat')}</span>
+                  {threadUnreadCount > 0 ? (
+                    <span className="studio-chat-unread-badge" aria-hidden="true">
+                      {threadUnreadCount > 99 ? '99+' : threadUnreadCount}
+                    </span>
+                  ) : null}
+                </button>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </header>
   );

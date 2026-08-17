@@ -23,15 +23,23 @@ describe('studio shell claim selectors', () => {
     );
   });
 
-  it('gives the complete phone action set a full-width row', () => {
+  it('keeps the whole phone strip — folder, title, actions — on one row', () => {
     expect(css).toMatch(
-      /@media \(max-width: 800px\)[\s\S]*?\.app:has\(\.studio-layout\.is-game-open\) \.studio-strip\s*\{[\s\S]*?flex-wrap:\s*wrap;/,
+      /@media \(max-width: 800px\), \(max-height: 500px\)[\s\S]*?\.app:has\(\.studio-layout\.is-game-open\) \.studio-strip\s*\{[\s\S]*?flex-wrap:\s*nowrap;/,
     );
+    // Inline after the title, not forced onto its own full-width line.
     expect(css).toMatch(
-      /\.app:has\(\.studio-layout\.is-game-open\) \.studio-strip-actions\s*\{[\s\S]*?grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\);[\s\S]*?width:\s*100%;/,
+      /\.app:has\(\.studio-layout\.is-game-open\) \.studio-strip-actions\s*\{[\s\S]*?flex:\s*0 0 auto;/,
     );
+    // Folder/Code/Play/⋯ stay fixed size; only the title shrinks.
     expect(css).toMatch(
-      /\.app:has\(\.studio-layout\.is-game-open\) \.studio-strip-actions \.studio-head-action\.is-primary\s*\{[\s\S]*?grid-column:\s*span 2;/,
+      /\.app:has\(\.studio-layout\.is-game-open\) \.studio-strip-actions > \*,[\s\S]*?flex:\s*0 0 auto;/,
+    );
+  });
+
+  it('hides the redundant global topbar once a game is open on a phone', () => {
+    expect(css).toMatch(
+      /@media \(max-width: 800px\), \(max-height: 500px\)[\s\S]*?\.app:has\(\.studio-layout\.is-game-open\) \.app-header\s*\{[\s\S]*?display:\s*none;/,
     );
   });
 

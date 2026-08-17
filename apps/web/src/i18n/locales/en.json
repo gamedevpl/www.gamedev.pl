@@ -346,6 +346,10 @@
       "edit": "Edit",
       "code": "Code"
     },
+    "strip": {
+      "moreActions": "More",
+      "exit": "Leave Studio"
+    },
     "code": {
       "back": "Thread",
       "filePicker": "Choose file",
