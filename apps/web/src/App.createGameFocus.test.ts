@@ -151,7 +151,7 @@ describe('Create Game menu focus', () => {
   });
 });
 
-describe('Play/Party home anchors from elsewhere', () => {
+describe('Play home anchor from elsewhere', () => {
   afterEach(() => {
     document.body.innerHTML = '';
     localStorage.clear();
@@ -160,15 +160,14 @@ describe('Play/Party home anchors from elsewhere', () => {
     vi.unstubAllGlobals();
   });
 
-  // A multiplayer game so the featured slot and party rail mount.
-  const partyGame = {
-    slug: 'party-karts',
-    title: 'Party Karts',
-    genre: 'Arcade racing (3D)',
+  const featuredGame = {
+    slug: 'sky-dodge',
+    title: 'Sky Dodge',
+    genre: 'Arcade',
     controls: 'Arrow keys',
     status: 'published',
     media: null,
-    multiplayer: { mode: 'controllers', minPlayers: 2, maxPlayers: 4 },
+    multiplayer: null,
     saves: null,
     world: null,
     sensing: null,
@@ -187,7 +186,7 @@ describe('Play/Party home anchors from elsewhere', () => {
         return new Response(JSON.stringify({ status: 'ok', provider: 'mock', privateBeta: false }));
       }
       if (url.endsWith('/api/catalog')) {
-        return new Response(JSON.stringify([partyGame]));
+        return new Response(JSON.stringify([featuredGame]));
       }
       if (url.includes('/api/recommendations')) {
         return new Response(JSON.stringify({ items: [] }));
@@ -212,7 +211,7 @@ describe('Play/Party home anchors from elsewhere', () => {
     return vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(() => undefined);
   }
 
-  it('queues the party anchor and resolves it once home mounts, from Studio', async () => {
+  it('queues the play anchor and resolves it once home mounts, from Studio', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     const scrollIntoView = stubAppFetchesWithCatalog();
 
@@ -236,13 +235,13 @@ describe('Play/Party home anchors from elsewhere', () => {
       hamburger?.click();
       await flushEffects();
     });
-    const partyItem = Array.from(container.querySelectorAll<HTMLButtonElement>('.nav-link')).find(
-      (btn) => btn.textContent?.trim() === 'Party',
+    const playItem = Array.from(container.querySelectorAll<HTMLButtonElement>('.nav-link')).find(
+      (btn) => btn.textContent?.trim() === 'Play',
     );
-    expect(partyItem).toBeDefined();
+    expect(playItem).toBeDefined();
 
     await act(async () => {
-      partyItem?.click();
+      playItem?.click();
       await flushEffects();
     });
 
@@ -253,10 +252,10 @@ describe('Play/Party home anchors from elsewhere', () => {
       await new Promise((resolve) => setTimeout(resolve, 150));
     });
 
-    const partyRail = container.querySelector('#party-rail');
-    expect(partyRail).not.toBeNull();
+    const playAnchor = container.querySelector('#play-anchor');
+    expect(playAnchor).not.toBeNull();
     expect(scrollIntoView).toHaveBeenCalled();
-    expect(scrollIntoView.mock.instances).toContain(partyRail);
+    expect(scrollIntoView.mock.instances).toContain(playAnchor);
 
     await act(async () => root.unmount());
   });

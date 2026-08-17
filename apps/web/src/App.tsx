@@ -954,7 +954,6 @@ export function App() {
           onReview={() => navigate(reviewPath())}
           onCreate={handleCreateNav}
           onPlay={() => handleHomeAnchorNav('play-anchor')}
-          onParty={() => handleHomeAnchorNav('party-rail')}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -978,7 +977,6 @@ export function App() {
           onReview={() => navigate(reviewPath())}
           onCreate={handleCreateNav}
           onPlay={() => handleHomeAnchorNav('play-anchor')}
-          onParty={() => handleHomeAnchorNav('party-rail')}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -1002,7 +1000,6 @@ export function App() {
           onReview={() => navigate(reviewPath())}
           onCreate={handleCreateNav}
           onPlay={() => handleHomeAnchorNav('play-anchor')}
-          onParty={() => handleHomeAnchorNav('party-rail')}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -1039,7 +1036,6 @@ export function App() {
           onReview={() => navigate(reviewPath())}
           onCreate={handleCreateNav}
           onPlay={() => handleHomeAnchorNav('play-anchor')}
-          onParty={() => handleHomeAnchorNav('party-rail')}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -1080,7 +1076,6 @@ export function App() {
           onReview={() => navigate(reviewPath())}
           onCreate={handleCreateNav}
           onPlay={() => handleHomeAnchorNav('play-anchor')}
-          onParty={() => handleHomeAnchorNav('party-rail')}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -1105,7 +1100,6 @@ export function App() {
           onReview={() => navigate(reviewPath())}
           onCreate={handleCreateNav}
           onPlay={() => handleHomeAnchorNav('play-anchor')}
-          onParty={() => handleHomeAnchorNav('party-rail')}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -1165,7 +1159,6 @@ export function App() {
         onReview={() => navigate(reviewPath())}
         onCreate={handleCreateNav}
         onPlay={() => handleHomeAnchorNav('play-anchor')}
-        onParty={() => handleHomeAnchorNav('party-rail')}
         isOnCreate={route.view === 'create'}
         isOnStudio={route.view === 'studio' || route.view === 'studioWelcome' || route.view === 'studioConnect'}
         upTarget={headerUp}
