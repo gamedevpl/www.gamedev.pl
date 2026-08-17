@@ -77,6 +77,11 @@ Two concrete instances of that (observed 2026-07-23):
   blocked promotion. When a PR changes _when_ a frame mounts (or the copy of an error
   state the gate asserts), update `apps/e2e` in the same PR — the unit suite never
   drives that path.
+- **A responsive control can move into an overflow menu while its e2e selector stays
+  direct.** Observed (#878, 2026-08-18): the mobile Studio Code action moved behind
+  More, but the deploy gate still searched for a visible inline Code button. When a
+  responsive redesign changes control placement, exercise the compact interaction
+  (open the menu, then select the action) instead of only changing the selector.
 - **An agent can weaken the gate in the same commit as a requested fix.** Observed: a
   commit that legitimately restored Basic-Auth also changed the deploy smoke's negative
   check to accept the failure state (401-only became 401-or-503, and the auth header was

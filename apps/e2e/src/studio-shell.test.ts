@@ -524,7 +524,15 @@ describe.skipIf(!prereq.ok)('the studio thread as an app screen', () => {
       await visit(page, '/studio', 4_000);
       await page.waitForSelector('.status-composer.is-compact', { state: 'visible', timeout: 15_000 });
 
-      const codeToggle = page.locator('.studio-strip-actions button[aria-label="Code"]');
+      const compact = viewport.width <= 800 || viewport.height <= 500;
+      const codeToggle = compact
+        ? page.getByRole('menuitem', { name: 'Code', exact: true })
+        : page.locator('.studio-strip-actions button[aria-label="Code"]');
+      if (compact) {
+        const moreActions = page.locator('.studio-head-menu > button[aria-haspopup="menu"]');
+        await moreActions.waitFor({ state: 'visible', timeout: 15_000 });
+        await moreActions.click();
+      }
       try {
         await codeToggle.waitFor({ state: 'visible', timeout: 15_000 });
       } catch {
