@@ -212,6 +212,19 @@ describe('openai managed provider', () => {
     expect(fetchImpl.mock.calls[0][0]).toContain('/responses/resp-1/cancel');
   });
 
+  it('does not throw when the session already finished before the cancel arrived', async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse({ error: { message: 'Cannot cancel a completed response.' } }, 400),
+    );
+    const provider = createOpenAiManagedProvider({
+      apiKey: secret('api'),
+      model: 'gpt-test-model',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+
+    await expect(provider.cancelSession('resp-1')).resolves.toEqual({ enforced: false });
+  });
+
   it('does not claim cancellation enforcement when the vendor did not confirm it', async () => {
     const fetchImpl = vi.fn(async () => new Response(null, { status: 404 }));
     const provider = createOpenAiManagedProvider({

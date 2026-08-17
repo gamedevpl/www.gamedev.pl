@@ -168,8 +168,13 @@ export function createOpenAiManagedProvider(config: ManagedProviderConfig): Mana
     },
 
     async cancelSession(sessionId: string): Promise<{ enforced: boolean }> {
-      const response = await call(`/responses/${encodeURIComponent(sessionId)}/cancel`, { method: 'POST' });
-      return { enforced: response !== null };
+      // OpenAI 400s cancelling an already-finished session; same as a 404.
+      try {
+        const response = await call(`/responses/${encodeURIComponent(sessionId)}/cancel`, { method: 'POST' });
+        return { enforced: response !== null };
+      } catch {
+        return { enforced: false };
+      }
     },
 
     async deleteSession(sessionId: string): Promise<void> {
