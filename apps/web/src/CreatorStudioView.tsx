@@ -427,6 +427,13 @@ export function CreatorStudioView({
     return () => document.body.classList.remove('player-open');
   }, [theaterOpen]);
 
+  // The theater's fixed full-viewport surface sits above the strip (z-index 1000 vs.
+  // the popover's 40) — an open share popover would be pinned underneath it, present
+  // but unreachable. Close it rather than chase the theater's stacking context.
+  useEffect(() => {
+    if (theaterOpen) setShareMenuOpen(false);
+  }, [theaterOpen]);
+
   // A game switch starts every per-game bit of stage state fresh. The very first
   // resolution applies the deep link's posture (if any); every later switch — the
   // creator picking a different game — always starts back in watch.
@@ -998,7 +1005,8 @@ export function CreatorStudioView({
                           onImproved={(newToken) => setHandoffToken(newToken)}
                           onDisplayedOriginChange={setDisplayedOrigin}
                           editorPushRef={editorPushRef}
-                           onEditorControllerChange={setEditorController}                        />
+                          onEditorControllerChange={setEditorController}
+                        />
 
                         {stageStatus.kind === 'empty' &&
                         !stageSource.html &&
