@@ -30,8 +30,6 @@ type NavHeaderProps = {
   isOnStudio?: boolean;
   // Scrolls to the curated picks on home; navigates home first if elsewhere.
   onPlay: () => void;
-  // Scrolls to the party rail on home; navigates home first if elsewhere.
-  onParty: () => void;
   /**
    * Android-style Up target for non-home surfaces. Null on home, join, play, and
    * while an immersive theater owns escape. Never history.back() — deep links
@@ -51,7 +49,6 @@ export function NavHeader({
   isOnCreate = false,
   isOnStudio = false,
   onPlay,
-  onParty,
   upTarget = null,
   onUp,
 }: NavHeaderProps) {
@@ -205,9 +202,6 @@ export function NavHeader({
             </span>
           ) : null}
         </button>
-        <button type="button" className="header-nav-link" onClick={onParty}>
-          {t('header.navParty')}
-        </button>
       </nav>
 
       <div className="header-actions">
@@ -273,8 +267,10 @@ export function NavHeader({
 
           {isMenuOpen && (
             <nav className="dropdown-menu">
+              {/* Mirrors the flat nav — hidden by CSS once that row is visible (1100px+),
+                  so this is purely the narrow-width fallback, not a permanent duplicate. */}
               <button
-                className="nav-link"
+                className="nav-link nav-link--flat-mirror"
                 onClick={() => {
                   setIsMenuOpen(false);
                   onPlay();
@@ -283,7 +279,7 @@ export function NavHeader({
                 <PixelIcon name="play" size={14} /> {t('header.navPlay')}
               </button>
               <button
-                className={`nav-link${isOnCreate ? ' is-active' : ''}`}
+                className={`nav-link nav-link--flat-mirror${isOnCreate ? ' is-active' : ''}`}
                 onClick={() => {
                   setIsMenuOpen(false);
                   onCreate();
@@ -292,7 +288,7 @@ export function NavHeader({
                 <PixelIcon name="sparkle" size={14} /> {t('header.navPrompt')}
               </button>
               <button
-                className={`nav-link${isOnStudio ? ' is-active' : ''}`}
+                className={`nav-link nav-link--flat-mirror${isOnStudio ? ' is-active' : ''}`}
                 onClick={() => {
                   setIsMenuOpen(false);
                   onStudio();
@@ -307,15 +303,6 @@ export function NavHeader({
                     {activeBuildCount}
                   </span>
                 ) : null}
-              </button>
-              <button
-                className="nav-link"
-                onClick={() => {
-                  setIsMenuOpen(false);
-                  onParty();
-                }}
-              >
-                <PixelIcon name="phone" size={14} /> {t('header.navParty')}
               </button>
 
               {/* Operators only — everyone else never learns this exists, which is the

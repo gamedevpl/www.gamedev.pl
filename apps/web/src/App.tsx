@@ -954,7 +954,6 @@ export function App() {
           onReview={() => navigate(reviewPath())}
           onCreate={handleCreateNav}
           onPlay={() => handleHomeAnchorNav('play-anchor')}
-          onParty={() => handleHomeAnchorNav('party-rail')}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -978,7 +977,6 @@ export function App() {
           onReview={() => navigate(reviewPath())}
           onCreate={handleCreateNav}
           onPlay={() => handleHomeAnchorNav('play-anchor')}
-          onParty={() => handleHomeAnchorNav('party-rail')}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -1002,7 +1000,6 @@ export function App() {
           onReview={() => navigate(reviewPath())}
           onCreate={handleCreateNav}
           onPlay={() => handleHomeAnchorNav('play-anchor')}
-          onParty={() => handleHomeAnchorNav('party-rail')}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -1039,7 +1036,6 @@ export function App() {
           onReview={() => navigate(reviewPath())}
           onCreate={handleCreateNav}
           onPlay={() => handleHomeAnchorNav('play-anchor')}
-          onParty={() => handleHomeAnchorNav('party-rail')}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -1050,6 +1046,7 @@ export function App() {
             slug={route.slug}
             onNavigate={navigate}
             onPlay={handlePlayGame}
+            onPlayTogether={handlePlayTogether}
             onRemix={handleRemixGame}
             onCanonicalPath={(path) => navigate(path, { replace: true })}
             onGameLoaded={setGameTitle}
@@ -1058,7 +1055,9 @@ export function App() {
         {/* Play/Remix on this page set stageContent; without the overlay here the
             body scroll-locks (`player-open`) and nothing covers the page. */}
         {stageOverlay}
+        {partyError && <p className="error party-error">{partyError}</p>}
         {!stageContent && <SiteFooter />}
+        <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
       </div>
     );
   }
@@ -1077,7 +1076,6 @@ export function App() {
           onReview={() => navigate(reviewPath())}
           onCreate={handleCreateNav}
           onPlay={() => handleHomeAnchorNav('play-anchor')}
-          onParty={() => handleHomeAnchorNav('party-rail')}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -1102,7 +1100,6 @@ export function App() {
           onReview={() => navigate(reviewPath())}
           onCreate={handleCreateNav}
           onPlay={() => handleHomeAnchorNav('play-anchor')}
-          onParty={() => handleHomeAnchorNav('party-rail')}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -1162,7 +1159,6 @@ export function App() {
         onReview={() => navigate(reviewPath())}
         onCreate={handleCreateNav}
         onPlay={() => handleHomeAnchorNav('play-anchor')}
-        onParty={() => handleHomeAnchorNav('party-rail')}
         isOnCreate={route.view === 'create'}
         isOnStudio={route.view === 'studio' || route.view === 'studioWelcome' || route.view === 'studioConnect'}
         upTarget={headerUp}
@@ -1201,6 +1197,7 @@ export function App() {
                 game={playCatalogGame}
                 state={catalogStatus}
                 onPlay={handlePlayGame}
+                onPlayTogether={handlePlayTogether}
                 onRemix={handleRemixGame}
                 onRetry={handleRetryCatalog}
               />

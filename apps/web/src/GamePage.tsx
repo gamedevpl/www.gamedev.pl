@@ -32,6 +32,7 @@ export function GamePage({
   onCanonicalPath,
   onGameLoaded,
   onPlay,
+  onPlayTogether,
   onRemix,
 }: {
   handle: string;
@@ -40,6 +41,7 @@ export function GamePage({
   onCanonicalPath?: (path: string) => void;
   onGameLoaded?: (title: string) => void;
   onPlay?: (game: CatalogEntry, via?: PlayVia) => void;
+  onPlayTogether?: (game: CatalogEntry, via?: PlayVia) => void;
   onRemix: (game: CatalogEntry, request: string) => void;
 }) {
   const { t } = useTranslation();
@@ -197,6 +199,8 @@ export function GamePage({
     if (!onPlay) onNavigate(playPath(slug));
   };
 
+  const playTogether = () => onPlayTogether?.(entry, arrivalVia);
+
   const openRemixEntry = () => {
     recordRemixStep('opened', { control: 'page' });
     setRemixEntryOpen(true);
@@ -235,6 +239,11 @@ export function GamePage({
           <button type="button" className="primary-btn" onClick={play}>
             <PixelIcon name="play" size={13} /> {t('gamePage.play')}
           </button>
+          {entry.multiplayer ? (
+            <button type="button" className="secondary-btn party-btn" onClick={playTogether}>
+              <PixelIcon name="phone" size={13} /> {t('party.playTogether')}
+            </button>
+          ) : null}
           <VoteWidget slug={slug} />
           {isOwner ? (
             <a

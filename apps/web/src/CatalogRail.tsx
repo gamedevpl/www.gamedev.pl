@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   catalogMediaUrl,
@@ -6,11 +7,16 @@ import {
   isPlatformAuthor,
   type CatalogEntry,
 } from './catalog.js';
+import { isCatalogScrolling, whenCatalogScrollIdle } from './catalogScrollIdle.js';
 import { PixelIcon } from './PixelIcon.js';
 import { creatorPath, gamePath } from './router.js';
+import { useInView } from './useInView.js';
 import type { PlayVia } from './visitTelemetry.js';
 
 // Curated home page surfaces above the full catalog grid.
+
+// Same dwell delay as CatalogCard, to skip arming during scroll sweeps.
+const RAIL_HOVER_INTENT_MS = 240;
 
 function RailCard({
   entry,
@@ -25,19 +31,120 @@ function RailCard({
   onPlayTogether?: (game: CatalogEntry, via?: PlayVia) => void;
 }) {
   const { t } = useTranslation();
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const hoverTimerRef = useRef<number | null>(null);
+  const hoveringRef = useRef(false);
+  const cancelIdleWaitRef = useRef<(() => void) | null>(null);
+  const [previewArmed, setPreviewArmed] = useState(false);
+  // Unloads off-screen, same as the grid — rails hold a dozen cards.
+  const { ref: mediaRef, inView } = useInView<HTMLDivElement>({ rootMargin: '200px 0px', once: false });
   const screenshots = entry.media?.screenshots ?? [];
   const selected = screenshots[defaultScreenshotIndex(screenshots)];
   const posterUrl = selected ? catalogMediaUrl(entry.slug, selected.file, 320) : undefined;
+  const hasVideo = Boolean(entry.media?.video);
+  const videoUrl =
+    hasVideo && inView && previewArmed && entry.media?.video ? catalogMediaUrl(entry.slug, entry.media.video) : null;
+
+  useEffect(() => {
+    if (inView) return;
+    clearHoverIntent();
+    hoveringRef.current = false;
+    setPreviewArmed(false);
+  }, [inView]);
+
+  useEffect(() => {
+    if (!videoUrl) return;
+    void Promise.resolve(videoRef.current?.play()).catch(() => {});
+  }, [videoUrl]);
+
+  useEffect(
+    () => () => {
+      clearHoverIntent();
+      hoveringRef.current = false;
+    },
+    [],
+  );
+
+  function clearHoverIntent() {
+    if (hoverTimerRef.current != null) {
+      window.clearTimeout(hoverTimerRef.current);
+      hoverTimerRef.current = null;
+    }
+    cancelIdleWaitRef.current?.();
+    cancelIdleWaitRef.current = null;
+  }
+
+  // Same idle wait as CatalogCard — a sliding rail must not arm this.
+  function armFromHoverIntent() {
+    if (!hoveringRef.current) return;
+    if (isCatalogScrolling()) {
+      cancelIdleWaitRef.current?.();
+      cancelIdleWaitRef.current = whenCatalogScrollIdle(() => {
+        cancelIdleWaitRef.current = null;
+        armFromHoverIntent();
+      });
+      return;
+    }
+    setPreviewArmed(true);
+  }
+
+  function scheduleArm() {
+    clearHoverIntent();
+    hoveringRef.current = true;
+    hoverTimerRef.current = window.setTimeout(() => {
+      hoverTimerRef.current = null;
+      armFromHoverIntent();
+    }, RAIL_HOVER_INTENT_MS);
+  }
+
+  function disarm() {
+    hoveringRef.current = false;
+    clearHoverIntent();
+    setPreviewArmed(false);
+    const video = videoRef.current;
+    if (video) {
+      video.pause();
+      video.removeAttribute('src');
+      video.load();
+    }
+  }
 
   return (
     <article className="rail-card">
-      <div className="rail-card-media">
+      <div
+        ref={mediaRef}
+        className="rail-card-media"
+        tabIndex={hasVideo ? 0 : undefined}
+        onPointerEnter={(event) => {
+          if (event.pointerType === 'mouse' && hasVideo) scheduleArm();
+        }}
+        onPointerLeave={(event) => {
+          if (event.pointerType === 'mouse') disarm();
+        }}
+        onFocus={(event) => {
+          if (event.target === event.currentTarget && hasVideo) setPreviewArmed(true);
+        }}
+        onBlur={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget)) disarm();
+        }}
+      >
         <a
           className="rail-card-hit-area"
           href={`${gamePath(gamePageHandle(entry), entry.slug)}?via=${via}`}
           aria-label={`${entry.title} — ${t('catalog.openGame')}`}
         />
-        {posterUrl ? (
+        {videoUrl ? (
+          <video
+            ref={videoRef}
+            src={videoUrl}
+            poster={posterUrl}
+            muted
+            loop
+            playsInline
+            preload="auto"
+            aria-hidden="true"
+          />
+        ) : posterUrl ? (
           <img src={posterUrl} alt="" loading="lazy" decoding="async" />
         ) : (
           <div className="rail-card-fallback" aria-hidden="true">

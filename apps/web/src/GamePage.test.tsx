@@ -177,6 +177,31 @@ describe('GamePage', () => {
     expect(container.querySelector('iframe')).toBeNull();
   });
 
+  it('offers Play together for a multiplayer game and hides it otherwise', async () => {
+    const playTogetherAction = vi.fn();
+    fetchGamePage.mockResolvedValue(
+      pageData({
+        entry: {
+          ...pageData().entry,
+          multiplayer: { mode: 'controllers', minPlayers: 2, maxPlayers: 4 },
+        },
+      }),
+    );
+    await renderPage({ onPlayTogether: playTogetherAction });
+
+    const partyButton = container.querySelector<HTMLButtonElement>('.party-btn');
+    expect(partyButton).not.toBeNull();
+    await act(async () => {
+      partyButton!.click();
+    });
+    expect(playTogetherAction).toHaveBeenCalledWith(expect.objectContaining({ slug: 'neon-courier' }), undefined);
+  });
+
+  it('hides Play together for a single-player game', async () => {
+    await renderPage();
+    expect(container.querySelector('.party-btn')).toBeNull();
+  });
+
   it('carries a rail-attributed via from the URL into the Play call', async () => {
     window.history.pushState(null, '', `${window.location.pathname}?via=rail_party`);
     await renderPage();

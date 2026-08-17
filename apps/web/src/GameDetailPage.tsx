@@ -13,6 +13,7 @@ type GameDetailPageProps = {
   game: CatalogEntry | null;
   state: 'loading' | 'ready' | 'error';
   onPlay: (game: CatalogEntry) => void;
+  onPlayTogether: (game: CatalogEntry) => void;
   onRemix: (game: CatalogEntry) => void;
   onRetry: () => void;
 };
@@ -29,7 +30,7 @@ function previewScreenshot(game: CatalogEntry) {
  * Published play redirects Close onto the canonical game page ({@link GamePage}).
  * This surface never mounts the iframe.
  */
-export function GameDetailPage({ game, state, onPlay, onRemix, onRetry }: GameDetailPageProps) {
+export function GameDetailPage({ game, state, onPlay, onPlayTogether, onRemix, onRetry }: GameDetailPageProps) {
   const { t } = useTranslation();
   const { user } = useAuth();
   const [selectedScreenshotName, setSelectedScreenshotName] = useState<string | null>(null);
@@ -69,6 +70,7 @@ export function GameDetailPage({ game, state, onPlay, onRemix, onRetry }: GameDe
   );
 
   const play = () => onPlay(game);
+  const playTogether = () => onPlayTogether(game);
   const remix = () => {
     recordRemixStep('opened', { control: 'page' });
     onRemix(game);
@@ -87,6 +89,11 @@ export function GameDetailPage({ game, state, onPlay, onRemix, onRetry }: GameDe
           <button type="button" className="primary-btn" onClick={play}>
             <PixelIcon name="play" size={13} /> {t('catalog.play')}
           </button>
+          {game.multiplayer ? (
+            <button type="button" className="secondary-btn party-btn" onClick={playTogether}>
+              <PixelIcon name="phone" size={13} /> {t('party.playTogether')}
+            </button>
+          ) : null}
           <VoteWidget slug={game.slug} />
           {isOwner ? (
             <a className="secondary-btn game-page-studio" href={studioPath(game.slug)}>
