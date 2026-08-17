@@ -14,13 +14,6 @@
 
 import type { AgentObservation } from './job-state.js';
 
-export type BuildHistoryEntry = {
-  kind: 'creator_request' | 'agent_note' | 'build_progress';
-  text: string;
-  createdAt: string;
-  round: 'current' | 'earlier';
-};
-
 /** Everything a backend needs to start a build. Deliberately not a GitHub issue. */
 export interface BuildBrief {
   /** Our job identity, for correlating an agent's reports back to the job. */
@@ -38,9 +31,10 @@ export interface BuildBrief {
   mcpOpenerToken?: string;
   /** Where the agent reports progress and delivers its work. */
   apiBaseUrl: string;
-  /** Set for a revision round: what the creator asked to change. Untrusted text. */
+  // A selector, not the request itself — buildPrompt points at read_inbox/get_transcript.
   feedback?: string;
-  history?: BuildHistoryEntry[];
+  // Queue write for `feedback` failed — buildPrompt must inline it instead.
+  feedbackQueueFailed?: boolean;
   /**
    * Set when the previous session ended without delivering.
    *

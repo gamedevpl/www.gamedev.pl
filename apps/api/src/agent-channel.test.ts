@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mintAgentToken, mintLegacyAgentToken, STALE_AGENT_TOKEN_REASON } from './agent-token.js';
 import { verifyUploadToken } from './agent-upload-token.js';
 import type { AgentChannelOptions } from './agent-channel.js';
+import { MAX_TRANSCRIPT_LIST_ENTRIES } from './build-transcript.js';
 import { buildApp } from './app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './github-client.js';
@@ -377,6 +378,85 @@ describe('agent build channel', () => {
       payload: { ids: [first.json().pending[0].id] },
     });
     expect(acked.json().pending).toHaveLength(0);
+  });
+
+  it('serves the tail of the conversation on the transcript route without acking anything', async () => {
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    // Already delivered — gone from the inbox, kept in the record.
+    await store.appendCreatorMessage(ISSUE, 'A long spec about hatching and teaching creatures.', {
+      delivered: true,
+    });
+    await store.appendCreatorMessage(ISSUE, 'build my game plz');
+    await store.appendCreatorMessage(ISSUE, 'Relayed on your behalf.', { origin: 'studio' });
+    await store.appendBuildEvent(ISSUE, { kind: 'step', text: 'Drawing the nursery.' });
+    app = await createApp(store);
+
+    const res = await app.inject({ method: 'GET', url: '/api/agent/build/transcript', headers: agentHeaders() });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as {
+      entries: Array<{ kind: string; text: string; round: string }>;
+      hasMore: boolean;
+      nextCursor?: string;
+      pending: Array<{ text: string }>;
+      control: { stop: boolean };
+    };
+    expect(body.entries.map((entry) => [entry.kind, entry.text])).toEqual(
+      expect.arrayContaining([
+        ['creator_request', 'A long spec about hatching and teaching creatures.'],
+        ['creator_request', 'build my game plz'],
+        ['agent_note', 'Relayed on your behalf.'],
+        ['build_progress', 'Drawing the nursery.'],
+      ]),
+    );
+    // Four entries fit under the default window.
+    expect(body.hasMore).toBe(false);
+    expect(body.nextCursor).toBeUndefined();
+    expect(body.control).toMatchObject({ stop: false });
+
+    // Reading the transcript is not acknowledging: the pending message survives.
+    const inbox = await app.inject({ method: 'GET', url: '/api/agent/build/inbox', headers: agentHeaders() });
+    expect(inbox.json().pending).toHaveLength(1);
+  });
+
+  it('pages the transcript with cursor/limit instead of serving it all at once', async () => {
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    for (let i = 0; i < 5; i += 1) {
+      await store.appendCreatorMessage(ISSUE, `message-${i}`, { delivered: true });
+    }
+    app = await createApp(store);
+
+    const firstPage = await app.inject({
+      method: 'GET',
+      url: '/api/agent/build/transcript?limit=2',
+      headers: agentHeaders(),
+    });
+    const first = firstPage.json() as { entries: Array<{ text: string }>; hasMore: boolean; nextCursor?: string };
+    expect(first.entries.map((e) => e.text)).toEqual(['message-3', 'message-4']);
+    expect(first.hasMore).toBe(true);
+    expect(first.nextCursor).toBeDefined();
+
+    const secondPage = await app.inject({
+      method: 'GET',
+      url: `/api/agent/build/transcript?limit=2&cursor=${first.nextCursor}`,
+      headers: agentHeaders(),
+    });
+    const second = secondPage.json() as { entries: Array<{ text: string }>; hasMore: boolean };
+    expect(second.entries.map((e) => e.text)).toEqual(['message-1', 'message-2']);
+    expect(second.hasMore).toBe(true);
+  });
+
+  it('flags truncatedAtSource over the real channel route when a round exceeds the read ceiling', async () => {
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    for (let i = 0; i < MAX_TRANSCRIPT_LIST_ENTRIES; i += 1) {
+      await store.appendBuildEvent(ISSUE, { kind: 'step', text: `event-${i}` });
+    }
+    app = await createApp(store);
+
+    const res = await app.inject({ method: 'GET', url: '/api/agent/build/transcript', headers: agentHeaders() });
+    expect(res.json().truncatedAtSource).toBe(true);
   });
 
   it('queues creator feedback for the agent when it is posted to GitHub', async () => {

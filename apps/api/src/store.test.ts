@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  dispatchAttempt,
   InMemoryStore,
   MAX_JOB_TRANSITIONS,
   TELEMETRY_COLLECTION,
@@ -757,5 +758,63 @@ describe('dispatch records', () => {
       workspace: 'copilot/x',
       seedWorkspace: undefined,
     });
+  });
+});
+
+describe('dispatchAttempt', () => {
+  it('counts a job with no dispatch yet and no siblings as attempt 1', async () => {
+    const store = new InMemoryStore();
+    await store.createSubmission(1, 'g:1', 'A game');
+
+    expect(await dispatchAttempt(store, (await store.getSubmission(1))!)).toBe(1);
+  });
+
+  it('counts this job’s own dispatches when it has no siblings', async () => {
+    const store = new InMemoryStore();
+    await store.createSubmission(1, 'g:1', 'A game');
+    await store.recordDispatch(1, { backend: 'self', ref: 'r1' });
+    await store.recordDispatch(1, { backend: 'self', ref: 'r2' });
+
+    expect(await dispatchAttempt(store, (await store.getSubmission(1))!)).toBe(2);
+  });
+
+  it('adds earlier sibling jobs for the same game — an improvement round is a new job', async () => {
+    vi.useFakeTimers();
+    try {
+      // Job 1 is the original game, dispatched twice (built, then one retry).
+      vi.setSystemTime(new Date('2026-08-01T10:00:00.000Z'));
+      const store = new InMemoryStore();
+      await store.createSubmission(1, 'g:1', 'A game');
+      await store.setSubmissionSlug(1, 'a-game');
+      await store.recordDispatch(1, { backend: 'self', ref: 'r1' });
+      await store.recordDispatch(1, { backend: 'self', ref: 'r2' });
+
+      // Job 2: a post-publish improvement, a brand new job.
+      vi.setSystemTime(new Date('2026-08-02T10:00:00.000Z'));
+      await store.createSubmission(2, 'g:1', 'A game');
+      await store.setSubmissionSlug(2, 'a-game');
+
+      const job2 = (await store.getSubmission(2))!;
+      expect(job2.dispatch).toBeUndefined();
+      // 0 of its own + 2 from job 1, not 1.
+      expect(await dispatchAttempt(store, job2)).toBe(2);
+
+      await store.recordDispatch(2, { backend: 'self', ref: 'r3' });
+      expect(await dispatchAttempt(store, (await store.getSubmission(2))!)).toBe(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('ignores another owner’s job with the same slug', async () => {
+    const store = new InMemoryStore();
+    await store.createSubmission(1, 'g:1', 'A game');
+    await store.setSubmissionSlug(1, 'a-game');
+    await store.recordDispatch(1, { backend: 'self', ref: 'r1' });
+
+    await store.createSubmission(2, 'g:2', 'A game');
+    await store.setSubmissionSlug(2, 'a-game');
+
+    expect(await dispatchAttempt(store, (await store.getSubmission(2))!)).toBe(1);
   });
 });

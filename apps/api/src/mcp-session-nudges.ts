@@ -11,6 +11,7 @@ export type NudgeCode =
   | 'progress_stale'
   | 'inbox_pending'
   | 'seed_unread'
+  | 'transcript_unread'
   | 'call_end'
   | 'gate_not_started'
   | 'gate_poll_backoff'
@@ -33,6 +34,12 @@ export interface JobNudgeState {
   seedFetched: boolean;
   /** Last known seedStatus from brief/seed payloads. */
   seedStatus: 'pending' | 'available' | 'unavailable' | null;
+  // Last-seen dispatchAttempt; a change re-arms transcriptFetched below.
+  lastDispatchAttempt: number | null;
+  // True after get_transcript since the last dispatch this tracker saw.
+  transcriptFetched: boolean;
+  // Bounds transcript_unread reminders so it cannot become noise.
+  transcriptRemindersSent: number;
   /**
    * True after a successful submit_sources until `end` — subsequent tools re-emit
    * `call_end` so ChatGPT-class agents that keep chatting without ending still see it.
@@ -60,6 +67,9 @@ export const GATE_POLL_RETRY_AFTER_SECONDS = 30;
  * the step.
  */
 export const CARD_REMINDER_LIMIT = 3;
+
+// Same reasoning as CARD_REMINDER_LIMIT: bounded so it cannot crowd out later warnings.
+export const TRANSCRIPT_REMINDER_LIMIT = 3;
 
 /** No progress for this long (wall clock) → `progress_stale`. */
 export const PROGRESS_STALE_MS = 90_000;
@@ -117,6 +127,8 @@ export interface McpNudgeTracker {
   noteInboxCheck(jobId: number, nowMs: number): void;
   noteSeedFetch(jobId: number, nowMs: number): void;
   noteSeedStatus(jobId: number, status: 'pending' | 'available' | 'unavailable' | null, nowMs: number): void;
+  // Called with dispatchAttempt from a start/get_brief payload.
+  noteDispatchAttempt(jobId: number, attempt: number, nowMs: number): void;
   /** Successful submit_sources — creator handoff may already be unlocked; still need `end`. */
   noteSubmitSuccess(jobId: number, nowMs: number): void;
   /** Successful MCP `end` — clear the post-submit call_end loop. */
@@ -149,6 +161,9 @@ export function createMcpNudgeTracker(
         lastInboxCheckAt: null,
         seedFetched: false,
         seedStatus: null,
+        lastDispatchAttempt: null,
+        transcriptFetched: false,
+        transcriptRemindersSent: 0,
         awaitingEnd: false,
         lastGatePollAt: null,
         cardOpened: false,
@@ -184,6 +199,21 @@ export function createMcpNudgeTracker(
     state.seedStatus = status;
   }
 
+  function noteDispatchAttempt(jobId: number, attempt: number, nowMs: number): void {
+    const state = ensure(jobId, nowMs);
+    if (state.lastDispatchAttempt !== null && state.lastDispatchAttempt !== attempt) {
+      // A new dispatch started — the earlier read no longer covers it.
+      state.transcriptFetched = false;
+      state.transcriptRemindersSent = 0;
+    }
+    state.lastDispatchAttempt = attempt;
+  }
+
+  function noteTranscriptFetch(jobId: number, nowMs: number): void {
+    const state = ensure(jobId, nowMs);
+    state.transcriptFetched = true;
+  }
+
   function noteSubmitSuccess(jobId: number, nowMs: number): void {
     const state = ensure(jobId, nowMs);
     state.awaitingEnd = true;
@@ -210,6 +240,9 @@ export function createMcpNudgeTracker(
     }
     if (toolName === 'get_seed') {
       noteSeedFetch(jobId, nowMs);
+    }
+    if (toolName === 'get_transcript') {
+      noteTranscriptFetch(jobId, nowMs);
     }
     if (toolName === 'end') {
       noteEnded(jobId, nowMs);
@@ -283,6 +316,23 @@ export function createMcpNudgeTracker(
       });
     }
 
+    // An earlier attempt exists; the brief no longer inlines the last message.
+    if (
+      (state.lastDispatchAttempt ?? 1) > 1 &&
+      !state.transcriptFetched &&
+      state.transcriptRemindersSent < TRANSCRIPT_REMINDER_LIMIT &&
+      toolName !== 'get_transcript' &&
+      toolName !== 'start'
+    ) {
+      state.transcriptRemindersSent += 1;
+      warnings.push({
+        code: 'transcript_unread',
+        message:
+          'This game has an earlier build attempt — earlier conversation may exist. Call get_transcript before ' +
+          'deciding what to build; the latest message is the tail of a conversation, not the whole of it.',
+      });
+    }
+
     // Re-emit after submit until end — ChatGPT often stops on the submit reply itself,
     // but when it keeps chatting this keeps call_end in every subsequent tool result.
     if (state.awaitingEnd && toolName !== 'end' && toolName !== 'submit_sources') {
@@ -316,6 +366,7 @@ export function createMcpNudgeTracker(
     noteInboxCheck,
     noteSeedFetch,
     noteSeedStatus,
+    noteDispatchAttempt,
     noteSubmitSuccess,
     noteEnded,
     notePendingCount,

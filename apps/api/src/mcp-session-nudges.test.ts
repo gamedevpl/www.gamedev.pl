@@ -3,6 +3,7 @@ import {
   GATE_POLL_MIN_INTERVAL_MS,
   PROGRESS_STALE_CALLS,
   PROGRESS_STALE_MS,
+  TRANSCRIPT_REMINDER_LIMIT,
   createMcpNudgeTracker,
   pendingCountFromPayload,
 } from './mcp-session-nudges.js';
@@ -109,6 +110,59 @@ describe('mcp-session-nudges', () => {
     expect(
       nudges.warningsFor(1, 'get_gate_verdict', t0 + 1_000 + GATE_POLL_MIN_INTERVAL_MS).map((w) => w.code),
     ).not.toContain('gate_poll_backoff');
+  });
+
+  it('warns transcript_unread once dispatchAttempt > 1, until get_transcript runs', () => {
+    const nudges = createMcpNudgeTracker();
+    const t0 = 1_000_000;
+    nudges.noteDispatchAttempt(1, 2, t0);
+    expect(nudges.warningsFor(1, 'get_brief', t0).map((w) => w.code)).toContain('transcript_unread');
+    // start and get_transcript itself never carry the nudge.
+    expect(nudges.warningsFor(1, 'start', t0).map((w) => w.code)).not.toContain('transcript_unread');
+    expect(nudges.warningsFor(1, 'get_transcript', t0).map((w) => w.code)).not.toContain('transcript_unread');
+    nudges.noteToolSuccess(1, 'get_transcript', t0 + 1);
+    expect(nudges.warningsFor(1, 'get_brief', t0 + 2).map((w) => w.code)).not.toContain('transcript_unread');
+  });
+
+  it('never warns transcript_unread on the first-ever dispatch, or before one has been reported', () => {
+    const nudges = createMcpNudgeTracker();
+    const t0 = 1_000_000;
+    expect(nudges.warningsFor(1, 'get_brief', t0).map((w) => w.code)).not.toContain('transcript_unread');
+    nudges.noteDispatchAttempt(1, 1, t0);
+    expect(nudges.warningsFor(1, 'get_brief', t0 + 1).map((w) => w.code)).not.toContain('transcript_unread');
+  });
+
+  it('caps transcript_unread reminders so a long round is not nagged forever', () => {
+    const nudges = createMcpNudgeTracker();
+    const t0 = 1_000_000;
+    nudges.noteDispatchAttempt(1, 2, t0);
+    for (let i = 0; i < TRANSCRIPT_REMINDER_LIMIT; i += 1) {
+      expect(nudges.warningsFor(1, 'stage_source_file', t0 + i).map((w) => w.code)).toContain('transcript_unread');
+    }
+    expect(nudges.warningsFor(1, 'stage_source_file', t0 + 100).map((w) => w.code)).not.toContain('transcript_unread');
+  });
+
+  it('re-arms transcript_unread when a new dispatch attempt starts, even on the same in-process tracker', () => {
+    // A tracker keyed by jobId outlives one dispatch across attempts.
+    const nudges = createMcpNudgeTracker();
+    const t0 = 1_000_000;
+    nudges.noteDispatchAttempt(1, 2, t0);
+    nudges.noteToolSuccess(1, 'get_transcript', t0 + 1);
+    expect(nudges.warningsFor(1, 'get_brief', t0 + 2).map((w) => w.code)).not.toContain('transcript_unread');
+
+    // Attempt 3 starts on the same job.
+    nudges.noteDispatchAttempt(1, 3, t0 + 100);
+    expect(nudges.warningsFor(1, 'get_brief', t0 + 101).map((w) => w.code)).toContain('transcript_unread');
+  });
+
+  it('does not re-arm transcript_unread when the same dispatch attempt is reported again', () => {
+    const nudges = createMcpNudgeTracker();
+    const t0 = 1_000_000;
+    nudges.noteDispatchAttempt(1, 2, t0);
+    nudges.noteToolSuccess(1, 'get_transcript', t0 + 1);
+    // Same attempt reported again must not re-arm the reminder.
+    nudges.noteDispatchAttempt(1, 2, t0 + 2);
+    expect(nudges.warningsFor(1, 'get_brief', t0 + 3).map((w) => w.code)).not.toContain('transcript_unread');
   });
 
   it('does not progress-nudge submit_sources (call_end owns that reply)', () => {

@@ -459,6 +459,7 @@ describe('POST /api/mcp (BY-05)', () => {
         'get_gate_verdict',
         'read_inbox',
         'ack_inbox',
+        'get_transcript',
       ]),
     );
     // Kit browse tools are advertised now; example/proposal ones stay hidden.
@@ -553,6 +554,122 @@ describe('POST /api/mcp (BY-05)', () => {
     );
     // Example/proposal tooling stays off the focused build surface.
     expect(names).not.toEqual(expect.arrayContaining(['list_examples', 'submit_proposal']));
+  });
+
+  it('serves a window of the creator conversation through get_transcript, acked or not', async () => {
+    // Where a terse "build my game plz" gets its conversation back.
+    const store = new InMemoryStore();
+    await seedJob(store);
+    await store.appendCreatorMessage(ISSUE, 'Build a Creatures-like life sim where you hatch and teach Norns.', {
+      delivered: true,
+    });
+    await store.appendCreatorMessage(ISSUE, 'build my game plz');
+    await store.appendBuildEvent(ISSUE, { kind: 'step', text: 'Staged the first playable draft.' });
+    app = await createApp(store);
+    const sessionId = await initialize(app);
+    const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    const transcript = await callTool(app, 'get_transcript', { sessionKey }, { 'mcp-session-id': sessionId });
+    expect(transcript.isError).toBe(false);
+    const structured = transcript.structured as {
+      entries: Array<{ kind: string; text: string; round: string }>;
+      hasMore: boolean;
+      nextCursor?: string;
+      pendingMessages: unknown[];
+      stop: boolean;
+    };
+    // The already-acked request still appears — this is the record.
+    expect(structured.entries.map((entry) => entry.text)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('Norns'),
+        'build my game plz',
+        'Staged the first playable draft.',
+      ]),
+    );
+    expect(structured.entries.every((entry) => entry.round === 'current')).toBe(true);
+    // Three entries fit the default window.
+    expect(structured.hasMore).toBe(false);
+    expect(structured.nextCursor).toBeUndefined();
+    // Reading the transcript acks nothing.
+    expect(structured.pendingMessages).toHaveLength(1);
+    expect(structured.stop).toBe(false);
+  });
+
+  it('pages get_transcript with cursor/limit instead of returning everything at once', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    for (let i = 0; i < 5; i += 1) {
+      await store.appendCreatorMessage(ISSUE, `message-${i}`, { delivered: true });
+    }
+    app = await createApp(store);
+    const sessionId = await initialize(app);
+    const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    const first = await callTool(app, 'get_transcript', { sessionKey, limit: 2 }, { 'mcp-session-id': sessionId });
+    const firstStructured = first.structured as {
+      entries: Array<{ text: string }>;
+      hasMore: boolean;
+      nextCursor?: string;
+    };
+    expect(firstStructured.entries.map((e) => e.text)).toEqual(['message-3', 'message-4']);
+    expect(firstStructured.hasMore).toBe(true);
+    expect(firstStructured.nextCursor).toBeDefined();
+
+    const second = await callTool(
+      app,
+      'get_transcript',
+      { sessionKey, limit: 2, cursor: firstStructured.nextCursor },
+      { 'mcp-session-id': sessionId },
+    );
+    const secondStructured = second.structured as { entries: Array<{ text: string }> };
+    expect(secondStructured.entries.map((e) => e.text)).toEqual(['message-1', 'message-2']);
+  });
+
+  it('nudges transcript_unread on an undelivered retry of round 1 — the round number never moves', async () => {
+    // ensureRoundGeneration does not bump the round for an undelivered retry.
+    const store = new InMemoryStore();
+    await seedJob(store);
+    // The original dispatch, as dispatchBuild would have recorded it.
+    await store.recordDispatch(ISSUE, { backend: 'self', ref: 'attempt-1' });
+    app = await createApp(store);
+    const sessionId = await initialize(app);
+
+    const firstStarted = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
+    const firstStructured = firstStarted.structured as { round: number; dispatchAttempt: number };
+    expect(firstStructured.round).toBe(1);
+    expect(firstStructured.dispatchAttempt).toBe(1);
+    const freshBrief = await callTool(
+      app,
+      'get_brief',
+      { sessionKey: (firstStarted.structured as { sessionKey: string }).sessionKey },
+      { 'mcp-session-id': sessionId },
+    );
+    expect((freshBrief.structured as { warnings?: Array<{ code: string }> }).warnings ?? []).not.toContainEqual(
+      expect.objectContaining({ code: 'transcript_unread' }),
+    );
+
+    // The undelivered-nudge retry: a second dispatch, same round generation (still 1).
+    await store.recordDispatch(ISSUE, { backend: 'self', ref: 'attempt-2' });
+    const secondSessionId = await initialize(app);
+    const started = await callTool(app, 'start', { key: roundKey(1) }, { 'mcp-session-id': secondSessionId });
+    const structured = started.structured as { round: number; dispatchAttempt: number; sessionKey: string };
+    expect(structured.round).toBe(1); // the round number genuinely did not move
+    expect(structured.dispatchAttempt).toBe(2); // but this is not the first attempt
+    const sessionKey = structured.sessionKey;
+
+    const brief = await callTool(app, 'get_brief', { sessionKey }, { 'mcp-session-id': secondSessionId });
+    expect((brief.structured as { dispatchAttempt: number }).dispatchAttempt).toBe(2);
+    expect((brief.structured as { warnings?: Array<{ code: string }> }).warnings).toContainEqual(
+      expect.objectContaining({ code: 'transcript_unread' }),
+    );
+
+    await callTool(app, 'get_transcript', { sessionKey }, { 'mcp-session-id': secondSessionId });
+    const afterRead = await callTool(app, 'get_brief', { sessionKey }, { 'mcp-session-id': secondSessionId });
+    expect((afterRead.structured as { warnings?: Array<{ code: string }> }).warnings ?? []).not.toContainEqual(
+      expect.objectContaining({ code: 'transcript_unread' }),
+    );
   });
 
   it('keeps the Copilot MCP connector inert without a round key', async () => {

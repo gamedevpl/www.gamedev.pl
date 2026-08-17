@@ -1152,13 +1152,9 @@ describe('submission routes', () => {
     expect(response.statusCode).toBe(200);
     expect(briefs.at(-1)?.undelivered).toBeUndefined();
     expect(briefs.at(-1)?.feedback).toContain('Make the parcels bigger');
-    expect(briefs.at(-1)?.history).toContainEqual(
-      expect.objectContaining({
-        kind: 'creator_request',
-        text: 'The first draft had the right controls; keep them in the revision.',
-        round: 'current',
-      }),
-    );
+    expect(briefs.at(-1)?.feedbackQueueFailed).toBeUndefined();
+    // Context now reads back via get_transcript, not an injected brief field.
+    expect(briefs.at(-1)).not.toHaveProperty('history');
     // Gate-green closed the round; feedback must reopen the job, not leave it stuck
     // in ready_for_review while a session quietly starts underneath. Land on
     // `dispatched` — Copilot boots before GitHub reports `in_progress`.
@@ -1169,6 +1165,48 @@ describe('submission routes', () => {
       by: 'creator',
       reason: 'creator_feedback',
     });
+
+    await app.close();
+  });
+
+  // ready_for_review isn't inbox-steered, so a failed queue write still dispatches.
+  it('falls back to inlining feedback in the prompt when the queue write fails but the round still dispatches', async () => {
+    const { githubClient } = createGithubClientStub({ issueNumber: 77 });
+    const { backend, briefs } = createBackendStub();
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    await store.setSubmissionDeliveredVersion(job.issueNumber, 'v20260731T153306124Z');
+    await store.recordJobTransition(job.issueNumber, {
+      to: 'ready_for_review',
+      at: new Date().toISOString(),
+      by: 'reconciler',
+      reason: 'gate_green',
+    });
+    store.appendCreatorMessage = async () => {
+      throw new Error('firestore unavailable');
+    };
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(job.issueNumber, secret)}/feedback`,
+      headers: authHeaders,
+      payload: { feedback: 'Make the parcels bigger and the asteroids slower.' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(briefs.at(-1)?.feedback).toContain('Make the parcels bigger');
+    expect(briefs.at(-1)?.feedbackQueueFailed).toBe(true);
 
     await app.close();
   });

@@ -78,7 +78,164 @@ are not advertised to models; kit browse/read tools (`list_kit_files`,
 `search_kit_files`, `read_kit_file`, `read_kit_files`, `read_kit_file_fragment`) now
 are, alongside `get_kit_api` and, since 2026-08-11, `knowledge_query` for everything
 `get_kit_api` does not cover, plus `regenerate_seed` for a round-0 draft that is missing
-or off-brief.
+or off-brief, and, since 2026-08-17, `get_transcript` — the whole creator conversation
+(see below).
+
+### `get_transcript` — a window of the conversation, never the whole of it
+
+The managed kickoff prompt used to end with the creator's _last_ relayed message fenced
+as "What the creator asked for" (`buildPrompt`'s `finish()` injected
+`brief.feedback ?? brief.spec`, and a resume round sets `spec = feedback`, so the last
+message shadowed everything). Observed failure (job 1000074, 2026-08-17): round 1
+hiccuped before any agent read the creator's long Creatures-style spec, the creator
+followed up with "build my game plz", and round 2 was briefed with those six words —
+the full spec sat unread on the job the whole time (`get_brief` still served it).
+
+The fix has two halves, and both matter when editing either:
+
+- **The prompt no longer inlines the last message** (or the injected
+  "Conversation and previous changes" history block — `BuildBrief.history` is gone).
+  A revision round's prompt points at `read_inbox` → `get_brief` → `get_transcript`
+  instead; only a fresh round still inlines its spec, because at creation the spec _is_
+  the conversation. `build-prompt.test.ts` pins that the feedback text stays out.
+- **`get_transcript`** (`GET /api/agent/build/transcript`, assembled by
+  `apps/api/src/build-transcript.ts`) serves creator requests, agent notes and build
+  events across the current job and up to five earlier sibling rounds,
+  playtest-instrumentation stripped, presence leftovers hidden. Read-only: it never
+  acks — `read_inbox`/`ack_inbox` keep that.
+
+**Windowed, not budgeted-and-truncated.** The first version served the whole assembled
+conversation in one reply, fit to a byte budget by dropping `build_progress` before
+`agent_note` before `creator_request` — the same shape that made `get_kit_api` refuse
+outright at a 100 KB default on a live client's own token ceiling (see below). A
+conversation has no natural ceiling the way one kit's API surface does, so "budget and
+drop the least important parts" was never going to hold as rounds accumulated. It now
+pages instead: `loadBuildTranscript(store, record, { cursor?, limit? })` slices the full
+chronological list into windows (`DEFAULT_TRANSCRIPT_WINDOW_ENTRIES` = 20 entries,
+capped at `MAX_TRANSCRIPT_WINDOW_ENTRIES` = 50, each window additionally capped at
+`MAX_TRANSCRIPT_WINDOW_BYTES` = 20 KB by shrinking the window — never by dropping an
+entry out of chronological order within it). No arguments returns the tail — the newest
+window, oldest-first within it, which is what almost every caller wants. `hasMore` +
+`nextCursor` let a caller page further back; `cursor` is an opaque index string,
+clamped rather than erroring on a stale or malformed value, so it always degrades to
+something sane rather than refusing the call.
+
+The workflow's `get_brief` step and the managed system prompt
+(`infra/managed-agent.json`) both tell agents: when the latest message is terse
+("continue", "build my game") or references anything unseen, call `get_transcript`
+before deciding what to build (it returns the tail on the plain call) — and only page
+further back with `cursor` when that window genuinely does not answer what is needed,
+not speculatively. The latest message is the tail of a conversation, not the whole of
+it, but neither is `get_transcript`'s reply the whole of it either — that is the point.
+
+**The founding request is a synthetic entry, not a message.** A game's very first round
+writes its concept straight to the job's `spec` and never appends it as a creator
+message — chat is for what happens after creation — so without help, `get_transcript`
+could never surface it at all for an older sibling round, not merely truncate it out.
+`collectTranscriptEntries` synthesizes one `creator_request` entry per round from
+`roundRecord.spec` (when set), timestamped at the round's own `createdAt` so it sorts
+before anything that happened once the round existed. An improvement round
+(`startImprovementRound`) _does_ echo the same text into the thread as a delivered
+creator message, so the synthesizer skips the synthetic copy whenever a message in that
+round already carries the identical (post-`stripPlaytestContext`) text — otherwise the
+creator's request would appear to repeat itself.
+
+**`truncatedAtSource` — the read cap can be honest about lying.** `listCreatorMessages`
+/ `listBuildEvents` both return the _newest_ `limit` items, so a round with more than
+`MAX_TRANSCRIPT_LIST_ENTRIES` (300) creator messages or build events has its _oldest_
+entries silently absent from what `collectTranscriptEntries` even fetches — pagination
+then walks off the front of a list that was already incomplete and reports `hasMore:
+false`, having never actually reached the true start of the round. 300 is sized to make
+that a pathological case rather than a routine one (this repo's own rounds run on a
+two-minute clock), but when a round's fetch comes back at exactly the cap on either
+list, the response carries `truncatedAtSource: true` — present only when something was
+actually capped, never `false`, so a caller can tell "we checked and this is everything"
+from "we didn't check". There is nothing to _do_ about it beyond knowing the picture may
+be incomplete; the founding-spec synthesis above means the single most important entry
+survives a truncated round regardless, since it's computed fresh rather than read
+through the capped list.
+
+**Whole rounds can be truncated too, not just entries within one.** `siblings` slices
+to `MAX_TRANSCRIPT_ROUNDS - 1` (5) after the newest-first sort, so a game with more than
+six total rounds silently drops its oldest sibling jobs — including possibly the one
+holding the founding request — before any per-round entry cap even applies. Caught in
+review: `truncatedAtSource` now also flips true whenever `eligibleSiblings.length >
+siblings.length`, i.e. real sibling rounds existed beyond what the slice kept, using the
+same flag rather than inventing a second one for what is the same underlying promise
+("is anything real missing from what you fetched").
+
+**A machine-written brief is not the creator's word.** `startImprovementRound`'s
+`requestedBy` param is deliberately omitted by the two autonomous paths
+(`suggestion-inbox.ts`, `suggestion-sweep.ts`) because `buildImprovementBrief` assembles
+`spec` out of player evidence — nobody typed it. The founding-spec synthesis above
+originally labelled every round's `spec` as `creator_request` unconditionally, which
+would have handed a builder a machine-generated evidence brief dressed up as something
+the creator said. `SubmissionRecord.specIsSystemGenerated` (set by
+`startImprovementRound` exactly when `requestedBy` is absent) is the fix:
+`collectTranscriptEntries` reads it and labels that round's synthetic entry
+`agent_note` instead of `creator_request` when it is set. The original creation route
+(`POST /api/submissions`) never sets it — a fresh game's spec is always the creator's
+own words, so it keeps its normal label.
+
+**Prose in a prompt is advice; MCP has no way to force a tool call.** So the round also
+carries a soft nudge, `transcript_unread` (`mcp-session-nudges.ts`): once `start` or
+`get_brief` returns `dispatchAttempt > 1`, every reply other than
+`get_transcript`/`start` itself carries the warning until the agent calls
+`get_transcript` once, capped at `TRANSCRIPT_REMINDER_LIMIT` (3) the same way
+`card_unopened` is capped, so it cannot become noise once the round is well underway.
+
+**Not `round > 1`.** The first cut of this nudge keyed off `start`'s `round`
+(`roundGeneration`) field directly, and shipped with exactly the gap a reviewer caught
+before merge: `ensureRoundGeneration` does not bump the round on an undelivered retry,
+so a job whose very first attempt hiccuped without delivering is _still on round 1_
+when it is retried — precisely the scenario that motivated `get_transcript` in the
+first place, silently unflagged. `dispatchAttempt` (`store.ts`, backed by
+`dispatch.refs.length`) fixes this: it counts every dispatch call, not just the ones
+that bump the round, because a revision round is a new _task_ on the same workspace,
+not a new session on the old one (`dispatch`'s own doc comment) — the same fact
+`hasEarlierDispatch`'s replacement, `dispatchAttempt`, is now named for directly.
+
+**And the tracker resets on a new attempt, not just once per job.** `dispatchAttempt`
+also fixed a second bug the same review caught: `noteDispatchAttempt` compares the
+incoming value against `lastDispatchAttempt` and re-arms `transcriptFetched` /
+`transcriptRemindersSent` whenever it changed. Without that, an in-process nudge
+tracker — keyed by jobId, so it outlives one dispatch when the same Cloud Run instance
+handles a later attempt — would let an agent that read the transcript on attempt 2
+silently suppress the nudge on attempt 3, whose conversation that earlier read never
+saw. (The tracker is still best-effort across instances: a request landing on a
+_different_ instance mid-session starts from a fresh `null`, same as every other soft
+nudge here.) Attempt 1 (a fresh game, whose spec is inlined in full) never gets the
+nudge — there is nothing yet to catch up on.
+
+**Why a tool and not a seeded conversation.** The obvious alternative — hand the
+managed vendor prior turns directly, so the agent's context already contains the
+conversation without a tool round-trip — does not exist across the three managed
+backends today. `ManagedSessionRequest` (`managed-agent.ts`) has exactly one `prompt`
+string plus an optional `systemPrompt`; none of the three vendor adapters take an
+array of prior turns:
+
+- **Anthropic** (`managed-provider-anthropic.ts`) posts `initial_events: [{ type:
+'user.message', ... }]` — a single event, always. The Managed Agents API shape is an
+  array, so it may be _structurally_ capable of carrying more, but nothing here has
+  tried seeding multiple pre-agent turns through it, and there is no reason to expect
+  the vendor treats a synthetic multi-turn preamble as genuine history rather than,
+  say, concatenating it into one turn or rejecting mixed roles before the agent's own
+  first turn. `sendMessage` posts a _follow-up_ `user.message` to a session already
+  running — that is continuation, not history seeding.
+- **Gemini** (`managed-provider-gemini.ts`) takes `input: string` — one prompt, no
+  turn array. `environment.sources` seeds _files_ (used only for the round-0 draft on
+  a scratch environment), not conversation turns.
+- **Copilot** (`managed-provider-copilot.ts` → `agent-tasks.ts`, GitHub's Agent Tasks
+  API) takes `prompt: string` — one problem statement, nothing else.
+
+So a tool call is not a workaround for a missing feature we could otherwise use —
+it is the only mechanism that exists today across all three vendors. If a vendor adds
+real multi-turn seeding later, that would let a _fresh_ round open with more context
+already loaded, but it still would not replace `get_transcript`: the whole reason this
+tool pages instead of dumping everything (see above) is that a conversation has no
+natural size ceiling, and seeding a session's initial context has exactly the same
+problem a single prompt string has — something has to decide what fits, and today nothing
+_(else)_ does. The status quo answer is a tool, not a prompt.
 
 Adding an advertised tool means adding its row to `listings/mcp/README.md` in the same
 change: `mcp-server.test.ts` asserts the README documents every live tool with the exact
@@ -696,6 +853,7 @@ Merged by `applySessionNudges` / submit handler. Act, then continue:
 | `progress_stale`        | Call `report_progress`                                                                                                                                                     |
 | `inbox_pending`         | `read_inbox` → apply → `ack_inbox`                                                                                                                                         |
 | `seed_unread`           | Call `get_seed` before scaffolding from the kit                                                                                                                            |
+| `transcript_unread`     | `dispatchAttempt` > 1 (earlier attempt exists) and `get_transcript` has not been called yet — call it before deciding what to build                                        |
 | `game_manifest_invalid` | Just-staged/patched `GAME.json` has a shape that crashes the gate before typecheck (e.g. missing `engine.modules`) — fix it now, in the same session, before submitting    |
 | `patch_incomplete`      | Some `patch_source_file` edits landed and some did not — retry only `failed[]` (path + index); do not resend the ones that applied                                         |
 
@@ -788,6 +946,7 @@ queued.
 | Engine modules catalog             | games repo `tools/lib/pack-kit.ts` (`digestEngineModules`) — generated from `shared/modules/*.ts` header comments, not hand-maintained                                                                 |
 | Upload tokens                      | `apps/api/src/agent-upload-token.ts` + `POST …/shot/upload-url` + `PUT …/shot/upload` + `PUT …/sources/stage/upload`                                                                                   |
 | Presence pulses                    | `apps/api/src/mcp-presence.ts` (`start` → `joining_round` in the MCP dispatcher)                                                                                                                       |
+| Conversation transcript            | `apps/api/src/build-transcript.ts` (`loadBuildTranscript`) + `GET /api/agent/build/transcript` in `agent-channel.ts` + `get_transcript` in `mcp-server.ts`                                             |
 | Gate milestones                    | `apps/api/src/gate-progress.ts` + `GamesStore.putGateProgress` (GCS; Studio/MCP poll while checks run)                                                                                                 |
 | Gate verdict (shared)              | `apps/api/src/gate-verdict.ts` — `readGateVerdict` / `deriveGateStatusString`, used by the channel's `/api/agent/build/gate` route and by `start`'s reconnect visibility                               |
 | Preview-gate reconciliation        | `apps/api/src/submissions.ts` (`reconcileGateVerdict`) — red `previewGate` → `needs_changes`/`gate_red`; green preview never promotes                                                                  |

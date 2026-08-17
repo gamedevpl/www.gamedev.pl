@@ -26,6 +26,7 @@ import {
   type UploadKind,
   type UploadTokenClaims,
 } from './agent-upload-token.js';
+import { loadBuildTranscript } from './build-transcript.js';
 import { canonicalAppBaseUrl } from './canonical-app-url.js';
 import { deriveGateStatusString, readGateVerdict } from './gate-verdict.js';
 import { DEFAULT_SIGNED_URL_TTL_SECONDS, type GcsObjectStore } from './gcs-sign.js';
@@ -65,7 +66,13 @@ import { computeStageAdvisories } from './stage-hints.js';
 import { applyExactReplace, applySourcePatch, SourcePatchError } from './source-patch.js';
 import { overlayGameSources } from './staged-preview.js';
 import { SourceDeliveryValidationError, type SourceDeliveryService } from './source-delivery.js';
-import { type BuilderHandoff, type CreatorMessage, type Store, type SubmissionRecord } from './store.js';
+import {
+  dispatchAttempt,
+  type BuilderHandoff,
+  type CreatorMessage,
+  type Store,
+  type SubmissionRecord,
+} from './store.js';
 import { BUILD_EVENT_KINDS, BUILD_STEPS, sanitizeCreatorText, type BuildEvent } from './submission-status.js';
 import { normalizeAtIntake, type IntakeText } from './localize-intake.js';
 import { createTranslatorFromEnv, type Translator } from './translate.js';
@@ -2160,6 +2167,24 @@ export async function registerAgentChannelRoutes(
     },
   );
 
+  // The creator conversation, windowed — inbox serves the unacked tail, this the record.
+  app.get(
+    '/api/agent/build/transcript',
+    { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      const resolved = await resolveBuild(request, reply);
+      if (!resolved) return reply;
+      const { issueNumber, record } = resolved;
+
+      const query = request.query as { cursor?: string; limit?: string };
+      const transcript = await loadBuildTranscript(store!, record, {
+        ...(query.cursor !== undefined ? { cursor: query.cursor } : {}),
+        ...(optionalFiniteQuery(query.limit) !== undefined ? { limit: optionalFiniteQuery(query.limit) } : {}),
+      });
+      return reply.send({ ...transcript, ...(await channelState(issueNumber, record)) });
+    },
+  );
+
   app.post(
     '/api/agent/build/inbox/ack',
     { config: { rateLimit: { max: 600, timeWindow: '1 hour' } } },
@@ -2296,6 +2321,8 @@ export async function registerAgentChannelRoutes(
         constraints: buildConstraints(DEFAULT_BUILD_ORIENTATION),
         locales: briefLocales(record.locale),
         ...seed,
+        // > 1 means get_transcript may know more than this brief's spec.
+        dispatchAttempt: await dispatchAttempt(store!, record),
         pendingMessages: pending.map((message) => ({
           id: message.id,
           text: message.text,

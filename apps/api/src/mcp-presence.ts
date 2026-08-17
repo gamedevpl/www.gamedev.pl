@@ -62,6 +62,7 @@ const PRESENCE_BY_TOOL: Record<string, { key: string; text: string }> = {
   get_example: { key: 'reading_example', text: 'Reading an example game…' },
   list_staged_sources: { key: 'checking_staged', text: 'Checking staged sources…' },
   read_inbox: { key: 'checking_inbox', text: 'Checking creator notes…' },
+  get_transcript: { key: 'reading_conversation', text: 'Reading the conversation…' },
   get_gate_verdict: { key: 'waiting_checks', text: 'Waiting on automated checks…' },
   get_gate_media: { key: 'reviewing_captures', text: 'Reviewing gate captures…' },
 };
