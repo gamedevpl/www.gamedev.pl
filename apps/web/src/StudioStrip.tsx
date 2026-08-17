@@ -173,7 +173,7 @@ export function StudioStrip({
           </button>
         ) : null}
 
-        {codeAvailable ? (
+        {codeAvailable && !isCompact ? (
           // Visible label like Play's: the bare glyph read as decoration.
           <button
             type="button"
@@ -276,6 +276,22 @@ export function StudioStrip({
             </button>
             {overflowOpen ? (
               <div className="studio-head-menu-popover" role="menu" aria-label={t('studioPanel.strip.moreActions')}>
+                {codeAvailable ? (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className={`studio-head-menu-item${codeActive ? ' is-active' : ''}`}
+                    aria-pressed={codeActive}
+                    onClick={() => {
+                      setOverflowOpen(false);
+                      onToggleCode();
+                    }}
+                  >
+                    <PixelIcon name="code" size={14} />
+                    <span>{t('studioPanel.tabs.code')}</span>
+                  </button>
+                ) : null}
+
                 {editAvailable ? (
                   <button
                     type="button"
