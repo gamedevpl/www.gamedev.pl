@@ -370,4 +370,44 @@ describe('Party navigation from elsewhere', () => {
 
     await act(async () => root.unmount());
   });
+
+  it('sends "Build a game" to /create with the concept pre-loaded for a party game', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    stubAppFetchesWithCatalog();
+
+    await i18n.changeLanguage('en');
+    window.history.pushState(null, '', '/party');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(AuthProvider, null, createElement(App)));
+      await flushEffects();
+      await flushEffects();
+      await flushEffects();
+      await flushEffects();
+    });
+
+    const buildButton = Array.from(container.querySelectorAll<HTMLButtonElement>('.party-custom-btn')).find((btn) =>
+      /Build a game/i.test(btn.textContent ?? ''),
+    );
+    expect(buildButton).toBeDefined();
+
+    await act(async () => {
+      buildButton?.click();
+    });
+
+    expect(window.location.pathname).toBe('/create');
+    const prompt = container.querySelector<HTMLTextAreaElement>('.big-prompt-input');
+    expect(prompt).not.toBeNull();
+    expect(prompt?.value).toContain('party game');
+    expect(prompt?.value).toContain('phones as controllers');
+    expect(document.activeElement).toBe(prompt);
+    // Cursor lands at the end so typing continues the starter sentence.
+    expect(prompt?.selectionStart).toBe(prompt?.value.length);
+
+    await act(async () => root.unmount());
+  });
 });

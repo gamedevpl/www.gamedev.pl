@@ -805,6 +805,21 @@ export function App() {
     input?.focus({ preventScroll: true });
   }
 
+  // Same handoff as Create, concept pre-loaded with party framing.
+  function handlePartyCreateNav() {
+    flushSync(() => {
+      setRetryPrompt(t('party.customStarterPrompt'));
+      navigate(createPath());
+    });
+    window.scrollTo(0, 0);
+    const input = document.querySelector<HTMLTextAreaElement>('#hero-prompt .big-prompt-input');
+    if (input) {
+      input.focus({ preventScroll: true });
+      // Cursor at the end so typing continues the sentence, not overwrites it.
+      input.setSelectionRange(input.value.length, input.value.length);
+    }
+  }
+
   // A real destination now, not a scroll to the home rail.
   function handlePartyNav() {
     navigate(partyPath());
@@ -1264,7 +1279,7 @@ export function App() {
                 onPlayGame={handlePlayGame}
                 onPlayTogether={(game, via) => void handlePlayTogether(game, via)}
                 onRetryCatalog={handleRetryCatalog}
-                onCreateCustom={handleCreateNav}
+                onCreateCustom={handlePartyCreateNav}
                 partyError={partyError}
               />
             ) : (

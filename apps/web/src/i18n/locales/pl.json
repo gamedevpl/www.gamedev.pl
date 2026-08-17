@@ -1208,6 +1208,7 @@
     "customHeading": "Chcesz grę zbudowaną specjalnie na dziś?",
     "customDetail": "Opisz grę, jaką chcesz mieć, a będzie gotowa do gry w kilka minut — gra na miarę Twojej ekipy.",
     "customCta": "Zbuduj grę",
+    "customStarterPrompt": "gra imprezowa dla 3–6 graczy, telefony jako kontrolery, o ",
     "playTogether": "Zagrajcie razem",
     "playersBadge": "Do {{max}} graczy",
     "scanToJoin": "Zeskanuj, aby dołączyć",

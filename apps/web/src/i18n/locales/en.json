@@ -1196,6 +1196,7 @@
     "customHeading": "Want something built just for tonight?",
     "customDetail": "Describe the game you want and it's ready to play in minutes — a custom party game, made for your group.",
     "customCta": "Build a game",
+    "customStarterPrompt": "a party game for 3–6 players, phones as controllers, about ",
     "playTogether": "Play together",
     "playersBadge": "Up to {{max}} players",
     "scanToJoin": "Scan to join",
