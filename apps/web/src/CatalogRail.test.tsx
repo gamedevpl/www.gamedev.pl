@@ -124,6 +124,27 @@ describe('RailCard hover video preview', () => {
     });
     expect(container.querySelector('video')).toBeNull();
   });
+
+  it('arms and disarms the trailer from the tap-only toggle, bypassing the dwell timer', () => {
+    render([withVideo]);
+
+    const toggle = () => container.querySelector<HTMLButtonElement>('.rail-card-preview-toggle')!;
+    expect(toggle()).not.toBeNull();
+    expect(container.querySelector('video')).toBeNull();
+
+    act(() => toggle().click());
+    expect(container.querySelector('video')).not.toBeNull();
+    expect(toggle().getAttribute('aria-pressed')).toBe('true');
+
+    act(() => toggle().click());
+    expect(container.querySelector('video')).toBeNull();
+    expect(toggle().getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('has no tap toggle for a card with no video', () => {
+    render([withoutVideo]);
+    expect(container.querySelector('.rail-card-preview-toggle')).toBeNull();
+  });
 });
 
 describe('FeaturedGame hero preview', () => {

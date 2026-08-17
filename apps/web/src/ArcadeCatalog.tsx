@@ -330,7 +330,7 @@ function CatalogCard({
           {hasVideo && (
             <button
               type="button"
-              className="preview-toggle"
+              className="preview-toggle preview-toggle--video"
               aria-pressed={isPreviewPlaying}
               aria-label={isPreviewPlaying ? t('catalog.pausePreview') : t('catalog.watchPreview')}
               disabled={!inView}
