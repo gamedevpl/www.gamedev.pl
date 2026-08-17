@@ -448,4 +448,60 @@ describe('Party navigation from elsewhere', () => {
 
     await act(async () => root.unmount());
   });
+
+  it('does not resurface the party starter on a second /create visit via the Up chevron', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    stubAppFetchesWithCatalog();
+
+    await i18n.changeLanguage('en');
+    window.history.pushState(null, '', '/party');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(AuthProvider, null, createElement(App)));
+      await flushEffects();
+      await flushEffects();
+      await flushEffects();
+      await flushEffects();
+    });
+
+    const buildButton = container.querySelector<HTMLButtonElement>('.party-custom-btn');
+    await act(async () => {
+      buildButton?.click();
+      // Let the pending-clear effect run before the Up chevron bounces home.
+      await flushEffects();
+    });
+    expect(window.location.pathname).toBe('/create');
+    expect(container.querySelector<HTMLTextAreaElement>('.big-prompt-input')?.value).toContain('party game');
+
+    // The Up chevron on /create bypasses every Home/Create-specific handler.
+    const upButton = container.querySelector<HTMLButtonElement>('button.nav-up');
+    expect(upButton).not.toBeNull();
+    await act(async () => {
+      upButton?.click();
+      await flushEffects();
+    });
+    expect(window.location.pathname).toBe('/');
+
+    const hamburger = container.querySelector<HTMLButtonElement>('.hamburger-btn');
+    await act(async () => {
+      hamburger?.click();
+      await flushEffects();
+    });
+    const createItem = Array.from(container.querySelectorAll<HTMLButtonElement>('.nav-link')).find((btn) =>
+      /Create Game/i.test(btn.textContent ?? ''),
+    );
+    await act(async () => {
+      createItem?.click();
+      await flushEffects();
+    });
+
+    expect(window.location.pathname).toBe('/create');
+    expect(container.querySelector<HTMLTextAreaElement>('.big-prompt-input')?.value ?? '').toBe('');
+
+    await act(async () => root.unmount());
+  });
 });
