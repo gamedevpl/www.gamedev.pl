@@ -1059,7 +1059,9 @@ export function App() {
         {/* Play/Remix on this page set stageContent; without the overlay here the
             body scroll-locks (`player-open`) and nothing covers the page. */}
         {stageOverlay}
+        {partyError && <p className="error party-error">{partyError}</p>}
         {!stageContent && <SiteFooter />}
+        <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
       </div>
     );
   }

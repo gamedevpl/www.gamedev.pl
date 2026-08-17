@@ -5,6 +5,7 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App.js';
 import { AuthProvider } from './AuthContext.js';
+import type { CatalogEntry } from './catalog.js';
 import i18n from './i18n/index.js';
 
 /**
@@ -22,7 +23,7 @@ async function flushEffects() {
   await Promise.resolve();
 }
 
-const catalogEntry = {
+const catalogEntry: CatalogEntry = {
   slug: 'sky-dodge',
   title: 'Sky Dodge',
   genre: 'Arcade',
@@ -39,22 +40,31 @@ const catalogEntry = {
   creatorHandle: 'nightshift',
 };
 
-function mockApi() {
-  vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+const partyCatalogEntry: CatalogEntry = {
+  ...catalogEntry,
+  multiplayer: { mode: 'controllers', minPlayers: 2, maxPlayers: 4 },
+};
+
+function mockApi(options: { entry?: CatalogEntry; signedIn?: boolean; partySessionStatus?: number } = {}) {
+  const entry = options.entry ?? catalogEntry;
+  const signedIn = options.signedIn ?? true;
+  vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
     const url = String(input);
     if (url.endsWith('/api/auth/me')) {
-      return new Response(JSON.stringify({ user: { uid: 'creator-1', tier: 'beta' } }));
+      return signedIn
+        ? new Response(JSON.stringify({ user: { uid: 'creator-1', tier: 'beta' } }))
+        : new Response(JSON.stringify({ user: null }), { status: 401 });
     }
     if (url.endsWith('/api/health')) {
       return new Response(JSON.stringify({ status: 'ok', provider: 'mock', privateBeta: false }));
     }
     if (url.endsWith('/api/catalog')) {
-      return new Response(JSON.stringify([catalogEntry]));
+      return new Response(JSON.stringify([entry]));
     }
-    if (url.endsWith('/api/games/sky-dodge/page')) {
+    if (url.endsWith(`/api/games/${entry.slug}/page`)) {
       return new Response(
         JSON.stringify({
-          entry: catalogEntry,
+          entry,
           creator: {
             handle: 'nightshift',
             profileName: 'Night Shift',
@@ -67,11 +77,25 @@ function mockApi() {
         }),
       );
     }
-    if (url.endsWith('/api/games/sky-dodge/remix')) {
+    if (url.endsWith('/api/mp/sessions') && init?.method === 'POST') {
+      return options.partySessionStatus && options.partySessionStatus !== 200
+        ? new Response(JSON.stringify({ error: 'lobby is full' }), { status: options.partySessionStatus })
+        : new Response(
+            JSON.stringify({
+              code: 'ABCD',
+              hostToken: 'h1',
+              joinToken: 'j1',
+              joinPath: '/join/ABCD',
+              maxPlayers: 4,
+              expiresAt: Date.now() + 60_000,
+            }),
+          );
+    }
+    if (url.endsWith(`/api/games/${entry.slug}/remix`)) {
       return new Response(JSON.stringify({ remixId: 'r1', values: {}, params: {}, suggestions: [] }));
     }
-    if (url.endsWith('/api/games/sky-dodge')) {
-      return new Response(JSON.stringify({ slug: 'sky-dodge', title: 'Sky Dodge', html: '<!doctype html><canvas>' }));
+    if (url.endsWith(`/api/games/${entry.slug}`)) {
+      return new Response(JSON.stringify({ slug: entry.slug, title: entry.title, html: '<!doctype html><canvas>' }));
     }
     return new Response(JSON.stringify({}), { status: 404 });
   });
@@ -175,6 +199,47 @@ describe('theater from the public game page', () => {
     expect(document.body.classList.contains('player-open')).toBe(true);
     expect(container.querySelector('.exit-btn')).not.toBeNull();
     expect(window.location.pathname).toBe('/nightshift/sky-dodge');
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('opens the sign-in modal for Play Together when signed out', async () => {
+    mockApi({ entry: partyCatalogEntry, signedIn: false });
+    window.history.pushState(null, '', '/nightshift/sky-dodge');
+    const { container, root } = await renderApp();
+
+    expect(document.querySelector('.auth-modal-card')).toBeNull();
+    const party = container.querySelector<HTMLButtonElement>('.party-btn');
+    expect(party).not.toBeNull();
+    await act(async () => {
+      party?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushEffects();
+    });
+
+    // AuthModal portals to document.body, not into `container`.
+    expect(document.querySelector('.auth-modal-card')).not.toBeNull();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it('shows the party error when opening a lobby fails', async () => {
+    mockApi({ entry: partyCatalogEntry, partySessionStatus: 500 });
+    window.history.pushState(null, '', '/nightshift/sky-dodge');
+    const { container, root } = await renderApp();
+
+    const party = container.querySelector<HTMLButtonElement>('.party-btn');
+    expect(party).not.toBeNull();
+    await act(async () => {
+      party?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushEffects();
+      await flushEffects();
+    });
+
+    expect(container.querySelector('.party-error')?.textContent).toBe('lobby is full');
 
     await act(async () => {
       root.unmount();

@@ -61,6 +61,13 @@ function intersect(observer: ObserverInstance, target: Element, isIntersecting: 
   );
 }
 
+// Rails mount observers too, so match by watched target instead of index.
+function observerFor(target: Element): ObserverInstance {
+  const match = observers.find((observer) => observer.targets.includes(target));
+  if (!match) throw new Error('no observer registered for target');
+  return match;
+}
+
 const entries: CatalogEntry[] = [
   {
     slug: 'above-fold',
@@ -164,11 +171,13 @@ describe('ArcadeCatalog lazy media', () => {
     expect(container.querySelectorAll('video')).toHaveLength(0);
     expect(container.querySelectorAll('img.catalog-preview')).toHaveLength(0);
     expect(container.querySelectorAll('.catalog-moment')).toHaveLength(0);
-    expect(observers).toHaveLength(2);
+    // One observer per grid card — rails watch their own cards separately.
+    const gridMediaObservers = [...container.querySelectorAll('.catalog-media')].map(observerFor);
+    expect(gridMediaObservers).toHaveLength(2);
 
     const firstMedia = container.querySelectorAll('.catalog-media')[0]!;
     await act(async () => {
-      intersect(observers[0]!, firstMedia, true);
+      intersect(observerFor(firstMedia), firstMedia, true);
       await flushEffects();
     });
 
@@ -274,7 +283,7 @@ describe('ArcadeCatalog lazy media', () => {
     const media = container.querySelector('.catalog-media')!;
     expect(media.getAttribute('tabindex')).toBe('0');
     await act(async () => {
-      intersect(observers[0]!, media, true);
+      intersect(observerFor(media), media, true);
       await flushEffects();
     });
 
@@ -318,7 +327,7 @@ describe('ArcadeCatalog lazy media', () => {
 
     const firstMedia = container.querySelectorAll('.catalog-media')[0]!;
     await act(async () => {
-      intersect(observers[0]!, firstMedia, true);
+      intersect(observerFor(firstMedia), firstMedia, true);
       await flushEffects();
     });
     await act(async () => {
@@ -328,7 +337,7 @@ describe('ArcadeCatalog lazy media', () => {
     expect(container.querySelector('video.catalog-preview')).not.toBeNull();
 
     await act(async () => {
-      intersect(observers[0]!, firstMedia, false);
+      intersect(observerFor(firstMedia), firstMedia, false);
       await flushEffects();
     });
 

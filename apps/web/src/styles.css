@@ -88,7 +88,6 @@ a {
   display: flex;
   flex-direction: row;
   align-items: center;
-  justify-content: space-between;
   padding: 12px 28px;
   /* Installed on iOS the app runs under a translucent status bar, so the header
      shares its space with the clock and the battery unless it pays the inset —
@@ -263,6 +262,7 @@ a {
   display: flex;
   align-items: center;
   gap: 16px;
+  margin-left: auto;
 }
 
 .specs-count-badge {
@@ -1409,7 +1409,8 @@ button:disabled {
   overflow: hidden;
 }
 
-.rail-card-media img {
+.rail-card-media img,
+.rail-card-media video {
   width: 100%;
   height: 100%;
   object-fit: cover;
