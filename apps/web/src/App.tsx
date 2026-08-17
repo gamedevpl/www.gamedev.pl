@@ -15,6 +15,7 @@ import { PixelIcon } from './PixelIcon.js';
 import { CreatorQA, type QAQuestion } from './CreatorQA.js';
 import { deriveTitleFromConcept } from './gameTitle.js';
 import { MIN_CONCEPT_LENGTH } from './conceptLength.js';
+import { resolveCreateInitialPrompt } from './createInitialPrompt.js';
 import {
   adminPath,
   canonicalPath,
@@ -1266,7 +1267,7 @@ export function App() {
               <CreatePage
                 // Remount when a retry loads a new idea, so the prompt box picks it up.
                 retryKey={retryPrompt ?? 'blank'}
-                initialPrompt={retryPrompt ?? partySeedRef.current ?? ''}
+                initialPrompt={resolveCreateInitialPrompt(partySeedRef.current, retryPrompt)}
                 catalogEntries={catalogEntries}
                 onPlayGame={handlePlayGame}
                 submissionStatus={submissionStatus}
