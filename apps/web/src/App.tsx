@@ -1152,7 +1152,6 @@ export function App() {
           onReview={() => navigate(reviewPath())}
           onCreate={handleCreateNav}
           onPlay={() => handleHomeAnchorNav('play-anchor')}
-          onParty={() => handleHomeAnchorNav('party-rail')}
           upTarget={headerUp}
           onUp={navigate}
         />
