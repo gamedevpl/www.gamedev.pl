@@ -165,8 +165,14 @@ function RailCard({
             <PixelIcon name="play" size={12} /> {t('catalog.play')}
           </button>
           {entry.multiplayer && onPlayTogether && (
-            <button type="button" className="secondary-btn rail-card-party" onClick={() => onPlayTogether(entry, via)}>
-              <PixelIcon name="phone" size={12} /> {t('party.playTogether')}
+            <button
+              type="button"
+              className="secondary-btn rail-card-party"
+              onClick={() => onPlayTogether(entry, via)}
+              aria-label={t('party.playTogether')}
+              title={t('party.playTogether')}
+            >
+              <PixelIcon name="phone" size={13} />
             </button>
           )}
         </div>
@@ -262,6 +268,12 @@ export function FeaturedGame({ entry, onPlayGame, onPlayTogether, moreLikeThis =
   // Tap-to-play, not autoplay — this is the page's heaviest asset.
   useEffect(() => setPreviewPlaying(false), [entry.slug]);
 
+  // The video only mounts once playing flips true — wait for that first.
+  useEffect(() => {
+    if (!previewPlaying) return;
+    void Promise.resolve(videoRef.current?.play()).catch(() => setPreviewPlaying(false));
+  }, [previewPlaying]);
+
   function togglePreview() {
     if (!videoUrl) return;
     if (previewPlaying) {
@@ -270,7 +282,6 @@ export function FeaturedGame({ entry, onPlayGame, onPlayTogether, moreLikeThis =
       return;
     }
     setPreviewPlaying(true);
-    void Promise.resolve(videoRef.current?.play()).catch(() => setPreviewPlaying(false));
   }
 
   return (

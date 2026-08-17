@@ -141,6 +141,8 @@ describe('FeaturedGame hero preview', () => {
   }
 
   it('starts on the poster and swaps in the trailer on tap, without autoplaying', () => {
+    // Regression guard: play must fire from an effect, after the video mounts.
+    const play = vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
     renderHero(withVideo);
 
     expect(container.querySelector('img')).not.toBeNull();
@@ -157,6 +159,7 @@ describe('FeaturedGame hero preview', () => {
     expect(container.querySelector('img')).toBeNull();
     expect(container.querySelector('.featured-game-preview-toggle')?.getAttribute('aria-pressed')).toBe('true');
     expect(container.querySelector('.featured-game-preview-toggle')?.classList.contains('is-playing')).toBe(true);
+    expect(play).toHaveBeenCalled();
   });
 
   it('pauses back to the poster on a second tap', () => {
