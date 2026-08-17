@@ -30,6 +30,10 @@ on:
         type: string
         required: false
         default: '0'
+    outputs:
+      games_sha:
+        description: 'Commit SHA checked by every gate job'
+        value: ${{ jobs.catalog-gate.outputs.games_sha }}
     secrets:
       GAMES_REPO_TOKEN:
         required: true
@@ -53,6 +57,7 @@ jobs:
     timeout-minutes: 180
     outputs:
       games_ref: ${{ steps.resolve.outputs.games_ref }}
+      games_sha: ${{ steps.checkout_sha.outputs.games_sha }}
       mode: ${{ steps.resolve.outputs.mode }}
       slugs: ${{ steps.resolve.outputs.slugs }}
       need_webkit: ${{ steps.resolve.outputs.need_webkit }}
@@ -125,6 +130,11 @@ jobs:
           token: ${{ secrets.GAMES_REPO_TOKEN }}
           path: games-repo
           persist-credentials: false
+
+      - name: Resolve checked out games commit
+        id: checkout_sha
+        working-directory: games-repo
+        run: echo "games_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Check Playwright image matches games package
         working-directory: games-repo
@@ -264,7 +274,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ${{ env.GAMES_REPO }}
-          ref: ${{ needs.catalog-gate.outputs.games_ref }}
+          ref: ${{ needs.catalog-gate.outputs.games_sha }}
           token: ${{ secrets.GAMES_REPO_TOKEN }}
           path: games-repo
           persist-credentials: false
