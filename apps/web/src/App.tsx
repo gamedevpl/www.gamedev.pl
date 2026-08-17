@@ -1297,8 +1297,10 @@ export function App() {
             )}
 
             {/* Both pages' real content can run shorter than the viewport, leaving a
-                bare gap above the sticky footer — fill it with a reason to scroll back up. */}
-            {(route.view === 'home' || route.view === 'create') && <BottomCta />}
+                bare gap above the sticky footer — fill it with a reason to scroll back up.
+                Gated on the catalog for home: before it's ready, the nudge would sit right
+                under the composer with nothing in between but a loading spinner. */}
+            {(route.view === 'create' || (route.view === 'home' && catalogStatus === 'ready')) && <BottomCta />}
           </>
         )}
       </main>

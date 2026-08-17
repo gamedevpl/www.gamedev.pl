@@ -1413,6 +1413,11 @@ button:disabled {
   scroll-margin-top: 88px;
 }
 
+#hero-prompt {
+  /* Same reasoning — the composer headline was landing right under the header. */
+  scroll-margin-top: 88px;
+}
+
 .catalog-rail-track {
   display: flex;
   gap: 14px;
@@ -1532,16 +1537,34 @@ button:disabled {
 
 .rail-card-actions {
   display: flex;
-  flex-wrap: wrap;
+  align-items: center;
   gap: 6px;
 }
 
-.rail-card-play,
-.rail-card-party {
+.rail-card-play {
+  flex: 1 1 auto;
+  min-width: 0;
   border-radius: 8px;
   padding: 6px 14px;
   font-size: 0.75rem;
   font-weight: 700;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Icon-only: the card is too narrow (200px) to fit both labels on one row
+   without clipping one, so the accessible name lives in aria-label/title. */
+.rail-card-party {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 8px;
   cursor: pointer;
 }
 
@@ -3716,11 +3739,9 @@ body.player-open {
     text-overflow: ellipsis;
   }
 
-  .app-header .logo img {
+  .app-header .logo img,
+  .app-header .logo .mascot {
     flex: 0 0 auto;
-  }
-
-  .app-header .logo img {
     width: 28px;
     height: 28px;
     margin-right: 8px;
@@ -4042,7 +4063,8 @@ body.player-open {
     font-size: 1.2em;
   }
 
-  .app-header .logo img {
+  .app-header .logo img,
+  .app-header .logo .mascot {
     width: 24px;
     height: 24px;
     margin-right: 6px;
