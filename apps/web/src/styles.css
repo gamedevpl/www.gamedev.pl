@@ -548,7 +548,7 @@ a {
   position: absolute;
   left: 0;
   bottom: calc(100% + 8px);
-  z-index: 20;
+  z-index: 200;
   min-width: 180px;
   padding: 6px;
   background: var(--panel);
