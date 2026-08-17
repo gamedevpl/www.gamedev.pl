@@ -182,13 +182,19 @@ function RailCard({
       <div className="rail-card-body">
         <h4 className="rail-card-title">{entry.title}</h4>
         <div className="rail-card-actions">
-          <button type="button" className="primary-btn rail-card-play" onClick={() => onPlayGame(entry, via)}>
+          <button
+            type="button"
+            className={
+              entry.multiplayer && onPlayTogether ? 'secondary-btn rail-card-play' : 'primary-btn rail-card-play'
+            }
+            onClick={() => onPlayGame(entry, via)}
+          >
             <PixelIcon name="play" size={12} /> {t('catalog.play')}
           </button>
           {entry.multiplayer && onPlayTogether && (
             <button
               type="button"
-              className="secondary-btn rail-card-party"
+              className="primary-btn rail-card-party"
               onClick={() => onPlayTogether(entry, via)}
               aria-label={t('party.playTogether')}
               title={t('party.playTogether')}
