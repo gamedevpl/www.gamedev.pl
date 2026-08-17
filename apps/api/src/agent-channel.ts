@@ -2325,6 +2325,9 @@ export async function registerAgentChannelRoutes(
 
       const pending = await store!.listPendingCreatorMessages(issueNumber);
       const seed = seedPayload(record);
+      const referenceShots = (await store!.listBuildShots(issueNumber)).filter(
+        (shot) => shot.label === 'creator-reference',
+      );
       return reply.send({
         title: record.title,
         slug: record.slug ?? null,
@@ -2341,7 +2344,34 @@ export async function registerAgentChannelRoutes(
           text: message.text,
           createdAt: message.createdAt,
         })),
+        // Ids only — fetch pixels via get_reference_images / GET .../reference-images.
+        referenceImages: referenceShots.map((shot) => ({ id: shot.id, createdAt: shot.createdAt })),
       });
+    },
+  );
+
+  /**
+   * Sketches/photos the creator attached (composer "+" menu, or a steering message) —
+   * moodboard reference, not gate output. Bytes included, unlike /brief's id-only list,
+   * because this route exists so the model can look at them (mirrors /build/media).
+   */
+  app.get(
+    '/api/agent/build/reference-images',
+    { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      const resolved = await resolveBuild(request, reply);
+      if (!resolved) return reply;
+      const { issueNumber } = resolved;
+
+      const summaries = (await store!.listBuildShots(issueNumber)).filter((shot) => shot.label === 'creator-reference');
+      const images = await Promise.all(
+        summaries.map(async (summary) => {
+          const shot = await store!.getBuildShot(issueNumber, summary.id);
+          if (!shot) return null;
+          return { id: shot.id, createdAt: shot.createdAt, png: shot.data };
+        }),
+      );
+      return reply.send({ images: images.filter((image): image is NonNullable<typeof image> => image !== null) });
     },
   );
 

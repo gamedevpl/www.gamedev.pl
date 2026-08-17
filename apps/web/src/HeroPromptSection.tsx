@@ -5,6 +5,11 @@ import type { CatalogEntry } from './catalog.js';
 import { SketchModal } from './SketchModal.js';
 import { PixelIcon } from './PixelIcon.js';
 import { getQuota, type PlatformBuilderAvailability } from './submissionApi.js';
+import { toBase64PngList } from './attachmentImages.js';
+
+// Backend caps a submission at MAX_REFERENCE_IMAGES (submissions.ts) — mirrored here so
+// the composer stops accepting attachments before a submit would silently drop extras.
+const MAX_ATTACHMENTS = 4;
 
 // Gemini-style composer: attach, prompt, mic, build in one pill.
 
@@ -15,7 +20,7 @@ type HeroPromptSectionProps = {
   // refining = pre-submit spec refiner; nothing sent yet
   submissionStatus: 'idle' | 'refining' | 'loading';
   submissionError: string | null;
-  onSubmitSpec: (concept: string) => void;
+  onSubmitSpec: (concept: string, referenceImages?: string[]) => void;
   mockStatus: 'idle' | 'loading' | 'error';
   mockError: string | null;
   // Demo mock only; Build runs QA before any generation
@@ -330,11 +335,15 @@ export function HeroPromptSection({
     setAttachments((prev) => prev.filter((item) => item.id !== id));
   };
 
-  const handlePrimarySubmit = (e: React.FormEvent) => {
+  const handlePrimarySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isBusy) return;
     const trimmed = promptText.trim();
     if (!trimmed && attachments.length === 0) return;
+
+    // Re-encoded to PNG client-side so an uploaded JPEG/WebP still passes the backend's
+    // build-shot PNG-signature check; a sketch is already a PNG canvas export.
+    const referenceImages = await toBase64PngList(attachments.slice(0, MAX_ATTACHMENTS).map((a) => a.dataUrl));
 
     let finalPrompt = trimmed;
     if (attachments.length > 0) {
@@ -347,7 +356,7 @@ export function HeroPromptSection({
     // Funnel step: they asked for a game, signed-in or not.
     recordCreateStep('spec_submitted');
     // Naming happens in confirm; do not invent a title from the prompt.
-    onSubmitSpec(finalPrompt);
+    onSubmitSpec(finalPrompt, referenceImages.length > 0 ? referenceImages : undefined);
   };
 
   return (
