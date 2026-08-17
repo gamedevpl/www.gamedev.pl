@@ -7215,16 +7215,32 @@ a.user-name--profile:focus-visible {
     flex-wrap: wrap;
   }
 
+  /* flex-basis 0, not the base rule's auto: `auto` sizes this by its unwrapped
+     content (title + pill), and that content is routinely just wide enough to
+     push the whole block, folder button included, onto its own line. A 0 basis
+     makes it a true flexible child that shares row 1 and lets the title's own
+     ellipsis absorb the shortfall instead. */
   .app:has(.studio-layout.is-game-open) .studio-strip-title-block {
+    flex: 1 1 0%;
     min-width: 0;
   }
 
+  /* Same fix, one level deeper: the title's own auto basis was pushing the
+     phase pill beside it onto its own line too. */
   .app:has(.studio-layout.is-game-open) .studio-strip-title {
+    flex: 1 1 0%;
     min-width: 0;
   }
 
   .app:has(.studio-layout.is-game-open) .studio-strip .studio-slug,
   .app:has(.studio-layout.is-game-open) .studio-strip-heartbeat {
+    display: none;
+  }
+
+  /* Actions already move to their own full-width row below (flex-basis 100%),
+     so this desktop-only right-pusher has nothing left to push — left alone
+     it was still claiming half of every pixel the title tried to grow into. */
+  .app:has(.studio-layout.is-game-open) .studio-strip-spacer {
     display: none;
   }
 
