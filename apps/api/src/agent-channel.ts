@@ -2322,7 +2322,7 @@ export async function registerAgentChannelRoutes(
         locales: briefLocales(record.locale),
         ...seed,
         // > 1 means get_transcript may know more than this brief's spec.
-        dispatchAttempt: dispatchAttempt(record),
+        dispatchAttempt: await dispatchAttempt(store!, record),
         pendingMessages: pending.map((message) => ({
           id: message.id,
           text: message.text,

@@ -1767,7 +1767,12 @@ export async function registerSubmissionRoutes(
     // backend to read it: the creator's own agent calls get_brief, which serves the
     // stored brief and nothing else. Without this an agent-opened improvement round
     // starts with an empty spec and no idea what the creator asked for.
-    await store.setSubmissionBrief(jobId, { spec: input.text, qa: [] });
+    // No requestedBy means an autonomous suggestion sweep wrote `text`, not the creator.
+    await store.setSubmissionBrief(jobId, {
+      spec: input.text,
+      qa: [],
+      ...(input.requestedBy ? {} : { specIsSystemGenerated: true }),
+    });
     // Open the new job's thread with the request that started it. Written already
     // delivered: the brief below carries the same words to the agent, and a pending
     // note would read as a second, newer instruction to act on.

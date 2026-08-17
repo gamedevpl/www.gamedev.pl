@@ -1560,7 +1560,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             workflow: SESSION_WORKFLOW,
             inboxPolicy: INBOX_POLICY,
             whenRefused: RETIRED_KEY_ETIQUETTE,
-            dispatchAttempt: dispatchAttempt(active),
+            dispatchAttempt: await dispatchAttempt(store!, active),
             ...seed,
             ...gateField,
           };
@@ -1750,7 +1750,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           workflow: SESSION_WORKFLOW,
           inboxPolicy: INBOX_POLICY,
           whenRefused: RETIRED_KEY_ETIQUETTE,
-          dispatchAttempt: dispatchAttempt(record),
+          dispatchAttempt: await dispatchAttempt(store!, record),
           ...seed,
           ...gateField,
         };

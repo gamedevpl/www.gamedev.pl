@@ -3,6 +3,7 @@ import {
   DEFAULT_TRANSCRIPT_WINDOW_ENTRIES,
   loadBuildTranscript,
   MAX_TRANSCRIPT_LIST_ENTRIES,
+  MAX_TRANSCRIPT_ROUNDS,
   MAX_TRANSCRIPT_WINDOW_ENTRIES,
   PLAYTEST_CONTEXT_HEADER,
   stripPlaytestContext,
@@ -13,7 +14,13 @@ import type { BuildEvent } from './submission-status.js';
 
 type TranscriptStore = Pick<Store, 'listSubmissionsBySlug' | 'listCreatorMessages' | 'listBuildEvents'>;
 
-function job(issueNumber: number, createdAt: string, slug = 'comet-courier', spec?: string): SubmissionRecord {
+function job(
+  issueNumber: number,
+  createdAt: string,
+  slug = 'comet-courier',
+  spec?: string,
+  specIsSystemGenerated?: boolean,
+): SubmissionRecord {
   return {
     issueNumber,
     ownerUid: 'g:owner',
@@ -22,6 +29,7 @@ function job(issueNumber: number, createdAt: string, slug = 'comet-courier', spe
     createdAt,
     state: 'building',
     ...(spec !== undefined ? { spec } : {}),
+    ...(specIsSystemGenerated ? { specIsSystemGenerated: true } : {}),
   } as SubmissionRecord;
 }
 
@@ -280,5 +288,47 @@ describe('loadBuildTranscript', () => {
     const page = await loadBuildTranscript(store, current);
 
     expect(page).not.toHaveProperty('truncatedAtSource');
+  });
+
+  it('flags truncatedAtSource when a game has more sibling rounds than the cap keeps', async () => {
+    // One sibling past the cap pushes the founding round out entirely.
+    const current = job(MAX_TRANSCRIPT_ROUNDS + 1, '2026-08-23T00:00:00.000Z');
+    const siblings = Array.from({ length: MAX_TRANSCRIPT_ROUNDS }, (_, i) =>
+      job(i + 1, `2026-08-${String(i + 10).padStart(2, '0')}T00:00:00.000Z`),
+    );
+    const store = fakeStore({ submissions: [current, ...siblings] });
+
+    const page = await loadBuildTranscript(store, current);
+
+    expect(page.truncatedAtSource).toBe(true);
+  });
+
+  it('does not flag truncatedAtSource when sibling rounds fit within the cap', async () => {
+    const current = job(MAX_TRANSCRIPT_ROUNDS, '2026-08-23T00:00:00.000Z');
+    const siblings = Array.from({ length: MAX_TRANSCRIPT_ROUNDS - 1 }, (_, i) =>
+      job(i + 1, `2026-08-${String(i + 10).padStart(2, '0')}T00:00:00.000Z`),
+    );
+    const store = fakeStore({ submissions: [current, ...siblings] });
+
+    const page = await loadBuildTranscript(store, current);
+
+    expect(page).not.toHaveProperty('truncatedAtSource');
+  });
+
+  it('labels a system-generated sweep brief as agent_note, not creator_request', async () => {
+    const current = job(
+      1,
+      '2026-08-16T00:00:00.000Z',
+      'comet-courier',
+      'Evidence brief: players stall at level 2.',
+      true,
+    );
+    const store = fakeStore({});
+
+    const page = await loadBuildTranscript(store, current);
+
+    expect(page.entries).toEqual([
+      expect.objectContaining({ kind: 'agent_note', text: 'Evidence brief: players stall at level 2.' }),
+    ]);
   });
 });

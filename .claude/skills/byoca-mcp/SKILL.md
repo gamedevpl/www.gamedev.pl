@@ -155,6 +155,28 @@ be incomplete; the founding-spec synthesis above means the single most important
 survives a truncated round regardless, since it's computed fresh rather than read
 through the capped list.
 
+**Whole rounds can be truncated too, not just entries within one.** `siblings` slices
+to `MAX_TRANSCRIPT_ROUNDS - 1` (5) after the newest-first sort, so a game with more than
+six total rounds silently drops its oldest sibling jobs — including possibly the one
+holding the founding request — before any per-round entry cap even applies. Caught in
+review: `truncatedAtSource` now also flips true whenever `eligibleSiblings.length >
+siblings.length`, i.e. real sibling rounds existed beyond what the slice kept, using the
+same flag rather than inventing a second one for what is the same underlying promise
+("is anything real missing from what you fetched").
+
+**A machine-written brief is not the creator's word.** `startImprovementRound`'s
+`requestedBy` param is deliberately omitted by the two autonomous paths
+(`suggestion-inbox.ts`, `suggestion-sweep.ts`) because `buildImprovementBrief` assembles
+`spec` out of player evidence — nobody typed it. The founding-spec synthesis above
+originally labelled every round's `spec` as `creator_request` unconditionally, which
+would have handed a builder a machine-generated evidence brief dressed up as something
+the creator said. `SubmissionRecord.specIsSystemGenerated` (set by
+`startImprovementRound` exactly when `requestedBy` is absent) is the fix:
+`collectTranscriptEntries` reads it and labels that round's synthetic entry
+`agent_note` instead of `creator_request` when it is set. The original creation route
+(`POST /api/submissions`) never sets it — a fresh game's spec is always the creator's
+own words, so it keeps its normal label.
+
 **Prose in a prompt is advice; MCP has no way to force a tool call.** So the round also
 carries a soft nudge, `transcript_unread` (`mcp-session-nudges.ts`): once `start` or
 `get_brief` returns `dispatchAttempt > 1`, every reply other than

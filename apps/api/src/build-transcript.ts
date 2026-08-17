@@ -21,7 +21,7 @@ export type TranscriptEntry = {
 };
 
 // Rounds of the same game read into the transcript, current round included.
-const MAX_TRANSCRIPT_ROUNDS = 6;
+export const MAX_TRANSCRIPT_ROUNDS = 6;
 // Per-round read ceiling — both lists return newest-first only.
 export const MAX_TRANSCRIPT_LIST_ENTRIES = 300;
 // A single entry's cap, above creator-feedback's 2000 chars.
@@ -91,21 +91,21 @@ async function collectTranscriptEntries(
   store: TranscriptStore,
   record: SubmissionRecord,
 ): Promise<{ entries: TranscriptEntry[]; truncatedAtSource: boolean }> {
-  const siblings = record.slug
-    ? (await store.listSubmissionsBySlug(record.slug))
-        .filter(
-          (sibling) =>
-            sibling.issueNumber !== record.issueNumber &&
-            sibling.ownerUid === record.ownerUid &&
-            sibling.createdAt < record.createdAt,
-        )
-        .slice(0, MAX_TRANSCRIPT_ROUNDS - 1)
+  const eligibleSiblings = record.slug
+    ? (await store.listSubmissionsBySlug(record.slug)).filter(
+        (sibling) =>
+          sibling.issueNumber !== record.issueNumber &&
+          sibling.ownerUid === record.ownerUid &&
+          sibling.createdAt < record.createdAt,
+      )
     : [];
+  const siblings = eligibleSiblings.slice(0, MAX_TRANSCRIPT_ROUNDS - 1);
   const rounds = [
     { record, round: 'current' as const },
     ...siblings.map((sibling) => ({ record: sibling, round: 'earlier' as const })),
   ];
-  let truncatedAtSource = false;
+  // Older rounds beyond the cap (including possibly the founding one) were dropped.
+  let truncatedAtSource = eligibleSiblings.length > siblings.length;
   const collected = await Promise.all(
     rounds.map(async ({ record: roundRecord, round }) => {
       const [messages, events] = await Promise.all([
@@ -137,11 +137,13 @@ async function collectTranscriptEntries(
       const specAlreadyEchoed = trimmedSpec
         ? messages.some((message) => stripPlaytestContext(message.text).trim() === trimmedSpec)
         : false;
+      // A system-assembled sweep brief is not the creator's own word.
+      const specKind: TranscriptEntry['kind'] = roundRecord.specIsSystemGenerated ? 'agent_note' : 'creator_request';
       const specEntry: TranscriptEntry[] =
         trimmedSpec && !specAlreadyEchoed
           ? [
               {
-                kind: 'creator_request' as const,
+                kind: specKind,
                 text: trimmedSpec.slice(0, MAX_TRANSCRIPT_ENTRY_CHARS),
                 createdAt: roundRecord.createdAt,
                 round,

@@ -422,6 +422,8 @@ export interface SubmissionRecord {
   qa?: string[];
   // Set before the reaper's one retry of a job stuck queued.
   dispatchReaperAttemptedAt?: string;
+  // True when `spec` is a machine-assembled brief, not creator words.
+  specIsSystemGenerated?: boolean;
 }
 
 /**
@@ -616,9 +618,23 @@ export function isStudioOrigin(origin: CreatorMessageOrigin | undefined): boolea
   return origin === 'studio' || origin === 'studio_ack';
 }
 
-// 1 for the first dispatch; unlike roundGeneration, retries don't bump it.
-export function dispatchAttempt(record: Pick<SubmissionRecord, 'dispatch'>): number {
-  return record.dispatch?.refs?.length ?? 1;
+// Counts dispatches on this job plus earlier sibling jobs (own refs undercount).
+export async function dispatchAttempt(
+  store: Pick<Store, 'listSubmissionsBySlug'>,
+  record: Pick<SubmissionRecord, 'dispatch' | 'slug' | 'issueNumber' | 'ownerUid' | 'createdAt'>,
+): Promise<number> {
+  const ownAttempts = record.dispatch?.refs?.length ?? 0;
+  if (!record.slug) return Math.max(ownAttempts, 1);
+  const siblings = await store.listSubmissionsBySlug(record.slug);
+  const priorAttempts = siblings
+    .filter(
+      (sibling) =>
+        sibling.issueNumber !== record.issueNumber &&
+        sibling.ownerUid === record.ownerUid &&
+        sibling.createdAt < record.createdAt,
+    )
+    .reduce((sum, sibling) => sum + (sibling.dispatch?.refs?.length ?? 0), 0);
+  return Math.max(ownAttempts + priorAttempts, 1);
 }
 
 /**
@@ -2046,7 +2062,10 @@ export interface Store {
    * Written once at submission create; not cleared on round boundaries — the
    * game's brief is the job's brief for its whole life.
    */
-  setSubmissionBrief(issueNumber: number, brief: { spec: string; qa: string[] }): Promise<void>;
+  setSubmissionBrief(
+    issueNumber: number,
+    brief: { spec: string; qa: string[]; specIsSystemGenerated?: boolean },
+  ): Promise<void>;
   /** Appends an agent progress event. Returns it with its assigned id and timestamp. */
   appendBuildEvent(
     issueNumber: number,
@@ -3567,9 +3586,19 @@ export class InMemoryStore implements Store {
     if (sub) this.submissions.set(issueNumber, { ...sub, clarificationCount: count });
   }
 
-  async setSubmissionBrief(issueNumber: number, brief: { spec: string; qa: string[] }): Promise<void> {
+  async setSubmissionBrief(
+    issueNumber: number,
+    brief: { spec: string; qa: string[]; specIsSystemGenerated?: boolean },
+  ): Promise<void> {
     const sub = this.submissions.get(issueNumber);
-    if (sub) this.submissions.set(issueNumber, { ...sub, spec: brief.spec, qa: brief.qa });
+    if (sub) {
+      this.submissions.set(issueNumber, {
+        ...sub,
+        spec: brief.spec,
+        qa: brief.qa,
+        ...(brief.specIsSystemGenerated ? { specIsSystemGenerated: true } : {}),
+      });
+    }
   }
 
   async appendBuildEvent(
@@ -6123,11 +6152,21 @@ export class FirestoreStore implements Store {
       .set({ clarificationCount: count }, { merge: true });
   }
 
-  async setSubmissionBrief(issueNumber: number, brief: { spec: string; qa: string[] }): Promise<void> {
+  async setSubmissionBrief(
+    issueNumber: number,
+    brief: { spec: string; qa: string[]; specIsSystemGenerated?: boolean },
+  ): Promise<void> {
     await this.db
       .collection('submissions')
       .doc(String(issueNumber))
-      .set({ spec: brief.spec, qa: brief.qa }, { merge: true });
+      .set(
+        {
+          spec: brief.spec,
+          qa: brief.qa,
+          ...(brief.specIsSystemGenerated ? { specIsSystemGenerated: true } : {}),
+        },
+        { merge: true },
+      );
   }
 
   private eventsCollection(issueNumber: number) {
