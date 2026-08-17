@@ -7208,25 +7208,29 @@ a.user-name--profile:focus-visible {
     max-width: 100%;
   }
 
+  /* One row, not two: nowrap, not wrap. Every child below is sized so the
+     title — the one thing with no natural minimum — is the sole part that
+     shrinks; everything else (folder, Code, Play, ⋯) keeps its intrinsic
+     width and the title's own ellipsis absorbs whatever room is left. */
   .app:has(.studio-layout.is-game-open) .studio-strip {
     min-width: 0;
     max-width: 100%;
     gap: 8px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
   }
 
   /* flex-basis 0, not the base rule's auto: `auto` sizes this by its unwrapped
      content (title + pill), and that content is routinely just wide enough to
      push the whole block, folder button included, onto its own line. A 0 basis
-     makes it a true flexible child that shares row 1 and lets the title's own
-     ellipsis absorb the shortfall instead. */
+     makes it a true flexible child that shares the row instead. */
   .app:has(.studio-layout.is-game-open) .studio-strip-title-block {
     flex: 1 1 0%;
     min-width: 0;
+    flex-wrap: nowrap;
   }
 
   /* Same fix, one level deeper: the title's own auto basis was pushing the
-     phase pill beside it onto its own line too. */
+     phase pill beside it out of the row entirely. */
   .app:has(.studio-layout.is-game-open) .studio-strip-title {
     flex: 1 1 0%;
     min-width: 0;
@@ -7237,41 +7241,42 @@ a.user-name--profile:focus-visible {
     display: none;
   }
 
-  /* Actions already move to their own full-width row below (flex-basis 100%),
-     so this desktop-only right-pusher has nothing left to push — left alone
-     it was still claiming half of every pixel the title tried to grow into. */
+  /* The pill's own text can't shrink, so on the narrowest phones (portrait,
+     not the wider end of this band a landscape phone lands in) it's the one
+     thing this row drops rather than squeezing the title to a few letters. */
+  @media (max-width: 460px) {
+    .app:has(.studio-layout.is-game-open) .studio-strip-phase-pill {
+      display: none;
+    }
+  }
+
+  /* The action row no longer claims its own line below (see .studio-strip-
+     actions right after), so this desktop-only right-pusher has nothing left
+     to push — left alone it was still claiming half of every pixel the title
+     tried to grow into. */
   .app:has(.studio-layout.is-game-open) .studio-strip-spacer {
     display: none;
   }
 
-  /* Flex, not the old 4-col grid: the ⋯ overflow menu folds Edit/Claim/Theater/
-     Share/Details/Chat away, so this row only ever holds Code (optional), Play,
-     and the menu trigger — a fixed column count stopped fitting the item count. */
+  /* Inline on the title's row now, not a forced second line: the ⋯ overflow
+     menu folds Edit/Claim/Theater/Share/Details/Chat away, so this only ever
+     holds Code (optional), Play, and the menu trigger — three intrinsic-width
+     controls the title-block's own shrink already makes room for. */
   .app:has(.studio-layout.is-game-open) .studio-strip-actions {
     display: flex;
-    width: 100%;
-    flex: 1 0 100%;
+    flex: 0 0 auto;
     gap: 8px;
   }
 
   .app:has(.studio-layout.is-game-open) .studio-strip-actions > *,
   .app:has(.studio-layout.is-game-open) .studio-strip-actions .studio-head-action,
   .app:has(.studio-layout.is-game-open) .studio-head-menu {
-    min-width: 0;
-    flex: 1;
+    flex: 0 0 auto;
     justify-content: center;
-  }
-
-  .app:has(.studio-layout.is-game-open) .studio-strip-actions .studio-head-action.is-primary {
-    flex: 2;
   }
 
   .app:has(.studio-layout.is-game-open) .studio-head-menu {
     display: flex;
-  }
-
-  .app:has(.studio-layout.is-game-open) .studio-head-menu .studio-head-action {
-    width: 100%;
   }
 
   /* 24px tall icon pills read as cramped and undershoot the ~44px touch target
