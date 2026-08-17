@@ -1336,6 +1336,19 @@ export async function registerSubmissionRoutes(
     /** Set when this round exists only because the last one never uploaded. */
     undelivered?: boolean;
     /**
+     * Set when `feedback` could not be durably queued to the build channel (the
+     * `appendCreatorMessage` write failed) but the caller is dispatching anyway rather
+     * than failing the request outright.
+     *
+     * `buildPrompt` normally points a revision round at `read_inbox` / `get_transcript`
+     * instead of inlining the creator's words, because a relayed last message loses the
+     * conversation around it. That is only safe when the words are actually durable
+     * somewhere those tools can read — if the queue write itself failed, nothing will
+     * ever answer `read_inbox` with this text, and inlining it directly is the only way
+     * the agent still receives it.
+     */
+    feedbackQueueFailed?: boolean;
+    /**
      * Who asked for this round and why, when it was not the creator. The transition an
      * operator's retry writes has to say so — a history reading `derived_from_github`
      * for a round a person explicitly started would be the history lying about the one
@@ -1409,6 +1422,7 @@ export async function registerSubmissionRoutes(
         }),
         apiBaseUrl: notifyAppBaseUrl,
         ...(input.undelivered ? { undelivered: true } : {}),
+        ...(input.feedbackQueueFailed ? { feedbackQueueFailed: true } : {}),
         ...(switchSeed ? { seed: switchSeed } : preservedSeed ? { seed: preservedSeed } : {}),
         ...(reusedSelfSeed ? { seed: reusedSelfSeed } : {}),
       };
@@ -4176,6 +4190,11 @@ export async function registerSubmissionRoutes(
         ...(builderChanging ? {} : record?.deliveredVersion ? {} : { undelivered: true }),
         ...(requestedBuilder && isBuilderKind(requestedBuilder) ? { builder: requestedBuilder } : {}),
         ...(builderChanging ? { preserveRoundBudget: true } : {}),
+        // The inbox write above failed (`queued` false) but this path dispatches anyway
+        // (shouldSteerFeedbackViaInbox already fails closed on that combination) — with
+        // no durable copy for read_inbox/get_transcript to serve, buildPrompt must
+        // inline this text directly or the agent never receives it at all.
+        ...(!queued ? { feedbackQueueFailed: true } : {}),
         // Name the actor so a ready_for_review → dispatched reopen does not look like a
         // GitHub-derived observation in the job history.
         transition: {

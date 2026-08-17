@@ -43,6 +43,14 @@ export interface BuildBrief {
    */
   feedback?: string;
   /**
+   * `feedback` could not be durably queued to the build channel, so `read_inbox` /
+   * `get_transcript` will never be able to serve it — the queue write itself failed,
+   * and the caller is dispatching anyway rather than failing the request. The only
+   * remaining way this text reaches the agent is inlining it directly, so `buildPrompt`
+   * does that instead of pointing at tools that have nothing to give back.
+   */
+  feedbackQueueFailed?: boolean;
+  /**
    * Set when the previous session ended without delivering.
    *
    * Distinct from `feedback` because it is not the creator speaking — nobody asked for

@@ -66,7 +66,13 @@ import { computeStageAdvisories } from './stage-hints.js';
 import { applyExactReplace, applySourcePatch, SourcePatchError } from './source-patch.js';
 import { overlayGameSources } from './staged-preview.js';
 import { SourceDeliveryValidationError, type SourceDeliveryService } from './source-delivery.js';
-import { type BuilderHandoff, type CreatorMessage, type Store, type SubmissionRecord } from './store.js';
+import {
+  dispatchAttempt,
+  type BuilderHandoff,
+  type CreatorMessage,
+  type Store,
+  type SubmissionRecord,
+} from './store.js';
 import { BUILD_EVENT_KINDS, BUILD_STEPS, sanitizeCreatorText, type BuildEvent } from './submission-status.js';
 import { normalizeAtIntake, type IntakeText } from './localize-intake.js';
 import { createTranslatorFromEnv, type Translator } from './translate.js';
@@ -2324,6 +2330,9 @@ export async function registerAgentChannelRoutes(
         constraints: buildConstraints(DEFAULT_BUILD_ORIENTATION),
         locales: briefLocales(record.locale),
         ...seed,
+        // > 1 means an earlier attempt exists (revision, undelivered retry, or
+        // handoff) — get_transcript may have context this brief's inlined spec does not.
+        dispatchAttempt: dispatchAttempt(record),
         pendingMessages: pending.map((message) => ({
           id: message.id,
           text: message.text,

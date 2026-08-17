@@ -1152,6 +1152,7 @@ describe('submission routes', () => {
     expect(response.statusCode).toBe(200);
     expect(briefs.at(-1)?.undelivered).toBeUndefined();
     expect(briefs.at(-1)?.feedback).toContain('Make the parcels bigger');
+    expect(briefs.at(-1)?.feedbackQueueFailed).toBeUndefined();
     // Conversation context is no longer injected into the brief — the round reads it
     // back through GET /api/agent/build/transcript (MCP get_transcript) instead, so a
     // long creator request can never be lost to a prompt that only relays the last
@@ -1167,6 +1168,53 @@ describe('submission routes', () => {
       by: 'creator',
       reason: 'creator_feedback',
     });
+
+    await app.close();
+  });
+
+  it('falls back to inlining feedback in the prompt when the queue write fails but the round still dispatches', async () => {
+    // A job with no active in-flight dispatch (ready_for_review) is NOT steered via the
+    // inbox (shouldSteerFeedbackViaInbox is false), so a failed appendCreatorMessage
+    // does not fail the request closed — resumeBuild still runs. With the prompt no
+    // longer inlining feedback by default, that queue failure would otherwise mean
+    // read_inbox and get_transcript both come back empty and the agent never learns
+    // what the creator asked for at all.
+    const { githubClient } = createGithubClientStub({ issueNumber: 77 });
+    const { backend, briefs } = createBackendStub();
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+    });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/submissions',
+      headers: authHeaders,
+      payload: { title: 'A game', concept: 'A sufficiently long concept about delivering parcels in space.' },
+    });
+    const [job] = await store.listSubmissionsByOwner('g:test-user');
+    await store.setSubmissionDeliveredVersion(job.issueNumber, 'v20260731T153306124Z');
+    await store.recordJobTransition(job.issueNumber, {
+      to: 'ready_for_review',
+      at: new Date().toISOString(),
+      by: 'reconciler',
+      reason: 'gate_green',
+    });
+    store.appendCreatorMessage = async () => {
+      throw new Error('firestore unavailable');
+    };
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(job.issueNumber, secret)}/feedback`,
+      headers: authHeaders,
+      payload: { feedback: 'Make the parcels bigger and the asteroids slower.' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(briefs.at(-1)?.feedback).toContain('Make the parcels bigger');
+    expect(briefs.at(-1)?.feedbackQueueFailed).toBe(true);
 
     await app.close();
   });

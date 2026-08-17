@@ -628,15 +628,23 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(secondStructured.entries.map((e) => e.text)).toEqual(['message-1', 'message-2']);
   });
 
-  it('nudges transcript_unread on a resumed round until get_transcript runs, never on round 1', async () => {
+  it('nudges transcript_unread on an undelivered retry of round 1 — the round number never moves', async () => {
+    // This is the case round > 1 would have missed: ensureRoundGeneration does not
+    // bump the round for an undelivered retry, so a job whose very first attempt
+    // hiccuped without delivering is still reported as round 1 on the retry — exactly
+    // the scenario that motivated get_transcript. dispatchAttempt (dispatch.refs.length)
+    // catches it because a retry is a new dispatch call regardless of round number.
     const store = new InMemoryStore();
     await seedJob(store);
+    // The original dispatch, as dispatchBuild would have recorded it.
+    await store.recordDispatch(ISSUE, { backend: 'self', ref: 'attempt-1' });
     app = await createApp(store);
     const sessionId = await initialize(app);
 
-    // Round 1: fresh round, nothing to catch up on.
     const firstStarted = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
-    expect((firstStarted.structured as { round: number }).round).toBe(1);
+    const firstStructured = firstStarted.structured as { round: number; dispatchAttempt: number };
+    expect(firstStructured.round).toBe(1);
+    expect(firstStructured.dispatchAttempt).toBe(1);
     const freshBrief = await callTool(
       app,
       'get_brief',
@@ -647,14 +655,17 @@ describe('POST /api/mcp (BY-05)', () => {
       expect.objectContaining({ code: 'transcript_unread' }),
     );
 
-    // Bump to round 2 the way a revision round does, then reconnect.
-    await store.bumpRoundGeneration(ISSUE);
+    // The undelivered-nudge retry: a second dispatch, same round generation (still 1).
+    await store.recordDispatch(ISSUE, { backend: 'self', ref: 'attempt-2' });
     const secondSessionId = await initialize(app);
-    const started = await callTool(app, 'start', { key: roundKey(2) }, { 'mcp-session-id': secondSessionId });
-    expect((started.structured as { round: number }).round).toBe(2);
-    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+    const started = await callTool(app, 'start', { key: roundKey(1) }, { 'mcp-session-id': secondSessionId });
+    const structured = started.structured as { round: number; dispatchAttempt: number; sessionKey: string };
+    expect(structured.round).toBe(1); // the round number genuinely did not move
+    expect(structured.dispatchAttempt).toBe(2); // but this is not the first attempt
+    const sessionKey = structured.sessionKey;
 
     const brief = await callTool(app, 'get_brief', { sessionKey }, { 'mcp-session-id': secondSessionId });
+    expect((brief.structured as { dispatchAttempt: number }).dispatchAttempt).toBe(2);
     expect((brief.structured as { warnings?: Array<{ code: string }> }).warnings).toContainEqual(
       expect.objectContaining({ code: 'transcript_unread' }),
     );

@@ -39,8 +39,17 @@ export type TranscriptEntry = {
 
 /** Rounds of the same game read into the transcript, the current round included. */
 const MAX_TRANSCRIPT_ROUNDS = 6;
-/** Per-round read ceiling for each of the two lists (creator messages, build events). */
-const MAX_TRANSCRIPT_LIST_ENTRIES = 50;
+/**
+ * Per-round read ceiling for each of the two lists (creator messages, build events).
+ *
+ * Generous on purpose: `listCreatorMessages`/`listBuildEvents` return the *newest*
+ * `limit` items, so a low cap here silently drops a round's *oldest* entries before
+ * pagination ever sees them — the founding request most of all, and `hasMore` would
+ * report false once paging reached that artificial floor, having never actually reached
+ * the start of the round. 300 keeps that scenario to genuinely pathological rounds; see
+ * `truncatedAtSource` for the honest fallback when even that is not enough.
+ */
+export const MAX_TRANSCRIPT_LIST_ENTRIES = 300;
 /**
  * A single entry's ceiling. Creator feedback caps at 2000 chars, but a spec relayed as a
  * message can run longer — and cutting a long creator request in half is exactly the
@@ -69,6 +78,14 @@ export type TranscriptWindow = {
   hasMore: boolean;
   /** Pass as `cursor` to read the window immediately before this one. Absent when hasMore is false. */
   nextCursor?: string;
+  /**
+   * True when a round's own message or event history exceeded the per-round read
+   * ceiling, so some of its oldest entries were never fetched at all — `hasMore` only
+   * describes what pagination can reach within what *was* fetched, and cannot see past
+   * this. Absent (not merely false) when nothing was capped, so a caller can tell "we
+   * checked and everything is here" from "we didn't check".
+   */
+  truncatedAtSource?: boolean;
 };
 
 /**
@@ -84,7 +101,7 @@ export async function loadBuildTranscript(
   record: SubmissionRecord,
   opts?: { cursor?: string; limit?: number },
 ): Promise<TranscriptWindow> {
-  const all = await collectTranscriptEntries(store, record);
+  const { entries: all, truncatedAtSource } = await collectTranscriptEntries(store, record);
 
   const requestedLimit = opts?.limit !== undefined ? Math.floor(opts.limit) : DEFAULT_TRANSCRIPT_WINDOW_ENTRIES;
   const windowSize = Math.min(
@@ -106,11 +123,15 @@ export async function loadBuildTranscript(
     start += 1;
   }
 
+  // hasMore only describes what pagination can reach within the fetched set — once
+  // start hits 0 there is nothing left to page to, but truncatedAtSource says whether
+  // that fetched set was itself missing a round's oldest history.
   const hasMore = start > 0;
   return {
     entries: all.slice(start, end),
     hasMore,
     ...(hasMore ? { nextCursor: String(start) } : {}),
+    ...(truncatedAtSource ? { truncatedAtSource: true } : {}),
   };
 }
 
@@ -121,7 +142,10 @@ function windowBytes(entries: TranscriptEntry[], start: number, end: number): nu
 }
 
 /** Every entry across the readable rounds, oldest first — the full list a window slices into. */
-async function collectTranscriptEntries(store: TranscriptStore, record: SubmissionRecord): Promise<TranscriptEntry[]> {
+async function collectTranscriptEntries(
+  store: TranscriptStore,
+  record: SubmissionRecord,
+): Promise<{ entries: TranscriptEntry[]; truncatedAtSource: boolean }> {
   const siblings = record.slug
     ? (await store.listSubmissionsBySlug(record.slug))
         .filter(
@@ -136,12 +160,20 @@ async function collectTranscriptEntries(store: TranscriptStore, record: Submissi
     { record, round: 'current' as const },
     ...siblings.map((sibling) => ({ record: sibling, round: 'earlier' as const })),
   ];
+  let truncatedAtSource = false;
   const collected = await Promise.all(
     rounds.map(async ({ record: roundRecord, round }) => {
       const [messages, events] = await Promise.all([
         store.listCreatorMessages(roundRecord.issueNumber, { limit: MAX_TRANSCRIPT_LIST_ENTRIES }),
         store.listBuildEvents(roundRecord.issueNumber, { limit: MAX_TRANSCRIPT_LIST_ENTRIES }),
       ]);
+      // Both lists return the newest `limit` items — hitting the cap means this round's
+      // own oldest history (in the worst case, the founding request itself, when it was
+      // also relayed as a creator message rather than only stored as `spec` below) was
+      // never fetched, so pagination can never actually reach it.
+      if (messages.length >= MAX_TRANSCRIPT_LIST_ENTRIES || events.length >= MAX_TRANSCRIPT_LIST_ENTRIES) {
+        truncatedAtSource = true;
+      }
       const messageEntries: TranscriptEntry[] = messages.map((message) => ({
         kind: isStudioOrigin(message.origin) ? ('agent_note' as const) : ('creator_request' as const),
         text: stripPlaytestContext(message.text).slice(0, MAX_TRANSCRIPT_ENTRY_CHARS),
@@ -158,11 +190,35 @@ async function collectTranscriptEntries(store: TranscriptStore, record: Submissi
           createdAt: event.createdAt,
           round,
         }));
-      return [...messageEntries, ...eventEntries];
+      // The round's founding request. A game's very first round writes it straight to
+      // the job's `spec` and never appends it as a creator message at all (chat is for
+      // what happens after creation), so without this, get_transcript could never
+      // surface it — not "truncated out", genuinely never read. An improvement round
+      // (`startImprovementRound`) does echo the same text into the thread, so skip the
+      // synthetic copy when a message already carries it rather than showing the same
+      // request twice. Timestamped at the round's own createdAt so it sorts before
+      // anything that happened once the round existed.
+      const trimmedSpec = roundRecord.spec?.trim();
+      const specAlreadyEchoed = trimmedSpec
+        ? messages.some((message) => stripPlaytestContext(message.text).trim() === trimmedSpec)
+        : false;
+      const specEntry: TranscriptEntry[] =
+        trimmedSpec && !specAlreadyEchoed
+          ? [
+              {
+                kind: 'creator_request' as const,
+                text: trimmedSpec.slice(0, MAX_TRANSCRIPT_ENTRY_CHARS),
+                createdAt: roundRecord.createdAt,
+                round,
+              },
+            ]
+          : [];
+      return [...specEntry, ...messageEntries, ...eventEntries];
     }),
   );
-  return collected
+  const entries = collected
     .flat()
     .filter((entry) => entry.text.trim().length > 0)
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  return { entries, truncatedAtSource };
 }

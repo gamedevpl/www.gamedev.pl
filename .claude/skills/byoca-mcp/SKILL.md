@@ -128,18 +128,62 @@ further back with `cursor` when that window genuinely does not answer what is ne
 not speculatively. The latest message is the tail of a conversation, not the whole of
 it, but neither is `get_transcript`'s reply the whole of it either — that is the point.
 
+**The founding request is a synthetic entry, not a message.** A game's very first round
+writes its concept straight to the job's `spec` and never appends it as a creator
+message — chat is for what happens after creation — so without help, `get_transcript`
+could never surface it at all for an older sibling round, not merely truncate it out.
+`collectTranscriptEntries` synthesizes one `creator_request` entry per round from
+`roundRecord.spec` (when set), timestamped at the round's own `createdAt` so it sorts
+before anything that happened once the round existed. An improvement round
+(`startImprovementRound`) _does_ echo the same text into the thread as a delivered
+creator message, so the synthesizer skips the synthetic copy whenever a message in that
+round already carries the identical (post-`stripPlaytestContext`) text — otherwise the
+creator's request would appear to repeat itself.
+
+**`truncatedAtSource` — the read cap can be honest about lying.** `listCreatorMessages`
+/ `listBuildEvents` both return the _newest_ `limit` items, so a round with more than
+`MAX_TRANSCRIPT_LIST_ENTRIES` (300) creator messages or build events has its _oldest_
+entries silently absent from what `collectTranscriptEntries` even fetches — pagination
+then walks off the front of a list that was already incomplete and reports `hasMore:
+false`, having never actually reached the true start of the round. 300 is sized to make
+that a pathological case rather than a routine one (this repo's own rounds run on a
+two-minute clock), but when a round's fetch comes back at exactly the cap on either
+list, the response carries `truncatedAtSource: true` — present only when something was
+actually capped, never `false`, so a caller can tell "we checked and this is everything"
+from "we didn't check". There is nothing to _do_ about it beyond knowing the picture may
+be incomplete; the founding-spec synthesis above means the single most important entry
+survives a truncated round regardless, since it's computed fresh rather than read
+through the capped list.
+
 **Prose in a prompt is advice; MCP has no way to force a tool call.** So the round also
-carries a soft nudge, `transcript_unread` (`mcp-session-nudges.ts`): once `start`
-returns `round > 1` — a revision, a resumed undelivered round, or a builder handoff —
-every reply other than `get_transcript`/`start` itself carries the warning until the
-agent calls `get_transcript` once, capped at `TRANSCRIPT_REMINDER_LIMIT` (3) the same
-way `card_unopened` is capped, so it cannot become noise once the round is well
-underway. `noteRoundGeneration` is wired off `start`'s own `round` field in
-`applySessionNudges`, the same in-process, best-effort tracker every other soft nudge
-uses — it does not survive a request landing on a different Cloud Run instance
-mid-session, which is an accepted characteristic of every nudge here, not new to this
-one. Round 1 (a fresh game, whose spec is inlined in full) never gets the nudge — there
-is nothing yet to catch up on.
+carries a soft nudge, `transcript_unread` (`mcp-session-nudges.ts`): once `start` or
+`get_brief` returns `dispatchAttempt > 1`, every reply other than
+`get_transcript`/`start` itself carries the warning until the agent calls
+`get_transcript` once, capped at `TRANSCRIPT_REMINDER_LIMIT` (3) the same way
+`card_unopened` is capped, so it cannot become noise once the round is well underway.
+
+**Not `round > 1`.** The first cut of this nudge keyed off `start`'s `round`
+(`roundGeneration`) field directly, and shipped with exactly the gap a reviewer caught
+before merge: `ensureRoundGeneration` does not bump the round on an undelivered retry,
+so a job whose very first attempt hiccuped without delivering is _still on round 1_
+when it is retried — precisely the scenario that motivated `get_transcript` in the
+first place, silently unflagged. `dispatchAttempt` (`store.ts`, backed by
+`dispatch.refs.length`) fixes this: it counts every dispatch call, not just the ones
+that bump the round, because a revision round is a new _task_ on the same workspace,
+not a new session on the old one (`dispatch`'s own doc comment) — the same fact
+`hasEarlierDispatch`'s replacement, `dispatchAttempt`, is now named for directly.
+
+**And the tracker resets on a new attempt, not just once per job.** `dispatchAttempt`
+also fixed a second bug the same review caught: `noteDispatchAttempt` compares the
+incoming value against `lastDispatchAttempt` and re-arms `transcriptFetched` /
+`transcriptRemindersSent` whenever it changed. Without that, an in-process nudge
+tracker — keyed by jobId, so it outlives one dispatch when the same Cloud Run instance
+handles a later attempt — would let an agent that read the transcript on attempt 2
+silently suppress the nudge on attempt 3, whose conversation that earlier read never
+saw. (The tracker is still best-effort across instances: a request landing on a
+_different_ instance mid-session starts from a fresh `null`, same as every other soft
+nudge here.) Attempt 1 (a fresh game, whose spec is inlined in full) never gets the
+nudge — there is nothing yet to catch up on.
 
 **Why a tool and not a seeded conversation.** The obvious alternative — hand the
 managed vendor prior turns directly, so the agent's context already contains the
@@ -787,7 +831,7 @@ Merged by `applySessionNudges` / submit handler. Act, then continue:
 | `progress_stale`        | Call `report_progress`                                                                                                                                                     |
 | `inbox_pending`         | `read_inbox` → apply → `ack_inbox`                                                                                                                                         |
 | `seed_unread`           | Call `get_seed` before scaffolding from the kit                                                                                                                            |
-| `transcript_unread`     | Round > 1 (earlier conversation exists) and `get_transcript` has not been called yet — call it before deciding what to build                                               |
+| `transcript_unread`     | `dispatchAttempt` > 1 (earlier attempt exists) and `get_transcript` has not been called yet — call it before deciding what to build                                        |
 | `game_manifest_invalid` | Just-staged/patched `GAME.json` has a shape that crashes the gate before typecheck (e.g. missing `engine.modules`) — fix it now, in the same session, before submitting    |
 | `patch_incomplete`      | Some `patch_source_file` edits landed and some did not — retry only `failed[]` (path + index); do not resend the ones that applied                                         |
 

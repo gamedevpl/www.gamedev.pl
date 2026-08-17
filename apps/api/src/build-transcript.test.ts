@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_TRANSCRIPT_WINDOW_ENTRIES,
   loadBuildTranscript,
+  MAX_TRANSCRIPT_LIST_ENTRIES,
   MAX_TRANSCRIPT_WINDOW_ENTRIES,
   PLAYTEST_CONTEXT_HEADER,
   stripPlaytestContext,
@@ -12,7 +13,7 @@ import type { BuildEvent } from './submission-status.js';
 
 type TranscriptStore = Pick<Store, 'listSubmissionsBySlug' | 'listCreatorMessages' | 'listBuildEvents'>;
 
-function job(issueNumber: number, createdAt: string, slug = 'comet-courier'): SubmissionRecord {
+function job(issueNumber: number, createdAt: string, slug = 'comet-courier', spec?: string): SubmissionRecord {
   return {
     issueNumber,
     ownerUid: 'g:owner',
@@ -20,6 +21,7 @@ function job(issueNumber: number, createdAt: string, slug = 'comet-courier'): Su
     slug,
     createdAt,
     state: 'building',
+    ...(spec !== undefined ? { spec } : {}),
   } as SubmissionRecord;
 }
 
@@ -219,5 +221,68 @@ describe('loadBuildTranscript', () => {
   it('stripPlaytestContext removes the stapled block and nothing else', () => {
     expect(stripPlaytestContext(`hello\n\n${PLAYTEST_CONTEXT_HEADER}\nstuff`)).toBe('hello');
     expect(stripPlaytestContext('hello')).toBe('hello');
+  });
+
+  it('surfaces the founding spec as a synthetic entry — creation never appends it as a message', async () => {
+    // A game's very first round writes its concept straight to `spec` and never echoes
+    // it into the creator-message thread (chat is for what happens after creation), so
+    // without a synthetic entry get_transcript could never show it at all.
+    const current = job(1, '2026-08-16T00:00:00.000Z', 'comet-courier', 'A game about delivering parcels.');
+    const store = fakeStore({
+      messages: { 1: [{ text: 'Make the parcels bigger.', createdAt: '2026-08-16T01:00:00.000Z' }] },
+    });
+
+    const page = await loadBuildTranscript(store, current);
+
+    expect(page.entries).toEqual([
+      {
+        kind: 'creator_request',
+        text: 'A game about delivering parcels.',
+        createdAt: '2026-08-16T00:00:00.000Z',
+        round: 'current',
+      },
+      {
+        kind: 'creator_request',
+        text: 'Make the parcels bigger.',
+        createdAt: '2026-08-16T01:00:00.000Z',
+        round: 'current',
+      },
+    ]);
+  });
+
+  it('does not duplicate the founding spec when an improvement round already echoed it as a message', async () => {
+    // startImprovementRound sets both `spec` and a delivered creator message with the
+    // same text — showing both would read as the creator asking twice.
+    const current = job(1, '2026-08-16T00:00:00.000Z', 'comet-courier', 'Add a boss fight.');
+    const store = fakeStore({
+      messages: { 1: [{ text: 'Add a boss fight.', createdAt: '2026-08-16T00:00:00.500Z' }] },
+    });
+
+    const page = await loadBuildTranscript(store, current);
+
+    expect(page.entries).toHaveLength(1);
+    expect(page.entries[0]).toMatchObject({ text: 'Add a boss fight.', createdAt: '2026-08-16T00:00:00.500Z' });
+  });
+
+  it('flags truncatedAtSource when a round exceeds the per-round read ceiling, without lying about hasMore', async () => {
+    const current = job(1, '2026-08-16T00:00:00.000Z');
+    const events = Array.from({ length: MAX_TRANSCRIPT_LIST_ENTRIES }, (_, i) => ({
+      text: `event-${i}`,
+      createdAt: `2026-08-16T01:${String(i % 60).padStart(2, '0')}:${String(Math.floor(i / 60)).padStart(2, '0')}.000Z`,
+    }));
+    const store = fakeStore({ events: { 1: events } });
+
+    const page = await loadBuildTranscript(store, current);
+
+    expect(page.truncatedAtSource).toBe(true);
+  });
+
+  it('omits truncatedAtSource entirely when nothing was capped', async () => {
+    const current = job(1, '2026-08-16T00:00:00.000Z');
+    const store = fakeStore({ messages: { 1: manyMessages(5) } });
+
+    const page = await loadBuildTranscript(store, current);
+
+    expect(page).not.toHaveProperty('truncatedAtSource');
   });
 });

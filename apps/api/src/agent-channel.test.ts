@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mintAgentToken, mintLegacyAgentToken, STALE_AGENT_TOKEN_REASON } from './agent-token.js';
 import { verifyUploadToken } from './agent-upload-token.js';
 import type { AgentChannelOptions } from './agent-channel.js';
+import { MAX_TRANSCRIPT_LIST_ENTRIES } from './build-transcript.js';
 import { buildApp } from './app.js';
 import { mintSessionToken, SESSION_COOKIE_NAME } from './auth.js';
 import type { CatalogGameEntry, GameSources, GitHubClient, LinkedPullRequest } from './github-client.js';
@@ -444,6 +445,18 @@ describe('agent build channel', () => {
     const second = secondPage.json() as { entries: Array<{ text: string }>; hasMore: boolean };
     expect(second.entries.map((e) => e.text)).toEqual(['message-1', 'message-2']);
     expect(second.hasMore).toBe(true);
+  });
+
+  it('flags truncatedAtSource over the real channel route when a round exceeds the read ceiling', async () => {
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    for (let i = 0; i < MAX_TRANSCRIPT_LIST_ENTRIES; i += 1) {
+      await store.appendBuildEvent(ISSUE, { kind: 'step', text: `event-${i}` });
+    }
+    app = await createApp(store);
+
+    const res = await app.inject({ method: 'GET', url: '/api/agent/build/transcript', headers: agentHeaders() });
+    expect(res.json().truncatedAtSource).toBe(true);
   });
 
   it('queues creator feedback for the agent when it is posted to GitHub', async () => {
