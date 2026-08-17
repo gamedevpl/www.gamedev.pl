@@ -6929,6 +6929,17 @@ a.user-name--profile:focus-visible {
   flex: none;
 }
 
+.status-composer-attach {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+}
+
+.status-composer-attach-btn.is-open {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+}
+
 .status-composer-attach-btn {
   display: inline-flex;
   align-items: center;
@@ -7105,6 +7116,16 @@ a.user-name--profile:focus-visible {
   .status-composer.is-compact .status-composer-stop {
     width: 44px;
     height: 44px;
+  }
+
+  .status-composer-attach-btn {
+    width: 44px;
+    height: 44px;
+  }
+
+  .status-composer-attachment-chip {
+    width: 48px;
+    height: 48px;
   }
 
   .status-feedback-quick-action {

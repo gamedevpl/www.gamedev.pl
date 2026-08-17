@@ -34,6 +34,7 @@ import { pollDelayMs } from './studioStatusPoll.js';
 import { studioThreadContentScrollTop, studioThreadNearContentEnd } from './studioThreadScroll.js';
 import { recordStudioStep, type StudioStepDetail } from './visitTelemetry.js';
 import { toBase64PngList } from './attachmentImages.js';
+import { SketchModal } from './SketchModal.js';
 
 type BuilderHandoffHandler = () => Promise<void | { pending?: boolean }> | void | { pending?: boolean };
 
@@ -1456,7 +1457,28 @@ function FeedbackPanel({
   // Sketches/photos attached to the change request about to be sent — mirrors the
   // create-page composer's attach menu, capped the same way the backend is (MAX_REFERENCE_IMAGES).
   const [attachments, setAttachments] = useState<ComposerAttachment[]>([]);
+  const [attachMenuOpen, setAttachMenuOpen] = useState(false);
+  const [isSketchOpen, setIsSketchOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const attachMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!attachMenuOpen) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (attachMenuRef.current && !attachMenuRef.current.contains(event.target as Node)) {
+        setAttachMenuOpen(false);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setAttachMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [attachMenuOpen]);
 
   useEffect(() => {
     setBuilder(initialBuilder);
@@ -1552,6 +1574,14 @@ function FeedbackPanel({
       };
       reader.readAsDataURL(file);
     });
+  };
+
+  const handleSaveSketch = (dataUrl: string) => {
+    setAttachments((prev) =>
+      prev.length >= MAX_COMPOSER_ATTACHMENTS
+        ? prev
+        : [...prev, { id: `sketch-${Date.now()}`, name: `Sketch ${prev.length + 1}`, dataUrl }],
+    );
   };
 
   const removeAttachment = (id: string) => {
@@ -1818,29 +1848,59 @@ function FeedbackPanel({
         )}
         <div className="status-composer-toolbar">
           <div className="status-composer-toolbar-left">
-            <button
-              type="button"
-              className="status-composer-attach-btn"
-              onClick={() => fileInputRef.current?.click()}
-              title={t('hero.uploadImage')}
-              aria-label={t('hero.uploadImage')}
-              disabled={sending || attachments.length >= MAX_COMPOSER_ATTACHMENTS}
-            >
-              <PixelIcon name="image" size={15} />
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              className="hidden-file-input"
-              onChange={(event) => {
-                if (event.target.files && event.target.files.length > 0) {
-                  handleAttachFiles(event.target.files);
-                  event.target.value = '';
-                }
-              }}
-            />
+            <div className="status-composer-attach" ref={attachMenuRef}>
+              <button
+                type="button"
+                className={`status-composer-attach-btn${attachMenuOpen ? ' is-open' : ''}`}
+                onClick={() => setAttachMenuOpen((open) => !open)}
+                title={t('hero.attachMenuAria')}
+                aria-label={t('hero.attachMenuAria')}
+                aria-expanded={attachMenuOpen}
+                aria-haspopup="menu"
+                disabled={sending || attachments.length >= MAX_COMPOSER_ATTACHMENTS}
+              >
+                <PixelIcon name="plus" size={15} />
+              </button>
+              {attachMenuOpen && !sending ? (
+                <div className="prompt-attach-menu" role="menu" aria-label={t('hero.attachMenu')}>
+                  <button
+                    type="button"
+                    className="prompt-attach-item"
+                    role="menuitem"
+                    onClick={() => {
+                      setAttachMenuOpen(false);
+                      fileInputRef.current?.click();
+                    }}
+                  >
+                    <PixelIcon name="image" size={16} /> {t('hero.uploadImage')}
+                  </button>
+                  <button
+                    type="button"
+                    className="prompt-attach-item"
+                    role="menuitem"
+                    onClick={() => {
+                      setAttachMenuOpen(false);
+                      setIsSketchOpen(true);
+                    }}
+                  >
+                    <PixelIcon name="palette" size={16} /> {t('hero.drawSketch')}
+                  </button>
+                </div>
+              ) : null}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden-file-input"
+                onChange={(event) => {
+                  if (event.target.files && event.target.files.length > 0) {
+                    handleAttachFiles(event.target.files);
+                    event.target.value = '';
+                  }
+                }}
+              />
+            </div>
             {builderControls}
           </div>
           <div className="status-composer-toolbar-right">
@@ -1889,6 +1949,7 @@ function FeedbackPanel({
             )}
           </div>
         ) : null}
+        <SketchModal isOpen={isSketchOpen} onClose={() => setIsSketchOpen(false)} onSaveSketch={handleSaveSketch} />
       </div>
     );
   }
