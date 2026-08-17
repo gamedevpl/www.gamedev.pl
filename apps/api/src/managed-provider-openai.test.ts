@@ -147,6 +147,35 @@ describe('openai managed provider', () => {
     }
   });
 
+  it('parses a normal response where OpenAI sends explicit nulls, not omitted fields', async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse({
+        id: 'resp-1',
+        status: 'in_progress',
+        model: 'gpt-5.6-luna',
+        created_at: 1_700_000_000,
+        incomplete_details: null,
+        usage: {
+          input_tokens: 5,
+          output_tokens: 2,
+          total_tokens: 7,
+          input_tokens_details: null,
+          output_tokens_details: null,
+        },
+      }),
+    );
+    const provider = createOpenAiManagedProvider({
+      apiKey: secret('api'),
+      model: 'gpt-test-model',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+
+    const session = await provider.getSession('resp-1');
+    expect(session?.state).toBe('in_progress');
+    expect(session?.stopReason).toBeUndefined();
+    expect(session?.usage).toMatchObject({ inputTokens: 5, outputTokens: 2, totalTokens: 7 });
+  });
+
   it('records a budget stop only when incomplete was caused by the token ceiling', async () => {
     const budgetFetch = vi.fn(async () =>
       jsonResponse({ id: 'resp-1', status: 'incomplete', incomplete_details: { reason: 'max_output_tokens' } }),

@@ -520,6 +520,18 @@ export function applyMeasuredTokens(
         left.toolUse === right.toolUse
       );
     }
+    if (left.vendor === 'openai' || right.vendor === 'openai') {
+      return (
+        left.vendor === 'openai' &&
+        right.vendor === 'openai' &&
+        left.model === right.model &&
+        left.input === right.input &&
+        left.output === right.output &&
+        left.total === right.total &&
+        left.reasoning === right.reasoning &&
+        left.cached === right.cached
+      );
+    }
     return (
       left.input === right.input &&
       left.output === right.output &&

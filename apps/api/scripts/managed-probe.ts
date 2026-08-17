@@ -112,7 +112,9 @@ const model =
     ? process.env.AGENT_TASKS_MODEL?.trim()
     : vendor === 'openai'
       ? process.env.MANAGED_AGENT_OPENAI_MODEL?.trim()
-      : process.env.MANAGED_AGENT_MODEL?.trim()) ??
+      : vendor === 'gemini'
+        ? process.env.MANAGED_AGENT_GEMINI_MODEL?.trim()
+        : process.env.MANAGED_AGENT_MODEL?.trim()) ??
   (vendor === 'anthropic'
     ? 'claude-sonnet-5'
     : vendor === 'copilot'

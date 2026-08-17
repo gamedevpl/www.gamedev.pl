@@ -64,6 +64,49 @@ describe('InMemoryStore', () => {
     expect(entry.tokens).toEqual({ input: 10, output: 2 });
   });
 
+  it('persists a later OpenAI usage breakdown even when input/output are unchanged', async () => {
+    const store = new InMemoryStore();
+    await store.createSubmission(1, 'g:123', 'A game');
+    await store.recordJobCost(1, {
+      kind: 'agent_session',
+      at: '2026-08-17T10:00:00Z',
+      by: 'managed:openai',
+      ref: 's1',
+      credits: 1,
+    });
+
+    await store.setJobCostTokens(1, 's1', {
+      vendor: 'openai',
+      model: 'gpt-5.6-luna',
+      input: 100,
+      output: 50,
+      total: 150,
+      reasoning: 0,
+      cached: 0,
+    });
+    // Same input/output, later reasoning/cached — generic comparison would miss this.
+    await store.setJobCostTokens(1, 's1', {
+      vendor: 'openai',
+      model: 'gpt-5.6-luna',
+      input: 100,
+      output: 50,
+      total: 150,
+      reasoning: 20,
+      cached: 15,
+    });
+
+    const [entry] = (await store.getSubmission(1))?.costs ?? [];
+    expect(entry.tokens).toEqual({
+      vendor: 'openai',
+      model: 'gpt-5.6-luna',
+      input: 100,
+      output: 50,
+      total: 150,
+      reasoning: 20,
+      cached: 15,
+    });
+  });
+
   it('records job transitions as a history, newest state on the record', async () => {
     const store = new InMemoryStore();
     await store.createSubmission(1, 'g:123', 'A game');

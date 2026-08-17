@@ -14,13 +14,22 @@ export const OPENAI_VENDOR = 'openai';
 const DEFAULT_BASE_URL = 'https://api.openai.com/v1';
 const DEFAULT_TIMEOUT_MS = 30_000;
 
+// OpenAI sends explicit null here, not omission — must be nullable.
 const UsageSchema = z
   .object({
     input_tokens: z.number().nonnegative().optional(),
     output_tokens: z.number().nonnegative().optional(),
     total_tokens: z.number().nonnegative().optional(),
-    input_tokens_details: z.object({ cached_tokens: z.number().nonnegative().optional() }).partial().optional(),
-    output_tokens_details: z.object({ reasoning_tokens: z.number().nonnegative().optional() }).partial().optional(),
+    input_tokens_details: z
+      .object({ cached_tokens: z.number().nonnegative().optional() })
+      .partial()
+      .nullable()
+      .optional(),
+    output_tokens_details: z
+      .object({ reasoning_tokens: z.number().nonnegative().optional() })
+      .partial()
+      .nullable()
+      .optional(),
   })
   .partial();
 
@@ -30,8 +39,8 @@ const ResponseSchema = z
     status: z.string().optional(),
     model: z.string().optional(),
     created_at: z.number().optional(),
-    incomplete_details: z.object({ reason: z.string().optional() }).partial().optional(),
-    usage: UsageSchema.optional(),
+    incomplete_details: z.object({ reason: z.string().nullable().optional() }).partial().nullable().optional(),
+    usage: UsageSchema.nullable().optional(),
   })
   .passthrough();
 
@@ -60,7 +69,7 @@ function mcpTools(request: ManagedSessionRequest): OpenAiMcpTool[] {
 }
 
 // Only a token ceiling counts as budget-stopped; content filters do not.
-function isBudgetIncomplete(reason: string | undefined): boolean {
+function isBudgetIncomplete(reason: string | null | undefined): boolean {
   return reason === 'max_output_tokens' || reason === 'max_tokens';
 }
 
