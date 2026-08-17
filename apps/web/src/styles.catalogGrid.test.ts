@@ -29,8 +29,8 @@ describe('catalog grid layout', () => {
     expect(ruleBody('.catalog-media')).toMatch(/aspect-ratio:\s*16\s*\/\s*9/);
   });
 
-  it('hides trailer/moment chrome on coarse pointers so cards keep one Play CTA', () => {
-    const rule = css.match(/\.preview-toggle\s*,\s*\.catalog-moments\s*\{([\s\S]*?)\}/);
+  it('hides the moments-only toggle on coarse pointers, but keeps the video one tappable', () => {
+    const rule = css.match(/\.preview-toggle:not\(\.preview-toggle--video\)\s*,\s*\.catalog-moments\s*\{([\s\S]*?)\}/);
     expect(rule, 'missing combined preview-toggle/catalog-moments hide rule').not.toBeNull();
     expect(rule![1]).toMatch(/display:\s*none/);
     // Same rule lives under the coarse/phone media query (look behind a short window).

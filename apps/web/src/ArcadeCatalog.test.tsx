@@ -187,6 +187,9 @@ describe('ArcadeCatalog lazy media', () => {
     expect(poster?.getAttribute('src')).toBe('/api/games/above-fold/media/mid.png?w=640');
     expect(container.querySelectorAll('.catalog-moment')).toHaveLength(0);
 
+    // The modifier the coarse-pointer CSS keeps visible for a tap.
+    expect(container.querySelector('.preview-toggle')?.classList.contains('preview-toggle--video')).toBe(true);
+
     await act(async () => {
       container.querySelector<HTMLButtonElement>('.preview-toggle')?.click();
       await flushEffects();

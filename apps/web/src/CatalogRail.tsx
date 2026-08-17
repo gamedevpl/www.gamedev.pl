@@ -109,6 +109,16 @@ function RailCard({
     }
   }
 
+  // Touch-only tap target (CSS-gated) — hover never fires on a finger.
+  function toggleTap() {
+    if (previewArmed) {
+      disarm();
+      return;
+    }
+    clearHoverIntent();
+    setPreviewArmed(true);
+  }
+
   return (
     <article className="rail-card">
       <div
@@ -156,6 +166,17 @@ function RailCard({
           <span className="rail-card-party-badge">
             <PixelIcon name="phone" size={11} /> {t('party.playersBadge', { max: entry.multiplayer.maxPlayers })}
           </span>
+        )}
+        {hasVideo && (
+          <button
+            type="button"
+            className="rail-card-preview-toggle"
+            aria-pressed={previewArmed}
+            aria-label={previewArmed ? t('catalog.pausePreview') : t('catalog.watchPreview')}
+            onClick={toggleTap}
+          >
+            <PixelIcon name={previewArmed ? 'pause' : 'play'} size={12} />
+          </button>
         )}
       </div>
       <div className="rail-card-body">

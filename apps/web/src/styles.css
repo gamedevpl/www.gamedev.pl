@@ -1518,6 +1518,32 @@ button:disabled {
   white-space: nowrap;
 }
 
+/* Hidden by default — hover already arms the preview on a mouse. Shown only
+   where hover never fires, same reasoning as .preview-toggle on the grid. */
+.rail-card-preview-toggle {
+  display: none;
+}
+
+@media (pointer: coarse), (max-width: 768px) {
+  .rail-card-preview-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    position: absolute;
+    z-index: 1;
+    bottom: 8px;
+    right: 8px;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 999px;
+    color: #fff;
+    background: rgba(6, 10, 14, 0.92);
+    cursor: pointer;
+  }
+}
+
 .rail-card-body {
   display: flex;
   flex-direction: column;
@@ -2136,12 +2162,12 @@ button:disabled {
   text-transform: uppercase;
 }
 
-/* Phone / coarse pointer: the card already has a primary Zagraj CTA. A second 44px
-   play circle for trailer preview (plus moment thumbs) stacked the AI disclosure over
-   gameplay HUDs and read as two competing Play affordances. Hover-to-preview is a
-   mouse behaviour — on a finger, leave the art alone and keep only the disclosures. */
+/* Phone / coarse pointer: hover-to-preview is a mouse behaviour, so a finger gets an
+   explicit tap target instead — the hero's single tap-to-play button, reused here.
+   The moments-only toggle stays hidden: that is the second, lower-value affordance
+   that used to stack with the video one and read as competing Play buttons. */
 @media (pointer: coarse), (max-width: 768px) {
-  .preview-toggle,
+  .preview-toggle:not(.preview-toggle--video),
   .catalog-moments {
     display: none;
   }
