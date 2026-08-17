@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CatalogRail } from './CatalogRail.js';
 import type { CatalogEntry } from './catalog.js';
+import { PartyDiagram } from './PartyDiagram.js';
 import { PixelIcon } from './PixelIcon.js';
 import type { PlayVia } from './visitTelemetry.js';
 
@@ -29,6 +30,8 @@ export function PartyPage({ catalogEntries, onPlayGame, onPlayTogether, onCreate
         <h1 className="party-headline">{t('party.pageHeadline')}</h1>
         <p className="party-subhead">{t('party.pageSubhead')}</p>
       </header>
+
+      <PartyDiagram />
 
       <section className="party-how" aria-labelledby="party-how-heading">
         <h2 id="party-how-heading" className="party-section-heading">

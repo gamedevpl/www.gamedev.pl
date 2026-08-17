@@ -270,7 +270,7 @@ describe('Party navigation from elsewhere', () => {
     vi.unstubAllGlobals();
   });
 
-  // A multiplayer game so the party rail on /party has something to show.
+  // A multiplayer game, so the party rail has something to show.
   const partyGame = {
     slug: 'party-karts',
     title: 'Party Karts',

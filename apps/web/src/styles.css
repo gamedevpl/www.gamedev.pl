@@ -10103,6 +10103,28 @@ button.builder-mode-selector:disabled {
   margin: 0 0 1rem;
 }
 
+.party-diagram {
+  margin: 0 0 2.5rem;
+  padding: 0;
+  text-align: center;
+}
+
+.party-diagram svg {
+  display: block;
+  width: 100%;
+  max-width: 480px;
+  height: auto;
+  margin: 0 auto;
+}
+
+.party-diagram figcaption {
+  margin: 0.75rem auto 0;
+  max-width: 30rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
 .party-how {
   margin: 0 0 3rem;
 }
