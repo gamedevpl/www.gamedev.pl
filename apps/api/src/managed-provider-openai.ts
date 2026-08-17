@@ -50,7 +50,8 @@ type OpenAiMcpTool = {
   server_url: string;
   // Never omitted — default requires approval per call; nothing can grant it.
   require_approval: 'never';
-  headers?: { Authorization: string };
+  // `headers` is real but is dropped on tool calls — verified live.
+  authorization?: string;
 };
 
 function mcpTools(request: ManagedSessionRequest): OpenAiMcpTool[] {
@@ -63,7 +64,7 @@ function mcpTools(request: ManagedSessionRequest): OpenAiMcpTool[] {
       server_label: label,
       server_url: endpoint.url,
       require_approval: 'never',
-      ...(token ? { headers: { Authorization: `Bearer ${token}` } } : {}),
+      ...(token ? { authorization: token } : {}),
     };
   });
 }

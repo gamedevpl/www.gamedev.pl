@@ -61,7 +61,7 @@ describe('openai managed provider', () => {
         server_label: 'gamedevpl',
         server_url: 'https://www.gamedev.pl/api/mcp',
         require_approval: 'never',
-        headers: { Authorization: `Bearer ${roundToken}` },
+        authorization: roundToken,
       },
     ]);
   });
@@ -84,7 +84,7 @@ describe('openai managed provider', () => {
 
     const [, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
     const body = JSON.parse(String(init.body));
-    expect(body.tools[0]).not.toHaveProperty('headers');
+    expect(body.tools[0]).not.toHaveProperty('authorization');
   });
 
   it('refuses seed files — there is no checkout to write them into', async () => {
