@@ -101,4 +101,24 @@ describe('PartyPage', () => {
     expect(container.querySelector('.party-empty')).toBeNull();
     expect(container.textContent).toContain('Party Karts');
   });
+
+  it('surfaces a soft-refresh error without hiding the last-good rail behind it', () => {
+    const { onRetryCatalog } = render({
+      catalogStatus: 'ready',
+      catalogError: 'refresh failed',
+      catalogEntries: [partyGame],
+    });
+
+    expect(container.textContent).toContain('refresh failed');
+    // The stale rail stays visible; the banner does not replace it.
+    expect(container.textContent).toContain('Party Karts');
+    expect(container.querySelector('.party-empty')).toBeNull();
+
+    const retry = container.querySelector<HTMLButtonElement>('.catalog-refresh-error__retry');
+    expect(retry).not.toBeNull();
+    act(() => {
+      retry?.click();
+    });
+    expect(onRetryCatalog).toHaveBeenCalled();
+  });
 });

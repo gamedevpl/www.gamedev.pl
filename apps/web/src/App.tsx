@@ -805,11 +805,11 @@ export function App() {
     input?.focus({ preventScroll: true });
   }
 
-  // A real destination now (HP-6's open question, closed): the header used to scroll
-  // home to the party rail, which was "just a deeplink to the main page" — /party is
-  // a page of its own, so this is a plain navigate like Create's.
+  // A real destination now, not a scroll to the home rail.
   function handlePartyNav() {
     navigate(partyPath());
+    // A new page starts at the top, not mid-scroll.
+    window.scrollTo(0, 0);
   }
 
   // Play lives on home only. Elsewhere, queue the anchor and go there — the
@@ -1169,6 +1169,7 @@ export function App() {
           onReview={() => navigate(reviewPath())}
           onCreate={handleCreateNav}
           onPlay={() => handleHomeAnchorNav('play-anchor')}
+          onParty={handlePartyNav}
           upTarget={headerUp}
           onUp={navigate}
         />

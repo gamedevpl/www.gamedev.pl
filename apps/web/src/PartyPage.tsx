@@ -62,6 +62,15 @@ export function PartyPage({
         </ol>
       </section>
 
+      {catalogStatus === 'ready' && catalogError ? (
+        <div className="catalog-refresh-error" role="status">
+          <p className="catalog-refresh-error__text">{t('catalog.refreshError', { message: catalogError })}</p>
+          <button type="button" className="secondary-btn catalog-refresh-error__retry" onClick={onRetryCatalog}>
+            <PixelIcon name="undo" size={13} /> {t('catalog.retry')}
+          </button>
+        </div>
+      ) : null}
+
       {catalogStatus === 'loading' ? (
         <MascotMoment className="catalog-state" emotion="busy" size={56} title={t('mascot.busyAlt')}>
           <p>{t('catalog.loading')}</p>
