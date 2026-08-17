@@ -39,7 +39,7 @@ export type OperatorAlertKind =
    */
   | 'game_unhealthy'
   /**
-   * Seeded builds are generating drafts that cannot be placed.
+   * Round 0 is failing: no draft generated, or no draft placed.
    *
    * The odd one out here in two ways, both deliberate. It is not about a job — every
    * affected build ran fine, unseeded, and no creator is waiting on anything — and it is
@@ -205,12 +205,12 @@ function alertFor(record: SubmissionRecord, now: number, pendingFeedback?: Pendi
 }
 
 /**
- * Whether seeded builds are paying for drafts nobody can place.
+ * Whether round 0 is failing — generating nothing, or drafts nobody can place.
  *
  * Separate from `detectOperatorAlerts` because it is a judgement about a *set* of jobs
  * rather than about each one, and because its alert has no job to point at. Returns null
- * when seeding is healthy, off, or simply has not run — absence of evidence is not a
- * fault, and a platform with no seeded builds must not page anyone.
+ * when seeding is healthy or simply has not run: a platform with no new games in a day
+ * must not page anyone.
  */
 export function detectSeedingDegraded(outcomes: JobSeedOutcome[], at: number): OperatorAlert | null {
   const since = at - SEEDING_DEGRADED_WINDOW_MS;
@@ -221,12 +221,13 @@ export function detectSeedingDegraded(outcomes: JobSeedOutcome[], at: number): O
     return Number.isFinite(stamped) && stamped >= since;
   });
 
-  const unplaced = recent.filter((outcome) => !outcome.staged);
-  // Every recent attempt has to have failed. A mix means placing works and something
+  // Never generated is as failed as never placed: both scaffold from nothing.
+  const failed = recent.filter((outcome) => outcome.generated === false || !outcome.staged);
+  // Every recent attempt has to have failed. A mix means round 0 works and something
   // about one draft did not, which is a different problem and not this alert's.
-  if (unplaced.length < SEEDING_DEGRADED_MIN_FAILURES || unplaced.length !== recent.length) return null;
+  if (failed.length < SEEDING_DEGRADED_MIN_FAILURES || failed.length !== recent.length) return null;
 
-  const oldest = unplaced.reduce((earliest, outcome) => (outcome.at < earliest.at ? outcome : earliest));
+  const oldest = failed.reduce((earliest, outcome) => (outcome.at < earliest.at ? outcome : earliest));
   return {
     // Per day, not per occurrence: this nags once a day while it is broken rather than
     // once ever (which a job-scoped id would give) or once per build (which is a pager).
@@ -234,7 +235,7 @@ export function detectSeedingDegraded(outcomes: JobSeedOutcome[], at: number): O
     kind: 'seeding_degraded',
     // Phrased as a noun the copy can predicate on: every surface renders an alert as
     // “{title}” followed by what happened to it.
-    title: `The last ${unplaced.length} seeded builds`,
+    title: `The last ${failed.length} new games`,
     since: oldest.at,
   };
 }

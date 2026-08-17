@@ -199,21 +199,17 @@ jobs:
             ENV_VARS="${ENV_VARS}|ZONE_HOST_URL=${ZONE_HOST_URL_VAL}"
           fi
 
-          # Seeded dispatch: a model writes a first draft of the game before the coding
-          # agent starts, and a compiling draft becomes the creator's round-0 preview
-          # (docs/agent-adapters.md). Threaded from a repo variable for the same reason
-          # as the two below — set by hand on the service, the next deploy would wipe it
-          # and builds would quietly stop being seeded with nothing to show why. Absent
-          # or anything other than "true" leaves seeding off, which is how every build
-          # ran before it existed.
-          SEED_DISPATCH_VAL="${{ vars.SEED_DISPATCH }}"
-          if [ -n "$SEED_DISPATCH_VAL" ]; then
-            ENV_VARS="${ENV_VARS}|SEED_DISPATCH=${SEED_DISPATCH_VAL}"
-          fi
+          # SEED_DISPATCH used to be threaded here. Round 0 is not a feature any more —
+          # a model writes the first draft of every new game and that draft *is* the
+          # round's sources (docs/agent-adapters.md), so there is nothing to switch on.
+          # The variable is deliberately not read: leaving it wired would keep a way to
+          # turn new-game creation back into scaffolding-from-nothing by editing a repo
+          # setting, which is the failure this whole change is answering. It can be
+          # deleted from the repository variables.
 
           # The editor's natural-language tuning lane: one Vertex call turns "make the
           # dog a bit bigger" into a patch against the game's own declared params. Same
-          # threading rule as SEED_DISPATCH above — a hand-set value would vanish on the
+          # threading rule as ZONE_HOST_URL above — a hand-set value would vanish on the
           # next deploy and the composer would go quiet with nothing to explain it.
           # Absent or not "true" leaves the route answering 503, which is the state
           # every deployment was in before it existed.
@@ -360,6 +356,7 @@ jobs:
             --allow-unauthenticated \
             --min-instances 0 \
             --max-instances "$MAX_INSTANCES" \
+            --no-cpu-throttling \
             --port 8080 \
             --set-env-vars "$ENV_VARS" \
             "${SECRET_FLAGS[@]}"

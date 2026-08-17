@@ -21,10 +21,13 @@ firewall does not cover MCP servers, so the round-key boundary is the isolation 
 Source of truth: `SESSION_WORKFLOW` + `BEHAVIOURAL_CONTRACT` in
 `apps/api/src/mcp-server.ts` (returned by `start`, appended to every tool description).
 
-1. `start` → `show_round` (once) → `get_brief` / `get_seed` / `get_sources` / `get_kit` as needed
-   - The seed is a starting point, not an authority: where it and the brief disagree, the
-     brief wins. `regenerate_seed({ steer })` once if the draft is missing or plainly not
-     the game the brief describes — then keep building rather than waiting on it
+1. `start` → `show_round` (once) → `get_brief` → `get_sources` → `get_kit` as needed
+   - `get_sources` is the first read of **every** round. A new game arrives with a
+     generated round-0 draft (`origin: seed`), a later round with what it delivered
+     (`origin: delivery`); `seedStatus: pending` means call again rather than scaffold
+   - The draft is a starting point, not an authority: where it and the brief disagree, the
+     brief wins. `regenerate_seed({ steer })` once if it is plainly not the game the brief
+     describes — then keep building rather than waiting on it
 2. Build; `report_progress`; screenshot when something draws via
    `screenshot_upload_url` then `curl --upload-file <png> "$url"`. There is **no**
    base64 `send_screenshot` — PNG bytes must never enter the model. Without shell
@@ -43,7 +46,7 @@ Source of truth: `SESSION_WORKFLOW` + `BEHAVIOURAL_CONTRACT` in
      diff (`---` / `+++` + `@@` hunks; bare `@@` ok). Do not re-emit whole `render.ts` /
      `model.ts` files through `stage_source_file`
    - **Modules:** soft budget ~350 lines / ~12 KiB per `game/*.ts`. Honour
-     `warnings.code=module_too_large` (on `get_sources` / `get_seed` / stage / patch)
+     `warnings.code=module_too_large` (on `get_sources` / stage / patch)
      by splitting cohesive pieces _before_ more feature work — same urgency as
      `call_end`. Recipes: render→`art`/`ui`/`hud`/`rooms`; model→`tables`/`layout`/
      `types`; runtime→systems
@@ -486,8 +489,9 @@ it up — the job sat in `submitted` (reads as "building" to the creator) indefi
 
 Round-0 seeding (`VertexGameSeeder`, `apps/api/src/game-seed.ts`) generates a first draft
 before the agent starts, on the first dispatch of any new round — self/BYOCA and platform
-alike — unless `SEED_DISPATCH` is off or generation itself fails (fails open, logs a
-`warn`). A self round's seed is stored straight on the job (`get_seed` reads it); a
+alike. There is no opt-out: the only way a round starts unseeded is generation failing,
+which still fails open and now writes a `seedOutcome` row with `generated: false`. A self
+round's seed is stored straight on the job (`get_sources` serves it); a
 `harness`/`outputs`-lane platform round instead commits it to a disposable
 `seed/job-<id>` branch and passes that as the dispatch `base_ref`.
 
@@ -530,19 +534,19 @@ Net effect before the fix: bouncing between a managed round and a BYOCA round �
 creator behaviour — meant BYOCA landed inside the ten-minute mute a managed round had just
 set, almost every time, and got `seedStatus: 'unavailable'`. This was reported as "the
 seeding mechanism seems very ineffective, no seeds happening" and traced to
-`submissions.ts`'s mute-setting condition and `seedBuild`'s mute check, not to `SEED_DISPATCH`
-or credentials being unset.
+`submissions.ts`'s mute-setting condition and `seedBuild`'s mute check, not to the
+then-existing `SEED_DISPATCH` flag (since removed) or credentials being unset.
 
 ### A seed is delivered two ways, and the round says which
 
 `AgentBackend.seedDelivery(promptLane?)` answers, before anything is generated, how a seed
 would reach that round's agent:
 
-| Answer      | Means                                                             | Who                                                                              |
-| ----------- | ----------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| `workspace` | Files are placed for the agent, so the prompt may say so          | Copilot on `harness` (staged branch); Gemini with a scratch env (inline sources) |
-| `channel`   | Files are stored on the job; the agent reads them with `get_seed` | every self/BYOCA round; managed `mcp` rounds whose vendor refuses inline files   |
-| `none`      | Nothing would arrive, so a generation is only a bill              | a non-`mcp` lane whose provider cannot take files                                |
+| Answer      | Means                                                                | Who                                                                              |
+| ----------- | -------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `workspace` | Files are placed for the agent, so the prompt may say so             | Copilot on `harness` (staged branch); Gemini with a scratch env (inline sources) |
+| `channel`   | Files are stored on the job; the agent reads them with `get_sources` | every self/BYOCA round; managed `mcp` rounds whose vendor refuses inline files   |
+| `none`      | Nothing would arrive, so a generation is only a bill                 | a non-`mcp` lane whose provider cannot take files                                |
 
 **`channel` is the entry that made managed rounds seedable at all.** The first pass at this
 only asked whether the provider accepts `workspaceFiles` (`acceptsSeed`), and skipped
@@ -552,7 +556,7 @@ conclusion. Anthropic _always_ rejects inline files, and it is an `mcp`-lane ven
 Anthropic built unseeded**. But an `mcp` round holds a round key and talks to this very
 channel; it can fetch a seed perfectly well. The missing piece was never the vendor — it
 was `submissions.ts` persisting the draft to the job only when `builder === 'self'`, so
-`get_seed` had nothing to return for a platform round.
+`get_sources` had no draft to return for a platform round.
 
 That condition is now `readsSeedFromJob` (i.e. `seedDelivery === 'channel'`), and the same
 predicate gates the `pending` / `unavailable` status writes and the stored-seed reuse. The
@@ -580,7 +584,7 @@ every file it wrote.
 
 `regenerate_seed({ steer? })` (`POST /api/agent/build/seed/regenerate`) queues one
 replacement. What it is _not_ is a poll: it returns `status: pending` immediately and the
-agent rechecks `get_seed`, the same shape the create_game race already uses — agents cannot
+agent rechecks `get_sources`, the same shape the create_game race already uses — agents cannot
 sleep, so a tool that waited would burn the connector's budget.
 
 - **`steer` is the point.** Same spec + same picker = same draft, so a blind retry mostly
@@ -852,7 +856,7 @@ Merged by `applySessionNudges` / submit handler. Act, then continue:
 | `gate_poll_backoff`     | Repeated one-shot gate check — stop checking; build/submit or honour `stop:true`                                                                                           |
 | `progress_stale`        | Call `report_progress`                                                                                                                                                     |
 | `inbox_pending`         | `read_inbox` → apply → `ack_inbox`                                                                                                                                         |
-| `seed_unread`           | Call `get_seed` before scaffolding from the kit                                                                                                                            |
+| `seed_unread`           | Call `get_sources` before scaffolding from the kit                                                                                                                         |
 | `transcript_unread`     | `dispatchAttempt` > 1 (earlier attempt exists) and `get_transcript` has not been called yet — call it before deciding what to build                                        |
 | `game_manifest_invalid` | Just-staged/patched `GAME.json` has a shape that crashes the gate before typecheck (e.g. missing `engine.modules`) — fix it now, in the same session, before submitting    |
 | `patch_incomplete`      | Some `patch_source_file` edits landed and some did not — retry only `failed[]` (path + index); do not resend the ones that applied                                         |

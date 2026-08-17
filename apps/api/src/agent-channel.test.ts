@@ -2616,6 +2616,7 @@ describe('agent build channel', () => {
 
       expect(response.statusCode).toBe(200);
       expect(response.json()).toEqual({
+        origin: 'delivery',
         delivery: { slug: 'comet-courier', version: 'v1' },
         files: [
           { path: 'SPEC.md', content: '# Comet Courier' },
@@ -2678,9 +2679,7 @@ describe('agent build channel', () => {
       });
     });
 
-    it('says plainly that a first build has nothing to restore', async () => {
-      // The ordinary state of every new game. An agent that runs restore by habit must
-      // not be sent looking for a problem that does not exist.
+    it('says plainly that a build with no draft and no delivery has nothing to continue', async () => {
       const store = new InMemoryStore();
       await seedSubmission(store);
       app = await createApp(store, { gamesStore: storeWithVersion({}) });
@@ -2688,7 +2687,49 @@ describe('agent build channel', () => {
       const response = await app.inject({ method: 'GET', url: '/api/agent/build/sources', headers: agentHeaders() });
 
       expect(response.statusCode).toBe(200);
-      expect(response.json()).toEqual({ delivery: null, files: [] });
+      expect(response.json()).toMatchObject({
+        delivery: null,
+        origin: null,
+        files: [],
+        seedStatus: 'unavailable',
+      });
+    });
+
+    it('serves the generated round-0 draft as the sources of a game that has never delivered', async () => {
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      await store.setSubmissionSlug(ISSUE, 'comet-courier');
+      await store.setSubmissionSeed(ISSUE, {
+        slug: 'comet-courier',
+        files: [{ path: 'game.ts', content: 'export const draft = true;' }],
+        references: ['apex-sprint'],
+        notes: 'physics is roughed in; tune the thrust curve',
+      });
+      app = await createApp(store, { gamesStore: storeWithVersion({}) });
+
+      const response = await app.inject({ method: 'GET', url: '/api/agent/build/sources', headers: agentHeaders() });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({
+        delivery: null,
+        origin: 'seed',
+        files: [{ path: 'game.ts', content: 'export const draft = true;' }],
+        references: ['apex-sprint'],
+        notes: 'physics is roughed in; tune the thrust curve',
+        seedStatus: 'available',
+      });
+    });
+
+    it('tells an agent to call again while the draft is still generating, rather than to scaffold', async () => {
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      await store.setSeedStatus(ISSUE, 'pending');
+      app = await createApp(store, { gamesStore: storeWithVersion({}) });
+
+      const response = await app.inject({ method: 'GET', url: '/api/agent/build/sources', headers: agentHeaders() });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({ origin: null, files: [], seedStatus: 'pending' });
     });
 
     it('restores the live publication for an improvement job that has not delivered yet', async () => {
@@ -2721,6 +2762,7 @@ describe('agent build channel', () => {
 
       expect(response.statusCode).toBe(200);
       expect(response.json()).toEqual({
+        origin: 'delivery',
         delivery: { slug: 'global-thermonuclear-strategy', version: 'v3' },
         files: [
           { path: 'SPEC.md', content: '# Global Thermonuclear Strategy' },
@@ -2769,7 +2811,7 @@ describe('agent build channel', () => {
       const response = await app.inject({ method: 'GET', url: '/api/agent/build/sources', headers: agentHeaders() });
 
       expect(response.statusCode).toBe(200);
-      expect(response.json()).toEqual({ delivery: null, files: [] });
+      expect(response.json()).toMatchObject({ delivery: null, origin: null, files: [] });
     });
 
     it('refuses a version with holes rather than restoring a game missing files', async () => {

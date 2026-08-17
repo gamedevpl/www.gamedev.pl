@@ -96,6 +96,7 @@ import { createDefaultContentChecker, type ContentChecker } from './moderation.j
 import { emitOperatorAlert, emitSubmissionNotification, notifyOnTransition, type EmitDeps } from './notify.js';
 import { detectOperatorAlerts, FEEDBACK_STALL_MS } from './operator-alerts.js';
 import { pageOwnerGames } from './owner-games.js';
+import { seedOutcomeFor } from './seed-status.js';
 import { isAdminSession } from './admin.js';
 import { peekQuota } from './quota-gate.js';
 import { mintGameSlug } from './slug.js';
@@ -964,11 +965,12 @@ export async function registerSubmissionRoutes(
     delivery: SeedDelivery;
     steer?: string;
     log: { error: (context: object, message: string) => void };
-  }): Promise<SeedDraft | undefined> {
-    if (!gameSeeder || !store) return undefined;
+  }): Promise<{ draft: SeedDraft } | { draft?: undefined; reason: string }> {
+    if (!gameSeeder) return { reason: 'not_configured' };
+    if (!store) return { reason: 'no_store' };
     try {
       const record = await store.getSubmission(input.issueNumber);
-      if (!record) return undefined;
+      if (!record) return { reason: 'job_not_found' };
 
       const draft = await gameSeeder.seed({
         slug: input.slug,
@@ -976,15 +978,14 @@ export async function registerSubmissionRoutes(
         spec: input.spec,
         ...(input.steer ? { steer: input.steer } : {}),
       });
-      if (!draft) return undefined;
+      if (!draft) return { reason: 'seeder_declined' };
 
       await recordSeedCost(input.issueNumber, draft, input.log);
-      return draft;
+      return { draft };
     } catch (error) {
-      // Fail-open is the whole contract: a seed is an optimization, and a build that
-      // cannot get one is a build that starts the way every build used to.
+      // Fail-open survives round 0 becoming mandatory; the caller records the failure.
       input.log.error({ err: error, issueNumber: input.issueNumber }, 'seeding failed, dispatching unseeded');
-      return undefined;
+      return { reason: error instanceof Error ? `threw: ${error.message}` : 'threw' };
     }
   }
 
@@ -1017,7 +1018,7 @@ export async function registerSubmissionRoutes(
     await store.setSeedStatus(input.issueNumber, 'pending');
     const slug = record.slug;
     void (async () => {
-      const draft = await seedBuild({
+      const { draft } = await seedBuild({
         issueNumber: input.issueNumber,
         slug,
         spec: record.spec ?? '',
@@ -1144,10 +1145,11 @@ export async function registerSubmissionRoutes(
       } else if (readsSeedFromJob) {
         await store.setSeedStatus(input.issueNumber, 'unavailable');
       }
-      const draft =
+      const seedAttempt =
         storedSeed || input.feedback || !input.slug
           ? undefined
           : await seedBuild({ ...input, slug: input.slug, delivery: seedDelivery });
+      const draft = seedAttempt?.draft;
       const seed: SeedFiles | undefined = storedSeed
         ? storedSeed
         : draft
@@ -1199,19 +1201,17 @@ export async function registerSubmissionRoutes(
         ...(input.feedback ? { feedback: input.feedback } : {}),
         ...(seed ? { seed } : {}),
       });
-      // Both halves of the seed's story are known here — what generation produced, and
-      // whether it was placed as a workspace hand-off — so the record is written once,
-      // from the one place that has both.
-      if (draft) {
+      // Written once, here: only this scope knows both generation and placement.
+      // After dispatch, so no bookkeeping delays the agent starting.
+      // Failures too: recording only successes is what hid the 2026-08 outage.
+      const seedOutcome = seedOutcomeFor({
+        attempt: seedAttempt,
+        placed: readsSeedFromJob ? Boolean(seed) : true,
+        at: new Date(now()).toISOString(),
+      });
+      if (seedOutcome) {
         try {
-          await store.recordSeedOutcome(input.issueNumber, {
-            at: new Date(now()).toISOString(),
-            references: draft.references,
-            ms: draft.elapsedMs,
-            compiles: draft.compiles,
-            repaired: draft.repaired,
-            staged: seedDelivery === 'workspace',
-          });
+          await store.recordSeedOutcome(input.issueNumber, seedOutcome);
         } catch (error) {
           input.log.error({ err: error, issueNumber: input.issueNumber }, 'could not record the seed outcome');
         }

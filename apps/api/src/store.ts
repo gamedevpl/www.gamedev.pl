@@ -427,16 +427,20 @@ export interface SubmissionRecord {
 }
 
 /**
- * One seeded build's outcome.
+ * One new game's round-0 outcome, written whatever happened.
  *
  * `staged` is the one that matters operationally: a draft that was generated but could
  * not be placed is money spent for nothing, and it is invisible from the creator's side
- * because seeding fails open. `compiles` is the quality signal — it decides whether the
- * creator ever saw a round-0 preview — and `repaired` says whether reaching that verdict
- * took a second model call.
+ * because seeding still fails open. `compiles` is the quality signal — it decides
+ * whether the creator ever saw a round-0 preview — and `repaired` says whether reaching
+ * that verdict took a second model call.
  */
 export interface JobSeedOutcome {
   at: string;
+  // Whether a draft came back at all; false carries only `reason`.
+  generated: boolean;
+  // Why generation produced nothing. Free text from the seeder.
+  reason?: string;
   /** Published games put in front of the model, in pick order. */
   references: string[];
   /** Wall-clock for the whole seed, including any repair round. */
@@ -445,7 +449,7 @@ export interface JobSeedOutcome {
   compiles: boolean;
   /** Whether a repair round ran before that verdict. */
   repaired: boolean;
-  /** Whether a backend could place the draft. False is a fault, not a quality signal. */
+  // Whether placement happened — never merely which delivery mode was chosen.
   staged: boolean;
 }
 

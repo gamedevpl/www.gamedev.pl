@@ -165,7 +165,7 @@ describe('agent build reads (BY-04)', () => {
       locales: ['pl', 'en'],
       seedAvailable: true,
       seedStatus: 'available',
-      seedNotice: expect.stringMatching(/get_seed/i),
+      seedNotice: expect.stringMatching(/get_sources/i),
     });
     expect(res.json().pendingMessages).toEqual([expect.objectContaining({ text: 'Make it harder' })]);
   });
@@ -180,7 +180,7 @@ describe('agent build reads (BY-04)', () => {
     expect(empty.json()).toEqual({
       available: false,
       status: 'unavailable',
-      notice: expect.stringMatching(/no seed draft is available/i),
+      notice: expect.stringMatching(/scaffold from the kit/i),
       files: [],
       references: [],
       notes: null,
@@ -192,7 +192,7 @@ describe('agent build reads (BY-04)', () => {
     expect(pending.json()).toMatchObject({
       available: false,
       status: 'pending',
-      notice: expect.stringMatching(/get_seed/i),
+      notice: expect.stringMatching(/get_sources/i),
     });
 
     await store.setSubmissionSeed(ISSUE, {
@@ -210,7 +210,7 @@ describe('agent build reads (BY-04)', () => {
     expect(present.json()).toMatchObject({
       available: true,
       status: 'available',
-      notice: expect.stringMatching(/get_seed/i),
+      notice: expect.stringMatching(/get_sources/i),
       files: [
         { path: 'SPEC.md', content: '# Spec' },
         { path: 'game.ts', content: 'export {}' },
