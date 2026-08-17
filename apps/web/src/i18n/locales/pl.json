@@ -347,6 +347,9 @@
       "edit": "Edytuj",
       "code": "Kod"
     },
+    "strip": {
+      "moreActions": "Więcej"
+    },
     "code": {
       "back": "Wątek",
       "filePicker": "Wybierz plik",

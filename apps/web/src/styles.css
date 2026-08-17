@@ -6150,6 +6150,93 @@ a.user-name--profile:focus-visible {
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
 }
 
+/* The ⋯ overflow trigger on phones — same anchored-popover shape as Share. */
+.studio-head-menu {
+  position: relative;
+}
+
+.studio-head-menu-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: min(280px, calc(100vw - 24px));
+  padding: 6px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: var(--panel-bg, #0c1218);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+.studio-head-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.86rem;
+  text-align: left;
+  cursor: pointer;
+  position: relative;
+}
+
+.studio-head-menu-item:hover,
+.studio-head-menu-item:focus-visible {
+  background: rgba(0, 228, 172, 0.1);
+}
+
+.studio-head-menu-item.is-active {
+  color: var(--turquoise);
+}
+
+/* Share drops into the ⋯ menu as-is (CreatorStudioView owns its state) — restyled
+   here to read as a menu row instead of the icon-only pill it is everywhere else. */
+.studio-head-menu-popover .studio-head-share {
+  display: flex;
+}
+
+.studio-head-menu-popover .studio-head-share > .studio-head-action {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  justify-content: flex-start;
+}
+
+/* !important: the phone-strip rule that visually-hides non-primary labels
+   (specificity 0,6,0, `:not(.is-primary) .studio-head-action-label`) outranks
+   a same-shape override here — this un-hides Share's label inside the menu. */
+.studio-head-menu-popover .studio-head-share > .studio-head-action .studio-head-action-label {
+  position: static !important;
+  width: auto !important;
+  height: auto !important;
+  margin: 0 !important;
+  overflow: visible !important;
+  clip: auto !important;
+  white-space: normal !important;
+  font-size: 0.86rem;
+}
+
+/* Anchoring to its own trigger's box would push Share's dialog off past the
+   menu's right edge, so it drops in-flow under the trigger instead. */
+.studio-head-menu-popover .studio-head-share-popover {
+  position: static;
+  width: auto;
+  margin-top: 6px;
+  box-shadow: none;
+}
+
 .studio-head-action--claim {
   border-color: rgba(0, 228, 172, 0.45);
   color: #c8f5da;
@@ -7141,23 +7228,34 @@ a.user-name--profile:focus-visible {
     display: none;
   }
 
+  /* Flex, not the old 4-col grid: the ⋯ overflow menu folds Edit/Claim/Theater/
+     Share/Details/Chat away, so this row only ever holds Code (optional), Play,
+     and the menu trigger — a fixed column count stopped fitting the item count. */
   .app:has(.studio-layout.is-game-open) .studio-strip-actions {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    display: flex;
     width: 100%;
     flex: 1 0 100%;
     gap: 8px;
   }
 
   .app:has(.studio-layout.is-game-open) .studio-strip-actions > *,
-  .app:has(.studio-layout.is-game-open) .studio-strip-actions .studio-head-action {
+  .app:has(.studio-layout.is-game-open) .studio-strip-actions .studio-head-action,
+  .app:has(.studio-layout.is-game-open) .studio-head-menu {
     min-width: 0;
-    width: 100%;
+    flex: 1;
     justify-content: center;
   }
 
   .app:has(.studio-layout.is-game-open) .studio-strip-actions .studio-head-action.is-primary {
-    grid-column: span 2;
+    flex: 2;
+  }
+
+  .app:has(.studio-layout.is-game-open) .studio-head-menu {
+    display: flex;
+  }
+
+  .app:has(.studio-layout.is-game-open) .studio-head-menu .studio-head-action {
+    width: 100%;
   }
 
   /* 24px tall icon pills read as cramped and undershoot the ~44px touch target
@@ -12166,6 +12264,11 @@ button.builder-mode-selector:disabled {
   border: 1px solid var(--panel-border);
   background: rgba(10, 14, 20, 0.72);
   backdrop-filter: blur(10px);
+  /* backdrop-filter makes this its own stacking context; without a z-index of
+     its own, that context sank below the stage's z-index:30 crash card and
+     swallowed any popover anchored here (Share, now ⋯). */
+  position: relative;
+  z-index: 35;
 }
 
 .studio-strip-title-block {

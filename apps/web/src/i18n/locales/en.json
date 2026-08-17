@@ -345,6 +345,9 @@
       "edit": "Edit",
       "code": "Code"
     },
+    "strip": {
+      "moreActions": "More"
+    },
     "code": {
       "back": "Thread",
       "filePicker": "Choose file",

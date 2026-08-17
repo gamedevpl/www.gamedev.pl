@@ -951,6 +951,7 @@ export function CreatorStudioView({
                         onClaim={() => setClaimOpen(true)}
                         shareSlot={shareSlot}
                         onOpenTheater={() => setTheaterOpen(true)}
+                        isCompact={shelfIsDrawer}
                       />
 
                       {theaterOpen ? (
@@ -998,7 +999,8 @@ export function CreatorStudioView({
                           onImproved={(newToken) => setHandoffToken(newToken)}
                           onDisplayedOriginChange={setDisplayedOrigin}
                           editorPushRef={editorPushRef}
-                           onEditorControllerChange={setEditorController}                        />
+                          onEditorControllerChange={setEditorController}
+                        />
 
                         {stageStatus.kind === 'empty' &&
                         !stageSource.html &&
