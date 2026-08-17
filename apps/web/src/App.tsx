@@ -1265,6 +1265,7 @@ export function App() {
                 onPlayTogether={(game, via) => void handlePlayTogether(game, via)}
                 onRetryCatalog={handleRetryCatalog}
                 onCreateCustom={handleCreateNav}
+                partyError={partyError}
               />
             ) : (
               <div id="hero-prompt">
@@ -1309,7 +1310,7 @@ export function App() {
 
             {stageOverlay}
 
-            {partyError && <p className="error party-error">{partyError}</p>}
+            {partyError && route.view !== 'party' && <p className="error party-error">{partyError}</p>}
 
             {/* The gallery is home content; game pages have their own compact surface. */}
             {route.view === 'home' && (

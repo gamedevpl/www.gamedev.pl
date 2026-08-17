@@ -44,6 +44,7 @@ type RenderOverrides = {
   catalogError?: string | null;
   catalogEntries?: CatalogEntry[];
   onRetryCatalog?: () => void;
+  partyError?: string | null;
 };
 
 function render(overrides: RenderOverrides = {}) {
@@ -59,6 +60,7 @@ function render(overrides: RenderOverrides = {}) {
         onPlayTogether: vi.fn(),
         onRetryCatalog,
         onCreateCustom: vi.fn(),
+        partyError: overrides.partyError ?? null,
       }),
     );
   });
@@ -120,5 +122,22 @@ describe('PartyPage', () => {
       retry?.click();
     });
     expect(onRetryCatalog).toHaveBeenCalled();
+  });
+
+  it('shows a failed Play Together attempt next to the rail, not off-screen below it', () => {
+    render({
+      catalogStatus: 'ready',
+      catalogEntries: [partyGame],
+      partyError: 'Could not start the lobby.',
+    });
+
+    const errorEl = container.querySelector('.party-error');
+    expect(errorEl).not.toBeNull();
+    expect(errorEl?.textContent).toBe('Could not start the lobby.');
+
+    // Reads above the rail, not buried below the custom-game pitch.
+    const rail = container.querySelector('.catalog-rail-section');
+    expect(rail).not.toBeNull();
+    expect(errorEl!.compareDocumentPosition(rail!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });

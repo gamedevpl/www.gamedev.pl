@@ -15,6 +15,8 @@ type PartyPageProps = {
   onPlayTogether: (game: CatalogEntry, via?: PlayVia) => void;
   onRetryCatalog: () => void;
   onCreateCustom: () => void;
+  // Set when Play Together on this rail failed to open a lobby.
+  partyError: string | null;
 };
 
 const STEP_KEYS = ['step1', 'step2', 'step3'];
@@ -28,6 +30,7 @@ export function PartyPage({
   onPlayTogether,
   onRetryCatalog,
   onCreateCustom,
+  partyError,
 }: PartyPageProps) {
   const { t } = useTranslation();
 
@@ -61,6 +64,8 @@ export function PartyPage({
           ))}
         </ol>
       </section>
+
+      {partyError ? <p className="error party-error">{partyError}</p> : null}
 
       {catalogStatus === 'ready' && catalogError ? (
         <div className="catalog-refresh-error" role="status">
