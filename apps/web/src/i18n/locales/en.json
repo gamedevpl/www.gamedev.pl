@@ -965,6 +965,7 @@
       "checking_staged": "Checking staged sources…",
       "staging_sources": "Staging game sources…",
       "checking_inbox": "Checking creator notes…",
+      "reading_conversation": "Reading the conversation…",
       "waiting_checks": "Waiting on automated checks…",
       "reviewing_captures": "Reviewing gate captures…"
     },

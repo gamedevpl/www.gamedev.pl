@@ -459,6 +459,7 @@ describe('POST /api/mcp (BY-05)', () => {
         'get_gate_verdict',
         'read_inbox',
         'ack_inbox',
+        'get_transcript',
       ]),
     );
     // Kit browse tools are advertised now; example/proposal ones stay hidden.
@@ -553,6 +554,44 @@ describe('POST /api/mcp (BY-05)', () => {
     );
     // Example/proposal tooling stays off the focused build surface.
     expect(names).not.toEqual(expect.arrayContaining(['list_examples', 'submit_proposal']));
+  });
+
+  it('serves the whole creator conversation through get_transcript, acked or not', async () => {
+    // The kickoff prompt no longer inlines the creator's last message; this tool is
+    // where a terse "build my game plz" gets its missing conversation back.
+    const store = new InMemoryStore();
+    await seedJob(store);
+    await store.appendCreatorMessage(ISSUE, 'Build a Creatures-like life sim where you hatch and teach Norns.', {
+      delivered: true,
+    });
+    await store.appendCreatorMessage(ISSUE, 'build my game plz');
+    await store.appendBuildEvent(ISSUE, { kind: 'step', text: 'Staged the first playable draft.' });
+    app = await createApp(store);
+    const sessionId = await initialize(app);
+    const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    const transcript = await callTool(app, 'get_transcript', { sessionKey }, { 'mcp-session-id': sessionId });
+    expect(transcript.isError).toBe(false);
+    const structured = transcript.structured as {
+      entries: Array<{ kind: string; text: string; round: string }>;
+      omitted: number;
+      pendingMessages: unknown[];
+      stop: boolean;
+    };
+    // The already-acked long request still appears: this is the record, not the unacked tail.
+    expect(structured.entries.map((entry) => entry.text)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('Norns'),
+        'build my game plz',
+        'Staged the first playable draft.',
+      ]),
+    );
+    expect(structured.entries.every((entry) => entry.round === 'current')).toBe(true);
+    expect(structured.omitted).toBe(0);
+    // Reading the transcript acks nothing.
+    expect(structured.pendingMessages).toHaveLength(1);
+    expect(structured.stop).toBe(false);
   });
 
   it('keeps the Copilot MCP connector inert without a round key', async () => {

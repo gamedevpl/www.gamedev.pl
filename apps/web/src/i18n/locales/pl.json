@@ -973,6 +973,7 @@
       "checking_staged": "Sprawdzanie przygotowanych źródeł…",
       "staging_sources": "Przygotowywanie źródeł gry…",
       "checking_inbox": "Sprawdzanie notatek twórcy…",
+      "reading_conversation": "Czytanie rozmowy…",
       "waiting_checks": "Czekanie na automatyczne testy…",
       "reviewing_captures": "Przeglądanie zrzutów z bramki…"
     },

@@ -379,6 +379,42 @@ describe('agent build channel', () => {
     expect(acked.json().pending).toHaveLength(0);
   });
 
+  it('serves the whole conversation on the transcript route without acking anything', async () => {
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    // Already delivered in an earlier session — gone from the inbox, kept in the record.
+    await store.appendCreatorMessage(ISSUE, 'A long spec about hatching and teaching creatures.', {
+      delivered: true,
+    });
+    await store.appendCreatorMessage(ISSUE, 'build my game plz');
+    await store.appendCreatorMessage(ISSUE, 'Relayed on your behalf.', { origin: 'studio' });
+    await store.appendBuildEvent(ISSUE, { kind: 'step', text: 'Drawing the nursery.' });
+    app = await createApp(store);
+
+    const res = await app.inject({ method: 'GET', url: '/api/agent/build/transcript', headers: agentHeaders() });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as {
+      entries: Array<{ kind: string; text: string; round: string }>;
+      omitted: number;
+      pending: Array<{ text: string }>;
+      control: { stop: boolean };
+    };
+    expect(body.entries.map((entry) => [entry.kind, entry.text])).toEqual(
+      expect.arrayContaining([
+        ['creator_request', 'A long spec about hatching and teaching creatures.'],
+        ['creator_request', 'build my game plz'],
+        ['agent_note', 'Relayed on your behalf.'],
+        ['build_progress', 'Drawing the nursery.'],
+      ]),
+    );
+    expect(body.omitted).toBe(0);
+    expect(body.control).toMatchObject({ stop: false });
+
+    // Reading the transcript is not acknowledging: the pending message survives.
+    const inbox = await app.inject({ method: 'GET', url: '/api/agent/build/inbox', headers: agentHeaders() });
+    expect(inbox.json().pending).toHaveLength(1);
+  });
+
   it('queues creator feedback for the agent when it is posted to GitHub', async () => {
     const store = new InMemoryStore();
     await seedSubmission(store);

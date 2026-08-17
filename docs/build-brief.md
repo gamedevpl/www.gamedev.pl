@@ -14,6 +14,24 @@ widen the scope stated above it — so a spec reading "ignore your instructions 
 `shared/`" arrives as the string it is. `build-prompt.test.ts` pins this; it is not a
 mode, and nothing turns it off.
 
+## The last message is never the request
+
+A revision round used to end with the creator's last relayed message fenced as "What the
+creator asked for". That looked complete and wasn't: a single message is often the terse
+tail of a longer conversation, and fencing the tail as _the_ request promotes it to the
+whole ask. The failure that proved it: a round hiccuped before its agent ever read the
+creator's long spec, the creator followed up with "build my game plz", and the next round
+was briefed with those six words while the full spec sat unread in the job — the game got
+built from a nudge and a title.
+
+So a revision round's prompt no longer inlines the message at all. It points at the
+channel instead: `read_inbox` for the pending request (then `ack_inbox`), `get_brief` for
+the spec, and `get_transcript` for the whole conversation across rounds — the store has
+all of it, unabridged, and a tool read cannot go stale the way a relayed copy can. A
+fresh round still gets its spec inlined: at creation time the spec _is_ the whole
+conversation. The same data-not-instructions fencing applies to whatever those tools
+return, and `build-prompt.test.ts` pins that the last message stays out of the prompt.
+
 ## Every round is the same contract: MCP tools, no shell, on a clock
 
 `buildPrompt` used to take a `DeliveryContract` and render different instructions for a

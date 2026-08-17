@@ -85,6 +85,7 @@ build round; the authoritative list is whatever `tools/list` returns, and
 | `show_media`             | Show the creator the gate's screenshots | read        |
 | `read_inbox`             | Read creator messages                   | read        |
 | `ack_inbox`              | Acknowledge creator messages            | destructive |
+| `get_transcript`         | Read the creator conversation           | read        |
 
 The third column is the tool's own `annotations`, not a summary written here: `read` is
 `readOnlyHint`, `destructive` is `destructiveHint`. Six tools are destructive, and the

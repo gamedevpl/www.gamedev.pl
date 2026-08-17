@@ -14,13 +14,6 @@
 
 import type { AgentObservation } from './job-state.js';
 
-export type BuildHistoryEntry = {
-  kind: 'creator_request' | 'agent_note' | 'build_progress';
-  text: string;
-  createdAt: string;
-  round: 'current' | 'earlier';
-};
-
 /** Everything a backend needs to start a build. Deliberately not a GitHub issue. */
 export interface BuildBrief {
   /** Our job identity, for correlating an agent's reports back to the job. */
@@ -38,9 +31,17 @@ export interface BuildBrief {
   mcpOpenerToken?: string;
   /** Where the agent reports progress and delivers its work. */
   apiBaseUrl: string;
-  /** Set for a revision round: what the creator asked to change. Untrusted text. */
+  /**
+   * Set for a revision round: what the creator asked to change. Untrusted text.
+   *
+   * A *selector*, not the request itself: `buildPrompt` branches on it to frame the
+   * round as continuing rather than starting, and points the agent at `read_inbox` /
+   * `get_transcript` for the creator's actual words. It is never inlined into the
+   * prompt — a relayed last message loses the conversation around it, and a terse
+   * follow-up ("build my game plz") fenced as *the* request once shadowed a full spec
+   * that was still sitting in the brief.
+   */
   feedback?: string;
-  history?: BuildHistoryEntry[];
   /**
    * Set when the previous session ended without delivering.
    *

@@ -26,6 +26,7 @@ import {
   type UploadKind,
   type UploadTokenClaims,
 } from './agent-upload-token.js';
+import { loadBuildTranscript } from './build-transcript.js';
 import { canonicalAppBaseUrl } from './canonical-app-url.js';
 import { deriveGateStatusString, readGateVerdict } from './gate-verdict.js';
 import { DEFAULT_SIGNED_URL_TTL_SECONDS, type GcsObjectStore } from './gcs-sign.js';
@@ -2157,6 +2158,27 @@ export async function registerAgentChannelRoutes(
       }
 
       return reply.send(await channelState(issueNumber, record));
+    },
+  );
+
+  /**
+   * The whole creator conversation, not just what is pending. The inbox serves the
+   * unacked tail; this serves the record — creator requests, agent notes and build
+   * events across this round and the game's earlier rounds, oldest first — so a terse
+   * latest message ("continue", "build my game plz") can be read against the
+   * conversation it is the tail of instead of standing in for it. Read-only: it never
+   * marks anything delivered; acking stays explicit via the inbox.
+   */
+  app.get(
+    '/api/agent/build/transcript',
+    { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      const resolved = await resolveBuild(request, reply);
+      if (!resolved) return reply;
+      const { issueNumber, record } = resolved;
+
+      const transcript = await loadBuildTranscript(store!, record);
+      return reply.send({ ...transcript, ...(await channelState(issueNumber, record)) });
     },
   );
 

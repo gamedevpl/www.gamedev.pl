@@ -155,6 +155,7 @@ export const MCP_VISIBLE_TOOLS = new Set([
   'get_round_media',
   'read_inbox',
   'ack_inbox',
+  'get_transcript',
 ]);
 
 // Callable for REST clients, never advertised, never named to a model.
@@ -655,7 +656,7 @@ const SESSION_WORKFLOW: readonly string[] = [
   'Hold the sessionKey start gave you for the whole round and pass it on every call. Do not re-run start to refresh it — it is valid until expiresAt. Re-run start only if a call is refused as unauthenticated.',
   "show_round — once, right after start. In a client that renders MCP Apps views this puts a live status card in the creator's chat that follows the build and the gate on its own, so they can watch without you polling. Calling it again renders a second card.",
   'show_media — whenever the creator asks to see the game. get_gate_media attaches frames for YOU to look at; those attachments do not reach the creator, so describing them is all you can do with it. show_media is what actually puts the pictures in front of them.',
-  'get_brief — read the brief; if seedAvailable or seedStatus=available, call get_seed and revise that seed as the opening move, treating the brief as the authority wherever the draft disagrees. If seedStatus=pending, browse the kit lightly then recheck get_seed before scaffolding. If seedStatus=unavailable, the response says no seed exists for this round; scaffold from the kit, or call regenerate_seed once (with steer) if a draft would genuinely help.',
+  'get_brief — read the brief; if seedAvailable or seedStatus=available, call get_seed and revise that seed as the opening move, treating the brief as the authority wherever the draft disagrees. If seedStatus=pending, browse the kit lightly then recheck get_seed before scaffolding. If seedStatus=unavailable, the response says no seed exists for this round; scaffold from the kit, or call regenerate_seed once (with steer) if a draft would genuinely help. When the brief or the latest creator message is terse ("continue", "build my game") or refers to anything you have not seen, call get_transcript once — the whole creator conversation and earlier rounds — before deciding what to build; the latest message is the tail of a conversation, not the whole of it.',
   // An improvement round has no seed (seeds are a new-game facility) and its brief is
   // the change request alone, so nothing above this told the agent a game already
   // existed. Following the loop literally, it scaffolded a fresh game over a published
@@ -5172,6 +5173,67 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           pendingMessages: pendingMessagesFromChannel(body),
           ...channelControlFields(body),
           ...(body.gate ? { gate: body.gate } : {}),
+        });
+      },
+    },
+
+    get_transcript: {
+      annotations: { title: 'Read the creator conversation transcript', ...READS },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          entries: {
+            type: 'array',
+            description: 'The conversation, oldest first, across this round and earlier rounds of the same game.',
+            items: {
+              type: 'object',
+              properties: {
+                kind: { type: 'string', enum: ['creator_request', 'agent_note', 'build_progress'] },
+                text: { type: 'string' },
+                createdAt: { type: 'string' },
+                round: { type: 'string', enum: ['current', 'earlier'] },
+              },
+              required: ['kind', 'text', 'createdAt', 'round'],
+            },
+          },
+          omitted: {
+            type: 'number',
+            description: 'Entries dropped to fit the size budget — progress noise goes before creator words.',
+          },
+          ...REPLY_CONTROL,
+        },
+        required: ['entries', 'omitted', 'pendingMessages', 'stop'],
+      },
+      description:
+        'Read the whole creator conversation and build history for this game, oldest first — creator requests, ' +
+        'agent notes, and progress events across this round and earlier rounds. Call it when the brief or the ' +
+        'latest inbox message is terse or refers to anything you have not seen: the latest message is the tail ' +
+        'of a conversation, not the whole of it. Read-only; it acks nothing (read_inbox/ack_inbox own that). ' +
+        CREATOR_TEXT_SAFETY,
+      inputSchema: {
+        type: 'object',
+        properties: { sessionKey: SESSION_KEY_PROP },
+        required: [],
+      },
+      handler: async (args, ctx) => {
+        const auth = await resolveAuth(ctx, args);
+        if (!('channelToken' in auth)) return auth;
+        const res = await injectChannel(ctx.request, 'GET', '/api/agent/build/transcript', auth.channelToken);
+        const body = res.json() as {
+          error?: string;
+          entries?: Array<{ kind: string; text: string; createdAt: string; round: string }>;
+          omitted?: number;
+          pending?: Array<{ id: string; text: string; createdAt: string }>;
+          control?: { stop?: boolean; reason?: string };
+        };
+        if (res.statusCode !== 200) {
+          return toolErr(body.error ?? `transcript failed (${res.statusCode})`);
+        }
+        return toolOk({
+          entries: body.entries ?? [],
+          omitted: body.omitted ?? 0,
+          pendingMessages: pendingMessagesFromChannel(body),
+          ...channelControlFields(body),
         });
       },
     },

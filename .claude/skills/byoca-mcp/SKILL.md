@@ -78,7 +78,39 @@ are not advertised to models; kit browse/read tools (`list_kit_files`,
 `search_kit_files`, `read_kit_file`, `read_kit_files`, `read_kit_file_fragment`) now
 are, alongside `get_kit_api` and, since 2026-08-11, `knowledge_query` for everything
 `get_kit_api` does not cover, plus `regenerate_seed` for a round-0 draft that is missing
-or off-brief.
+or off-brief, and, since 2026-08-17, `get_transcript` — the whole creator conversation
+(see below).
+
+### `get_transcript` — the conversation, not just its tail
+
+The managed kickoff prompt used to end with the creator's _last_ relayed message fenced
+as "What the creator asked for" (`buildPrompt`'s `finish()` injected
+`brief.feedback ?? brief.spec`, and a resume round sets `spec = feedback`, so the last
+message shadowed everything). Observed failure (job 1000074, 2026-08-17): round 1
+hiccuped before any agent read the creator's long Creatures-style spec, the creator
+followed up with "build my game plz", and round 2 was briefed with those six words —
+the full spec sat unread on the job the whole time (`get_brief` still served it).
+
+The fix has two halves, and both matter when editing either:
+
+- **The prompt no longer inlines the last message** (or the injected
+  "Conversation and previous changes" history block — `BuildBrief.history` is gone).
+  A revision round's prompt points at `read_inbox` → `get_brief` → `get_transcript`
+  instead; only a fresh round still inlines its spec, because at creation the spec _is_
+  the conversation. `build-prompt.test.ts` pins that the feedback text stays out.
+- **`get_transcript`** (`GET /api/agent/build/transcript`, assembled by
+  `apps/api/src/build-transcript.ts`) serves creator requests, agent notes and build
+  events across the current job and up to five earlier sibling rounds, oldest first,
+  playtest-instrumentation stripped, presence leftovers hidden. Read-only: it never
+  acks — `read_inbox`/`ack_inbox` keep that. Budgeted at 40 KB per the get_kit_api
+  single-tool-result lesson, dropping `build_progress` noise before `agent_note`
+  before `creator_request` and reporting the count as `omitted` — never a silent cut.
+
+The workflow's `get_brief` step and the managed system prompt
+(`infra/managed-agent.json`) both tell agents: when the latest message is terse
+("continue", "build my game") or references anything unseen, call `get_transcript` once
+before deciding what to build — the latest message is the tail of a conversation, not
+the whole of it.
 
 Adding an advertised tool means adding its row to `listings/mcp/README.md` in the same
 change: `mcp-server.test.ts` asserts the README documents every live tool with the exact
@@ -788,6 +820,7 @@ queued.
 | Engine modules catalog             | games repo `tools/lib/pack-kit.ts` (`digestEngineModules`) — generated from `shared/modules/*.ts` header comments, not hand-maintained                                                                 |
 | Upload tokens                      | `apps/api/src/agent-upload-token.ts` + `POST …/shot/upload-url` + `PUT …/shot/upload` + `PUT …/sources/stage/upload`                                                                                   |
 | Presence pulses                    | `apps/api/src/mcp-presence.ts` (`start` → `joining_round` in the MCP dispatcher)                                                                                                                       |
+| Conversation transcript            | `apps/api/src/build-transcript.ts` (`loadBuildTranscript`) + `GET /api/agent/build/transcript` in `agent-channel.ts` + `get_transcript` in `mcp-server.ts`                                             |
 | Gate milestones                    | `apps/api/src/gate-progress.ts` + `GamesStore.putGateProgress` (GCS; Studio/MCP poll while checks run)                                                                                                 |
 | Gate verdict (shared)              | `apps/api/src/gate-verdict.ts` — `readGateVerdict` / `deriveGateStatusString`, used by the channel's `/api/agent/build/gate` route and by `start`'s reconnect visibility                               |
 | Preview-gate reconciliation        | `apps/api/src/submissions.ts` (`reconcileGateVerdict`) — red `previewGate` → `needs_changes`/`gate_red`; green preview never promotes                                                                  |

@@ -1152,13 +1152,11 @@ describe('submission routes', () => {
     expect(response.statusCode).toBe(200);
     expect(briefs.at(-1)?.undelivered).toBeUndefined();
     expect(briefs.at(-1)?.feedback).toContain('Make the parcels bigger');
-    expect(briefs.at(-1)?.history).toContainEqual(
-      expect.objectContaining({
-        kind: 'creator_request',
-        text: 'The first draft had the right controls; keep them in the revision.',
-        round: 'current',
-      }),
-    );
+    // Conversation context is no longer injected into the brief — the round reads it
+    // back through GET /api/agent/build/transcript (MCP get_transcript) instead, so a
+    // long creator request can never be lost to a prompt that only relays the last
+    // message. The route is covered in agent-channel.test.ts / build-transcript.test.ts.
+    expect(briefs.at(-1)).not.toHaveProperty('history');
     // Gate-green closed the round; feedback must reopen the job, not leave it stuck
     // in ready_for_review while a session quietly starts underneath. Land on
     // `dispatched` — Copilot boots before GitHub reports `in_progress`.
