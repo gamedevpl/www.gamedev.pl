@@ -213,12 +213,18 @@ resource — there is no environment or agent id to preconfigure, which is why
 Anthropic's own no-seed answer.
 
 The MCP endpoint is declared as a `type: 'mcp'` tool with `server_url` and the round's
-bearer on that tool's `Authorization` header, the same per-round pattern as Gemini — no
-static connector secret is copied into the environment. `require_approval: 'never'` is
-set on every MCP tool and is never omitted: the API's default requires a human to approve
-each tool call, which a background, unattended round has nobody to grant. Without it a
-round would sit stuck on the first `stage_source_file` call until the wall clock killed
-it.
+bearer on that tool's own `authorization` field — the same per-round pattern as Gemini,
+no static connector secret copied into the environment. **This field is easy to get
+wrong: `headers: { Authorization: ... }` is also a real, accepted field on this tool
+type, but it is silently dropped on the actual tool-call request** — confirmed by
+fetching two live rounds' raw stored Response objects and finding `start()` reaching
+the round-key-scoped MCP server with no Authorization header despite the field being
+present in the request. `authorization` (a bare token string, no `Bearer ` prefix, per
+OpenAI's own documented example) is the field that is actually forwarded on every call,
+not just on `tools/list`. `require_approval: 'never'` is set on every MCP tool and is
+never omitted: the API's default requires a human to approve each tool call, which a
+background, unattended round has nobody to grant. Without it a round would sit stuck on
+the first `stage_source_file` call until the wall clock killed it.
 
 `effort` maps straight to `reasoning.effort` — unlike Gemini, which throws on any effort
 override, and unlike Anthropic, which configures effort on the Agent resource instead of
