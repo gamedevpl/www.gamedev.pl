@@ -79,6 +79,8 @@ type CatalogRailProps = {
   headingAside?: string;
   // Only shelves pass this — curated rails have nowhere to send it.
   onSeeAll?: () => void;
+  // Scroll target for the header nav; only the party rail needs it.
+  id?: string;
 };
 
 // Hides itself when empty — no empty-rail state to design.
@@ -90,11 +92,12 @@ export function CatalogRail({
   onPlayTogether,
   headingAside,
   onSeeAll,
+  id,
 }: CatalogRailProps) {
   const { t } = useTranslation();
   if (entries.length === 0) return null;
   return (
-    <section className="catalog-rail-section">
+    <section id={id} className="catalog-rail-section">
       <div className="catalog-rail-head">
         <h3 className="catalog-rail-heading">{heading}</h3>
         {headingAside ? <span className="catalog-rail-aside">{headingAside}</span> : null}

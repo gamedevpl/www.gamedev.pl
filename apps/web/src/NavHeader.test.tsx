@@ -46,6 +46,8 @@ describe('NavHeader Up chevron', () => {
             onStudio: vi.fn(),
             onAdmin: vi.fn(),
             onReview: vi.fn(),
+            onPlay: vi.fn(),
+            onParty: vi.fn(),
             upTarget: { path: '/studio', ariaLabel: 'Back to Studio' },
             onUp,
           }),
@@ -85,6 +87,8 @@ describe('NavHeader Up chevron', () => {
             onStudio: vi.fn(),
             onAdmin: vi.fn(),
             onReview: vi.fn(),
+            onPlay: vi.fn(),
+            onParty: vi.fn(),
             upTarget: null,
           }),
         ),
@@ -141,6 +145,8 @@ describe('NavHeader menu', () => {
             onStudio: vi.fn(),
             onAdmin: vi.fn(),
             onReview: vi.fn(),
+            onPlay: vi.fn(),
+            onParty: vi.fn(),
             upTarget: null,
           }),
         ),
@@ -163,6 +169,9 @@ describe('NavHeader menu', () => {
 
     expect(labels.some((text) => /Create Game/i.test(text))).toBe(true);
     expect(labels.some((text) => /Studio/i.test(text))).toBe(true);
+    // Play and Party live only here — the flat nav hides below 1099px.
+    expect(labels.some((text) => text.trim() === 'Play')).toBe(true);
+    expect(labels.some((text) => text.trim() === 'Party')).toBe(true);
     expect(labels.some((text) => /Operator/i.test(text))).toBe(true);
     expect(labels.some((text) => /^Review$|Review/.test(text))).toBe(true);
     expect(labels.some((text) => /Arcade/i.test(text))).toBe(false);
@@ -265,6 +274,8 @@ describe('NavHeader menu', () => {
             onStudio: vi.fn(),
             onAdmin: vi.fn(),
             onReview: vi.fn(),
+            onPlay: vi.fn(),
+            onParty: vi.fn(),
             upTarget: null,
           }),
         ),
@@ -295,8 +306,11 @@ describe('NavHeader menu', () => {
     await act(async () => root.unmount());
   });
 
-  it('also offers Create Game in the always-visible header nav', async () => {
+  it('offers Play, Create, Studio and Party as plain links in the always-visible header nav', async () => {
     const onCreate = vi.fn();
+    const onPlay = vi.fn();
+    const onStudio = vi.fn();
+    const onParty = vi.fn();
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = String(input);
@@ -321,10 +335,13 @@ describe('NavHeader menu', () => {
             activeBuildCount: 0,
             onCreate,
             isOnCreate: true,
+            isOnStudio: false,
             onHome: vi.fn(),
-            onStudio: vi.fn(),
+            onStudio,
             onAdmin: vi.fn(),
             onReview: vi.fn(),
+            onPlay,
+            onParty,
             upTarget: null,
           }),
         ),
@@ -333,16 +350,95 @@ describe('NavHeader menu', () => {
       await Promise.resolve();
     });
 
-    const headerNavCreate = Array.from(container.querySelectorAll<HTMLButtonElement>('.header-nav .nav-link')).find(
-      (btn) => /Create Game/i.test(btn.textContent ?? ''),
-    );
-    expect(headerNavCreate).toBeDefined();
-    expect(headerNavCreate?.className).toContain('is-active');
+    const links = Array.from(container.querySelectorAll<HTMLButtonElement>('.header-nav .header-nav-link'));
+    const labels = links.map((btn) => btn.textContent?.trim());
+    expect(labels).toEqual(['Play', 'Create', 'Studio', 'Party']);
+
+    // Plain text links, not the dropdown's boxed rows.
+    const findByLabel = (label: string) => links.find((btn) => btn.textContent?.trim() === label);
+    expect(findByLabel('Create')?.className).toContain('is-active');
+    expect(findByLabel('Studio')?.className).not.toContain('is-active');
+
     await act(async () => {
-      headerNavCreate?.click();
+      findByLabel('Play')?.click();
+    });
+    expect(onPlay).toHaveBeenCalled();
+
+    await act(async () => {
+      findByLabel('Studio')?.click();
+    });
+    expect(onStudio).toHaveBeenCalled();
+
+    await act(async () => {
+      findByLabel('Party')?.click();
+    });
+    expect(onParty).toHaveBeenCalled();
+
+    await act(async () => root.unmount());
+  });
+
+  it('also reaches Play and Party from the dropdown, where the flat nav is hidden', async () => {
+    const onPlay = vi.fn();
+    const onParty = vi.fn();
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith('/api/auth/me')) return new Response(JSON.stringify({ user: null }));
+      if (url.endsWith('/api/health')) {
+        return new Response(JSON.stringify({ status: 'ok', provider: 'mock', privateBeta: false }));
+      }
+      return new Response('{}', { status: 404 });
+    });
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        createElement(
+          AuthProvider,
+          null,
+          createElement(NavHeader, {
+            activeBuildCount: 0,
+            onCreate: vi.fn(),
+            onHome: vi.fn(),
+            onStudio: vi.fn(),
+            onAdmin: vi.fn(),
+            onReview: vi.fn(),
+            onPlay,
+            onParty,
+            upTarget: null,
+          }),
+        ),
+      );
+      await Promise.resolve();
       await Promise.resolve();
     });
-    expect(onCreate).toHaveBeenCalled();
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.hamburger-btn')?.click();
+    });
+
+    const dropdownLinks = Array.from(container.querySelectorAll<HTMLButtonElement>('.dropdown-menu .nav-link'));
+    const playItem = dropdownLinks.find((btn) => btn.textContent?.trim() === 'Play');
+    const partyItem = dropdownLinks.find((btn) => btn.textContent?.trim() === 'Party');
+    expect(playItem).toBeDefined();
+    expect(partyItem).toBeDefined();
+
+    await act(async () => {
+      playItem?.click();
+    });
+    expect(onPlay).toHaveBeenCalled();
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.hamburger-btn')?.click();
+    });
+    await act(async () => {
+      Array.from(container.querySelectorAll<HTMLButtonElement>('.dropdown-menu .nav-link'))
+        .find((btn) => btn.textContent?.trim() === 'Party')
+        ?.click();
+    });
+    expect(onParty).toHaveBeenCalled();
 
     await act(async () => root.unmount());
   });
@@ -388,6 +484,8 @@ describe('NavHeader menu', () => {
             onStudio: vi.fn(),
             onAdmin: vi.fn(),
             onReview,
+            onPlay: vi.fn(),
+            onParty: vi.fn(),
             upTarget: null,
           }),
         ),
@@ -457,6 +555,8 @@ describe('NavHeader menu', () => {
             onStudio: vi.fn(),
             onAdmin: vi.fn(),
             onReview: vi.fn(),
+            onPlay: vi.fn(),
+            onParty: vi.fn(),
             upTarget: null,
           }),
         ),
@@ -515,6 +615,8 @@ describe('NavHeader menu', () => {
             onStudio: vi.fn(),
             onAdmin: vi.fn(),
             onReview: vi.fn(),
+            onPlay: vi.fn(),
+            onParty: vi.fn(),
             upTarget: null,
           }),
         ),
@@ -604,6 +706,8 @@ describe('NavHeader operator link', () => {
             onStudio: vi.fn(),
             onAdmin,
             onReview,
+            onPlay: vi.fn(),
+            onParty: vi.fn(),
             upTarget: null,
           }),
         ),
@@ -685,13 +789,13 @@ describe('NavHeader operator link', () => {
   });
 });
 
-describe('NavHeader Studio chip', () => {
+describe('NavHeader Studio live count', () => {
   afterEach(() => {
     document.body.innerHTML = '';
     vi.restoreAllMocks();
   });
 
-  it('shows the rich live chip in the header and opens Studio', async () => {
+  it('badges the flat Studio link, the hamburger, and the dropdown row alike', async () => {
     await i18n.changeLanguage('en');
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = String(input);
@@ -721,6 +825,8 @@ describe('NavHeader Studio chip', () => {
             onStudio,
             onAdmin: vi.fn(),
             onReview: vi.fn(),
+            onPlay: vi.fn(),
+            onParty: vi.fn(),
             upTarget: null,
           }),
         ),
@@ -729,23 +835,25 @@ describe('NavHeader Studio chip', () => {
       await Promise.resolve();
     });
 
-    const chip = container.querySelector<HTMLButtonElement>('button.studio-chip');
-    expect(chip).not.toBeNull();
-    expect(chip?.classList.contains('is-live')).toBe(true);
-    expect(chip?.textContent).toMatch(/9 in progress/i);
-    expect(chip?.textContent).toMatch(/Studio/i);
+    expect(container.querySelector('.studio-chip')).toBeNull();
 
-    await act(async () => chip?.click());
+    const flatStudioLink = Array.from(
+      container.querySelectorAll<HTMLButtonElement>('.header-nav .header-nav-link'),
+    ).find((el) => el.textContent?.includes('Studio'));
+    expect(flatStudioLink).toBeDefined();
+    expect(flatStudioLink?.querySelector('.specs-count-badge')?.textContent).toBe('9');
+
+    await act(async () => flatStudioLink?.click());
     expect(onStudio).toHaveBeenCalledOnce();
 
-    // Menu carries the same count for phones (where the chip is CSS-hidden).
+    // The hamburger carries the same count once the flat nav hides.
     const hamburger = container.querySelector<HTMLButtonElement>('.hamburger-btn');
     expect(hamburger?.querySelector('.hamburger-live-badge')?.textContent).toBe('9');
     await act(async () => hamburger?.click());
-    const studioLink = Array.from(container.querySelectorAll<HTMLButtonElement>('.nav-link')).find((el) =>
-      /Studio/i.test(el.textContent ?? ''),
-    );
-    expect(studioLink?.querySelector('.specs-count-badge')?.textContent).toBe('9');
+    const dropdownStudioLink = Array.from(
+      container.querySelectorAll<HTMLButtonElement>('.dropdown-menu .nav-link'),
+    ).find((el) => /Studio/i.test(el.textContent ?? ''));
+    expect(dropdownStudioLink?.querySelector('.specs-count-badge')?.textContent).toBe('9');
 
     await act(async () => root.unmount());
   });
@@ -796,6 +904,8 @@ describe('NavHeader profile link', () => {
             onStudio: vi.fn(),
             onAdmin: vi.fn(),
             onReview: vi.fn(),
+            onPlay: vi.fn(),
+            onParty: vi.fn(),
             upTarget: null,
           }),
         ),
@@ -841,6 +951,8 @@ describe('NavHeader profile link', () => {
             onStudio: vi.fn(),
             onAdmin: vi.fn(),
             onReview: vi.fn(),
+            onPlay: vi.fn(),
+            onParty: vi.fn(),
             upTarget: null,
           }),
         ),
@@ -896,6 +1008,8 @@ describe('LanguageSwitcher in header', () => {
             onStudio: vi.fn(),
             onAdmin: vi.fn(),
             onReview: vi.fn(),
+            onPlay: vi.fn(),
+            onParty: vi.fn(),
             upTarget: null,
           }),
         ),

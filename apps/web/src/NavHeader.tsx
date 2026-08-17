@@ -26,6 +26,12 @@ type NavHeaderProps = {
   onCreate: () => void;
   // Highlights the Create Game item when already on /create.
   isOnCreate?: boolean;
+  // Highlights the Studio item when already there.
+  isOnStudio?: boolean;
+  // Scrolls to the curated picks on home; navigates home first if elsewhere.
+  onPlay: () => void;
+  // Scrolls to the party rail on home; navigates home first if elsewhere.
+  onParty: () => void;
   /**
    * Android-style Up target for non-home surfaces. Null on home, join, play, and
    * while an immersive theater owns escape. Never history.back() — deep links
@@ -43,6 +49,9 @@ export function NavHeader({
   onReview,
   onCreate,
   isOnCreate = false,
+  isOnStudio = false,
+  onPlay,
+  onParty,
   upTarget = null,
   onUp,
 }: NavHeaderProps) {
@@ -173,8 +182,31 @@ export function NavHeader({
       </div>
 
       <nav className="header-nav">
-        <button type="button" className={`nav-link${isOnCreate ? ' is-active' : ''}`} onClick={onCreate}>
-          <PixelIcon name="sparkle" size={14} /> {t('header.navPrompt')}
+        <button type="button" className="header-nav-link" onClick={onPlay}>
+          {t('header.navPlay')}
+        </button>
+        <button type="button" className={`header-nav-link${isOnCreate ? ' is-active' : ''}`} onClick={onCreate}>
+          {t('header.navCreate')}
+        </button>
+        <button
+          type="button"
+          className={`header-nav-link${isOnStudio ? ' is-active' : ''}`}
+          onClick={onStudio}
+          aria-label={
+            activeBuildCount > 0
+              ? `${t('header.navStudio')} — ${t('myGames.liveCount', { count: activeBuildCount })}`
+              : undefined
+          }
+        >
+          {t('header.navStudio')}
+          {activeBuildCount > 0 ? (
+            <span className="specs-count-badge" aria-hidden="true">
+              {activeBuildCount}
+            </span>
+          ) : null}
+        </button>
+        <button type="button" className="header-nav-link" onClick={onParty}>
+          {t('header.navParty')}
         </button>
       </nav>
 
@@ -216,29 +248,6 @@ export function NavHeader({
           </button>
         )}
 
-        {/* Rich Studio chip — desktop only. On a phone the hamburger already lists
-            Studio next to Create Game; the live count rides on that menu row (and a
-            small badge on the menu button) so the header stays logo · session · menu. */}
-        <button
-          type="button"
-          className={`studio-chip${activeBuildCount > 0 ? ' is-live' : ''}`}
-          onClick={onStudio}
-          aria-label={
-            activeBuildCount > 0
-              ? `${t('myGames.liveCount', { count: activeBuildCount })} — ${t('myGames.openStudio')}`
-              : t('myGames.openStudio')
-          }
-        >
-          {activeBuildCount > 0 ? (
-            <>
-              <span className="live-dot" aria-hidden="true" />
-              <span className="studio-chip-count">{t('myGames.liveCount', { count: activeBuildCount })}</span>
-            </>
-          ) : null}
-          <PixelIcon name="wrench" size={12} />
-          <span className="studio-chip-label">{t('myGames.openStudio')}</span>
-        </button>
-
         <LanguageSwitcher />
 
         <div ref={menuContainerRef} className={`hamburger-container${isMenuOpen ? ' is-open' : ''}`}>
@@ -265,6 +274,15 @@ export function NavHeader({
           {isMenuOpen && (
             <nav className="dropdown-menu">
               <button
+                className="nav-link"
+                onClick={() => {
+                  setIsMenuOpen(false);
+                  onPlay();
+                }}
+              >
+                <PixelIcon name="play" size={14} /> {t('header.navPlay')}
+              </button>
+              <button
                 className={`nav-link${isOnCreate ? ' is-active' : ''}`}
                 onClick={() => {
                   setIsMenuOpen(false);
@@ -274,7 +292,7 @@ export function NavHeader({
                 <PixelIcon name="sparkle" size={14} /> {t('header.navPrompt')}
               </button>
               <button
-                className="nav-link"
+                className={`nav-link${isOnStudio ? ' is-active' : ''}`}
                 onClick={() => {
                   setIsMenuOpen(false);
                   onStudio();
@@ -289,6 +307,15 @@ export function NavHeader({
                     {activeBuildCount}
                   </span>
                 ) : null}
+              </button>
+              <button
+                className="nav-link"
+                onClick={() => {
+                  setIsMenuOpen(false);
+                  onParty();
+                }}
+              >
+                <PixelIcon name="phone" size={14} /> {t('header.navParty')}
               </button>
 
               {/* Operators only — everyone else never learns this exists, which is the
