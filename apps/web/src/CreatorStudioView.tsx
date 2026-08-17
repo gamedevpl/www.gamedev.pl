@@ -427,9 +427,7 @@ export function CreatorStudioView({
     return () => document.body.classList.remove('player-open');
   }, [theaterOpen]);
 
-  // The theater's fixed full-viewport surface sits above the strip (z-index 1000 vs.
-  // the popover's 40) — an open share popover would be pinned underneath it, present
-  // but unreachable. Close it rather than chase the theater's stacking context.
+  // Theater z-index (1000) buries the popover (40) — close it instead.
   useEffect(() => {
     if (theaterOpen) setShareMenuOpen(false);
   }, [theaterOpen]);
