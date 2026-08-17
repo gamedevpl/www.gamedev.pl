@@ -427,6 +427,11 @@ export function CreatorStudioView({
     return () => document.body.classList.remove('player-open');
   }, [theaterOpen]);
 
+  // Theater z-index (1000) buries the popover (40) — close it instead.
+  useEffect(() => {
+    if (theaterOpen) setShareMenuOpen(false);
+  }, [theaterOpen]);
+
   // A game switch starts every per-game bit of stage state fresh. The very first
   // resolution applies the deep link's posture (if any); every later switch — the
   // creator picking a different game — always starts back in watch.
@@ -998,7 +1003,8 @@ export function CreatorStudioView({
                           onImproved={(newToken) => setHandoffToken(newToken)}
                           onDisplayedOriginChange={setDisplayedOrigin}
                           editorPushRef={editorPushRef}
-                           onEditorControllerChange={setEditorController}                        />
+                          onEditorControllerChange={setEditorController}
+                        />
 
                         {stageStatus.kind === 'empty' &&
                         !stageSource.html &&
