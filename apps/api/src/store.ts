@@ -520,6 +520,18 @@ export function applyMeasuredTokens(
         left.toolUse === right.toolUse
       );
     }
+    if (left.vendor === 'openai' || right.vendor === 'openai') {
+      return (
+        left.vendor === 'openai' &&
+        right.vendor === 'openai' &&
+        left.model === right.model &&
+        left.input === right.input &&
+        left.output === right.output &&
+        left.total === right.total &&
+        left.reasoning === right.reasoning &&
+        left.cached === right.cached
+      );
+    }
     return (
       left.input === right.input &&
       left.output === right.output &&
@@ -711,7 +723,7 @@ export interface CreationLimits {
   // Switches the `platform` option; `auto` defers to whether a backend exists.
   managedBuilderMode?: 'auto' | 'off' | 'coming_soon';
   // Runtime override; unset defers to MANAGED_AGENT_VENDOR, the env-var default.
-  managedAgentVendorOverride?: 'anthropic' | 'gemini' | 'copilot' | null;
+  managedAgentVendorOverride?: 'anthropic' | 'gemini' | 'copilot' | 'openai' | null;
   // Shared daily ceiling on platform rounds started. `null` = no cap.
   managedDailyCap: number | null;
   // Same ceiling, per creator per UTC day.
@@ -6581,7 +6593,8 @@ export class FirestoreStore implements Store {
       managedAgentVendorOverride:
         data?.managedAgentVendorOverride === 'anthropic' ||
         data?.managedAgentVendorOverride === 'gemini' ||
-        data?.managedAgentVendorOverride === 'copilot'
+        data?.managedAgentVendorOverride === 'copilot' ||
+        data?.managedAgentVendorOverride === 'openai'
           ? data.managedAgentVendorOverride
           : null,
       managedDailyCap: typeof data?.managedDailyCap === 'number' ? data.managedDailyCap : null,

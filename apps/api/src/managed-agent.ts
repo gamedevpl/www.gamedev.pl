@@ -29,6 +29,14 @@ export interface ManagedGeminiTokenUsage extends ManagedTokenUsageBase {
   toolUseTokens: number;
 }
 
+export interface ManagedOpenAiTokenUsage extends ManagedTokenUsageBase {
+  vendor: 'openai';
+  model: string;
+  totalTokens: number;
+  reasoningTokens: number;
+  cachedTokens: number;
+}
+
 export interface ManagedCreditUsage {
   unit: 'credits';
   vendor: string;
@@ -36,7 +44,8 @@ export interface ManagedCreditUsage {
   model?: string;
 }
 
-export type ManagedSessionUsage = ManagedTokenUsage | ManagedGeminiTokenUsage | ManagedCreditUsage;
+export type ManagedSessionUsage =
+  ManagedTokenUsage | ManagedGeminiTokenUsage | ManagedOpenAiTokenUsage | ManagedCreditUsage;
 
 export type ManagedUsageBudget =
   { unit: 'tokens'; max: number } | { unit: 'credits'; max: number } | { unit: 'cents'; max: number };

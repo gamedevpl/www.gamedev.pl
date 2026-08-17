@@ -189,7 +189,7 @@ const CreationLimitsPatchSchema = z
     // Same document: whether the platform builder is offered. See managed-availability.ts.
     managedBuilderMode: z.enum(['auto', 'off', 'coming_soon']).optional(),
     // null clears the override, same as globalDailySubmissionCap above.
-    managedAgentVendorOverride: z.enum(['anthropic', 'gemini', 'copilot']).nullable().optional(),
+    managedAgentVendorOverride: z.enum(['anthropic', 'gemini', 'copilot', 'openai']).nullable().optional(),
     managedDailyCap: z.number().int().min(0).max(100_000).nullable().optional(),
     managedDailyUserCap: z.number().int().min(0).max(100_000).nullable().optional(),
   })

@@ -680,6 +680,22 @@ describe('/api/admin/creation-limits', () => {
     }
   });
 
+  it('accepts openai as a managed vendor override', async () => {
+    const app = await appWith(store);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/admin/creation-limits',
+      headers: authHeaders('g:boss'),
+      payload: { managedAgentVendorOverride: 'openai' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as CreationLimitsResponse;
+    expect(body.stored?.managedAgentVendorOverride).toBe('openai');
+    await app.close();
+  });
+
   it('accepts a chat-breaker patch, same document as the other lanes', async () => {
     const app = await appWith(store);
 

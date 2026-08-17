@@ -9,6 +9,7 @@ import { createManagedProvider } from '../src/managed-agent.js';
 import '../src/managed-provider-anthropic.js';
 import '../src/managed-provider-copilot.js';
 import '../src/managed-provider-gemini.js';
+import '../src/managed-provider-openai.js';
 import { createManagedBackend } from '../src/managed-backend.js';
 import { createFileKitDigestLoader } from '../src/kit-digest.js';
 
@@ -26,12 +27,16 @@ const CREATE_CONCEPT =
 const digestPath = value('digest-file');
 const vendor = value('vendor');
 if (!vendor) {
-  console.error('--vendor anthropic|gemini|copilot is required — every managed round dispatches over MCP.');
+  console.error('--vendor anthropic|gemini|copilot|openai is required — every managed round dispatches over MCP.');
   process.exit(1);
 }
 const apiBaseUrl = (
   value('base-url') ??
-  (vendor === 'gemini' ? 'https://generativelanguage.googleapis.com/v1beta' : 'https://api.anthropic.com')
+  (vendor === 'gemini'
+    ? 'https://generativelanguage.googleapis.com/v1beta'
+    : vendor === 'openai'
+      ? 'https://api.openai.com/v1'
+      : 'https://api.anthropic.com')
 ).replace(/\/$/, '');
 const wait = flag('wait');
 const waitSeconds = Number(value('wait-seconds') ?? process.env.MANAGED_AGENT_MAX_SECONDS ?? '');
@@ -98,10 +103,18 @@ const apiKey =
       ? process.env.AGENT_TASKS_TOKEN?.trim()
       : vendor === 'gemini'
         ? process.env.GEMINI_API_KEY?.trim()
-        : undefined);
+        : vendor === 'openai'
+          ? process.env.OPENAI_API_KEY?.trim()
+          : undefined);
 const model =
   value('model') ??
-  (vendor === 'copilot' ? process.env.AGENT_TASKS_MODEL?.trim() : process.env.MANAGED_AGENT_MODEL?.trim()) ??
+  (vendor === 'copilot'
+    ? process.env.AGENT_TASKS_MODEL?.trim()
+    : vendor === 'openai'
+      ? process.env.MANAGED_AGENT_OPENAI_MODEL?.trim()
+      : vendor === 'gemini'
+        ? process.env.MANAGED_AGENT_GEMINI_MODEL?.trim()
+        : process.env.MANAGED_AGENT_MODEL?.trim()) ??
   (vendor === 'anthropic'
     ? 'claude-sonnet-5'
     : vendor === 'copilot'
@@ -117,20 +130,21 @@ if (vendor === 'copilot' && !process.env.MANAGED_AGENT_COPILOT_MCP_REPO?.trim())
   console.error('--vendor copilot needs MANAGED_AGENT_COPILOT_MCP_REPO (the scratch repo it dispatches into)');
   process.exit(1);
 }
+const usesTokenBudget = vendor === 'gemini' || vendor === 'openai';
 if (
   wait &&
   (!Number.isInteger(waitSeconds) ||
     waitSeconds <= 0 ||
     (vendor === 'copilot'
       ? !Number.isFinite(budgetCredits) || budgetCredits <= 0
-      : vendor === 'gemini'
+      : usesTokenBudget
         ? !Number.isSafeInteger(budgetTokens) || budgetTokens <= 0
         : !Number.isFinite(budgetUsd) || budgetUsd <= 0))
 ) {
   console.error(
     vendor === 'copilot'
       ? '--wait requires positive --wait-seconds and --budget-credits values'
-      : vendor === 'gemini'
+      : usesTokenBudget
         ? '--wait requires positive --wait-seconds and --budget-tokens values'
         : '--wait requires positive --wait-seconds and --budget-usd values',
   );
@@ -187,7 +201,7 @@ const backend = createManagedBackend({
   ...(vendor === 'copilot' && Number.isFinite(budgetCredits) && budgetCredits > 0
     ? { budget: { unit: 'credits' as const, max: budgetCredits } }
     : {}),
-  ...(vendor === 'gemini' && Number.isSafeInteger(budgetTokens) && budgetTokens > 0
+  ...(usesTokenBudget && Number.isSafeInteger(budgetTokens) && budgetTokens > 0
     ? { budget: { unit: 'tokens' as const, max: budgetTokens } }
     : {}),
   // The probe cannot see the MCP submit_sources call, so nudging would mislead.

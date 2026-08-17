@@ -67,7 +67,7 @@ export async function fetchAdminSummary(): Promise<AdminSummary | null> {
 }
 
 export type ManagedBuilderMode = 'auto' | 'off' | 'coming_soon';
-export type ManagedAgentVendor = 'anthropic' | 'gemini' | 'copilot';
+export type ManagedAgentVendor = 'anthropic' | 'gemini' | 'copilot' | 'openai';
 
 export interface CreationLimits {
   stored: {
