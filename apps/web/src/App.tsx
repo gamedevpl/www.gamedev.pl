@@ -1141,9 +1141,30 @@ export function App() {
     return <AppLoadingScreen />;
   }
 
-  // Unpublished /play: theater owns the viewport; no chrome.
+  // Unpublished /play: theater covers the viewport when a game loads, but the
+  // loading/error sub-states are regular panels and need the site chrome around
+  // them (same wrapper as the notFound branch above).
   if (unpublishedPlayTheater) {
-    return <UnpublishedPlayView slug={route.slug} onExit={exitOverlay} onTitle={setUnpublishedPlayTitle} />;
+    return (
+      <div className="app app--unpublished-play">
+        <NavHeader
+          activeBuildCount={activeBuildCount}
+          onHome={() => navigate('/')}
+          onStudio={() => navigate(studioPath())}
+          onAdmin={() => navigate(adminPath())}
+          onReview={() => navigate(reviewPath())}
+          onCreate={handleCreateNav}
+          onPlay={() => handleHomeAnchorNav('play-anchor')}
+          onParty={() => handleHomeAnchorNav('party-rail')}
+          upTarget={headerUp}
+          onUp={navigate}
+        />
+        <main className="content">
+          <UnpublishedPlayView slug={route.slug} onExit={exitOverlay} onTitle={setUnpublishedPlayTitle} />
+        </main>
+        <SiteFooter />
+      </div>
+    );
   }
 
   // Bridge catalog-ready → auto-open so GameDetailPage does not flash first.
