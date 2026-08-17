@@ -87,28 +87,21 @@ jobs:
 
       - name: Resolve games-repo ref
         env:
-          DISPATCH_REF: ${{ github.event.client_payload.ref }}
-          DISPATCH_SHA: ${{ github.event.client_payload.sha }}
-          INPUT_REF: ${{ github.event.inputs.ref }}
+          VALIDATED_SHA: ${{ needs.validate-games.outputs.games_sha }}
         run: |
-          # Payload values come from another repository's workflow, so they are
-          # treated as data: passed through the environment (never interpolated
-          # into the script) and constrained before use.
-          REF="${DISPATCH_REF:-${INPUT_REF:-main}}"
-          case "$REF" in
-            *[!A-Za-z0-9._/-]*)
-              echo "Error: refusing to bake from a ref with unexpected characters"
+          # Bake exactly the tree the reusable gate checked, including nightly runs.
+          case "$VALIDATED_SHA" in
+            "")
+              echo "Error: games catalog gate did not return a commit SHA"
+              exit 1
+              ;;
+            *[!0-9a-fA-F]*)
+              echo "Error: games catalog gate returned an invalid commit SHA"
               exit 1
               ;;
           esac
-          echo "SNAPSHOT_REF=${REF}" >> "$GITHUB_ENV"
-          case "$DISPATCH_SHA" in
-            "" ) ;;
-            *[!0-9a-fA-F]* )
-              echo "::warning::ignoring malformed commit sha in dispatch payload"
-              ;;
-            * ) echo "SNAPSHOT_SHA=${DISPATCH_SHA}" >> "$GITHUB_ENV" ;;
-          esac
+          echo "SNAPSHOT_REF=${VALIDATED_SHA}" >> "$GITHUB_ENV"
+          echo "SNAPSHOT_SHA=${VALIDATED_SHA}" >> "$GITHUB_ENV"
 
       - name: Authenticate to GCP via Workload Identity Federation
         if: ${{ github.event.inputs.dry_run != 'true' }}
