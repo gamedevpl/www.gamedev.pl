@@ -334,11 +334,11 @@ export function StudioWelcomeView({ game, onOpenStudio }: StudioWelcomeViewProps
               {progress}
             </p>
             {isReady ? (
-              <div className="studio-welcome-ready-callout">
+              <button type="button" className="studio-welcome-ready-callout" onClick={openStudio}>
                 <p className="studio-welcome-ready-title">
                   <PixelIcon name="play" size={14} /> {t('welcome.readyBanner')}
                 </p>
-              </div>
+              </button>
             ) : null}
             {loadError ? <p className="error qa-error">{loadError}</p> : null}
           </div>

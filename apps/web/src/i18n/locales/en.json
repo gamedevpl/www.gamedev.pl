@@ -742,7 +742,7 @@
     "runningFor": "Running for {{time}}",
     "completedIn": "Completed in {{time}}",
     "statusReadyLabel": "Draft Ready",
-    "readyBanner": "Draft ready — click \"Play Draft in Studio\" to play your game preview!",
+    "readyBanner": "Draft ready — tap here to play your game preview!",
     "playDraft": "Play Draft in Studio",
     "primerTitle": "How to steer the agent",
     "primerSteer": "In Studio, type what to change while it builds — the agent picks it up on the next update.",

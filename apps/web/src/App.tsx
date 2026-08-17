@@ -1050,6 +1050,7 @@ export function App() {
             slug={route.slug}
             onNavigate={navigate}
             onPlay={handlePlayGame}
+            onPlayTogether={handlePlayTogether}
             onRemix={handleRemixGame}
             onCanonicalPath={(path) => navigate(path, { replace: true })}
             onGameLoaded={setGameTitle}
@@ -1201,6 +1202,7 @@ export function App() {
                 game={playCatalogGame}
                 state={catalogStatus}
                 onPlay={handlePlayGame}
+                onPlayTogether={handlePlayTogether}
                 onRemix={handleRemixGame}
                 onRetry={handleRetryCatalog}
               />

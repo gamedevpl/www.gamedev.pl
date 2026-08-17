@@ -105,14 +105,16 @@ describe('StudioWelcomeView', () => {
     expect(dialog?.textContent).toContain('Draft ready!');
     expect(dialog?.textContent).toContain('Ready to Play');
     expect(dialog?.textContent).toContain('Full gate checks complete');
-    expect(dialog?.querySelector('.studio-welcome-ready-callout')).toBeTruthy();
+    const callout = dialog?.querySelector('.studio-welcome-ready-callout') as HTMLButtonElement;
+    expect(callout).toBeTruthy();
+    expect(callout.tagName).toBe('BUTTON');
 
     const cta = dialog?.querySelector('button.qa-primary') as HTMLButtonElement;
     expect(cta?.classList.contains('is-ready-cta')).toBe(true);
     expect(cta?.textContent).toMatch(/Play Draft in Studio/);
 
     await act(async () => {
-      cta.click();
+      callout.click();
     });
     expect(onOpenStudio).toHaveBeenCalledWith('/studio/bastion-wave?from=handoff');
   });

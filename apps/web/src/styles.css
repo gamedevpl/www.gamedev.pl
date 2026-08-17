@@ -198,6 +198,7 @@ a {
   display: flex;
   align-items: center;
   gap: 24px;
+  margin-left: 40px;
 }
 
 .header-nav-link {
@@ -225,6 +226,13 @@ a {
   /* Signed-in chrome (name, bell, Studio chip, language) is already tight in this
      range — the hamburger's own Create Game row covers it, same as on a phone. */
   .header-nav {
+    display: none;
+  }
+}
+
+@media (min-width: 1100px) {
+  /* The flat nav already carries these — no need for the dropdown to repeat them. */
+  .nav-link--flat-mirror {
     display: none;
   }
 }
@@ -2133,15 +2141,19 @@ button:disabled {
 .card-actions {
   display: flex;
   justify-content: flex-end;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px;
 }
 
 .card-actions button {
   pointer-events: auto;
-  flex: 0 0 auto;
-  padding: 7px 16px;
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: 7px 14px;
   font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -8464,11 +8476,25 @@ button.builder-mode-selector:disabled {
 }
 
 .studio-welcome-ready-callout {
+  display: block;
+  width: 100%;
   margin-top: 12px;
   padding: 10px 14px;
   background: rgba(0, 228, 172, 0.12);
   border: 1px dashed rgba(0, 228, 172, 0.4);
   border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.studio-welcome-ready-callout:hover,
+.studio-welcome-ready-callout:focus-visible {
+  background: rgba(0, 228, 172, 0.2);
+  border-color: rgba(0, 228, 172, 0.7);
 }
 
 .studio-welcome-ready-title {
@@ -9279,18 +9305,22 @@ button.builder-mode-selector:disabled {
 /* Click-to-fill prompt starters, shown only where a caller passes exampleChips. */
 .prompt-examples {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 0.5rem;
   margin: 10px 8px 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
 
 .prompt-example-chip {
+  flex: 0 0 auto;
   padding: 0.35rem 0.7rem;
   border-radius: 999px;
   border: 1px solid var(--panel-border);
   background: transparent;
   color: var(--muted);
   font-size: 0.8rem;
+  white-space: nowrap;
   cursor: pointer;
 }
 
