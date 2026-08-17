@@ -39,8 +39,7 @@ type OpenAiMcpTool = {
   type: 'mcp';
   server_label: string;
   server_url: string;
-  // Never omitted: the default requires a human approval per call, which a
-  // background, unattended round has nobody to grant.
+  // Never omitted — default requires approval per call; nothing can grant it.
   require_approval: 'never';
   headers?: { Authorization: string };
 };
@@ -60,8 +59,7 @@ function mcpTools(request: ManagedSessionRequest): OpenAiMcpTool[] {
   });
 }
 
-// Only a token ceiling stopped it — a content-filter or other incomplete reason is not
-// a budget stop and must not be recorded as one.
+// Only a token ceiling counts as budget-stopped; content filters do not.
 function isBudgetIncomplete(reason: string | undefined): boolean {
   return reason === 'max_output_tokens' || reason === 'max_tokens';
 }
@@ -123,7 +121,7 @@ export function createOpenAiManagedProvider(config: ManagedProviderConfig): Mana
   return {
     vendor: OPENAI_VENDOR,
     model,
-    // No checkout, no environment resource — the brief's seed has nowhere to land.
+    // No checkout or environment — nowhere for a seed to land.
     supportsSeedFiles: false,
 
     async startSession(request: ManagedSessionRequest): Promise<ManagedSession> {
@@ -139,9 +137,7 @@ export function createOpenAiManagedProvider(config: ManagedProviderConfig): Mana
         ...(request.systemPrompt ? { instructions: request.systemPrompt } : {}),
         ...(tools.length ? { tools } : {}),
         ...(request.effort ? { reasoning: { effort: request.effort } } : {}),
-        // A partial belt, not the ceiling: this caps one response's output tokens, not
-        // the round's cumulative total the way Gemini's max_total_tokens does. The
-        // backend's own observed-usage budget stop is what actually enforces the total.
+        // Partial belt only: caps one response, not the round's total.
         ...(config.budget?.unit === 'tokens' ? { max_output_tokens: config.budget.max } : {}),
       };
       const raw = await call('/responses', { method: 'POST', body: JSON.stringify(body) });

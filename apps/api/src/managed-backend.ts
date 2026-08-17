@@ -47,8 +47,7 @@ export interface ManagedRoundSignals {
   agentEndedAt?: string;
 }
 
-// Discriminated by shape, not the vendor word — a flat ManagedTokenUsage's `vendor` is
-// just `string`, so an equality check on it wouldn't narrow the type.
+// Discriminated by shape: a flat usage's vendor field is just string.
 function ledgerTokens(
   usage: ManagedTokenUsage | ManagedGeminiTokenUsage | ManagedOpenAiTokenUsage,
 ): AgentSessionTokens {
