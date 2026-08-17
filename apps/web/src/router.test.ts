@@ -215,6 +215,12 @@ describe('parsePathRoute', () => {
     expect(parsePathRoute('/create/some-game')).toEqual({ view: 'notFound' });
   });
 
+  it('parses the party landing route, and reserves the handle', () => {
+    expect(parsePathRoute('/party')).toEqual({ view: 'party' });
+    // Same reserved-segment protection as the other first-class routes.
+    expect(parsePathRoute('/party/some-game')).toEqual({ view: 'notFound' });
+  });
+
   it('parses public creator profile routes', () => {
     expect(parsePathRoute('/ada')).toEqual({ view: 'creator', handle: 'ada' });
     expect(parsePathRoute('/ada_lovelace')).toEqual({ view: 'creator', handle: 'ada_lovelace' });
@@ -412,6 +418,7 @@ describe('navUpTarget', () => {
     expect(navUpTarget({ view: 'legal', doc: 'privacy' })).toEqual({ path: '/', labelKey: 'upHome' });
     expect(navUpTarget({ view: 'contact' })).toEqual({ path: '/', labelKey: 'upHome' });
     expect(navUpTarget({ view: 'create' })).toEqual({ path: '/', labelKey: 'upHome' });
+    expect(navUpTarget({ view: 'party' })).toEqual({ path: '/', labelKey: 'upHome' });
     expect(navUpTarget({ view: 'creator', handle: 'ada' })).toEqual({ path: '/', labelKey: 'upHome' });
     expect(navUpTarget({ view: 'notFound' })).toEqual({ path: '/', labelKey: 'upHome' });
   });

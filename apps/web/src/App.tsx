@@ -24,6 +24,7 @@ import {
   NAVIGATE_EVENT,
   navUpTarget,
   parsePathRoute,
+  partyPath,
   playPath,
   reviewPath,
   studioPath,
@@ -37,6 +38,7 @@ import type { PublicCreatorProfile } from './creatorProfileApi.js';
 import { LegalPage } from './LegalPage.js';
 import { ContactPage } from './ContactPage.js';
 import { CreatePage } from './CreatePage.js';
+import { PartyPage } from './PartyPage.js';
 import { ProposalsPage } from './ProposalsPage.js';
 import { CreatorProfilePage } from './CreatorProfilePage.js';
 import { GamePage } from './GamePage.js';
@@ -203,6 +205,7 @@ export function App() {
         terms: t('legal.terms'),
         contact: t('pageTitle.contact'),
         create: t('pageTitle.create'),
+        party: t('pageTitle.party'),
         proposals: t('pageTitle.proposals'),
         notFound: t('pageTitle.notFound'),
         playNamed: t('pageTitle.playNamed'),
@@ -311,8 +314,8 @@ export function App() {
     // would just 401. Don't fetch (and don't render an error) until signed in.
     // Outside private beta, catalog reads stay public (owner decision).
     if (privateBeta && !user) return;
-    // Home, /play, and /create all need the catalog loaded.
-    if (route.view !== 'home' && route.view !== 'play' && route.view !== 'create') return;
+    // Home, /play, /create, and /party all need the catalog loaded.
+    if (route.view !== 'home' && route.view !== 'play' && route.view !== 'create' && route.view !== 'party') return;
 
     let cancelled = false;
     // Soft refreshes (Retry, pull-to-refresh) keep the last-good grid on screen —
@@ -802,9 +805,16 @@ export function App() {
     input?.focus({ preventScroll: true });
   }
 
-  // Play/Party live on home only. Elsewhere, queue the anchor and go
-  // there — the existing pending-scroll effect resolves it once the
-  // target (which may still be loading) has actually mounted.
+  // A real destination now (HP-6's open question, closed): the header used to scroll
+  // home to the party rail, which was "just a deeplink to the main page" — /party is
+  // a page of its own, so this is a plain navigate like Create's.
+  function handlePartyNav() {
+    navigate(partyPath());
+  }
+
+  // Play lives on home only. Elsewhere, queue the anchor and go there — the
+  // existing pending-scroll effect resolves it once the target (which may still be
+  // loading) has actually mounted.
   function handleHomeAnchorNav(anchorId: string) {
     if (route.view === 'home') {
       document.getElementById(anchorId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -955,6 +965,7 @@ export function App() {
           onReview={() => navigate(reviewPath())}
           onCreate={handleCreateNav}
           onPlay={() => handleHomeAnchorNav('play-anchor')}
+          onParty={handlePartyNav}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -978,6 +989,7 @@ export function App() {
           onReview={() => navigate(reviewPath())}
           onCreate={handleCreateNav}
           onPlay={() => handleHomeAnchorNav('play-anchor')}
+          onParty={handlePartyNav}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -1001,6 +1013,7 @@ export function App() {
           onReview={() => navigate(reviewPath())}
           onCreate={handleCreateNav}
           onPlay={() => handleHomeAnchorNav('play-anchor')}
+          onParty={handlePartyNav}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -1037,6 +1050,7 @@ export function App() {
           onReview={() => navigate(reviewPath())}
           onCreate={handleCreateNav}
           onPlay={() => handleHomeAnchorNav('play-anchor')}
+          onParty={handlePartyNav}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -1077,6 +1091,7 @@ export function App() {
           onReview={() => navigate(reviewPath())}
           onCreate={handleCreateNav}
           onPlay={() => handleHomeAnchorNav('play-anchor')}
+          onParty={handlePartyNav}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -1101,6 +1116,7 @@ export function App() {
           onReview={() => navigate(reviewPath())}
           onCreate={handleCreateNav}
           onPlay={() => handleHomeAnchorNav('play-anchor')}
+          onParty={handlePartyNav}
           upTarget={headerUp}
           onUp={navigate}
         />
@@ -1180,7 +1196,9 @@ export function App() {
         onReview={() => navigate(reviewPath())}
         onCreate={handleCreateNav}
         onPlay={() => handleHomeAnchorNav('play-anchor')}
+        onParty={handlePartyNav}
         isOnCreate={route.view === 'create'}
+        isOnParty={route.view === 'party'}
         isOnStudio={route.view === 'studio' || route.view === 'studioWelcome' || route.view === 'studioConnect'}
         upTarget={headerUp}
         onUp={navigate}
@@ -1236,6 +1254,13 @@ export function App() {
                 mockError={mockError}
                 onGenerateMock={(prompt) => void handleGenerateMock(prompt)}
                 onPlatformBuilderAvailability={setPlatformBuilderAvailability}
+              />
+            ) : route.view === 'party' ? (
+              <PartyPage
+                catalogEntries={catalogEntries}
+                onPlayGame={handlePlayGame}
+                onPlayTogether={(game, via) => void handlePlayTogether(game, via)}
+                onCreateCustom={handleCreateNav}
               />
             ) : (
               <div id="hero-prompt">
