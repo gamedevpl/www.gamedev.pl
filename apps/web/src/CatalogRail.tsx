@@ -7,6 +7,7 @@ import {
   isPlatformAuthor,
   type CatalogEntry,
 } from './catalog.js';
+import { isCatalogScrolling, whenCatalogScrollIdle } from './catalogScrollIdle.js';
 import { PixelIcon } from './PixelIcon.js';
 import { creatorPath, gamePath } from './router.js';
 import { useInView } from './useInView.js';
@@ -32,6 +33,8 @@ function RailCard({
   const { t } = useTranslation();
   const videoRef = useRef<HTMLVideoElement>(null);
   const hoverTimerRef = useRef<number | null>(null);
+  const hoveringRef = useRef(false);
+  const cancelIdleWaitRef = useRef<(() => void) | null>(null);
   const [previewArmed, setPreviewArmed] = useState(false);
   // Unloads off-screen, same as the grid — rails hold a dozen cards.
   const { ref: mediaRef, inView } = useInView<HTMLDivElement>({ rootMargin: '200px 0px', once: false });
@@ -44,10 +47,8 @@ function RailCard({
 
   useEffect(() => {
     if (inView) return;
-    if (hoverTimerRef.current != null) {
-      window.clearTimeout(hoverTimerRef.current);
-      hoverTimerRef.current = null;
-    }
+    clearHoverIntent();
+    hoveringRef.current = false;
     setPreviewArmed(false);
   }, [inView]);
 
@@ -58,24 +59,47 @@ function RailCard({
 
   useEffect(
     () => () => {
-      if (hoverTimerRef.current != null) window.clearTimeout(hoverTimerRef.current);
+      clearHoverIntent();
+      hoveringRef.current = false;
     },
     [],
   );
 
-  function scheduleArm() {
-    if (hoverTimerRef.current != null) window.clearTimeout(hoverTimerRef.current);
-    hoverTimerRef.current = window.setTimeout(() => {
-      hoverTimerRef.current = null;
-      setPreviewArmed(true);
-    }, RAIL_HOVER_INTENT_MS);
-  }
-
-  function disarm() {
+  function clearHoverIntent() {
     if (hoverTimerRef.current != null) {
       window.clearTimeout(hoverTimerRef.current);
       hoverTimerRef.current = null;
     }
+    cancelIdleWaitRef.current?.();
+    cancelIdleWaitRef.current = null;
+  }
+
+  // Same idle wait as CatalogCard — a sliding rail must not arm this.
+  function armFromHoverIntent() {
+    if (!hoveringRef.current) return;
+    if (isCatalogScrolling()) {
+      cancelIdleWaitRef.current?.();
+      cancelIdleWaitRef.current = whenCatalogScrollIdle(() => {
+        cancelIdleWaitRef.current = null;
+        armFromHoverIntent();
+      });
+      return;
+    }
+    setPreviewArmed(true);
+  }
+
+  function scheduleArm() {
+    clearHoverIntent();
+    hoveringRef.current = true;
+    hoverTimerRef.current = window.setTimeout(() => {
+      hoverTimerRef.current = null;
+      armFromHoverIntent();
+    }, RAIL_HOVER_INTENT_MS);
+  }
+
+  function disarm() {
+    hoveringRef.current = false;
+    clearHoverIntent();
     setPreviewArmed(false);
     const video = videoRef.current;
     if (video) {

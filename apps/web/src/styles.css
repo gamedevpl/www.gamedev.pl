@@ -2142,10 +2142,14 @@ button:disabled {
 .card-actions {
   display: flex;
   justify-content: flex-end;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
+/* Wrap decides per each button's natural content size, not its shrunk size — so
+   two buttons that fit stay on one row, and one that does not gets its own full-
+   width row below rather than clipping. Shrink/ellipsis only guard a button whose
+   own text alone still cannot fit that row (see AGENTS.md's longest-string rule). */
 .card-actions button {
   pointer-events: auto;
   flex: 0 1 auto;
