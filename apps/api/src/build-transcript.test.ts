@@ -94,15 +94,15 @@ describe('loadBuildTranscript', () => {
     const current = job(1, '2026-08-16T00:00:00.000Z');
     const store = fakeStore({ messages: { 1: manyMessages(25) } });
 
-    // Garbage cursor: falls back to the tail, same as no cursor at all.
+    // Garbage cursor: falls back to the tail.
     const garbage = await loadBuildTranscript(store, current, { cursor: 'not-a-number' });
     expect(garbage.entries.at(-1)!.text).toBe('message-24');
 
-    // Cursor past the end: clamps to the tail rather than an empty/erroring result.
+    // Cursor past the end: clamps to the tail.
     const tooFar = await loadBuildTranscript(store, current, { cursor: '9999' });
     expect(tooFar.entries.at(-1)!.text).toBe('message-24');
 
-    // Cursor before the start: clamps to nothing left to show, not negative indices.
+    // Cursor before the start: clamps to nothing.
     const beforeStart = await loadBuildTranscript(store, current, { cursor: '-5' });
     expect(beforeStart.entries).toEqual([]);
     expect(beforeStart.hasMore).toBe(false);
@@ -123,8 +123,7 @@ describe('loadBuildTranscript', () => {
 
   it('shrinks the window to stay under the per-window byte ceiling, without dropping an entry out of order', async () => {
     const current = job(1, '2026-08-16T00:00:00.000Z');
-    // 10 entries of 3000 bytes each: a 20-entry window would be 60 KB, well past the
-    // 20 KB per-window cap, so the window must shrink rather than serve it whole.
+    // 10 entries of 3000 bytes each exceeds the 20 KB window cap.
     const messages = Array.from({ length: 10 }, (_, i) => ({
       text: 'x'.repeat(3000),
       createdAt: `2026-08-17T12:${String(i).padStart(2, '0')}:00.000Z`,
@@ -186,7 +185,7 @@ describe('loadBuildTranscript', () => {
         round: 'current',
       },
     ]);
-    // Job 3 is newer than the current round and belongs to its own transcript.
+    // Job 3 is newer — its own transcript, not this one.
     expect(page.entries.some((entry) => entry.createdAt.startsWith('2026-08-18'))).toBe(false);
   });
 
@@ -224,9 +223,7 @@ describe('loadBuildTranscript', () => {
   });
 
   it('surfaces the founding spec as a synthetic entry — creation never appends it as a message', async () => {
-    // A game's very first round writes its concept straight to `spec` and never echoes
-    // it into the creator-message thread (chat is for what happens after creation), so
-    // without a synthetic entry get_transcript could never show it at all.
+    // Creation writes the concept to `spec`, never as a message.
     const current = job(1, '2026-08-16T00:00:00.000Z', 'comet-courier', 'A game about delivering parcels.');
     const store = fakeStore({
       messages: { 1: [{ text: 'Make the parcels bigger.', createdAt: '2026-08-16T01:00:00.000Z' }] },
@@ -251,8 +248,7 @@ describe('loadBuildTranscript', () => {
   });
 
   it('does not duplicate the founding spec when an improvement round already echoed it as a message', async () => {
-    // startImprovementRound sets both `spec` and a delivered creator message with the
-    // same text — showing both would read as the creator asking twice.
+    // Both `spec` and a message carry the same text here.
     const current = job(1, '2026-08-16T00:00:00.000Z', 'comet-courier', 'Add a boss fight.');
     const store = fakeStore({
       messages: { 1: [{ text: 'Add a boss fight.', createdAt: '2026-08-16T00:00:00.500Z' }] },

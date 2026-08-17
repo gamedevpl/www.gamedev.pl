@@ -31,24 +31,9 @@ export interface BuildBrief {
   mcpOpenerToken?: string;
   /** Where the agent reports progress and delivers its work. */
   apiBaseUrl: string;
-  /**
-   * Set for a revision round: what the creator asked to change. Untrusted text.
-   *
-   * A *selector*, not the request itself: `buildPrompt` branches on it to frame the
-   * round as continuing rather than starting, and points the agent at `read_inbox` /
-   * `get_transcript` for the creator's actual words. It is never inlined into the
-   * prompt — a relayed last message loses the conversation around it, and a terse
-   * follow-up ("build my game plz") fenced as *the* request once shadowed a full spec
-   * that was still sitting in the brief.
-   */
+  // A selector, not the request itself — buildPrompt points at read_inbox/get_transcript.
   feedback?: string;
-  /**
-   * `feedback` could not be durably queued to the build channel, so `read_inbox` /
-   * `get_transcript` will never be able to serve it — the queue write itself failed,
-   * and the caller is dispatching anyway rather than failing the request. The only
-   * remaining way this text reaches the agent is inlining it directly, so `buildPrompt`
-   * does that instead of pointing at tools that have nothing to give back.
-   */
+  // Queue write for `feedback` failed — buildPrompt must inline it instead.
   feedbackQueueFailed?: boolean;
   /**
    * Set when the previous session ended without delivering.

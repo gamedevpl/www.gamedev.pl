@@ -119,15 +119,9 @@ function channelDelivery(brief: BuildBrief, creating: boolean): string[] {
   ];
 }
 
-// The creator's words, last. A fresh round's spec is inlined; a revision round is
-// pointed at the channel instead. Inlining the last relayed message looked complete and
-// wasn't: when a round dies before its agent reads the real request, the next round
-// holds only the creator's follow-up nudge, and "build my game plz" fenced as *the*
-// request reads as the whole ask while the full spec sits unread in the brief.
+// The creator's words: inlined for a fresh round, pointed at tools.
 function finish(lines: string[], brief: BuildBrief): string {
-  // The queue write that was supposed to make this durable failed, so read_inbox and
-  // get_transcript have nothing to serve for it — inlining directly is the only path
-  // left that actually gets these words to the agent.
+  // Queue write failed — inline directly; read_inbox/get_transcript have nothing.
   if (brief.feedback && brief.feedbackQueueFailed) {
     lines.push(
       '',

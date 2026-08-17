@@ -143,16 +143,14 @@ describe('mcp-session-nudges', () => {
   });
 
   it('re-arms transcript_unread when a new dispatch attempt starts, even on the same in-process tracker', () => {
-    // The bug a reviewer caught before merge: an in-process tracker is keyed by jobId
-    // and outlives one dispatch, so a stale transcriptFetched=true from an earlier
-    // attempt must not silently suppress the nudge for a later attempt's conversation.
+    // A tracker keyed by jobId outlives one dispatch across attempts.
     const nudges = createMcpNudgeTracker();
     const t0 = 1_000_000;
     nudges.noteDispatchAttempt(1, 2, t0);
     nudges.noteToolSuccess(1, 'get_transcript', t0 + 1);
     expect(nudges.warningsFor(1, 'get_brief', t0 + 2).map((w) => w.code)).not.toContain('transcript_unread');
 
-    // A creator sends more feedback; a new dispatch (attempt 3) starts on the same job.
+    // Attempt 3 starts on the same job.
     nudges.noteDispatchAttempt(1, 3, t0 + 100);
     expect(nudges.warningsFor(1, 'get_brief', t0 + 101).map((w) => w.code)).toContain('transcript_unread');
   });
@@ -162,7 +160,7 @@ describe('mcp-session-nudges', () => {
     const t0 = 1_000_000;
     nudges.noteDispatchAttempt(1, 2, t0);
     nudges.noteToolSuccess(1, 'get_transcript', t0 + 1);
-    // A second get_brief in the same attempt must not re-arm the reminder.
+    // Same attempt reported again must not re-arm the reminder.
     nudges.noteDispatchAttempt(1, 2, t0 + 2);
     expect(nudges.warningsFor(1, 'get_brief', t0 + 3).map((w) => w.code)).not.toContain('transcript_unread');
   });

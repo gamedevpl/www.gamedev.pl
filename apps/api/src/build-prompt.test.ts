@@ -78,11 +78,8 @@ describe('buildPrompt', () => {
     expect(prompt).not.toContain('Build a new browser game');
   });
 
+  // The incident: a hiccuped round left only "build my game plz".
   it('points a revision round at the channel for the request instead of inlining the last message', () => {
-    // A relayed last message loses the conversation around it: a round that hiccuped
-    // before its agent read the real spec left the next round holding only "build my
-    // game plz", fenced as *the* request — and the round built from six words and a
-    // title while the full spec sat unread in the brief.
     const prompt = buildPrompt({ ...BRIEF, feedback: 'build my game plz' });
     expect(prompt).not.toContain('build my game plz');
     expect(prompt).toContain('## What the creator asked for');
@@ -125,10 +122,8 @@ describe('buildPrompt', () => {
     expect(prompt.length).toBeLessThan(12_000);
   });
 
+  // Without this, a queue-write failure would silently drop creator words.
   it('inlines feedback directly when it could not be durably queued, since no tool can serve it', () => {
-    // Without this fallback, a queue write failure would silently drop the creator's
-    // words: read_inbox and get_transcript both read from the same store the failed
-    // write never reached, so pointing the agent at them serves nothing.
     const prompt = buildPrompt({ ...BRIEF, feedback: 'make the bubbles bigger', feedbackQueueFailed: true });
     expect(prompt).toContain('## What the creator asked for');
     expect(prompt).toContain('```text\nmake the bubbles bigger\n```');
@@ -138,9 +133,8 @@ describe('buildPrompt', () => {
     expect(prompt).toContain('`get_transcript`');
   });
 
+  // Injected history used to truncate entries at 800 chars.
   it('sends a revision round to get_transcript for context instead of injecting history', () => {
-    // Injected history was bounded (entries truncated at 800 chars), so a long creator
-    // request arrived pre-cut; the transcript tool serves the conversation on demand.
     const prompt = buildPrompt({ ...BRIEF, feedback: 'make the bubbles bigger' });
     expect(prompt).not.toContain('## Conversation and previous changes');
     expect(prompt).toContain('`get_transcript`');

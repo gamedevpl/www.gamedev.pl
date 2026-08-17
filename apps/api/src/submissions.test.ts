@@ -1153,10 +1153,7 @@ describe('submission routes', () => {
     expect(briefs.at(-1)?.undelivered).toBeUndefined();
     expect(briefs.at(-1)?.feedback).toContain('Make the parcels bigger');
     expect(briefs.at(-1)?.feedbackQueueFailed).toBeUndefined();
-    // Conversation context is no longer injected into the brief — the round reads it
-    // back through GET /api/agent/build/transcript (MCP get_transcript) instead, so a
-    // long creator request can never be lost to a prompt that only relays the last
-    // message. The route is covered in agent-channel.test.ts / build-transcript.test.ts.
+    // Context now reads back via get_transcript, not an injected brief field.
     expect(briefs.at(-1)).not.toHaveProperty('history');
     // Gate-green closed the round; feedback must reopen the job, not leave it stuck
     // in ready_for_review while a session quietly starts underneath. Land on
@@ -1172,13 +1169,8 @@ describe('submission routes', () => {
     await app.close();
   });
 
+  // ready_for_review isn't inbox-steered, so a failed queue write still dispatches.
   it('falls back to inlining feedback in the prompt when the queue write fails but the round still dispatches', async () => {
-    // A job with no active in-flight dispatch (ready_for_review) is NOT steered via the
-    // inbox (shouldSteerFeedbackViaInbox is false), so a failed appendCreatorMessage
-    // does not fail the request closed — resumeBuild still runs. With the prompt no
-    // longer inlining feedback by default, that queue failure would otherwise mean
-    // read_inbox and get_transcript both come back empty and the agent never learns
-    // what the creator asked for at all.
     const { githubClient } = createGithubClientStub({ issueNumber: 77 });
     const { backend, briefs } = createBackendStub();
     const { app, authHeaders, store } = await createApp({

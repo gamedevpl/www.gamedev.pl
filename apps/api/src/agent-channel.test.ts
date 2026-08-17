@@ -383,7 +383,7 @@ describe('agent build channel', () => {
   it('serves the tail of the conversation on the transcript route without acking anything', async () => {
     const store = new InMemoryStore();
     await seedSubmission(store);
-    // Already delivered in an earlier session — gone from the inbox, kept in the record.
+    // Already delivered — gone from the inbox, kept in the record.
     await store.appendCreatorMessage(ISSUE, 'A long spec about hatching and teaching creatures.', {
       delivered: true,
     });
@@ -409,7 +409,7 @@ describe('agent build channel', () => {
         ['build_progress', 'Drawing the nursery.'],
       ]),
     );
-    // Four entries fit well under the default window; nothing more to page to.
+    // Four entries fit under the default window.
     expect(body.hasMore).toBe(false);
     expect(body.nextCursor).toBeUndefined();
     expect(body.control).toMatchObject({ stop: false });

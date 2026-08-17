@@ -557,8 +557,7 @@ describe('POST /api/mcp (BY-05)', () => {
   });
 
   it('serves a window of the creator conversation through get_transcript, acked or not', async () => {
-    // The kickoff prompt no longer inlines the creator's last message; this tool is
-    // where a terse "build my game plz" gets its missing conversation back.
+    // Where a terse "build my game plz" gets its conversation back.
     const store = new InMemoryStore();
     await seedJob(store);
     await store.appendCreatorMessage(ISSUE, 'Build a Creatures-like life sim where you hatch and teach Norns.', {
@@ -580,7 +579,7 @@ describe('POST /api/mcp (BY-05)', () => {
       pendingMessages: unknown[];
       stop: boolean;
     };
-    // The already-acked long request still appears: this is the record, not the unacked tail.
+    // The already-acked request still appears — this is the record.
     expect(structured.entries.map((entry) => entry.text)).toEqual(
       expect.arrayContaining([
         expect.stringContaining('Norns'),
@@ -589,7 +588,7 @@ describe('POST /api/mcp (BY-05)', () => {
       ]),
     );
     expect(structured.entries.every((entry) => entry.round === 'current')).toBe(true);
-    // Three entries fit well inside the default window; nothing more to page to.
+    // Three entries fit the default window.
     expect(structured.hasMore).toBe(false);
     expect(structured.nextCursor).toBeUndefined();
     // Reading the transcript acks nothing.
@@ -629,11 +628,7 @@ describe('POST /api/mcp (BY-05)', () => {
   });
 
   it('nudges transcript_unread on an undelivered retry of round 1 — the round number never moves', async () => {
-    // This is the case round > 1 would have missed: ensureRoundGeneration does not
-    // bump the round for an undelivered retry, so a job whose very first attempt
-    // hiccuped without delivering is still reported as round 1 on the retry — exactly
-    // the scenario that motivated get_transcript. dispatchAttempt (dispatch.refs.length)
-    // catches it because a retry is a new dispatch call regardless of round number.
+    // ensureRoundGeneration does not bump the round for an undelivered retry.
     const store = new InMemoryStore();
     await seedJob(store);
     // The original dispatch, as dispatchBuild would have recorded it.

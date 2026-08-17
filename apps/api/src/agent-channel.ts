@@ -2167,16 +2167,7 @@ export async function registerAgentChannelRoutes(
     },
   );
 
-  /**
-   * The creator conversation, one window at a time — never the whole thing in a single
-   * reply. The inbox serves the unacked tail; this serves the record — creator requests,
-   * agent notes and build events across this round and the game's earlier rounds — so a
-   * terse latest message ("continue", "build my game plz") can be read against the
-   * conversation it is the tail of instead of standing in for it. With no query params
-   * this returns the most recent window; pass back `nextCursor` as `cursor` to page
-   * further into history. Read-only: it never marks anything delivered; acking stays
-   * explicit via the inbox.
-   */
+  // The creator conversation, windowed — inbox serves the unacked tail, this the record.
   app.get(
     '/api/agent/build/transcript',
     { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },
@@ -2330,8 +2321,7 @@ export async function registerAgentChannelRoutes(
         constraints: buildConstraints(DEFAULT_BUILD_ORIENTATION),
         locales: briefLocales(record.locale),
         ...seed,
-        // > 1 means an earlier attempt exists (revision, undelivered retry, or
-        // handoff) — get_transcript may have context this brief's inlined spec does not.
+        // > 1 means get_transcript may know more than this brief's spec.
         dispatchAttempt: dispatchAttempt(record),
         pendingMessages: pending.map((message) => ({
           id: message.id,

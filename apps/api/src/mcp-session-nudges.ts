@@ -34,18 +34,11 @@ export interface JobNudgeState {
   seedFetched: boolean;
   /** Last known seedStatus from brief/seed payloads. */
   seedStatus: 'pending' | 'available' | 'unavailable' | null;
-  /**
-   * `dispatchAttempt` from the last start/get_brief payload seen, or null before either
-   * has been called. A *change* from the previously seen value (not just its being > 1)
-   * re-arms `transcriptFetched`/`transcriptRemindersSent` — a job's in-process nudge
-   * state is keyed by jobId and outlives one dispatch, so without this, an agent that
-   * read the transcript on attempt 2 would silently suppress the nudge on attempt 3,
-   * whose conversation the earlier read never saw.
-   */
+  // Last-seen dispatchAttempt; a change re-arms transcriptFetched below.
   lastDispatchAttempt: number | null;
-  /** True after a successful get_transcript since the last dispatch this tracker saw. */
+  // True after get_transcript since the last dispatch this tracker saw.
   transcriptFetched: boolean;
-  /** How many times we have asked for it, so the reminder cannot become noise. */
+  // Bounds transcript_unread reminders so it cannot become noise.
   transcriptRemindersSent: number;
   /**
    * True after a successful submit_sources until `end` — subsequent tools re-emit
@@ -75,12 +68,7 @@ export const GATE_POLL_RETRY_AFTER_SECONDS = 30;
  */
 export const CARD_REMINDER_LIMIT = 3;
 
-/**
- * How many times to ask an agent to read the transcript on a round with earlier
- * conversation before letting it go, same reasoning as `CARD_REMINDER_LIMIT`: a
- * bounded nudge catches an agent that did not notice, without crowding out warnings
- * that matter more once it is well into the round.
- */
+// Same reasoning as CARD_REMINDER_LIMIT: bounded so it cannot crowd out later warnings.
 export const TRANSCRIPT_REMINDER_LIMIT = 3;
 
 /** No progress for this long (wall clock) → `progress_stale`. */
@@ -139,7 +127,7 @@ export interface McpNudgeTracker {
   noteInboxCheck(jobId: number, nowMs: number): void;
   noteSeedFetch(jobId: number, nowMs: number): void;
   noteSeedStatus(jobId: number, status: 'pending' | 'available' | 'unavailable' | null, nowMs: number): void;
-  /** Called with `dispatchAttempt` from a start/get_brief payload. */
+  // Called with dispatchAttempt from a start/get_brief payload.
   noteDispatchAttempt(jobId: number, attempt: number, nowMs: number): void;
   /** Successful submit_sources — creator handoff may already be unlocked; still need `end`. */
   noteSubmitSuccess(jobId: number, nowMs: number): void;
@@ -214,9 +202,7 @@ export function createMcpNudgeTracker(
   function noteDispatchAttempt(jobId: number, attempt: number, nowMs: number): void {
     const state = ensure(jobId, nowMs);
     if (state.lastDispatchAttempt !== null && state.lastDispatchAttempt !== attempt) {
-      // A new dispatch happened since this tracker last saw the job — whatever an
-      // earlier session already read no longer covers the conversation attached to
-      // this one, so the nudge must be able to fire again.
+      // A new dispatch started — the earlier read no longer covers it.
       state.transcriptFetched = false;
       state.transcriptRemindersSent = 0;
     }
@@ -330,10 +316,7 @@ export function createMcpNudgeTracker(
       });
     }
 
-    // An earlier dispatch exists — a revision, a resumed undelivered round, or a
-    // builder handoff. The brief no longer inlines the last creator message (it can be
-    // the terse tail of a much longer conversation), so this is the one nudge standing
-    // in for what used to be automatic.
+    // An earlier attempt exists; the brief no longer inlines the last message.
     if (
       (state.lastDispatchAttempt ?? 1) > 1 &&
       !state.transcriptFetched &&

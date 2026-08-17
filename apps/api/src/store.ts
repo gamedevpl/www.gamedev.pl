@@ -616,20 +616,7 @@ export function isStudioOrigin(origin: CreatorMessageOrigin | undefined): boolea
   return origin === 'studio' || origin === 'studio_ack';
 }
 
-/**
- * Which attempt this is at building this job — 1 for the very first dispatch ever,
- * incrementing on every dispatch after that. The signal for "there may be conversation
- * worth reading with get_transcript before deciding what to build" (`dispatchAttempt >
- * 1`), and for detecting that a *new* attempt has started since a caller last checked.
- *
- * Deliberately not `roundGeneration`: an undelivered retry resumes the *same* round
- * (`ensureRoundGeneration` does not bump it), so a job whose very first attempt
- * hiccuped without delivering can still be on round 1 when it is retried — exactly the
- * scenario that motivated get_transcript in the first place. `dispatch.refs` grows on
- * every dispatch call regardless of whether the round number moved (a revision round is
- * a new task on the same workspace, not a new session on the old one — see `dispatch`'s
- * own doc comment), so its length is the count that actually matters here.
- */
+// 1 for the first dispatch; unlike roundGeneration, retries don't bump it.
 export function dispatchAttempt(record: Pick<SubmissionRecord, 'dispatch'>): number {
   return record.dispatch?.refs?.length ?? 1;
 }
