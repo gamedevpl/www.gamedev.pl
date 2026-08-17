@@ -379,7 +379,7 @@ describe('agent build channel', () => {
     expect(acked.json().pending).toHaveLength(0);
   });
 
-  it('serves the whole conversation on the transcript route without acking anything', async () => {
+  it('serves the tail of the conversation on the transcript route without acking anything', async () => {
     const store = new InMemoryStore();
     await seedSubmission(store);
     // Already delivered in an earlier session — gone from the inbox, kept in the record.
@@ -395,7 +395,8 @@ describe('agent build channel', () => {
     expect(res.statusCode).toBe(200);
     const body = res.json() as {
       entries: Array<{ kind: string; text: string; round: string }>;
-      omitted: number;
+      hasMore: boolean;
+      nextCursor?: string;
       pending: Array<{ text: string }>;
       control: { stop: boolean };
     };
@@ -407,12 +408,42 @@ describe('agent build channel', () => {
         ['build_progress', 'Drawing the nursery.'],
       ]),
     );
-    expect(body.omitted).toBe(0);
+    // Four entries fit well under the default window; nothing more to page to.
+    expect(body.hasMore).toBe(false);
+    expect(body.nextCursor).toBeUndefined();
     expect(body.control).toMatchObject({ stop: false });
 
     // Reading the transcript is not acknowledging: the pending message survives.
     const inbox = await app.inject({ method: 'GET', url: '/api/agent/build/inbox', headers: agentHeaders() });
     expect(inbox.json().pending).toHaveLength(1);
+  });
+
+  it('pages the transcript with cursor/limit instead of serving it all at once', async () => {
+    const store = new InMemoryStore();
+    await seedSubmission(store);
+    for (let i = 0; i < 5; i += 1) {
+      await store.appendCreatorMessage(ISSUE, `message-${i}`, { delivered: true });
+    }
+    app = await createApp(store);
+
+    const firstPage = await app.inject({
+      method: 'GET',
+      url: '/api/agent/build/transcript?limit=2',
+      headers: agentHeaders(),
+    });
+    const first = firstPage.json() as { entries: Array<{ text: string }>; hasMore: boolean; nextCursor?: string };
+    expect(first.entries.map((e) => e.text)).toEqual(['message-3', 'message-4']);
+    expect(first.hasMore).toBe(true);
+    expect(first.nextCursor).toBeDefined();
+
+    const secondPage = await app.inject({
+      method: 'GET',
+      url: `/api/agent/build/transcript?limit=2&cursor=${first.nextCursor}`,
+      headers: agentHeaders(),
+    });
+    const second = secondPage.json() as { entries: Array<{ text: string }>; hasMore: boolean };
+    expect(second.entries.map((e) => e.text)).toEqual(['message-1', 'message-2']);
+    expect(second.hasMore).toBe(true);
   });
 
   it('queues creator feedback for the agent when it is posted to GitHub', async () => {

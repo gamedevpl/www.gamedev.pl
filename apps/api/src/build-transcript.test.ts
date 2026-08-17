@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { loadBuildTranscript, stripPlaytestContext, PLAYTEST_CONTEXT_HEADER } from './build-transcript.js';
+import {
+  DEFAULT_TRANSCRIPT_WINDOW_ENTRIES,
+  loadBuildTranscript,
+  MAX_TRANSCRIPT_WINDOW_ENTRIES,
+  PLAYTEST_CONTEXT_HEADER,
+  stripPlaytestContext,
+} from './build-transcript.js';
 import { mcpPresenceText } from './mcp-presence.js';
 import type { CreatorMessage, Store, SubmissionRecord } from './store.js';
 import type { BuildEvent } from './submission-status.js';
@@ -39,8 +45,101 @@ function fakeStore(input: {
   };
 }
 
+// 25 strictly increasing creator messages, oldest first: message-0 .. message-24.
+function manyMessages(count: number) {
+  return Array.from({ length: count }, (_, i) => ({
+    text: `message-${i}`,
+    createdAt: `2026-08-17T12:${String(i).padStart(2, '0')}:00.000Z`,
+  }));
+}
+
 describe('loadBuildTranscript', () => {
-  it('merges creator messages and build events across rounds, oldest first', async () => {
+  it('defaults to the tail — the most recent window — when no cursor is given', async () => {
+    const current = job(1, '2026-08-16T00:00:00.000Z');
+    const store = fakeStore({ messages: { 1: manyMessages(25) } });
+
+    const page = await loadBuildTranscript(store, current);
+
+    expect(page.entries).toHaveLength(DEFAULT_TRANSCRIPT_WINDOW_ENTRIES);
+    expect(page.entries[0]!.text).toBe('message-5');
+    expect(page.entries.at(-1)!.text).toBe('message-24');
+    expect(page.hasMore).toBe(true);
+    expect(page.nextCursor).toBe('5');
+  });
+
+  it('never returns the whole conversation in one call, and paging with nextCursor covers it without gaps or dupes', async () => {
+    const current = job(1, '2026-08-16T00:00:00.000Z');
+    const store = fakeStore({ messages: { 1: manyMessages(47) } });
+
+    const seen: string[] = [];
+    let cursor: string | undefined;
+    let pages = 0;
+    for (;;) {
+      const page = await loadBuildTranscript(store, current, cursor !== undefined ? { cursor } : undefined);
+      pages += 1;
+      expect(page.entries.length).toBeLessThanOrEqual(DEFAULT_TRANSCRIPT_WINDOW_ENTRIES);
+      seen.unshift(...page.entries.map((e) => e.text));
+      if (!page.hasMore) break;
+      cursor = page.nextCursor;
+      expect(pages).toBeLessThan(10); // guard against an infinite loop on a bug
+    }
+
+    expect(pages).toBeGreaterThan(1); // proves no single call served everything
+    expect(seen).toEqual(manyMessages(47).map((m) => m.text));
+  });
+
+  it('degrades a malformed or out-of-range cursor to something sane rather than erroring', async () => {
+    const current = job(1, '2026-08-16T00:00:00.000Z');
+    const store = fakeStore({ messages: { 1: manyMessages(25) } });
+
+    // Garbage cursor: falls back to the tail, same as no cursor at all.
+    const garbage = await loadBuildTranscript(store, current, { cursor: 'not-a-number' });
+    expect(garbage.entries.at(-1)!.text).toBe('message-24');
+
+    // Cursor past the end: clamps to the tail rather than an empty/erroring result.
+    const tooFar = await loadBuildTranscript(store, current, { cursor: '9999' });
+    expect(tooFar.entries.at(-1)!.text).toBe('message-24');
+
+    // Cursor before the start: clamps to nothing left to show, not negative indices.
+    const beforeStart = await loadBuildTranscript(store, current, { cursor: '-5' });
+    expect(beforeStart.entries).toEqual([]);
+    expect(beforeStart.hasMore).toBe(false);
+    expect(beforeStart.nextCursor).toBeUndefined();
+  });
+
+  it('honours limit, clamped to the window ceiling', async () => {
+    const current = job(1, '2026-08-16T00:00:00.000Z');
+    const store = fakeStore({ messages: { 1: manyMessages(80) } });
+
+    const small = await loadBuildTranscript(store, current, { limit: 3 });
+    expect(small.entries).toHaveLength(3);
+    expect(small.entries.at(-1)!.text).toBe('message-79');
+
+    const oversized = await loadBuildTranscript(store, current, { limit: 1000 });
+    expect(oversized.entries).toHaveLength(MAX_TRANSCRIPT_WINDOW_ENTRIES);
+  });
+
+  it('shrinks the window to stay under the per-window byte ceiling, without dropping an entry out of order', async () => {
+    const current = job(1, '2026-08-16T00:00:00.000Z');
+    // 10 entries of 3000 bytes each: a 20-entry window would be 60 KB, well past the
+    // 20 KB per-window cap, so the window must shrink rather than serve it whole.
+    const messages = Array.from({ length: 10 }, (_, i) => ({
+      text: 'x'.repeat(3000),
+      createdAt: `2026-08-17T12:${String(i).padStart(2, '0')}:00.000Z`,
+    }));
+    const store = fakeStore({ messages: { 1: messages } });
+
+    const page = await loadBuildTranscript(store, current);
+
+    expect(page.entries.length).toBeLessThan(10);
+    expect(page.entries.length).toBeGreaterThan(0);
+    const totalBytes = page.entries.reduce((sum, e) => sum + Buffer.byteLength(e.text, 'utf8'), 0);
+    expect(totalBytes).toBeLessThanOrEqual(20_000);
+    // Still the newest entries, still contiguous — no entry skipped mid-window.
+    expect(page.hasMore).toBe(true);
+  });
+
+  it('merges creator messages and build events across sibling rounds, oldest first within the window', async () => {
     const current = job(2, '2026-08-17T12:00:00.000Z');
     const store = fakeStore({
       submissions: [current, job(1, '2026-08-16T12:00:00.000Z'), job(3, '2026-08-18T12:00:00.000Z')],
@@ -56,10 +155,10 @@ describe('loadBuildTranscript', () => {
       },
     });
 
-    const { entries, omitted } = await loadBuildTranscript(store, current);
+    const page = await loadBuildTranscript(store, current);
 
-    expect(omitted).toBe(0);
-    expect(entries).toEqual([
+    expect(page.hasMore).toBe(false);
+    expect(page.entries).toEqual([
       {
         kind: 'creator_request',
         text: 'A very long spec about hatching Norns.',
@@ -86,30 +185,7 @@ describe('loadBuildTranscript', () => {
       },
     ]);
     // Job 3 is newer than the current round and belongs to its own transcript.
-    expect(entries.some((entry) => entry.createdAt.startsWith('2026-08-18'))).toBe(false);
-  });
-
-  it('drops progress noise before it ever drops a creator word when the budget is tight', async () => {
-    const current = job(1, '2026-08-17T12:00:00.000Z');
-    const store = fakeStore({
-      messages: {
-        1: [{ text: 'c'.repeat(30), createdAt: '2026-08-17T13:00:00.000Z' }],
-      },
-      events: {
-        1: [
-          { text: 'p'.repeat(30), createdAt: '2026-08-17T12:30:00.000Z' },
-          { text: 'q'.repeat(30), createdAt: '2026-08-17T12:45:00.000Z' },
-        ],
-      },
-    });
-
-    const { entries, omitted } = await loadBuildTranscript(store, current, { maxBytes: 65 });
-
-    // The creator message survives even though it is chronologically last; the newest
-    // progress entry fills what budget remains, and the rest is counted, not hidden.
-    expect(entries.map((entry) => entry.kind)).toEqual(['build_progress', 'creator_request']);
-    expect(entries[0]!.text).toBe('q'.repeat(30));
-    expect(omitted).toBe(1);
+    expect(page.entries.some((entry) => entry.createdAt.startsWith('2026-08-18'))).toBe(false);
   });
 
   it('strips playtest instrumentation and hides pre-cutover presence leftovers', async () => {
@@ -135,9 +211,9 @@ describe('loadBuildTranscript', () => {
       },
     });
 
-    const { entries } = await loadBuildTranscript(store, current);
+    const page = await loadBuildTranscript(store, current);
 
-    expect(entries.map((entry) => entry.text)).toEqual(['Make it faster.', presence]);
+    expect(page.entries.map((entry) => entry.text)).toEqual(['Make it faster.', presence]);
   });
 
   it('stripPlaytestContext removes the stapled block and nothing else', () => {

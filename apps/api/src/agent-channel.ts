@@ -2162,12 +2162,14 @@ export async function registerAgentChannelRoutes(
   );
 
   /**
-   * The whole creator conversation, not just what is pending. The inbox serves the
-   * unacked tail; this serves the record — creator requests, agent notes and build
-   * events across this round and the game's earlier rounds, oldest first — so a terse
-   * latest message ("continue", "build my game plz") can be read against the
-   * conversation it is the tail of instead of standing in for it. Read-only: it never
-   * marks anything delivered; acking stays explicit via the inbox.
+   * The creator conversation, one window at a time — never the whole thing in a single
+   * reply. The inbox serves the unacked tail; this serves the record — creator requests,
+   * agent notes and build events across this round and the game's earlier rounds — so a
+   * terse latest message ("continue", "build my game plz") can be read against the
+   * conversation it is the tail of instead of standing in for it. With no query params
+   * this returns the most recent window; pass back `nextCursor` as `cursor` to page
+   * further into history. Read-only: it never marks anything delivered; acking stays
+   * explicit via the inbox.
    */
   app.get(
     '/api/agent/build/transcript',
@@ -2177,7 +2179,11 @@ export async function registerAgentChannelRoutes(
       if (!resolved) return reply;
       const { issueNumber, record } = resolved;
 
-      const transcript = await loadBuildTranscript(store!, record);
+      const query = request.query as { cursor?: string; limit?: string };
+      const transcript = await loadBuildTranscript(store!, record, {
+        ...(query.cursor !== undefined ? { cursor: query.cursor } : {}),
+        ...(optionalFiniteQuery(query.limit) !== undefined ? { limit: optionalFiniteQuery(query.limit) } : {}),
+      });
       return reply.send({ ...transcript, ...(await channelState(issueNumber, record)) });
     },
   );

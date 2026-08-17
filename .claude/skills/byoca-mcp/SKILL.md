@@ -81,7 +81,7 @@ are, alongside `get_kit_api` and, since 2026-08-11, `knowledge_query` for everyt
 or off-brief, and, since 2026-08-17, `get_transcript` — the whole creator conversation
 (see below).
 
-### `get_transcript` — the conversation, not just its tail
+### `get_transcript` — a window of the conversation, never the whole of it
 
 The managed kickoff prompt used to end with the creator's _last_ relayed message fenced
 as "What the creator asked for" (`buildPrompt`'s `finish()` injected
@@ -100,17 +100,33 @@ The fix has two halves, and both matter when editing either:
   the conversation. `build-prompt.test.ts` pins that the feedback text stays out.
 - **`get_transcript`** (`GET /api/agent/build/transcript`, assembled by
   `apps/api/src/build-transcript.ts`) serves creator requests, agent notes and build
-  events across the current job and up to five earlier sibling rounds, oldest first,
+  events across the current job and up to five earlier sibling rounds,
   playtest-instrumentation stripped, presence leftovers hidden. Read-only: it never
-  acks — `read_inbox`/`ack_inbox` keep that. Budgeted at 40 KB per the get_kit_api
-  single-tool-result lesson, dropping `build_progress` noise before `agent_note`
-  before `creator_request` and reporting the count as `omitted` — never a silent cut.
+  acks — `read_inbox`/`ack_inbox` keep that.
+
+**Windowed, not budgeted-and-truncated.** The first version served the whole assembled
+conversation in one reply, fit to a byte budget by dropping `build_progress` before
+`agent_note` before `creator_request` — the same shape that made `get_kit_api` refuse
+outright at a 100 KB default on a live client's own token ceiling (see below). A
+conversation has no natural ceiling the way one kit's API surface does, so "budget and
+drop the least important parts" was never going to hold as rounds accumulated. It now
+pages instead: `loadBuildTranscript(store, record, { cursor?, limit? })` slices the full
+chronological list into windows (`DEFAULT_TRANSCRIPT_WINDOW_ENTRIES` = 20 entries,
+capped at `MAX_TRANSCRIPT_WINDOW_ENTRIES` = 50, each window additionally capped at
+`MAX_TRANSCRIPT_WINDOW_BYTES` = 20 KB by shrinking the window — never by dropping an
+entry out of chronological order within it). No arguments returns the tail — the newest
+window, oldest-first within it, which is what almost every caller wants. `hasMore` +
+`nextCursor` let a caller page further back; `cursor` is an opaque index string,
+clamped rather than erroring on a stale or malformed value, so it always degrades to
+something sane rather than refusing the call.
 
 The workflow's `get_brief` step and the managed system prompt
 (`infra/managed-agent.json`) both tell agents: when the latest message is terse
-("continue", "build my game") or references anything unseen, call `get_transcript` once
-before deciding what to build — the latest message is the tail of a conversation, not
-the whole of it.
+("continue", "build my game") or references anything unseen, call `get_transcript`
+before deciding what to build (it returns the tail on the plain call) — and only page
+further back with `cursor` when that window genuinely does not answer what is needed,
+not speculatively. The latest message is the tail of a conversation, not the whole of
+it, but neither is `get_transcript`'s reply the whole of it either — that is the point.
 
 Adding an advertised tool means adding its row to `listings/mcp/README.md` in the same
 change: `mcp-server.test.ts` asserts the README documents every live tool with the exact

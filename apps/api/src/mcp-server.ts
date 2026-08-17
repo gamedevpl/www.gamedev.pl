@@ -3,6 +3,7 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import { looksLikeCreatorAgentKey } from './agent-creator-key.js';
 import { canonicalAppBaseUrl } from './canonical-app-url.js';
+import { DEFAULT_TRANSCRIPT_WINDOW_ENTRIES, MAX_TRANSCRIPT_WINDOW_ENTRIES } from './build-transcript.js';
 import {
   resolveCreatorAgentKeyForOpenRound,
   resolveCreatorAgentKeyForStart,
@@ -656,7 +657,7 @@ const SESSION_WORKFLOW: readonly string[] = [
   'Hold the sessionKey start gave you for the whole round and pass it on every call. Do not re-run start to refresh it — it is valid until expiresAt. Re-run start only if a call is refused as unauthenticated.',
   "show_round — once, right after start. In a client that renders MCP Apps views this puts a live status card in the creator's chat that follows the build and the gate on its own, so they can watch without you polling. Calling it again renders a second card.",
   'show_media — whenever the creator asks to see the game. get_gate_media attaches frames for YOU to look at; those attachments do not reach the creator, so describing them is all you can do with it. show_media is what actually puts the pictures in front of them.',
-  'get_brief — read the brief; if seedAvailable or seedStatus=available, call get_seed and revise that seed as the opening move, treating the brief as the authority wherever the draft disagrees. If seedStatus=pending, browse the kit lightly then recheck get_seed before scaffolding. If seedStatus=unavailable, the response says no seed exists for this round; scaffold from the kit, or call regenerate_seed once (with steer) if a draft would genuinely help. When the brief or the latest creator message is terse ("continue", "build my game") or refers to anything you have not seen, call get_transcript once — the whole creator conversation and earlier rounds — before deciding what to build; the latest message is the tail of a conversation, not the whole of it.',
+  'get_brief — read the brief; if seedAvailable or seedStatus=available, call get_seed and revise that seed as the opening move, treating the brief as the authority wherever the draft disagrees. If seedStatus=pending, browse the kit lightly then recheck get_seed before scaffolding. If seedStatus=unavailable, the response says no seed exists for this round; scaffold from the kit, or call regenerate_seed once (with steer) if a draft would genuinely help. When the brief or the latest creator message is terse ("continue", "build my game") or refers to anything you have not seen, call get_transcript before deciding what to build — it returns the most recent window of the creator conversation (never the whole thing); pass cursor: nextCursor only if that window still does not answer what you need. The latest message is the tail of a conversation, not the whole of it.',
   // An improvement round has no seed (seeds are a new-game facility) and its brief is
   // the change request alone, so nothing above this told the agent a game already
   // existed. Following the loop literally, it scaffolded a fresh game over a published
@@ -5178,13 +5179,15 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
     },
 
     get_transcript: {
-      annotations: { title: 'Read the creator conversation transcript', ...READS },
+      annotations: { title: 'Read a window of the creator conversation', ...READS },
       outputSchema: {
         type: 'object',
         properties: {
           entries: {
             type: 'array',
-            description: 'The conversation, oldest first, across this round and earlier rounds of the same game.',
+            description:
+              'One window of the conversation, oldest first, across this round and earlier rounds of the same game. ' +
+              'Never the whole conversation — see hasMore/nextCursor to read further back.',
             items: {
               type: 'object',
               properties: {
@@ -5196,33 +5199,62 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
               required: ['kind', 'text', 'createdAt', 'round'],
             },
           },
-          omitted: {
-            type: 'number',
-            description: 'Entries dropped to fit the size budget — progress noise goes before creator words.',
+          hasMore: {
+            type: 'boolean',
+            description: 'True when earlier entries exist beyond this window.',
+          },
+          nextCursor: {
+            type: 'string',
+            description: 'Pass as cursor to read the window immediately before this one. Absent when hasMore is false.',
           },
           ...REPLY_CONTROL,
         },
-        required: ['entries', 'omitted', 'pendingMessages', 'stop'],
+        required: ['entries', 'hasMore', 'pendingMessages', 'stop'],
       },
       description:
-        'Read the whole creator conversation and build history for this game, oldest first — creator requests, ' +
-        'agent notes, and progress events across this round and earlier rounds. Call it when the brief or the ' +
-        'latest inbox message is terse or refers to anything you have not seen: the latest message is the tail ' +
-        'of a conversation, not the whole of it. Read-only; it acks nothing (read_inbox/ack_inbox own that). ' +
+        'Read one window of the creator conversation and build history for this game — creator requests, agent ' +
+        'notes, and progress events across this round and earlier rounds, oldest first within the window. Never ' +
+        'returns the whole conversation in one call. With no arguments, returns the most recent window (the ' +
+        'tail) — call it plain first. If hasMore is true and you need earlier context, call again with cursor ' +
+        'set to nextCursor to page further back; do not do this speculatively — only when the tail itself does ' +
+        'not answer what you need. Call it when the brief or the latest inbox message is terse or refers to ' +
+        'anything you have not seen: the latest message is the tail of a conversation, not the whole of it. ' +
+        'Read-only; it acks nothing (read_inbox/ack_inbox own that). ' +
         CREATOR_TEXT_SAFETY,
       inputSchema: {
         type: 'object',
-        properties: { sessionKey: SESSION_KEY_PROP },
+        properties: {
+          sessionKey: SESSION_KEY_PROP,
+          cursor: {
+            type: 'string',
+            description:
+              'From a previous reply’s nextCursor — reads the window immediately before it. Omit for the tail.',
+          },
+          limit: {
+            type: 'number',
+            description: `Entries in this window (default ${DEFAULT_TRANSCRIPT_WINDOW_ENTRIES}, max ${MAX_TRANSCRIPT_WINDOW_ENTRIES}).`,
+          },
+        },
         required: [],
       },
       handler: async (args, ctx) => {
         const auth = await resolveAuth(ctx, args);
         if (!('channelToken' in auth)) return auth;
-        const res = await injectChannel(ctx.request, 'GET', '/api/agent/build/transcript', auth.channelToken);
+        const query = new URLSearchParams();
+        if (typeof args.cursor === 'string' && args.cursor.trim()) query.set('cursor', args.cursor.trim());
+        if (typeof args.limit === 'number' && Number.isFinite(args.limit)) query.set('limit', String(args.limit));
+        const qs = query.toString();
+        const res = await injectChannel(
+          ctx.request,
+          'GET',
+          `/api/agent/build/transcript${qs ? `?${qs}` : ''}`,
+          auth.channelToken,
+        );
         const body = res.json() as {
           error?: string;
           entries?: Array<{ kind: string; text: string; createdAt: string; round: string }>;
-          omitted?: number;
+          hasMore?: boolean;
+          nextCursor?: string;
           pending?: Array<{ id: string; text: string; createdAt: string }>;
           control?: { stop?: boolean; reason?: string };
         };
@@ -5231,7 +5263,8 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         }
         return toolOk({
           entries: body.entries ?? [],
-          omitted: body.omitted ?? 0,
+          hasMore: body.hasMore ?? false,
+          ...(body.nextCursor ? { nextCursor: body.nextCursor } : {}),
           pendingMessages: pendingMessagesFromChannel(body),
           ...channelControlFields(body),
         });

@@ -556,7 +556,7 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(names).not.toEqual(expect.arrayContaining(['list_examples', 'submit_proposal']));
   });
 
-  it('serves the whole creator conversation through get_transcript, acked or not', async () => {
+  it('serves a window of the creator conversation through get_transcript, acked or not', async () => {
     // The kickoff prompt no longer inlines the creator's last message; this tool is
     // where a terse "build my game plz" gets its missing conversation back.
     const store = new InMemoryStore();
@@ -575,7 +575,8 @@ describe('POST /api/mcp (BY-05)', () => {
     expect(transcript.isError).toBe(false);
     const structured = transcript.structured as {
       entries: Array<{ kind: string; text: string; round: string }>;
-      omitted: number;
+      hasMore: boolean;
+      nextCursor?: string;
       pendingMessages: unknown[];
       stop: boolean;
     };
@@ -588,10 +589,43 @@ describe('POST /api/mcp (BY-05)', () => {
       ]),
     );
     expect(structured.entries.every((entry) => entry.round === 'current')).toBe(true);
-    expect(structured.omitted).toBe(0);
+    // Three entries fit well inside the default window; nothing more to page to.
+    expect(structured.hasMore).toBe(false);
+    expect(structured.nextCursor).toBeUndefined();
     // Reading the transcript acks nothing.
     expect(structured.pendingMessages).toHaveLength(1);
     expect(structured.stop).toBe(false);
+  });
+
+  it('pages get_transcript with cursor/limit instead of returning everything at once', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    for (let i = 0; i < 5; i += 1) {
+      await store.appendCreatorMessage(ISSUE, `message-${i}`, { delivered: true });
+    }
+    app = await createApp(store);
+    const sessionId = await initialize(app);
+    const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    const first = await callTool(app, 'get_transcript', { sessionKey, limit: 2 }, { 'mcp-session-id': sessionId });
+    const firstStructured = first.structured as {
+      entries: Array<{ text: string }>;
+      hasMore: boolean;
+      nextCursor?: string;
+    };
+    expect(firstStructured.entries.map((e) => e.text)).toEqual(['message-3', 'message-4']);
+    expect(firstStructured.hasMore).toBe(true);
+    expect(firstStructured.nextCursor).toBeDefined();
+
+    const second = await callTool(
+      app,
+      'get_transcript',
+      { sessionKey, limit: 2, cursor: firstStructured.nextCursor },
+      { 'mcp-session-id': sessionId },
+    );
+    const secondStructured = second.structured as { entries: Array<{ text: string }> };
+    expect(secondStructured.entries.map((e) => e.text)).toEqual(['message-1', 'message-2']);
   });
 
   it('keeps the Copilot MCP connector inert without a round key', async () => {

@@ -26,8 +26,12 @@ built from a nudge and a title.
 
 So a revision round's prompt no longer inlines the message at all. It points at the
 channel instead: `read_inbox` for the pending request (then `ack_inbox`), `get_brief` for
-the spec, and `get_transcript` for the whole conversation across rounds — the store has
-all of it, unabridged, and a tool read cannot go stale the way a relayed copy can. A
+the spec, and `get_transcript` for the conversation across rounds — read on demand, so a
+tool call cannot go stale the way a relayed copy can. `get_transcript` itself never
+returns the whole conversation in one reply: it serves the most recent window by default
+and pages further back only on request (`cursor`/`nextCursor`), the same lesson
+`get_kit_api` learned the hard way — a tool result sized to fit an unbounded conversation
+is exactly the shape that got refused outright by a live client's own token ceiling. A
 fresh round still gets its spec inlined: at creation time the spec _is_ the whole
 conversation. The same data-not-instructions fencing applies to whatever those tools
 return, and `build-prompt.test.ts` pins that the last message stays out of the prompt.
