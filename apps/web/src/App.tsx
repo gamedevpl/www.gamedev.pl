@@ -1257,9 +1257,12 @@ export function App() {
               />
             ) : route.view === 'party' ? (
               <PartyPage
+                catalogStatus={catalogStatus}
+                catalogError={catalogError}
                 catalogEntries={catalogEntries}
                 onPlayGame={handlePlayGame}
                 onPlayTogether={(game, via) => void handlePlayTogether(game, via)}
+                onRetryCatalog={handleRetryCatalog}
                 onCreateCustom={handleCreateNav}
               />
             ) : (

@@ -114,7 +114,8 @@ const PLAY_VIA_LABELS: Record<string, string> = {
   create_showcase: '/create showcase',
   shelf: 'catalog shelf',
   featured_similar: 'featured "more like this"',
-  unknown: 'unknown (direct link, party, etc.)',
+  party_page: '/party rail',
+  unknown: 'unknown (direct link, etc.)',
 };
 
 const HOW_TO_ENTRY_LABELS: Record<string, string> = {

@@ -2,21 +2,33 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CatalogRail } from './CatalogRail.js';
 import type { CatalogEntry } from './catalog.js';
+import { MascotMoment } from './Mascot.js';
 import { PartyDiagram } from './PartyDiagram.js';
 import { PixelIcon } from './PixelIcon.js';
 import type { PlayVia } from './visitTelemetry.js';
 
 type PartyPageProps = {
+  catalogStatus: 'loading' | 'ready' | 'error';
+  catalogError: string | null;
   catalogEntries: CatalogEntry[];
   onPlayGame: (game: CatalogEntry, via?: PlayVia) => void;
   onPlayTogether: (game: CatalogEntry, via?: PlayVia) => void;
+  onRetryCatalog: () => void;
   onCreateCustom: () => void;
 };
 
 const STEP_KEYS = ['step1', 'step2', 'step3'];
 
 // /party: a real destination now, not the old scroll-to-rail anchor.
-export function PartyPage({ catalogEntries, onPlayGame, onPlayTogether, onCreateCustom }: PartyPageProps) {
+export function PartyPage({
+  catalogStatus,
+  catalogError,
+  catalogEntries,
+  onPlayGame,
+  onPlayTogether,
+  onRetryCatalog,
+  onCreateCustom,
+}: PartyPageProps) {
   const { t } = useTranslation();
 
   const partyEntries = useMemo(() => catalogEntries.filter((entry) => entry.multiplayer), [catalogEntries]);
@@ -50,7 +62,20 @@ export function PartyPage({ catalogEntries, onPlayGame, onPlayTogether, onCreate
         </ol>
       </section>
 
-      {partyEntries.length > 0 ? (
+      {catalogStatus === 'loading' ? (
+        <MascotMoment className="catalog-state" emotion="busy" size={56} title={t('mascot.busyAlt')}>
+          <p>{t('catalog.loading')}</p>
+        </MascotMoment>
+      ) : catalogStatus === 'error' ? (
+        <MascotMoment className="load-error" emotion="sad" size={64} title={t('mascot.sadAlt')}>
+          <p className="error" role="alert">
+            {t('catalog.error', { message: catalogError ?? t('errors.generic') })}
+          </p>
+          <button type="button" className="secondary-btn" onClick={onRetryCatalog}>
+            <PixelIcon name="undo" size={13} /> {t('catalog.retry')}
+          </button>
+        </MascotMoment>
+      ) : partyEntries.length > 0 ? (
         <CatalogRail
           heading={t('catalog.rails.party')}
           entries={partyEntries}

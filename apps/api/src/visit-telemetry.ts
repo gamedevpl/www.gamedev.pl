@@ -51,6 +51,7 @@ const RouteKindSchema = z.enum([
   'studio',
   'game',
   'create',
+  'party',
   'notFound',
 ]);
 /**
@@ -201,6 +202,7 @@ const PlayViaSchema = z.enum([
   'create_showcase',
   'shelf',
   'featured_similar',
+  'party_page',
 ]);
 /**
  * Acquisition strings are re-validated here rather than trusted from the client. The
