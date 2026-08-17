@@ -188,6 +188,7 @@ describe('detectOperatorAlerts — records the state machine cannot read', () =>
 
 describe('detectSeedingDegraded', () => {
   const outcome = (overrides: Partial<JobSeedOutcome> & { at: string }): JobSeedOutcome => ({
+    generated: true,
     references: ['comet-courier'],
     ms: 40_000,
     compiles: true,
@@ -195,6 +196,10 @@ describe('detectSeedingDegraded', () => {
     staged: false,
     ...overrides,
   });
+
+  // A round 0 that produced nothing — the 2026-08 outage's shape.
+  const nothing = (at: string): JobSeedOutcome =>
+    outcome({ at, generated: false, reason: 'seeder_declined', references: [], ms: 0, compiles: false });
 
   it('says nothing when seeding has never run', () => {
     expect(detectSeedingDegraded([], NOW)).toBeNull();
@@ -226,6 +231,24 @@ describe('detectSeedingDegraded', () => {
       [outcome({ at: ago(MINUTE) }), outcome({ at: ago(2 * MINUTE) }), outcome({ at: ago(30 * MINUTE), staged: true })],
       NOW,
     );
+
+    expect(alert).toBeNull();
+  });
+
+  it('raises when round 0 generated nothing at all, not only when placing failed', () => {
+    const alert = detectSeedingDegraded([nothing(ago(MINUTE)), nothing(ago(30 * MINUTE))], NOW);
+
+    expect(alert).toMatchObject({ kind: 'seeding_degraded', since: ago(30 * MINUTE) });
+  });
+
+  it('counts a generation failure and a placement failure as the same outage', () => {
+    const alert = detectSeedingDegraded([nothing(ago(MINUTE)), outcome({ at: ago(20 * MINUTE) })], NOW);
+
+    expect(alert).toMatchObject({ kind: 'seeding_degraded' });
+  });
+
+  it('stays quiet when a generated draft did land', () => {
+    const alert = detectSeedingDegraded([nothing(ago(MINUTE)), outcome({ at: ago(20 * MINUTE), staged: true })], NOW);
 
     expect(alert).toBeNull();
   });

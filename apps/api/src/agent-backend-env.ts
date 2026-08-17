@@ -22,6 +22,8 @@ import { createSelfBuildBackend, type SelfBuildBackendOptions } from './self-bui
 interface Logger {
   info: (context: object, message: string) => void;
   warn: (context: object, message: string) => void;
+  // A deployment that cannot seed is broken, not unusual.
+  error?: (context: object, message: string) => void;
 }
 
 // Every managed vendor this file knows how to build a backend for.
@@ -254,36 +256,33 @@ export function createAgentBackendRegistryFromEnv(
   return { platformByVendor, ...(defaultVendor ? { defaultVendor } : {}), self };
 }
 
-/**
- * Returns the seeder, or undefined when this environment does not seed.
- *
- * Off unless `SEED_DISPATCH` is explicitly on. A default-on optimization that calls a
- * paid API on every creator submission is not something an environment should acquire by
- * upgrading, and local development in particular must keep working with no GCP
- * credentials at all — the seeder needs both Vertex and a games-repo read token, and
- * having neither is the normal state of a laptop.
- *
- * The read token is deliberately `GAMES_REPO_TOKEN` (what already reads the repo for
- * serving) rather than the dispatch PAT: assembling context is a read, and giving the
- * dispatch credential another job would widen what one expiry takes down.
- */
+// Seeder, or undefined when this environment has no credential for one.
+
+// No flag: round 0 is how a new game starts (docs/agent-adapters.md).
+
+// Reads with GAMES_REPO_TOKEN, not the dispatch PAT — narrower blast radius.
 export function createGameSeederFromEnv(
   log?: Logger,
   knowledgeSearch?: QueryKnowledgeFn,
   snapshotReader?: GameSnapshotReader | null,
 ): GameSeeder | undefined {
-  if (process.env.SEED_DISPATCH?.trim() !== 'true') return undefined;
+  // Tests inject their own seeder; ambient GITHUB_TOKEN must not buy a real one.
+  if (process.env.NODE_ENV === 'test') return undefined;
 
   const token = process.env.GAMES_REPO_TOKEN?.trim() ?? process.env.GITHUB_TOKEN?.trim();
   const repo = process.env.GAMES_REPO?.trim() ?? 'gamedevpl/www.gamedev.pl-games';
   const ref = process.env.GAMES_PUBLISHED_REF?.trim() || 'main';
   if (!token) {
-    log?.warn({ repo }, 'seeding is enabled but no games-repo token is set; builds will not be seeded');
+    (log?.error ?? log?.warn)?.call(
+      log,
+      { repo },
+      'no games-repo token: new games will start from an empty directory instead of a generated round 0',
+    );
     return undefined;
   }
 
   const model = process.env.SEED_MODEL?.trim() || undefined;
-  log?.info({ repo, ref, ...(model ? { model } : {}) }, 'seeded dispatch enabled');
+  log?.info({ repo, ref, ...(model ? { model } : {}) }, 'round-0 seeding ready');
 
   return new VertexGameSeeder({
     context: createArchiveSeedContextSource({

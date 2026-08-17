@@ -2112,10 +2112,22 @@ export async function registerAgentChannelRoutes(
         }
       }
 
-      // Nothing delivered yet is the ordinary state of a first build, not an error:
-      // the agent starts from the repository, exactly as it does today.
+      // Round 0 arrives here, not through a verb of its own: one read for every round.
+      if (slug && !version && (record.seed?.files.length ?? 0) > 0) {
+        const seed = record.seed!;
+        return reply.send({
+          delivery: null,
+          origin: 'seed',
+          files: seed.files.map((file) => ({ path: file.path, content: file.content })),
+          references: seed.references,
+          notes: seed.notes ?? null,
+          ...seedPayload(record),
+        });
+      }
+
+      // Nothing drafted and nothing delivered; seedStatus says whether to wait.
       if (!slug || !version) {
-        return reply.send({ delivery: null, files: [] });
+        return reply.send({ delivery: null, origin: null, files: [], ...seedPayload(record) });
       }
 
       const manifest = await options.gamesStore.getManifest(slug, version);
@@ -2144,6 +2156,7 @@ export async function registerAgentChannelRoutes(
 
       return reply.send({
         delivery: { slug, version },
+        origin: 'delivery',
         files,
       });
     },

@@ -156,9 +156,13 @@ GitHub **repository variable** and confirm the name appears in _both_
 
 `ADMIN_UIDS`, `REVIEWER_UIDS`, `APPLE_CLIENT_IDS`, `BETA_ALLOWED_EMAILS`, `BETA_ALLOWED_UIDS`,
 `CANONICAL_HOST`, `CODE_LANE`, `EDITOR_ASSIST`, `GOOGLE_OAUTH_CLIENT_ID`,
-`MCP_AUTHORIZATION_SERVERS`, `MP_RELAY_URL`, `REMIX_DEBUG`, `SEED_DISPATCH`,
+`MCP_AUTHORIZATION_SERVERS`, `MP_RELAY_URL`, `REMIX_DEBUG`,
 `TRANSLATE_BUILD_LOG`, `VAPID_*`, `VERTEX_MODEL`, `VERTEX_REGION`, `ZONE_HOST_URL`, and
 the sweep audiences.
+
+`SEED_DISPATCH` is **no longer a lever**: round 0 runs for every new game and the draft it
+produces is the round's sources, so there is nothing to switch off. The variable can be
+deleted from the repository settings; nothing reads it.
 
 **Everything else the code reads is a code default and cannot be changed at runtime** —
 including `DAILY_*` quotas, `SEED_MODEL`, `SEED_*_TIMEOUT_MS`, `REFINE_TIMEOUT_MS`,

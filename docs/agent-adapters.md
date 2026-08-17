@@ -26,9 +26,14 @@ repository contract stays stable.
 
 ## Seeded workspaces
 
-A dispatched build may start with a **generated first draft of the game already in its
-game directory** — written by a model from the creator's spec and a few published games,
-before any agent is started. This is a starting point, not a specification:
+Every new game starts with a **generated first draft already in place** — written by a
+model from the creator's spec and a few published games, before any agent is started.
+This is not optional and there is no flag for it: round 0 is how a new game begins, and
+the draft it produces _is_ the round's sources. An agent reads it through `get_sources`,
+the same verb that returns a later round's delivered files, so the first round and every
+round after it are the same flow.
+
+It is still a starting point, not a specification:
 
 - The draft has never been run, typechecked or gated. It is expected to be roughly right
   about structure and wrong in details.
@@ -36,12 +41,18 @@ before any agent is started. This is a starting point, not a specification:
   wrong. Recorded traces, acceptance criteria and progress landmarks in particular need a
   game that actually runs, which a generated draft cannot produce.
 - Nothing else changes. The scope rule, the delivery contract, and the gate are identical
-  for a seeded and an unseeded build, and every seeding failure falls back to starting
-  from an empty directory rather than failing the build.
+  for a seeded and an unseeded build.
 
-Seeding is a property of the _dispatch_, not of the agent: it is carried on the build
-brief, so any adapter can honour it by placing the files in its workspace, and an adapter
-that ignores it still builds the game.
+Generation still **fails open**: a creator's game is never blocked because a model call
+did not come back, and a build whose draft failed starts from an empty directory exactly
+as it did before round 0 existed. What is no longer allowed is that failing _silently_ —
+every attempt writes a `seedOutcome` on the job (`generated`, `staged`, `compiles`), and
+a run of failures raises `seeding_degraded` in the operator console. An outage that
+generates nothing now looks like an outage rather than like a quiet week.
+
+Delivery is a property of the _dispatch_, not of the agent. A backend that accepts
+workspace files gets them inline; every other round reads the draft from the job through
+`get_sources`. Either way an adapter that ignores the seed still builds the game.
 
 ## Hosted agents
 

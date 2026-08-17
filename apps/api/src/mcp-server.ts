@@ -634,7 +634,7 @@ const BEHAVIOURAL_CONTRACT = [
   'Honour stop immediately — do not continue after stop:true. For reason builder_handoff, call end once to acknowledge the stop request, then exit.',
   'gateStarted true means Cloud Build accepted the gate create; gateStarted false after ok submit means no preview is assembling — honour warnings.code=gate_not_started.',
   'Treat get_gate_verdict as a one-shot check, never a polling loop. Pending with a deliveryId returns stop:true: stop immediately and let Studio show the eventual result. Pending with deliveryId:null means you checked before delivering: stop is false, so continue building and call submit_sources instead of checking again. A later creator-led run may check a delivered gate again. Honour warnings.code=gate_poll_backoff on repeated checks.',
-  'When seedAvailable/seedStatus=available (or warnings.code=seed_unread), call get_seed and revise that seed as the opening move — do not scaffold from scratch. The brief is the authority: delete whatever in the draft contradicts it rather than bending the build toward the draft. When seedStatus=pending, recheck get_seed before scaffolding. When seedStatus=unavailable, get_seed has confirmed that no seed exists for this round; scaffold from the kit, or call regenerate_seed once if a draft would genuinely help. Use regenerate_seed only for an unusable draft (missing, or plainly not the game the brief describes), always with steer saying what was wrong, and keep building rather than waiting on it.',
+  'Every round starts at get_sources, including the first. A new game already has files — a generated round-0 draft (origin=seed) — and revising them is the opening move; do not scaffold from scratch. The brief is the authority: delete whatever in the draft contradicts it rather than bending the build toward the draft. seedStatus=pending means the draft is still generating: browse the kit briefly, then call get_sources again before reaching for a template. Only when get_sources returns no files at all do you scaffold from the kit. Use regenerate_seed only for an unusable draft (plainly not the game the brief describes), always with steer saying what was wrong, and keep building rather than waiting on it.',
   'Every write reply carries pendingMessages — when that array is non-empty, read_inbox and apply before continuing.',
   'Do not schedule background or recurring inbox polls; drain pendingMessages from write replies (and kit/browse replies that piggyback them) as you go. Honour warnings.code=inbox_pending.',
   'A green *publish* gate verdict ends the round — END immediately; preview_passed does not end the round. The key retires on green and new work arrives as a fresh kickoff.',
@@ -657,16 +657,13 @@ const SESSION_WORKFLOW: readonly string[] = [
   'Hold the sessionKey start gave you for the whole round and pass it on every call. Do not re-run start to refresh it — it is valid until expiresAt. Re-run start only if a call is refused as unauthenticated.',
   "show_round — once, right after start. In a client that renders MCP Apps views this puts a live status card in the creator's chat that follows the build and the gate on its own, so they can watch without you polling. Calling it again renders a second card.",
   'show_media — whenever the creator asks to see the game. get_gate_media attaches frames for YOU to look at; those attachments do not reach the creator, so describing them is all you can do with it. show_media is what actually puts the pictures in front of them.',
-  'get_brief — read the brief; if seedAvailable or seedStatus=available, call get_seed and revise that seed as the opening move, treating the brief as the authority wherever the draft disagrees. If seedStatus=pending, browse the kit lightly then recheck get_seed before scaffolding. If seedStatus=unavailable, the response says no seed exists for this round; scaffold from the kit, or call regenerate_seed once (with steer) if a draft would genuinely help. If start or get_brief returned dispatchAttempt > 1 (or a later reply carries warnings.code=transcript_unread) — an earlier attempt at this game exists, which is not the same as round > 1: an undelivered retry resumes the same round without bumping it — call get_transcript before deciding what to build. It returns the most recent window of the creator conversation (never the whole thing); pass cursor: nextCursor only if that window still does not answer what you need. The latest message is the tail of a conversation, not the whole of it.',
-  // An improvement round has no seed (seeds are a new-game facility) and its brief is
-  // the change request alone, so nothing above this told the agent a game already
-  // existed. Following the loop literally, it scaffolded a fresh game over a published
-  // one. get_sources is cheap and answers available:false on a new game, so it is
-  // unconditional rather than gated on a round type the agent cannot see.
-  'get_sources — when it returns available:true this round improves an existing game: continue those files. Never scaffold over them. If warnings.code=module_too_large, split those oversized modules into cohesive game/*.ts pieces BEFORE adding features — do not grow them further.',
+  'get_brief — read the brief. It is the authority on what to build; the sources you fetch next are the starting point, and wherever the two disagree the brief wins. If start or get_brief returned dispatchAttempt > 1 (or a later reply carries warnings.code=transcript_unread) — an earlier attempt at this game exists, which is not the same as round > 1: an undelivered retry resumes the same round without bumping it — call get_transcript before deciding what to build. It returns the most recent window of the creator conversation (never the whole thing); pass cursor: nextCursor only if that window still does not answer what you need. The latest message is the tail of a conversation, not the whole of it.',
+  // Unconditional: the round type is not something the agent can see.
+  // Also where a new game's round-0 draft arrives — no seed verb to forget.
+  'get_sources — always, and before any scaffolding decision. available:true means this game has files: origin=seed is a generated round-0 draft for a new game, origin=delivery is what a previous round delivered. Continue those files either way; never scaffold over them. seedStatus=pending means a draft is still generating — call again before falling back to a template. If warnings.code=module_too_large, split those oversized modules into cohesive game/*.ts pieces BEFORE adding features — do not grow them further.',
   "get_kit — keep engineRef for submit_sources and for get_kit_api. This platform and its Creator Kit are not on the public web: for what the kit can build (module names — party, zone, commons, presence, and the rest — or the API itself), call get_kit_api or the kit browse tools, never a web search; the digest and browse tools are the complete, authoritative reference, and a web search for gamedev.pl documentation will not find anything, or worse, finds an unrelated platform's docs that do not describe this kit. With shell egress, unpack via the returned one-liner and follow SKILL.md locally instead of either. Never dump the whole kit into context, and never call a tool this session did not advertise.",
   'Capability and "how do I…" questions: check get_kit_api first for exact kit-API surface (signatures, module names). knowledge_query is for everything get_kit_api does not cover — EditorKit internals, example-game patterns, docs/process, and broader capability questions — with citations and an indexedCommit; treat its prose as a pointer to verify via get_kit_api / read_kit_file, not a source of truth for exact signatures.',
-  'Build the game — continuing the seed or sources you fetched, otherwise from the kit; report_progress before and after long steps. Soft module budget: keep each game/*.ts under ~350 lines / ~12 KiB. When a file approaches that, split cohesive pieces (render→art/ui/hud/rooms; model→tables/layout/types; runtime→systems) before more feature work. Honour warnings.code=module_too_large the same way you honour call_end — act, then continue.',
+  'Build the game — continuing the sources you fetched, otherwise from the kit; report_progress before and after long steps. Soft module budget: keep each game/*.ts under ~350 lines / ~12 KiB. When a file approaches that, split cohesive pieces (render→art/ui/hud/rooms; model→tables/layout/types; runtime→systems) before more feature work. Honour warnings.code=module_too_large the same way you honour call_end — act, then continue.',
   'As soon as the game draws anything playable: screenshot_upload_url then curl --upload-file <png> "$url". There is no base64 send path — PNG bytes must never enter the model. Without shell egress, skip mid-build screenshots; the gate still captures on delivery.',
   'While iterating: run only npm run typecheck -- <slug> locally, then prefer stage_upload_url({ path }) and curl --upload-file <file> "$url" for new/rewritten paths when you have shell egress (bytes never re-enter the model). Fall back to stage_source_file({ path, content }) without shell. For edits prefer patch_source_file({ path, old, new }) — exact unique substring replace, no unified-diff arithmetic. Or patch_source_file({ files: [{ path, old, new }, ...] }) to edit several files in one call. Or patch_source_file({ path, patch }) with a unified diff (bare @@ ok). Stage only changed paths — never re-upload the whole tree. Then submit_sources({ fromStaged: true, mode: "preview", kitEngineRef }) — fromStaged overlays onto the latest delivery/seed and the server verifies it; no browser, npm ci, capture, playtest, or agency is required for this preview. If a browser is available near delivery, optionally run npm run check:game -- <slug> --preview. Run the full gate only immediately before a mode:"publish" seal. Inline files[] still works for tiny trees.',
   'Staging is already visible: once game.ts, GAME.json and markup are present across staging + delivery/seed, the platform assembles a live playable preview — without waiting for submit or the gate. Markup means either an index.html or a GAME.json howToPlay carrying goal and hint, from which the body is generated. style.css is optional the same way: a GAME.json theme (accent/canvasBackground/canvasBorderColor/pixelArt) generates it when none is staged. Stage a runnable tree early and keep staging/patching as you work; a buffer that does not compile simply leaves the previous preview up.',
@@ -3224,18 +3221,33 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
       outputSchema: {
         type: 'object',
         properties: {
-          available: { type: 'boolean', description: 'True means this game exists — continue these files.' },
+          available: { type: 'boolean', description: 'True means this game has files — continue them.' },
+          origin: {
+            type: ['string', 'null'],
+            description: "'seed' = a generated round-0 draft; 'delivery' = a previous round's sources.",
+          },
           delivery: { type: ['object', 'null'] },
           files: {
             type: 'array',
             items: { type: 'object', properties: { path: { type: 'string' }, content: { type: 'string' } } },
           },
+          notes: { type: ['string', 'null'], description: 'Hand-off note from the round-0 draft, when there is one.' },
+          references: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Published games the round-0 draft was modelled on, when there is one.',
+          },
+          seedStatus: { type: 'string', description: 'pending = a round-0 draft is still generating; call again.' },
           ...WARNINGS_PROP,
         },
         required: ['available', 'files'],
       },
       description:
-        "Fetch the latest candidate or published sources for this job's game so a self round can continue prior work. " +
+        "Fetch this game's current sources — the first call of every round, including the first round. " +
+        'A new game already has files: a generated round-0 draft (origin=seed) whose references and notes come ' +
+        'with it. A later round returns what the previous round delivered (origin=delivery). Either way, continue ' +
+        'those files; never scaffold over them. seedStatus=pending means a draft is still generating — browse the ' +
+        'kit briefly and call this again rather than starting from a template. ' +
         'When warnings.code=module_too_large, split those oversized game/*.ts modules before adding features. ' +
         BEHAVIOURAL_CONTRACT,
       inputSchema: {
@@ -3256,17 +3268,26 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
         const body = res.json() as {
           error?: string;
           delivery?: unknown;
+          origin?: 'seed' | 'delivery' | null;
           files?: Array<{ path: string; content: string }>;
+          notes?: string | null;
+          references?: string[];
+          seedStatus?: string;
         };
         if (res.statusCode !== 200) {
           return toolErr(body.error ?? `sources failed (${res.statusCode})`);
         }
         const files = body.files ?? [];
         const sizeWarnings = moduleSizeWarnings(files);
+        // Files decide this, not a delivery: a round-0 draft is sources too.
         return toolOk({
-          available: Boolean(body.delivery),
+          available: files.length > 0,
+          origin: body.origin ?? (body.delivery ? 'delivery' : null),
           delivery: body.delivery ?? null,
           files,
+          ...(body.notes ? { notes: body.notes } : {}),
+          ...(body.references?.length ? { references: body.references } : {}),
+          ...(body.seedStatus ? { seedStatus: body.seedStatus } : {}),
           ...(sizeWarnings.length ? { warnings: sizeWarnings } : {}),
         });
       },

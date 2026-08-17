@@ -1056,12 +1056,12 @@ declare const GameKit: { defineGame(): unknown };
       slug: 'comet-courier',
       seedAvailable: true,
       seedStatus: 'available',
-      seedNotice: expect.stringMatching(/get_seed/i),
+      seedNotice: expect.stringMatching(/get_sources/i),
     });
     expect(started.structured).toMatchObject({
       seedAvailable: true,
       seedStatus: 'available',
-      seedNotice: expect.stringMatching(/get_seed/i),
+      seedNotice: expect.stringMatching(/get_sources/i),
     });
   });
 
@@ -1155,9 +1155,10 @@ declare const GameKit: { defineGame(): unknown };
     expect(workflow.length).toBeGreaterThanOrEqual(6);
     const joined = workflow.join('\n');
     expect(joined).toMatch(/get_brief/);
-    expect(joined).toMatch(/get_seed/);
-    expect(joined).toMatch(/revise that seed as the opening move/i);
-    expect(joined).toMatch(/seedStatus=unavailable.*no seed exists/i);
+    expect(joined).toMatch(/get_sources — always, and before any scaffolding decision/);
+    expect(joined).toMatch(/origin=seed is a generated round-0 draft/);
+    expect(joined).toMatch(/seedStatus=pending means a draft is still generating/);
+    expect(joined).not.toMatch(/get_seed/);
     expect(joined).toMatch(/typecheck -- <slug>/);
     expect(joined).toMatch(/no browser.*npm ci.*capture.*playtest.*agency/i);
     expect(joined).toMatch(/server verifies.*preview/i);
@@ -2364,7 +2365,35 @@ declare const GameKit: { defineGame(): unknown };
 
     const sources = await callTool(app, 'get_sources', { sessionKey }, { 'mcp-session-id': sessionId });
     expect(sources.isError).toBe(false);
-    expect(sources.structured).toMatchObject({ available: false, files: [] });
+    expect(sources.structured).toMatchObject({
+      available: true,
+      origin: 'seed',
+      files: [{ path: 'game.ts', content: 'export const seed = true;' }],
+    });
+  });
+
+  it('get_sources carries the round-0 draft references, the same exemplars get_seed used to expose', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    await store.setSubmissionSeed(ISSUE, {
+      slug: 'comet-courier',
+      files: [{ path: 'game.ts', content: 'export const seed = true;' }],
+      references: ['apex-sprint', 'crate-keeper'],
+      notes: 'continue me',
+    });
+    const { gamesStore } = stubGamesStore();
+    app = await createApp(store, gamesStore);
+    const sessionId = await initialize(app);
+    const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    const sources = await callTool(app, 'get_sources', { sessionKey }, { 'mcp-session-id': sessionId });
+    expect(sources.isError).toBe(false);
+    expect(sources.structured).toMatchObject({
+      origin: 'seed',
+      references: ['apex-sprint', 'crate-keeper'],
+      notes: 'continue me',
+    });
   });
 
   it('rejects submit_sources without kitEngineRef', async () => {

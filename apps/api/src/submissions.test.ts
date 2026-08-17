@@ -6106,12 +6106,75 @@ describe('seeded dispatch', () => {
     });
 
     expect(outcome).toMatchObject({
+      generated: true,
       references: ['apex-sprint'],
       ms: 41_000,
       compiles: true,
       repaired: true,
       staged: true,
     });
+
+    await app.close();
+  });
+
+  it('records a failed round 0, so an outage that generates nothing is countable', async () => {
+    const stub = createGithubClientStub({});
+    const { backend, briefs } = createBackendStub();
+    const { app, store, response } = await submitOne('Comet Courier', {
+      githubClient: stub.githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      gameSeeder: seederStub(null),
+    });
+
+    expect(response.statusCode).toBe(200);
+    await vi.waitFor(() => expect(briefs).toHaveLength(1));
+    const outcome = await vi.waitFor(async () => {
+      const record = await store.getSubmission(briefs[0].issueNumber);
+      expect(record?.seedOutcome).toBeDefined();
+      return record!.seedOutcome!;
+    });
+
+    expect(outcome).toMatchObject({ generated: false, reason: 'seeder_declined', staged: false });
+    // Nothing generated, so nothing billed.
+    const record = await store.getSubmission(briefs[0].issueNumber);
+    expect(record?.costs ?? []).not.toContainEqual(expect.objectContaining({ kind: 'seed' }));
+
+    await app.close();
+  });
+
+  it('counts a draft the job itself stored as placed, not only one a workspace took', async () => {
+    const stub = createGithubClientStub({});
+    const briefs: BuildBrief[] = [];
+    const backend: AgentBackend = {
+      name: 'stub',
+      seedDelivery: () => 'channel',
+      dispatch: async (brief) => {
+        briefs.push(brief);
+        return { ref: 'task-1' };
+      },
+      resume: async () => ({ ref: 'task-2' }),
+      observe: async () => null,
+      cancel: async () => ({ enforced: false }),
+    };
+    const { app, store, response } = await submitOne('Comet Courier', {
+      githubClient: stub.githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      gameSeeder: seederStub({ compiles: true }),
+    });
+
+    expect(response.statusCode).toBe(200);
+    await vi.waitFor(() => expect(briefs).toHaveLength(1));
+    const outcome = await vi.waitFor(async () => {
+      const record = await store.getSubmission(briefs[0].issueNumber);
+      expect(record?.seedOutcome).toBeDefined();
+      return record!.seedOutcome!;
+    });
+
+    expect(outcome).toMatchObject({ generated: true, staged: true });
+    const record = await store.getSubmission(briefs[0].issueNumber);
+    expect(record?.seed?.files).toHaveLength(1);
 
     await app.close();
   });

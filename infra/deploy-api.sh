@@ -301,13 +301,17 @@ for KNOWLEDGE_VAR in KNOWLEDGE_SEARCH_ENGINE_ID KNOWLEDGE_SEARCH_PROJECT_ID KNOW
 done
 # Feature flags the Actions workflow threads from repo variables but this script did not,
 # found by auditing the two paths against each other after the 2026-08-04 incident. A
-# deploy from here would silently drop all four: seeding would stop, the code lane and the
-# editor assist would switch off, and MCP clients would lose their authorization-server
-# list — each looking like a spontaneous regression with a deploy as the only clue.
+# deploy from here would silently drop them: the code lane and the editor assist would
+# switch off, and MCP clients would lose their authorization-server list — each looking
+# like a spontaneous regression with a deploy as the only clue.
+#
+# SEED_DISPATCH used to head this list. It is gone because round 0 is no longer
+# optional: a flag that must always be true is a way to turn the product off by
+# accident, which is what a missing thread here would have done.
 #
 # The rule this file already states for REMIX_DEBUG applies to every one of them: both
 # supported paths carry a flag, or neither should.
-for FLAG_VAR in SEED_DISPATCH CODE_LANE EDITOR_ASSIST MCP_AUTHORIZATION_SERVERS MCP_UI CODE_SURFACE TAB_COMPLETE; do
+for FLAG_VAR in CODE_LANE EDITOR_ASSIST MCP_AUTHORIZATION_SERVERS MCP_UI CODE_SURFACE TAB_COMPLETE; do
   eval "FLAG_VAL=\${${FLAG_VAR}:-}"
   if [ -n "${FLAG_VAL}" ]; then
     ENV_VARS="${ENV_VARS}|${FLAG_VAR}=${FLAG_VAL}"
@@ -431,7 +435,15 @@ else
   MAX_INSTANCES=1
 fi
 
-echo "==> Deploying to Cloud Run (scale-to-zero, max ${MAX_INSTANCES} instance(s))"
+# --no-cpu-throttling (CPU always allocated) is load-bearing, not a performance tweak.
+# Round-0 seeding is dispatched with `void dispatchBuild(...)`: it runs entirely after
+# the creator's HTTP response has been sent, and it is the CPU-bound half — an esbuild
+# bundle and a typecheck — that decides whether the draft compiles. Under the default
+# (CPU throttled outside a request) that work crawls while the seeder's wall-clock
+# timeouts keep running, and an instance reclaimed mid-seed kills the draft with no
+# error and no record. Same threading rule as the flags above: both supported deploy
+# paths carry it, or neither should.
+echo "==> Deploying to Cloud Run (scale-to-zero, CPU always allocated, max ${MAX_INSTANCES} instance(s))"
 gcloud run deploy "$SERVICE" \
   --image "$IMAGE" \
   --region "$REGION" \
@@ -440,6 +452,7 @@ gcloud run deploy "$SERVICE" \
   --allow-unauthenticated \
   --min-instances 0 \
   --max-instances "$MAX_INSTANCES" \
+  --no-cpu-throttling \
   --port 8080 \
   --set-env-vars "${ENV_VARS}" \
   ${SECRET_FLAGS[@]+"${SECRET_FLAGS[@]}"}

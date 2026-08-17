@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolveSeedStatus, seedNoticeFor, seedPayload } from './seed-status.js';
+import { resolveSeedStatus, seedNoticeFor, seedOutcomeFor, seedPayload } from './seed-status.js';
 
 describe('seed-status', () => {
   it('prefers stored files over a stale pending flag', () => {
@@ -10,14 +10,52 @@ describe('seed-status', () => {
     expect(resolveSeedStatus({})).toBe('unavailable');
   });
 
-  it('returns actionable notices only when the agent should act', () => {
-    expect(seedNoticeFor('available')).toMatch(/get_seed/);
-    expect(seedNoticeFor('pending')).toMatch(/get_seed again|still generating/i);
-    expect(seedNoticeFor('unavailable')).toMatch(/no seed draft is available/i);
+  it('points every notice at get_sources, the one verb that reads a game', () => {
+    expect(seedNoticeFor('available')).toMatch(/get_sources/);
+    expect(seedNoticeFor('pending')).toMatch(/get_sources again/);
+    expect(seedNoticeFor('pending')).toMatch(/still generating/i);
+    expect(seedNoticeFor('unavailable')).toMatch(/scaffold from the kit/i);
+    expect(seedNoticeFor('available')).not.toMatch(/get_seed/);
     expect(seedPayload({ seedStatus: 'pending' })).toMatchObject({
       seedAvailable: false,
       seedStatus: 'pending',
       seedNotice: expect.stringMatching(/still generating/i),
+    });
+  });
+
+  describe('seedOutcomeFor', () => {
+    const draft = { references: ['apex-sprint'], elapsedMs: 41_000, compiles: true, repaired: false };
+
+    it('records nothing for a round that never attempted one', () => {
+      expect(seedOutcomeFor({ attempt: undefined, placed: false, at: 'now' })).toBeNull();
+    });
+
+    it('records nothing when the deployment has no seeder at all', () => {
+      expect(seedOutcomeFor({ attempt: { reason: 'not_configured' }, placed: false, at: 'now' })).toBeNull();
+    });
+
+    it('records a failure with its reason, so an outage is countable', () => {
+      expect(
+        seedOutcomeFor({ attempt: { reason: 'threw: vertex is having a day' }, placed: false, at: 'now' }),
+      ).toEqual({
+        at: 'now',
+        generated: false,
+        reason: 'threw: vertex is having a day',
+        references: [],
+        ms: 0,
+        compiles: false,
+        repaired: false,
+        staged: false,
+      });
+    });
+
+    it('reports placement as what happened, not as which delivery mode was picked', () => {
+      expect(seedOutcomeFor({ attempt: { draft }, placed: true, at: 'now' })).toMatchObject({
+        generated: true,
+        staged: true,
+        references: ['apex-sprint'],
+      });
+      expect(seedOutcomeFor({ attempt: { draft }, placed: false, at: 'now' })).toMatchObject({ staged: false });
     });
   });
 });

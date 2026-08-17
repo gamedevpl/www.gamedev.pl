@@ -91,11 +91,12 @@ function channelDelivery(brief: BuildBrief, creating: boolean): string[] {
         ]
       : [
           // channelToken, not mcpOpenerToken: verifyAgentToken checks this key, not verifyManagedMcpOpener.
-          `Call \`start\` with exactly \`{ "slug": "${brief.slug ?? '(slug)'}", "key": "${brief.channelToken}" }\`, then call \`get_brief\`, \`read_inbox\`, \`get_seed\` and \`get_kit\`.`,
+          `Call \`start\` with exactly \`{ "slug": "${brief.slug ?? '(slug)'}", "key": "${brief.channelToken}" }\`, then call \`get_brief\`, \`read_inbox\`, \`get_sources\` and \`get_kit\`.`,
         ]),
     'Copy the exact sessionKey from `start` into every later MCP call.',
-    'If get_seed returns available, revise those files instead of scaffolding.',
-    'If get_seed returns pending, do not browse or wait; build the smallest preview now.',
+    "Call `get_sources` before deciding anything. It returns this game's files: origin=seed is a generated",
+    'round-0 draft for a new game, origin=delivery is a previous round. Revise those files; never scaffold over them.',
+    'If get_sources returns seedStatus=pending, do not browse or wait; build the smallest preview now.',
     'Call `get_kit` only to obtain kitEngineRef; do not download or browse the kit in this lane.',
     'Use the injected digest and its template slice as your API and file-shape reference.',
     'Do not use bash or the write tool. Stage source content directly with `stage_source_file`.',
