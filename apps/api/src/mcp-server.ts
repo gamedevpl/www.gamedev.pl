@@ -3232,6 +3232,11 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
             items: { type: 'object', properties: { path: { type: 'string' }, content: { type: 'string' } } },
           },
           notes: { type: ['string', 'null'], description: 'Hand-off note from the round-0 draft, when there is one.' },
+          references: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Published games the round-0 draft was modelled on, when there is one.',
+          },
           seedStatus: { type: 'string', description: 'pending = a round-0 draft is still generating; call again.' },
           ...WARNINGS_PROP,
         },
@@ -3266,6 +3271,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           origin?: 'seed' | 'delivery' | null;
           files?: Array<{ path: string; content: string }>;
           notes?: string | null;
+          references?: string[];
           seedStatus?: string;
         };
         if (res.statusCode !== 200) {
@@ -3280,6 +3286,7 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
           delivery: body.delivery ?? null,
           files,
           ...(body.notes ? { notes: body.notes } : {}),
+          ...(body.references?.length ? { references: body.references } : {}),
           ...(body.seedStatus ? { seedStatus: body.seedStatus } : {}),
           ...(sizeWarnings.length ? { warnings: sizeWarnings } : {}),
         });

@@ -2372,6 +2372,30 @@ declare const GameKit: { defineGame(): unknown };
     });
   });
 
+  it('get_sources carries the round-0 draft references, the same exemplars get_seed used to expose', async () => {
+    const store = new InMemoryStore();
+    await seedJob(store);
+    await store.setSubmissionSeed(ISSUE, {
+      slug: 'comet-courier',
+      files: [{ path: 'game.ts', content: 'export const seed = true;' }],
+      references: ['apex-sprint', 'crate-keeper'],
+      notes: 'continue me',
+    });
+    const { gamesStore } = stubGamesStore();
+    app = await createApp(store, gamesStore);
+    const sessionId = await initialize(app);
+    const started = await callTool(app, 'start', { key: roundKey() }, { 'mcp-session-id': sessionId });
+    const sessionKey = (started.structured as { sessionKey: string }).sessionKey;
+
+    const sources = await callTool(app, 'get_sources', { sessionKey }, { 'mcp-session-id': sessionId });
+    expect(sources.isError).toBe(false);
+    expect(sources.structured).toMatchObject({
+      origin: 'seed',
+      references: ['apex-sprint', 'crate-keeper'],
+      notes: 'continue me',
+    });
+  });
+
   it('rejects submit_sources without kitEngineRef', async () => {
     const store = new InMemoryStore();
     await seedJob(store);
