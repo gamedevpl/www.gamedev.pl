@@ -1441,6 +1441,43 @@ describe('submission routes', () => {
     await app.close();
   });
 
+  it('platform→self handoff on a never-dispatched round resumes immediately, not pending', async () => {
+    // A never-dispatched round has no agent to ack a stop request.
+    const { githubClient } = createGithubClientStub({ issueNumber: 77 });
+    const { backend } = createBackendStub();
+    const { app, authHeaders, store } = await createApp({
+      githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+    });
+
+    const jobId = await store.allocateJobId();
+    await store.createSubmission(jobId, 'g:test-user', 'A game');
+    await store.recordJobTransition(jobId, {
+      to: 'queued',
+      at: new Date().toISOString(),
+      by: 'creator',
+      reason: 'code_surface_opened',
+    });
+    const token = mintToken(jobId, secret);
+
+    const handoff = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${token}/handoff`,
+      headers: authHeaders,
+      payload: { builder: 'self', stopActivePlatformAgent: true },
+    });
+
+    expect(handoff.statusCode).toBe(200);
+    expect(handoff.json()).not.toMatchObject({ pending: true });
+
+    const after = await store.getSubmission(jobId);
+    expect(after?.builder).toBe('self');
+    expect(after?.builderHandoff).toBeUndefined();
+
+    await app.close();
+  });
+
   it('busts the status cache when the agent acks an inbox message', async () => {
     const { githubClient } = createGithubClientStub({ issueNumber: 77 });
     const { app, authHeaders, store } = await createApp({

@@ -117,7 +117,7 @@ function isAgentWorkActive(status: SubmissionStatus | null | undefined): boolean
 
 // True even once the agent has ended.
 function canOfferSelfHandoff(status: SubmissionStatus | null | undefined): boolean {
-  if (!status || status.builder !== 'platform') return false;
+  if (!status || status.builder === 'self') return false;
   if (status.status === 'publishing') return false;
   if (status.status === 'in_review' || status.phase === 'ready_for_review') return false;
   if (TERMINAL_STATUSES.has(status.status)) return false;
