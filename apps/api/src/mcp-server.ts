@@ -154,6 +154,7 @@ export const MCP_VISIBLE_TOOLS = new Set([
   'get_gate_verdict',
   'get_gate_media',
   'get_round_media',
+  'get_reference_images',
   'read_inbox',
   'ack_inbox',
   'get_transcript',

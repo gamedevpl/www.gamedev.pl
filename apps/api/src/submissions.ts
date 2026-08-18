@@ -136,6 +136,15 @@ const referenceImageSchema = z.string().max(Math.ceil((300 * 1024 * 4) / 3) + 10
 /** Reference images travel as data, never instructions — see storeCreatorImage. */
 const MAX_REFERENCE_IMAGES = 4;
 
+/**
+ * MAX_REFERENCE_IMAGES images at referenceImageSchema's cap, plus room for the rest of
+ * the body (concept/feedback text, JSON overhead). Fastify's default bodyLimit is 1 MiB,
+ * which four ~400 KB base64 strings alone already exceed — a creator attaching the
+ * allowed maximum would get a bare 413 before the schema (or its own error copy) ever
+ * runs. Routes that accept referenceImages must opt into this explicitly.
+ */
+const REFERENCE_IMAGES_BODY_LIMIT_BYTES = MAX_REFERENCE_IMAGES * (Math.ceil((300 * 1024 * 4) / 3) + 1024) + 64 * 1024;
+
 const CreateSubmissionRequestSchema = z.object({
   title: z.string().trim().min(3, 'title must be at least 3 characters').max(80, 'title must be at most 80 characters'),
   concept: z
@@ -3318,7 +3327,7 @@ export async function registerSubmissionRoutes(
     }
   }
 
-  app.post('/api/submissions', async (request, reply) => {
+  app.post('/api/submissions', { bodyLimit: REFERENCE_IMAGES_BODY_LIMIT_BYTES }, async (request, reply) => {
     // Ahead of the auth check, as it always was: an unconfigured server is not the
     // caller's problem to authenticate for, and a test pins the order.
     if (!githubClient || !submissionTokenSecret) {
@@ -4003,7 +4012,10 @@ export async function registerSubmissionRoutes(
   // injection boundary as the original spec). A published game can't be revised here.
   app.post(
     '/api/submissions/:token/feedback',
-    { config: { rateLimit: { max: maxFeedbackPerWindow, timeWindow: feedbackRateLimitWindowMs } } },
+    {
+      bodyLimit: REFERENCE_IMAGES_BODY_LIMIT_BYTES,
+      config: { rateLimit: { max: maxFeedbackPerWindow, timeWindow: feedbackRateLimitWindowMs } },
+    },
     async (request, reply) => {
       if (!githubClient || !submissionTokenSecret) {
         return reply.status(503).send({ error: 'submissions are not configured' });
@@ -4290,6 +4302,7 @@ export async function registerSubmissionRoutes(
   app.post(
     '/api/submissions/:token/improve',
     {
+      bodyLimit: REFERENCE_IMAGES_BODY_LIMIT_BYTES,
       config: {
         rateLimit: {
           max: maxImprovementsPerWindow,
@@ -4465,6 +4478,17 @@ export async function registerSubmissionRoutes(
         await store
           .appendCreatorMessage(started.jobId, studioAckText, { origin: 'studio_ack', delivered: true })
           .catch(() => {});
+      }
+      // The brief/reference-image endpoint the new round's agent reads from is scoped to
+      // started.jobId, not issueNumber — the shots stored above (keyed to the published
+      // game's old issue, for the chat-only reply path above) are invisible there. Store
+      // them again under the new job so the ids embedded in its brief actually resolve.
+      if (parsed.data.context?.referenceImages?.length) {
+        try {
+          await storeCreatorReferenceImages(store, started.jobId, parsed.data.context.referenceImages);
+        } catch (shotError) {
+          request.log.error({ err: shotError }, 'failed to store creator reference images on the new job');
+        }
       }
       // Publishing is terminal, so this is a *new* job with its own capability. The
       // creator's thread has to move onto it — the old (published) token cannot address
