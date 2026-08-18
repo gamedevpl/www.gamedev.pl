@@ -157,6 +157,38 @@ describe('MCP continue_draft', () => {
     expect(started.structured).toMatchObject({ jobId: DRAFT_ISSUE, slug: SLUG });
   });
 
+  it('reopens as self even when the closed round was platform-built and never set deliveredVersion', async () => {
+    // A platform round reaches ready_for_review without ever setting deliveredVersion.
+    const store = new InMemoryStore();
+    await store.createSubmission(DRAFT_ISSUE, OWNER, 'Pong Draft');
+    await store.setSubmissionSlug(DRAFT_ISSUE, SLUG);
+    await store.recordDispatch(DRAFT_ISSUE, { backend: 'managed:openai', ref: 'resp_1' });
+    await store.recordJobTransition(DRAFT_ISSUE, {
+      to: 'ready_for_review',
+      at: '2026-08-01T12:00:00.000Z',
+      by: 'reconciler',
+      reason: 'task_completed',
+    });
+    await store.ensureGameAgentKey(SLUG, OWNER, '2026-08-01T12:00:00.000Z');
+    const headers = await creatorHeaders(store);
+    app = await createApp(store);
+
+    const { isError } = await callTool(
+      app,
+      'continue_draft',
+      { slug: SLUG, feedback: 'Switch this to my own agent.' },
+      headers,
+    );
+    expect(isError).toBe(false);
+
+    const job = await store.getSubmission(DRAFT_ISSUE);
+    expect(job?.builder).toBe('self');
+    expect(job?.state).toBe('dispatched');
+
+    const started = await callTool(app, 'start', { slug: SLUG }, headers);
+    expect(started.isError).toBe(false);
+  });
+
   it('records the relayed feedback as the agent’s words, not the creator’s', async () => {
     // The agent writes this sentence; the creator said something else, somewhere else.
     // Studio shows it on the creator's side of the thread, so it has to carry who typed
@@ -233,12 +265,7 @@ describe('MCP continue_draft', () => {
     const headers = await creatorHeaders(store);
     app = await createApp(store, undefined, translator);
 
-    const res = await callTool(
-      app,
-      'continue_draft',
-      { slug: SLUG, feedback: 'Make the paddle wider.' },
-      headers,
-    );
+    const res = await callTool(app, 'continue_draft', { slug: SLUG, feedback: 'Make the paddle wider.' }, headers);
 
     expect((res.structured as { error?: string }).error).toBeUndefined();
     const messages = await store.listCreatorMessages(DRAFT_ISSUE);
