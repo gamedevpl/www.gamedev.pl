@@ -491,9 +491,9 @@ Round-0 seeding (`VertexGameSeeder`, `apps/api/src/game-seed.ts`) generates a fi
 before the agent starts, on the first dispatch of any new round — self/BYOCA and platform
 alike. There is no opt-out: the only way a round starts unseeded is generation failing,
 which still fails open and now writes a `seedOutcome` row with `generated: false`. A self
-round's seed is stored straight on the job (`get_sources` serves it); a
-`harness`/`outputs`-lane platform round instead commits it to a disposable
-`seed/job-<id>` branch and passes that as the dispatch `base_ref`.
+round's seed is stored straight on the job (`get_sources` serves it); a platform round
+whose vendor accepts inline files gets it as `workspaceFiles` on the managed session
+instead.
 
 `submissions.ts`'s `seedBuild` circuit breaker (`SEED_STAGING_COOLDOWN_MS`, 10 minutes)
 exists so a broken staging credential costs one wasted Vertex draft, not one per
@@ -501,14 +501,13 @@ submission — but two bugs made it fire on rounds that were never staging anyth
 the mute it sets is **process-global**, not scoped to the builder or round that tripped
 it:
 
-- **The `mcp` prompt lane never stages a branch** — it delivers the seed as inline
+- **A managed round never stages a branch** — it delivers the seed as inline
   `workspaceFiles` on the managed session instead (`managed-backend.ts`). An absent
   `seedWorkspace` there was indistinguishable, from the mute-setting code's side, from a
-  real staging failure — so **every single `mcp`-lane managed round** (Anthropic, Gemini,
-  and Copilot's `mcp` lane) tripped the breaker on delivery. `DispatchResult` now carries
-  back the `promptLane` the round actually dispatched on (a brief can ask for no lane and
-  get the backend's own default, so the caller cannot infer it from what it sent); the
-  mute only sets when that lane is not `mcp`.
+  real staging failure — so **every managed round** (Anthropic, Gemini, Copilot) tripped
+  the breaker on delivery. `seedBuild` now takes the round's `SeedDelivery` and honours
+  the cooldown only for `workspace`, the one mode where a failed branch write actually
+  costs a draft.
 - **The mute wasn't scoped to the builder that tripped it.** A genuine platform staging
   failure still suppressed `seedBuild` for a self/BYOCA round submitted minutes later,
   even though a self round never stages a branch and so was never at risk of the failure
@@ -522,13 +521,9 @@ it:
   attaching `workspaceFiles` and drops the seed from `brief` before building the prompt
   too — `buildPrompt` writes "a first draft is already in your checkout" whenever
   `brief.seed` is set, and that line must not survive an unseeded dispatch.
-  `supportsSeedFiles` can be a plain boolean (Anthropic, Gemini — static per
-  provider config) or a `(promptLane) => boolean` (Copilot — its own
-  `startSession` already silently drops the seed on the `mcp` lane while staging it
-  outside `mcp`, so a plain `true` would misreport a round that is about to throw the
-  seed away; a static answer cannot say "it depends which lane this round dispatches
-  on"). `managed-backend.ts` resolves the function form against `roundPromptLane`
-  before deciding whether to attach `workspaceFiles`.
+  `supportsSeedFiles` is a plain boolean: `false` for Anthropic, Copilot and OpenAI, and
+  `!config.environmentId` for Gemini, which takes inline sources only when it has no
+  named environment to run in.
 
 Net effect before the fix: bouncing between a managed round and a BYOCA round — normal
 creator behaviour — meant BYOCA landed inside the ten-minute mute a managed round had just
@@ -539,24 +534,23 @@ then-existing `SEED_DISPATCH` flag (since removed) or credentials being unset.
 
 ### A seed is delivered two ways, and the round says which
 
-`AgentBackend.seedDelivery(promptLane?)` answers, before anything is generated, how a seed
-would reach that round's agent:
+`AgentBackend.seedDelivery()` answers, before anything is generated, how a seed would
+reach that round's agent:
 
-| Answer      | Means                                                                | Who                                                                              |
-| ----------- | -------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| `workspace` | Files are placed for the agent, so the prompt may say so             | Copilot on `harness` (staged branch); Gemini with a scratch env (inline sources) |
-| `channel`   | Files are stored on the job; the agent reads them with `get_sources` | every self/BYOCA round; managed `mcp` rounds whose vendor refuses inline files   |
-| `none`      | Nothing would arrive, so a generation is only a bill                 | a non-`mcp` lane whose provider cannot take files                                |
+| Answer      | Means                                                                | Who                                                                            |
+| ----------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `workspace` | Files are placed for the agent, so the prompt may say so             | Gemini with no named environment (inline sources)                              |
+| `channel`   | Files are stored on the job; the agent reads them with `get_sources` | every self/BYOCA round; Anthropic, Copilot, OpenAI, Gemini-with-an-environment |
 
 **`channel` is the entry that made managed rounds seedable at all.** The first pass at this
 only asked whether the provider accepts `workspaceFiles` (`acceptsSeed`), and skipped
 generation when it did not — which was right about the waste and wrong about the
-conclusion. Anthropic _always_ rejects inline files, and it is an `mcp`-lane vendor, so
-"cannot be handed a seed" was being read as "cannot have one" and **every managed round on
-Anthropic built unseeded**. But an `mcp` round holds a round key and talks to this very
-channel; it can fetch a seed perfectly well. The missing piece was never the vendor — it
-was `submissions.ts` persisting the draft to the job only when `builder === 'self'`, so
-`get_sources` had no draft to return for a platform round.
+conclusion. Anthropic _always_ rejects inline files, so "cannot be handed a seed" was
+being read as "cannot have one" and **every managed round on Anthropic built unseeded**.
+But a managed round holds a round key and talks to this very channel; it can fetch a seed
+perfectly well. The missing piece was never the vendor — it was `submissions.ts`
+persisting the draft to the job only when `builder === 'self'`, so `get_sources` had no
+draft to return for a platform round.
 
 That condition is now `readsSeedFromJob` (i.e. `seedDelivery === 'channel'`), and the same
 predicate gates the `pending` / `unavailable` status writes and the stored-seed reuse. The
@@ -942,32 +936,32 @@ queued.
 
 ## Key code
 
-| Area                               | Path                                                                                                                                                                                                   |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| MCP tools                          | `apps/api/src/mcp-server.ts` (`screenshot_upload_url` / `stage_upload_url` → signed PUT; no base64 shot tool)                                                                                          |
-| Kit API digest (get_kit_api)       | `apps/api/src/kit-digest.ts` (`compactKitDigestForApi`, `splitDeclarationBlocks`, `selectApiBlocks`) + `GET /api/agent/build/kit/api` in `agent-channel.ts`                                            |
-| Knowledge query (Discovery Engine) | `apps/api/src/knowledge-search.ts` (the one Discovery Engine seam) + `GET /api/agent/build/knowledge/query` in `agent-channel.ts` + `knowledge_query` in `mcp-server.ts`                               |
-| Engine modules catalog             | games repo `tools/lib/pack-kit.ts` (`digestEngineModules`) — generated from `shared/modules/*.ts` header comments, not hand-maintained                                                                 |
-| Upload tokens                      | `apps/api/src/agent-upload-token.ts` + `POST …/shot/upload-url` + `PUT …/shot/upload` + `PUT …/sources/stage/upload`                                                                                   |
-| Presence pulses                    | `apps/api/src/mcp-presence.ts` (`start` → `joining_round` in the MCP dispatcher)                                                                                                                       |
-| Conversation transcript            | `apps/api/src/build-transcript.ts` (`loadBuildTranscript`) + `GET /api/agent/build/transcript` in `agent-channel.ts` + `get_transcript` in `mcp-server.ts`                                             |
-| Gate milestones                    | `apps/api/src/gate-progress.ts` + `GamesStore.putGateProgress` (GCS; Studio/MCP poll while checks run)                                                                                                 |
-| Gate verdict (shared)              | `apps/api/src/gate-verdict.ts` — `readGateVerdict` / `deriveGateStatusString`, used by the channel's `/api/agent/build/gate` route and by `start`'s reconnect visibility                               |
-| Preview-gate reconciliation        | `apps/api/src/submissions.ts` (`reconcileGateVerdict`) — red `previewGate` → `needs_changes`/`gate_red`; green preview never promotes                                                                  |
-| GAME.json staging shape check      | `apps/api/src/game-manifest-hint.ts` (`gameManifestHint`) — wired into the stage/patch routes in `agent-channel.ts`                                                                                    |
-| Round-0 seed generation            | `apps/api/src/game-seed.ts` (`VertexGameSeeder`) + `seedBuild`/`seedStagingMutedUntil` in `submissions.ts` — mute is `builder === 'platform'`-scoped and skips `mcp`-lane rounds (`result.promptLane`) |
-| Seed regeneration                  | `regenerateSeed` in `submissions.ts` + `POST /api/agent/build/seed/regenerate` in `agent-channel.ts` + `regenerate_seed` in `mcp-server.ts`; cap via `store.incrementSeedRegenerations`                |
-| "How would this lane get a seed?"  | `AgentBackend.seedDelivery` → `workspace` / `channel` / `none`; read before generating, and `seedDeliveryFor` in `submissions.ts` backstops a backend that does not declare it                         |
-| Seed → managed session wiring      | `apps/api/src/managed-backend.ts` (`start`) — checks `provider.supportsSeedFiles` before attaching `workspaceFiles`; drops `brief.seed` from the prompt too when unsupported                           |
-| Account-session invalidation       | `apps/api/src/agent-session-revocation.ts`                                                                                                                                                             |
-| Channel (`POST …/end`, …)          | `apps/api/src/agent-channel.ts`                                                                                                                                                                        |
-| Stall / `ended`                    | `apps/api/src/job-state.ts` (`detectStall`)                                                                                                                                                            |
-| Handoff gate                       | `apps/api/src/builder.ts` (`allowsCreatorBuilderHandoff`)                                                                                                                                              |
-| Live staged preview                | `apps/api/src/staged-preview.ts`                                                                                                                                                                       |
-| Studio live-preview frame          | `apps/web/src/StudioLivePreview.tsx`                                                                                                                                                                   |
-| Studio status poll cadence         | `apps/web/src/studioStatusPoll.ts` (tight poll on `ended` / `quiet` / `no_agent_yet` / `dispatched`)                                                                                                   |
-| Feedback / resume                  | `apps/api/src/submissions.ts`                                                                                                                                                                          |
-| Studio copy / builder choice       | `apps/web/src/selfBuildCopy.ts`, `BuilderModeBadge.tsx`, `SubmissionStatusView.tsx` (sticky badge + Change modal at round boundaries; full two-up stays in create wizard)                              |
+| Area                               | Path                                                                                                                                                                                                        |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| MCP tools                          | `apps/api/src/mcp-server.ts` (`screenshot_upload_url` / `stage_upload_url` → signed PUT; no base64 shot tool)                                                                                               |
+| Kit API digest (get_kit_api)       | `apps/api/src/kit-digest.ts` (`compactKitDigestForApi`, `splitDeclarationBlocks`, `selectApiBlocks`) + `GET /api/agent/build/kit/api` in `agent-channel.ts`                                                 |
+| Knowledge query (Discovery Engine) | `apps/api/src/knowledge-search.ts` (the one Discovery Engine seam) + `GET /api/agent/build/knowledge/query` in `agent-channel.ts` + `knowledge_query` in `mcp-server.ts`                                    |
+| Engine modules catalog             | games repo `tools/lib/pack-kit.ts` (`digestEngineModules`) — generated from `shared/modules/*.ts` header comments, not hand-maintained                                                                      |
+| Upload tokens                      | `apps/api/src/agent-upload-token.ts` + `POST …/shot/upload-url` + `PUT …/shot/upload` + `PUT …/sources/stage/upload`                                                                                        |
+| Presence pulses                    | `apps/api/src/mcp-presence.ts` (`start` → `joining_round` in the MCP dispatcher)                                                                                                                            |
+| Conversation transcript            | `apps/api/src/build-transcript.ts` (`loadBuildTranscript`) + `GET /api/agent/build/transcript` in `agent-channel.ts` + `get_transcript` in `mcp-server.ts`                                                  |
+| Gate milestones                    | `apps/api/src/gate-progress.ts` + `GamesStore.putGateProgress` (GCS; Studio/MCP poll while checks run)                                                                                                      |
+| Gate verdict (shared)              | `apps/api/src/gate-verdict.ts` — `readGateVerdict` / `deriveGateStatusString`, used by the channel's `/api/agent/build/gate` route and by `start`'s reconnect visibility                                    |
+| Preview-gate reconciliation        | `apps/api/src/submissions.ts` (`reconcileGateVerdict`) — red `previewGate` → `needs_changes`/`gate_red`; green preview never promotes                                                                       |
+| GAME.json staging shape check      | `apps/api/src/game-manifest-hint.ts` (`gameManifestHint`) — wired into the stage/patch routes in `agent-channel.ts`                                                                                         |
+| Round-0 seed generation            | `apps/api/src/game-seed.ts` (`VertexGameSeeder`) + `seedBuild`/`seedStagingMutedUntil` in `submissions.ts` — mute is `builder === 'platform'`-scoped and honours the cooldown only for `workspace` delivery |
+| Seed regeneration                  | `regenerateSeed` in `submissions.ts` + `POST /api/agent/build/seed/regenerate` in `agent-channel.ts` + `regenerate_seed` in `mcp-server.ts`; cap via `store.incrementSeedRegenerations`                     |
+| "How would this round get a seed?" | `AgentBackend.seedDelivery` → `workspace` / `channel`; read before generating, and `seedDeliveryFor` in `submissions.ts` backstops a backend that does not declare it                                       |
+| Seed → managed session wiring      | `apps/api/src/managed-backend.ts` (`start`) — checks `provider.supportsSeedFiles` before attaching `workspaceFiles`; drops `brief.seed` from the prompt too when unsupported                                |
+| Account-session invalidation       | `apps/api/src/agent-session-revocation.ts`                                                                                                                                                                  |
+| Channel (`POST …/end`, …)          | `apps/api/src/agent-channel.ts`                                                                                                                                                                             |
+| Stall / `ended`                    | `apps/api/src/job-state.ts` (`detectStall`)                                                                                                                                                                 |
+| Handoff gate                       | `apps/api/src/builder.ts` (`allowsCreatorBuilderHandoff`)                                                                                                                                                   |
+| Live staged preview                | `apps/api/src/staged-preview.ts`                                                                                                                                                                            |
+| Studio live-preview frame          | `apps/web/src/StudioLivePreview.tsx`                                                                                                                                                                        |
+| Studio status poll cadence         | `apps/web/src/studioStatusPoll.ts` (tight poll on `ended` / `quiet` / `no_agent_yet` / `dispatched`)                                                                                                        |
+| Feedback / resume                  | `apps/api/src/submissions.ts`                                                                                                                                                                               |
+| Studio copy / builder choice       | `apps/web/src/selfBuildCopy.ts`, `BuilderModeBadge.tsx`, `SubmissionStatusView.tsx` (sticky badge + Change modal at round boundaries; full two-up stays in create wizard)                                   |
 
 ## Safety invariant (unchanged)
 
