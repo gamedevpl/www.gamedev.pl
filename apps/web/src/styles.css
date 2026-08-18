@@ -15395,7 +15395,6 @@ button.builder-mode-selector:disabled {
 .studio-oauth-client-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
   margin: 2px 0 0;
   padding: 0;
   list-style: none;
@@ -15403,69 +15402,69 @@ button.builder-mode-selector:disabled {
 
 .studio-oauth-client-row {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.studio-oauth-client-row:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.studio-oauth-client-row:has(.studio-credential-confirm) {
   flex-direction: column;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 12px;
-  border: 1px solid var(--panel-border);
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--panel-card) 70%, transparent);
+  align-items: stretch;
 }
 
-.studio-oauth-client-meta {
-  display: flex;
-  min-width: 0;
-  width: 100%;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.studio-oauth-client-name {
-  gap: 6px 10px;
-}
-
-.studio-oauth-client-name strong {
-  min-width: 0;
-  overflow-wrap: anywhere;
-  color: var(--text-heading, #fff);
-  font-size: 0.92rem;
-}
-
-.studio-oauth-client-name span {
-  color: var(--muted, #94a3b8);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.68rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.studio-oauth-client-dates {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  margin: 0;
-}
-
-.studio-oauth-client-dates div {
+.studio-oauth-client-summary {
   display: flex;
   min-width: 0;
   flex-direction: column;
   gap: 2px;
 }
 
-.studio-oauth-client-dates dt {
-  color: var(--muted, #94a3b8);
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+.studio-oauth-client-name strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--text-heading, #fff);
+  font-size: 0.9rem;
+  font-weight: 600;
 }
 
-.studio-oauth-client-dates dd {
+.studio-oauth-client-meta {
   margin: 0;
-  color: var(--text, #e2e8f0);
-  font-size: 0.8rem;
-  line-height: 1.35;
+  color: var(--muted, #94a3b8);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.studio-oauth-client-revoke {
+  flex: 0 0 auto;
+  padding: 4px 2px;
+  border: 0;
+  background: transparent;
+  color: var(--danger, #f87171);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.studio-oauth-client-revoke:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.studio-oauth-client-revoke:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.studio-credential-confirm.is-compact {
+  margin: 8px 0 12px;
+  padding: 10px 12px;
 }
 
 @media (max-width: 520px) {
@@ -15473,13 +15472,10 @@ button.builder-mode-selector:disabled {
   .studio-credential-action {
     width: 100%;
   }
-
-  .studio-oauth-client-dates {
-    grid-template-columns: 1fr;
-  }
 }
 
 /* Panel density: install chrome without the thread's title/lead/waiting stack. */
+
 .studio-connect.is-panel {
   gap: 12px;
   margin: 0;
