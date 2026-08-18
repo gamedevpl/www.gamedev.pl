@@ -212,6 +212,7 @@ export function StudioStrip({
           type="button"
           className={`studio-head-action is-primary is-play${posture === 'play' ? ' is-active' : ''}`}
           aria-pressed={posture === 'play'}
+          aria-label={posture === 'play' ? t('studioPanel.stage.stopPlaying') : undefined}
           disabled={posture === 'watch' && stageEmpty}
           onClick={() => onPostureChange(posture === 'play' ? 'watch' : 'play')}
         >
