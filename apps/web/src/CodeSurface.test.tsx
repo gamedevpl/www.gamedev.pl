@@ -164,6 +164,42 @@ describe('CodeSurface', () => {
     expect(container.textContent).toContain('export const boot');
   });
 
+  it('keeps watching a self-build round, which is never read-only', async () => {
+    // Polling was gated on readOnly, which a self-build round never sets.
+    vi.useFakeTimers();
+    try {
+      mocked.fetchCodeSurfaceSources.mockResolvedValue(sourcesFor({ readOnly: false, agentRound: true }));
+      await render();
+      const initial = mocked.fetchCodeSurfaceSources.mock.calls.length;
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(4_100);
+      });
+
+      expect(mocked.fetchCodeSurfaceSources.mock.calls.length).toBeGreaterThan(initial);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('stops watching once the round is neither live nor open to an agent', async () => {
+    vi.useFakeTimers();
+    try {
+      mocked.fetchCodeSurfaceSources.mockResolvedValue(sourcesFor({ readOnly: false, agentRound: false }));
+      await render();
+      const initial = mocked.fetchCodeSurfaceSources.mock.calls.length;
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(4_100);
+      });
+
+      // A closed round cannot gain files; do not poll it forever.
+      expect(mocked.fetchCodeSurfaceSources.mock.calls.length).toBe(initial);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('opens on game.ts, not whatever sorts first — the manifest listing leads with GAME.json', async () => {
     mocked.fetchCodeSurfaceSources.mockResolvedValue(
       sourcesFor({

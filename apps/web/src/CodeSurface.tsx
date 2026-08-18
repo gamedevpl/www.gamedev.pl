@@ -312,13 +312,14 @@ export function CodeSurface({
     load(true);
   }, [load]);
 
-  // Watching an agent's files land live, while the buffer is locked (CE-08) — the same
-  // polling cadence the read-only banner needs to stay current without a page reload.
+  // Poll while an agent could be staging. Was gated on readOnly, which needs
+  // a dispatch a self-build round never has — so it never armed there.
+  const watching = Boolean(sources?.readOnly || sources?.agentRound);
   useEffect(() => {
-    if (!sources?.readOnly) return undefined;
+    if (!watching) return undefined;
     const id = window.setInterval(() => load(false), 4_000);
     return () => window.clearInterval(id);
-  }, [sources?.readOnly, load]);
+  }, [watching, load]);
 
   useEffect(() => {
     setCodeSurfaceSessionState(slug, {
@@ -815,8 +816,8 @@ export function CodeSurface({
       const base = liveContentRef.current ?? fetched;
       if (!base) return;
       const prevParams = base.params;
-       const params: Record<string, EditorParamValue> =
-         prevParams && !Array.isArray(prevParams) ? { ...(prevParams as Record<string, EditorParamValue>) } : {};
+      const params: Record<string, EditorParamValue> =
+        prevParams && !Array.isArray(prevParams) ? { ...(prevParams as Record<string, EditorParamValue>) } : {};
       for (const change of changes) params[change.key] = change.value as EditorParamValue;
       const merged: EditorContentDoc = { ...base, params };
       liveContentRef.current = merged;

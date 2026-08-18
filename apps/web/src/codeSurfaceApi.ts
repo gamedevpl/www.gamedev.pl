@@ -50,6 +50,8 @@ export type CodeSurfaceSources = {
   deleted: string[];
   readOnly: boolean;
   reason?: 'agent_round';
+  // Wider than readOnly; absent on older servers.
+  agentRound?: boolean;
   staged: CodeSurfaceStagingSummary;
 };
 
