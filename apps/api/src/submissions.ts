@@ -335,9 +335,7 @@ async function storeCreatorPlaytestShot(
   return storeCreatorImage(store, issueNumber, pngBase64, 'creator-playtest');
 }
 
-// Persists up to MAX_REFERENCE_IMAGES images, dropping any that fail validation. Also
-// hands back the validated base64 bytes so a caller can pass them straight to the chat
-// agent (chat-agent.ts) without re-decoding what storage already checked.
+// Persists up to MAX_REFERENCE_IMAGES images; also returns validated bytes for chat.
 async function storeCreatorReferenceImages(
   store: Store,
   issueNumber: number,

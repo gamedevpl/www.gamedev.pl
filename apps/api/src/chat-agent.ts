@@ -33,8 +33,7 @@ export type ChatAgentDecision =
   | { kind: 'reply'; text: string; tokens?: { input: number; output: number }; model?: string }
   | { kind: 'build'; text?: string; tokens?: { input: number; output: number }; model?: string };
 
-// Only what the Studio composer's reference-image attach ever produces — see
-// storeCreatorReferenceImages in submissions.ts.
+// What Studio's image-attach composer produces (submissions.ts).
 export interface ChatAgentImage {
   data: string;
   mediaType: 'image/png';
