@@ -312,19 +312,8 @@ export function CodeSurface({
     load(true);
   }, [load]);
 
-  /*
-   * Watching an agent's files land, for as long as one could be staging them.
-   *
-   * This used to poll only while `readOnly` — a platform round holding the
-   * buffer. A self-build round has the creator's own agent staging over MCP and
-   * no dispatch, so it is never read-only, so this never armed: the agent's
-   * files reached the staging buffer, the API merged them on request, and the
-   * editor never asked again. The files were live; the view was not, with
-   * nothing on screen to say so.
-   *
-   * `agentRound` is the wider question — is the round open to agent writes —
-   * and `readOnly` still answers the narrower one about who owns the buffer.
-   */
+  // Poll while an agent could be staging. Was gated on readOnly, which needs
+  // a dispatch a self-build round never has — so it never armed there.
   const watching = Boolean(sources?.readOnly || sources?.agentRound);
   useEffect(() => {
     if (!watching) return undefined;

@@ -165,10 +165,7 @@ describe('CodeSurface', () => {
   });
 
   it('keeps watching a self-build round, which is never read-only', async () => {
-    // The gap this closes: polling was gated on `readOnly`, which needs a
-    // platform dispatch. A creator's own agent staging over MCP produces no
-    // dispatch, so the editor stopped asking and showed a snapshot from before
-    // the agent wrote anything — with nothing on screen to say it was stale.
+    // Polling was gated on readOnly, which a self-build round never sets.
     vi.useFakeTimers();
     try {
       mocked.fetchCodeSurfaceSources.mockResolvedValue(sourcesFor({ readOnly: false, agentRound: true }));
@@ -196,8 +193,7 @@ describe('CodeSurface', () => {
         await vi.advanceTimersByTimeAsync(4_100);
       });
 
-      // A closed round cannot gain files under the reader; polling it forever
-      // would be a request every four seconds for the life of the tab.
+      // A closed round cannot gain files; do not poll it forever.
       expect(mocked.fetchCodeSurfaceSources.mock.calls.length).toBe(initial);
     } finally {
       vi.useRealTimers();
