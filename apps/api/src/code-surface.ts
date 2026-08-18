@@ -39,3 +39,13 @@ export function isLiveAgentRound(record: {
   if (!isActiveBuildRound({ state, transitions: record.transitions })) return false;
   return (record.dispatch?.refs?.length ?? 0) > 0;
 }
+
+// Could an agent write? No dispatch.refs; agentEndedAt self-clears.
+export function isOpenAgentRound(record: {
+  state?: JobState;
+  lastStatus?: Parameters<typeof resolveJobState>[0]['lastStatus'];
+  transitions?: JobTransition[];
+}): boolean {
+  const state = resolveJobState(record) ?? 'queued';
+  return isActiveBuildRound({ state, transitions: record.transitions });
+}

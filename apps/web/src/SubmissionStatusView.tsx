@@ -35,6 +35,7 @@ import { studioThreadContentScrollTop, studioThreadNearContentEnd } from './stud
 import { recordStudioStep, type StudioStepDetail } from './visitTelemetry.js';
 import { toBase64PngList } from './attachmentImages.js';
 import { SketchModal } from './SketchModal.js';
+import { useClampToViewport } from './useClampToViewport.js';
 
 type BuilderHandoffHandler = () => Promise<void | { pending?: boolean }> | void | { pending?: boolean };
 
@@ -1453,10 +1454,13 @@ function FeedbackPanel({
   const [builder, setBuilder] = useState<BuilderKind>(initialBuilder);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const [attachments, setAttachments] = useState<ComposerAttachment[]>([]);
+  // FileReader work not yet landed in attachments — Send waits for it.
+  const [pendingAttachmentReads, setPendingAttachmentReads] = useState(0);
   const [attachMenuOpen, setAttachMenuOpen] = useState(false);
   const [isSketchOpen, setIsSketchOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const attachMenuRef = useRef<HTMLDivElement | null>(null);
+  const attachPanelRef = useClampToViewport<HTMLDivElement>(attachMenuOpen);
 
   useEffect(() => {
     if (!attachMenuOpen) return;
@@ -1555,19 +1559,24 @@ function FeedbackPanel({
     if (state === 'sending') return;
     Array.from(files).forEach((file) => {
       if (!file.type.startsWith('image/')) return;
+      setPendingAttachmentReads((count) => count + 1);
       const reader = new FileReader();
+      const done = () => setPendingAttachmentReads((count) => count - 1);
       reader.onload = (e) => {
         const dataUrl = e.target?.result as string;
-        if (!dataUrl) return;
-        setAttachments((prev) =>
-          prev.length >= MAX_COMPOSER_ATTACHMENTS
-            ? prev
-            : [
-                ...prev,
-                { id: `file-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, name: file.name, dataUrl },
-              ],
-        );
+        if (dataUrl) {
+          setAttachments((prev) =>
+            prev.length >= MAX_COMPOSER_ATTACHMENTS
+              ? prev
+              : [
+                  ...prev,
+                  { id: `file-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, name: file.name, dataUrl },
+                ],
+          );
+        }
+        done();
       };
+      reader.onerror = done;
       reader.readAsDataURL(file);
     });
   };
@@ -1586,7 +1595,7 @@ function FeedbackPanel({
 
   const send = async (requestedText: string = trimmed) => {
     const message = requestedText.trim();
-    if (message.length < 10 || state === 'sending') return;
+    if (message.length < 10 || state === 'sending' || pendingAttachmentReads > 0) return;
     setState('sending');
     setError(null);
     setNotice(null);
@@ -1711,7 +1720,7 @@ function FeedbackPanel({
     />
   ) : null;
   const activeSelfHandoff =
-    !chooseBuilder && effectiveBuilder === 'self' && onSwitchToPlatform ? (
+    !chooseBuilder && effectiveBuilder === 'self' && onSwitchToPlatform && state !== 'sending' ? (
       <SwitchToPlatformControl
         compact
         active
@@ -1724,7 +1733,7 @@ function FeedbackPanel({
     !chooseBuilder && agentWorking && effectiveBuilder === 'platform' && Boolean(onSwitchToSelf) && !stopRequested;
   // Hide the switch-to-self badge while STOP covers the same action.
   const activePlatformHandoff =
-    !chooseBuilder && effectiveBuilder === 'platform' && onSwitchToSelf && !showStop ? (
+    !chooseBuilder && effectiveBuilder === 'platform' && onSwitchToSelf && !showStop && state !== 'sending' ? (
       <SwitchToSelfControl compact active onSwitchToSelf={onSwitchToSelf} pending={stopRequested} />
     ) : null;
   const stopAndSwitchToSelf = async () => {
@@ -1816,6 +1825,13 @@ function FeedbackPanel({
             event.preventDefault();
             void send();
           }}
+          onPaste={(event) => {
+            const pastedImages = Array.from(event.clipboardData?.items ?? [])
+              .filter((item) => item.type.startsWith('image/'))
+              .map((item) => item.getAsFile())
+              .filter((file): file is File => file !== null);
+            if (pastedImages.length > 0) handleAttachFiles(pastedImages);
+          }}
           placeholder={t(composerHintKey)}
           aria-label={t(titleKey)}
           rows={1}
@@ -1856,7 +1872,7 @@ function FeedbackPanel({
                 <PixelIcon name="plus" size={15} />
               </button>
               {attachMenuOpen && !sending ? (
-                <div className="prompt-attach-menu" role="menu" aria-label={t('hero.attachMenu')}>
+                <div className="prompt-attach-menu" role="menu" aria-label={t('hero.attachMenu')} ref={attachPanelRef}>
                   <button
                     type="button"
                     className="prompt-attach-item"
@@ -1898,6 +1914,11 @@ function FeedbackPanel({
             {builderControls}
           </div>
           <div className="status-composer-toolbar-right">
+            {sending && !showStop ? (
+              <span className="status-feedback-sending" role="status">
+                {t('statusView.feedback.sending')}
+              </span>
+            ) : null}
             {showStop ? (
               <button
                 type="button"
@@ -1913,7 +1934,7 @@ function FeedbackPanel({
                 type="button"
                 className="primary-btn status-composer-send"
                 onClick={() => void send()}
-                disabled={sending || trimmed.length < 10}
+                disabled={sending || trimmed.length < 10 || pendingAttachmentReads > 0}
                 aria-label={sending ? t('statusView.feedback.sending') : t('statusView.feedback.submit')}
                 title={sending ? t('statusView.feedback.sending') : t('statusView.feedback.submit')}
               >
@@ -1926,21 +1947,10 @@ function FeedbackPanel({
             )}
           </div>
         </div>
-        {/* Failures, in-flight, and "kept but nothing started" still need a row — they
-            ask the creator to wait or act. A plain Sent receipt does not: the thread
-            already shows the message the moment send succeeds. */}
-        {error || sending || notice ? (
-          <div className={`status-feedback-actions${sending ? ' status-feedback-actions-end' : ''}`}>
-            {error ? (
-              <p className="error">{error}</p>
-            ) : sending ? (
-              // Right-aligned under Send, not the switch-builder button.
-              <span className="status-feedback-sending" role="status">
-                {t('statusView.feedback.sending')}
-              </span>
-            ) : (
-              <p className="status-feedback-notice">{notice}</p>
-            )}
+        {/* Sending's indicator now sits inline next to Send, above */}
+        {error || notice ? (
+          <div className="status-feedback-actions">
+            {error ? <p className="error">{error}</p> : <p className="status-feedback-notice">{notice}</p>}
           </div>
         ) : null}
         <SketchModal isOpen={isSketchOpen} onClose={() => setIsSketchOpen(false)} onSaveSketch={handleSaveSketch} />

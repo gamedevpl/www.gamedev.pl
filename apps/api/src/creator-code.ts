@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './assemble.js';
 import { isActiveBuildRound } from './builder.js';
-import { codeSurfaceEnabled, isLiveAgentRound } from './code-surface.js';
+import { codeSurfaceEnabled, isLiveAgentRound, isOpenAgentRound } from './code-surface.js';
 import type { GcsObjectStore } from './gcs-sign.js';
 import {
   InvalidUploadError,
@@ -322,6 +322,8 @@ export async function registerCreatorCodeRoutes(
         deleted,
         readOnly: liveAgent,
         ...(liveAgent ? { reason: 'agent_round' as const } : {}),
+        // Round is open to agent writes, so this snapshot can go stale.
+        agentRound: isOpenAgentRound(record),
         staged: {
           totalBytes: stagedSummary.totalBytes,
           maxBytes: stagedSummary.maxBytes,

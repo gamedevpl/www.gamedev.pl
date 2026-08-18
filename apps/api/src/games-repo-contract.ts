@@ -92,7 +92,12 @@ export const GAME_KIT_MODULES = [
 
 export type GameKitModuleName = (typeof GAME_KIT_MODULES)[number];
 
-// Author-facing budget — games-repo Check 4 GAME_BUDGET_BYTES; raise this side first.
+/**
+ * Author-facing budget — games-repo Check 4 `GAME_BUDGET_BYTES`.
+ *
+ * 252 → 624 KiB: transport-tycoon-remake assembled to 694_419 bytes, ~26 KiB
+ * over the prior 668_048 cap.
+ */
 export const GAME_BUDGET_BYTES = 624 * 1024;
 
 /**
@@ -100,9 +105,11 @@ export const GAME_BUDGET_BYTES = 624 * 1024;
  * (`MAX_SOURCE_GRAPH_BYTES` in `github-client.ts`, `MAX_GAME_SOURCE_BYTES` in
  * `seed-bundle.ts`). Lockstep with games-repo Check 4 `SOURCE_GRAPH_BUDGET_BYTES`.
  *
- * Distinct from {@link GAME_BUDGET_BYTES}: the assembled author payload can stay under
- * the author budget while comments and types push the `.ts` tree higher, so this must
- * stay above it. Raise it whenever the author budget moves.
+ * Distinct from {@link GAME_BUDGET_BYTES}: the assembled author payload can stay
+ * under the author budget while comments and types push the `.ts` tree higher. Moved
+ * 200 → 300 KiB when carjack-city (~247 KiB source) stranded every snapshot publish;
+ * 300 → 336 KiB for the same game's island coastline, on-foot car collision and
+ * mission-ladder work. 336 → 708 KiB to stay above the 624 KiB author budget.
  */
 export const SOURCE_GRAPH_BUDGET_BYTES = 708 * 1024;
 
@@ -113,21 +120,19 @@ export const SOURCE_GRAPH_BUDGET_BYTES = 708 * 1024;
  * (1_048_976, matching `maxProjectBytes`). Not a round KiB.
  *
  * One derived ceiling, not a sum of per-feature constants (games-repo #281). Check 4
- * over there bills each author for measured `assembled − platformBytes` against the
- * 624 KiB author budget; this number is serve-compat only so a game that clears that
- * gate is not refused here. Feature-by-feature archaeology lives in the games repo's
+ * bills each author for measured `assembled − platformBytes` against the 624 KiB
+ * author budget; this number is serve-compat only so a game that clears that gate
+ * is not refused here. Archaeology lives in the games repo's
  * `docs/platform-byte-ledger.md`. Raise this when measurement shows a passing game
  * would exceed it — do not re-split it into named allowances on this side either.
  *
  * The platform ceiling last moved for carjack-city's ai/effects crowd helpers and
- * wind-aware vehicle FX: measured platform ~400_249 bytes. 400_000 → 410_000,
- * serve cap 658_048 → 668_048.
+ * wind-aware vehicle FX: measured platform ~400_249 bytes. 400_000 → 410_000.
  *
- * Before that, coastal road-mask / weather/daylight / foot-clearance: ~380_645,
- * 380_000 → 400_000. Urban ground/shadow + headlight + extrusion: ~369_006,
- * 340_000 → 380_000. Author budget for island/collision/mission ladder: 232 → 252 KiB.
+ * Before that: coastal road-mask/weather/foot-clearance, 380 → 400 KiB; urban
+ * ground/shadow/headlight/extrusion, 340 → 380 KiB.
  *
- * Sized here to the heaviest 2D selection rather than to gfx3d.
+ * Sized to the heaviest 2D selection, not gfx3d.
  */
 export const GAMEKIT_PLATFORM_BYTES = 410_000;
 

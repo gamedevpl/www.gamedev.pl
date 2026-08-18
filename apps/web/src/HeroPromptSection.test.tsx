@@ -254,6 +254,102 @@ describe('HeroPromptSection', () => {
     await act(async () => root.unmount());
   });
 
+  it('attaches an image pasted into the prompt field', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(HeroPromptSection, {
+          initialPrompt: '',
+          catalogEntries: [],
+          submissionStatus: 'idle',
+          submissionError: null,
+          onSubmitSpec: vi.fn(),
+          mockStatus: 'idle',
+          mockError: null,
+          onGenerateMock: vi.fn(),
+        }),
+      );
+      await flushEffects();
+    });
+
+    const input = container.querySelector('.big-prompt-input')!;
+    const file = new File(['fake'], 'sprite.png', { type: 'image/png' });
+    await act(async () => {
+      const paste = new Event('paste', { bubbles: true, cancelable: true }) as ClipboardEvent;
+      Object.defineProperty(paste, 'clipboardData', {
+        value: { items: [{ type: 'image/png', getAsFile: () => file }] },
+      });
+      input.dispatchEvent(paste);
+      // FileReader resolves on a real macrotask in jsdom, not a microtask.
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+    expect(container.querySelector('.attachments-list')).not.toBeNull();
+    expect(container.querySelector('.attachment-thumb')?.getAttribute('alt')).toBe('sprite.png');
+
+    await act(async () => root.unmount());
+  });
+
+  it('blocks submit until a pasted image finishes loading', async () => {
+    // Codex #887: a same-tick submit after paste raced the FileReader.
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    const onSubmitSpec = vi.fn();
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        createElement(HeroPromptSection, {
+          initialPrompt: 'a quiet garden game',
+          catalogEntries: [],
+          submissionStatus: 'idle',
+          submissionError: null,
+          onSubmitSpec,
+          mockStatus: 'idle',
+          mockError: null,
+          onGenerateMock: vi.fn(),
+        }),
+      );
+      await flushEffects();
+    });
+
+    const input = container.querySelector('.big-prompt-input')!;
+    const file = new File(['fake'], 'sprite.png', { type: 'image/png' });
+    await act(async () => {
+      const paste = new Event('paste', { bubbles: true, cancelable: true }) as ClipboardEvent;
+      Object.defineProperty(paste, 'clipboardData', {
+        value: { items: [{ type: 'image/png', getAsFile: () => file }] },
+      });
+      input.dispatchEvent(paste);
+      // Deliberately not awaiting the FileReader's macrotask.
+      await flushEffects();
+    });
+
+    expect(container.querySelector<HTMLButtonElement>('.build-btn')?.disabled).toBe(true);
+    await act(async () => {
+      container
+        .querySelector('.prompt-box-form')
+        ?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      await flushEffects();
+    });
+    expect(onSubmitSpec).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+    expect(container.querySelector<HTMLButtonElement>('.build-btn')?.disabled).toBe(false);
+
+    await act(async () => root.unmount());
+  });
+
   it('opens sketch modal from the attach menu', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');

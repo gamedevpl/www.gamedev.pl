@@ -230,6 +230,33 @@ describe('the Code surface routes (creator-code.ts)', () => {
         expect(body.readOnly).toBe(true);
         expect(body.reason).toBe('agent_round');
       }));
+
+    it('marks a self-build round as watchable even though it is never read-only', async () =>
+      withApp(async (app) => {
+        // readOnly needs dispatch.refs; a self-build MCP round has none.
+        const res = await app.inject({
+          method: 'GET',
+          url: '/api/me/studio/games/sky-dodge/sources',
+          headers: authHeaders('g:creator'),
+        });
+        expect(res.statusCode).toBe(200);
+        const body = res.json() as { readOnly: boolean; agentRound: boolean };
+        expect(body.readOnly).toBe(false);
+        expect(body.agentRound).toBe(true);
+      }));
+
+    it('keeps watching across the submit handoff, which any later stage undoes', async () =>
+      withApp(async (app) => {
+        // agentEndedAt is self-clearing: the next stage call deletes it.
+        await store.markAgentEnded(10);
+        const res = await app.inject({
+          method: 'GET',
+          url: '/api/me/studio/games/sky-dodge/sources',
+          headers: authHeaders('g:creator'),
+        });
+        expect(res.statusCode).toBe(200);
+        expect((res.json() as { agentRound: boolean }).agentRound).toBe(true);
+      }));
   });
 
   describe('PUT /api/me/studio/games/:slug/sources/stage', () => {

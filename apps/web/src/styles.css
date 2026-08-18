@@ -7166,11 +7166,6 @@ a.user-name--profile:focus-visible {
   margin: 0;
 }
 
-/* Sending pairs with Send on the right, not the switch-builder button on the left. */
-.status-composer.is-compact .status-feedback-actions-end {
-  justify-content: flex-end;
-}
-
 /* THE STUDIO THREAD AS AN APP SCREEN — the part that is true at every width.
    Below this, two media blocks give the shell its shape: edge-to-edge on a phone at
    800px and under, a shelf rail and a capped reading column above that. What lives here
@@ -7432,6 +7427,22 @@ a.user-name--profile:focus-visible {
      shove the trailing control past the right edge on a 390px phone with a long title.
      Play keeps its word: clipping it made the primary CTA a tiny icon twin of Details. */
   .app:has(.studio-layout.is-game-open) .studio-head-action:not(.is-primary) .studio-head-action-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  /* Play keeps its word, but "Stop playing" (Polish: "Zakończ granie") is a
+     different, much longer word — long enough to crush the title down to a
+     single letter. The X icon already says "stop" on its own; only the label
+     goes, and only in this active state. */
+  .app:has(.studio-layout.is-game-open) .studio-head-action.is-primary.is-active .studio-head-action-label {
     position: absolute;
     width: 1px;
     height: 1px;
