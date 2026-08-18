@@ -1391,7 +1391,9 @@
       "cooldown": "You renamed recently — try again after the cooldown.",
       "unchanged": "That is already your handle.",
       "unknown": "Could not update the profile."
-    }
+    },
+    "accountNavCredentials": "Credentials",
+    "accountNavAccount": "Account"
   },
   "pwa": {
     "ariaLabel": "Install this app",

@@ -19255,16 +19255,86 @@ body.remix-entry-open {
 }
 
 .account-settings-modal-card {
-  width: min(92vw, 520px);
+  width: min(94vw, 700px);
 }
 
-.account-settings-credentials {
-  margin-top: 0.75rem;
+.account-settings-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1rem;
 }
 
-.account-settings-section-title {
-  margin: 0 0 0.35rem;
-  font-size: 0.9rem;
+.account-settings-nav {
+  display: flex;
+  flex-direction: row;
+  gap: 4px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.account-settings-nav-item {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted, #94a3b8);
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.account-settings-nav-item:hover {
+  background: color-mix(in srgb, var(--panel-card) 70%, transparent);
+  color: var(--text, #e2e8f0);
+}
+
+.account-settings-nav-item.is-active {
+  background: color-mix(in srgb, var(--panel-card) 90%, transparent);
+  color: var(--text-heading, #fff);
+}
+
+.account-settings-panel {
+  min-width: 0;
+  padding-top: 0.25rem;
+}
+
+.account-settings-panel .creator-profile-danger {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+@media (min-width: 640px) {
+  .account-settings-body {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 1.25rem;
+  }
+
+  .account-settings-nav {
+    flex-direction: column;
+    flex: 0 0 168px;
+    gap: 2px;
+    overflow-x: visible;
+    padding-right: 0.75rem;
+    padding-bottom: 0;
+    border-right: 1px solid var(--panel-border);
+  }
+
+  .account-settings-nav-item {
+    width: 100%;
+  }
+
+  .account-settings-panel {
+    flex: 1 1 auto;
+    padding-top: 0;
+  }
 }
 
 .creator-profile-danger {

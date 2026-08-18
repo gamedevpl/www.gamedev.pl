@@ -1403,7 +1403,9 @@
       "cooldown": "Niedawno zmieniałeś handle — spróbuj ponownie po okresie oczekiwania.",
       "unchanged": "To już jest Twój handle.",
       "unknown": "Nie udało się zaktualizować profilu."
-    }
+    },
+    "accountNavCredentials": "Dane dostępowe",
+    "accountNavAccount": "Konto"
   },
   "pwa": {
     "ariaLabel": "Zainstaluj tę aplikację",

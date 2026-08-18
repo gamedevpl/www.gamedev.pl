@@ -80,6 +80,29 @@ describe('AccountSettingsModal', () => {
     expect(card?.textContent).toContain('Connection 111111');
   });
 
+  it('switches to the Account tab and hides the credentials panel', async () => {
+    await act(async () => {
+      root.render(createElement(AccountSettingsModal, { isOpen: true, onClose: () => {} }));
+      await flush();
+    });
+
+    const card = document.body.querySelector('.account-settings-modal-card');
+    const accountTab = [...(card?.querySelectorAll('[role="tab"]') ?? [])].find(
+      (tab) => tab.textContent === 'Account',
+    ) as HTMLButtonElement | undefined;
+    expect(accountTab).toBeDefined();
+
+    await act(async () => {
+      accountTab?.click();
+      await flush();
+    });
+
+    expect(card?.querySelector('[data-testid="creator-key-masked"]')).toBeNull();
+    expect(card?.querySelectorAll('.studio-oauth-client-row')).toHaveLength(0);
+    expect(card?.textContent).toContain('Schedule account deletion');
+    expect(accountTab?.getAttribute('aria-selected')).toBe('true');
+  });
+
   it('renders nothing — and asks for no credentials — while closed', async () => {
     await act(async () => {
       root.render(createElement(AccountSettingsModal, { isOpen: false, onClose: () => {} }));
