@@ -1701,9 +1701,7 @@ function FeedbackPanel({
   if (compact) {
     const sending = state === 'sending';
     const empty = text.length === 0;
-    // Hide the handoff switch button while a message is sending: it sits right above
-    // the "Wysyłanie…" status line, and showing it there reads as if switching builders
-    // — not the unrelated send — is what's in flight.
+    // Hidden while sending: it sat right above the unrelated status line.
     const compactBuilderControls = (
       <div className="builder-mode-controls">
         {builderSelector}
