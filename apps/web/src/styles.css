@@ -8916,6 +8916,13 @@ button.builder-mode-selector:disabled {
   color: var(--text, #e2e8f0);
 }
 
+/* Live "what's happening behind the scenes" checklist while the build runs. */
+.studio-welcome-checklist {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(148, 163, 184, 0.15);
+}
+
 .studio-welcome-primer {
   margin: 0 0 20px;
 }
