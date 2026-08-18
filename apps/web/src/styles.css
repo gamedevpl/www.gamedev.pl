@@ -19255,6 +19255,7 @@ body.remix-entry-open {
 }
 
 .account-settings-modal-card {
+  max-width: 700px;
   width: min(94vw, 700px);
 }
 
