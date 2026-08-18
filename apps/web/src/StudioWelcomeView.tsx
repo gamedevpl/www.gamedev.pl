@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { InteractiveMascot, type MascotEmotion } from './Mascot.js';
 import { PixelIcon } from './PixelIcon.js';
 import { studioPath } from './router.js';
+import { BuildProgressChecklist } from './StudioDetailsBuildProgress.js';
 import { isStudioOnboarded, markStudioOnboarded, resolveWelcomeToken } from './studioWelcome.js';
 import { pollDelayMs } from './studioStatusPoll.js';
 import { getSubmissionStatus, type SubmissionStatus } from './submissionApi.js';
@@ -333,6 +334,15 @@ export function StudioWelcomeView({ game, onOpenStudio }: StudioWelcomeViewProps
             <p className="studio-welcome-progress-message" role="status" aria-live="polite">
               {progress}
             </p>
+            {isRunning && token ? (
+              <div className="studio-welcome-checklist">
+                <BuildProgressChecklist
+                  progress={status?.progress ?? null}
+                  events={status?.events ?? []}
+                  loaded={status != null}
+                />
+              </div>
+            ) : null}
             {isReady ? (
               <button type="button" className="studio-welcome-ready-callout" onClick={openStudio}>
                 <p className="studio-welcome-ready-title">
