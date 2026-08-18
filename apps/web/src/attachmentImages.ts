@@ -1,7 +1,3 @@
-// Converts an arbitrary image data URL (upload of any type, or a sketch canvas export)
-// to a base64 PNG with no `data:` prefix — the shape the backend's build-shot storage
-// validates against (PNG signature check). Uploads are re-encoded through a canvas so a
-// JPEG/WebP photo still lands as a PNG the backend will accept.
 export async function toBase64Png(dataUrl: string): Promise<string | null> {
   if (dataUrl.startsWith('data:image/png')) {
     const comma = dataUrl.indexOf(',');
@@ -29,7 +25,6 @@ export async function toBase64Png(dataUrl: string): Promise<string | null> {
   });
 }
 
-/** Converts a list of data URLs to base64 PNGs, dropping any that fail to decode. */
 export async function toBase64PngList(dataUrls: string[]): Promise<string[]> {
   const results = await Promise.all(dataUrls.map((dataUrl) => toBase64Png(dataUrl)));
   return results.filter((png): png is string => png !== null);

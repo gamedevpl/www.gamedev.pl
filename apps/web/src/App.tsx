@@ -153,10 +153,7 @@ export function App() {
   const [pendingSpec, setPendingSpec] = useState<{ title: string; concept: string; displayName: string } | null>(
     restoredQa.current?.spec ?? null,
   );
-  // Reference images ride separately from pendingSpec: base64 PNGs are too large to put
-  // through the same localStorage-backed persistence (pendingQa.ts) without risking the
-  // quota, and losing them on a mid-QA reload is an acceptable edge case a retype/reattach
-  // fixes, unlike losing the whole spec.
+  // Kept out of pendingSpec — too large for its localStorage-backed persistence.
   const pendingReferenceImagesRef = useRef<string[] | undefined>(undefined);
   // Language the parked questions were written in. Empty when an older blob never
   // recorded one — that mismatch with the live UI language is what triggers a

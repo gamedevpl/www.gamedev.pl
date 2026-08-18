@@ -7,8 +7,7 @@ import { PixelIcon } from './PixelIcon.js';
 import { getQuota, type PlatformBuilderAvailability } from './submissionApi.js';
 import { toBase64PngList } from './attachmentImages.js';
 
-// Backend caps a submission at MAX_REFERENCE_IMAGES (submissions.ts) — mirrored here so
-// the composer stops accepting attachments before a submit would silently drop extras.
+// Mirrors MAX_REFERENCE_IMAGES in submissions.ts.
 const MAX_ATTACHMENTS = 4;
 
 // Gemini-style composer: attach, prompt, mic, build in one pill.
@@ -341,8 +340,7 @@ export function HeroPromptSection({
     const trimmed = promptText.trim();
     if (!trimmed && attachments.length === 0) return;
 
-    // Re-encoded to PNG client-side so an uploaded JPEG/WebP still passes the backend's
-    // build-shot PNG-signature check; a sketch is already a PNG canvas export.
+    // Normalizes to PNG so an uploaded JPEG/WebP passes the backend's signature check.
     const referenceImages = await toBase64PngList(attachments.slice(0, MAX_ATTACHMENTS).map((a) => a.dataUrl));
 
     let finalPrompt = trimmed;

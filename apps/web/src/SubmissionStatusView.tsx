@@ -40,8 +40,6 @@ type BuilderHandoffHandler = () => Promise<void | { pending?: boolean }> | void 
 
 type ComposerAttachment = { id: string; name: string; dataUrl: string };
 
-// Backend caps a feedback/improve message the same way a submission is capped
-// (MAX_REFERENCE_IMAGES in submissions.ts).
 const MAX_COMPOSER_ATTACHMENTS = 4;
 
 function copyInputFromStatus(status: SubmissionStatus | null | undefined) {
@@ -1454,8 +1452,6 @@ function FeedbackPanel({
   const [notice, setNotice] = useState<string | null>(null);
   const [builder, setBuilder] = useState<BuilderKind>(initialBuilder);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
-  // Sketches/photos attached to the change request about to be sent — mirrors the
-  // create-page composer's attach menu, capped the same way the backend is (MAX_REFERENCE_IMAGES).
   const [attachments, setAttachments] = useState<ComposerAttachment[]>([]);
   const [attachMenuOpen, setAttachMenuOpen] = useState(false);
   const [isSketchOpen, setIsSketchOpen] = useState(false);
@@ -1601,9 +1597,7 @@ function FeedbackPanel({
     // client bounds the server call; this button stays disabled until that answer lands.
     try {
       const roundBuilder = chooseBuilder ? builder : undefined;
-      // Re-encoded to PNG client-side, same as the create-page composer, so the backend's
-      // build-shot PNG-signature check accepts an uploaded JPEG/WebP too. Skipped
-      // entirely (no extra await) when nothing is attached — the common case.
+      // Normalized to PNG for the backend's signature check.
       let context: { referenceImages: string[] } | undefined;
       if (attachments.length > 0) {
         const referenceImages = await toBase64PngList(attachments.map((a) => a.dataUrl));

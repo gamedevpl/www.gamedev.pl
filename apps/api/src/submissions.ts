@@ -130,19 +130,12 @@ import { createTranslatorFromEnv, normalizeLocale, type Translator } from './tra
 import { isVariantWidth } from './image-variants.js';
 import { logModerationRejection } from './moderation-metrics.js';
 
-/** Base64 PNG, no data: prefix — same shape as a creator playtest screenshot. */
+// Base64 PNG, no data: prefix — same shape as a playtest screenshot.
 const referenceImageSchema = z.string().max(Math.ceil((300 * 1024 * 4) / 3) + 1024, 'reference image is too large');
 
-/** Reference images travel as data, never instructions — see storeCreatorImage. */
 const MAX_REFERENCE_IMAGES = 4;
 
-/**
- * MAX_REFERENCE_IMAGES images at referenceImageSchema's cap, plus room for the rest of
- * the body (concept/feedback text, JSON overhead). Fastify's default bodyLimit is 1 MiB,
- * which four ~400 KB base64 strings alone already exceed — a creator attaching the
- * allowed maximum would get a bare 413 before the schema (or its own error copy) ever
- * runs. Routes that accept referenceImages must opt into this explicitly.
- */
+// 4 images at the cap above exceed Fastify's default 1 MiB bodyLimit.
 const REFERENCE_IMAGES_BODY_LIMIT_BYTES = MAX_REFERENCE_IMAGES * (Math.ceil((300 * 1024 * 4) / 3) + 1024) + 64 * 1024;
 
 const CreateSubmissionRequestSchema = z.object({
@@ -160,11 +153,7 @@ const CreateSubmissionRequestSchema = z.object({
    * surface the choice; the API accepts it so routing is testable without the card.
    */
   builder: z.enum(['platform', 'self']).optional(),
-  /**
-   * Sketches/photos attached from the composer's "+" menu — moodboard reference for the
-   * builder agent, not instructions. Stored as build shots (label creator-reference) and
-   * exposed to the agent via get_reference_images.
-   */
+  // Moodboard reference for the builder agent, not instructions.
   referenceImages: z.array(referenceImageSchema).max(MAX_REFERENCE_IMAGES).optional(),
 });
 
@@ -257,11 +246,7 @@ const FeedbackRequestSchema = z.object({
           progress: z.array(z.string().max(80)).max(20).optional(),
         })
         .optional(),
-      /**
-       * Sketches/photos attached to this change request from the Studio composer —
-       * moodboard reference for the agent, not instructions. Same base64-PNG shape as
-       * screenshotPng, plural because a steering message may carry more than one.
-       */
+      // Same shape as screenshotPng, plural — a steering message may carry several.
       referenceImages: z.array(referenceImageSchema).max(MAX_REFERENCE_IMAGES).optional(),
     })
     .optional(),
@@ -318,7 +303,7 @@ function revisionOriginOf(message: { origin?: CreatorMessageOrigin }): 'agent' |
   return undefined;
 }
 
-/** Validates and persists a creator-supplied base64 PNG as a build shot. Label tells them apart. */
+// Validates and persists a base64 PNG as a build shot.
 async function storeCreatorImage(
   store: Store,
   issueNumber: number,
@@ -349,7 +334,7 @@ async function storeCreatorPlaytestShot(
   return storeCreatorImage(store, issueNumber, pngBase64, 'creator-playtest');
 }
 
-/** Persists up to MAX_REFERENCE_IMAGES creator-attached images; drops any that fail validation. */
+// Persists up to MAX_REFERENCE_IMAGES images, dropping any that fail validation.
 async function storeCreatorReferenceImages(
   store: Store,
   issueNumber: number,
@@ -4479,10 +4464,7 @@ export async function registerSubmissionRoutes(
           .appendCreatorMessage(started.jobId, studioAckText, { origin: 'studio_ack', delivered: true })
           .catch(() => {});
       }
-      // The brief/reference-image endpoint the new round's agent reads from is scoped to
-      // started.jobId, not issueNumber — the shots stored above (keyed to the published
-      // game's old issue, for the chat-only reply path above) are invisible there. Store
-      // them again under the new job so the ids embedded in its brief actually resolve.
+      // Re-store under the new job — the brief/reference-image endpoint reads started.jobId, not issueNumber.
       if (parsed.data.context?.referenceImages?.length) {
         try {
           await storeCreatorReferenceImages(store, started.jobId, parsed.data.context.referenceImages);

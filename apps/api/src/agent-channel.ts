@@ -2350,11 +2350,7 @@ export async function registerAgentChannelRoutes(
     },
   );
 
-  /**
-   * Sketches/photos the creator attached (composer "+" menu, or a steering message) —
-   * moodboard reference, not gate output. Bytes included, unlike /brief's id-only list,
-   * because this route exists so the model can look at them (mirrors /build/media).
-   */
+  // Creator-attached reference images, with bytes — mirrors /build/media.
   app.get(
     '/api/agent/build/reference-images',
     { config: { rateLimit: { max: 60, timeWindow: '1 hour' } } },

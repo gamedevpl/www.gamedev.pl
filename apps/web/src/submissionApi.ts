@@ -291,7 +291,7 @@ export async function submitSpec(input: {
   locale?: string;
   /** Who builds this round — platform team (default) or the creator's own agent. */
   builder?: 'platform' | 'self';
-  /** Sketches/photos from the composer's "+" menu — base64 PNG, no data: prefix. Max 4. */
+  // Base64 PNGs, no data: prefix. Max 4.
   referenceImages?: string[];
 }): Promise<{ token: string; slug?: string; statusUrl: string }> {
   const response = await fetch(`${API_BASE}/api/submissions`, {
@@ -452,7 +452,7 @@ export type FeedbackContext = {
     errors?: string[];
     progress?: string[];
   };
-  /** Sketches/photos attached to this change request — base64 PNG, no data: prefix. Max 4. */
+  // Base64 PNGs, no data: prefix. Max 4.
   referenceImages?: string[];
 };
 
