@@ -86,6 +86,19 @@ describe('AccountSettingsModal', () => {
   const panel = (section: string) =>
     document.body.querySelector(`.account-settings-panel[data-section="${section}"]`) as HTMLElement | undefined;
 
+  it('lists Account before Credentials, but still opens on Credentials', async () => {
+    await act(async () => {
+      root.render(createElement(AccountSettingsModal, { isOpen: true, onClose: () => {} }));
+      await flush();
+    });
+
+    const order = [...document.body.querySelectorAll('.account-settings-nav-item')].map((el) =>
+      el.getAttribute('data-section'),
+    );
+    expect(order).toEqual(['account', 'credentials']);
+    expect(panel('credentials')?.hidden).toBe(false);
+  });
+
   it('switches to the Account section and hides — but keeps — the credentials panel', async () => {
     await act(async () => {
       root.render(createElement(AccountSettingsModal, { isOpen: true, onClose: () => {} }));
