@@ -390,6 +390,7 @@ describe('ArcadeCatalog lazy media', () => {
 
     expect(container.querySelectorAll('.catalog-card')).toHaveLength(0);
     expect(container.querySelector('.catalog-state')?.textContent).toMatch(/Loading/i);
+    expect(container.querySelector('.arcade-section')?.classList.contains('is-pending')).toBe(true);
 
     await act(async () => {
       resolveSignals?.(
@@ -402,6 +403,7 @@ describe('ArcadeCatalog lazy media', () => {
     });
 
     expect(container.querySelectorAll('.catalog-card')).toHaveLength(2);
+    expect(container.querySelector('.arcade-section')?.classList.contains('is-pending')).toBe(false);
 
     await act(async () => {
       root.unmount();

@@ -29,6 +29,12 @@ describe('catalog grid layout', () => {
     expect(ruleBody('.catalog-media')).toMatch(/aspect-ratio:\s*16\s*\/\s*9/);
   });
 
+  it('keeps the footer below the fold while the catalog settles', () => {
+    const rule = ruleBody('.arcade-section.is-pending');
+    expect(rule).toMatch(/min-height:\s*100vh/);
+    expect(rule).toMatch(/min-height:\s*100dvh/);
+  });
+
   it('hides the moments-only toggle on coarse pointers, but keeps the video one tappable', () => {
     const rule = css.match(/\.preview-toggle:not\(\.preview-toggle--video\)\s*,\s*\.catalog-moments\s*\{([\s\S]*?)\}/);
     expect(rule, 'missing combined preview-toggle/catalog-moments hide rule').not.toBeNull();

@@ -1644,6 +1644,12 @@ button:disabled {
   margin-bottom: 60px;
 }
 
+/* Keep the footer below the fold while the catalog settles. */
+.arcade-section.is-pending {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
 .arcade-header {
   margin-bottom: 16px;
   display: flex;
