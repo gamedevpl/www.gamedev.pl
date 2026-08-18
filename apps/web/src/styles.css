@@ -20115,6 +20115,13 @@ body.remix-entry-open {
   font-size: 0.8rem;
 }
 
+.review-card-rereview {
+  margin: 0.35rem 0 0;
+  color: var(--warning, #f5a623);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
 .review-card-stage {
   position: relative;
   aspect-ratio: 16 / 10;

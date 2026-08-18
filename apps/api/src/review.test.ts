@@ -549,3 +549,234 @@ describe('reviewer assessment desk', () => {
     expect(body.recent.length).toBeLessThanOrEqual(40);
   });
 });
+
+describe('targeted re-review', () => {
+  const apps: Array<Awaited<ReturnType<typeof buildApp>>> = [];
+
+  afterEach(async () => {
+    while (apps.length) {
+      await apps.pop()!.close();
+    }
+  });
+
+  const catalog = [
+    {
+      slug: 'sky-dodge',
+      title: 'Sky Dodge',
+      creatorHandle: null as string | null,
+      genre: 'arcade',
+      media: { screenshots: [], video: null as string | null },
+    },
+    {
+      slug: 'neon-courier',
+      title: 'Neon Courier',
+      creatorHandle: 'ada' as string | null,
+      genre: 'racing',
+      media: { screenshots: [], video: null as string | null },
+    },
+  ];
+
+  async function makeApp() {
+    const store = new InMemoryStore();
+    const app = await buildApp({
+      store,
+      contentChecker: allowAll,
+      reviewerUids: 'dev:reviewer,dev:second',
+      adminUids: 'dev:boss',
+      reviewRoutes: {
+        listCatalog: async () => catalog,
+      },
+    });
+    apps.push(app);
+    return { app, store };
+  }
+
+  async function assess(app: Awaited<ReturnType<typeof buildApp>>, cookie: string, payload: Record<string, unknown>) {
+    const res = await app.inject({ method: 'POST', url: '/api/review/assessments', headers: { cookie }, payload });
+    expect(res.statusCode).toBe(200);
+    return JSON.parse(res.body).assessment;
+  }
+
+  it('re-surfaces an already-assessed slug only for the targeted reviewer, and resolves once re-assessed', async () => {
+    const { app, store } = await makeApp();
+    const reviewer = await sessionCookie(app, 'reviewer');
+    const second = await sessionCookie(app, 'second');
+    const boss = await sessionCookie(app, 'boss');
+
+    // First pass, via a normal sweep.
+    await store.createReviewSweep({
+      id: 'swp-first',
+      status: 'active',
+      source: 'catalog',
+      slugs: ['sky-dodge'],
+      releasedCount: 1,
+      releasePerDay: null,
+      startedAt: new Date().toISOString(),
+      note: null,
+      createdAt: new Date().toISOString(),
+      createdBy: 'dev:boss',
+      updatedAt: new Date().toISOString(),
+      updatedBy: 'dev:boss',
+      notifiedAt: null,
+      notifiedCount: 0,
+    });
+    await assess(app, reviewer, {
+      slug: 'sky-dodge',
+      source: 'catalog',
+      verdict: 'cut',
+      note: 'Controls are broken.',
+      checklist: sampleChecklist,
+      gameVersion: 'v1',
+    });
+
+    // Once assessed, the slug is gone from this reviewer's queue — the permanent
+    // exclusion the games-repo skill flags as the gap.
+    const gone = await app.inject({ method: 'GET', url: '/api/review/queue', headers: { cookie: reviewer } });
+    expect(JSON.parse(gone.body).items.map((i: { slug: string }) => i.slug)).not.toContain('sky-dodge');
+
+    // Close out the sweep so only the targeted request drives what shows up next.
+    await app.inject({
+      method: 'POST',
+      url: '/api/admin/review-sweeps/swp-first',
+      headers: { cookie: boss },
+      payload: { status: 'completed' },
+    });
+
+    // A fix lands; an operator asks this specific reviewer to look again, with an
+    // explicit slug and reviewer uid (not a sweep), naming the fixed version.
+    const requeue = await app.inject({
+      method: 'POST',
+      url: '/api/admin/review-requeue',
+      headers: { cookie: boss },
+      payload: {
+        slugs: ['sky-dodge'],
+        reviewerUids: ['dev:reviewer'],
+        gameVersion: 'v2',
+        reason: 'Controls fix shipped.',
+        notify: false,
+      },
+    });
+    expect(requeue.statusCode).toBe(200);
+    const requeueBody = JSON.parse(requeue.body) as { requests: Array<{ slug: string; reviewerUid: string }> };
+    expect(requeueBody.requests).toEqual([
+      expect.objectContaining({ slug: 'sky-dodge', reviewerUid: 'dev:reviewer', status: 'open' }),
+    ]);
+
+    // The targeted reviewer sees it again, flagged as a re-review — even with no active
+    // sweep at all.
+    const targetedQueue = await app.inject({ method: 'GET', url: '/api/review/queue', headers: { cookie: reviewer } });
+    const targetedBody = JSON.parse(targetedQueue.body) as {
+      items: Array<{ slug: string; reReview: { reason: string | null; gameVersion: string | null } | null }>;
+    };
+    expect(targetedBody.items).toEqual([
+      expect.objectContaining({
+        slug: 'sky-dodge',
+        reReview: expect.objectContaining({ reason: 'Controls fix shipped.', gameVersion: 'v2' }),
+      }),
+    ]);
+
+    // A different reviewer, not named in the request, does not see it.
+    const otherQueue = await app.inject({ method: 'GET', url: '/api/review/queue', headers: { cookie: second } });
+    expect(JSON.parse(otherQueue.body).items).toEqual([]);
+
+    // The targeted reviewer re-assesses; the original verdict is preserved as history,
+    // not overwritten silently, and the new row carries the version it judged.
+    const second_assessment = await assess(app, reviewer, {
+      slug: 'sky-dodge',
+      source: 'catalog',
+      verdict: 'keep',
+      note: 'Controls feel great now.',
+      checklist: sampleChecklist,
+    });
+    expect(second_assessment.verdict).toBe('keep');
+    expect(second_assessment.gameVersion).toBe('v2'); // inherited from the re-review request
+
+    const history = await app.inject({
+      method: 'GET',
+      url: '/api/admin/assessments/history?slug=sky-dodge&reviewerUid=dev:reviewer',
+      headers: { cookie: boss },
+    });
+    expect(history.statusCode).toBe(200);
+    const historyBody = JSON.parse(history.body) as {
+      current: { verdict: string };
+      history: Array<{ verdict: string; note: string; gameVersion: string | null }>;
+    };
+    expect(historyBody.current.verdict).toBe('keep');
+    expect(historyBody.history).toEqual([
+      expect.objectContaining({ verdict: 'cut', note: 'Controls are broken.', gameVersion: 'v1' }),
+    ]);
+
+    // Resolved: it drops back out of the queue.
+    const resolved = await app.inject({ method: 'GET', url: '/api/review/queue', headers: { cookie: reviewer } });
+    expect(JSON.parse(resolved.body).items).toEqual([]);
+  });
+
+  it('lets an explicit gameVersion on the submission override the re-review request default', async () => {
+    const { app, store } = await makeApp();
+    const reviewer = await sessionCookie(app, 'reviewer');
+    const boss = await sessionCookie(app, 'boss');
+    await store.upsertGameAssessment({
+      slug: 'neon-courier',
+      title: 'Neon Courier',
+      source: 'catalog',
+      creatorHandle: 'ada',
+      reviewerUid: 'dev:reviewer',
+      verdict: 'cut',
+      note: 'first pass',
+      noteOrigin: 'text',
+      checklist: sampleChecklist,
+      clientContext: null,
+      gameVersion: 'v1',
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/api/admin/review-requeue',
+      headers: { cookie: boss },
+      payload: { slugs: ['neon-courier'], reviewerUids: ['dev:reviewer'], gameVersion: 'v2', notify: false },
+    });
+    const assessment = await assess(app, reviewer, {
+      slug: 'neon-courier',
+      source: 'catalog',
+      verdict: 'keep',
+      note: 'Better now.',
+      checklist: sampleChecklist,
+      gameVersion: 'v3',
+    });
+    expect(assessment.gameVersion).toBe('v3');
+  });
+
+  it('rejects a requeue naming a uid that is not a reviewer, and caps slug x reviewer pairs', async () => {
+    const { app } = await makeApp();
+    const boss = await sessionCookie(app, 'boss');
+
+    const badReviewer = await app.inject({
+      method: 'POST',
+      url: '/api/admin/review-requeue',
+      headers: { cookie: boss },
+      payload: { slugs: ['sky-dodge'], reviewerUids: ['dev:stranger'], notify: false },
+    });
+    expect(badReviewer.statusCode).toBe(400);
+
+    const tooManyPairs = await app.inject({
+      method: 'POST',
+      url: '/api/admin/review-requeue',
+      headers: { cookie: boss },
+      payload: {
+        slugs: Array.from({ length: 41 }, (_, i) => `game-${i}`),
+        reviewerUids: ['dev:reviewer', 'dev:second', 'dev:boss', 'dev:boss', 'dev:boss'],
+        notify: false,
+      },
+    });
+    expect(tooManyPairs.statusCode).toBe(400);
+
+    // Only admins can requeue.
+    const reviewer = await sessionCookie(app, 'reviewer');
+    const asReviewer = await app.inject({
+      method: 'POST',
+      url: '/api/admin/review-requeue',
+      headers: { cookie: reviewer },
+      payload: { slugs: ['sky-dodge'], reviewerUids: ['dev:reviewer'], notify: false },
+    });
+    expect(asReviewer.statusCode).toBe(404);
+  });
+});

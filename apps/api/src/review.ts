@@ -19,6 +19,7 @@ import type {
   AssessmentSource,
   AssessmentVerdict,
   GameAssessment,
+  ReReviewRequest,
   ReviewSweep,
   ReviewSweepSource,
   Store,
@@ -28,6 +29,9 @@ import type {
 const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
 const MAX_NOTE = 2000;
 const MAX_ADMIN_ROWS = 200;
+const MAX_REQUEUE_SLUGS = 50;
+const MAX_REQUEUE_REVIEWERS = 50;
+const MAX_REQUEUE_PAIRS = 200;
 const ChecklistMarkSchema = z.enum(['ok', 'weak', 'bad']);
 const ChecklistSchema = z
   .object({
@@ -61,6 +65,12 @@ export interface ReviewQueueItem {
   genre: string | null;
   issueNumber: number | null;
   media: ReviewCatalogMedia | null;
+  /**
+   * Present when this slug is queued via an operator's targeted re-review request
+   * rather than (or in addition to) the general sweep — meaning this reviewer has
+   * already assessed it once and an operator is explicitly asking for another look.
+   */
+  reReview?: { reason: string | null; gameVersion: string | null; requestedAt: string } | null;
 }
 
 export interface ReviewRoutesOptions {
@@ -100,6 +110,8 @@ const AssessmentBodySchema = z.object({
   noteOrigin: z.enum(['text', 'speech']).optional(),
   checklist: ChecklistSchema,
   clientContext: ClientContextSchema.optional(),
+  // The deployed game version this verdict judges (e.g. a shared draft's deliveredVersion).
+  gameVersion: z.string().trim().min(1).max(80).nullable().optional(),
 });
 
 function normalizeClientContext(raw: z.infer<typeof ClientContextSchema> | undefined): AssessmentClientContext | null {
@@ -219,6 +231,68 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
     return items;
   }
 
+  // Single-slug lookup for a targeted re-review, independent of any sweep — a slug an
+  // operator wants a specific reviewer to look at again is not necessarily in the
+  // currently open sweep's pool at all.
+  async function findQueueItem(slug: string): Promise<ReviewQueueItem | null> {
+    try {
+      const catalog = await listCatalog();
+      const entry = catalog.find((row) => row.slug === slug);
+      if (entry) {
+        return {
+          slug: entry.slug,
+          title: entry.title || entry.slug,
+          source: 'catalog',
+          creatorHandle: entry.creatorHandle,
+          genre: entry.genre ?? null,
+          issueNumber: null,
+          media: entry.media ?? null,
+        };
+      }
+    } catch {
+      // Fall through to creator drafts.
+    }
+    const delivered = await store.listSubmissionsWithDelivery();
+    const record = delivered.find((row) => row.slug === slug && isReviewableCreatorDraft(row));
+    if (!record) return null;
+    let creatorHandle: string | null = null;
+    try {
+      creatorHandle = (await store.getUser(record.ownerUid))?.handle ?? null;
+    } catch {
+      // best-effort
+    }
+    return {
+      slug,
+      title: titleFromSubmission(record),
+      source: 'creator',
+      creatorHandle,
+      genre: null,
+      issueNumber: record.issueNumber,
+      media: null,
+    };
+  }
+
+  async function targetedQueueItems(
+    reviewerUid: string,
+    sourceFilter: 'catalog' | 'creator' | 'all',
+  ): Promise<{
+    items: ReviewQueueItem[];
+    requests: ReReviewRequest[];
+  }> {
+    const requests = await store.listOpenReReviewRequestsForReviewer(reviewerUid);
+    const items: ReviewQueueItem[] = [];
+    for (const req of requests) {
+      const item = await findQueueItem(req.slug);
+      if (!item) continue;
+      if (sourceFilter !== 'all' && item.source !== sourceFilter) continue;
+      items.push({
+        ...item,
+        reReview: { reason: req.reason, gameVersion: req.gameVersion, requestedAt: req.createdAt },
+      });
+    }
+    return { items, requests };
+  }
+
   async function notifySweep(sweep: ReviewSweep, notificationId: string): Promise<number> {
     if (!options.emitDeps) return 0;
     const audience = reviewerAudience(reviewerUids, adminUids);
@@ -251,14 +325,16 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
     }
     const sourceFilter = query.data.source ?? 'all';
     const uid = request.user!.uid;
+    const mine = await store.listGameAssessmentsByReviewer(uid);
+    const { items: targeted } = await targetedQueueItems(uid, sourceFilter);
 
     const open = await store.getOpenReviewSweep();
     if (!open || open.status === 'paused') {
       return {
         source: sourceFilter,
-        remaining: 0,
-        assessed: (await store.listGameAssessmentsByReviewer(uid)).length,
-        items: [] as ReviewQueueItem[],
+        remaining: targeted.length,
+        assessed: mine.length,
+        items: targeted,
         sweep: open
           ? {
               id: open.id,
@@ -267,24 +343,32 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
               released: effectiveReleasedCount(open, now()),
             }
           : null,
-        emptyReason: open ? ('sweep_paused' as const) : ('no_active_sweep' as const),
+        emptyReason: targeted.length > 0 ? null : open ? ('sweep_paused' as const) : ('no_active_sweep' as const),
       };
     }
 
-    const mine = await store.listGameAssessmentsByReviewer(uid);
     const done = new Set(mine.map((row) => row.slug));
     const unlocked = new Set(releasedSlugs(open, now()));
     const pool = await collectPool(open.source);
     const bySlug = new Map(pool.map((item) => [item.slug, item]));
 
     const items: ReviewQueueItem[] = [];
+    const seen = new Set<string>();
     for (const slug of open.slugs) {
       if (!unlocked.has(slug) || done.has(slug)) continue;
       const item = bySlug.get(slug);
       if (!item) continue;
       if (sourceFilter !== 'all' && item.source !== sourceFilter) continue;
       items.push(item);
+      seen.add(slug);
       if (items.length >= MAX_QUEUE) break;
+    }
+    // Targeted re-review slugs surface even though the reviewer already assessed them —
+    // that is the whole point of a targeted request — and even outside the sweep's pool.
+    for (const item of targeted) {
+      if (seen.has(item.slug) || items.length >= MAX_QUEUE) continue;
+      items.push(item);
+      seen.add(item.slug);
     }
 
     return {
@@ -376,9 +460,12 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
     const creatorHandle = body.data.creatorHandle === undefined ? null : body.data.creatorHandle;
     const reviewerUid = request.user!.uid;
 
-    // New rows need an active released slug; re-edits ok.
+    // New rows need an active released slug or an operator's targeted re-review request;
+    // re-edits are always ok.
     const prior = await store.getGameAssessment(body.data.slug, reviewerUid);
-    if (!prior) {
+    const reReviewRequest = await store.getReReviewRequest(body.data.slug, reviewerUid);
+    const targeted = reReviewRequest?.status === 'open';
+    if (!prior && !targeted) {
       const open = await store.getOpenReviewSweep();
       if (!open || open.status !== 'active') {
         return reply.status(409).send({ error: 'no_active_sweep' });
@@ -387,6 +474,9 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
         return reply.status(409).send({ error: 'slug_not_in_sweep' });
       }
     }
+
+    const gameVersion =
+      body.data.gameVersion === undefined ? (reReviewRequest?.gameVersion ?? null) : body.data.gameVersion;
 
     const assessment: GameAssessment = await store.upsertGameAssessment({
       slug: body.data.slug,
@@ -399,7 +489,12 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
       noteOrigin,
       checklist,
       clientContext: normalizeClientContext(body.data.clientContext),
+      gameVersion,
     });
+
+    if (targeted) {
+      await store.resolveReReviewRequest(body.data.slug, reviewerUid);
+    }
 
     return { assessment };
   });
@@ -614,5 +709,92 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
       },
       notified,
     };
+  });
+
+  // Superseded rows for one reviewer's one game — the record a plain re-edit would
+  // otherwise have overwritten silently.
+  const HistoryQuerySchema = z.object({
+    slug: z.string().trim().min(1).max(80).regex(SLUG_PATTERN, 'invalid slug'),
+    reviewerUid: z.string().trim().min(1).max(120),
+  });
+
+  app.get('/api/admin/assessments/history', async (request, reply) => {
+    if (!isAdminSession(request, adminUids)) {
+      return reply.status(404).send({ error: 'not found' });
+    }
+    const query = HistoryQuerySchema.safeParse(request.query);
+    if (!query.success) {
+      return reply.status(400).send({ error: query.error.issues[0]?.message ?? 'invalid query' });
+    }
+    const [current, history] = await Promise.all([
+      store.getGameAssessment(query.data.slug, query.data.reviewerUid),
+      store.listGameAssessmentHistory(query.data.slug, query.data.reviewerUid),
+    ]);
+    return { current, history };
+  });
+
+  const RequeueSchema = z.object({
+    slugs: z.array(z.string().trim().min(1).max(80).regex(SLUG_PATTERN, 'invalid slug')).min(1).max(MAX_REQUEUE_SLUGS),
+    reviewerUids: z.array(z.string().trim().min(1).max(120)).min(1).max(MAX_REQUEUE_REVIEWERS),
+    // Deployed version the requeued fix is expected to be judged against; informational.
+    gameVersion: z.string().trim().min(1).max(80).nullable().optional(),
+    reason: z.string().trim().max(280).nullable().optional(),
+    notify: z.boolean().optional(),
+  });
+
+  // Explicit slugs × explicit reviewers, independent of any sweep — "reviewer X, look at
+  // slug Y again" for a fix that landed after a cut (docs/game-assessment-plan.md
+  // follow-up: re-queue a game after a major revision).
+  app.post('/api/admin/review-requeue', async (request, reply) => {
+    if (!isAdminSession(request, adminUids)) {
+      return reply.status(404).send({ error: 'not found' });
+    }
+    const body = RequeueSchema.safeParse(request.body ?? {});
+    if (!body.success) {
+      return reply.status(400).send({ error: body.error.issues[0]?.message ?? 'invalid request' });
+    }
+
+    const pairCount = body.data.slugs.length * body.data.reviewerUids.length;
+    if (pairCount > MAX_REQUEUE_PAIRS) {
+      return reply.status(400).send({ error: `too many slug × reviewer pairs (max ${MAX_REQUEUE_PAIRS})` });
+    }
+
+    const audience = reviewerAudience(reviewerUids, adminUids);
+    const unknownReviewer = body.data.reviewerUids.find((uid) => !audience.has(uid));
+    if (unknownReviewer) {
+      return reply.status(400).send({ error: `${unknownReviewer} is not a reviewer` });
+    }
+
+    const gameVersion = body.data.gameVersion ?? null;
+    const reason = body.data.reason ?? null;
+    const createdBy = request.user!.uid;
+    const requests = body.data.slugs.flatMap((slug) =>
+      body.data.reviewerUids.map((reviewerUid) => ({ slug, reviewerUid, gameVersion, reason, createdBy })),
+    );
+    const created = await store.upsertReReviewRequests(requests);
+
+    let notified = 0;
+    if (body.data.notify !== false && options.emitDeps) {
+      const targetedReviewers = new Set(body.data.reviewerUids);
+      const { created: n } = await emitReviewSweep(
+        { ...options.emitDeps, reviewerUids: targetedReviewers, now },
+        {
+          notificationId: `review-requeue-${now().toString(36)}`,
+          title: `Targeted re-review · ${body.data.slugs.length} game${body.data.slugs.length === 1 ? '' : 's'}`,
+          detail: reason ?? undefined,
+        },
+      );
+      notified = n;
+    }
+
+    return { requests: created, notified };
+  });
+
+  app.get('/api/admin/review-requeue', async (request, reply) => {
+    if (!isAdminSession(request, adminUids)) {
+      return reply.status(404).send({ error: 'not found' });
+    }
+    const requests = await store.listReReviewRequests({ limit: MAX_ADMIN_ROWS });
+    return { requests };
   });
 }

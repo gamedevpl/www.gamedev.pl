@@ -1227,6 +1227,13 @@ export interface GameAssessment {
   // Null on rows written before checklist / clientContext shipped.
   checklist: AssessmentChecklist | null;
   clientContext: AssessmentClientContext | null;
+  /**
+   * The deployed game version this verdict judged — `deliveredVersion` for a shared
+   * creator draft, or null when the source (e.g. the catalog today) does not carry a
+   * per-game version yet. Lets a targeted re-review tell "already judged this exact
+   * build" apart from "judged an older one" instead of only "already judged".
+   */
+  gameVersion: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -1238,14 +1245,56 @@ export function gameAssessmentId(slug: string, reviewerUid: string): string {
   return `${slug}:${reviewerUid}`;
 }
 
-// Missing checklist / clientContext become null, not undefined.
+// Missing checklist / clientContext / gameVersion become null, not undefined.
 export function hydrateGameAssessment(id: string, data: Omit<GameAssessment, 'id'>): GameAssessment {
   return {
     ...data,
     id,
     checklist: data.checklist ?? null,
     clientContext: data.clientContext ?? null,
+    gameVersion: data.gameVersion ?? null,
   };
+}
+
+/**
+ * A superseded assessment row, archived the moment a reviewer's second pass would
+ * otherwise overwrite it. Preserves the original judgment (docs/game-assessment-plan.md
+ * follow-up: "re-queue a game after a major revision") so a targeted re-review can be
+ * compared against what was said before, not just replace it silently.
+ */
+export interface GameAssessmentHistoryEntry extends Omit<GameAssessment, 'id'> {
+  id: string;
+  supersededAt: string;
+}
+
+export const GAME_ASSESSMENT_HISTORY_COLLECTION = 'gameAssessmentHistory';
+
+export type ReReviewRequestStatus = 'open' | 'resolved' | 'cancelled';
+
+/**
+ * An operator's explicit ask: "reviewer X, look at slug Y again" — independent of a
+ * general sweep. Exists because `/api/review/queue` otherwise excludes a slug a reviewer
+ * has already assessed permanently, which is fine for a first pass but wrong once a fix
+ * has landed and the same reviewer (who has the original context) needs a re-look.
+ */
+export interface ReReviewRequest {
+  id: string;
+  slug: string;
+  reviewerUid: string;
+  status: ReReviewRequestStatus;
+  // Deployed version the fix is expected to be judged against; informational only, not
+  // enforced — a reviewer can still submit before it lands.
+  gameVersion: string | null;
+  reason: string | null;
+  createdAt: string;
+  createdBy: string;
+  resolvedAt: string | null;
+}
+
+export const RE_REVIEW_REQUESTS_COLLECTION = 'reviewReRequests';
+
+export function reReviewRequestId(slug: string, reviewerUid: string): string {
+  return `${slug}:${reviewerUid}`;
 }
 
 /**
@@ -2445,7 +2494,10 @@ export interface Store {
   countPlayerFeedback(slug: string): Promise<number>;
   // Upsert reviewer verdict; second pass overwrites in place.
   upsertGameAssessment(
-    input: Omit<GameAssessment, 'id' | 'createdAt' | 'updatedAt'> & { createdAt?: string },
+    input: Omit<GameAssessment, 'id' | 'createdAt' | 'updatedAt' | 'gameVersion'> & {
+      createdAt?: string;
+      gameVersion?: string | null;
+    },
   ): Promise<GameAssessment>;
   getGameAssessment(slug: string, reviewerUid: string): Promise<GameAssessment | null>;
   listGameAssessmentsByReviewer(reviewerUid: string): Promise<GameAssessment[]>;
@@ -2454,6 +2506,17 @@ export interface Store {
   listGameAssessmentsBySource(source: AssessmentSource): Promise<GameAssessment[]>;
   countGameAssessmentsByUid(uid: string): Promise<number>;
   deleteGameAssessmentsByUid(uid: string): Promise<number>;
+  // Superseded rows for one reviewer's one game, newest first; empty before a second pass.
+  listGameAssessmentHistory(slug: string, reviewerUid: string): Promise<GameAssessmentHistoryEntry[]>;
+  // Opens (or re-opens) one targeted re-review request per (slug, reviewerUid) pair.
+  upsertReReviewRequests(
+    requests: Array<Pick<ReReviewRequest, 'slug' | 'reviewerUid' | 'gameVersion' | 'reason' | 'createdBy'>>,
+  ): Promise<ReReviewRequest[]>;
+  getReReviewRequest(slug: string, reviewerUid: string): Promise<ReReviewRequest | null>;
+  listOpenReReviewRequestsForReviewer(reviewerUid: string): Promise<ReReviewRequest[]>;
+  // Recent targeted requests across reviewers; bounded operator page.
+  listReReviewRequests(opts?: { limit?: number }): Promise<ReReviewRequest[]>;
+  resolveReReviewRequest(slug: string, reviewerUid: string): Promise<ReReviewRequest | null>;
   getOpenReviewSweep(): Promise<ReviewSweep | null>;
   getReviewSweep(id: string): Promise<ReviewSweep | null>;
   listReviewSweeps(opts?: { limit?: number }): Promise<ReviewSweep[]>;
@@ -2822,6 +2885,9 @@ export class InMemoryStore implements Store {
   // slug -> feedback rows, newest last (reversed on read)
   private playerFeedback = new Map<string, PlayerFeedbackRecord[]>();
   private gameAssessments = new Map<string, GameAssessment>();
+  // gameAssessmentId -> superseded rows, oldest first.
+  private gameAssessmentHistory = new Map<string, GameAssessmentHistoryEntry[]>();
+  private reReviewRequests = new Map<string, ReReviewRequest>();
   private reviewSweeps = new Map<string, ReviewSweep>();
   // uid -> (slug -> saved progress)
   private gameSaves = new Map<string, Map<string, GameSaveRecord>>();
@@ -4567,11 +4633,19 @@ export class InMemoryStore implements Store {
   }
 
   async upsertGameAssessment(
-    input: Omit<GameAssessment, 'id' | 'createdAt' | 'updatedAt'> & { createdAt?: string },
+    input: Omit<GameAssessment, 'id' | 'createdAt' | 'updatedAt' | 'gameVersion'> & {
+      createdAt?: string;
+      gameVersion?: string | null;
+    },
   ): Promise<GameAssessment> {
     const id = gameAssessmentId(input.slug, input.reviewerUid);
     const existing = this.gameAssessments.get(id);
     const now = new Date().toISOString();
+    if (existing) {
+      const history = this.gameAssessmentHistory.get(id) ?? [];
+      history.push({ ...existing, supersededAt: now });
+      this.gameAssessmentHistory.set(id, history);
+    }
     const record: GameAssessment = {
       id,
       slug: input.slug,
@@ -4584,11 +4658,72 @@ export class InMemoryStore implements Store {
       noteOrigin: input.noteOrigin,
       checklist: input.checklist ?? null,
       clientContext: input.clientContext ?? null,
+      gameVersion: input.gameVersion ?? null,
       createdAt: existing?.createdAt ?? input.createdAt ?? now,
       updatedAt: now,
     };
     this.gameAssessments.set(id, record);
     return { ...record };
+  }
+
+  async listGameAssessmentHistory(slug: string, reviewerUid: string): Promise<GameAssessmentHistoryEntry[]> {
+    const id = gameAssessmentId(slug, reviewerUid);
+    return [...(this.gameAssessmentHistory.get(id) ?? [])]
+      .sort((a, b) => b.supersededAt.localeCompare(a.supersededAt))
+      .map((row) => ({ ...row }));
+  }
+
+  async upsertReReviewRequests(
+    requests: Array<Pick<ReReviewRequest, 'slug' | 'reviewerUid' | 'gameVersion' | 'reason' | 'createdBy'>>,
+  ): Promise<ReReviewRequest[]> {
+    const now = new Date().toISOString();
+    const out: ReReviewRequest[] = [];
+    for (const req of requests) {
+      const id = reReviewRequestId(req.slug, req.reviewerUid);
+      const record: ReReviewRequest = {
+        id,
+        slug: req.slug,
+        reviewerUid: req.reviewerUid,
+        status: 'open',
+        gameVersion: req.gameVersion,
+        reason: req.reason,
+        createdAt: now,
+        createdBy: req.createdBy,
+        resolvedAt: null,
+      };
+      this.reReviewRequests.set(id, record);
+      out.push({ ...record });
+    }
+    return out;
+  }
+
+  async getReReviewRequest(slug: string, reviewerUid: string): Promise<ReReviewRequest | null> {
+    const record = this.reReviewRequests.get(reReviewRequestId(slug, reviewerUid));
+    return record ? { ...record } : null;
+  }
+
+  async listOpenReReviewRequestsForReviewer(reviewerUid: string): Promise<ReReviewRequest[]> {
+    return Array.from(this.reReviewRequests.values())
+      .filter((row) => row.reviewerUid === reviewerUid && row.status === 'open')
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .map((row) => ({ ...row }));
+  }
+
+  async listReReviewRequests(opts?: { limit?: number }): Promise<ReReviewRequest[]> {
+    const sorted = Array.from(this.reReviewRequests.values())
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .map((row) => ({ ...row }));
+    return opts?.limit !== undefined ? sorted.slice(0, opts.limit) : sorted;
+  }
+
+  async resolveReReviewRequest(slug: string, reviewerUid: string): Promise<ReReviewRequest | null> {
+    const id = reReviewRequestId(slug, reviewerUid);
+    const existing = this.reReviewRequests.get(id);
+    if (!existing) return null;
+    if (existing.status !== 'open') return { ...existing };
+    const updated: ReReviewRequest = { ...existing, status: 'resolved', resolvedAt: new Date().toISOString() };
+    this.reReviewRequests.set(id, updated);
+    return { ...updated };
   }
 
   async getGameAssessment(slug: string, reviewerUid: string): Promise<GameAssessment | null> {
@@ -4630,8 +4765,12 @@ export class InMemoryStore implements Store {
     for (const [id, row] of this.gameAssessments) {
       if (row.reviewerUid === uid) {
         this.gameAssessments.delete(id);
+        this.gameAssessmentHistory.delete(id);
         deleted += 1;
       }
+    }
+    for (const [id, row] of this.reReviewRequests) {
+      if (row.reviewerUid === uid) this.reReviewRequests.delete(id);
     }
     return deleted;
   }
@@ -7647,7 +7786,10 @@ export class FirestoreStore implements Store {
   }
 
   async upsertGameAssessment(
-    input: Omit<GameAssessment, 'id' | 'createdAt' | 'updatedAt'> & { createdAt?: string },
+    input: Omit<GameAssessment, 'id' | 'createdAt' | 'updatedAt' | 'gameVersion'> & {
+      createdAt?: string;
+      gameVersion?: string | null;
+    },
   ): Promise<GameAssessment> {
     const id = gameAssessmentId(input.slug, input.reviewerUid);
     const ref = this.gameAssessmentsCollection().doc(id);
@@ -7657,6 +7799,15 @@ export class FirestoreStore implements Store {
       existing.exists && typeof existing.data()?.createdAt === 'string'
         ? (existing.data()!.createdAt as string)
         : (input.createdAt ?? now);
+    if (existing.exists) {
+      const prior = hydrateGameAssessment(id, existing.data() as Omit<GameAssessment, 'id'>);
+      const { id: priorId, ...priorBody } = prior;
+      await this.gameAssessmentHistoryCollection().add({
+        ...priorBody,
+        assessmentId: priorId,
+        supersededAt: now,
+      });
+    }
     const record: GameAssessment = {
       id,
       slug: input.slug,
@@ -7669,6 +7820,7 @@ export class FirestoreStore implements Store {
       noteOrigin: input.noteOrigin,
       checklist: input.checklist ?? null,
       clientContext: input.clientContext ?? null,
+      gameVersion: input.gameVersion ?? null,
       createdAt,
       updatedAt: now,
     };
@@ -7683,10 +7835,110 @@ export class FirestoreStore implements Store {
       noteOrigin: record.noteOrigin,
       checklist: record.checklist,
       clientContext: record.clientContext,
+      gameVersion: record.gameVersion,
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,
     });
     return record;
+  }
+
+  private gameAssessmentHistoryCollection() {
+    return this.db.collection(GAME_ASSESSMENT_HISTORY_COLLECTION);
+  }
+
+  async listGameAssessmentHistory(slug: string, reviewerUid: string): Promise<GameAssessmentHistoryEntry[]> {
+    const id = gameAssessmentId(slug, reviewerUid);
+    // Equality query only; sort in memory, same shape as the assessments themselves.
+    const snap = await this.gameAssessmentHistoryCollection().where('assessmentId', '==', id).get();
+    return snap.docs
+      .map((d) => {
+        const { assessmentId, ...rest } = d.data() as Omit<GameAssessmentHistoryEntry, 'id'> & {
+          assessmentId: string;
+        };
+        return { ...rest, id: d.id, checklist: rest.checklist ?? null, clientContext: rest.clientContext ?? null };
+      })
+      .sort((a, b) => b.supersededAt.localeCompare(a.supersededAt));
+  }
+
+  private reReviewRequestsCollection() {
+    return this.db.collection(RE_REVIEW_REQUESTS_COLLECTION);
+  }
+
+  private hydrateReReviewRequest(id: string, data: Omit<ReReviewRequest, 'id'>): ReReviewRequest {
+    return {
+      ...data,
+      id,
+      gameVersion: data.gameVersion ?? null,
+      reason: data.reason ?? null,
+      resolvedAt: data.resolvedAt ?? null,
+    };
+  }
+
+  async upsertReReviewRequests(
+    requests: Array<Pick<ReReviewRequest, 'slug' | 'reviewerUid' | 'gameVersion' | 'reason' | 'createdBy'>>,
+  ): Promise<ReReviewRequest[]> {
+    const now = new Date().toISOString();
+    const out: ReReviewRequest[] = [];
+    for (let index = 0; index < requests.length; index += 400) {
+      const batch = this.db.batch();
+      const chunk = requests.slice(index, index + 400);
+      const records = chunk.map((req) => {
+        const id = reReviewRequestId(req.slug, req.reviewerUid);
+        const record: ReReviewRequest = {
+          id,
+          slug: req.slug,
+          reviewerUid: req.reviewerUid,
+          status: 'open',
+          gameVersion: req.gameVersion,
+          reason: req.reason,
+          createdAt: now,
+          createdBy: req.createdBy,
+          resolvedAt: null,
+        };
+        const { id: recordId, ...body } = record;
+        batch.set(this.reReviewRequestsCollection().doc(recordId), body);
+        return record;
+      });
+      await batch.commit();
+      out.push(...records);
+    }
+    return out;
+  }
+
+  async getReReviewRequest(slug: string, reviewerUid: string): Promise<ReReviewRequest | null> {
+    const id = reReviewRequestId(slug, reviewerUid);
+    const snap = await this.reReviewRequestsCollection().doc(id).get();
+    if (!snap.exists) return null;
+    return this.hydrateReReviewRequest(id, snap.data() as Omit<ReReviewRequest, 'id'>);
+  }
+
+  async listOpenReReviewRequestsForReviewer(reviewerUid: string): Promise<ReReviewRequest[]> {
+    // Equality only — no orderBy / composite index.
+    const snap = await this.reReviewRequestsCollection()
+      .where('reviewerUid', '==', reviewerUid)
+      .where('status', '==', 'open')
+      .get();
+    return snap.docs
+      .map((d) => this.hydrateReReviewRequest(d.id, d.data() as Omit<ReReviewRequest, 'id'>))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async listReReviewRequests(opts?: { limit?: number }): Promise<ReReviewRequest[]> {
+    const ordered = this.reReviewRequestsCollection().orderBy('createdAt', 'desc');
+    const snap = await (opts?.limit === undefined ? ordered : ordered.limit(opts.limit)).get();
+    return snap.docs.map((d) => this.hydrateReReviewRequest(d.id, d.data() as Omit<ReReviewRequest, 'id'>));
+  }
+
+  async resolveReReviewRequest(slug: string, reviewerUid: string): Promise<ReReviewRequest | null> {
+    const id = reReviewRequestId(slug, reviewerUid);
+    const ref = this.reReviewRequestsCollection().doc(id);
+    const snap = await ref.get();
+    if (!snap.exists) return null;
+    const existing = this.hydrateReReviewRequest(id, snap.data() as Omit<ReReviewRequest, 'id'>);
+    if (existing.status !== 'open') return existing;
+    const resolvedAt = new Date().toISOString();
+    await ref.set({ status: 'resolved', resolvedAt }, { merge: true });
+    return { ...existing, status: 'resolved', resolvedAt };
   }
 
   async getGameAssessment(slug: string, reviewerUid: string): Promise<GameAssessment | null> {
@@ -7724,13 +7976,18 @@ export class FirestoreStore implements Store {
   }
 
   async deleteGameAssessmentsByUid(uid: string): Promise<number> {
-    const snap = await this.gameAssessmentsCollection().where('reviewerUid', '==', uid).get();
-    for (let index = 0; index < snap.docs.length; index += 400) {
+    const [assessments, history, reReviews] = await Promise.all([
+      this.gameAssessmentsCollection().where('reviewerUid', '==', uid).get(),
+      this.gameAssessmentHistoryCollection().where('reviewerUid', '==', uid).get(),
+      this.reReviewRequestsCollection().where('reviewerUid', '==', uid).get(),
+    ]);
+    const refs = [...assessments.docs, ...history.docs, ...reReviews.docs].map((d) => d.ref);
+    for (let index = 0; index < refs.length; index += 400) {
       const batch = this.db.batch();
-      for (const doc of snap.docs.slice(index, index + 400)) batch.delete(doc.ref);
+      for (const ref of refs.slice(index, index + 400)) batch.delete(ref);
       await batch.commit();
     }
-    return snap.docs.length;
+    return assessments.docs.length;
   }
 
   private reviewSweepsCollection() {
