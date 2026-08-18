@@ -247,4 +247,33 @@ describe('ReviewDesk', () => {
       }),
     );
   });
+
+  it('flags a slug an operator explicitly requeued for re-review', async () => {
+    reviewApi.fetchReviewQueue.mockResolvedValue({
+      source: 'all',
+      remaining: 1,
+      assessed: 1,
+      items: [
+        {
+          slug: 'sky-dodge',
+          title: 'Sky Dodge',
+          source: 'catalog',
+          creatorHandle: 'sky-pilot',
+          genre: 'arcade',
+          issueNumber: null,
+          media: { screenshots: [], video: null },
+          reReview: { reason: 'Controls fix shipped.', gameVersion: 'v2', requestedAt: '2026-08-06T00:00:00.000Z' },
+        },
+      ],
+    });
+
+    root = createRoot(container);
+    await act(async () => {
+      root!.render(<ReviewDesk />);
+    });
+    await flush();
+
+    expect(container.textContent).toContain('Re-review requested');
+    expect(container.textContent).toContain('Controls fix shipped.');
+  });
 });

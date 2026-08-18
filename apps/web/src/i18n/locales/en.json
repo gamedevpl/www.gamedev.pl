@@ -1296,6 +1296,8 @@
     "loading": "Loading the queue…",
     "denied": "This desk is only for reviewers.",
     "loadError": "Could not load the review queue. Try again.",
+    "reReviewBadge": "Re-review requested",
+    "reReviewReason": "Why: {{reason}}",
     "empty": "Queue clear — nothing left to assess in this filter.",
     "emptyNoSweep": "No active review sweep. An operator opens one from the Assessments console.",
     "emptyPaused": "The current review sweep is paused. Check back when it resumes.",

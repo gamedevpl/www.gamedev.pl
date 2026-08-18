@@ -420,6 +420,14 @@ export function ReviewDesk() {
                   {current.creatorHandle ? <span> · @{current.creatorHandle}</span> : null}
                   <span> · {t(`review.source.${current.source}`)}</span>
                 </p>
+                {current.reReview ? (
+                  <p className="review-card-rereview">
+                    {t('review.reReviewBadge')}
+                    {current.reReview.reason
+                      ? ` — ${t('review.reReviewReason', { reason: current.reReview.reason })}`
+                      : ''}
+                  </p>
+                ) : null}
               </div>
 
               <div className="review-card-stage">

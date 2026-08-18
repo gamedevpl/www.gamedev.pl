@@ -1308,6 +1308,8 @@
     "loading": "Ładowanie kolejki…",
     "denied": "To biurko jest tylko dla recenzentów.",
     "loadError": "Nie udało się wczytać kolejki ocen. Spróbuj ponownie.",
+    "reReviewBadge": "Poproszono o ponowną ocenę",
+    "reReviewReason": "Powód: {{reason}}",
     "empty": "Kolejka pusta — nic więcej do oceny w tym filtrze.",
     "emptyNoSweep": "Brak aktywnego przeglądu. Operator uruchamia go w konsoli Ocen.",
     "emptyPaused": "Bieżący przegląd jest wstrzymany. Wróć, gdy zostanie wznowiony.",

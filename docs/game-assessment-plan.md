@@ -13,21 +13,22 @@ judgment_ from someone who knows what the shelf should feel like.
 
 ## Shape
 
-| Piece         | Choice                                                                                                                                                                 |
-| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Role          | Env allowlist `REVIEWER_UIDS` (comma UIDs). Admins are reviewers too. Session-only, same posture as `ADMIN_UIDS` — PATs never count.                                   |
-| Surface       | Unlisted `/review`. 404 to everyone else (API answers 404, not 403).                                                                                                   |
-| Queue         | **Catalog** (published) and **Creator** (delivered, shared drafts that are not yet published). Private unshared drafts stay private.                                   |
-| Gesture       | Swipe right = keep, left = cut, down/button = skip. Keyboard: `→` / `←` / `↓`.                                                                                         |
-| Preview       | Catalog **MP4 + screenshots** first (gate media). Optional **Try play** opens full-screen theater (no play telemetry, no remix).                                       |
-| Mobile dock   | Note + Cut/Skip/Keep sit in a **bottom dock** (thumb zone). The desk owns the window like Studio; install/update banners join the column instead of covering the game. |
-| Rationale     | **Required** free text and/or speech-to-text (same Web Speech API as the hero mic). Transcript only — no audio upload.                                                 |
-| Checklist     | Required marks for **graphics / gameplay / fun / sound / controls** — each `ok` · `weak` · `bad`.                                                                      |
-| Client env    | Viewport, screen size, DPR, input method (`touch`/`mouse`/`mixed`), platform, lang, truncated UA — stored on the row at commit time.                                   |
-| Storage       | `gameAssessments/{slug}:{reviewerUid}` — one row per reviewer per game; a second pass overwrites.                                                                      |
-| Operator read | `/admin/assessments` — **review sweeps** (dispatch / rate / pause / notify) plus keep/cut aggregates and recent notes.                                                 |
-| Sweeps        | Operator opens a bounded pass; desk shows only the released prefix. `releasePerDay` drips by 24h from `startedAt`; manual Release.                                     |
-| Notify        | Starting or re-notifying a sweep fans out `operator.review_sweep` to `REVIEWER_UIDS` ∪ admins (in-app + email + push).                                                 |
+| Piece              | Choice                                                                                                                                                                 |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Role               | Env allowlist `REVIEWER_UIDS` (comma UIDs). Admins are reviewers too. Session-only, same posture as `ADMIN_UIDS` — PATs never count.                                   |
+| Surface            | Unlisted `/review`. 404 to everyone else (API answers 404, not 403).                                                                                                   |
+| Queue              | **Catalog** (published) and **Creator** (delivered, shared drafts that are not yet published). Private unshared drafts stay private.                                   |
+| Gesture            | Swipe right = keep, left = cut, down/button = skip. Keyboard: `→` / `←` / `↓`.                                                                                         |
+| Preview            | Catalog **MP4 + screenshots** first (gate media). Optional **Try play** opens full-screen theater (no play telemetry, no remix).                                       |
+| Mobile dock        | Note + Cut/Skip/Keep sit in a **bottom dock** (thumb zone). The desk owns the window like Studio; install/update banners join the column instead of covering the game. |
+| Rationale          | **Required** free text and/or speech-to-text (same Web Speech API as the hero mic). Transcript only — no audio upload.                                                 |
+| Checklist          | Required marks for **graphics / gameplay / fun / sound / controls** — each `ok` · `weak` · `bad`.                                                                      |
+| Client env         | Viewport, screen size, DPR, input method (`touch`/`mouse`/`mixed`), platform, lang, truncated UA — stored on the row at commit time.                                   |
+| Storage            | `gameAssessments/{slug}:{reviewerUid}` — one row per reviewer per game; a second pass archives the prior row to `gameAssessmentHistory` before overwriting.            |
+| Operator read      | `/admin/assessments` — **review sweeps** (dispatch / rate / pause / notify) plus keep/cut aggregates and recent notes.                                                 |
+| Sweeps             | Operator opens a bounded pass; desk shows only the released prefix. `releasePerDay` drips by 24h from `startedAt`; manual Release.                                     |
+| Targeted re-review | Operator picks explicit `slugs` × `reviewerUids` (`reviewReRequests/{slug}:{reviewerUid}`) to re-surface a slug for one reviewer outside any sweep — see below.        |
+| Notify             | Starting or re-notifying a sweep, or a targeted re-review, fans out `operator.review_sweep` to the intended reviewers (in-app + email + push).                         |
 
 ## Non-goals (this steel thread)
 
@@ -82,22 +83,44 @@ Unset / empty means nobody extra is a reviewer. Locally: `REVIEWER_UIDS=dev:loca
 
 ## API
 
-| Method | Path                                             | Who      | Body / query                                                                                      |
-| ------ | ------------------------------------------------ | -------- | ------------------------------------------------------------------------------------------------- |
-| `GET`  | `/api/review/queue?source=catalog\|creator\|all` | reviewer | Queue of games not yet assessed by this reviewer                                                  |
-| `POST` | `/api/review/assessments`                        | reviewer | `{ slug, source, title?, creatorHandle?, verdict, note, checklist, noteOrigin?, clientContext? }` |
-| `GET`  | `/api/review/assessments/mine`                   | reviewer | This reviewer's rows (progress / re-edit)                                                         |
-| `GET`  | `/api/admin/assessments`                         | admin    | Aggregate + recent rows for the operator tab                                                      |
-| `GET`  | `/api/admin/review-sweeps`                       | admin    | Open sweep + progress + recent history                                                            |
-| `POST` | `/api/admin/review-sweeps`                       | admin    | Start a sweep (`source`, `maxGames`, `releasePerDay?`, `note?`, `notify?`)                        |
-| `POST` | `/api/admin/review-sweeps/:id`                   | admin    | Pause / resume / complete / cancel, release more/all, change rate, notify again                   |
+| Method | Path                                                | Who      | Body / query                                                                                                                   |
+| ------ | --------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `GET`  | `/api/review/queue?source=catalog\|creator\|all`    | reviewer | Queue of games not yet assessed by this reviewer, plus any slug an operator has targeted for this reviewer to re-review        |
+| `POST` | `/api/review/assessments`                           | reviewer | `{ slug, source, title?, creatorHandle?, verdict, note, checklist, noteOrigin?, clientContext?, gameVersion? }`                |
+| `GET`  | `/api/review/assessments/mine`                      | reviewer | This reviewer's rows (progress / re-edit)                                                                                      |
+| `GET`  | `/api/admin/assessments`                            | admin    | Aggregate + recent rows for the operator tab                                                                                   |
+| `GET`  | `/api/admin/assessments/history?slug=&reviewerUid=` | admin    | The superseded rows a re-assessment would otherwise have overwritten silently                                                  |
+| `GET`  | `/api/admin/review-sweeps`                          | admin    | Open sweep + progress + recent history                                                                                         |
+| `POST` | `/api/admin/review-sweeps`                          | admin    | Start a sweep (`source`, `maxGames`, `releasePerDay?`, `note?`, `notify?`)                                                     |
+| `POST` | `/api/admin/review-sweeps/:id`                      | admin    | Pause / resume / complete / cancel, release more/all, change rate, notify again                                                |
+| `POST` | `/api/admin/review-requeue`                         | admin    | `{ slugs[], reviewerUids[], gameVersion?, reason?, notify? }` — target explicit games at explicit reviewers, outside any sweep |
+| `GET`  | `/api/admin/review-requeue`                         | admin    | Recent targeted re-review requests                                                                                             |
 
-The desk queue is **empty until an operator opens a sweep**. Released games unlock by
-`releasePerDay` (elapsed 24h windows from `startedAt`) and/or manual Release controls.
-Every **new** verdict must target a slug in the active released prefix (re-edits of an
-existing assessment are allowed). Every verdict (including `skip`) needs a **non-empty
-note** and a complete checklist (`graphics` / `gameplay` / `fun` / `sound` / `controls`,
-each `ok|weak|bad`). Notes are moderated and sanitized.
+The desk queue is **empty until an operator opens a sweep**, except for slugs an operator
+explicitly targeted (see below), which surface regardless of any sweep. Released games
+unlock by `releasePerDay` (elapsed 24h windows from `startedAt`) and/or manual Release
+controls. Every **new** verdict must target a slug in the active released prefix, or one
+of this reviewer's open targeted re-review requests (re-edits of an existing assessment
+are always allowed). Every verdict (including `skip`) needs a **non-empty note** and a
+complete checklist (`graphics` / `gameplay` / `fun` / `sound` / `controls`, each
+`ok|weak|bad`). Notes are moderated and sanitized.
+
+### Targeted re-review
+
+`POST /api/admin/review-requeue` closes the gap the games-repo `catalog-feedback-loop`
+skill used to call out: `/api/review/queue` excludes a slug a reviewer has already
+assessed **permanently**, which is fine for a first pass but wrong once a fix has landed.
+An operator names explicit `slugs` × explicit `reviewerUids` (bounded to 200 pairs) and
+optionally the `gameVersion` the fix is expected to be judged against and a `reason`; each
+pair opens (or re-opens) a `ReReviewRequest`. Only that reviewer sees that slug surface
+again — the general sweep pool and every other reviewer are unaffected. The reviewer's
+next verdict on that slug resolves the request and stamps the assessment's `gameVersion`
+(from the submission if given, else the request's) so a later look can tell "judged this
+exact build" apart from "judged an older one." The **previous** assessment is archived,
+not overwritten — `GET /api/admin/assessments/history` reads it back — so the record of
+what a reviewer said the first time survives a second pass. `gameVersion` is informational
+only for the catalog (not tracked per-commit today); creator drafts pass their
+`deliveredVersion`.
 
 ## Instrumentation
 
@@ -108,8 +131,11 @@ into the existing `health` bucket (same unlisted-console posture as `/admin`).
 
 ## Follow-ups (not blocking)
 
-- Re-queue a game after a major revision (invalidate assessments when `publishedAt` or
-  delivered version advances).
+- ✅ **Targeted re-review** — `POST /api/admin/review-requeue` re-queues explicit slugs for
+  explicit reviewers after a fix, independent of the general sweep exclusion. See "Targeted
+  re-review" above. Still open: nothing _automatically_ invalidates an assessment when
+  `publishedAt` or `deliveredVersion` advances — an operator (or a script driving the API)
+  decides when a fix is worth a re-look and requeues it deliberately.
 - Optional CSV for offline curation — **Copy JSON** on Admin → Assessments is enough for
   agent paste handoff ([`ingest-desk-reviews`](../.claude/skills/ingest-desk-reviews/SKILL.md)).
 - ✅ **Editorial signal class** — creator-source cut consensus (≥2 reviewers, cut ≥ keep)

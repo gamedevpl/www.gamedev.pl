@@ -21,6 +21,8 @@ export interface ReviewQueueItem {
   genre: string | null;
   issueNumber: number | null;
   media: ReviewQueueMedia | null;
+  // Set when an operator targeted this slug for re-review.
+  reReview?: { reason: string | null; gameVersion: string | null; requestedAt: string } | null;
 }
 
 export interface ReviewQueueSweepHint {
@@ -51,6 +53,8 @@ export interface GameAssessment {
   noteOrigin: AssessmentNoteOrigin;
   checklist: AssessmentChecklist | null;
   clientContext: AssessmentClientContext | null;
+  // The deployed game version this verdict judged.
+  gameVersion: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -65,6 +69,7 @@ export interface SubmitAssessmentInput {
   noteOrigin?: Exclude<AssessmentNoteOrigin, 'none'>;
   checklist: AssessmentChecklist;
   clientContext?: AssessmentClientContext | null;
+  gameVersion?: string | null;
 }
 
 export interface AdminAssessmentsResponse {
@@ -142,5 +147,59 @@ export async function fetchMyAssessments(): Promise<GameAssessment[]> {
 
 export async function fetchAdminAssessments(): Promise<AdminAssessmentsResponse> {
   const res = await fetch(`${API_BASE}/api/admin/assessments`, { credentials: 'include' });
+  return readJson(res);
+}
+
+export type ReReviewRequestStatus = 'open' | 'resolved' | 'cancelled';
+
+export interface ReReviewRequest {
+  id: string;
+  slug: string;
+  reviewerUid: string;
+  status: ReReviewRequestStatus;
+  gameVersion: string | null;
+  reason: string | null;
+  createdAt: string;
+  createdBy: string;
+  resolvedAt: string | null;
+}
+
+export interface RequeueForReReviewInput {
+  slugs: string[];
+  reviewerUids: string[];
+  gameVersion?: string | null;
+  reason?: string | null;
+  notify?: boolean;
+}
+
+// Explicit slugs x explicit reviewers, outside any sweep.
+export async function requeueForReReview(
+  input: RequeueForReReviewInput,
+): Promise<{ requests: ReReviewRequest[]; notified: number }> {
+  const res = await fetch(`${API_BASE}/api/admin/review-requeue`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  return readJson(res);
+}
+
+export async function fetchReReviewRequests(): Promise<{ requests: ReReviewRequest[] }> {
+  const res = await fetch(`${API_BASE}/api/admin/review-requeue`, { credentials: 'include' });
+  return readJson(res);
+}
+
+export interface AssessmentHistoryResponse {
+  current: GameAssessment | null;
+  history: GameAssessment[];
+}
+
+// The rows a plain re-edit would otherwise have overwritten silently.
+export async function fetchAssessmentHistory(slug: string, reviewerUid: string): Promise<AssessmentHistoryResponse> {
+  const params = new URLSearchParams({ slug, reviewerUid });
+  const res = await fetch(`${API_BASE}/api/admin/assessments/history?${params.toString()}`, {
+    credentials: 'include',
+  });
   return readJson(res);
 }
