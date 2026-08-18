@@ -17,6 +17,12 @@ export function AccountSettingsModal({ isOpen, onClose }: { isOpen: boolean; onC
   onCloseRef.current = onClose;
   const [section, setSection] = useState<AccountSettingsSection>('credentials');
 
+  // The modal stays mounted between openings, so without this a creator who left
+  // on Account reopens staring at the deletion pane.
+  useEffect(() => {
+    if (isOpen) setSection('credentials');
+  }, [isOpen]);
+
   useEffect(() => {
     if (!isOpen) return;
     const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -35,8 +41,10 @@ export function AccountSettingsModal({ isOpen, onClose }: { isOpen: boolean; onC
 
   if (!isOpen) return null;
 
-  const credentialsPanelId = `${headingId}-panel-credentials`;
-  const accountPanelId = `${headingId}-panel-account`;
+  const sections: { id: AccountSettingsSection; icon: 'lock' | 'user'; label: string }[] = [
+    { id: 'credentials', icon: 'lock', label: t('creatorProfile.accountNavCredentials') },
+    { id: 'account', icon: 'user', label: t('creatorProfile.accountNavAccount') },
+  ];
 
   return createPortal(
     <div className="modal-backdrop claim-handle-modal-backdrop" role="presentation" onClick={onClose}>
@@ -56,56 +64,36 @@ export function AccountSettingsModal({ isOpen, onClose }: { isOpen: boolean; onC
         </header>
 
         <div className="account-settings-body">
-          <nav className="account-settings-nav" aria-orientation="vertical">
-            <button
-              type="button"
-              role="tab"
-              id={`${headingId}-tab-credentials`}
-              className={`account-settings-nav-item${section === 'credentials' ? ' is-active' : ''}`}
-              aria-selected={section === 'credentials'}
-              aria-controls={credentialsPanelId}
-              onClick={() => setSection('credentials')}
-            >
-              <PixelIcon name="lock" size={14} />
-              {t('creatorProfile.accountNavCredentials')}
-            </button>
-            <button
-              type="button"
-              role="tab"
-              id={`${headingId}-tab-account`}
-              className={`account-settings-nav-item${section === 'account' ? ' is-active' : ''}`}
-              aria-selected={section === 'account'}
-              aria-controls={accountPanelId}
-              onClick={() => setSection('account')}
-            >
-              <PixelIcon name="trash" size={14} />
-              {t('creatorProfile.accountNavAccount')}
-            </button>
+          {/* Plain nav rather than a tablist: two buttons do not earn the roving-focus contract. */}
+          <nav className="account-settings-nav" aria-label={t('creatorProfile.accountSettings')}>
+            {sections.map((entry) => (
+              <button
+                key={entry.id}
+                type="button"
+                className={`account-settings-nav-item${section === entry.id ? ' is-active' : ''}`}
+                aria-current={section === entry.id ? 'true' : undefined}
+                data-section={entry.id}
+                onClick={() => setSection(entry.id)}
+              >
+                <PixelIcon name={entry.icon} size={14} />
+                {entry.label}
+              </button>
+            ))}
           </nav>
 
-          {section === 'credentials' ? (
-            <div
-              className="account-settings-panel"
-              role="tabpanel"
-              id={credentialsPanelId}
-              aria-labelledby={`${headingId}-tab-credentials`}
-            >
-              <p className="studio-rail-credentials-hint">{t('studioPanel.rail.credentialsHint')}</p>
-              <div className="studio-rail-credentials-body">
-                <StudioCreatorAgentKeyPanel />
-                <StudioOAuthClientsPanel />
-              </div>
+          {/* Both panels stay mounted so switching away never refetches the key or
+              discards a confirmation the creator already armed. */}
+          <div className="account-settings-panel" data-section="credentials" hidden={section !== 'credentials'}>
+            <p className="studio-rail-credentials-hint">{t('studioPanel.rail.credentialsHint')}</p>
+            <div className="studio-rail-credentials-body">
+              <StudioCreatorAgentKeyPanel />
+              <StudioOAuthClientsPanel />
             </div>
-          ) : (
-            <div
-              className="account-settings-panel"
-              role="tabpanel"
-              id={accountPanelId}
-              aria-labelledby={`${headingId}-tab-account`}
-            >
-              <AccountDeletionControl labelledBy={`${headingId}-danger`} />
-            </div>
-          )}
+          </div>
+
+          <div className="account-settings-panel" data-section="account" hidden={section !== 'account'}>
+            <AccountDeletionControl labelledBy={`${headingId}-danger`} />
+          </div>
         </div>
       </div>
     </div>,

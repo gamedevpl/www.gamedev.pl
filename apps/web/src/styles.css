@@ -15423,6 +15423,7 @@ button.builder-mode-selector:disabled {
 .studio-oauth-client-summary {
   display: flex;
   min-width: 0;
+  flex: 1 1 0;
   flex-direction: column;
   gap: 2px;
 }
@@ -19305,6 +19306,10 @@ body.remix-entry-open {
   padding-top: 0.25rem;
 }
 
+.account-settings-panel[hidden] {
+  display: none;
+}
+
 .account-settings-panel .creator-profile-danger {
   margin-top: 0;
   padding-top: 0;
@@ -19319,6 +19324,8 @@ body.remix-entry-open {
   }
 
   .account-settings-nav {
+    position: sticky;
+    top: 0;
     flex-direction: column;
     flex: 0 0 168px;
     gap: 2px;
