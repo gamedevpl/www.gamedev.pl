@@ -7438,6 +7438,22 @@ a.user-name--profile:focus-visible {
     border: 0;
   }
 
+  /* Play keeps its word, but "Stop playing" (Polish: "Zakończ granie") is a
+     different, much longer word — long enough to crush the title down to a
+     single letter. The X icon already says "stop" on its own; only the label
+     goes, and only in this active state. */
+  .app:has(.studio-layout.is-game-open) .studio-head-action.is-primary.is-active .studio-head-action-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
   /* 126px of page padding — 60 on the content, 48 on the panel, 18 on the detail — was
      what put the composer that far above the bottom of the screen with nothing under it.
      Right for a section of a document, wrong for the bottom edge of an app. */
