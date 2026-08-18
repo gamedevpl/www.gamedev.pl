@@ -3,16 +3,10 @@ import { useTranslation } from 'react-i18next';
 import { PixelIcon } from './PixelIcon.js';
 import { getSubmissionStatus, type BuildEvent, type BuildProgress } from './submissionApi.js';
 
-/** Details refreshes slower than the thread — the thread already owns the live pulse. */
+// Details refreshes slower than the thread's own live pulse.
 const DETAILS_POLL_MS = 10_000;
 
-/**
- * Pure checklist + progress-bar rendering, driven entirely by props. Callers that
- * already poll `SubmissionStatus` themselves (e.g. the Studio welcome screen) should
- * pass that data straight through instead of mounting a second poller against the
- * same endpoint — `StudioDetailsBuildProgress` below is the self-fetching wrapper for
- * callers that don't have a status poll of their own.
- */
+// Props-driven; callers with their own status poll should feed it in, not refetch.
 export function BuildProgressChecklist({
   progress,
   events,
@@ -21,9 +15,9 @@ export function BuildProgressChecklist({
 }: {
   progress: BuildProgress | null;
   events: BuildEvent[];
-  /** Whether the first fetch has completed — controls the empty-state message. */
+  // Whether the first fetch has completed.
   loaded: boolean;
-  /** When set, an empty checklist renders this instead of nothing. */
+  // Empty-state label shown when the checklist is empty.
   emptyLabel?: string;
 }) {
   const { t } = useTranslation();
@@ -88,18 +82,13 @@ export function BuildProgressChecklist({
   );
 }
 
-/**
- * Checklist + fraction for the Details rail — the progress that used to sit in the
- * thread foot. Kept out of the composer strip so the conversation stays Claude-quiet;
- * open Details when you want the count. Self-fetches on its own timer — only use this
- * for callers that don't already poll `SubmissionStatus`.
- */
+// Self-fetching wrapper for callers with no status poll of their own.
 export function StudioDetailsBuildProgress({
   token,
   emptyLabel,
 }: {
   token: string;
-  /** When set, an empty checklist renders this instead of nothing. */
+  // Empty-state label shown when the checklist is empty.
   emptyLabel?: string;
 }) {
   const { i18n } = useTranslation();
