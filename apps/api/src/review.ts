@@ -65,11 +65,7 @@ export interface ReviewQueueItem {
   genre: string | null;
   issueNumber: number | null;
   media: ReviewCatalogMedia | null;
-  /**
-   * Present when this slug is queued via an operator's targeted re-review request
-   * rather than (or in addition to) the general sweep — meaning this reviewer has
-   * already assessed it once and an operator is explicitly asking for another look.
-   */
+  // Set when an operator targeted this slug for re-review.
   reReview?: { reason: string | null; gameVersion: string | null; requestedAt: string } | null;
 }
 
@@ -110,7 +106,7 @@ const AssessmentBodySchema = z.object({
   noteOrigin: z.enum(['text', 'speech']).optional(),
   checklist: ChecklistSchema,
   clientContext: ClientContextSchema.optional(),
-  // The deployed game version this verdict judges (e.g. a shared draft's deliveredVersion).
+  // The deployed game version this verdict judges.
   gameVersion: z.string().trim().min(1).max(80).nullable().optional(),
 });
 
@@ -231,9 +227,7 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
     return items;
   }
 
-  // Single-slug lookup for a targeted re-review, independent of any sweep — a slug an
-  // operator wants a specific reviewer to look at again is not necessarily in the
-  // currently open sweep's pool at all.
+  // Single-slug lookup for a targeted re-review, outside any sweep pool.
   async function findQueueItem(slug: string): Promise<ReviewQueueItem | null> {
     try {
       const catalog = await listCatalog();
@@ -363,8 +357,7 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
       seen.add(slug);
       if (items.length >= MAX_QUEUE) break;
     }
-    // Targeted re-review slugs surface even though the reviewer already assessed them —
-    // that is the whole point of a targeted request — and even outside the sweep's pool.
+    // Targeted slugs surface even if already assessed or outside the pool.
     for (const item of targeted) {
       if (seen.has(item.slug) || items.length >= MAX_QUEUE) continue;
       items.push(item);
@@ -460,8 +453,7 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
     const creatorHandle = body.data.creatorHandle === undefined ? null : body.data.creatorHandle;
     const reviewerUid = request.user!.uid;
 
-    // New rows need an active released slug or an operator's targeted re-review request;
-    // re-edits are always ok.
+    // New rows need a released slug or an open re-review request.
     const prior = await store.getGameAssessment(body.data.slug, reviewerUid);
     const reReviewRequest = await store.getReReviewRequest(body.data.slug, reviewerUid);
     const targeted = reReviewRequest?.status === 'open';
@@ -711,8 +703,7 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
     };
   });
 
-  // Superseded rows for one reviewer's one game — the record a plain re-edit would
-  // otherwise have overwritten silently.
+  // Superseded rows a plain re-edit would otherwise overwrite silently.
   const HistoryQuerySchema = z.object({
     slug: z.string().trim().min(1).max(80).regex(SLUG_PATTERN, 'invalid slug'),
     reviewerUid: z.string().trim().min(1).max(120),
@@ -742,9 +733,7 @@ export async function registerReviewRoutes(app: FastifyInstance, options: Review
     notify: z.boolean().optional(),
   });
 
-  // Explicit slugs × explicit reviewers, independent of any sweep — "reviewer X, look at
-  // slug Y again" for a fix that landed after a cut (docs/game-assessment-plan.md
-  // follow-up: re-queue a game after a major revision).
+  // Explicit slugs x explicit reviewers, outside any sweep.
   app.post('/api/admin/review-requeue', async (request, reply) => {
     if (!isAdminSession(request, adminUids)) {
       return reply.status(404).send({ error: 'not found' });

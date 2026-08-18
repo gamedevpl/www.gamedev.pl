@@ -629,12 +629,11 @@ describe('targeted re-review', () => {
       gameVersion: 'v1',
     });
 
-    // Once assessed, the slug is gone from this reviewer's queue — the permanent
-    // exclusion the games-repo skill flags as the gap.
+    // Once assessed, the slug drops out of this reviewer's queue.
     const gone = await app.inject({ method: 'GET', url: '/api/review/queue', headers: { cookie: reviewer } });
     expect(JSON.parse(gone.body).items.map((i: { slug: string }) => i.slug)).not.toContain('sky-dodge');
 
-    // Close out the sweep so only the targeted request drives what shows up next.
+    // Close out the sweep so only the targeted request drives the queue.
     await app.inject({
       method: 'POST',
       url: '/api/admin/review-sweeps/swp-first',
@@ -642,8 +641,7 @@ describe('targeted re-review', () => {
       payload: { status: 'completed' },
     });
 
-    // A fix lands; an operator asks this specific reviewer to look again, with an
-    // explicit slug and reviewer uid (not a sweep), naming the fixed version.
+    // A fix lands; requeue that one slug for that one reviewer.
     const requeue = await app.inject({
       method: 'POST',
       url: '/api/admin/review-requeue',
@@ -662,8 +660,7 @@ describe('targeted re-review', () => {
       expect.objectContaining({ slug: 'sky-dodge', reviewerUid: 'dev:reviewer', status: 'open' }),
     ]);
 
-    // The targeted reviewer sees it again, flagged as a re-review — even with no active
-    // sweep at all.
+    // The targeted reviewer sees it again, flagged as a re-review.
     const targetedQueue = await app.inject({ method: 'GET', url: '/api/review/queue', headers: { cookie: reviewer } });
     const targetedBody = JSON.parse(targetedQueue.body) as {
       items: Array<{ slug: string; reReview: { reason: string | null; gameVersion: string | null } | null }>;
@@ -679,8 +676,7 @@ describe('targeted re-review', () => {
     const otherQueue = await app.inject({ method: 'GET', url: '/api/review/queue', headers: { cookie: second } });
     expect(JSON.parse(otherQueue.body).items).toEqual([]);
 
-    // The targeted reviewer re-assesses; the original verdict is preserved as history,
-    // not overwritten silently, and the new row carries the version it judged.
+    // Re-assessing archives the original verdict instead of overwriting it.
     const second_assessment = await assess(app, reviewer, {
       slug: 'sky-dodge',
       source: 'catalog',

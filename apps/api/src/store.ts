@@ -1227,12 +1227,7 @@ export interface GameAssessment {
   // Null on rows written before checklist / clientContext shipped.
   checklist: AssessmentChecklist | null;
   clientContext: AssessmentClientContext | null;
-  /**
-   * The deployed game version this verdict judged — `deliveredVersion` for a shared
-   * creator draft, or null when the source (e.g. the catalog today) does not carry a
-   * per-game version yet. Lets a targeted re-review tell "already judged this exact
-   * build" apart from "judged an older one" instead of only "already judged".
-   */
+  // The deployed game version this verdict judged; null when unknown.
   gameVersion: string | null;
   createdAt: string;
   updatedAt: string;
@@ -1256,12 +1251,7 @@ export function hydrateGameAssessment(id: string, data: Omit<GameAssessment, 'id
   };
 }
 
-/**
- * A superseded assessment row, archived the moment a reviewer's second pass would
- * otherwise overwrite it. Preserves the original judgment (docs/game-assessment-plan.md
- * follow-up: "re-queue a game after a major revision") so a targeted re-review can be
- * compared against what was said before, not just replace it silently.
- */
+// A superseded assessment row, archived before the next pass overwrites it.
 export interface GameAssessmentHistoryEntry extends Omit<GameAssessment, 'id'> {
   id: string;
   supersededAt: string;
@@ -1271,19 +1261,13 @@ export const GAME_ASSESSMENT_HISTORY_COLLECTION = 'gameAssessmentHistory';
 
 export type ReReviewRequestStatus = 'open' | 'resolved' | 'cancelled';
 
-/**
- * An operator's explicit ask: "reviewer X, look at slug Y again" — independent of a
- * general sweep. Exists because `/api/review/queue` otherwise excludes a slug a reviewer
- * has already assessed permanently, which is fine for a first pass but wrong once a fix
- * has landed and the same reviewer (who has the original context) needs a re-look.
- */
+// An operator asking one reviewer to look at one slug again.
 export interface ReReviewRequest {
   id: string;
   slug: string;
   reviewerUid: string;
   status: ReReviewRequestStatus;
-  // Deployed version the fix is expected to be judged against; informational only, not
-  // enforced — a reviewer can still submit before it lands.
+  // Version the fix is expected to be judged against; informational only.
   gameVersion: string | null;
   reason: string | null;
   createdAt: string;
@@ -2506,9 +2490,9 @@ export interface Store {
   listGameAssessmentsBySource(source: AssessmentSource): Promise<GameAssessment[]>;
   countGameAssessmentsByUid(uid: string): Promise<number>;
   deleteGameAssessmentsByUid(uid: string): Promise<number>;
-  // Superseded rows for one reviewer's one game, newest first; empty before a second pass.
+  // Superseded rows for one reviewer's one game, newest first.
   listGameAssessmentHistory(slug: string, reviewerUid: string): Promise<GameAssessmentHistoryEntry[]>;
-  // Opens (or re-opens) one targeted re-review request per (slug, reviewerUid) pair.
+  // Opens or re-opens one re-review request per (slug, reviewerUid) pair.
   upsertReReviewRequests(
     requests: Array<Pick<ReReviewRequest, 'slug' | 'reviewerUid' | 'gameVersion' | 'reason' | 'createdBy'>>,
   ): Promise<ReReviewRequest[]>;

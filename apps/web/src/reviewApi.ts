@@ -21,8 +21,7 @@ export interface ReviewQueueItem {
   genre: string | null;
   issueNumber: number | null;
   media: ReviewQueueMedia | null;
-  // Present when an operator explicitly asked this reviewer to look at this slug again
-  // (a fix landed after an earlier verdict), not a first pass through a sweep.
+  // Set when an operator targeted this slug for re-review.
   reReview?: { reason: string | null; gameVersion: string | null; requestedAt: string } | null;
 }
 
@@ -54,8 +53,7 @@ export interface GameAssessment {
   noteOrigin: AssessmentNoteOrigin;
   checklist: AssessmentChecklist | null;
   clientContext: AssessmentClientContext | null;
-  // The deployed game version this verdict judged, or null when the source does not
-  // carry a per-game version (today: the catalog).
+  // The deployed game version this verdict judged.
   gameVersion: string | null;
   createdAt: string;
   updatedAt: string;
@@ -174,9 +172,7 @@ export interface RequeueForReReviewInput {
   notify?: boolean;
 }
 
-// Explicit slugs x explicit reviewers, independent of any sweep — asks a specific
-// reviewer to look at a specific game again after a fix (docs/game-assessment-plan.md
-// follow-up: re-queue a game after a major revision).
+// Explicit slugs x explicit reviewers, outside any sweep.
 export async function requeueForReReview(
   input: RequeueForReReviewInput,
 ): Promise<{ requests: ReReviewRequest[]; notified: number }> {
