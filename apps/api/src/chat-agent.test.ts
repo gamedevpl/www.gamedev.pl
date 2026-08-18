@@ -54,6 +54,9 @@ function contextText(request: GenerationRequest): string {
 function liveMessageText(request: GenerationRequest): string {
   return [...request.prompt].reverse().find((item) => item.type === 'user')?.text ?? '';
 }
+function liveMessageImages(request: GenerationRequest) {
+  return [...request.prompt].reverse().find((item) => item.type === 'user')?.images ?? [];
+}
 
 describe('VertexStudioChatAgent', () => {
   it('returns a reply decision with the model text, never dispatching', async () => {
@@ -290,6 +293,31 @@ describe('VertexStudioChatAgent', () => {
     });
     await agent.decide({ message: 'hi', status: STATUS, history: [] });
     expect(seen?.thinking).toEqual({ level: 'low' });
+  });
+
+  it('attaches reference images to the live user turn, not the history or context turn', async () => {
+    let seen: GenerationRequest | undefined;
+    const agent = new VertexStudioChatAgent({
+      client: stubClient(textResult('ok'), (req) => (seen = req)),
+    });
+    await agent.decide({
+      message: 'does this look right?',
+      status: STATUS,
+      history: [{ message: 'earlier', reply: 'earlier reply' }],
+      images: [{ data: 'aGVsbG8=', mediaType: 'image/png' }],
+    });
+    expect(liveMessageImages(seen!)).toEqual([{ mediaType: 'image/png', data: 'aGVsbG8=' }]);
+    const historyItem = seen!.prompt.find((item) => item.type === 'user' && item.text === 'earlier');
+    expect(historyItem?.images ?? []).toEqual([]);
+  });
+
+  it('sends a plain string user turn (no images field) when no images are attached', async () => {
+    let seen: GenerationRequest | undefined;
+    const agent = new VertexStudioChatAgent({
+      client: stubClient(textResult('ok'), (req) => (seen = req)),
+    });
+    await agent.decide({ message: 'hi', status: STATUS, history: [] });
+    expect(liveMessageImages(seen!)).toEqual([]);
   });
 
   it('keeps a bounded, validated locale out of reach of free-text injection', async () => {

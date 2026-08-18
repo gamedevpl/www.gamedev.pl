@@ -83,6 +83,7 @@ import {
 } from './delivery-metrics.js';
 import {
   VertexStudioChatAgent,
+  type ChatAgentImage,
   type ChatAgentScope,
   type ChatAgentStatus,
   type StudioChatAgent,
@@ -334,19 +335,25 @@ async function storeCreatorPlaytestShot(
   return storeCreatorImage(store, issueNumber, pngBase64, 'creator-playtest');
 }
 
-// Persists up to MAX_REFERENCE_IMAGES images, dropping any that fail validation.
+// Persists up to MAX_REFERENCE_IMAGES images, dropping any that fail validation. Also
+// hands back the validated base64 bytes so a caller can pass them straight to the chat
+// agent (chat-agent.ts) without re-decoding what storage already checked.
 async function storeCreatorReferenceImages(
   store: Store,
   issueNumber: number,
   pngBase64List: string[] | undefined,
-): Promise<string[]> {
-  if (!pngBase64List || pngBase64List.length === 0) return [];
+): Promise<{ ids: string[]; images: ChatAgentImage[] }> {
+  if (!pngBase64List || pngBase64List.length === 0) return { ids: [], images: [] };
   const ids: string[] = [];
+  const images: ChatAgentImage[] = [];
   for (const png of pngBase64List.slice(0, MAX_REFERENCE_IMAGES)) {
     const id = await storeCreatorImage(store, issueNumber, png, 'creator-reference');
-    if (id) ids.push(id);
+    if (id) {
+      ids.push(id);
+      images.push({ data: png, mediaType: 'image/png' });
+    }
   }
-  return ids;
+  return { ids, images };
 }
 
 interface CachedStatus {
@@ -1661,6 +1668,8 @@ export async function registerSubmissionRoutes(
     locale: string;
     ip: string;
     uid: string;
+    // Reference images the creator attached to this turn, already validated PNGs.
+    images?: ChatAgentImage[];
   }): Promise<ChatAgentOutcome | null> {
     if (!store || !chatAgentLog) return null;
     if (isRateLimited(chatTurnsByIp, input.ip, now(), maxChatTurnsPerWindow, chatTurnRateLimitWindowMs)) {
@@ -1701,6 +1710,7 @@ export async function registerSubmissionRoutes(
         ...(input.record.title || input.record.spec
           ? { game: { title: input.record.title, concept: input.record.spec } }
           : {}),
+        ...(input.images?.length ? { images: input.images } : {}),
       });
       logChatAgentDecision(chatAgentLog, {
         issueNumber: input.issueNumber,
@@ -4063,6 +4073,7 @@ export async function registerSubmissionRoutes(
       const creatorLocale = record?.locale ?? 'en';
       let shotId: string | undefined;
       let referenceImageShotIds: string[] = [];
+      let referenceImages: ChatAgentImage[] = [];
       if (store && parsed.data.context?.screenshotPng) {
         try {
           shotId = await storeCreatorPlaytestShot(store, issueNumber, parsed.data.context.screenshotPng);
@@ -4072,11 +4083,9 @@ export async function registerSubmissionRoutes(
       }
       if (store && parsed.data.context?.referenceImages?.length) {
         try {
-          referenceImageShotIds = await storeCreatorReferenceImages(
-            store,
-            issueNumber,
-            parsed.data.context.referenceImages,
-          );
+          const stored = await storeCreatorReferenceImages(store, issueNumber, parsed.data.context.referenceImages);
+          referenceImageShotIds = stored.ids;
+          referenceImages = stored.images;
         } catch (shotError) {
           request.log.error({ err: shotError }, 'failed to store creator reference images');
         }
@@ -4147,6 +4156,7 @@ export async function registerSubmissionRoutes(
           locale: creatorLocale,
           ip: request.ip,
           uid: request.user!.uid,
+          images: referenceImages,
         });
         if (chatOutcome?.kind === 'replied' && store) {
           try {
@@ -4355,6 +4365,7 @@ export async function registerSubmissionRoutes(
       const sanitizedTitle = sanitizeCreatorText(`Improve ${record.title}`, { singleLine: true });
       let shotId: string | undefined;
       let referenceImageShotIds: string[] = [];
+      let referenceImages: ChatAgentImage[] = [];
       if (parsed.data.context?.screenshotPng) {
         try {
           shotId = await storeCreatorPlaytestShot(store, issueNumber, parsed.data.context.screenshotPng);
@@ -4364,11 +4375,9 @@ export async function registerSubmissionRoutes(
       }
       if (parsed.data.context?.referenceImages?.length) {
         try {
-          referenceImageShotIds = await storeCreatorReferenceImages(
-            store,
-            issueNumber,
-            parsed.data.context.referenceImages,
-          );
+          const stored = await storeCreatorReferenceImages(store, issueNumber, parsed.data.context.referenceImages);
+          referenceImageShotIds = stored.ids;
+          referenceImages = stored.images;
         } catch (shotError) {
           request.log.error({ err: shotError }, 'failed to store creator reference images');
         }
@@ -4389,6 +4398,7 @@ export async function registerSubmissionRoutes(
         locale: record.locale ?? 'en',
         ip: request.ip,
         uid: request.user!.uid,
+        images: referenceImages,
       });
       if (chatOutcome?.kind === 'replied') {
         try {

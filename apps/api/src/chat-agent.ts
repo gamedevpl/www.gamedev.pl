@@ -1,4 +1,4 @@
-import { resultText, resultToolCalls, type GenAIClient, type ToolDefinition } from 'genaicode';
+import { image, resultText, resultToolCalls, user, type GenAIClient, type ToolDefinition } from 'genaicode';
 import { createVertexClient } from './genai.js';
 import type { ChatTurn } from './chat-turns.js';
 import type { JobStall } from './job-state.js';
@@ -33,6 +33,13 @@ export type ChatAgentDecision =
   | { kind: 'reply'; text: string; tokens?: { input: number; output: number }; model?: string }
   | { kind: 'build'; text?: string; tokens?: { input: number; output: number }; model?: string };
 
+// Only what the Studio composer's reference-image attach ever produces — see
+// storeCreatorReferenceImages in submissions.ts.
+export interface ChatAgentImage {
+  data: string;
+  mediaType: 'image/png';
+}
+
 export interface ChatAgentRequest {
   message: string;
   status: ChatAgentStatus;
@@ -40,6 +47,8 @@ export interface ChatAgentRequest {
   locale?: string;
   // concept: the creator's own words, truncated — never the game's source.
   game?: { title?: string; concept?: string };
+  // Reference images the creator attached to this turn, already validated PNGs.
+  images?: ChatAgentImage[];
 }
 
 export interface StudioChatAgent {
@@ -189,7 +198,8 @@ export class VertexStudioChatAgent implements StudioChatAgent {
     for (const turn of request.history) {
       builder = builder.user(turn.message).assistant(turn.reply ?? builtTurnMarker(turn.ackText));
     }
-    builder = builder.user(request.message);
+    const images = request.images?.map((img) => image(img.data, img.mediaType));
+    builder = builder.user(images?.length ? user(request.message, { images }) : request.message);
 
     // Bloat guard: a legitimate conversation never approaches this — see the constant.
     const promptChars = builder
