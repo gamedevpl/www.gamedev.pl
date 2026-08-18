@@ -334,7 +334,7 @@
     "apps/web/src/AccessTokensPanel.test.tsx": 75,
     "apps/web/src/AccessTokensPanel.tsx": 185,
     "apps/web/src/AccountDeletionControl.tsx": 40,
-    "apps/web/src/AccountSettingsModal.tsx": 34,
+    "apps/web/src/AccountSettingsModal.tsx": 12,
     "apps/web/src/activeBuilds.test.ts": 47,
     "apps/web/src/activeBuilds.ts": 255,
     "apps/web/src/adminApi.ts": 223,

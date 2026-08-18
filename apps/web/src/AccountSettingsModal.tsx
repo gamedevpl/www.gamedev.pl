@@ -17,7 +17,6 @@ export function AccountSettingsModal({ isOpen, onClose }: { isOpen: boolean; onC
   onCloseRef.current = onClose;
   const [section, setSection] = useState<AccountSettingsSection>('credentials');
 
-  // Modal stays mounted between openings; reset the tab on each open.
   useEffect(() => {
     if (isOpen) setSection('credentials');
   }, [isOpen]);
@@ -63,7 +62,6 @@ export function AccountSettingsModal({ isOpen, onClose }: { isOpen: boolean; onC
         </header>
 
         <div className="account-settings-body">
-          {/* Plain nav, not a tablist: too few tabs for roving focus. */}
           <nav className="account-settings-nav" aria-label={t('creatorProfile.accountSettings')}>
             {sections.map((entry) => (
               <button
@@ -80,7 +78,6 @@ export function AccountSettingsModal({ isOpen, onClose }: { isOpen: boolean; onC
             ))}
           </nav>
 
-          {/* Stays mounted so switching tabs keeps state and skips a refetch. */}
           <div className="account-settings-panel" data-section="credentials" hidden={section !== 'credentials'}>
             <p className="studio-rail-credentials-hint">{t('studioPanel.rail.credentialsHint')}</p>
             <div className="studio-rail-credentials-body">
