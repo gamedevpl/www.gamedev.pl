@@ -707,6 +707,7 @@ export function ArcadeCatalog({
     catalogStatus === 'ready' && catalogEntries.length > 0 && catalogSortNeedsSignals(sortMode) && !signalsReady;
   // Hold the grid while auth is unknown, and while a signed-in shelf is still loading.
   const awaitingCreatorShelf = authLoading || (Boolean(viewerUid) && !creatorGamesReady);
+  const catalogPending = catalogStatus === 'loading' || awaitingSignals || awaitingCreatorShelf || !featuredPoolReady;
   const layoutReady = catalogStatus === 'ready' && !awaitingSignals && !awaitingCreatorShelf;
 
   // Curated surfaces above the grid, gated on layoutReady like the grid.
@@ -936,7 +937,7 @@ export function ArcadeCatalog({
           ))}
         </>
       )}
-      <section id="arcade" className="arcade-section">
+      <section id="arcade" className={`arcade-section${catalogPending ? ' is-pending' : ''}`}>
         <div id="browse-everything" className="arcade-header">
           <div className="arcade-title-row">
             <h2 className="arcade-title">{t('catalog.browseEverything')}</h2>
@@ -1020,7 +1021,7 @@ export function ArcadeCatalog({
           </div>
         ) : null}
 
-        {catalogStatus === 'loading' || awaitingSignals || awaitingCreatorShelf || !featuredPoolReady ? (
+        {catalogPending ? (
           <MascotMoment className="catalog-state" emotion="busy" size={56} title={t('mascot.busyAlt')}>
             <p>{t('catalog.loading')}</p>
           </MascotMoment>
