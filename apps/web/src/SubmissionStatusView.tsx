@@ -115,8 +115,14 @@ function isAgentWorkActive(status: SubmissionStatus | null | undefined): boolean
 }
 
 // True even once the agent has ended.
+// `status.builder` is only echoed when the record has committed to one (submissions.ts
+// `nativeJobStatus`) — a fresh round that has not dispatched yet reports it `undefined`,
+// which still resolves to `platform` server-side (`builderOf()`'s fallback). Treating
+// `undefined` as "not platform" hid this control on every such round: a queued round
+// opened via `code_surface_opened` had no `builder`/`defaultBuilder` field, `canChooseBuilder`
+// also excludes `queued`, so the creator had no path at all to pick `self` for it.
 function canOfferSelfHandoff(status: SubmissionStatus | null | undefined): boolean {
-  if (!status || status.builder !== 'platform') return false;
+  if (!status || status.builder === 'self') return false;
   if (status.status === 'publishing') return false;
   if (status.status === 'in_review' || status.phase === 'ready_for_review') return false;
   if (TERMINAL_STATUSES.has(status.status)) return false;
