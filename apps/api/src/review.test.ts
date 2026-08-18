@@ -775,4 +775,40 @@ describe('targeted re-review', () => {
     });
     expect(asReviewer.statusCode).toBe(404);
   });
+
+  it('counts a targeted re-review in the nav badge with no active sweep', async () => {
+    const { app } = await makeApp();
+    const reviewer = await sessionCookie(app, 'reviewer');
+    const boss = await sessionCookie(app, 'boss');
+
+    const idle = await app.inject({ method: 'GET', url: '/api/review/status', headers: { cookie: reviewer } });
+    expect(JSON.parse(idle.body)).toEqual({ remaining: 0, sweep: null });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/admin/review-requeue',
+      headers: { cookie: boss },
+      payload: { slugs: ['sky-dodge'], reviewerUids: ['dev:reviewer'], notify: false },
+    });
+
+    const targeted = await app.inject({ method: 'GET', url: '/api/review/status', headers: { cookie: reviewer } });
+    expect(JSON.parse(targeted.body).remaining).toBe(1);
+  });
+
+  it('rejects a slug that is neither in the catalog nor a reviewable draft', async () => {
+    const { app } = await makeApp();
+    const boss = await sessionCookie(app, 'boss');
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/admin/review-requeue',
+      headers: { cookie: boss },
+      payload: { slugs: ['does-not-exist'], reviewerUids: ['dev:reviewer'], notify: false },
+    });
+    expect(res.statusCode).toBe(400);
+
+    // No phantom request was left behind for the valid slug either.
+    const list = await app.inject({ method: 'GET', url: '/api/admin/review-requeue', headers: { cookie: boss } });
+    expect(JSON.parse(list.body).requests).toEqual([]);
+  });
 });

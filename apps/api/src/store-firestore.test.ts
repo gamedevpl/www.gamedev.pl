@@ -140,8 +140,9 @@ function fakeFirestore() {
     return query;
   };
 
+  let autoIdCounter = 0;
   const makeCollection = (path: string) => ({
-    doc: (id: string) => makeRef(path, id),
+    doc: (id?: string) => makeRef(path, id ?? `auto-${(autoIdCounter += 1)}`),
     listDocuments: async () => idsUnder(path).map((id) => makeRef(path, id)),
     where: (field: string, op: string, value: unknown) => makeQuery([path], null).where(field, op, value),
     count: () => makeQuery([path], null).count(),
@@ -162,6 +163,11 @@ function fakeFirestore() {
     batch: () => {
       const staged: Array<() => void> = [];
       return {
+        set: (ref: ReturnType<typeof makeRef>, data: Record<string, unknown>, options?: { merge?: boolean }) => {
+          rejectUndefined(data);
+          rejectNestedArrays(data);
+          staged.push(() => void ref.set(data, options));
+        },
         delete: (ref: { id: string; delete: () => Promise<void> }) => {
           staged.push(() => void ref.delete());
         },
@@ -402,6 +408,49 @@ describe('FirestoreStore game saves', () => {
 
     expect(await store.getGameSave('g:alice', 'crypt-delver')).toBeNull();
     expect(await store.getGameSave('g:alice', 'brick-storm')).not.toBeNull();
+  });
+});
+
+describe('FirestoreStore game assessments', () => {
+  const checklist = { graphics: 'ok', gameplay: 'ok', fun: 'ok', sound: 'ok', controls: 'ok' } as const;
+
+  it('archives the superseded row in the same batch as the replacement', async () => {
+    const { db } = fakeFirestore();
+    const store = new FirestoreStore(db);
+
+    await store.upsertGameAssessment({
+      slug: 'sky-dodge',
+      title: 'Sky Dodge',
+      source: 'catalog',
+      creatorHandle: null,
+      reviewerUid: 'g:alice',
+      verdict: 'cut',
+      note: 'Controls are broken.',
+      noteOrigin: 'text',
+      checklist: { ...checklist },
+      clientContext: null,
+      gameVersion: 'v1',
+    });
+    await store.upsertGameAssessment({
+      slug: 'sky-dodge',
+      title: 'Sky Dodge',
+      source: 'catalog',
+      creatorHandle: null,
+      reviewerUid: 'g:alice',
+      verdict: 'keep',
+      note: 'Controls feel great now.',
+      noteOrigin: 'text',
+      checklist: { ...checklist },
+      clientContext: null,
+      gameVersion: 'v2',
+    });
+
+    const current = await store.getGameAssessment('sky-dodge', 'g:alice');
+    expect(current?.verdict).toBe('keep');
+    expect(current?.gameVersion).toBe('v2');
+
+    const history = await store.listGameAssessmentHistory('sky-dodge', 'g:alice');
+    expect(history).toEqual([expect.objectContaining({ verdict: 'cut', gameVersion: 'v1' })]);
   });
 });
 

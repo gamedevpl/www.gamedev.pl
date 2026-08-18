@@ -7783,15 +7783,6 @@ export class FirestoreStore implements Store {
       existing.exists && typeof existing.data()?.createdAt === 'string'
         ? (existing.data()!.createdAt as string)
         : (input.createdAt ?? now);
-    if (existing.exists) {
-      const prior = hydrateGameAssessment(id, existing.data() as Omit<GameAssessment, 'id'>);
-      const { id: priorId, ...priorBody } = prior;
-      await this.gameAssessmentHistoryCollection().add({
-        ...priorBody,
-        assessmentId: priorId,
-        supersededAt: now,
-      });
-    }
     const record: GameAssessment = {
       id,
       slug: input.slug,
@@ -7808,7 +7799,18 @@ export class FirestoreStore implements Store {
       createdAt,
       updatedAt: now,
     };
-    await ref.set({
+    // One batch: the archive and the replacement land together, or neither does.
+    const batch = this.db.batch();
+    if (existing.exists) {
+      const prior = hydrateGameAssessment(id, existing.data() as Omit<GameAssessment, 'id'>);
+      const { id: priorId, ...priorBody } = prior;
+      batch.set(this.gameAssessmentHistoryCollection().doc(), {
+        ...priorBody,
+        assessmentId: priorId,
+        supersededAt: now,
+      });
+    }
+    batch.set(ref, {
       slug: record.slug,
       title: record.title,
       source: record.source,
@@ -7823,6 +7825,7 @@ export class FirestoreStore implements Store {
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,
     });
+    await batch.commit();
     return record;
   }
 
