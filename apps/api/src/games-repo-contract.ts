@@ -92,13 +92,7 @@ export const GAME_KIT_MODULES = [
 
 export type GameKitModuleName = (typeof GAME_KIT_MODULES)[number];
 
-/**
- * Author-facing budget — games-repo Check 4 `GAME_BUDGET_BYTES`.
- *
- * 252 → 624 KiB for transport-tycoon-remake, an OpenTTD-scale sim whose assembled
- * project (694_419 bytes) blew the prior 668_048 total cap by ~26 KiB even with a
- * lean platform half.
- */
+// Author-facing budget — games-repo Check 4 GAME_BUDGET_BYTES; raise this side first.
 export const GAME_BUDGET_BYTES = 624 * 1024;
 
 /**
@@ -106,12 +100,9 @@ export const GAME_BUDGET_BYTES = 624 * 1024;
  * (`MAX_SOURCE_GRAPH_BYTES` in `github-client.ts`, `MAX_GAME_SOURCE_BYTES` in
  * `seed-bundle.ts`). Lockstep with games-repo Check 4 `SOURCE_GRAPH_BUDGET_BYTES`.
  *
- * Distinct from {@link GAME_BUDGET_BYTES}: the assembled author payload can stay
- * under the author budget while comments and types push the `.ts` tree higher. Moved
- * 200 → 300 KiB when carjack-city (~247 KiB source) stranded every snapshot publish;
- * 300 → 336 KiB for the same game's island coastline, on-foot car collision and
- * mission-ladder work — 335_142 raw bytes carrying 252_340 assembled ones. 336 → 708 KiB
- * to keep clearing the 624 KiB author budget when it moved for transport-tycoon-remake.
+ * Distinct from {@link GAME_BUDGET_BYTES}: the assembled author payload can stay under
+ * the author budget while comments and types push the `.ts` tree higher, so this must
+ * stay above it. Raise it whenever the author budget moves.
  */
 export const SOURCE_GRAPH_BUDGET_BYTES = 708 * 1024;
 
