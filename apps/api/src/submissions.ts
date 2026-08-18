@@ -3778,7 +3778,9 @@ export async function registerSubmissionRoutes(
       }
 
       // An already-`ended` agent cannot ack again — resume immediately instead.
-      const awaitsAgentAck = creatorRequested && stall !== 'ended';
+      // Same if never dispatched: no agent exists to ack.
+      const neverDispatched = !record.dispatch?.refs?.length;
+      const awaitsAgentAck = creatorRequested && stall !== 'ended' && !neverDispatched;
       const requestedAt = new Date(now()).toISOString();
       const accepted = await store.requestBuilderHandoff(issueNumber, requestedBuilder, requestedAt, awaitsAgentAck);
       if (!accepted) {
