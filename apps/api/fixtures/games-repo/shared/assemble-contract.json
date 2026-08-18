@@ -34,9 +34,9 @@
     "editor",
     "inspect"
   ],
-  "authorBudgetBytes": 258048,
+  "authorBudgetBytes": 638976,
   "platformCeilingBytes": 410000,
-  "maxProjectBytes": 668048,
+  "maxProjectBytes": 1048976,
   "audio": {
     "musicField": "string",
     "musicTracksField": "string[]",

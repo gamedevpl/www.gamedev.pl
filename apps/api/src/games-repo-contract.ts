@@ -92,8 +92,14 @@ export const GAME_KIT_MODULES = [
 
 export type GameKitModuleName = (typeof GAME_KIT_MODULES)[number];
 
-/** Author-facing budget — games-repo Check 4 `GAME_BUDGET_BYTES`. */
-export const GAME_BUDGET_BYTES = 252 * 1024;
+/**
+ * Author-facing budget — games-repo Check 4 `GAME_BUDGET_BYTES`.
+ *
+ * 252 → 624 KiB for transport-tycoon-remake, an OpenTTD-scale sim whose assembled
+ * project (694_419 bytes) blew the prior 668_048 total cap by ~26 KiB even with a
+ * lean platform half.
+ */
+export const GAME_BUDGET_BYTES = 624 * 1024;
 
 /**
  * Raw TypeScript source-graph ceiling for the bake/play/seed bundlers
@@ -104,19 +110,20 @@ export const GAME_BUDGET_BYTES = 252 * 1024;
  * under the author budget while comments and types push the `.ts` tree higher. Moved
  * 200 → 300 KiB when carjack-city (~247 KiB source) stranded every snapshot publish;
  * 300 → 336 KiB for the same game's island coastline, on-foot car collision and
- * mission-ladder work — 335_142 raw bytes carrying 252_340 assembled ones.
+ * mission-ladder work — 335_142 raw bytes carrying 252_340 assembled ones. 336 → 708 KiB
+ * to keep clearing the 624 KiB author budget when it moved for transport-tycoon-remake.
  */
-export const SOURCE_GRAPH_BUDGET_BYTES = 336 * 1024;
+export const SOURCE_GRAPH_BUDGET_BYTES = 708 * 1024;
 
 /**
  * Platform half of the serve cap — games-repo `GAMEKIT_PLATFORM_BYTES` /
  * `assemble-contract.json` `platformCeilingBytes`. Together with
  * {@link GAME_BUDGET_BYTES} this must equal games-repo `MAX_BUNDLE_BYTES`
- * (668_048, matching `maxProjectBytes`). Not a round KiB.
+ * (1_048_976, matching `maxProjectBytes`). Not a round KiB.
  *
  * One derived ceiling, not a sum of per-feature constants (games-repo #281). Check 4
  * over there bills each author for measured `assembled − platformBytes` against the
- * 252 KiB author budget; this number is serve-compat only so a game that clears that
+ * 624 KiB author budget; this number is serve-compat only so a game that clears that
  * gate is not refused here. Feature-by-feature archaeology lives in the games repo's
  * `docs/platform-byte-ledger.md`. Raise this when measurement shows a passing game
  * would exceed it — do not re-split it into named allowances on this side either.
