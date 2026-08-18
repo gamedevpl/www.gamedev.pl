@@ -80,6 +80,16 @@ function indexHtmlHint(content: string): string | null {
   const trimmed = content.trim();
   if (!trimmed) return null;
 
+  if (/<!doctype\s|<html[\s>]|<head[\s>]|<body[\s>]/i.test(trimmed)) {
+    return (
+      'index.html is a complete HTML document, but the assembler inlines this file into the <body> of the ' +
+      'served document — a second <!doctype>/<html>/<head>/<body> gets nested inside it, and your own ' +
+      'title/heading markup renders as stray text under the canvas on the play page (the player hides only ' +
+      'the standard chrome: #game-title, #game-desc, .game-controls, .hint). Ship a body fragment with that ' +
+      'standard chrome instead, or call delete_source_file("index.html") to let the platform generate the ' +
+      'markup from GAME.json howToPlay.'
+    );
+  }
   if (/<link\b[^>]*\bhref\s*=/i.test(trimmed)) {
     return (
       'index.html has a <link href=...> tag. style.css is already inlined into the served document by the ' +
@@ -100,6 +110,15 @@ function indexHtmlHint(content: string): string | null {
       'index.html is non-empty but has no element with id="game" — the kit renderer looks up that id (a ' +
       '<canvas id="game">) and throws "canvas is unavailable" if nothing matches. Add it, or call ' +
       'delete_source_file("index.html") to let the platform generate the markup from GAME.json instead.'
+    );
+  }
+  if (/<h1\b/i.test(trimmed) && !/id\s*=\s*["']game-title["']/.test(trimmed)) {
+    return (
+      'index.html has an <h1> without id="game-title". The play page hides only the standard chrome ' +
+      '(#game-title, #game-desc, .game-controls, .hint) and shows the title and description in its own ' +
+      'header instead — a title or description in any other markup stays visible as stray text under the ' +
+      'canvas. Use <h1 id="game-title"> and <p id="game-desc"> for them, or call ' +
+      'delete_source_file("index.html") to let the platform generate the markup from GAME.json howToPlay.'
     );
   }
   return null;

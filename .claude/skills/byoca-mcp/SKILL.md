@@ -628,6 +628,17 @@ duplicates (that's `validate.ts` in the games repo, which still runs as the sour
 truth in the gate) — it only catches the shapes that crash outright before any real
 validation runs.
 
+The same hint also covers a staged/patched `index.html` (which agents should normally
+never write — it is generated from GAME.json `howToPlay`). Beyond the long-standing
+`<link href>` / `<script src>` / missing-`#game` checks, it now flags a **complete HTML
+document** and a **title heading outside the standard chrome**: the assembler inlines
+`index.html` into the served document's `<body>`, and the play page hides only
+`#game-title` / `#game-desc` / `.game-controls` / `.hint` — so a full document, or an
+`<h1>` without `id="game-title"`, renders its title/description as stray visible text
+under the canvas in the player (observed on transport-tycoon-remake, 2026-08-18, where a
+hand-written full-document `index.html` showed its `<main>` title + description block
+below the game).
+
 ### `kit_outdated` — do not re-upload the tree
 
 When the gate returns `kit_outdated` (or soft copy says the kit rotated):
@@ -841,19 +852,19 @@ cache), so a resume cannot keep showing “finished this round” next to live p
 
 Merged by `applySessionNudges` / submit handler. Act, then continue:
 
-| Code                    | Meaning                                                                                                                                                                    |
-| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `call_end`              | Call `end` when finished iterating this round                                                                                                                              |
-| `must_fix_gate`         | Last delivery refused (`preview_failed` / `red` / `kit_outdated`) — fix and **`submit_sources` again**; staging alone does not re-run the gate or refresh the creator card |
-| `must_deliver`          | Nothing delivered yet — submit before finishing                                                                                                                            |
-| `gate_not_started`      | Delivery ok but Cloud Build did not start — no preview yet                                                                                                                 |
-| `gate_poll_backoff`     | Repeated one-shot gate check — stop checking; build/submit or honour `stop:true`                                                                                           |
-| `progress_stale`        | Call `report_progress`                                                                                                                                                     |
-| `inbox_pending`         | `read_inbox` → apply → `ack_inbox`                                                                                                                                         |
-| `seed_unread`           | Call `get_sources` before scaffolding from the kit                                                                                                                         |
-| `transcript_unread`     | `dispatchAttempt` > 1 (earlier attempt exists) and `get_transcript` has not been called yet — call it before deciding what to build                                        |
-| `game_manifest_invalid` | Just-staged/patched `GAME.json` has a shape that crashes the gate before typecheck (e.g. missing `engine.modules`) — fix it now, in the same session, before submitting    |
-| `patch_incomplete`      | Some `patch_source_file` edits landed and some did not — retry only `failed[]` (path + index); do not resend the ones that applied                                         |
+| Code                    | Meaning                                                                                                                                                                                                                                                                                                                                   |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `call_end`              | Call `end` when finished iterating this round                                                                                                                                                                                                                                                                                             |
+| `must_fix_gate`         | Last delivery refused (`preview_failed` / `red` / `kit_outdated`) — fix and **`submit_sources` again**; staging alone does not re-run the gate or refresh the creator card                                                                                                                                                                |
+| `must_deliver`          | Nothing delivered yet — submit before finishing                                                                                                                                                                                                                                                                                           |
+| `gate_not_started`      | Delivery ok but Cloud Build did not start — no preview yet                                                                                                                                                                                                                                                                                |
+| `gate_poll_backoff`     | Repeated one-shot gate check — stop checking; build/submit or honour `stop:true`                                                                                                                                                                                                                                                          |
+| `progress_stale`        | Call `report_progress`                                                                                                                                                                                                                                                                                                                    |
+| `inbox_pending`         | `read_inbox` → apply → `ack_inbox`                                                                                                                                                                                                                                                                                                        |
+| `seed_unread`           | Call `get_sources` before scaffolding from the kit                                                                                                                                                                                                                                                                                        |
+| `transcript_unread`     | `dispatchAttempt` > 1 (earlier attempt exists) and `get_transcript` has not been called yet — call it before deciding what to build                                                                                                                                                                                                       |
+| `game_manifest_invalid` | Just-staged/patched `GAME.json` or `index.html` has a shape that breaks the gate or the play page (e.g. missing `engine.modules`; a full-document `index.html`, or chrome outside `#game-title`/`#game-desc`/`.game-controls`/`.hint`, which renders as stray text under the canvas) — fix it now, in the same session, before submitting |
+| `patch_incomplete`      | Some `patch_source_file` edits landed and some did not — retry only `failed[]` (path + index); do not resend the ones that applied                                                                                                                                                                                                        |
 
 ## Builder handoff (Studio)
 
