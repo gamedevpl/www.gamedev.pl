@@ -6,6 +6,7 @@ import { SketchModal } from './SketchModal.js';
 import { PixelIcon } from './PixelIcon.js';
 import { getQuota, type PlatformBuilderAvailability } from './submissionApi.js';
 import { toBase64PngList } from './attachmentImages.js';
+import { useClampToViewport } from './useClampToViewport.js';
 
 // Mirrors MAX_REFERENCE_IMAGES in submissions.ts.
 const MAX_ATTACHMENTS = 4;
@@ -136,6 +137,7 @@ export function HeroPromptSection({
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const attachMenuRef = useRef<HTMLDivElement | null>(null);
+  const attachPanelRef = useClampToViewport<HTMLDivElement>(attachMenuOpen);
 
   // Show quota before a 429 after they finish typing.
   const [quota, setQuota] = useState<{ used: number; limit: number | null } | null>(null);
@@ -381,7 +383,7 @@ export function HeroPromptSection({
                 <PixelIcon name="plus" size={18} />
               </button>
               {attachMenuOpen && !isBusy ? (
-                <div className="prompt-attach-menu" role="menu" aria-label={t('hero.attachMenu')}>
+                <div className="prompt-attach-menu" role="menu" aria-label={t('hero.attachMenu')} ref={attachPanelRef}>
                   <button
                     type="button"
                     className="prompt-attach-item"
@@ -430,6 +432,13 @@ export function HeroPromptSection({
               enterKeyHint="go"
               autoComplete="off"
               disabled={isBusy}
+              onPaste={(e) => {
+                const pastedImages = Array.from(e.clipboardData?.items ?? [])
+                  .filter((item) => item.type.startsWith('image/'))
+                  .map((item) => item.getAsFile())
+                  .filter((file): file is File => file !== null);
+                if (pastedImages.length > 0) handleFiles(pastedImages);
+              }}
             />
 
             <div className="prompt-bar-actions">
