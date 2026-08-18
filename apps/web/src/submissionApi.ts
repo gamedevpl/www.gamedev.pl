@@ -291,6 +291,8 @@ export async function submitSpec(input: {
   locale?: string;
   /** Who builds this round — platform team (default) or the creator's own agent. */
   builder?: 'platform' | 'self';
+  // Base64 PNGs, no data: prefix. Max 4.
+  referenceImages?: string[];
 }): Promise<{ token: string; slug?: string; statusUrl: string }> {
   const response = await fetch(`${API_BASE}/api/submissions`, {
     method: 'POST',
@@ -450,6 +452,8 @@ export type FeedbackContext = {
     errors?: string[];
     progress?: string[];
   };
+  // Base64 PNGs, no data: prefix. Max 4.
+  referenceImages?: string[];
 };
 
 /**

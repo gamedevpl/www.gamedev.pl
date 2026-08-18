@@ -548,7 +548,7 @@ a {
   position: absolute;
   left: 0;
   bottom: calc(100% + 8px);
-  z-index: 20;
+  z-index: 200;
   min-width: 180px;
   padding: 6px;
   background: var(--panel);
@@ -6929,6 +6929,87 @@ a.user-name--profile:focus-visible {
   flex: none;
 }
 
+.status-composer-attach {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+}
+
+.status-composer-attach-btn.is-open {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+}
+
+.status-composer-attach-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.status-composer-attach-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+}
+
+.status-composer-attach-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.status-composer-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 2px 0 6px;
+}
+
+.status-composer-attachment-chip {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  flex: none;
+}
+
+.status-composer-attachment-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 6px;
+  background: #000;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.status-composer-attachment-remove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: #1e293b;
+  color: #94a3b8;
+  cursor: pointer;
+}
+
+.status-composer-attachment-remove:hover {
+  color: #f43f5e;
+  background: rgba(244, 63, 94, 0.2);
+}
+
 .status-composer.is-compact .status-feedback-input {
   width: 100%;
   min-width: 0;
@@ -7035,6 +7116,16 @@ a.user-name--profile:focus-visible {
   .status-composer.is-compact .status-composer-stop {
     width: 44px;
     height: 44px;
+  }
+
+  .status-composer-attach-btn {
+    width: 44px;
+    height: 44px;
+  }
+
+  .status-composer-attachment-chip {
+    width: 48px;
+    height: 48px;
   }
 
   .status-feedback-quick-action {

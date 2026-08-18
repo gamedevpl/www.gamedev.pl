@@ -33,8 +33,14 @@ import { submitImprovement } from './studioApi.js';
 import { pollDelayMs } from './studioStatusPoll.js';
 import { studioThreadContentScrollTop, studioThreadNearContentEnd } from './studioThreadScroll.js';
 import { recordStudioStep, type StudioStepDetail } from './visitTelemetry.js';
+import { toBase64PngList } from './attachmentImages.js';
+import { SketchModal } from './SketchModal.js';
 
 type BuilderHandoffHandler = () => Promise<void | { pending?: boolean }> | void | { pending?: boolean };
+
+type ComposerAttachment = { id: string; name: string; dataUrl: string };
+
+const MAX_COMPOSER_ATTACHMENTS = 4;
 
 function copyInputFromStatus(status: SubmissionStatus | null | undefined) {
   return {
@@ -1446,6 +1452,29 @@ function FeedbackPanel({
   const [notice, setNotice] = useState<string | null>(null);
   const [builder, setBuilder] = useState<BuilderKind>(initialBuilder);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const [attachments, setAttachments] = useState<ComposerAttachment[]>([]);
+  const [attachMenuOpen, setAttachMenuOpen] = useState(false);
+  const [isSketchOpen, setIsSketchOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const attachMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!attachMenuOpen) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (attachMenuRef.current && !attachMenuRef.current.contains(event.target as Node)) {
+        setAttachMenuOpen(false);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setAttachMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [attachMenuOpen]);
 
   useEffect(() => {
     setBuilder(initialBuilder);
@@ -1522,6 +1551,39 @@ function FeedbackPanel({
     input.style.height = `${Math.min(input.scrollHeight, 220)}px`;
   };
 
+  const handleAttachFiles = (files: FileList | File[]) => {
+    if (state === 'sending') return;
+    Array.from(files).forEach((file) => {
+      if (!file.type.startsWith('image/')) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const dataUrl = e.target?.result as string;
+        if (!dataUrl) return;
+        setAttachments((prev) =>
+          prev.length >= MAX_COMPOSER_ATTACHMENTS
+            ? prev
+            : [
+                ...prev,
+                { id: `file-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, name: file.name, dataUrl },
+              ],
+        );
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleSaveSketch = (dataUrl: string) => {
+    setAttachments((prev) =>
+      prev.length >= MAX_COMPOSER_ATTACHMENTS
+        ? prev
+        : [...prev, { id: `sketch-${Date.now()}`, name: `Sketch ${prev.length + 1}`, dataUrl }],
+    );
+  };
+
+  const removeAttachment = (id: string) => {
+    setAttachments((prev) => prev.filter((item) => item.id !== id));
+  };
+
   const send = async (requestedText: string = trimmed) => {
     const message = requestedText.trim();
     if (message.length < 10 || state === 'sending') return;
@@ -1535,6 +1597,12 @@ function FeedbackPanel({
     // client bounds the server call; this button stays disabled until that answer lands.
     try {
       const roundBuilder = chooseBuilder ? builder : undefined;
+      // Normalized to PNG for the backend's signature check.
+      let context: { referenceImages: string[] } | undefined;
+      if (attachments.length > 0) {
+        const referenceImages = await toBase64PngList(attachments.map((a) => a.dataUrl));
+        if (referenceImages.length > 0) context = { referenceImages };
+      }
       // The new job an improvement opened, if this send was one — the thread hands over
       // to it once the local echo and receipt are in place, below.
       let handoffToken: string | undefined;
@@ -1543,16 +1611,20 @@ function FeedbackPanel({
       // Shortest call shape for the ordinary case — tests assert on it.
       if (published) {
         const improved = roundBuilder
-          ? await submitImprovement(token, message, undefined, roundBuilder)
-          : await submitImprovement(token, message);
+          ? await submitImprovement(token, message, context, roundBuilder)
+          : context
+            ? await submitImprovement(token, message, context)
+            : await submitImprovement(token, message);
         // Publishing is terminal: the improvement is a new job with its own token. The
         // builder memory is keyed by token in localStorage, so persist the choice under
         // the *new* token as well — the old token's memory dies with its round.
         handoffToken = improved.token;
       } else {
         const result = roundBuilder
-          ? await submitFeedback(token, message, undefined, roundBuilder)
-          : await submitFeedback(token, message);
+          ? await submitFeedback(token, message, context, roundBuilder)
+          : context
+            ? await submitFeedback(token, message, context)
+            : await submitFeedback(token, message);
         if (result.roundStarted === false) {
           setNotice(
             result.reason === 'no_capacity' ? t('statusView.feedback.noCapacity') : t('statusView.feedback.notStarted'),
@@ -1567,6 +1639,7 @@ function FeedbackPanel({
       }
       setState('sent');
       setText('');
+      setAttachments([]);
       // Back to the CSS height rather than the height the sent message grew it to: an
       // empty box the size of the last paragraph is a leftover, not a state.
       if (inputRef.current) inputRef.current.style.height = '';
@@ -1749,8 +1822,81 @@ function FeedbackPanel({
           maxLength={2000}
           disabled={sending}
         />
+        {attachments.length > 0 && (
+          <div className="status-composer-attachments">
+            {attachments.map((item) => (
+              <div key={item.id} className="status-composer-attachment-chip">
+                <img src={item.dataUrl} alt={item.name} className="status-composer-attachment-thumb" />
+                <button
+                  type="button"
+                  className="status-composer-attachment-remove"
+                  onClick={() => removeAttachment(item.id)}
+                  title={t('hero.removeAttachment')}
+                  disabled={sending}
+                >
+                  <PixelIcon name="close" size={11} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
         <div className="status-composer-toolbar">
-          <div className="status-composer-toolbar-left">{builderControls}</div>
+          <div className="status-composer-toolbar-left">
+            <div className="status-composer-attach" ref={attachMenuRef}>
+              <button
+                type="button"
+                className={`status-composer-attach-btn${attachMenuOpen ? ' is-open' : ''}`}
+                onClick={() => setAttachMenuOpen((open) => !open)}
+                title={t('hero.attachMenuAria')}
+                aria-label={t('hero.attachMenuAria')}
+                aria-expanded={attachMenuOpen}
+                aria-haspopup="menu"
+                disabled={sending || attachments.length >= MAX_COMPOSER_ATTACHMENTS}
+              >
+                <PixelIcon name="plus" size={15} />
+              </button>
+              {attachMenuOpen && !sending ? (
+                <div className="prompt-attach-menu" role="menu" aria-label={t('hero.attachMenu')}>
+                  <button
+                    type="button"
+                    className="prompt-attach-item"
+                    role="menuitem"
+                    onClick={() => {
+                      setAttachMenuOpen(false);
+                      fileInputRef.current?.click();
+                    }}
+                  >
+                    <PixelIcon name="image" size={16} /> {t('hero.uploadImage')}
+                  </button>
+                  <button
+                    type="button"
+                    className="prompt-attach-item"
+                    role="menuitem"
+                    onClick={() => {
+                      setAttachMenuOpen(false);
+                      setIsSketchOpen(true);
+                    }}
+                  >
+                    <PixelIcon name="palette" size={16} /> {t('hero.drawSketch')}
+                  </button>
+                </div>
+              ) : null}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden-file-input"
+                onChange={(event) => {
+                  if (event.target.files && event.target.files.length > 0) {
+                    handleAttachFiles(event.target.files);
+                    event.target.value = '';
+                  }
+                }}
+              />
+            </div>
+            {builderControls}
+          </div>
           <div className="status-composer-toolbar-right">
             {showStop ? (
               <button
@@ -1797,6 +1943,7 @@ function FeedbackPanel({
             )}
           </div>
         ) : null}
+        <SketchModal isOpen={isSketchOpen} onClose={() => setIsSketchOpen(false)} onSaveSketch={handleSaveSketch} />
       </div>
     );
   }

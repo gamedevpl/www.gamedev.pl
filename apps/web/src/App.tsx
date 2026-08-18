@@ -153,6 +153,8 @@ export function App() {
   const [pendingSpec, setPendingSpec] = useState<{ title: string; concept: string; displayName: string } | null>(
     restoredQa.current?.spec ?? null,
   );
+  // Kept out of pendingSpec — too large for its localStorage-backed persistence.
+  const pendingReferenceImagesRef = useRef<string[] | undefined>(undefined);
   // Language the parked questions were written in. Empty when an older blob never
   // recorded one — that mismatch with the live UI language is what triggers a
   // one-shot re-ask so English chips don't stick under a Polish chrome.
@@ -544,7 +546,7 @@ export function App() {
   // The generation gate: before spending a submission we run the spec refiner. If it
   // returns clarifying questions, generation pauses on the QA panel until they're
   // answered; a clean spec submits straight through. A refiner error stops here too.
-  async function handleSubmitSpec(concept: string, displayName: string = '') {
+  async function handleSubmitSpec(concept: string, displayName: string = '', referenceImages?: string[]) {
     if (!user) {
       // The wall between "wrote an idea" and "made an account". Everything before this
       // is anonymous, so this is the only place that drop-off is visible at all.
@@ -589,6 +591,7 @@ export function App() {
       displayName: displayName.trim(),
     };
     const locale = i18n.resolvedLanguage ?? i18n.language;
+    pendingReferenceImagesRef.current = referenceImages;
     setPendingSpec(spec);
     setQaQuestions(questions);
     setQaLocale(locale);
@@ -619,6 +622,7 @@ export function App() {
         // the creator's language rather than machine-translated afterwards.
         locale: i18n.language,
         builder,
+        referenceImages: pendingReferenceImagesRef.current,
       });
 
       // Save to localStorage
@@ -641,6 +645,7 @@ export function App() {
       // whole call. A no-op when the spec never went through the gate.
       setQaQuestions([]);
       setPendingSpec(null);
+      pendingReferenceImagesRef.current = undefined;
       setQaLocale('');
       setQaBuilder('platform');
       clearPendingQa();
@@ -691,6 +696,7 @@ export function App() {
   const handleQaCancel = () => {
     setQaQuestions([]);
     setPendingSpec(null);
+    pendingReferenceImagesRef.current = undefined;
     setQaLocale('');
     setQaBuilder('platform');
     clearPendingQa();
@@ -1272,7 +1278,7 @@ export function App() {
                 onPlayGame={handlePlayGame}
                 submissionStatus={submissionStatus}
                 submissionError={submissionError}
-                onSubmitSpec={(concept) => void handleSubmitSpec(concept)}
+                onSubmitSpec={(concept, referenceImages) => void handleSubmitSpec(concept, undefined, referenceImages)}
                 mockStatus={mockStatus}
                 mockError={mockError}
                 onGenerateMock={(prompt) => void handleGenerateMock(prompt)}
@@ -1299,7 +1305,9 @@ export function App() {
                   onPlayGame={handlePlayGame}
                   submissionStatus={submissionStatus}
                   submissionError={submissionError}
-                  onSubmitSpec={(concept) => void handleSubmitSpec(concept)}
+                  onSubmitSpec={(concept, referenceImages) =>
+                    void handleSubmitSpec(concept, undefined, referenceImages)
+                  }
                   mockStatus={mockStatus}
                   mockError={mockError}
                   onGenerateMock={(prompt) => void handleGenerateMock(prompt)}

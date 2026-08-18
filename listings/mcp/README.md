@@ -79,6 +79,7 @@ build round; the authoritative list is whatever `tools/list` returns, and
 | `end`                    | End (commit) this round                 | write       |
 | `get_gate_verdict`       | Check the gate once                     | read        |
 | `get_gate_media`         | Fetch the gate's screenshots and video  | read        |
+| `get_reference_images`   | Fetch creator-attached reference images | read        |
 | `report_progress`        | Report progress                         | write       |
 | `screenshot_upload_url`  | Get a screenshot upload URL             | write       |
 | `show_round`             | Show the creator a live round card      | read        |

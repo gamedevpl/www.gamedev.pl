@@ -14,7 +14,7 @@ type CreatePageProps = {
   onPlayGame: (game: CatalogEntry, via?: PlayVia) => void;
   submissionStatus: 'idle' | 'refining' | 'loading';
   submissionError: string | null;
-  onSubmitSpec: (concept: string) => void;
+  onSubmitSpec: (concept: string, referenceImages?: string[]) => void;
   mockStatus: 'idle' | 'loading' | 'error';
   mockError: string | null;
   onGenerateMock: (prompt: string) => void;

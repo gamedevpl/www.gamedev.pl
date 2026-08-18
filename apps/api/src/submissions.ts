@@ -130,6 +130,14 @@ import { createTranslatorFromEnv, normalizeLocale, type Translator } from './tra
 import { isVariantWidth } from './image-variants.js';
 import { logModerationRejection } from './moderation-metrics.js';
 
+// Base64 PNG, no data: prefix — same shape as a playtest screenshot.
+const referenceImageSchema = z.string().max(Math.ceil((300 * 1024 * 4) / 3) + 1024, 'reference image is too large');
+
+const MAX_REFERENCE_IMAGES = 4;
+
+// 4 images at the cap above exceed Fastify's default 1 MiB bodyLimit.
+const REFERENCE_IMAGES_BODY_LIMIT_BYTES = MAX_REFERENCE_IMAGES * (Math.ceil((300 * 1024 * 4) / 3) + 1024) + 64 * 1024;
+
 const CreateSubmissionRequestSchema = z.object({
   title: z.string().trim().min(3, 'title must be at least 3 characters').max(80, 'title must be at most 80 characters'),
   concept: z
@@ -145,6 +153,8 @@ const CreateSubmissionRequestSchema = z.object({
    * surface the choice; the API accepts it so routing is testable without the card.
    */
   builder: z.enum(['platform', 'self']).optional(),
+  // Moodboard reference for the builder agent, not instructions.
+  referenceImages: z.array(referenceImageSchema).max(MAX_REFERENCE_IMAGES).optional(),
 });
 
 // Re-exported for callers (and tests) that knew it here; it now lives with the status
@@ -236,6 +246,8 @@ const FeedbackRequestSchema = z.object({
           progress: z.array(z.string().max(80)).max(20).optional(),
         })
         .optional(),
+      // Same shape as screenshotPng, plural — a steering message may carry several.
+      referenceImages: z.array(referenceImageSchema).max(MAX_REFERENCE_IMAGES).optional(),
     })
     .optional(),
 });
@@ -249,6 +261,7 @@ const HANDOFF_ACK_STALL_MS = 10 * 60 * 1000;
 function formatPlaytestContextBlock(
   context: z.infer<typeof FeedbackRequestSchema>['context'],
   shotId?: string,
+  referenceImageShotIds?: string[],
 ): string | null {
   if (!context) return null;
   const lines: string[] = [];
@@ -274,6 +287,11 @@ function formatPlaytestContextBlock(
   } else if (context.screenshotPng) {
     lines.push('screenshot: (capture failed validation — text context only)');
   }
+  if (referenceImageShotIds && referenceImageShotIds.length > 0) {
+    lines.push(`referenceImageShotIds: ${referenceImageShotIds.join(', ')}`);
+  } else if (context.referenceImages && context.referenceImages.length > 0) {
+    lines.push('referenceImages: (capture failed validation — text context only)');
+  }
   if (lines.length === 0) return null;
   return [PLAYTEST_CONTEXT_HEADER, '```text', ...lines, '```'].join('\n');
 }
@@ -285,10 +303,12 @@ function revisionOriginOf(message: { origin?: CreatorMessageOrigin }): 'agent' |
   return undefined;
 }
 
-async function storeCreatorPlaytestShot(
+// Validates and persists a base64 PNG as a build shot.
+async function storeCreatorImage(
   store: Store,
   issueNumber: number,
   pngBase64: string | undefined,
+  label: 'creator-playtest' | 'creator-reference',
 ): Promise<string | undefined> {
   if (!pngBase64) return undefined;
   let bytes: Buffer;
@@ -301,9 +321,32 @@ async function storeCreatorPlaytestShot(
   if (!bytes.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)) return undefined;
   const stored = await store.appendBuildShot(issueNumber, {
     data: bytes.toString('base64'),
-    label: 'creator-playtest',
+    label,
   });
   return stored.id;
+}
+
+async function storeCreatorPlaytestShot(
+  store: Store,
+  issueNumber: number,
+  pngBase64: string | undefined,
+): Promise<string | undefined> {
+  return storeCreatorImage(store, issueNumber, pngBase64, 'creator-playtest');
+}
+
+// Persists up to MAX_REFERENCE_IMAGES images, dropping any that fail validation.
+async function storeCreatorReferenceImages(
+  store: Store,
+  issueNumber: number,
+  pngBase64List: string[] | undefined,
+): Promise<string[]> {
+  if (!pngBase64List || pngBase64List.length === 0) return [];
+  const ids: string[] = [];
+  for (const png of pngBase64List.slice(0, MAX_REFERENCE_IMAGES)) {
+    const id = await storeCreatorImage(store, issueNumber, png, 'creator-reference');
+    if (id) ids.push(id);
+  }
+  return ids;
 }
 
 interface CachedStatus {
@@ -3218,6 +3261,8 @@ export async function registerSubmissionRoutes(
       const jobId = await store.allocateJobId();
       await store.createSubmission(jobId, input.uid, sanitizedTitle);
       await store.setSubmissionSlug(jobId, wanted);
+      // Best-effort: an image that fails PNG validation is dropped, never blocks creation.
+      await storeCreatorReferenceImages(store, jobId, parsed.data.referenceImages);
 
       const slug = await confirmSlugClaim(jobId, wanted, sanitizedTitle);
       if (!slug) {
@@ -3267,7 +3312,7 @@ export async function registerSubmissionRoutes(
     }
   }
 
-  app.post('/api/submissions', async (request, reply) => {
+  app.post('/api/submissions', { bodyLimit: REFERENCE_IMAGES_BODY_LIMIT_BYTES }, async (request, reply) => {
     // Ahead of the auth check, as it always was: an unconfigured server is not the
     // caller's problem to authenticate for, and a test pins the order.
     if (!githubClient || !submissionTokenSecret) {
@@ -3952,7 +3997,10 @@ export async function registerSubmissionRoutes(
   // injection boundary as the original spec). A published game can't be revised here.
   app.post(
     '/api/submissions/:token/feedback',
-    { config: { rateLimit: { max: maxFeedbackPerWindow, timeWindow: feedbackRateLimitWindowMs } } },
+    {
+      bodyLimit: REFERENCE_IMAGES_BODY_LIMIT_BYTES,
+      config: { rateLimit: { max: maxFeedbackPerWindow, timeWindow: feedbackRateLimitWindowMs } },
+    },
     async (request, reply) => {
       if (!githubClient || !submissionTokenSecret) {
         return reply.status(503).send({ error: 'submissions are not configured' });
@@ -4014,6 +4062,7 @@ export async function registerSubmissionRoutes(
       const sanitizedFeedback = sanitizeCreatorText(parsed.data.feedback, { singleLine: false });
       const creatorLocale = record?.locale ?? 'en';
       let shotId: string | undefined;
+      let referenceImageShotIds: string[] = [];
       if (store && parsed.data.context?.screenshotPng) {
         try {
           shotId = await storeCreatorPlaytestShot(store, issueNumber, parsed.data.context.screenshotPng);
@@ -4021,7 +4070,18 @@ export async function registerSubmissionRoutes(
           request.log.error({ err: shotError }, 'failed to store creator playtest screenshot');
         }
       }
-      const contextBlock = formatPlaytestContextBlock(parsed.data.context, shotId);
+      if (store && parsed.data.context?.referenceImages?.length) {
+        try {
+          referenceImageShotIds = await storeCreatorReferenceImages(
+            store,
+            issueNumber,
+            parsed.data.context.referenceImages,
+          );
+        } catch (shotError) {
+          request.log.error({ err: shotError }, 'failed to store creator reference images');
+        }
+      }
+      const contextBlock = formatPlaytestContextBlock(parsed.data.context, shotId, referenceImageShotIds);
       const inboxText = contextBlock ? `${sanitizedFeedback}\n\n${contextBlock}` : sanitizedFeedback;
 
       // A revision is a new task on the job's existing workspace, dispatched by us. This
@@ -4227,6 +4287,7 @@ export async function registerSubmissionRoutes(
   app.post(
     '/api/submissions/:token/improve',
     {
+      bodyLimit: REFERENCE_IMAGES_BODY_LIMIT_BYTES,
       config: {
         rateLimit: {
           max: maxImprovementsPerWindow,
@@ -4293,6 +4354,7 @@ export async function registerSubmissionRoutes(
       const sanitizedFeedback = sanitizeCreatorText(parsed.data.feedback, { singleLine: false });
       const sanitizedTitle = sanitizeCreatorText(`Improve ${record.title}`, { singleLine: true });
       let shotId: string | undefined;
+      let referenceImageShotIds: string[] = [];
       if (parsed.data.context?.screenshotPng) {
         try {
           shotId = await storeCreatorPlaytestShot(store, issueNumber, parsed.data.context.screenshotPng);
@@ -4300,7 +4362,18 @@ export async function registerSubmissionRoutes(
           request.log.error({ err: shotError }, 'failed to store creator playtest screenshot');
         }
       }
-      const contextBlock = formatPlaytestContextBlock(parsed.data.context, shotId);
+      if (parsed.data.context?.referenceImages?.length) {
+        try {
+          referenceImageShotIds = await storeCreatorReferenceImages(
+            store,
+            issueNumber,
+            parsed.data.context.referenceImages,
+          );
+        } catch (shotError) {
+          request.log.error({ err: shotError }, 'failed to store creator reference images');
+        }
+      }
+      const contextBlock = formatPlaytestContextBlock(parsed.data.context, shotId, referenceImageShotIds);
       const inboxText = contextBlock ? `${sanitizedFeedback}\n\n${contextBlock}` : sanitizedFeedback;
       const requestedBuilder = parsed.data.builder;
 
@@ -4390,6 +4463,14 @@ export async function registerSubmissionRoutes(
         await store
           .appendCreatorMessage(started.jobId, studioAckText, { origin: 'studio_ack', delivered: true })
           .catch(() => {});
+      }
+      // Re-store under the new job — the brief/reference-image endpoint reads started.jobId, not issueNumber.
+      if (parsed.data.context?.referenceImages?.length) {
+        try {
+          await storeCreatorReferenceImages(store, started.jobId, parsed.data.context.referenceImages);
+        } catch (shotError) {
+          request.log.error({ err: shotError }, 'failed to store creator reference images on the new job');
+        }
       }
       // Publishing is terminal, so this is a *new* job with its own capability. The
       // creator's thread has to move onto it — the old (published) token cannot address
