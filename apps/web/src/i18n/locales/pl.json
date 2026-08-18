@@ -1383,7 +1383,6 @@
     "available": "Dostępny",
     "accountHeading": "Konto",
     "accountSettings": "Ustawienia konta",
-    "accountCredentials": "Klucze i połączone agenty",
     "deleteAccountSummary": "Zaplanuj usunięcie konta i danych osobowych po 14-dniowym okresie na zmianę decyzji.",
     "deleteAccount": "Zaplanuj usunięcie konta",
     "deleteDialogTitle": "Zaplanować usunięcie konta?",
@@ -1403,7 +1402,9 @@
       "cooldown": "Niedawno zmieniałeś handle — spróbuj ponownie po okresie oczekiwania.",
       "unchanged": "To już jest Twój handle.",
       "unknown": "Nie udało się zaktualizować profilu."
-    }
+    },
+    "accountNavCredentials": "Dane dostępowe",
+    "accountNavAccount": "Konto"
   },
   "pwa": {
     "ariaLabel": "Zainstaluj tę aplikację",

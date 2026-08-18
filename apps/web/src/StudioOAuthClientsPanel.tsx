@@ -71,37 +71,31 @@ export function StudioOAuthClientsPanel() {
         <ul className="studio-oauth-client-list">
           {grants.map((grant) => (
             <li key={grant.grantId} className="studio-oauth-client-row">
-              <div className="studio-oauth-client-meta">
+              <div className="studio-oauth-client-summary">
                 <div className="studio-oauth-client-name">
                   <strong>{grant.clientLabel}</strong>
-                  <span>{t('oauthClients.connectionId', { id: grant.grantId.slice(-6).toUpperCase() })}</span>
                 </div>
-                <dl className="studio-oauth-client-dates">
-                  <div>
-                    <dt>{t('oauthClients.connectedLabel')}</dt>
-                    <dd>
-                      <time dateTime={grant.createdAt} title={formatExact(grant.createdAt)}>
-                        {formatRelativeTime(grant.createdAt, i18n.language)}
-                      </time>
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>{t('oauthClients.lastUsedLabel')}</dt>
-                    <dd>
-                      {grant.lastUsedAt ? (
-                        <time dateTime={grant.lastUsedAt} title={formatExact(grant.lastUsedAt)}>
-                          {formatRelativeTime(grant.lastUsedAt, i18n.language)}
-                        </time>
-                      ) : (
-                        t('oauthClients.neverUsed')
-                      )}
-                    </dd>
-                  </div>
-                </dl>
+                <p className="studio-oauth-client-meta">
+                  {t('oauthClients.connectionId', { id: grant.grantId.slice(-6).toUpperCase() })}
+                  {' · '}
+                  {t('oauthClients.connectedLabel')}{' '}
+                  <time dateTime={grant.createdAt} title={formatExact(grant.createdAt)}>
+                    {formatRelativeTime(grant.createdAt, i18n.language)}
+                  </time>
+                  {' · '}
+                  {t('oauthClients.lastUsedLabel')}{' '}
+                  {grant.lastUsedAt ? (
+                    <time dateTime={grant.lastUsedAt} title={formatExact(grant.lastUsedAt)}>
+                      {formatRelativeTime(grant.lastUsedAt, i18n.language)}
+                    </time>
+                  ) : (
+                    t('oauthClients.neverUsed')
+                  )}
+                </p>
               </div>
 
               {confirmingId === grant.grantId ? (
-                <div className="studio-credential-confirm is-danger" role="alert">
+                <div className="studio-credential-confirm is-danger is-compact" role="alert">
                   <p>{t('oauthClients.confirm', { client: grant.clientLabel })}</p>
                   <div className="studio-credential-actions">
                     <button
@@ -126,7 +120,7 @@ export function StudioOAuthClientsPanel() {
               ) : (
                 <button
                   type="button"
-                  className="studio-credential-action is-danger"
+                  className="studio-oauth-client-revoke"
                   disabled={revokingId !== null}
                   onClick={() => setConfirmingId(grant.grantId)}
                 >

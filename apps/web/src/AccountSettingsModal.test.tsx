@@ -80,6 +80,71 @@ describe('AccountSettingsModal', () => {
     expect(card?.textContent).toContain('Connection 111111');
   });
 
+  const navItem = (section: string) =>
+    document.body.querySelector(`.account-settings-nav-item[data-section="${section}"]`) as
+      HTMLButtonElement | undefined;
+  const panel = (section: string) =>
+    document.body.querySelector(`.account-settings-panel[data-section="${section}"]`) as HTMLElement | undefined;
+
+  it('switches to the Account section and hides — but keeps — the credentials panel', async () => {
+    await act(async () => {
+      root.render(createElement(AccountSettingsModal, { isOpen: true, onClose: () => {} }));
+      await flush();
+    });
+
+    await act(async () => {
+      navItem('account')?.click();
+      await flush();
+    });
+
+    expect(panel('credentials')?.hidden).toBe(true);
+    expect(panel('account')?.hidden).toBe(false);
+    expect(panel('account')?.textContent).toContain('Schedule account deletion');
+    expect(navItem('account')?.getAttribute('aria-current')).toBe('true');
+    expect(navItem('credentials')?.getAttribute('aria-current')).toBeNull();
+  });
+
+  it('does not refetch credentials when the creator switches back', async () => {
+    await act(async () => {
+      root.render(createElement(AccountSettingsModal, { isOpen: true, onClose: () => {} }));
+      await flush();
+    });
+    expect(connectApi.getCreatorAgentKey).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      navItem('account')?.click();
+      await flush();
+    });
+    await act(async () => {
+      navItem('credentials')?.click();
+      await flush();
+    });
+
+    expect(connectApi.getCreatorAgentKey).toHaveBeenCalledTimes(1);
+    expect(connectApi.listOAuthGrants).toHaveBeenCalledTimes(1);
+  });
+
+  it('reopens on Credentials even after closing on Account', async () => {
+    const render = (isOpen: boolean) =>
+      act(async () => {
+        root.render(createElement(AccountSettingsModal, { isOpen, onClose: () => {} }));
+        await flush();
+      });
+
+    await render(true);
+    await act(async () => {
+      navItem('account')?.click();
+      await flush();
+    });
+    expect(panel('account')?.hidden).toBe(false);
+
+    await render(false);
+    await render(true);
+
+    expect(panel('credentials')?.hidden).toBe(false);
+    expect(panel('account')?.hidden).toBe(true);
+  });
+
   it('renders nothing — and asks for no credentials — while closed', async () => {
     await act(async () => {
       root.render(createElement(AccountSettingsModal, { isOpen: false, onClose: () => {} }));

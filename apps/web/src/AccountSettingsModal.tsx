@@ -1,9 +1,12 @@
-import { useEffect, useId, useRef } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { AccountDeletionControl } from './AccountDeletionControl.js';
+import { PixelIcon } from './PixelIcon.js';
 import { StudioCreatorAgentKeyPanel } from './StudioCreatorAgentKeyPanel.js';
 import { StudioOAuthClientsPanel } from './StudioOAuthClientsPanel.js';
+
+type AccountSettingsSection = 'credentials' | 'account';
 
 /** Account settings remain reachable even before a creator claims a public handle. */
 export function AccountSettingsModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
@@ -12,6 +15,11 @@ export function AccountSettingsModal({ isOpen, onClose }: { isOpen: boolean; onC
   const cardRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+  const [section, setSection] = useState<AccountSettingsSection>('credentials');
+
+  useEffect(() => {
+    if (isOpen) setSection('credentials');
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -31,6 +39,11 @@ export function AccountSettingsModal({ isOpen, onClose }: { isOpen: boolean; onC
 
   if (!isOpen) return null;
 
+  const sections: { id: AccountSettingsSection; icon: 'lock' | 'user'; label: string }[] = [
+    { id: 'credentials', icon: 'lock', label: t('creatorProfile.accountNavCredentials') },
+    { id: 'account', icon: 'user', label: t('creatorProfile.accountNavAccount') },
+  ];
+
   return createPortal(
     <div className="modal-backdrop claim-handle-modal-backdrop" role="presentation" onClick={onClose}>
       <div
@@ -47,18 +60,36 @@ export function AccountSettingsModal({ isOpen, onClose }: { isOpen: boolean; onC
         <header className="claim-handle-modal-head">
           <h2 id={headingId}>{t('creatorProfile.accountSettings')}</h2>
         </header>
-        <section className="account-settings-credentials" aria-labelledby={`${headingId}-credentials`}>
-          <h3 id={`${headingId}-credentials`} className="account-settings-section-title">
-            {t('creatorProfile.accountCredentials')}
-          </h3>
-          <p className="studio-rail-credentials-hint">{t('studioPanel.rail.credentialsHint')}</p>
-          <div className="studio-rail-credentials-body">
-            <StudioCreatorAgentKeyPanel />
-            <StudioOAuthClientsPanel />
-          </div>
-        </section>
 
-        <AccountDeletionControl labelledBy={`${headingId}-danger`} />
+        <div className="account-settings-body">
+          <nav className="account-settings-nav" aria-label={t('creatorProfile.accountSettings')}>
+            {sections.map((entry) => (
+              <button
+                key={entry.id}
+                type="button"
+                className={`account-settings-nav-item${section === entry.id ? ' is-active' : ''}`}
+                aria-current={section === entry.id ? 'true' : undefined}
+                data-section={entry.id}
+                onClick={() => setSection(entry.id)}
+              >
+                <PixelIcon name={entry.icon} size={14} />
+                {entry.label}
+              </button>
+            ))}
+          </nav>
+
+          <div className="account-settings-panel" data-section="credentials" hidden={section !== 'credentials'}>
+            <p className="studio-rail-credentials-hint">{t('studioPanel.rail.credentialsHint')}</p>
+            <div className="studio-rail-credentials-body">
+              <StudioCreatorAgentKeyPanel />
+              <StudioOAuthClientsPanel />
+            </div>
+          </div>
+
+          <div className="account-settings-panel" data-section="account" hidden={section !== 'account'}>
+            <AccountDeletionControl labelledBy={`${headingId}-danger`} />
+          </div>
+        </div>
       </div>
     </div>,
     document.body,
