@@ -50,6 +50,13 @@ export type CodeSurfaceSources = {
   deleted: string[];
   readOnly: boolean;
   reason?: 'agent_round';
+  /**
+   * The round is open to agent writes, so this snapshot can go stale under the
+   * reader. Wider than `readOnly`: a self-build round has an agent staging over
+   * MCP and no platform dispatch, so it is never read-only and its files were
+   * landing into a view that had stopped watching. Absent from an older server.
+   */
+  agentRound?: boolean;
   staged: CodeSurfaceStagingSummary;
 };
 

@@ -230,6 +230,24 @@ describe('the Code surface routes (creator-code.ts)', () => {
         expect(body.readOnly).toBe(true);
         expect(body.reason).toBe('agent_round');
       }));
+
+    it('marks a self-build round as watchable even though it is never read-only', async () =>
+      withApp(async (app) => {
+        // The bug this pins: `readOnly` requires `dispatch.refs`, which only a
+        // platform-dispatched round has. A creator's own agent staging over MCP
+        // has none, so the Code surface read it as "no agent here" and stopped
+        // polling — the files landed in the staging buffer and the editor never
+        // asked again. Locked and worth-watching are different questions.
+        const res = await app.inject({
+          method: 'GET',
+          url: '/api/me/studio/games/sky-dodge/sources',
+          headers: authHeaders('g:creator'),
+        });
+        expect(res.statusCode).toBe(200);
+        const body = res.json() as { readOnly: boolean; agentRound: boolean };
+        expect(body.readOnly).toBe(false);
+        expect(body.agentRound).toBe(true);
+      }));
   });
 
   describe('PUT /api/me/studio/games/:slug/sources/stage', () => {

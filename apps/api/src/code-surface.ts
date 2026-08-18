@@ -39,3 +39,30 @@ export function isLiveAgentRound(record: {
   if (!isActiveBuildRound({ state, transitions: record.transitions })) return false;
   return (record.dispatch?.refs?.length ?? 0) > 0;
 }
+
+/**
+ * Whether an agent *could* be writing to this round's buffer.
+ *
+ * Deliberately weaker than `isLiveAgentRound`, and the difference is the whole
+ * point: that one additionally requires `dispatch.refs`, which only a
+ * platform-dispatched round has. A self-build round — the creator's own agent
+ * staging over MCP — never has one, so it read as "no agent here" everywhere the
+ * live test was used.
+ *
+ * Two questions were being answered by one predicate, and only one of them is
+ * about dispatch. *Should the owner be locked out* is: the platform round owns
+ * the buffer while its agent holds it. *Should the view keep refreshing* is not
+ * — files land in the staging buffer the same way whoever staged them, and an
+ * editor that stops watching shows a stale game with no sign it is stale. This
+ * answers the second; `isLiveAgentRound` still answers the first.
+ */
+export function isOpenAgentRound(record: {
+  state?: JobState;
+  lastStatus?: Parameters<typeof resolveJobState>[0]['lastStatus'];
+  transitions?: JobTransition[];
+  agentEndedAt?: string;
+}): boolean {
+  if (record.agentEndedAt) return false;
+  const state = resolveJobState(record) ?? 'queued';
+  return isActiveBuildRound({ state, transitions: record.transitions });
+}

@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './assemble.js';
 import { isActiveBuildRound } from './builder.js';
-import { codeSurfaceEnabled, isLiveAgentRound } from './code-surface.js';
+import { codeSurfaceEnabled, isLiveAgentRound, isOpenAgentRound } from './code-surface.js';
 import type { GcsObjectStore } from './gcs-sign.js';
 import {
   InvalidUploadError,
@@ -322,6 +322,14 @@ export async function registerCreatorCodeRoutes(
         deleted,
         readOnly: liveAgent,
         ...(liveAgent ? { reason: 'agent_round' as const } : {}),
+        /**
+         * The round is open to agent writes, so this response can go stale under
+         * the reader. Separate from `readOnly` because a self-build round has an
+         * agent staging over MCP and no dispatch — locked and worth-watching are
+         * different questions, and answering both with the live test left the
+         * Code surface not refreshing at all for exactly those rounds.
+         */
+        agentRound: isOpenAgentRound(record),
         staged: {
           totalBytes: stagedSummary.totalBytes,
           maxBytes: stagedSummary.maxBytes,

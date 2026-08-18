@@ -164,6 +164,46 @@ describe('CodeSurface', () => {
     expect(container.textContent).toContain('export const boot');
   });
 
+  it('keeps watching a self-build round, which is never read-only', async () => {
+    // The gap this closes: polling was gated on `readOnly`, which needs a
+    // platform dispatch. A creator's own agent staging over MCP produces no
+    // dispatch, so the editor stopped asking and showed a snapshot from before
+    // the agent wrote anything — with nothing on screen to say it was stale.
+    vi.useFakeTimers();
+    try {
+      mocked.fetchCodeSurfaceSources.mockResolvedValue(sourcesFor({ readOnly: false, agentRound: true }));
+      await render();
+      const initial = mocked.fetchCodeSurfaceSources.mock.calls.length;
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(4_100);
+      });
+
+      expect(mocked.fetchCodeSurfaceSources.mock.calls.length).toBeGreaterThan(initial);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('stops watching once the round is neither live nor open to an agent', async () => {
+    vi.useFakeTimers();
+    try {
+      mocked.fetchCodeSurfaceSources.mockResolvedValue(sourcesFor({ readOnly: false, agentRound: false }));
+      await render();
+      const initial = mocked.fetchCodeSurfaceSources.mock.calls.length;
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(4_100);
+      });
+
+      // A closed round cannot gain files under the reader; polling it forever
+      // would be a request every four seconds for the life of the tab.
+      expect(mocked.fetchCodeSurfaceSources.mock.calls.length).toBe(initial);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('opens on game.ts, not whatever sorts first — the manifest listing leads with GAME.json', async () => {
     mocked.fetchCodeSurfaceSources.mockResolvedValue(
       sourcesFor({
