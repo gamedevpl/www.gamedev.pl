@@ -7,46 +7,26 @@ import { getSubmissionStatus, type BuildEvent, type BuildProgress } from './subm
 const DETAILS_POLL_MS = 10_000;
 
 /**
- * Checklist + fraction for the Details rail — the progress that used to sit in the
- * thread foot. Kept out of the composer strip so the conversation stays Claude-quiet;
- * open Details when you want the count.
+ * Pure checklist + progress-bar rendering, driven entirely by props. Callers that
+ * already poll `SubmissionStatus` themselves (e.g. the Studio welcome screen) should
+ * pass that data straight through instead of mounting a second poller against the
+ * same endpoint — `StudioDetailsBuildProgress` below is the self-fetching wrapper for
+ * callers that don't have a status poll of their own.
  */
-export function StudioDetailsBuildProgress({
-  token,
+export function BuildProgressChecklist({
+  progress,
+  events,
+  loaded,
   emptyLabel,
 }: {
-  token: string;
+  progress: BuildProgress | null;
+  events: BuildEvent[];
+  /** Whether the first fetch has completed — controls the empty-state message. */
+  loaded: boolean;
   /** When set, an empty checklist renders this instead of nothing. */
   emptyLabel?: string;
 }) {
-  const { t, i18n } = useTranslation();
-  const [progress, setProgress] = useState<BuildProgress | null>(null);
-  const [events, setEvents] = useState<BuildEvent[]>([]);
-  const [loaded, setLoaded] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const load = async () => {
-      try {
-        const status = await getSubmissionStatus(token, i18n.language);
-        if (cancelled) return;
-        setProgress(status.progress ?? null);
-        setEvents(status.events ?? []);
-      } catch {
-        // Secondary chrome — a failed poll must not toast over the thread.
-      } finally {
-        if (!cancelled) setLoaded(true);
-      }
-    };
-
-    void load();
-    const timer = window.setInterval(() => void load(), DETAILS_POLL_MS);
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
-  }, [token, i18n.language]);
+  const { t } = useTranslation();
 
   const checklist = progress?.checklist ?? [];
   const reported = events.find((event) => event.progress)?.progress;
@@ -106,4 +86,50 @@ export function StudioDetailsBuildProgress({
       ) : null}
     </div>
   );
+}
+
+/**
+ * Checklist + fraction for the Details rail — the progress that used to sit in the
+ * thread foot. Kept out of the composer strip so the conversation stays Claude-quiet;
+ * open Details when you want the count. Self-fetches on its own timer — only use this
+ * for callers that don't already poll `SubmissionStatus`.
+ */
+export function StudioDetailsBuildProgress({
+  token,
+  emptyLabel,
+}: {
+  token: string;
+  /** When set, an empty checklist renders this instead of nothing. */
+  emptyLabel?: string;
+}) {
+  const { i18n } = useTranslation();
+  const [progress, setProgress] = useState<BuildProgress | null>(null);
+  const [events, setEvents] = useState<BuildEvent[]>([]);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const load = async () => {
+      try {
+        const status = await getSubmissionStatus(token, i18n.language);
+        if (cancelled) return;
+        setProgress(status.progress ?? null);
+        setEvents(status.events ?? []);
+      } catch {
+        // Secondary chrome — a failed poll must not toast over the thread.
+      } finally {
+        if (!cancelled) setLoaded(true);
+      }
+    };
+
+    void load();
+    const timer = window.setInterval(() => void load(), DETAILS_POLL_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [token, i18n.language]);
+
+  return <BuildProgressChecklist progress={progress} events={events} loaded={loaded} emptyLabel={emptyLabel} />;
 }
