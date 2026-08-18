@@ -1701,14 +1701,6 @@ function FeedbackPanel({
   if (compact) {
     const sending = state === 'sending';
     const empty = text.length === 0;
-    // Hidden while sending: it sat right above the unrelated status line.
-    const compactBuilderControls = (
-      <div className="builder-mode-controls">
-        {builderSelector}
-        {sending ? null : activeSelfHandoff}
-        {sending ? null : activePlatformHandoff}
-      </div>
-    );
     return (
       <div
         className={`status-feedback status-composer is-compact${empty ? ' is-empty' : ''}${sending ? ' is-sending' : ''}`}
@@ -1758,7 +1750,7 @@ function FeedbackPanel({
           disabled={sending}
         />
         <div className="status-composer-toolbar">
-          <div className="status-composer-toolbar-left">{compactBuilderControls}</div>
+          <div className="status-composer-toolbar-left">{builderControls}</div>
           <div className="status-composer-toolbar-right">
             {showStop ? (
               <button
@@ -1792,11 +1784,11 @@ function FeedbackPanel({
             ask the creator to wait or act. A plain Sent receipt does not: the thread
             already shows the message the moment send succeeds. */}
         {error || sending || notice ? (
-          <div className="status-feedback-actions">
+          <div className={`status-feedback-actions${sending ? ' status-feedback-actions-end' : ''}`}>
             {error ? (
               <p className="error">{error}</p>
             ) : sending ? (
-              // The send button already animates its own spinner — one is enough.
+              // Right-aligned under Send, not the switch-builder button.
               <span className="status-feedback-sending" role="status">
                 {t('statusView.feedback.sending')}
               </span>
