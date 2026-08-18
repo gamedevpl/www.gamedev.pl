@@ -244,6 +244,21 @@ describe('the Code surface routes (creator-code.ts)', () => {
         expect(body.readOnly).toBe(false);
         expect(body.agentRound).toBe(true);
       }));
+
+    it('keeps watching across the submit handoff, which any later stage undoes', async () =>
+      withApp(async (app) => {
+        // agentEndedAt is optimistic: touchLastAgentSignalAt deletes it on the next
+        // stage or patch. Gating on it stopped the only interval at submit, so an
+        // agent resuming after a red gate wrote into a view that had stopped looking.
+        await store.markAgentEnded(10);
+        const res = await app.inject({
+          method: 'GET',
+          url: '/api/me/studio/games/sky-dodge/sources',
+          headers: authHeaders('g:creator'),
+        });
+        expect(res.statusCode).toBe(200);
+        expect((res.json() as { agentRound: boolean }).agentRound).toBe(true);
+      }));
   });
 
   describe('PUT /api/me/studio/games/:slug/sources/stage', () => {
