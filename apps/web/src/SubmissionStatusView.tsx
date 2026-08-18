@@ -1454,6 +1454,8 @@ function FeedbackPanel({
   const [builder, setBuilder] = useState<BuilderKind>(initialBuilder);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const [attachments, setAttachments] = useState<ComposerAttachment[]>([]);
+  // FileReader work not yet landed in attachments — Send waits for it.
+  const [pendingAttachmentReads, setPendingAttachmentReads] = useState(0);
   const [attachMenuOpen, setAttachMenuOpen] = useState(false);
   const [isSketchOpen, setIsSketchOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -1557,19 +1559,24 @@ function FeedbackPanel({
     if (state === 'sending') return;
     Array.from(files).forEach((file) => {
       if (!file.type.startsWith('image/')) return;
+      setPendingAttachmentReads((count) => count + 1);
       const reader = new FileReader();
+      const done = () => setPendingAttachmentReads((count) => count - 1);
       reader.onload = (e) => {
         const dataUrl = e.target?.result as string;
-        if (!dataUrl) return;
-        setAttachments((prev) =>
-          prev.length >= MAX_COMPOSER_ATTACHMENTS
-            ? prev
-            : [
-                ...prev,
-                { id: `file-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, name: file.name, dataUrl },
-              ],
-        );
+        if (dataUrl) {
+          setAttachments((prev) =>
+            prev.length >= MAX_COMPOSER_ATTACHMENTS
+              ? prev
+              : [
+                  ...prev,
+                  { id: `file-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, name: file.name, dataUrl },
+                ],
+          );
+        }
+        done();
       };
+      reader.onerror = done;
       reader.readAsDataURL(file);
     });
   };
@@ -1588,7 +1595,7 @@ function FeedbackPanel({
 
   const send = async (requestedText: string = trimmed) => {
     const message = requestedText.trim();
-    if (message.length < 10 || state === 'sending') return;
+    if (message.length < 10 || state === 'sending' || pendingAttachmentReads > 0) return;
     setState('sending');
     setError(null);
     setNotice(null);
@@ -1927,7 +1934,7 @@ function FeedbackPanel({
                 type="button"
                 className="primary-btn status-composer-send"
                 onClick={() => void send()}
-                disabled={sending || trimmed.length < 10}
+                disabled={sending || trimmed.length < 10 || pendingAttachmentReads > 0}
                 aria-label={sending ? t('statusView.feedback.sending') : t('statusView.feedback.submit')}
                 title={sending ? t('statusView.feedback.sending') : t('statusView.feedback.submit')}
               >

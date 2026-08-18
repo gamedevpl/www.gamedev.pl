@@ -129,6 +129,8 @@ export function HeroPromptSection({
   const shouldAutoFocusPrompt = typeof matchMedia !== 'function' || !matchMedia('(max-width: 768px)').matches;
   const [promptText, setPromptText] = useState(initialPrompt);
   const [attachments, setAttachments] = useState<VisualAttachment[]>([]);
+  // FileReader work not yet landed in attachments.
+  const [pendingAttachmentReads, setPendingAttachmentReads] = useState(0);
   const [isSketchOpen, setIsSketchOpen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -257,7 +259,9 @@ export function HeroPromptSection({
     if (submissionStatus !== 'idle' || mockStatus === 'loading') return;
     Array.from(files).forEach((file) => {
       if (!file.type.startsWith('image/')) return;
+      setPendingAttachmentReads((count) => count + 1);
       const reader = new FileReader();
+      const done = () => setPendingAttachmentReads((count) => count - 1);
       reader.onload = (e) => {
         const dataUrl = e.target?.result as string;
         if (dataUrl) {
@@ -270,7 +274,9 @@ export function HeroPromptSection({
             },
           ]);
         }
+        done();
       };
+      reader.onerror = done;
       reader.readAsDataURL(file);
     });
   };
@@ -338,7 +344,7 @@ export function HeroPromptSection({
 
   const handlePrimarySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isBusy) return;
+    if (isBusy || pendingAttachmentReads > 0) return;
     const trimmed = promptText.trim();
     if (!trimmed && attachments.length === 0) return;
 
@@ -460,7 +466,7 @@ export function HeroPromptSection({
               className={`primary-btn build-btn${isBusy ? ' is-busy' : ''}`}
               title={busyLabel ?? t('hero.buildGameButton')}
               aria-label={busyLabel ?? t('hero.buildGameButton')}
-              disabled={isBusy || (!promptText.trim() && attachments.length === 0)}
+              disabled={isBusy || pendingAttachmentReads > 0 || (!promptText.trim() && attachments.length === 0)}
             >
               {isBusy ? <span className="build-btn-spinner" aria-hidden="true" /> : <PixelIcon name="send" size={16} />}
               {/* refining ≠ submitting; phone shows label, desktop clips to icon */}

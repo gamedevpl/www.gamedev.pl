@@ -1890,6 +1890,82 @@ describe('SubmissionStatusView', () => {
     });
   });
 
+  it('blocks send until a pasted image finishes loading, so it never ships without it', async () => {
+    // Codex #887: a same-tick send after paste could beat the FileReader.
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    mockedGetSubmissionStatus.mockResolvedValue({
+      status: 'needs_changes',
+      preview: { slug: 'space-runner' },
+      progress: { headSha: 'sha-1', commits: [], checklist: [] },
+    });
+    mockedGetSubmissionPreview.mockResolvedValue({
+      slug: 'space-runner',
+      title: 'Space Runner',
+      html: '<canvas></canvas>',
+    });
+    mockedSubmitFeedback.mockResolvedValue({ ok: true, target: 'pull_request' });
+    await i18n.changeLanguage('en');
+    window.history.pushState(null, '', '/studio/feedback-token/thread');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(createElement(SubmissionStatusView, { token: 'feedback-token', embedded: true }));
+      await flushEffects();
+      await flushEffects();
+    });
+
+    const textarea = container.querySelector<HTMLTextAreaElement>('.status-feedback-input');
+    await act(async () => {
+      if (textarea) {
+        const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+        setter?.call(textarea, 'Match the sketch I just pasted please.');
+        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      await flushEffects();
+    });
+
+    const file = new File(['fake'], 'sprite.png', { type: 'image/png' });
+    await act(async () => {
+      const paste = new Event('paste', { bubbles: true, cancelable: true }) as ClipboardEvent;
+      Object.defineProperty(paste, 'clipboardData', {
+        value: { items: [{ type: 'image/png', getAsFile: () => file }] },
+      });
+      textarea?.dispatchEvent(paste);
+      // Deliberately not awaiting the FileReader's macrotask here.
+      await flushEffects();
+    });
+
+    const sendButton = container.querySelector<HTMLButtonElement>('.status-composer-send');
+    expect(sendButton?.disabled).toBe(true);
+    await act(async () => {
+      sendButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushEffects();
+    });
+    expect(mockedSubmitFeedback).not.toHaveBeenCalled();
+
+    await act(async () => {
+      // Let the FileReader resolve.
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+    expect(container.querySelector<HTMLButtonElement>('.status-composer-send')?.disabled).toBe(false);
+
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('.status-composer-send')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await flushEffects();
+    });
+    expect(mockedSubmitFeedback).toHaveBeenCalledTimes(1);
+    expect(mockedSubmitFeedback.mock.calls[0][2]).toMatchObject({ referenceImages: [expect.any(String)] });
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it('sends from the compact composer on Enter and focuses the field from card chrome', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     mockedGetSubmissionStatus.mockResolvedValue({
