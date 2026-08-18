@@ -7160,6 +7160,11 @@ a.user-name--profile:focus-visible {
   margin: 0;
 }
 
+/* Sending pairs with Send on the right, not the switch-builder button on the left. */
+.status-composer.is-compact .status-feedback-actions-end {
+  justify-content: flex-end;
+}
+
 /* THE STUDIO THREAD AS AN APP SCREEN — the part that is true at every width.
    Below this, two media blocks give the shell its shape: edge-to-edge on a phone at
    800px and under, a shelf rail and a capped reading column above that. What lives here

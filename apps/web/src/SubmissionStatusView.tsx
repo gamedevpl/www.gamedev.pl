@@ -1930,11 +1930,11 @@ function FeedbackPanel({
             ask the creator to wait or act. A plain Sent receipt does not: the thread
             already shows the message the moment send succeeds. */}
         {error || sending || notice ? (
-          <div className="status-feedback-actions">
+          <div className={`status-feedback-actions${sending ? ' status-feedback-actions-end' : ''}`}>
             {error ? (
               <p className="error">{error}</p>
             ) : sending ? (
-              // The send button already animates its own spinner — one is enough.
+              // Right-aligned under Send, not the switch-builder button.
               <span className="status-feedback-sending" role="status">
                 {t('statusView.feedback.sending')}
               </span>
