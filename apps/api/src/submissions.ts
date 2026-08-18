@@ -1931,7 +1931,8 @@ export async function registerSubmissionRoutes(
       feedback: input.feedback,
       locale: input.locale,
       log: input.log,
-      ...(record.deliveredVersion ? {} : { undelivered: true }),
+      // deliveredVersion misses platform rounds; dispatch presence is the real "never ran" signal.
+      ...(record.dispatch?.refs?.length ? {} : { undelivered: true }),
       builder: 'self',
       transition: {
         by: input.openedBy === 'agent' ? 'agent' : 'creator',
