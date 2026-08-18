@@ -879,6 +879,34 @@ has no cancel endpoint. Do not auto-dispatch platform from an ordinary `end`.
 `no_agent_yet` is a handoff without an agent to acknowledge it, so Studio can dispatch
 the selected replacement immediately.
 
+### A platform→self request on a never-dispatched round has no agent to ack
+
+`status.builder` is only echoed to the browser when `record.builder` is explicitly set
+(`submissions.ts` `nativeJobStatus`) — a round with none yet (e.g. opened via
+`code_surface_opened`, before any dispatch) reports it `undefined`. The Studio control that
+offers the switch-to-self badge used to require `status.builder === 'platform'` exactly,
+which hid it on every such round even though it resolves to `platform` by default
+(`canOfferSelfHandoff`, `apps/web/src/SubmissionStatusView.tsx`, now excludes only `'self'`).
+
+Exposing the control there surfaced a second bug: `POST /handoff`'s `awaitsAgentAck`
+(submissions.ts) waited for an agent to acknowledge a stop even when nothing was ever
+dispatched — there is no agent to ack, so the round sat `pending` until the 10-minute
+stale-handoff sweep force-acked it. `awaitsAgentAck` now also resolves immediately
+when `record.dispatch` has no refs, the same way it already skips waiting for an
+already-`ended` agent.
+
+### `continue_draft` must not silently reopen a self request as platform
+
+`continueDraftRound` always passes `builder: 'self'` to `resumeBuild` — MCP `continue_draft`
+is only ever called by a self/BYOCA agent's own creator key. But `resumeBuild` discards
+`input.builder` whenever it treats the round as `undelivered` (same-round retry semantics),
+and that flag used to key off `record.deliveredVersion` — a field only MCP `submit_sources`
+ever sets. A platform (managed) round reaches `ready_for_review` through its own completion
+path and never sets it, so every `continue_draft` on a job a platform agent last touched kept
+silently reopening it on `platform` regardless of what was asked. `undelivered` now keys off
+`record.dispatch?.refs?.length` instead — a round nothing was ever dispatched to is the one
+genuinely "undelivered" case the flag exists for; a round that ran to completion is not.
+
 ### The platform→self control must not require the agent to still be working
 
 The server-side gate for a creator-requested platform→self handoff
