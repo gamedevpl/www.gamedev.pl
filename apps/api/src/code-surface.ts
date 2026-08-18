@@ -40,10 +40,7 @@ export function isLiveAgentRound(record: {
   return (record.dispatch?.refs?.length ?? 0) > 0;
 }
 
-// Could an agent be writing? No dispatch.refs needed, unlike isLiveAgentRound.
-// agentEndedAt is deliberately ignored: it is an optimistic handoff marker that
-// any later stage or patch deletes, so a resumed agent would never be watched.
-// The job state already bounds this — submitted, gating and gate-red all stay true.
+// Could an agent write? No dispatch.refs; agentEndedAt self-clears.
 export function isOpenAgentRound(record: {
   state?: JobState;
   lastStatus?: Parameters<typeof resolveJobState>[0]['lastStatus'];

@@ -247,9 +247,7 @@ describe('the Code surface routes (creator-code.ts)', () => {
 
     it('keeps watching across the submit handoff, which any later stage undoes', async () =>
       withApp(async (app) => {
-        // agentEndedAt is optimistic: touchLastAgentSignalAt deletes it on the next
-        // stage or patch. Gating on it stopped the only interval at submit, so an
-        // agent resuming after a red gate wrote into a view that had stopped looking.
+        // agentEndedAt is self-clearing: the next stage call deletes it.
         await store.markAgentEnded(10);
         const res = await app.inject({
           method: 'GET',
