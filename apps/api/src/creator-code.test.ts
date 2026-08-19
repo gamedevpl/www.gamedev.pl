@@ -863,6 +863,21 @@ describe('the Code surface routes (creator-code.ts)', () => {
         expect(listed.json().version).not.toBe(version);
         expect(listed.json().files).toEqual([]);
       }));
+
+    it('the round it opens carries the version forward on its own record, not only via a sibling lookup', async () =>
+      withApp(async (app) => {
+        const version = await deliverBase();
+        await store.recordJobTransition(10, { to: 'published', at: new Date().toISOString(), by: 'operator' });
+
+        const staged = await app.inject({
+          method: 'PUT',
+          url: '/api/me/studio/games/sky-dodge/sources/stage',
+          headers: { ...authHeaders('g:creator'), 'content-type': 'application/json' },
+          payload: { path: 'game.ts', content: 'export const boot = 2;', rebuild: false },
+        });
+        const opened = await store.getSubmission(staged.json().roundOpened as number);
+        expect(opened?.previewVersion).toBe(version);
+      }));
   });
 
   describe('POST /api/me/studio/games/:slug/sources/stage/restore', () => {

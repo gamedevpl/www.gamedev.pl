@@ -223,6 +223,9 @@ export async function registerCreatorCodeRoutes(
       by: 'creator',
       reason: 'code_surface_opened',
     });
+    // Carry the version forward — else its first write sees no base.
+    const baseVersion = await resolveRoundBaseVersion(store, source, slug);
+    if (baseVersion) await store.setSubmissionPreviewVersion(jobId, baseVersion);
     return (await store.getSubmission(jobId)) ?? { ...source, issueNumber: jobId, roundGeneration: undefined };
   }
 
