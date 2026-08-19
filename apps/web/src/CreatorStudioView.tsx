@@ -224,6 +224,12 @@ export function CreatorStudioView({
   const [shelfFilter, setShelfFilter] = useState<StudioShelfFilter>('all');
   /** Desktop rail expand, or mobile drawer open. Closed by default once a game is open. */
   const [shelfOpen, setShelfOpen] = useState(false);
+  /**
+   * Manual desktop collapse for a shelf too short to auto-compact (below
+   * STUDIO_SHELF_TOOLS_AT). Reuses the same rail styling a long shelf gets automatically —
+   * see `compactShelf` below.
+   */
+  const [shelfCollapsedByUser, setShelfCollapsedByUser] = useState(false);
   /** True when the shelf is the phone drawer (off-canvas), not the desktop rail. */
   const [shelfIsDrawer, setShelfIsDrawer] = useState(false);
   /** Header share control — draft link toggle/copy, not buried in Details → Overview. */
@@ -462,6 +468,9 @@ export function CreatorStudioView({
     [shelfGames, shelfFilter, shelfQuery],
   );
   const showShelfTools = shelfGames.length >= STUDIO_SHELF_TOOLS_AT;
+  // A long shelf auto-compacts; a short one only compacts if the creator asks for the
+  // room back via the edge toggle. Either way it is the same rail styling below.
+  const compactShelf = Boolean(activeGame) && (showShelfTools || shelfCollapsedByUser);
   const shelfSummaryCount = shelfTruncated ? totalGames : shelfGames.length;
   // The URL named a game and the shelf does not have it: a typo, a game since abandoned,
   // or somebody else's slug. Said plainly, because an unexplained shelf looks like the
@@ -775,8 +784,9 @@ export function CreatorStudioView({
               'studio-layout',
               activeGame ? 'is-game-open' : '',
               // Long shelf on a desktop: collapse to a left-edge summary after pick.
+              // A short shelf can still be collapsed manually via the edge toggle.
               // Phones ignore this — they always use the drawer once a game is open.
-              activeGame && showShelfTools ? 'is-compact-shelf' : '',
+              compactShelf ? 'is-compact-shelf' : '',
               shelfOpen ? 'is-shelf-open' : '',
             ]
               .filter(Boolean)
@@ -817,21 +827,38 @@ export function CreatorStudioView({
                     type="button"
                     className="studio-shelf-edge-toggle"
                     onClick={() => {
+                      if (!compactShelf) {
+                        // Short shelf, still expanded: collapse it into the rail.
+                        setShelfCollapsedByUser(true);
+                        return;
+                      }
                       if (shelfOpen) closeShelf({ restoreFocus: shelfIsDrawer });
                       else setShelfOpen(true);
                     }}
-                    aria-expanded={shelfOpen}
-                    aria-label={shelfOpen ? t('studioPanel.shelf.collapseShelf') : t('studioPanel.shelf.expandShelf')}
+                    aria-expanded={compactShelf ? shelfOpen : true}
+                    aria-label={
+                      !compactShelf || shelfOpen
+                        ? t('studioPanel.shelf.collapseShelf')
+                        : t('studioPanel.shelf.expandShelf')
+                    }
                   >
-                    <PixelIcon name={shelfOpen ? 'collapse' : 'expand'} size={12} />
+                    <PixelIcon name={!compactShelf || shelfOpen ? 'collapse' : 'expand'} size={12} />
                   </button>
                 ) : null}
               </div>
-              {activeGame && showShelfTools ? (
+              {activeGame && compactShelf ? (
                 <button
                   type="button"
                   className="studio-shelf-summary"
-                  onClick={() => setShelfOpen(true)}
+                  onClick={() => {
+                    if (!showShelfTools) {
+                      // Manually collapsed: the folder button restores the full shelf
+                      // directly instead of opening the overlay first.
+                      setShelfCollapsedByUser(false);
+                      return;
+                    }
+                    setShelfOpen(true);
+                  }}
                   aria-expanded={shelfOpen}
                   aria-label={t('studioPanel.shelf.expandShelf')}
                   title={

@@ -356,6 +356,42 @@ describe('CreatorStudioView', () => {
     root.unmount();
   });
 
+  it('lets a short shelf collapse to the rail manually via the edge toggle', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
+    // Below STUDIO_SHELF_TOOLS_AT — the shelf never auto-compacts on its own.
+    fetchStudioGames.mockResolvedValue(studioShelf(manyGames(2)));
+
+    const { container, root } = await renderStudio();
+
+    expect(container.querySelector('.studio-layout')?.classList.contains('is-compact-shelf')).toBe(false);
+
+    const toggle = container.querySelector<HTMLButtonElement>('.studio-shelf-edge-toggle');
+    expect(toggle).toBeTruthy();
+
+    await act(async () => {
+      toggle!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(container.querySelector('.studio-layout')?.classList.contains('is-compact-shelf')).toBe(true);
+    expect(container.querySelector('.studio-layout')?.classList.contains('is-shelf-open')).toBe(false);
+
+    const summary = container.querySelector<HTMLButtonElement>('.studio-shelf-summary');
+    expect(summary).toBeTruthy();
+
+    await act(async () => {
+      summary!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    // A manual collapse restores the full shelf directly, rather than opening the
+    // overlay a long shelf's folder button would.
+    expect(container.querySelector('.studio-layout')?.classList.contains('is-compact-shelf')).toBe(false);
+    expect(container.querySelector('.studio-layout')?.classList.contains('is-shelf-open')).toBe(false);
+
+    root.unmount();
+  });
+
   it('badges the collapsed shelf with totalGames when the page is truncated', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');

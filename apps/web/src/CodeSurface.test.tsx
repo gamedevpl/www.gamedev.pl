@@ -41,6 +41,7 @@ vi.mock('./codeSurfaceApi.js', async () => {
     ...actual,
     fetchCodeSurfaceSources: vi.fn(),
     stageCodeSurfaceFile: vi.fn(),
+    deleteCodeSurfaceFile: vi.fn(),
     patchCodeSurfaceFile: vi.fn(),
     rebuildCodeSurfaceStage: vi.fn(),
     requestCodeSurfacePreview: vi.fn(),
@@ -102,6 +103,7 @@ describe('CodeSurface', () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     mocked.fetchCodeSurfaceSources.mockReset();
     mocked.stageCodeSurfaceFile.mockReset();
+    mocked.deleteCodeSurfaceFile.mockReset();
     mocked.rebuildCodeSurfaceStage.mockReset();
     mocked.requestCodeSurfacePreview.mockReset();
     mocked.typecheckCodeSurface.mockReset();
@@ -243,7 +245,7 @@ describe('CodeSurface', () => {
     expect(sheet?.textContent).toContain('src/main.ts');
 
     await act(async () => {
-      [...container.querySelectorAll<HTMLButtonElement>('.code-surface-file-option')]
+      [...container.querySelectorAll<HTMLButtonElement>('.code-surface-file-option-open')]
         .find((option) => option.textContent?.includes('src/main.ts'))
         ?.click();
     });
@@ -251,6 +253,51 @@ describe('CodeSurface', () => {
     expect(container.querySelector('textarea')!.value).toContain('export const boot');
     expect(container.querySelector('.code-surface-rail-item.is-active')?.textContent).toContain('src/main.ts');
     expect(container.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it('deletes a file from the file sheet on a second confirming click', async () => {
+    mocked.fetchCodeSurfaceSources.mockResolvedValueOnce(
+      sourcesFor({
+        files: [
+          { path: 'GAME.json', content: '{"engine":{"modules":[]}}' },
+          { path: 'src/main.ts', content: 'export const boot = () => {};' },
+        ],
+      }),
+    );
+    mocked.deleteCodeSurfaceFile.mockResolvedValue({
+      accepted: true,
+      path: 'src/main.ts',
+      staged: { totalBytes: 0, maxBytes: 1_000_000, maxFiles: 60, updatedAt: '2026-08-10T00:00:00.000Z' },
+    });
+    mocked.fetchCodeSurfaceSources.mockResolvedValueOnce(
+      sourcesFor({ files: [{ path: 'GAME.json', content: '{"engine":{"modules":[]}}' }] }),
+    );
+
+    await render();
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.code-surface-file-trigger')!.click();
+    });
+
+    const deleteBtn = () =>
+      [...container.querySelectorAll<HTMLButtonElement>('.code-surface-file-option')]
+        .find((option) => option.textContent?.includes('src/main.ts'))
+        ?.querySelector<HTMLButtonElement>('.code-surface-file-option-delete');
+
+    await act(async () => {
+      deleteBtn()!.click();
+    });
+    // First click only arms the button — nothing deleted yet.
+    expect(mocked.deleteCodeSurfaceFile).not.toHaveBeenCalled();
+    expect(deleteBtn()!.className).toContain('is-armed');
+
+    await act(async () => {
+      deleteBtn()!.click();
+      await flush();
+    });
+
+    expect(mocked.deleteCodeSurfaceFile).toHaveBeenCalledWith('sky-dodge', 'src/main.ts');
+    expect(container.querySelector('[role="dialog"]')?.textContent).not.toContain('src/main.ts');
   });
 
   it('autosaves an edit into the working copy, marks the rail dirty, and schedules a preview rebuild', async () => {

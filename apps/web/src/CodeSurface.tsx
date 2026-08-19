@@ -21,6 +21,7 @@ import { formatShortcut } from './codeActionsMatch.js';
 import type { CodeMirrorDiagnostic } from './CodeMirrorEditor.js';
 import {
   CodeSurfaceApiError,
+  deleteCodeSurfaceFile,
   deliverCodeSurface,
   fetchCodeSurfaceCompletion,
   fetchCodeSurfaceKitDeclaration,
@@ -206,6 +207,10 @@ export function CodeSurface({
   const [deliverState, setDeliverState] = useState<'idle' | 'delivering' | 'delivered'>('idle');
   const [deliverMessage, setDeliverMessage] = useState<string | null>(null);
   const [filePickerOpen, setFilePickerOpen] = useState(false);
+  // Two-click confirm, same pattern as the admin job cancel button: first click arms
+  // the row, second click (on the same path) actually deletes it.
+  const [deleteArmedPath, setDeleteArmedPath] = useState<string | null>(null);
+  const [deletingPath, setDeletingPath] = useState<string | null>(null);
   // Nonce remounts an open palette so a repeat shortcut re-targets it.
   const [actionsMenu, setActionsMenu] = useState<{ mode: CodeActionsMode; nonce: number } | null>(null);
   /** Briefly true after a live param push (§E tier 1) — separate from `saveState`. */
@@ -643,6 +648,12 @@ export function CodeSurface({
       .map((entry) => ({ line: entry.line, message: entry.message, severity: 'error' as const }));
   }, [diagnostics, selected]);
 
+  function closeFilePicker() {
+    setFilePickerOpen(false);
+    setDeleteArmedPath(null);
+    filePickerTriggerRef.current?.focus();
+  }
+
   function selectFile(path: string) {
     setSelected(path);
     setDiagnostics(null);
@@ -886,6 +897,43 @@ export function CodeSurface({
       setDeliverMessage(error instanceof CodeSurfaceApiError ? error.message : t('studioPanel.code.discardError'));
     } finally {
       setDiscardState('idle');
+    }
+  }
+
+  async function deleteFile(path: string) {
+    if (deleteArmedPath !== path) {
+      setDeleteArmedPath(path);
+      return;
+    }
+    if (deletingPath) return;
+    setDeleteArmedPath(null);
+    setDeletingPath(path);
+    setDeliverMessage(null);
+    const timer = saveTimersRef.current.get(path);
+    if (timer !== undefined) {
+      window.clearTimeout(timer);
+      saveTimersRef.current.delete(path);
+    }
+    try {
+      await deleteCodeSurfaceFile(slug, path);
+      setDrafts((current) => {
+        if (!(path in current)) return current;
+        const next = { ...current };
+        delete next[path];
+        return next;
+      });
+      const result = await fetchCodeSurfaceSources(slug);
+      setSources(result);
+      if (selected === path) {
+        const next = result.files[0]?.path ?? null;
+        if (next) selectFile(next);
+        else setSelected(null);
+      }
+      schedulePreviewRebuild();
+    } catch (error) {
+      setDeliverMessage(error instanceof CodeSurfaceApiError ? error.message : t('studioPanel.code.deleteFileError'));
+    } finally {
+      setDeletingPath(null);
     }
   }
 
@@ -1351,8 +1399,7 @@ export function CodeSurface({
           className="code-surface-file-backdrop"
           role="presentation"
           onClick={() => {
-            setFilePickerOpen(false);
-            filePickerTriggerRef.current?.focus();
+            closeFilePicker();
           }}
         >
           <section
@@ -1367,10 +1414,7 @@ export function CodeSurface({
               <button
                 type="button"
                 className="modal-close-btn"
-                onClick={() => {
-                  setFilePickerOpen(false);
-                  filePickerTriggerRef.current?.focus();
-                }}
+                onClick={() => closeFilePicker()}
                 aria-label={t('studioPanel.code.filePickerClose')}
               >
                 <PixelIcon name="close" size={13} />
@@ -1378,26 +1422,49 @@ export function CodeSurface({
             </header>
             <div className="code-surface-file-options" role="listbox" aria-label={t('studioPanel.code.filePicker')}>
               {sources.files.map((entry) => (
-                <button
+                <div
                   key={entry.path}
-                  type="button"
                   className={`code-surface-file-option${entry.path === selected ? ' is-active' : ''}`}
                   role="option"
                   aria-selected={entry.path === selected}
-                  onClick={() => {
-                    selectFile(entry.path);
-                    setFilePickerOpen(false);
-                    filePickerTriggerRef.current?.focus();
-                  }}
                 >
-                  <span className="code-surface-file-option-path">{entry.path}</span>
-                  {entry.stagedBy ? (
-                    <span className="code-surface-file-option-status">
-                      {t('studioPanel.code.stagedBy', { who: entry.stagedBy })}
-                    </span>
+                  <button
+                    type="button"
+                    className="code-surface-file-option-open"
+                    onClick={() => {
+                      selectFile(entry.path);
+                      closeFilePicker();
+                    }}
+                  >
+                    <span className="code-surface-file-option-path">{entry.path}</span>
+                    {entry.stagedBy ? (
+                      <span className="code-surface-file-option-status">
+                        {t('studioPanel.code.stagedBy', { who: entry.stagedBy })}
+                      </span>
+                    ) : null}
+                    {entry.path === selected ? <PixelIcon name="check" size={13} /> : null}
+                  </button>
+                  {editable ? (
+                    <button
+                      type="button"
+                      className={`code-surface-file-option-delete${deleteArmedPath === entry.path ? ' is-armed' : ''}`}
+                      disabled={deletingPath === entry.path}
+                      title={
+                        deleteArmedPath === entry.path
+                          ? t('studioPanel.code.filePickerDeleteConfirm', { path: entry.path })
+                          : t('studioPanel.code.filePickerDelete', { path: entry.path })
+                      }
+                      aria-label={
+                        deleteArmedPath === entry.path
+                          ? t('studioPanel.code.filePickerDeleteConfirm', { path: entry.path })
+                          : t('studioPanel.code.filePickerDelete', { path: entry.path })
+                      }
+                      onClick={() => void deleteFile(entry.path)}
+                    >
+                      <PixelIcon name="trash" size={13} />
+                    </button>
                   ) : null}
-                  {entry.path === selected ? <PixelIcon name="check" size={13} /> : null}
-                </button>
+                </div>
               ))}
               {LOCKED_DIRS.map((dir) => (
                 <div

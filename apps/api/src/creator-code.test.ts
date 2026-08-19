@@ -347,6 +347,67 @@ describe('the Code surface routes (creator-code.ts)', () => {
       }));
   });
 
+  describe('POST /api/me/studio/games/:slug/sources/stage/delete', () => {
+    it('stages a deletion marker and refuses it once an agent round goes live', async () =>
+      withApp(async (app) => {
+        const staged = await app.inject({
+          method: 'PUT',
+          url: '/api/me/studio/games/sky-dodge/sources/stage',
+          headers: { ...authHeaders('g:creator'), 'content-type': 'application/json' },
+          payload: { path: 'game.ts', content: 'export const boot = 1;', rebuild: false },
+        });
+        expect(staged.statusCode).toBe(200);
+
+        const deleted = await app.inject({
+          method: 'POST',
+          url: '/api/me/studio/games/sky-dodge/sources/stage/delete',
+          headers: { ...authHeaders('g:creator'), 'content-type': 'application/json' },
+          payload: { path: 'game.ts' },
+        });
+        expect(deleted.statusCode).toBe(200);
+        expect(deleted.json()).toMatchObject({ accepted: true, path: 'game.ts' });
+        const listed = await games.listStagedSources({ slug: 'sky-dodge', issueNumber: 10, roundGeneration: 1 });
+        expect(listed.files).toEqual([{ path: 'game.ts', bytes: 0, deleted: true, stagedBy: 'owner' }]);
+
+        await store.recordDispatch(10, { backend: 'managed', ref: 'session-1' });
+        const refused = await app.inject({
+          method: 'POST',
+          url: '/api/me/studio/games/sky-dodge/sources/stage/delete',
+          headers: { ...authHeaders('g:creator'), 'content-type': 'application/json' },
+          payload: { path: 'game.ts' },
+        });
+        expect(refused.statusCode).toBe(409);
+        expect(refused.json()).toMatchObject({ error: 'agent_round' });
+      }));
+
+    it('CE-17: a delete into a round that has already closed opens a fresh manual round implicitly', async () =>
+      withApp(async (app) => {
+        await store.recordJobTransition(10, { to: 'published', at: new Date().toISOString(), by: 'operator' });
+        const res = await app.inject({
+          method: 'POST',
+          url: '/api/me/studio/games/sky-dodge/sources/stage/delete',
+          headers: { ...authHeaders('g:creator'), 'content-type': 'application/json' },
+          payload: { path: 'game.ts' },
+        });
+        expect(res.statusCode).toBe(200);
+        const body = res.json();
+        expect(body.accepted).toBe(true);
+        expect(body.roundOpened).toEqual(expect.any(Number));
+        expect(body.roundOpened).not.toBe(10);
+      }));
+
+    it('404s for a slug the caller does not own', async () =>
+      withApp(async (app) => {
+        const res = await app.inject({
+          method: 'POST',
+          url: '/api/me/studio/games/sky-dodge/sources/stage/delete',
+          headers: { ...authHeaders('g:other'), 'content-type': 'application/json' },
+          payload: { path: 'game.ts' },
+        });
+        expect(res.statusCode).toBe(404);
+      }));
+  });
+
   describe('POST /api/me/studio/games/:slug/sources/stage/patch', () => {
     it('CE-17: a patch into a round that has already closed opens a round against the published base', async () =>
       withApp(async (app) => {
