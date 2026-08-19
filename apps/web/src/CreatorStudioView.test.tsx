@@ -384,8 +384,7 @@ describe('CreatorStudioView', () => {
       summary!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
-    // A manual collapse restores the full shelf directly, rather than opening the
-    // overlay a long shelf's folder button would.
+    // Manual collapse restores the shelf directly, skipping the overlay.
     expect(container.querySelector('.studio-layout')?.classList.contains('is-compact-shelf')).toBe(false);
     expect(container.querySelector('.studio-layout')?.classList.contains('is-shelf-open')).toBe(false);
 

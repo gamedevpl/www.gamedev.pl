@@ -143,7 +143,6 @@ export type CodeSurfaceDeleteResult = {
   staged: CodeSurfaceStagingSummary;
 };
 
-/** Stages a file deletion — the file drops out of the next staged rebuild. */
 export async function deleteCodeSurfaceFile(slug: string, path: string): Promise<CodeSurfaceDeleteResult> {
   const response = await fetch(`${API_BASE}/api/me/studio/games/${encodeURIComponent(slug)}/sources/stage/delete`, {
     method: 'POST',

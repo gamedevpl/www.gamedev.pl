@@ -415,11 +415,7 @@ export async function registerCreatorCodeRoutes(
     path: z.string().trim().min(1).max(120),
   });
 
-  /**
-   * POST /api/me/studio/games/:slug/sources/stage/delete (CE-10) — the owner twin of
-   * the agent channel's delete route. Stages a deletion marker; the file drops out of
-   * the next staged rebuild the same way an agent's `delete_source_file` call does.
-   */
+  // Owner twin of the agent channel delete route (CE-10).
   app.post<{ Params: { slug: string } }>(
     '/api/me/studio/games/:slug/sources/stage/delete',
     { config: { rateLimit: { max: 300, timeWindow: '1 hour' } } },

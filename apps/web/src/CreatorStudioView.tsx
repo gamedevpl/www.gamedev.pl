@@ -224,11 +224,7 @@ export function CreatorStudioView({
   const [shelfFilter, setShelfFilter] = useState<StudioShelfFilter>('all');
   /** Desktop rail expand, or mobile drawer open. Closed by default once a game is open. */
   const [shelfOpen, setShelfOpen] = useState(false);
-  /**
-   * Manual desktop collapse for a shelf too short to auto-compact (below
-   * STUDIO_SHELF_TOOLS_AT). Reuses the same rail styling a long shelf gets automatically —
-   * see `compactShelf` below.
-   */
+  /** Manual rail collapse for a shelf below STUDIO_SHELF_TOOLS_AT. */
   const [shelfCollapsedByUser, setShelfCollapsedByUser] = useState(false);
   /** True when the shelf is the phone drawer (off-canvas), not the desktop rail. */
   const [shelfIsDrawer, setShelfIsDrawer] = useState(false);
@@ -468,8 +464,7 @@ export function CreatorStudioView({
     [shelfGames, shelfFilter, shelfQuery],
   );
   const showShelfTools = shelfGames.length >= STUDIO_SHELF_TOOLS_AT;
-  // A long shelf auto-compacts; a short one only compacts if the creator asks for the
-  // room back via the edge toggle. Either way it is the same rail styling below.
+  // Long shelf auto-compacts; short shelf compacts only if manually collapsed.
   const compactShelf = Boolean(activeGame) && (showShelfTools || shelfCollapsedByUser);
   const shelfSummaryCount = shelfTruncated ? totalGames : shelfGames.length;
   // The URL named a game and the shelf does not have it: a typo, a game since abandoned,
@@ -784,7 +779,6 @@ export function CreatorStudioView({
               'studio-layout',
               activeGame ? 'is-game-open' : '',
               // Long shelf on a desktop: collapse to a left-edge summary after pick.
-              // A short shelf can still be collapsed manually via the edge toggle.
               // Phones ignore this — they always use the drawer once a game is open.
               compactShelf ? 'is-compact-shelf' : '',
               shelfOpen ? 'is-shelf-open' : '',
@@ -852,8 +846,7 @@ export function CreatorStudioView({
                   className="studio-shelf-summary"
                   onClick={() => {
                     if (!showShelfTools) {
-                      // Manually collapsed: the folder button restores the full shelf
-                      // directly instead of opening the overlay first.
+                      // Manual collapse: the folder button restores the shelf directly.
                       setShelfCollapsedByUser(false);
                       return;
                     }
