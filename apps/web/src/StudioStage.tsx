@@ -150,7 +150,16 @@ export function StudioStage({
 
   const [idle, setIdle] = useState(false);
   const idleTimerRef = useRef<number | null>(null);
+  const shimmerTimeoutRef = useRef<number | null>(null);
   const swapWatchRef = useRef<{ stop: () => void } | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (shimmerTimeoutRef.current !== null) {
+        window.clearTimeout(shimmerTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const reducedMotion =
     typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -214,7 +223,13 @@ export function StudioStage({
     setStatusAndReport(next ? { kind: 'ready' } : { kind: 'empty' });
     if (next) watchSwappedDocument(next, origin);
     if (showShimmer) {
-      window.setTimeout(() => setShimmer(false), 400);
+      if (shimmerTimeoutRef.current !== null) {
+        window.clearTimeout(shimmerTimeoutRef.current);
+      }
+      shimmerTimeoutRef.current = window.setTimeout(() => {
+        setShimmer(false);
+        shimmerTimeoutRef.current = null;
+      }, 400);
     }
   }
 

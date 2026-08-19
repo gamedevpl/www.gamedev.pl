@@ -1407,6 +1407,34 @@ describe('getGameSources', () => {
     expect(() => new Function(sources?.gameJs ?? '')).not.toThrow();
   });
 
+  it('allows importing shared sim code from shared/sim', async () => {
+    const files = new Map<string, string | Uint8Array>([
+      ['games/sim-game/index.html', '<canvas id="game"></canvas>'],
+      ['games/sim-game/game.ts', "import { createWorld } from '../../shared/sim/box-world.ts'; createWorld();"],
+      ['shared/sim/box-world.ts', 'export function createWorld(): void { GameKit.mount({ ok: true }); }'],
+      ['games/sim-game/style.css', '.game { color: gold; }'],
+      ['games/sim-game/SPEC.md', specMd({ title: 'Sim Game' })],
+      ['games/sim-game/GAME.json', JSON.stringify({ engine: { modules: [] } })],
+      ['shared/game-shell.css', '.shell { display: grid; }'],
+      ['shared/modules/core.ts', 'window.GameKit = { mount() {} };'],
+    ]);
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const pathname = new URL(String(input)).pathname;
+      const marker = '/contents/';
+      const requestedPath = decodeURIComponent(pathname.slice(pathname.indexOf(marker) + marker.length));
+      const value = files.get(requestedPath);
+      return value === undefined ? new Response('not found', { status: 404 }) : new Response(value, { status: 200 });
+    }) as unknown as typeof fetch;
+    const client = createGitHubClient({ token: 'test-token', repo, fetchImpl });
+
+    const sources = await client.getGameSources('main', 'sim-game');
+    expect(sources?.gameJs).toContain('ok: true');
+    expect(() => new Function(sources?.gameJs ?? '')).not.toThrow();
+
+    const sourceMap = await client.getGameSourceMap('main', 'sim-game');
+    expect(Object.keys(sourceMap ?? {})).toEqual(['game.ts']);
+  });
+
   it.each([
     ["import '../other-game/runtime.ts';", 'game imports must be TypeScript files inside'],
     ["import 'some-package';", 'game runtime dependency is forbidden'],
