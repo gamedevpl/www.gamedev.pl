@@ -5,6 +5,8 @@ describe('gameManifestHint', () => {
   it('ignores every path other than GAME.json', () => {
     expect(gameManifestHint('game.ts', '{}')).toBeNull();
     expect(gameManifestHint('game/model.ts', '{}')).toBeNull();
+    // Refused at the store layer instead — see games-store.test.ts.
+    expect(gameManifestHint('index.html', '<html><body></body></html>')).toBeNull();
   });
 
   it('flags invalid JSON', () => {
@@ -81,30 +83,5 @@ describe('gameManifestHint', () => {
     expect(gameManifestHint('GAME.json', content)).toBeNull();
   });
 
-  it('accepts an empty index.html', () => {
-    expect(gameManifestHint('index.html', '')).toBeNull();
-    expect(gameManifestHint('index.html', '   \n  ')).toBeNull();
-  });
-
-  it('accepts a real body fragment with the canvas the kit expects', () => {
-    expect(gameManifestHint('index.html', '<canvas id="game"></canvas>')).toBeNull();
-    expect(gameManifestHint('index.html', '<div class="hud"></div><canvas id="game"></canvas>')).toBeNull();
-  });
-
-  it('flags a <link href> tag (arena-brawlers, 2026-08-09)', () => {
-    const content = '<link rel="stylesheet" href="./style.css" /><canvas id="game"></canvas>';
-    expect(gameManifestHint('index.html', content)).toMatch(/already inlined.*style\.css|<link href/i);
-  });
-
-  it('flags a <script src> tag (arena-brawlers, 2026-08-09)', () => {
-    const content = '<canvas id="game"></canvas><script type="module" src="./game.ts"></script>';
-    expect(gameManifestHint('index.html', content)).toMatch(/already inlined.*game\.ts|<script src/i);
-  });
-
-  it('flags a non-empty index.html missing the #game canvas', () => {
-    const content = '<!DOCTYPE html><html><body><div id="app"></div></body></html>';
-    const hint = gameManifestHint('index.html', content);
-    expect(hint).toMatch(/no element with id="game"/);
-    expect(hint).toMatch(/canvas is unavailable/);
-  });
+  // index.html has its own refusal now — see games-store.test.ts.
 });

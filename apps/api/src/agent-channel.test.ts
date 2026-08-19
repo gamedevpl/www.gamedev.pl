@@ -1296,11 +1296,18 @@ describe('agent build channel', () => {
   describe('POST /api/agent/build/sources', () => {
     const MINIMAL = [
       { path: 'SPEC.md', content: '---\ntitle: A game\n---\n' },
-      { path: 'index.html', content: '<!doctype html>' },
       { path: 'game.ts', content: 'export {};' },
       { path: 'TRACE.json', content: '{"samples":[]}' },
       { path: 'PLAYTEST.json', content: '{"expectProgress":["round-start"]}' },
       { path: 'AGENT.json', content: '{"policy":"capture"}' },
+      // index.html is refused as an upload — GAME.json.howToPlay supplies markup instead.
+      {
+        path: 'GAME.json',
+        content: JSON.stringify({
+          engine: { modules: [] },
+          howToPlay: { goal: { en: 'Survive', pl: 'Przetrwaj' }, hint: { en: 'Keep moving', pl: 'Nie stój' } },
+        }),
+      },
     ];
 
     function stubGamesStore() {
@@ -1442,6 +1449,29 @@ describe('agent build channel', () => {
       expect(response.statusCode).toBe(400);
       expect(response.json().error).toContain('package.json');
       expect(response.json().error).toMatch(/Config or executable-shaped/i);
+    });
+
+    it('refuses a fresh index.html riding along in a direct files[] submit', async () => {
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      const { gamesStore, stored } = stubGamesStore();
+      app = await createApp(store, { gamesStore });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/sources',
+        headers: agentHeaders(),
+        payload: {
+          slug: 'comet-courier',
+          files: [...MINIMAL, { path: 'index.html', content: '<canvas id="game"></canvas>' }],
+          kitEngineRef: 'abcdef1234567890',
+        },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error).toMatch(/index\.html cannot be staged or patched/);
+      // Refused before the store saw it, not after (stored stays empty).
+      expect(stored).toEqual([]);
     });
 
     it('adopts the SPEC title so the shelf stops showing a truncated prompt', async () => {
