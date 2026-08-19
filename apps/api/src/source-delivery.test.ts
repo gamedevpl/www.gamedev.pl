@@ -528,5 +528,34 @@ export function tick(round: Round) {
       expect(result.accepted).toBe(true);
       expect((await store.getSubmission(ISSUE))?.previewVersion).toBeDefined();
     });
+
+    it('does not relock a creator manual delivery as a resumed agent round', async () => {
+      // Regression: any delivery always cleared agentEndedAt, faking agent liveness.
+      const kitFileStore = fakeKitStore({ [PINNED]: treeFor(PINNED, KIT_DTS) });
+      const { store, service } = await setup({ kitFileStore });
+      await store.pinRoundKitEngineRef(ISSUE, PINNED);
+      await store.markAgentEnded(ISSUE, '2026-08-19T07:00:00.000Z', 'end');
+
+      for (let i = 0; i < 2; i += 1) {
+        await expect(
+          service.deliver({
+            issueNumber: ISSUE,
+            slug: SLUG,
+            files: brokenFiles,
+            mode: 'preview',
+            actor: 'creator',
+          }),
+        ).rejects.toBeInstanceOf(InvalidUploadError);
+      }
+      const result = await service.deliver({
+        issueNumber: ISSUE,
+        slug: SLUG,
+        files: brokenFiles,
+        mode: 'preview',
+        actor: 'creator',
+      });
+      expect(result.accepted).toBe(true);
+      expect((await store.getSubmission(ISSUE))?.agentEndedAt).toBe('2026-08-19T07:00:00.000Z');
+    });
   });
 });
