@@ -134,11 +134,14 @@ export type PreflightRefusalKind = 'audio' | 'symbols' | 'typecheck';
 
 export class InvalidUploadError extends Error {
   readonly kind?: PreflightRefusalKind;
+  // Required paths the upload lacked, so a caller can offer them.
+  readonly missingPaths?: readonly string[];
 
-  constructor(message: string, kind?: PreflightRefusalKind) {
+  constructor(message: string, kind?: PreflightRefusalKind, missingPaths?: readonly string[]) {
     super(message);
     this.name = 'InvalidUploadError';
     this.kind = kind;
+    this.missingPaths = missingPaths;
   }
 }
 
@@ -264,9 +267,11 @@ export function validateSourceUpload(files: SourceFile[], mode: DeliveryMode = '
     seen.add(path);
   }
 
-  if (!seen.has('SPEC.md')) throw new InvalidUploadError('SPEC.md is required — it is the spec of record for the game');
+  if (!seen.has('SPEC.md')) {
+    throw new InvalidUploadError('SPEC.md is required — it is the spec of record for the game', undefined, ['SPEC.md']);
+  }
   if (!seen.has('game.ts')) {
-    throw new InvalidUploadError('game.ts is required — a game must be playable');
+    throw new InvalidUploadError('game.ts is required — a game must be playable', undefined, ['game.ts']);
   }
   const gameJson = files.find((file) => file.path.trim() === 'GAME.json');
 

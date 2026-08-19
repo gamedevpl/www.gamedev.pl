@@ -7,13 +7,22 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 export class CodeSurfaceApiError extends Error {
   status?: number;
   code?: string;
+  // Required paths a refused delivery lacked; drives the fixit.
+  missing?: string[];
 }
 
 async function throwResponseError(response: Response): Promise<never> {
-  const body = (await response.json().catch(() => null)) as { error?: string; message?: string } | null;
+  const body = (await response.json().catch(() => null)) as {
+    error?: string;
+    message?: string;
+    code?: string;
+    missing?: string[];
+  } | null;
   const error = new CodeSurfaceApiError(body?.message ?? body?.error ?? `Request failed (${response.status})`);
   error.status = response.status;
-  error.code = body?.error;
+  // Some routes put the code in `error`, some name it explicitly.
+  error.code = body?.code ?? body?.error;
+  if (Array.isArray(body?.missing)) error.missing = body.missing.filter((path) => typeof path === 'string');
   throw error;
 }
 
@@ -152,6 +161,28 @@ export async function deleteCodeSurfaceFile(slug: string, path: string): Promise
   });
   if (!response.ok) await throwResponseError(response);
   return (await response.json()) as CodeSurfaceDeleteResult;
+}
+
+export type CodeSurfaceRestoreResult = {
+  accepted: true;
+  path: string;
+  bytes: number;
+  // The delivery that still had it, or a generated stub.
+  from: 'delivery' | 'stub';
+  roundOpened?: number;
+  staged: CodeSurfaceStagingSummary;
+};
+
+// Supplies a required file the game lacks.
+export async function restoreCodeSurfaceFile(slug: string, path: string): Promise<CodeSurfaceRestoreResult> {
+  const response = await fetch(`${API_BASE}/api/me/studio/games/${encodeURIComponent(slug)}/sources/stage/restore`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ path }),
+  });
+  if (!response.ok) await throwResponseError(response);
+  return (await response.json()) as CodeSurfaceRestoreResult;
 }
 
 export async function discardCodeSurfaceEdits(slug: string, paths?: string[]): Promise<{ cleared: number }> {

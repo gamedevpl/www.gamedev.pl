@@ -1,7 +1,7 @@
 // Runs submit_sources' typecheck/audio checks per staged file, as hints.
 import type { KitFileStore } from './kit-files.js';
 import type { GamesStore } from './games-store.js';
-import type { Store } from './store.js';
+import type { BaseVersionRecord, BaseVersionStore } from './round-base-version.js';
 import { overlayGameSources, readDeliveredSources } from './staged-preview.js';
 import { runTypecheckPreflight, sharedSourcesFromKitTree } from './typecheck-preflight.js';
 import { KIT_ROOT_DIR } from './kit-registry.js';
@@ -25,11 +25,9 @@ export type StageAdvisories = {
 export async function computeStageAdvisories(input: {
   kitFileStore: KitFileStore | null;
   gamesStore: GamesStore;
-  store: Pick<Store, 'getPublication'>;
-  record: {
+  store: BaseVersionStore;
+  record: BaseVersionRecord & {
     slug?: string;
-    previewVersion?: string;
-    deliveredVersion?: string;
     seed?: { files: { path: string; content: string }[] };
   };
   slug: string;
@@ -96,11 +94,9 @@ export async function computeStageAdvisories(input: {
 
 async function buildOverlay(input: {
   gamesStore: GamesStore;
-  store: Pick<Store, 'getPublication'>;
-  record: {
+  store: BaseVersionStore;
+  record: BaseVersionRecord & {
     slug?: string;
-    previewVersion?: string;
-    deliveredVersion?: string;
     seed?: { files: { path: string; content: string }[] };
   };
   slug: string;

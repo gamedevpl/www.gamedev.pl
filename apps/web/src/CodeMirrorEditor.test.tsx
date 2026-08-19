@@ -67,3 +67,40 @@ describe('CodeMirrorEditor color picker', () => {
     );
   });
 });
+
+describe('CodeMirrorEditor external updates', () => {
+  let container: HTMLDivElement;
+  let root: Root;
+
+  beforeEach(() => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    Object.defineProperty(Range.prototype, 'getClientRects', { configurable: true, value: () => [] });
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+  });
+
+  afterEach(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+
+  async function render(value: string, onChange: (next: string) => void) {
+    await act(async () => {
+      root.render(createElement(CodeMirrorEditor, { value, language: 'typescript', onChange, diagnostics: [] }));
+    });
+  }
+
+  // An agent's rewrite used to need a page reload.
+  it('shows a value the parent changed underneath it, without reporting it back as an edit', async () => {
+    const onChange = vi.fn();
+    await render('export const boot = 1;', onChange);
+    expect(container.textContent).toContain('export const boot = 1;');
+
+    await render('export const boot = 2;', onChange);
+
+    expect(container.textContent).toContain('export const boot = 2;');
+    // An echo would stage the agent's text as a draft.
+    expect(onChange).not.toHaveBeenCalled();
+  });
+});

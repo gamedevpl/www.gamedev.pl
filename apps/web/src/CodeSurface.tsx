@@ -29,6 +29,7 @@ import {
   fetchCodeSurfaceSources,
   rebuildCodeSurfaceStage,
   requestCodeSurfacePreview,
+  restoreCodeSurfaceFile,
   stageCodeSurfaceFile,
   typecheckCodeSurface,
   type CodeSurfaceFile,
@@ -206,6 +207,9 @@ export function CodeSurface({
   const [discardState, setDiscardState] = useState<DiscardState>('idle');
   const [deliverState, setDeliverState] = useState<'idle' | 'delivering' | 'delivered'>('idle');
   const [deliverMessage, setDeliverMessage] = useState<string | null>(null);
+  // A required file the last delivery was refused for.
+  const [missingRequiredPath, setMissingRequiredPath] = useState<string | null>(null);
+  const [restoringPath, setRestoringPath] = useState<string | null>(null);
   const [filePickerOpen, setFilePickerOpen] = useState(false);
   // Two-click confirm, same pattern as the admin job cancel button.
   const [deleteArmedPath, setDeleteArmedPath] = useState<string | null>(null);
@@ -950,9 +954,34 @@ export function CodeSurface({
     }
   }
 
+  // The fixit under a refused delivery: stage the file, open it.
+  async function restoreMissingFile(path: string) {
+    setRestoringPath(path);
+    try {
+      const result = await restoreCodeSurfaceFile(slug, path);
+      recordCodeStep('restored_missing');
+      setMissingRequiredPath(null);
+      setSources(await fetchCodeSurfaceSources(slug));
+      selectFile(path);
+      setDeliverMessage(
+        result.from === 'stub'
+          ? t('studioPanel.code.restoredStub', { path })
+          : t('studioPanel.code.restoredDelivery', { path }),
+      );
+      schedulePreviewRebuild();
+    } catch (error) {
+      // Quote the server's reason, including "nothing to restore it from".
+      setMissingRequiredPath(null);
+      setDeliverMessage(error instanceof CodeSurfaceApiError ? error.message : t('studioPanel.code.restoreError'));
+    } finally {
+      setRestoringPath(null);
+    }
+  }
+
   async function deliver() {
     setDeliverState('delivering');
     setDeliverMessage(null);
+    setMissingRequiredPath(null);
     try {
       const flushed = await flushPendingSaves();
       if (!flushed) {
@@ -980,6 +1009,10 @@ export function CodeSurface({
         setDeliverMessage(t('studioPanel.code.deliverNoActiveRound'));
       } else {
         setDeliverMessage(error instanceof CodeSurfaceApiError ? error.message : t('studioPanel.code.deliverError'));
+        // The one delivery failure the creator can fix from here.
+        if (error instanceof CodeSurfaceApiError && error.code === 'invalid_upload') {
+          setMissingRequiredPath(error.missing?.[0] ?? null);
+        }
       }
     }
   }
@@ -1402,6 +1435,18 @@ export function CodeSurface({
               role="status"
             >
               {deliverMessage}
+              {missingRequiredPath ? (
+                <button
+                  type="button"
+                  className="code-surface-deliver-fix"
+                  disabled={restoringPath !== null}
+                  onClick={() => void restoreMissingFile(missingRequiredPath)}
+                >
+                  {restoringPath === missingRequiredPath
+                    ? t('studioPanel.code.restoring')
+                    : t('studioPanel.code.restoreFile', { path: missingRequiredPath })}
+                </button>
+              ) : null}
             </span>
           ) : null}
         </footer>

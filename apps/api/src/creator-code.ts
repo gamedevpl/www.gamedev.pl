@@ -23,6 +23,7 @@ import {
   MODULE_SOFT_LIMIT_BYTES,
   MODULE_SOFT_LIMIT_LINES,
 } from './module-size.js';
+import { resolveRoundBaseVersion } from './round-base-version.js';
 import { applyExactReplace, applySourcePatch, SourcePatchError } from './source-patch.js';
 import {
   createSourceDeliveryService,
@@ -133,14 +134,33 @@ async function resolveOwnedRecord(store: Store, uid: string, slug: string): Prom
   return [...owned].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]!;
 }
 
-/** `previewVersion ?? deliveredVersion ?? the live publication` — same order `get_sources` reads. */
+// The delivery this round builds on — see round-base-version.ts.
 async function resolveVersion(store: Store, record: SubmissionRecord, slug: string): Promise<string | null> {
-  let version = record.previewVersion ?? record.deliveredVersion ?? null;
-  if (!version) {
-    const publication = await store.getPublication(slug);
-    if (publication?.state === 'published') version = publication.currentVersion;
-  }
-  return version;
+  return resolveRoundBaseVersion(store, record, slug);
+}
+
+// A SPEC.md from what the record knows: title, slug, the brief.
+
+// genre/controls/submitted_by stay for the creator, never guessed.
+export function buildSpecStub(record: Pick<SubmissionRecord, 'title' | 'slug' | 'spec'>): string {
+  // Frontmatter is line-based; a title is one line.
+  const title = record.title?.replace(/\s+/g, ' ').trim() || record.slug || 'Untitled game';
+  // YAML-safe without a serializer.
+  const quote = (value: string) => `"${value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`;
+  const brief = record.spec?.trim();
+  return [
+    '---',
+    `title: ${quote(title)}`,
+    ...(record.slug ? [`slug: ${quote(record.slug)}`] : []),
+    '---',
+    '',
+    `# ${title}`,
+    '',
+    brief || 'Describe the game here — what the player does, how a round starts and ends.',
+    '',
+    '<!-- Add genre, controls and submitted_by to the frontmatter above before publishing. -->',
+    '',
+  ].join('\n');
 }
 
 function budgetFor(path: string, content: string): CreatorCodeFile['budget'] {
@@ -650,6 +670,78 @@ export async function registerCreatorCodeRoutes(
     },
   );
 
+  const RestoreInputSchema = z.object({ path: z.string().trim().min(1).max(120) });
+
+  // POST /sources/stage/restore — supplies a required file a delivery lacked.
+
+  // The base delivery first, then a SPEC.md stub, else 404.
+  app.post<{ Params: { slug: string } }>(
+    '/api/me/studio/games/:slug/sources/stage/restore',
+    { config: { rateLimit: { max: 30, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      if (notFoundIfDisabled(reply)) return;
+      if (!options.gamesStore) {
+        return reply.status(503).send({ error: 'the Code surface is not configured on this deployment' });
+      }
+      const resolved = await resolveForSlug(request, reply);
+      if (!resolved) return;
+      const { record, slug } = resolved;
+      const gamesStore = options.gamesStore;
+
+      if (isLiveAgentRound(record)) {
+        return reply.status(409).send({ error: 'agent_round', message: 'an agent is actively building this round' });
+      }
+      const activeRecord = roundIsClosed(record) ? await openManualRound(store, record, slug) : record;
+
+      const parsed = RestoreInputSchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
+      }
+      const path = parsed.data.path;
+
+      const version = await resolveVersion(store, activeRecord, slug);
+      const delivered = version ? await gamesStore.getSourceFile(slug, version, path) : null;
+      const content = delivered ?? (path === 'SPEC.md' ? buildSpecStub(record) : null);
+      if (content === null) {
+        return reply.status(404).send({
+          error: 'no_source',
+          message: `nothing to restore ${path} from — no delivery of this game contains it`,
+        });
+      }
+
+      const roundGeneration =
+        (await store.ensureRoundGeneration(activeRecord.issueNumber)) ?? activeRecord.roundGeneration ?? 1;
+      try {
+        const staged = await gamesStore.putStagedSourceFile({
+          slug,
+          issueNumber: activeRecord.issueNumber,
+          roundGeneration,
+          path,
+          content,
+          stagedBy: 'owner',
+        });
+        options.invalidateStatusCache?.(activeRecord.issueNumber);
+        options.scheduleStagedPreview?.(activeRecord.issueNumber);
+        return reply.send({
+          accepted: true,
+          path: staged.path,
+          bytes: staged.bytes,
+          from: delivered !== null ? ('delivery' as const) : ('stub' as const),
+          ...(activeRecord.issueNumber !== record.issueNumber ? { roundOpened: activeRecord.issueNumber } : {}),
+          staged: {
+            totalBytes: staged.totalBytes,
+            maxBytes: staged.maxBytes,
+            maxFiles: staged.maxFiles,
+            updatedAt: staged.updatedAt,
+          },
+        });
+      } catch (error) {
+        if (error instanceof InvalidUploadError) return reply.status(400).send({ error: error.message });
+        throw error;
+      }
+    },
+  );
+
   /**
    * POST /api/me/studio/games/:slug/sources/stage/rebuild (CE-13) — arms the
    * debounced staged-preview assembly. Studio auto-calls after autosave/discard.
@@ -1076,7 +1168,13 @@ export async function registerCreatorCodeRoutes(
         return reply.send(outcome);
       } catch (error) {
         if (error instanceof SourceDeliveryValidationError || error instanceof InvalidUploadError) {
-          return reply.status(400).send({ error: error.message });
+          // `error` stays the sentence; `code`/`missing` drive the fixit.
+          const missing = error instanceof InvalidUploadError ? error.missingPaths : undefined;
+          return reply.status(400).send({
+            error: error.message,
+            code: 'invalid_upload',
+            ...(missing?.length ? { missing: [...missing] } : {}),
+          });
         }
         throw error;
       }
