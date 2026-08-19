@@ -14381,21 +14381,17 @@ button.builder-mode-selector:disabled {
   .code-surface-file-option {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 4px;
     width: 100%;
     min-height: 44px;
-    padding: 8px 9px;
+    padding: 2px;
     border: 1px solid transparent;
     border-radius: 8px;
-    background: transparent;
     color: var(--text);
-    text-align: left;
-    font: inherit;
-    cursor: pointer;
   }
 
-  .code-surface-file-option:hover,
-  .code-surface-file-option:focus-visible {
+  .code-surface-file-option:has(.code-surface-file-option-open:hover),
+  .code-surface-file-option:has(.code-surface-file-option-open:focus-visible) {
     border-color: rgba(0, 228, 172, 0.3);
     background: rgba(0, 228, 172, 0.07);
   }
@@ -14407,7 +14403,24 @@ button.builder-mode-selector:disabled {
 
   .code-surface-file-option.is-locked {
     color: var(--muted);
+    padding: 8px 9px;
     cursor: default;
+  }
+
+  .code-surface-file-option-open {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+    padding: 8px 7px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    font: inherit;
+    cursor: pointer;
   }
 
   .code-surface-file-option-path {
@@ -14422,6 +14435,40 @@ button.builder-mode-selector:disabled {
     flex: none;
     color: var(--muted);
     font-size: 0.68rem;
+  }
+
+  .code-surface-file-option-delete {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    margin-right: 4px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+  }
+
+  .code-surface-file-option-delete:hover,
+  .code-surface-file-option-delete:focus-visible {
+    border-color: color-mix(in srgb, var(--error) 40%, transparent);
+    color: var(--error);
+    background: color-mix(in srgb, var(--error) 8%, transparent);
+  }
+
+  .code-surface-file-option-delete.is-armed {
+    border-color: color-mix(in srgb, var(--error) 50%, transparent);
+    color: var(--error);
+    background: color-mix(in srgb, var(--error) 12%, transparent);
+  }
+
+  .code-surface-file-option-delete:disabled {
+    opacity: 0.5;
+    cursor: default;
   }
 
   .code-surface-rail {
@@ -15004,6 +15051,13 @@ button.builder-mode-selector:disabled {
    short-but-wide viewport gets this collapsed-rail grid *and* the drawer grid from
    the shelf-becomes-drawer block below, fighting over the same grid-template-columns. */
 @media (min-width: 801px) and (min-height: 501px) {
+  /* Fewer than 5 games: the rail above never auto-triggers, but the edge toggle still
+     offers manual collapse — hidden the rest of the time (base rule further up), shown
+     here once a game is open and the shelf hasn't already gone compact. */
+  .studio-layout.is-game-open:not(.is-compact-shelf) .studio-shelf-edge-toggle {
+    display: inline-flex;
+  }
+
   /* Variable on `.app` (ancestor of both header and shelf) — children inherit it. */
   .app:has(.studio-layout.is-game-open.is-compact-shelf:not(.is-shelf-open)) {
     --studio-shelf-collapsed-width: 80px;
