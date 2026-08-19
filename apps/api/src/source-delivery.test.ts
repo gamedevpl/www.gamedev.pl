@@ -4,6 +4,7 @@ import { InvalidUploadError } from './games-store.js';
 import type { KitFileStore, KitTree } from './kit-files.js';
 import { KIT_ROOT_DIR } from './kit-registry.js';
 import { InMemoryStore } from './store.js';
+import { NoopTranslator, type BilingualText, type Translator } from './translate.js';
 import { DELIVERY_ACCEPTED_MSG, DELIVERY_PREFLIGHT_REFUSED_MSG } from './delivery-metrics.js';
 import {
   createSourceDeliveryService,
@@ -43,6 +44,10 @@ interface GameKitGameContext { width: number; height: number; }
 declare const GameKit: { defineGame(): unknown };
 `;
 
+function stubTranslator(pl: string): Translator {
+  return { toBilingual: async (text): Promise<BilingualText> => ({ en: text, localized: pl }) };
+}
+
 function fakeKitStore(trees: Record<string, KitTree>): KitFileStore {
   return {
     loadRegistry: async () => ({ engineRef: Object.keys(trees)[0]!, previous: null, sha256: 'a'.repeat(64) }),
@@ -64,7 +69,11 @@ function treeFor(engineRef: string, kitDts: string): KitTree {
   };
 }
 
-async function setup(opts?: { kitFileStore?: KitFileStore | null }) {
+async function setup(opts?: {
+  kitFileStore?: KitFileStore | null;
+  failPutCandidateSources?: boolean;
+  translator?: Translator;
+}) {
   const store = new InMemoryStore();
   await store.createSubmission(ISSUE, 'owner', 'Original title');
   await store.setSubmissionSlug(ISSUE, SLUG);
@@ -78,6 +87,7 @@ async function setup(opts?: { kitFileStore?: KitFileStore | null }) {
 
   let versionNumber = 0;
   const putCandidateSources = vi.fn(async (input: { files: SourceFile[] }) => {
+    if (opts?.failPutCandidateSources) throw new InvalidUploadError('storage rejected this delivery', 'audio');
     versionNumber += 1;
     const version = `v-managed-${versionNumber}`;
     return { version, manifest: manifest(input.files, version) };
@@ -92,6 +102,7 @@ async function setup(opts?: { kitFileStore?: KitFileStore | null }) {
     onSourcesDelivered: gate,
     onEvent: vi.fn(),
     log,
+    translator: opts?.translator ?? new NoopTranslator(),
   });
   const authority: SourceDeliveryAuthority = {
     backend: BACKEND,
@@ -357,6 +368,64 @@ export function tick(round: Round) {
       );
     });
 
+    it('does not post the bypass warning when the delivery itself fails to store', async () => {
+      // Regression: bypass event used to post before storage could fail.
+      const kitFileStore = fakeKitStore({ [PINNED]: treeFor(PINNED, KIT_DTS) });
+      const { store, service, authority } = await setup({ kitFileStore, failPutCandidateSources: true });
+      await store.pinRoundKitEngineRef(ISSUE, PINNED);
+
+      for (let i = 0; i < 2; i += 1) {
+        await expect(
+          service.deliver({
+            issueNumber: ISSUE,
+            slug: SLUG,
+            files: brokenFiles,
+            mode: 'preview',
+            backend: BACKEND,
+            authority,
+          }),
+        ).rejects.toBeInstanceOf(InvalidUploadError);
+      }
+
+      await expect(
+        service.deliver({
+          issueNumber: ISSUE,
+          slug: SLUG,
+          files: brokenFiles,
+          mode: 'preview',
+          backend: BACKEND,
+          authority,
+        }),
+      ).rejects.toBeInstanceOf(InvalidUploadError);
+
+      expect(await store.listBuildEvents(ISSUE)).toEqual([]);
+    });
+
+    it('localizes the bypass warning like any other build event', async () => {
+      // Regression: this event skipped intake localization, unlike agent progress events.
+      const kitFileStore = fakeKitStore({ [PINNED]: treeFor(PINNED, KIT_DTS) });
+      const { store, service, authority } = await setup({
+        kitFileStore,
+        translator: stubTranslator('Dostarczono bez przejścia typecheck.'),
+      });
+      await store.pinRoundKitEngineRef(ISSUE, PINNED);
+
+      for (let i = 0; i < 3; i += 1) {
+        await service
+          .deliver({ issueNumber: ISSUE, slug: SLUG, files: brokenFiles, mode: 'preview', backend: BACKEND, authority })
+          .catch(() => {});
+      }
+
+      const events = await store.listBuildEvents(ISSUE);
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          kind: 'blocked',
+          textLocalized: 'Dostarczono bez przejścia typecheck.',
+          locale: 'pl',
+        }),
+      );
+    });
+
     it('does not refuse when no kit store is configured', async () => {
       const { putCandidateSources, service, authority } = await setup({ kitFileStore: null });
       const result = await service.deliver({
@@ -392,6 +461,12 @@ export function tick(round: Round) {
       });
       expect(result.accepted).toBe(true);
       expect((await store.getSubmission(ISSUE))?.roundTypecheckPreflightBypassErrors).toBeUndefined();
+
+      // Regression: the stale 'blocked' warning was never superseded for a reader.
+      const events = await store.listBuildEvents(ISSUE);
+      expect(events).toContainEqual(
+        expect.objectContaining({ kind: 'milestone', text: expect.stringContaining('no longer applies') }),
+      );
     });
   });
 });
