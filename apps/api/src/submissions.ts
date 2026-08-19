@@ -8,6 +8,7 @@ import { registerAgentChannelRoutes, type AgentChannelOptions } from './agent-ch
 import { mintAgentToken, mintManagedMcpOpener } from './agent-token.js';
 import { registerMcpServerRoutes } from './mcp-server.js';
 import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './assemble.js';
+import { MAX_BUILD_PREVIEW_BYTES } from './build-preview-limits.js';
 import {
   createCreationGate,
   createChatGate,
@@ -101,7 +102,7 @@ import { emitOperatorAlert, emitSubmissionNotification, notifyOnTransition, type
 import { detectOperatorAlerts, FEEDBACK_STALL_MS } from './operator-alerts.js';
 import { pageOwnerGames } from './owner-games.js';
 import { seedOutcomeFor } from './seed-status.js';
-import { isAdminSession } from './admin.js';
+import { isAdminSession } from './admin-session.js';
 import { peekQuota } from './quota-gate.js';
 import { mintGameSlug } from './slug.js';
 import { runSlugBackfill, settleSlugClaim } from './slug-backfill.js';
@@ -1144,9 +1145,6 @@ export async function registerSubmissionRoutes(
   const SEED_PREVIEW_LABEL = 'First rough draft \u2014 the agent is improving it';
   const SEED_PREVIEW_LABEL_PL = 'Pierwszy szkic gry \u2014 agent w\u0142a\u015bnie j\u0105 ulepsza';
 
-  /** Same ceiling as the channel's preview verb: this store record is the same record. */
-  const SEED_PREVIEW_MAX_BYTES = 320 * 1024;
-
   /**
    * Assembles the draft's own files into a playable preview on the creator's status page.
    *
@@ -1180,7 +1178,7 @@ export async function registerSubmissionRoutes(
       },
       { restrictNetwork: true },
     );
-    if (Buffer.byteLength(html, 'utf8') > SEED_PREVIEW_MAX_BYTES) return;
+    if (Buffer.byteLength(html, 'utf8') > MAX_BUILD_PREVIEW_BYTES) return;
     await store.appendBuildPreview(input.issueNumber, {
       data: Buffer.from(html, 'utf8').toString('base64'),
       slug: input.slug,
