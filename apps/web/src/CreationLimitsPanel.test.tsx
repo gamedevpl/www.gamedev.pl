@@ -39,6 +39,14 @@ function limits(overrides: Partial<CreationLimits> = {}): CreationLimits {
       },
       tabCompletePaused: false,
       globalDailyTabCompleteTokenCap: 2_000_000,
+      seedingMode: 'auto',
+      seedProvider: {
+        stored: null,
+        effective: 'vertex',
+        available: true,
+        configuredProviders: ['vertex'],
+        defaultProvider: 'vertex',
+      },
     },
     today: { dateStr: '2026-07-30', submissions: 12, managedBuilds: 3, tabCompleteTokens: 0 },
     propagationMs: 60_000,
@@ -110,6 +118,14 @@ describe('CreationLimitsPanel', () => {
           },
           tabCompletePaused: false,
           globalDailyTabCompleteTokenCap: 2_000_000,
+          seedingMode: 'auto',
+          seedProvider: {
+            stored: null,
+            effective: 'vertex',
+            available: true,
+            configuredProviders: ['vertex'],
+            defaultProvider: 'vertex',
+          },
         },
       }),
     );
@@ -162,6 +178,14 @@ describe('CreationLimitsPanel', () => {
           },
           tabCompletePaused: false,
           globalDailyTabCompleteTokenCap: 2_000_000,
+          seedingMode: 'auto',
+          seedProvider: {
+            stored: null,
+            effective: 'vertex',
+            available: true,
+            configuredProviders: ['vertex'],
+            defaultProvider: 'vertex',
+          },
         },
       }),
     );
@@ -183,6 +207,14 @@ describe('CreationLimitsPanel', () => {
           },
           tabCompletePaused: false,
           globalDailyTabCompleteTokenCap: 2_000_000,
+          seedingMode: 'auto',
+          seedProvider: {
+            stored: null,
+            effective: 'vertex',
+            available: true,
+            configuredProviders: ['vertex'],
+            defaultProvider: 'vertex',
+          },
         },
       }),
     );
@@ -224,6 +256,14 @@ describe('CreationLimitsPanel', () => {
           },
           tabCompletePaused: false,
           globalDailyTabCompleteTokenCap: 2_000_000,
+          seedingMode: 'auto',
+          seedProvider: {
+            stored: null,
+            effective: 'vertex',
+            available: true,
+            configuredProviders: ['vertex'],
+            defaultProvider: 'vertex',
+          },
         },
       }),
     );
@@ -248,6 +288,110 @@ describe('CreationLimitsPanel', () => {
 
     expect(container.querySelector('.admin-limits-message')?.textContent).toBe('nothing to change');
     expect(container.querySelector('.health-summary')?.textContent).toContain('Creation is open');
+
+    await act(async () => root.unmount());
+  });
+
+  it('turns round-0 seeding off from the console — the kill switch SEED_DISPATCH used to be', async () => {
+    mocked.fetchCreationLimits.mockResolvedValue(limits());
+    mocked.setCreationLimits.mockResolvedValue(
+      limits({ stored: { seedingMode: 'off' }, effective: { ...limits().effective, seedingMode: 'off' } }),
+    );
+
+    const { container, root } = await render();
+    // Two "Mode" labels exist; scope to the seeding section.
+    const seedingSection = Array.from(container.querySelectorAll('section')).find((section) =>
+      section.textContent?.startsWith('Round-0 seeding'),
+    );
+    if (!seedingSection) throw new Error('seeding section not found');
+    const modeSelect = Array.from(seedingSection.querySelectorAll('label'))
+      .find((label) => label.textContent?.startsWith('Mode'))
+      ?.querySelector('select');
+    if (!modeSelect) throw new Error('seeding mode select not found');
+
+    await act(async () => {
+      modeSelect.value = 'off';
+      modeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    expect(mocked.setCreationLimits).toHaveBeenCalledWith({ seedingMode: 'off' });
+    expect(container.textContent).toContain('Off — every new game starts from an empty directory');
+
+    await act(async () => root.unmount());
+  });
+
+  it('says auto is not actually operational when no provider is available', async () => {
+    mocked.fetchCreationLimits.mockResolvedValue(
+      limits({
+        effective: {
+          ...limits().effective,
+          seedProvider: {
+            stored: null,
+            effective: 'vertex',
+            available: false,
+            configuredProviders: [],
+            defaultProvider: 'vertex',
+          },
+        },
+      }),
+    );
+
+    const { container, root } = await render();
+
+    expect(container.textContent).toContain('no provider is available here');
+    expect(container.textContent).not.toContain('every new game gets a round-0 draft');
+
+    await act(async () => root.unmount());
+  });
+
+  it('picks a seed provider from the console', async () => {
+    mocked.fetchCreationLimits.mockResolvedValue(
+      limits({
+        effective: {
+          ...limits().effective,
+          seedProvider: {
+            stored: null,
+            effective: 'vertex',
+            available: true,
+            configuredProviders: ['vertex', 'anthropic'],
+            defaultProvider: 'vertex',
+          },
+        },
+      }),
+    );
+    mocked.setCreationLimits.mockResolvedValue(
+      limits({
+        stored: { seedProviderOverride: 'anthropic' },
+        effective: {
+          ...limits().effective,
+          seedProvider: {
+            stored: 'anthropic',
+            effective: 'anthropic',
+            available: true,
+            configuredProviders: ['vertex', 'anthropic'],
+            defaultProvider: 'vertex',
+          },
+        },
+      }),
+    );
+
+    const { container, root } = await render();
+    const seedingSection = Array.from(container.querySelectorAll('section')).find((section) =>
+      section.textContent?.startsWith('Round-0 seeding'),
+    );
+    if (!seedingSection) throw new Error('seeding section not found');
+    const providerSelect = Array.from(seedingSection.querySelectorAll('label'))
+      .find((label) => label.textContent?.startsWith('Provider'))
+      ?.querySelector('select');
+    if (!providerSelect) throw new Error('seed provider select not found');
+
+    await act(async () => {
+      providerSelect.value = 'anthropic';
+      providerSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    expect(mocked.setCreationLimits).toHaveBeenCalledWith({ seedProviderOverride: 'anthropic' });
+    expect(container.textContent).toContain('Overridden to anthropic (no redeploy needed).');
 
     await act(async () => root.unmount());
   });

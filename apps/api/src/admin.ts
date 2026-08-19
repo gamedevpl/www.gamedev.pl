@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { DEFAULT_SEED_PROVIDER } from './game-seed.js';
 import {
   recentPartitions,
   scanPartitions,
@@ -116,6 +117,10 @@ export interface AdminRoutesOptions {
   configuredVendors?: string[];
   // MANAGED_AGENT_VENDOR — the fallback when no override is stored.
   defaultVendor?: string;
+  // Seed vendors configured at boot; selectable by seedProviderOverride.
+  configuredSeedProviders?: string[];
+  // Fallback when no seed provider override is stored.
+  defaultSeedProvider?: string;
 }
 
 /**
@@ -153,6 +158,15 @@ export interface CreationLimitsResponse {
     // TA-01's own breaker (creator-code-tab-autocomplete-research.md).
     tabCompletePaused: boolean;
     globalDailyTabCompleteTokenCap: number;
+    // Round 0's kill switch and provider picker.
+    seedingMode: 'auto' | 'off';
+    seedProvider: {
+      stored: string | null;
+      effective: string;
+      available: boolean;
+      configuredProviders: string[];
+      defaultProvider: string | null;
+    };
   };
   today: { dateStr: string; submissions: number; managedBuilds: number; tabCompleteTokens: number };
   /** Upper bound, in ms, on how long a change takes to reach every instance. */
@@ -192,6 +206,10 @@ const CreationLimitsPatchSchema = z
     managedAgentVendorOverride: z.enum(['anthropic', 'gemini', 'copilot', 'openai']).nullable().optional(),
     managedDailyCap: z.number().int().min(0).max(100_000).nullable().optional(),
     managedDailyUserCap: z.number().int().min(0).max(100_000).nullable().optional(),
+    // Round 0's kill switch, same document as everything above.
+    seedingMode: z.enum(['auto', 'off']).optional(),
+    // Free-form, not an enum: providers self-register.
+    seedProviderOverride: z.string().min(1).max(64).nullable().optional(),
   })
   .refine(
     (patch) =>
@@ -206,8 +224,10 @@ const CreationLimitsPatchSchema = z
       patch.managedBuilderMode !== undefined ||
       patch.managedAgentVendorOverride !== undefined ||
       patch.managedDailyCap !== undefined ||
-      patch.managedDailyUserCap !== undefined,
-    'nothing to change: send paused, globalDailySubmissionCap, editingPaused, globalDailyEditCap, chatPaused, globalDailyChatCap, tabCompletePaused, globalDailyTabCompleteTokenCap, managedBuilderMode, managedAgentVendorOverride, managedDailyCap and/or managedDailyUserCap',
+      patch.managedDailyUserCap !== undefined ||
+      patch.seedingMode !== undefined ||
+      patch.seedProviderOverride !== undefined,
+    'nothing to change: send paused, globalDailySubmissionCap, editingPaused, globalDailyEditCap, chatPaused, globalDailyChatCap, tabCompletePaused, globalDailyTabCompleteTokenCap, managedBuilderMode, managedAgentVendorOverride, managedDailyCap, managedDailyUserCap, seedingMode and/or seedProviderOverride',
   );
 
 const PublicPlayPatchSchema = z.object({
@@ -411,6 +431,8 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
   const publicPlayTtlMs = options.publicPlayTtlMs ?? DEFAULT_CREATION_LIMITS_TTL_MS;
   const configuredVendors = new Set(options.configuredVendors ?? []);
   const defaultVendor = options.defaultVendor ?? null;
+  const configuredSeedProviders = new Set(options.configuredSeedProviders ?? []);
+  const defaultSeedProvider = options.defaultSeedProvider ?? null;
 
   /** Reads the stored breaker plus today's spend, uncached — an operator wants truth. */
   async function readCreationLimits(): Promise<CreationLimitsResponse> {
@@ -425,6 +447,14 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
     // An invalid default must not report as effective when nothing overrode it.
     const validDefaultVendor = defaultVendor && configuredVendors.has(defaultVendor) ? defaultVendor : null;
     const effectiveVendor = storedVendor && configuredVendors.has(storedVendor) ? storedVendor : validDefaultVendor;
+    const storedSeedProvider = stored?.seedProviderOverride ?? null;
+    const validDefaultSeedProvider =
+      defaultSeedProvider && configuredSeedProviders.has(defaultSeedProvider) ? defaultSeedProvider : null;
+    // Null here means no registry was ever built; vertex needs none.
+    const effectiveSeedProvider =
+      storedSeedProvider && configuredSeedProviders.has(storedSeedProvider)
+        ? storedSeedProvider
+        : (validDefaultSeedProvider ?? DEFAULT_SEED_PROVIDER);
     return {
       stored,
       effective: {
@@ -444,6 +474,14 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
         tabCompletePaused: stored?.tabCompletePaused === true,
         globalDailyTabCompleteTokenCap:
           stored?.globalDailyTabCompleteTokenCap ?? resolveDefaultGlobalDailyTabCompleteTokenCap(),
+        seedingMode: stored?.seedingMode ?? 'auto',
+        seedProvider: {
+          stored: storedSeedProvider,
+          effective: effectiveSeedProvider,
+          available: configuredSeedProviders.has(effectiveSeedProvider),
+          configuredProviders: [...configuredSeedProviders],
+          defaultProvider: defaultSeedProvider,
+        },
       },
       today: { dateStr, submissions, managedBuilds, tabCompleteTokens },
       propagationMs: creationLimitsTtlMs,

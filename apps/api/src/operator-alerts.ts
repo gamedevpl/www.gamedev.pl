@@ -228,6 +228,9 @@ export function detectSeedingDegraded(outcomes: JobSeedOutcome[], at: number): O
   if (failed.length < SEEDING_DEGRADED_MIN_FAILURES || failed.length !== recent.length) return null;
 
   const oldest = failed.reduce((earliest, outcome) => (outcome.at < earliest.at ? outcome : earliest));
+  // Named only when every failure shares a provider; absent means vertex.
+  const providers = [...new Set(failed.map((outcome) => outcome.provider ?? 'vertex'))];
+  const namedProvider = providers.length === 1 ? providers[0] : undefined;
   return {
     // Per day, not per occurrence: this nags once a day while it is broken rather than
     // once ever (which a job-scoped id would give) or once per build (which is a pager).
@@ -235,7 +238,9 @@ export function detectSeedingDegraded(outcomes: JobSeedOutcome[], at: number): O
     kind: 'seeding_degraded',
     // Phrased as a noun the copy can predicate on: every surface renders an alert as
     // “{title}” followed by what happened to it.
-    title: `The last ${failed.length} new games`,
+    title: namedProvider
+      ? `The last ${failed.length} new games (${namedProvider})`
+      : `The last ${failed.length} new games`,
     since: oldest.at,
   };
 }

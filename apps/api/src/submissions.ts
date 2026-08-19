@@ -43,10 +43,12 @@ import type { AgentBackend, SeedDelivery, SeedFiles } from './agent-backend.js';
 import { PLAYTEST_CONTEXT_HEADER, stripPlaytestContext } from './build-transcript.js';
 import {
   createAgentBackendRegistryFromEnv,
+  createSeedProvidersFromEnv,
   resolveBuilderBackend,
   type AgentBackendRegistry,
   type ManagedBackendDeps,
 } from './agent-backend-env.js';
+import { createSeedAvailabilityGate, type SeedAvailabilityGate } from './seed-availability.js';
 import {
   allowsCreatorBuilderHandoff,
   allowsSelfToPlatformHandoff,
@@ -58,7 +60,7 @@ import {
   type BuilderKind,
 } from './builder.js';
 import { codeSurfaceEnabled, isLiveAgentRound } from './code-surface.js';
-import type { GameSeeder, SeedDraft, SeedFile } from './game-seed.js';
+import { DEFAULT_SEED_PROVIDER, type GameSeeder, type SeedDraft, type SeedFile } from './game-seed.js';
 import { createSourceDeliveryService } from './source-delivery.js';
 import { createKitFileStore } from './kit-files.js';
 import type { GamesStore } from './games-store.js';
@@ -435,6 +437,10 @@ export interface SubmissionRoutesOptions {
    * an empty directory, which is what they all did before seeding existed.
    */
   gameSeeder?: GameSeeder;
+  // Provider ids `gameSeeder` was built with, and the fallback provider.
+  seedProviders?: { providers: string[]; defaultProvider: string };
+  // Test seam for the availability gate.
+  seedAvailabilityGate?: SeedAvailabilityGate;
   agentChannel?: Pick<
     AgentChannelOptions,
     | 'maxEventsPerBuild'
@@ -595,6 +601,10 @@ export interface SubmissionRoutesHandle {
   configuredVendors: string[];
   // MANAGED_AGENT_VENDOR, the fallback when no override is stored.
   defaultVendor?: string;
+  // Seed vendors configured at boot — vertex is always in here.
+  configuredSeedProviders: string[];
+  // Fallback when no console override is stored.
+  defaultSeedProvider: string;
   /**
    * Finds a published entry in the repo-backed catalog only.
    *
@@ -832,6 +842,28 @@ export async function registerSubmissionRoutes(
         })
       : options.managedAvailabilityGate;
 
+  // Mirrors what gameSeeder was built from. No seeder, nothing is really reachable.
+  function resolveSeedProviderEnv(): { providers: string[]; defaultProvider: string } {
+    if (options.seedProviders) return options.seedProviders;
+    if (!gameSeeder) return { providers: [], defaultProvider: DEFAULT_SEED_PROVIDER };
+    const env = createSeedProvidersFromEnv(app.log);
+    return { providers: [...env.providers.keys()], defaultProvider: env.defaultProvider };
+  }
+  const seedProviderEnv = resolveSeedProviderEnv();
+  const configuredSeedProviders = new Set(seedProviderEnv.providers);
+
+  const seedAvailabilityGate =
+    options.seedAvailabilityGate === undefined
+      ? createSeedAvailabilityGate({
+          store,
+          now,
+          ttlMs: options.creationLimitsTtlMs,
+          configuredProviders: configuredSeedProviders,
+          defaultProvider: seedProviderEnv.defaultProvider,
+          logWarn: (payload, message) => app.log.warn(payload, message),
+        })
+      : options.seedAvailabilityGate;
+
   async function backendFor(builder: BuilderKind | undefined): Promise<AgentBackend | undefined> {
     const resolvedBuilder = builder ?? 'platform';
     if (resolvedBuilder === 'self') return agentBackends.self;
@@ -989,6 +1021,7 @@ export async function registerSubmissionRoutes(
         at: new Date(now()).toISOString(),
         by: draft.usage.model,
         tokens: { input: draft.usage.inputTokens, output: draft.usage.outputTokens },
+        ...(draft.usage.provider ? { provider: draft.usage.provider } : {}),
       });
     } catch (error) {
       log.error({ err: error, issueNumber }, 'could not record the cost of a seed');
@@ -1013,27 +1046,32 @@ export async function registerSubmissionRoutes(
     delivery: SeedDelivery;
     steer?: string;
     log: { error: (context: object, message: string) => void };
-  }): Promise<{ draft: SeedDraft } | { draft?: undefined; reason: string }> {
+  }): Promise<{ draft: SeedDraft } | { draft?: undefined; reason: string; provider?: string }> {
     if (!gameSeeder) return { reason: 'not_configured' };
     if (!store) return { reason: 'no_store' };
+    // Checked before the paid call, so "off" costs nothing.
+    if (!(await seedAvailabilityGate.seedingEnabled())) return { reason: 'seeding_off' };
+    // Resolved before the try so a failed attempt still names the vendor.
+    const provider = await seedAvailabilityGate.resolveProvider();
     try {
       const record = await store.getSubmission(input.issueNumber);
-      if (!record) return { reason: 'job_not_found' };
+      if (!record) return { reason: 'job_not_found', provider };
 
       const draft = await gameSeeder.seed({
         slug: input.slug,
         title: record.title,
         spec: input.spec,
+        provider,
         ...(input.steer ? { steer: input.steer } : {}),
       });
-      if (!draft) return { reason: 'seeder_declined' };
+      if (!draft) return { reason: 'seeder_declined', provider };
 
       await recordSeedCost(input.issueNumber, draft, input.log);
       return { draft };
     } catch (error) {
       // Fail-open survives round 0 becoming mandatory; the caller records the failure.
       input.log.error({ err: error, issueNumber: input.issueNumber }, 'seeding failed, dispatching unseeded');
-      return { reason: error instanceof Error ? `threw: ${error.message}` : 'threw' };
+      return { reason: error instanceof Error ? `threw: ${error.message}` : 'threw', provider };
     }
   }
 
@@ -1047,7 +1085,11 @@ export async function registerSubmissionRoutes(
     log: { error: (context: object, message: string) => void; info?: (context: object, message: string) => void };
   }): Promise<
     | { ok: true; status: 'pending'; regenerationsRemaining: number }
-    | { ok: false; reason: 'not_configured' | 'not_found' | 'seed_not_readable' | 'already_delivered' | 'cap_reached' }
+    | {
+        ok: false;
+        reason:
+          'not_configured' | 'not_found' | 'seed_not_readable' | 'already_delivered' | 'cap_reached' | 'seeding_off';
+      }
   > {
     if (!gameSeeder || !store) return { ok: false, reason: 'not_configured' };
     const record = await store.getSubmission(input.issueNumber);
@@ -1059,6 +1101,8 @@ export async function registerSubmissionRoutes(
     }
     // A delivered round was already judged; do not move its starting point.
     if ((record.roundDeliveryCount ?? 0) > 0) return { ok: false, reason: 'already_delivered' };
+    // Checked before spending quota, which never resets when seeding comes back on.
+    if (!(await seedAvailabilityGate.seedingEnabled())) return { ok: false, reason: 'seeding_off' };
 
     const used = await store.incrementSeedRegenerations(input.issueNumber);
     if (used > MAX_SEED_REGENERATIONS) return { ok: false, reason: 'cap_reached' };
@@ -5883,6 +5927,8 @@ export async function registerSubmissionRoutes(
     hasPlatformBackend: agentBackends.platformByVendor.size > 0,
     configuredVendors: [...agentBackends.platformByVendor.keys()],
     ...(agentBackends.defaultVendor ? { defaultVendor: agentBackends.defaultVendor } : {}),
+    configuredSeedProviders: [...configuredSeedProviders],
+    defaultSeedProvider: seedProviderEnv.defaultProvider,
     getRepoPublishedCatalogEntry: (slug) =>
       githubClient ? getPublishedCatalogEntry(githubClient, slug) : Promise.resolve(null),
     startImprovementRound,

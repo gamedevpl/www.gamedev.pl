@@ -160,19 +160,29 @@ GitHub **repository variable** and confirm the name appears in _both_
 `TRANSLATE_BUILD_LOG`, `VAPID_*`, `VERTEX_MODEL`, `VERTEX_REGION`, `ZONE_HOST_URL`, and
 the sweep audiences.
 
-`SEED_DISPATCH` is **no longer a lever**: round 0 runs for every new game and the draft it
-produces is the round's sources, so there is nothing to switch off. The variable can be
-deleted from the repository settings; nothing reads it.
+`SEED_DISPATCH` is **removed**: the variable is gone from `infra/deploy-api.sh` and
+`.github/workflows/deploy.yml`, and nothing reads it. Round 0's kill switch moved to a
+Firestore document instead — see below — because an env var needing a redeploy was the
+wrong shape for a lever whose whole failure mode is silent.
+
+**Which model vendor answers round 0 is also runtime-selectable, not baked into a single
+env var.** `SEED_PROVIDER` still names the boot-time default, and per-vendor credentials
+still live in env (`SEED_<VENDOR>_API_KEY` / `SEED_<VENDOR>_MODEL`, `SEED_MODEL` for the
+always-on Vertex default) — but _which configured vendor a fresh build actually uses_ is
+the `seedProviderOverride` field on the creation-limits document, same TTL and no redeploy.
+See [`seed-provider-selection-plan.md`](https://github.com/gamedevpl/www.gamedev.pl-ops/blob/main/docs/seed-provider-selection-plan.md)
+(private) for why.
 
 **Everything else the code reads is a code default and cannot be changed at runtime** —
-including `DAILY_*` quotas, `SEED_MODEL`, `SEED_*_TIMEOUT_MS`, `REFINE_TIMEOUT_MS`,
+including `DAILY_*` quotas, `SEED_*_TIMEOUT_MS`, `REFINE_TIMEOUT_MS`,
 `VERTEX_THINKING_LEVEL`, `VERTEX_TRANSLATE_*`, `SELF_BUILD_*`, the `*_TTL_DAYS` keys, and
 `ENABLE_VERTEX_MODERATION` / `ENABLE_VERTEX_THEMES`. Do not plan an incident response
 around setting one of those; ship the change instead.
 
-**Not every emergency lever is an env var.** Two of the most important are Firestore
-documents that take effect within a TTL and need no deploy at all: `remixTracePaused` and
-the spend breaker, both on the creation-limits document. Prefer those where they exist.
+**Not every emergency lever is an env var.** Several of the most important are Firestore
+documents that take effect within a TTL and need no deploy at all: `remixTracePaused`, the
+spend breaker, and round 0's `seedingMode` / `seedProviderOverride`, all on the
+creation-limits document. Prefer those where they exist.
 
 **A6 has no uptime check behind it, on purpose.** Probing a scale-to-zero service every
 five minutes keeps an instance warm around the clock and turns `$0` at rest into roughly

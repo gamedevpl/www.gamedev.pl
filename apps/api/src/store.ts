@@ -451,6 +451,9 @@ export interface JobSeedOutcome {
   repaired: boolean;
   // Whether placement happened — never merely which delivery mode was chosen.
   staged: boolean;
+  // Which vendor and model answered. Absent means Vertex (before multi-provider).
+  provider?: string;
+  model?: string;
 }
 
 /**
@@ -496,6 +499,8 @@ export interface JobCostEntry {
   tokens?: AgentSessionTokens;
   /** Money, when a service reports it directly rather than in its own unit. */
   usd?: number;
+  // Which vendor billed this; `by` stays the model id.
+  provider?: string;
 }
 
 /**
@@ -753,6 +758,10 @@ export interface CreationLimits {
   managedDailyCap: number | null;
   // Same ceiling, per creator per UTC day.
   managedDailyUserCap: number | null;
+  // Round 0's kill switch; no env var exists for it.
+  seedingMode?: 'auto' | 'off';
+  // Runtime override; unset defers to SEED_PROVIDER. Free-form: providers self-register.
+  seedProviderOverride?: string | null;
   /** Who last changed this and when, so a leftover pause is legible as a leftover. */
   updatedAt?: string;
   updatedBy?: string;
@@ -4016,6 +4025,11 @@ export class InMemoryStore implements Store {
         patch.managedDailyUserCap !== undefined
           ? patch.managedDailyUserCap
           : (this.creationLimits?.managedDailyUserCap ?? null),
+      seedingMode: patch.seedingMode ?? this.creationLimits?.seedingMode ?? 'auto',
+      seedProviderOverride:
+        patch.seedProviderOverride !== undefined
+          ? patch.seedProviderOverride
+          : (this.creationLimits?.seedProviderOverride ?? null),
       updatedAt: new Date().toISOString(),
       updatedBy,
     };
@@ -6777,6 +6791,8 @@ export class FirestoreStore implements Store {
           : null,
       managedDailyCap: typeof data?.managedDailyCap === 'number' ? data.managedDailyCap : null,
       managedDailyUserCap: typeof data?.managedDailyUserCap === 'number' ? data.managedDailyUserCap : null,
+      seedingMode: data?.seedingMode === 'off' ? 'off' : 'auto',
+      seedProviderOverride: typeof data?.seedProviderOverride === 'string' ? data.seedProviderOverride : null,
       ...(data?.updatedAt ? { updatedAt: data.updatedAt } : {}),
       ...(data?.updatedBy ? { updatedBy: data.updatedBy } : {}),
     };
@@ -6816,6 +6832,11 @@ export class FirestoreStore implements Store {
           patch.managedDailyCap !== undefined ? patch.managedDailyCap : (existing.managedDailyCap ?? null),
         managedDailyUserCap:
           patch.managedDailyUserCap !== undefined ? patch.managedDailyUserCap : (existing.managedDailyUserCap ?? null),
+        seedingMode: patch.seedingMode ?? existing.seedingMode ?? 'auto',
+        seedProviderOverride:
+          patch.seedProviderOverride !== undefined
+            ? patch.seedProviderOverride
+            : (existing.seedProviderOverride ?? null),
         updatedAt: new Date().toISOString(),
         updatedBy,
       };

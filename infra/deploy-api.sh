@@ -219,6 +219,22 @@ if gcloud secrets describe openai-api-key --project "$PROJECT_ID" >/dev/null 2>&
   echo "==> openai-api-key found; OpenAI managed agent access enabled."
 fi
 
+# Round-0 seed providers (ops: seed-provider-selection-plan.md). Reuses the managed-agent
+# secrets where a vendor's credential already exists — same account, a narrower ask —
+# rather than provisioning a second copy. Vertex needs none of this; it is unconditional.
+if gcloud secrets describe anthropic-api-key --project "$PROJECT_ID" >/dev/null 2>&1; then
+  SECRET_MAPPINGS+=("SEED_ANTHROPIC_API_KEY=anthropic-api-key:latest")
+  echo "==> anthropic-api-key found; selectable as a seed provider once SEED_ANTHROPIC_MODEL is also set."
+fi
+if gcloud secrets describe openai-api-key --project "$PROJECT_ID" >/dev/null 2>&1; then
+  SECRET_MAPPINGS+=("SEED_OPENAI_API_KEY=openai-api-key:latest")
+  echo "==> openai-api-key found; selectable as a seed provider once SEED_OPENAI_MODEL is also set."
+fi
+if gcloud secrets describe meta-api-key --project "$PROJECT_ID" >/dev/null 2>&1; then
+  SECRET_MAPPINGS+=("SEED_META_API_KEY=meta-api-key:latest")
+  echo "==> meta-api-key found; selectable as a seed provider once SEED_META_MODEL is also set."
+fi
+
 if gcloud secrets describe session-secret --project "$PROJECT_ID" >/dev/null 2>&1; then
   SECRET_MAPPINGS+=("SESSION_SECRET=session-secret:latest")
   echo "==> session-secret found; session authentication enabled."
@@ -305,9 +321,9 @@ done
 # switch off, and MCP clients would lose their authorization-server list — each looking
 # like a spontaneous regression with a deploy as the only clue.
 #
-# SEED_DISPATCH used to head this list. It is gone because round 0 is no longer
-# optional: a flag that must always be true is a way to turn the product off by
-# accident, which is what a missing thread here would have done.
+# SEED_DISPATCH used to head this list; it is gone, round 0 is unconditional now.
+# Its kill switch moved to the creation-limits document (seedingMode), not an env var —
+# see ops: seed-provider-selection-plan.md.
 #
 # The rule this file already states for REMIX_DEBUG applies to every one of them: both
 # supported paths carry a flag, or neither should.
@@ -337,6 +353,28 @@ for MANAGED_VAR in \
   eval "MANAGED_VAL=\${${MANAGED_VAR}:-}"
   if [ -n "${MANAGED_VAL}" ]; then
     ENV_VARS="${ENV_VARS}|${MANAGED_VAR}=${MANAGED_VAL}"
+  fi
+done
+# Round-0 seed providers. SEED_PROVIDER/SEED_MODEL tune the always-on Vertex default;
+# the rest only matter once the matching secret above is also present.
+for SEED_VAR in \
+  SEED_PROVIDER \
+  SEED_MODEL \
+  SEED_ANTHROPIC_MODEL \
+  SEED_OPENAI_MODEL \
+  SEED_META_MODEL \
+  SEED_META_BASE_URL \
+  SEED_MAX_OUTPUT_TOKENS \
+  SEED_ANTHROPIC_MAX_OUTPUT_TOKENS \
+  SEED_OPENAI_MAX_OUTPUT_TOKENS \
+  SEED_META_MAX_OUTPUT_TOKENS \
+  SEED_PICK_MAX_OUTPUT_TOKENS \
+  SEED_ANTHROPIC_PICK_MAX_OUTPUT_TOKENS \
+  SEED_OPENAI_PICK_MAX_OUTPUT_TOKENS \
+  SEED_META_PICK_MAX_OUTPUT_TOKENS; do
+  eval "SEED_VAL=\${${SEED_VAR}:-}"
+  if [ -n "${SEED_VAL}" ]; then
+    ENV_VARS="${ENV_VARS}|${SEED_VAR}=${SEED_VAL}"
   fi
 done
 if [ -n "$GOOGLE_OAUTH_CLIENT_ID" ]; then
