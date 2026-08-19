@@ -948,7 +948,8 @@ export default function CodeMirrorEditor({
     view.dispatch({
       changes: { from: 0, to: view.state.doc.length, insert: value },
       selection: { anchor: Math.min(anchor, value.length), head: Math.min(head, value.length) },
-      annotations: Transaction.remote.of(true),
+      // Out of undo too — else Ctrl+Z restores pre-refresh text.
+      annotations: [Transaction.remote.of(true), Transaction.addToHistory.of(false)],
     });
   }, [value]);
 

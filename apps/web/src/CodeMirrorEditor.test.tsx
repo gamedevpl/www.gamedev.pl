@@ -103,4 +103,34 @@ describe('CodeMirrorEditor external updates', () => {
     // An echo would stage the agent's text as a draft.
     expect(onChange).not.toHaveBeenCalled();
   });
+
+  // Undo must not resurrect text an external update replaced.
+  it('does not let Ctrl+Z restore the text an external update replaced', async () => {
+    const onChange = vi.fn();
+    await render('export const boot = 1;', onChange);
+    const editable = container.querySelector<HTMLElement>('[contenteditable="true"]')!;
+    // A local edit first, so there is something to undo.
+    await act(async () => {
+      editable.dispatchEvent(
+        new (window as unknown as { InputEvent: typeof InputEvent }).InputEvent('beforeinput', {
+          inputType: 'insertText',
+          data: 'x',
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    });
+
+    await render('export const boot = 2;', onChange);
+    onChange.mockClear();
+
+    await act(async () => {
+      editable.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true, cancelable: true }),
+      );
+    });
+
+    expect(container.textContent).toContain('export const boot = 2;');
+    expect(onChange).not.toHaveBeenCalled();
+  });
 });
