@@ -33,9 +33,7 @@ describe('seed provider registry', () => {
     );
   });
 
-  // Registered by the real vendor files as a side effect of importing agent-backend-env.ts;
-  // asserted here too so a broken registration surfaces as a unit failure, not just an
-  // integration one.
+  // Catches a broken registration as a unit failure, not an integration one.
   it('always includes vertex once seed-provider-vertex.js has been imported', async () => {
     await import('./seed-provider-vertex.js');
     expect(isSeedProviderRegistered('vertex')).toBe(true);

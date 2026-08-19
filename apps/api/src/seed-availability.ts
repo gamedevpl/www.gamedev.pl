@@ -1,35 +1,25 @@
-// Whether round 0 runs at all right now, and which provider answers it.
-//
-// Mirrors managed-availability.ts's shape one size smaller: seeding has no daily quota
-// to spend (it rides the submission cap, not its own counter), so this gate is only the
-// two decisions an operator actually needs mid-incident — kill it, or point it at a
-// different vendor — both from the same ops-config document the managed builder reads,
-// within the same TTL, with no redeploy. See ops/seed-provider-selection-plan.md SP-06.
+// Whether round 0 runs right now, and which provider answers it.
 
 import type { CreationLimits, Store } from './store.js';
 
 export const DEFAULT_SEED_AVAILABILITY_TTL_MS = 60_000;
 
 export interface SeedAvailabilityOptions {
-  // Absent only in tests with no store; seeding then always reads as enabled/default.
+  // Absent only in tests with no store; seeding reads as enabled.
   store?: Store;
   now?: () => number;
   ttlMs?: number;
-  // Vendors with a real provider config at boot (agent-backend-env.ts). Vertex is always
-  // in here — it authenticates with ambient ADC, not a stored credential.
+  // Vendors with a real provider config at boot; vertex is always here.
   configuredProviders: ReadonlySet<string>;
-  // SEED_PROVIDER, or DEFAULT_SEED_PROVIDER absent that — what resolveProvider() returns
-  // when no override is stored, or the stored one names an unconfigured vendor.
+  // What resolveProvider() returns when no valid override is stored.
   defaultProvider: string;
   logWarn?: (payload: Record<string, unknown>, message: string) => void;
 }
 
 export interface SeedAvailabilityGate {
-  // False means: do not attempt a seed at all. This is round 0's kill switch — see
-  // "The finding that reorders this plan" in the plan doc for why one had to exist.
+  // False means: do not attempt a seed. Round 0's kill switch.
   seedingEnabled(): Promise<boolean>;
-  // Provider a fresh seed attempt should use: stored override if it is configured, else
-  // defaultProvider. Never throws, never returns an unconfigured id.
+  // Stored override if configured, else the default. Never an unconfigured id.
   resolveProvider(): Promise<string>;
 }
 

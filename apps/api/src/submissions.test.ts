@@ -138,8 +138,7 @@ async function createApp(params: {
   };
   adminUids?: string;
   gameSeeder?: GameSeeder;
-  // What the seed availability gate believes is configured; defaults to the real
-  // environment (vertex, always) when omitted.
+  // What the seed gate believes is configured; defaults to vertex-only.
   seedProviders?: { providers: string[]; defaultProvider: string };
   // Defaults to always-available; tests of the switch pass an explicit gate.
   managedAvailabilityGate?: ManagedAvailabilityGate | null;
@@ -6124,7 +6123,7 @@ describe('seeded dispatch', () => {
     const seeded: string[] = [];
     const store = new InMemoryStore();
     await store.upsertUser({ uid: 'g:test-user' });
-    // ops/seed-provider-selection-plan.md SP-09: the switch SEED_DISPATCH used to be.
+    // The switch SEED_DISPATCH used to be.
     await store.setCreationLimits({ seedingMode: 'off' }, 'g:boss');
     const { app, response } = await submitOne('Comet Courier', {
       githubClient: stub.githubClient,
@@ -6136,7 +6135,7 @@ describe('seeded dispatch', () => {
 
     expect(response.statusCode).toBe(200);
     await vi.waitFor(() => expect(briefs).toHaveLength(1));
-    // Never called: the switch is checked before the seeder, not after.
+    // Never called: checked before the seeder runs.
     expect(seeded).toEqual([]);
     expect(briefs[0].seed).toBeUndefined();
 
@@ -6172,8 +6171,7 @@ describe('seeded dispatch', () => {
       agentBackend: backend,
       submissionTokenSecret: secret,
       gameSeeder: seeder,
-      // Without this, "anthropic" is not a provider anything actually built, and the gate
-      // would honestly fall back to vertex — see the unconfigured-override test below.
+      // Without this the gate falls back to vertex; see the test below.
       seedProviders: { providers: ['vertex', 'anthropic'], defaultProvider: 'vertex' },
       store,
     });
@@ -6210,8 +6208,7 @@ describe('seeded dispatch', () => {
     };
     const store = new InMemoryStore();
     await store.upsertUser({ uid: 'g:test-user' });
-    // Nothing ever registered "meta" here; an operator picking it from the console must
-    // degrade to "seed with the old one", not "stop seeding" (ops/seed-provider-selection-plan.md).
+    // Nothing registered "meta"; picking it must degrade, not stop seeding.
     await store.setCreationLimits({ seedProviderOverride: 'meta' }, 'g:boss');
     const { app, response } = await submitOne('Comet Courier', {
       githubClient: stub.githubClient,

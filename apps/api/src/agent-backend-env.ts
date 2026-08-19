@@ -262,15 +262,11 @@ export function createAgentBackendRegistryFromEnv(
   return { platformByVendor, ...(defaultVendor ? { defaultVendor } : {}), self };
 }
 
-// Every seed vendor this file knows how to build a provider config for. Registration
-// (seed-provider-*.ts, imported above for side effects) is unconditional; whether a
-// vendor lands in `providers` below is conditional on its credential existing.
+// Every seed vendor this file can build a config for; registration is unconditional.
 export const SEED_PROVIDER_IDS = ['vertex', 'anthropic', 'openai', 'meta'] as const;
 export type SeedProviderId = (typeof SEED_PROVIDER_IDS)[number];
 
-// One vendor's config, or undefined when its credential/model are not set. Vertex is the
-// one exception: it authenticates with ambient ADC (genai.ts's own posture), so it is
-// always configured and needs no key — only its model is env-tunable.
+// Undefined when the credential/model are unset. Vertex needs neither: ambient ADC.
 function buildSeedProviderConfig(id: SeedProviderId, log: Logger | undefined): SeedProviderConfig | undefined {
   if (id === 'vertex') {
     const projectId = process.env.VERTEX_PROJECT_ID?.trim();
@@ -297,16 +293,11 @@ function buildSeedProviderConfig(id: SeedProviderId, log: Logger | undefined): S
 
 export interface SeedProviderEnvRegistry {
   providers: Map<string, SeedProviderConfig>;
-  // Runtime override; unset defers to this. Never invalid — falls back to
-  // DEFAULT_SEED_PROVIDER rather than naming a vendor with no config (SP-06's gate makes
-  // the same choice for a stored console override).
+  // Runtime override; unset (or invalid) defers to this rather than to nothing.
   defaultProvider: string;
 }
 
-// Vertex is unconditional, so this map is never empty and seeding never needs a flag —
-// consistent with round 0 having no on/off switch of its own (docs/agent-adapters.md).
-// The console's own mode switch (CreationLimits.seedingMode) is the actual kill switch;
-// see ops/seed-provider-selection-plan.md SP-09 for why one had to exist somewhere.
+// Vertex is unconditional, so this map is never empty; the console holds the real switch.
 export function createSeedProvidersFromEnv(log?: Logger): SeedProviderEnvRegistry {
   const providers = new Map<string, SeedProviderConfig>();
   for (const id of SEED_PROVIDER_IDS) {
@@ -321,11 +312,7 @@ export function createSeedProvidersFromEnv(log?: Logger): SeedProviderEnvRegistr
   return { providers, defaultProvider };
 }
 
-// Seeder, or undefined when this environment has no games-repo token to seed with.
-//
-// No flag: round 0 is how a new game starts (docs/agent-adapters.md). Which *vendor*
-// answers it is a separate, always-on choice — see createSeedProvidersFromEnv above.
-//
+// Undefined when this environment has no games-repo token. Which vendor answers is separate.
 // Reads with GAMES_REPO_TOKEN, not the dispatch PAT — narrower blast radius.
 export function createGameSeederFromEnv(
   log?: Logger,

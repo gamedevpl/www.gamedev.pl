@@ -224,15 +224,11 @@ export function detectSeedingDegraded(outcomes: JobSeedOutcome[], at: number): O
   // Never generated is as failed as never placed: both scaffold from nothing.
   const failed = recent.filter((outcome) => outcome.generated === false || !outcome.staged);
   // Every recent attempt has to have failed. A mix means round 0 works and something
-  // about one draft did not, which is a different problem and not this alert's. This
-  // check stays provider-blind on purpose (ops/seed-provider-selection-plan.md invariant
-  // 3) — a split trigger would let one vendor's outage hide behind another vendor's
-  // successes, and the operator console only ever selects one provider at a time anyway.
+  // about one draft did not, which is a different problem and not this alert's.
   if (failed.length < SEEDING_DEGRADED_MIN_FAILURES || failed.length !== recent.length) return null;
 
   const oldest = failed.reduce((earliest, outcome) => (outcome.at < earliest.at ? outcome : earliest));
-  // Named only when every failure shares one provider — a mix says nothing about which
-  // vendor to blame, and a wrong guess is worse than the generic title (SP-12).
+  // Named only when every failure shares one provider; a mix names none.
   const providers = [...new Set(failed.map((outcome) => outcome.provider).filter((provider) => provider))];
   const namedProvider = providers.length === 1 ? providers[0] : undefined;
   return {

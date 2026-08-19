@@ -437,14 +437,9 @@ export interface SubmissionRoutesOptions {
    * an empty directory, which is what they all did before seeding existed.
    */
   gameSeeder?: GameSeeder;
-  /**
-   * The provider ids `gameSeeder` was actually built with, and which one answers when no
-   * console override is stored. Test injection point; production derives this from the
-   * environment (createSeedProvidersFromEnv) so the availability gate below and the
-   * seeder agree about what "configured" means.
-   */
+  // Provider ids `gameSeeder` was built with, and the fallback provider.
   seedProviders?: { providers: string[]; defaultProvider: string };
-  /** Test seam for the availability gate; production builds one from `seedProviders`. */
+  // Test seam for the availability gate.
   seedAvailabilityGate?: SeedAvailabilityGate;
   agentChannel?: Pick<
     AgentChannelOptions,
@@ -606,9 +601,9 @@ export interface SubmissionRoutesHandle {
   configuredVendors: string[];
   // MANAGED_AGENT_VENDOR, the fallback when no override is stored.
   defaultVendor?: string;
-  // Seed vendors with a real provider config at boot — vertex is always in here.
+  // Seed vendors configured at boot — vertex is always in here.
   configuredSeedProviders: string[];
-  // SEED_PROVIDER (or DEFAULT_SEED_PROVIDER), the fallback when no console override is stored.
+  // Fallback when no console override is stored.
   defaultSeedProvider: string;
   /**
    * Finds a published entry in the repo-backed catalog only.
@@ -847,9 +842,7 @@ export async function registerSubmissionRoutes(
         })
       : options.managedAvailabilityGate;
 
-  // Test injection carries its own provider list; production reads the same environment
-  // gameSeeder itself was built from, so the gate never offers a provider the seeder
-  // cannot actually reach.
+  // Production reads the same environment gameSeeder was built from.
   function resolveSeedProviderEnv(): { providers: string[]; defaultProvider: string } {
     if (options.seedProviders) return options.seedProviders;
     const env = createSeedProvidersFromEnv(app.log);
@@ -1055,8 +1048,7 @@ export async function registerSubmissionRoutes(
   }): Promise<{ draft: SeedDraft } | { draft?: undefined; reason: string }> {
     if (!gameSeeder) return { reason: 'not_configured' };
     if (!store) return { reason: 'no_store' };
-    // The kill switch (ops/seed-provider-selection-plan.md SP-09): checked before the
-    // paid call, not after, so "off" costs nothing and needs no seeder change to honour.
+    // Checked before the paid call, so "off" costs nothing.
     if (!(await seedAvailabilityGate.seedingEnabled())) return { reason: 'seeding_off' };
     try {
       const record = await store.getSubmission(input.issueNumber);

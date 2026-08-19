@@ -80,7 +80,7 @@ export interface CreationLimits {
     managedDailyUserCap?: number | null;
     tabCompletePaused?: boolean;
     globalDailyTabCompleteTokenCap?: number | null;
-    // Round 0's kill switch and provider picker (ops/seed-provider-selection-plan.md).
+    // Round 0's kill switch and provider picker.
     seedingMode?: SeedingMode;
     seedProviderOverride?: string | null;
     updatedAt?: string;

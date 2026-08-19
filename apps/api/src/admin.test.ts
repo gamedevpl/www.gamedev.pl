@@ -725,8 +725,7 @@ describe('/api/admin/creation-limits', () => {
 
     expect(res.statusCode).toBe(200);
     const body = res.json() as CreationLimitsResponse;
-    // Stored honestly, but not effective: nothing built a "meta" seed provider in this
-    // test environment, so the console cannot select it into existence.
+    // Stored honestly, but never effective: nothing built a "meta" provider here.
     expect(body.stored?.seedProviderOverride).toBe('meta');
     expect(body.effective.seedProvider.stored).toBe('meta');
     expect(body.effective.seedProvider.available).toBe(true);

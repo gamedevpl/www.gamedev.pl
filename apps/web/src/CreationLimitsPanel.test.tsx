@@ -299,7 +299,7 @@ describe('CreationLimitsPanel', () => {
     );
 
     const { container, root } = await render();
-    // Two "Mode" labels exist (managed builder and seeding); scope to the seeding section.
+    // Two "Mode" labels exist; scope to the seeding section.
     const seedingSection = Array.from(container.querySelectorAll('section')).find((section) =>
       section.textContent?.startsWith('Round-0 seeding'),
     );

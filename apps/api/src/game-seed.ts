@@ -84,7 +84,7 @@ export const DEFAULT_SEED_GENERATE_TIMEOUT_MS = 180_000;
 const SEED_PICK_MAX_OUTPUT_TOKENS = 2048;
 export const DEFAULT_SEED_TYPECHECK_TIMEOUT_MS = TYPECHECK_PREFLIGHT_BUDGET_MS;
 
-/** Which registered provider answers a seed when the request names none, or an unknown one. */
+// Provider that answers when a request names none, or an unregistered one.
 export const DEFAULT_SEED_PROVIDER = 'vertex';
 
 /** Bound the untrusted spec the same way the dispatch prompt does. */
@@ -102,7 +102,7 @@ export interface SeedUsage {
   inputTokens: number;
   outputTokens: number;
   model: string;
-  /** Which registered vendor answered. Absent on records written before this existed. */
+  // Which vendor answered. Absent on records written before this existed.
   provider?: string;
 }
 
@@ -148,14 +148,7 @@ export interface SeedRequest {
   spec: string;
   // What the last draft got wrong. Data, never instructions.
   steer?: string;
-  /**
-   * Which registered provider should answer this seed. Resolved once per dispatch by the
-   * caller (the operator's console choice, cached — see seed-availability.ts), never
-   * per-file or per-retry: invariant 3 in ops/seed-provider-selection-plan.md is that a
-   * traffic split would silently disable `detectSeedingDegraded`, which only fires when
-   * every recent attempt failed. An unset or unconfigured id falls back to the seeder's
-   * own default rather than failing the round.
-   */
+  // Which provider answers. Resolved once per dispatch, never per-file or per-retry.
   provider?: string;
 }
 
@@ -436,20 +429,16 @@ function positiveNumber(value: string | number | undefined, fallback: number): n
 
 export interface ModelGameSeederOptions {
   context: SeedContextSource;
-  /**
-   * Every provider this seeder may call, resolved once at boot per vendor
-   * (agent-backend-env.ts) — apiKey/model/host are per-provider config, not per-request.
-   * A provider id absent from this map is not configured, whatever a request asks for.
-   */
+  // Every provider this seeder may call, resolved once at boot per vendor.
   providers?: Map<string, SeedProviderConfig>;
-  /** Which provider answers a request that names none, or names one not in `providers`. */
+  // Answers a request naming no provider, or an unconfigured one.
   defaultProvider?: string;
   references?: number;
   pickTimeoutMs?: number;
   generateTimeoutMs?: number;
   typeCheckTimeoutMs?: number;
   log?: { warn: (context: object, message: string) => void; info: (context: object, message: string) => void };
-  /** Test seam, mirroring VertexChecker/VertexSpecRefiner: a prebuilt client, wins over `providers`. */
+  // Test seam: a prebuilt client, wins over `providers` entirely.
   client?: GenAIClient;
   // knowledge-search.ts, called server-internally (chunks mode).
   knowledgeSearch?: QueryKnowledgeFn;
@@ -462,16 +451,7 @@ export interface ModelGameSeederOptions {
   bundleCheck?: (slug: string, files: SeedFile[]) => Promise<SeedBundleResult>;
 }
 
-/**
- * The production seeder: at most three plain-text model calls (pick, generate, a
- * conditional repair), all bounded, all failures swallowed. Backend-agnostic by design —
- * see seed-provider.ts for why a provider is only a `GenAIClient` factory, never a second
- * copy of this pipeline.
- *
- * The picker runs at the cheap `'low'` thinking floor — it is a classification over
- * a few hundred tokens of catalog, and the latency of reasoning about it costs more
- * than the choice is worth.
- */
+// The production seeder: three bounded model calls, all failures swallowed.
 export class ModelGameSeeder implements GameSeeder {
   private readonly references: number;
   private readonly pickTimeoutMs: number;
@@ -499,12 +479,7 @@ export class ModelGameSeeder implements GameSeeder {
     this.defaultProvider = options.defaultProvider ?? DEFAULT_SEED_PROVIDER;
   }
 
-  /**
-   * Which configured provider answers this request. An id the request names but that is
-   * not in `providers` falls back to the default rather than failing the round — an
-   * operator switching the console picker to a not-yet-deployed vendor must degrade to
-   * "seed with the old one", never "stop seeding".
-   */
+  // An unconfigured requested id falls back to the default rather than failing.
   private resolveProvider(requested: string | undefined): string {
     if (this.options.client) return requested ?? this.defaultProvider; // test seam: id is a label only
     if (requested && this.providers.has(requested)) return requested;
@@ -518,7 +493,7 @@ export class ModelGameSeeder implements GameSeeder {
     return this.providers.get(providerId)?.model ?? providerId;
   }
 
-  /** Lazy, like every other model call site: constructing a client must not touch the network. */
+  // Lazy: constructing a client must not touch the network.
   private client(providerId: string): GenAIClient {
     if (this.options.client) return this.options.client;
     const cached = this.clients.get(providerId);
@@ -530,12 +505,7 @@ export class ModelGameSeeder implements GameSeeder {
     return built;
   }
 
-  /**
-   * The pick response's shape, portable across providers via genaicode's json_schema
-   * response format — replaces a Vertex-only generationConfig.responseSchema (#899),
-   * which only genaicode's Google converter could have honoured. Constrains the shape;
-   * does not reserve output tokens, which is what SEED_PICK_MAX_OUTPUT_TOKENS is for.
-   */
+  // Constrains the pick shape, portable across providers; doesn't reserve output tokens.
   private pickResponseFormat(): { type: 'json_schema'; name: string; schema: Record<string, unknown> } {
     return {
       type: 'json_schema',
@@ -553,9 +523,7 @@ export class ModelGameSeeder implements GameSeeder {
     spec: string,
     providerId: string,
   ): Promise<{ picks: string[]; usage: SeedUsage }> {
-    // Raw thinkingBudget:0 also 400s on gemini-3.7-flash; 'low' is the floor — and it
-    // happens to port to Muse Spark, which refuses reasoning_effort:"none" for the same
-    // practical reason (ops: seed-provider-selection-plan.md).
+    // Raw thinkingBudget:0 also 400s on gemini-3.7-flash; 'low' is the floor.
     const result = await this.client(providerId)(buildPickPrompt(context, spec, this.references))
       .responseFormat(this.pickResponseFormat())
       .thinking({ level: 'low' })
@@ -626,8 +594,7 @@ export class ModelGameSeeder implements GameSeeder {
       const slug = request.slug;
       const spec = request.spec.slice(0, MAX_SPEC_CHARS);
       const steer = request.steer?.trim().slice(0, MAX_STEER_CHARS) || undefined;
-      // Resolved once for the whole round: pick, generate and any repair all answer from
-      // the same vendor, never a mix (ops: seed-provider-selection-plan.md invariant 3).
+      // Resolved once: pick, generate and repair all answer from the same vendor.
       const providerId = this.resolveProvider(request.provider);
       // The steer rides the picker, or wrong references return.
       const { picks, usage: pickUsage } = await this.pickReferences(

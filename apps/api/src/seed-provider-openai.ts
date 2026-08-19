@@ -1,7 +1,4 @@
-// OpenAI as a seed provider — genaicode's `openai()` speaks Chat Completions
-// (`client.chat.completions.create`), which is the right surface for round 0's
-// single-shot, no-tool-use calls (see game-seed.ts and ops: seed-provider-selection-plan.md
-// on why the pick/generate/repair shape needs no more than that).
+// OpenAI as a seed provider, over Chat Completions.
 
 import { genaicode } from 'genaicode';
 import { openai } from 'genaicode/providers';

@@ -117,9 +117,9 @@ export interface AdminRoutesOptions {
   configuredVendors?: string[];
   // MANAGED_AGENT_VENDOR — the fallback when no override is stored.
   defaultVendor?: string;
-  // Seed vendors with a real provider config at boot; selectable by seedProviderOverride.
+  // Seed vendors configured at boot; selectable by seedProviderOverride.
   configuredSeedProviders?: string[];
-  // SEED_PROVIDER (or DEFAULT_SEED_PROVIDER) — the fallback when no override is stored.
+  // Fallback when no seed provider override is stored.
   defaultSeedProvider?: string;
 }
 
@@ -158,7 +158,7 @@ export interface CreationLimitsResponse {
     // TA-01's own breaker (creator-code-tab-autocomplete-research.md).
     tabCompletePaused: boolean;
     globalDailyTabCompleteTokenCap: number;
-    // Round 0's kill switch and provider picker (ops/seed-provider-selection-plan.md).
+    // Round 0's kill switch and provider picker.
     seedingMode: 'auto' | 'off';
     seedProvider: {
       stored: string | null;
@@ -206,12 +206,9 @@ const CreationLimitsPatchSchema = z
     managedAgentVendorOverride: z.enum(['anthropic', 'gemini', 'copilot', 'openai']).nullable().optional(),
     managedDailyCap: z.number().int().min(0).max(100_000).nullable().optional(),
     managedDailyUserCap: z.number().int().min(0).max(100_000).nullable().optional(),
-    // Round 0's kill switch. Same document, same propagation delay as everything above.
+    // Round 0's kill switch, same document as everything above.
     seedingMode: z.enum(['auto', 'off']).optional(),
-    // null clears the override, same as managedAgentVendorOverride above. Free-form
-    // rather than an enum: seed providers self-register (seed-provider.ts) and the
-    // valid set is read at boot, not hand-enumerated in this schema — an id that does
-    // not match a configured provider simply never becomes effective (readCreationLimits).
+    // Free-form, not an enum: providers self-register.
     seedProviderOverride: z.string().min(1).max(64).nullable().optional(),
   })
   .refine(
@@ -453,8 +450,7 @@ export async function registerAdminRoutes(app: FastifyInstance, options: AdminRo
     const storedSeedProvider = stored?.seedProviderOverride ?? null;
     const validDefaultSeedProvider =
       defaultSeedProvider && configuredSeedProviders.has(defaultSeedProvider) ? defaultSeedProvider : null;
-    // Vertex is always configured (ambient ADC), so this only reads null when the caller
-    // passed no defaultSeedProvider at all — an environment that never built the registry.
+    // Null here means no registry was ever built; vertex needs none.
     const effectiveSeedProvider =
       storedSeedProvider && configuredSeedProviders.has(storedSeedProvider)
         ? storedSeedProvider
