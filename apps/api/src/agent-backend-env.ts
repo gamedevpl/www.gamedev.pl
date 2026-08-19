@@ -266,6 +266,11 @@ export function createAgentBackendRegistryFromEnv(
 export const SEED_PROVIDER_IDS = ['vertex', 'anthropic', 'openai', 'meta'] as const;
 export type SeedProviderId = (typeof SEED_PROVIDER_IDS)[number];
 
+// Muse Spark always reasons and cannot turn it off (ops: seed-provider-selection-plan.md
+// SP-16) — measured burning the pick call's whole 2048-token default on reasoning alone.
+// Every other vendor here can opt out of it, so this default is Meta-only.
+const PICK_MAX_OUTPUT_TOKENS_DEFAULTS: Partial<Record<SeedProviderId, number>> = { meta: 8192 };
+
 // Undefined when the credential/model are unset. Vertex needs neither: ambient ADC.
 function seedMaxOutputTokens(envVar: string, log: Logger | undefined, id: SeedProviderId): number | undefined {
   const raw = process.env[envVar]?.trim();
@@ -283,11 +288,13 @@ function buildSeedProviderConfig(id: SeedProviderId, log: Logger | undefined): S
     const projectId = process.env.VERTEX_PROJECT_ID?.trim();
     const region = process.env.VERTEX_REGION?.trim();
     const maxOutputTokens = seedMaxOutputTokens('SEED_MAX_OUTPUT_TOKENS', log, id);
+    const pickMaxOutputTokens = seedMaxOutputTokens('SEED_PICK_MAX_OUTPUT_TOKENS', log, id);
     return {
       model: process.env.SEED_MODEL?.trim() || DEFAULT_VERTEX_SEED_MODEL,
       ...(projectId ? { projectId } : {}),
       ...(region ? { region } : {}),
       ...(maxOutputTokens ? { maxOutputTokens } : {}),
+      ...(pickMaxOutputTokens ? { pickMaxOutputTokens } : {}),
     };
   }
   const envPrefix = id.toUpperCase();
@@ -302,7 +309,15 @@ function buildSeedProviderConfig(id: SeedProviderId, log: Logger | undefined): S
   }
   const baseUrl = process.env[`SEED_${envPrefix}_BASE_URL`]?.trim();
   const maxOutputTokens = seedMaxOutputTokens(`SEED_${envPrefix}_MAX_OUTPUT_TOKENS`, log, id);
-  return { apiKey, model, ...(baseUrl ? { baseUrl } : {}), ...(maxOutputTokens ? { maxOutputTokens } : {}) };
+  const pickMaxOutputTokens =
+    seedMaxOutputTokens(`SEED_${envPrefix}_PICK_MAX_OUTPUT_TOKENS`, log, id) ?? PICK_MAX_OUTPUT_TOKENS_DEFAULTS[id];
+  return {
+    apiKey,
+    model,
+    ...(baseUrl ? { baseUrl } : {}),
+    ...(maxOutputTokens ? { maxOutputTokens } : {}),
+    ...(pickMaxOutputTokens ? { pickMaxOutputTokens } : {}),
+  };
 }
 
 export interface SeedProviderEnvRegistry {

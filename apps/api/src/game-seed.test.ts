@@ -526,6 +526,41 @@ describe('ModelGameSeeder', () => {
     expect(maxOutputTokensArgs).toEqual([500, 500]);
   });
 
+  it('raises the pick call above its default for a vendor that always reasons', async () => {
+    const maxOutputTokensArgs: unknown[] = [];
+    registerSeedProvider('__test_reasoning_vendor__', () => {
+      const client = ((_prompt: string) => {
+        const chain = {
+          responseFormat: () => chain,
+          thinking: () => chain,
+          temperature: () => chain,
+          maxOutputTokens: (n: unknown) => {
+            maxOutputTokensArgs.push(n);
+            return chain;
+          },
+          signal: () => chain,
+          run: async () => ({
+            parts: [{ type: 'text' as const, text: '{"picks":["apex-sprint"]}' }],
+            model: 'reasoning-model',
+            usage: { inputTokens: 10, outputTokens: 5 },
+          }),
+        };
+        return chain;
+      }) as unknown;
+      return client as never;
+    });
+
+    const seeder = new ModelGameSeeder({
+      context: stubContext(),
+      providers: new Map([['__test_reasoning_vendor__', { model: 'reasoning-model', pickMaxOutputTokens: 8192 }]]),
+    });
+
+    await seeder.seed({ ...request, provider: '__test_reasoning_vendor__' });
+
+    // Above the 2048 default; below the generate ceiling, which stayed unset.
+    expect(maxOutputTokensArgs).toEqual([8192, 65_536]);
+  });
+
   it('falls back to the Vertex-sized ceiling when the provider sets none', async () => {
     const maxOutputTokensArgs: unknown[] = [];
     registerSeedProvider('__test_unbounded_vendor__', () => {

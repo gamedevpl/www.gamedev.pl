@@ -14,6 +14,8 @@ export interface SeedProviderConfig {
   baseUrl?: string;
   // Below the vendor's own ceiling, every generate call rejects outright.
   maxOutputTokens?: number;
+  // Raises the pick call above its default for reasoning vendors.
+  pickMaxOutputTokens?: number;
 }
 
 export type SeedProviderFactory = (config: SeedProviderConfig) => GenAIClient;

@@ -500,9 +500,12 @@ export class ModelGameSeeder implements GameSeeder {
     return this.providers.get(providerId)?.maxOutputTokens ?? GENERATE_MAX_OUTPUT_TOKENS;
   }
 
-  // The pick call's own small budget, but never above what the vendor will accept at all.
+  // A vendor that always reasons (Muse Spark: no opt-out) can spend the whole default
+  // budget on hidden reasoning before writing a single pick — raise it per provider.
+  // Still never above what the vendor accepts at all.
   private pickMaxOutputTokensFor(providerId: string): number {
-    return Math.min(SEED_PICK_MAX_OUTPUT_TOKENS, this.maxOutputTokensFor(providerId));
+    const base = this.providers.get(providerId)?.pickMaxOutputTokens ?? SEED_PICK_MAX_OUTPUT_TOKENS;
+    return Math.min(base, this.maxOutputTokensFor(providerId));
   }
 
   // Lazy: constructing a client must not touch the network.
