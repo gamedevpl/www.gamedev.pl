@@ -40,8 +40,8 @@ export function AccountSettingsModal({ isOpen, onClose }: { isOpen: boolean; onC
   if (!isOpen) return null;
 
   const sections: { id: AccountSettingsSection; icon: 'lock' | 'user'; label: string }[] = [
-    { id: 'credentials', icon: 'lock', label: t('creatorProfile.accountNavCredentials') },
     { id: 'account', icon: 'user', label: t('creatorProfile.accountNavAccount') },
+    { id: 'credentials', icon: 'lock', label: t('creatorProfile.accountNavCredentials') },
   ];
 
   return createPortal(
