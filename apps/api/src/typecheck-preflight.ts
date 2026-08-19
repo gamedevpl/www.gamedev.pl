@@ -48,7 +48,8 @@ export function sharedSourcesFromKitTree(tree: KitTree): Record<string, string> 
     const isKitDts = rel === 'shared/game-kit.d.ts';
     const isModule = rel.startsWith('shared/modules/') && rel.endsWith('.ts');
     const isVertical = rel.startsWith('shared/verticals/') && rel.endsWith('.ts');
-    if (isKitDts || isModule || isVertical) {
+    const isSharedSim = rel.startsWith('shared/sim/') && rel.endsWith('.ts');
+    if (isKitDts || isModule || isVertical || isSharedSim) {
       out[rel] = buf.toString('utf8');
     }
   }

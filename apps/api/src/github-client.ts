@@ -906,6 +906,8 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
     return (await response.json()) as T;
   }
 
+  const SHARED_SIM_ROOT = '/shared/sim';
+
   async function bundleTypeScriptGraph(
     entrySource: string,
     ref: string,
@@ -946,7 +948,11 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
               // onto a path under the source root before the sandbox check; anything
               // that escapes that root is rejected.
               const sourcePath = resolveGameTypeScriptPath(args.resolveDir, args.path);
-              if (!sourcePath || !sourcePath.startsWith(`${sourceRoot}/`)) {
+              const isAllowed =
+                sourcePath &&
+                (sourcePath.startsWith(`${sourceRoot}/`) ||
+                  (sourceKind === 'game' && sourcePath.startsWith(`${SHARED_SIM_ROOT}/`)));
+              if (!isAllowed) {
                 return {
                   errors: [{ text: `${sourceKind} imports must be TypeScript files inside ${sourceRoot}` }],
                 };
@@ -973,7 +979,10 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
               let source = overrideOf(loadedPath) ?? (await readRawFile(loadedPath.slice(1), ref));
               if (source === null && loadedPath.endsWith('.ts')) {
                 const indexPath = `${loadedPath.slice(0, -'.ts'.length)}/index.ts`;
-                if (indexPath.startsWith(`${sourceRoot}/`)) {
+                const isAllowedIndex =
+                  indexPath.startsWith(`${sourceRoot}/`) ||
+                  (sourceKind === 'game' && indexPath.startsWith(`${SHARED_SIM_ROOT}/`));
+                if (isAllowedIndex) {
                   const indexSource = overrideOf(indexPath) ?? (await readRawFile(indexPath.slice(1), ref));
                   if (indexSource !== null) {
                     loadedPath = indexPath;
@@ -984,7 +993,9 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
               if (source === null) {
                 return { errors: [{ text: `${sourceKind} module not found: ${args.path}` }] };
               }
-              collect?.set(loadedPath.slice(sourceRoot.length + 1), source);
+              if (loadedPath.startsWith(`${sourceRoot}/`)) {
+                collect?.set(loadedPath.slice(sourceRoot.length + 1), source);
+              }
               if (!loadedPaths.has(loadedPath)) {
                 if (loadedPaths.size >= MAX_SOURCE_GRAPH_MODULES) {
                   return {

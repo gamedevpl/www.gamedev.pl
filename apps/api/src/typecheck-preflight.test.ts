@@ -29,11 +29,16 @@ describe('typecheck preflight', () => {
       kitTree({
         'shared/game-kit.d.ts': KIT_DTS,
         'shared/modules/core.ts': 'export const core = 1;\n',
+        'shared/sim/box-world.ts': 'export const boxWorld = 1;\n',
         'SKILL.md': '# ignore\n',
         'shared/audio/beep.wav': 'not-text',
       }),
     );
-    expect(Object.keys(shared).sort()).toEqual(['shared/game-kit.d.ts', 'shared/modules/core.ts']);
+    expect(Object.keys(shared).sort()).toEqual([
+      'shared/game-kit.d.ts',
+      'shared/modules/core.ts',
+      'shared/sim/box-world.ts',
+    ]);
   });
 
   it('refuses the Round-field transcript failure with one grouped line', () => {
