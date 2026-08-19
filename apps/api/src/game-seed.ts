@@ -82,6 +82,8 @@ export const DEFAULT_SEED_GENERATE_TIMEOUT_MS = 180_000;
 
 // 'low' thinking shares this budget; 512 could starve the JSON answer empty.
 const SEED_PICK_MAX_OUTPUT_TOKENS = 2048;
+// Vertex's own ceiling. A vendor/model with a lower one needs its own provider config.
+const GENERATE_MAX_OUTPUT_TOKENS = 65_536;
 export const DEFAULT_SEED_TYPECHECK_TIMEOUT_MS = TYPECHECK_PREFLIGHT_BUDGET_MS;
 
 // Provider that answers when a request names none, or an unregistered one.
@@ -493,6 +495,11 @@ export class ModelGameSeeder implements GameSeeder {
     return this.providers.get(providerId)?.model ?? providerId;
   }
 
+  // Vertex's own ceiling by default; a narrower vendor/model overrides via provider config.
+  private maxOutputTokensFor(providerId: string): number {
+    return this.providers.get(providerId)?.maxOutputTokens ?? GENERATE_MAX_OUTPUT_TOKENS;
+  }
+
   // Lazy: constructing a client must not touch the network.
   private client(providerId: string): GenAIClient {
     if (this.options.client) return this.options.client;
@@ -625,7 +632,7 @@ export class ModelGameSeeder implements GameSeeder {
           ...(steer ? { steer } : {}),
         }),
       )
-        .maxOutputTokens(65_536)
+        .maxOutputTokens(this.maxOutputTokensFor(providerId))
         .signal(AbortSignal.timeout(this.generateTimeoutMs))
         .run();
 
@@ -670,7 +677,7 @@ export class ModelGameSeeder implements GameSeeder {
         const repairResult = await this.client(providerId)(
           buildRepairPrompt({ slug, errors: validationErrors(), files }),
         )
-          .maxOutputTokens(65_536)
+          .maxOutputTokens(this.maxOutputTokensFor(providerId))
           .signal(AbortSignal.timeout(this.generateTimeoutMs))
           .run();
         const repairUsage = usageOf(repairResult, providerId, this.modelFor(providerId));

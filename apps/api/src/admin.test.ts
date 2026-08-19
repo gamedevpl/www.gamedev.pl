@@ -20,8 +20,18 @@ function authHeaders(uid: string) {
   return { cookie: `${SESSION_COOKIE_NAME}=${mintSessionToken(uid, sessionSecret)}` };
 }
 
-function appWith(store: InMemoryStore, adminUids = 'g:boss') {
-  return buildApp({ store, sessionSecret, adminUids });
+function appWith(
+  store: InMemoryStore,
+  adminUids = 'g:boss',
+  // NODE_ENV=test always leaves gameSeeder unbuilt; inject the registry directly.
+  seedProviders?: { providers: string[]; defaultProvider: string },
+) {
+  return buildApp({
+    store,
+    sessionSecret,
+    adminUids,
+    ...(seedProviders ? { submissionRoutes: { seedProviders } } : {}),
+  });
 }
 
 const today = new Date().toISOString().slice(0, 10);
@@ -572,8 +582,8 @@ describe('/api/admin/creation-limits', () => {
       seedProvider: {
         stored: null,
         effective: 'vertex',
-        available: true,
-        configuredProviders: ['vertex'],
+        available: false,
+        configuredProviders: [],
         defaultProvider: 'vertex',
       },
     });
@@ -616,8 +626,8 @@ describe('/api/admin/creation-limits', () => {
       seedProvider: {
         stored: null,
         effective: 'vertex',
-        available: true,
-        configuredProviders: ['vertex'],
+        available: false,
+        configuredProviders: [],
         defaultProvider: 'vertex',
       },
     });
@@ -714,7 +724,7 @@ describe('/api/admin/creation-limits', () => {
   });
 
   it('rejects an unconfigured seed provider as effective, same as a vendor override', async () => {
-    const app = await appWith(store);
+    const app = await appWith(store, 'g:boss', { providers: ['vertex'], defaultProvider: 'vertex' });
 
     const res = await app.inject({
       method: 'POST',

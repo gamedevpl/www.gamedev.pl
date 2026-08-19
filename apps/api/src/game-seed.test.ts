@@ -10,6 +10,7 @@ import {
   ModelGameSeeder,
   type SeedFile,
 } from './game-seed.js';
+import { registerSeedProvider } from './seed-provider.js';
 import type { SeedContext, SeedContextSource } from './seed-context.js';
 import type { KnowledgeQueryResult, QueryKnowledgeFn } from './knowledge-search.js';
 
@@ -453,6 +454,75 @@ describe('ModelGameSeeder', () => {
       model: 'gemini-3.7-flash',
       provider: 'vertex',
     });
+  });
+
+  it('requests the ceiling configured for the resolved provider, not a fixed constant', async () => {
+    const maxOutputTokensArgs: unknown[] = [];
+    registerSeedProvider('__test_narrow_vendor__', () => {
+      const client = ((_prompt: string) => {
+        const chain = {
+          responseFormat: () => chain,
+          thinking: () => chain,
+          temperature: () => chain,
+          maxOutputTokens: (n: unknown) => {
+            maxOutputTokensArgs.push(n);
+            return chain;
+          },
+          signal: () => chain,
+          run: async () => ({
+            parts: [{ type: 'text' as const, text: '{"picks":["apex-sprint"]}' }],
+            model: 'narrow-model',
+            usage: { inputTokens: 10, outputTokens: 5 },
+          }),
+        };
+        return chain;
+      }) as unknown;
+      return client as never;
+    });
+
+    const seeder = new ModelGameSeeder({
+      context: stubContext(),
+      providers: new Map([['__test_narrow_vendor__', { model: 'narrow-model', maxOutputTokens: 4_096 }]]),
+    });
+
+    await seeder.seed({ ...request, provider: '__test_narrow_vendor__' });
+
+    // Pick keeps its own budget; generate uses the provider ceiling.
+    expect(maxOutputTokensArgs).toEqual([2048, 4_096]);
+  });
+
+  it('falls back to the Vertex-sized ceiling when the provider sets none', async () => {
+    const maxOutputTokensArgs: unknown[] = [];
+    registerSeedProvider('__test_unbounded_vendor__', () => {
+      const client = ((_prompt: string) => {
+        const chain = {
+          responseFormat: () => chain,
+          thinking: () => chain,
+          temperature: () => chain,
+          maxOutputTokens: (n: unknown) => {
+            maxOutputTokensArgs.push(n);
+            return chain;
+          },
+          signal: () => chain,
+          run: async () => ({
+            parts: [{ type: 'text' as const, text: '{"picks":["apex-sprint"]}' }],
+            model: 'unbounded-model',
+            usage: { inputTokens: 10, outputTokens: 5 },
+          }),
+        };
+        return chain;
+      }) as unknown;
+      return client as never;
+    });
+
+    const seeder = new ModelGameSeeder({
+      context: stubContext(),
+      providers: new Map([['__test_unbounded_vendor__', { model: 'unbounded-model' }]]),
+    });
+
+    await seeder.seed({ ...request, provider: '__test_unbounded_vendor__' });
+
+    expect(maxOutputTokensArgs).toEqual([2048, 65_536]);
   });
 
   it('combines bundle and GameKit validation errors into one repair round', async () => {

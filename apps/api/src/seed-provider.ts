@@ -12,6 +12,8 @@ export interface SeedProviderConfig {
   region?: string;
   // For openaiCompatible-shaped providers, a third party's own host.
   baseUrl?: string;
+  // Below the vendor's own ceiling, every generate call rejects outright.
+  maxOutputTokens?: number;
 }
 
 export type SeedProviderFactory = (config: SeedProviderConfig) => GenAIClient;

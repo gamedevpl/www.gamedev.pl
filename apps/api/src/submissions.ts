@@ -60,7 +60,7 @@ import {
   type BuilderKind,
 } from './builder.js';
 import { codeSurfaceEnabled, isLiveAgentRound } from './code-surface.js';
-import type { GameSeeder, SeedDraft, SeedFile } from './game-seed.js';
+import { DEFAULT_SEED_PROVIDER, type GameSeeder, type SeedDraft, type SeedFile } from './game-seed.js';
 import { createSourceDeliveryService } from './source-delivery.js';
 import { createKitFileStore } from './kit-files.js';
 import type { GamesStore } from './games-store.js';
@@ -842,9 +842,10 @@ export async function registerSubmissionRoutes(
         })
       : options.managedAvailabilityGate;
 
-  // Production reads the same environment gameSeeder was built from.
+  // Mirrors what gameSeeder was built from. No seeder, nothing is really reachable.
   function resolveSeedProviderEnv(): { providers: string[]; defaultProvider: string } {
     if (options.seedProviders) return options.seedProviders;
+    if (!gameSeeder) return { providers: [], defaultProvider: DEFAULT_SEED_PROVIDER };
     const env = createSeedProvidersFromEnv(app.log);
     return { providers: [...env.providers.keys()], defaultProvider: env.defaultProvider };
   }

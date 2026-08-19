@@ -267,14 +267,27 @@ export const SEED_PROVIDER_IDS = ['vertex', 'anthropic', 'openai', 'meta'] as co
 export type SeedProviderId = (typeof SEED_PROVIDER_IDS)[number];
 
 // Undefined when the credential/model are unset. Vertex needs neither: ambient ADC.
+function seedMaxOutputTokens(envVar: string, log: Logger | undefined, id: SeedProviderId): number | undefined {
+  const raw = process.env[envVar]?.trim();
+  if (!raw) return undefined;
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    log?.warn({ provider: id, envVar, raw }, `${envVar} is not a positive integer; ignoring`);
+    return undefined;
+  }
+  return parsed;
+}
+
 function buildSeedProviderConfig(id: SeedProviderId, log: Logger | undefined): SeedProviderConfig | undefined {
   if (id === 'vertex') {
     const projectId = process.env.VERTEX_PROJECT_ID?.trim();
     const region = process.env.VERTEX_REGION?.trim();
+    const maxOutputTokens = seedMaxOutputTokens('SEED_MAX_OUTPUT_TOKENS', log, id);
     return {
       model: process.env.SEED_MODEL?.trim() || DEFAULT_VERTEX_SEED_MODEL,
       ...(projectId ? { projectId } : {}),
       ...(region ? { region } : {}),
+      ...(maxOutputTokens ? { maxOutputTokens } : {}),
     };
   }
   const envPrefix = id.toUpperCase();
@@ -288,7 +301,8 @@ function buildSeedProviderConfig(id: SeedProviderId, log: Logger | undefined): S
     return undefined;
   }
   const baseUrl = process.env[`SEED_${envPrefix}_BASE_URL`]?.trim();
-  return { apiKey, model, ...(baseUrl ? { baseUrl } : {}) };
+  const maxOutputTokens = seedMaxOutputTokens(`SEED_${envPrefix}_MAX_OUTPUT_TOKENS`, log, id);
+  return { apiKey, model, ...(baseUrl ? { baseUrl } : {}), ...(maxOutputTokens ? { maxOutputTokens } : {}) };
 }
 
 export interface SeedProviderEnvRegistry {
