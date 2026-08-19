@@ -257,6 +257,11 @@ export const privacyPl: LegalDocument = {
               'Moderacja i doprecyzowanie opisu gry; podpowiedzi uzupełnień kodu w edytorze kodu',
               'USA / globalnie — standardowe klauzule umowne',
             ],
+            [
+              'Meta (Muse Spark, Meta Model API)',
+              'Wygenerowanie wstępnego szkicu gry na podstawie Twojego opisu, zanim zajmie się nią agent kodujący',
+              'USA — standardowe klauzule umowne',
+            ],
             ['GitHub (Microsoft)', 'Repozytorium gier i agent kodujący', 'USA — Data Privacy Framework'],
             ['Resend', 'Wysyłka wiadomości e-mail', 'USA — standardowe klauzule umowne'],
             [
