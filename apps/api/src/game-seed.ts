@@ -80,12 +80,7 @@ const MAX_SEED_TOTAL_BYTES = 400_000;
 export const DEFAULT_SEED_PICK_TIMEOUT_MS = 30_000;
 export const DEFAULT_SEED_GENERATE_TIMEOUT_MS = 180_000;
 
-// 'low' thinking is mandatory here (thinkingBudget:0 400s on this model — see pickReferences)
-// and its tokens are drawn from the same maxOutputTokens cap as the answer. 512 was sized for
-// the JSON answer alone and left no headroom: on a verbose thinking pass the whole budget went
-// to thinking, the answer came back empty, and JSON.parse('') crashed the pick (seen in prod,
-// 2026-08-19). This is still tiny next to the 65_536 generate calls — just enough slack that
-// thinking overhead can't starve the three-slug answer that follows it.
+// 'low' thinking shares this budget; 512 could starve the JSON answer empty.
 const SEED_PICK_MAX_OUTPUT_TOKENS = 2048;
 export const DEFAULT_SEED_TYPECHECK_TIMEOUT_MS = TYPECHECK_PREFLIGHT_BUDGET_MS;
 
@@ -489,10 +484,7 @@ export class VertexGameSeeder implements GameSeeder {
     const generationConfig: Record<string, unknown> = {};
     if (kind === 'pick') {
       generationConfig.responseMimeType = 'application/json';
-      // Constrains the *shape* the model is decoded into — hallucinated extra fields or
-      // a picks list past `this.references` cannot happen. It does not reserve output
-      // tokens for the answer, so it does not by itself stop the empty-response crash
-      // pickReferences guards against below; that is what maxOutputTokens headroom is for.
+      // Constrains picks' shape; doesn't reserve output tokens for the answer.
       generationConfig.responseSchema = {
         type: 'OBJECT',
         properties: { picks: { type: 'ARRAY', items: { type: 'STRING' }, maxItems: String(this.references) } },
@@ -522,9 +514,7 @@ export class VertexGameSeeder implements GameSeeder {
       .run();
 
     const usage = usageOf(result, this.model);
-    // The answer is a few slugs, not prose — but an empty or fence-only reply parses to
-    // neither valid JSON nor a schema match. Miss either way and this call still picked
-    // nothing, same as a clean "no references matched": fail open, don't crash the seed.
+    // An empty or malformed reply must fail open, not crash the seed.
     let picks: string[] = [];
     try {
       const parsed = PickSchema.safeParse(JSON.parse(extractJson(result)));

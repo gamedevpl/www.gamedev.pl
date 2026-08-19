@@ -127,14 +127,7 @@ const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
 // Matches agent-channel.ts's MAX_EVENT_TEXT — same field, same reader, same cap.
 const MAX_DELIVERY_EVENT_TEXT = 300;
 
-/**
- * A creator-visible 'blocked' thread event for a delivery that went through with a
- * gap the creator cannot otherwise see: typecheck skipped or bypassed. Before this,
- * these were `log?.warn` only — real in the store (roundTypecheckPreflightBypassErrors)
- * but never read by anything, so a build could sit unpublished with the thread saying
- * nothing was wrong. `appendBuildEvent` already renders 'blocked' with its own icon
- * (see apps/web/src/SubmissionStatusView.tsx); no client change needed to show this.
- */
+// Posts a 'blocked' thread event; UI already renders that kind.
 async function reportDeliveryBlocked(store: Store, issueNumber: number, text: string): Promise<void> {
   await store.appendBuildEvent(issueNumber, {
     kind: 'blocked',

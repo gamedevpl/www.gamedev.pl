@@ -499,10 +499,7 @@ describe('VertexGameSeeder', () => {
   });
 
   it('treats an empty pick response as no references, not a crash', async () => {
-    // Regression: seen in prod 2026-08-19 — a verbose 'low' thinking pass spent the whole
-    // maxOutputTokens budget on thinking and left nothing for the answer. The empty text
-    // used to reach JSON.parse('') uncaught, throwing "Unexpected end of JSON input" and
-    // taking the whole seed down instead of the pick alone failing open.
+    // Regression: empty pick text used to throw JSON.parse('') uncaught.
     const seeder = new VertexGameSeeder({
       context: stubContext(),
       client: stubClient([{ text: '' }, { text: GOOD_DRAFT }]),
