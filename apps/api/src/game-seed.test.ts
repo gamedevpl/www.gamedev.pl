@@ -498,6 +498,16 @@ describe('VertexGameSeeder', () => {
     expect(await seeder.seed(request)).toBeNull();
   });
 
+  it('treats an empty pick response as no references, not a crash', async () => {
+    // Regression: empty pick text used to throw JSON.parse('') uncaught.
+    const seeder = new VertexGameSeeder({
+      context: stubContext(),
+      client: stubClient([{ text: '' }, { text: GOOD_DRAFT }]),
+    });
+
+    await expect(seeder.seed(request)).resolves.toBeNull();
+  });
+
   it('returns null when the draft is not a usable game', async () => {
     const seeder = new VertexGameSeeder({
       context: stubContext(),
