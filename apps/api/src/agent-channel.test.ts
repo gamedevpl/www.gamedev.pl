@@ -1451,6 +1451,29 @@ describe('agent build channel', () => {
       expect(response.json().error).toMatch(/Config or executable-shaped/i);
     });
 
+    it('refuses a fresh index.html riding along in a direct files[] submit', async () => {
+      const store = new InMemoryStore();
+      await seedSubmission(store);
+      const { gamesStore, stored } = stubGamesStore();
+      app = await createApp(store, { gamesStore });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/agent/build/sources',
+        headers: agentHeaders(),
+        payload: {
+          slug: 'comet-courier',
+          files: [...MINIMAL, { path: 'index.html', content: '<canvas id="game"></canvas>' }],
+          kitEngineRef: 'abcdef1234567890',
+        },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error).toMatch(/index\.html cannot be staged or patched/);
+      // Refused before the store saw it, not after (stored stays empty).
+      expect(stored).toEqual([]);
+    });
+
     it('adopts the SPEC title so the shelf stops showing a truncated prompt', async () => {
       // The production example: submission title was prompt.slice(0, 40), SPEC said
       // "TV Tycoon". Publish already preferred the SPEC title for the catalog; the

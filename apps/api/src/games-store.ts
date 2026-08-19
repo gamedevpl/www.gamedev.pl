@@ -260,9 +260,6 @@ export function validateSourceUpload(files: SourceFile[], mode: DeliveryMode = '
   for (const file of files) {
     const path = assertDeliverableSourcePath(file.path);
     if (seen.has(path)) throw new InvalidUploadError(`duplicate path: ${path}`);
-    // Same refusal as stage/patch — closes the direct-upload bypass around it.
-    const indexHtmlReason = forbiddenIndexHtmlWriteReason(path, file.content);
-    if (indexHtmlReason) throw new InvalidUploadError(indexHtmlReason);
 
     total += Buffer.byteLength(file.content, 'utf8');
     if (total > MAX_UPLOAD_BYTES) throw new InvalidUploadError(`upload too large: over ${MAX_UPLOAD_BYTES} bytes`);
@@ -276,6 +273,12 @@ export function validateSourceUpload(files: SourceFile[], mode: DeliveryMode = '
   }
   const gameJson = files.find((file) => file.path.trim() === 'GAME.json');
 
+  // Blank is absent, matching getGameSources. A real one here is always carried
+  // forward, never a fresh write — that's refused earlier, so an old game's next
+  // revision isn't bricked by a file nobody just tried to author.
+  const indexHtml = files.find((file) => file.path.trim() === 'index.html');
+  const hasIndexHtml = !!indexHtml?.content.trim();
+
   let hasHowToPlay = false;
   if (gameJson) {
     try {
@@ -286,12 +289,10 @@ export function validateSourceUpload(files: SourceFile[], mode: DeliveryMode = '
     }
   }
 
-  // index.html never reaches here with content — howToPlay is the only source left.
-  if (!hasHowToPlay) {
+  if (!hasIndexHtml && !hasHowToPlay) {
     throw new InvalidUploadError(
-      'GAME.json.howToPlay is required — a game must be playable. Define howToPlay with at least goal and ' +
-        'hint (each a bilingual {"en", "pl"} pair) in GAME.json; index.html is generated from it and is not ' +
-        'accepted as an upload.',
+      'index.html or GAME.json.howToPlay is required — a game must be playable. A fresh index.html write is ' +
+        'refused elsewhere; define howToPlay with goal and hint in GAME.json instead.',
     );
   }
   if (mode === 'preview' && gameJson) {

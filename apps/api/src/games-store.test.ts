@@ -77,35 +77,35 @@ describe('validateSourceUpload — the delivery contract', () => {
     expect(() => validateSourceUpload([{ path: 'game.ts', content: 'x' }])).toThrow(/SPEC.md is required/);
   });
 
-  describe('index.html is refused; GAME.json.howToPlay is the only markup source', () => {
-    it('refuses any non-blank index.html outright, before any other check', () => {
-      expect(() =>
-        validateSourceUpload([...MINIMAL_WITHOUT_GAME_JSON, { path: 'index.html', content: '<canvas id="game">' }]),
-      ).toThrow(/index\.html cannot be staged or patched/);
+  describe('index.html or GAME.json howToPlay', () => {
+    // A fresh index.html write is refused elsewhere (putStagedSourceFile; the submit
+    // route's own-files[] check) — this function stays permissive for a carried-forward one.
+    it('still accepts a delivery that ships a real index.html and no howToPlay', () => {
+      const files = [...MINIMAL_WITHOUT_GAME_JSON, { path: 'index.html', content: '<canvas id="game"></canvas>' }];
+      expect(validateSourceUpload(files).map((file) => file.path)).toContain('index.html');
     });
 
-    it('treats a whitespace-only index.html as absent rather than refusing it', () => {
-      // Matches getGameSources: a blank file is absent, not content.
+    it('accepts a delivery that declares howToPlay instead of shipping index.html', () => {
+      expect(validateSourceUpload(MINIMAL).map((file) => file.path)).not.toContain('index.html');
+    });
+
+    it('treats a whitespace-only index.html as absent, same as getGameSources does', () => {
       expect(() =>
         validateSourceUpload([
           ...MINIMAL_WITHOUT_GAME_JSON,
           { path: 'index.html', content: '   \n  ' },
           { path: 'GAME.json', content: JSON.stringify({ engine: { modules: [] } }) },
         ]),
-      ).toThrow(/GAME\.json\.howToPlay is required/);
+      ).toThrow(/index\.html or GAME\.json\.howToPlay is required/);
     });
 
-    it('accepts a delivery whose GAME.json declares a valid howToPlay', () => {
-      expect(validateSourceUpload(MINIMAL).map((file) => file.path)).not.toContain('index.html');
-    });
-
-    it('refuses a delivery with no howToPlay', () => {
+    it('refuses a delivery with neither', () => {
       expect(() =>
         validateSourceUpload([
           ...MINIMAL_WITHOUT_GAME_JSON,
           { path: 'GAME.json', content: JSON.stringify({ engine: { modules: [] } }) },
         ]),
-      ).toThrow(/GAME\.json\.howToPlay is required/);
+      ).toThrow(/index\.html or GAME\.json\.howToPlay is required/);
     });
 
     it('refuses a howToPlay missing the pair the generator needs', () => {
@@ -118,13 +118,13 @@ describe('validateSourceUpload — the delivery contract', () => {
             content: JSON.stringify({ engine: { modules: [] }, howToPlay: { goal: HOW_TO_PLAY.goal } }),
           },
         ]),
-      ).toThrow(/GAME\.json\.howToPlay is required/);
+      ).toThrow(/index\.html or GAME\.json\.howToPlay is required/);
     });
 
     it('refuses a schema-only delivery whose GAME.json does not parse', () => {
       expect(() =>
         validateSourceUpload([...MINIMAL_WITHOUT_GAME_JSON, { path: 'GAME.json', content: '{"howToPlay": {' }]),
-      ).toThrow(/GAME\.json\.howToPlay is required/);
+      ).toThrow(/index\.html or GAME\.json\.howToPlay is required/);
     });
 
     it('refuses a howToPlay whose goal/hint are truthy but not {en, pl} strings', () => {
@@ -137,7 +137,7 @@ describe('validateSourceUpload — the delivery contract', () => {
             content: JSON.stringify({ engine: { modules: [] }, howToPlay: { goal: true, hint: HOW_TO_PLAY.hint } }),
           },
         ]),
-      ).toThrow(/GAME\.json\.howToPlay is required/);
+      ).toThrow(/index\.html or GAME\.json\.howToPlay is required/);
     });
   });
 
@@ -568,6 +568,31 @@ describe('GCS games store', () => {
 
     await store.clearStagedSources({ slug: 'g', issueNumber: 7, roundGeneration: 1 });
     expect((await store.listStagedSources({ slug: 'g', issueNumber: 7, roundGeneration: 1 })).files).toEqual([]);
+  });
+
+  it('refuses to stage a non-blank index.html, but a blank one is a no-op', async () => {
+    const { impl } = stubGcs();
+    const store = createGcsGamesStore({ ...base, fetchImpl: impl });
+
+    await expect(
+      store.putStagedSourceFile({
+        slug: 'g',
+        issueNumber: 7,
+        roundGeneration: 1,
+        path: 'index.html',
+        content: '<canvas id="game"></canvas>',
+      }),
+    ).rejects.toThrow(/index\.html cannot be staged or patched/);
+
+    await expect(
+      store.putStagedSourceFile({
+        slug: 'g',
+        issueNumber: 7,
+        roundGeneration: 1,
+        path: 'index.html',
+        content: '   \n  ',
+      }),
+    ).resolves.toMatchObject({ path: 'index.html' });
   });
 
   it('tombstones a staged path instead of delivering it as an empty file', async () => {

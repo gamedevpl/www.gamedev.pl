@@ -53,13 +53,20 @@ function platformStub() {
   return { backend, briefs, canceledRefs };
 }
 
+// index.html is refused — GAME.json.howToPlay supplies markup instead.
 const MINIMAL_FILES = [
   { path: 'SPEC.md', content: '---\ntitle: Self Built\n---\n' },
-  { path: 'index.html', content: '<!doctype html>' },
   { path: 'game.ts', content: 'export {};' },
   { path: 'TRACE.json', content: '{"samples":[]}' },
   { path: 'PLAYTEST.json', content: '{"expectProgress":["round-start"]}' },
   { path: 'AGENT.json', content: '{"policy":"capture"}' },
+  {
+    path: 'GAME.json',
+    content: JSON.stringify({
+      engine: { modules: [] },
+      howToPlay: { goal: { en: 'Win', pl: 'Wygraj' }, hint: { en: 'Play', pl: 'Graj' } },
+    }),
+  },
 ];
 
 function stubGamesStore(options?: {
