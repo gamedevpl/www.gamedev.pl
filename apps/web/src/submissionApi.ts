@@ -384,6 +384,17 @@ export async function abandonSubmission(token: string): Promise<void> {
   }
 }
 
+export async function deleteGame(token: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/api/submissions/${encodeURIComponent(token)}/delete-game`, {
+    method: 'POST',
+    credentials: 'include',
+  });
+
+  if (!response.ok) {
+    await throwResponseError(response);
+  }
+}
+
 export type BuilderHandoffResponse = { pending?: boolean; acknowledgedAt?: string };
 
 export async function handoffToPlatform(

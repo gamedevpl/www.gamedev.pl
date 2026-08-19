@@ -3712,6 +3712,49 @@ export async function registerSubmissionRoutes(
     },
   );
 
+  app.post(
+    '/api/submissions/:token/delete-game',
+    { config: { rateLimit: { max: 20, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      if (!submissionTokenSecret) {
+        return reply.status(503).send({ error: 'submissions are not configured' });
+      }
+      if (!checkUserAccess(request, reply)) return;
+      if (!store) {
+        return reply.status(503).send({ error: 'submissions are not configured' });
+      }
+
+      const token = z.string().parse((request.params as { token?: string }).token);
+      let issueNumber: number;
+      try {
+        issueNumber = verifyToken(token, submissionTokenSecret);
+      } catch (error) {
+        if (error instanceof InvalidTokenError) {
+          return reply.status(400).send({ error: 'invalid submission token' });
+        }
+        throw error;
+      }
+
+      const record = await store.getSubmission(issueNumber);
+      if (!record || record.ownerUid !== request.user!.uid) {
+        return reply.status(403).send({ error: 'only the creator can delete this game' });
+      }
+      if (!record.slug) {
+        return reply.status(409).send({ error: 'this game has no address yet' });
+      }
+
+      const publication = await store.getPublication(record.slug);
+      if (!publication || publication.state !== 'published') {
+        return reply.status(409).send({ error: 'not_published' });
+      }
+
+      await store.archivePublication(record.slug, 'deleted by creator', new Date(now()).toISOString());
+      invalidateStatusCache(issueNumber);
+
+      return reply.send({ ok: true, slug: record.slug });
+    },
+  );
+
   /** Lets a creator replace the current builder without creating feedback. */
   app.post(
     '/api/submissions/:token/handoff',
@@ -4761,6 +4804,29 @@ export async function registerSubmissionRoutes(
 
     return reply.send({ ok: true, slug, version: start.version, ...(start.buildId ? { buildId: start.buildId } : {}) });
   });
+
+  app.post<{ Params: { slug: string }; Body: { reason?: string } }>(
+    '/api/admin/games/:slug/delete',
+    async (request, reply) => {
+      if (!isAdminSession(request, adminUids)) return reply.status(404).send({ error: 'not_found' });
+      if (!store) return reply.status(503).send({ error: 'store_unavailable' });
+
+      const slug = request.params.slug;
+      const publication = await store.getPublication(slug);
+      if (!publication) return reply.status(404).send({ error: 'not_found' });
+      if (publication.state !== 'published') {
+        return reply.status(409).send({ error: 'not_published', state: publication.state });
+      }
+
+      const reason =
+        typeof request.body?.reason === 'string' && request.body.reason.trim()
+          ? request.body.reason.trim()
+          : 'deleted by operator';
+      await store.archivePublication(slug, reason, new Date(now()).toISOString());
+
+      return reply.send({ ok: true, slug });
+    },
+  );
 
   /**
    * Gives an address to every game still missing one.

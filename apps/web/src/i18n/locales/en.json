@@ -510,7 +510,10 @@
       "abandonConfirmRemove": "Yes, remove it — the game leaves Studio",
       "abandonHintRemove": "This draft was never published. Removing it stops the build and takes the game off your Studio shelf.",
       "abandonNotice": "\"{{title}}\" removed from Studio.",
-      "abandonNoticeDismiss": "Dismiss"
+      "abandonNoticeDismiss": "Dismiss",
+      "delete": "Delete this game",
+      "deleteConfirm": "Yes, delete it — the game goes offline",
+      "deleteHint": "This takes the game off the site immediately. It leaves your Studio shelf too."
     },
     "rail": {
       "connect": "Connect your agent",

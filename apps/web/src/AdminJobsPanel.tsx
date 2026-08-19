@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   cancelJob,
+  deleteGame,
   fetchJobQueue,
   fetchPublishedGames,
   publishJob,
   regateGame,
   retryJob,
   type CancelRefusal,
+  type DeleteGameRefusal,
   type JobQueueEntry,
   type JobQueueResponse,
   type PublishedGame,
@@ -78,6 +80,12 @@ const REGATE_COPY: Record<RegateRefusal, string> = {
   unknown: 'refused, and the reason was not one this console knows',
 };
 
+const DELETE_COPY: Record<DeleteGameRefusal, string> = {
+  not_published: 'not currently published — already taken down',
+  store_unavailable: 'the store is not configured on this deployment',
+  unknown: 'refused, and the reason was not one this console knows',
+};
+
 /**
  * The health column in words. Three honest states: never asked, asked and waiting
  * (with the age, because a request the gate never picked up looks exactly like a slow
@@ -99,12 +107,14 @@ function healthLabel(game: PublishedGame, now: number): string {
 }
 
 function PublishedRow({ game, onChanged }: { game: PublishedGame; onChanged: () => void }) {
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<'regate' | 'delete' | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [deleteArmed, setDeleteArmed] = useState(false);
 
   const onRegate = useCallback(async () => {
-    setBusy(true);
+    setBusy('regate');
     setMessage(null);
+    setDeleteArmed(false);
     try {
       const result = await regateGame(game.slug);
       if ('refused' in result) {
@@ -116,11 +126,35 @@ function PublishedRow({ game, onChanged }: { game: PublishedGame; onChanged: () 
     } catch {
       setMessage('could not reach the API');
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   }, [game.slug, onChanged]);
 
+  const onDelete = useCallback(async () => {
+    if (!deleteArmed) {
+      setDeleteArmed(true);
+      return;
+    }
+    setBusy('delete');
+    setMessage(null);
+    setDeleteArmed(false);
+    try {
+      const result = await deleteGame(game.slug);
+      if ('refused' in result) {
+        setMessage(DELETE_COPY[result.refused]);
+      } else {
+        setMessage('deleted — the game is offline');
+        onChanged();
+      }
+    } catch {
+      setMessage('could not reach the API');
+    } finally {
+      setBusy(null);
+    }
+  }, [deleteArmed, game.slug, onChanged]);
+
   const failing = game.healthCheck?.verdictAt && game.healthCheck.green === false;
+  const published = game.state === 'published';
 
   return (
     <tr className={failing ? 'admin-job-row is-stalled' : 'admin-job-row'}>
@@ -130,13 +164,24 @@ function PublishedRow({ game, onChanged }: { game: PublishedGame; onChanged: () 
       </td>
       <td>{game.publishedAt.slice(0, 10)}</td>
       <td>
-        <span className="admin-job-state">{healthLabel(game, Date.now())}</span>
+        <span className="admin-job-state">{published ? healthLabel(game, Date.now()) : game.state}</span>
         {failing ? <div className="admin-job-stall">creator nudged to refresh</div> : null}
       </td>
       <td>
-        <button className="admin-job-publish" onClick={onRegate} disabled={busy}>
-          {busy ? 'Starting…' : 'Re-gate'}
-        </button>
+        {published ? (
+          <div className="admin-job-actions">
+            <button className="admin-job-publish" onClick={onRegate} disabled={busy !== null}>
+              {busy === 'regate' ? 'Starting…' : 'Re-gate'}
+            </button>
+            <button
+              className={deleteArmed ? 'admin-job-cancel is-armed' : 'admin-job-cancel'}
+              onClick={onDelete}
+              disabled={busy !== null}
+            >
+              {busy === 'delete' ? 'Deleting…' : deleteArmed ? 'Sure? This is final' : 'Delete'}
+            </button>
+          </div>
+        ) : null}
         {message ? <div className="admin-job-message">{message}</div> : null}
       </td>
     </tr>

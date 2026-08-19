@@ -6043,6 +6043,180 @@ describe('operator health re-gate', () => {
   });
 });
 
+describe('creator deletes their own published game', () => {
+  async function appWithPublishedSubmission(
+    ownerUid: string,
+    publicationState: 'published' | 'archived' = 'published',
+  ) {
+    const { githubClient } = createGithubClientStub({});
+    const { app, authHeaders, store } = await createApp({ githubClient, submissionTokenSecret: secret });
+    await store.upsertUser({ uid: ownerUid });
+    await store.createSubmission(1_000_099, ownerUid, 'Sky Dodge');
+    await store.setSubmissionSlug(1_000_099, 'sky-dodge');
+    await store.setPublication({
+      slug: 'sky-dodge',
+      state: publicationState,
+      currentVersion: 'v1',
+      publishedAt: '2026-07-01T00:00:00.000Z',
+    });
+    return { app, authHeaders, store };
+  }
+
+  it('archives the publication and leaves nothing else touched', async () => {
+    const { app, authHeaders, store } = await appWithPublishedSubmission('g:test-user');
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(1_000_099, secret)}/delete-game`,
+      headers: authHeaders,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ ok: true, slug: 'sky-dodge' });
+    expect(await store.getPublication('sky-dodge')).toMatchObject({
+      state: 'archived',
+      takedownReason: 'deleted by creator',
+    });
+
+    await app.close();
+  });
+
+  it("refuses a token that is not the game's creator", async () => {
+    const { app, store } = await appWithPublishedSubmission('g:someone-else');
+    await store.upsertUser({ uid: 'g:test-user' });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(1_000_099, secret)}/delete-game`,
+      headers: getAuthHeaders('g:test-user'),
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(await store.getPublication('sky-dodge')).toMatchObject({ state: 'published' });
+
+    await app.close();
+  });
+
+  it('refuses a game that is not currently published', async () => {
+    const { app, authHeaders, store } = await appWithPublishedSubmission('g:test-user', 'archived');
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(1_000_099, secret)}/delete-game`,
+      headers: authHeaders,
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(await store.getPublication('sky-dodge')).toMatchObject({ state: 'archived' });
+
+    await app.close();
+  });
+});
+
+describe('operator deletes a published game', () => {
+  const bossHeaders = () => getAuthHeaders('g:boss');
+
+  async function appWithPublishedGame(publicationState: 'published' | 'disabled' = 'published') {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:test-user' });
+    await store.upsertUser({ uid: 'g:boss' });
+    await store.setPublication({
+      slug: 'sky-dodge',
+      state: publicationState,
+      currentVersion: 'v1',
+      publishedAt: '2026-07-01T00:00:00.000Z',
+    });
+
+    const { app } = await createApp({
+      githubClient: createGithubClientStub({}).githubClient,
+      store,
+      submissionTokenSecret: secret,
+      adminUids: 'g:boss',
+    });
+    return { app, store };
+  }
+
+  it('answers 404 to a non-operator', async () => {
+    const { app } = await appWithPublishedGame();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/admin/games/sky-dodge/delete',
+      headers: getAuthHeaders('g:someone-else'),
+    });
+    expect(response.statusCode).toBe(404);
+
+    await app.close();
+  });
+
+  it('answers 404 for a slug with no publication at all', async () => {
+    const { app } = await appWithPublishedGame();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/admin/games/never-published/delete',
+      headers: bossHeaders(),
+    });
+    expect(response.statusCode).toBe(404);
+
+    await app.close();
+  });
+
+  it('refuses a game that is not currently published', async () => {
+    const { app, store } = await appWithPublishedGame('disabled');
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/admin/games/sky-dodge/delete',
+      headers: bossHeaders(),
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({ error: 'not_published', state: 'disabled' });
+    expect(await store.getPublication('sky-dodge')).toMatchObject({ state: 'disabled' });
+
+    await app.close();
+  });
+
+  it('archives the game and records the operator-supplied reason', async () => {
+    const { app, store } = await appWithPublishedGame();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/admin/games/sky-dodge/delete',
+      headers: { ...bossHeaders(), 'content-type': 'application/json' },
+      payload: { reason: 'infringing assets' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ ok: true, slug: 'sky-dodge' });
+    expect(await store.getPublication('sky-dodge')).toMatchObject({
+      state: 'archived',
+      takedownReason: 'infringing assets',
+    });
+
+    await app.close();
+  });
+
+  it('defaults the reason when the operator gives none', async () => {
+    const { app, store } = await appWithPublishedGame();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/admin/games/sky-dodge/delete',
+      headers: bossHeaders(),
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(await store.getPublication('sky-dodge')).toMatchObject({
+      state: 'archived',
+      takedownReason: 'deleted by operator',
+    });
+
+    await app.close();
+  });
+});
+
 /**
  * Seeding through the whole submission path.
  *

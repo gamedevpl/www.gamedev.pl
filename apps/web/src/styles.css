@@ -9685,6 +9685,44 @@ button.builder-mode-selector:disabled {
   color: var(--muted);
 }
 
+.status-delete {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 2px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 0.82rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.status-delete:hover {
+  color: var(--text);
+}
+
+.status-delete.is-danger {
+  color: #f87171;
+  font-weight: 600;
+}
+
+.studio-delete-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  width: 100%;
+}
+
+.studio-delete-hint {
+  margin: 0;
+  max-width: 28rem;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
 /* Click-to-fill prompt starters, shown only where a caller passes exampleChips. */
 .prompt-examples {
   display: flex;
