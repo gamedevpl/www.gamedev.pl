@@ -181,8 +181,13 @@ describe('the Code surface routes (creator-code.ts)', () => {
           issueNumber: 10,
           files: [
             { path: 'SPEC.md', content: '# Sky Dodge' },
-            { path: 'index.html', content: '<div id="game-root"></div>' },
-            { path: 'GAME.json', content: '{"engine":{"modules":[]}}' },
+            {
+              path: 'GAME.json',
+              content: JSON.stringify({
+                engine: { modules: [] },
+                howToPlay: { goal: { en: 'Win', pl: 'Wygraj' }, hint: { en: 'Play', pl: 'Graj' } },
+              }),
+            },
             { path: 'game.ts', content: 'export const boot = 1;' },
             { path: 'game/render.ts', content: 'export const paint = 1;' },
           ],
@@ -350,7 +355,13 @@ describe('the Code surface routes (creator-code.ts)', () => {
           issueNumber: 10,
           files: [
             { path: 'SPEC.md', content: '# Sky Dodge' },
-            { path: 'index.html', content: '<div id="game-root"></div>' },
+            {
+              path: 'GAME.json',
+              content: JSON.stringify({
+                engine: { modules: [] },
+                howToPlay: { goal: { en: 'Win', pl: 'Wygraj' }, hint: { en: 'Play', pl: 'Graj' } },
+              }),
+            },
             { path: 'game.ts', content: 'export const boot = 1;' },
           ],
           mode: 'preview',
@@ -617,15 +628,11 @@ describe('the Code surface routes (creator-code.ts)', () => {
         issueNumber: 10,
         roundGeneration: 1,
         path: 'GAME.json',
-        content: '{"engine":{"modules":[]}}',
-        stagedBy: 'owner',
-      });
-      await withKitGames.putStagedSourceFile({
-        slug: 'sky-dodge',
-        issueNumber: 10,
-        roundGeneration: 1,
-        path: 'index.html',
-        content: '<div id="game-root"></div>',
+        // index.html is refused — howToPlay satisfies hasPlayableOverlay instead.
+        content: JSON.stringify({
+          engine: { modules: [] },
+          howToPlay: { goal: { en: 'Win', pl: 'Wygraj' }, hint: { en: 'Play', pl: 'Graj' } },
+        }),
         stagedBy: 'owner',
       });
       await withKitGames.putStagedSourceFile({
@@ -743,8 +750,14 @@ describe('the Code surface routes (creator-code.ts)', () => {
             stagedBy: 'owner',
           });
         await stage('SPEC.md', '# Sky Dodge');
-        await stage('index.html', '<div id="game-root"></div>');
-        await stage('GAME.json', '{"engine":{"modules":[]}}');
+        // index.html is refused as an upload — GAME.json.howToPlay supplies markup.
+        await stage(
+          'GAME.json',
+          JSON.stringify({
+            engine: { modules: [] },
+            howToPlay: { goal: { en: 'Win', pl: 'Wygraj' }, hint: { en: 'Play', pl: 'Graj' } },
+          }),
+        );
         await stage('game.ts', 'export const boot = () => {};');
 
         const res = await app.inject({
@@ -781,8 +794,15 @@ describe('the Code surface routes (creator-code.ts)', () => {
             ...(agentAssisted ? { agentAssisted: true } : {}),
           });
         await stage('SPEC.md', '# Sky Dodge', true);
-        await stage('index.html', '<div id="game-root"></div>', true);
-        await stage('GAME.json', '{"engine":{"modules":[]}}', true);
+        // index.html is refused as an upload — GAME.json.howToPlay supplies markup.
+        await stage(
+          'GAME.json',
+          JSON.stringify({
+            engine: { modules: [] },
+            howToPlay: { goal: { en: 'Win', pl: 'Wygraj' }, hint: { en: 'Play', pl: 'Graj' } },
+          }),
+          true,
+        );
         await stage('game.ts', 'export const boot = () => {};', true);
 
         const res = await app.inject({
@@ -824,10 +844,16 @@ describe('the Code surface routes (creator-code.ts)', () => {
           content,
           stagedBy: 'agent',
         });
-      const paths = ['SPEC.md', 'index.html', 'GAME.json', 'game.ts'] as const;
+      const paths = ['SPEC.md', 'GAME.json', 'game.ts'] as const;
       await stageAgent('SPEC.md', '# Sky Dodge');
-      await stageAgent('index.html', '<div id="game-root"></div>');
-      await stageAgent('GAME.json', '{"engine":{"modules":[]}}');
+      // index.html is refused as an upload — GAME.json.howToPlay supplies markup.
+      await stageAgent(
+        'GAME.json',
+        JSON.stringify({
+          engine: { modules: [] },
+          howToPlay: { goal: { en: 'Win', pl: 'Wygraj' }, hint: { en: 'Play', pl: 'Graj' } },
+        }),
+      );
       await stageAgent('game.ts', 'export const boot = () => {};');
 
       // A separate `withApp` each time — its per-slug deliver cooldown is process-local
@@ -874,8 +900,14 @@ describe('the Code surface routes (creator-code.ts)', () => {
             stagedBy: 'owner',
           });
         await stage('SPEC.md', '# Sky Dodge');
-        await stage('index.html', '<div id="game-root"></div>');
-        await stage('GAME.json', '{"engine":{"modules":[]}}');
+        // index.html is refused as an upload — GAME.json.howToPlay supplies markup.
+        await stage(
+          'GAME.json',
+          JSON.stringify({
+            engine: { modules: [] },
+            howToPlay: { goal: { en: 'Win', pl: 'Wygraj' }, hint: { en: 'Play', pl: 'Graj' } },
+          }),
+        );
         await stage('game.ts', 'export const boot = () => {};');
         await stage('TRACE.json', '{"samples":[]}');
         await stage('PLAYTEST.json', '{"expectProgress":["round-start"]}');

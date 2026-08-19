@@ -186,6 +186,22 @@ export function forbiddenDeliveryPathReason(path: string): string | null {
   return null;
 }
 
+// index.html is generated from GAME.json howToPlay; a hand-authored one broke chrome-
+// hiding on the play page. Refused outright — generation covers every legitimate case.
+// Blank is a no-op. Applies to both write paths below, including a carried-forward
+// pre-policy file; delete still works (assertDeliverableSourcePath doesn't call this).
+export function forbiddenIndexHtmlWriteReason(path: string, content: string): string | null {
+  if (path !== 'index.html' || !content.trim()) return null;
+  return (
+    'index.html cannot be staged or patched — it is generated from GAME.json howToPlay, never hand-authored. ' +
+    'Add a valid howToPlay to GAME.json instead: at minimum howToPlay.goal and howToPlay.hint, each a ' +
+    '{"en": "...", "pl": "..."} pair (both languages, both non-empty) — that is what the generator requires ' +
+    'to produce a playable page; optional controls/scoring/mode add more rows. Without it, the game has no ' +
+    'markup and the gate refuses it as unplayable. If an index.html from an earlier round is in the way, ' +
+    'call delete_source_file("index.html").'
+  );
+}
+
 /**
  * Validates one delivery path (shape + allowlist). Used by full uploads and by
  * file-by-file staging — required-set checks (SPEC.md, TRACE, …) stay on finalize.
@@ -244,6 +260,9 @@ export function validateSourceUpload(files: SourceFile[], mode: DeliveryMode = '
   for (const file of files) {
     const path = assertDeliverableSourcePath(file.path);
     if (seen.has(path)) throw new InvalidUploadError(`duplicate path: ${path}`);
+    // Same refusal as stage/patch — closes the direct-upload bypass around it.
+    const indexHtmlReason = forbiddenIndexHtmlWriteReason(path, file.content);
+    if (indexHtmlReason) throw new InvalidUploadError(indexHtmlReason);
 
     total += Buffer.byteLength(file.content, 'utf8');
     if (total > MAX_UPLOAD_BYTES) throw new InvalidUploadError(`upload too large: over ${MAX_UPLOAD_BYTES} bytes`);
@@ -257,10 +276,6 @@ export function validateSourceUpload(files: SourceFile[], mode: DeliveryMode = '
   }
   const gameJson = files.find((file) => file.path.trim() === 'GAME.json');
 
-  // A blank index.html is absent, same as getGameSources treats it.
-  const indexHtml = files.find((file) => file.path.trim() === 'index.html');
-  const hasIndexHtml = !!indexHtml?.content.trim();
-
   let hasHowToPlay = false;
   if (gameJson) {
     try {
@@ -271,9 +286,12 @@ export function validateSourceUpload(files: SourceFile[], mode: DeliveryMode = '
     }
   }
 
-  if (!hasIndexHtml && !hasHowToPlay) {
+  // index.html never reaches here with content — howToPlay is the only source left.
+  if (!hasHowToPlay) {
     throw new InvalidUploadError(
-      'index.html or GAME.json.howToPlay is required — a game must be playable. Either upload index.html or define howToPlay with goal and hint in GAME.json.',
+      'GAME.json.howToPlay is required — a game must be playable. Define howToPlay with at least goal and ' +
+        'hint (each a bilingual {"en", "pl"} pair) in GAME.json; index.html is generated from it and is not ' +
+        'accepted as an upload.',
     );
   }
   if (mode === 'preview' && gameJson) {
@@ -898,6 +916,8 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
     async putStagedSourceFile(input) {
       assertSlug(input.slug);
       const path = assertDeliverableSourcePath(input.path);
+      const indexHtmlReason = forbiddenIndexHtmlWriteReason(path, input.content);
+      if (indexHtmlReason) throw new InvalidUploadError(indexHtmlReason);
       const bytes = Buffer.byteLength(input.content, 'utf8');
       if (bytes > 1_000_000) {
         throw new InvalidUploadError(`file too large: ${path} is ${bytes} bytes (max 1000000 per file)`);

@@ -130,7 +130,7 @@
     "apps/api/src/games-repo-contract.test.ts": 240,
     "apps/api/src/games-repo-contract.ts": 2101,
     "apps/api/src/games-store.test.ts": 526,
-    "apps/api/src/games-store.ts": 3084,
+    "apps/api/src/games-store.ts": 3149,
     "apps/api/src/gate-progress.ts": 21,
     "apps/api/src/gate-runner.test.ts": 711,
     "apps/api/src/gate-runner.ts": 2428,

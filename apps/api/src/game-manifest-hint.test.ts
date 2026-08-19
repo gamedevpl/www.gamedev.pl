@@ -5,6 +5,8 @@ describe('gameManifestHint', () => {
   it('ignores every path other than GAME.json', () => {
     expect(gameManifestHint('game.ts', '{}')).toBeNull();
     expect(gameManifestHint('game/model.ts', '{}')).toBeNull();
+    // Refused at the store layer instead — see games-store.test.ts.
+    expect(gameManifestHint('index.html', '<html><body></body></html>')).toBeNull();
   });
 
   it('flags invalid JSON', () => {
@@ -81,70 +83,5 @@ describe('gameManifestHint', () => {
     expect(gameManifestHint('GAME.json', content)).toBeNull();
   });
 
-  it('accepts an empty index.html', () => {
-    expect(gameManifestHint('index.html', '')).toBeNull();
-    expect(gameManifestHint('index.html', '   \n  ')).toBeNull();
-  });
-
-  it('accepts a real body fragment with the canvas the kit expects', () => {
-    expect(gameManifestHint('index.html', '<canvas id="game"></canvas>')).toBeNull();
-    expect(gameManifestHint('index.html', '<div class="hud"></div><canvas id="game"></canvas>')).toBeNull();
-  });
-
-  it('flags a <link href> tag (arena-brawlers, 2026-08-09)', () => {
-    const content = '<link rel="stylesheet" href="./style.css" /><canvas id="game"></canvas>';
-    expect(gameManifestHint('index.html', content)).toMatch(/already inlined.*style\.css|<link href/i);
-  });
-
-  it('flags a <script src> tag (arena-brawlers, 2026-08-09)', () => {
-    const content = '<canvas id="game"></canvas><script type="module" src="./game.ts"></script>';
-    expect(gameManifestHint('index.html', content)).toMatch(/already inlined.*game\.ts|<script src/i);
-  });
-
-  it('flags a non-empty index.html missing the #game canvas', () => {
-    const content = '<div class="wrap"><div id="app"></div></div>';
-    const hint = gameManifestHint('index.html', content);
-    expect(hint).toMatch(/no element with id="game"/);
-    expect(hint).toMatch(/canvas is unavailable/);
-  });
-
-  it('flags a complete HTML document before any other index.html check (transport-tycoon-remake, 2026-08-18)', () => {
-    // Exact shape that leaked stray chrome under the canvas on /play.
-    const content =
-      '<!doctype html><html><head><meta charset="utf-8"><title>Sunny Transport</title></head><body>' +
-      '<canvas id="game" width="960" height="640"></canvas>' +
-      '<main><h1>Sunny Transport</h1><p>Build a profitable coal railway.</p></main></body></html>';
-    const hint = gameManifestHint('index.html', content);
-    expect(hint).toMatch(/complete HTML document/);
-    expect(hint).toMatch(/inlines this file into the <body>/);
-    expect(hint).toMatch(/#game-title/);
-  });
-
-  it('flags a bare <html> or <body> wrapper even without a doctype', () => {
-    expect(gameManifestHint('index.html', '<html><body><canvas id="game"></canvas></body></html>')).toMatch(
-      /complete HTML document/,
-    );
-    expect(gameManifestHint('index.html', '<body>\n<canvas id="game"></canvas>\n</body>')).toMatch(
-      /complete HTML document/,
-    );
-  });
-
-  it('does not read <header> as a document <head> wrapper', () => {
-    const content = '<header class="hud"></header><canvas id="game"></canvas><h1 id="game-title">T</h1>';
-    expect(gameManifestHint('index.html', content)).toBeNull();
-  });
-
-  it('flags a title heading the play page cannot hide', () => {
-    const content = '<canvas id="game"></canvas><main><h1>Sunny Transport</h1><p>Build a railway.</p></main>';
-    const hint = gameManifestHint('index.html', content);
-    expect(hint).toMatch(/<h1> without id="game-title"/);
-    expect(hint).toMatch(/stays visible as stray text under the canvas/);
-  });
-
-  it('accepts the standard chrome the play page hides', () => {
-    const content =
-      '<div class="wrap"><h1 id="game-title">Sunny Transport</h1><p id="game-desc">Build a railway.</p>' +
-      '<canvas id="game"></canvas><p class="hint">Watch the train loop.</p></div>';
-    expect(gameManifestHint('index.html', content)).toBeNull();
-  });
+  // index.html has its own refusal now — see games-store.test.ts.
 });

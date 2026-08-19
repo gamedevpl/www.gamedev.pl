@@ -39,11 +39,14 @@ const EDITOR_JSON = JSON.stringify({
 
 const VERSION_SOURCES: Record<string, string> = {
   'SPEC.md': '---\ntitle: Test\n---\nbody',
-  'GAME.json': '{"engine":{"modules":["gfx","audio","editor"]}}',
+  // index.html is refused as an upload — howToPlay supplies markup instead.
+  'GAME.json': JSON.stringify({
+    engine: { modules: ['gfx', 'audio', 'editor'] },
+    howToPlay: { goal: { en: 'Win', pl: 'Wygraj' }, hint: { en: 'Play', pl: 'Graj' } },
+  }),
   'EDITOR.json': EDITOR_JSON,
   'game.ts': 'import "./game/runtime.ts";',
   'game/editor-content.ts': '// stale generated module',
-  'index.html': '<canvas id="game"></canvas>',
   'style.css': 'body{}',
   'TRACE.json': '{"samples":[]}',
   'PLAYTEST.json': '{"expectProgress":["round-start"]}',

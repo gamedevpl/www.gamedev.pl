@@ -9,9 +9,14 @@ import {
   type SourceFile,
 } from './games-store.js';
 
-const MINIMAL: SourceFile[] = [
+const HOW_TO_PLAY = {
+  goal: { en: 'Survive', pl: 'Przetrwaj' },
+  hint: { en: 'Keep moving', pl: 'Nie zatrzymuj się' },
+};
+
+// MINIMAL minus GAME.json, for tests that swap in their own manifest.
+const MINIMAL_WITHOUT_GAME_JSON: SourceFile[] = [
   { path: 'SPEC.md', content: '---\ntitle: A game\n---\n' },
-  { path: 'index.html', content: '<!doctype html>' },
   { path: 'game.ts', content: 'export {};' },
   // The behavioural golden is part of a minimal delivery, not an extra: without it the
   // gate stops at the trace stage and the version can never reach a verdict.
@@ -23,6 +28,12 @@ const MINIMAL: SourceFile[] = [
   // Check 28's play policy. Allowed (and present on the happy path); not hard-required
   // at upload until in-flight workspaces drain — see ALLOWED_SOURCE_FILES note.
   { path: 'AGENT.json', content: '{"policy":"capture"}' },
+];
+
+// index.html is refused now — howToPlay is the only markup source.
+const MINIMAL: SourceFile[] = [
+  ...MINIMAL_WITHOUT_GAME_JSON,
+  { path: 'GAME.json', content: JSON.stringify({ engine: { modules: [] }, howToPlay: HOW_TO_PLAY }) },
 ];
 
 describe('validateSourceUpload — the delivery contract', () => {
@@ -63,83 +74,70 @@ describe('validateSourceUpload — the delivery contract', () => {
 
   it('requires the files that make a delivery a game', () => {
     expect(() => validateSourceUpload([{ path: 'SPEC.md', content: 'x' }])).toThrow(/must be playable/);
-    expect(() =>
-      validateSourceUpload([
-        { path: 'index.html', content: 'x' },
-        { path: 'game.ts', content: 'x' },
-      ]),
-    ).toThrow(/SPEC.md is required/);
+    expect(() => validateSourceUpload([{ path: 'game.ts', content: 'x' }])).toThrow(/SPEC.md is required/);
   });
 
-  describe('index.html or GAME.json howToPlay', () => {
-    const withoutIndexHtml = MINIMAL.filter((file) => file.path !== 'index.html');
-    const howToPlay = {
-      goal: { en: 'Survive', pl: 'Przetrwaj' },
-      hint: { en: 'Keep moving', pl: 'Nie zatrzymuj się' },
-    };
-
-    it('accepts a delivery that declares howToPlay instead of shipping index.html', () => {
-      const files = [
-        ...withoutIndexHtml,
-        { path: 'GAME.json', content: JSON.stringify({ engine: { modules: [] }, howToPlay }) },
-      ];
-
-      expect(validateSourceUpload(files).map((file) => file.path)).not.toContain('index.html');
+  describe('index.html is refused; GAME.json.howToPlay is the only markup source', () => {
+    it('refuses any non-blank index.html outright, before any other check', () => {
+      expect(() =>
+        validateSourceUpload([...MINIMAL_WITHOUT_GAME_JSON, { path: 'index.html', content: '<canvas id="game">' }]),
+      ).toThrow(/index\.html cannot be staged or patched/);
     });
 
-    it('still accepts a delivery that ships index.html and no howToPlay', () => {
-      expect(validateSourceUpload(MINIMAL).map((file) => file.path)).toContain('index.html');
-    });
-
-    it('refuses a delivery with neither', () => {
+    it('treats a whitespace-only index.html as absent rather than refusing it', () => {
+      // Matches getGameSources: a blank file is absent, not content.
       expect(() =>
         validateSourceUpload([
-          ...withoutIndexHtml,
+          ...MINIMAL_WITHOUT_GAME_JSON,
+          { path: 'index.html', content: '   \n  ' },
           { path: 'GAME.json', content: JSON.stringify({ engine: { modules: [] } }) },
         ]),
-      ).toThrow(/index\.html or GAME\.json\.howToPlay is required/);
+      ).toThrow(/GAME\.json\.howToPlay is required/);
+    });
+
+    it('accepts a delivery whose GAME.json declares a valid howToPlay', () => {
+      expect(validateSourceUpload(MINIMAL).map((file) => file.path)).not.toContain('index.html');
+    });
+
+    it('refuses a delivery with no howToPlay', () => {
+      expect(() =>
+        validateSourceUpload([
+          ...MINIMAL_WITHOUT_GAME_JSON,
+          { path: 'GAME.json', content: JSON.stringify({ engine: { modules: [] } }) },
+        ]),
+      ).toThrow(/GAME\.json\.howToPlay is required/);
     });
 
     it('refuses a howToPlay missing the pair the generator needs', () => {
       // goal without hint cannot produce a body
       expect(() =>
         validateSourceUpload([
-          ...withoutIndexHtml,
+          ...MINIMAL_WITHOUT_GAME_JSON,
           {
             path: 'GAME.json',
-            content: JSON.stringify({ engine: { modules: [] }, howToPlay: { goal: howToPlay.goal } }),
+            content: JSON.stringify({ engine: { modules: [] }, howToPlay: { goal: HOW_TO_PLAY.goal } }),
           },
         ]),
-      ).toThrow(/index\.html or GAME\.json\.howToPlay is required/);
+      ).toThrow(/GAME\.json\.howToPlay is required/);
     });
 
     it('refuses a schema-only delivery whose GAME.json does not parse', () => {
       expect(() =>
-        validateSourceUpload([...withoutIndexHtml, { path: 'GAME.json', content: '{"howToPlay": {' }]),
-      ).toThrow(/index\.html or GAME\.json\.howToPlay is required/);
+        validateSourceUpload([...MINIMAL_WITHOUT_GAME_JSON, { path: 'GAME.json', content: '{"howToPlay": {' }]),
+      ).toThrow(/GAME\.json\.howToPlay is required/);
     });
 
     it('refuses a howToPlay whose goal/hint are truthy but not {en, pl} strings', () => {
       // `'goal' in howToPlay` used to pass this, crashing deep in the assembler
       expect(() =>
         validateSourceUpload([
-          ...withoutIndexHtml,
+          ...MINIMAL_WITHOUT_GAME_JSON,
           {
             path: 'GAME.json',
-            content: JSON.stringify({ engine: { modules: [] }, howToPlay: { goal: true, hint: howToPlay.hint } }),
+            content: JSON.stringify({ engine: { modules: [] }, howToPlay: { goal: true, hint: HOW_TO_PLAY.hint } }),
           },
         ]),
-      ).toThrow(/index\.html or GAME\.json\.howToPlay is required/);
-    });
-
-    it('treats a whitespace-only index.html as absent, same as getGameSources does', () => {
-      expect(() =>
-        validateSourceUpload([
-          ...withoutIndexHtml,
-          { path: 'index.html', content: '   \n  ' },
-          { path: 'GAME.json', content: JSON.stringify({ engine: { modules: [] } }) },
-        ]),
-      ).toThrow(/index\.html or GAME\.json\.howToPlay is required/);
+      ).toThrow(/GAME\.json\.howToPlay is required/);
     });
   });
 
@@ -194,7 +192,13 @@ describe('validateSourceUpload — the delivery contract', () => {
   it('catches an enabled audio module without selected sounds before the gate', () => {
     expect(() =>
       validateSourceUpload(
-        [...MINIMAL, { path: 'GAME.json', content: JSON.stringify({ engine: { modules: ['audio'] }, audio: {} }) }],
+        [
+          ...MINIMAL_WITHOUT_GAME_JSON,
+          {
+            path: 'GAME.json',
+            content: JSON.stringify({ engine: { modules: ['audio'] }, audio: {}, howToPlay: HOW_TO_PLAY }),
+          },
+        ],
         'preview',
       ),
     ).toThrow(/audio\.sounds/);
@@ -202,7 +206,10 @@ describe('validateSourceUpload — the delivery contract', () => {
 
   it('rejects a preview manifest without engine.modules before smoke runs', () => {
     expect(() =>
-      validateSourceUpload([...MINIMAL, { path: 'GAME.json', content: JSON.stringify({ howToPlay: {} }) }], 'preview'),
+      validateSourceUpload(
+        [...MINIMAL_WITHOUT_GAME_JSON, { path: 'GAME.json', content: JSON.stringify({ howToPlay: HOW_TO_PLAY }) }],
+        'preview',
+      ),
     ).toThrow(/engine\.modules as an array/);
   });
 
@@ -210,10 +217,14 @@ describe('validateSourceUpload — the delivery contract', () => {
     expect(() =>
       validateSourceUpload(
         [
-          ...MINIMAL,
+          ...MINIMAL_WITHOUT_GAME_JSON,
           {
             path: 'GAME.json',
-            content: JSON.stringify({ engine: { modules: ['audio'] }, audio: { sounds: ['win'] } }),
+            content: JSON.stringify({
+              engine: { modules: ['audio'] },
+              audio: { sounds: ['win'] },
+              howToPlay: HOW_TO_PLAY,
+            }),
           },
         ],
         'preview',
@@ -222,12 +233,13 @@ describe('validateSourceUpload — the delivery contract', () => {
     expect(
       validateSourceUpload(
         [
-          ...MINIMAL,
+          ...MINIMAL_WITHOUT_GAME_JSON,
           {
             path: 'GAME.json',
             content: JSON.stringify({
               engine: { modules: ['audio'] },
               audio: { sounds: ['win'], music: 'bright-chase' },
+              howToPlay: HOW_TO_PLAY,
             }),
           },
         ],
@@ -237,17 +249,16 @@ describe('validateSourceUpload — the delivery contract', () => {
   });
 
   it('points the audio refusal at the catalog instead of offering to drop the module', () => {
-    expect(() =>
-      validateSourceUpload(
-        [...MINIMAL, { path: 'GAME.json', content: JSON.stringify({ engine: { modules: ['audio'] }, audio: {} }) }],
-        'preview',
-      ),
-    ).toThrow(/Audio catalog/);
+    const files = [
+      ...MINIMAL_WITHOUT_GAME_JSON,
+      {
+        path: 'GAME.json',
+        content: JSON.stringify({ engine: { modules: ['audio'] }, audio: {}, howToPlay: HOW_TO_PLAY }),
+      },
+    ];
+    expect(() => validateSourceUpload(files, 'preview')).toThrow(/Audio catalog/);
     try {
-      validateSourceUpload(
-        [...MINIMAL, { path: 'GAME.json', content: JSON.stringify({ engine: { modules: ['audio'] }, audio: {} }) }],
-        'preview',
-      );
+      validateSourceUpload(files, 'preview');
     } catch (error) {
       expect((error as Error).message).not.toMatch(/or remove the audio module/);
     }
@@ -308,8 +319,8 @@ describe('validateSourceUpload — the delivery contract', () => {
   });
 
   it('accept/reject matrix for the delivery filename allowlist', () => {
+    // GAME.json isn't repeated here — MINIMAL already carries one (duplicate-path).
     const accept = [
-      'GAME.json',
       'music.json',
       'CAPTURE.json',
       'style.css',

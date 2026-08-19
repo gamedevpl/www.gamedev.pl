@@ -1,9 +1,10 @@
 import { GAME_KIT_MODULES } from './games-repo-contract.js';
 
 // Shallow shape check — catches assemble.ts crashes before the gate does.
+
+// index.html is refused elsewhere at write time — never reaches this check.
 export function gameManifestHint(path: string, content: string): string | null {
   const normalized = path.trim().replaceAll('\\', '/');
-  if (normalized === 'index.html') return indexHtmlHint(content);
   if (normalized !== 'GAME.json') return null;
 
   let parsed: unknown;
@@ -73,53 +74,5 @@ export function gameManifestHint(path: string, content: string): string | null {
     }
   }
 
-  return null;
-}
-
-function indexHtmlHint(content: string): string | null {
-  const trimmed = content.trim();
-  if (!trimmed) return null;
-
-  if (/<!doctype\s|<html[\s>]|<head[\s>]|<body[\s>]/i.test(trimmed)) {
-    return (
-      'index.html is a complete HTML document, but the assembler inlines this file into the <body> of the ' +
-      'served document — a second <!doctype>/<html>/<head>/<body> gets nested inside it, and your own ' +
-      'title/heading markup renders as stray text under the canvas on the play page (the player hides only ' +
-      'the standard chrome: #game-title, #game-desc, .game-controls, .hint). Ship a body fragment with that ' +
-      'standard chrome instead, or call delete_source_file("index.html") to let the platform generate the ' +
-      'markup from GAME.json howToPlay.'
-    );
-  }
-  if (/<link\b[^>]*\bhref\s*=/i.test(trimmed)) {
-    return (
-      'index.html has a <link href=...> tag. style.css is already inlined into the served document by the ' +
-      'assembler, so this reference is never fetched — it 404s locally and is blocked outright by the served ' +
-      "game's CSP (no external files, ever). Remove the <link> tag; the game's own CSS still applies."
-    );
-  }
-  if (/<script\b[^>]*\bsrc\s*=/i.test(trimmed)) {
-    return (
-      'index.html has a <script src=...> tag. game.ts is already inlined into the served document by the ' +
-      'assembler, so this reference is never fetched — it 404s locally and is blocked outright by the served ' +
-      "game's CSP (no external files, ever), so the game's real code never runs for a player. Remove the " +
-      '<script src=...> tag; the compiled game.ts already runs from the inlined <script> the assembler adds.'
-    );
-  }
-  if (!/id\s*=\s*["']game["']/.test(trimmed)) {
-    return (
-      'index.html is non-empty but has no element with id="game" — the kit renderer looks up that id (a ' +
-      '<canvas id="game">) and throws "canvas is unavailable" if nothing matches. Add it, or call ' +
-      'delete_source_file("index.html") to let the platform generate the markup from GAME.json instead.'
-    );
-  }
-  if (/<h1\b/i.test(trimmed) && !/id\s*=\s*["']game-title["']/.test(trimmed)) {
-    return (
-      'index.html has an <h1> without id="game-title". The play page hides only the standard chrome ' +
-      '(#game-title, #game-desc, .game-controls, .hint) and shows the title and description in its own ' +
-      'header instead — a title or description in any other markup stays visible as stray text under the ' +
-      'canvas. Use <h1 id="game-title"> and <p id="game-desc"> for them, or call ' +
-      'delete_source_file("index.html") to let the platform generate the markup from GAME.json howToPlay.'
-    );
-  }
   return null;
 }
