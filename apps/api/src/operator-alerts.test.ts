@@ -277,6 +277,16 @@ describe('detectSeedingDegraded', () => {
     expect(alert?.title).toBe('The last 2 new games');
   });
 
+  it('treats a legacy no-provider failure as vertex, not as a name-free wildcard', () => {
+    // A missing provider must not be misread as "every failure is anthropic".
+    const alert = detectSeedingDegraded(
+      [nothing(ago(MINUTE)), { ...nothing(ago(30 * MINUTE)), provider: 'anthropic' }],
+      NOW,
+    );
+
+    expect(alert?.title).toBe('The last 2 new games');
+  });
+
   it('forgets failures older than the window', () => {
     const alert = detectSeedingDegraded(
       [outcome({ at: ago(SEEDING_DEGRADED_WINDOW_MS + MINUTE) }), outcome({ at: ago(SEEDING_DEGRADED_WINDOW_MS * 2) })],
