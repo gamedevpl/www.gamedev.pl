@@ -253,6 +253,30 @@ describe('detectSeedingDegraded', () => {
     expect(alert).toBeNull();
   });
 
+  it('names the provider in the title when every failure shares one (SP-12)', () => {
+    const alert = detectSeedingDegraded(
+      [
+        { ...nothing(ago(MINUTE)), provider: 'anthropic' },
+        { ...nothing(ago(30 * MINUTE)), provider: 'anthropic' },
+      ],
+      NOW,
+    );
+
+    expect(alert?.title).toBe('The last 2 new games (anthropic)');
+  });
+
+  it('leaves the title generic when the run mixes providers — a wrong guess is worse', () => {
+    const alert = detectSeedingDegraded(
+      [
+        { ...nothing(ago(MINUTE)), provider: 'anthropic' },
+        { ...nothing(ago(30 * MINUTE)), provider: 'vertex' },
+      ],
+      NOW,
+    );
+
+    expect(alert?.title).toBe('The last 2 new games');
+  });
+
   it('forgets failures older than the window', () => {
     const alert = detectSeedingDegraded(
       [outcome({ at: ago(SEEDING_DEGRADED_WINDOW_MS + MINUTE) }), outcome({ at: ago(SEEDING_DEGRADED_WINDOW_MS * 2) })],

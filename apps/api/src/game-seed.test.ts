@@ -7,7 +7,7 @@ import {
   normalizeSeedPath,
   parseSeedResponse,
   renderKnowledgeContext,
-  VertexGameSeeder,
+  ModelGameSeeder,
   type SeedFile,
 } from './game-seed.js';
 import type { SeedContext, SeedContextSource } from './seed-context.js';
@@ -313,6 +313,7 @@ function stubClient(responses: { text: string; inputTokens?: number; outputToken
   const builder = () => {
     const response = responses[Math.min(call++, responses.length - 1)];
     const chain = {
+      responseFormat: () => chain,
       thinking: () => chain,
       temperature: () => chain,
       maxOutputTokens: () => chain,
@@ -325,7 +326,7 @@ function stubClient(responses: { text: string; inputTokens?: number; outputToken
     };
     return chain;
   };
-  return builder as unknown as ConstructorParameters<typeof VertexGameSeeder>[0]['client'];
+  return builder as unknown as ConstructorParameters<typeof ModelGameSeeder>[0]['client'];
 }
 
 function stubClientWithPrompts(responses: { text: string }[]) {
@@ -335,6 +336,7 @@ function stubClientWithPrompts(responses: { text: string }[]) {
     prompts.push(prompt);
     const response = responses[Math.min(call++, responses.length - 1)];
     const chain = {
+      responseFormat: () => chain,
       thinking: () => chain,
       temperature: () => chain,
       maxOutputTokens: () => chain,
@@ -346,7 +348,7 @@ function stubClientWithPrompts(responses: { text: string }[]) {
       }),
     };
     return chain;
-  }) as unknown as ConstructorParameters<typeof VertexGameSeeder>[0]['client'];
+  }) as unknown as ConstructorParameters<typeof ModelGameSeeder>[0]['client'];
   return { client: builder, prompts };
 }
 
@@ -399,12 +401,13 @@ interface GameKitGameContext {
 }
 `;
 
-describe('VertexGameSeeder', () => {
+describe('ModelGameSeeder', () => {
   const request = { slug: 'my-game', title: 'My Game', spec: 'A game about tanks' };
 
   it('asks for the low thinking floor, not a raw budget gemini-3.7-flash rejects', async () => {
     const thinkingArgs: unknown[] = [];
     const chain = {
+      responseFormat: () => chain,
       thinking: (arg: unknown) => {
         thinkingArgs.push(arg);
         return chain;
@@ -418,8 +421,8 @@ describe('VertexGameSeeder', () => {
         usage: { inputTokens: 100, outputTokens: 10 },
       }),
     };
-    const client = (() => chain) as unknown as ConstructorParameters<typeof VertexGameSeeder>[0]['client'];
-    const seeder = new VertexGameSeeder({ context: stubContext(), client });
+    const client = (() => chain) as unknown as ConstructorParameters<typeof ModelGameSeeder>[0]['client'];
+    const seeder = new ModelGameSeeder({ context: stubContext(), client });
 
     await seeder.seed(request);
 
@@ -427,7 +430,7 @@ describe('VertexGameSeeder', () => {
   });
 
   it('returns a draft with references, usage summed across both calls, and notes', async () => {
-    const seeder = new VertexGameSeeder({
+    const seeder = new ModelGameSeeder({
       context: stubContext(),
       client: stubClient([
         { text: '{"picks":["apex-sprint","word-forge"]}', inputTokens: 400, outputTokens: 10 },
@@ -444,7 +447,12 @@ describe('VertexGameSeeder', () => {
     expect(draft!.typeChecked).toBe(false);
     expect(draft!.typeErrors).toBe(0);
     // Both calls are billed to the job, not just the expensive one.
-    expect(draft!.usage).toEqual({ inputTokens: 30_400, outputTokens: 8_010, model: 'gemini-3.7-flash' });
+    expect(draft!.usage).toEqual({
+      inputTokens: 30_400,
+      outputTokens: 8_010,
+      model: 'gemini-3.7-flash',
+      provider: 'vertex',
+    });
   });
 
   it('combines bundle and GameKit validation errors into one repair round', async () => {
@@ -459,7 +467,7 @@ describe('VertexGameSeeder', () => {
       { text: '--- games/my-game/game.ts ---\n// repaired\n' },
     ]);
 
-    const seeder = new VertexGameSeeder({
+    const seeder = new ModelGameSeeder({
       context: stubContext({ kitDeclaration: KIT }),
       client,
       bundleCheck: async () => bundleVerdicts.shift()!,
@@ -481,7 +489,7 @@ describe('VertexGameSeeder', () => {
   });
 
   it('drops hallucinated slugs and keeps the real ones', async () => {
-    const seeder = new VertexGameSeeder({
+    const seeder = new ModelGameSeeder({
       context: stubContext(),
       client: stubClient([{ text: '{"picks":["not-a-game","apex-sprint"]}' }, { text: GOOD_DRAFT }]),
     });
@@ -490,7 +498,7 @@ describe('VertexGameSeeder', () => {
   });
 
   it('returns null when no reference matched, rather than generating blind', async () => {
-    const seeder = new VertexGameSeeder({
+    const seeder = new ModelGameSeeder({
       context: stubContext(),
       client: stubClient([{ text: '{"picks":["not-a-game"]}' }, { text: GOOD_DRAFT }]),
     });
@@ -499,7 +507,7 @@ describe('VertexGameSeeder', () => {
   });
 
   it('returns null when the draft is not a usable game', async () => {
-    const seeder = new VertexGameSeeder({
+    const seeder = new ModelGameSeeder({
       context: stubContext(),
       client: stubClient([
         { text: '{"picks":["apex-sprint"]}' },
@@ -518,14 +526,14 @@ describe('VertexGameSeeder', () => {
       run: async () => {
         throw new Error('vertex is having a day');
       },
-    })) as unknown as ConstructorParameters<typeof VertexGameSeeder>[0]['client'];
+    })) as unknown as ConstructorParameters<typeof ModelGameSeeder>[0]['client'];
 
-    const seeder = new VertexGameSeeder({ context: stubContext(), client: exploding });
+    const seeder = new ModelGameSeeder({ context: stubContext(), client: exploding });
     await expect(seeder.seed(request)).resolves.toBeNull();
   });
 
   it('fails open when context cannot be assembled', async () => {
-    const seeder = new VertexGameSeeder({
+    const seeder = new ModelGameSeeder({
       context: { load: async () => null },
       client: stubClient([{ text: '{"picks":["apex-sprint"]}' }, { text: GOOD_DRAFT }]),
     });
@@ -534,7 +542,7 @@ describe('VertexGameSeeder', () => {
   });
 
   it('fails open on a picker response that is not JSON at all', async () => {
-    const seeder = new VertexGameSeeder({
+    const seeder = new ModelGameSeeder({
       context: stubContext(),
       client: stubClient([{ text: 'I think apex-sprint would be good' }, { text: GOOD_DRAFT }]),
     });
@@ -546,7 +554,7 @@ describe('VertexGameSeeder', () => {
     // The containment guard seen from the other side: paths are only stripped of *this*
     // game's prefix, so a draft labelled with some other slug lands nowhere and the
     // build starts unseeded rather than writing into a directory it does not own.
-    const seeder = new VertexGameSeeder({
+    const seeder = new ModelGameSeeder({
       context: stubContext(),
       client: stubClient([{ text: '{"picks":["apex-sprint"]}' }, { text: draftFor('some-other-game') }]),
     });
@@ -559,7 +567,7 @@ describe('VertexGameSeeder', () => {
       { ok: false as const, errors: ['/games/my-game/game.ts:1: game module not found: game/render.ts'] },
       { ok: true as const },
     ];
-    const seeder = new VertexGameSeeder({
+    const seeder = new ModelGameSeeder({
       context: stubContext(),
       client: stubClient([
         { text: '{"picks":["apex-sprint"]}', inputTokens: 400, outputTokens: 10 },
@@ -589,7 +597,7 @@ describe('VertexGameSeeder', () => {
     // A draft two rounds from compiling is still a head start for the agent — it is
     // only the creator preview that is withheld. One round, never a loop.
     let checks = 0;
-    const seeder = new VertexGameSeeder({
+    const seeder = new ModelGameSeeder({
       context: stubContext(),
       client: stubClient([
         { text: '{"picks":["apex-sprint"]}' },
@@ -611,7 +619,7 @@ describe('VertexGameSeeder', () => {
   });
 
   it('discards a repair that broke the draft shape, keeping the original', async () => {
-    const seeder = new VertexGameSeeder({
+    const seeder = new ModelGameSeeder({
       context: stubContext(),
       client: stubClient([
         { text: '{"picks":["apex-sprint"]}' },
@@ -657,7 +665,7 @@ describe('VertexGameSeeder', () => {
     // immediately rather than waiting. A typo must not buy either.
     process.env.SEED_REFERENCES = 'three';
     process.env.SEED_GENERATE_TIMEOUT_MS = '';
-    const seeder = new VertexGameSeeder({
+    const seeder = new ModelGameSeeder({
       context: stubContext(),
       client: stubClient([{ text: '{"picks":["apex-sprint","word-forge"]}' }, { text: GOOD_DRAFT }]),
     });
@@ -670,7 +678,7 @@ describe('VertexGameSeeder', () => {
 
   it('honours a valid override', async () => {
     process.env.SEED_REFERENCES = '1';
-    const seeder = new VertexGameSeeder({
+    const seeder = new ModelGameSeeder({
       context: stubContext(),
       client: stubClient([{ text: '{"picks":["apex-sprint","word-forge"]}' }, { text: GOOD_DRAFT }]),
     });
@@ -679,7 +687,7 @@ describe('VertexGameSeeder', () => {
   });
 
   it('does not run a repair round when the draft already bundles', async () => {
-    const seeder = new VertexGameSeeder({
+    const seeder = new ModelGameSeeder({
       context: stubContext(),
       client: stubClient([{ text: '{"picks":["apex-sprint"]}' }, { text: GOOD_DRAFT }]),
     });
@@ -692,7 +700,7 @@ describe('VertexGameSeeder', () => {
   });
 
   it('keeps a draft that tried to write outside the game, minus those files', async () => {
-    const seeder = new VertexGameSeeder({
+    const seeder = new ModelGameSeeder({
       context: stubContext(),
       client: stubClient([
         { text: '{"picks":["apex-sprint"]}' },
@@ -730,6 +738,7 @@ describe('knowledge context injection (KQ-11)', () => {
       prompts.push(prompt);
       const response = responses[Math.min(call++, responses.length - 1)];
       const chain = {
+        responseFormat: () => chain,
         thinking: () => chain,
         temperature: () => chain,
         maxOutputTokens: () => chain,
@@ -741,7 +750,7 @@ describe('knowledge context injection (KQ-11)', () => {
         }),
       };
       return chain;
-    }) as unknown as ConstructorParameters<typeof VertexGameSeeder>[0]['client'];
+    }) as unknown as ConstructorParameters<typeof ModelGameSeeder>[0]['client'];
     return { client: builder, prompts };
   }
 
@@ -764,7 +773,7 @@ describe('knowledge context injection (KQ-11)', () => {
     ]);
     const knowledgeSearch: QueryKnowledgeFn = async () => stubKnowledgeResult;
 
-    const seeder = new VertexGameSeeder({ context: source, client, knowledgeSearch });
+    const seeder = new ModelGameSeeder({ context: source, client, knowledgeSearch });
     const draft = await seeder.seed(request);
 
     expect(draft).not.toBeNull();
@@ -779,7 +788,7 @@ describe('knowledge context injection (KQ-11)', () => {
       calls.push(options);
       return stubKnowledgeResult;
     };
-    const seeder = new VertexGameSeeder({
+    const seeder = new ModelGameSeeder({
       context: stubContext(),
       client: stubClient([{ text: '{"picks":["apex-sprint"]}' }, { text: GOOD_DRAFT }]),
       knowledgeSearch,
@@ -800,7 +809,7 @@ describe('knowledge context injection (KQ-11)', () => {
       throw new Error('discovery engine unavailable');
     };
 
-    const seeder = new VertexGameSeeder({ context: source, client, knowledgeSearch });
+    const seeder = new ModelGameSeeder({ context: source, client, knowledgeSearch });
     const draft = await seeder.seed(request);
 
     expect(draft).not.toBeNull();
@@ -810,7 +819,7 @@ describe('knowledge context injection (KQ-11)', () => {
 
   it('proceeds with the full reference budget when knowledge search is not configured', async () => {
     const { source, budgets } = stubContextCapturingBudget();
-    const seeder = new VertexGameSeeder({
+    const seeder = new ModelGameSeeder({
       context: source,
       client: stubClient([{ text: '{"picks":["apex-sprint"]}' }, { text: GOOD_DRAFT }]),
     });

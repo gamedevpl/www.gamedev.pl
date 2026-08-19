@@ -68,6 +68,7 @@ export async function fetchAdminSummary(): Promise<AdminSummary | null> {
 
 export type ManagedBuilderMode = 'auto' | 'off' | 'coming_soon';
 export type ManagedAgentVendor = 'anthropic' | 'gemini' | 'copilot' | 'openai';
+export type SeedingMode = 'auto' | 'off';
 
 export interface CreationLimits {
   stored: {
@@ -79,6 +80,9 @@ export interface CreationLimits {
     managedDailyUserCap?: number | null;
     tabCompletePaused?: boolean;
     globalDailyTabCompleteTokenCap?: number | null;
+    // Round 0's kill switch and provider picker (ops/seed-provider-selection-plan.md).
+    seedingMode?: SeedingMode;
+    seedProviderOverride?: string | null;
     updatedAt?: string;
     updatedBy?: string;
   } | null;
@@ -99,6 +103,14 @@ export interface CreationLimits {
     // TA-01's breaker — off/on and the shared daily token ceiling.
     tabCompletePaused: boolean;
     globalDailyTabCompleteTokenCap: number;
+    seedingMode: SeedingMode;
+    seedProvider: {
+      stored: string | null;
+      effective: string;
+      available: boolean;
+      configuredProviders: string[];
+      defaultProvider: string | null;
+    };
   };
   today: { dateStr: string; submissions: number; managedBuilds: number; tabCompleteTokens: number };
   propagationMs: number;
@@ -127,6 +139,8 @@ export async function setCreationLimits(patch: {
   managedDailyUserCap?: number | null;
   tabCompletePaused?: boolean;
   globalDailyTabCompleteTokenCap?: number | null;
+  seedingMode?: SeedingMode;
+  seedProviderOverride?: string | null;
 }): Promise<CreationLimits | { error: string }> {
   const res = await fetch(`${API_BASE}/api/admin/creation-limits`, {
     method: 'POST',

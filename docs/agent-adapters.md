@@ -28,10 +28,13 @@ repository contract stays stable.
 
 Every new game starts with a **generated first draft already in place** — written by a
 model from the creator's spec and a few published games, before any agent is started.
-This is not optional and there is no flag for it: round 0 is how a new game begins, and
-the draft it produces _is_ the round's sources. An agent reads it through `get_sources`,
-the same verb that returns a later round's delivered files, so the first round and every
-round after it are the same flow.
+There is no env-var flag for it — round 0 is how a new game begins by default, and the
+draft it produces _is_ the round's sources. An agent reads it through `get_sources`, the
+same verb that returns a later round's delivered files, so the first round and every
+round after it are the same flow. An operator can still turn it off from the console mid-
+incident (a Firestore document, not a deploy); an adapter should not assume a draft is
+always there, only that its absence means "start from an empty directory," exactly as
+every fail-open path below already requires.
 
 It is still a starting point, not a specification:
 

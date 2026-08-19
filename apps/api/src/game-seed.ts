@@ -31,7 +31,7 @@
 import path from 'node:path';
 import { z } from 'zod';
 import type { GenAIClient, GenerationResult } from 'genaicode';
-import { createVertexClient, type VertexGenerationConfig } from './genai.js';
+import { createSeedClient, type SeedProviderConfig } from './seed-provider.js';
 import { checkSeedBundles, type SeedBundleResult } from './seed-bundle.js';
 import type { SeedContext, SeedContextSource } from './seed-context.js';
 import { typeCheckGame } from './type-check.js';
@@ -81,8 +81,8 @@ export const DEFAULT_SEED_PICK_TIMEOUT_MS = 30_000;
 export const DEFAULT_SEED_GENERATE_TIMEOUT_MS = 180_000;
 export const DEFAULT_SEED_TYPECHECK_TIMEOUT_MS = TYPECHECK_PREFLIGHT_BUDGET_MS;
 
-/** Same model family as the rest of our Vertex call sites; flash is the measured choice. */
-const DEFAULT_SEED_MODEL = 'gemini-3.7-flash';
+/** Which registered provider answers a seed when the request names none, or an unknown one. */
+export const DEFAULT_SEED_PROVIDER = 'vertex';
 
 /** Bound the untrusted spec the same way the dispatch prompt does. */
 const MAX_SPEC_CHARS = 8000;
@@ -99,6 +99,8 @@ export interface SeedUsage {
   inputTokens: number;
   outputTokens: number;
   model: string;
+  /** Which registered vendor answered. Absent on records written before this existed. */
+  provider?: string;
 }
 
 export interface SeedDraft {
@@ -143,6 +145,15 @@ export interface SeedRequest {
   spec: string;
   // What the last draft got wrong. Data, never instructions.
   steer?: string;
+  /**
+   * Which registered provider should answer this seed. Resolved once per dispatch by the
+   * caller (the operator's console choice, cached — see seed-availability.ts), never
+   * per-file or per-retry: invariant 3 in ops/seed-provider-selection-plan.md is that a
+   * traffic split would silently disable `detectSeedingDegraded`, which only fires when
+   * every recent attempt failed. An unset or unconfigured id falls back to the seeder's
+   * own default rather than failing the round.
+   */
+  provider?: string;
 }
 
 export interface GameSeeder {
@@ -273,11 +284,12 @@ export function isUsableSeed(files: SeedFile[]): boolean {
   return paths.has('game.ts') && paths.has('SPEC.md') && hasModule;
 }
 
-function usageOf(result: GenerationResult, fallbackModel: string): SeedUsage {
+function usageOf(result: GenerationResult, provider: string, fallbackModel: string): SeedUsage {
   return {
     inputTokens: result.usage?.inputTokens ?? 0,
     outputTokens: result.usage?.outputTokens ?? 0,
     model: result.model ?? fallbackModel,
+    provider,
   };
 }
 
@@ -419,17 +431,22 @@ function positiveNumber(value: string | number | undefined, fallback: number): n
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-export interface VertexGameSeederOptions {
+export interface ModelGameSeederOptions {
   context: SeedContextSource;
-  projectId?: string;
-  region?: string;
-  model?: string;
+  /**
+   * Every provider this seeder may call, resolved once at boot per vendor
+   * (agent-backend-env.ts) — apiKey/model/host are per-provider config, not per-request.
+   * A provider id absent from this map is not configured, whatever a request asks for.
+   */
+  providers?: Map<string, SeedProviderConfig>;
+  /** Which provider answers a request that names none, or names one not in `providers`. */
+  defaultProvider?: string;
   references?: number;
   pickTimeoutMs?: number;
   generateTimeoutMs?: number;
   typeCheckTimeoutMs?: number;
   log?: { warn: (context: object, message: string) => void; info: (context: object, message: string) => void };
-  /** Test seam, mirroring VertexChecker/VertexSpecRefiner: a prebuilt client. */
+  /** Test seam, mirroring VertexChecker/VertexSpecRefiner: a prebuilt client, wins over `providers`. */
   client?: GenAIClient;
   // knowledge-search.ts, called server-internally (chunks mode).
   knowledgeSearch?: QueryKnowledgeFn;
@@ -443,22 +460,26 @@ export interface VertexGameSeederOptions {
 }
 
 /**
- * The production seeder: two Vertex calls, both bounded, all failures swallowed.
+ * The production seeder: at most three plain-text model calls (pick, generate, a
+ * conditional repair), all bounded, all failures swallowed. Backend-agnostic by design —
+ * see seed-provider.ts for why a provider is only a `GenAIClient` factory, never a second
+ * copy of this pipeline.
  *
  * The picker runs at the cheap `'low'` thinking floor — it is a classification over
  * a few hundred tokens of catalog, and the latency of reasoning about it costs more
  * than the choice is worth.
  */
-export class VertexGameSeeder implements GameSeeder {
+export class ModelGameSeeder implements GameSeeder {
   private readonly references: number;
   private readonly pickTimeoutMs: number;
   private readonly generateTimeoutMs: number;
   private readonly typeCheckTimeoutMs: number;
-  private readonly model: string;
-  private pickClient?: GenAIClient;
-  private generateClient?: GenAIClient;
+  private readonly defaultProvider: string;
+  private readonly providers: Map<string, SeedProviderConfig>;
+  private readonly clients = new Map<string, GenAIClient>();
 
-  constructor(private readonly options: VertexGameSeederOptions) {
+  constructor(private readonly options: ModelGameSeederOptions) {
+    this.providers = options.providers ?? new Map();
     this.references = positiveNumber(options.references ?? process.env.SEED_REFERENCES, DEFAULT_SEED_REFERENCES);
     this.pickTimeoutMs = positiveNumber(
       options.pickTimeoutMs ?? process.env.SEED_PICK_TIMEOUT_MS,
@@ -472,30 +493,50 @@ export class VertexGameSeeder implements GameSeeder {
       options.typeCheckTimeoutMs ?? process.env.SEED_TYPECHECK_TIMEOUT_MS,
       DEFAULT_SEED_TYPECHECK_TIMEOUT_MS,
     );
-    this.model = options.model ?? process.env.SEED_MODEL?.trim() ?? DEFAULT_SEED_MODEL;
+    this.defaultProvider = options.defaultProvider ?? DEFAULT_SEED_PROVIDER;
   }
 
-  /** Lazy like the other Vertex call sites: constructing one must not touch GCP. */
-  private client(kind: 'pick' | 'generate'): GenAIClient {
+  /**
+   * Which configured provider answers this request. An id the request names but that is
+   * not in `providers` falls back to the default rather than failing the round — an
+   * operator switching the console picker to a not-yet-deployed vendor must degrade to
+   * "seed with the old one", never "stop seeding".
+   */
+  private resolveProvider(requested: string | undefined): string {
+    if (this.options.client) return requested ?? this.defaultProvider; // test seam: id is a label only
+    if (requested && this.providers.has(requested)) return requested;
+    if (requested) {
+      this.options.log?.warn({ requested, fallback: this.defaultProvider }, 'seed provider not configured');
+    }
+    return this.defaultProvider;
+  }
+
+  private modelFor(providerId: string): string {
+    return this.providers.get(providerId)?.model ?? providerId;
+  }
+
+  /** Lazy, like every other model call site: constructing a client must not touch the network. */
+  private client(providerId: string): GenAIClient {
     if (this.options.client) return this.options.client;
-    const generationConfig: Record<string, unknown> = {};
-    if (kind === 'pick') generationConfig.responseMimeType = 'application/json';
-    const build = () =>
-      createVertexClient({
-        projectId: this.options.projectId,
-        region: this.options.region,
-        model: this.model,
-        defaultRegion: 'global',
-        defaultModel: DEFAULT_SEED_MODEL,
-        generationConfig: generationConfig as VertexGenerationConfig,
-      });
-    if (kind === 'pick') return (this.pickClient ??= build());
-    return (this.generateClient ??= build());
+    const cached = this.clients.get(providerId);
+    if (cached) return cached;
+    const config = this.providers.get(providerId);
+    if (!config) throw new Error(`seed provider "${providerId}" is not configured`);
+    const built = createSeedClient(providerId, config);
+    this.clients.set(providerId, built);
+    return built;
   }
 
-  private async pickReferences(context: SeedContext, spec: string): Promise<{ picks: string[]; usage: SeedUsage }> {
-    // Raw thinkingBudget:0 also 400s on gemini-3.7-flash; 'low' is the floor.
-    const result = await this.client('pick')(buildPickPrompt(context, spec, this.references))
+  private async pickReferences(
+    context: SeedContext,
+    spec: string,
+    providerId: string,
+  ): Promise<{ picks: string[]; usage: SeedUsage }> {
+    // Raw thinkingBudget:0 also 400s on gemini-3.7-flash; 'low' is the floor — and it
+    // happens to port to Muse Spark, which refuses reasoning_effort:"none" for the same
+    // practical reason (ops: seed-provider-selection-plan.md).
+    const result = await this.client(providerId)(buildPickPrompt(context, spec, this.references))
+      .responseFormat({ type: 'json' })
       .thinking({ level: 'low' })
       .temperature(0)
       .maxOutputTokens(512)
@@ -507,7 +548,7 @@ export class VertexGameSeeder implements GameSeeder {
       .filter((slug) => context.hasGame(slug))
       .slice(0, this.references);
 
-    return { picks, usage: usageOf(result, this.model) };
+    return { picks, usage: usageOf(result, providerId, this.modelFor(providerId)) };
   }
 
   // Fail-open: absent or timed out just means references-only generation.
@@ -554,8 +595,15 @@ export class VertexGameSeeder implements GameSeeder {
       const slug = request.slug;
       const spec = request.spec.slice(0, MAX_SPEC_CHARS);
       const steer = request.steer?.trim().slice(0, MAX_STEER_CHARS) || undefined;
+      // Resolved once for the whole round: pick, generate and any repair all answer from
+      // the same vendor, never a mix (ops: seed-provider-selection-plan.md invariant 3).
+      const providerId = this.resolveProvider(request.provider);
       // The steer rides the picker, or wrong references return.
-      const { picks, usage: pickUsage } = await this.pickReferences(context, steer ? `${spec}\n\n${steer}` : spec);
+      const { picks, usage: pickUsage } = await this.pickReferences(
+        context,
+        steer ? `${spec}\n\n${steer}` : spec,
+        providerId,
+      );
       // No references means no style guide and no API documentation in context; the draft
       // that would come back is a guess at an engine it has never seen.
       if (picks.length === 0) {
@@ -568,7 +616,7 @@ export class VertexGameSeeder implements GameSeeder {
         ? CONTEXT_BYTE_BUDGET - KNOWLEDGE_CONTEXT_BYTE_BUDGET
         : CONTEXT_BYTE_BUDGET;
 
-      const result = await this.client('generate')(
+      const result = await this.client(providerId)(
         buildGeneratePrompt({
           slug,
           title: request.title,
@@ -583,7 +631,7 @@ export class VertexGameSeeder implements GameSeeder {
         .signal(AbortSignal.timeout(this.generateTimeoutMs))
         .run();
 
-      const generateUsage = usageOf(result, this.model);
+      const generateUsage = usageOf(result, providerId, this.modelFor(providerId));
       const parsed = parseSeedResponse(resultTextOf(result));
       let files = collectSeedFiles(parsed, slug);
       if (!isUsableSeed(files)) {
@@ -595,6 +643,7 @@ export class VertexGameSeeder implements GameSeeder {
         inputTokens: pickUsage.inputTokens + generateUsage.inputTokens,
         outputTokens: pickUsage.outputTokens + generateUsage.outputTokens,
         model: generateUsage.model,
+        provider: providerId,
       };
 
       // One repair round when the draft does not bundle. The distinction funds the
@@ -620,13 +669,13 @@ export class VertexGameSeeder implements GameSeeder {
 
       if (validationErrors().length > 0) {
         repaired = true;
-        const repairResult = await this.client('generate')(
+        const repairResult = await this.client(providerId)(
           buildRepairPrompt({ slug, errors: validationErrors(), files }),
         )
           .maxOutputTokens(65_536)
           .signal(AbortSignal.timeout(this.generateTimeoutMs))
           .run();
-        const repairUsage = usageOf(repairResult, this.model);
+        const repairUsage = usageOf(repairResult, providerId, this.modelFor(providerId));
         usage.inputTokens += repairUsage.inputTokens;
         usage.outputTokens += repairUsage.outputTokens;
 

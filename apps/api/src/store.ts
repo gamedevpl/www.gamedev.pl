@@ -451,6 +451,13 @@ export interface JobSeedOutcome {
   repaired: boolean;
   // Whether placement happened — never merely which delivery mode was chosen.
   staged: boolean;
+  /**
+   * Which registered vendor and model answered, for the seeded A/B and the degradation
+   * alert to group by (ops/seed-provider-selection-plan.md SP-04/SP-11/SP-12). Absent on
+   * records written before provider selection existed — that always meant Vertex.
+   */
+  provider?: string;
+  model?: string;
 }
 
 /**
@@ -496,6 +503,12 @@ export interface JobCostEntry {
   tokens?: AgentSessionTokens;
   /** Money, when a service reports it directly rather than in its own unit. */
   usd?: number;
+  /**
+   * Which registered vendor billed this — a `seed` entry once seeding could name more
+   * than one (ops/seed-provider-selection-plan.md SP-10/SP-11). `by` stays the model id;
+   * this is the vendor `by` belongs to, since a price table has to key on both.
+   */
+  provider?: string;
 }
 
 /**
@@ -753,6 +766,18 @@ export interface CreationLimits {
   managedDailyCap: number | null;
   // Same ceiling, per creator per UTC day.
   managedDailyUserCap: number | null;
+  /**
+   * Round 0's kill switch (ops/seed-provider-selection-plan.md SP-09). `auto` (or unset)
+   * seeds every new game as today; `off` dispatches every build unseeded, from the same
+   * document an operator already opens during an incident, no redeploy. This is the only
+   * lever that stops seeding at all — there is no env var for it.
+   */
+  seedingMode?: 'auto' | 'off';
+  // Runtime override; unset defers to SEED_PROVIDER, the env-var default. Free-form
+  // rather than a literal union like managedAgentVendorOverride: seed providers register
+  // themselves (seed-provider.ts) and the set they are checked against is read at boot,
+  // not hand-enumerated here — an invalid value simply never matches a configured id.
+  seedProviderOverride?: string | null;
   /** Who last changed this and when, so a leftover pause is legible as a leftover. */
   updatedAt?: string;
   updatedBy?: string;
@@ -4012,6 +4037,11 @@ export class InMemoryStore implements Store {
         patch.managedDailyUserCap !== undefined
           ? patch.managedDailyUserCap
           : (this.creationLimits?.managedDailyUserCap ?? null),
+      seedingMode: patch.seedingMode ?? this.creationLimits?.seedingMode ?? 'auto',
+      seedProviderOverride:
+        patch.seedProviderOverride !== undefined
+          ? patch.seedProviderOverride
+          : (this.creationLimits?.seedProviderOverride ?? null),
       updatedAt: new Date().toISOString(),
       updatedBy,
     };
@@ -6770,6 +6800,8 @@ export class FirestoreStore implements Store {
           : null,
       managedDailyCap: typeof data?.managedDailyCap === 'number' ? data.managedDailyCap : null,
       managedDailyUserCap: typeof data?.managedDailyUserCap === 'number' ? data.managedDailyUserCap : null,
+      seedingMode: data?.seedingMode === 'off' ? 'off' : 'auto',
+      seedProviderOverride: typeof data?.seedProviderOverride === 'string' ? data.seedProviderOverride : null,
       ...(data?.updatedAt ? { updatedAt: data.updatedAt } : {}),
       ...(data?.updatedBy ? { updatedBy: data.updatedBy } : {}),
     };
@@ -6809,6 +6841,11 @@ export class FirestoreStore implements Store {
           patch.managedDailyCap !== undefined ? patch.managedDailyCap : (existing.managedDailyCap ?? null),
         managedDailyUserCap:
           patch.managedDailyUserCap !== undefined ? patch.managedDailyUserCap : (existing.managedDailyUserCap ?? null),
+        seedingMode: patch.seedingMode ?? existing.seedingMode ?? 'auto',
+        seedProviderOverride:
+          patch.seedProviderOverride !== undefined
+            ? patch.seedProviderOverride
+            : (existing.seedProviderOverride ?? null),
         updatedAt: new Date().toISOString(),
         updatedBy,
       };

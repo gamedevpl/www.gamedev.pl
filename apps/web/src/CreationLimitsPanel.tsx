@@ -5,6 +5,7 @@ import {
   type CreationLimits,
   type ManagedAgentVendor,
   type ManagedBuilderMode,
+  type SeedingMode,
 } from './adminApi.js';
 import { FeaturedPoolPanel } from './FeaturedPoolPanel.js';
 import { PublicPlayPanel } from './PublicPlayPanel.js';
@@ -72,6 +73,8 @@ export function CreationLimitsPanel({ onChanged }: { onChanged?: () => void }) {
       managedDailyUserCap?: number | null;
       tabCompletePaused?: boolean;
       globalDailyTabCompleteTokenCap?: number | null;
+      seedingMode?: SeedingMode;
+      seedProviderOverride?: string | null;
     }) => {
       setBusy(true);
       setMessage(null);
@@ -133,6 +136,22 @@ export function CreationLimitsPanel({ onChanged }: { onChanged?: () => void }) {
       : storedVendor === effectiveVendor
         ? `Overridden to ${effectiveVendor} (no redeploy needed).`
         : `Overridden to ${storedVendor}, but that vendor has no credentials in this environment — falling back to ${effectiveVendor ?? 'none'}.`;
+
+  const seedModeStatusLine =
+    effective.seedingMode === 'off'
+      ? 'Off — every new game starts from an empty directory, no round-0 draft.'
+      : 'Auto — every new game gets a round-0 draft, as today.';
+  const {
+    stored: storedSeedProvider,
+    effective: effectiveSeedProvider,
+    defaultProvider: defaultSeedProvider,
+  } = effective.seedProvider;
+  const seedProviderStatusLine =
+    storedSeedProvider === null
+      ? `Using the deployed default (${defaultSeedProvider ?? 'none configured'}).`
+      : storedSeedProvider === effectiveSeedProvider
+        ? `Overridden to ${effectiveSeedProvider} (no redeploy needed).`
+        : `Overridden to ${storedSeedProvider}, but that provider has no credentials in this environment — falling back to ${effectiveSeedProvider}.`;
 
   return (
     <>
@@ -283,6 +302,52 @@ export function CreationLimitsPanel({ onChanged }: { onChanged?: () => void }) {
           every instance within {relative(limits.propagationMs)}.
         </p>
       </section>
+
+      <section className="admin-limits">
+        <h2 className="health-section-title">Round-0 seeding</h2>
+        <p className="health-summary">{seedModeStatusLine}</p>
+        <p className="health-summary">{seedProviderStatusLine}</p>
+
+        <div className="admin-limits-controls">
+          <label className="admin-limits-cap">
+            Mode
+            <select
+              value={effective.seedingMode}
+              disabled={busy}
+              onChange={(event) => void apply({ seedingMode: event.target.value as SeedingMode })}
+            >
+              <option value="auto">Auto (seed every new game)</option>
+              <option value="off">Off (start from empty)</option>
+            </select>
+          </label>
+
+          <label className="admin-limits-cap">
+            Provider
+            <select
+              value={storedSeedProvider ?? ''}
+              disabled={busy}
+              onChange={(event) =>
+                void apply({ seedProviderOverride: event.target.value === '' ? null : event.target.value })
+              }
+            >
+              <option value="">Default ({defaultSeedProvider ?? 'none configured'})</option>
+              {effective.seedProvider.configuredProviders.map((provider) => (
+                <option key={provider} value={provider}>
+                  {provider}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        {message && <p className="admin-limits-message">{message}</p>}
+
+        <p className="health-note">
+          A change needs no redeploy and reaches every instance within {relative(limits.propagationMs)}. Only new
+          submissions are affected — a round already seeded keeps its draft.
+        </p>
+      </section>
+
       <section className="admin-limits">
         <h2 className="health-section-title">Tab completion (ghost text)</h2>
         <p className="health-summary">

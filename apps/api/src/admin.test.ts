@@ -568,6 +568,14 @@ describe('/api/admin/creation-limits', () => {
       },
       tabCompletePaused: false,
       globalDailyTabCompleteTokenCap: 2_000_000,
+      seedingMode: 'auto',
+      seedProvider: {
+        stored: null,
+        effective: 'vertex',
+        available: true,
+        configuredProviders: ['vertex'],
+        defaultProvider: 'vertex',
+      },
     });
     // A pause left on by accident is this feature's own failure mode, so the record of
     // who set it is part of the deliverable.
@@ -604,6 +612,14 @@ describe('/api/admin/creation-limits', () => {
       },
       tabCompletePaused: false,
       globalDailyTabCompleteTokenCap: 2_000_000,
+      seedingMode: 'auto',
+      seedProvider: {
+        stored: null,
+        effective: 'vertex',
+        available: true,
+        configuredProviders: ['vertex'],
+        defaultProvider: 'vertex',
+      },
     });
     await app.close();
   });
@@ -678,6 +694,45 @@ describe('/api/admin/creation-limits', () => {
         else process.env[key] = value;
       }
     }
+  });
+
+  it('turns seeding off from the console — the kill switch SEED_DISPATCH used to be', async () => {
+    const app = await appWith(store);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/admin/creation-limits',
+      headers: authHeaders('g:boss'),
+      payload: { seedingMode: 'off' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as CreationLimitsResponse;
+    expect(body.stored?.seedingMode).toBe('off');
+    expect(body.effective.seedingMode).toBe('off');
+    await app.close();
+  });
+
+  it('rejects an unconfigured seed provider as effective, same as a vendor override', async () => {
+    const app = await appWith(store);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/admin/creation-limits',
+      headers: authHeaders('g:boss'),
+      payload: { seedProviderOverride: 'meta' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as CreationLimitsResponse;
+    // Stored honestly, but not effective: nothing built a "meta" seed provider in this
+    // test environment, so the console cannot select it into existence.
+    expect(body.stored?.seedProviderOverride).toBe('meta');
+    expect(body.effective.seedProvider.stored).toBe('meta');
+    expect(body.effective.seedProvider.available).toBe(true);
+    expect(body.effective.seedProvider.effective).toBe('vertex');
+    expect(body.effective.seedProvider.configuredProviders).toEqual(['vertex']);
+    await app.close();
   });
 
   it('accepts openai as a managed vendor override', async () => {

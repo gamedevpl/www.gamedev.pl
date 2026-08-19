@@ -138,6 +138,9 @@ async function createApp(params: {
   };
   adminUids?: string;
   gameSeeder?: GameSeeder;
+  // What the seed availability gate believes is configured; defaults to the real
+  // environment (vertex, always) when omitted.
+  seedProviders?: { providers: string[]; defaultProvider: string };
   // Defaults to always-available; tests of the switch pass an explicit gate.
   managedAvailabilityGate?: ManagedAvailabilityGate | null;
   chatAgent?: StudioChatAgent;
@@ -159,6 +162,7 @@ async function createApp(params: {
       agentBackend: params.agentBackend,
       ...(params.agentBackends ? { agentBackends: params.agentBackends } : {}),
       ...(params.gameSeeder ? { gameSeeder: params.gameSeeder } : {}),
+      ...(params.seedProviders ? { seedProviders: params.seedProviders } : {}),
       now: params.now,
       dailySubmissionQuota: params.dailySubmissionQuota,
       dailyFeedbackQuota: params.dailyFeedbackQuota,
@@ -6110,6 +6114,117 @@ describe('seeded dispatch', () => {
     const seedCost = record?.costs?.find((entry) => entry.kind === 'seed');
     expect(seedCost?.tokens).toEqual({ input: 30_000, output: 9_000 });
     expect(seedCost?.by).toBe('gemini-3.7-flash');
+
+    await app.close();
+  });
+
+  it('skips the paid call entirely when the console kill switch is off', async () => {
+    const stub = createGithubClientStub({});
+    const { backend, briefs } = createBackendStub();
+    const seeded: string[] = [];
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:test-user' });
+    // ops/seed-provider-selection-plan.md SP-09: the switch SEED_DISPATCH used to be.
+    await store.setCreationLimits({ seedingMode: 'off' }, 'g:boss');
+    const { app, response } = await submitOne('Comet Courier', {
+      githubClient: stub.githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      gameSeeder: seederStub({}, (slug) => seeded.push(slug)),
+      store,
+    });
+
+    expect(response.statusCode).toBe(200);
+    await vi.waitFor(() => expect(briefs).toHaveLength(1));
+    // Never called: the switch is checked before the seeder, not after.
+    expect(seeded).toEqual([]);
+    expect(briefs[0].seed).toBeUndefined();
+
+    const record = await store.getSubmission(briefs[0].issueNumber);
+    expect(record?.costs?.find((entry) => entry.kind === 'seed')).toBeUndefined();
+
+    await app.close();
+  });
+
+  it('passes the console-selected provider through to the seeder, and records it', async () => {
+    const stub = createGithubClientStub({});
+    const { backend, briefs } = createBackendStub();
+    const providersSeen: (string | undefined)[] = [];
+    const seeder: GameSeeder = {
+      seed: async (request) => {
+        providersSeen.push(request.provider);
+        return {
+          slug: request.slug,
+          files: [{ path: 'game.ts', content: 'export {};\n' }],
+          references: ['apex-sprint'],
+          usage: { inputTokens: 100, outputTokens: 50, model: 'claude-haiku-4-5', provider: 'anthropic' },
+          elapsedMs: 1_000,
+          compiles: true,
+          repaired: false,
+        } as SeedDraft;
+      },
+    };
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:test-user' });
+    await store.setCreationLimits({ seedProviderOverride: 'anthropic' }, 'g:boss');
+    const { app, response } = await submitOne('Comet Courier', {
+      githubClient: stub.githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      gameSeeder: seeder,
+      // Without this, "anthropic" is not a provider anything actually built, and the gate
+      // would honestly fall back to vertex — see the unconfigured-override test below.
+      seedProviders: { providers: ['vertex', 'anthropic'], defaultProvider: 'vertex' },
+      store,
+    });
+
+    expect(response.statusCode).toBe(200);
+    await vi.waitFor(() => expect(briefs).toHaveLength(1));
+    expect(providersSeen).toEqual(['anthropic']);
+
+    const record = await store.getSubmission(briefs[0].issueNumber);
+    const seedCost = record?.costs?.find((entry) => entry.kind === 'seed');
+    expect(seedCost?.provider).toBe('anthropic');
+    expect(seedCost?.by).toBe('claude-haiku-4-5');
+
+    await app.close();
+  });
+
+  it('falls back to the default rather than failing when the override names an unconfigured provider', async () => {
+    const stub = createGithubClientStub({});
+    const { backend, briefs } = createBackendStub();
+    const providersSeen: (string | undefined)[] = [];
+    const seeder: GameSeeder = {
+      seed: async (request) => {
+        providersSeen.push(request.provider);
+        return {
+          slug: request.slug,
+          files: [{ path: 'game.ts', content: 'export {};\n' }],
+          references: ['apex-sprint'],
+          usage: { inputTokens: 100, outputTokens: 50, model: 'gemini-3.7-flash', provider: 'vertex' },
+          elapsedMs: 1_000,
+          compiles: true,
+          repaired: false,
+        } as SeedDraft;
+      },
+    };
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:test-user' });
+    // Nothing ever registered "meta" here; an operator picking it from the console must
+    // degrade to "seed with the old one", not "stop seeding" (ops/seed-provider-selection-plan.md).
+    await store.setCreationLimits({ seedProviderOverride: 'meta' }, 'g:boss');
+    const { app, response } = await submitOne('Comet Courier', {
+      githubClient: stub.githubClient,
+      agentBackend: backend,
+      submissionTokenSecret: secret,
+      gameSeeder: seeder,
+      seedProviders: { providers: ['vertex'], defaultProvider: 'vertex' },
+      store,
+    });
+
+    expect(response.statusCode).toBe(200);
+    await vi.waitFor(() => expect(briefs).toHaveLength(1));
+    expect(providersSeen).toEqual(['vertex']);
 
     await app.close();
   });

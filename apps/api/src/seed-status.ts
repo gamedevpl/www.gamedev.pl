@@ -12,6 +12,7 @@ interface SeedAttemptDraft {
   elapsedMs: number;
   compiles: boolean;
   repaired: boolean;
+  usage?: { provider?: string; model?: string };
 }
 
 export const SEED_STATUSES = ['pending', 'available', 'unavailable'] as const;
@@ -59,8 +60,11 @@ export function seedOutcomeFor(input: {
   const { attempt } = input;
   if (!attempt) return null;
   if (!attempt.draft) {
-    // Environment facts, not round-0 faults.
-    if (attempt.reason === 'not_configured' || attempt.reason === 'no_store') return null;
+    // Environment and operator facts, not round-0 faults: an operator-chosen "off" must
+    // never count toward detectSeedingDegraded the way an actual generation failure does.
+    if (attempt.reason === 'not_configured' || attempt.reason === 'no_store' || attempt.reason === 'seeding_off') {
+      return null;
+    }
     return {
       at: input.at,
       generated: false,
@@ -81,5 +85,7 @@ export function seedOutcomeFor(input: {
     compiles: draft.compiles,
     repaired: draft.repaired,
     staged: input.placed,
+    ...(draft.usage?.provider ? { provider: draft.usage.provider } : {}),
+    ...(draft.usage?.model ? { model: draft.usage.model } : {}),
   };
 }

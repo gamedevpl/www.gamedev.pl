@@ -43,10 +43,12 @@ import type { AgentBackend, SeedDelivery, SeedFiles } from './agent-backend.js';
 import { PLAYTEST_CONTEXT_HEADER, stripPlaytestContext } from './build-transcript.js';
 import {
   createAgentBackendRegistryFromEnv,
+  createSeedProvidersFromEnv,
   resolveBuilderBackend,
   type AgentBackendRegistry,
   type ManagedBackendDeps,
 } from './agent-backend-env.js';
+import { createSeedAvailabilityGate, type SeedAvailabilityGate } from './seed-availability.js';
 import {
   allowsCreatorBuilderHandoff,
   allowsSelfToPlatformHandoff,
@@ -435,6 +437,15 @@ export interface SubmissionRoutesOptions {
    * an empty directory, which is what they all did before seeding existed.
    */
   gameSeeder?: GameSeeder;
+  /**
+   * The provider ids `gameSeeder` was actually built with, and which one answers when no
+   * console override is stored. Test injection point; production derives this from the
+   * environment (createSeedProvidersFromEnv) so the availability gate below and the
+   * seeder agree about what "configured" means.
+   */
+  seedProviders?: { providers: string[]; defaultProvider: string };
+  /** Test seam for the availability gate; production builds one from `seedProviders`. */
+  seedAvailabilityGate?: SeedAvailabilityGate;
   agentChannel?: Pick<
     AgentChannelOptions,
     | 'maxEventsPerBuild'
@@ -595,6 +606,10 @@ export interface SubmissionRoutesHandle {
   configuredVendors: string[];
   // MANAGED_AGENT_VENDOR, the fallback when no override is stored.
   defaultVendor?: string;
+  // Seed vendors with a real provider config at boot — vertex is always in here.
+  configuredSeedProviders: string[];
+  // SEED_PROVIDER (or DEFAULT_SEED_PROVIDER), the fallback when no console override is stored.
+  defaultSeedProvider: string;
   /**
    * Finds a published entry in the repo-backed catalog only.
    *
@@ -832,6 +847,29 @@ export async function registerSubmissionRoutes(
         })
       : options.managedAvailabilityGate;
 
+  // Test injection carries its own provider list; production reads the same environment
+  // gameSeeder itself was built from, so the gate never offers a provider the seeder
+  // cannot actually reach.
+  function resolveSeedProviderEnv(): { providers: string[]; defaultProvider: string } {
+    if (options.seedProviders) return options.seedProviders;
+    const env = createSeedProvidersFromEnv(app.log);
+    return { providers: [...env.providers.keys()], defaultProvider: env.defaultProvider };
+  }
+  const seedProviderEnv = resolveSeedProviderEnv();
+  const configuredSeedProviders = new Set(seedProviderEnv.providers);
+
+  const seedAvailabilityGate =
+    options.seedAvailabilityGate === undefined
+      ? createSeedAvailabilityGate({
+          store,
+          now,
+          ttlMs: options.creationLimitsTtlMs,
+          configuredProviders: configuredSeedProviders,
+          defaultProvider: seedProviderEnv.defaultProvider,
+          logWarn: (payload, message) => app.log.warn(payload, message),
+        })
+      : options.seedAvailabilityGate;
+
   async function backendFor(builder: BuilderKind | undefined): Promise<AgentBackend | undefined> {
     const resolvedBuilder = builder ?? 'platform';
     if (resolvedBuilder === 'self') return agentBackends.self;
@@ -989,6 +1027,7 @@ export async function registerSubmissionRoutes(
         at: new Date(now()).toISOString(),
         by: draft.usage.model,
         tokens: { input: draft.usage.inputTokens, output: draft.usage.outputTokens },
+        ...(draft.usage.provider ? { provider: draft.usage.provider } : {}),
       });
     } catch (error) {
       log.error({ err: error, issueNumber }, 'could not record the cost of a seed');
@@ -1016,14 +1055,19 @@ export async function registerSubmissionRoutes(
   }): Promise<{ draft: SeedDraft } | { draft?: undefined; reason: string }> {
     if (!gameSeeder) return { reason: 'not_configured' };
     if (!store) return { reason: 'no_store' };
+    // The kill switch (ops/seed-provider-selection-plan.md SP-09): checked before the
+    // paid call, not after, so "off" costs nothing and needs no seeder change to honour.
+    if (!(await seedAvailabilityGate.seedingEnabled())) return { reason: 'seeding_off' };
     try {
       const record = await store.getSubmission(input.issueNumber);
       if (!record) return { reason: 'job_not_found' };
 
+      const provider = await seedAvailabilityGate.resolveProvider();
       const draft = await gameSeeder.seed({
         slug: input.slug,
         title: record.title,
         spec: input.spec,
+        provider,
         ...(input.steer ? { steer: input.steer } : {}),
       });
       if (!draft) return { reason: 'seeder_declined' };
@@ -5883,6 +5927,8 @@ export async function registerSubmissionRoutes(
     hasPlatformBackend: agentBackends.platformByVendor.size > 0,
     configuredVendors: [...agentBackends.platformByVendor.keys()],
     ...(agentBackends.defaultVendor ? { defaultVendor: agentBackends.defaultVendor } : {}),
+    configuredSeedProviders: [...configuredSeedProviders],
+    defaultSeedProvider: seedProviderEnv.defaultProvider,
     getRepoPublishedCatalogEntry: (slug) =>
       githubClient ? getPublishedCatalogEntry(githubClient, slug) : Promise.resolve(null),
     startImprovementRound,

@@ -593,6 +593,8 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     hasPlatformBackend: submissionSeams.hasPlatformBackend,
     configuredVendors: submissionSeams.configuredVendors,
     defaultVendor: submissionSeams.defaultVendor,
+    configuredSeedProviders: submissionSeams.configuredSeedProviders,
+    defaultSeedProvider: submissionSeams.defaultSeedProvider,
   });
 
   // Review catalog matches /api/catalog; snapshot first in prod.
