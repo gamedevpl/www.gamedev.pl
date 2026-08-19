@@ -411,6 +411,66 @@ export async function registerCreatorCodeRoutes(
     },
   );
 
+  const DeleteFileInputSchema = z.object({
+    path: z.string().trim().min(1).max(120),
+  });
+
+  // Owner twin of the agent channel delete route (CE-10).
+  app.post<{ Params: { slug: string } }>(
+    '/api/me/studio/games/:slug/sources/stage/delete',
+    { config: { rateLimit: { max: 300, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      if (notFoundIfDisabled(reply)) return;
+      if (!options.gamesStore) {
+        return reply.status(503).send({ error: 'the Code surface is not configured on this deployment' });
+      }
+      const resolved = await resolveForSlug(request, reply);
+      if (!resolved) return;
+      const { record, slug } = resolved;
+
+      if (isLiveAgentRound(record)) {
+        return reply.status(409).send({ error: 'agent_round', message: 'an agent is actively building this round' });
+      }
+      const activeRecord = roundIsClosed(record) ? await openManualRound(store, record, slug) : record;
+
+      const parsed = DeleteFileInputSchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
+      }
+
+      const roundGeneration =
+        (await store.ensureRoundGeneration(activeRecord.issueNumber)) ?? activeRecord.roundGeneration ?? 1;
+
+      try {
+        const staged = await options.gamesStore.deleteStagedSourceFile({
+          slug,
+          issueNumber: activeRecord.issueNumber,
+          roundGeneration,
+          path: parsed.data.path,
+          stagedBy: 'owner',
+        });
+        options.invalidateStatusCache?.(activeRecord.issueNumber);
+        options.scheduleStagedPreview?.(activeRecord.issueNumber);
+        return reply.send({
+          accepted: true,
+          path: staged.path,
+          ...(activeRecord.issueNumber !== record.issueNumber ? { roundOpened: activeRecord.issueNumber } : {}),
+          staged: {
+            totalBytes: staged.totalBytes,
+            maxBytes: staged.maxBytes,
+            maxFiles: staged.maxFiles,
+            updatedAt: staged.updatedAt,
+          },
+        });
+      } catch (error) {
+        if (error instanceof InvalidUploadError) {
+          return reply.status(400).send({ error: error.message });
+        }
+        throw error;
+      }
+    },
+  );
+
   const PatchInputSchema = z
     .object({
       path: z.string().trim().min(1).max(120),

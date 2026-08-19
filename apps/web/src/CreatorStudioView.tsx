@@ -224,6 +224,8 @@ export function CreatorStudioView({
   const [shelfFilter, setShelfFilter] = useState<StudioShelfFilter>('all');
   /** Desktop rail expand, or mobile drawer open. Closed by default once a game is open. */
   const [shelfOpen, setShelfOpen] = useState(false);
+  /** Manual rail collapse for a shelf below STUDIO_SHELF_TOOLS_AT. */
+  const [shelfCollapsedByUser, setShelfCollapsedByUser] = useState(false);
   /** True when the shelf is the phone drawer (off-canvas), not the desktop rail. */
   const [shelfIsDrawer, setShelfIsDrawer] = useState(false);
   /** Header share control — draft link toggle/copy, not buried in Details → Overview. */
@@ -462,6 +464,8 @@ export function CreatorStudioView({
     [shelfGames, shelfFilter, shelfQuery],
   );
   const showShelfTools = shelfGames.length >= STUDIO_SHELF_TOOLS_AT;
+  // Long shelf auto-compacts; short shelf compacts only if manually collapsed.
+  const compactShelf = Boolean(activeGame) && (showShelfTools || shelfCollapsedByUser);
   const shelfSummaryCount = shelfTruncated ? totalGames : shelfGames.length;
   // The URL named a game and the shelf does not have it: a typo, a game since abandoned,
   // or somebody else's slug. Said plainly, because an unexplained shelf looks like the
@@ -776,7 +780,7 @@ export function CreatorStudioView({
               activeGame ? 'is-game-open' : '',
               // Long shelf on a desktop: collapse to a left-edge summary after pick.
               // Phones ignore this — they always use the drawer once a game is open.
-              activeGame && showShelfTools ? 'is-compact-shelf' : '',
+              compactShelf ? 'is-compact-shelf' : '',
               shelfOpen ? 'is-shelf-open' : '',
             ]
               .filter(Boolean)
@@ -817,21 +821,37 @@ export function CreatorStudioView({
                     type="button"
                     className="studio-shelf-edge-toggle"
                     onClick={() => {
+                      if (!compactShelf) {
+                        // Short shelf, still expanded: collapse it into the rail.
+                        setShelfCollapsedByUser(true);
+                        return;
+                      }
                       if (shelfOpen) closeShelf({ restoreFocus: shelfIsDrawer });
                       else setShelfOpen(true);
                     }}
-                    aria-expanded={shelfOpen}
-                    aria-label={shelfOpen ? t('studioPanel.shelf.collapseShelf') : t('studioPanel.shelf.expandShelf')}
+                    aria-expanded={compactShelf ? shelfOpen : true}
+                    aria-label={
+                      !compactShelf || shelfOpen
+                        ? t('studioPanel.shelf.collapseShelf')
+                        : t('studioPanel.shelf.expandShelf')
+                    }
                   >
-                    <PixelIcon name={shelfOpen ? 'collapse' : 'expand'} size={12} />
+                    <PixelIcon name={!compactShelf || shelfOpen ? 'collapse' : 'expand'} size={12} />
                   </button>
                 ) : null}
               </div>
-              {activeGame && showShelfTools ? (
+              {activeGame && compactShelf ? (
                 <button
                   type="button"
                   className="studio-shelf-summary"
-                  onClick={() => setShelfOpen(true)}
+                  onClick={() => {
+                    if (!showShelfTools) {
+                      // Manual collapse: the folder button restores the shelf directly.
+                      setShelfCollapsedByUser(false);
+                      return;
+                    }
+                    setShelfOpen(true);
+                  }}
                   aria-expanded={shelfOpen}
                   aria-label={t('studioPanel.shelf.expandShelf')}
                   title={

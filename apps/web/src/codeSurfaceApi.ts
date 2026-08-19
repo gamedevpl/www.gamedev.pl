@@ -136,6 +136,24 @@ export async function patchCodeSurfaceFile(
   return (await response.json()) as CodeSurfacePatchResult;
 }
 
+export type CodeSurfaceDeleteResult = {
+  accepted: true;
+  path: string;
+  roundOpened?: number;
+  staged: CodeSurfaceStagingSummary;
+};
+
+export async function deleteCodeSurfaceFile(slug: string, path: string): Promise<CodeSurfaceDeleteResult> {
+  const response = await fetch(`${API_BASE}/api/me/studio/games/${encodeURIComponent(slug)}/sources/stage/delete`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ path }),
+  });
+  if (!response.ok) await throwResponseError(response);
+  return (await response.json()) as CodeSurfaceDeleteResult;
+}
+
 export async function discardCodeSurfaceEdits(slug: string, paths?: string[]): Promise<{ cleared: number }> {
   const response = await fetch(`${API_BASE}/api/me/studio/games/${encodeURIComponent(slug)}/sources/stage/discard`, {
     method: 'POST',
