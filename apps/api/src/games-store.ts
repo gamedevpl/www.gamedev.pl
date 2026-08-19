@@ -186,10 +186,7 @@ export function forbiddenDeliveryPathReason(path: string): string | null {
   return null;
 }
 
-// index.html is generated from GAME.json howToPlay; a hand-authored one broke chrome-
-// hiding on the play page. Refused outright — generation covers every legitimate case.
-// Blank is a no-op. Applies to both write paths below, including a carried-forward
-// pre-policy file; delete still works (assertDeliverableSourcePath doesn't call this).
+// index.html is generated, never hand-authored — see byoca-mcp SKILL.md.
 export function forbiddenIndexHtmlWriteReason(path: string, content: string): string | null {
   if (path !== 'index.html' || !content.trim()) return null;
   return (
@@ -273,9 +270,7 @@ export function validateSourceUpload(files: SourceFile[], mode: DeliveryMode = '
   }
   const gameJson = files.find((file) => file.path.trim() === 'GAME.json');
 
-  // Blank is absent, matching getGameSources. A real one here is always carried
-  // forward, never a fresh write — that's refused earlier, so an old game's next
-  // revision isn't bricked by a file nobody just tried to author.
+  // A blank index.html is absent, same as getGameSources treats it.
   const indexHtml = files.find((file) => file.path.trim() === 'index.html');
   const hasIndexHtml = !!indexHtml?.content.trim();
 

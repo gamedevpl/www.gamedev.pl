@@ -47,7 +47,13 @@ import { decodeCanonicalBase64Utf8, InvalidBase64Error } from './canonical-base6
 import { selfBuildDeliveryCap } from './builder.js';
 import type { BuilderKind } from './builder.js';
 import type { ManagedUnavailableReason } from './managed-availability.js';
-import { assertDeliverableSourcePath, InvalidUploadError, MAX_UPLOAD_FILES, type GamesStore } from './games-store.js';
+import {
+  assertDeliverableSourcePath,
+  forbiddenIndexHtmlWriteReason,
+  InvalidUploadError,
+  MAX_UPLOAD_FILES,
+  type GamesStore,
+} from './games-store.js';
 import { deriveGateStatusString, readGateVerdict } from './gate-verdict.js';
 import { gameManifestHint } from './game-manifest-hint.js';
 import { detectStall, resolveJobState, toSubmissionStatus } from './job-state.js';
@@ -2011,6 +2017,20 @@ export async function registerMcpServerRoutes(app: FastifyInstance, options: Mcp
               .map((file) => ({ path: file.path as string, content: file.content as string }))
           : [];
         if (files.length === 0) return toolErr('files is required — send the complete source set');
+
+        // Resubmit sends the whole tree — only a changed index.html is refused.
+        const proposedIndexHtml = files.find((file) => file.path === 'index.html');
+        if (proposedIndexHtml && proposedIndexHtml.content.trim()) {
+          const baseline = record.version
+            ? await gamesStoreForProposals.getSourceFile(record.targetSlug, record.version, 'index.html')
+            : null;
+          if ((baseline ?? '').trim() !== proposedIndexHtml.content.trim()) {
+            return toolErr(
+              forbiddenIndexHtmlWriteReason('index.html', proposedIndexHtml.content) ??
+                'index.html cannot be changed in a proposal',
+            );
+          }
+        }
 
         let version: string;
         try {

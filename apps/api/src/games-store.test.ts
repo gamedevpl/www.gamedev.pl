@@ -78,8 +78,7 @@ describe('validateSourceUpload — the delivery contract', () => {
   });
 
   describe('index.html or GAME.json howToPlay', () => {
-    // A fresh index.html write is refused elsewhere (putStagedSourceFile; the submit
-    // route's own-files[] check) — this function stays permissive for a carried-forward one.
+    // A fresh write is refused elsewhere; this stays permissive for carry-forward.
     it('still accepts a delivery that ships a real index.html and no howToPlay', () => {
       const files = [...MINIMAL_WITHOUT_GAME_JSON, { path: 'index.html', content: '<canvas id="game"></canvas>' }];
       expect(validateSourceUpload(files).map((file) => file.path)).toContain('index.html');
