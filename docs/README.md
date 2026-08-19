@@ -49,8 +49,7 @@ survives only in this repo's early history.
 | File                                                               | What's in it                                                                                            |
 | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
 | [`vision.md`](./vision.md)                                         | Product vision and the three core loops (create / play / remix)                                         |
-| [`architecture.md`](./architecture.md)                             | Working local preview + agreed games-repo product architecture (⚠️ stale — see north star)              |
-| [`north-star-architecture.md`](./north-star-architecture.md)       | 📋 2026-08 code-structure review: measured current state, target shape, and the phased plan towards it  |
+| [`architecture.md`](./architecture.md)                             | Working local preview + agreed games-repo product architecture                                          |
 | [`roadmap.md`](./roadmap.md)                                       | Phased milestones with goals, deliverables, dependencies, open questions                                |
 | [`games-repo.md`](./games-repo.md)                                 | **The current architecture — games will live in a repo maintained by coding agents. Read this first.**  |
 | [`games-repo-blueprint.md`](./games-repo-blueprint.md)             | Concrete layout, validation, publishing, and issue-first implementation plan                            |

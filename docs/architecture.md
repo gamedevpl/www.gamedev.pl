@@ -1,14 +1,5 @@
 # Architecture
 
-> ⚠️ **Stale (verified 2026-08-19).** This document predates the shipped system: it does not
-> mention the MCP delivery contract, the managed builder, the GCS games store and gate, the
-> snapshot bake, party mode, or the zone host — and its "target" diagram shows the retired
-> issue→PR dispatch and games-CDN plans. Until it is rewritten, the closest current map is
-> [`north-star-architecture.md`](./north-star-architecture.md) §1, with
-> [`games-repo.md`](./games-repo.md) and
-> [`.claude/skills/byoca-mcp/SKILL.md`](../.claude/skills/byoca-mcp/SKILL.md) for the
-> creation pipeline.
-
 This document describes the **current local-preview architecture** (what exists on this branch) and the **target decentralized games-repo architecture** (the direction the project has pivoted to).
 
 ---
