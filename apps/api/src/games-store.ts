@@ -186,6 +186,19 @@ export function forbiddenDeliveryPathReason(path: string): string | null {
   return null;
 }
 
+// index.html is generated, never hand-authored — see byoca-mcp SKILL.md.
+export function forbiddenIndexHtmlWriteReason(path: string, content: string): string | null {
+  if (path !== 'index.html' || !content.trim()) return null;
+  return (
+    'index.html cannot be staged or patched — it is generated from GAME.json howToPlay, never hand-authored. ' +
+    'Add a valid howToPlay to GAME.json instead: at minimum howToPlay.goal and howToPlay.hint, each a ' +
+    '{"en": "...", "pl": "..."} pair (both languages, both non-empty) — that is what the generator requires ' +
+    'to produce a playable page; optional controls/scoring/mode add more rows. Without it, the game has no ' +
+    'markup and the gate refuses it as unplayable. If an index.html from an earlier round is in the way, ' +
+    'call delete_source_file("index.html").'
+  );
+}
+
 /**
  * Validates one delivery path (shape + allowlist). Used by full uploads and by
  * file-by-file staging — required-set checks (SPEC.md, TRACE, …) stay on finalize.
@@ -273,7 +286,8 @@ export function validateSourceUpload(files: SourceFile[], mode: DeliveryMode = '
 
   if (!hasIndexHtml && !hasHowToPlay) {
     throw new InvalidUploadError(
-      'index.html or GAME.json.howToPlay is required — a game must be playable. Either upload index.html or define howToPlay with goal and hint in GAME.json.',
+      'index.html or GAME.json.howToPlay is required — a game must be playable. A fresh index.html write is ' +
+        'refused elsewhere; define howToPlay with goal and hint in GAME.json instead.',
     );
   }
   if (mode === 'preview' && gameJson) {
@@ -898,6 +912,8 @@ export function createGcsGamesStore(options: GcsGamesStoreOptions): GamesStore {
     async putStagedSourceFile(input) {
       assertSlug(input.slug);
       const path = assertDeliverableSourcePath(input.path);
+      const indexHtmlReason = forbiddenIndexHtmlWriteReason(path, input.content);
+      if (indexHtmlReason) throw new InvalidUploadError(indexHtmlReason);
       const bytes = Buffer.byteLength(input.content, 'utf8');
       if (bytes > 1_000_000) {
         throw new InvalidUploadError(`file too large: ${path} is ${bytes} bytes (max 1000000 per file)`);

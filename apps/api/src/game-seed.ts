@@ -79,6 +79,9 @@ const MAX_SEED_TOTAL_BYTES = 400_000;
 /** A seed that has not arrived by now has stopped being an optimization. */
 export const DEFAULT_SEED_PICK_TIMEOUT_MS = 30_000;
 export const DEFAULT_SEED_GENERATE_TIMEOUT_MS = 180_000;
+
+// 'low' thinking shares this budget; 512 could starve the JSON answer empty.
+const SEED_PICK_MAX_OUTPUT_TOKENS = 2048;
 export const DEFAULT_SEED_TYPECHECK_TIMEOUT_MS = TYPECHECK_PREFLIGHT_BUDGET_MS;
 
 /** Which registered provider answers a seed when the request names none, or an unknown one. */
@@ -527,6 +530,24 @@ export class ModelGameSeeder implements GameSeeder {
     return built;
   }
 
+  /**
+   * The pick response's shape, portable across providers via genaicode's json_schema
+   * response format — replaces a Vertex-only generationConfig.responseSchema (#899),
+   * which only genaicode's Google converter could have honoured. Constrains the shape;
+   * does not reserve output tokens, which is what SEED_PICK_MAX_OUTPUT_TOKENS is for.
+   */
+  private pickResponseFormat(): { type: 'json_schema'; name: string; schema: Record<string, unknown> } {
+    return {
+      type: 'json_schema',
+      name: 'seed_picks',
+      schema: {
+        type: 'object',
+        properties: { picks: { type: 'array', items: { type: 'string' }, maxItems: this.references } },
+        required: ['picks'],
+      },
+    };
+  }
+
   private async pickReferences(
     context: SeedContext,
     spec: string,
@@ -536,19 +557,29 @@ export class ModelGameSeeder implements GameSeeder {
     // happens to port to Muse Spark, which refuses reasoning_effort:"none" for the same
     // practical reason (ops: seed-provider-selection-plan.md).
     const result = await this.client(providerId)(buildPickPrompt(context, spec, this.references))
-      .responseFormat({ type: 'json' })
+      .responseFormat(this.pickResponseFormat())
       .thinking({ level: 'low' })
       .temperature(0)
-      .maxOutputTokens(512)
+      .maxOutputTokens(SEED_PICK_MAX_OUTPUT_TOKENS)
       .signal(AbortSignal.timeout(this.pickTimeoutMs))
       .run();
 
-    const parsed = PickSchema.safeParse(JSON.parse(extractJson(result)));
-    const picks = (parsed.success ? (parsed.data.picks ?? []) : [])
-      .filter((slug) => context.hasGame(slug))
-      .slice(0, this.references);
+    const usage = usageOf(result, providerId, this.modelFor(providerId));
+    // An empty or malformed reply must fail open, not crash the seed.
+    let picks: string[] = [];
+    try {
+      const parsed = PickSchema.safeParse(JSON.parse(extractJson(result)));
+      picks = (parsed.success ? (parsed.data.picks ?? []) : [])
+        .filter((slug) => context.hasGame(slug))
+        .slice(0, this.references);
+    } catch (error) {
+      this.options.log?.warn(
+        { err: error, raw: extractJson(result).slice(0, 200) },
+        'seed pick response was not valid JSON, treating as no references',
+      );
+    }
 
-    return { picks, usage: usageOf(result, providerId, this.modelFor(providerId)) };
+    return { picks, usage };
   }
 
   // Fail-open: absent or timed out just means references-only generation.

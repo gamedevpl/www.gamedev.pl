@@ -15,8 +15,10 @@ import {
   type TransitionActor,
 } from './job-state.js';
 import type { KitFileStore } from './kit-files.js';
+import { normalizeAtIntake } from './localize-intake.js';
 import { sanitizeCreatorText } from './submission-status.js';
 import type { Store, SubmissionRecord } from './store.js';
+import { createTranslatorFromEnv, type Translator } from './translate.js';
 import {
   runTypecheckPreflight,
   sharedSourcesFromKitTree,
@@ -119,10 +121,32 @@ export interface SourceDeliveryServiceOptions {
     error: (context: object, message: string) => void;
     warn?: (context: object, message: string) => void;
   };
+  // Same lazy-default pattern as agent-channel.ts / submissions.ts.
+  translator?: Translator;
 }
 
 const DEFAULT_MAX_SUBMITS_PER_WINDOW = 20;
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
+
+// Matches agent-channel.ts's MAX_EVENT_TEXT — same field, same reader, same cap.
+const MAX_DELIVERY_EVENT_TEXT = 300;
+
+// Posts a thread event via the same localization pass agent events get.
+async function reportDeliveryEvent(
+  store: Store,
+  translator: Translator,
+  issueNumber: number,
+  kind: 'blocked' | 'milestone',
+  rawText: string,
+): Promise<void> {
+  const clean = sanitizeCreatorText(rawText, { singleLine: true }).slice(0, MAX_DELIVERY_EVENT_TEXT);
+  const intake = await normalizeAtIntake(translator, clean, { kind: 'log', maxLength: MAX_DELIVERY_EVENT_TEXT });
+  await store.appendBuildEvent(issueNumber, {
+    kind,
+    text: intake.text,
+    ...(intake.textLocalized && intake.locale ? { textLocalized: intake.textLocalized, locale: intake.locale } : {}),
+  });
+}
 
 function stopReason(record: SubmissionRecord): 'stopped' | null {
   if (record.abandonedAt || record.publishedAt || resolveJobState(record) === 'canceled') return 'stopped';
@@ -180,6 +204,7 @@ function managedAuthorityError(
 
 export function createSourceDeliveryService(options: SourceDeliveryServiceOptions): SourceDeliveryService {
   const now = options.now ?? Date.now;
+  const translator = options.translator ?? createTranslatorFromEnv();
   const maxSubmitsPerWindow = options.maxSubmitsPerWindow ?? DEFAULT_MAX_SUBMITS_PER_WINDOW;
   const submitsByBuild = new Map<number, number[]>();
 
@@ -279,6 +304,8 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
       // Typecheck preflight uses the pinned kit; skip if unavailable.
       const engineRefForCheck = pinnedEngineRef ?? input.kitEngineRef;
       let typecheckBypass = Boolean(record.roundTypecheckPreflightBypassErrors);
+      // Deferred: posted only after storage succeeds, not before.
+      const pendingThreadEvents: { kind: 'blocked' | 'milestone'; text: string }[] = [];
       if (options.kitFileStore && engineRefForCheck) {
         try {
           const tree = await options.kitFileStore.loadTree(engineRefForCheck);
@@ -312,16 +339,28 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
               },
               'typecheck preflight bypassed after refusal cap',
             );
+            pendingThreadEvents.push({
+              kind: 'blocked',
+              text: `Delivered without a passing typecheck after ${TYPECHECK_PREFLIGHT_MAX_REFUSALS} failed attempts: ${check.message}`,
+            });
           } else {
             if (record.roundTypecheckPreflightBypassErrors) {
               typecheckBypass = false;
               await options.store.setRoundTypecheckPreflightBypassErrors(input.issueNumber, null);
+              pendingThreadEvents.push({
+                kind: 'milestone',
+                text: "Typecheck now passes — this round's earlier bypass warning no longer applies.",
+              });
             }
             if (check.skipped === 'timeout') {
               options.log?.warn?.(
                 { issueNumber: input.issueNumber, slug: input.slug, durationMs: check.durationMs },
                 'typecheck preflight skipped: budget exceeded',
               );
+              pendingThreadEvents.push({
+                kind: 'blocked',
+                text: "Delivered without typecheck validation — the check ran out of time on this round's budget.",
+              });
             }
           }
         } catch (error) {
@@ -372,6 +411,9 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
           await emitRefusal(error.kind);
         }
         throw error;
+      }
+      for (const event of pendingThreadEvents) {
+        await reportDeliveryEvent(options.store, translator, input.issueNumber, event.kind, event.text);
       }
 
       if (input.mode === 'preview') {

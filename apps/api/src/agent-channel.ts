@@ -32,6 +32,7 @@ import { deriveGateStatusString, readGateVerdict } from './gate-verdict.js';
 import { DEFAULT_SIGNED_URL_TTL_SECONDS, type GcsObjectStore } from './gcs-sign.js';
 import { DEFAULT_MCP_DIGEST_MAX_BYTES, compactKitDigestForApi } from './kit-digest.js';
 import {
+  forbiddenIndexHtmlWriteReason,
   InvalidUploadError,
   MAX_UPLOAD_BYTES,
   MAX_UPLOAD_FILES,
@@ -1906,6 +1907,12 @@ export async function registerAgentChannelRoutes(
       const parsed = BuildSourcesInputSchema.safeParse(request.body ?? {});
       if (!parsed.success) {
         return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'invalid request' });
+      }
+
+      // Own files[] only, before fromStaged/fromLatestDelivery overlay in a carried-forward one.
+      for (const file of parsed.data.files ?? []) {
+        const indexHtmlReason = forbiddenIndexHtmlWriteReason(file.path, file.content);
+        if (indexHtmlReason) return reply.status(400).send({ error: indexHtmlReason });
       }
 
       if (record.slug && record.slug !== parsed.data.slug) {

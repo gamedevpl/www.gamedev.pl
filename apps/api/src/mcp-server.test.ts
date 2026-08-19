@@ -49,11 +49,18 @@ const TINY_PNG = Buffer.from(
 
 const MINIMAL_FILES = [
   { path: 'SPEC.md', content: '---\ntitle: Comet Courier\n---\n' },
-  { path: 'index.html', content: '<!doctype html><html></html>' },
   { path: 'game.ts', content: 'export {};' },
   { path: 'TRACE.json', content: '{"samples":[]}' },
   { path: 'PLAYTEST.json', content: '{"expectProgress":["round-start"]}' },
   { path: 'AGENT.json', content: '{"policy":"capture"}' },
+  // index.html is refused — GAME.json.howToPlay supplies markup instead.
+  {
+    path: 'GAME.json',
+    content: JSON.stringify({
+      engine: { modules: [] },
+      howToPlay: { goal: { en: 'Survive', pl: 'Przetrwaj' }, hint: { en: 'Keep moving', pl: 'Nie stój' } },
+    }),
+  },
 ];
 
 function stubGitHub(): GitHubClient {

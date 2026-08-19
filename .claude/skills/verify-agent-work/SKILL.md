@@ -198,6 +198,21 @@ Two concrete instances of that (observed 2026-07-23):
   what the scan used to tolerate. Enumerate the states the discarded records could be
   in (abandoned, canceled, superseded, owned-by-someone-else) and test the newest
   record in each, not just the one from the bug report.
+- **A follow-up that claims "all review findings fixed" can drop items that lived
+  only in an issue comment.** Observed (www.gamedev.pl-games#807, 2026-08-19): the
+  first pass posted 32 inline findings plus a separate issue comment for two
+  `zone.ts` defects that were not in the diff (restart slot stranding, host-disconnect
+  zombie actors). The later "all 32 findings fixed" body was true of the *threads*;
+  the issue-comment item (host close leaves remotes latched and farmable) was still
+  on HEAD. When verifying a "we fixed the review" push, re-probe every promised
+  fix — including ones that could not be inlined — and do not treat resolved-thread
+  count as the checklist.
+- **A whole-action cap check can still leak through a multi-count loop.** Same PR:
+  `launch()` started returning before spending ammo when `projectiles.length >= MAX`,
+  which fixes the single-rocket case; Feather Flurry still spends one ammo unit and
+  then `addProjectile` silently drops the remaining pellets once the cap is hit
+  mid-volley (probe: 78/80, ammo 10→9, added 2 of 7). When a fix adds an early
+  return at the cap, walk every caller that loops `count` times.
 - **Run your probe against the PRE-fix branch too.** A probe that only fails on the
   candidate proves a defect exists; running the identical probe on the base proves
   whether the PR _introduced_ it or merely failed to fix it. Those are different
@@ -229,6 +244,13 @@ Two concrete instances of that (observed 2026-07-23):
   skip. For puzzle games, import the pure model in a throwaway clone and prove a
   no-mechanic control *fails* (walk-only into the door, jump-over) in the same session as
   the intended solve.
+- **A training-lab / per-mode closer can be TRACE-green on one happy path.** Observed
+  (mexico-86 / www.gamedev.pl-games#811, 2026-08-19): SPEC promised every drill ends in a
+  pass/fail verdict; CAPTURE only `waitFor`s `trainingOutcome` after short-pass key 4.
+  Isolated `check:game` was green. Walking the other labs showed set-piece choice and STOP
+  leave `trainingOutcome=none` with `trainingActed` already true, so the idle closer never
+  fires. When a PR adds a per-mode closer, probe each mode (or at least the one that does
+  not go through `finishAction`), not only the capture drill.
 - **Two writers of one knob, tested in isolation, is not a composition test.** Observed
   (games-repo gfx scale, 2026-08-12, [www.gamedev.pl-games#692](https://github.com/gamedevpl/www.gamedev.pl-games/pull/692)):
   a frame governor stepped the backing-store scale down when fill was slow, and a
