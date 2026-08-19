@@ -500,6 +500,11 @@ export class ModelGameSeeder implements GameSeeder {
     return this.providers.get(providerId)?.maxOutputTokens ?? GENERATE_MAX_OUTPUT_TOKENS;
   }
 
+  // The pick call's own small budget, but never above what the vendor will accept at all.
+  private pickMaxOutputTokensFor(providerId: string): number {
+    return Math.min(SEED_PICK_MAX_OUTPUT_TOKENS, this.maxOutputTokensFor(providerId));
+  }
+
   // Lazy: constructing a client must not touch the network.
   private client(providerId: string): GenAIClient {
     if (this.options.client) return this.options.client;
@@ -535,7 +540,7 @@ export class ModelGameSeeder implements GameSeeder {
       .responseFormat(this.pickResponseFormat())
       .thinking({ level: 'low' })
       .temperature(0)
-      .maxOutputTokens(SEED_PICK_MAX_OUTPUT_TOKENS)
+      .maxOutputTokens(this.pickMaxOutputTokensFor(providerId))
       .signal(AbortSignal.timeout(this.pickTimeoutMs))
       .run();
 

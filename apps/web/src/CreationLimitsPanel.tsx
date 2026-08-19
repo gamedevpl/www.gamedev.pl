@@ -140,7 +140,9 @@ export function CreationLimitsPanel({ onChanged }: { onChanged?: () => void }) {
   const seedModeStatusLine =
     effective.seedingMode === 'off'
       ? 'Off — every new game starts from an empty directory, no round-0 draft.'
-      : 'Auto — every new game gets a round-0 draft, as today.';
+      : effective.seedProvider.available
+        ? 'Auto — every new game gets a round-0 draft, as today.'
+        : 'Auto, but no provider is available here — new games start from an empty directory.';
   const {
     stored: storedSeedProvider,
     effective: effectiveSeedProvider,

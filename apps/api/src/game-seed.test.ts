@@ -491,6 +491,41 @@ describe('ModelGameSeeder', () => {
     expect(maxOutputTokensArgs).toEqual([2048, 4_096]);
   });
 
+  it('clamps the pick call to a provider ceiling below its own default budget', async () => {
+    const maxOutputTokensArgs: unknown[] = [];
+    registerSeedProvider('__test_tiny_vendor__', () => {
+      const client = ((_prompt: string) => {
+        const chain = {
+          responseFormat: () => chain,
+          thinking: () => chain,
+          temperature: () => chain,
+          maxOutputTokens: (n: unknown) => {
+            maxOutputTokensArgs.push(n);
+            return chain;
+          },
+          signal: () => chain,
+          run: async () => ({
+            parts: [{ type: 'text' as const, text: '{"picks":["apex-sprint"]}' }],
+            model: 'tiny-model',
+            usage: { inputTokens: 10, outputTokens: 5 },
+          }),
+        };
+        return chain;
+      }) as unknown;
+      return client as never;
+    });
+
+    const seeder = new ModelGameSeeder({
+      context: stubContext(),
+      providers: new Map([['__test_tiny_vendor__', { model: 'tiny-model', maxOutputTokens: 500 }]]),
+    });
+
+    await seeder.seed({ ...request, provider: '__test_tiny_vendor__' });
+
+    // Below the pick's own default, so it must shrink too.
+    expect(maxOutputTokensArgs).toEqual([500, 500]);
+  });
+
   it('falls back to the Vertex-sized ceiling when the provider sets none', async () => {
     const maxOutputTokensArgs: unknown[] = [];
     registerSeedProvider('__test_unbounded_vendor__', () => {

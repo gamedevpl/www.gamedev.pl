@@ -320,6 +320,30 @@ describe('CreationLimitsPanel', () => {
     await act(async () => root.unmount());
   });
 
+  it('says auto is not actually operational when no provider is available', async () => {
+    mocked.fetchCreationLimits.mockResolvedValue(
+      limits({
+        effective: {
+          ...limits().effective,
+          seedProvider: {
+            stored: null,
+            effective: 'vertex',
+            available: false,
+            configuredProviders: [],
+            defaultProvider: 'vertex',
+          },
+        },
+      }),
+    );
+
+    const { container, root } = await render();
+
+    expect(container.textContent).toContain('no provider is available here');
+    expect(container.textContent).not.toContain('every new game gets a round-0 draft');
+
+    await act(async () => root.unmount());
+  });
+
   it('picks a seed provider from the console', async () => {
     mocked.fetchCreationLimits.mockResolvedValue(
       limits({
