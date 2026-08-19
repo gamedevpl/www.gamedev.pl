@@ -229,6 +229,13 @@ Two concrete instances of that (observed 2026-07-23):
   skip. For puzzle games, import the pure model in a throwaway clone and prove a
   no-mechanic control *fails* (walk-only into the door, jump-over) in the same session as
   the intended solve.
+- **A training-lab / per-mode closer can be TRACE-green on one happy path.** Observed
+  (mexico-86 / www.gamedev.pl-games#811, 2026-08-19): SPEC promised every drill ends in a
+  pass/fail verdict; CAPTURE only `waitFor`s `trainingOutcome` after short-pass key 4.
+  Isolated `check:game` was green. Walking the other labs showed set-piece choice and STOP
+  leave `trainingOutcome=none` with `trainingActed` already true, so the idle closer never
+  fires. When a PR adds a per-mode closer, probe each mode (or at least the one that does
+  not go through `finishAction`), not only the capture drill.
 - **Two writers of one knob, tested in isolation, is not a composition test.** Observed
   (games-repo gfx scale, 2026-08-12, [www.gamedev.pl-games#692](https://github.com/gamedevpl/www.gamedev.pl-games/pull/692)):
   a frame governor stepped the backing-store scale down when fill was slow, and a
