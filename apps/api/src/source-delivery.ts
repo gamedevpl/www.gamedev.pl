@@ -141,11 +141,16 @@ async function reportDeliveryEvent(
 ): Promise<void> {
   const clean = sanitizeCreatorText(rawText, { singleLine: true }).slice(0, MAX_DELIVERY_EVENT_TEXT);
   const intake = await normalizeAtIntake(translator, clean, { kind: 'log', maxLength: MAX_DELIVERY_EVENT_TEXT });
-  await store.appendBuildEvent(issueNumber, {
-    kind,
-    text: intake.text,
-    ...(intake.textLocalized && intake.locale ? { textLocalized: intake.textLocalized, locale: intake.locale } : {}),
-  });
+  await store.appendBuildEvent(
+    issueNumber,
+    {
+      kind,
+      text: intake.text,
+      ...(intake.textLocalized && intake.locale ? { textLocalized: intake.textLocalized, locale: intake.locale } : {}),
+    },
+    // A system notice about this delivery, not proof the agent itself resumed.
+    { preserveEnded: true },
+  );
 }
 
 function stopReason(record: SubmissionRecord): 'stopped' | null {
@@ -344,7 +349,8 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
               text: `Delivered without a passing typecheck after ${TYPECHECK_PREFLIGHT_MAX_REFUSALS} failed attempts: ${check.message}`,
             });
           } else {
-            if (record.roundTypecheckPreflightBypassErrors) {
+            // A skipped check is not a pass; leave the bypass state alone.
+            if (record.roundTypecheckPreflightBypassErrors && !check.skipped) {
               typecheckBypass = false;
               await options.store.setRoundTypecheckPreflightBypassErrors(input.issueNumber, null);
               pendingThreadEvents.push({
@@ -413,7 +419,12 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
         throw error;
       }
       for (const event of pendingThreadEvents) {
-        await reportDeliveryEvent(options.store, translator, input.issueNumber, event.kind, event.text);
+        try {
+          await reportDeliveryEvent(options.store, translator, input.issueNumber, event.kind, event.text);
+        } catch (error) {
+          // Decorative: a stored version must not roll back over an event write.
+          options.log?.warn?.({ err: error, issueNumber: input.issueNumber }, 'delivery thread event not stored');
+        }
       }
 
       if (input.mode === 'preview') {
@@ -482,7 +493,10 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
       }
 
       options.onEvent?.(input.issueNumber);
-      await options.store.touchLastAgentSignalAt(input.issueNumber);
+      // A creator's own manual delivery is not the agent resuming.
+      await options.store.touchLastAgentSignalAt(input.issueNumber, undefined, undefined, {
+        preserveEnded: transitionActor === 'creator',
+      });
 
       return {
         accepted: true,
