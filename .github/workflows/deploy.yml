@@ -107,6 +107,19 @@ jobs:
             SECRET_MAPPINGS+=("OPENAI_API_KEY=openai-api-key:latest")
           fi
 
+          # Round-0 seed providers (ops: seed-provider-selection-plan.md). Reuses the
+          # managed-agent secrets where a vendor's credential already exists. Vertex is
+          # unconditional and needs none of this.
+          if gcloud secrets describe anthropic-api-key --project "$PROJECT_ID" >/dev/null 2>&1; then
+            SECRET_MAPPINGS+=("SEED_ANTHROPIC_API_KEY=anthropic-api-key:latest")
+          fi
+          if gcloud secrets describe openai-api-key --project "$PROJECT_ID" >/dev/null 2>&1; then
+            SECRET_MAPPINGS+=("SEED_OPENAI_API_KEY=openai-api-key:latest")
+          fi
+          if gcloud secrets describe meta-api-key --project "$PROJECT_ID" >/dev/null 2>&1; then
+            SECRET_MAPPINGS+=("SEED_META_API_KEY=meta-api-key:latest")
+          fi
+
           # Resend API key for outbound email (beta invites, notifications). The
           # mailer degrades to a no-op without it, so email is simply off until
           # the secret exists — the deploy stays green either way.
@@ -194,18 +207,29 @@ jobs:
               ENV_VARS="${ENV_VARS}|${MANAGED_VAR}=${MANAGED_VAL}"
             fi
           done
+          # Round-0 seed providers. SEED_PROVIDER/SEED_MODEL tune the always-on Vertex
+          # default; the rest only matter once the matching secret above exists too.
+          for SEED_VAR in SEED_PROVIDER SEED_MODEL SEED_ANTHROPIC_MODEL SEED_OPENAI_MODEL SEED_META_MODEL SEED_META_BASE_URL; do
+            case "$SEED_VAR" in
+              SEED_PROVIDER) SEED_VAL="${{ vars.SEED_PROVIDER }}" ;;
+              SEED_MODEL) SEED_VAL="${{ vars.SEED_MODEL }}" ;;
+              SEED_ANTHROPIC_MODEL) SEED_VAL="${{ vars.SEED_ANTHROPIC_MODEL }}" ;;
+              SEED_OPENAI_MODEL) SEED_VAL="${{ vars.SEED_OPENAI_MODEL }}" ;;
+              SEED_META_MODEL) SEED_VAL="${{ vars.SEED_META_MODEL }}" ;;
+              SEED_META_BASE_URL) SEED_VAL="${{ vars.SEED_META_BASE_URL }}" ;;
+            esac
+            if [ -n "$SEED_VAL" ]; then
+              ENV_VARS="${ENV_VARS}|${SEED_VAR}=${SEED_VAL}"
+            fi
+          done
           ZONE_HOST_URL_VAL="${{ vars.ZONE_HOST_URL }}"
           if [ -n "$ZONE_HOST_URL_VAL" ]; then
             ENV_VARS="${ENV_VARS}|ZONE_HOST_URL=${ZONE_HOST_URL_VAL}"
           fi
 
-          # SEED_DISPATCH used to be threaded here. Round 0 is not a feature any more —
-          # a model writes the first draft of every new game and that draft *is* the
-          # round's sources (docs/agent-adapters.md), so there is nothing to switch on.
-          # The variable is deliberately not read: leaving it wired would keep a way to
-          # turn new-game creation back into scaffolding-from-nothing by editing a repo
-          # setting, which is the failure this whole change is answering. It can be
-          # deleted from the repository variables.
+          # SEED_DISPATCH used to be threaded here; it is gone, round 0 is unconditional
+          # now. Its kill switch moved to the creation-limits document (seedingMode), not
+          # an env var — see ops: seed-provider-selection-plan.md.
 
           # The editor's natural-language tuning lane: one Vertex call turns "make the
           # dog a bit bigger" into a patch against the game's own declared params. Same

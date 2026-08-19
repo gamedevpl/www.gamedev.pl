@@ -53,7 +53,7 @@ export function seedPayload(record: Pick<SubmissionRecord, 'seed' | 'seedStatus'
 
 // Failures included: an unplaced draft and an ungenerated one read the same.
 export function seedOutcomeFor(input: {
-  attempt: { draft?: SeedAttemptDraft; reason?: string } | undefined;
+  attempt: { draft?: SeedAttemptDraft; reason?: string; provider?: string } | undefined;
   placed: boolean;
   at: string;
 }): JobSeedOutcome | null {
@@ -74,6 +74,7 @@ export function seedOutcomeFor(input: {
       compiles: false,
       repaired: false,
       staged: false,
+      ...(attempt.provider ? { provider: attempt.provider } : {}),
     };
   }
   const draft = attempt.draft;

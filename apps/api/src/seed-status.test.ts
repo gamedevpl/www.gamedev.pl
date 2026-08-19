@@ -49,6 +49,16 @@ describe('seed-status', () => {
       });
     });
 
+    it('carries the attempted provider on a failure, so an outage names its vendor', () => {
+      expect(
+        seedOutcomeFor({
+          attempt: { reason: 'threw: anthropic is having a day', provider: 'anthropic' },
+          placed: false,
+          at: 'now',
+        }),
+      ).toMatchObject({ generated: false, provider: 'anthropic' });
+    });
+
     it('reports placement as what happened, not as which delivery mode was picked', () => {
       expect(seedOutcomeFor({ attempt: { draft }, placed: true, at: 'now' })).toMatchObject({
         generated: true,

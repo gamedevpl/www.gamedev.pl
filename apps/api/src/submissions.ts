@@ -1045,16 +1045,17 @@ export async function registerSubmissionRoutes(
     delivery: SeedDelivery;
     steer?: string;
     log: { error: (context: object, message: string) => void };
-  }): Promise<{ draft: SeedDraft } | { draft?: undefined; reason: string }> {
+  }): Promise<{ draft: SeedDraft } | { draft?: undefined; reason: string; provider?: string }> {
     if (!gameSeeder) return { reason: 'not_configured' };
     if (!store) return { reason: 'no_store' };
     // Checked before the paid call, so "off" costs nothing.
     if (!(await seedAvailabilityGate.seedingEnabled())) return { reason: 'seeding_off' };
+    // Resolved before the try so a failed attempt still names the vendor.
+    const provider = await seedAvailabilityGate.resolveProvider();
     try {
       const record = await store.getSubmission(input.issueNumber);
-      if (!record) return { reason: 'job_not_found' };
+      if (!record) return { reason: 'job_not_found', provider };
 
-      const provider = await seedAvailabilityGate.resolveProvider();
       const draft = await gameSeeder.seed({
         slug: input.slug,
         title: record.title,
@@ -1062,14 +1063,14 @@ export async function registerSubmissionRoutes(
         provider,
         ...(input.steer ? { steer: input.steer } : {}),
       });
-      if (!draft) return { reason: 'seeder_declined' };
+      if (!draft) return { reason: 'seeder_declined', provider };
 
       await recordSeedCost(input.issueNumber, draft, input.log);
       return { draft };
     } catch (error) {
       // Fail-open survives round 0 becoming mandatory; the caller records the failure.
       input.log.error({ err: error, issueNumber: input.issueNumber }, 'seeding failed, dispatching unseeded');
-      return { reason: error instanceof Error ? `threw: ${error.message}` : 'threw' };
+      return { reason: error instanceof Error ? `threw: ${error.message}` : 'threw', provider };
     }
   }
 

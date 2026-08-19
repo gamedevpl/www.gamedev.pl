@@ -6285,6 +6285,8 @@ describe('seeded dispatch', () => {
     });
 
     expect(outcome).toMatchObject({ generated: false, reason: 'seeder_declined', staged: false });
+    // The attempted provider survives a decline too, not only a successful draft.
+    expect(outcome.provider).toBe('vertex');
     // Nothing generated, so nothing billed.
     const record = await store.getSubmission(briefs[0].issueNumber);
     expect(record?.costs ?? []).not.toContainEqual(expect.objectContaining({ kind: 'seed' }));
