@@ -2103,10 +2103,11 @@ export interface Store {
     issueNumber: number,
     brief: { spec: string; qa: string[]; specIsSystemGenerated?: boolean },
   ): Promise<void>;
-  /** Appends an agent progress event. Returns it with its assigned id and timestamp. */
+  /** Appends a progress event. Returns it with its assigned id and timestamp. */
   appendBuildEvent(
     issueNumber: number,
     event: Omit<BuildEvent, 'id' | 'createdAt'> & { createdAt?: string },
+    options?: { preserveEnded?: boolean },
   ): Promise<BuildEvent>;
   /**
    * Refreshes {@link SubmissionRecord.lastAgentSignalAt} without writing a chat event.
@@ -3658,6 +3659,7 @@ export class InMemoryStore implements Store {
   async appendBuildEvent(
     issueNumber: number,
     event: Omit<BuildEvent, 'id' | 'createdAt'> & { createdAt?: string },
+    options?: { preserveEnded?: boolean },
   ): Promise<BuildEvent> {
     const record: BuildEvent = { ...event, id: randomUUID(), createdAt: event.createdAt ?? new Date().toISOString() };
     const existing = this.buildEvents.get(issueNumber) ?? [];
@@ -3668,9 +3670,11 @@ export class InMemoryStore implements Store {
       const next: SubmissionRecord = { ...submission, lastAgentSignalAt: record.createdAt };
       // A real chat row supersedes the ambient thought flash.
       delete next.lastAgentPresence;
-      // Resumed work after MCP `end` — clear so stall is no longer `ended`.
-      delete next.agentEndedAt;
-      delete next.agentEndedBy;
+      if (!options?.preserveEnded) {
+        // Resumed work after MCP `end` — clear so stall is no longer `ended`.
+        delete next.agentEndedAt;
+        delete next.agentEndedBy;
+      }
       this.submissions.set(issueNumber, next);
     }
     return { ...record };
@@ -6315,6 +6319,7 @@ export class FirestoreStore implements Store {
   async appendBuildEvent(
     issueNumber: number,
     event: Omit<BuildEvent, 'id' | 'createdAt'> & { createdAt?: string },
+    options?: { preserveEnded?: boolean },
   ): Promise<BuildEvent> {
     const record: BuildEvent = { ...event, id: randomUUID(), createdAt: event.createdAt ?? new Date().toISOString() };
     // Firestore rejects undefined values; optional fields are simply absent instead.
@@ -6324,17 +6329,19 @@ export class FirestoreStore implements Store {
     // in-flight job without a subcollection read per job. Merged separately rather than
     // transactionally: losing a race here costs a slightly stale liveness timestamp,
     // which is not worth a transaction on the hottest write in the channel.
-    await this.db.collection('submissions').doc(String(issueNumber)).set(
-      {
-        lastAgentSignalAt: record.createdAt,
-        // A real chat row supersedes the ambient thought flash.
-        lastAgentPresence: FieldValue.delete(),
-        // Resumed work after MCP `end`.
-        agentEndedAt: FieldValue.delete(),
-        agentEndedBy: FieldValue.delete(),
-      },
-      { merge: true },
-    );
+    await this.db
+      .collection('submissions')
+      .doc(String(issueNumber))
+      .set(
+        {
+          lastAgentSignalAt: record.createdAt,
+          // A real chat row supersedes the ambient thought flash.
+          lastAgentPresence: FieldValue.delete(),
+          // Resumed work after MCP `end`.
+          ...(options?.preserveEnded ? {} : { agentEndedAt: FieldValue.delete(), agentEndedBy: FieldValue.delete() }),
+        },
+        { merge: true },
+      );
     return record;
   }
 
