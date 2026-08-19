@@ -487,7 +487,18 @@ export class VertexGameSeeder implements GameSeeder {
   private client(kind: 'pick' | 'generate'): GenAIClient {
     if (this.options.client) return this.options.client;
     const generationConfig: Record<string, unknown> = {};
-    if (kind === 'pick') generationConfig.responseMimeType = 'application/json';
+    if (kind === 'pick') {
+      generationConfig.responseMimeType = 'application/json';
+      // Constrains the *shape* the model is decoded into — hallucinated extra fields or
+      // a picks list past `this.references` cannot happen. It does not reserve output
+      // tokens for the answer, so it does not by itself stop the empty-response crash
+      // pickReferences guards against below; that is what maxOutputTokens headroom is for.
+      generationConfig.responseSchema = {
+        type: 'OBJECT',
+        properties: { picks: { type: 'ARRAY', items: { type: 'STRING' }, maxItems: String(this.references) } },
+        required: ['picks'],
+      };
+    }
     const build = () =>
       createVertexClient({
         projectId: this.options.projectId,
