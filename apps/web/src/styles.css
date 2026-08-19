@@ -14031,6 +14031,28 @@ button.builder-mode-selector:disabled {
   color: var(--muted);
 }
 
+/* Sits inline after the refusal it answers, so the fix reads as part of the sentence. */
+.code-surface-deliver-fix {
+  margin-left: 8px;
+  padding: 2px 8px;
+  border: 1px solid var(--turquoise);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--turquoise);
+  font: inherit;
+  cursor: pointer;
+}
+
+.code-surface-deliver-fix:hover:not(:disabled) {
+  background: rgba(45, 212, 191, 0.14);
+}
+
+.code-surface-deliver-fix:disabled {
+  border-color: var(--panel-border);
+  color: var(--muted);
+  cursor: default;
+}
+
 /* A refusal or failure is the one line explaining why nothing shipped — it must not
    read as footnote grey. */
 .code-surface-deliver-message.is-error {

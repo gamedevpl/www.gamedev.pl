@@ -35,6 +35,7 @@ import { MAX_BUILD_PREVIEW_BYTES } from './agent-channel.js';
 import type { GamesStore, SourceFile } from './games-store.js';
 import { hasPlayableHowToPlay } from './index-html-generator.js';
 import type { GitHubClient } from './github-client.js';
+import { resolveRoundBaseVersion, type BaseVersionRecord, type BaseVersionStore } from './round-base-version.js';
 import type { Store } from './store.js';
 
 /**
@@ -169,24 +170,20 @@ export function overlayGameSources(layers: OverlayLayers): Record<string, string
 /**
  * The delivered sources a round improves, when there are any.
  *
- * Reads the same three-step the channel's `GET /sources` does — this round's own
- * delivery, then the round's preview delivery, then what is actually published — because
- * an improvement round inherits a slug long before it delivers anything of its own, and
- * without the base layer a one-file stage would render (or typecheck) a game with holes.
+ * Reads the same base version the channel's `GET /sources` does (round-base-version.ts),
+ * because an improvement round inherits a slug long before it delivers anything of its
+ * own, and without the base layer a one-file stage would render (or typecheck) a game
+ * with holes.
  */
 export async function readDeliveredSources(input: {
   gamesStore: Pick<GamesStore, 'getManifest' | 'getSourceFile'>;
-  store: Pick<Store, 'getPublication'>;
-  record: { slug?: string; previewVersion?: string; deliveredVersion?: string };
+  store: BaseVersionStore;
+  record: BaseVersionRecord & { slug?: string };
 }): Promise<SourceFile[]> {
   const { gamesStore, store, record } = input;
   const slug = record.slug;
   if (!slug) return [];
-  let version = record.previewVersion ?? record.deliveredVersion;
-  if (!version) {
-    const publication = await store.getPublication(slug);
-    if (publication?.state === 'published') version = publication.currentVersion;
-  }
+  const version = await resolveRoundBaseVersion(store, record, slug);
   if (!version) return [];
 
   const manifest = await gamesStore.getManifest(slug, version);
@@ -247,7 +244,10 @@ function noteJob<K, V>(entries: Map<K, V>, key: K, value: V, maxJobs = MAX_STAGE
 }
 
 export interface StagedPreviewOptions {
-  store: Pick<Store, 'getSubmission' | 'getPublication' | 'appendBuildPreview' | 'pruneBuildPreviews'>;
+  store: Pick<
+    Store,
+    'getSubmission' | 'getPublication' | 'listSubmissionsByOwner' | 'appendBuildPreview' | 'pruneBuildPreviews'
+  >;
   gamesStore: Pick<GamesStore, 'getStagedSourceFiles' | 'getManifest' | 'getSourceFile'>;
   /** Supplies the *engine* half only — every game file comes from the overlay. */
   githubClient: Pick<GitHubClient, 'getGameSources'>;

@@ -56,9 +56,12 @@ function fakeGamesStore(staged: Record<string, string>, delivered: Record<string
   } as unknown as GamesStore;
 }
 
-const fakeStore: Pick<Store, 'getPublication'> = {
+const fakeStore: Pick<Store, 'getPublication' | 'listSubmissionsByOwner'> = {
   async getPublication() {
     return null;
+  },
+  async listSubmissionsByOwner() {
+    return [];
   },
 };
 

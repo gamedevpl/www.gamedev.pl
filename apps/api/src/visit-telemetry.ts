@@ -149,6 +149,7 @@ const CodeStepSchema = z.enum([
   'read_only_agent',
   'conflict_seen',
   'round_reopened',
+  'restored_missing',
   'agent_mode_enabled',
   'agent_mode_disabled',
   'agent_console_run',

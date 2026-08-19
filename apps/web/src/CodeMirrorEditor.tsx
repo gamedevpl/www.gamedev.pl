@@ -22,6 +22,7 @@ import {
   RangeSetBuilder,
   StateEffect,
   StateField,
+  Transaction,
   type Extension,
   type Text,
 } from '@codemirror/state';
@@ -911,7 +912,10 @@ export default function CodeMirrorEditor({
           ...(readOnly ? [] : [colorPickerCompartmentRef.current.of(colorPickerExtension(colorPickerLabel))]),
           EditorView.editable.of(!readOnly),
           EditorView.updateListener.of((update) => {
-            if (update.docChanged) onChangeRef.current(update.state.doc.toString());
+            if (!update.docChanged) return;
+            // A doc the parent pushed in is not the creator's edit.
+            if (update.transactions.some((transaction) => transaction.annotation(Transaction.remote))) return;
+            onChangeRef.current(update.state.doc.toString());
           }),
           EditorView.lineWrapping,
           syntaxHighlighting(darkHighlight),
@@ -928,6 +932,26 @@ export default function CodeMirrorEditor({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- refs carry live values
   }, []);
+
+  // Takes an externally changed `value` into the doc.
+
+  // The mount effect reads `value` once; rewrites needed a reload.
+
+  // A typing creator gets their own draft back, already matching.
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    const current = view.state.doc.toString();
+    if (current === value) return;
+    // The caret keeps its offset where the text allows.
+    const { anchor, head } = view.state.selection.main;
+    view.dispatch({
+      changes: { from: 0, to: view.state.doc.length, insert: value },
+      selection: { anchor: Math.min(anchor, value.length), head: Math.min(head, value.length) },
+      // Out of undo too — else Ctrl+Z restores pre-refresh text.
+      annotations: [Transaction.remote.of(true), Transaction.addToHistory.of(false)],
+    });
+  }, [value]);
 
   // GA-09 jumps, including same-file search hits; offsets clamped to doc.
   useEffect(() => {

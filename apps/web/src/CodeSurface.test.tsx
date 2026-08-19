@@ -48,6 +48,7 @@ vi.mock('./codeSurfaceApi.js', async () => {
     typecheckCodeSurface: vi.fn(),
     discardCodeSurfaceEdits: vi.fn(),
     deliverCodeSurface: vi.fn(),
+    restoreCodeSurfaceFile: vi.fn(),
   };
 });
 
@@ -109,6 +110,7 @@ describe('CodeSurface', () => {
     mocked.typecheckCodeSurface.mockReset();
     mocked.discardCodeSurfaceEdits.mockReset();
     mocked.deliverCodeSurface.mockReset();
+    mocked.restoreCodeSurfaceFile.mockReset();
     mockedStudioApi.fetchGameEditor.mockReset();
     codeMirrorMock.current = null;
     mockedWebmcp.registerCodeSurfaceWebMcpTools.mockClear();
@@ -852,6 +854,86 @@ describe('CodeSurface', () => {
       { rebuild: false },
     );
     expect(mocked.deliverCodeSurface).toHaveBeenCalledWith('sky-dodge', 'publish');
+  });
+
+  it('offers to add the required file a refused Publish named, and opens it once added', async () => {
+    mocked.fetchCodeSurfaceSources.mockResolvedValue(sourcesFor());
+    mocked.stageCodeSurfaceFile.mockResolvedValue({
+      accepted: true,
+      path: 'game.ts',
+      bytes: 1,
+      staged: { totalBytes: 1, maxBytes: 1_000_000, maxFiles: 60, updatedAt: null },
+    });
+    const refusal = new codeSurfaceApi.CodeSurfaceApiError('SPEC.md is required — it is the spec of record');
+    refusal.status = 400;
+    refusal.code = 'invalid_upload';
+    refusal.missing = ['SPEC.md'];
+    mocked.deliverCodeSurface.mockRejectedValue(refusal);
+    mocked.restoreCodeSurfaceFile.mockResolvedValue({
+      accepted: true,
+      path: 'SPEC.md',
+      bytes: 20,
+      from: 'stub',
+      staged: { totalBytes: 20, maxBytes: 1_000_000, maxFiles: 60, updatedAt: null },
+    });
+
+    await render();
+    await act(async () => {
+      typeInto(container.querySelector('textarea')!, 'export const boot = () => { /* edited */ };');
+    });
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.code-surface-deliver-btn')!.click();
+      await flush();
+    });
+
+    const fix = container.querySelector<HTMLButtonElement>('.code-surface-deliver-fix')!;
+    expect(container.querySelector('.code-surface-deliver-message')!.textContent).toContain('SPEC.md is required');
+    expect(fix.textContent).toBe('Add SPEC.md');
+
+    mocked.fetchCodeSurfaceSources.mockResolvedValue(
+      sourcesFor({
+        files: [
+          { path: 'SPEC.md', content: '---\ntitle: "Sky Dodge"\n---\n' },
+          { path: 'game.ts', content: 'export const boot = () => {};' },
+        ],
+      }),
+    );
+    await act(async () => {
+      fix.click();
+      await flush();
+    });
+
+    expect(mocked.restoreCodeSurfaceFile).toHaveBeenCalledWith('sky-dodge', 'SPEC.md');
+    expect(container.querySelector('.code-surface-deliver-fix')).toBeNull();
+    expect(container.querySelector('.code-surface-deliver-message')!.textContent).toContain('your game brief');
+    // Opened, so the creator lands on what they must fill in.
+    expect(container.querySelector('textarea')!.value).toContain('title: "Sky Dodge"');
+  });
+
+  it('does not offer the fixit for a refusal that names no missing file', async () => {
+    mocked.fetchCodeSurfaceSources.mockResolvedValue(sourcesFor());
+    mocked.stageCodeSurfaceFile.mockResolvedValue({
+      accepted: true,
+      path: 'game.ts',
+      bytes: 1,
+      staged: { totalBytes: 1, maxBytes: 1_000_000, maxFiles: 60, updatedAt: null },
+    });
+    const refusal = new codeSurfaceApi.CodeSurfaceApiError('this build does not typecheck');
+    refusal.status = 400;
+    refusal.code = 'invalid_upload';
+    mocked.deliverCodeSurface.mockRejectedValue(refusal);
+
+    await render();
+    await act(async () => {
+      typeInto(container.querySelector('textarea')!, 'export const boot = () => { /* edited */ };');
+    });
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.code-surface-deliver-btn')!.click();
+      await flush();
+    });
+
+    expect(container.querySelector('.code-surface-deliver-message')!.textContent).toContain('does not typecheck');
+    expect(container.querySelector('.code-surface-deliver-fix')).toBeNull();
   });
 
   it('Publish refuses to ship when the pre-flight autosave fails, rather than delivering without the edit', async () => {

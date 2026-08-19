@@ -311,6 +311,8 @@ export type CodeStep =
   | 'conflict_seen'
   // CE-17: a staging write opened a fresh round implicitly.
   | 'round_reopened'
+  // A refused delivery's missing required file was supplied from the fixit.
+  | 'restored_missing'
   | 'agent_mode_enabled'
   | 'agent_mode_disabled'
   | 'agent_console_run';

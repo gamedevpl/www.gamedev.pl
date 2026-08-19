@@ -774,6 +774,229 @@ describe('the Code surface routes (creator-code.ts)', () => {
     });
   });
 
+  describe('the base a round builds on (round-base-version.ts)', () => {
+    // Delivers the three required files under round 10.
+    async function deliverBase(): Promise<string> {
+      await games.putCandidateSources({
+        slug: 'sky-dodge',
+        issueNumber: 10,
+        files: [
+          { path: 'SPEC.md', content: '# Sky Dodge' },
+          {
+            path: 'GAME.json',
+            content: JSON.stringify({
+              engine: { modules: [] },
+              howToPlay: { goal: { en: 'Win', pl: 'Wygraj' }, hint: { en: 'Play', pl: 'Graj' } },
+            }),
+          },
+          { path: 'game.ts', content: 'export const boot = 1;' },
+        ],
+        mode: 'preview',
+      });
+      const version = (await games.listVersions('sky-dodge'))[0]!.version;
+      await store.setSubmissionDeliveredVersion(10, version);
+      return version;
+    }
+
+    it('an edit that opens a fresh round still sees the files the previous round delivered', async () =>
+      withApp(async (app) => {
+        await deliverBase();
+        // Closed round: the next write opens a manual one.
+        await store.recordJobTransition(10, { to: 'published', at: new Date().toISOString(), by: 'operator' });
+
+        const staged = await app.inject({
+          method: 'PUT',
+          url: '/api/me/studio/games/sky-dodge/sources/stage',
+          headers: { ...authHeaders('g:creator'), 'content-type': 'application/json' },
+          payload: { path: 'game.ts', content: 'export const boot = 2;', rebuild: false },
+        });
+        expect(staged.statusCode).toBe(200);
+        expect(staged.json().roundOpened).toEqual(expect.any(Number));
+
+        const listed = await app.inject({
+          method: 'GET',
+          url: '/api/me/studio/games/sky-dodge/sources',
+          headers: authHeaders('g:creator'),
+        });
+        expect(listed.statusCode).toBe(200);
+        const files = listed.json().files as Array<{ path: string; content: string; base?: string }>;
+        // Editing one file must not read as "the others are gone".
+        expect(files.map((file) => file.path)).toEqual(['GAME.json', 'SPEC.md', 'game.ts']);
+        expect(files.find((file) => file.path === 'game.ts')?.base).toBe('export const boot = 1;');
+      }));
+
+    it('delivers that edit as a whole game, not as the one file the buffer holds', async () =>
+      withApp(async (app) => {
+        await deliverBase();
+        await store.recordJobTransition(10, { to: 'published', at: new Date().toISOString(), by: 'operator' });
+        await app.inject({
+          method: 'PUT',
+          url: '/api/me/studio/games/sky-dodge/sources/stage',
+          headers: { ...authHeaders('g:creator'), 'content-type': 'application/json' },
+          payload: { path: 'game.ts', content: 'export const boot = 2;', rebuild: false },
+        });
+
+        const res = await app.inject({
+          method: 'POST',
+          url: '/api/me/studio/games/sky-dodge/sources/deliver',
+          headers: { ...authHeaders('g:creator'), 'content-type': 'application/json' },
+          payload: { mode: 'preview', attestation: true },
+        });
+        expect(res.statusCode).toBe(200);
+        const manifest = await games.getManifest('sky-dodge', res.json().version as string);
+        expect([...(manifest?.sourceFiles ?? [])].sort()).toEqual(['GAME.json', 'SPEC.md', 'game.ts']);
+      }));
+
+    it('ignores an abandoned round when it looks for the base', async () =>
+      withApp(async (app) => {
+        const version = await deliverBase();
+        await store.setSubmissionAbandoned(10, new Date().toISOString());
+        await store.createSubmission(11, 'g:creator', 'Sky Dodge');
+        await store.setSubmissionSlug(11, 'sky-dodge');
+
+        const listed = await app.inject({
+          method: 'GET',
+          url: '/api/me/studio/games/sky-dodge/sources',
+          headers: authHeaders('g:creator'),
+        });
+        expect(listed.statusCode).toBe(200);
+        expect(listed.json().version).not.toBe(version);
+        expect(listed.json().files).toEqual([]);
+      }));
+
+    it('the round it opens carries the version forward on its own record, not only via a sibling lookup', async () =>
+      withApp(async (app) => {
+        const version = await deliverBase();
+        await store.recordJobTransition(10, { to: 'published', at: new Date().toISOString(), by: 'operator' });
+
+        const staged = await app.inject({
+          method: 'PUT',
+          url: '/api/me/studio/games/sky-dodge/sources/stage',
+          headers: { ...authHeaders('g:creator'), 'content-type': 'application/json' },
+          payload: { path: 'game.ts', content: 'export const boot = 2;', rebuild: false },
+        });
+        const opened = await store.getSubmission(staged.json().roundOpened as number);
+        expect(opened?.previewVersion).toBe(version);
+      }));
+  });
+
+  describe('POST /api/me/studio/games/:slug/sources/stage/restore', () => {
+    it('names the missing required file on a refused delivery, not only in the sentence', async () =>
+      withApp(async (app) => {
+        await games.putStagedSourceFile({
+          slug: 'sky-dodge',
+          issueNumber: 10,
+          roundGeneration: 1,
+          path: 'game.ts',
+          content: 'export const boot = 1;',
+          stagedBy: 'owner',
+        });
+        const res = await app.inject({
+          method: 'POST',
+          url: '/api/me/studio/games/sky-dodge/sources/deliver',
+          headers: { ...authHeaders('g:creator'), 'content-type': 'application/json' },
+          payload: { mode: 'preview', attestation: true },
+        });
+        expect(res.statusCode).toBe(400);
+        expect(res.json()).toMatchObject({ code: 'invalid_upload', missing: ['SPEC.md'] });
+      }));
+
+    it('stages the file back from the delivery that has it', async () =>
+      withApp(async (app) => {
+        await games.putCandidateSources({
+          slug: 'sky-dodge',
+          issueNumber: 10,
+          files: [
+            { path: 'SPEC.md', content: '# Sky Dodge\n' },
+            {
+              path: 'GAME.json',
+              content: JSON.stringify({
+                engine: { modules: [] },
+                howToPlay: { goal: { en: 'Win', pl: 'Wygraj' }, hint: { en: 'Play', pl: 'Graj' } },
+              }),
+            },
+            { path: 'game.ts', content: 'export const boot = 1;' },
+          ],
+          mode: 'preview',
+        });
+        await store.setSubmissionDeliveredVersion(10, (await games.listVersions('sky-dodge'))[0]!.version);
+
+        const res = await app.inject({
+          method: 'POST',
+          url: '/api/me/studio/games/sky-dodge/sources/stage/restore',
+          headers: { ...authHeaders('g:creator'), 'content-type': 'application/json' },
+          payload: { path: 'SPEC.md' },
+        });
+        expect(res.statusCode).toBe(200);
+        expect(res.json()).toMatchObject({ accepted: true, path: 'SPEC.md', from: 'delivery' });
+        const staged = await games.getStagedSourceFile({
+          slug: 'sky-dodge',
+          issueNumber: 10,
+          roundGeneration: 1,
+          path: 'SPEC.md',
+        });
+        expect(staged).toBe('# Sky Dodge\n');
+      }));
+
+    it('builds SPEC.md from the game brief when no delivery has one', async () =>
+      withApp(async (app) => {
+        await store.setSubmissionBrief(10, { spec: 'Dodge falling rocks for as long as you can.', qa: [] });
+        const res = await app.inject({
+          method: 'POST',
+          url: '/api/me/studio/games/sky-dodge/sources/stage/restore',
+          headers: { ...authHeaders('g:creator'), 'content-type': 'application/json' },
+          payload: { path: 'SPEC.md' },
+        });
+        expect(res.statusCode).toBe(200);
+        expect(res.json()).toMatchObject({ accepted: true, from: 'stub' });
+        const staged = await games.getStagedSourceFile({
+          slug: 'sky-dodge',
+          issueNumber: 10,
+          roundGeneration: 1,
+          path: 'SPEC.md',
+        });
+        expect(staged).toContain('title: "Sky Dodge"');
+        expect(staged).toContain('slug: "sky-dodge"');
+        expect(staged).toContain('Dodge falling rocks for as long as you can.');
+      }));
+
+    it('refuses to invent a game.ts nobody has written', async () =>
+      withApp(async (app) => {
+        const res = await app.inject({
+          method: 'POST',
+          url: '/api/me/studio/games/sky-dodge/sources/stage/restore',
+          headers: { ...authHeaders('g:creator'), 'content-type': 'application/json' },
+          payload: { path: 'game.ts' },
+        });
+        expect(res.statusCode).toBe(404);
+        expect(res.json()).toMatchObject({ error: 'no_source' });
+      }));
+
+    it('refuses while an agent holds the round', async () =>
+      withApp(async (app) => {
+        await store.recordDispatch(10, { backend: 'managed', ref: 'session-1' });
+        const res = await app.inject({
+          method: 'POST',
+          url: '/api/me/studio/games/sky-dodge/sources/stage/restore',
+          headers: { ...authHeaders('g:creator'), 'content-type': 'application/json' },
+          payload: { path: 'SPEC.md' },
+        });
+        expect(res.statusCode).toBe(409);
+        expect(res.json()).toMatchObject({ error: 'agent_round' });
+      }));
+
+    it('404s for a slug the caller does not own', async () =>
+      withApp(async (app) => {
+        const res = await app.inject({
+          method: 'POST',
+          url: '/api/me/studio/games/sky-dodge/sources/stage/restore',
+          headers: { ...authHeaders('g:other'), 'content-type': 'application/json' },
+          payload: { path: 'SPEC.md' },
+        });
+        expect(res.statusCode).toBe(404);
+      }));
+  });
+
   describe('POST /api/me/studio/games/:slug/sources/deliver', () => {
     it('refuses without the IP attestation', async () =>
       withApp(async (app) => {
