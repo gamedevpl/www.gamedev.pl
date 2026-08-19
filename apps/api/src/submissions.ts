@@ -1084,7 +1084,11 @@ export async function registerSubmissionRoutes(
     log: { error: (context: object, message: string) => void; info?: (context: object, message: string) => void };
   }): Promise<
     | { ok: true; status: 'pending'; regenerationsRemaining: number }
-    | { ok: false; reason: 'not_configured' | 'not_found' | 'seed_not_readable' | 'already_delivered' | 'cap_reached' }
+    | {
+        ok: false;
+        reason:
+          'not_configured' | 'not_found' | 'seed_not_readable' | 'already_delivered' | 'cap_reached' | 'seeding_off';
+      }
   > {
     if (!gameSeeder || !store) return { ok: false, reason: 'not_configured' };
     const record = await store.getSubmission(input.issueNumber);
@@ -1096,6 +1100,8 @@ export async function registerSubmissionRoutes(
     }
     // A delivered round was already judged; do not move its starting point.
     if ((record.roundDeliveryCount ?? 0) > 0) return { ok: false, reason: 'already_delivered' };
+    // Checked before spending quota, which never resets when seeding comes back on.
+    if (!(await seedAvailabilityGate.seedingEnabled())) return { ok: false, reason: 'seeding_off' };
 
     const used = await store.incrementSeedRegenerations(input.issueNumber);
     if (used > MAX_SEED_REGENERATIONS) return { ok: false, reason: 'cap_reached' };

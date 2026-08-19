@@ -489,11 +489,14 @@ it up — the job sat in `submitted` (reads as "building" to the creator) indefi
 
 Round-0 seeding (`ModelGameSeeder`, `apps/api/src/game-seed.ts`) generates a first draft
 before the agent starts, on the first dispatch of any new round — self/BYOCA and platform
-alike. There is no opt-out: the only way a round starts unseeded is generation failing,
-which still fails open and now writes a `seedOutcome` row with `generated: false`. A self
-round's seed is stored straight on the job (`get_sources` serves it); a platform round
-whose vendor accepts inline files gets it as `workspaceFiles` on the managed session
-instead.
+alike. There is no per-round opt-out, but there is a runtime kill switch: an operator can
+set `seedingMode: 'off'` on the creation-limits document (ops:
+seed-provider-selection-plan.md) and every round starts unseeded until it is switched
+back on, no redeploy. Absent that, the only way a round starts unseeded is generation
+failing, which still fails open and now writes a `seedOutcome` row with
+`generated: false`. A self round's seed is stored straight on the job (`get_sources`
+serves it); a platform round whose vendor accepts inline files gets it as `workspaceFiles`
+on the managed session instead.
 
 `submissions.ts`'s `seedBuild` circuit breaker (`SEED_STAGING_COOLDOWN_MS`, 10 minutes)
 exists so a broken staging credential costs one wasted Vertex draft, not one per

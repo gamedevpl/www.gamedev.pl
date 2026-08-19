@@ -3277,6 +3277,31 @@ describe('seed regeneration', () => {
     await vi.waitFor(() => expect(seedCalls).toBe(2));
   });
 
+  it('refuses without spending regeneration quota when the console kill switch is off', async () => {
+    const store = new InMemoryStore();
+    await selfRound(store);
+    await store.setCreationLimits({ seedingMode: 'off' }, 'g:boss');
+    let seedCalls = 0;
+    app = await createApp(store, undefined, { gameSeeder: seederStub(() => seedCalls++) });
+
+    const regenerate = () =>
+      app!.inject({
+        method: 'POST',
+        url: '/api/agent/build/seed/regenerate',
+        headers: agentHeaders(),
+        payload: {},
+      });
+
+    // Twice — more than the cap — and neither may cost a real attempt.
+    for (let i = 0; i < 2; i++) {
+      const res = await regenerate();
+      expect(res.statusCode).toBe(409);
+      expect(res.json().error).toBe('seeding_off');
+    }
+    expect(seedCalls).toBe(0);
+    expect((await store.getSubmission(ISSUE))?.seedRegenerations ?? 0).toBe(0);
+  });
+
   it('answers 503 rather than pretending, when the deployment does not seed', async () => {
     const store = new InMemoryStore();
     await selfRound(store);
