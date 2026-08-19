@@ -343,8 +343,9 @@ export function CreationLimitsPanel({ onChanged }: { onChanged?: () => void }) {
         {message && <p className="admin-limits-message">{message}</p>}
 
         <p className="health-note">
-          A change needs no redeploy and reaches every instance within {relative(limits.propagationMs)}. Only new
-          submissions are affected — a round already seeded keeps its draft.
+          A change needs no redeploy and reaches every instance within {relative(limits.propagationMs)}. A seeded round
+          keeps its draft — unless the creator asks for a regeneration before delivery, which reads the mode and
+          provider live.
         </p>
       </section>
 
