@@ -124,6 +124,24 @@ export interface SourceDeliveryServiceOptions {
 const DEFAULT_MAX_SUBMITS_PER_WINDOW = 20;
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
 
+// Matches agent-channel.ts's MAX_EVENT_TEXT — same field, same reader, same cap.
+const MAX_DELIVERY_EVENT_TEXT = 300;
+
+/**
+ * A creator-visible 'blocked' thread event for a delivery that went through with a
+ * gap the creator cannot otherwise see: typecheck skipped or bypassed. Before this,
+ * these were `log?.warn` only — real in the store (roundTypecheckPreflightBypassErrors)
+ * but never read by anything, so a build could sit unpublished with the thread saying
+ * nothing was wrong. `appendBuildEvent` already renders 'blocked' with its own icon
+ * (see apps/web/src/SubmissionStatusView.tsx); no client change needed to show this.
+ */
+async function reportDeliveryBlocked(store: Store, issueNumber: number, text: string): Promise<void> {
+  await store.appendBuildEvent(issueNumber, {
+    kind: 'blocked',
+    text: sanitizeCreatorText(text, { singleLine: true }).slice(0, MAX_DELIVERY_EVENT_TEXT),
+  });
+}
+
 function stopReason(record: SubmissionRecord): 'stopped' | null {
   if (record.abandonedAt || record.publishedAt || resolveJobState(record) === 'canceled') return 'stopped';
   if (record.builderHandoff && record.builderHandoff.awaitsAgentAck !== false) return 'stopped';
@@ -312,6 +330,11 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
               },
               'typecheck preflight bypassed after refusal cap',
             );
+            await reportDeliveryBlocked(
+              options.store,
+              input.issueNumber,
+              `Delivered without a passing typecheck after ${TYPECHECK_PREFLIGHT_MAX_REFUSALS} failed attempts: ${check.message}`,
+            );
           } else {
             if (record.roundTypecheckPreflightBypassErrors) {
               typecheckBypass = false;
@@ -321,6 +344,11 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
               options.log?.warn?.(
                 { issueNumber: input.issueNumber, slug: input.slug, durationMs: check.durationMs },
                 'typecheck preflight skipped: budget exceeded',
+              );
+              await reportDeliveryBlocked(
+                options.store,
+                input.issueNumber,
+                "Delivered without typecheck validation — the check ran out of time on this round's budget.",
               );
             }
           }

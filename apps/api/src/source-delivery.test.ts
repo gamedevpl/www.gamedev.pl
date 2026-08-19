@@ -349,6 +349,14 @@ export function tick(round: Round) {
       const record = await store.getSubmission(ISSUE);
       expect(record?.roundTypecheckPreflightRefusals).toBe(2);
       expect(record?.roundTypecheckPreflightBypassErrors).toMatch(/Typecheck preflight failed/);
+
+      // Regression: this used to be a server log line only — the diagnostics landed in
+      // roundTypecheckPreflightBypassErrors, which nothing reads, so the creator never
+      // learned their "accepted" delivery skipped validation. It must reach the thread.
+      const events = await store.listBuildEvents(ISSUE);
+      expect(events).toContainEqual(
+        expect.objectContaining({ kind: 'blocked', text: expect.stringContaining('without a passing typecheck') }),
+      );
     });
 
     it('does not refuse when no kit store is configured', async () => {

@@ -79,6 +79,14 @@ const MAX_SEED_TOTAL_BYTES = 400_000;
 /** A seed that has not arrived by now has stopped being an optimization. */
 export const DEFAULT_SEED_PICK_TIMEOUT_MS = 30_000;
 export const DEFAULT_SEED_GENERATE_TIMEOUT_MS = 180_000;
+
+// 'low' thinking is mandatory here (thinkingBudget:0 400s on this model — see pickReferences)
+// and its tokens are drawn from the same maxOutputTokens cap as the answer. 512 was sized for
+// the JSON answer alone and left no headroom: on a verbose thinking pass the whole budget went
+// to thinking, the answer came back empty, and JSON.parse('') crashed the pick (seen in prod,
+// 2026-08-19). This is still tiny next to the 65_536 generate calls — just enough slack that
+// thinking overhead can't starve the three-slug answer that follows it.
+const SEED_PICK_MAX_OUTPUT_TOKENS = 2048;
 export const DEFAULT_SEED_TYPECHECK_TIMEOUT_MS = TYPECHECK_PREFLIGHT_BUDGET_MS;
 
 /** Same model family as the rest of our Vertex call sites; flash is the measured choice. */
@@ -498,16 +506,28 @@ export class VertexGameSeeder implements GameSeeder {
     const result = await this.client('pick')(buildPickPrompt(context, spec, this.references))
       .thinking({ level: 'low' })
       .temperature(0)
-      .maxOutputTokens(512)
+      .maxOutputTokens(SEED_PICK_MAX_OUTPUT_TOKENS)
       .signal(AbortSignal.timeout(this.pickTimeoutMs))
       .run();
 
-    const parsed = PickSchema.safeParse(JSON.parse(extractJson(result)));
-    const picks = (parsed.success ? (parsed.data.picks ?? []) : [])
-      .filter((slug) => context.hasGame(slug))
-      .slice(0, this.references);
+    const usage = usageOf(result, this.model);
+    // The answer is a few slugs, not prose — but an empty or fence-only reply parses to
+    // neither valid JSON nor a schema match. Miss either way and this call still picked
+    // nothing, same as a clean "no references matched": fail open, don't crash the seed.
+    let picks: string[] = [];
+    try {
+      const parsed = PickSchema.safeParse(JSON.parse(extractJson(result)));
+      picks = (parsed.success ? (parsed.data.picks ?? []) : [])
+        .filter((slug) => context.hasGame(slug))
+        .slice(0, this.references);
+    } catch (error) {
+      this.options.log?.warn(
+        { err: error, raw: extractJson(result).slice(0, 200) },
+        'seed pick response was not valid JSON, treating as no references',
+      );
+    }
 
-    return { picks, usage: usageOf(result, this.model) };
+    return { picks, usage };
   }
 
   // Fail-open: absent or timed out just means references-only generation.
