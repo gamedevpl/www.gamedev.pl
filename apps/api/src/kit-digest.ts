@@ -5,7 +5,7 @@ import { readFile } from 'node:fs/promises';
 
 export const KIT_REGISTRY_OBJECT = 'kits/current.json';
 // Sanity ceiling on raw digest bytes, not a prompt budget.
-export const DEFAULT_KIT_DIGEST_MAX_BYTES = 150_000;
+export const DEFAULT_KIT_DIGEST_MAX_BYTES = 250_000;
 export const DEFAULT_PROMPT_DIGEST_MAX_BYTES = 20_000;
 // Sized to an MCP tool-result ceiling, not the whole API.
 export const DEFAULT_MCP_DIGEST_MAX_BYTES = 50_000;
