@@ -240,6 +240,8 @@ export function CodeSurface({
   /** One autosave timer per dirty path, not one shared timer — editing a second file
    * inside the debounce window must not cancel the first file's pending save. */
   const saveTimersRef = useRef<Map<string, number>>(new Map());
+  // In-flight autosave PUTs by path, awaited before delete.
+  const savingPromisesRef = useRef<Map<string, Promise<boolean>>>(new Map());
   const typecheckTimerRef = useRef<number | null>(null);
   const livePushTimerRef = useRef<number | null>(null);
   const previewTimerRef = useRef<number | null>(null);
@@ -600,13 +602,14 @@ export function CodeSurface({
     if (pendingJump && pendingJump.path === selected) setPendingJump(null);
   }, [pendingJump, selected]);
 
-  /** Owner-staged paths plus local drafts that still differ — the working-copy set. */
+  /** Owner-staged paths, staged deletions, and local drafts that still differ. */
   const changedPaths = useMemo(() => {
     if (!sources) return [] as string[];
     const paths = new Set<string>();
     for (const entry of sources.files) {
       if (entry.stagedBy === 'owner') paths.add(entry.path);
     }
+    for (const path of sources.deleted) paths.add(path);
     for (const [path, draft] of Object.entries(drafts)) {
       const base = sources.files.find((entry) => entry.path === path);
       if (base && draft !== base.content) paths.add(path);
@@ -785,6 +788,15 @@ export function CodeSurface({
     [slug, schedulePreviewRebuild],
   );
 
+  // Fires and tracks an autosave so a delete can await it.
+  function runAutosave(path: string, value: string) {
+    const promise = saveNow(path, value);
+    savingPromisesRef.current.set(path, promise);
+    void promise.finally(() => {
+      if (savingPromisesRef.current.get(path) === promise) savingPromisesRef.current.delete(path);
+    });
+  }
+
   /** Flushes every path with a pending autosave — not just the one currently open —
    * before deliver acts on the buffer. Returns false if any of them failed to save. */
   const flushPendingSaves = useCallback(async (): Promise<boolean> => {
@@ -856,7 +868,7 @@ export function CodeSurface({
       path,
       window.setTimeout(() => {
         saveTimersRef.current.delete(path);
-        void saveNow(path, value);
+        runAutosave(path, value);
       }, AUTOSAVE_MS),
     );
     if (typecheckTimerRef.current !== null) window.clearTimeout(typecheckTimerRef.current);
@@ -913,6 +925,8 @@ export function CodeSurface({
       window.clearTimeout(timer);
       saveTimersRef.current.delete(path);
     }
+    // An in-flight save could otherwise revive the file after deletion.
+    await savingPromisesRef.current.get(path);
     try {
       await deleteCodeSurfaceFile(slug, path);
       setDrafts((current) => {

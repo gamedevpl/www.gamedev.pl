@@ -300,6 +300,108 @@ describe('CodeSurface', () => {
     expect(container.querySelector('[role="dialog"]')?.textContent).not.toContain('src/main.ts');
   });
 
+  it('keeps Discard/Publish enabled when a delete is the only working-copy change', async () => {
+    mocked.fetchCodeSurfaceSources.mockResolvedValueOnce(
+      sourcesFor({
+        files: [
+          { path: 'GAME.json', content: '{"engine":{"modules":[]}}' },
+          { path: 'src/main.ts', content: 'export const boot = () => {};' },
+        ],
+      }),
+    );
+    mocked.deleteCodeSurfaceFile.mockResolvedValue({
+      accepted: true,
+      path: 'src/main.ts',
+      staged: { totalBytes: 0, maxBytes: 1_000_000, maxFiles: 60, updatedAt: '2026-08-10T00:00:00.000Z' },
+    });
+    // The refetch after delete reports the tombstone via `deleted`, not `files`.
+    mocked.fetchCodeSurfaceSources.mockResolvedValueOnce(
+      sourcesFor({
+        files: [{ path: 'GAME.json', content: '{"engine":{"modules":[]}}' }],
+        deleted: ['src/main.ts'],
+      }),
+    );
+
+    await render();
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.code-surface-file-trigger')!.click();
+    });
+    const deleteBtn = () =>
+      [...container.querySelectorAll<HTMLButtonElement>('.code-surface-file-option')]
+        .find((option) => option.textContent?.includes('src/main.ts'))
+        ?.querySelector<HTMLButtonElement>('.code-surface-file-option-delete');
+    await act(async () => {
+      deleteBtn()!.click();
+    });
+    await act(async () => {
+      deleteBtn()!.click();
+      await flush();
+    });
+
+    expect(container.querySelector<HTMLButtonElement>('.code-surface-discard')).not.toBeNull();
+    expect(container.querySelector<HTMLButtonElement>('.code-surface-deliver-btn')!.disabled).toBe(false);
+  });
+
+  it('waits for an in-flight autosave before deleting, so the save cannot revive the file', async () => {
+    mocked.fetchCodeSurfaceSources.mockResolvedValueOnce(
+      sourcesFor({ files: [{ path: 'game.ts', content: 'export const boot = () => {};' }] }),
+    );
+    let resolveSave: ((value: codeSurfaceApi.CodeSurfaceStageResult) => void) | null = null;
+    mocked.stageCodeSurfaceFile.mockReturnValue(
+      new Promise((resolve) => {
+        resolveSave = resolve;
+      }),
+    );
+    mocked.deleteCodeSurfaceFile.mockResolvedValue({
+      accepted: true,
+      path: 'game.ts',
+      staged: { totalBytes: 0, maxBytes: 1_000_000, maxFiles: 60, updatedAt: '2026-08-10T00:00:00.000Z' },
+    });
+    mocked.fetchCodeSurfaceSources.mockResolvedValueOnce(sourcesFor({ files: [] }));
+
+    await render();
+    const textarea = container.querySelector('textarea')!;
+    await act(async () => {
+      typeInto(textarea, 'export const boot = () => { /* edited */ };');
+    });
+    // Debounce fires: the PUT is in flight (unresolved) when delete is requested.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+    expect(mocked.stageCodeSurfaceFile).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.code-surface-file-trigger')!.click();
+    });
+    const deleteBtn = () =>
+      [...container.querySelectorAll<HTMLButtonElement>('.code-surface-file-option')]
+        .find((option) => option.textContent?.includes('game.ts'))
+        ?.querySelector<HTMLButtonElement>('.code-surface-file-option-delete');
+    await act(async () => {
+      deleteBtn()!.click();
+    });
+    await act(async () => {
+      deleteBtn()!.click();
+      await flush();
+    });
+
+    // Not called yet — the autosave PUT is still unresolved.
+    expect(mocked.deleteCodeSurfaceFile).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveSave!({
+        accepted: true,
+        path: 'game.ts',
+        bytes: 10,
+        staged: { totalBytes: 10, maxBytes: 1_000_000, maxFiles: 60, updatedAt: '2026-08-10T00:00:00.000Z' },
+      });
+      await flush();
+    });
+
+    expect(mocked.deleteCodeSurfaceFile).toHaveBeenCalledWith('sky-dodge', 'game.ts');
+  });
+
   it('autosaves an edit into the working copy, marks the rail dirty, and schedules a preview rebuild', async () => {
     mocked.fetchCodeSurfaceSources.mockResolvedValue(sourcesFor());
     mocked.stageCodeSurfaceFile.mockResolvedValue({
