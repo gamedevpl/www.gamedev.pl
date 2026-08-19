@@ -247,6 +247,11 @@ export const privacyEn: LegalDocument = {
               'Moderating and refining your game description; suggesting code completions in the Code editor',
               'USA / global — Standard Contractual Clauses',
             ],
+            [
+              'Meta (Muse Spark, Meta Model API)',
+              'Generating a starting draft of your game from your description, before the coding agent begins',
+              'USA — Standard Contractual Clauses',
+            ],
             ['GitHub (Microsoft)', 'Games repository and coding agent', 'USA — Data Privacy Framework'],
             ['Resend', 'Sending email', 'USA — Standard Contractual Clauses'],
             [
