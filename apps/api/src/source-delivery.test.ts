@@ -468,5 +468,65 @@ export function tick(round: Round) {
         expect.objectContaining({ kind: 'milestone', text: expect.stringContaining('no longer applies') }),
       );
     });
+
+    it('does not resolve the bypass when the check only skipped, not passed', async () => {
+      // Regression: a skipped check is not a real pass.
+      const emptyKit = { engineRef: PINNED, sha256: 'a'.repeat(64), files: new Map() };
+      const kitFileStore = fakeKitStore({ [PINNED]: emptyKit });
+      const { store, service, authority } = await setup({ kitFileStore });
+      await store.pinRoundKitEngineRef(ISSUE, PINNED);
+      await store.setRoundTypecheckPreflightBypassErrors(ISSUE, 'stale diagnostics');
+
+      const clean: SourceFile[] = [
+        { path: 'SPEC.md', content: '---\ntitle: Clean\n---\n' },
+        { path: 'index.html', content: '<!doctype html>' },
+        { path: 'game.ts', content: 'export const n = 1;\n' },
+      ];
+      const result = await service.deliver({
+        issueNumber: ISSUE,
+        slug: SLUG,
+        files: clean,
+        mode: 'preview',
+        backend: BACKEND,
+        authority,
+      });
+      expect(result.accepted).toBe(true);
+      expect((await store.getSubmission(ISSUE))?.roundTypecheckPreflightBypassErrors).toBe('stale diagnostics');
+      expect(await store.listBuildEvents(ISSUE)).toEqual([]);
+    });
+
+    it('does not let a thread-event write failure roll back an accepted delivery', async () => {
+      // Regression: a decorative event write used to reject deliver() after storage.
+      const kitFileStore = fakeKitStore({ [PINNED]: treeFor(PINNED, KIT_DTS) });
+      const { store, service, authority } = await setup({ kitFileStore });
+      await store.pinRoundKitEngineRef(ISSUE, PINNED);
+      store.appendBuildEvent = vi.fn(async () => {
+        throw new Error('event store unavailable');
+      });
+
+      for (let i = 0; i < 2; i += 1) {
+        await expect(
+          service.deliver({
+            issueNumber: ISSUE,
+            slug: SLUG,
+            files: brokenFiles,
+            mode: 'preview',
+            backend: BACKEND,
+            authority,
+          }),
+        ).rejects.toBeInstanceOf(InvalidUploadError);
+      }
+
+      const result = await service.deliver({
+        issueNumber: ISSUE,
+        slug: SLUG,
+        files: brokenFiles,
+        mode: 'preview',
+        backend: BACKEND,
+        authority,
+      });
+      expect(result.accepted).toBe(true);
+      expect((await store.getSubmission(ISSUE))?.previewVersion).toBeDefined();
+    });
   });
 });

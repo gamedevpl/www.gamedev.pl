@@ -344,7 +344,8 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
               text: `Delivered without a passing typecheck after ${TYPECHECK_PREFLIGHT_MAX_REFUSALS} failed attempts: ${check.message}`,
             });
           } else {
-            if (record.roundTypecheckPreflightBypassErrors) {
+            // A skipped check is not a pass; leave the bypass state alone.
+            if (record.roundTypecheckPreflightBypassErrors && !check.skipped) {
               typecheckBypass = false;
               await options.store.setRoundTypecheckPreflightBypassErrors(input.issueNumber, null);
               pendingThreadEvents.push({
@@ -413,7 +414,12 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
         throw error;
       }
       for (const event of pendingThreadEvents) {
-        await reportDeliveryEvent(options.store, translator, input.issueNumber, event.kind, event.text);
+        try {
+          await reportDeliveryEvent(options.store, translator, input.issueNumber, event.kind, event.text);
+        } catch (error) {
+          // Decorative: a stored version must not roll back over an event write.
+          options.log?.warn?.({ err: error, issueNumber: input.issueNumber }, 'delivery thread event not stored');
+        }
       }
 
       if (input.mode === 'preview') {
