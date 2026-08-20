@@ -539,10 +539,12 @@ export class ModelGameSeeder implements GameSeeder {
     providerId: string,
   ): Promise<{ picks: string[]; usage: SeedUsage }> {
     // Raw thinkingBudget:0 also 400s on gemini-3.7-flash; 'low' is the floor.
+    // No .temperature(0): claude-sonnet-5 and gpt-5.6-luna are reasoning-locked and 400
+    // on any explicit value other than their default — the pick is JSON-schema
+    // constrained anyway, so determinism here isn't worth a per-vendor exception.
     const result = await this.client(providerId)(buildPickPrompt(context, spec, this.references))
       .responseFormat(this.pickResponseFormat())
       .thinking({ level: 'low' })
-      .temperature(0)
       .maxOutputTokens(this.pickMaxOutputTokensFor(providerId))
       .signal(AbortSignal.timeout(this.pickTimeoutMs))
       .run();
