@@ -13,10 +13,10 @@
 
 import type { AgentTaskState } from './agent-state.js';
 import type { ManagedBudgetStop, ManagedSessionUsage } from './managed-agent.js';
-import { JOB_STATES, type JobState } from '@gamedevpl/contract';
+import { JOB_STALL_VALUES, JOB_STATES, type JobStall, type JobState } from '@gamedevpl/contract';
 import type { SubmissionStatus } from './submission-status.js';
 
-export { JOB_STATES, type JobState };
+export { JOB_STALL_VALUES, JOB_STATES, type JobStall, type JobState };
 
 export const TERMINAL_JOB_STATES: ReadonlySet<JobState> = new Set<JobState>([
   'published',
@@ -376,32 +376,6 @@ export function reconcileAgentObservation(current: JobState, observation: AgentO
   if (!next || next.to === current) return null;
   return canTransition(current, next.to) ? next : null;
 }
-
-/**
- * Why a job looks stuck. This is the answer to the creator-experience finding that we
- * "still have no way to tell **stuck** from **slow**" — with an agent state machine and
- * our own transition timestamps, most of it stops being guesswork.
- */
-export type JobStall =
-  /** The agent is explicitly blocked on an answer. Known, not inferred. */
-  | 'awaiting_input'
-  /** Accepted but never handed to an agent — dispatch itself is wedged. */
-  | 'not_dispatched'
-  /** A live session that has said nothing for a while. The old heuristic, kept. */
-  | 'quiet'
-  /**
-   * The agent called MCP `end` — finished iterating this round on purpose.
-   * Prefer this over inferred quiet; unlocks creator self→platform handoff immediately.
-   */
-  | 'ended'
-  /** Delivered, but our own gate never picked it up. Our bug, not the agent's. */
-  | 'gate_not_started'
-  /**
-   * A self-build round waiting for the creator's agent to connect. Distinct from
-   * `not_dispatched` / `quiet`: nothing is wedged — the platform dispatched locally and
-   * is idle on purpose until the first channel signal.
-   */
-  | 'no_agent_yet';
 
 export interface StallThresholds {
   notDispatchedMs: number;
