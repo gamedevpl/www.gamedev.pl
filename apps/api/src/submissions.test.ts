@@ -4861,6 +4861,48 @@ describe('games published from the store rather than the repo', () => {
 
     await app.close();
   });
+
+  it('evicts the bundle, catalog and media caches so a delete takes effect immediately', async () => {
+    const store = new InMemoryStore();
+    await store.upsertUser({ uid: 'g:boss' });
+    await store.setPublication({
+      slug: 'comet-courier',
+      state: 'published',
+      currentVersion: 'v1',
+      publishedAt: '2026-07-30T12:00:00Z',
+    });
+    const { githubClient } = createGithubClientStub({});
+    const { app } = await createApp({
+      githubClient,
+      store,
+      submissionTokenSecret: secret,
+      adminUids: 'g:boss',
+      agentChannel: { gamesStore: publishedGamesStore() },
+    });
+
+    expect((await app.inject({ method: 'GET', url: '/api/games/comet-courier' })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'GET', url: '/api/games/comet-courier/media/opening.png' })).statusCode).toBe(
+      200,
+    );
+    const warmCatalog = await app.inject({ method: 'GET', url: '/api/catalog' });
+    expect(warmCatalog.json().some((item: CatalogGameEntry) => item.slug === 'comet-courier')).toBe(true);
+
+    const del = await app.inject({
+      method: 'POST',
+      url: '/api/admin/games/comet-courier/delete',
+      headers: getAuthHeaders('g:boss'),
+    });
+    expect(del.statusCode).toBe(200);
+
+    expect((await app.inject({ method: 'GET', url: '/api/games/comet-courier' })).statusCode).toBe(404);
+    expect((await app.inject({ method: 'GET', url: '/api/games/comet-courier/media/opening.png' })).statusCode).toBe(
+      404,
+    );
+    const coldCatalog = await app.inject({ method: 'GET', url: '/api/catalog' });
+    expect(coldCatalog.json().some((item: CatalogGameEntry) => item.slug === 'comet-courier')).toBe(false);
+
+    await app.close();
+  });
 });
 
 describe('a session that finishes without delivering', () => {
@@ -6107,6 +6149,43 @@ describe('creator deletes their own published game', () => {
     });
 
     expect(response.statusCode).toBe(409);
+    expect(await store.getPublication('sky-dodge')).toMatchObject({ state: 'archived' });
+
+    await app.close();
+  });
+
+  it("refuses the previous owner's token once a slug transfer moves the game on", async () => {
+    const { githubClient } = createGithubClientStub({});
+    const { app, store } = await createApp({ githubClient, submissionTokenSecret: secret });
+    await store.upsertUser({ uid: 'g:previous' });
+    await store.upsertUser({ uid: 'g:new-owner' });
+    await store.createSubmission(1_000_100, 'g:previous', 'Sky Dodge');
+    await store.setSubmissionSlug(1_000_100, 'sky-dodge');
+    await store.setSubmissionPublishedAt(1_000_100, '2026-07-01T00:00:00.000Z');
+    await new Promise((resolve) => setTimeout(resolve, 2));
+    await store.createSubmission(1_000_101, 'g:new-owner', 'Sky Dodge');
+    await store.setSubmissionSlug(1_000_101, 'sky-dodge');
+    await store.setPublication({
+      slug: 'sky-dodge',
+      state: 'published',
+      currentVersion: 'v1',
+      publishedAt: '2026-07-01T00:00:00.000Z',
+    });
+
+    const fromPrevious = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(1_000_100, secret)}/delete-game`,
+      headers: getAuthHeaders('g:previous'),
+    });
+    expect(fromPrevious.statusCode).toBe(403);
+    expect(await store.getPublication('sky-dodge')).toMatchObject({ state: 'published' });
+
+    const fromNewOwner = await app.inject({
+      method: 'POST',
+      url: `/api/submissions/${mintToken(1_000_101, secret)}/delete-game`,
+      headers: getAuthHeaders('g:new-owner'),
+    });
+    expect(fromNewOwner.statusCode).toBe(200);
     expect(await store.getPublication('sky-dodge')).toMatchObject({ state: 'archived' });
 
     await app.close();

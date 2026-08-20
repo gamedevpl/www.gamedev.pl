@@ -2068,6 +2068,42 @@ describe('CreatorStudioView delete', () => {
     root.unmount();
   });
 
+  it('offers delete alongside abandon while an improvement round is open on a live game', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    fetchStudioGames.mockResolvedValue(
+      studioShelf([
+        {
+          token: 'token-improve',
+          title: 'TV Tycoon',
+          createdAt: '2026-08-01T09:00:00.000Z',
+          lastKnownStatus: 'building',
+          slug: 'tv-tycoon',
+          livePublishedAt: '2026-07-31T09:00:00.000Z',
+        },
+      ]),
+    );
+
+    const { container, root } = await renderStudio({ selectedGame: 'tv-tycoon', selectedTab: 'details' });
+
+    expect(container.querySelector('.status-abandon')).not.toBeNull();
+    const del = container.querySelector<HTMLButtonElement>('.status-delete');
+    expect(del).not.toBeNull();
+
+    await act(async () => {
+      del!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('.status-delete.is-danger')!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(deleteGame).toHaveBeenCalledWith('token-improve');
+
+    root.unmount();
+  });
+
   it('deletes the game and refetches the shelf', async () => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     await i18n.changeLanguage('en');

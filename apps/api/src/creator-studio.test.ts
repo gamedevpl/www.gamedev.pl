@@ -68,6 +68,44 @@ describe('GET /api/me/studio', () => {
     await app.close();
   });
 
+  it('reports a deleted game as not live while keeping its publish history', async () => {
+    await store.createSubmission(20, 'g:creator', 'Comet Courier');
+    await store.setSubmissionSlug(20, 'comet-courier');
+    await store.setSubmissionPublishedAt(20, `${today}T12:00:00.000Z`);
+    await store.setSubmissionNotifiedStatus(20, 'published');
+    await store.setPublication({
+      slug: 'comet-courier',
+      state: 'published',
+      currentVersion: 'v1',
+      publishedAt: `${today}T12:00:00.000Z`,
+    });
+    await store.archivePublication('comet-courier', 'deleted by creator', `${today}T13:00:00.000Z`);
+
+    const app = await buildApp({ store, sessionSecret, submissionRoutes: { submissionTokenSecret } });
+    const res = await app.inject({ method: 'GET', url: '/api/me/studio', headers: authHeaders('g:creator') });
+
+    const games = (res.json() as { games: CreatorStudioGame[] }).games;
+    expect(games).toHaveLength(1);
+    // History stands — the row still says when it published.
+    expect(games[0]).toMatchObject({ slug: 'comet-courier', publishedAt: `${today}T12:00:00.000Z`, live: false });
+
+    await app.close();
+  });
+
+  it('reads a game with no publication record as live (games-repo entries, legacy slugs)', async () => {
+    await store.createSubmission(21, 'g:creator', 'Legacy Game');
+    await store.setSubmissionSlug(21, 'legacy-game');
+    await store.setSubmissionPublishedAt(21, `${today}T12:00:00.000Z`);
+
+    const app = await buildApp({ store, sessionSecret, submissionRoutes: { submissionTokenSecret } });
+    const res = await app.inject({ method: 'GET', url: '/api/me/studio', headers: authHeaders('g:creator') });
+
+    const games = (res.json() as { games: CreatorStudioGame[] }).games;
+    expect(games[0]?.live).toBeUndefined();
+
+    await app.close();
+  });
+
   it('lists all distinct games even when improvement rounds exceed the job ceiling', async () => {
     for (let game = 0; game < 3; game++) {
       const slug = `game-${game}`;

@@ -1546,7 +1546,7 @@ function DetailsPanel({
                     </button>
                   </div>
                 ) : null}
-                {publishedJob && game.lastKnownStatus !== 'abandoned' ? (
+                {catalogLive && game.lastKnownStatus !== 'abandoned' ? (
                   <div className="studio-delete-block">
                     {deleteArmed ? <p className="studio-delete-hint">{t('studioPanel.overview.deleteHint')}</p> : null}
                     <button

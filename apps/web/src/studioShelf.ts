@@ -23,6 +23,7 @@ export type StudioShelfGame = StudioGame & { livePublishedAt?: string };
 export const STUDIO_SHELF_TOOLS_AT = 5;
 
 export function isStudioGamePublished(game: StudioGame): boolean {
+  if (game.live === false) return false;
   return Boolean(game.publishedAt && game.slug) || game.lastKnownStatus === 'published';
 }
 

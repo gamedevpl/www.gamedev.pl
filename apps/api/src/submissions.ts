@@ -3,6 +3,7 @@ import type { GameProject } from '@gamedevpl/game-generator';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { splitConceptBrief } from './agent-build-brief.js';
+import { creatorOwnsSlug } from './agent-game-key-resolve.js';
 import { registerAgentChannelRoutes, type AgentChannelOptions } from './agent-channel.js';
 import { mintAgentToken, mintManagedMcpOpener } from './agent-token.js';
 import { registerMcpServerRoutes } from './mcp-server.js';
@@ -2486,6 +2487,15 @@ export async function registerSubmissionRoutes(
   const maxCachedMediaEntries = 400;
   const mediaCache = new Map<string, { expiresAt: number; etag: string; contentType: string; body: Buffer }>();
 
+  // These three trust a cache hit without re-checking publication state.
+  function invalidatePublishedGameCaches(slug: string): void {
+    gameCache.delete(slug);
+    storeCatalogCache = null;
+    for (const key of mediaCache.keys()) {
+      if (key.startsWith(`${slug}/`)) mediaCache.delete(key);
+    }
+  }
+
   // The cache-cold path is the dangerous one: with min-instances 0, a fresh
   // instance takes a page load's several catalog-touching requests at once.
   // getCatalog itself is now a handful of GraphQL round-trips (not ~2N Contents
@@ -3736,11 +3746,15 @@ export async function registerSubmissionRoutes(
       }
 
       const record = await store.getSubmission(issueNumber);
-      if (!record || record.ownerUid !== request.user!.uid) {
+      if (!record) {
         return reply.status(403).send({ error: 'only the creator can delete this game' });
       }
       if (!record.slug) {
         return reply.status(409).send({ error: 'this game has no address yet' });
+      }
+      // Not record.ownerUid — a slug transfer can move ownership on.
+      if (!(await creatorOwnsSlug(store, record.slug, request.user!.uid))) {
+        return reply.status(403).send({ error: 'only the creator can delete this game' });
       }
 
       const publication = await store.getPublication(record.slug);
@@ -3749,6 +3763,7 @@ export async function registerSubmissionRoutes(
       }
 
       await store.archivePublication(record.slug, 'deleted by creator', new Date(now()).toISOString());
+      invalidatePublishedGameCaches(record.slug);
       invalidateStatusCache(issueNumber);
 
       return reply.send({ ok: true, slug: record.slug });
@@ -4823,6 +4838,7 @@ export async function registerSubmissionRoutes(
           ? request.body.reason.trim()
           : 'deleted by operator';
       await store.archivePublication(slug, reason, new Date(now()).toISOString());
+      invalidatePublishedGameCaches(slug);
 
       return reply.send({ ok: true, slug });
     },

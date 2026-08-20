@@ -29,6 +29,8 @@ export type StudioGame = {
   editable?: boolean;
   /** Whether the Code surface's kill switch (CE-02) is on for this deployment. */
   codeSurface?: boolean;
+  /** `false` only when the game has been deleted — `publishedAt` stays as history. */
+  live?: false;
 };
 
 /* ---------------------------------------------------------------------------
