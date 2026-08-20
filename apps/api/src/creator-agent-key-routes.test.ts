@@ -70,7 +70,7 @@ async function mcpCall(app: FastifyInstance, method: string, params?: unknown, h
     headers: {
       'content-type': 'application/json',
       accept: 'application/json, text/event-stream',
-      ...headers,
+      ...(method === 'initialize' ? { authorization: 'Bearer handshake', ...headers } : headers),
     },
     payload: { jsonrpc: '2.0', id: 1, method, ...(params !== undefined ? { params } : {}) },
   });

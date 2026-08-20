@@ -288,29 +288,6 @@ describe('MCP OAuth 401 challenge (BY-18a)', () => {
     expect(res.headers['www-authenticate']).toContain('resource_metadata="https://www.gamedev.pl');
     expect(res.headers['www-authenticate']).not.toContain('evil.test');
   });
-
-  it('still allows initialize without credentials', async () => {
-    const store = new InMemoryStore();
-    await seedJob(store);
-    app = await buildMcpApp(store);
-    const res = await app.inject({
-      method: 'POST',
-      url: MCP_ENDPOINT_PATH,
-      headers: { 'content-type': 'application/json' },
-      payload: {
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'initialize',
-        params: {
-          protocolVersion: '2025-11-25',
-          capabilities: {},
-          clientInfo: { name: 'test', version: '0' },
-        },
-      },
-    });
-    expect(res.statusCode).toBe(200);
-    expect(res.headers['www-authenticate']).toBeUndefined();
-  });
 });
 
 describe('MCP OAuth challenge regressions (BY-18a)', () => {
@@ -367,7 +344,8 @@ describe('MCP OAuth challenge regressions (BY-18a)', () => {
     const res = await app.inject({
       method: 'POST',
       url: MCP_ENDPOINT_PATH,
-      headers: { 'content-type': 'application/json' },
+      // Any Bearer shape clears the handshake challenge.
+      headers: { 'content-type': 'application/json', authorization: 'Bearer handshake' },
       payload: {
         jsonrpc: '2.0',
         id: 1,

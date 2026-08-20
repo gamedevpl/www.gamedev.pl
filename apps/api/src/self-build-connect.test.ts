@@ -25,6 +25,12 @@ import {
 import { InMemoryStore } from './store.js';
 import { mintToken } from './submission-token.js';
 
+const MCP_HANDSHAKE_HEADERS = {
+  'content-type': 'application/json',
+  accept: 'application/json, text/event-stream',
+  authorization: 'Bearer handshake',
+};
+
 const secret = 'self-build-connect-test-secret';
 const sessionSecret = 'dev-session-secret-change-me';
 const CONCEPT = 'A squad tactics game about clearing rooms with careful timing and cover.';
@@ -332,10 +338,7 @@ describe('GET /api/submissions/:id/connect (BY-03 / BY-27b)', () => {
     const init = await app.inject({
       method: 'POST',
       url: '/api/mcp',
-      headers: {
-        'content-type': 'application/json',
-        accept: 'application/json, text/event-stream',
-      },
+      headers: MCP_HANDSHAKE_HEADERS,
       payload: {
         jsonrpc: '2.0',
         id: 1,
@@ -629,10 +632,7 @@ async function mcpStart(
   const init = await app.inject({
     method: 'POST',
     url: '/api/mcp',
-    headers: {
-      'content-type': 'application/json',
-      accept: 'application/json, text/event-stream',
-    },
+    headers: MCP_HANDSHAKE_HEADERS,
     payload: {
       jsonrpc: '2.0',
       id: 1,

@@ -155,7 +155,7 @@ describe('mcp tool refusal logging', () => {
     const init = await app.inject({
       method: 'POST',
       url: MCP_ENDPOINT_PATH,
-      headers: { 'content-type': 'application/json', 'user-agent': 'openai-mcp/1.0.0' },
+      headers: { 'content-type': 'application/json', 'user-agent': 'openai-mcp/1.0.0', authorization: 'Bearer h' },
       payload: {
         jsonrpc: '2.0',
         id: 1,

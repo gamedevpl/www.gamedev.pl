@@ -84,18 +84,19 @@ export function mcpRequestLacksCredential(request: FastifyRequest, message: Json
   return true;
 }
 
-/** Protocol methods that never receive an OAuth challenge — existing clients handshake here. */
+// Not initialize — see below. tools/list stays an open directory.
 export function mcpMethodAllowsAnonymousHandshake(method: string | undefined): boolean {
   if (!method) return true;
-  if (method === 'initialize') return true;
   if (method === 'ping') return true;
   if (method === 'tools/list') return true;
   if (method.startsWith('notifications/')) return true;
   return false;
 }
 
+// A 200 handshake reads as "no auth needed"; discovery never starts.
 export function shouldIssueMcpOAuthChallenge(request: FastifyRequest, message: JsonRpcMessage): boolean {
   if (mcpMethodAllowsAnonymousHandshake(message.method)) return false;
+  if (message.method === 'initialize') return !readBearerToken(request.headers.authorization);
   if (message.method !== 'tools/call') return false;
   return mcpRequestLacksCredential(request, message);
 }
@@ -118,10 +119,9 @@ export const MCP_MISSING_CREDENTIAL_HINT =
  *
  * The sentence above tells an agent to go find a key, which is a dead end for a visitor
  * with no account — and a directory listing puts exactly that visitor here: anonymous
- * `initialize` and `tools/list` succeed, every tool looks healthy, and the first write is
- * where they learn otherwise. Say it in this string specifically: it is the only
- * explanation reaching a client that never opens a browser — headless agents, and Cursor
- * desktop while its OAuth stalls after DCR.
+ * `tools/list` succeeds and every tool looks healthy. Say it in this string specifically:
+ * it is the only explanation reaching a client that never opens a browser. One that can
+ * gets the challenge at `initialize` instead, so this is the fallback, not the only path.
  *
  * Product state, not a per-user verdict: an account is required, never whether a given
  * account has one. It names no launch stage, so it survives one changing.
