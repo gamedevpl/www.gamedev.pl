@@ -192,6 +192,24 @@ describe('validateSourceUpload — the delivery contract', () => {
       ];
       expect(() => validateSourceUpload(delivery)).toThrow(/game\/model\.ts.*uses the `any` type/);
     });
+
+    it('accepts a genuine regex right after a control-flow condition or `throw`', () => {
+      // A `)` closing an `if`/`while`/`for`/`switch` condition starts a new statement,
+      // where `/` opens a regex — misreading it as division walks the regex's interior as
+      // ordinary code and would refuse this delivery for the word `any` inside the pattern.
+      const delivery = [
+        ...MINIMAL,
+        {
+          path: 'game/model.ts',
+          content:
+            'export function checkName(ok: boolean, text: string) {\n' +
+            '  if (ok) /any/.test(text);\n' +
+            '  throw /any/;\n' +
+            '}\n',
+        },
+      ];
+      expect(validateSourceUpload(delivery)).toHaveLength(delivery.length);
+    });
   });
 
   describe('cross-file symbol link check', () => {

@@ -73,7 +73,10 @@ const REGEX_PRECEDING_KEYWORDS = new Set([
   'else',
   'yield',
   'await',
+  'throw',
 ]);
+/** A word `previous` can hold after a `(` opened by one of these — see the `)` handler. */
+const CONTROL_PAREN_KEYWORDS = new Set(['if', 'for', 'while', 'switch']);
 
 function isIdentifierStart(ch: string): boolean {
   return /[A-Za-z_$]/.test(ch);
@@ -97,6 +100,12 @@ export function findBannedAnyUsages(source: string): BannedAnyFinding[] {
   /** One entry per `${` we are inside, counting the braces opened within it. */
   const templateExpressions: { braces: number }[] = [];
   let inTemplateText = false;
+  /**
+   * One entry per open `(`: whether it belongs to `if`/`for`/`while`/`switch`. Its `)`
+   * starts a new statement, where a `/` opens a regex — unlike an ordinary `)` closing a
+   * call or a grouped expression, after which `/` divides.
+   */
+  const parens: boolean[] = [];
   /** Last significant token, for the regex-or-division decision. */
   let previous = '';
 
@@ -254,6 +263,23 @@ export function findBannedAnyUsages(source: string): BannedAnyFinding[] {
         enclosing.braces -= 1;
       }
       previous = '}';
+      index += 1;
+      continue;
+    }
+
+    if (char === '(') {
+      parens.push(CONTROL_PAREN_KEYWORDS.has(previous));
+      previous = '(';
+      index += 1;
+      continue;
+    }
+
+    if (char === ')') {
+      const closedControl = parens.pop() ?? false;
+      // A control condition's `)` starts a new statement — reuse '' (already in the
+      // "starts regex" set) rather than a plain ')', which an ordinary call/group leaves,
+      // and which correctly means the next `/` divides.
+      previous = closedControl ? '' : ')';
       index += 1;
       continue;
     }
