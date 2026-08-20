@@ -193,6 +193,17 @@ describe('validateSourceUpload — the delivery contract', () => {
       expect(() => validateSourceUpload(delivery)).toThrow(/game\/model\.ts.*uses the `any` type/);
     });
 
+    it('is not fooled by `/` right after a non-null assertion `!` into reading a regex', () => {
+      // `!` is both prefix negation (a regex can follow: `!/re/.test(s)`) and TypeScript's
+      // postfix non-null assertion (`value!`, after which `/` divides) — conflating them
+      // reads `value! / (x as any)` as division-then-regex and misses the `any`.
+      const delivery = [
+        ...MINIMAL,
+        { path: 'game/model.ts', content: 'export const ratio = value! / (denominator as any);\n' },
+      ];
+      expect(() => validateSourceUpload(delivery)).toThrow(/game\/model\.ts.*uses the `any` type/);
+    });
+
     it('accepts a genuine regex right after a control-flow condition or `throw`', () => {
       // A `)` closing an `if`/`while`/`for`/`switch` condition starts a new statement,
       // where `/` opens a regex — misreading it as division walks the regex's interior as

@@ -284,6 +284,18 @@ export function findBannedAnyUsages(source: string): BannedAnyFinding[] {
       continue;
     }
 
+    if (char === '!') {
+      // `!` is both prefix logical negation (`!x`, where a regex may follow: `!/re/.test(s)`)
+      // and TypeScript's postfix non-null assertion (`value!`, after which `/` divides).
+      // Only the token before it tells them apart: negation follows a "regex allowed" spot,
+      // an assertion follows a value. Reusing that same check here, rather than `!`'s own
+      // punctuation-set membership, is what makes `value! / (x as any)` divide correctly.
+      const wasValueContext = !(REGEX_PRECEDING_PUNCTUATION.has(previous) || REGEX_PRECEDING_KEYWORDS.has(previous));
+      previous = wasValueContext ? 'x' : '!';
+      index += 1;
+      continue;
+    }
+
     if ((char === '+' && source[index + 1] === '+') || (char === '-' && source[index + 1] === '-')) {
       // `++`/`--` (prefix or postfix) always leave a value behind, so a `/` right after
       // divides — unlike a single `+`/`-`, which a regex can legally follow. Without this,
