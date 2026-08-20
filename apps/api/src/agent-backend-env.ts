@@ -271,15 +271,10 @@ export type SeedProviderId = (typeof SEED_PROVIDER_IDS)[number];
 // Every other vendor here can opt out of it, so this default is Meta-only.
 const PICK_MAX_OUTPUT_TOKENS_DEFAULTS: Partial<Record<SeedProviderId, number>> = { meta: 8192 };
 
-// The Anthropic SDK refuses a non-streaming request client-side once maxTokens implies
-// more than 10 minutes at its generic 128k-tokens/hour estimate — i.e. above ~21,333 —
-// and genaicode's anthropic provider always calls the non-streaming endpoint. The generic
-// GENERATE_MAX_OUTPUT_TOKENS default (65,536) sits well past that, so every anthropic
-// generate call 400s. 21,000 is as close to that ceiling as is safe: measured, a draft
-// has hit 20,000 exactly (likely truncated) on ordinary specs — Claude spends a real share
-// of this budget on reasoning, not just code — so leave it as little headroom below the
-// SDK's hard stop as the guard allows rather than a round, comfortable-looking number.
-const GENERATE_MAX_OUTPUT_TOKENS_DEFAULTS: Partial<Record<SeedProviderId, number>> = { anthropic: 21_000 };
+// Streaming (game-seed.ts) skips the guard that forced this default down.
+
+// No longer narrower than Vertex; the generic ceiling applies here too.
+const GENERATE_MAX_OUTPUT_TOKENS_DEFAULTS: Partial<Record<SeedProviderId, number>> = {};
 
 // Undefined when the credential/model are unset. Vertex needs neither: ambient ADC.
 function seedMaxOutputTokens(envVar: string, log: Logger | undefined, id: SeedProviderId): number | undefined {

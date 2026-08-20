@@ -324,6 +324,9 @@ function stubClient(responses: { text: string; inputTokens?: number; outputToken
         model: 'gemini-3.7-flash',
         usage: { inputTokens: response.inputTokens ?? 100, outputTokens: response.outputTokens ?? 50 },
       }),
+      stream: async function* () {
+        yield { type: 'done' as const, result: await chain.run() };
+      },
     };
     return chain;
   };
@@ -347,6 +350,9 @@ function stubClientWithPrompts(responses: { text: string }[]) {
         model: 'gemini-3.7-flash',
         usage: { inputTokens: 100, outputTokens: 50 },
       }),
+      stream: async function* () {
+        yield { type: 'done' as const, result: await chain.run() };
+      },
     };
     return chain;
   }) as unknown as ConstructorParameters<typeof ModelGameSeeder>[0]['client'];
@@ -421,6 +427,9 @@ describe('ModelGameSeeder', () => {
         model: 'gemini-3.7-flash',
         usage: { inputTokens: 100, outputTokens: 10 },
       }),
+      stream: async function* () {
+        yield { type: 'done' as const, result: await chain.run() };
+      },
     };
     const client = (() => chain) as unknown as ConstructorParameters<typeof ModelGameSeeder>[0]['client'];
     const seeder = new ModelGameSeeder({ context: stubContext(), client });
@@ -456,6 +465,72 @@ describe('ModelGameSeeder', () => {
     });
   });
 
+  it('streams the generate call instead of using run(), reporting progress per file as it arrives', async () => {
+    // The stub throws if generate ever calls run() instead of stream().
+    const progressFiles: string[] = [];
+    const log = {
+      warn: () => {},
+      info: (context: Record<string, unknown>, message: string) => {
+        if (message === 'seed file generated') progressFiles.push(context.file as string);
+      },
+    };
+
+    // Chunked, not one blob, so progress proves it streamed rather than replayed.
+    const chunksOf = (text: string, size: number): string[] => {
+      const chunks: string[] = [];
+      for (let index = 0; index < text.length; index += size) chunks.push(text.slice(index, index + size));
+      return chunks;
+    };
+
+    let call = 0;
+    const client = ((_prompt: string) => {
+      const thisCall = call++;
+      const chain = {
+        responseFormat: () => chain,
+        thinking: () => chain,
+        temperature: () => chain,
+        maxOutputTokens: () => chain,
+        signal: () => chain,
+        run: async () => {
+          if (thisCall !== 0) throw new Error('the generate call must stream, not run()');
+          return {
+            parts: [{ type: 'text' as const, text: '{"picks":["apex-sprint"]}' }],
+            model: 'gemini-3.7-flash',
+            usage: { inputTokens: 100, outputTokens: 10 },
+          };
+        },
+        stream: async function* () {
+          if (thisCall === 0) throw new Error('the pick call must run(), not stream()');
+          for (const chunk of chunksOf(GOOD_DRAFT, 24)) {
+            yield { type: 'text-delta' as const, text: chunk };
+          }
+          yield {
+            type: 'done' as const,
+            result: {
+              parts: [{ type: 'text' as const, text: GOOD_DRAFT }],
+              model: 'gemini-3.7-flash',
+              usage: { inputTokens: 30_000, outputTokens: 8_000 },
+            },
+          };
+        },
+      };
+      return chain;
+    }) as unknown as ConstructorParameters<typeof ModelGameSeeder>[0]['client'];
+
+    const seeder = new ModelGameSeeder({ context: stubContext(), client, log });
+    const draft = await seeder.seed(request);
+
+    expect(draft).not.toBeNull();
+    expect(draft!.files.map((file) => file.path)).toEqual(['SPEC.md', 'game.ts', 'game/model.ts']);
+    // One report per fence header, in stream order.
+    expect(progressFiles).toEqual([
+      'games/my-game/SPEC.md',
+      'games/my-game/game.ts',
+      'games/my-game/game/model.ts',
+      'NOTES',
+    ]);
+  });
+
   it('requests the ceiling configured for the resolved provider, not a fixed constant', async () => {
     const maxOutputTokensArgs: unknown[] = [];
     registerSeedProvider('__test_narrow_vendor__', () => {
@@ -474,6 +549,9 @@ describe('ModelGameSeeder', () => {
             model: 'narrow-model',
             usage: { inputTokens: 10, outputTokens: 5 },
           }),
+          stream: async function* () {
+            yield { type: 'done' as const, result: await chain.run() };
+          },
         };
         return chain;
       }) as unknown;
@@ -509,6 +587,9 @@ describe('ModelGameSeeder', () => {
             model: 'tiny-model',
             usage: { inputTokens: 10, outputTokens: 5 },
           }),
+          stream: async function* () {
+            yield { type: 'done' as const, result: await chain.run() };
+          },
         };
         return chain;
       }) as unknown;
@@ -544,6 +625,9 @@ describe('ModelGameSeeder', () => {
             model: 'reasoning-model',
             usage: { inputTokens: 10, outputTokens: 5 },
           }),
+          stream: async function* () {
+            yield { type: 'done' as const, result: await chain.run() };
+          },
         };
         return chain;
       }) as unknown;
@@ -579,6 +663,9 @@ describe('ModelGameSeeder', () => {
             model: 'unbounded-model',
             usage: { inputTokens: 10, outputTokens: 5 },
           }),
+          stream: async function* () {
+            yield { type: 'done' as const, result: await chain.run() };
+          },
         };
         return chain;
       }) as unknown;
@@ -898,6 +985,9 @@ describe('knowledge context injection (KQ-11)', () => {
           model: 'gemini-3.7-flash',
           usage: { inputTokens: 100, outputTokens: 50 },
         }),
+        stream: async function* () {
+          yield { type: 'done' as const, result: await chain.run() };
+        },
       };
       return chain;
     }) as unknown as ConstructorParameters<typeof ModelGameSeeder>[0]['client'];

@@ -30,7 +30,7 @@
 
 import path from 'node:path';
 import { z } from 'zod';
-import type { GenAIClient, GenerationResult } from 'genaicode';
+import { collectStream, type GenAIClient, type GenerationResult, type StreamEvent } from 'genaicode';
 import { createSeedClient, type SeedProviderConfig } from './seed-provider.js';
 import { checkSeedBundles, type SeedBundleResult } from './seed-bundle.js';
 import type { SeedContext, SeedContextSource } from './seed-context.js';
@@ -50,6 +50,9 @@ const TOP_LEVEL_ALLOWED = new Set(['SPEC.md', 'GAME.json', 'game.ts', 'index.htm
 
 /** The fence label carrying the hand-off note rather than a file. */
 const NOTES_FENCE = 'NOTES';
+
+// Same header parseSeedResponse matches — one definition, not two to drift.
+const SEED_FENCE_HEADER_RE = /^[ \t]*--- (NOTES|[\w./-]+\.(?:ts|md|json|html|css)) ---[ \t]*\r?\n/gm;
 
 /**
  * How many published games are put in front of the model as references.
@@ -219,7 +222,7 @@ export function parseSeedResponse(text: string): ParsedSeedResponse {
   // template literal — which is an entirely ordinary thing for a game to contain — had
   // its file truncated at that line and the remainder thrown away as an unwritable path.
   // A space in the label is now enough to disqualify it.
-  const headers = [...unwrapped.matchAll(/^[ \t]*--- (NOTES|[\w./-]+\.(?:ts|md|json|html|css)) ---[ \t]*\r?\n/gm)];
+  const headers = [...unwrapped.matchAll(SEED_FENCE_HEADER_RE)];
   const files: { path: string; content: string }[] = [];
   let notes: string | undefined;
 
@@ -602,6 +605,30 @@ export class ModelGameSeeder implements GameSeeder {
     }
   }
 
+  // Streams instead of run to skip the Anthropic 21k token cap.
+
+  // Also reports each file boundary as progress, straight from the stream text.
+  private async streamCollect(events: AsyncIterable<StreamEvent>, onFile?: (file: string) => void) {
+    if (!onFile) return collectStream(events);
+
+    let buffer = '';
+    let reported = 0;
+    async function* watched(notify: (file: string) => void) {
+      for await (const event of events) {
+        if (event.type === 'text-delta') {
+          buffer += event.text;
+          const headers = [...buffer.matchAll(SEED_FENCE_HEADER_RE)];
+          while (reported < headers.length) {
+            notify(headers[reported][1]);
+            reported++;
+          }
+        }
+        yield event;
+      }
+    }
+    return collectStream(watched(onFile));
+  }
+
   async seed(request: SeedRequest): Promise<SeedDraft | null> {
     const startedAt = Date.now();
     try {
@@ -631,20 +658,23 @@ export class ModelGameSeeder implements GameSeeder {
         ? CONTEXT_BYTE_BUDGET - KNOWLEDGE_CONTEXT_BYTE_BUDGET
         : CONTEXT_BYTE_BUDGET;
 
-      const result = await this.client(providerId)(
-        buildGeneratePrompt({
-          slug,
-          title: request.title,
-          spec,
-          scaffold: context.scaffold,
-          references: context.renderReferences(picks, referenceBudget),
-          ...(knowledgeContext ? { knowledgeContext } : {}),
-          ...(steer ? { steer } : {}),
-        }),
-      )
-        .maxOutputTokens(this.maxOutputTokensFor(providerId))
-        .signal(AbortSignal.timeout(this.generateTimeoutMs))
-        .run();
+      const result = await this.streamCollect(
+        this.client(providerId)(
+          buildGeneratePrompt({
+            slug,
+            title: request.title,
+            spec,
+            scaffold: context.scaffold,
+            references: context.renderReferences(picks, referenceBudget),
+            ...(knowledgeContext ? { knowledgeContext } : {}),
+            ...(steer ? { steer } : {}),
+          }),
+        )
+          .maxOutputTokens(this.maxOutputTokensFor(providerId))
+          .signal(AbortSignal.timeout(this.generateTimeoutMs))
+          .stream(),
+        (file) => this.options.log?.info({ slug, file }, 'seed file generated'),
+      );
 
       const generateUsage = usageOf(result, providerId, this.modelFor(providerId));
       const parsed = parseSeedResponse(resultTextOf(result));
@@ -684,12 +714,13 @@ export class ModelGameSeeder implements GameSeeder {
 
       if (validationErrors().length > 0) {
         repaired = true;
-        const repairResult = await this.client(providerId)(
-          buildRepairPrompt({ slug, errors: validationErrors(), files }),
-        )
-          .maxOutputTokens(this.maxOutputTokensFor(providerId))
-          .signal(AbortSignal.timeout(this.generateTimeoutMs))
-          .run();
+        const repairResult = await this.streamCollect(
+          this.client(providerId)(buildRepairPrompt({ slug, errors: validationErrors(), files }))
+            .maxOutputTokens(this.maxOutputTokensFor(providerId))
+            .signal(AbortSignal.timeout(this.generateTimeoutMs))
+            .stream(),
+          (file) => this.options.log?.info({ slug, file }, 'seed repair file generated'),
+        );
         const repairUsage = usageOf(repairResult, providerId, this.modelFor(providerId));
         usage.inputTokens += repairUsage.inputTokens;
         usage.outputTokens += repairUsage.outputTokens;
