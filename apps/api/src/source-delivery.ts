@@ -342,7 +342,7 @@ export function createSourceDeliveryService(options: SourceDeliveryServiceOption
                 durationMs: check.durationMs,
                 message: check.message,
               },
-              'typecheck preflight bypassed after refusal cap',
+              `typecheck preflight bypassed after refusal cap: ${check.message}`,
             );
             pendingThreadEvents.push({
               kind: 'blocked',
