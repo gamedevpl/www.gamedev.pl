@@ -1,8 +1,15 @@
-import type { BuildEventKind, BuildStep, JobStall, JobState, SubmissionState } from '@gamedevpl/contract';
+import type {
+  BuildEventKind,
+  BuildStep,
+  GateProgressLane,
+  JobStall,
+  JobState,
+  SubmissionState,
+} from '@gamedevpl/contract';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 
-export type { BuildEventKind, BuildStep, JobStall, JobState, SubmissionState };
+export type { BuildEventKind, BuildStep, GateProgressLane, JobStall, JobState, SubmissionState };
 
 export type BuildProgress = {
   /** Head commit SHA of the PR — changes when the agent pushes new work. */
@@ -107,7 +114,7 @@ export type SubmissionStatus = {
   lastAgentPresence?: { key: string; at: string };
   /** Mid-gate milestone while checks run. */
   gateProgress?: {
-    lane: 'preview' | 'publish' | 'health' | 'proposal';
+    lane: GateProgressLane;
     stage: string;
     index: number;
     total: number;

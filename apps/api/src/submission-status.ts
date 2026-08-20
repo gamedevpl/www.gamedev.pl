@@ -5,6 +5,7 @@
 // its own; callers pass an `isSlugPublished` probe.
 
 import type { LinkedPullRequest } from './github-client.js';
+import type { GateProgressLane } from './gate-progress.js';
 import type { JobStall, JobState } from './job-state.js';
 import {
   BUILD_EVENT_KINDS,
@@ -181,7 +182,7 @@ export interface SubmissionStatusResponseBase {
   lastAgentPresence?: { key: string; at: string };
   /** Mid-gate milestone; cleared on verdict. */
   gateProgress?: {
-    lane: 'preview' | 'publish' | 'health' | 'proposal';
+    lane: GateProgressLane;
     stage: string;
     index: number;
     total: number;
