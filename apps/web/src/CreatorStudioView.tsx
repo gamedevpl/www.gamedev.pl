@@ -393,7 +393,9 @@ export function CreatorStudioView({
   // game-first inversion's core claim — see docs/studio-game-first-implementation-plan.md).
   const stageToken = playtestGame?.token ?? null;
   const [posture, setPosture] = useState<StagePosture>('watch');
-  const playChromeIdle = usePlayChromeIdle(shelfIsDrawer && posture === 'play');
+  const { idle: playChromeIdle, noteActivity: notePlayChromeActivity } = usePlayChromeIdle(
+    shelfIsDrawer && posture === 'play',
+  );
   // Captured once at mount, never updated: the URL-canonicalization effect below
   // rewrites `/playtest` onto its posture-free canonical form as soon as the game
   // resolves, which would otherwise race the reset effect and drop the deep link's
@@ -1035,6 +1037,7 @@ export function CreatorStudioView({
                           onDisplayedOriginChange={setDisplayedOrigin}
                           editorPushRef={editorPushRef}
                           onEditorControllerChange={setEditorController}
+                          onPlayActivity={notePlayChromeActivity}
                         />
 
                         {stageStatus.kind === 'empty' &&

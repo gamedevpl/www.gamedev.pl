@@ -1,32 +1,39 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 // Same fade idea as GameTheater's chrome bar.
 const PLAY_CHROME_IDLE_MS = 3200;
 
-// True once `active` idles a few seconds with no tap or key.
-export function usePlayChromeIdle(active: boolean): boolean {
+export type PlayChromeIdle = { idle: boolean; noteActivity: () => void };
+
+// True once `active` idles with no tap, key, or relayed iframe input.
+export function usePlayChromeIdle(active: boolean): PlayChromeIdle {
   const [idle, setIdle] = useState(false);
+  const timerRef = useRef<number | null>(null);
+  const activeRef = useRef(active);
+  activeRef.current = active;
+
+  const noteActivity = useCallback(() => {
+    if (!activeRef.current) return;
+    setIdle(false);
+    if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+    timerRef.current = window.setTimeout(() => setIdle(true), PLAY_CHROME_IDLE_MS);
+  }, []);
 
   useEffect(() => {
     if (!active) {
       setIdle(false);
+      if (timerRef.current !== null) window.clearTimeout(timerRef.current);
       return;
     }
-    let timer: number | null = null;
-    const resetIdle = () => {
-      setIdle(false);
-      if (timer !== null) window.clearTimeout(timer);
-      timer = window.setTimeout(() => setIdle(true), PLAY_CHROME_IDLE_MS);
-    };
-    resetIdle();
-    window.addEventListener('pointerdown', resetIdle);
-    window.addEventListener('keydown', resetIdle);
+    noteActivity();
+    window.addEventListener('pointerdown', noteActivity);
+    window.addEventListener('keydown', noteActivity);
     return () => {
-      if (timer !== null) window.clearTimeout(timer);
-      window.removeEventListener('pointerdown', resetIdle);
-      window.removeEventListener('keydown', resetIdle);
+      if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+      window.removeEventListener('pointerdown', noteActivity);
+      window.removeEventListener('keydown', noteActivity);
     };
-  }, [active]);
+  }, [active, noteActivity]);
 
-  return idle;
+  return { idle, noteActivity };
 }

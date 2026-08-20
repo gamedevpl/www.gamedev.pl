@@ -12781,6 +12781,13 @@ button.builder-mode-selector:disabled {
    but only actually leave rendering after the fade — any tap brings it back
    at once via the base rule's zero-delay visibility. */
 .studio-strip.is-idle {
+  /* Drop out of `.studio-detail`'s flex flow so the stage reclaims this row
+     instead of leaving a blank band where the strip used to be. */
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  margin-bottom: 0;
   opacity: 0;
   visibility: hidden;
   transform: translateY(-8px);
