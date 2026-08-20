@@ -291,9 +291,8 @@ export function validateSourceUpload(files: SourceFile[], mode: DeliveryMode = '
 
   if (!hasIndexHtml && !hasHowToPlay) {
     throw new InvalidUploadError(
-      'GAME.json.howToPlay is required — set howToPlay.goal and howToPlay.hint to non-empty ' +
-        '{"en":"...","pl":"..."} objects. The platform generates the playable page; do not author ' +
-        'index.html because fresh index.html writes are not supported.',
+      'GAME.json.howToPlay is required — set goal and hint to non-empty {"en":"...","pl":"..."} objects. ' +
+        'The platform generates the playable page; do not author index.html because fresh writes are unsupported.',
     );
   }
   if (mode === 'preview' && gameJson) {
