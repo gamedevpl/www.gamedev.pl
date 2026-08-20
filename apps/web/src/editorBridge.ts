@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
+import { PROPERTY_TYPES, type PropertyType } from '@gamedevpl/contract';
 import { BRIDGE_NAMESPACE, PROTOCOL_VERSION } from './mp/protocol.js';
 import { fetchGameEditor, type EditorContentDoc } from './studioApi.js';
 import { recordEditorStep } from './visitTelemetry.js';
@@ -16,7 +17,7 @@ export type EditorUiLabel = string | { en: string; pl: string };
 export type EditorUiField = {
   name: string;
   label: EditorUiLabel;
-  type: 'text' | 'int' | 'number' | 'enum' | 'bool';
+  type: PropertyType;
   value?: string | number | boolean;
   min?: number;
   max?: number;
@@ -96,7 +97,7 @@ function parseUiField(value: unknown): EditorUiField | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const raw = value as Record<string, unknown>;
   if (typeof raw.name !== 'string' || !isLabel(raw.label)) return null;
-  if (!['text', 'int', 'number', 'enum', 'bool'].includes(String(raw.type))) return null;
+  if (!(PROPERTY_TYPES as readonly string[]).includes(String(raw.type))) return null;
   if (raw.value !== undefined && !['string', 'number', 'boolean'].includes(typeof raw.value)) return null;
   const field: EditorUiField = { name: raw.name, label: raw.label, type: raw.type as EditorUiField['type'] };
   if (typeof raw.value === 'string' || typeof raw.value === 'number' || typeof raw.value === 'boolean')
@@ -108,7 +109,9 @@ function parseUiField(value: unknown): EditorUiField | null {
   return field;
 }
 
-function parseUiPaletteTile(value: unknown): { key: string; char: string; label: EditorUiLabel; color?: string } | null {
+function parseUiPaletteTile(
+  value: unknown,
+): { key: string; char: string; label: EditorUiLabel; color?: string } | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const raw = value as Record<string, unknown>;
   if (
@@ -177,7 +180,9 @@ function parseUiNode(value: unknown, depth = 0): EditorUiNode | null {
     return {
       type,
       ...(typeof raw.layer === 'string' ? { layer: raw.layer } : {}),
-      ...(tiles === undefined ? {} : { tiles: tiles as Array<{ key: string; char: string; label: EditorUiLabel; color?: string }> }),
+      ...(tiles === undefined
+        ? {}
+        : { tiles: tiles as Array<{ key: string; char: string; label: EditorUiLabel; color?: string }> }),
     };
   }
   if (type === 'propertySheet') {
