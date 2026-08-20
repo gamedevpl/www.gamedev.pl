@@ -1,6 +1,6 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { FieldValue, Firestore, type DocumentData, type Query } from '@google-cloud/firestore';
-import type { ManagedAgentVendorName } from './agent-backend-env.js';
+import { MANAGED_AGENT_VENDORS, type ManagedAgentVendorName } from './agent-backend-env.js';
 import type { AgentTaskState } from './agent-state.js';
 import type { SeedFiles } from './agent-backend.js';
 import type { BuilderKind } from './builder.js';
@@ -6807,10 +6807,8 @@ export class FirestoreStore implements Store {
           ? data.managedBuilderMode
           : 'auto',
       managedAgentVendorOverride:
-        data?.managedAgentVendorOverride === 'anthropic' ||
-        data?.managedAgentVendorOverride === 'gemini' ||
-        data?.managedAgentVendorOverride === 'copilot' ||
-        data?.managedAgentVendorOverride === 'openai'
+        typeof data?.managedAgentVendorOverride === 'string' &&
+        MANAGED_AGENT_VENDORS.includes(data.managedAgentVendorOverride)
           ? data.managedAgentVendorOverride
           : null,
       managedDailyCap: typeof data?.managedDailyCap === 'number' ? data.managedDailyCap : null,
