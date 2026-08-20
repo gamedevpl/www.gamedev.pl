@@ -716,6 +716,10 @@ composer (`apps/web/src/StudioLivePreview.tsx`); clicking opens the normal theat
   valid `howToPlay`, or — only via a carried-forward seed/delivery, never a fresh
   stage — a legacy `index.html`), and `style.css` present across that overlay; short of
   that it does nothing.
+- "Last delivered" includes the newest eligible sibling round even before publication.
+  `get_sources`, patch bases, staged preview, and `fromStaged` must all resolve it through
+  `round-base-version.ts`; otherwise a new round turns one changed file into an invalid
+  one-file upload.
 - Reuses the serve path (`getGameSources` + `assembleGameHtml`, `restrictNetwork`), so a
   live preview passes the same CSP / provenance / credential-scan hygiene as a published
   game. It never writes `gate` or `previewGate` and can never publish.
