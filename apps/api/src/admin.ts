@@ -1,5 +1,6 @@
-import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { isAdminSession } from './admin-session.js';
 import { DEFAULT_SEED_PROVIDER } from './game-seed.js';
 import {
   recentPartitions,
@@ -396,23 +397,6 @@ const WaitlistUidParamsSchema = z.object({
     .trim()
     .regex(/^(?:g:|a:|email:)[^\s]+$/i, 'invalid uid'),
 });
-
-export function isAdmin(uid: string | undefined, adminUids: Set<string> | undefined): boolean {
-  return uid !== undefined && adminUids !== undefined && adminUids.has(uid);
-}
-
-/**
- * Admin *and* signed in with a browser session rather than a personal access token.
- *
- * Every operator surface takes this stricter test. A PAT is a long-lived credential that
- * lives in CI config and agent VMs — environments where a human is not watching — so it
- * may act as its user but never see across other people's games, and never mint another
- * token. That keeps the blast radius of a leaked token inside one account, which is the
- * property the whole design rests on (docs/agent-access-tokens.md).
- */
-export function isAdminSession(request: FastifyRequest, adminUids: Set<string> | undefined): boolean {
-  return request.authMethod === 'session' && isAdmin(request.user?.uid, adminUids);
-}
 
 /**
  * This page's read budget. The walk itself lives in telemetry-health.ts, shared with the

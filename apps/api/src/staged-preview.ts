@@ -31,7 +31,7 @@
 
 import { createHash } from 'node:crypto';
 import { assembleGameHtml, CredentialLeakError, EmptyProjectError, ProjectTooLargeError } from './assemble.js';
-import { MAX_BUILD_PREVIEW_BYTES } from './agent-channel.js';
+import { MAX_BUILD_PREVIEW_BYTES } from './build-preview-limits.js';
 import type { GamesStore, SourceFile } from './games-store.js';
 import { hasPlayableHowToPlay } from './index-html-generator.js';
 import type { GitHubClient } from './github-client.js';

@@ -26,6 +26,7 @@ import {
   type UploadKind,
   type UploadTokenClaims,
 } from './agent-upload-token.js';
+import { MAX_BUILD_PREVIEW_BYTES } from './build-preview-limits.js';
 import { loadBuildTranscript } from './build-transcript.js';
 import { canonicalAppBaseUrl } from './canonical-app-url.js';
 import { deriveGateStatusString, readGateVerdict } from './gate-verdict.js';
@@ -188,16 +189,6 @@ const RETIRED_BASE64_SHOT_REASON =
   'base64 screenshot upload is retired — POST /api/agent/build/shot/upload-url, then curl --upload-file <png> "$url"';
 
 const MAX_PREVIEW_LABEL = 120;
-/**
- * 320 KB decoded. The games repo caps an assembled bundle at a little over 200 KB
- * (validate.ts Check 4) and the largest game in the catalog measures 243 KB, so this
- * clears the real ceiling with slack while staying well inside a Firestore document.
- *
- * Exported because every producer of a `BuildPreview` shares this ceiling — the agent's
- * own pushes here, the round-0 seed preview, and the staged live preview — and three
- * copies of one number is how the first two came to disagree.
- */
-export const MAX_BUILD_PREVIEW_BYTES = 320 * 1024;
 /**
  * A delivery: the game's own source files, and nothing else.
  *

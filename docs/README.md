@@ -71,6 +71,7 @@ survives only in this repo's early history.
 | [`runbooks/`](./runbooks/README.md)                                | ✅ Incident procedures: site-down triage, deploy rollback, Firestore restore, secret rotation           |
 | [`contributing-for-agents.md`](./contributing-for-agents.md)       | How agents run, structure, and contribute to this repository                                            |
 | [`comment-prose-debt.md`](./comment-prose-debt.md)                 | ✅ Comment seal: // one-liners ≤12 words; per-file baseline ratchet (`npm run comment-prose`)           |
+| [`module-size-debt.md`](./module-size-debt.md)                     | ✅ No file may grow past its baseline; new files cap at 500 lines (`npm run module-size`)               |
 | [`local-development.md`](./local-development.md)                   | ✅ Running the whole product on a laptop with no keys — start here to contribute                        |
 | [`multiplayer-plan.md`](./multiplayer-plan.md)                     | ✅ Party mode: shared screen, phones as controllers, slot model, in-process relay                       |
 | [`persistent-world-plan.md`](./persistent-world-plan.md)           | Shared persistent worlds ("the Ultima Online question") — P1 saves ✅ built, P2/P3 💭 concept           |
