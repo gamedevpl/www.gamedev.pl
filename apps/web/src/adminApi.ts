@@ -5,6 +5,7 @@
 // rather than as an error, because the operator surface does not confirm its own
 // existence to someone who is not one.
 
+import type { JobStall } from './adminJobsApi.js';
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 
 export type OperatorAlertKind =
@@ -19,7 +20,7 @@ export interface OperatorAlert {
   ownerUid?: string;
   slug?: string;
   since: string;
-  stall?: 'awaiting_input' | 'not_dispatched' | 'quiet' | 'ended' | 'gate_not_started';
+  stall?: JobStall;
 }
 
 export interface AdminSummary {
@@ -54,10 +55,9 @@ export interface BetaInvite {
 }
 
 /**
- * The console's admission test as well as its header.
- *
- * Null is the whole answer for a non-operator: the nav draws no link, the page renders
- * "not found", and neither has to know why.
+ * The console's admission test as well as its header. Null is the whole answer for a
+ * non-operator: the nav draws no link, the page renders "not found", and neither has
+ * to know why.
  */
 export async function fetchAdminSummary(): Promise<AdminSummary | null> {
   const res = await fetch(`${API_BASE}/api/admin/summary`, { credentials: 'include' });
