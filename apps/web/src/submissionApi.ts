@@ -1,8 +1,8 @@
-import type { BuildEventKind, BuildStep, JobState, SubmissionState } from '@gamedevpl/contract';
+import type { BuildEventKind, BuildStep, JobStall, JobState, SubmissionState } from '@gamedevpl/contract';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 
-export type { BuildEventKind, BuildStep, JobState, SubmissionState };
+export type { BuildEventKind, BuildStep, JobStall, JobState, SubmissionState };
 
 export type BuildProgress = {
   /** Head commit SHA of the PR — changes when the agent pushes new work. */
@@ -128,7 +128,7 @@ export type SubmissionStatus = {
    * Why the build looks stuck, when it does. Closed vocabulary; the page renders its
    * own translated copy per value. Absent means progressing normally.
    */
-  stall?: 'awaiting_input' | 'not_dispatched' | 'quiet' | 'ended' | 'gate_not_started' | 'no_agent_yet';
+  stall?: JobStall;
   /**
    * When the self agent called MCP `end`. Survives when stall later becomes
    * `gate_not_started` — Studio still offers platform handoff.

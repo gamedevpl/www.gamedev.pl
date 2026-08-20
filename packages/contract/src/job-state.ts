@@ -26,3 +26,20 @@ export const JOB_STATES = [
   'abandoned',
 ] as const;
 export type JobState = (typeof JOB_STATES)[number];
+
+// Why a job looks stuck — stuck versus merely slow.
+export const JOB_STALL_VALUES = [
+  // Agent is explicitly blocked on an answer. Known, not inferred.
+  'awaiting_input',
+  // Accepted but never handed to an agent; dispatch itself wedged.
+  'not_dispatched',
+  // A live session that has said nothing for a while.
+  'quiet',
+  // Agent called MCP end; finished this round on purpose.
+  'ended',
+  // Delivered, but our own gate never picked it up.
+  'gate_not_started',
+  // A self-build round waiting for the creator's agent to connect.
+  'no_agent_yet',
+] as const;
+export type JobStall = (typeof JOB_STALL_VALUES)[number];
