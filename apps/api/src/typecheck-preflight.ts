@@ -22,8 +22,10 @@ const COMPILER_OPTIONS: ts.CompilerOptions = {
 const ROOT = '/preflight';
 const MAX_GROUPED = 8;
 const MAX_ERROR_BYTES = 800;
-// Soft wall; over budget → skip (accept).
-export const TYPECHECK_PREFLIGHT_BUDGET_MS = 10_000;
+// Soft wall; over budget → skip (accept). Raised from 10s after a real round (raycaster
+// rendering plus the full GameKit shared surface) ran 12.9s and got skipped — 10s was
+// tight enough for an ordinary game to lose validation, not just a pathological one.
+export const TYPECHECK_PREFLIGHT_BUDGET_MS = 20_000;
 // Cap refusals; further submits accept.
 export const TYPECHECK_PREFLIGHT_MAX_REFUSALS = 2;
 

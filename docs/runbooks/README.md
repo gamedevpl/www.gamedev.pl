@@ -41,6 +41,7 @@ Provisioned by [`infra/setup-monitoring.sh`](../../infra/setup-monitoring.sh).
 | A23 | `A23 seeded builds cannot place their drafts`   | >1 seed staging failure in an hour (log-based)                           | §Vertex spend below                              |
 | A24 | `A24 Vertex call volume abnormally high`        | Vertex calls >0.25/s sustained 10 min, project-wide                      | §Vertex spend below                              |
 | A25 | `A25 Vertex output token rate abnormally high`  | Vertex output tokens >300/s sustained 10 min, project-wide               | §Vertex spend below                              |
+| A27 | `A27 typecheck preflight budget chronically exceeded` | >2 preflight skips (budget exceeded) in 30 min on `gamedev-app` (log-based) | §below                                     |
 
 **A1 and A2 name the service; the rest do not.** A1/A2 exist once per Cloud Run service
 answering requests (`gamedev-app`, and the party relay when it takes traffic), so the
@@ -139,6 +140,23 @@ gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.serv
 
 Requests still flowing while the Vertex rate sits at zero is proof. A quiet period on its
 own only proves nobody was looking.
+
+### Typecheck preflight budget (A27)
+
+`typecheck-preflight.ts` runs a real, in-process `tsc` pass against a round's delivered
+sources before accepting them — synchronous, so it cannot be preempted mid-run. If it takes
+longer than `TYPECHECK_PREFLIGHT_BUDGET_MS` (20s), the completed result is thrown away and
+the delivery is accepted unvalidated instead, the same fail-open shape as every other gate
+in this pipeline. One skip is unremarkable — a cold instance, a game with an unusually large
+module set. A27 fires on **more than 2 in 30 minutes**, because that stops being "one heavy
+round" and starts being "the budget is wrong for real games." Every skip already ships code
+without the safety net, silently to the creator; this is what makes that visible at all.
+
+Raised from 10s to 20s on 2026-08-20 after an ordinary raycaster-rendering game (7 files,
+nothing pathological) ran 12.9s and got discarded. If A27 fires again, check
+`jsonPayload.durationMs` against the current budget before raising it again — a budget that
+keeps needing to grow might mean `tsc` itself got slower (the shared GameKit surface grew)
+rather than that games got bigger.
 
 ### Runtime levers, and which ones are real
 
