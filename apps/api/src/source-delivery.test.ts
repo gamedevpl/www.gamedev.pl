@@ -330,7 +330,7 @@ export function tick(round: Round) {
 
     it('accepts on the third submit and attaches diagnostics to the round', async () => {
       const kitFileStore = fakeKitStore({ [PINNED]: treeFor(PINNED, KIT_DTS) });
-      const { store, putCandidateSources, service, authority } = await setup({ kitFileStore });
+      const { store, putCandidateSources, service, authority, log } = await setup({ kitFileStore });
       await store.pinRoundKitEngineRef(ISSUE, PINNED);
 
       for (let i = 0; i < 2; i += 1) {
@@ -360,7 +360,7 @@ export function tick(round: Round) {
       const record = await store.getSubmission(ISSUE);
       expect(record?.roundTypecheckPreflightRefusals).toBe(2);
       expect(record?.roundTypecheckPreflightBypassErrors).toMatch(/Typecheck preflight failed/);
-
+      expect(log.warn.mock.calls[0]?.[0]).toMatchObject({ message: record?.roundTypecheckPreflightBypassErrors });
       // Regression: bypass diagnostics never reached the thread, only a log line.
       const events = await store.listBuildEvents(ISSUE);
       expect(events).toContainEqual(

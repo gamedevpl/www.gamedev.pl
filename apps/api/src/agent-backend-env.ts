@@ -28,8 +28,7 @@ import { DEFAULT_VERTEX_SEED_MODEL } from './seed-provider-vertex.js';
 interface Logger {
   info: (context: object, message: string) => void;
   warn: (context: object, message: string) => void;
-  // A deployment that cannot seed is broken, not unusual.
-  error?: (context: object, message: string) => void;
+  error?: (context: object, message: string) => void; // Missing seeding is broken, not unusual.
 }
 
 // Every managed vendor this file knows how to build a backend for.
@@ -271,11 +270,6 @@ export type SeedProviderId = (typeof SEED_PROVIDER_IDS)[number];
 // Every other vendor here can opt out of it, so this default is Meta-only.
 const PICK_MAX_OUTPUT_TOKENS_DEFAULTS: Partial<Record<SeedProviderId, number>> = { meta: 8192 };
 
-// Streaming (game-seed.ts) skips the guard that forced this default down.
-
-// No longer narrower than Vertex; the generic ceiling applies here too.
-const GENERATE_MAX_OUTPUT_TOKENS_DEFAULTS: Partial<Record<SeedProviderId, number>> = {};
-
 // Undefined when the credential/model are unset. Vertex needs neither: ambient ADC.
 function seedMaxOutputTokens(envVar: string, log: Logger | undefined, id: SeedProviderId): number | undefined {
   const raw = process.env[envVar]?.trim();
@@ -314,7 +308,7 @@ function buildSeedProviderConfig(id: SeedProviderId, log: Logger | undefined): S
   }
   const baseUrl = process.env[`SEED_${envPrefix}_BASE_URL`]?.trim();
   const maxOutputTokens =
-    seedMaxOutputTokens(`SEED_${envPrefix}_MAX_OUTPUT_TOKENS`, log, id) ?? GENERATE_MAX_OUTPUT_TOKENS_DEFAULTS[id];
+    seedMaxOutputTokens(`SEED_${envPrefix}_MAX_OUTPUT_TOKENS`, log, id) ?? (id === 'anthropic' ? 21_000 : undefined);
   const pickMaxOutputTokens =
     seedMaxOutputTokens(`SEED_${envPrefix}_PICK_MAX_OUTPUT_TOKENS`, log, id) ?? PICK_MAX_OUTPUT_TOKENS_DEFAULTS[id];
   return {

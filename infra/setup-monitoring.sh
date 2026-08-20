@@ -325,6 +325,16 @@ ensure_log_metric knowledge_query_calls \
   'knowledge_query calls, any mode. Backs alert A26.' \
   "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"${PRIMARY_SERVICE}\" AND jsonPayload.msg=\"knowledge_query answered\""
 
+# The in-process tsc preflight (typecheck-preflight.ts) abandons a check that ran past its
+# soft wall and accepts the delivery unvalidated rather than blocking the agent — the same
+# fail-open shape as everywhere else in this pipeline. One skip is a heavy round (a big
+# GameKit surface, a slow instance); a *pattern* of skips means the budget itself is wrong
+# for what real games need, and nobody would otherwise notice, because a skip looks exactly
+# like a pass from the delivery's own response. Backs A27.
+ensure_log_metric typecheck_preflight_skipped \
+  'Typecheck preflight abandoned past its time budget (delivered unvalidated). Backs alert A27.' \
+  "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"${PRIMARY_SERVICE}\" AND jsonPayload.msg=\"typecheck preflight skipped: budget exceeded\""
+
 # A3 — a scheduled job is failing. notify-sweep already runs every 2 minutes against auth,
 # Firestore and the app in one request, which makes it a synthetic monitor we are getting
 # for free; all that was missing was anyone listening. Its failure is also a real
@@ -669,6 +679,40 @@ cat > "${POLICY_DIR}/a26.json" <<EOF
   "alertStrategy": { "autoClose": "86400s" },
   "documentation": {
     "content": "knowledge_query is being called far more than expected in a day. This protects against cost runaway on Discovery Engine's SEARCH_ADD_ON_LLM (:answer), which is billed per call unlike plain chunk retrieval. Triage: Logs Explorer, jsonPayload.msg=\"knowledge_query answered\", group by jsonPayload.knowledgeQuery.mode (answer costs ~3.7x chunks) and .issueNumber (one round looping vs many rounds using it normally). The per-round soft caps live in apps/api/src/agent-channel.ts (maxKnowledgeAnswersPerWindow / maxKnowledgeChunksPerWindow); a single round cannot exceed them, so sustained volume above this threshold means many rounds, not one runaway loop.",
+    "mimeType": "text/markdown"
+  }
+}
+EOF
+
+# A27 — the typecheck preflight is chronically running out of time, same "isolated is fine,
+# recurring is not" shape as A3: one slow round proves nothing (an instance was cold, a game
+# has an unusually large module set), but a pattern means the budget itself is miscalibrated
+# for real games rather than for whatever it was tuned against. Every occurrence already ships
+# a round without validation, silently to the creator — this is the only thing that makes that
+# accumulate into something an operator sees.
+cat > "${POLICY_DIR}/a27.json" <<EOF
+{
+  "displayName": "A27 typecheck preflight budget chronically exceeded",
+  "combiner": "OR",
+  "conditions": [{
+    "displayName": "preflight skipped past its time budget, repeatedly",
+    "conditionThreshold": {
+      "filter": "metric.type=\"logging.googleapis.com/user/typecheck_preflight_skipped\" AND resource.type=\"cloud_run_revision\" AND resource.label.\"service_name\"=\"${PRIMARY_SERVICE}\"",
+      "aggregations": [{
+        "alignmentPeriod": "1800s",
+        "perSeriesAligner": "ALIGN_SUM",
+        "crossSeriesReducer": "REDUCE_SUM"
+      }],
+      "comparison": "COMPARISON_GT",
+      "thresholdValue": 2,
+      "duration": "0s",
+      "trigger": { "count": 1 }
+    }
+  }],
+  "notificationChannels": ["${CHANNEL_NAME}"],
+  "alertStrategy": { "autoClose": "86400s" },
+  "documentation": {
+    "content": "Deliveries are shipping without typecheck validation more than occasionally — apps/api/src/typecheck-preflight.ts's in-process tsc run kept exceeding TYPECHECK_PREFLIGHT_BUDGET_MS (currently 20s) and got discarded even though it finished (the check cannot be preempted mid-run, so this is never wasted server time, only a wasted verdict). One skip is unremarkable; several in 30 minutes means the budget is wrong for real game sizes, not just a pathological one. Triage: Logs Explorer, jsonPayload.msg=\"typecheck preflight skipped: budget exceeded\", check jsonPayload.durationMs against the current budget and jsonPayload.slug for which games are large enough to trip it — then decide whether to raise the budget again or investigate why tsc itself got slower (shared GameKit surface grew, instance under CPU pressure).",
     "mimeType": "text/markdown"
   }
 }

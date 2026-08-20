@@ -22,8 +22,8 @@ const COMPILER_OPTIONS: ts.CompilerOptions = {
 const ROOT = '/preflight';
 const MAX_GROUPED = 8;
 const MAX_ERROR_BYTES = 800;
-// Soft wall; over budget → skip (accept).
-export const TYPECHECK_PREFLIGHT_BUDGET_MS = 10_000;
+// Soft wall, over budget skips. Raised from 10s: hit 12.9s once.
+export const TYPECHECK_PREFLIGHT_BUDGET_MS = 20_000;
 // Cap refusals; further submits accept.
 export const TYPECHECK_PREFLIGHT_MAX_REFUSALS = 2;
 
