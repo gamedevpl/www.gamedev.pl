@@ -1,8 +1,8 @@
-import type { SubmissionState } from '@gamedevpl/contract';
+import type { BuildEventKind, BuildStep, SubmissionState } from '@gamedevpl/contract';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 
-export type { SubmissionState };
+export type { BuildEventKind, BuildStep, SubmissionState };
 
 export type BuildProgress = {
   /** Head commit SHA of the PR — changes when the agent pushes new work. */
@@ -50,11 +50,6 @@ export type MySubmission = {
    */
   livePublishedAt?: string;
 };
-
-/** The build steps an agent can report. Rendered from our own translated copy. */
-export type BuildStep = 'planning' | 'art' | 'mechanics' | 'audio' | 'balancing' | 'fixing' | 'testing' | 'polishing';
-
-export type BuildEventKind = 'step' | 'milestone' | 'asking' | 'blocked' | 'done';
 
 /**
  * An update the agent pushed over the build channel. Unlike a commit subject, this

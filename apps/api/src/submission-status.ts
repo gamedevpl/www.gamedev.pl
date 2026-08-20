@@ -6,7 +6,13 @@
 
 import type { LinkedPullRequest } from './github-client.js';
 import type { JobStall, JobState } from './job-state.js';
-import type { SubmissionState } from '@gamedevpl/contract';
+import {
+  BUILD_EVENT_KINDS,
+  BUILD_STEPS,
+  type BuildEventKind,
+  type BuildStep,
+  type SubmissionState,
+} from '@gamedevpl/contract';
 
 // Same seven values apps/web/src/submissionApi.ts calls SubmissionState.
 export type SubmissionStatus = SubmissionState;
@@ -43,28 +49,8 @@ export interface CreatorRevision {
 // submissions.ts) because both the writer and this reader need it.
 export const CREATOR_FEEDBACK_MARKER = '<!-- gamedevpl:creator-feedback -->';
 
-/**
- * The steps a game build actually moves through, as a closed set. This is the whole
- * i18n answer for progress reporting: the enum carries the *meaning* and is rendered
- * from our own translated copy, so a Polish creator reads correct Polish even when
- * the agent wrote its sentence in English and machine translation is off or failing.
- * The free-text sentence alongside it carries only flavour.
- */
-export const BUILD_STEPS = [
-  'planning',
-  'art',
-  'mechanics',
-  'audio',
-  'balancing',
-  'fixing',
-  'testing',
-  'polishing',
-] as const;
-export type BuildStep = (typeof BUILD_STEPS)[number];
-
-/** What kind of moment this is — drives the icon and how loudly the UI says it. */
-export const BUILD_EVENT_KINDS = ['step', 'milestone', 'asking', 'blocked', 'done'] as const;
-export type BuildEventKind = (typeof BUILD_EVENT_KINDS)[number];
+// Same values apps/web/src/submissionApi.ts calls BuildStep/BuildEventKind.
+export { BUILD_STEPS, BUILD_EVENT_KINDS, type BuildStep, type BuildEventKind };
 
 /**
  * One update pushed by the agent over the build channel, rather than inferred from
