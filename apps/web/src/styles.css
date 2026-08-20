@@ -12768,6 +12768,30 @@ button.builder-mode-selector:disabled {
      swallowed any popover anchored here (Share, now ⋯). */
   position: relative;
   z-index: 35;
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  transition:
+    opacity 700ms ease,
+    transform 700ms ease,
+    visibility 0s linear 0s;
+}
+
+/* Same idea as `.game-theater-bar.is-idle`: fade out and stop hit-testing,
+   but only actually leave rendering after the fade — any tap brings it back
+   at once via the base rule's zero-delay visibility. */
+.studio-strip.is-idle {
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-8px);
+  pointer-events: none;
+  transition-delay: 0s, 0s, 700ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-strip {
+    transition: none;
+  }
 }
 
 .studio-strip-title-block {
