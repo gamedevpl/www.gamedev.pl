@@ -307,8 +307,8 @@ function buildSeedProviderConfig(id: SeedProviderId, log: Logger | undefined): S
     return undefined;
   }
   const baseUrl = process.env[`SEED_${envPrefix}_BASE_URL`]?.trim();
-  const maxOutputTokens =
-    seedMaxOutputTokens(`SEED_${envPrefix}_MAX_OUTPUT_TOKENS`, log, id) ?? (id === 'anthropic' ? 21_000 : undefined);
+  // Streaming (game-seed.ts) skips the guard that forced anthropic's default down.
+  const maxOutputTokens = seedMaxOutputTokens(`SEED_${envPrefix}_MAX_OUTPUT_TOKENS`, log, id);
   const pickMaxOutputTokens =
     seedMaxOutputTokens(`SEED_${envPrefix}_PICK_MAX_OUTPUT_TOKENS`, log, id) ?? PICK_MAX_OUTPUT_TOKENS_DEFAULTS[id];
   return {

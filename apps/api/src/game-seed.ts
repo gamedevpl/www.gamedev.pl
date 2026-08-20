@@ -33,6 +33,7 @@ import { z } from 'zod';
 import type { GenAIClient, GenerationResult } from 'genaicode';
 import { createSeedClient, type SeedProviderConfig } from './seed-provider.js';
 import { checkSeedBundles, type SeedBundleResult } from './seed-bundle.js';
+import { streamCollect, SEED_FENCE_HEADER_RE } from './seed-stream.js';
 import type { SeedContext, SeedContextSource } from './seed-context.js';
 import { typeCheckGame } from './type-check.js';
 import type { TypeCheckResult } from './type-check.js';
@@ -78,7 +79,8 @@ const MAX_SEED_TOTAL_BYTES = 400_000;
 
 /** A seed that has not arrived by now has stopped being an optimization. */
 export const DEFAULT_SEED_PICK_TIMEOUT_MS = 30_000;
-export const DEFAULT_SEED_GENERATE_TIMEOUT_MS = 180_000;
+// Raised further — reproduced needing 391s on a complex anthropic-ceiling spec.
+export const DEFAULT_SEED_GENERATE_TIMEOUT_MS = 600_000;
 
 // 'low' thinking shares this budget; 512 could starve the JSON answer empty.
 const SEED_PICK_MAX_OUTPUT_TOKENS = 2048;
@@ -219,7 +221,7 @@ export function parseSeedResponse(text: string): ParsedSeedResponse {
   // template literal — which is an entirely ordinary thing for a game to contain — had
   // its file truncated at that line and the remainder thrown away as an unwritable path.
   // A space in the label is now enough to disqualify it.
-  const headers = [...unwrapped.matchAll(/^[ \t]*--- (NOTES|[\w./-]+\.(?:ts|md|json|html|css)) ---[ \t]*\r?\n/gm)];
+  const headers = [...unwrapped.matchAll(SEED_FENCE_HEADER_RE)];
   const files: { path: string; content: string }[] = [];
   let notes: string | undefined;
 
@@ -600,6 +602,13 @@ export class ModelGameSeeder implements GameSeeder {
     }
   }
 
+  private generate(prompt: string, providerId: string, slug: string, event: string) {
+    const builder = this.client(providerId)(prompt).maxOutputTokens(this.maxOutputTokensFor(providerId));
+    return streamCollect(builder.signal(AbortSignal.timeout(this.generateTimeoutMs)).stream(), (file) =>
+      this.options.log?.info({ slug, file }, event),
+    );
+  }
+
   async seed(request: SeedRequest): Promise<SeedDraft | null> {
     const startedAt = Date.now();
     try {
@@ -629,20 +638,16 @@ export class ModelGameSeeder implements GameSeeder {
         ? CONTEXT_BYTE_BUDGET - KNOWLEDGE_CONTEXT_BYTE_BUDGET
         : CONTEXT_BYTE_BUDGET;
 
-      const result = await this.client(providerId)(
-        buildGeneratePrompt({
-          slug,
-          title: request.title,
-          spec,
-          scaffold: context.scaffold,
-          references: context.renderReferences(picks, referenceBudget),
-          ...(knowledgeContext ? { knowledgeContext } : {}),
-          ...(steer ? { steer } : {}),
-        }),
-      )
-        .maxOutputTokens(this.maxOutputTokensFor(providerId))
-        .signal(AbortSignal.timeout(this.generateTimeoutMs))
-        .run();
+      const generatePrompt = buildGeneratePrompt({
+        slug,
+        title: request.title,
+        spec,
+        scaffold: context.scaffold,
+        references: context.renderReferences(picks, referenceBudget),
+        ...(knowledgeContext ? { knowledgeContext } : {}),
+        ...(steer ? { steer } : {}),
+      });
+      const result = await this.generate(generatePrompt, providerId, slug, 'seed file generated');
 
       const generateUsage = usageOf(result, providerId, this.modelFor(providerId));
       const parsed = parseSeedResponse(resultTextOf(result));
@@ -682,12 +687,8 @@ export class ModelGameSeeder implements GameSeeder {
 
       if (validationErrors().length > 0) {
         repaired = true;
-        const repairResult = await this.client(providerId)(
-          buildRepairPrompt({ slug, errors: validationErrors(), files }),
-        )
-          .maxOutputTokens(this.maxOutputTokensFor(providerId))
-          .signal(AbortSignal.timeout(this.generateTimeoutMs))
-          .run();
+        const repairPrompt = buildRepairPrompt({ slug, errors: validationErrors(), files });
+        const repairResult = await this.generate(repairPrompt, providerId, slug, 'seed repair file generated');
         const repairUsage = usageOf(repairResult, providerId, this.modelFor(providerId));
         usage.inputTokens += repairUsage.inputTokens;
         usage.outputTokens += repairUsage.outputTokens;
