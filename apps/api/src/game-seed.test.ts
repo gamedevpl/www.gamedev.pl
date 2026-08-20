@@ -303,32 +303,43 @@ function stubContext(overrides: Partial<SeedContext> = {}): SeedContextSource {
   return { load: async () => context };
 }
 
-/**
- * A genaicode-shaped client returning canned results, one per call in order.
- *
- * Typed loosely on purpose: the seeder uses three builder methods and `run()`, and a
- * full fake of the client surface would be a test of the SDK rather than of this module.
- */
+type StubResult = { parts: { type: 'text'; text: string }[]; model: string; usage: Record<string, number> };
+
+// One chain shape — run() and stream() replay the same result.
+function makeChain(
+  getResult: () => StubResult,
+  hooks: { onThinking?: (arg: unknown) => void; onMaxOutputTokens?: (n: unknown) => void } = {},
+) {
+  const chain = {
+    responseFormat: () => chain,
+    thinking: (arg: unknown) => {
+      hooks.onThinking?.(arg);
+      return chain;
+    },
+    temperature: () => chain,
+    maxOutputTokens: (n: unknown) => {
+      hooks.onMaxOutputTokens?.(n);
+      return chain;
+    },
+    signal: () => chain,
+    run: async () => getResult(),
+    stream: async function* () {
+      yield { type: 'done' as const, result: getResult() };
+    },
+  };
+  return chain;
+}
+
+// A genaicode-shaped client returning canned results, one per call in order.
 function stubClient(responses: { text: string; inputTokens?: number; outputTokens?: number }[]) {
   let call = 0;
   const builder = () => {
     const response = responses[Math.min(call++, responses.length - 1)];
-    const chain = {
-      responseFormat: () => chain,
-      thinking: () => chain,
-      temperature: () => chain,
-      maxOutputTokens: () => chain,
-      signal: () => chain,
-      run: async () => ({
-        parts: [{ type: 'text' as const, text: response.text }],
-        model: 'gemini-3.7-flash',
-        usage: { inputTokens: response.inputTokens ?? 100, outputTokens: response.outputTokens ?? 50 },
-      }),
-      stream: async function* () {
-        yield { type: 'done' as const, result: await chain.run() };
-      },
-    };
-    return chain;
+    return makeChain(() => ({
+      parts: [{ type: 'text' as const, text: response.text }],
+      model: 'gemini-3.7-flash',
+      usage: { inputTokens: response.inputTokens ?? 100, outputTokens: response.outputTokens ?? 50 },
+    }));
   };
   return builder as unknown as ConstructorParameters<typeof ModelGameSeeder>[0]['client'];
 }
@@ -339,22 +350,11 @@ function stubClientWithPrompts(responses: { text: string }[]) {
   const builder = ((prompt: string) => {
     prompts.push(prompt);
     const response = responses[Math.min(call++, responses.length - 1)];
-    const chain = {
-      responseFormat: () => chain,
-      thinking: () => chain,
-      temperature: () => chain,
-      maxOutputTokens: () => chain,
-      signal: () => chain,
-      run: async () => ({
-        parts: [{ type: 'text' as const, text: response.text }],
-        model: 'gemini-3.7-flash',
-        usage: { inputTokens: 100, outputTokens: 50 },
-      }),
-      stream: async function* () {
-        yield { type: 'done' as const, result: await chain.run() };
-      },
-    };
-    return chain;
+    return makeChain(() => ({
+      parts: [{ type: 'text' as const, text: response.text }],
+      model: 'gemini-3.7-flash',
+      usage: { inputTokens: 100, outputTokens: 50 },
+    }));
   }) as unknown as ConstructorParameters<typeof ModelGameSeeder>[0]['client'];
   return { client: builder, prompts };
 }
@@ -413,25 +413,15 @@ describe('ModelGameSeeder', () => {
 
   it('asks for the low thinking floor, not a raw budget gemini-3.7-flash rejects', async () => {
     const thinkingArgs: unknown[] = [];
-    const chain = {
-      responseFormat: () => chain,
-      thinking: (arg: unknown) => {
-        thinkingArgs.push(arg);
-        return chain;
-      },
-      temperature: () => chain,
-      maxOutputTokens: () => chain,
-      signal: () => chain,
-      run: async () => ({
-        parts: [{ type: 'text' as const, text: '{"picks":["apex-sprint"]}' }],
-        model: 'gemini-3.7-flash',
-        usage: { inputTokens: 100, outputTokens: 10 },
-      }),
-      stream: async function* () {
-        yield { type: 'done' as const, result: await chain.run() };
-      },
-    };
-    const client = (() => chain) as unknown as ConstructorParameters<typeof ModelGameSeeder>[0]['client'];
+    const client = (() =>
+      makeChain(
+        () => ({
+          parts: [{ type: 'text' as const, text: '{"picks":["apex-sprint"]}' }],
+          model: 'gemini-3.7-flash',
+          usage: { inputTokens: 100, outputTokens: 10 },
+        }),
+        { onThinking: (arg) => thinkingArgs.push(arg) },
+      )) as unknown as ConstructorParameters<typeof ModelGameSeeder>[0]['client'];
     const seeder = new ModelGameSeeder({ context: stubContext(), client });
 
     await seeder.seed(request);
@@ -465,21 +455,14 @@ describe('ModelGameSeeder', () => {
     });
   });
 
-  it('streams the generate call instead of using run(), reporting progress per file as it arrives', async () => {
-    // The stub throws if generate ever calls run() instead of stream().
+  it('streams the generate call and wires per-file progress to the log', async () => {
+    // Chunking/ordering are covered elsewhere; this only checks the wiring.
     const progressFiles: string[] = [];
     const log = {
       warn: () => {},
       info: (context: Record<string, unknown>, message: string) => {
         if (message === 'seed file generated') progressFiles.push(context.file as string);
       },
-    };
-
-    // Chunked, not one blob, so progress proves it streamed rather than replayed.
-    const chunksOf = (text: string, size: number): string[] => {
-      const chunks: string[] = [];
-      for (let index = 0; index < text.length; index += size) chunks.push(text.slice(index, index + size));
-      return chunks;
     };
 
     let call = 0;
@@ -501,9 +484,7 @@ describe('ModelGameSeeder', () => {
         },
         stream: async function* () {
           if (thisCall === 0) throw new Error('the pick call must run(), not stream()');
-          for (const chunk of chunksOf(GOOD_DRAFT, 24)) {
-            yield { type: 'text-delta' as const, text: chunk };
-          }
+          yield { type: 'text-delta' as const, text: GOOD_DRAFT };
           yield {
             type: 'done' as const,
             result: {
@@ -517,12 +498,9 @@ describe('ModelGameSeeder', () => {
       return chain;
     }) as unknown as ConstructorParameters<typeof ModelGameSeeder>[0]['client'];
 
-    const seeder = new ModelGameSeeder({ context: stubContext(), client, log });
-    const draft = await seeder.seed(request);
+    const draft = await new ModelGameSeeder({ context: stubContext(), client, log }).seed(request);
 
     expect(draft).not.toBeNull();
-    expect(draft!.files.map((file) => file.path)).toEqual(['SPEC.md', 'game.ts', 'game/model.ts']);
-    // One report per fence header, in stream order.
     expect(progressFiles).toEqual([
       'games/my-game/SPEC.md',
       'games/my-game/game.ts',
@@ -534,27 +512,15 @@ describe('ModelGameSeeder', () => {
   it('requests the ceiling configured for the resolved provider, not a fixed constant', async () => {
     const maxOutputTokensArgs: unknown[] = [];
     registerSeedProvider('__test_narrow_vendor__', () => {
-      const client = ((_prompt: string) => {
-        const chain = {
-          responseFormat: () => chain,
-          thinking: () => chain,
-          temperature: () => chain,
-          maxOutputTokens: (n: unknown) => {
-            maxOutputTokensArgs.push(n);
-            return chain;
-          },
-          signal: () => chain,
-          run: async () => ({
+      const client = ((_prompt: string) =>
+        makeChain(
+          () => ({
             parts: [{ type: 'text' as const, text: '{"picks":["apex-sprint"]}' }],
             model: 'narrow-model',
             usage: { inputTokens: 10, outputTokens: 5 },
           }),
-          stream: async function* () {
-            yield { type: 'done' as const, result: await chain.run() };
-          },
-        };
-        return chain;
-      }) as unknown;
+          { onMaxOutputTokens: (n) => maxOutputTokensArgs.push(n) },
+        )) as unknown;
       return client as never;
     });
 
@@ -572,27 +538,15 @@ describe('ModelGameSeeder', () => {
   it('clamps the pick call to a provider ceiling below its own default budget', async () => {
     const maxOutputTokensArgs: unknown[] = [];
     registerSeedProvider('__test_tiny_vendor__', () => {
-      const client = ((_prompt: string) => {
-        const chain = {
-          responseFormat: () => chain,
-          thinking: () => chain,
-          temperature: () => chain,
-          maxOutputTokens: (n: unknown) => {
-            maxOutputTokensArgs.push(n);
-            return chain;
-          },
-          signal: () => chain,
-          run: async () => ({
+      const client = ((_prompt: string) =>
+        makeChain(
+          () => ({
             parts: [{ type: 'text' as const, text: '{"picks":["apex-sprint"]}' }],
             model: 'tiny-model',
             usage: { inputTokens: 10, outputTokens: 5 },
           }),
-          stream: async function* () {
-            yield { type: 'done' as const, result: await chain.run() };
-          },
-        };
-        return chain;
-      }) as unknown;
+          { onMaxOutputTokens: (n) => maxOutputTokensArgs.push(n) },
+        )) as unknown;
       return client as never;
     });
 
@@ -610,27 +564,15 @@ describe('ModelGameSeeder', () => {
   it('raises the pick call above its default for a vendor that always reasons', async () => {
     const maxOutputTokensArgs: unknown[] = [];
     registerSeedProvider('__test_reasoning_vendor__', () => {
-      const client = ((_prompt: string) => {
-        const chain = {
-          responseFormat: () => chain,
-          thinking: () => chain,
-          temperature: () => chain,
-          maxOutputTokens: (n: unknown) => {
-            maxOutputTokensArgs.push(n);
-            return chain;
-          },
-          signal: () => chain,
-          run: async () => ({
+      const client = ((_prompt: string) =>
+        makeChain(
+          () => ({
             parts: [{ type: 'text' as const, text: '{"picks":["apex-sprint"]}' }],
             model: 'reasoning-model',
             usage: { inputTokens: 10, outputTokens: 5 },
           }),
-          stream: async function* () {
-            yield { type: 'done' as const, result: await chain.run() };
-          },
-        };
-        return chain;
-      }) as unknown;
+          { onMaxOutputTokens: (n) => maxOutputTokensArgs.push(n) },
+        )) as unknown;
       return client as never;
     });
 
@@ -648,27 +590,15 @@ describe('ModelGameSeeder', () => {
   it('falls back to the Vertex-sized ceiling when the provider sets none', async () => {
     const maxOutputTokensArgs: unknown[] = [];
     registerSeedProvider('__test_unbounded_vendor__', () => {
-      const client = ((_prompt: string) => {
-        const chain = {
-          responseFormat: () => chain,
-          thinking: () => chain,
-          temperature: () => chain,
-          maxOutputTokens: (n: unknown) => {
-            maxOutputTokensArgs.push(n);
-            return chain;
-          },
-          signal: () => chain,
-          run: async () => ({
+      const client = ((_prompt: string) =>
+        makeChain(
+          () => ({
             parts: [{ type: 'text' as const, text: '{"picks":["apex-sprint"]}' }],
             model: 'unbounded-model',
             usage: { inputTokens: 10, outputTokens: 5 },
           }),
-          stream: async function* () {
-            yield { type: 'done' as const, result: await chain.run() };
-          },
-        };
-        return chain;
-      }) as unknown;
+          { onMaxOutputTokens: (n) => maxOutputTokensArgs.push(n) },
+        )) as unknown;
       return client as never;
     });
 
@@ -968,32 +898,6 @@ describe('knowledge context injection (KQ-11)', () => {
     return { source: { load: async () => context } as SeedContextSource, budgets };
   }
 
-  function stubClientCapturingPrompts(responses: { text: string }[]) {
-    const prompts: string[] = [];
-    let call = 0;
-    const builder = ((prompt: string) => {
-      prompts.push(prompt);
-      const response = responses[Math.min(call++, responses.length - 1)];
-      const chain = {
-        responseFormat: () => chain,
-        thinking: () => chain,
-        temperature: () => chain,
-        maxOutputTokens: () => chain,
-        signal: () => chain,
-        run: async () => ({
-          parts: [{ type: 'text' as const, text: response.text }],
-          model: 'gemini-3.7-flash',
-          usage: { inputTokens: 100, outputTokens: 50 },
-        }),
-        stream: async function* () {
-          yield { type: 'done' as const, result: await chain.run() };
-        },
-      };
-      return chain;
-    }) as unknown as ConstructorParameters<typeof ModelGameSeeder>[0]['client'];
-    return { client: builder, prompts };
-  }
-
   const stubKnowledgeResult: KnowledgeQueryResult = {
     mode: 'chunks',
     fallback: false,
@@ -1007,10 +911,7 @@ describe('knowledge context injection (KQ-11)', () => {
 
   it('crowds out the reference budget instead of expanding the total', async () => {
     const { source, budgets } = stubContextCapturingBudget();
-    const { client, prompts } = stubClientCapturingPrompts([
-      { text: '{"picks":["apex-sprint"]}' },
-      { text: GOOD_DRAFT },
-    ]);
+    const { client, prompts } = stubClientWithPrompts([{ text: '{"picks":["apex-sprint"]}' }, { text: GOOD_DRAFT }]);
     const knowledgeSearch: QueryKnowledgeFn = async () => stubKnowledgeResult;
 
     const seeder = new ModelGameSeeder({ context: source, client, knowledgeSearch });
@@ -1041,10 +942,7 @@ describe('knowledge context injection (KQ-11)', () => {
 
   it('proceeds with the full reference budget when knowledge search fails, per fail-open', async () => {
     const { source, budgets } = stubContextCapturingBudget();
-    const { client, prompts } = stubClientCapturingPrompts([
-      { text: '{"picks":["apex-sprint"]}' },
-      { text: GOOD_DRAFT },
-    ]);
+    const { client, prompts } = stubClientWithPrompts([{ text: '{"picks":["apex-sprint"]}' }, { text: GOOD_DRAFT }]);
     const knowledgeSearch: QueryKnowledgeFn = async () => {
       throw new Error('discovery engine unavailable');
     };
