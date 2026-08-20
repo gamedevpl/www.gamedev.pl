@@ -12,12 +12,18 @@ import {
   GAME_KIT_MODULES,
   GAME_KIT_VERTICAL_ENTRIES,
   MAX_PROJECT_BYTES,
+  TS_ANY_SCAN_PATH,
 } from './games-repo-contract.js';
 
 /** Deliberately different header prose — proves only the code below it must match. */
 const EDITOR_CONTRACT_CODE = `export const EDITOR_FILE = 'EDITOR.json';\nexport function noop() {}\n`;
 const EDITOR_CONTRACT_REMOTE = `/**\n * The editor content contract — L0 of EditorKit.\n */\n\n${EDITOR_CONTRACT_CODE}`;
 const EDITOR_CONTRACT_LOCAL = `/**\n * MIRROR of the games repo's tools/lib/editor-contract.ts.\n */\n\n${EDITOR_CONTRACT_CODE}`;
+
+/** Same arrangement for the `any` scan: shared code, headers free to differ. */
+const TS_ANY_SCAN_CODE = `export function findBannedAnyUsages() {\n  return [];\n}\n`;
+const TS_ANY_SCAN_REMOTE = `/**\n * The scan behind validate Check 37.\n */\n\n${TS_ANY_SCAN_CODE}`;
+const TS_ANY_SCAN_LOCAL = `/**\n * MIRROR of the games repo's tools/lib/ts-any-scan.ts.\n */\n\n${TS_ANY_SCAN_CODE}`;
 
 const VERTICALS_SOURCE = `
   const GAME_KIT_VERTICALS = Object.freeze({
@@ -58,6 +64,7 @@ function agreeingPages(delivery: string | Response[] = deliverySource()): Record
     'tools/validate.ts': [ok(VALIDATE_SOURCE)],
     [DELIVERY_CONTRACT_PATH]: typeof delivery === 'string' ? [ok(delivery)] : delivery,
     [EDITOR_CONTRACT_PATH]: [ok(EDITOR_CONTRACT_REMOTE)],
+    [TS_ANY_SCAN_PATH]: [ok(TS_ANY_SCAN_REMOTE)],
   };
 }
 
@@ -90,7 +97,8 @@ const BASE = {
   ref: 'main',
   token: 't',
   sleep: async () => {},
-  readLocalFile: () => EDITOR_CONTRACT_LOCAL,
+  readLocalFile: (filePath: string) =>
+    filePath.endsWith('ts-any-scan.ts') ? TS_ANY_SCAN_LOCAL : EDITOR_CONTRACT_LOCAL,
 };
 
 describe('runGamesRepoContractCheck', () => {
@@ -360,6 +368,42 @@ describe('runGamesRepoContractCheck — editor-contract mirror', () => {
     });
     expect(outcome.kind).toBe('drift');
     expect(outcome.kind === 'drift' && outcome.reason).toContain('editor-contract mismatch');
+  });
+});
+
+describe('runGamesRepoContractCheck — ts-any-scan mirror', () => {
+  it('reports drift when the two scans disagree', async () => {
+    const { fetchImpl } = createFetch({
+      ...agreeingPages(),
+      [TS_ANY_SCAN_PATH]: [ok(TS_ANY_SCAN_REMOTE.replace('return [];', 'return [1];'))],
+    });
+
+    const outcome = await runGamesRepoContractCheck({ ...BASE, fetchImpl });
+    expect(outcome.kind).toBe('drift');
+    expect(outcome.kind === 'drift' && outcome.reason).toContain('ts-any-scan mismatch');
+  });
+
+  it('reports drift when the website mirror has code the games repo lacks', async () => {
+    const { fetchImpl } = createFetch(agreeingPages());
+
+    const outcome = await runGamesRepoContractCheck({
+      ...BASE,
+      fetchImpl,
+      readLocalFile: (filePath: string) =>
+        filePath.endsWith('ts-any-scan.ts') ? `${TS_ANY_SCAN_LOCAL}export const extra = 1;\n` : EDITOR_CONTRACT_LOCAL,
+    });
+    expect(outcome.kind).toBe('drift');
+    expect(outcome.kind === 'drift' && outcome.reason).toContain('ts-any-scan mismatch');
+  });
+
+  it('tolerates the file being absent from the games tip, and says so', async () => {
+    // The expected state while this side merges first: an observed absence, not a failed
+    // read, so it must not read as agreement either.
+    const { fetchImpl } = createFetch({ ...agreeingPages(), [TS_ANY_SCAN_PATH]: [failure(404)] });
+
+    const outcome = await runGamesRepoContractCheck({ ...BASE, fetchImpl });
+    expect(outcome.kind).toBe('ok');
+    expect(outcome.kind === 'ok' && outcome.notes?.join('\n')).toContain(TS_ANY_SCAN_PATH);
   });
 });
 

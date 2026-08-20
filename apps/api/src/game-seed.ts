@@ -323,6 +323,8 @@ export function buildGeneratePrompt(input: {
     '- ACCEPTANCE.json is exactly {"objective": "<one sentence a player would say>", "achieved": [<conditions>]},',
     '  each condition {"field": "<a field your snapshot() reports>", "atLeast"|"atMost"|"equals": <value>}.',
     '- No external assets, no network calls, no new dependencies.',
+    '- Type every value: the `any` type is refused on delivery, and so is an unannotated',
+    '  parameter. Name the GameKit type the references use, or `unknown` and narrow it.',
     '- Implement the full core loop (start, play, win/lose, restart, mute) — a playable rough draft, not a stub.',
     '',
     'Output format — exactly how the reference sources below are presented to you:',

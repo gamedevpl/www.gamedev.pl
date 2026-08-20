@@ -8,7 +8,7 @@ export const DELIVERY_PREFLIGHT_REFUSED_MSG = 'delivery preflight refused';
 export const DELIVERY_ACCEPTED_MSG = 'delivery accepted';
 export const DELIVERY_GATE_VERDICT_MSG = 'delivery gate verdict';
 
-export type DeliveryPreflightKind = 'audio' | 'symbols' | 'typecheck';
+export type DeliveryPreflightKind = 'audio' | 'symbols' | 'typecheck' | 'any-type';
 export type DeliveryBuilderLabel = 'platform' | 'self' | 'managed' | 'other';
 export type DeliveryModeLabel = 'preview' | 'publish';
 

@@ -140,6 +140,50 @@ describe('validateSourceUpload — the delivery contract', () => {
     });
   });
 
+  describe('`any` refusal', () => {
+    // Refused at upload rather than at the gate: the games repo fails the same source on
+    // validate Check 37, and hearing it now costs the agent a tool call instead of a round.
+    it('refuses the `any` type in a delivered module, on preview and publish', () => {
+      const delivery = [...MINIMAL, { path: 'game/render.ts', content: 'export function paint(kit: any) {}\n' }];
+      for (const mode of ['preview', 'publish'] as const) {
+        expect(() => validateSourceUpload(delivery, mode)).toThrow(/game\/render\.ts:1:28 uses the `any` type/);
+      }
+    });
+
+    it('names how many more it found, so a wholesale fix is one pass', () => {
+      const delivery = [
+        ...MINIMAL,
+        { path: 'game/render.ts', content: 'export function paint(kit: any, draw: any) {}\n' },
+      ];
+      expect(() => validateSourceUpload(delivery)).toThrow(/and 1 more/);
+    });
+
+    it('carries the refusal kind, so the round can count it', () => {
+      const delivery = [...MINIMAL, { path: 'game/render.ts', content: 'const x = y as any;\n' }];
+      try {
+        validateSourceUpload(delivery);
+        expect.unreachable('expected the delivery to be refused');
+      } catch (error) {
+        expect(error).toBeInstanceOf(InvalidUploadError);
+        expect((error as InvalidUploadError).kind).toBe('any-type');
+      }
+    });
+
+    it('leaves the word alone in prose and data', () => {
+      const delivery = [
+        ...MINIMAL,
+        { path: 'game/render.ts', content: "// any of these\nexport const facing = 'any';\n" },
+      ];
+      // A JSON file is not scanned at all: `any` is only a type in TypeScript.
+      const withJsonKey = delivery.map((file) =>
+        file.path === 'GAME.json'
+          ? { path: 'GAME.json', content: JSON.stringify({ engine: { modules: [] }, howToPlay: HOW_TO_PLAY, any: 1 }) }
+          : file,
+      );
+      expect(validateSourceUpload(withJsonKey)).toHaveLength(withJsonKey.length);
+    });
+  });
+
   describe('cross-file symbol link check', () => {
     const brokenPair: SourceFile[] = [
       {

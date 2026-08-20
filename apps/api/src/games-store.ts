@@ -32,6 +32,7 @@ import { hasPlayableHowToPlay } from './index-html-generator.js';
 import { parseKitSidecar } from './kit-registry.js';
 import { KIT_REGISTRY_OBJECT, parseKitRegistry, type KitRegistry } from './kit-window.js';
 import { findUnresolvedSourceLinks, formatSourceLinkError, sourceFilesToMap } from './source-link-check.js';
+import { BANNED_ANY_GUIDANCE, describeBannedAnyFinding, findBannedAnyUsages } from './ts-any-scan.js';
 
 export type { GateProgress } from './gate-progress.js';
 
@@ -131,7 +132,7 @@ export function isPublishableMode(mode: DeliveryMode | undefined): boolean {
 }
 
 // Preflight kinds counted by delivery metrics.
-export type PreflightRefusalKind = 'audio' | 'symbols' | 'typecheck';
+export type PreflightRefusalKind = 'audio' | 'symbols' | 'typecheck' | 'any-type';
 
 export class InvalidUploadError extends Error {
   readonly kind?: PreflightRefusalKind;
@@ -357,6 +358,22 @@ export function validateSourceUpload(files: SourceFile[], mode: DeliveryMode = '
 
   // Refuse missing cross-file symbols before the async gate.
   const normalized = files.map((file) => ({ path: file.path.trim(), content: file.content }));
+
+  // `any` is refused here rather than at the gate, for the reason the gate refuses it at
+  // all: it is the difference between a mistake the checker catches and one a player
+  // does. Telling the agent now costs it one tool call; telling it at the gate costs a
+  // round, and by then it has usually written more code on top of the untyped value.
+  for (const file of normalized) {
+    if (!file.path.endsWith('.ts')) continue;
+    const findings = findBannedAnyUsages(file.content);
+    const first = findings[0];
+    if (!first) continue;
+    const rest = findings.length > 1 ? ` (and ${findings.length - 1} more in this delivery's sources)` : '';
+    throw new InvalidUploadError(
+      `${describeBannedAnyFinding(file.path, first)}${rest}. ${BANNED_ANY_GUIDANCE}`,
+      'any-type',
+    );
+  }
   const linkFindings = findUnresolvedSourceLinks(sourceFilesToMap(normalized));
   if (linkFindings.length > 0) {
     throw new InvalidUploadError(formatSourceLinkError(linkFindings), 'symbols');
