@@ -13,6 +13,7 @@ const mocked = vi.hoisted(() => ({
   retryJob: vi.fn(),
   fetchPublishedGames: vi.fn(),
   regateGame: vi.fn(),
+  deleteGame: vi.fn(),
 }));
 
 vi.mock('./adminJobsApi.js', () => mocked);
@@ -269,6 +270,51 @@ describe('AdminJobsPanel', () => {
     });
     expect(mocked.regateGame).toHaveBeenCalledWith('comet-courier');
     expect(shelf?.textContent).toContain('health check started');
+
+    await act(async () => root.unmount());
+  });
+
+  it('deletes a published game after a second, confirming click', async () => {
+    mocked.fetchJobQueue.mockResolvedValue(queue([]));
+    mocked.fetchPublishedGames.mockResolvedValue([
+      { slug: 'comet-courier', state: 'published', currentVersion: 'v1', publishedAt: '2026-07-01T10:00:00Z' },
+    ]);
+    mocked.deleteGame.mockResolvedValue({ ok: true });
+
+    const { container, root } = await render();
+    const shelf = container.querySelector('.admin-published');
+
+    const del = Array.from(shelf?.querySelectorAll('button') ?? []).find(
+      (button) => button.textContent === 'Delete',
+    ) as HTMLButtonElement;
+    await act(async () => {
+      del.click();
+    });
+    expect(mocked.deleteGame).not.toHaveBeenCalled();
+    expect(del.textContent).toBe('Sure? This is final');
+
+    await act(async () => {
+      del.click();
+      await Promise.resolve();
+    });
+    expect(mocked.deleteGame).toHaveBeenCalledWith('comet-courier');
+    expect(shelf?.textContent).toContain('deleted — the game is offline');
+
+    await act(async () => root.unmount());
+  });
+
+  it('offers no action on a game that is no longer published', async () => {
+    mocked.fetchJobQueue.mockResolvedValue(queue([]));
+    mocked.fetchPublishedGames.mockResolvedValue([
+      { slug: 'comet-courier', state: 'archived', currentVersion: 'v1', publishedAt: '2026-07-01T10:00:00Z' },
+    ]);
+
+    const { container, root } = await render();
+    const shelf = container.querySelector('.admin-published');
+
+    expect(shelf?.textContent).toContain('comet-courier');
+    expect(shelf?.textContent).toContain('archived');
+    expect(shelf?.querySelectorAll('button')).toHaveLength(0);
 
     await act(async () => root.unmount());
   });

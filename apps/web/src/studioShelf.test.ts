@@ -3,6 +3,7 @@ import type { StudioGame } from './studioApi.js';
 import {
   collapseStudioGames,
   filterStudioGames,
+  isStudioGamePublished,
   isStudioGameShelfLive,
   sortStudioGames,
   studioGameInitials,
@@ -116,6 +117,53 @@ describe('studioShelf', () => {
     expect(collapsed[0]?.livePublishedAt).toBe('');
     expect(isStudioGameShelfLive(collapsed[0]!)).toBe(true);
     expect(filterStudioGames(collapsed, { filter: 'live' }).map((item) => item.token)).toEqual(['tip']);
+  });
+
+  it('treats live: false as deleted, regardless of publishedAt history', () => {
+    const deleted = game({
+      token: 'gone',
+      title: 'Comet Courier',
+      slug: 'comet-courier',
+      lastKnownStatus: 'published',
+      publishedAt: '2026-07-01T00:00:00.000Z',
+      live: false,
+    });
+    expect(isStudioGamePublished(deleted)).toBe(false);
+    expect(isStudioGameShelfLive(deleted)).toBe(false);
+  });
+
+  it('keeps a sibling with no publication record out of the deleted read (games-repo entries)', () => {
+    const legacy = game({
+      token: 'legacy',
+      title: 'TV Tycoon',
+      slug: 'tv-tycoon',
+      lastKnownStatus: 'published',
+      publishedAt: '2026-07-01T00:00:00.000Z',
+    });
+    expect(isStudioGamePublished(legacy)).toBe(true);
+  });
+
+  it("does not resurrect a deleted publication as an improve tip's live sibling", () => {
+    const collapsed = collapseStudioGames([
+      game({
+        token: 'deleted-live',
+        title: 'Sky Dodge',
+        slug: 'sky-dodge',
+        lastKnownStatus: 'published',
+        publishedAt: '2026-06-01T00:00:00.000Z',
+        live: false,
+      }),
+      game({
+        token: 'tip',
+        title: 'Sky Dodge',
+        slug: 'sky-dodge',
+        lastKnownStatus: 'building',
+        createdAt: '2026-07-20T00:00:00.000Z',
+      }),
+    ]);
+
+    expect(collapsed[0]?.livePublishedAt).toBeUndefined();
+    expect(isStudioGameShelfLive(collapsed[0]!)).toBe(false);
   });
 
   it('filters by building / live and by title or slug query', () => {

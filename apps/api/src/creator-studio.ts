@@ -77,6 +77,8 @@ export interface CreatorStudioGame {
    * all, and absent entirely when the switch is off.
    */
   codeSurface?: boolean;
+  // `false` only when the slug's publication says archived/disabled.
+  live?: false;
 }
 
 export interface CreatorHealthResponse {
@@ -244,6 +246,17 @@ export async function registerCreatorStudioRoutes(
       );
     }
 
+    // publishedAt/catalogPublishedAt are history and stay; liveness is getPublication's call.
+    const notLiveSlugs = new Set<string>();
+    await Promise.all(
+      shelf
+        .filter(({ tip, catalogPublishedAt }) => tip.slug && (tip.publishedAt || catalogPublishedAt))
+        .map(async ({ tip }) => {
+          const publication = await store.getPublication(tip.slug as string);
+          if (publication && publication.state !== 'published') notLiveSlugs.add(tip.slug as string);
+        }),
+    );
+
     const games: CreatorStudioGame[] = shelf.map(({ tip, catalogPublishedAt }) => ({
       token: options.mintStatusToken!(tip.issueNumber),
       title: tip.title,
@@ -256,6 +269,7 @@ export async function registerCreatorStudioRoutes(
       ...(tip.slug ? { slug: tip.slug } : {}),
       ...(tip.publishedAt ? { publishedAt: tip.publishedAt } : {}),
       ...(catalogPublishedAt ? { livePublishedAt: catalogPublishedAt } : {}),
+      ...(tip.slug && notLiveSlugs.has(tip.slug) ? { live: false as const } : {}),
       ...(tip.draftSharedAt ? { draftShared: true } : {}),
       ...(tip.slug && editableSlugs.has(tip.slug) ? { editable: true } : {}),
       ...(codeSurfaceEnabled() ? { codeSurface: true } : {}),

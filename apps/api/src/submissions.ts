@@ -3,6 +3,7 @@ import type { GameProject } from '@gamedevpl/game-generator';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { splitConceptBrief } from './agent-build-brief.js';
+import { creatorOwnsSlug } from './agent-game-key-resolve.js';
 import { registerAgentChannelRoutes, type AgentChannelOptions } from './agent-channel.js';
 import { mintAgentToken, mintManagedMcpOpener } from './agent-token.js';
 import { registerMcpServerRoutes } from './mcp-server.js';
@@ -2486,6 +2487,15 @@ export async function registerSubmissionRoutes(
   const maxCachedMediaEntries = 400;
   const mediaCache = new Map<string, { expiresAt: number; etag: string; contentType: string; body: Buffer }>();
 
+  // These three trust a cache hit without re-checking publication state.
+  function invalidatePublishedGameCaches(slug: string): void {
+    gameCache.delete(slug);
+    storeCatalogCache = null;
+    for (const key of mediaCache.keys()) {
+      if (key.startsWith(`${slug}/`)) mediaCache.delete(key);
+    }
+  }
+
   // The cache-cold path is the dangerous one: with min-instances 0, a fresh
   // instance takes a page load's several catalog-touching requests at once.
   // getCatalog itself is now a handful of GraphQL round-trips (not ~2N Contents
@@ -3712,6 +3722,54 @@ export async function registerSubmissionRoutes(
     },
   );
 
+  app.post(
+    '/api/submissions/:token/delete-game',
+    { config: { rateLimit: { max: 20, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      if (!submissionTokenSecret) {
+        return reply.status(503).send({ error: 'submissions are not configured' });
+      }
+      if (!checkUserAccess(request, reply)) return;
+      if (!store) {
+        return reply.status(503).send({ error: 'submissions are not configured' });
+      }
+
+      const token = z.string().parse((request.params as { token?: string }).token);
+      let issueNumber: number;
+      try {
+        issueNumber = verifyToken(token, submissionTokenSecret);
+      } catch (error) {
+        if (error instanceof InvalidTokenError) {
+          return reply.status(400).send({ error: 'invalid submission token' });
+        }
+        throw error;
+      }
+
+      const record = await store.getSubmission(issueNumber);
+      if (!record) {
+        return reply.status(403).send({ error: 'only the creator can delete this game' });
+      }
+      if (!record.slug) {
+        return reply.status(409).send({ error: 'this game has no address yet' });
+      }
+      // Not record.ownerUid — a slug transfer can move ownership on.
+      if (!(await creatorOwnsSlug(store, record.slug, request.user!.uid))) {
+        return reply.status(403).send({ error: 'only the creator can delete this game' });
+      }
+
+      const publication = await store.getPublication(record.slug);
+      if (!publication || publication.state !== 'published') {
+        return reply.status(409).send({ error: 'not_published' });
+      }
+
+      await store.archivePublication(record.slug, 'deleted by creator', new Date(now()).toISOString());
+      invalidatePublishedGameCaches(record.slug);
+      invalidateStatusCache(issueNumber);
+
+      return reply.send({ ok: true, slug: record.slug });
+    },
+  );
+
   /** Lets a creator replace the current builder without creating feedback. */
   app.post(
     '/api/submissions/:token/handoff',
@@ -4761,6 +4819,30 @@ export async function registerSubmissionRoutes(
 
     return reply.send({ ok: true, slug, version: start.version, ...(start.buildId ? { buildId: start.buildId } : {}) });
   });
+
+  app.post<{ Params: { slug: string }; Body: { reason?: string } }>(
+    '/api/admin/games/:slug/delete',
+    async (request, reply) => {
+      if (!isAdminSession(request, adminUids)) return reply.status(404).send({ error: 'not_found' });
+      if (!store) return reply.status(503).send({ error: 'store_unavailable' });
+
+      const slug = request.params.slug;
+      const publication = await store.getPublication(slug);
+      if (!publication) return reply.status(404).send({ error: 'not_found' });
+      if (publication.state !== 'published') {
+        return reply.status(409).send({ error: 'not_published', state: publication.state });
+      }
+
+      const reason =
+        typeof request.body?.reason === 'string' && request.body.reason.trim()
+          ? request.body.reason.trim()
+          : 'deleted by operator';
+      await store.archivePublication(slug, reason, new Date(now()).toISOString());
+      invalidatePublishedGameCaches(slug);
+
+      return reply.send({ ok: true, slug });
+    },
+  );
 
   /**
    * Gives an address to every game still missing one.

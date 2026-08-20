@@ -153,6 +153,23 @@ export async function regateGame(slug: string): Promise<{ ok: true; buildId?: st
   return { refused: known.find((code) => code === body.error) ?? 'unknown' };
 }
 
+export type DeleteGameRefusal = 'not_published' | 'store_unavailable' | 'unknown';
+
+export async function deleteGame(
+  slug: string,
+  reason?: string,
+): Promise<{ ok: true } | { refused: DeleteGameRefusal }> {
+  const response = await fetch(`/api/admin/games/${encodeURIComponent(slug)}/delete`, {
+    method: 'POST',
+    credentials: 'include',
+    ...(reason ? { headers: { 'content-type': 'application/json' }, body: JSON.stringify({ reason }) } : {}),
+  });
+  if (response.ok) return (await response.json()) as { ok: true };
+  const body = (await response.json().catch(() => ({}))) as { error?: string };
+  const known: DeleteGameRefusal[] = ['not_published', 'store_unavailable'];
+  return { refused: known.find((code) => code === body.error) ?? 'unknown' };
+}
+
 export interface RetryResult {
   ok: true;
   state: 'building';

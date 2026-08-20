@@ -2091,6 +2091,7 @@ export interface Store {
    * version pointer.
    */
   takedownPublication(slug: string, reason: string, at: string): Promise<boolean>;
+  archivePublication(slug: string, reason: string, at: string): Promise<boolean>;
   /**
    * Records or updates the publication's health re-gate (request, verdict, and
    * notified-at are all patches of the same record — see PublicationHealthCheck).
@@ -3564,6 +3565,13 @@ export class InMemoryStore implements Store {
     const record = this.publications.get(slug);
     if (!record) return false;
     this.publications.set(slug, { ...record, state: 'disabled', takedownAt: at, takedownReason: reason });
+    return true;
+  }
+
+  async archivePublication(slug: string, reason: string, at: string): Promise<boolean> {
+    const record = this.publications.get(slug);
+    if (!record) return false;
+    this.publications.set(slug, { ...record, state: 'archived', takedownAt: at, takedownReason: reason });
     return true;
   }
 
@@ -6219,6 +6227,21 @@ export class FirestoreStore implements Store {
       tx.set(
         ref,
         { publication: { ...current, state: 'disabled', takedownAt: at, takedownReason: reason } },
+        { merge: true },
+      );
+      return true;
+    });
+  }
+
+  async archivePublication(slug: string, reason: string, at: string): Promise<boolean> {
+    const ref = this.db.collection('games').doc(slug);
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const current = (snap.data() as { publication?: PublicationRecord } | undefined)?.publication;
+      if (!current) return false;
+      tx.set(
+        ref,
+        { publication: { ...current, state: 'archived', takedownAt: at, takedownReason: reason } },
         { merge: true },
       );
       return true;

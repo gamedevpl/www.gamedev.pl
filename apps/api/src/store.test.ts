@@ -665,6 +665,24 @@ describe('publication registry', () => {
     expect(await store.takedownPublication('nope', 'x', '2026-07-30T12:00:00Z')).toBe(false);
   });
 
+  it('archives a game under its own state, distinct from a moderation takedown', async () => {
+    const store = new InMemoryStore();
+    await store.setPublication(published);
+
+    expect(await store.archivePublication('comet-courier', 'deleted by creator', '2026-07-30T12:00:00Z')).toBe(true);
+
+    expect(await store.getPublication('comet-courier')).toMatchObject({
+      state: 'archived',
+      takedownReason: 'deleted by creator',
+      takedownAt: '2026-07-30T12:00:00Z',
+    });
+  });
+
+  it('reports an archive of something never published rather than inventing a record', async () => {
+    const store = new InMemoryStore();
+    expect(await store.archivePublication('nope', 'x', '2026-07-30T12:00:00Z')).toBe(false);
+  });
+
   it('keeps a withdrawn game out of nothing — the bake decides, from state', async () => {
     // listPublications returns every record, including disabled ones. The bake filters on
     // state rather than on presence, so a withdrawn game is visibly withdrawn instead of

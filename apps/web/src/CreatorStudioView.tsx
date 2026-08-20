@@ -8,7 +8,7 @@ import type { GameHealth } from './healthApi.js';
 import { PixelIcon, type PixelIconName } from './PixelIcon.js';
 import { formatRelativeTime } from './relativeTime.js';
 import { playPath, studioPath, type StudioTab } from './router.js';
-import { abandonSubmission, handoffToPlatform } from './submissionApi.js';
+import { abandonSubmission, deleteGame, handoffToPlatform } from './submissionApi.js';
 import { StudioShotToasts } from './StudioShotToasts.js';
 import { type CodeActionsMode } from './CodeActionsMenu.js';
 import { CodeSurface } from './CodeSurface.js';
@@ -1422,6 +1422,8 @@ function DetailsPanel({
   const publishedAt = game.publishedAt ?? game.livePublishedAt;
   const [abandonArmed, setAbandonArmed] = useState(false);
   const [abandoning, setAbandoning] = useState(false);
+  const [deleteArmed, setDeleteArmed] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const shotToken = mediaToken ?? game.token;
 
   async function handleAbandon() {
@@ -1436,6 +1438,21 @@ function DetailsPanel({
     } catch {
       setAbandoning(false);
       setAbandonArmed(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!deleteArmed) {
+      setDeleteArmed(true);
+      return;
+    }
+    setDeleting(true);
+    try {
+      await deleteGame(game.token);
+      await onRemoved(game.token);
+    } catch {
+      setDeleting(false);
+      setDeleteArmed(false);
     }
   }
 
@@ -1526,6 +1543,19 @@ function DetailsPanel({
                               : 'studioPanel.overview.abandonConfirmRemove',
                           )
                         : t(catalogLive ? 'studioPanel.overview.abandon' : 'studioPanel.overview.abandonRemove')}
+                    </button>
+                  </div>
+                ) : null}
+                {catalogLive && game.lastKnownStatus !== 'abandoned' ? (
+                  <div className="studio-delete-block">
+                    {deleteArmed ? <p className="studio-delete-hint">{t('studioPanel.overview.deleteHint')}</p> : null}
+                    <button
+                      type="button"
+                      className={`status-delete${deleteArmed ? ' is-danger' : ''}`}
+                      onClick={() => void handleDelete()}
+                      disabled={deleting}
+                    >
+                      {deleteArmed ? t('studioPanel.overview.deleteConfirm') : t('studioPanel.overview.delete')}
                     </button>
                   </div>
                 ) : null}

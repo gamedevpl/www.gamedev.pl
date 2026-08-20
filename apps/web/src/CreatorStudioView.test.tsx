@@ -8,6 +8,7 @@ import i18n from './i18n/index.js';
 import type { StudioGame, StudioGamesResponse, StudioScorecard } from './studioApi.js';
 
 const abandonSubmission = vi.fn();
+const deleteGame = vi.fn();
 const fetchStudioGames = vi.fn();
 const fetchStudioHealth = vi.fn();
 const fetchStudioScorecards = vi.fn();
@@ -29,6 +30,7 @@ vi.mock('./submissionApi', async () => {
     ...actual,
     getSubmissionStatus: vi.fn(async () => ({ media: [] })),
     abandonSubmission: (...args: unknown[]) => abandonSubmission(...args),
+    deleteGame: (...args: unknown[]) => deleteGame(...args),
   };
 });
 
@@ -101,6 +103,8 @@ describe('CreatorStudioView', () => {
     authUser = null;
     abandonSubmission.mockReset();
     abandonSubmission.mockResolvedValue(undefined);
+    deleteGame.mockReset();
+    deleteGame.mockResolvedValue(undefined);
     fetchStudioGames.mockReset();
     fetchStudioHealth.mockReset();
     fetchStudioHealth.mockResolvedValue({ days: [], truncated: false, games: [] });
@@ -1638,6 +1642,8 @@ describe('CreatorStudioView abandon', () => {
     authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
     abandonSubmission.mockReset();
     abandonSubmission.mockResolvedValue(undefined);
+    deleteGame.mockReset();
+    deleteGame.mockResolvedValue(undefined);
     fetchStudioGames.mockReset();
     fetchStudioHealth.mockReset();
     fetchStudioHealth.mockResolvedValue({ days: [], truncated: false, games: [] });
@@ -1997,6 +2003,140 @@ describe('CreatorStudioView abandon', () => {
     expect(onNavigate).not.toHaveBeenCalledWith('/studio');
     expect(onNavigate).toHaveBeenLastCalledWith('/studio/third-game/details', { replace: true });
     expect(container.querySelector('.studio-strip-title')?.textContent).toContain('Third Game');
+
+    root.unmount();
+  });
+});
+
+describe('CreatorStudioView delete', () => {
+  beforeEach(() => {
+    authUser = { uid: 'g:studio-demo', name: 'Studio Demo' };
+    abandonSubmission.mockReset();
+    abandonSubmission.mockResolvedValue(undefined);
+    deleteGame.mockReset();
+    deleteGame.mockResolvedValue(undefined);
+    fetchStudioGames.mockReset();
+    fetchStudioHealth.mockReset();
+    fetchStudioHealth.mockResolvedValue({ days: [], truncated: false, games: [] });
+    fetchStudioScorecards.mockReset();
+    fetchStudioScorecards.mockResolvedValue([]);
+    fetchStudioSuggestions.mockReset();
+    fetchStudioSuggestions.mockResolvedValue([]);
+    fetchGameAutonomy.mockReset();
+    fetchGameAutonomy.mockRejectedValue(new Error('not owned'));
+    setDraftShared.mockReset();
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('offers delete, not abandon, on a published game', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    fetchStudioGames.mockResolvedValue(
+      studioShelf([
+        {
+          token: 'token-gts',
+          title: 'Global Thermonuclear Strategy',
+          createdAt: '2026-07-02T00:00:00.000Z',
+          lastKnownStatus: 'published',
+          slug: 'global-thermonuclear-strategy',
+          publishedAt: '2026-07-02T00:00:00.000Z',
+        },
+      ]),
+    );
+
+    const { container, root } = await renderStudio({
+      selectedGame: 'global-thermonuclear-strategy',
+      selectedTab: 'details',
+    });
+
+    expect(container.querySelector('.status-abandon')).toBeNull();
+    const del = container.querySelector<HTMLButtonElement>('.status-delete');
+    expect(del?.textContent).toContain('Delete this game');
+
+    await act(async () => {
+      del!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(container.querySelector('.studio-delete-hint')?.textContent).toContain(
+      'takes the game off the site immediately',
+    );
+    expect(container.querySelector('.status-delete')?.textContent).toContain('Yes, delete it — the game goes offline');
+
+    root.unmount();
+  });
+
+  it('offers delete alongside abandon while an improvement round is open on a live game', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    fetchStudioGames.mockResolvedValue(
+      studioShelf([
+        {
+          token: 'token-improve',
+          title: 'TV Tycoon',
+          createdAt: '2026-08-01T09:00:00.000Z',
+          lastKnownStatus: 'building',
+          slug: 'tv-tycoon',
+          livePublishedAt: '2026-07-31T09:00:00.000Z',
+        },
+      ]),
+    );
+
+    const { container, root } = await renderStudio({ selectedGame: 'tv-tycoon', selectedTab: 'details' });
+
+    expect(container.querySelector('.status-abandon')).not.toBeNull();
+    const del = container.querySelector<HTMLButtonElement>('.status-delete');
+    expect(del).not.toBeNull();
+
+    await act(async () => {
+      del!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('.status-delete.is-danger')!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(deleteGame).toHaveBeenCalledWith('token-improve');
+
+    root.unmount();
+  });
+
+  it('deletes the game and refetches the shelf', async () => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    await i18n.changeLanguage('en');
+    const live = {
+      token: 'token-gts',
+      title: 'Global Thermonuclear Strategy',
+      createdAt: '2026-07-02T00:00:00.000Z',
+      lastKnownStatus: 'published' as const,
+      slug: 'global-thermonuclear-strategy',
+      publishedAt: '2026-07-02T00:00:00.000Z',
+    };
+    fetchStudioGames.mockResolvedValueOnce(studioShelf([live]));
+    fetchStudioGames.mockResolvedValueOnce(studioShelf([]));
+
+    const { container, root, onNavigate } = await renderStudio({
+      selectedGame: 'global-thermonuclear-strategy',
+      selectedTab: 'details',
+    });
+
+    const del = container.querySelector<HTMLButtonElement>('.status-delete');
+    await act(async () => {
+      del!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('.status-delete.is-danger')!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(deleteGame).toHaveBeenCalledWith('token-gts');
+    expect(fetchStudioGames).toHaveBeenCalledTimes(2);
+    expect(fetchStudioGames).toHaveBeenLastCalledWith('global-thermonuclear-strategy');
+    expect(onNavigate).toHaveBeenCalledWith('/studio');
 
     root.unmount();
   });

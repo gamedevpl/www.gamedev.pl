@@ -521,7 +521,10 @@
       "abandonConfirmRemove": "Tak, usuń — gra zniknie ze Studio",
       "abandonHintRemove": "Ten szkic nigdy nie był opublikowany. Usunięcie zatrzyma build i zdejmie grę z półki Studio.",
       "abandonNotice": "„{{title}}” usunięto ze Studio.",
-      "abandonNoticeDismiss": "Zamknij"
+      "abandonNoticeDismiss": "Zamknij",
+      "delete": "Usuń tę grę",
+      "deleteConfirm": "Tak, usuń — gra zniknie ze strony",
+      "deleteHint": "Gra natychmiast znika ze strony. Zniknie też z półki Studio."
     },
     "rail": {
       "connect": "Podłącz agenta",
