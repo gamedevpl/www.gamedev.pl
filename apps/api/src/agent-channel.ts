@@ -450,7 +450,7 @@ function applyPatchFileBestEffort(
 
 async function resolvePatchBase(input: {
   gamesStore: GamesStore;
-  store: Store;
+  version: string | null;
   record: SubmissionRecord;
   slug: string;
   issueNumber: number;
@@ -465,9 +465,8 @@ async function resolvePatchBase(input: {
   });
   if (stagedContent !== null) return { content: stagedContent, baseFrom: 'staged' };
 
-  const version = await resolveRoundBaseVersion(input.store, input.record, input.slug);
-  if (version) {
-    const delivered = await input.gamesStore.getSourceFile(input.slug, version, input.path);
+  if (input.version) {
+    const delivered = await input.gamesStore.getSourceFile(input.slug, input.version, input.path);
     if (delivered !== null) return { content: delivered, baseFrom: 'delivery' };
   }
 
@@ -1579,6 +1578,7 @@ export async function registerAgentChannelRoutes(
           ];
 
       try {
+        const version = await resolveRoundBaseVersion(store!, record, slug);
         const prepared: Array<{
           path: string;
           content: string;
@@ -1590,7 +1590,7 @@ export async function registerAgentChannelRoutes(
         for (const spec of specs) {
           const base = await resolvePatchBase({
             gamesStore: options.gamesStore,
-            store: store!,
+            version,
             record,
             slug,
             issueNumber,

@@ -26,8 +26,7 @@ import {
 } from './typecheck-preflight.js';
 
 export interface SourceDeliveryAuthority {
-  // Backend identity recorded at dispatch time.
-  backend: string;
+  backend: string; // Backend identity recorded at dispatch time.
   // Vendor session that produced these files.
   sessionRef: string;
   // Round generation captured when that session started.

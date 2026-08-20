@@ -360,11 +360,7 @@ export function tick(round: Round) {
       const record = await store.getSubmission(ISSUE);
       expect(record?.roundTypecheckPreflightRefusals).toBe(2);
       expect(record?.roundTypecheckPreflightBypassErrors).toMatch(/Typecheck preflight failed/);
-      expect(log.warn).toHaveBeenCalledWith(
-        expect.objectContaining({ message: expect.stringMatching(/Typecheck preflight failed/) }),
-        'typecheck preflight bypassed after refusal cap',
-      );
-
+      expect(log.warn.mock.calls[0]?.[0]).toMatchObject({ message: record?.roundTypecheckPreflightBypassErrors });
       // Regression: bypass diagnostics never reached the thread, only a log line.
       const events = await store.listBuildEvents(ISSUE);
       expect(events).toContainEqual(

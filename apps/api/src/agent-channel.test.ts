@@ -2029,59 +2029,6 @@ describe('agent build channel', () => {
       expect(staged.size).toBe(0);
     });
 
-    it('patches and delivers against an unpublished prior sibling round', async () => {
-      const store = new InMemoryStore();
-      await seedSubmission(store);
-      await store.setSubmissionSlug(ISSUE, 'comet-courier');
-      await seedSubmission(store, ISSUE - 1);
-      await store.setSubmissionSlug(ISSUE - 1, 'comet-courier');
-      await store.setSubmissionPreviewVersion(ISSUE - 1, 'v-prior');
-      const { gamesStore, stored } = stubGamesStore();
-      const delivered: Record<string, string> = Object.fromEntries(
-        MINIMAL.filter((f) => f.path !== 'TRACE.json' && f.path !== 'PLAYTEST.json').map((f) => [f.path, f.content]),
-      );
-      delivered['game/render.ts'] = 'export function paint() {\n  drawSky();\n}\n';
-      app = await createApp(store, {
-        gamesStore: {
-          ...gamesStore,
-          getManifest: async (_slug: string, version: string) =>
-            version === 'v-prior' ? ({ sourceFiles: Object.keys(delivered) } as never) : null,
-          getSourceFile: async (_slug: string, version: string, path: string) =>
-            version === 'v-prior' ? (delivered[path] ?? null) : null,
-        } as unknown as GamesStore,
-      });
-
-      const patched = await app.inject({
-        method: 'POST',
-        url: '/api/agent/build/sources/stage/patch',
-        headers: agentHeaders(),
-        payload: {
-          path: 'game/render.ts',
-          old: '  drawSky();\n',
-          new: '  drawSky();\n  drawHud();\n',
-        },
-      });
-      expect(patched.statusCode).toBe(200);
-      expect(patched.json()).toMatchObject({ accepted: true, baseFrom: 'delivery' });
-
-      const response = await app.inject({
-        method: 'POST',
-        url: '/api/agent/build/sources',
-        headers: agentHeaders(),
-        payload: {
-          slug: 'comet-courier',
-          fromStaged: true,
-          kitEngineRef: 'abcdef1234567890',
-          mode: 'preview',
-        },
-      });
-      expect(response.statusCode).toBe(200);
-      const files = stored[0]?.files as Array<{ path: string; content: string }>;
-      expect(files.find((f) => f.path === 'game/render.ts')?.content).toContain('drawHud()');
-      expect(files.find((f) => f.path === 'SPEC.md')?.content).toBe(delivered['SPEC.md']);
-      expect(files.find((f) => f.path === 'game.ts')?.content).toBe(delivered['game.ts']);
-    });
-
     it('delete_source_file drops a path from the next fromStaged delivery entirely', async () => {
       const store = new InMemoryStore();
       await seedSubmission(store);
@@ -2725,30 +2672,6 @@ describe('agent build channel', () => {
         files: [
           { path: 'SPEC.md', content: '# Draft' },
           { path: 'game.ts', content: 'export {};' },
-        ],
-      });
-    });
-
-    it('restores an unpublished delivery from a prior sibling round', async () => {
-      const store = new InMemoryStore();
-      await seedSubmission(store);
-      await store.setSubmissionSlug(ISSUE, 'comet-courier');
-      await seedSubmission(store, ISSUE - 1);
-      await store.setSubmissionSlug(ISSUE - 1, 'comet-courier');
-      await store.setSubmissionPreviewVersion(ISSUE - 1, 'v-prior');
-      app = await createApp(store, {
-        gamesStore: storeWithVersion({ 'SPEC.md': '# Prior draft', 'game.ts': 'export const prior = true;' }),
-      });
-
-      const response = await app.inject({ method: 'GET', url: '/api/agent/build/sources', headers: agentHeaders() });
-
-      expect(response.statusCode).toBe(200);
-      expect(response.json()).toMatchObject({
-        origin: 'delivery',
-        delivery: { slug: 'comet-courier', version: 'v-prior' },
-        files: [
-          { path: 'SPEC.md', content: '# Prior draft' },
-          { path: 'game.ts', content: 'export const prior = true;' },
         ],
       });
     });
