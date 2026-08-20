@@ -299,6 +299,7 @@
     "apps/api/src/translate.ts": 1120,
     "apps/api/src/type-check.test.ts": 153,
     "apps/api/src/type-check.ts": 544,
+    "apps/api/src/typecheck-preflight.ts": 43,
     "apps/api/src/unsubscribe-token.test.ts": 15,
     "apps/api/src/unsubscribe-token.ts": 65,
     "apps/api/src/verify-erase-signals.test.ts": 431,

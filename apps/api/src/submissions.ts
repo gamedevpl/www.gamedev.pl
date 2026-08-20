@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { deriveGateStatusString, derivePreviewGateStatus } from '@gamedevpl/contract';
 import type { GameProject } from '@gamedevpl/game-generator';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
@@ -3105,11 +3106,7 @@ export async function registerSubmissionRoutes(
 
       const verdict = manifest?.gate;
       if (verdict && record.deliveredVersion) {
-        const status: DeliveryGateStatus = verdict.green
-          ? 'green'
-          : verdict.status === 'kit_outdated'
-            ? 'kit_outdated'
-            : 'red';
+        const status: DeliveryGateStatus = deriveGateStatusString(verdict);
         await emitGateMetric({
           mode: 'publish',
           outcome: verdict.green ? 'passed' : 'failed',
@@ -3147,8 +3144,7 @@ export async function registerSubmissionRoutes(
       // mode=preview never writes manifest.gate — still emit metrics for green/red.
       const preview = manifest?.previewGate;
       if (!preview) return null;
-      const previewStatus: DeliveryGateStatus =
-        preview.status === 'kit_outdated' ? 'kit_outdated' : preview.green ? 'preview_passed' : 'preview_failed';
+      const previewStatus: DeliveryGateStatus = derivePreviewGateStatus(preview);
       await emitGateMetric({
         mode: 'preview',
         outcome: preview.green ? 'passed' : 'failed',
