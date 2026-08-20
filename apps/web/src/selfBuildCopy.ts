@@ -8,15 +8,15 @@
  *
  * Pure functions so the selection is unit-tested without mounting Studio.
  */
+import type { JobStall } from '@gamedevpl/contract';
 
 export type SelfStatusCopy = 'no_agent_yet' | 'quiet_agent' | 'agent_ended' | 'delivery_cap';
 
 /** Where a self-round composer message will actually go. */
 export type SelfComposerRoute = 'active' | 'waiting';
-
 export type SelfBuildCopyInput = {
   builder?: 'platform' | 'self' | null;
-  stall?: 'awaiting_input' | 'not_dispatched' | 'quiet' | 'ended' | 'gate_not_started' | 'no_agent_yet' | null;
+  stall?: JobStall | null;
   failureReason?: string | null;
   /**
    * Internal job phase when the coarse status is lossy. Gate-green drafts project as
