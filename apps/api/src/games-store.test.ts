@@ -182,6 +182,16 @@ describe('validateSourceUpload — the delivery contract', () => {
       );
       expect(validateSourceUpload(withJsonKey)).toHaveLength(withJsonKey.length);
     });
+
+    it('is not fooled by `/` right after `++`/`--` into reading the rest of the line as a regex', () => {
+      // Without disambiguating postfix/prefix increment from a lone `+`/`-`, this `/`
+      // reads as opening a regex — which would swallow the `any` and let it upload clean.
+      const delivery = [
+        ...MINIMAL,
+        { path: 'game/model.ts', content: 'export const ratio = count++ / (total as any);\n' },
+      ];
+      expect(() => validateSourceUpload(delivery)).toThrow(/game\/model\.ts.*uses the `any` type/);
+    });
   });
 
   describe('cross-file symbol link check', () => {

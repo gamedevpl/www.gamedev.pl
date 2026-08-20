@@ -112,25 +112,34 @@ export function findBannedAnyUsages(source: string): BannedAnyFinding[] {
   };
 
   const scanComment = (text: string, startIndex: number) => {
+    // `line`/`lineStart` as they stood when the comment started — captured once so a
+    // comment with many suppression strings locates every match without rescanning from
+    // the comment's start each time, which went quadratic in the comment's length.
+    const startLine = line;
+    const startLineStart = lineStart;
+    const newlineOffsets: number[] = [];
+    for (let i = 0; i < text.length; i += 1) {
+      if (text[i] === '\n') newlineOffsets.push(i);
+    }
+    const locate = (offset: number) => {
+      // Last newline in the comment strictly before `offset`, via binary search.
+      let lo = 0;
+      let hi = newlineOffsets.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (newlineOffsets[mid]! < offset) lo = mid + 1;
+        else hi = mid;
+      }
+      const newlinesBefore = lo;
+      const lineStartAbsolute =
+        newlinesBefore === 0 ? startLineStart : startIndex + newlineOffsets[newlinesBefore - 1]! + 1;
+      return { line: startLine + newlinesBefore, column: startIndex + offset - lineStartAbsolute + 1 };
+    };
     for (const suppression of SUPPRESSIONS) {
       let found = text.indexOf(suppression);
       while (found !== -1) {
-        const absolute = startIndex + found;
-        // Count the newlines the comment already consumed before this point.
-        let commentLine = line;
-        let commentLineStart = lineStart;
-        for (let scan = startIndex; scan < absolute; scan += 1) {
-          if (source[scan] === '\n') {
-            commentLine += 1;
-            commentLineStart = scan + 1;
-          }
-        }
-        findings.push({
-          kind: 'ts-suppression',
-          line: commentLine,
-          column: absolute - commentLineStart + 1,
-          text: suppression,
-        });
+        const { line: commentLine, column } = locate(found);
+        findings.push({ kind: 'ts-suppression', line: commentLine, column, text: suppression });
         found = text.indexOf(suppression, found + suppression.length);
       }
     }
@@ -246,6 +255,15 @@ export function findBannedAnyUsages(source: string): BannedAnyFinding[] {
       }
       previous = '}';
       index += 1;
+      continue;
+    }
+
+    if ((char === '+' && source[index + 1] === '+') || (char === '-' && source[index + 1] === '-')) {
+      // `++`/`--` (prefix or postfix) always leave a value behind, so a `/` right after
+      // divides — unlike a single `+`/`-`, which a regex can legally follow. Without this,
+      // `left++ / (x as any)` reads the `/` as opening a regex and the `any` never surfaces.
+      previous = 'x';
+      index += 2;
       continue;
     }
 
