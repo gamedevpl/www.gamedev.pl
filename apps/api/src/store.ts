@@ -1,5 +1,6 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { FieldValue, Firestore, type DocumentData, type Query } from '@google-cloud/firestore';
+import type { ManagedAgentVendorName } from './agent-backend-env.js';
 import type { AgentTaskState } from './agent-state.js';
 import type { SeedFiles } from './agent-backend.js';
 import type { BuilderKind } from './builder.js';
@@ -753,7 +754,7 @@ export interface CreationLimits {
   // Switches the `platform` option; `auto` defers to whether a backend exists.
   managedBuilderMode?: 'auto' | 'off' | 'coming_soon';
   // Runtime override; unset defers to MANAGED_AGENT_VENDOR, the env-var default.
-  managedAgentVendorOverride?: 'anthropic' | 'gemini' | 'copilot' | 'openai' | null;
+  managedAgentVendorOverride?: ManagedAgentVendorName | null;
   // Shared daily ceiling on platform rounds started. `null` = no cap.
   managedDailyCap: number | null;
   // Same ceiling, per creator per UTC day.

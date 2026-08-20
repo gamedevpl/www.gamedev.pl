@@ -4,6 +4,7 @@
 // decision rather than a branch buried in server wiring — and so a second backend can be
 // added here without touching the server at all.
 
+import { MANAGED_AGENT_VENDORS, type ManagedAgentVendorName } from '@gamedevpl/contract';
 import type { AgentBackend } from './agent-backend.js';
 import type { BuilderKind } from './builder.js';
 import { ModelGameSeeder, DEFAULT_SEED_PROVIDER, type GameSeeder } from './game-seed.js';
@@ -31,9 +32,7 @@ interface Logger {
   error?: (context: object, message: string) => void; // Missing seeding is broken, not unusual.
 }
 
-// Every managed vendor this file knows how to build a backend for.
-export const MANAGED_AGENT_VENDORS = ['anthropic', 'gemini', 'copilot', 'openai'] as const;
-export type ManagedAgentVendorName = (typeof MANAGED_AGENT_VENDORS)[number];
+export { MANAGED_AGENT_VENDORS, type ManagedAgentVendorName };
 
 // One backend per vendor built at boot — a runtime override selects one.
 export interface AgentBackendRegistry {

@@ -5,6 +5,7 @@
 // rather than as an error, because the operator surface does not confirm its own
 // existence to someone who is not one.
 
+import type { ManagedAgentVendorName } from '@gamedevpl/contract';
 import type { JobStall } from './adminJobsApi.js';
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 
@@ -67,7 +68,7 @@ export async function fetchAdminSummary(): Promise<AdminSummary | null> {
 }
 
 export type ManagedBuilderMode = 'auto' | 'off' | 'coming_soon';
-export type ManagedAgentVendor = 'anthropic' | 'gemini' | 'copilot' | 'openai';
+export type ManagedAgentVendor = ManagedAgentVendorName;
 export type SeedingMode = 'auto' | 'off';
 
 export interface CreationLimits {
