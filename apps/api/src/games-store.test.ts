@@ -77,7 +77,7 @@ describe('validateSourceUpload — the delivery contract', () => {
     expect(() => validateSourceUpload([{ path: 'game.ts', content: 'x' }])).toThrow(/SPEC.md is required/);
   });
 
-  describe('index.html or GAME.json howToPlay', () => {
+  describe('GAME.json howToPlay', () => {
     // A fresh write is refused elsewhere; this stays permissive for carry-forward.
     it('still accepts a delivery that ships a real index.html and no howToPlay', () => {
       const files = [...MINIMAL_WITHOUT_GAME_JSON, { path: 'index.html', content: '<canvas id="game"></canvas>' }];
@@ -95,7 +95,7 @@ describe('validateSourceUpload — the delivery contract', () => {
           { path: 'index.html', content: '   \n  ' },
           { path: 'GAME.json', content: JSON.stringify({ engine: { modules: [] } }) },
         ]),
-      ).toThrow(/index\.html or GAME\.json\.howToPlay is required/);
+      ).toThrow(/GAME\.json\.howToPlay is required/);
     });
 
     it('refuses a delivery with neither', () => {
@@ -104,7 +104,7 @@ describe('validateSourceUpload — the delivery contract', () => {
           ...MINIMAL_WITHOUT_GAME_JSON,
           { path: 'GAME.json', content: JSON.stringify({ engine: { modules: [] } }) },
         ]),
-      ).toThrow(/index\.html or GAME\.json\.howToPlay is required/);
+      ).toThrow(/GAME\.json\.howToPlay is required.*do not author index\.html/i);
     });
 
     it('refuses a howToPlay missing the pair the generator needs', () => {
@@ -117,13 +117,13 @@ describe('validateSourceUpload — the delivery contract', () => {
             content: JSON.stringify({ engine: { modules: [] }, howToPlay: { goal: HOW_TO_PLAY.goal } }),
           },
         ]),
-      ).toThrow(/index\.html or GAME\.json\.howToPlay is required/);
+      ).toThrow(/GAME\.json\.howToPlay is required/);
     });
 
     it('refuses a schema-only delivery whose GAME.json does not parse', () => {
       expect(() =>
         validateSourceUpload([...MINIMAL_WITHOUT_GAME_JSON, { path: 'GAME.json', content: '{"howToPlay": {' }]),
-      ).toThrow(/index\.html or GAME\.json\.howToPlay is required/);
+      ).toThrow(/GAME\.json\.howToPlay is required/);
     });
 
     it('refuses a howToPlay whose goal/hint are truthy but not {en, pl} strings', () => {
@@ -136,7 +136,7 @@ describe('validateSourceUpload — the delivery contract', () => {
             content: JSON.stringify({ engine: { modules: [] }, howToPlay: { goal: true, hint: HOW_TO_PLAY.hint } }),
           },
         ]),
-      ).toThrow(/index\.html or GAME\.json\.howToPlay is required/);
+      ).toThrow(/GAME\.json\.howToPlay is required/);
     });
   });
 
